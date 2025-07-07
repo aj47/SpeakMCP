@@ -36,7 +36,7 @@ SpeakMCP is a sophisticated AI-powered dictation tool with MCP integration built
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    Whispo Architecture                      │
+│                   SpeakMCP Architecture                     │
 ├─────────────────────────────────────────────────────────────┤
 │  Frontend (React/TypeScript)                               │
 │  ├── Recording Interface (Real-time audio visualization)   │
@@ -171,7 +171,7 @@ SpeakMCP is a sophisticated AI-powered dictation tool with MCP integration built
 
 ### Positioning
 
-| Aspect | Whispo | Traditional Dictation | Cloud Solutions |
+| Aspect | SpeakMCP | Traditional Dictation | Cloud Solutions |
 |--------|--------|----------------------|-----------------|
 | **Privacy** | 🟢 Local option available | 🟡 Mixed | 🔴 Cloud-dependent |
 | **Speed** | 🟢 Very fast (local) | 🟡 Moderate | 🟡 Network-dependent |
@@ -190,7 +190,7 @@ SpeakMCP is a sophisticated AI-powered dictation tool with MCP integration built
 
 ### Immediate Actions (Next 30 Days)
 
-1. **Implement Testing Framework** 
+1. **Implement Testing Framework**
    - Set up Vitest for unit tests
    - Add basic E2E tests with Playwright
    - Establish CI/CD pipeline
@@ -261,4 +261,4 @@ SpeakMCP is a sophisticated AI-powered dictation tool with MCP integration built
 
 ---
 
-This analysis provides a comprehensive view of Whispo's current state and future opportunities. The project shows strong technical foundations with clear paths for growth and improvement.
+This analysis provides a comprehensive view of SpeakMCP's current state and future opportunities. The project shows strong technical foundations with clear paths for growth and improvement.

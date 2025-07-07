@@ -232,7 +232,7 @@ export const router = {
               <html>
                 <body>
                   <h1>Authentication Successful!</h1>
-                  <p>You can close this window and return to Whispo.</p>
+                  <p>You can close this window and return to SpeakMCP.</p>
                   <script>
                     // Auto-close after 2 seconds
                     setTimeout(() => window.close(), 2000)

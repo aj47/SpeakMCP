@@ -1,12 +1,12 @@
 # 🌐 Cross-Platform Support and Linux Compatibility
 
-**Status:** Proposed  
-**Priority:** Medium  
-**Labels:** enhancement, cross-platform, linux, compatibility  
+**Status:** Proposed
+**Priority:** Medium
+**Labels:** enhancement, cross-platform, linux, compatibility
 
 ## Overview
 
-Expand Whispo's platform support to include Linux distributions and improve cross-platform compatibility across macOS, Windows, and Linux.
+Expand SpeakMCP's platform support to include Linux distributions and improve cross-platform compatibility across macOS, Windows, and Linux.
 
 ## Current Platform Support
 
@@ -72,11 +72,11 @@ Expand Whispo's platform support to include Linux distributions and improve cros
 mod linux_keyboard {
     use x11::xlib::*;
     use std::ptr;
-    
+
     pub fn listen_keyboard_events() -> Result<(), Box<dyn std::error::Error>> {
         // X11/Wayland keyboard monitoring implementation
     }
-    
+
     pub fn inject_text(text: &str) -> Result<(), Box<dyn std::error::Error>> {
         // Linux text injection implementation
     }
@@ -203,7 +203,7 @@ impl X11KeyboardMonitor {
             Ok(Self { display })
         }
     }
-    
+
     pub fn listen(&self) -> Result<(), Box<dyn std::error::Error>> {
         // Implement X11 keyboard event listening
     }
@@ -228,7 +228,7 @@ use atspi::*;
 pub fn inject_text_atspi(text: &str) -> Result<(), Box<dyn std::error::Error>> {
     let connection = Connection::new()?;
     let registry = Registry::new(&connection)?;
-    
+
     // Find focused application and inject text
     Ok(())
 }
@@ -240,11 +240,11 @@ pub fn inject_text_atspi(text: &str) -> Result<(), Box<dyn std::error::Error>> {
 ```typescript
 class LinuxSystemTray {
   private backend: 'gtk' | 'qt' | 'ayatana' | 'generic'
-  
+
   constructor() {
     this.backend = this.detectBackend()
   }
-  
+
   private detectBackend(): 'gtk' | 'qt' | 'ayatana' | 'generic' {
     // Detect available system tray backend
   }

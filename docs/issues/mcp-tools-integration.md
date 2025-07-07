@@ -1,8 +1,8 @@
 # 🔧 Implement MCP Tools Integration for Voice-Activated Actions
 
-**Status:** Proposed  
-**Priority:** High  
-**Labels:** enhancement, feature, mcp, voice-commands  
+**Status:** Proposed
+**Priority:** High
+**Labels:** enhancement, feature, mcp, voice-commands
 
 ## Overview
 
@@ -10,7 +10,7 @@ Implement Model Context Protocol (MCP) tools integration to enable voice-activat
 
 ## Background
 
-Based on user feedback, there's a need to extend Whispo beyond simple dictation to support voice-activated tool execution. The MCP (Model Context Protocol) provides a standardized way to integrate various tools and services.
+Based on user feedback, there's a need to extend SpeakMCP beyond simple dictation to support voice-activated tool execution. The MCP (Model Context Protocol) provides a standardized way to integrate various tools and services.
 
 ## Requirements
 

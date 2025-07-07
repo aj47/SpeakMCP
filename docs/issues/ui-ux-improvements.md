@@ -1,12 +1,12 @@
 # 🎨 UI/UX Improvements and Modernization
 
-**Status:** Proposed  
-**Priority:** Medium  
-**Labels:** enhancement, ui, ux, design, accessibility  
+**Status:** Proposed
+**Priority:** Medium
+**Labels:** enhancement, ui, ux, design, accessibility
 
 ## Overview
 
-Enhance the user interface and user experience of Whispo with modern design patterns, improved accessibility, and better visual feedback systems.
+Enhance the user interface and user experience of SpeakMCP with modern design patterns, improved accessibility, and better visual feedback systems.
 
 ## Current State Analysis
 

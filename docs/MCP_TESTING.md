@@ -1,6 +1,6 @@
 # MCP Testing Infrastructure
 
-This document describes the automated testing infrastructure for the Model Context Protocol (MCP) functionality in Whispo.
+This document describes the automated testing infrastructure for the Model Context Protocol (MCP) functionality in SpeakMCP.
 
 ## Overview
 
@@ -27,7 +27,7 @@ The MCP testing suite addresses the original `spawn npx ENOENT` error and provid
 
 **Problem**: Electron's child process environment has limited PATH, causing `spawn npx ENOENT` errors.
 
-**Solution**: 
+**Solution**:
 - `resolveCommandPath()` - Cross-platform command resolution
 - `prepareEnvironment()` - Proper environment variable setup
 - Automatic addition of Node.js paths (`/usr/local/bin`, `/opt/homebrew/bin`, etc.)

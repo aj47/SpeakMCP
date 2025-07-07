@@ -1,12 +1,12 @@
 # ⚡ Performance Optimization and Resource Management
 
-**Status:** Proposed  
-**Priority:** High  
-**Labels:** performance, optimization, memory, cpu, battery  
+**Status:** Proposed
+**Priority:** High
+**Labels:** performance, optimization, memory, cpu, battery
 
 ## Overview
 
-Optimize Whispo's performance across all components to reduce resource usage, improve responsiveness, and extend battery life on laptops.
+Optimize SpeakMCP's performance across all components to reduce resource usage, improve responsiveness, and extend battery life on laptops.
 
 ## Current Performance Analysis
 
@@ -107,11 +107,11 @@ Optimize Whispo's performance across all components to reduce resource usage, im
 class OptimizedAudioBuffer {
   private buffers: AudioBuffer[] = []
   private maxBuffers = 5
-  
+
   getBuffer(): AudioBuffer {
     return this.buffers.pop() || new AudioBuffer()
   }
-  
+
   releaseBuffer(buffer: AudioBuffer): void {
     if (this.buffers.length < this.maxBuffers) {
       buffer.reset()
@@ -141,7 +141,7 @@ const debouncedKeyboardHandler = debounce((event: KeyboardEvent) => {
 ```typescript
 class BackgroundProcessor {
   private worker: Worker
-  
+
   processAudio(audioData: ArrayBuffer): Promise<ProcessedAudio> {
     return new Promise((resolve) => {
       this.worker.postMessage({ type: 'process', data: audioData })
@@ -158,7 +158,7 @@ class BackgroundProcessor {
 class ConfigCache {
   private cache = new Map<string, any>()
   private ttl = 5 * 60 * 1000 // 5 minutes
-  
+
   get(key: string): any {
     const item = this.cache.get(key)
     if (item && Date.now() - item.timestamp < this.ttl) {
@@ -173,13 +173,13 @@ class ConfigCache {
 ```typescript
 class APICache {
   private cache = new LRUCache<string, any>({ max: 100 })
-  
+
   async get(url: string, options: RequestInit): Promise<any> {
     const key = this.generateKey(url, options)
     if (this.cache.has(key)) {
       return this.cache.get(key)
     }
-    
+
     const response = await fetch(url, options)
     const data = await response.json()
     this.cache.set(key, data)

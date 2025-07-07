@@ -55,13 +55,13 @@ https://github.com/user-attachments/assets/2344a817-f36c-42b0-9ebc-cdd6e926b7a0
 
 ## 🏗️ Architecture
 
-Whispo is built with a modern, multi-process architecture designed for performance and reliability:
+SpeakMCP is built with a modern, multi-process architecture designed for performance and reliability:
 
 ### System Overview
 ```
 ┌─────────────────┐    ┌──────────────────┐
 │   Electron      │    │   Rust Binary    │
-│   Main Process  │◄──►│   whispo-rs      │
+│   Main Process  │◄──►│   speakmcp-rs    │
 │                 │    │   (Keyboard &    │
 │                 │    │   Text Input)    │
 └─────────────────┘    └──────────────────┘
@@ -186,13 +186,13 @@ Configure intelligent transcript enhancement:
 ### OpenAI Setup
 
 1. Get API key from [OpenAI Platform](https://platform.openai.com/api-keys)
-2. Add to Whispo settings under "Providers" → "OpenAI"
+2. Add to SpeakMCP settings under "Providers" → "OpenAI"
 3. Optional: Configure custom base URL for self-hosted endpoints
 
 ### Groq Setup
 
 1. Get API key from [Groq Console](https://console.groq.com/keys)
-2. Add to Whispo settings under "Providers" → "Groq"
+2. Add to SpeakMCP settings under "Providers" → "Groq"
 3. Configure STT prompt for better accuracy (optional)
 
 ### Google Gemini Setup
@@ -264,4 +264,4 @@ This project is licensed under the [AGPL-3.0 License](./LICENSE).
 
 ---
 
-**Made with ❤️ by the Whispo team**
+**Made with ❤️ by the SpeakMCP team**

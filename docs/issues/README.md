@@ -21,7 +21,7 @@ Implement Model Context Protocol (MCP) tools integration to enable voice-activat
 ### [⚡ Performance Optimization](./performance-optimization.md)
 **Status:** Proposed | **Priority:** High | **Labels:** performance, optimization, memory, cpu, battery
 
-Optimize Whispo's performance across all components to reduce resource usage, improve responsiveness, and extend battery life on laptops.
+Optimize SpeakMCP's performance across all components to reduce resource usage, improve responsiveness, and extend battery life on laptops.
 
 **Key Areas:**
 - Memory usage reduction (30% target)
@@ -78,7 +78,7 @@ Implement comprehensive testing framework to improve code quality, reduce bugs, 
 ### [🌐 Cross-Platform Support](./cross-platform-support.md)
 **Status:** Proposed | **Priority:** Medium | **Labels:** enhancement, cross-platform, linux, compatibility
 
-Expand Whispo's platform support to include Linux distributions and improve cross-platform compatibility.
+Expand SpeakMCP's platform support to include Linux distributions and improve cross-platform compatibility.
 
 **Target Platforms:**
 - Linux (Ubuntu, Fedora, Debian, Arch)
@@ -191,8 +191,8 @@ If you have questions about any of these issues:
 
 ---
 
-**Last Updated:** 2025-01-02  
-**Total Issues:** 6  
-**High Priority:** 2  
-**Medium Priority:** 4  
+**Last Updated:** 2025-01-02
+**Total Issues:** 6
+**High Priority:** 2
+**Medium Priority:** 4
 **Low Priority:** 0

@@ -8,10 +8,45 @@ import {
   shell,
   systemPreferences,
   dialog,
+  BrowserWindow,
 } from "electron"
 import path from "path"
 import { configStore, recordingsFolder } from "./config"
-import { Config, RecordingHistoryItem, MCPConfig, MCPServerConfig } from "../shared/types"
+import { Config, RecordingHistoryItem, MCPConfig, MCPServerConfig, AuthState, User } from "../shared/types"
+
+// Helper function to set auth token (to avoid circular reference)
+async function setAuthTokenHelper(token: string): Promise<{ success: boolean; user: User }> {
+  try {
+    const isDevelopment = process.env.NODE_ENV === 'development' || !app.isPackaged
+    const baseUrl = isDevelopment
+      ? "http://localhost:8787"
+      : "https://api.speakmcp.com"
+
+    const response = await fetch(`${baseUrl}/auth/me`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    })
+
+    if (!response.ok) {
+      throw new Error("Invalid token")
+    }
+
+    const user: User = await response.json()
+
+    // Save to config
+    const config = configStore.get()
+    configStore.save({
+      ...config,
+      authToken: token,
+      user,
+    })
+
+    return { success: true, user }
+  } catch (error) {
+    throw new Error("Failed to authenticate: " + (error as Error).message)
+  }
+}
 import { RendererHandlers } from "./renderer-handlers"
 import { postProcessTranscript, processTranscriptWithTools } from "./llm"
 import { mcpService, MCPToolResult } from "./mcp-service"
@@ -151,6 +186,178 @@ export const router = {
     .action(async ({ input }) => {
       dialog.showErrorBox(input.title || "Error", input.message)
     }),
+
+
+  // Authentication methods
+  getAuthState: t.procedure.action(async () => {
+    const config = configStore.get()
+    return {
+      user: config.user || null,
+      token: config.authToken || null,
+    } as AuthState
+  }),
+
+  initiateLogin: t.procedure.action(async () => {
+    return new Promise((resolve, reject) => {
+      const http = require('http')
+      const { URL } = require('url')
+
+      // Create a temporary HTTP server to receive the OAuth callback
+      const server = http.createServer((req: any, res: any) => {
+        const url = new URL(req.url, `http://localhost`)
+
+        if (url.pathname === '/auth/callback') {
+          const token = url.searchParams.get('token')
+          const error = url.searchParams.get('error')
+
+          if (error) {
+            res.writeHead(400, { 'Content-Type': 'text/html' })
+            res.end(`
+              <html>
+                <body>
+                  <h1>Authentication Failed</h1>
+                  <p>Error: ${error}</p>
+                  <p>You can close this window.</p>
+                </body>
+              </html>
+            `)
+            server.close()
+            reject(new Error(`Authentication failed: ${error}`))
+            return
+          }
+
+          if (token) {
+            res.writeHead(200, { 'Content-Type': 'text/html' })
+            res.end(`
+              <html>
+                <body>
+                  <h1>Authentication Successful!</h1>
+                  <p>You can close this window and return to Whispo.</p>
+                  <script>
+                    // Auto-close after 2 seconds
+                    setTimeout(() => window.close(), 2000)
+                  </script>
+                </body>
+              </html>
+            `)
+
+            // Save the token using helper function
+            setAuthTokenHelper(token).then(() => {
+              server.close()
+              resolve({ success: true })
+            }).catch((error) => {
+              server.close()
+              reject(error)
+            })
+          } else {
+            res.writeHead(400, { 'Content-Type': 'text/html' })
+            res.end(`
+              <html>
+                <body>
+                  <h1>Authentication Failed</h1>
+                  <p>No token received</p>
+                  <p>You can close this window.</p>
+                </body>
+              </html>
+            `)
+            server.close()
+            reject(new Error('No token received'))
+          }
+        } else {
+          res.writeHead(404)
+          res.end('Not found')
+        }
+      })
+
+      const startOAuthFlow = (port: number) => {
+        // Use local development URL in development, production URL in production
+        const isDevelopment = process.env.NODE_ENV === 'development' || !app.isPackaged
+        const baseUrl = isDevelopment
+          ? "http://localhost:8787"
+          : "https://api.speakmcp.com"
+
+        // Create OAuth URL with our local callback
+        const callbackUrl = `http://localhost:${port}/auth/callback`
+        const authUrl = `${baseUrl}/auth/google?callback=${encodeURIComponent(callbackUrl)}`
+
+        console.log(`Starting OAuth flow with callback: ${callbackUrl}`)
+
+        // Open in user's default browser
+        shell.openExternal(authUrl)
+
+        // Set a timeout to close the server if no response
+        setTimeout(() => {
+          if (server.listening) {
+            server.close()
+            reject(new Error('Authentication timeout - no response received'))
+          }
+        }, 300000) // 5 minutes timeout
+      }
+
+      // Start server on a fixed port for OAuth callback
+      const OAUTH_CALLBACK_PORT = 8789
+      server.listen(OAUTH_CALLBACK_PORT, 'localhost', () => {
+        const address = server.address()
+        const port = address?.port
+
+        if (!port) {
+          reject(new Error('Failed to start local server'))
+          return
+        }
+
+        startOAuthFlow(port)
+      })
+
+      server.on('error', (error: any) => {
+        if (error.code === 'EADDRINUSE') {
+          // Port is in use, try a few alternative ports
+          const altPorts = [8789, 8790, 8791, 8792]
+          let portIndex = 0
+
+          const tryNextPort = () => {
+            if (portIndex >= altPorts.length) {
+              reject(new Error('All OAuth callback ports are in use. Please close other applications and try again.'))
+              return
+            }
+
+            const nextPort = altPorts[portIndex++]
+            server.listen(nextPort, 'localhost', () => {
+              const address = server.address()
+              const port = address?.port
+
+              if (!port) {
+                reject(new Error('Failed to start local server'))
+                return
+              }
+
+              startOAuthFlow(port)
+            })
+          }
+
+          tryNextPort()
+        } else {
+          reject(new Error(`Server error: ${error.message}`))
+        }
+      })
+    })
+  }),
+
+  setAuthToken: t.procedure
+    .input<{ token: string }>()
+    .action(async ({ input }) => {
+      return setAuthTokenHelper(input.token)
+    }),
+
+  logout: t.procedure.action(async () => {
+    const config = configStore.get()
+    configStore.save({
+      ...config,
+      authToken: undefined,
+      user: undefined,
+    })
+    return { success: true }
+  }),
+
 
   createRecording: t.procedure
     .input<{

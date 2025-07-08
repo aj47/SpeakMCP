@@ -141,7 +141,7 @@ export async function postProcessTranscript(transcript: string) {
   const isDevelopment = process.env.NODE_ENV === 'development' || !require('electron').app.isPackaged
   const baseUrl = isDevelopment
     ? "http://localhost:8788"  // Proxy worker port
-    : "https://api.speakmcp.com"
+    : "https://proxy.speakmcp.techfren.net"
 
   const chatResponse = await fetch(`${baseUrl}/openai/v1/chat/completions`, {
     method: "POST",
@@ -257,7 +257,7 @@ Remember: Respond with ONLY the JSON object, no markdown formatting, no code blo
   const isDevelopment = process.env.NODE_ENV === 'development' || !require('electron').app.isPackaged
   const baseUrl = isDevelopment
     ? "http://localhost:8788"  // Proxy worker port
-    : "https://api.speakmcp.com"
+    : "https://proxy.speakmcp.techfren.net"
 
   const model = "gemma2-9b-it" // Default to Groq model via proxy
 

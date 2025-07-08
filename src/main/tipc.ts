@@ -20,7 +20,7 @@ async function setAuthTokenHelper(token: string): Promise<{ success: boolean; us
     const isDevelopment = process.env.NODE_ENV === 'development' || !app.isPackaged
     const baseUrl = isDevelopment
       ? "http://localhost:8787"  // Auth worker port
-      : "https://api.speakmcp.com"
+      : "https://auth.speakmcp.techfren.net"
 
     const response = await fetch(`${baseUrl}/auth/me`, {
       headers: {
@@ -274,7 +274,7 @@ export const router = {
         const isDevelopment = process.env.NODE_ENV === 'development' || !app.isPackaged
         const baseUrl = isDevelopment
           ? "http://localhost:8787"
-          : "https://api.speakmcp.com"
+          : "https://auth.speakmcp.techfren.net"
 
         // Create OAuth URL with our local callback
         const callbackUrl = `http://localhost:${port}/auth/callback`
@@ -336,7 +336,7 @@ export const router = {
 
           tryNextPort()
         } else {
-          reject(new Error(`Server error: ${error.message}`))
+          reject(new Error(`Server error: ${error instanceof Error ? error.message : String(error)}`))
         }
       })
     })
@@ -470,110 +470,45 @@ export const router = {
       console.log("[MCP-DEBUG] Initializing MCP service...")
       await mcpService.initialize()
 
-      // First, transcribe the audio using the same logic as regular recording
-      console.log(`[MCP-DEBUG] 🎤 Starting transcription using provider: ${config.sttProviderId}`)
+      // First, transcribe the audio using the proxy server
+      console.log("[MCP-DEBUG] 🎤 Starting transcription using proxy server")
 
-      if (config.sttProviderId === "lightning-whisper-mlx") {
-        try {
-          console.log("[MCP-DEBUG] Using Lightning Whisper MLX for transcription")
-          const result = await transcribeWithLightningWhisper(input.recording, {
-            model: config.lightningWhisperMlxModel || "distil-medium.en",
-            batchSize: config.lightningWhisperMlxBatchSize || 12,
-            quant: config.lightningWhisperMlxQuant || null,
-          })
-
-          if (!result.success) {
-            throw new Error(result.error || "Lightning Whisper MLX transcription failed")
-          }
-
-          transcript = result.text || ""
-          console.log(`[MCP-DEBUG] ✅ Lightning Whisper transcription successful: "${transcript}"`)
-        } catch (error) {
-          console.error("[MCP-DEBUG] ❌ Lightning Whisper MLX failed, falling back to proxy server:", error)
-
-          // Fallback to proxy server if lightning-whisper-mlx fails
-          if (!config.authToken) {
-            throw new Error("Authentication required. Please sign in to use SpeakMCP.")
-          }
-
-          const form = new FormData()
-          form.append(
-            "file",
-            new File([input.recording], "recording.webm", { type: "audio/webm" }),
-          )
-          form.append("model", "whisper-large-v3")
-          form.append("response_format", "json")
-
-          const isDevelopment = process.env.NODE_ENV === 'development' || !app.isPackaged
-          const baseUrl = isDevelopment
-            ? "http://localhost:8788"  // Proxy worker port
-            : "https://api.speakmcp.com"
-
-          const transcriptResponse = await fetch(
-            `${baseUrl}/openai/v1/audio/transcriptions`,
-            {
-              method: "POST",
-              headers: {
-                Authorization: `Bearer ${config.authToken}`,
-              },
-              body: form,
-            },
-          )
-
-          if (!transcriptResponse.ok) {
-            const message = `Fallback transcription failed: ${transcriptResponse.statusText} ${(await transcriptResponse.text()).slice(0, 300)}`
-            throw new Error(message)
-          }
-
-          const json: { text: string } = await transcriptResponse.json()
-          transcript = json.text
-          console.log(`[MCP-DEBUG] ✅ Fallback proxy server transcription successful: "${transcript}"`)
-        }
-      } else {
-        // Use proxy server for transcription
-        console.log("[MCP-DEBUG] Using proxy server for transcription")
-
-        if (!config.authToken) {
-          throw new Error("Authentication required. Please sign in to use SpeakMCP.")
-        }
-
-        const form = new FormData()
-        form.append(
-          "file",
-          new File([input.recording], "recording.webm", { type: "audio/webm" }),
-        )
-        form.append("model", "whisper-large-v3") // Default to Groq model via proxy
-        form.append("response_format", "json")
-
-        if (config.groqSttPrompt?.trim()) {
-          form.append("prompt", config.groqSttPrompt.trim())
-        }
-
-        const isDevelopment = process.env.NODE_ENV === 'development' || !app.isPackaged
-        const baseUrl = isDevelopment
-          ? "http://localhost:8788"  // Proxy worker port
-          : "https://api.speakmcp.com"
-
-        const transcriptResponse = await fetch(
-          `${baseUrl}/openai/v1/audio/transcriptions`,
-          {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${config.authToken}`,
-            },
-            body: form,
-          },
-        )
-
-        if (!transcriptResponse.ok) {
-          const message = `${transcriptResponse.statusText} ${(await transcriptResponse.text()).slice(0, 300)}`
-          throw new Error(message)
-        }
-
-        const json: { text: string } = await transcriptResponse.json()
-        transcript = json.text
-        console.log(`[MCP-DEBUG] ✅ Proxy server transcription successful: "${transcript}"`)
+      if (!config.authToken) {
+        throw new Error("Authentication required. Please sign in to use SpeakMCP.")
       }
+
+      const form = new FormData()
+      form.append(
+        "file",
+        new File([input.recording], "recording.webm", { type: "audio/webm" }),
+      )
+      form.append("model", "whisper-large-v3")
+      form.append("response_format", "json")
+
+      const isDevelopment = process.env.NODE_ENV === 'development' || !app.isPackaged
+      const baseUrl = isDevelopment
+        ? "http://localhost:8788"  // Proxy worker port
+        : "https://proxy.speakmcp.techfren.net"
+
+      const transcriptResponse = await fetch(
+        `${baseUrl}/openai/v1/audio/transcriptions`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${config.authToken}`,
+          },
+          body: form,
+        },
+      )
+
+      if (!transcriptResponse.ok) {
+        const message = `Transcription failed: ${transcriptResponse.statusText} ${(await transcriptResponse.text()).slice(0, 300)}`
+        throw new Error(message)
+      }
+
+      const json: { text: string } = await transcriptResponse.json()
+      transcript = json.text
+      console.log(`[MCP-DEBUG] ✅ Proxy server transcription successful: "${transcript}"`)
 
       // Process transcript with MCP tools
       console.log("[MCP-DEBUG] 🔧 Getting available tools and processing with LLM...")
@@ -736,7 +671,7 @@ export const router = {
 
       return mcpConfig
     } catch (error) {
-      throw new Error(`Failed to load MCP config: ${error.message}`)
+      throw new Error(`Failed to load MCP config: ${error instanceof Error ? error.message : String(error)}`)
     }
   }),
 
@@ -760,7 +695,7 @@ export const router = {
         fs.writeFileSync(result.filePath, JSON.stringify(input.config, null, 2))
         return true
       } catch (error) {
-        throw new Error(`Failed to save MCP config: ${error.message}`)
+        throw new Error(`Failed to save MCP config: ${error instanceof Error ? error.message : String(error)}`)
       }
     }),
 
@@ -792,7 +727,7 @@ export const router = {
 
         return { valid: true }
       } catch (error) {
-        return { valid: false, error: error.message }
+        return { valid: false, error: error instanceof Error ? error.message : String(error) }
       }
     }),
 

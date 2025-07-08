@@ -11,15 +11,15 @@ binding = "DB"
 database_name = "speakmcp-db"
 database_id = "3347842c-06c0-4f89-adc5-b91cfadd990e"
 
-# Routes (commented out for local development)
-# [[routes]]
-# pattern = "api.speakmcp.com/openai/*"
-# custom_domain = true
+# Custom domain for proxy worker
+[route]
+pattern = "proxy.speakmcp.techfren.net"
+custom_domain = true
 
 # Environment Variables for local development
 [vars]
 JWT_SECRET = "test-jwt-secret-for-local-development-only-not-secure"
-GROQ_API_KEY = "test-groq-api-key"
+GROQ_API_KEY = "your-groq-api-key-from-env-local"
 ALLOWED_ORIGINS = "*"
 
 [env.development.vars]

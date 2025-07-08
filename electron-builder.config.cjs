@@ -18,9 +18,16 @@ module.exports = {
     "!*.{js,cjs,mjs,ts}",
     "!components.json",
     "!.prettierrc",
-    '!speakmcp-rs/*'
+    '!speakmcp-rs/*',
+    "resources/**"
   ],
   asarUnpack: ["resources/**", "node_modules/**"],
+  extraFiles: [
+    {
+      from: "resources/bin/speakmcp-rs",
+      to: "Resources/app.asar.unpacked/resources/bin/speakmcp-rs"
+    }
+  ],
   win: {
     executableName: "speakmcp",
   },
@@ -31,7 +38,6 @@ module.exports = {
     createDesktopShortcut: "always",
   },
   mac: {
-    binaries: [`resources/bin/speakmcp-rs${process.platform === 'darwin' ? '' : '.exe'}`],
     artifactName: "${productName}-${version}-${arch}.${ext}",
     entitlementsInherit: "build/entitlements.mac.plist",
     identity: process.env.CSC_NAME || "Apple Development",

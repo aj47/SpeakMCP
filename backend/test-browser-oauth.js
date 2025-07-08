@@ -22,11 +22,124 @@ const server = http.createServer((req, res) => {
       console.log(`❌ Authentication failed: ${error}`);
       res.writeHead(400, { 'Content-Type': 'text/html' });
       res.end(`
-        <html>
+        <!DOCTYPE html>
+        <html lang="en">
+          <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>SpeakMCP - Authentication Failed</title>
+            <style>
+              * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+              }
+
+              body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+                background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+                min-height: 100vh;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                color: white;
+                animation: fadeIn 0.6s ease-out;
+              }
+
+              .container {
+                text-align: center;
+                padding: 3rem 2rem;
+                background: rgba(255, 255, 255, 0.1);
+                backdrop-filter: blur(10px);
+                border-radius: 20px;
+                border: 1px solid rgba(255, 255, 255, 0.2);
+                box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+                max-width: 400px;
+                width: 100%;
+                animation: slideUp 0.8s ease-out;
+              }
+
+              .error-icon {
+                font-size: 4rem;
+                margin-bottom: 1.5rem;
+                animation: shake 0.8s ease-out;
+              }
+
+              h1 {
+                font-size: 2rem;
+                font-weight: 600;
+                margin-bottom: 1rem;
+                letter-spacing: -0.02em;
+              }
+
+              .brand {
+                color: #fca5a5;
+                font-weight: 700;
+              }
+
+              p {
+                font-size: 1.1rem;
+                opacity: 0.9;
+                line-height: 1.6;
+                margin-bottom: 1rem;
+              }
+
+              .error-details {
+                background: rgba(0, 0, 0, 0.2);
+                padding: 1rem;
+                border-radius: 10px;
+                font-family: monospace;
+                font-size: 0.9rem;
+                margin-bottom: 1rem;
+                word-break: break-word;
+              }
+
+              @keyframes fadeIn {
+                from { opacity: 0; }
+                to { opacity: 1; }
+              }
+
+              @keyframes slideUp {
+                from {
+                  opacity: 0;
+                  transform: translateY(30px);
+                }
+                to {
+                  opacity: 1;
+                  transform: translateY(0);
+                }
+              }
+
+              @keyframes shake {
+                0%, 100% { transform: translateX(0); }
+                10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+                20%, 40%, 60%, 80% { transform: translateX(5px); }
+              }
+
+              @media (max-width: 480px) {
+                .container {
+                  margin: 1rem;
+                  padding: 2rem 1.5rem;
+                }
+
+                h1 {
+                  font-size: 1.5rem;
+                }
+
+                .error-icon {
+                  font-size: 3rem;
+                }
+              }
+            </style>
+          </head>
           <body>
-            <h1>Authentication Failed</h1>
-            <p>Error: ${error}</p>
-            <p>You can close this window.</p>
+            <div class="container">
+              <div class="error-icon">❌</div>
+              <h1><span class="brand">SpeakMCP</span> Authentication Failed</h1>
+              <p>We encountered an issue during authentication:</p>
+              <div class="error-details">${error}</div>
+              <p>Please close this window and try again.</p>
+            </div>
           </body>
         </html>
       `);
@@ -40,13 +153,163 @@ const server = http.createServer((req, res) => {
       
       res.writeHead(200, { 'Content-Type': 'text/html' });
       res.end(`
-        <html>
+        <!DOCTYPE html>
+        <html lang="en">
+          <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>SpeakMCP - Authentication Successful</title>
+            <style>
+              * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+              }
+
+              body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                min-height: 100vh;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                color: white;
+                animation: fadeIn 0.6s ease-out;
+              }
+
+              .container {
+                text-align: center;
+                padding: 3rem 2rem;
+                background: rgba(255, 255, 255, 0.1);
+                backdrop-filter: blur(10px);
+                border-radius: 20px;
+                border: 1px solid rgba(255, 255, 255, 0.2);
+                box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+                max-width: 400px;
+                width: 100%;
+                animation: slideUp 0.8s ease-out;
+              }
+
+              .success-icon {
+                font-size: 4rem;
+                margin-bottom: 1.5rem;
+                animation: bounce 1s ease-out;
+              }
+
+              .microphone-icon {
+                font-size: 2rem;
+                margin-bottom: 1rem;
+                opacity: 0.8;
+                animation: pulse 2s infinite;
+              }
+
+              h1 {
+                font-size: 2rem;
+                font-weight: 600;
+                margin-bottom: 1rem;
+                letter-spacing: -0.02em;
+              }
+
+              .brand {
+                color: #60a5fa;
+                font-weight: 700;
+              }
+
+              p {
+                font-size: 1.1rem;
+                opacity: 0.9;
+                line-height: 1.6;
+                margin-bottom: 2rem;
+              }
+
+              .auto-close {
+                font-size: 0.9rem;
+                opacity: 0.7;
+                font-style: italic;
+              }
+
+              @keyframes fadeIn {
+                from { opacity: 0; }
+                to { opacity: 1; }
+              }
+
+              @keyframes slideUp {
+                from {
+                  opacity: 0;
+                  transform: translateY(30px);
+                }
+                to {
+                  opacity: 1;
+                  transform: translateY(0);
+                }
+              }
+
+              @keyframes bounce {
+                0%, 20%, 53%, 80%, 100% {
+                  transform: translate3d(0, 0, 0);
+                }
+                40%, 43% {
+                  transform: translate3d(0, -15px, 0);
+                }
+                70% {
+                  transform: translate3d(0, -7px, 0);
+                }
+                90% {
+                  transform: translate3d(0, -2px, 0);
+                }
+              }
+
+              @keyframes pulse {
+                0%, 100% {
+                  transform: scale(1);
+                  opacity: 0.8;
+                }
+                50% {
+                  transform: scale(1.1);
+                  opacity: 1;
+                }
+              }
+
+              @media (max-width: 480px) {
+                .container {
+                  margin: 1rem;
+                  padding: 2rem 1.5rem;
+                }
+
+                h1 {
+                  font-size: 1.5rem;
+                }
+
+                .success-icon {
+                  font-size: 3rem;
+                }
+              }
+            </style>
+          </head>
           <body>
-            <h1>Authentication Successful!</h1>
-            <p>You can close this window and return to SpeakMCP.</p>
+            <div class="container">
+              <div class="microphone-icon">🎤</div>
+              <div class="success-icon">✅</div>
+              <h1>Welcome to <span class="brand">SpeakMCP</span>!</h1>
+              <p>Authentication successful! You can now close this window and start using voice-to-text with AI-powered transcription.</p>
+              <p class="auto-close">This window will close automatically in 3 seconds...</p>
+            </div>
             <script>
-              // Auto-close after 2 seconds
-              setTimeout(() => window.close(), 2000)
+              // Auto-close after 3 seconds with countdown
+              let countdown = 3;
+              const autoCloseElement = document.querySelector('.auto-close');
+
+              const updateCountdown = () => {
+                if (countdown > 0) {
+                  autoCloseElement.textContent = \`This window will close automatically in \${countdown} second\${countdown !== 1 ? 's' : ''}...\`;
+                  countdown--;
+                  setTimeout(updateCountdown, 1000);
+                } else {
+                  window.close();
+                }
+              };
+
+              setTimeout(updateCountdown, 1000);
             </script>
           </body>
         </html>

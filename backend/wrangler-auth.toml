@@ -9,15 +9,19 @@ compatibility_date = "2024-01-01"
 [[d1_databases]]
 binding = "DB"
 database_name = "speakmcp-db"
-database_id = "your-database-id"
+database_id = "3347842c-06c0-4f89-adc5-b91cfadd990e"
 
 # Routes (commented out for local development)
 # [[routes]]
 # pattern = "api.speakmcp.com/auth/*"
 # custom_domain = true
 
-# Environment Variables loaded from .env.local
+# Environment Variables for local development
 [vars]
+JWT_SECRET = "test-jwt-secret-for-local-development-only-not-secure"
+GOOGLE_CLIENT_ID = "test-google-client-id"
+GOOGLE_CLIENT_SECRET = "test-google-client-secret"
+ALLOWED_ORIGINS = "*"
 
 [env.development.vars]
 

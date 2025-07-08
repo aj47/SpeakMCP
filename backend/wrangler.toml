@@ -9,7 +9,7 @@ main = "src/auth.ts"
 [[d1_databases]]
 binding = "DB"
 database_name = "speakmcp-db"
-database_id = "your-database-id"
+database_id = "3347842c-06c0-4f89-adc5-b91cfadd990e"
 migrations_dir = "migrations"
 
 # Environment Variables

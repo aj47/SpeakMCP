@@ -50,10 +50,8 @@ function handleGoogleAuth(env: Env, request: Request): Response {
   const url = new URL(request.url);
   const electronCallbackUrl = url.searchParams.get('callback');
 
-  // Always use the backend callback URL for OAuth
-  const redirectUri = env.ALLOWED_ORIGINS === '*'
-    ? 'http://localhost:8787/auth/callback'
-    : 'https://api.speakmcp.com/auth/callback';
+  // Use production worker URL for OAuth callback
+  const redirectUri = 'https://speakmcp-auth.techfren.workers.dev/auth/callback';
 
   // Store the Electron callback URL in the state parameter
   const state = electronCallbackUrl ? encodeURIComponent(electronCallbackUrl) : '';
@@ -92,10 +90,8 @@ async function handleGoogleCallback(
     // Decode the Electron callback URL from the state parameter
     const electronCallbackUrl = state ? decodeURIComponent(state) : 'http://localhost:8789/auth/callback';
 
-  // Use localhost for development, production URL for production
-  const redirectUri = env.ALLOWED_ORIGINS === '*'
-    ? 'http://localhost:8787/auth/callback'
-    : 'https://api.speakmcp.com/auth/callback';
+  // Use production worker URL for OAuth callback
+  const redirectUri = 'https://speakmcp-auth.techfren.workers.dev/auth/callback';
 
   // Exchange code for tokens
   const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {

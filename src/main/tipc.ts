@@ -289,9 +289,9 @@ export const router = {
         setTimeout(() => {
           if (server.listening) {
             server.close()
-            reject(new Error('Authentication timeout - no response received'))
+            reject(new Error('Authentication timeout - no response received within 2 minutes'))
           }
-        }, 300000) // 5 minutes timeout
+        }, 120000) // 2 minutes timeout
       }
 
       // Start server on a fixed port for OAuth callback

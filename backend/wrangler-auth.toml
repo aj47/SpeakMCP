@@ -1,0 +1,31 @@
+# Authentication Worker Configuration
+name = "speakmcp-auth"
+main = "src/auth.ts"
+
+# Inherit from base wrangler.toml
+compatibility_date = "2024-01-01"
+
+# D1 Database
+[[d1_databases]]
+binding = "DB"
+database_name = "speakmcp-db"
+database_id = "your-database-id"
+
+# Routes (commented out for local development)
+# [[routes]]
+# pattern = "api.speakmcp.com/auth/*"
+# custom_domain = true
+
+# Environment Variables (for development - use .env.local for actual values)
+[vars]
+JWT_SECRET = "dev-jwt-secret-change-this-in-production"
+GOOGLE_CLIENT_ID = "your-google-client-id"
+GOOGLE_CLIENT_SECRET = "your-google-client-secret"
+GROQ_API_KEY = "your-groq-api-key"
+ALLOWED_ORIGINS = "*"
+
+[env.production.vars]
+JWT_SECRET = "your-jwt-secret"
+GOOGLE_CLIENT_ID = "your-google-client-id"
+GOOGLE_CLIENT_SECRET = "your-google-client-secret"
+ALLOWED_ORIGINS = "https://speakmcp.app"

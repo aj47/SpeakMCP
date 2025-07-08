@@ -1,0 +1,31 @@
+# Cloudflare Workers Infrastructure as Code
+# This is the base configuration - individual workers override main and name
+
+# Default worker configuration (auth worker)
+name = "speakmcp-auth"
+main = "src/auth.ts"
+
+# D1 Database
+[[d1_databases]]
+binding = "DB"
+database_name = "speakmcp-db"
+database_id = "your-database-id"
+migrations_dir = "migrations"
+
+# Environment Variables
+[env.production.vars]
+JWT_SECRET = "your-jwt-secret"
+GOOGLE_CLIENT_ID = "your-google-client-id"
+GOOGLE_CLIENT_SECRET = "your-google-client-secret"
+GROQ_API_KEY = "your-groq-api-key"
+ALLOWED_ORIGINS = "https://speakmcp.app"
+
+[env.development.vars]
+JWT_SECRET = "dev-jwt-secret"
+GOOGLE_CLIENT_ID = "dev-google-client-id"
+GOOGLE_CLIENT_SECRET = "dev-google-client-secret"
+GROQ_API_KEY = "dev-groq-api-key"
+ALLOWED_ORIGINS = "*"
+
+# Shared configuration for all workers
+compatibility_date = "2024-01-01"

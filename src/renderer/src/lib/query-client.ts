@@ -32,11 +32,42 @@ export const useConfigQuery = () => useQuery({
   },
 })
 
+export const useAuthStateQuery = () => useQuery({
+  queryKey: ["auth-state"],
+  queryFn: async () => {
+    return tipcClient.getAuthState()
+  },
+})
+
 
 
 export const useSaveConfigMutation = () => useMutation({
   mutationFn: tipcClient.saveConfig,
   onSuccess() {
+    queryClient.invalidateQueries({
+      queryKey: ["config"],
+    })
+  },
+})
+
+export const useInitiateLoginMutation = () => useMutation({
+  mutationFn: tipcClient.initiateLogin,
+  onSuccess() {
+    queryClient.invalidateQueries({
+      queryKey: ["auth-state"],
+    })
+    queryClient.invalidateQueries({
+      queryKey: ["config"],
+    })
+  },
+})
+
+export const useLogoutMutation = () => useMutation({
+  mutationFn: tipcClient.logout,
+  onSuccess() {
+    queryClient.invalidateQueries({
+      queryKey: ["auth-state"],
+    })
     queryClient.invalidateQueries({
       queryKey: ["config"],
     })

@@ -20,6 +20,21 @@ export interface MCPConfig {
   mcpServers: Record<string, MCPServerConfig>
 }
 
+// Authentication Types
+export interface User {
+  id: string
+  email: string
+  name?: string
+  avatar_url?: string
+  created_at: number
+  updated_at: number
+}
+
+export interface AuthState {
+  user: User | null
+  token: string | null
+}
+
 export type Config = {
   shortcut?: "hold-ctrl" | "ctrl-slash"
   hideDockIcon?: boolean
@@ -56,4 +71,8 @@ export type Config = {
 
   // MCP Server Configuration
   mcpConfig?: MCPConfig
+
+  // Authentication
+  authToken?: string
+  user?: User
 }

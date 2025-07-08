@@ -1,0 +1,35 @@
+# Dependencies
+node_modules/
+.pnpm-debug.log*
+
+# Environment files
+.env
+.env.local
+.env.production
+.env.development
+
+# Wrangler
+.wrangler/
+wrangler.toml.bak
+
+# Build outputs
+dist/
+.output/
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Temporary files
+*.tmp
+*.temp

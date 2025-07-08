@@ -1,0 +1,25 @@
+{
+  "name": "speakmcp-backend",
+  "version": "1.0.0",
+  "description": "Minimal Cloudflare Workers backend for SpeakMCP authentication",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "wrangler dev --config wrangler-auth.toml",
+    "dev:auth": "wrangler dev --config wrangler-auth.toml",
+    "dev:proxy": "wrangler dev --config wrangler-proxy.toml",
+    "deploy": "wrangler deploy",
+    "deploy:auth": "wrangler deploy --config wrangler-auth.toml",
+    "deploy:proxy": "wrangler deploy --config wrangler-proxy.toml",
+    "db:create": "wrangler d1 create speakmcp-db",
+    "db:migrate": "wrangler d1 migrations apply speakmcp-db",
+    "db:migrate:local": "wrangler d1 migrations apply speakmcp-db --local",
+    "type-check": "tsc --noEmit",
+    "test": "echo \"No tests yet\" && exit 0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20241106.0",
+    "typescript": "^5.6.3",
+    "wrangler": "^3.84.0"
+  },
+  "dependencies": {}
+}

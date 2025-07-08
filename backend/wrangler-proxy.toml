@@ -1,0 +1,28 @@
+# API Proxy Worker Configuration
+name = "speakmcp-proxy"
+main = "src/proxy.ts"
+
+# Inherit from base wrangler.toml
+compatibility_date = "2024-01-01"
+
+# D1 Database
+[[d1_databases]]
+binding = "DB"
+database_name = "speakmcp-db"
+database_id = "your-database-id"
+
+# Routes
+[[routes]]
+pattern = "api.speakmcp.com/openai/*"
+custom_domain = true
+
+# Environment Variables
+[env.production.vars]
+JWT_SECRET = "your-jwt-secret"
+GROQ_API_KEY = "your-groq-api-key"
+ALLOWED_ORIGINS = "https://speakmcp.app"
+
+[env.development.vars]
+JWT_SECRET = "dev-jwt-secret"
+GROQ_API_KEY = "dev-groq-api-key"
+ALLOWED_ORIGINS = "*"

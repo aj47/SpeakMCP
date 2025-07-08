@@ -19,6 +19,8 @@ database_id = "your-database-id"
 # Environment Variables loaded from .env.local
 [vars]
 
+[env.development.vars]
+
 [env.production.vars]
 JWT_SECRET = "your-jwt-secret"
 GROQ_API_KEY = "your-groq-api-key"

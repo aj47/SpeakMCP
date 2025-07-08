@@ -60,6 +60,11 @@ export const useInitiateLoginMutation = () => useMutation({
       queryKey: ["config"],
     })
   },
+  onError(error) {
+    console.error('Login mutation failed:', error)
+    // The mutation state will automatically reset to not pending
+    // This ensures the UI can show the retry button
+  },
 })
 
 export const useLogoutMutation = () => useMutation({

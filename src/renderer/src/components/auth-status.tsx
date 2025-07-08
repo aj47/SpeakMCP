@@ -11,10 +11,19 @@ export function AuthStatus() {
 
   const handleLogin = async () => {
     try {
+      // Reset any previous error state
+      initiateLoginMutation.reset()
       await initiateLoginMutation.mutateAsync()
       toast.success("Successfully signed in!")
     } catch (error) {
-      toast.error("Failed to sign in: " + (error as Error).message)
+      const errorMessage = (error as Error).message
+      if (errorMessage.includes('timeout')) {
+        toast.error("Sign in timed out. Please try again.")
+      } else if (errorMessage.includes('Authentication failed')) {
+        toast.error("Authentication was cancelled or failed. Please try again.")
+      } else {
+        toast.error("Failed to sign in: " + errorMessage)
+      }
     }
   }
 
@@ -69,7 +78,9 @@ export function AuthStatus() {
 
   return (
     <div className="space-y-2">
-      <div className="text-xs text-muted-foreground">Not signed in</div>
+      <div className="text-xs text-muted-foreground">
+        {initiateLoginMutation.isError ? "Sign in failed" : "Not signed in"}
+      </div>
       <Button
         variant="default"
         size="sm"
@@ -77,8 +88,18 @@ export function AuthStatus() {
         disabled={initiateLoginMutation.isPending}
         className="w-full h-6 text-xs"
       >
-        {initiateLoginMutation.isPending ? "Signing in..." : "Sign in"}
+        {initiateLoginMutation.isPending
+          ? "Signing in..."
+          : initiateLoginMutation.isError
+            ? "Try again"
+            : "Sign in"
+        }
       </Button>
+      {initiateLoginMutation.isError && (
+        <div className="text-xs text-muted-foreground text-center">
+          Close the browser? Click "Try again" to retry.
+        </div>
+      )}
     </div>
   )
 }

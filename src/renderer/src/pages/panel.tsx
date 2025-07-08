@@ -5,6 +5,8 @@ import { cn } from "@renderer/lib/utils"
 import { useMutation } from "@tanstack/react-query"
 import { useEffect, useRef, useState } from "react"
 import { rendererHandlers, tipcClient } from "~/lib/tipc-client"
+import { useAuthStateQuery } from "@renderer/lib/query-client"
+import { AuthWarningModal } from "@renderer/components/auth-warning-modal"
 
 
 
@@ -14,12 +16,14 @@ const getInitialVisualizerData = () =>
   Array<number>(VISUALIZER_BUFFER_LENGTH).fill(-1000)
 
 export function Component() {
-
+  const authStateQuery = useAuthStateQuery()
   const [visualizerData, setVisualizerData] = useState(() =>
     getInitialVisualizerData(),
   )
   const [recording, setRecording] = useState(false)
   const [mcpMode, setMcpMode] = useState(false)
+  const [showAuthWarning, setShowAuthWarning] = useState(false)
+  const [authWarningMode, setAuthWarningMode] = useState<"regular" | "mcp">("regular")
   const isConfirmedRef = useRef(false)
   const mcpModeRef = useRef(false)
 
@@ -74,6 +78,19 @@ export function Component() {
   })
 
   const recorderRef = useRef<Recorder | null>(null)
+
+  // Helper function to check authentication before recording
+  const checkAuthAndStartRecording = (mode: "regular" | "mcp" = "regular") => {
+    const isAuthenticated = authStateQuery.data?.user && authStateQuery.data?.token
+
+    if (!isAuthenticated) {
+      setAuthWarningMode(mode)
+      setShowAuthWarning(true)
+      return false
+    }
+
+    return true
+  }
 
   useEffect(() => {
     if (recorderRef.current) return
@@ -166,19 +183,31 @@ export function Component() {
         isConfirmedRef.current = true
         recorderRef.current?.stopRecording()
       } else {
+        // Check authentication before starting recording
+        if (!checkAuthAndStartRecording("regular")) {
+          return
+        }
+
         tipcClient.showPanelWindow()
         recorderRef.current?.startRecording()
       }
     })
 
     return unlisten
-  }, [recording])
+  }, [recording, authStateQuery.data])
 
   // MCP handlers
   useEffect(() => {
 
     const unlisten = rendererHandlers.startMcpRecording.listen(() => {
       console.log("[MCP-DEBUG] 🎤 startMcpRecording handler triggered")
+
+      // Check authentication before starting MCP recording
+      if (!checkAuthAndStartRecording("mcp")) {
+        console.log("[MCP-DEBUG] Authentication required, showing warning modal")
+        return
+      }
+
       console.log("[MCP-DEBUG] Setting mcpMode to true")
       setMcpMode(true)
       mcpModeRef.current = true
@@ -188,7 +217,7 @@ export function Component() {
     })
 
     return unlisten
-  }, [])
+  }, [authStateQuery.data])
 
   useEffect(() => {
     const unlisten = rendererHandlers.finishMcpRecording.listen(() => {
@@ -210,6 +239,13 @@ export function Component() {
         recorderRef.current?.stopRecording()
       } else {
         console.log("[MCP-DEBUG] Not recording, starting MCP recording")
+
+        // Check authentication before starting MCP recording
+        if (!checkAuthAndStartRecording("mcp")) {
+          console.log("[MCP-DEBUG] Authentication required, showing warning modal")
+          return
+        }
+
         setMcpMode(true)
         tipcClient.showPanelWindow()
         recorderRef.current?.startRecording()
@@ -217,7 +253,7 @@ export function Component() {
     })
 
     return unlisten
-  }, [recording])
+  }, [recording, authStateQuery.data])
 
   return (
     <div className="flex h-screen dark:text-white">
@@ -261,6 +297,12 @@ export function Component() {
           </div>
         </div>
       )}
+
+      <AuthWarningModal
+        open={showAuthWarning}
+        onOpenChange={setShowAuthWarning}
+        mode={authWarningMode}
+      />
     </div>
   )
 }

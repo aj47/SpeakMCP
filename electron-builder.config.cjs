@@ -8,6 +8,9 @@ module.exports = {
     buildResources: "build",
   },
   files: [
+    "out/**/*",
+    "node_modules/**/*",
+    "package.json",
     "!**/.vscode/*",
     "!src/*",
     "!scripts/*",

@@ -20,7 +20,7 @@ async function setAuthTokenHelper(token: string): Promise<{ success: boolean; us
     const isDevelopment = process.env.NODE_ENV === 'development' || !app.isPackaged
     const baseUrl = isDevelopment
       ? "http://localhost:8787"  // Auth worker port
-      : "https://auth.speakmcp.techfren.net"
+      : "https://speakmcp-auth.techfren.workers.dev"
 
     const response = await fetch(`${baseUrl}/auth/me`, {
       headers: {
@@ -274,7 +274,7 @@ export const router = {
         const isDevelopment = process.env.NODE_ENV === 'development' || !app.isPackaged
         const baseUrl = isDevelopment
           ? "http://localhost:8787"
-          : "https://auth.speakmcp.techfren.net"
+          : "https://speakmcp-auth.techfren.workers.dev"
 
         // Create OAuth URL with our local callback
         const callbackUrl = `http://localhost:${port}/auth/callback`
@@ -392,7 +392,7 @@ export const router = {
         const isDevelopment = process.env.NODE_ENV === 'development' || !app.isPackaged
         const baseUrl = isDevelopment
           ? "http://localhost:8788"  // Proxy worker port
-          : "https://api.speakmcp.com"
+          : "https://speakmcp-proxy.techfren.workers.dev"
 
         const transcriptResponse = await fetch(
           `${baseUrl}/openai/v1/audio/transcriptions`,
@@ -488,7 +488,7 @@ export const router = {
       const isDevelopment = process.env.NODE_ENV === 'development' || !app.isPackaged
       const baseUrl = isDevelopment
         ? "http://localhost:8788"  // Proxy worker port
-        : "https://proxy.speakmcp.techfren.net"
+        : "https://speakmcp-proxy.techfren.workers.dev"
 
       const transcriptResponse = await fetch(
         `${baseUrl}/openai/v1/audio/transcriptions`,

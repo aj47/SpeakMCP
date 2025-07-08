@@ -133,38 +133,25 @@ export async function postProcessTranscript(transcript: string) {
     transcript,
   )
 
-  const chatProviderId = config.transcriptPostProcessingProviderId
-
-  if (chatProviderId === "gemini") {
-    if (!config.geminiApiKey) throw new Error("Gemini API key is required")
-
-    const gai = new GoogleGenerativeAI(config.geminiApiKey)
-    const geminiModel = config.transcriptPostProcessingGeminiModel || "gemini-1.5-flash-002"
-    const gModel = gai.getGenerativeModel({ model: geminiModel })
-
-    const result = await gModel.generateContent([prompt], {
-      baseUrl: config.geminiBaseUrl,
-    })
-    return result.response.text().trim()
+  // Use proxy server for all chat completions
+  if (!config.authToken) {
+    throw new Error("Authentication required. Please sign in to use SpeakMCP.")
   }
 
-  const chatBaseUrl =
-    chatProviderId === "groq"
-      ? config.groqBaseUrl || "https://api.groq.com/openai/v1"
-      : config.openaiBaseUrl || "https://api.openai.com/v1"
+  const isDevelopment = process.env.NODE_ENV === 'development' || !require('electron').app.isPackaged
+  const baseUrl = isDevelopment
+    ? "http://localhost:8788"  // Proxy worker port
+    : "https://api.speakmcp.com"
 
-  const chatResponse = await fetch(`${chatBaseUrl}/chat/completions`, {
+  const chatResponse = await fetch(`${baseUrl}/openai/v1/chat/completions`, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${chatProviderId === "groq" ? config.groqApiKey : config.openaiApiKey}`,
+      Authorization: `Bearer ${config.authToken}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
       temperature: 0,
-      model:
-        chatProviderId === "groq"
-          ? config.transcriptPostProcessingGroqModel || "gemma2-9b-it"
-          : config.transcriptPostProcessingOpenaiModel || "gpt-4o-mini",
+      model: "gemma2-9b-it", // Default to Groq model via proxy
       messages: [
         {
           role: "system",
@@ -199,8 +186,7 @@ export async function processTranscriptWithTools(
     return { content: transcript }
   }
 
-  const chatProviderId = config.mcpToolsProviderId || "openai"
-  console.log(`[MCP-DEBUG] Using LLM provider: ${chatProviderId}`)
+  console.log("[MCP-DEBUG] Using proxy server for LLM processing")
 
   // Create system prompt with available tools
   const systemPrompt = config.mcpToolsSystemPrompt || `You are a helpful assistant that can execute tools based on user requests.
@@ -263,53 +249,25 @@ Remember: Respond with ONLY the JSON object, no markdown formatting, no code blo
     }
   ]
 
-  if (chatProviderId === "gemini") {
-    console.log("[MCP-DEBUG] Using Gemini for LLM processing")
-    if (!config.geminiApiKey) throw new Error("Gemini API key is required")
-
-    const gai = new GoogleGenerativeAI(config.geminiApiKey)
-    const geminiModel = config.mcpToolsGeminiModel || "gemini-1.5-flash-002"
-    console.log(`[MCP-DEBUG] Using Gemini model: ${geminiModel}`)
-    const gModel = gai.getGenerativeModel({ model: geminiModel })
-
-    const prompt = messages.map(m => `${m.role}: ${m.content}`).join('\n\n')
-    console.log(`[MCP-DEBUG] Sending prompt to Gemini:`, prompt)
-
-    const result = await gModel.generateContent([prompt], {
-      baseUrl: config.geminiBaseUrl,
-    })
-
-    const responseText = result.response.text().trim()
-    console.log(`[MCP-DEBUG] Gemini response:`, responseText)
-
-    const parsed = extractAndParseJSON(responseText)
-    if (parsed) {
-      console.log(`[MCP-DEBUG] ✅ Successfully parsed Gemini JSON response:`, parsed)
-      return parsed
-    } else {
-      console.log(`[MCP-DEBUG] ⚠️ Failed to extract JSON from Gemini response, returning as content`)
-      return { content: responseText }
-    }
+  // Use proxy server for all chat completions
+  if (!config.authToken) {
+    throw new Error("Authentication required. Please sign in to use SpeakMCP.")
   }
 
-  console.log(`[MCP-DEBUG] Using ${chatProviderId} for LLM processing`)
+  const isDevelopment = process.env.NODE_ENV === 'development' || !require('electron').app.isPackaged
+  const baseUrl = isDevelopment
+    ? "http://localhost:8788"  // Proxy worker port
+    : "https://api.speakmcp.com"
 
-  const chatBaseUrl =
-    chatProviderId === "groq"
-      ? config.groqBaseUrl || "https://api.groq.com/openai/v1"
-      : config.openaiBaseUrl || "https://api.openai.com/v1"
-
-  const model = chatProviderId === "groq"
-    ? config.mcpToolsGroqModel || "gemma2-9b-it"
-    : config.mcpToolsOpenaiModel || "gpt-4o-mini"
+  const model = "gemma2-9b-it" // Default to Groq model via proxy
 
   console.log(`[MCP-DEBUG] Using model: ${model}`)
-  console.log(`[MCP-DEBUG] Sending request to: ${chatBaseUrl}/chat/completions`)
+  console.log(`[MCP-DEBUG] Sending request to: ${baseUrl}/openai/v1/chat/completions`)
 
-  const chatResponse = await fetch(`${chatBaseUrl}/chat/completions`, {
+  const chatResponse = await fetch(`${baseUrl}/openai/v1/chat/completions`, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${chatProviderId === "groq" ? config.groqApiKey : config.openaiApiKey}`,
+      Authorization: `Bearer ${config.authToken}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({

@@ -39,34 +39,16 @@ export type Config = {
   shortcut?: "hold-ctrl" | "ctrl-slash"
   hideDockIcon?: boolean
 
-  sttProviderId?: STT_PROVIDER_ID
-
-  openaiApiKey?: string
-  openaiBaseUrl?: string
-
-  groqApiKey?: string
-  groqBaseUrl?: string
+  // STT Configuration (simplified for proxy usage)
   groqSttPrompt?: string
 
-  geminiApiKey?: string
-  geminiBaseUrl?: string
-
-
-
+  // Transcript Post-Processing Configuration (simplified for proxy usage)
   transcriptPostProcessingEnabled?: boolean
-  transcriptPostProcessingProviderId?: CHAT_PROVIDER_ID
   transcriptPostProcessingPrompt?: string
-  transcriptPostProcessingOpenaiModel?: string
-  transcriptPostProcessingGroqModel?: string
-  transcriptPostProcessingGeminiModel?: string
 
-  // MCP Tool Calling Configuration
+  // MCP Tool Calling Configuration (simplified for proxy usage)
   mcpToolsEnabled?: boolean
   mcpToolsShortcut?: "hold-ctrl-alt" | "ctrl-alt-slash"
-  mcpToolsProviderId?: CHAT_PROVIDER_ID
-  mcpToolsOpenaiModel?: string
-  mcpToolsGroqModel?: string
-  mcpToolsGeminiModel?: string
   mcpToolsSystemPrompt?: string
 
   // MCP Server Configuration

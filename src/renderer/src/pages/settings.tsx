@@ -8,14 +8,6 @@ export function Component() {
       href: "/settings",
     },
     {
-      text: "Providers",
-      href: "/settings/providers",
-    },
-    {
-      text: "Tools",
-      href: "/settings/tools",
-    },
-    {
       text: "Data",
       href: "/settings/data",
     },

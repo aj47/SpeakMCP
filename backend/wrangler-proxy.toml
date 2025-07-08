@@ -11,18 +11,15 @@ binding = "DB"
 database_name = "speakmcp-db"
 database_id = "your-database-id"
 
-# Routes
-[[routes]]
-pattern = "api.speakmcp.com/openai/*"
-custom_domain = true
+# Routes (commented out for local development)
+# [[routes]]
+# pattern = "api.speakmcp.com/openai/*"
+# custom_domain = true
 
-# Environment Variables
+# Environment Variables loaded from .env.local
+[vars]
+
 [env.production.vars]
 JWT_SECRET = "your-jwt-secret"
 GROQ_API_KEY = "your-groq-api-key"
 ALLOWED_ORIGINS = "https://speakmcp.app"
-
-[env.development.vars]
-JWT_SECRET = "dev-jwt-secret"
-GROQ_API_KEY = "dev-groq-api-key"
-ALLOWED_ORIGINS = "*"

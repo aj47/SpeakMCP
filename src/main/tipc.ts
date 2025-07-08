@@ -19,7 +19,7 @@ async function setAuthTokenHelper(token: string): Promise<{ success: boolean; us
   try {
     const isDevelopment = process.env.NODE_ENV === 'development' || !app.isPackaged
     const baseUrl = isDevelopment
-      ? "http://localhost:8787"
+      ? "http://localhost:8787"  // Auth worker port
       : "https://api.speakmcp.com"
 
     const response = await fetch(`${baseUrl}/auth/me`, {
@@ -371,34 +371,35 @@ export const router = {
       const config = configStore.get()
       let transcript: string
 
-      // Use OpenAI or Groq for transcription
+      // Use proxy server for transcription
+        if (!config.authToken) {
+          throw new Error("Authentication required. Please sign in to use SpeakMCP.")
+        }
+
         const form = new FormData()
         form.append(
           "file",
           new File([input.recording], "recording.webm", { type: "audio/webm" }),
         )
-        form.append(
-          "model",
-          config.sttProviderId === "groq" ? "whisper-large-v3" : "whisper-1",
-        )
+        form.append("model", "whisper-large-v3") // Default to Groq model via proxy
         form.append("response_format", "json")
 
-        // Add prompt parameter for Groq if provided
-        if (config.sttProviderId === "groq" && config.groqSttPrompt?.trim()) {
+        // Add prompt parameter if provided
+        if (config.groqSttPrompt?.trim()) {
           form.append("prompt", config.groqSttPrompt.trim())
         }
 
-        const groqBaseUrl = config.groqBaseUrl || "https://api.groq.com/openai/v1"
-        const openaiBaseUrl = config.openaiBaseUrl || "https://api.openai.com/v1"
+        const isDevelopment = process.env.NODE_ENV === 'development' || !app.isPackaged
+        const baseUrl = isDevelopment
+          ? "http://localhost:8788"  // Proxy worker port
+          : "https://api.speakmcp.com"
 
         const transcriptResponse = await fetch(
-          config.sttProviderId === "groq"
-            ? `${groqBaseUrl}/audio/transcriptions`
-            : `${openaiBaseUrl}/audio/transcriptions`,
+          `${baseUrl}/openai/v1/audio/transcriptions`,
           {
             method: "POST",
             headers: {
-              Authorization: `Bearer ${config.sttProviderId === "groq" ? config.groqApiKey : config.openaiApiKey}`,
+              Authorization: `Bearer ${config.authToken}`,
             },
             body: form,
           },
@@ -488,25 +489,32 @@ export const router = {
           transcript = result.text || ""
           console.log(`[MCP-DEBUG] ✅ Lightning Whisper transcription successful: "${transcript}"`)
         } catch (error) {
-          console.error("[MCP-DEBUG] ❌ Lightning Whisper MLX failed, falling back to OpenAI:", error)
+          console.error("[MCP-DEBUG] ❌ Lightning Whisper MLX failed, falling back to proxy server:", error)
 
-          // Fallback to OpenAI if lightning-whisper-mlx fails
+          // Fallback to proxy server if lightning-whisper-mlx fails
+          if (!config.authToken) {
+            throw new Error("Authentication required. Please sign in to use SpeakMCP.")
+          }
+
           const form = new FormData()
           form.append(
             "file",
             new File([input.recording], "recording.webm", { type: "audio/webm" }),
           )
-          form.append("model", "whisper-1")
+          form.append("model", "whisper-large-v3")
           form.append("response_format", "json")
 
-          const openaiBaseUrl = config.openaiBaseUrl || "https://api.openai.com/v1"
+          const isDevelopment = process.env.NODE_ENV === 'development' || !app.isPackaged
+          const baseUrl = isDevelopment
+            ? "http://localhost:8788"  // Proxy worker port
+            : "https://api.speakmcp.com"
 
           const transcriptResponse = await fetch(
-            `${openaiBaseUrl}/audio/transcriptions`,
+            `${baseUrl}/openai/v1/audio/transcriptions`,
             {
               method: "POST",
               headers: {
-                Authorization: `Bearer ${config.openaiApiKey}`,
+                Authorization: `Bearer ${config.authToken}`,
               },
               body: form,
             },
@@ -519,37 +527,39 @@ export const router = {
 
           const json: { text: string } = await transcriptResponse.json()
           transcript = json.text
-          console.log(`[MCP-DEBUG] ✅ Fallback OpenAI transcription successful: "${transcript}"`)
+          console.log(`[MCP-DEBUG] ✅ Fallback proxy server transcription successful: "${transcript}"`)
         }
       } else {
-        // Use OpenAI or Groq for transcription
-        console.log(`[MCP-DEBUG] Using ${config.sttProviderId} for transcription`)
+        // Use proxy server for transcription
+        console.log("[MCP-DEBUG] Using proxy server for transcription")
+
+        if (!config.authToken) {
+          throw new Error("Authentication required. Please sign in to use SpeakMCP.")
+        }
+
         const form = new FormData()
         form.append(
           "file",
           new File([input.recording], "recording.webm", { type: "audio/webm" }),
         )
-        form.append(
-          "model",
-          config.sttProviderId === "groq" ? "whisper-large-v3" : "whisper-1",
-        )
+        form.append("model", "whisper-large-v3") // Default to Groq model via proxy
         form.append("response_format", "json")
 
-        if (config.sttProviderId === "groq" && config.groqSttPrompt?.trim()) {
+        if (config.groqSttPrompt?.trim()) {
           form.append("prompt", config.groqSttPrompt.trim())
         }
 
-        const groqBaseUrl = config.groqBaseUrl || "https://api.groq.com/openai/v1"
-        const openaiBaseUrl = config.openaiBaseUrl || "https://api.openai.com/v1"
+        const isDevelopment = process.env.NODE_ENV === 'development' || !app.isPackaged
+        const baseUrl = isDevelopment
+          ? "http://localhost:8788"  // Proxy worker port
+          : "https://api.speakmcp.com"
 
         const transcriptResponse = await fetch(
-          config.sttProviderId === "groq"
-            ? `${groqBaseUrl}/audio/transcriptions`
-            : `${openaiBaseUrl}/audio/transcriptions`,
+          `${baseUrl}/openai/v1/audio/transcriptions`,
           {
             method: "POST",
             headers: {
-              Authorization: `Bearer ${config.sttProviderId === "groq" ? config.groqApiKey : config.openaiApiKey}`,
+              Authorization: `Bearer ${config.authToken}`,
             },
             body: form,
           },
@@ -562,7 +572,7 @@ export const router = {
 
         const json: { text: string } = await transcriptResponse.json()
         transcript = json.text
-        console.log(`[MCP-DEBUG] ✅ ${config.sttProviderId} transcription successful: "${transcript}"`)
+        console.log(`[MCP-DEBUG] ✅ Proxy server transcription successful: "${transcript}"`)
       }
 
       // Process transcript with MCP tools

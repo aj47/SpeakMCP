@@ -16,13 +16,8 @@ database_id = "your-database-id"
 # pattern = "api.speakmcp.com/auth/*"
 # custom_domain = true
 
-# Environment Variables (for development - use .env.local for actual values)
+# Environment Variables loaded from .env.local
 [vars]
-JWT_SECRET = "dev-jwt-secret-change-this-in-production"
-GOOGLE_CLIENT_ID = "your-google-client-id"
-GOOGLE_CLIENT_SECRET = "your-google-client-secret"
-GROQ_API_KEY = "your-groq-api-key"
-ALLOWED_ORIGINS = "*"
 
 [env.production.vars]
 JWT_SECRET = "your-jwt-secret"

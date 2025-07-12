@@ -43,30 +43,41 @@ module.exports = {
   mac: {
     artifactName: "${productName}-${version}-${arch}.${ext}",
     entitlementsInherit: "build/entitlements.mac.plist",
-    identity: process.env.CSC_NAME || "Apple Development",
-    extendInfo: [
+    entitlements: "build/entitlements.mac.plist",
+    hardenedRuntime: true,
+    gatekeeperAssess: false,
+    identity: process.env.CSC_NAME || "Developer ID Application",
+    category: "public.app-category.productivity",
+    target: [
       {
-        NSCameraUsageDescription:
-          "Application requests access to the device's camera.",
+        target: "dmg",
+        arch: ["x64", "arm64"]
       },
       {
-        NSMicrophoneUsageDescription:
-          "Application requests access to the device's microphone.",
-      },
-      {
-        NSDocumentsFolderUsageDescription:
-          "Application requests access to the user's Documents folder.",
-      },
-      {
-        NSDownloadsFolderUsageDescription:
-          "Application requests access to the user's Downloads folder.",
-      },
+        target: "zip",
+        arch: ["x64", "arm64"]
+      }
     ],
-    notarize: process.env.APPLE_TEAM_ID
+    extendInfo: {
+      NSCameraUsageDescription: "SpeakMCP may request camera access for enhanced AI features.",
+      NSMicrophoneUsageDescription: "SpeakMCP requires microphone access for voice dictation and transcription.",
+      NSDocumentsFolderUsageDescription: "SpeakMCP may access your Documents folder to save transcriptions and settings.",
+      NSDownloadsFolderUsageDescription: "SpeakMCP may access your Downloads folder to save exported files.",
+      LSMinimumSystemVersion: "10.15.0",
+      CFBundleURLTypes: [
+        {
+          CFBundleURLName: "SpeakMCP Protocol",
+          CFBundleURLSchemes: ["speakmcp"]
+        }
+      ]
+    },
+    notarize: process.env.APPLE_TEAM_ID && process.env.APPLE_ID && process.env.APPLE_APP_SPECIFIC_PASSWORD
       ? {
           teamId: process.env.APPLE_TEAM_ID,
+          appleId: process.env.APPLE_ID,
+          appleIdPassword: process.env.APPLE_APP_SPECIFIC_PASSWORD,
         }
-      : undefined,
+      : false,
   },
   dmg: {
     artifactName: "${productName}-${version}-${arch}.${ext}",

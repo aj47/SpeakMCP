@@ -10,6 +10,11 @@ export function Component() {
     queryFn: () => tipcClient.isAccessibilityGranted(),
   })
 
+  // Check if all required permissions are granted
+  const microphoneGranted = microphoneStatusQuery.data === "granted"
+  const accessibilityGranted = isAccessibilityGrantedQuery.data
+  const allPermissionsGranted = microphoneGranted && (process.env.IS_MAC ? accessibilityGranted : true)
+
   return (
     <div className="app-drag-region flex h-dvh items-center justify-center p-10">
       <div className="-mt-20">
@@ -52,16 +57,29 @@ export function Component() {
           </div>
         </div>
 
+        {/* Show restart instructions when permissions are granted */}
+        {allPermissionsGranted && (
+          <div className="mt-6 rounded-lg border border-green-200 bg-green-50 p-4 text-center dark:border-green-800 dark:bg-green-950">
+            <div className="flex items-center justify-center gap-2 text-green-700 dark:text-green-300">
+              <span className="i-mingcute-check-circle-fill text-lg"></span>
+              <span className="font-semibold">All permissions granted!</span>
+            </div>
+            <p className="mt-2 text-sm text-green-600 dark:text-green-400">
+              Please restart the app to complete the setup and start using {process.env.PRODUCT_NAME}.
+            </p>
+          </div>
+        )}
+
         <div className="mt-10 flex items-center justify-center">
           <Button
-            variant="outline"
-            className="gap-2"
+            variant={allPermissionsGranted ? "default" : "outline"}
+            className={`gap-2 ${allPermissionsGranted ? "animate-pulse bg-green-600 hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-800" : ""}`}
             onClick={() => {
               tipcClient.restartApp()
             }}
           >
             <span className="i-mingcute-refresh-2-line"></span>
-            <span>Restart App</span>
+            <span>{allPermissionsGranted ? "Restart App Now" : "Restart App"}</span>
           </Button>
         </div>
       </div>

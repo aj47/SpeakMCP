@@ -120,7 +120,7 @@ describe('MCP PATH Resolution', () => {
         expect(npxPath).toMatch(/npx/)
       } catch (error) {
         // npx might not be available in test environment
-        expect(error.message).toContain('npx not found')
+        expect((error as Error).message).toContain('npx not found')
       }
     })
 

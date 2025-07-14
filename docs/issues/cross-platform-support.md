@@ -12,7 +12,7 @@ Expand SpeakMCP's platform support to include Linux distributions and improve cr
 
 ### Supported Platforms
 - ✅ **macOS (Apple Silicon)** - Full support with Lightning Whisper MLX
-- ✅ **Windows x64** - Full support with cloud providers
+- ✅ **Windows x64** - Full support with cloud providers (build issues resolved 2025-07-14)
 - ❌ **Linux** - Not currently supported
 - ❌ **macOS (Intel)** - Limited support (no Lightning Whisper MLX)
 
@@ -29,6 +29,9 @@ Expand SpeakMCP's platform support to include Linux distributions and improve cr
 - System tray integration
 - Keyboard event monitoring
 - Text injection via Windows API
+- Cross-platform build system (batch + Node.js)
+- TypeScript compilation with Vitest testing
+- Native module compilation (node-gyp)
 
 ## Linux Support Requirements
 

@@ -1,36 +1,37 @@
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { MCPService } from '../mcp-service'
 import { configStore } from '../config'
 import { MCPConfig, MCPServerConfig } from '../../shared/types'
 
 // Mock the dependencies
-jest.mock('../config', () => ({
+vi.mock('../config', () => ({
   configStore: {
-    get: jest.fn()
+    get: vi.fn()
   }
 }))
 
-jest.mock('@modelcontextprotocol/sdk/client/index.js', () => ({
-  Client: jest.fn().mockImplementation(() => ({
-    connect: jest.fn(),
-    listTools: jest.fn().mockResolvedValue({ tools: [] }),
-    callTool: jest.fn(),
-    close: jest.fn()
+vi.mock('@modelcontextprotocol/sdk/client/index.js', () => ({
+  Client: vi.fn().mockImplementation(() => ({
+    connect: vi.fn(),
+    listTools: vi.fn().mockResolvedValue({ tools: [] }),
+    callTool: vi.fn(),
+    close: vi.fn()
   }))
 }))
 
-jest.mock('@modelcontextprotocol/sdk/client/stdio.js', () => ({
-  StdioClientTransport: jest.fn().mockImplementation(() => ({
-    close: jest.fn()
+vi.mock('@modelcontextprotocol/sdk/client/stdio.js', () => ({
+  StdioClientTransport: vi.fn().mockImplementation(() => ({
+    close: vi.fn()
   }))
 }))
 
 describe('MCPService', () => {
   let mcpService: MCPService
-  const mockConfigStore = configStore as jest.Mocked<typeof configStore>
+  const mockConfigStore = configStore as any
 
   beforeEach(() => {
     mcpService = new MCPService()
-    jest.clearAllMocks()
+    vi.clearAllMocks()
   })
 
   describe('initialize', () => {

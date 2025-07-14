@@ -20,6 +20,19 @@ import { updateTrayIcon } from "./tray"
 import { isAccessibilityGranted } from "./utils"
 import { writeText } from "./keyboard"
 
+// Stub for lightning-whisper-mlx until implementation is available
+const transcribeWithLightningWhisper = async (_recording: ArrayBuffer, _options: {
+  model: string
+  batchSize: number
+  quant: string | null
+}): Promise<{ success: boolean; text: string; error?: string }> => {
+  return {
+    success: false,
+    text: "",
+    error: "Lightning Whisper MLX is not yet implemented on Windows"
+  }
+}
+
 
 const t = tipc.create()
 
@@ -519,7 +532,7 @@ export const router = {
 
       return mcpConfig
     } catch (error) {
-      throw new Error(`Failed to load MCP config: ${error.message}`)
+      throw new Error(`Failed to load MCP config: ${(error as Error).message}`)
     }
   }),
 
@@ -543,7 +556,7 @@ export const router = {
         fs.writeFileSync(result.filePath, JSON.stringify(input.config, null, 2))
         return true
       } catch (error) {
-        throw new Error(`Failed to save MCP config: ${error.message}`)
+        throw new Error(`Failed to save MCP config: ${(error as Error).message}`)
       }
     }),
 
@@ -575,7 +588,7 @@ export const router = {
 
         return { valid: true }
       } catch (error) {
-        return { valid: false, error: error.message }
+        return { valid: false, error: (error as Error).message }
       }
     }),
 

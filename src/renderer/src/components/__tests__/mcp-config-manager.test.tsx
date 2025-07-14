@@ -1,32 +1,33 @@
 import React from 'react'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { MCPConfigManager } from '../mcp-config-manager'
 import { MCPConfig } from '@shared/types'
 import { toast } from 'sonner'
 
 // Mock dependencies
-jest.mock('@renderer/lib/tipc-client', () => ({
+vi.mock('@renderer/lib/tipc-client', () => ({
   tipcClient: {
-    loadMcpConfigFile: jest.fn(),
-    saveMcpConfigFile: jest.fn(),
-    getMcpServerStatus: jest.fn(),
-    restartMcpServer: jest.fn(),
-    stopMcpServer: jest.fn()
+    loadMcpConfigFile: vi.fn(),
+    saveMcpConfigFile: vi.fn(),
+    getMcpServerStatus: vi.fn(),
+    restartMcpServer: vi.fn(),
+    stopMcpServer: vi.fn()
   }
 }))
 
-jest.mock('sonner', () => ({
+vi.mock('sonner', () => ({
   toast: {
-    success: jest.fn(),
-    error: jest.fn()
+    success: vi.fn(),
+    error: vi.fn()
   }
 }))
 
 const mockTipcClient = require('@renderer/lib/tipc-client').tipcClient
-const mockToast = toast as jest.Mocked<typeof toast>
+const mockToast = toast as any
 
 describe('MCPConfigManager', () => {
-  const mockOnConfigChange = jest.fn()
+  const mockOnConfigChange = vi.fn()
   
   const defaultConfig: MCPConfig = {
     mcpServers: {}
@@ -50,7 +51,7 @@ describe('MCPConfigManager', () => {
   }
 
   beforeEach(() => {
-    jest.clearAllMocks()
+    vi.clearAllMocks()
     mockTipcClient.getMcpServerStatus.mockResolvedValue({})
   })
 

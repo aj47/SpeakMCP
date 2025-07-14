@@ -7,6 +7,10 @@ export const STT_PROVIDERS = [
     label: "Groq",
     value: "groq",
   },
+  {
+    label: "Lightning Whisper MLX",
+    value: "lightning-whisper-mlx",
+  },
 ] as const
 
 export type STT_PROVIDER_ID = (typeof STT_PROVIDERS)[number]["value"]

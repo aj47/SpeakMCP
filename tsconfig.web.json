@@ -13,6 +13,7 @@
     "jsx": "react-jsx",
     "moduleResolution": "Bundler",
     "noUnusedLocals": false,
+    "types": ["vitest/globals", "@testing-library/jest-dom"],
     "baseUrl": ".",
     "paths": {
       "@renderer/*": [

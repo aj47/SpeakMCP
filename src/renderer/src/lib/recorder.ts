@@ -3,16 +3,7 @@ import { playSound } from "./sound"
 
 const MIN_DECIBELS = -45
 
-const logTime = (label: string) => {
-  let time = performance.now()
-  console.log(`${label} started at`, time)
 
-  return (step: string) => {
-    const now = performance.now()
-    console.log(`${label} / ${step} took`, now - time)
-    time = now
-  }
-}
 
 const calculateRMS = (data: Uint8Array) => {
   let sumSquares = 0
@@ -93,8 +84,6 @@ export class Recorder extends EventEmitter<{
   async startRecording() {
     this.stopRecording()
 
-    const log = logTime("startRecording")
-
     const stream = (this.stream = await navigator.mediaDevices.getUserMedia({
       audio: {
         deviceId: "default",
@@ -102,19 +91,14 @@ export class Recorder extends EventEmitter<{
       video: false,
     }))
 
-    log("getUserMedia")
-
     const mediaRecorder = (this.mediaRecorder = new MediaRecorder(stream, {
       audioBitsPerSecond: 128e3,
     }))
-    log("new MediaRecorder")
 
     let audioChunks: Blob[] = []
     let startTime = Date.now()
 
-    // Start timing for mediaRecorder.onstart
     mediaRecorder.onstart = () => {
-      log("onstart")
       startTime = Date.now()
       this.emit("record-start")
       const stopAnalysing = this.analyseAudio(stream)

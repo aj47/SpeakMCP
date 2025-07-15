@@ -37,19 +37,14 @@ function isValidLLMResponse(obj: any): obj is LLMToolCallResponse {
  * Handles cases where JSON is wrapped in markdown code blocks or mixed with text
  */
 function extractAndParseJSON(responseText: string): LLMToolCallResponse | null {
-  console.log(`[MCP-DEBUG] 🔍 Attempting to extract JSON from response: "${responseText.substring(0, 200)}..."`)
-
   // First, try direct JSON parsing
   try {
     const parsed = JSON.parse(responseText.trim())
     if (isValidLLMResponse(parsed)) {
-      console.log(`[MCP-DEBUG] ✅ Direct JSON parse successful`)
       return parsed
-    } else {
-      console.log(`[MCP-DEBUG] ⚠️ Direct JSON parse successful but invalid structure`)
     }
   } catch (error) {
-    console.log(`[MCP-DEBUG] ⚠️ Direct JSON parse failed, trying extraction methods`)
+    // Continue to extraction methods
   }
 
   // Try to extract JSON from markdown code blocks
@@ -60,13 +55,10 @@ function extractAndParseJSON(responseText: string): LLMToolCallResponse | null {
     try {
       const parsed = JSON.parse(match[1].trim())
       if (isValidLLMResponse(parsed)) {
-        console.log(`[MCP-DEBUG] ✅ JSON extracted from code block`)
         return parsed
-      } else {
-        console.log(`[MCP-DEBUG] ⚠️ JSON from code block has invalid structure`)
       }
     } catch (error) {
-      console.log(`[MCP-DEBUG] ⚠️ Failed to parse JSON from code block`)
+      // Continue to next extraction method
     }
   }
 
@@ -105,7 +97,6 @@ function extractAndParseJSON(responseText: string): LLMToolCallResponse | null {
       try {
         const parsed = JSON.parse(potentialJson.trim())
         if (isValidLLMResponse(parsed)) {
-          console.log(`[MCP-DEBUG] ✅ JSON extracted from text content`)
           return parsed
         }
       } catch (error) {
@@ -114,7 +105,6 @@ function extractAndParseJSON(responseText: string): LLMToolCallResponse | null {
     }
   }
 
-  console.log(`[MCP-DEBUG] ❌ Failed to extract valid JSON from response`)
   return null
 }
 
@@ -181,7 +171,6 @@ export async function postProcessTranscript(transcript: string) {
   }
 
   const chatJson = await chatResponse.json()
-  console.log(chatJson)
   return chatJson.choices[0].message.content.trim()
 }
 
@@ -189,18 +178,11 @@ export async function processTranscriptWithTools(
   transcript: string,
   availableTools: MCPTool[]
 ): Promise<LLMToolCallResponse> {
-  console.log(`[MCP-DEBUG] 🧠 Processing transcript with tools: "${transcript}"`)
-  console.log(`[MCP-DEBUG] Available tools: ${availableTools.length}`, availableTools.map(t => t.name))
-
   const config = configStore.get()
 
   if (!config.mcpToolsEnabled) {
-    console.log("[MCP-DEBUG] MCP tools disabled, returning transcript as-is")
     return { content: transcript }
   }
-
-  const chatProviderId = config.mcpToolsProviderId || "openai"
-  console.log(`[MCP-DEBUG] Using LLM provider: ${chatProviderId}`)
 
   // Create system prompt with available tools
   const systemPrompt = config.mcpToolsSystemPrompt || `You are a helpful assistant that can execute tools based on user requests.
@@ -249,8 +231,6 @@ Response:
 }
 
 Remember: Respond with ONLY the JSON object, no markdown formatting, no code blocks, no additional text.`
-
-  console.log(`[MCP-DEBUG] System prompt created with ${availableTools.length} tools`)
 
   const messages = [
     {
@@ -322,15 +302,11 @@ Remember: Respond with ONLY the JSON object, no markdown formatting, no code blo
   if (!chatResponse.ok) {
     const errorText = await chatResponse.text()
     const message = `${chatResponse.statusText} ${errorText.slice(0, 300)}`
-    console.error(`[MCP-DEBUG] ❌ LLM API error:`, message)
     throw new Error(message)
   }
 
   const chatJson = await chatResponse.json()
-  console.log("[MCP-DEBUG] 📝 LLM API response:", chatJson)
-
   const responseContent = chatJson.choices[0].message.content.trim()
-  console.log(`[MCP-DEBUG] Response content: "${responseContent}"`)
 
   const parsed = extractAndParseJSON(responseContent)
   if (parsed) {

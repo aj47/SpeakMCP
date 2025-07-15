@@ -20,7 +20,6 @@ export const Component = () => {
 
   useEffect(() => {
     return rendererHandlers.navigate.listen((url) => {
-      console.log("navigate", url)
       navigate(url)
     })
   }, [])

@@ -78,3 +78,7 @@ export const useLogoutMutation = () => useMutation({
     })
   },
 })
+
+export const useCancelLoginMutation = () => useMutation({
+  mutationFn: tipcClient.cancelLogin,
+})

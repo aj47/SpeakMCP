@@ -1,13 +1,12 @@
-import React from "react"
 import { Button } from "./ui/button"
-import { Badge } from "./ui/badge"
-import { useAuthStateQuery, useInitiateLoginMutation, useLogoutMutation } from "@renderer/lib/query-client"
+import { useAuthStateQuery, useInitiateLoginMutation, useLogoutMutation, useCancelLoginMutation } from "@renderer/lib/query-client"
 import { toast } from "sonner"
 
 export function AuthStatus() {
   const authStateQuery = useAuthStateQuery()
   const initiateLoginMutation = useInitiateLoginMutation()
   const logoutMutation = useLogoutMutation()
+  const cancelLoginMutation = useCancelLoginMutation()
 
   const handleLogin = async () => {
     try {
@@ -17,13 +16,23 @@ export function AuthStatus() {
       toast.success("Successfully signed in!")
     } catch (error) {
       const errorMessage = (error as Error).message
-      if (errorMessage.includes('timeout')) {
-        toast.error("Sign in timed out. Please try again.")
-      } else if (errorMessage.includes('Authentication failed')) {
+      if (errorMessage.includes('timeout') || errorMessage.includes('browser was closed')) {
+        toast.error("Sign in timed out or browser was closed. Please try again.")
+      } else if (errorMessage.includes('Authentication failed') || errorMessage.includes('cancelled')) {
         toast.error("Authentication was cancelled or failed. Please try again.")
       } else {
         toast.error("Failed to sign in: " + errorMessage)
       }
+    }
+  }
+
+  const handleCancelLogin = async () => {
+    try {
+      await cancelLoginMutation.mutateAsync()
+      initiateLoginMutation.reset()
+      toast.info("Sign in cancelled")
+    } catch (error) {
+      console.error("Failed to cancel login:", error)
     }
   }
 
@@ -81,23 +90,38 @@ export function AuthStatus() {
       <div className="text-xs text-muted-foreground">
         {initiateLoginMutation.isError ? "Sign in failed" : "Not signed in"}
       </div>
-      <Button
-        variant="default"
-        size="sm"
-        onClick={handleLogin}
-        disabled={initiateLoginMutation.isPending}
-        className="w-full h-6 text-xs"
-      >
-        {initiateLoginMutation.isPending
-          ? "Signing in..."
-          : initiateLoginMutation.isError
-            ? "Try again"
-            : "Sign in"
-        }
-      </Button>
-      {initiateLoginMutation.isError && (
-        <div className="text-xs text-muted-foreground text-center">
-          Close the browser? Click "Try again" to retry.
+      {initiateLoginMutation.isPending ? (
+        <div className="space-y-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleCancelLogin}
+            disabled={cancelLoginMutation.isPending}
+            className="w-full h-6 text-xs"
+          >
+            {cancelLoginMutation.isPending ? "Cancelling..." : "Cancel"}
+          </Button>
+          <div className="text-xs text-muted-foreground text-center">
+            Browser opened. Complete sign in or click Cancel.
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <Button
+            variant="default"
+            size="sm"
+            onClick={handleLogin}
+            disabled={initiateLoginMutation.isPending}
+            className="w-full h-6 text-xs"
+          >
+            {initiateLoginMutation.isError || initiateLoginMutation.isSuccess
+              ? "Try again"
+              : "Sign in"
+            }
+          </Button>
+          <div className="text-xs text-muted-foreground text-center">
+            Click to sign in with Google.
+          </div>
         </div>
       )}
     </div>

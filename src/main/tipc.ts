@@ -14,6 +14,9 @@ import path from "path"
 import { configStore, recordingsFolder } from "./config"
 import { Config, RecordingHistoryItem, MCPConfig, MCPServerConfig, AuthState, User } from "../shared/types"
 
+// Global variable to track active authentication server
+let activeAuthServer: any = null
+
 // Helper function to set auth token (to avoid circular reference)
 async function setAuthTokenHelper(token: string): Promise<{ success: boolean; user: User }> {
   try {
@@ -198,9 +201,16 @@ export const router = {
   }),
 
   initiateLogin: t.procedure.action(async () => {
+    // Cancel any existing authentication flow
+    if (activeAuthServer && activeAuthServer.listening) {
+      activeAuthServer.close()
+      activeAuthServer = null
+    }
+
     return new Promise((resolve, reject) => {
       const http = require('http')
       const { URL } = require('url')
+      let authTimeout: NodeJS.Timeout | null = null
 
       // Create a temporary HTTP server to receive the OAuth callback
       const server = http.createServer((req: any, res: any) => {
@@ -209,6 +219,12 @@ export const router = {
         if (url.pathname === '/auth/callback') {
           const token = url.searchParams.get('token')
           const error = url.searchParams.get('error')
+
+          // Clear the timeout since we got a response
+          if (authTimeout) {
+            clearTimeout(authTimeout)
+            authTimeout = null
+          }
 
           if (error) {
             res.writeHead(400, { 'Content-Type': 'text/html' })
@@ -507,9 +523,11 @@ export const router = {
             // Save the token using helper function
             setAuthTokenHelper(token).then(() => {
               server.close()
+              activeAuthServer = null
               resolve({ success: true })
             }).catch((error) => {
               server.close()
+              activeAuthServer = null
               reject(error)
             })
           } else {
@@ -524,13 +542,36 @@ export const router = {
               </html>
             `)
             server.close()
+            activeAuthServer = null
             reject(new Error('No token received'))
           }
+        } else if (url.pathname === '/auth/cancel') {
+          // Handle explicit cancellation
+          if (authTimeout) {
+            clearTimeout(authTimeout)
+            authTimeout = null
+          }
+
+          res.writeHead(200, { 'Content-Type': 'text/html' })
+          res.end(`
+            <html>
+              <body>
+                <h1>Authentication Cancelled</h1>
+                <p>You can close this window.</p>
+              </body>
+            </html>
+          `)
+          server.close()
+          activeAuthServer = null
+          reject(new Error('Authentication was cancelled by user'))
         } else {
           res.writeHead(404)
           res.end('Not found')
         }
       })
+
+      // Track the server globally
+      activeAuthServer = server
 
       const startOAuthFlow = (port: number) => {
         // Use local development URL in development, production URL in production
@@ -548,13 +589,14 @@ export const router = {
         // Open in user's default browser
         shell.openExternal(authUrl)
 
-        // Set a timeout to close the server if no response
-        setTimeout(() => {
+        // Set a shorter timeout with better error message
+        authTimeout = setTimeout(() => {
           if (server.listening) {
             server.close()
-            reject(new Error('Authentication timeout - no response received'))
+            activeAuthServer = null
+            reject(new Error('Authentication failed - browser was closed or no response received. Please try again.'))
           }
-        }, 300000) // 5 minutes timeout
+        }, 60000) // Reduced to 1 minute timeout
       }
 
       // Start server on a fixed port for OAuth callback
@@ -564,6 +606,7 @@ export const router = {
         const port = address?.port
 
         if (!port) {
+          activeAuthServer = null
           reject(new Error('Failed to start local server'))
           return
         }
@@ -572,6 +615,12 @@ export const router = {
       })
 
       server.on('error', (error: any) => {
+        activeAuthServer = null
+        if (authTimeout) {
+          clearTimeout(authTimeout)
+          authTimeout = null
+        }
+
         if (error.code === 'EADDRINUSE') {
           // Port is in use, try a few alternative ports
           const altPorts = [8789, 8790, 8791, 8792]
@@ -593,6 +642,7 @@ export const router = {
                 return
               }
 
+              activeAuthServer = server
               startOAuthFlow(port)
             })
           }
@@ -603,6 +653,15 @@ export const router = {
         }
       })
     })
+  }),
+
+  cancelLogin: t.procedure.action(async () => {
+    if (activeAuthServer && activeAuthServer.listening) {
+      activeAuthServer.close()
+      activeAuthServer = null
+      return { success: true, message: 'Authentication cancelled' }
+    }
+    return { success: false, message: 'No active authentication to cancel' }
   }),
 
   setAuthToken: t.procedure

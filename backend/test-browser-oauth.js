@@ -292,11 +292,11 @@ const server = http.createServer((req, res) => {
               <div class="success-icon">✅</div>
               <h1>Welcome to <span class="brand">SpeakMCP</span>!</h1>
               <p>Authentication successful! You can now close this window and start using voice-to-text with AI-powered transcription.</p>
-              <p class="auto-close">This window will close automatically in 3 seconds...</p>
+              <p class="auto-close">This window will close automatically in 5 seconds...</p>
             </div>
             <script>
-              // Auto-close after 3 seconds with countdown
-              let countdown = 3;
+              // Auto-close after 5 seconds with countdown
+              let countdown = 5;
               const autoCloseElement = document.querySelector('.auto-close');
 
               const updateCountdown = () => {
@@ -305,7 +305,30 @@ const server = http.createServer((req, res) => {
                   countdown--;
                   setTimeout(updateCountdown, 1000);
                 } else {
-                  window.close();
+                  // Try multiple methods to close the window
+                  try {
+                    // Method 1: Standard window.close()
+                    window.close();
+                  } catch (e) {
+                    console.log('Standard window.close() failed:', e);
+                  }
+
+                  // Method 2: Try to close via opener
+                  try {
+                    if (window.opener) {
+                      window.opener.focus();
+                      window.close();
+                    }
+                  } catch (e) {
+                    console.log('Opener close failed:', e);
+                  }
+
+                  // Method 3: Fallback - show manual close message
+                  setTimeout(() => {
+                    autoCloseElement.innerHTML = 'Please close this window manually. <br><small>You can now return to SpeakMCP.</small>';
+                    autoCloseElement.style.color = '#ffd700';
+                    autoCloseElement.style.fontWeight = 'bold';
+                  }, 1000);
                 }
               };
 

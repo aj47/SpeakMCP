@@ -1,0 +1,198 @@
+{
+  "app_info": {
+    "name": "SpeakMCP",
+    "bundle_id": "com.speakmcp.app",
+    "version": "0.0.2",
+    "build": "1",
+    "category": "Productivity",
+    "subcategory": "Business",
+    "content_rating": "4+",
+    "platforms": ["macOS"],
+    "minimum_os_version": "10.15"
+  },
+  "app_store_copy": {
+    "name": "SpeakMCP",
+    "subtitle": "AI Voice to Text with Smart Tools",
+    "promotional_text": "Transform speech to text instantly with AI-powered transcription and intelligent post-processing. Perfect for productivity and accessibility.",
+    "keywords": "voice to text,dictation,speech recognition,AI transcription,productivity,accessibility,MCP tools",
+    "description": "See app-store-description.md for full description"
+  },
+  "urls": {
+    "privacy_policy": "https://speakmcp.com/privacy",
+    "terms_of_service": "https://speakmcp.com/terms",
+    "support": "https://github.com/aj47/SpeakMCP/issues",
+    "marketing": "https://speakmcp.com",
+    "app_website": "https://speakmcp.com"
+  },
+  "contact_info": {
+    "support_email": "support@speakmcp.com",
+    "developer_name": "SpeakMCP",
+    "developer_website": "https://speakmcp.com"
+  },
+  "features": {
+    "primary": [
+      "AI-powered speech-to-text transcription",
+      "Real-time audio visualization",
+      "Multi-provider AI integration (OpenAI, Groq, Gemini)",
+      "Model Context Protocol (MCP) tool calling",
+      "Intelligent post-processing and enhancement",
+      "Universal app compatibility",
+      "Searchable recording history",
+      "Privacy-focused design"
+    ],
+    "technical": [
+      "Groq Whisper API integration",
+      "Electron-based cross-platform architecture",
+      "Rust-powered system integration",
+      "Real-time audio processing",
+      "Secure API key management",
+      "Customizable keyboard shortcuts",
+      "Local and cloud processing options"
+    ]
+  },
+  "target_audience": [
+    "Content creators and writers",
+    "Business professionals",
+    "Students and researchers",
+    "Accessibility users",
+    "Developers and power users",
+    "Anyone seeking productivity enhancement"
+  ],
+  "use_cases": [
+    "Email composition and responses",
+    "Note-taking during meetings",
+    "Content creation and blogging",
+    "Academic writing and research",
+    "Documentation and reporting",
+    "Accessibility and assistive technology",
+    "Voice-controlled automation",
+    "Quick idea capture and brainstorming"
+  ],
+  "competitive_advantages": [
+    "MCP tool integration for automation",
+    "Multi-provider AI flexibility",
+    "Real-time processing and feedback",
+    "Privacy-first architecture",
+    "Universal app compatibility",
+    "Intelligent post-processing",
+    "Extensible plugin system",
+    "Professional-grade accuracy"
+  ],
+  "system_requirements": {
+    "minimum": {
+      "os": "macOS 10.15",
+      "memory": "4 GB RAM",
+      "storage": "100 MB available space",
+      "network": "Internet connection required for AI processing",
+      "hardware": "Microphone access required"
+    },
+    "recommended": {
+      "os": "macOS 12.0 or later",
+      "memory": "8 GB RAM",
+      "storage": "500 MB available space",
+      "network": "Broadband internet connection",
+      "hardware": "High-quality microphone for best results"
+    }
+  },
+  "permissions": {
+    "required": [
+      "Microphone access for audio recording",
+      "Accessibility permissions for text insertion",
+      "Network access for AI processing"
+    ],
+    "optional": [
+      "Notifications for recording status",
+      "Background app refresh for updates"
+    ]
+  },
+  "pricing": {
+    "model": "Freemium",
+    "free_tier": "Basic transcription with usage limits",
+    "premium_features": [
+      "Unlimited transcription",
+      "Advanced AI models",
+      "MCP tool integration",
+      "Priority support",
+      "Custom prompts and workflows"
+    ]
+  },
+  "localization": {
+    "supported_languages": [
+      "English (US)",
+      "English (UK)",
+      "Spanish",
+      "French",
+      "German",
+      "Italian",
+      "Portuguese",
+      "Japanese",
+      "Korean",
+      "Chinese (Simplified)",
+      "Chinese (Traditional)"
+    ],
+    "transcription_languages": [
+      "English",
+      "Spanish", 
+      "French",
+      "German",
+      "Italian",
+      "Portuguese",
+      "Dutch",
+      "Russian",
+      "Japanese",
+      "Korean",
+      "Chinese",
+      "Arabic",
+      "Hindi",
+      "And 50+ more languages"
+    ]
+  },
+  "app_store_optimization": {
+    "primary_keywords": [
+      "voice to text",
+      "dictation",
+      "speech recognition",
+      "AI transcription",
+      "productivity"
+    ],
+    "secondary_keywords": [
+      "accessibility",
+      "MCP tools",
+      "voice input",
+      "transcription app",
+      "AI assistant"
+    ],
+    "search_categories": [
+      "Productivity",
+      "Business",
+      "Utilities",
+      "Developer Tools",
+      "Accessibility"
+    ]
+  },
+  "marketing_assets": {
+    "app_icon_sizes": [
+      "1024x1024 (App Store)",
+      "512x512 (macOS)",
+      "256x256 (macOS)",
+      "128x128 (macOS)",
+      "64x64 (macOS)",
+      "32x32 (macOS)",
+      "16x16 (macOS)"
+    ],
+    "screenshot_requirements": {
+      "macOS": {
+        "sizes": ["1280x800", "1440x900", "2560x1600", "2880x1800"],
+        "count": "3-10 screenshots",
+        "format": "PNG or JPEG"
+      }
+    },
+    "promotional_graphics": [
+      "Feature callout graphics",
+      "Workflow demonstration images",
+      "Before/after comparison shots",
+      "UI mockups and interfaces",
+      "Brand and logo variations"
+    ]
+  }
+}

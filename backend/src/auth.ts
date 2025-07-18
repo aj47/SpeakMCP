@@ -63,7 +63,6 @@ function handleGoogleAuth(env: Env, request: Request): Response {
     scope: 'openid email profile',
     access_type: 'offline',
     state: state,
-  });
 
   const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
 

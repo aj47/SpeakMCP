@@ -8,6 +8,8 @@ export function AuthStatus() {
   const logoutMutation = useLogoutMutation()
   const cancelLoginMutation = useCancelLoginMutation()
 
+  const { user } = authStateQuery.data || {}
+
   const handleLogin = async () => {
     try {
       // Reset any previous error state
@@ -54,19 +56,24 @@ export function AuthStatus() {
     )
   }
 
-  const { user } = authStateQuery.data || {}
-
   if (user) {
+    // Generate initials from name or email
+    const getInitials = (name?: string, email?: string) => {
+      if (name) {
+        return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+      }
+      if (email) {
+        return email[0].toUpperCase()
+      }
+      return 'U'
+    }
+
     return (
       <div className="space-y-2">
         <div className="flex items-center gap-2">
-          {user.avatar_url && (
-            <img
-              src={user.avatar_url}
-              alt={user.name || user.email}
-              className="h-5 w-5 rounded-full"
-            />
-          )}
+          <div className="h-5 w-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-medium">
+            {getInitials(user.name, user.email)}
+          </div>
           <div className="flex-1 min-w-0">
             <div className="text-xs font-medium truncate">{user.name || user.email}</div>
             <div className="text-xs text-muted-foreground">Authenticated</div>

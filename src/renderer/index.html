@@ -6,7 +6,7 @@
     <!-- https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self' blob: assets:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:"
+      content="default-src 'self' blob: assets:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://speakmcp-auth.techfren.workers.dev https://speakmcp-proxy.techfren.workers.dev http://localhost:8787 http://localhost:8788;"
     />
     <script>
       function toggleThemeClass(darkMode) {

@@ -56,14 +56,23 @@ module.exports = {
       {
         target: "zip",
         arch: ["x64", "arm64"]
+      },
+      {
+        target: "pkg",
+        arch: ["x64", "arm64"]
       }
+      // Temporarily disabled MAS build until installer certificate is available
+      // {
+      //   target: "mas",
+      //   arch: ["arm64"]
+      // }
     ],
     extendInfo: {
       NSCameraUsageDescription: "SpeakMCP may request camera access for enhanced AI features.",
       NSMicrophoneUsageDescription: "SpeakMCP requires microphone access for voice dictation and transcription.",
       NSDocumentsFolderUsageDescription: "SpeakMCP may access your Documents folder to save transcriptions and settings.",
       NSDownloadsFolderUsageDescription: "SpeakMCP may access your Downloads folder to save exported files.",
-      LSMinimumSystemVersion: "10.15.0",
+      LSMinimumSystemVersion: "12.0.0",
       CFBundleURLTypes: [
         {
           CFBundleURLName: "SpeakMCP Protocol",
@@ -79,8 +88,64 @@ module.exports = {
         }
       : false,
   },
+  mas: {
+    artifactName: "${productName}-${version}-mas.${ext}",
+    entitlementsInherit: "build/entitlements.mas.inherit.plist",
+    entitlements: "build/entitlements.mas.plist",
+    hardenedRuntime: false,
+    identity: process.env.CSC_MAS_NAME || "3rd Party Mac Developer Application",
+    provisioningProfile: process.env.MAS_PROVISIONING_PROFILE,
+    category: "public.app-category.productivity",
+    type: "distribution",
+    preAutoEntitlements: false,
+    cscInstallerLink: process.env.CSC_INSTALLER_LINK,
+    extendInfo: {
+      NSCameraUsageDescription: "SpeakMCP may request camera access for enhanced AI features.",
+      NSMicrophoneUsageDescription: "SpeakMCP requires microphone access for voice dictation and transcription.",
+      NSDocumentsFolderUsageDescription: "SpeakMCP may access your Documents folder to save transcriptions and settings.",
+      NSDownloadsFolderUsageDescription: "SpeakMCP may access your Downloads folder to save exported files.",
+      LSMinimumSystemVersion: "12.0.0",
+      CFBundleURLTypes: [
+        {
+          CFBundleURLName: "SpeakMCP Protocol",
+          CFBundleURLSchemes: ["speakmcp"]
+        }
+      ]
+    },
+  },
+  masDev: {
+    artifactName: "${productName}-${version}-mas-dev.${ext}",
+    entitlementsInherit: "build/entitlements.mas.inherit.plist",
+    entitlements: "build/entitlements.mas.plist",
+    hardenedRuntime: false,
+    identity: process.env.CSC_MAS_DEV_NAME || "Mac Developer",
+    provisioningProfile: process.env.MAS_DEV_PROVISIONING_PROFILE,
+    category: "public.app-category.productivity",
+    extendInfo: {
+      NSCameraUsageDescription: "SpeakMCP may request camera access for enhanced AI features.",
+      NSMicrophoneUsageDescription: "SpeakMCP requires microphone access for voice dictation and transcription.",
+      NSDocumentsFolderUsageDescription: "SpeakMCP may access your Documents folder to save transcriptions and settings.",
+      NSDownloadsFolderUsageDescription: "SpeakMCP may access your Downloads folder to save exported files.",
+      LSMinimumSystemVersion: "10.15.0",
+      CFBundleURLTypes: [
+        {
+          CFBundleURLName: "SpeakMCP Protocol",
+          CFBundleURLSchemes: ["speakmcp"]
+        }
+      ]
+    },
+  },
   dmg: {
     artifactName: "${productName}-${version}-${arch}.${ext}",
+  },
+  pkg: {
+    artifactName: "${productName}-${version}-${arch}.${ext}",
+    identity: process.env.CSC_INSTALLER_NAME || process.env.CSC_NAME || "Developer ID Application",
+    allowAnywhere: false,
+    allowCurrentUserHome: false,
+    allowRootDirectory: false,
+    isRelocatable: false,
+    overwriteAction: "upgrade"
   },
   linux: {
     target: ["AppImage", "snap", "deb"],

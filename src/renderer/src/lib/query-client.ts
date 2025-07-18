@@ -60,7 +60,7 @@ export const useInitiateLoginMutation = () => useMutation({
       queryKey: ["config"],
     })
   },
-  onError(error) {
+  onError() {
     // The mutation state will automatically reset to not pending
     // This ensures the UI can show the retry button
   },

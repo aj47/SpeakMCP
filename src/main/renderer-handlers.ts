@@ -12,6 +12,11 @@ export type RendererHandlers = {
   finishMcpRecording: () => void
   startOrFinishMcpRecording: () => void
 
+  // Agent Chaining handlers
+  startAgentRecording: () => void
+  finishAgentRecording: () => void
+  startOrFinishAgentRecording: () => void
+
   updateAvailable: (e: UpdateDownloadedEvent) => void
   navigate: (url: string) => void
 }

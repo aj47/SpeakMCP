@@ -359,6 +359,7 @@ class MCPService {
     let client: Client | null = null
 
     try {
+      console.log(`[MCP-DEBUG] Testing connection to server: ${serverName}`)
       // Resolve command and prepare environment
       const resolvedCommand = await this.resolveCommandPath(serverConfig.command)
       const environment = await this.prepareEnvironment(serverConfig.env)

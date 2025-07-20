@@ -20,6 +20,50 @@ export interface MCPConfig {
   mcpServers: Record<string, MCPServerConfig>
 }
 
+// Agent Execution Types
+export interface AgentStep {
+  id: string
+  type: 'llm_call' | 'tool_execution' | 'completion'
+  status: 'pending' | 'running' | 'completed' | 'failed'
+  timestamp: number
+  description: string
+  llmResponse?: string
+  toolCalls?: Array<{
+    name: string
+    arguments: any
+    result?: {
+      content: Array<{ type: "text"; text: string }>
+      isError?: boolean
+    }
+  }>
+  error?: string
+}
+
+export interface AgentProgress {
+  currentStep: number
+  totalSteps: number
+  currentStepDescription: string
+  estimatedTimeRemaining?: number
+}
+
+export interface AgentExecutionState {
+  id: string
+  goal: string
+  status: 'initializing' | 'running' | 'completed' | 'failed' | 'cancelled'
+  startTime: number
+  endTime?: number
+  steps: AgentStep[]
+  progress: AgentProgress
+  conversationHistory: Array<{
+    role: 'system' | 'user' | 'assistant' | 'tool'
+    content: string
+    toolCalls?: any[]
+    toolCallId?: string
+  }>
+  finalResult?: string
+  error?: string
+}
+
 export type Config = {
   shortcut?: "hold-ctrl" | "ctrl-slash"
   hideDockIcon?: boolean
@@ -53,6 +97,17 @@ export type Config = {
   mcpToolsGroqModel?: string
   mcpToolsGeminiModel?: string
   mcpToolsSystemPrompt?: string
+
+  // Agent Chaining Configuration
+  agentChainingEnabled?: boolean
+  agentChainingShortcut?: "hold-ctrl-shift" | "ctrl-shift-slash"
+  agentChainingProviderId?: CHAT_PROVIDER_ID
+  agentChainingOpenaiModel?: string
+  agentChainingGroqModel?: string
+  agentChainingGeminiModel?: string
+  agentChainingSystemPrompt?: string
+  agentChainingMaxSteps?: number
+  agentChainingTimeoutMinutes?: number
 
   // MCP Server Configuration
   mcpConfig?: MCPConfig

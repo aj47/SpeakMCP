@@ -217,6 +217,196 @@ Always respond with valid JSON only.`
           )}
         </div>
 
+        {/* Agent Chaining Configuration Section */}
+        <div className="mt-8 pt-6 border-t space-y-6">
+          <div>
+            <h3 className="text-lg font-semibold mb-4">Agent Chaining</h3>
+            <p className="text-sm text-muted-foreground mb-6">
+              Configure agent chaining to enable multi-step task execution with automatic tool calling and reasoning.
+            </p>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div className="space-y-1">
+              <Label htmlFor="agent-chaining-enabled">Enable Agent Chaining</Label>
+              <p className="text-sm text-muted-foreground">
+                Allow agents to chain multiple tool calls and LLM interactions to complete complex tasks
+              </p>
+            </div>
+            <Switch
+              id="agent-chaining-enabled"
+              checked={config.agentChainingEnabled || false}
+              onCheckedChange={(checked) => updateConfig({ agentChainingEnabled: checked })}
+            />
+          </div>
+
+          {config.agentChainingEnabled && (
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="agent-chaining-shortcut">Keyboard Shortcut</Label>
+                <Select
+                  value={config.agentChainingShortcut || "hold-ctrl-shift"}
+                  onValueChange={(value: "hold-ctrl-shift" | "ctrl-shift-slash") =>
+                    updateConfig({ agentChainingShortcut: value })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="hold-ctrl-shift">Hold Ctrl+Shift</SelectItem>
+                    <SelectItem value="ctrl-shift-slash">Ctrl+Shift+/</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="agent-chaining-provider">LLM Provider</Label>
+                <Select
+                  value={config.agentChainingProviderId || "groq"}
+                  onValueChange={(value) => updateConfig({ agentChainingProviderId: value as any })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CHAT_PROVIDERS.map((provider) => (
+                      <SelectItem key={provider.value} value={provider.value}>
+                        {provider.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="grid grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="agent-chaining-openai-model">OpenAI Model</Label>
+                  <Select
+                    value={config.agentChainingOpenaiModel || "gpt-4o-mini"}
+                    onValueChange={(value) => updateConfig({ agentChainingOpenaiModel: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="gpt-4o-mini">GPT-4o Mini</SelectItem>
+                      <SelectItem value="gpt-4o">GPT-4o</SelectItem>
+                      <SelectItem value="gpt-4-turbo">GPT-4 Turbo</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="agent-chaining-groq-model">Groq Model</Label>
+                  <Select
+                    value={config.agentChainingGroqModel || "gemma2-9b-it"}
+                    onValueChange={(value) => updateConfig({ agentChainingGroqModel: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="gemma2-9b-it">Gemma2 9B IT</SelectItem>
+                      <SelectItem value="llama-3.1-70b-versatile">Llama 3.1 70B</SelectItem>
+                      <SelectItem value="llama-3.1-8b-instant">Llama 3.1 8B</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="agent-chaining-gemini-model">Gemini Model</Label>
+                  <Select
+                    value={config.agentChainingGeminiModel || "gemini-1.5-flash-002"}
+                    onValueChange={(value) => updateConfig({ agentChainingGeminiModel: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="gemini-1.5-flash-002">Gemini 1.5 Flash</SelectItem>
+                      <SelectItem value="gemini-1.5-pro-002">Gemini 1.5 Pro</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="agent-chaining-max-steps">Max Steps</Label>
+                  <Select
+                    value={String(config.agentChainingMaxSteps || 10)}
+                    onValueChange={(value) => updateConfig({ agentChainingMaxSteps: parseInt(value) })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="5">5 steps</SelectItem>
+                      <SelectItem value="10">10 steps</SelectItem>
+                      <SelectItem value="15">15 steps</SelectItem>
+                      <SelectItem value="20">20 steps</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="agent-chaining-timeout">Timeout (minutes)</Label>
+                  <Select
+                    value={String(config.agentChainingTimeoutMinutes || 10)}
+                    onValueChange={(value) => updateConfig({ agentChainingTimeoutMinutes: parseInt(value) })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="5">5 minutes</SelectItem>
+                      <SelectItem value="10">10 minutes</SelectItem>
+                      <SelectItem value="15">15 minutes</SelectItem>
+                      <SelectItem value="30">30 minutes</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="agent-chaining-system-prompt">System Prompt</Label>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => updateConfig({
+                      agentChainingSystemPrompt: `You are an intelligent agent that can execute multiple steps to accomplish complex goals.
+
+You have access to various tools that can help you complete tasks. Analyze the user's goal, break it down into steps, and execute them systematically.
+
+For each step:
+1. Analyze what needs to be done
+2. Use appropriate tools if needed
+3. Evaluate the results
+4. Decide whether to continue or if the goal is complete
+
+Be thorough but efficient. Always explain your reasoning and next steps clearly.
+
+When you believe the goal is complete, end your response with "COMPLETE: [summary of what was accomplished]"
+When you need to continue with more actions, end your response with "CONTINUE: [reason why you need to continue]"`
+                    })}
+                  >
+                    Reset to Default
+                  </Button>
+                </div>
+                <Textarea
+                  id="agent-chaining-system-prompt"
+                  value={config.agentChainingSystemPrompt || ""}
+                  onChange={(e) => updateConfig({ agentChainingSystemPrompt: e.target.value })}
+                  placeholder="Enter system prompt for agent chaining..."
+                  rows={8}
+                />
+              </div>
+            </>
+          )}
+        </div>
+
         {/* MCP Server Configuration Section */}
         {config.mcpToolsEnabled && (
           <div className="mt-8 pt-6 border-t space-y-8">

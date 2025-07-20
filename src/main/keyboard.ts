@@ -95,6 +95,11 @@ export function listenToKeyboardEvents() {
   let startMcpRecordingTimer: NodeJS.Timeout | undefined
   let isPressedCtrlAltKey = false
 
+  // Agent chaining state
+  let isHoldingCtrlShiftKey = false
+  let startAgentRecordingTimer: NodeJS.Timeout | undefined
+  let isPressedShiftKey = false
+
   if (process.env.IS_MAC) {
     if (!systemPreferences.isTrustedAccessibilityClient(false)) {
       return
@@ -115,6 +120,21 @@ export function listenToKeyboardEvents() {
     }
   }
 
+  const cancelAgentRecordingTimer = () => {
+    if (startAgentRecordingTimer) {
+      clearTimeout(startAgentRecordingTimer)
+      startAgentRecordingTimer = undefined
+    }
+  }
+
+  const showPanelWindowAndStartAgentRecording = () => {
+    const panel = WINDOWS.get("panel")
+    if (panel) {
+      panel.show()
+      getWindowRendererHandlers("panel")?.startAgentRecording.send()
+    }
+  }
+
   const handleEvent = (e: RdevEvent) => {
     if (e.event_type === "KeyPress") {
       if (e.data.key === "ControlLeft") {
@@ -123,6 +143,10 @@ export function listenToKeyboardEvents() {
 
       if (e.data.key === "Alt") {
         isPressedCtrlAltKey = isPressedCtrlKey && true
+      }
+
+      if (e.data.key === "ShiftLeft") {
+        isPressedShiftKey = isPressedCtrlKey && true
       }
 
       if (e.data.key === "Escape" && state.isRecording) {
@@ -140,6 +164,14 @@ export function listenToKeyboardEvents() {
       if (config.mcpToolsEnabled && config.mcpToolsShortcut === "ctrl-alt-slash") {
         if (e.data.key === "Slash" && isPressedCtrlKey && isPressedCtrlAltKey) {
           getWindowRendererHandlers("panel")?.startOrFinishMcpRecording.send()
+          return
+        }
+      }
+
+      // Handle Agent chaining shortcuts
+      if (config.agentChainingEnabled && config.agentChainingShortcut === "ctrl-shift-slash") {
+        if (e.data.key === "Slash" && isPressedCtrlKey && isPressedShiftKey) {
+          getWindowRendererHandlers("panel")?.startOrFinishAgentRecording.send()
           return
         }
       }
@@ -178,10 +210,28 @@ export function listenToKeyboardEvents() {
             isHoldingCtrlAltKey = true
             showPanelWindowAndStartMcpRecording()
           }, 800)
+        } else if (e.data.key === "ShiftLeft" && isPressedCtrlKey && config.agentChainingEnabled && config.agentChainingShortcut === "hold-ctrl-shift") {
+          if (hasRecentKeyPress()) {
+            return
+          }
+
+          if (startAgentRecordingTimer) {
+            return
+          }
+
+          // Cancel other recording timers since we're starting Agent mode
+          cancelRecordingTimer()
+          cancelMcpRecordingTimer()
+
+          startAgentRecordingTimer = setTimeout(() => {
+            isHoldingCtrlShiftKey = true
+            showPanelWindowAndStartAgentRecording()
+          }, 800)
         } else {
           keysPressed.set(e.data.key, e.time.secs_since_epoch)
           cancelRecordingTimer()
           cancelMcpRecordingTimer()
+          cancelAgentRecordingTimer()
 
           // when holding ctrl key, pressing any other key will stop recording
           if (isHoldingCtrlKey) {
@@ -193,8 +243,14 @@ export function listenToKeyboardEvents() {
             stopRecordingAndHidePanelWindow()
           }
 
+          // when holding ctrl+shift key, pressing any other key will stop Agent recording
+          if (isHoldingCtrlShiftKey) {
+            stopRecordingAndHidePanelWindow()
+          }
+
           isHoldingCtrlKey = false
           isHoldingCtrlAltKey = false
+          isHoldingCtrlShiftKey = false
         }
       }
     } else if (e.event_type === "KeyRelease") {
@@ -208,10 +264,15 @@ export function listenToKeyboardEvents() {
         isPressedCtrlAltKey = false
       }
 
+      if (e.data.key === "ShiftLeft") {
+        isPressedShiftKey = false
+      }
+
       if (configStore.get().shortcut === "ctrl-slash") return
 
       cancelRecordingTimer()
       cancelMcpRecordingTimer()
+      cancelAgentRecordingTimer()
 
       if (e.data.key === "ControlLeft") {
         if (isHoldingCtrlKey) {
@@ -232,6 +293,17 @@ export function listenToKeyboardEvents() {
         }
 
         isHoldingCtrlAltKey = false
+      }
+
+      if (e.data.key === "ShiftLeft") {
+        if (isHoldingCtrlShiftKey) {
+          const panelHandlers = getWindowRendererHandlers("panel")
+          panelHandlers?.finishAgentRecording.send()
+        } else {
+          stopRecordingAndHidePanelWindow()
+        }
+
+        isHoldingCtrlShiftKey = false
       }
     }
   }

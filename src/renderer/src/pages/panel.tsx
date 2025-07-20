@@ -20,8 +20,10 @@ export function Component() {
   )
   const [recording, setRecording] = useState(false)
   const [mcpMode, setMcpMode] = useState(false)
+  const [agentMode, setAgentMode] = useState(false)
   const isConfirmedRef = useRef(false)
   const mcpModeRef = useRef(false)
+  const agentModeRef = useRef(false)
 
   const transcribeMutation = useMutation({
     mutationFn: async ({
@@ -69,6 +71,36 @@ export function Component() {
     },
   })
 
+  const agentTranscribeMutation = useMutation({
+    mutationFn: async ({
+      blob,
+      duration,
+    }: {
+      blob: Blob
+      duration: number
+    }) => {
+      const arrayBuffer = await blob.arrayBuffer()
+
+      const result = await tipcClient.createAgentRecording({
+        recording: arrayBuffer,
+        duration,
+      })
+
+      return result.executionId
+    },
+    onSuccess(executionId) {
+      // Could navigate to agent progress view or show notification
+      console.log("Agent execution started:", executionId)
+    },
+    onError(error) {
+      tipcClient.hidePanelWindow()
+      tipcClient.displayError({
+        title: error.name,
+        message: error.message,
+      })
+    },
+  })
+
   const recorderRef = useRef<Recorder | null>(null)
 
   useEffect(() => {
@@ -95,6 +127,7 @@ export function Component() {
 
     recorder.on("record-end", (blob, duration) => {
       const currentMcpMode = mcpModeRef.current
+      const currentAgentMode = agentModeRef.current
       setRecording(false)
       setVisualizerData(() => getInitialVisualizerData())
       tipcClient.recordEvent({ type: "end" })
@@ -106,7 +139,12 @@ export function Component() {
       playSound("end_record")
 
       // Use appropriate mutation based on mode
-      if (currentMcpMode) {
+      if (currentAgentMode) {
+        agentTranscribeMutation.mutate({
+          blob,
+          duration,
+        })
+      } else if (currentMcpMode) {
         mcpTranscribeMutation.mutate({
           blob,
           duration,
@@ -118,11 +156,13 @@ export function Component() {
         })
       }
 
-      // Reset MCP mode after recording
+      // Reset modes after recording
       setMcpMode(false)
+      setAgentMode(false)
       mcpModeRef.current = false
+      agentModeRef.current = false
     })
-  }, [mcpMode, mcpTranscribeMutation, transcribeMutation])
+  }, [mcpMode, agentMode, mcpTranscribeMutation, agentTranscribeMutation, transcribeMutation])
 
   useEffect(() => {
     const unlisten = rendererHandlers.startRecording.listen(() => {
@@ -202,9 +242,47 @@ export function Component() {
     return unlisten
   }, [recording])
 
+  // Agent handlers
+  useEffect(() => {
+    const unlisten = rendererHandlers.startAgentRecording.listen(() => {
+      setAgentMode(true)
+      agentModeRef.current = true
+      setVisualizerData(() => getInitialVisualizerData())
+      recorderRef.current?.startRecording()
+    })
+
+    return unlisten
+  }, [])
+
+  useEffect(() => {
+    const unlisten = rendererHandlers.finishAgentRecording.listen(() => {
+      isConfirmedRef.current = true
+      recorderRef.current?.stopRecording()
+    })
+
+    return unlisten
+  }, [])
+
+  useEffect(() => {
+    const unlisten = rendererHandlers.startOrFinishAgentRecording.listen(() => {
+      if (recording) {
+        isConfirmedRef.current = true
+        recorderRef.current?.stopRecording()
+      } else {
+        setAgentMode(true)
+        agentModeRef.current = true
+        tipcClient.showPanelWindow()
+        setVisualizerData(() => getInitialVisualizerData())
+        recorderRef.current?.startRecording()
+      }
+    })
+
+    return unlisten
+  }, [recording])
+
   return (
     <div className="flex h-screen dark:text-white">
-      {(transcribeMutation.isPending || mcpTranscribeMutation.isPending) ? (
+      {(transcribeMutation.isPending || mcpTranscribeMutation.isPending || agentTranscribeMutation.isPending) ? (
         <div className="flex h-full w-full items-center justify-center">
           <Spinner />
         </div>
@@ -214,6 +292,11 @@ export function Component() {
             {mcpMode && (
               <div className="flex items-center justify-center w-8 h-full">
                 <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" title="MCP Tool Mode" />
+              </div>
+            )}
+            {agentMode && (
+              <div className="flex items-center justify-center w-8 h-full">
+                <div className="w-2 h-2 bg-purple-500 rounded-full animate-pulse" title="Agent Chaining Mode" />
               </div>
             )}
           </div>

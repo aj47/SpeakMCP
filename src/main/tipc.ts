@@ -15,6 +15,7 @@ import { Config, RecordingHistoryItem, MCPConfig, MCPServerConfig } from "../sha
 import { RendererHandlers } from "./renderer-handlers"
 import { postProcessTranscript, processTranscriptWithTools } from "./llm"
 import { mcpService, MCPToolResult } from "./mcp-service"
+import { agentService } from "./agent-service"
 import { state } from "./state"
 import { updateTrayIcon } from "./tray"
 import { isAccessibilityGranted } from "./utils"
@@ -265,56 +266,7 @@ export const router = {
       // First, transcribe the audio using the same logic as regular recording
       console.log(`[MCP-DEBUG] 🎤 Starting transcription using provider: ${config.sttProviderId}`)
 
-      if (config.sttProviderId === "lightning-whisper-mlx") {
-        try {
-          console.log("[MCP-DEBUG] Using Lightning Whisper MLX for transcription")
-          const result = await transcribeWithLightningWhisper(input.recording, {
-            model: config.lightningWhisperMlxModel || "distil-medium.en",
-            batchSize: config.lightningWhisperMlxBatchSize || 12,
-            quant: config.lightningWhisperMlxQuant || null,
-          })
-
-          if (!result.success) {
-            throw new Error(result.error || "Lightning Whisper MLX transcription failed")
-          }
-
-          transcript = result.text || ""
-          console.log(`[MCP-DEBUG] ✅ Lightning Whisper transcription successful: "${transcript}"`)
-        } catch (error) {
-          console.error("[MCP-DEBUG] ❌ Lightning Whisper MLX failed, falling back to OpenAI:", error)
-
-          // Fallback to OpenAI if lightning-whisper-mlx fails
-          const form = new FormData()
-          form.append(
-            "file",
-            new File([input.recording], "recording.webm", { type: "audio/webm" }),
-          )
-          form.append("model", "whisper-1")
-          form.append("response_format", "json")
-
-          const openaiBaseUrl = config.openaiBaseUrl || "https://api.openai.com/v1"
-
-          const transcriptResponse = await fetch(
-            `${openaiBaseUrl}/audio/transcriptions`,
-            {
-              method: "POST",
-              headers: {
-                Authorization: `Bearer ${config.openaiApiKey}`,
-              },
-              body: form,
-            },
-          )
-
-          if (!transcriptResponse.ok) {
-            const message = `Fallback transcription failed: ${transcriptResponse.statusText} ${(await transcriptResponse.text()).slice(0, 300)}`
-            throw new Error(message)
-          }
-
-          const json: { text: string } = await transcriptResponse.json()
-          transcript = json.text
-          console.log(`[MCP-DEBUG] ✅ Fallback OpenAI transcription successful: "${transcript}"`)
-        }
-      } else {
+      {
         // Use OpenAI or Groq for transcription
         console.log(`[MCP-DEBUG] Using ${config.sttProviderId} for transcription`)
         const form = new FormData()
@@ -449,6 +401,96 @@ export const router = {
       }
     }),
 
+  createAgentRecording: t.procedure
+    .input<{
+      recording: ArrayBuffer
+      duration: number
+    }>()
+    .action(async ({ input }) => {
+      console.log("[AGENT-DEBUG] 🎤 Starting agent recording processing...")
+      const config = configStore.get()
+
+      if (!config.agentChainingEnabled) {
+        throw new Error("Agent chaining is not enabled")
+      }
+
+      // Transcribe audio
+      let transcript = ""
+      console.log("[AGENT-DEBUG] 🔊 Starting transcription...")
+
+      const form = new FormData()
+      form.append("file", new Blob([input.recording], { type: "audio/webm" }), "audio.webm")
+      form.append("model", config.sttProviderId === "groq" ? "whisper-large-v3" : "whisper-1")
+
+      if (config.groqSttPrompt && config.sttProviderId === "groq") {
+        form.append("prompt", config.groqSttPrompt)
+      }
+
+      const groqBaseUrl = config.groqBaseUrl || "https://api.groq.com/openai/v1"
+      const openaiBaseUrl = config.openaiBaseUrl || "https://api.openai.com/v1"
+
+      const transcriptResponse = await fetch(
+        config.sttProviderId === "groq"
+          ? `${groqBaseUrl}/audio/transcriptions`
+          : `${openaiBaseUrl}/audio/transcriptions`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${config.sttProviderId === "groq" ? config.groqApiKey : config.openaiApiKey}`,
+          },
+          body: form,
+        },
+      )
+
+      if (!transcriptResponse.ok) {
+        const message = `${transcriptResponse.statusText} ${(await transcriptResponse.text()).slice(0, 300)}`
+        throw new Error(message)
+      }
+
+      const json: { text: string } = await transcriptResponse.json()
+      transcript = json.text
+      console.log(`[AGENT-DEBUG] ✅ Transcription successful: "${transcript}"`)
+
+      // Start agent execution
+      console.log("[AGENT-DEBUG] 🤖 Starting agent execution...")
+      const executionId = await agentService.startAgentExecution(transcript)
+      console.log(`[AGENT-DEBUG] ✅ Agent execution started with ID: ${executionId}`)
+
+      // Save to history with execution ID for tracking
+      const history = getRecordingHistory()
+      const item: RecordingHistoryItem = {
+        id: Date.now().toString(),
+        createdAt: Date.now(),
+        duration: input.duration,
+        transcript: `[Agent Execution] ${transcript}`,
+      }
+      history.push(item)
+      saveRecordingsHitory(history)
+
+      fs.writeFileSync(
+        path.join(recordingsFolder, `${item.id}.webm`),
+        Buffer.from(input.recording),
+      )
+
+      // Refresh UI
+      const main = WINDOWS.get("main")
+      if (main) {
+        getRendererHandlers<RendererHandlers>(
+          main.webContents,
+        ).refreshRecordingHistory.send()
+      }
+
+      const panel = WINDOWS.get("panel")
+      if (panel) {
+        panel.hide()
+      }
+
+      console.log("[AGENT-DEBUG] ✅ Agent recording processing completed!")
+
+      // Return execution ID so UI can track progress
+      return { executionId }
+    }),
+
   getRecordingHistory: t.procedure.action(async () => getRecordingHistory()),
 
   deleteRecordingItem: t.procedure
@@ -519,7 +561,7 @@ export const router = {
 
       return mcpConfig
     } catch (error) {
-      throw new Error(`Failed to load MCP config: ${error.message}`)
+      throw new Error(`Failed to load MCP config: ${error instanceof Error ? error.message : String(error)}`)
     }
   }),
 
@@ -543,7 +585,7 @@ export const router = {
         fs.writeFileSync(result.filePath, JSON.stringify(input.config, null, 2))
         return true
       } catch (error) {
-        throw new Error(`Failed to save MCP config: ${error.message}`)
+        throw new Error(`Failed to save MCP config: ${error instanceof Error ? error.message : String(error)}`)
       }
     }),
 
@@ -575,7 +617,7 @@ export const router = {
 
         return { valid: true }
       } catch (error) {
-        return { valid: false, error: error.message }
+        return { valid: false, error: error instanceof Error ? error.message : String(error) }
       }
     }),
 
@@ -618,6 +660,35 @@ export const router = {
     .input<{ serverName: string }>()
     .action(async ({ input }) => {
       return mcpService.stopServer(input.serverName)
+    }),
+
+  // Agent Execution Handlers
+  startAgentExecution: t.procedure
+    .input<{ goal: string }>()
+    .action(async ({ input }) => {
+      const executionId = await agentService.startAgentExecution(input.goal)
+      return { executionId }
+    }),
+
+  getAgentExecution: t.procedure
+    .input<{ executionId: string }>()
+    .action(async ({ input }) => {
+      const execution = agentService.getExecution(input.executionId)
+      if (!execution) {
+        throw new Error("Agent execution not found")
+      }
+      return execution
+    }),
+
+  getAllAgentExecutions: t.procedure.action(async () => {
+    return agentService.getAllActiveExecutions()
+  }),
+
+  cancelAgentExecution: t.procedure
+    .input<{ executionId: string }>()
+    .action(async ({ input }) => {
+      const success = agentService.cancelExecution(input.executionId, "Cancelled by user")
+      return { success }
     }),
 }
 

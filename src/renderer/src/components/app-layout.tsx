@@ -12,6 +12,11 @@ export const Component = () => {
       icon: "i-mingcute-history-anticlockwise-line",
     },
     {
+      text: "Agents",
+      href: "/agents",
+      icon: "i-mingcute-robot-2-line",
+    },
+    {
       text: "Settings",
       href: "/settings",
       icon: "i-mingcute-settings-3-line",

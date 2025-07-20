@@ -20,6 +20,47 @@ export interface MCPConfig {
   mcpServers: Record<string, MCPServerConfig>
 }
 
+// Agent Chain Types
+export interface AgentChainStep {
+  id: string
+  timestamp: number
+  type: 'llm_decision' | 'tool_execution' | 'analysis' | 'completion' | 'error'
+  description: string
+  toolCall?: {
+    name: string
+    arguments: any
+  }
+  result?: {
+    content: string
+    isError?: boolean
+  }
+  llmResponse?: {
+    content?: string
+    reasoning?: string
+  }
+}
+
+export interface AgentChainExecution {
+  id: string
+  goal: string
+  startTime: number
+  endTime?: number
+  status: 'running' | 'paused' | 'completed' | 'failed' | 'stopped'
+  steps: AgentChainStep[]
+  currentStep?: string
+  totalSteps: number
+  maxIterations: number
+  timeoutMs: number
+}
+
+export interface AgentChainConfig {
+  enabled: boolean
+  maxIterations: number
+  timeoutMs: number
+  systemPrompt: string
+  enableProgressTracking: boolean
+}
+
 export type Config = {
   shortcut?: "hold-ctrl" | "ctrl-slash"
   hideDockIcon?: boolean
@@ -56,4 +97,7 @@ export type Config = {
 
   // MCP Server Configuration
   mcpConfig?: MCPConfig
+
+  // Agent Chain Configuration
+  agentChainConfig?: AgentChainConfig
 }

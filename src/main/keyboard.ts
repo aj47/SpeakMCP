@@ -144,6 +144,14 @@ export function listenToKeyboardEvents() {
         }
       }
 
+      // Handle Agent Chain shortcuts (Ctrl+Alt+Shift+/) - simplified for now
+      // TODO: Add proper Shift key detection
+      if (config.agentChainConfig?.enabled && e.data.key === "Slash" && isPressedCtrlKey && isPressedCtrlAltKey) {
+        // For now, we'll use a different key combination or add this later
+        // getWindowRendererHandlers("panel")?.startOrFinishAgentChainRecording.send()
+        // return
+      }
+
       if (config.shortcut === "ctrl-slash") {
         if (e.data.key === "Slash" && isPressedCtrlKey) {
           getWindowRendererHandlers("panel")?.startOrFinishRecording.send()

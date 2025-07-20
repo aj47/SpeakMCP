@@ -287,7 +287,7 @@ export function MCPConfigManager({ config, onConfigChange }: MCPConfigManagerPro
         toast.success("MCP configuration imported successfully")
       }
     } catch (error) {
-      toast.error(`Failed to import config: ${error.message}`)
+      toast.error(`Failed to import config: ${error instanceof Error ? error.message : String(error)}`)
     }
   }
 
@@ -298,7 +298,7 @@ export function MCPConfigManager({ config, onConfigChange }: MCPConfigManagerPro
         toast.success("MCP configuration exported successfully")
       }
     } catch (error) {
-      toast.error(`Failed to export config: ${error.message}`)
+      toast.error(`Failed to export config: ${error instanceof Error ? error.message : String(error)}`)
     }
   }
 
@@ -320,7 +320,7 @@ export function MCPConfigManager({ config, onConfigChange }: MCPConfigManagerPro
         toast.error(`Failed to restart server: ${result.error}`)
       }
     } catch (error) {
-      toast.error(`Failed to restart server: ${error.message}`)
+      toast.error(`Failed to restart server: ${error instanceof Error ? error.message : String(error)}`)
     }
   }
 
@@ -333,7 +333,7 @@ export function MCPConfigManager({ config, onConfigChange }: MCPConfigManagerPro
         toast.error(`Failed to stop server: ${result.error}`)
       }
     } catch (error) {
-      toast.error(`Failed to stop server: ${error.message}`)
+      toast.error(`Failed to stop server: ${error instanceof Error ? error.message : String(error)}`)
     }
   }
 

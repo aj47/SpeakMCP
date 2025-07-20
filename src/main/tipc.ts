@@ -11,10 +11,11 @@ import {
 } from "electron"
 import path from "path"
 import { configStore, recordingsFolder } from "./config"
-import { Config, RecordingHistoryItem, MCPConfig, MCPServerConfig } from "../shared/types"
+import { Config, RecordingHistoryItem, MCPConfig, MCPServerConfig, AgentChainConfig } from "../shared/types"
 import { RendererHandlers } from "./renderer-handlers"
 import { postProcessTranscript, processTranscriptWithTools } from "./llm"
 import { mcpService, MCPToolResult } from "./mcp-service"
+import { agentChainService } from "./agent-chain-service"
 import { state } from "./state"
 import { updateTrayIcon } from "./tray"
 import { isAccessibilityGranted } from "./utils"
@@ -265,98 +266,48 @@ export const router = {
       // First, transcribe the audio using the same logic as regular recording
       console.log(`[MCP-DEBUG] 🎤 Starting transcription using provider: ${config.sttProviderId}`)
 
-      if (config.sttProviderId === "lightning-whisper-mlx") {
-        try {
-          console.log("[MCP-DEBUG] Using Lightning Whisper MLX for transcription")
-          const result = await transcribeWithLightningWhisper(input.recording, {
-            model: config.lightningWhisperMlxModel || "distil-medium.en",
-            batchSize: config.lightningWhisperMlxBatchSize || 12,
-            quant: config.lightningWhisperMlxQuant || null,
-          })
+      // Use OpenAI or Groq for transcription
 
-          if (!result.success) {
-            throw new Error(result.error || "Lightning Whisper MLX transcription failed")
-          }
+      console.log(`[MCP-DEBUG] Using ${config.sttProviderId} for transcription`)
+      const form = new FormData()
+      form.append(
+        "file",
+        new File([input.recording], "recording.webm", { type: "audio/webm" }),
+      )
+      form.append(
+        "model",
+        config.sttProviderId === "groq" ? "whisper-large-v3" : "whisper-1",
+      )
+      form.append("response_format", "json")
 
-          transcript = result.text || ""
-          console.log(`[MCP-DEBUG] ✅ Lightning Whisper transcription successful: "${transcript}"`)
-        } catch (error) {
-          console.error("[MCP-DEBUG] ❌ Lightning Whisper MLX failed, falling back to OpenAI:", error)
-
-          // Fallback to OpenAI if lightning-whisper-mlx fails
-          const form = new FormData()
-          form.append(
-            "file",
-            new File([input.recording], "recording.webm", { type: "audio/webm" }),
-          )
-          form.append("model", "whisper-1")
-          form.append("response_format", "json")
-
-          const openaiBaseUrl = config.openaiBaseUrl || "https://api.openai.com/v1"
-
-          const transcriptResponse = await fetch(
-            `${openaiBaseUrl}/audio/transcriptions`,
-            {
-              method: "POST",
-              headers: {
-                Authorization: `Bearer ${config.openaiApiKey}`,
-              },
-              body: form,
-            },
-          )
-
-          if (!transcriptResponse.ok) {
-            const message = `Fallback transcription failed: ${transcriptResponse.statusText} ${(await transcriptResponse.text()).slice(0, 300)}`
-            throw new Error(message)
-          }
-
-          const json: { text: string } = await transcriptResponse.json()
-          transcript = json.text
-          console.log(`[MCP-DEBUG] ✅ Fallback OpenAI transcription successful: "${transcript}"`)
-        }
-      } else {
-        // Use OpenAI or Groq for transcription
-        console.log(`[MCP-DEBUG] Using ${config.sttProviderId} for transcription`)
-        const form = new FormData()
-        form.append(
-          "file",
-          new File([input.recording], "recording.webm", { type: "audio/webm" }),
-        )
-        form.append(
-          "model",
-          config.sttProviderId === "groq" ? "whisper-large-v3" : "whisper-1",
-        )
-        form.append("response_format", "json")
-
-        if (config.sttProviderId === "groq" && config.groqSttPrompt?.trim()) {
-          form.append("prompt", config.groqSttPrompt.trim())
-        }
-
-        const groqBaseUrl = config.groqBaseUrl || "https://api.groq.com/openai/v1"
-        const openaiBaseUrl = config.openaiBaseUrl || "https://api.openai.com/v1"
-
-        const transcriptResponse = await fetch(
-          config.sttProviderId === "groq"
-            ? `${groqBaseUrl}/audio/transcriptions`
-            : `${openaiBaseUrl}/audio/transcriptions`,
-          {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${config.sttProviderId === "groq" ? config.groqApiKey : config.openaiApiKey}`,
-            },
-            body: form,
-          },
-        )
-
-        if (!transcriptResponse.ok) {
-          const message = `${transcriptResponse.statusText} ${(await transcriptResponse.text()).slice(0, 300)}`
-          throw new Error(message)
-        }
-
-        const json: { text: string } = await transcriptResponse.json()
-        transcript = json.text
-        console.log(`[MCP-DEBUG] ✅ ${config.sttProviderId} transcription successful: "${transcript}"`)
+      if (config.sttProviderId === "groq" && config.groqSttPrompt?.trim()) {
+        form.append("prompt", config.groqSttPrompt.trim())
       }
+
+      const groqBaseUrl = config.groqBaseUrl || "https://api.groq.com/openai/v1"
+      const openaiBaseUrl = config.openaiBaseUrl || "https://api.openai.com/v1"
+
+      const transcriptResponse = await fetch(
+        config.sttProviderId === "groq"
+          ? `${groqBaseUrl}/audio/transcriptions`
+          : `${openaiBaseUrl}/audio/transcriptions`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${config.sttProviderId === "groq" ? config.groqApiKey : config.openaiApiKey}`,
+          },
+          body: form,
+        },
+      )
+
+      if (!transcriptResponse.ok) {
+        const message = `${transcriptResponse.statusText} ${(await transcriptResponse.text()).slice(0, 300)}`
+        throw new Error(message)
+      }
+
+      const json: { text: string } = await transcriptResponse.json()
+      transcript = json.text
+      console.log(`[MCP-DEBUG] ✅ ${config.sttProviderId} transcription successful: "${transcript}"`)
 
       // Process transcript with MCP tools
       console.log("[MCP-DEBUG] 🔧 Getting available tools and processing with LLM...")
@@ -519,7 +470,7 @@ export const router = {
 
       return mcpConfig
     } catch (error) {
-      throw new Error(`Failed to load MCP config: ${error.message}`)
+      throw new Error(`Failed to load MCP config: ${error instanceof Error ? error.message : String(error)}`)
     }
   }),
 
@@ -543,7 +494,7 @@ export const router = {
         fs.writeFileSync(result.filePath, JSON.stringify(input.config, null, 2))
         return true
       } catch (error) {
-        throw new Error(`Failed to save MCP config: ${error.message}`)
+        throw new Error(`Failed to save MCP config: ${error instanceof Error ? error.message : String(error)}`)
       }
     }),
 
@@ -575,7 +526,7 @@ export const router = {
 
         return { valid: true }
       } catch (error) {
-        return { valid: false, error: error.message }
+        return { valid: false, error: error instanceof Error ? error.message : String(error) }
       }
     }),
 
@@ -619,6 +570,146 @@ export const router = {
     .action(async ({ input }) => {
       return mcpService.stopServer(input.serverName)
     }),
+
+  // Agent Chain procedures
+  createAgentChainRecording: t.procedure
+    .input<{
+      recording: ArrayBuffer
+      duration: number
+    }>()
+    .action(async ({ input }) => {
+      console.log(`[AGENT-CHAIN] 🎬 Starting agent chain recording processing, duration: ${input.duration}ms`)
+
+      fs.mkdirSync(recordingsFolder, { recursive: true })
+
+      const config = configStore.get()
+      let transcript: string
+
+      // Initialize MCP service if not already done
+      console.log("[AGENT-CHAIN] Initializing MCP service...")
+      await mcpService.initialize()
+
+      // First, transcribe the audio using the same logic as regular recording
+      console.log(`[AGENT-CHAIN] 🎤 Starting transcription using provider: ${config.sttProviderId}`)
+
+      // Use OpenAI or Groq for transcription
+        const form = new FormData()
+        form.append(
+          "file",
+          new File([input.recording], "recording.webm", { type: "audio/webm" }),
+        )
+        form.append(
+          "model",
+          config.sttProviderId === "groq" ? "whisper-large-v3" : "whisper-1",
+        )
+        form.append("response_format", "json")
+
+        // Add prompt parameter for Groq if provided
+        if (config.sttProviderId === "groq" && config.groqSttPrompt?.trim()) {
+          form.append("prompt", config.groqSttPrompt.trim())
+        }
+
+        const baseUrl =
+          config.sttProviderId === "groq"
+            ? config.groqBaseUrl || "https://api.groq.com/openai/v1"
+            : config.openaiBaseUrl || "https://api.openai.com/v1"
+
+        const transcriptResponse = await fetch(
+          `${baseUrl}/audio/transcriptions`,
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${
+                config.sttProviderId === "groq" ? config.groqApiKey : config.openaiApiKey
+              }`,
+            },
+            body: form,
+          },
+        )
+
+        if (!transcriptResponse.ok) {
+          throw new Error(`Transcription failed: ${transcriptResponse.statusText}`)
+        }
+
+        const transcriptJson = await transcriptResponse.json()
+        transcript = transcriptJson.text || ""
+        console.log(`[AGENT-CHAIN] ✅ Transcription successful: "${transcript}"`)
+
+      // Start the agent chain with the transcribed goal
+      console.log("[AGENT-CHAIN] 🤖 Starting autonomous agent chain...")
+      const chainId = await agentChainService.startChain(transcript)
+      console.log(`[AGENT-CHAIN] ✅ Agent chain started with ID: ${chainId}`)
+
+      // Save to history with chain ID for tracking
+      const history = getRecordingHistory()
+      const item: RecordingHistoryItem = {
+        id: Date.now().toString(),
+        createdAt: Date.now(),
+        duration: input.duration,
+        transcript: `[AGENT CHAIN] Goal: ${transcript} (Chain ID: ${chainId})`,
+      }
+      history.push(item)
+      saveRecordingsHitory(history)
+
+      fs.writeFileSync(
+        path.join(recordingsFolder, `${item.id}.webm`),
+        Buffer.from(input.recording),
+      )
+
+      const main = WINDOWS.get("main")
+      if (main) {
+        getRendererHandlers<RendererHandlers>(
+          main.webContents,
+        ).refreshRecordingHistory.send()
+      }
+
+      const panel = WINDOWS.get("panel")
+      if (panel) {
+        panel.hide()
+      }
+
+      console.log("[AGENT-CHAIN] ✅ Agent chain recording processing completed!")
+
+      return { chainId, goal: transcript }
+    }),
+
+  startAgentChain: t.procedure
+    .input<{ goal: string }>()
+    .action(async ({ input }) => {
+      const chainId = await agentChainService.startChain(input.goal)
+      return { chainId }
+    }),
+
+  stopAgentChain: t.procedure
+    .input<{ chainId: string }>()
+    .action(async ({ input }) => {
+      agentChainService.stopChain(input.chainId, 'stopped')
+      return { success: true }
+    }),
+
+  pauseAgentChain: t.procedure
+    .input<{ chainId: string }>()
+    .action(async ({ input }) => {
+      const success = agentChainService.pauseChain(input.chainId)
+      return { success }
+    }),
+
+  resumeAgentChain: t.procedure
+    .input<{ chainId: string }>()
+    .action(async ({ input }) => {
+      const success = agentChainService.resumeChain(input.chainId)
+      return { success }
+    }),
+
+  getAgentChainExecution: t.procedure
+    .input<{ chainId: string }>()
+    .action(async ({ input }) => {
+      return agentChainService.getChainExecution(input.chainId)
+    }),
+
+  getAllActiveAgentChains: t.procedure.action(async () => {
+    return agentChainService.getAllActiveChains()
+  }),
 }
 
 export type Router = typeof router

@@ -20,8 +20,10 @@ export function Component() {
   )
   const [recording, setRecording] = useState(false)
   const [mcpMode, setMcpMode] = useState(false)
+  const [agentChainMode, setAgentChainMode] = useState(false)
   const isConfirmedRef = useRef(false)
   const mcpModeRef = useRef(false)
+  const agentChainModeRef = useRef(false)
 
   const transcribeMutation = useMutation({
     mutationFn: async ({
@@ -69,6 +71,30 @@ export function Component() {
     },
   })
 
+  const agentChainTranscribeMutation = useMutation({
+    mutationFn: async ({
+      blob,
+      duration,
+    }: {
+      blob: Blob
+      duration: number
+    }) => {
+      const arrayBuffer = await blob.arrayBuffer()
+
+      await tipcClient.createAgentChainRecording({
+        recording: arrayBuffer,
+        duration,
+      })
+    },
+    onError(error) {
+      tipcClient.hidePanelWindow()
+      tipcClient.displayError({
+        title: error.name,
+        message: error.message,
+      })
+    },
+  })
+
   const recorderRef = useRef<Recorder | null>(null)
 
   useEffect(() => {
@@ -95,6 +121,7 @@ export function Component() {
 
     recorder.on("record-end", (blob, duration) => {
       const currentMcpMode = mcpModeRef.current
+      const currentAgentChainMode = agentChainModeRef.current
       setRecording(false)
       setVisualizerData(() => getInitialVisualizerData())
       tipcClient.recordEvent({ type: "end" })
@@ -106,7 +133,12 @@ export function Component() {
       playSound("end_record")
 
       // Use appropriate mutation based on mode
-      if (currentMcpMode) {
+      if (currentAgentChainMode) {
+        agentChainTranscribeMutation.mutate({
+          blob,
+          duration,
+        })
+      } else if (currentMcpMode) {
         mcpTranscribeMutation.mutate({
           blob,
           duration,
@@ -118,9 +150,11 @@ export function Component() {
         })
       }
 
-      // Reset MCP mode after recording
+      // Reset modes after recording
       setMcpMode(false)
       mcpModeRef.current = false
+      setAgentChainMode(false)
+      agentChainModeRef.current = false
     })
   }, [mcpMode, mcpTranscribeMutation, transcribeMutation])
 
@@ -194,6 +228,44 @@ export function Component() {
         recorderRef.current?.stopRecording()
       } else {
         setMcpMode(true)
+        mcpModeRef.current = true
+        tipcClient.showPanelWindow()
+        recorderRef.current?.startRecording()
+      }
+    })
+
+    return unlisten
+  }, [recording])
+
+  // Agent Chain handlers
+  useEffect(() => {
+    const unlisten = rendererHandlers.startAgentChainRecording.listen(() => {
+      setAgentChainMode(true)
+      agentChainModeRef.current = true
+      setVisualizerData(() => getInitialVisualizerData())
+      recorderRef.current?.startRecording()
+    })
+
+    return unlisten
+  }, [])
+
+  useEffect(() => {
+    const unlisten = rendererHandlers.finishAgentChainRecording.listen(() => {
+      isConfirmedRef.current = true
+      recorderRef.current?.stopRecording()
+    })
+
+    return unlisten
+  }, [])
+
+  useEffect(() => {
+    const unlisten = rendererHandlers.startOrFinishAgentChainRecording.listen(() => {
+      if (recording) {
+        isConfirmedRef.current = true
+        recorderRef.current?.stopRecording()
+      } else {
+        setAgentChainMode(true)
+        agentChainModeRef.current = true
         tipcClient.showPanelWindow()
         recorderRef.current?.startRecording()
       }
@@ -211,7 +283,12 @@ export function Component() {
       ) : (
         <div className="flex h-full w-full rounded-xl transition-colors">
           <div className="flex shrink-0">
-            {mcpMode && (
+            {agentChainMode && (
+              <div className="flex items-center justify-center w-8 h-full">
+                <div className="w-2 h-2 bg-purple-500 rounded-full animate-pulse" title="Agent Chain Mode" />
+              </div>
+            )}
+            {mcpMode && !agentChainMode && (
               <div className="flex items-center justify-center w-8 h-full">
                 <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" title="MCP Tool Mode" />
               </div>

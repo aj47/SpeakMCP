@@ -354,7 +354,7 @@ class MCPService {
     }
   }
 
-  private async createTestConnection(serverName: string, serverConfig: MCPServerConfig): Promise<{ success: boolean; error?: string; toolCount?: number }> {
+  private async createTestConnection(_serverName: string, serverConfig: MCPServerConfig): Promise<{ success: boolean; error?: string; toolCount?: number }> {
     let transport: StdioClientTransport | null = null
     let client: Client | null = null
 

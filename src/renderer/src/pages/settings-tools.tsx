@@ -8,9 +8,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@renderer/components/ui/textarea"
 
 import { CHAT_PROVIDERS } from "@shared/index"
-import { Config, MCPConfig } from "@shared/types"
+import { Config, MCPConfig, AgentChainConfig } from "@shared/types"
 import { MCPConfigManager } from "@renderer/components/mcp-config-manager"
 import { MCPToolManager } from "@renderer/components/mcp-tool-manager"
+import { AgentChainSettings } from "@renderer/components/agent-chain-settings"
+import { AgentChainDashboard } from "@renderer/components/agent-chain-dashboard"
 
 export function Component() {
   const configQuery = useConfigQuery()
@@ -34,6 +36,10 @@ export function Component() {
 
   const updateMcpConfig = (mcpConfig: MCPConfig) => {
     updateConfig({ mcpConfig })
+  }
+
+  const updateAgentChainConfig = (agentChainConfig: AgentChainConfig) => {
+    updateConfig({ agentChainConfig })
   }
 
   const defaultSystemPrompt = `You are a helpful assistant that can execute tools based on user requests.
@@ -229,6 +235,27 @@ Always respond with valid JSON only.`
             <div className="pt-6 border-t">
               <MCPToolManager />
             </div>
+
+            {/* Agent Chain Configuration Section */}
+            <div className="pt-6 border-t">
+              <AgentChainSettings
+                config={config.agentChainConfig || {
+                  enabled: true,
+                  maxIterations: 10,
+                  timeoutMs: 300000,
+                  systemPrompt: "",
+                  enableProgressTracking: true
+                }}
+                onConfigChange={updateAgentChainConfig}
+              />
+            </div>
+
+            {/* Agent Chain Dashboard Section */}
+            {config.agentChainConfig?.enabled && (
+              <div className="pt-6 border-t">
+                <AgentChainDashboard />
+              </div>
+            )}
           </div>
         )}
       </div>

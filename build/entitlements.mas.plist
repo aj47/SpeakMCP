@@ -30,17 +30,17 @@
     <key>com.apple.security.automation.apple-events</key>
     <true/>
 
-    <!-- Temporary exception for JIT (may need to be removed for App Store) -->
+    <!-- JIT compilation allowed for Electron/Node.js -->
     <key>com.apple.security.cs.allow-jit</key>
-    <false/>
+    <true/>
 
-    <!-- Disable unsigned executable memory for App Store -->
+    <!-- Allow unsigned executable memory for Electron/Node.js -->
     <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
-    <false/>
+    <true/>
 
-    <!-- Disable DYLD environment variables for App Store -->
+    <!-- Allow DYLD environment variables for Electron/Node.js -->
     <key>com.apple.security.cs.allow-dyld-environment-variables</key>
-    <false/>
+    <true/>
 
 
   </dict>

@@ -243,6 +243,8 @@ Remember: Respond with ONLY the JSON object, no markdown formatting, no code blo
     }
   ]
 
+  const chatProviderId = config.mcpToolsProviderId
+
   if (chatProviderId === "gemini") {
     console.log("[MCP-DEBUG] Using Gemini for LLM processing")
     if (!config.geminiApiKey) throw new Error("Gemini API key is required")

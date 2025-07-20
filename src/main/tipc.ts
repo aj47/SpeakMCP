@@ -468,7 +468,7 @@ export const router = {
 
       return mcpConfig
     } catch (error) {
-      throw new Error(`Failed to load MCP config: ${error.message}`)
+      throw new Error(`Failed to load MCP config: ${error instanceof Error ? error.message : String(error)}`)
     }
   }),
 
@@ -492,7 +492,7 @@ export const router = {
         fs.writeFileSync(result.filePath, JSON.stringify(input.config, null, 2))
         return true
       } catch (error) {
-        throw new Error(`Failed to save MCP config: ${error.message}`)
+        throw new Error(`Failed to save MCP config: ${error instanceof Error ? error.message : String(error)}`)
       }
     }),
 
@@ -524,7 +524,7 @@ export const router = {
 
         return { valid: true }
       } catch (error) {
-        return { valid: false, error: error.message }
+        return { valid: false, error: error instanceof Error ? error.message : String(error) }
       }
     }),
 

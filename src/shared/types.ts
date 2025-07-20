@@ -53,6 +53,7 @@ export type Config = {
   mcpToolsGroqModel?: string
   mcpToolsGeminiModel?: string
   mcpToolsSystemPrompt?: string
+  mcpAgentModeEnabled?: boolean
 
   // MCP Server Configuration
   mcpConfig?: MCPConfig

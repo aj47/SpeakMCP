@@ -100,6 +100,18 @@ Always respond with valid JSON only.`
                 </p>
               </div>
 
+              <div className="flex items-center space-x-2">
+                <Switch
+                  id="mcp-agent-mode"
+                  checked={config.mcpAgentModeEnabled || false}
+                  onCheckedChange={(checked) => updateConfig({ mcpAgentModeEnabled: checked })}
+                />
+                <Label htmlFor="mcp-agent-mode">Enable Agent Mode</Label>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                When enabled, the agent can see tool results and make follow-up tool calls until the task is complete
+              </p>
+
               <div className="space-y-2">
                 <Label htmlFor="mcp-provider">LLM Provider</Label>
                 <Select

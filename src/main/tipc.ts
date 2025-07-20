@@ -13,7 +13,7 @@ import path from "path"
 import { configStore, recordingsFolder } from "./config"
 import { Config, RecordingHistoryItem, MCPConfig, MCPServerConfig } from "../shared/types"
 import { RendererHandlers } from "./renderer-handlers"
-import { postProcessTranscript, processTranscriptWithTools } from "./llm"
+import { postProcessTranscript, processTranscriptWithTools, processTranscriptWithAgentMode } from "./llm"
 import { mcpService, MCPToolResult } from "./mcp-service"
 import { state } from "./state"
 import { updateTrayIcon } from "./tray"
@@ -312,46 +312,66 @@ export const router = {
       const availableTools = mcpService.getAvailableTools()
       console.log(`[MCP-DEBUG] Available tools for processing: ${availableTools.map(t => t.name).join(', ')}`)
 
-      const llmResponse = await processTranscriptWithTools(transcript, availableTools)
-      console.log("[MCP-DEBUG] 📝 LLM processing completed:")
-      console.log(`[MCP-DEBUG] - Has content: ${!!llmResponse.content}`)
-      console.log(`[MCP-DEBUG] - Has toolCalls: ${!!llmResponse.toolCalls}`)
-      console.log(`[MCP-DEBUG] - Number of toolCalls: ${llmResponse.toolCalls?.length || 0}`)
-      if (llmResponse.toolCalls) {
-        console.log(`[MCP-DEBUG] - Tool names: ${llmResponse.toolCalls.map(tc => tc.name).join(', ')}`)
-      }
-
       let finalResponse = ""
 
-      // Execute tool calls if any
-      if (llmResponse.toolCalls && llmResponse.toolCalls.length > 0) {
-        console.log(`[MCP-DEBUG] 🔧 Executing ${llmResponse.toolCalls.length} tool calls:`,
-          llmResponse.toolCalls.map(tc => tc.name))
+      // Check if agent mode is enabled
+      if (config.mcpAgentModeEnabled) {
+        console.log("[MCP-AGENT] 🤖 Agent mode enabled, using agent processing...")
 
-        const toolResults: MCPToolResult[] = []
+        const agentResponse = await processTranscriptWithAgentMode(
+          transcript,
+          availableTools,
+          (toolCall) => mcpService.executeToolCall(toolCall),
+          10 // max iterations
+        )
 
-        for (const toolCall of llmResponse.toolCalls) {
-          console.log(`[MCP-DEBUG] Executing tool: ${toolCall.name}`)
-          const result = await mcpService.executeToolCall(toolCall)
-          toolResults.push(result)
+        finalResponse = agentResponse.content
+        console.log(`[MCP-AGENT] ✅ Agent processing completed in ${agentResponse.totalIterations} iterations`)
+        console.log(`[MCP-AGENT] Final response length: ${finalResponse.length}`)
+        console.log(`[MCP-AGENT] Final response preview: "${finalResponse.substring(0, 100)}..."`)
+        console.log(`[MCP-AGENT] Conversation history length: ${agentResponse.conversationHistory.length} entries`)
+      } else {
+        console.log("[MCP-DEBUG] Using single-shot tool processing...")
+
+        const llmResponse = await processTranscriptWithTools(transcript, availableTools)
+        console.log("[MCP-DEBUG] 📝 LLM processing completed:")
+        console.log(`[MCP-DEBUG] - Has content: ${!!llmResponse.content}`)
+        console.log(`[MCP-DEBUG] - Has toolCalls: ${!!llmResponse.toolCalls}`)
+        console.log(`[MCP-DEBUG] - Number of toolCalls: ${llmResponse.toolCalls?.length || 0}`)
+        if (llmResponse.toolCalls) {
+          console.log(`[MCP-DEBUG] - Tool names: ${llmResponse.toolCalls.map(tc => tc.name).join(', ')}`)
         }
 
-        // Combine tool results into final response
-        const toolResultTexts = toolResults.map(result =>
-          result.content.map(c => c.text).join('\n')
-        ).join('\n\n')
+        // Execute tool calls if any
+        if (llmResponse.toolCalls && llmResponse.toolCalls.length > 0) {
+          console.log(`[MCP-DEBUG] 🔧 Executing ${llmResponse.toolCalls.length} tool calls:`,
+            llmResponse.toolCalls.map(tc => tc.name))
 
-        finalResponse = llmResponse.content
-          ? `${llmResponse.content}\n\n${toolResultTexts}`
-          : toolResultTexts
+          const toolResults: MCPToolResult[] = []
 
-        console.log(`[MCP-DEBUG] ✅ Tool execution completed, final response length: ${finalResponse.length}`)
-        console.log(`[MCP-DEBUG] Final response preview: "${finalResponse.substring(0, 100)}..."`)
-      } else {
-        console.log("[MCP-DEBUG] No tool calls needed, using LLM response or original transcript")
-        finalResponse = llmResponse.content || transcript
-        console.log(`[MCP-DEBUG] Using ${llmResponse.content ? 'LLM content' : 'original transcript'} as final response`)
-        console.log(`[MCP-DEBUG] Final response preview: "${finalResponse.substring(0, 100)}..."`)
+          for (const toolCall of llmResponse.toolCalls) {
+            console.log(`[MCP-DEBUG] Executing tool: ${toolCall.name}`)
+            const result = await mcpService.executeToolCall(toolCall)
+            toolResults.push(result)
+          }
+
+          // Combine tool results into final response
+          const toolResultTexts = toolResults.map(result =>
+            result.content.map(c => c.text).join('\n')
+          ).join('\n\n')
+
+          finalResponse = llmResponse.content
+            ? `${llmResponse.content}\n\n${toolResultTexts}`
+            : toolResultTexts
+
+          console.log(`[MCP-DEBUG] ✅ Tool execution completed, final response length: ${finalResponse.length}`)
+          console.log(`[MCP-DEBUG] Final response preview: "${finalResponse.substring(0, 100)}..."`)
+        } else {
+          console.log("[MCP-DEBUG] No tool calls needed, using LLM response or original transcript")
+          finalResponse = llmResponse.content || transcript
+          console.log(`[MCP-DEBUG] Using ${llmResponse.content ? 'LLM content' : 'original transcript'} as final response`)
+          console.log(`[MCP-DEBUG] Final response preview: "${finalResponse.substring(0, 100)}..."`)
+        }
       }
 
       // Save to history (optional - we might want to track MCP recordings separately)

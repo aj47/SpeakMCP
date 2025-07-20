@@ -1,6 +1,6 @@
 import { GoogleGenerativeAI } from "@google/generative-ai"
 import { configStore } from "./config"
-import { MCPTool, MCPToolCall, LLMToolCallResponse } from "./mcp-service"
+import { MCPTool, MCPToolCall, LLMToolCallResponse, MCPToolResult } from "./mcp-service"
 
 /**
  * Validates that a parsed JSON object has the expected structure for LLM tool responses
@@ -316,6 +316,257 @@ Remember: Respond with ONLY the JSON object, no markdown formatting, no code blo
     return parsed
   } else {
     console.log(`[MCP-DEBUG] ⚠️ Failed to extract JSON from LLM response, returning as content`)
+    return { content: responseContent }
+  }
+}
+
+export interface AgentModeResponse {
+  content: string
+  conversationHistory: Array<{
+    role: "user" | "assistant" | "tool"
+    content: string
+    toolCalls?: MCPToolCall[]
+    toolResults?: MCPToolResult[]
+  }>
+  totalIterations: number
+}
+
+export async function processTranscriptWithAgentMode(
+  transcript: string,
+  availableTools: MCPTool[],
+  executeToolCall: (toolCall: MCPToolCall) => Promise<MCPToolResult>,
+  maxIterations: number = 10
+): Promise<AgentModeResponse> {
+  const config = configStore.get()
+
+  if (!config.mcpToolsEnabled || !config.mcpAgentModeEnabled) {
+    const fallbackResponse = await processTranscriptWithTools(transcript, availableTools)
+    return {
+      content: fallbackResponse.content || "",
+      conversationHistory: [
+        { role: "user", content: transcript },
+        { role: "assistant", content: fallbackResponse.content || "" }
+      ],
+      totalIterations: 1
+    }
+  }
+
+  console.log("[MCP-AGENT] 🤖 Starting agent mode processing...")
+
+  // Enhanced system prompt for agent mode
+  const systemPrompt = config.mcpToolsSystemPrompt || `You are a helpful assistant that can execute tools based on user requests. You are operating in agent mode, which means you can see the results of tool executions and make follow-up tool calls as needed.
+
+Available tools:
+${availableTools.map(tool => `- ${tool.name}: ${tool.description}`).join('\n')}
+
+IMPORTANT: You must respond with ONLY a valid JSON object. Do not include any explanatory text before or after the JSON.
+
+CRITICAL: When calling tools, you MUST use the EXACT tool name as listed above, including any server prefixes (like "server:tool_name"). Do not modify or shorten the tool names.
+
+In agent mode, you can:
+1. Execute tools and see their results
+2. Make follow-up tool calls based on the results
+3. Continue until the task is complete
+
+When you need to use tools, respond with this exact JSON format:
+{
+  "toolCalls": [
+    {
+      "name": "exact_tool_name_from_list_above",
+      "arguments": { "param1": "value1", "param2": "value2" }
+    }
+  ],
+  "content": "Brief explanation of what you're doing",
+  "needsMoreWork": true
+}
+
+When the task is complete and no more tools are needed, respond with:
+{
+  "content": "Final response with task completion summary",
+  "needsMoreWork": false
+}
+
+If no tools are needed for the initial request, respond with:
+{
+  "content": "Your response text here",
+  "needsMoreWork": false
+}
+
+Remember: Respond with ONLY the JSON object, no markdown formatting, no code blocks, no additional text.`
+
+  const conversationHistory: Array<{
+    role: "user" | "assistant" | "tool"
+    content: string
+    toolCalls?: MCPToolCall[]
+    toolResults?: MCPToolResult[]
+  }> = [
+    { role: "user", content: transcript }
+  ]
+
+  let iteration = 0
+  let finalContent = ""
+
+  while (iteration < maxIterations) {
+    iteration++
+    console.log(`[MCP-AGENT] 🔄 Agent iteration ${iteration}/${maxIterations}`)
+
+    // Build messages for LLM call
+    const messages = [
+      { role: "system", content: systemPrompt },
+      ...conversationHistory.map(entry => {
+        if (entry.role === "tool") {
+          return {
+            role: "user" as const,
+            content: `Tool execution results:\n${entry.content}`
+          }
+        }
+        return {
+          role: entry.role as "user" | "assistant",
+          content: entry.content
+        }
+      })
+    ]
+
+    // Make LLM call
+    const llmResponse = await makeLLMCall(messages, config)
+
+    // Check for completion signals
+    const isComplete = !llmResponse.toolCalls ||
+                      llmResponse.toolCalls.length === 0 ||
+                      (llmResponse as any).needsMoreWork === false
+
+    if (isComplete) {
+      // No tools to execute or agent explicitly says it's done
+      finalContent = llmResponse.content || ""
+      conversationHistory.push({
+        role: "assistant",
+        content: finalContent
+      })
+      console.log(`[MCP-AGENT] ✅ Agent completed task in ${iteration} iterations`)
+      break
+    }
+
+    // Execute tool calls
+    console.log(`[MCP-AGENT] 🔧 Executing ${llmResponse.toolCalls!.length} tool calls`)
+    const toolResults: MCPToolResult[] = []
+
+    for (const toolCall of llmResponse.toolCalls!) {
+      console.log(`[MCP-AGENT] Executing tool: ${toolCall.name}`)
+      const result = await executeToolCall(toolCall)
+      toolResults.push(result)
+    }
+
+    // Add assistant response and tool results to conversation
+    conversationHistory.push({
+      role: "assistant",
+      content: llmResponse.content || "",
+      toolCalls: llmResponse.toolCalls!
+    })
+
+    const toolResultsText = toolResults.map(result =>
+      result.content.map(c => c.text).join('\n')
+    ).join('\n\n')
+
+    conversationHistory.push({
+      role: "tool",
+      content: toolResultsText,
+      toolResults
+    })
+
+    // Enhanced completion detection
+    const hasErrors = toolResults.some(result => result.isError)
+    const allToolsSuccessful = toolResults.length > 0 && !hasErrors
+
+    if (hasErrors) {
+      console.log(`[MCP-AGENT] ⚠️ Tool execution had errors, continuing to handle them`)
+    }
+
+    // Check for completion keywords in the response
+    const completionKeywords = ['completed', 'finished', 'done', 'success', 'created successfully', 'task complete']
+    const responseText = (llmResponse.content || "").toLowerCase()
+    const hasCompletionKeywords = completionKeywords.some(keyword => responseText.includes(keyword))
+
+    if (allToolsSuccessful && hasCompletionKeywords) {
+      console.log(`[MCP-AGENT] 🎯 Detected task completion signals - tools successful and completion keywords found`)
+    }
+
+    // Set final content to the latest assistant response
+    finalContent = llmResponse.content || ""
+  }
+
+  if (iteration >= maxIterations) {
+    console.log(`[MCP-AGENT] ⚠️ Agent reached maximum iterations (${maxIterations})`)
+    finalContent += "\n\n(Note: Task may not be fully complete - reached maximum iteration limit)"
+  }
+
+  return {
+    content: finalContent,
+    conversationHistory,
+    totalIterations: iteration
+  }
+}
+
+async function makeLLMCall(messages: Array<{role: string, content: string}>, config: any): Promise<LLMToolCallResponse> {
+  const chatProviderId = config.mcpToolsProviderId
+
+  if (chatProviderId === "gemini") {
+    console.log("[MCP-AGENT] Using Gemini for LLM processing")
+    if (!config.geminiApiKey) throw new Error("Gemini API key is required")
+
+    const gai = new GoogleGenerativeAI(config.geminiApiKey)
+    const geminiModel = config.mcpToolsGeminiModel || "gemini-1.5-flash-002"
+    const gModel = gai.getGenerativeModel({ model: geminiModel })
+
+    const prompt = messages.map(m => `${m.role}: ${m.content}`).join('\n\n')
+
+    const result = await gModel.generateContent([prompt], {
+      baseUrl: config.geminiBaseUrl,
+    })
+
+    const responseText = result.response.text().trim()
+    const parsed = extractAndParseJSON(responseText)
+    if (parsed) {
+      return parsed
+    } else {
+      return { content: responseText }
+    }
+  }
+
+  const chatBaseUrl =
+    chatProviderId === "groq"
+      ? config.groqBaseUrl || "https://api.groq.com/openai/v1"
+      : config.openaiBaseUrl || "https://api.openai.com/v1"
+
+  const model = chatProviderId === "groq"
+    ? config.mcpToolsGroqModel || "gemma2-9b-it"
+    : config.mcpToolsOpenaiModel || "gpt-4o-mini"
+
+  const chatResponse = await fetch(`${chatBaseUrl}/chat/completions`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${chatProviderId === "groq" ? config.groqApiKey : config.openaiApiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      temperature: 0,
+      model,
+      messages,
+    }),
+  })
+
+  if (!chatResponse.ok) {
+    const errorText = await chatResponse.text()
+    const message = `${chatResponse.statusText} ${errorText.slice(0, 300)}`
+    throw new Error(message)
+  }
+
+  const chatJson = await chatResponse.json()
+  const responseContent = chatJson.choices[0].message.content.trim()
+
+  const parsed = extractAndParseJSON(responseContent)
+  if (parsed) {
+    return parsed
+  } else {
     return { content: responseContent }
   }
 }

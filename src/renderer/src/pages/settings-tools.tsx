@@ -202,16 +202,11 @@ Always respond with valid JSON only.`
               </div>
 
               <div className="rounded-lg border p-4 space-y-2">
-                <h4 className="font-medium">Available Tools</h4>
-                <div className="text-sm text-muted-foreground space-y-1">
-                  <div>• <strong>create_file</strong> - Create new files with specified content</div>
-                  <div>• <strong>read_file</strong> - Read contents of existing files</div>
-                  <div>• <strong>list_files</strong> - List files in a directory</div>
-                  <div>• <strong>send_notification</strong> - Send system notifications</div>
+                <h4 className="font-medium">MCP Tools</h4>
+                <div className="text-sm text-muted-foreground">
+                  <p>Tools are provided by MCP (Model Context Protocol) servers that you configure.</p>
+                  <p className="mt-2">Configure MCP servers below to add tools for file operations, API integrations, and more.</p>
                 </div>
-                <p className="text-xs text-muted-foreground mt-2">
-                  More tools can be added in future updates or through MCP server integrations.
-                </p>
               </div>
             </>
           )}

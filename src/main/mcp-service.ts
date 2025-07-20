@@ -52,9 +52,9 @@ class MCPService {
     const config = configStore.get()
     const mcpConfig = config.mcpConfig
 
-    if (!mcpConfig || !mcpConfig.mcpServers) {
-      console.log("[MCP-DEBUG] No MCP servers configured, using fallback tools")
-      this.initializeFallbackTools()
+    if (!mcpConfig || !mcpConfig.mcpServers || Object.keys(mcpConfig.mcpServers).length === 0) {
+      console.log("[MCP-DEBUG] No MCP servers configured")
+      this.availableTools = []
       this.isInitializing = false
       return
     }
@@ -81,75 +81,7 @@ class MCPService {
       this.availableTools.map(t => t.name))
   }
 
-  private initializeFallbackTools() {
-    // Fallback tools when no MCP servers are configured
-    this.availableTools = [
-      {
-        name: "create_file",
-        description: "Create a new file with the specified content",
-        inputSchema: {
-          type: "object",
-          properties: {
-            path: {
-              type: "string",
-              description: "The file path to create"
-            },
-            content: {
-              type: "string",
-              description: "The content to write to the file"
-            }
-          },
-          required: ["path", "content"]
-        }
-      },
-      {
-        name: "read_file",
-        description: "Read the contents of a file",
-        inputSchema: {
-          type: "object",
-          properties: {
-            path: {
-              type: "string",
-              description: "The file path to read"
-            }
-          },
-          required: ["path"]
-        }
-      },
-      {
-        name: "list_files",
-        description: "List files and directories in a specified path. If no path is provided, lists the current working directory.",
-        inputSchema: {
-          type: "object",
-          properties: {
-            path: {
-              type: "string",
-              description: "The directory path to list (optional, defaults to current directory if not specified)"
-            }
-          },
-          required: []
-        }
-      },
-      {
-        name: "send_notification",
-        description: "Send a system notification to the user",
-        inputSchema: {
-          type: "object",
-          properties: {
-            title: {
-              type: "string",
-              description: "The notification title"
-            },
-            message: {
-              type: "string",
-              description: "The notification message"
-            }
-          },
-          required: ["title", "message"]
-        }
-      }
-    ]
-  }
+
 
   private async initializeServer(serverName: string, serverConfig: MCPServerConfig) {
     console.log(`[MCP-DEBUG] Initializing server: ${serverName}`)
@@ -257,7 +189,7 @@ class MCPService {
     inputSchema: any
   }> {
     return this.availableTools.map(tool => {
-      const serverName = tool.name.includes(':') ? tool.name.split(':')[0] : 'fallback'
+      const serverName = tool.name.includes(':') ? tool.name.split(':')[0] : 'unknown'
       return {
         name: tool.name,
         description: tool.description,
@@ -487,40 +419,14 @@ class MCPService {
         return await this.executeServerTool(serverName, toolName, toolCall.arguments)
       }
 
-      // Handle fallback tools
-      let result: MCPToolResult
-
-      switch (toolCall.name) {
-        case "create_file":
-          console.log(`[MCP-DEBUG] Creating file: ${toolCall.arguments.path}`)
-          result = await this.createFile(toolCall.arguments.path, toolCall.arguments.content)
-          break
-
-        case "read_file":
-          console.log(`[MCP-DEBUG] Reading file: ${toolCall.arguments.path}`)
-          result = await this.readFile(toolCall.arguments.path)
-          break
-
-        case "list_files":
-          const listPath = toolCall.arguments.path || "."
-          console.log(`[MCP-DEBUG] Listing files in: ${listPath}`)
-          result = await this.listFiles(listPath)
-          break
-
-        case "send_notification":
-          console.log(`[MCP-DEBUG] Sending notification: ${toolCall.arguments.title}`)
-          result = await this.sendNotification(toolCall.arguments.title, toolCall.arguments.message)
-          break
-
-        default:
-          console.log(`[MCP-DEBUG] ❌ Unknown tool: ${toolCall.name}`)
-          result = {
-            content: [{
-              type: "text",
-              text: `Unknown tool: ${toolCall.name}`
-            }],
-            isError: true
-          }
+      // No fallback tools available
+      console.log(`[MCP-DEBUG] ❌ Unknown tool: ${toolCall.name}`)
+      const result: MCPToolResult = {
+        content: [{
+          type: "text",
+          text: `Unknown tool: ${toolCall.name}. Only MCP server tools are supported.`
+        }],
+        isError: true
       }
 
       console.log(`[MCP-DEBUG] ✅ Tool execution completed:`, result)
@@ -538,82 +444,7 @@ class MCPService {
     }
   }
 
-  private async createFile(path: string, content: string): Promise<MCPToolResult> {
-    const fs = await import("fs/promises")
-    const pathModule = await import("path")
 
-    try {
-      // Ensure directory exists
-      await fs.mkdir(pathModule.dirname(path), { recursive: true })
-      await fs.writeFile(path, content, "utf8")
-
-      return {
-        content: [{
-          type: "text",
-          text: `Successfully created file: ${path}`
-        }]
-      }
-    } catch (error) {
-      throw new Error(`Failed to create file: ${error instanceof Error ? error.message : String(error)}`)
-    }
-  }
-
-  private async readFile(path: string): Promise<MCPToolResult> {
-    const fs = await import("fs/promises")
-
-    try {
-      const content = await fs.readFile(path, "utf8")
-      return {
-        content: [{
-          type: "text",
-          text: `File content of ${path}:\n\n${content}`
-        }]
-      }
-    } catch (error) {
-      throw new Error(`Failed to read file: ${error instanceof Error ? error.message : String(error)}`)
-    }
-  }
-
-  private async listFiles(path: string = "."): Promise<MCPToolResult> {
-    const fs = await import("fs/promises")
-
-    try {
-      const files = await fs.readdir(path, { withFileTypes: true })
-      const fileList = files.map(file =>
-        file.isDirectory() ? `${file.name}/` : file.name
-      ).join("\n")
-
-      const displayPath = path === "." ? "current directory" : path
-      return {
-        content: [{
-          type: "text",
-          text: `Files in ${displayPath}:\n\n${fileList}`
-        }]
-      }
-    } catch (error) {
-      throw new Error(`Failed to list files: ${error instanceof Error ? error.message : String(error)}`)
-    }
-  }
-
-  private async sendNotification(title: string, message: string): Promise<MCPToolResult> {
-    const { Notification } = await import("electron")
-
-    try {
-      new Notification({
-        title,
-        body: message
-      }).show()
-
-      return {
-        content: [{
-          type: "text",
-          text: `Notification sent: ${title}`
-        }]
-      }
-    } catch (error) {
-      throw new Error(`Failed to send notification: ${error instanceof Error ? error.message : String(error)}`)
-    }
-  }
 
   /**
    * Resolve the full path to a command, handling different platforms and PATH resolution

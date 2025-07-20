@@ -34,22 +34,16 @@ describe('MCPService', () => {
   })
 
   describe('initialize', () => {
-    it('should initialize with fallback tools when no MCP config is provided', async () => {
+    it('should initialize with no tools when no MCP config is provided', async () => {
       mockConfigStore.get.mockReturnValue({})
 
       await mcpService.initialize()
 
       const tools = mcpService.getAvailableTools()
-      expect(tools).toHaveLength(4)
-      expect(tools.map(t => t.name)).toEqual([
-        'create_file',
-        'read_file', 
-        'list_files',
-        'send_notification'
-      ])
+      expect(tools).toHaveLength(0)
     })
 
-    it('should initialize with fallback tools when MCP config is empty', async () => {
+    it('should initialize with no tools when MCP config is empty', async () => {
       mockConfigStore.get.mockReturnValue({
         mcpConfig: { mcpServers: {} }
       })
@@ -57,7 +51,7 @@ describe('MCPService', () => {
       await mcpService.initialize()
 
       const tools = mcpService.getAvailableTools()
-      expect(tools).toHaveLength(4)
+      expect(tools).toHaveLength(0)
     })
 
     it('should skip disabled servers', async () => {
@@ -76,7 +70,7 @@ describe('MCPService', () => {
       await mcpService.initialize()
 
       const tools = mcpService.getAvailableTools()
-      expect(tools).toHaveLength(4) // Only fallback tools
+      expect(tools).toHaveLength(0) // No tools when servers are disabled
     })
   })
 
@@ -95,7 +89,7 @@ describe('MCPService', () => {
       }
 
       const result = await mcpService.testServerConnection('test', serverConfig)
-      
+
       expect(result.success).toBe(false)
       expect(result.error).toBe('Command is required')
     })
@@ -107,7 +101,7 @@ describe('MCPService', () => {
       }
 
       const result = await mcpService.testServerConnection('test', serverConfig)
-      
+
       expect(result.success).toBe(false)
       expect(result.error).toBe('Args must be an array')
     })
@@ -119,38 +113,30 @@ describe('MCPService', () => {
       }
 
       const result = await mcpService.testServerConnection('test', serverConfig)
-      
+
       expect(result.success).toBe(true)
     })
   })
 
   describe('executeToolCall', () => {
-    it('should execute fallback tools', async () => {
+    it('should handle unknown tools when no servers configured', async () => {
       await mcpService.initialize()
 
       const result = await mcpService.executeToolCall({
-        name: 'send_notification',
-        arguments: { title: 'Test', message: 'Test message' }
+        name: 'unknown_tool',
+        arguments: {}
       })
 
       expect(result.content).toHaveLength(1)
-      expect(result.content[0].text).toContain('Notification sent')
-    })
-
-    it('should handle unknown tools', async () => {
-      await mcpService.initialize()
-
-      await expect(mcpService.executeToolCall({
-        name: 'unknown_tool',
-        arguments: {}
-      })).rejects.toThrow('Unknown tool: unknown_tool')
+      expect(result.isError).toBe(true)
+      expect(result.content[0].text).toContain('Unknown tool: unknown_tool. Only MCP server tools are supported.')
     })
   })
 
   describe('cleanup', () => {
     it('should clear all data on cleanup', async () => {
       await mcpService.initialize()
-      
+
       await mcpService.cleanup()
 
       const tools = mcpService.getAvailableTools()

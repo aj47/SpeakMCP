@@ -39,7 +39,7 @@ https://github.com/user-attachments/assets/2344a817-f36c-42b0-9ebc-cdd6e926b7a0
 - **Multiple Providers**: OpenAI Whisper and Groq
 - **Cloud APIs**: OpenAI and Groq for high-accuracy transcription
 - **Custom Endpoints**: Support for self-hosted APIs
-- **Fallback System**: Automatic fallback between providers
+- **Reliable Processing**: Robust error handling and provider management
 
 ### 🧠 Intelligent Post-Processing
 - **LLM Enhancement**: Improve transcripts with OpenAI, Groq, or Gemini
@@ -79,7 +79,7 @@ SpeakMCP is built with a modern, multi-process architecture designed for perform
 - **Main Process**: Handles system integration, keyboard events, and API communication
 - **Renderer Process**: React-based UI for settings and recording interface
 - **Rust Binary**: Low-level keyboard monitoring and text injection
-- **Python Integration**: Local ML model execution for Mac Silicon devices
+- **MCP Integration**: Model Context Protocol for extensible tool support
 - **TIPC Communication**: Type-safe IPC between Electron processes
 
 ## 🛠️ Development
@@ -146,7 +146,7 @@ SpeakMCP/
 │   ├── preload/           # Electron preload scripts
 │   └── shared/            # Shared types and constants
 ├── speakmcp-rs/           # Rust binary for system integration
-├── resources/             # Static resources and Python scripts
+├── resources/             # Static resources and assets
 └── docs/                  # Documentation
 ```
 

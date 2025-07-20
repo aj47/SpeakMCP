@@ -186,30 +186,24 @@ describe('MCP End-to-End Tests', () => {
       expect(invalidResult.error).toBeTruthy()
     })
 
-    it('should handle fallback tools when no servers configured', async () => {
+    it('should handle no tools when no servers configured', async () => {
       // Configure with no MCP servers
       mockConfigStore.get.mockReturnValue({})
 
       await mcpService.initialize()
 
       const tools = mcpService.getAvailableTools()
-      expect(tools.length).toBeGreaterThan(0)
+      expect(tools.length).toBe(0)
 
-      // Should have fallback tools
-      const fallbackTools = ['create_file', 'read_file', 'list_files', 'send_notification']
-      for (const toolName of fallbackTools) {
-        expect(tools.some(t => t.name === toolName)).toBe(true)
-      }
-
-      // Test fallback tool execution
+      // Test unknown tool execution should return error
       const result = await mcpService.executeToolCall({
-        name: 'send_notification',
-        arguments: { title: 'Test', message: 'Fallback test' }
+        name: 'unknown_tool',
+        arguments: { test: 'value' }
       })
 
       expect(result.content).toHaveLength(1)
-      // In test environment, notification might fail, so check for either success or error
-      expect(result.content[0].text).toMatch(/Notification sent|Error executing tool/)
+      expect(result.isError).toBe(true)
+      expect(result.content[0].text).toMatch(/Unknown tool.*Only MCP server tools are supported/)
     })
 
     it('should handle multiple servers simultaneously', async () => {

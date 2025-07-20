@@ -265,98 +265,47 @@ export const router = {
       // First, transcribe the audio using the same logic as regular recording
       console.log(`[MCP-DEBUG] 🎤 Starting transcription using provider: ${config.sttProviderId}`)
 
-      if (config.sttProviderId === "lightning-whisper-mlx") {
-        try {
-          console.log("[MCP-DEBUG] Using Lightning Whisper MLX for transcription")
-          const result = await transcribeWithLightningWhisper(input.recording, {
-            model: config.lightningWhisperMlxModel || "distil-medium.en",
-            batchSize: config.lightningWhisperMlxBatchSize || 12,
-            quant: config.lightningWhisperMlxQuant || null,
-          })
+      // Use OpenAI or Groq for transcription
+      console.log(`[MCP-DEBUG] Using ${config.sttProviderId} for transcription`)
+      const form = new FormData()
+      form.append(
+        "file",
+        new File([input.recording], "recording.webm", { type: "audio/webm" }),
+      )
+      form.append(
+        "model",
+        config.sttProviderId === "groq" ? "whisper-large-v3" : "whisper-1",
+      )
+      form.append("response_format", "json")
 
-          if (!result.success) {
-            throw new Error(result.error || "Lightning Whisper MLX transcription failed")
-          }
-
-          transcript = result.text || ""
-          console.log(`[MCP-DEBUG] ✅ Lightning Whisper transcription successful: "${transcript}"`)
-        } catch (error) {
-          console.error("[MCP-DEBUG] ❌ Lightning Whisper MLX failed, falling back to OpenAI:", error)
-
-          // Fallback to OpenAI if lightning-whisper-mlx fails
-          const form = new FormData()
-          form.append(
-            "file",
-            new File([input.recording], "recording.webm", { type: "audio/webm" }),
-          )
-          form.append("model", "whisper-1")
-          form.append("response_format", "json")
-
-          const openaiBaseUrl = config.openaiBaseUrl || "https://api.openai.com/v1"
-
-          const transcriptResponse = await fetch(
-            `${openaiBaseUrl}/audio/transcriptions`,
-            {
-              method: "POST",
-              headers: {
-                Authorization: `Bearer ${config.openaiApiKey}`,
-              },
-              body: form,
-            },
-          )
-
-          if (!transcriptResponse.ok) {
-            const message = `Fallback transcription failed: ${transcriptResponse.statusText} ${(await transcriptResponse.text()).slice(0, 300)}`
-            throw new Error(message)
-          }
-
-          const json: { text: string } = await transcriptResponse.json()
-          transcript = json.text
-          console.log(`[MCP-DEBUG] ✅ Fallback OpenAI transcription successful: "${transcript}"`)
-        }
-      } else {
-        // Use OpenAI or Groq for transcription
-        console.log(`[MCP-DEBUG] Using ${config.sttProviderId} for transcription`)
-        const form = new FormData()
-        form.append(
-          "file",
-          new File([input.recording], "recording.webm", { type: "audio/webm" }),
-        )
-        form.append(
-          "model",
-          config.sttProviderId === "groq" ? "whisper-large-v3" : "whisper-1",
-        )
-        form.append("response_format", "json")
-
-        if (config.sttProviderId === "groq" && config.groqSttPrompt?.trim()) {
-          form.append("prompt", config.groqSttPrompt.trim())
-        }
-
-        const groqBaseUrl = config.groqBaseUrl || "https://api.groq.com/openai/v1"
-        const openaiBaseUrl = config.openaiBaseUrl || "https://api.openai.com/v1"
-
-        const transcriptResponse = await fetch(
-          config.sttProviderId === "groq"
-            ? `${groqBaseUrl}/audio/transcriptions`
-            : `${openaiBaseUrl}/audio/transcriptions`,
-          {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${config.sttProviderId === "groq" ? config.groqApiKey : config.openaiApiKey}`,
-            },
-            body: form,
-          },
-        )
-
-        if (!transcriptResponse.ok) {
-          const message = `${transcriptResponse.statusText} ${(await transcriptResponse.text()).slice(0, 300)}`
-          throw new Error(message)
-        }
-
-        const json: { text: string } = await transcriptResponse.json()
-        transcript = json.text
-        console.log(`[MCP-DEBUG] ✅ ${config.sttProviderId} transcription successful: "${transcript}"`)
+      if (config.sttProviderId === "groq" && config.groqSttPrompt?.trim()) {
+        form.append("prompt", config.groqSttPrompt.trim())
       }
+
+      const groqBaseUrl = config.groqBaseUrl || "https://api.groq.com/openai/v1"
+      const openaiBaseUrl = config.openaiBaseUrl || "https://api.openai.com/v1"
+
+      const transcriptResponse = await fetch(
+        config.sttProviderId === "groq"
+          ? `${groqBaseUrl}/audio/transcriptions`
+          : `${openaiBaseUrl}/audio/transcriptions`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${config.sttProviderId === "groq" ? config.groqApiKey : config.openaiApiKey}`,
+          },
+          body: form,
+        },
+      )
+
+      if (!transcriptResponse.ok) {
+        const message = `${transcriptResponse.statusText} ${(await transcriptResponse.text()).slice(0, 300)}`
+        throw new Error(message)
+      }
+
+      const json: { text: string } = await transcriptResponse.json()
+      transcript = json.text
+      console.log(`[MCP-DEBUG] ✅ ${config.sttProviderId} transcription successful: "${transcript}"`)
 
       // Process transcript with MCP tools
       console.log("[MCP-DEBUG] 🔧 Getting available tools and processing with LLM...")

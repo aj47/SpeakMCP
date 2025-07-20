@@ -34,3 +34,4 @@ temp/
 .env.local
 .env.production
 .env
+backend/.wrangler

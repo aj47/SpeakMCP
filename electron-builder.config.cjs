@@ -35,11 +35,7 @@ module.exports = {
     artifactName: "${productName}-${version}-${arch}.${ext}",
     entitlementsInherit: "build/entitlements.mac.plist",
     identity: process.env.CSC_NAME || "Apple Development",
-    extendInfo: [
-      {
-        NSCameraUsageDescription:
-          "Application requests access to the device's camera.",
-      },
+    target: [
       {
         target: "zip",
         arch: ["x64", "arm64"]

@@ -29,8 +29,6 @@
     "verify:signing": "./scripts/verify-signing.sh",
     "check:mas": "./scripts/check-mas-setup.sh",
     "upload:mas": "./scripts/build-and-upload-mas.sh",
-    "build:linux": "electron-vite build && electron-builder --linux --config electron-builder.config.cjs",
-    "release": "node ./scripts/release.js",
     "fix-pnpm-windows": "node ./scripts/fix-pnpm-windows.js",
     "build-rs": "sh scripts/build-rs.sh"
   },

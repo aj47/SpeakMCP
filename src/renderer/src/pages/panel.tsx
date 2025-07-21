@@ -254,7 +254,7 @@ export function Component() {
         <div className="flex h-full w-full items-center justify-center relative">
           {agentProgress ? (
             <div className="absolute inset-0 flex items-center justify-center p-4 z-20">
-              <AgentProgress progress={agentProgress} className="max-w-md w-full" />
+              <AgentProgress progress={agentProgress} className="max-w-sm w-full" />
             </div>
           ) : (
             <Spinner />

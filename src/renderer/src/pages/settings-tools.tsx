@@ -167,6 +167,9 @@ Always respond with valid JSON only.`
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="gemma2-9b-it">Gemma2 9B IT</SelectItem>
+                        <SelectItem value="moonshotai/kimi-k2-instruct">Moonshot AI Kimi K2 Instruct</SelectItem>
+                        <SelectItem value="deepseek-r1-distill-llama-70b">DeepSeek R1 Distill Llama 70B</SelectItem>
+                        <SelectItem value="llama-3.3-70b-versatile">Llama 3.3 70B Versatile</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>

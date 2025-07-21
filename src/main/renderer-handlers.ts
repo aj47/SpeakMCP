@@ -1,4 +1,5 @@
 import { UpdateDownloadedEvent } from "electron-updater"
+import { AgentProgressUpdate } from "../shared/types"
 
 export type RendererHandlers = {
   startRecording: () => void
@@ -11,6 +12,9 @@ export type RendererHandlers = {
   startMcpRecording: () => void
   finishMcpRecording: () => void
   startOrFinishMcpRecording: () => void
+
+  // Agent Mode Progress handlers
+  agentProgressUpdate: (update: AgentProgressUpdate) => void
 
   updateAvailable: (e: UpdateDownloadedEvent) => void
   navigate: (url: string) => void

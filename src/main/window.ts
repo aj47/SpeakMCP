@@ -132,15 +132,21 @@ const panelWindowSize = {
   height: 50,
 }
 
-const getPanelWindowPosition = () => {
+const agentPanelWindowSize = {
+  width: 420,
+  height: 240,
+}
+
+const getPanelWindowPosition = (isAgentMode = false) => {
   // position the window top right
   const currentScreen = screen.getDisplayNearestPoint(
     screen.getCursorScreenPoint(),
   )
   const screenSize = currentScreen.workArea
+  const size = isAgentMode ? agentPanelWindowSize : panelWindowSize
   const position = {
     x: Math.floor(
-      screenSize.x + (screenSize.width - panelWindowSize.width) - 10,
+      screenSize.x + (screenSize.width - size.width) - 10,
     ),
     y: screenSize.y + 10,
   }
@@ -184,18 +190,7 @@ export function createPanelWindow() {
 
 
 
-  // Only log important MCP-related console messages
-  win.webContents.on('console-message', (_event, _level, message, _line, _sourceId) => {
-    if (message.includes('[MCP-DEBUG]') && (
-      message.includes('startMcpRecording handler triggered') ||
-      message.includes('finishMcpRecording handler triggered') ||
-      message.includes('Using MCP transcription mutation') ||
-      message.includes('Recording ended, mcpMode:') ||
-      message.includes('Setting mcpMode to true')
-    )) {
-      console.log(`[MCP-DEBUG] 📝 ${message}`)
-    }
-  })
+
 
   makePanel(win)
 
@@ -218,7 +213,6 @@ export function showPanelWindowAndStartRecording() {
 }
 
 export function showPanelWindowAndStartMcpRecording() {
-  console.log("[MCP-DEBUG] showPanelWindowAndStartMcpRecording called")
   showPanelWindow()
   getWindowRendererHandlers("panel")?.startMcpRecording.send()
 }
@@ -246,4 +240,52 @@ export const stopRecordingAndHidePanelWindow = () => {
       win.hide()
     }
   }
+}
+
+export function resizePanelForAgentMode() {
+  const win = WINDOWS.get("panel")
+  if (!win) {
+    return
+  }
+
+  const position = getPanelWindowPosition(true)
+
+  // Update size constraints for agent mode
+  win.setMinimumSize(agentPanelWindowSize.width, agentPanelWindowSize.height)
+  win.setMaximumSize(agentPanelWindowSize.width, agentPanelWindowSize.height)
+
+  // Set size and position
+  win.setSize(agentPanelWindowSize.width, agentPanelWindowSize.height, true) // animate = true
+  win.setPosition(position.x, position.y, true) // animate = true
+
+  console.log("[MCP-AGENT-DEBUG] ✅ Panel resized for agent mode:", {
+    newSize: agentPanelWindowSize,
+    newPosition: position,
+    finalBounds: win.getBounds()
+  })
+}
+
+export function resizePanelToNormal() {
+  console.log("[MCP-AGENT-DEBUG] 📏 Attempting to resize panel to normal...")
+  const win = WINDOWS.get("panel")
+  if (!win) {
+    console.error("[MCP-AGENT-DEBUG] ❌ Panel window not found for resize!")
+    return
+  }
+
+  const position = getPanelWindowPosition(false)
+
+  // Update size constraints back to normal
+  win.setMinimumSize(panelWindowSize.width, panelWindowSize.height)
+  win.setMaximumSize(panelWindowSize.width, panelWindowSize.height)
+
+  // Set size and position
+  win.setSize(panelWindowSize.width, panelWindowSize.height, true) // animate = true
+  win.setPosition(position.x, position.y, true) // animate = true
+
+  console.log("[MCP-AGENT-DEBUG] ✅ Panel resized to normal:", {
+    newSize: panelWindowSize,
+    newPosition: position,
+    finalBounds: win.getBounds()
+  })
 }

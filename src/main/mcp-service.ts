@@ -44,8 +44,6 @@ class MCPService {
   private initializationProgress: { current: number; total: number; currentServer?: string } = { current: 0, total: 0 }
 
   async initialize(): Promise<void> {
-    console.log("[MCP-DEBUG] 🚀 Initializing MCP service...")
-
     this.isInitializing = true
     this.initializationProgress = { current: 0, total: 0 }
 
@@ -53,7 +51,6 @@ class MCPService {
     const mcpConfig = config.mcpConfig
 
     if (!mcpConfig || !mcpConfig.mcpServers || Object.keys(mcpConfig.mcpServers).length === 0) {
-      console.log("[MCP-DEBUG] No MCP servers configured")
       this.availableTools = []
       this.isInitializing = false
       return
@@ -70,22 +67,18 @@ class MCPService {
       try {
         await this.initializeServer(serverName, serverConfig)
       } catch (error) {
-        console.error(`[MCP-DEBUG] Failed to initialize server ${serverName}:`, error)
+        console.error(`Failed to initialize server ${serverName}:`, error)
       }
 
       this.initializationProgress.current++
     }
 
     this.isInitializing = false
-    console.log(`[MCP-DEBUG] ✅ MCP service initialized with ${this.availableTools.length} tools:`,
-      this.availableTools.map(t => t.name))
   }
 
 
 
   private async initializeServer(serverName: string, serverConfig: MCPServerConfig) {
-    console.log(`[MCP-DEBUG] Initializing server: ${serverName}`)
-
     // Resolve command path and prepare environment
     const resolvedCommand = await this.resolveCommandPath(serverConfig.command)
     const environment = await this.prepareEnvironment(serverConfig.env)
@@ -122,8 +115,6 @@ class MCPService {
     // Store references
     this.transports.set(serverName, transport)
     this.clients.set(serverName, client)
-
-    console.log(`[MCP-DEBUG] Server ${serverName} initialized with ${toolsResult.tools.length} tools`)
   }
 
   private cleanupServer(serverName: string) {
@@ -164,7 +155,7 @@ class MCPService {
         isError: Boolean(result.isError)
       }
     } catch (error) {
-      console.error(`[MCP-DEBUG] Error executing tool ${toolName} on server ${serverName}:`, error)
+      console.error(`Error executing tool ${toolName} on server ${serverName}:`, error)
       return {
         content: [{
           type: "text",
@@ -177,7 +168,6 @@ class MCPService {
 
   getAvailableTools(): MCPTool[] {
     const enabledTools = this.availableTools.filter(tool => !this.disabledTools.has(tool.name))
-    console.log(`[MCP-DEBUG] 📋 Getting available tools (${enabledTools.length}/${this.availableTools.length} tools enabled)`)
     return enabledTools
   }
 
@@ -226,16 +216,13 @@ class MCPService {
   setToolEnabled(toolName: string, enabled: boolean): boolean {
     const toolExists = this.availableTools.some(tool => tool.name === toolName)
     if (!toolExists) {
-      console.warn(`[MCP-DEBUG] Tool ${toolName} not found`)
       return false
     }
 
     if (enabled) {
       this.disabledTools.delete(toolName)
-      console.log(`[MCP-DEBUG] Enabled tool: ${toolName}`)
     } else {
       this.disabledTools.add(toolName)
-      console.log(`[MCP-DEBUG] Disabled tool: ${toolName}`)
     }
 
     return true
@@ -247,8 +234,6 @@ class MCPService {
 
   async testServerConnection(serverName: string, serverConfig: MCPServerConfig): Promise<{ success: boolean; error?: string; toolCount?: number }> {
     try {
-      console.log(`[MCP-DEBUG] Testing connection to server: ${serverName}`)
-
       // Basic validation
       if (!serverConfig.command) {
         return { success: false, error: "Command is required" }
@@ -261,7 +246,6 @@ class MCPService {
       // Try to resolve the command path
       try {
         const resolvedCommand = await this.resolveCommandPath(serverConfig.command)
-        console.log(`[MCP-DEBUG] Resolved command path: ${resolvedCommand}`)
       } catch (error) {
         return {
           success: false,
@@ -330,14 +314,14 @@ class MCPService {
         try {
           await client.close()
         } catch (error) {
-          console.error(`[MCP-DEBUG] Error closing test client:`, error)
+          console.error(`Error closing test client:`, error)
         }
       }
       if (transport) {
         try {
           await transport.close()
         } catch (error) {
-          console.error(`[MCP-DEBUG] Error closing test transport:`, error)
+          console.error(`Error closing test transport:`, error)
         }
       }
     }
@@ -345,8 +329,6 @@ class MCPService {
 
   async restartServer(serverName: string): Promise<{ success: boolean; error?: string }> {
     try {
-      console.log(`[MCP-DEBUG] Restarting server: ${serverName}`)
-
       // Get the current config for this server
       const config = configStore.get()
       const mcpConfig = config.mcpConfig
@@ -365,7 +347,7 @@ class MCPService {
 
       return { success: true }
     } catch (error) {
-      console.error(`[MCP-DEBUG] Failed to restart server ${serverName}:`, error)
+      console.error(`Failed to restart server ${serverName}:`, error)
       return {
         success: false,
         error: error instanceof Error ? error.message : String(error)
@@ -375,8 +357,6 @@ class MCPService {
 
   async stopServer(serverName: string): Promise<{ success: boolean; error?: string }> {
     try {
-      console.log(`[MCP-DEBUG] Stopping server: ${serverName}`)
-
       const client = this.clients.get(serverName)
       const transport = this.transports.get(serverName)
 
@@ -384,7 +364,7 @@ class MCPService {
         try {
           await client.close()
         } catch (error) {
-          console.error(`[MCP-DEBUG] Error closing client for ${serverName}:`, error)
+          console.error(`Error closing client for ${serverName}:`, error)
         }
       }
 
@@ -392,7 +372,7 @@ class MCPService {
         try {
           await transport.close()
         } catch (error) {
-          console.error(`[MCP-DEBUG] Error closing transport for ${serverName}:`, error)
+          console.error(`Error closing transport for ${serverName}:`, error)
         }
       }
 
@@ -401,7 +381,7 @@ class MCPService {
 
       return { success: true }
     } catch (error) {
-      console.error(`[MCP-DEBUG] Failed to stop server ${serverName}:`, error)
+      console.error(`Failed to stop server ${serverName}:`, error)
       return {
         success: false,
         error: error instanceof Error ? error.message : String(error)
@@ -410,8 +390,6 @@ class MCPService {
   }
 
   async executeToolCall(toolCall: MCPToolCall): Promise<MCPToolResult> {
-    console.log(`[MCP-DEBUG] 🔧 Executing tool call: ${toolCall.name}`, toolCall.arguments)
-
     try {
       // Check if this is a server-prefixed tool
       if (toolCall.name.includes(':')) {
@@ -420,7 +398,6 @@ class MCPService {
       }
 
       // No fallback tools available
-      console.log(`[MCP-DEBUG] ❌ Unknown tool: ${toolCall.name}`)
       const result: MCPToolResult = {
         content: [{
           type: "text",
@@ -429,11 +406,10 @@ class MCPService {
         isError: true
       }
 
-      console.log(`[MCP-DEBUG] ✅ Tool execution completed:`, result)
       return result
 
     } catch (error) {
-      console.error(`[MCP-DEBUG] ❌ Tool execution error for ${toolCall.name}:`, error)
+      console.error(`Tool execution error for ${toolCall.name}:`, error)
       return {
         content: [{
           type: "text",
@@ -555,7 +531,7 @@ class MCPService {
       try {
         await client.close()
       } catch (error) {
-        console.error(`[MCP-DEBUG] Error closing client for ${serverName}:`, error)
+        console.error(`Error closing client for ${serverName}:`, error)
       }
     }
 
@@ -563,7 +539,7 @@ class MCPService {
       try {
         await transport.close()
       } catch (error) {
-        console.error(`[MCP-DEBUG] Error closing transport for ${serverName}:`, error)
+        console.error(`Error closing transport for ${serverName}:`, error)
       }
     }
 

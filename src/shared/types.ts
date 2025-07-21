@@ -20,6 +20,33 @@ export interface MCPConfig {
   mcpServers: Record<string, MCPServerConfig>
 }
 
+// Agent Mode Progress Tracking Types
+export interface AgentProgressStep {
+  id: string
+  type: "thinking" | "tool_call" | "tool_result" | "completion"
+  title: string
+  description?: string
+  status: "pending" | "in_progress" | "completed" | "error"
+  timestamp: number
+  toolCall?: {
+    name: string
+    arguments: any
+  }
+  toolResult?: {
+    success: boolean
+    content: string
+    error?: string
+  }
+}
+
+export interface AgentProgressUpdate {
+  currentIteration: number
+  maxIterations: number
+  steps: AgentProgressStep[]
+  isComplete: boolean
+  finalContent?: string
+}
+
 export type Config = {
   shortcut?: "hold-ctrl" | "ctrl-slash"
   hideDockIcon?: boolean

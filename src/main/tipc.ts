@@ -1,6 +1,6 @@
 import fs from "fs"
 import { getRendererHandlers, tipc } from "@egoist/tipc/main"
-import { showPanelWindow, WINDOWS } from "./window"
+import { showPanelWindow, WINDOWS, resizePanelForAgentMode, resizePanelToNormal } from "./window"
 import {
   app,
   clipboard,
@@ -76,6 +76,28 @@ export const router = {
     const panel = WINDOWS.get("panel")
 
     panel?.hide()
+  }),
+
+  resizePanelForAgentMode: t.procedure.action(async () => {
+    console.log("[MCP-AGENT-DEBUG] 📞 TIPC call: resizePanelForAgentMode")
+    resizePanelForAgentMode()
+  }),
+
+  resizePanelToNormal: t.procedure.action(async () => {
+    console.log("[MCP-AGENT-DEBUG] 📞 TIPC call: resizePanelToNormal")
+    resizePanelToNormal()
+  }),
+
+  debugPanelState: t.procedure.action(async () => {
+    const panel = WINDOWS.get("panel")
+    const state = {
+      exists: !!panel,
+      isVisible: panel?.isVisible() || false,
+      isDestroyed: panel?.isDestroyed() || false,
+      bounds: panel?.getBounds() || null,
+      isAlwaysOnTop: panel?.isAlwaysOnTop() || false
+    }
+    return state
   }),
 
   showContextMenu: t.procedure
@@ -251,22 +273,16 @@ export const router = {
       duration: number
     }>()
     .action(async ({ input }) => {
-      console.log(`[MCP-DEBUG] 🎬 Starting MCP recording processing, duration: ${input.duration}ms, audio size: ${input.recording.byteLength} bytes`)
-
       fs.mkdirSync(recordingsFolder, { recursive: true })
 
       const config = configStore.get()
       let transcript: string
 
       // Initialize MCP service if not already done
-      console.log("[MCP-DEBUG] Initializing MCP service...")
       await mcpService.initialize()
 
       // First, transcribe the audio using the same logic as regular recording
-      console.log(`[MCP-DEBUG] 🎤 Starting transcription using provider: ${config.sttProviderId}`)
-
       // Use OpenAI or Groq for transcription
-      console.log(`[MCP-DEBUG] Using ${config.sttProviderId} for transcription`)
       const form = new FormData()
       form.append(
         "file",
@@ -305,12 +321,9 @@ export const router = {
 
       const json: { text: string } = await transcriptResponse.json()
       transcript = json.text
-      console.log(`[MCP-DEBUG] ✅ ${config.sttProviderId} transcription successful: "${transcript}"`)
 
       // Process transcript with MCP tools
-      console.log("[MCP-DEBUG] 🔧 Getting available tools and processing with LLM...")
       const availableTools = mcpService.getAvailableTools()
-      console.log(`[MCP-DEBUG] Available tools for processing: ${availableTools.map(t => t.name).join(', ')}`)
 
       let finalResponse = ""
 
@@ -331,26 +344,13 @@ export const router = {
         console.log(`[MCP-AGENT] Final response preview: "${finalResponse.substring(0, 100)}..."`)
         console.log(`[MCP-AGENT] Conversation history length: ${agentResponse.conversationHistory.length} entries`)
       } else {
-        console.log("[MCP-DEBUG] Using single-shot tool processing...")
-
         const llmResponse = await processTranscriptWithTools(transcript, availableTools)
-        console.log("[MCP-DEBUG] 📝 LLM processing completed:")
-        console.log(`[MCP-DEBUG] - Has content: ${!!llmResponse.content}`)
-        console.log(`[MCP-DEBUG] - Has toolCalls: ${!!llmResponse.toolCalls}`)
-        console.log(`[MCP-DEBUG] - Number of toolCalls: ${llmResponse.toolCalls?.length || 0}`)
-        if (llmResponse.toolCalls) {
-          console.log(`[MCP-DEBUG] - Tool names: ${llmResponse.toolCalls.map(tc => tc.name).join(', ')}`)
-        }
 
         // Execute tool calls if any
         if (llmResponse.toolCalls && llmResponse.toolCalls.length > 0) {
-          console.log(`[MCP-DEBUG] 🔧 Executing ${llmResponse.toolCalls.length} tool calls:`,
-            llmResponse.toolCalls.map(tc => tc.name))
-
           const toolResults: MCPToolResult[] = []
 
           for (const toolCall of llmResponse.toolCalls) {
-            console.log(`[MCP-DEBUG] Executing tool: ${toolCall.name}`)
             const result = await mcpService.executeToolCall(toolCall)
             toolResults.push(result)
           }
@@ -363,19 +363,12 @@ export const router = {
           finalResponse = llmResponse.content
             ? `${llmResponse.content}\n\n${toolResultTexts}`
             : toolResultTexts
-
-          console.log(`[MCP-DEBUG] ✅ Tool execution completed, final response length: ${finalResponse.length}`)
-          console.log(`[MCP-DEBUG] Final response preview: "${finalResponse.substring(0, 100)}..."`)
         } else {
-          console.log("[MCP-DEBUG] No tool calls needed, using LLM response or original transcript")
           finalResponse = llmResponse.content || transcript
-          console.log(`[MCP-DEBUG] Using ${llmResponse.content ? 'LLM content' : 'original transcript'} as final response`)
-          console.log(`[MCP-DEBUG] Final response preview: "${finalResponse.substring(0, 100)}..."`)
         }
       }
 
-      // Save to history (optional - we might want to track MCP recordings separately)
-      console.log("[MCP-DEBUG] 💾 Saving MCP recording to history...")
+      // Save to history
       const history = getRecordingHistory()
       const item: RecordingHistoryItem = {
         id: Date.now().toString(),
@@ -386,26 +379,17 @@ export const router = {
       history.push(item)
       saveRecordingsHitory(history)
 
-      console.log(`[MCP-DEBUG] Saving audio file: ${item.id}.webm`)
       fs.writeFileSync(
         path.join(recordingsFolder, `${item.id}.webm`),
         Buffer.from(input.recording),
       )
 
-      console.log("[MCP-DEBUG] Refreshing UI and hiding panel...")
       const main = WINDOWS.get("main")
       if (main) {
         getRendererHandlers<RendererHandlers>(
           main.webContents,
         ).refreshRecordingHistory.send()
       }
-
-      const panel = WINDOWS.get("panel")
-      if (panel) {
-        panel.hide()
-      }
-
-      console.log("[MCP-DEBUG] ✅ MCP recording processing completed successfully!")
 
       // Copy final response to clipboard and paste
       clipboard.writeText(finalResponse)
@@ -416,6 +400,15 @@ export const router = {
           console.error(`Failed to write text:`, error)
         }
       }
+
+      // Hide panel after a delay to allow progress visualization to complete
+      // The panel will also be hidden automatically when progress completes
+      setTimeout(() => {
+        const panel = WINDOWS.get("panel")
+        if (panel) {
+          panel.hide()
+        }
+      }, 5000) // 5 second delay to allow progress to be seen
     }),
 
   getRecordingHistory: t.procedure.action(async () => getRecordingHistory()),

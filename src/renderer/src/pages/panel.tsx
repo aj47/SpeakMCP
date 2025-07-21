@@ -1,10 +1,12 @@
 import { Spinner } from "@renderer/components/ui/spinner"
+import { AgentProgress } from "@renderer/components/agent-progress"
 import { Recorder } from "@renderer/lib/recorder"
 import { playSound } from "@renderer/lib/sound"
 import { cn } from "@renderer/lib/utils"
 import { useMutation } from "@tanstack/react-query"
 import { useEffect, useRef, useState } from "react"
 import { rendererHandlers, tipcClient } from "~/lib/tipc-client"
+import { AgentProgressUpdate } from "../../../shared/types"
 
 
 
@@ -20,8 +22,11 @@ export function Component() {
   )
   const [recording, setRecording] = useState(false)
   const [mcpMode, setMcpMode] = useState(false)
+  const [agentProgress, setAgentProgress] = useState<AgentProgressUpdate | null>(null)
   const isConfirmedRef = useRef(false)
   const mcpModeRef = useRef(false)
+
+
 
   const transcribeMutation = useMutation({
     mutationFn: async ({
@@ -61,11 +66,17 @@ export function Component() {
       })
     },
     onError(error) {
+      setAgentProgress(null) // Clear progress on error
+      tipcClient.resizePanelToNormal() // Resize back to normal on error
       tipcClient.hidePanelWindow()
       tipcClient.displayError({
         title: error.name,
         message: error.message,
       })
+    },
+    onSuccess() {
+      // Don't clear progress or hide panel on success - agent mode will handle this
+      // The panel needs to stay visible for agent mode progress updates
     },
   })
 
@@ -171,6 +182,8 @@ export function Component() {
     const unlisten = rendererHandlers.startMcpRecording.listen(() => {
       setMcpMode(true)
       mcpModeRef.current = true
+      setAgentProgress(null) // Clear any previous progress
+      tipcClient.resizePanelToNormal() // Ensure panel is normal size for recording
       setVisualizerData(() => getInitialVisualizerData())
       recorderRef.current?.startRecording()
     })
@@ -194,6 +207,8 @@ export function Component() {
         recorderRef.current?.stopRecording()
       } else {
         setMcpMode(true)
+        setAgentProgress(null) // Clear any previous progress
+        tipcClient.resizePanelToNormal() // Ensure panel is normal size for recording
         tipcClient.showPanelWindow()
         recorderRef.current?.startRecording()
       }
@@ -202,11 +217,54 @@ export function Component() {
     return unlisten
   }, [recording])
 
+  // Agent progress handler
+  useEffect(() => {
+    const unlisten = rendererHandlers.agentProgressUpdate.listen((update: AgentProgressUpdate) => {
+      setAgentProgress(update)
+
+      // Resize panel for agent mode on first progress update or when transitioning from no progress
+      if (!agentProgress && update && !update.isComplete) {
+        // Small delay to ensure the panel is ready
+        setTimeout(() => {
+          tipcClient.resizePanelForAgentMode()
+        }, 100)
+      }
+
+      // Auto-clear progress and hide panel after completion with a delay
+      if (update.isComplete) {
+        setTimeout(() => {
+          setAgentProgress(null)
+          // Resize back to normal and hide the panel after showing completion
+          tipcClient.resizePanelToNormal()
+          setTimeout(() => {
+            tipcClient.hidePanelWindow()
+          }, 200) // Small delay to ensure resize completes before hiding
+        }, 4000) // Show completion for 4 seconds
+      }
+    })
+
+    return unlisten
+  }, [agentProgress])
+
+
+
   return (
     <div className="flex h-screen dark:text-white">
       {(transcribeMutation.isPending || mcpTranscribeMutation.isPending) ? (
-        <div className="flex h-full w-full items-center justify-center">
-          <Spinner />
+        <div className="flex h-full w-full items-center justify-center relative">
+          {agentProgress ? (
+            <div className="absolute inset-0 flex items-center justify-center p-4 z-20">
+              <AgentProgress progress={agentProgress} className="max-w-md w-full" />
+            </div>
+          ) : (
+            <Spinner />
+          )}
+          {/* Show a subtle background spinner when agent progress is active */}
+          {agentProgress && (
+            <div className="absolute inset-0 flex items-center justify-center opacity-20">
+              <Spinner />
+            </div>
+          )}
         </div>
       ) : (
         <div className="flex h-full w-full rounded-xl transition-colors">
@@ -221,7 +279,18 @@ export function Component() {
             className="relative flex grow items-center overflow-hidden"
             dir="rtl"
           >
-            <div className="absolute right-0 flex h-6 items-center gap-0.5">
+            {/* Agent progress overlay - positioned to not interfere with waveform */}
+            {agentProgress && !mcpTranscribeMutation.isPending && (
+              <div className="absolute inset-0 flex items-center justify-start pl-4 pr-16 z-20">
+                <AgentProgress progress={agentProgress} className="max-w-sm w-full shadow-lg" />
+              </div>
+            )}
+
+            {/* Waveform visualization - dimmed when agent progress is showing */}
+            <div className={cn(
+              "absolute right-0 flex h-6 items-center gap-0.5 transition-opacity duration-300",
+              agentProgress && !mcpTranscribeMutation.isPending ? "opacity-30" : "opacity-100"
+            )}>
               {visualizerData
                 .slice()
                 .reverse()

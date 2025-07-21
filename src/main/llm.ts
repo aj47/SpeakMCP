@@ -1,6 +1,10 @@
 import { GoogleGenerativeAI } from "@google/generative-ai"
 import { configStore } from "./config"
 import { MCPTool, MCPToolCall, LLMToolCallResponse, MCPToolResult } from "./mcp-service"
+import { AgentProgressStep, AgentProgressUpdate } from "../shared/types"
+import { getRendererHandlers } from "@egoist/tipc/main"
+import { WINDOWS, showPanelWindow } from "./window"
+import { RendererHandlers } from "./renderer-handlers"
 
 /**
  * Validates that a parsed JSON object has the expected structure for LLM tool responses
@@ -331,6 +335,47 @@ export interface AgentModeResponse {
   totalIterations: number
 }
 
+// Helper function to emit progress updates to the renderer
+function emitAgentProgress(update: AgentProgressUpdate) {
+  const panel = WINDOWS.get("panel")
+  if (!panel) {
+    return
+  }
+
+  // Show the panel window if it's not visible
+  if (!panel.isVisible()) {
+    showPanelWindow()
+  }
+
+  try {
+    const handlers = getRendererHandlers<RendererHandlers>(panel.webContents)
+    if (!handlers.agentProgressUpdate) {
+      return
+    }
+
+    handlers.agentProgressUpdate.send(update)
+  } catch (error) {
+    console.error("Failed to emit progress update:", error)
+  }
+}
+
+// Helper function to create progress steps
+function createProgressStep(
+  type: AgentProgressStep["type"],
+  title: string,
+  description?: string,
+  status: AgentProgressStep["status"] = "pending"
+): AgentProgressStep {
+  return {
+    id: `step_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`,
+    type,
+    title,
+    description,
+    status,
+    timestamp: Date.now()
+  }
+}
+
 export async function processTranscriptWithAgentMode(
   transcript: string,
   availableTools: MCPTool[],
@@ -352,6 +397,21 @@ export async function processTranscriptWithAgentMode(
   }
 
   console.log("[MCP-AGENT] 🤖 Starting agent mode processing...")
+
+  // Initialize progress tracking
+  const progressSteps: AgentProgressStep[] = []
+
+  // Add initial step
+  const initialStep = createProgressStep("thinking", "Analyzing request", "Processing your request and determining next steps", "in_progress")
+  progressSteps.push(initialStep)
+
+  // Emit initial progress
+  emitAgentProgress({
+    currentIteration: 0,
+    maxIterations,
+    steps: progressSteps.slice(-3), // Show max 3 steps
+    isComplete: false
+  })
 
   // Enhanced system prompt for agent mode
   const systemPrompt = config.mcpToolsSystemPrompt || `You are a helpful assistant that can execute tools based on user requests. You are operating in agent mode, which means you can see the results of tool executions and make follow-up tool calls as needed.
@@ -410,6 +470,27 @@ Remember: Respond with ONLY the JSON object, no markdown formatting, no code blo
     iteration++
     console.log(`[MCP-AGENT] 🔄 Agent iteration ${iteration}/${maxIterations}`)
 
+    // Update initial step to completed and add thinking step for this iteration
+    if (iteration === 1) {
+      initialStep.status = "completed"
+    }
+
+    const thinkingStep = createProgressStep(
+      "thinking",
+      `Planning step ${iteration}`,
+      "Analyzing context and determining next actions",
+      "in_progress"
+    )
+    progressSteps.push(thinkingStep)
+
+    // Emit progress update
+    emitAgentProgress({
+      currentIteration: iteration,
+      maxIterations,
+      steps: progressSteps.slice(-3),
+      isComplete: false
+    })
+
     // Build messages for LLM call
     const messages = [
       { role: "system", content: systemPrompt },
@@ -430,6 +511,9 @@ Remember: Respond with ONLY the JSON object, no markdown formatting, no code blo
     // Make LLM call
     const llmResponse = await makeLLMCall(messages, config)
 
+    // Update thinking step to completed
+    thinkingStep.status = "completed"
+
     // Check for completion signals
     const isComplete = !llmResponse.toolCalls ||
                       llmResponse.toolCalls.length === 0 ||
@@ -442,6 +526,25 @@ Remember: Respond with ONLY the JSON object, no markdown formatting, no code blo
         role: "assistant",
         content: finalContent
       })
+
+      // Add completion step
+      const completionStep = createProgressStep(
+        "completion",
+        "Task completed",
+        "Successfully completed the requested task",
+        "completed"
+      )
+      progressSteps.push(completionStep)
+
+      // Emit final progress
+      emitAgentProgress({
+        currentIteration: iteration,
+        maxIterations,
+        steps: progressSteps.slice(-3),
+        isComplete: true,
+        finalContent
+      })
+
       console.log(`[MCP-AGENT] ✅ Agent completed task in ${iteration} iterations`)
       break
     }
@@ -452,8 +555,56 @@ Remember: Respond with ONLY the JSON object, no markdown formatting, no code blo
 
     for (const toolCall of llmResponse.toolCalls!) {
       console.log(`[MCP-AGENT] Executing tool: ${toolCall.name}`)
+
+      // Add tool call step
+      const toolCallStep = createProgressStep(
+        "tool_call",
+        `Executing ${toolCall.name}`,
+        `Running tool with arguments: ${JSON.stringify(toolCall.arguments)}`,
+        "in_progress"
+      )
+      toolCallStep.toolCall = {
+        name: toolCall.name,
+        arguments: toolCall.arguments
+      }
+      progressSteps.push(toolCallStep)
+
+      // Emit progress update
+      emitAgentProgress({
+        currentIteration: iteration,
+        maxIterations,
+        steps: progressSteps.slice(-3),
+        isComplete: false
+      })
+
       const result = await executeToolCall(toolCall)
       toolResults.push(result)
+
+      // Update tool call step with result
+      toolCallStep.status = result.isError ? "error" : "completed"
+      toolCallStep.toolResult = {
+        success: !result.isError,
+        content: result.content.map(c => c.text).join('\n'),
+        error: result.isError ? result.content.map(c => c.text).join('\n') : undefined
+      }
+
+      // Add tool result step
+      const toolResultStep = createProgressStep(
+        "tool_result",
+        `${toolCall.name} ${result.isError ? 'failed' : 'completed'}`,
+        result.isError ? 'Tool execution failed' : 'Tool executed successfully',
+        result.isError ? "error" : "completed"
+      )
+      toolResultStep.toolResult = toolCallStep.toolResult
+      progressSteps.push(toolResultStep)
+
+      // Emit progress update
+      emitAgentProgress({
+        currentIteration: iteration,
+        maxIterations,
+        steps: progressSteps.slice(-3),
+        isComplete: false
+      })
     }
 
     // Add assistant response and tool results to conversation
@@ -497,6 +648,24 @@ Remember: Respond with ONLY the JSON object, no markdown formatting, no code blo
   if (iteration >= maxIterations) {
     console.log(`[MCP-AGENT] ⚠️ Agent reached maximum iterations (${maxIterations})`)
     finalContent += "\n\n(Note: Task may not be fully complete - reached maximum iteration limit)"
+
+    // Add timeout completion step
+    const timeoutStep = createProgressStep(
+      "completion",
+      "Maximum iterations reached",
+      "Task stopped due to iteration limit",
+      "error"
+    )
+    progressSteps.push(timeoutStep)
+
+    // Emit final progress
+    emitAgentProgress({
+      currentIteration: iteration,
+      maxIterations,
+      steps: progressSteps.slice(-3),
+      isComplete: true,
+      finalContent
+    })
   }
 
   return {

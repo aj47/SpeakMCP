@@ -7,11 +7,6 @@ export type RendererHandlers = {
   startOrFinishRecording: () => void
   refreshRecordingHistory: () => void
 
-  // MCP Tool Calling handlers
-  startMcpRecording: () => void
-  finishMcpRecording: () => void
-  startOrFinishMcpRecording: () => void
-
   updateAvailable: (e: UpdateDownloadedEvent) => void
   navigate: (url: string) => void
 }

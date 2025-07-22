@@ -83,14 +83,14 @@ export function createMainWindow({ url }: { url?: string } = {}) {
 
   if (process.env.IS_MAC) {
     win.on("close", () => {
-      if (configStore.get().hideDockIcon) {
+      if (configStore.get().hideDockIcon && app.dock) {
         app.setActivationPolicy("accessory")
         app.dock.hide()
       }
     })
 
     win.on("show", () => {
-      if (configStore.get().hideDockIcon && !app.dock.isVisible()) {
+      if (configStore.get().hideDockIcon && app.dock && !app.dock.isVisible()) {
         app.dock.show()
       }
     })
@@ -184,18 +184,7 @@ export function createPanelWindow() {
 
 
 
-  // Only log important MCP-related console messages
-  win.webContents.on('console-message', (_event, _level, message, _line, _sourceId) => {
-    if (message.includes('[MCP-DEBUG]') && (
-      message.includes('startMcpRecording handler triggered') ||
-      message.includes('finishMcpRecording handler triggered') ||
-      message.includes('Using MCP transcription mutation') ||
-      message.includes('Recording ended, mcpMode:') ||
-      message.includes('Setting mcpMode to true')
-    )) {
-      console.log(`[MCP-DEBUG] 📝 ${message}`)
-    }
-  })
+
 
   makePanel(win)
 
@@ -217,11 +206,7 @@ export function showPanelWindowAndStartRecording() {
   getWindowRendererHandlers("panel")?.startRecording.send()
 }
 
-export function showPanelWindowAndStartMcpRecording() {
-  console.log("[MCP-DEBUG] showPanelWindowAndStartMcpRecording called")
-  showPanelWindow()
-  getWindowRendererHandlers("panel")?.startMcpRecording.send()
-}
+
 
 export function makePanelWindowClosable() {
   const panel = WINDOWS.get("panel")

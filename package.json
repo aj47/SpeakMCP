@@ -33,7 +33,6 @@
     "build-rs": "sh scripts/build-rs.sh"
   },
   "dependencies": {
-    "@egoist/electron-panel-window": "^8.0.3",
     "@modelcontextprotocol/sdk": "^1.13.3"
   },
   "devDependencies": {

@@ -7,11 +7,22 @@ import {
 } from "electron"
 import path from "path"
 import { getRendererHandlers } from "@egoist/tipc/main"
-import {
-  makeKeyWindow,
-  makePanel,
-  makeWindow,
-} from "@egoist/electron-panel-window"
+// Simple replacements for panel window functions to avoid native dependencies
+function makeKeyWindow(win: BrowserWindow) {
+  // Make window key/focused
+  win.focus()
+}
+
+function makePanel(win: BrowserWindow) {
+  // Make window behave like a panel (always on top, etc.)
+  win.setAlwaysOnTop(true, 'floating')
+  win.setVisibleOnAllWorkspaces(true)
+}
+
+function makeWindow(win: BrowserWindow) {
+  // Make window behave like a normal window
+  win.setAlwaysOnTop(false)
+}
 import { RendererHandlers } from "./renderer-handlers"
 import { configStore } from "./config"
 

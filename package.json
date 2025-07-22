@@ -21,7 +21,7 @@
     "build:mac": "source .env 2>/dev/null || true && electron-vite build && electron-builder --mac --config electron-builder.config.cjs",
     "build:mac:signed": "source .env 2>/dev/null || true && npm run build && electron-builder --mac --config electron-builder.config.cjs --publish=never",
     "build:mac:universal": "source .env 2>/dev/null || true && npm run build && electron-builder --mac --universal --config electron-builder.config.cjs",
-    "build:mas": "source .env 2>/dev/null || true && npm run build && electron-builder --mac mas --config electron-builder.config.cjs",
+    "build:mas": "source .env 2>/dev/null || true && npm run build && npx electron-builder --mac mas --config electron-builder.config.cjs && codesign --force --sign \"$CSC_MAS_NAME\" --entitlements build/entitlements.mas.plist dist/mas-arm64/SpeakMCP.app/Contents/Resources/app.asar.unpacked/resources/bin/speakmcp-rs && codesign --force --sign \"$CSC_MAS_NAME\" --entitlements build/entitlements.mas.plist --deep dist/mas-arm64/SpeakMCP.app && VERSION=$(node -p \"require('./package.json').version\") && productbuild --component dist/mas-arm64/SpeakMCP.app /Applications --sign \"$CSC_MAS_INSTALLER_NAME\" \"dist/SpeakMCP-${VERSION}-mas.pkg\"",
     "build:mas:dev": "source .env 2>/dev/null || true && npm run build && electron-builder --mac mas-dev --config electron-builder.config.cjs",
     "build:linux": "electron-vite build && electron-builder --linux --config electron-builder.config.cjs",
     "release": "node ./scripts/release.js",

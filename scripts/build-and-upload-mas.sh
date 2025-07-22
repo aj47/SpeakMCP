@@ -50,10 +50,31 @@ fi
 # Build the app
 echo ""
 echo "🔨 Building Mac App Store version..."
-CSC_NAME="$CSC_MAS_NAME" npm run build:mas
+npx electron-builder --mac mas --config electron-builder.config.cjs
 
 if [ $? -ne 0 ]; then
     echo "❌ Build failed"
+    exit 1
+fi
+
+# Sign the app manually since electron-builder skips signing for MAS
+echo ""
+echo "🔐 Signing app with MAS certificate..."
+codesign --force --sign "$CSC_MAS_NAME" --entitlements build/entitlements.mas.plist --deep dist/mas-arm64/SpeakMCP.app
+
+if [ $? -ne 0 ]; then
+    echo "❌ App signing failed"
+    exit 1
+fi
+
+# Create installer package
+echo ""
+echo "📦 Creating installer package..."
+VERSION=$(node -p "require('./package.json').version")
+productbuild --component dist/mas-arm64/SpeakMCP.app /Applications --sign "$CSC_MAS_INSTALLER_NAME" "dist/SpeakMCP-${VERSION}-mas.pkg"
+
+if [ $? -ne 0 ]; then
+    echo "❌ Package creation failed"
     exit 1
 fi
 

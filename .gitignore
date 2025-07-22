@@ -34,3 +34,14 @@ temp/
 .env.local
 .env.production
 .env
+
+# Mac App Store sensitive files
+*.provisionprofile
+*.mobileprovision
+*.p12
+*.cer
+
+# Build artifacts that may contain sensitive info
+dist/*.pkg
+dist/*.dmg
+dist/*.zip

@@ -110,7 +110,7 @@ export function MCPToolManager({ onToolToggle }: MCPToolManagerProps) {
           tool.name === toolName ? { ...tool, enabled: !enabled } : tool
         )
       )
-      toast.error(`Error toggling tool: ${error.message}`)
+      toast.error(`Error toggling tool: ${(error as Error).message}`)
     }
   }
 

@@ -264,9 +264,9 @@ export function Component() {
 
 
   return (
-    <div className="flex h-screen dark:text-white">
+    <div className="flex h-screen liquid-glass-panel text-foreground">
       {(transcribeMutation.isPending || mcpTranscribeMutation.isPending) ? (
-        <div className="flex h-full w-full items-center justify-center relative">
+        <div className="flex h-full w-full items-center justify-center relative liquid-glass-strong rounded-xl">
           {agentProgress ? (
             <div className="absolute inset-0 flex items-center justify-center p-4 z-20">
               <AgentProgress progress={agentProgress} className="max-w-sm w-full" />
@@ -282,11 +282,11 @@ export function Component() {
           )}
         </div>
       ) : (
-        <div className="flex h-full w-full rounded-xl transition-colors">
+        <div className="flex h-full w-full rounded-xl liquid-glass transition-all duration-300">
           <div className="flex shrink-0">
             {mcpMode && (
-              <div className="flex items-center justify-center w-8 h-full">
-                <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" title="MCP Tool Mode" />
+              <div className="flex items-center justify-center w-8 h-full liquid-glass-subtle rounded-l-xl">
+                <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse shadow-lg" title="MCP Tool Mode" />
               </div>
             )}
           </div>
@@ -297,7 +297,7 @@ export function Component() {
             {/* Agent progress overlay - positioned to not interfere with waveform */}
             {agentProgress && !mcpTranscribeMutation.isPending && (
               <div className="absolute inset-0 flex items-center justify-start pl-4 pr-16 z-20">
-                <AgentProgress progress={agentProgress} className="max-w-sm w-full shadow-lg" />
+                <AgentProgress progress={agentProgress} className="max-w-sm w-full liquid-glass-strong rounded-lg glass-shadow" />
               </div>
             )}
 

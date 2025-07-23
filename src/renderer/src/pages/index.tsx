@@ -70,12 +70,12 @@ export function Component() {
 
   return (
     <>
-      <header className="app-drag-region flex h-12 shrink-0 items-center justify-between border-b px-4 text-sm">
+      <header className="app-drag-region flex h-12 shrink-0 items-center justify-between liquid-glass-nav glass-border-b px-4 text-sm">
         <span className="font-bold">History</span>
 
         <div className="flex">
           <Input
-            wrapperClassName="dark:bg-transparent"
+            wrapperClassName="liquid-glass-input glass-border"
             endContent={
               <span className="i-mingcute-search-2-line text-muted-foreground"></span>
             }
@@ -93,7 +93,7 @@ export function Component() {
           {!keyword && (
             <span className="text-sm text-muted-foreground">
               Hold{" "}
-              <span className="inline-flex h-6 items-center rounded-lg border p-1 text-sm dark:border-neutral-700 dark:bg-neutral-800">
+              <span className="inline-flex h-6 items-center rounded-lg liquid-glass-subtle glass-border p-1 text-sm">
                 Ctrl
               </span>{" "}
               to record
@@ -107,6 +107,7 @@ export function Component() {
               return (
                 <ControlGroup
                   key={group.date}
+                  variant="glass"
                   title={
                     group.date === today
                       ? "Today"
@@ -119,12 +120,12 @@ export function Component() {
                     return (
                       <div
                         key={item.id}
-                        className="flex items-center justify-between gap-5 p-4"
+                        className="flex items-center justify-between gap-5 p-4 hover:liquid-glass-subtle transition-all duration-200 rounded-lg"
                       >
                         <TooltipProvider>
                           <Tooltip delayDuration={0} disableHoverableContent>
                             <TooltipTrigger asChild>
-                              <span className="inline-flex h-5 shrink-0 cursor-default items-center justify-center rounded bg-neutral-100 px-1 text-xs text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400">
+                              <span className="inline-flex h-5 shrink-0 cursor-default items-center justify-center rounded liquid-glass-subtle glass-border px-1 text-xs text-muted-foreground">
                                 {dayjs(item.createdAt).format("HH:mm")}
                               </span>
                             </TooltipTrigger>

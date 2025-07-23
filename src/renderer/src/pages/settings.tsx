@@ -31,7 +31,7 @@ export function Component() {
 
   return (
     <div className="flex h-full">
-      <div className="h-full w-36 shrink-0 border-r p-3 text-sm">
+      <div className="h-full w-36 shrink-0 liquid-glass-nav glass-border-r p-3 text-sm">
         <div className="grid gap-0.5">
           {navLinks.map((link) => {
             return (
@@ -41,10 +41,10 @@ export function Component() {
                 role="button"
                 draggable={false}
                 className={cn(
-                  "flex h-7 items-center gap-2 rounded-md px-2 font-medium transition-colors",
+                  "flex h-7 items-center gap-2 rounded-md px-2 font-medium transition-all duration-200",
                   location.pathname === link.href
-                    ? "bg-neutral-100 dark:bg-neutral-800 dark:text-white"
-                    : "hover:bg-neutral-50 dark:text-neutral-400 dark:hover:bg-neutral-800",
+                    ? "liquid-glass-button text-foreground"
+                    : "hover:liquid-glass-subtle text-muted-foreground hover:text-foreground",
                 )}
               >
                 {link.text}
@@ -53,8 +53,8 @@ export function Component() {
           })}
         </div>
       </div>
-      <div className="h-full grow overflow-auto px-6 py-4">
-        <header className="mb-5">
+      <div className="h-full grow overflow-auto px-6 py-4 liquid-glass-panel">
+        <header className="mb-5 liquid-glass-card glass-border rounded-lg p-4 glass-shadow">
           <h2 className="text-2xl font-bold">{activeNavLink?.text}</h2>
         </header>
 

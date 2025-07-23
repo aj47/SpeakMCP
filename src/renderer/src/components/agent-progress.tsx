@@ -26,15 +26,15 @@ const StepIcon: React.FC<{ step: AgentProgressStep }> = ({ step }) => {
   const getStatusColor = () => {
     switch (step.status) {
       case "pending":
-        return "text-gray-400 bg-gray-100 dark:bg-gray-800"
+        return "text-muted-foreground liquid-glass-subtle"
       case "in_progress":
-        return "text-blue-500 bg-blue-100 dark:bg-blue-900/30 animate-pulse"
+        return "text-blue-500 liquid-glass glass-border animate-pulse"
       case "completed":
-        return "text-green-500 bg-green-100 dark:bg-green-900/30"
+        return "text-green-500 liquid-glass glass-border"
       case "error":
-        return "text-red-500 bg-red-100 dark:bg-red-900/30"
+        return "text-red-500 liquid-glass glass-border"
       default:
-        return "text-gray-400 bg-gray-100 dark:bg-gray-800"
+        return "text-muted-foreground liquid-glass-subtle"
     }
   }
 
@@ -52,15 +52,15 @@ const ProgressStep: React.FC<{ step: AgentProgressStep; isLast: boolean }> = ({ 
   const getStatusColor = () => {
     switch (step.status) {
       case "pending":
-        return "border-gray-200 bg-gray-50/50 dark:border-gray-600 dark:bg-gray-800/50"
+        return "liquid-glass-subtle glass-border"
       case "in_progress":
-        return "border-blue-300 bg-blue-50/70 dark:border-blue-400 dark:bg-blue-900/30 shadow-sm"
+        return "liquid-glass glass-border glass-shadow animate-pulse"
       case "completed":
-        return "border-green-300 bg-green-50/70 dark:border-green-400 dark:bg-green-900/30"
+        return "liquid-glass glass-border glass-shadow"
       case "error":
-        return "border-red-300 bg-red-50/70 dark:border-red-400 dark:bg-red-900/30"
+        return "liquid-glass glass-border border-red-300/50 bg-red-500/10"
       default:
-        return "border-gray-200 bg-gray-50/50 dark:border-gray-600 dark:bg-gray-800/50"
+        return "liquid-glass-subtle glass-border"
     }
   }
 
@@ -73,34 +73,34 @@ const ProgressStep: React.FC<{ step: AgentProgressStep; isLast: boolean }> = ({ 
         "flex-1 min-w-0 p-2.5 rounded-lg border text-xs transition-all duration-200",
         getStatusColor()
       )}>
-        <div className="font-semibold text-gray-900 dark:text-gray-100 truncate">
+        <div className="font-semibold text-foreground truncate">
           {step.title}
         </div>
         {step.description && (
-          <div className="text-gray-600 dark:text-gray-400 mt-1.5 line-clamp-2 leading-relaxed">
+          <div className="text-muted-foreground mt-1.5 line-clamp-2 leading-relaxed">
             {step.description}
           </div>
         )}
         {step.toolCall && (
           <div className="mt-2 flex items-center gap-1">
-            <span className="text-gray-500 dark:text-gray-500 text-xs">Tool:</span>
-            <code className="text-gray-700 dark:text-gray-300 font-mono text-xs bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded truncate">
+            <span className="text-muted-foreground text-xs">Tool:</span>
+            <code className="text-foreground font-mono text-xs liquid-glass-subtle px-1.5 py-0.5 rounded truncate">
               {step.toolCall.name}
             </code>
           </div>
         )}
         {step.toolResult && step.toolResult.content && (
-          <div className="mt-2 p-2 bg-gray-100 dark:bg-gray-800 rounded text-xs">
-            <div className="text-gray-500 dark:text-gray-400 mb-1">Result:</div>
-            <div className="text-gray-700 dark:text-gray-300 line-clamp-2">
+          <div className="mt-2 p-2 liquid-glass-subtle rounded text-xs">
+            <div className="text-muted-foreground mb-1">Result:</div>
+            <div className="text-foreground line-clamp-2">
               {step.toolResult.content}
             </div>
           </div>
         )}
         {step.toolResult && step.toolResult.error && (
-          <div className="mt-2 p-2 bg-red-100 dark:bg-red-900/20 rounded text-xs">
-            <div className="text-red-600 dark:text-red-400 font-medium">Error:</div>
-            <div className="text-red-700 dark:text-red-300 line-clamp-2 mt-1">
+          <div className="mt-2 p-2 liquid-glass bg-red-500/20 border-red-300/50 rounded text-xs">
+            <div className="text-red-400 font-medium">Error:</div>
+            <div className="text-red-300 line-clamp-2 mt-1">
               {step.toolResult.error}
             </div>
           </div>

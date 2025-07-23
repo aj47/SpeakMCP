@@ -1,0 +1,147 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400">
+  <defs>
+    <!-- Basic Liquid Glass Displacement Filter -->
+    <filter id="liquid-glass-basic" x="0%" y="0%" width="100%" height="100%">
+      <!-- Create noise for displacement -->
+      <feTurbulence 
+        type="turbulence" 
+        baseFrequency="0.02 0.03" 
+        numOctaves="3" 
+        result="noise" 
+        seed="2" />
+      
+      <!-- Create displacement map -->
+      <feDisplacementMap 
+        in="SourceGraphic" 
+        in2="noise" 
+        scale="8" 
+        xChannelSelector="R" 
+        yChannelSelector="G" />
+    </filter>
+
+    <!-- Rounded Rectangle Displacement Filter -->
+    <filter id="liquid-glass-rounded" x="-20%" y="-20%" width="140%" height="140%">
+      <!-- Create base gradient for rounded shape -->
+      <feImage href="#rounded-gradient" result="roundedShape" />
+      
+      <!-- Add subtle turbulence -->
+      <feTurbulence 
+        type="turbulence" 
+        baseFrequency="0.015 0.025" 
+        numOctaves="2" 
+        result="noise" 
+        seed="5" />
+      
+      <!-- Combine shape with noise -->
+      <feComposite 
+        in="roundedShape" 
+        in2="noise" 
+        operator="multiply" 
+        result="combinedMap" />
+      
+      <!-- Apply displacement -->
+      <feDisplacementMap 
+        in="SourceGraphic" 
+        in2="combinedMap" 
+        scale="12" 
+        xChannelSelector="R" 
+        yChannelSelector="G" />
+    </filter>
+
+    <!-- Button Displacement Filter -->
+    <filter id="liquid-glass-button" x="-10%" y="-10%" width="120%" height="120%">
+      <!-- Create button-specific gradient -->
+      <feImage href="#button-gradient" result="buttonShape" />
+      
+      <!-- Light turbulence for subtle effect -->
+      <feTurbulence 
+        type="turbulence" 
+        baseFrequency="0.01 0.02" 
+        numOctaves="1" 
+        result="lightNoise" 
+        seed="3" />
+      
+      <!-- Combine and apply -->
+      <feComposite 
+        in="buttonShape" 
+        in2="lightNoise" 
+        operator="screen" 
+        result="buttonMap" />
+      
+      <feDisplacementMap 
+        in="SourceGraphic" 
+        in2="buttonMap" 
+        scale="6" 
+        xChannelSelector="R" 
+        yChannelSelector="G" />
+    </filter>
+
+    <!-- Modal/Dialog Displacement Filter -->
+    <filter id="liquid-glass-modal" x="-15%" y="-15%" width="130%" height="130%">
+      <!-- Create modal gradient -->
+      <feImage href="#modal-gradient" result="modalShape" />
+      
+      <!-- Medium turbulence for more pronounced effect -->
+      <feTurbulence 
+        type="turbulence" 
+        baseFrequency="0.025 0.035" 
+        numOctaves="3" 
+        result="modalNoise" 
+        seed="7" />
+      
+      <!-- Combine with multiply for stronger effect -->
+      <feComposite 
+        in="modalShape" 
+        in2="modalNoise" 
+        operator="multiply" 
+        result="modalMap" />
+      
+      <feDisplacementMap 
+        in="SourceGraphic" 
+        in2="modalMap" 
+        scale="15" 
+        xChannelSelector="R" 
+        yChannelSelector="G" />
+    </filter>
+
+    <!-- Gradient Definitions for Displacement Maps -->
+    
+    <!-- Rounded Rectangle Gradient -->
+    <radialGradient id="rounded-gradient" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" style="stop-color:#808080;stop-opacity:1" />
+      <stop offset="70%" style="stop-color:#808080;stop-opacity:1" />
+      <stop offset="85%" style="stop-color:#FF0000;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0000FF;stop-opacity:1" />
+    </radialGradient>
+
+    <!-- Button Gradient -->
+    <linearGradient id="button-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#808080;stop-opacity:1" />
+      <stop offset="30%" style="stop-color:#909090;stop-opacity:1" />
+      <stop offset="70%" style="stop-color:#707070;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#808080;stop-opacity:1" />
+    </linearGradient>
+
+    <!-- Modal Gradient -->
+    <radialGradient id="modal-gradient" cx="50%" cy="40%" r="60%">
+      <stop offset="0%" style="stop-color:#808080;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#808080;stop-opacity:1" />
+      <stop offset="80%" style="stop-color:#FF4040;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#4040FF;stop-opacity:1" />
+    </radialGradient>
+
+    <!-- Edge Distortion Gradient -->
+    <linearGradient id="edge-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#FF0000;stop-opacity:1" />
+      <stop offset="10%" style="stop-color:#808080;stop-opacity:1" />
+      <stop offset="90%" style="stop-color:#808080;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0000FF;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+
+  <!-- Invisible rectangles to define the displacement maps -->
+  <rect width="400" height="400" fill="url(#rounded-gradient)" opacity="0" />
+  <rect width="400" height="400" fill="url(#button-gradient)" opacity="0" />
+  <rect width="400" height="400" fill="url(#modal-gradient)" opacity="0" />
+  <rect width="400" height="400" fill="url(#edge-gradient)" opacity="0" />
+</svg>

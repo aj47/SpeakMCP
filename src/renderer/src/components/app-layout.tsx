@@ -26,7 +26,7 @@ export const Component = () => {
 
   return (
     <div className="flex h-dvh">
-      <div className="app-drag-region flex w-44 shrink-0 flex-col border-r">
+      <div className="app-drag-region flex w-44 shrink-0 flex-col liquid-glass-nav glass-border-r">
         <header
           className={process.env.IS_MAC ? "h-10" : "h-2"}
           aria-hidden
@@ -42,10 +42,10 @@ export const Component = () => {
                 draggable={false}
                 className={({ isActive }) =>
                   cn(
-                    "flex h-7 items-center gap-2 rounded-md px-2 font-medium transition-colors",
+                    "flex h-7 items-center gap-2 rounded-md px-2 font-medium transition-all duration-200",
                     isActive
-                      ? "bg-neutral-100 dark:bg-neutral-800 dark:text-white"
-                      : "hover:bg-neutral-50 dark:text-neutral-400 dark:hover:bg-neutral-800",
+                      ? "liquid-glass-button text-foreground"
+                      : "hover:liquid-glass-subtle text-muted-foreground hover:text-foreground",
                   )
                 }
               >
@@ -56,7 +56,7 @@ export const Component = () => {
           })}
         </div>
       </div>
-      <div className="flex grow flex-col overflow-auto">
+      <div className="flex grow flex-col overflow-auto liquid-glass-panel">
         <Outlet />
       </div>
     </div>

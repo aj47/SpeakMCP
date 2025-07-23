@@ -339,14 +339,14 @@ export function MCPConfigManager({ config, onConfigChange }: MCPConfigManagerPro
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h3 className="text-lg font-medium">MCP Server Configuration</h3>
           <p className="text-sm text-muted-foreground">
             Manage Model Context Protocol server connections
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2 justify-start sm:justify-end">
           <Button variant="outline" size="sm" onClick={handleImportConfig}>
             <Upload className="h-4 w-4 mr-2" />
             Import
@@ -456,17 +456,17 @@ export function MCPConfigManager({ config, onConfigChange }: MCPConfigManagerPro
                     ) : (
                       <>
                         {serverStatus[name]?.connected ? (
-                          <div className="flex items-center gap-1">
+                          <div className="flex items-center gap-2">
                             <CheckCircle className="h-4 w-4 text-green-500" />
                             <Badge variant="default">Connected ({serverStatus[name].toolCount} tools)</Badge>
                           </div>
                         ) : serverStatus[name]?.error ? (
-                          <div className="flex items-center gap-1">
+                          <div className="flex items-center gap-2">
                             <XCircle className="h-4 w-4 text-red-500" />
                             <Badge variant="destructive">Error</Badge>
                           </div>
                         ) : (
-                          <div className="flex items-center gap-1">
+                          <div className="flex items-center gap-2">
                             <AlertCircle className="h-4 w-4 text-yellow-500" />
                             <Badge variant="outline">Disconnected</Badge>
                           </div>

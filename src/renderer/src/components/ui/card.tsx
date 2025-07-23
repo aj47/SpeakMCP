@@ -3,7 +3,9 @@ import { cn } from "@renderer/lib/utils"
 
 const Card = React.forwardRef<
   HTMLDivElement,
-  React.HTMLAttributes<HTMLDivElement> & { variant?: "default" | "glass" | "glass-strong" }
+  React.HTMLAttributes<HTMLDivElement> & {
+    variant?: "default" | "glass" | "glass-strong" | "apple-2025" | "apple-floating" | "apple-interactive"
+  }
 >(({ className, variant = "default", ...props }, ref) => (
   <div
     ref={ref}
@@ -11,6 +13,9 @@ const Card = React.forwardRef<
       "rounded-lg text-card-foreground transition-all duration-300",
       variant === "glass" && "liquid-glass-card glass-border glass-shadow",
       variant === "glass-strong" && "liquid-glass-strong glass-border glass-shadow",
+      variant === "apple-2025" && "liquid-glass glass-border glass-shadow",
+      variant === "apple-floating" && "liquid-glass-floating glass-border glass-shadow",
+      variant === "apple-interactive" && "liquid-glass-interactive glass-border glass-shadow",
       variant === "default" && "border bg-card shadow-sm",
       className
     )}

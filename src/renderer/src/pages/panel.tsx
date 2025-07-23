@@ -228,7 +228,20 @@ export function Component() {
         finalContentPreview: update.finalContent?.substring(0, 50)
       })
 
-      setAgentProgress(update)
+      // Only update if the progress has actually changed to prevent flashing
+      setAgentProgress(prevProgress => {
+        if (!prevProgress) return update
+
+        // Compare key properties to determine if update is needed
+        const hasChanged =
+          prevProgress.isComplete !== update.isComplete ||
+          prevProgress.currentIteration !== update.currentIteration ||
+          prevProgress.steps.length !== update.steps.length ||
+          JSON.stringify(prevProgress.steps) !== JSON.stringify(update.steps) ||
+          prevProgress.finalContent !== update.finalContent
+
+        return hasChanged ? update : prevProgress
+      })
 
       // Resize panel for agent mode on first progress update or when transitioning from no progress
       if (!agentProgress && update && !update.isComplete) {
@@ -264,9 +277,9 @@ export function Component() {
 
 
   return (
-    <div className="flex h-screen liquid-glass-panel text-foreground">
+    <div className="flex h-screen liquid-glass-panel text-foreground glass-text-strong">
       {(transcribeMutation.isPending || mcpTranscribeMutation.isPending) ? (
-        <div className="flex h-full w-full items-center justify-center relative liquid-glass-strong rounded-xl">
+        <div className="flex h-full w-full items-center justify-center relative liquid-glass-strong rounded-xl glass-text-strong">
           {agentProgress ? (
             <div className="absolute inset-0 flex items-center justify-center z-20">
               <AgentProgress progress={agentProgress} variant="overlay" className="w-full mx-4" />
@@ -282,7 +295,7 @@ export function Component() {
           )}
         </div>
       ) : (
-        <div className="flex h-full w-full rounded-xl liquid-glass transition-all duration-300">
+        <div className="flex h-full w-full rounded-xl liquid-glass transition-all duration-300 glass-text-strong">
           <div className="flex shrink-0">
             {mcpMode && (
               <div className="flex items-center justify-center w-8 h-full liquid-glass-subtle rounded-l-xl">
@@ -296,7 +309,7 @@ export function Component() {
           >
             {/* Agent progress overlay - positioned to not interfere with waveform */}
             {agentProgress && !mcpTranscribeMutation.isPending && (
-              <div className="absolute inset-0 flex items-center justify-start z-20 liquid-glass-strong rounded-xl">
+              <div className="absolute inset-0 flex items-center justify-start z-20 liquid-glass-strong rounded-xl glass-text-strong">
                 <AgentProgress progress={agentProgress} variant="overlay" className="w-full mx-3" />
               </div>
             )}

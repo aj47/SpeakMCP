@@ -1,4 +1,4 @@
-import React, { useState } from "react"
+import React, { useState, useMemo } from "react"
 import { cn } from "~/lib/utils"
 import { AgentProgressStep, AgentProgressUpdate } from "../../../shared/types"
 
@@ -448,15 +448,15 @@ const ProgressStep: React.FC<{ step: AgentProgressStep; isLast: boolean }> = ({ 
   const getStatusColor = () => {
     switch (step.status) {
       case "pending":
-        return "liquid-glass-subtle glass-border"
+        return "liquid-glass-subtle glass-border text-foreground"
       case "in_progress":
-        return "liquid-glass glass-border glass-shadow animate-pulse"
+        return "liquid-glass glass-border glass-shadow animate-pulse text-foreground"
       case "completed":
-        return "liquid-glass glass-border glass-shadow"
+        return "liquid-glass glass-border glass-shadow text-foreground"
       case "error":
-        return "liquid-glass glass-border border-destructive/50 bg-destructive/10"
+        return "liquid-glass-strong glass-border border-destructive/50 bg-destructive/20 text-foreground"
       default:
-        return "liquid-glass-subtle glass-border"
+        return "liquid-glass-subtle glass-border text-foreground"
     }
   }
 
@@ -482,7 +482,7 @@ const ProgressStep: React.FC<{ step: AgentProgressStep; isLast: boolean }> = ({ 
         )}
         {!isMinimal && step.toolCall && (
           <div className="mt-1 flex items-center gap-1">
-            <code className="text-foreground font-mono text-xs liquid-glass-subtle px-1 py-0.5 rounded truncate">
+            <code className="text-foreground font-mono text-xs liquid-glass-subtle px-1 py-0.5 rounded truncate border border-white/20">
               {step.toolCall.name}
             </code>
           </div>
@@ -516,14 +516,20 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({ progress, classNam
 
   const { currentIteration, maxIterations, steps, isComplete } = progress
 
-  // Get the latest step (most recent activity)
-  const latestStep = steps[steps.length - 1]
-  const hasMultipleSteps = steps.length > 1
-  const hasErrors = steps.some(step => step.status === "error" || step.toolResult?.error)
+  // Memoize computed values to prevent unnecessary re-renders
+  const computedValues = useMemo(() => {
+    const latestStep = steps[steps.length - 1]
+    const hasMultipleSteps = steps.length > 1
+    const hasErrors = steps.some(step => step.status === "error" || step.toolResult?.error)
+
+    return { latestStep, hasMultipleSteps, hasErrors }
+  }, [steps])
+
+  const { latestStep, hasMultipleSteps, hasErrors } = computedValues
 
   const containerClasses = variant === "overlay"
-    ? "flex flex-col gap-3 p-3 w-full rounded-xl"
-    : "flex flex-col gap-3 p-4 liquid-glass-modal glass-border glass-shadow rounded-xl w-full"
+    ? "flex flex-col gap-3 p-3 w-full rounded-xl liquid-glass-strong glass-text-strong"
+    : "flex flex-col gap-3 p-4 liquid-glass-modal glass-border glass-shadow rounded-xl w-full glass-text-strong"
 
   return (
     <div className={cn(

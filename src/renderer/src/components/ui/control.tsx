@@ -10,13 +10,15 @@ export const Control = ({
   label: React.ReactNode
   children: React.ReactNode
   className?: string
-  variant?: "default" | "glass"
+  variant?: "default" | "glass" | "apple-2025" | "apple-interactive"
 }) => {
   return (
     <div
       className={cn(
-        "flex items-center justify-between gap-5 py-2 transition-all duration-200",
+        "flex items-center justify-between gap-5 py-2 transition-all duration-300",
         variant === "glass" && "liquid-glass-subtle glass-border rounded-lg px-4 py-3 glass-shadow",
+        variant === "apple-2025" && "liquid-glass glass-border rounded-lg px-4 py-3 glass-shadow",
+        variant === "apple-interactive" && "liquid-glass-interactive glass-border rounded-lg px-4 py-3 glass-shadow",
         className
       )}
     >

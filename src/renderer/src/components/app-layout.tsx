@@ -60,7 +60,7 @@ export const Component = () => {
 
   return (
     <div className="flex h-dvh">
-      <div className="app-drag-region flex w-44 shrink-0 flex-col liquid-glass-nav glass-border-r">
+      <div className="app-drag-region flex w-44 shrink-0 flex-col liquid-glass-nav glass-border-r glass-shine">
         <header
           className={process.env.IS_MAC ? "h-10" : "h-2"}
           aria-hidden
@@ -115,7 +115,7 @@ export const Component = () => {
           })}
         </div>
       </div>
-      <div className="flex grow flex-col overflow-auto liquid-glass-panel">
+      <div className="flex grow flex-col overflow-auto liquid-glass-panel glass-blur-medium">
         <Outlet />
       </div>
     </div>

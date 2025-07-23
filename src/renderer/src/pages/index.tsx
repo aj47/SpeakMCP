@@ -70,12 +70,12 @@ export function Component() {
 
   return (
     <>
-      <header className="app-drag-region flex h-12 shrink-0 items-center justify-between liquid-glass-nav glass-border-b px-4 text-sm">
+      <header className="app-drag-region flex h-12 shrink-0 items-center justify-between liquid-glass-nav glass-border-b glass-shine px-4 text-sm">
         <span className="font-bold">History</span>
 
         <div className="flex">
           <Input
-            wrapperClassName="liquid-glass-input glass-border"
+            wrapperClassName="liquid-glass-input glass-border glass-blur-light"
             endContent={
               <span className="i-mingcute-search-2-line text-muted-foreground"></span>
             }
@@ -93,7 +93,7 @@ export function Component() {
           {!keyword && (
             <span className="text-sm text-muted-foreground">
               Hold{" "}
-              <span className="inline-flex h-6 items-center rounded-lg liquid-glass-subtle glass-border p-1 text-sm">
+              <span className="inline-flex h-6 items-center rounded-lg liquid-glass-interactive glass-border glass-shine p-1 text-sm">
                 Ctrl
               </span>{" "}
               to record

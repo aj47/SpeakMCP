@@ -5,7 +5,7 @@ import { tv, type VariantProps } from "tailwind-variants"
 import { cn } from "~/lib/utils"
 
 const buttonVariants = tv({
-  base: "inline-flex items-center justify-center whitespace-nowrap rounded-lg text-sm font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:border-ring disabled:pointer-events-none disabled:opacity-50",
+  base: "inline-flex items-center justify-center whitespace-nowrap rounded-lg text-sm font-medium transition-all duration-300 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:border-ring disabled:pointer-events-none disabled:opacity-50",
   variants: {
     variant: {
       default: "liquid-glass-button text-foreground shadow-lg hover:shadow-xl",
@@ -19,6 +19,9 @@ const buttonVariants = tv({
       link: "text-primary underline-offset-4 hover:underline",
       glass: "liquid-glass-button liquid-glass-shine text-foreground",
       "glass-strong": "liquid-glass-strong liquid-glass-shine text-foreground",
+      "apple-2025": "liquid-glass-interactive text-foreground shadow-lg hover:shadow-2xl",
+      "apple-floating": "liquid-glass-floating text-foreground shadow-xl",
+      "apple-ripple": "liquid-glass-ripple text-foreground shadow-lg hover:shadow-xl",
     },
     size: {
       default: "h-9 px-4 py-2",

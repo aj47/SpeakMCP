@@ -796,16 +796,6 @@ Remember: Respond with ONLY the JSON object, no markdown formatting, no code blo
 async function makeLLMCall(messages: Array<{role: string, content: string}>, config: any): Promise<LLMToolCallResponse> {
   const chatProviderId = config.mcpToolsProviderId
 
-  // Debug: Log LLM call details
-  console.log("[MCP-LLM-DEBUG] 🚀 Making LLM call")
-  console.log("[MCP-LLM-DEBUG] 🔧 Provider:", chatProviderId || "openai (default)")
-  console.log("[MCP-LLM-DEBUG] 📝 Messages count:", messages.length)
-  console.log("[MCP-LLM-DEBUG] 📋 Messages preview:")
-  messages.forEach((msg, i) => {
-    const preview = msg.content.length > 200 ? msg.content.substring(0, 200) + "..." : msg.content
-    console.log(`[MCP-LLM-DEBUG]   ${i + 1}. ${msg.role}: ${preview}`)
-  })
-
   if (chatProviderId === "gemini") {
     const geminiModel = config.mcpToolsGeminiModel || "gemini-1.5-flash-002"
     console.log("[MCP-LLM-DEBUG] 🤖 Using Gemini model:", geminiModel)
@@ -844,10 +834,6 @@ async function makeLLMCall(messages: Array<{role: string, content: string}>, con
     ? config.mcpToolsGroqModel || "gemma2-9b-it"
     : config.mcpToolsOpenaiModel || "gpt-4o-mini"
 
-  console.log("[MCP-LLM-DEBUG] 🤖 Using model:", model)
-  console.log("[MCP-LLM-DEBUG] 🌐 Base URL:", chatBaseUrl)
-  console.log("[MCP-LLM-DEBUG] 📤 Sending request to", chatProviderId === "groq" ? "Groq" : "OpenAI", "...")
-
   const requestBody = {
     temperature: 0,
     model,
@@ -874,8 +860,6 @@ async function makeLLMCall(messages: Array<{role: string, content: string}>, con
   }
 
   const chatJson = await chatResponse.json()
-  console.log("[MCP-LLM-DEBUG] 📥 Full response JSON:", JSON.stringify(chatJson, null, 2))
-
   const responseContent = chatJson.choices[0].message.content.trim()
   console.log("[MCP-LLM-DEBUG] 📝 Response content:", responseContent)
 

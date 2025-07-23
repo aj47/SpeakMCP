@@ -18,28 +18,39 @@
 
   /* Webkit scrollbar styles */
   .scrollbar-thin::-webkit-scrollbar {
-    width: 4px;
+    width: 6px;
   }
 
   .scrollbar-thin::-webkit-scrollbar-track {
-    background: transparent;
+    background: rgba(0, 0, 0, 0.05);
+    border-radius: 3px;
+  }
+
+  .dark .scrollbar-thin::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
   }
 
   .scrollbar-thin::-webkit-scrollbar-thumb {
-    background-color: rgb(209 213 219);
-    border-radius: 2px;
+    background-color: rgba(209, 213, 219, 0.8);
+    border-radius: 3px;
+    transition: background-color 0.2s ease;
   }
 
   .dark .scrollbar-thin::-webkit-scrollbar-thumb {
-    background-color: rgb(75 85 99);
+    background-color: rgba(75, 85, 99, 0.8);
   }
 
   .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-    background-color: rgb(156 163 175);
+    background-color: rgba(156, 163, 175, 0.9);
   }
 
   .dark .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-    background-color: rgb(107 114 128);
+    background-color: rgba(107, 114, 128, 0.9);
+  }
+
+  /* Enhanced scrollbar for agent progress components */
+  .scrollbar-thin::-webkit-scrollbar-corner {
+    background: transparent;
   }
 }
 @tailwind variants;

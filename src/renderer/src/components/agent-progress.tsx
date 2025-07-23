@@ -392,7 +392,7 @@ const ResultDisplay: React.FC<{
             </button>
           )}
           {isExpanded && finalContent && (
-            <div className={`mt-2 p-2 ${styling.bgColor} rounded text-xs ${styling.titleColor} max-h-32 overflow-y-auto border ${styling.borderColor}`}>
+            <div className={`mt-2 p-2 ${styling.bgColor} rounded text-xs ${styling.titleColor} max-h-48 overflow-y-auto border ${styling.borderColor} scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600`}>
               <pre className="whitespace-pre-wrap font-sans">{finalContent}</pre>
             </div>
           )}
@@ -523,13 +523,15 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({ progress, classNam
   return (
     <div className={cn(
       "flex flex-col gap-3 p-4 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md rounded-xl border border-gray-200/50 dark:border-gray-700/50 shadow-xl",
-      // Adaptive sizing based on content
-      "w-full max-w-sm",
+      // Full width expansion - remove max-width constraint
+      "w-full",
       isComplete ? "min-h-[160px]" : "min-h-[140px]",
+      // Add max height and enable vertical scrolling for the entire component
+      "max-h-[80vh] overflow-y-auto",
       className
     )}>
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-shrink-0">
         <div className="flex items-center gap-2">
           <div className={cn(
             "w-2.5 h-2.5 rounded-full",
@@ -563,19 +565,21 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({ progress, classNam
 
       {/* Result Display - Show prominently when complete */}
       {isComplete && (
-        <ResultDisplay
-          progress={progress}
-          isExpanded={isExpanded}
-          onToggleExpanded={() => setIsExpanded(!isExpanded)}
-        />
+        <div className="flex-shrink-0">
+          <ResultDisplay
+            progress={progress}
+            isExpanded={isExpanded}
+            onToggleExpanded={() => setIsExpanded(!isExpanded)}
+          />
+        </div>
       )}
 
       {/* Current Activity - Show when not complete or when details are requested */}
       {(!isComplete || showDetails) && (
         <div className="flex flex-col gap-2 flex-1 min-h-0">
           {showDetails ? (
-            // Show all steps with scrolling when details are expanded
-            <div className="flex flex-col gap-2 max-h-32 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600">
+            // Show all steps with enhanced scrolling when details are expanded
+            <div className="flex flex-col gap-2 flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600 pr-1">
               {steps.map((step, index) => (
                 <ProgressStep
                   key={step.id}
@@ -606,7 +610,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({ progress, classNam
 
       {/* Progress Bar - Show only when not complete */}
       {!isComplete && (
-        <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5 mt-auto">
+        <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5 mt-auto flex-shrink-0">
           <div
             className="h-1.5 rounded-full transition-all duration-500 ease-out bg-blue-500"
             style={{

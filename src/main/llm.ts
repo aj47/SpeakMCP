@@ -536,7 +536,7 @@ In agent mode, you can:
 2. Make follow-up tool calls based on the results
 3. Continue until the task is complete
 
-When you need to use tools, respond with this exact JSON format:
+When you need to use tools and expect to continue working after seeing the results, respond with:
 {
   "toolCalls": [
     {
@@ -546,6 +546,18 @@ When you need to use tools, respond with this exact JSON format:
   ],
   "content": "Brief explanation of what you're doing",
   "needsMoreWork": true
+}
+
+When you need to use tools and the task will be complete after executing them, respond with:
+{
+  "toolCalls": [
+    {
+      "name": "exact_tool_name_from_list_above",
+      "arguments": { "param1": "value1", "param2": "value2" }
+    }
+  ],
+  "content": "Brief explanation of what you're doing",
+  "needsMoreWork": false
 }
 
 When the task is complete and no more tools are needed, respond with:
@@ -632,10 +644,13 @@ Remember: Respond with ONLY the JSON object, no markdown formatting, no code blo
     // Update thinking step to completed
     thinkingStep.status = "completed"
 
-    // Check for completion signals
-    const isComplete = !llmResponse.toolCalls ||
-                      llmResponse.toolCalls.length === 0 ||
-                      (llmResponse as any).needsMoreWork === false
+    // Check for completion signals - only complete if there are no tools to execute
+    const hasToolCalls = llmResponse.toolCalls && llmResponse.toolCalls.length > 0
+    const isComplete = !hasToolCalls && (
+      !llmResponse.toolCalls ||
+      llmResponse.toolCalls.length === 0 ||
+      (llmResponse as any).needsMoreWork === false
+    )
 
     if (isComplete) {
       // No tools to execute or agent explicitly says it's done
@@ -750,6 +765,42 @@ Remember: Respond with ONLY the JSON object, no markdown formatting, no code blo
       console.log(`[MCP-AGENT] ⚠️ Tool execution had errors, continuing to handle them`)
     }
 
+    // Check if agent indicated it was done after executing tools
+    const agentIndicatedDone = (llmResponse as any).needsMoreWork === false
+
+    if (agentIndicatedDone && allToolsSuccessful) {
+      console.log(`[MCP-AGENT] 🎯 Agent indicated task completion and tools executed successfully`)
+
+      // Create final content that includes tool results
+      const toolResultsSummary = toolResults
+        .filter(result => !result.isError)
+        .map(result => result.content.map(c => c.text).join('\n'))
+        .join('\n\n')
+
+      finalContent = toolResultsSummary || llmResponse.content || ""
+
+      // Add completion step
+      const completionStep = createProgressStep(
+        "completion",
+        "Task completed",
+        "Successfully completed the requested task with tool results",
+        "completed"
+      )
+      progressSteps.push(completionStep)
+
+      // Emit final progress
+      emitAgentProgress({
+        currentIteration: iteration,
+        maxIterations,
+        steps: progressSteps.slice(-3),
+        isComplete: true,
+        finalContent
+      })
+
+      console.log(`[MCP-AGENT] ✅ Agent completed task in ${iteration} iterations`)
+      break
+    }
+
     // Check for completion keywords in the response
     const completionKeywords = ['completed', 'finished', 'done', 'success', 'created successfully', 'task complete']
     const responseText = (llmResponse.content || "").toLowerCase()
@@ -759,8 +810,10 @@ Remember: Respond with ONLY the JSON object, no markdown formatting, no code blo
       console.log(`[MCP-AGENT] 🎯 Detected task completion signals - tools successful and completion keywords found`)
     }
 
-    // Set final content to the latest assistant response
-    finalContent = llmResponse.content || ""
+    // Set final content to the latest assistant response (fallback)
+    if (!finalContent) {
+      finalContent = llmResponse.content || ""
+    }
   }
 
   if (iteration >= maxIterations) {

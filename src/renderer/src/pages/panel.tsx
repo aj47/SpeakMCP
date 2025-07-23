@@ -269,7 +269,7 @@ export function Component() {
         <div className="flex h-full w-full items-center justify-center relative liquid-glass-strong rounded-xl">
           {agentProgress ? (
             <div className="absolute inset-0 flex items-center justify-center p-4 z-20">
-              <AgentProgress progress={agentProgress} className="max-w-sm w-full" />
+              <AgentProgress progress={agentProgress} className="w-full" />
             </div>
           ) : (
             <Spinner />
@@ -297,7 +297,7 @@ export function Component() {
             {/* Agent progress overlay - positioned to not interfere with waveform */}
             {agentProgress && !mcpTranscribeMutation.isPending && (
               <div className="absolute inset-0 flex items-center justify-start pl-4 pr-16 z-20">
-                <AgentProgress progress={agentProgress} className="max-w-sm w-full liquid-glass-strong rounded-lg glass-shadow" />
+                <AgentProgress progress={agentProgress} className="w-full liquid-glass-strong rounded-lg glass-shadow" />
               </div>
             )}
 

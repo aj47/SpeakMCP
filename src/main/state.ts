@@ -1,3 +1,4 @@
 export const state = {
-  isRecording: false
+  isRecording: false,
+  focusedAppBeforeRecording: null as string | null
 }

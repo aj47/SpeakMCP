@@ -220,31 +220,46 @@ export function Component() {
   // Agent progress handler
   useEffect(() => {
     const unlisten = rendererHandlers.agentProgressUpdate.listen((update: AgentProgressUpdate) => {
+      console.log(`[MCP-AGENT-GUI] 📊 Progress update received:`, {
+        isComplete: update.isComplete,
+        currentIteration: update.currentIteration,
+        stepsCount: update.steps.length,
+        hasFinalContent: !!update.finalContent,
+        finalContentPreview: update.finalContent?.substring(0, 50)
+      })
+
       setAgentProgress(update)
 
       // Resize panel for agent mode on first progress update or when transitioning from no progress
       if (!agentProgress && update && !update.isComplete) {
+        console.log(`[MCP-AGENT-GUI] 📏 Resizing panel for agent mode`)
         // Small delay to ensure the panel is ready
         setTimeout(() => {
           tipcClient.resizePanelForAgentMode()
         }, 100)
       }
 
-      // Auto-clear progress and hide panel after completion with a delay
+      // Keep the panel open when agent completes - user will press ESC to close
       if (update.isComplete) {
-        setTimeout(() => {
-          setAgentProgress(null)
-          // Resize back to normal and hide the panel after showing completion
-          tipcClient.resizePanelToNormal()
-          setTimeout(() => {
-            tipcClient.hidePanelWindow()
-          }, 200) // Small delay to ensure resize completes before hiding
-        }, 4000) // Show completion for 4 seconds
+        console.log(`[MCP-AGENT-GUI] ✅ Agent completed, panel will remain open until user presses ESC`)
+        // No auto-hide behavior - user controls when to close with ESC
       }
     })
 
     return unlisten
   }, [agentProgress])
+
+  // Clear agent progress handler
+  useEffect(() => {
+    const unlisten = rendererHandlers.clearAgentProgress.listen(() => {
+      console.log(`[MCP-AGENT-GUI] 🔄 Clearing agent progress`)
+      setAgentProgress(null)
+      setMcpMode(false)
+      mcpModeRef.current = false
+    })
+
+    return unlisten
+  }, [])
 
 
 

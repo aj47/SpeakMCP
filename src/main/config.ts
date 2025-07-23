@@ -12,6 +12,8 @@ export const configPath = path.join(dataFolder, "config.json")
 const getConfig = () => {
   const defaultConfig: Partial<Config> = {
     mcpToolsShortcut: "hold-ctrl-alt",
+    mcpAutoPasteEnabled: true,
+    mcpAutoPasteDelay: 1000, // 1 second delay by default
   }
 
   try {

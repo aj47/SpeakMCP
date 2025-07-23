@@ -80,7 +80,7 @@ export function Component() {
 
   return (
     <>
-      <header className="app-drag-region flex h-12 shrink-0 items-center justify-between liquid-glass-nav glass-border-b glass-shine px-4 text-sm">
+      <header className="app-drag-region flex h-12 shrink-0 items-center justify-between bg-background border-b px-4 text-sm">
         <span className="font-bold">History</span>
 
         <div className="flex items-center gap-2">
@@ -101,7 +101,6 @@ export function Component() {
             <span>Delete All</span>
           </Button>
           <Input
-            wrapperClassName="liquid-glass-input glass-border glass-blur-light"
             endContent={
               <span className="i-mingcute-search-2-line text-muted-foreground"></span>
             }

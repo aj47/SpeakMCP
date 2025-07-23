@@ -5,20 +5,15 @@ export const Control = ({
   label,
   children,
   className,
-  variant = "default",
 }: {
   label: React.ReactNode
   children: React.ReactNode
   className?: string
-  variant?: "default" | "glass" | "apple-2025" | "apple-interactive"
 }) => {
   return (
     <div
       className={cn(
-        "flex items-center justify-between gap-5 py-2 transition-all duration-300",
-        variant === "glass" && "liquid-glass-subtle glass-border rounded-lg px-4 py-3 glass-shadow",
-        variant === "apple-2025" && "liquid-glass glass-border rounded-lg px-4 py-3 glass-shadow",
-        variant === "apple-interactive" && "liquid-glass-interactive glass-border rounded-lg px-4 py-3 glass-shadow",
+        "flex items-center justify-between gap-5 py-2",
         className
       )}
     >
@@ -37,13 +32,11 @@ export const ControlGroup = ({
   className,
   title,
   endDescription,
-  variant = "default",
 }: {
   children: React.ReactNode
   className?: string
   title?: React.ReactNode
   endDescription?: React.ReactNode
-  variant?: "default" | "glass"
 }) => {
   return (
     <div className={className}>
@@ -52,10 +45,7 @@ export const ControlGroup = ({
           <span className="text-sm font-semibold">{title}</span>
         </div>
       )}
-      <div className={cn(
-        "divide-y rounded-lg transition-all duration-200",
-        variant === "glass" ? "liquid-glass-card glass-border glass-shadow" : "border"
-      )}>{children}</div>
+      <div className="divide-y rounded-lg border">{children}</div>
       {endDescription && (
         <div className="mt-2 flex justify-end text-right text-xs text-muted-foreground">
           <div className="max-w-[70%]">{endDescription}</div>

@@ -19,8 +19,13 @@ export const Component = () => {
 
   const navLinks: NavLink[] = [
     {
-      text: "History",
+      text: "About",
       href: "/",
+      icon: "i-mingcute-information-line",
+    },
+    {
+      text: "History",
+      href: "/history",
       icon: "i-mingcute-history-anticlockwise-line",
     },
     {
@@ -40,10 +45,6 @@ export const Component = () => {
           text: "Tools",
           href: "/settings/tools",
         },
-        {
-          text: "About",
-          href: "/settings/about",
-        },
       ],
     },
   ]
@@ -56,7 +57,7 @@ export const Component = () => {
 
   return (
     <div className="flex h-dvh">
-      <div className="app-drag-region flex w-44 shrink-0 flex-col liquid-glass-nav glass-border-r glass-shine">
+      <div className="app-drag-region flex w-44 shrink-0 flex-col bg-background border-r">
         <header
           className={process.env.IS_MAC ? "h-10" : "h-2"}
           aria-hidden
@@ -77,8 +78,8 @@ export const Component = () => {
                     cn(
                       "flex h-7 items-center gap-2 rounded-md px-2 font-medium transition-all duration-200",
                       isActive || (link.href === "/settings" && isSettingsSection)
-                        ? "liquid-glass-button text-foreground"
-                        : "hover:liquid-glass-subtle text-muted-foreground hover:text-foreground",
+                        ? "bg-accent text-accent-foreground"
+                        : "text-muted-foreground hover:text-foreground hover:bg-accent/50",
                     )
                   }
                 >
@@ -97,8 +98,8 @@ export const Component = () => {
                         className={cn(
                           "flex h-6 items-center gap-2 rounded-md px-2 text-xs font-medium transition-all duration-200",
                           location.pathname === subItem.href
-                            ? "liquid-glass-button text-foreground"
-                            : "hover:liquid-glass-subtle text-muted-foreground hover:text-foreground",
+                            ? "bg-accent text-accent-foreground"
+                            : "text-muted-foreground hover:text-foreground hover:bg-accent/50",
                         )}
                       >
                         {subItem.text}
@@ -111,7 +112,7 @@ export const Component = () => {
           })}
         </div>
       </div>
-      <div className="flex grow flex-col overflow-auto liquid-glass-panel glass-blur-medium">
+      <div className="flex grow flex-col overflow-auto bg-background">
         <Outlet />
       </div>
     </div>

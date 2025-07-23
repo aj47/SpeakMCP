@@ -1,8 +1,9 @@
-import { ControlGroup } from "@renderer/components/ui/control"
+import { Button } from "@renderer/components/ui/button"
+import { Control, ControlGroup } from "@renderer/components/ui/control"
 import { queryClient } from "@renderer/lib/query-client"
 import { rendererHandlers, tipcClient } from "@renderer/lib/tipc-client"
 import { cn } from "@renderer/lib/utils"
-import { useQuery } from "@tanstack/react-query"
+import { useQuery, useMutation } from "@tanstack/react-query"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { RecordingHistoryItem } from "@shared/types"
 import dayjs from "dayjs"
@@ -20,6 +21,15 @@ export function Component() {
     queryKey: ["recording-history"],
     queryFn: async () => {
       return tipcClient.getRecordingHistory()
+    },
+  })
+
+  const deleteRecordingHistoryMutation = useMutation({
+    mutationFn: tipcClient.deleteRecordingHistory,
+    onSuccess() {
+      queryClient.invalidateQueries({
+        queryKey: ["recording-history"],
+      })
     },
   })
 
@@ -73,7 +83,23 @@ export function Component() {
       <header className="app-drag-region flex h-12 shrink-0 items-center justify-between liquid-glass-nav glass-border-b glass-shine px-4 text-sm">
         <span className="font-bold">History</span>
 
-        <div className="flex">
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            className="h-7 gap-1 px-2 py-0 text-red-500 hover:text-red-500"
+            onClick={() => {
+              if (
+                window.confirm(
+                  "Are you absolutely sure to remove all recordings forever?",
+                )
+              ) {
+                deleteRecordingHistoryMutation.mutate()
+              }
+            }}
+          >
+            <span className="i-mingcute-delete-2-fill"></span>
+            <span>Delete All</span>
+          </Button>
           <Input
             wrapperClassName="liquid-glass-input glass-border glass-blur-light"
             endContent={

@@ -41,10 +41,6 @@ export const Component = () => {
           href: "/settings/tools",
         },
         {
-          text: "Data",
-          href: "/settings/data",
-        },
-        {
           text: "About",
           href: "/settings/about",
         },

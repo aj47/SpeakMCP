@@ -5,6 +5,7 @@ import { AgentProgressStep, AgentProgressUpdate } from "../../../shared/types"
 interface AgentProgressProps {
   progress: AgentProgressUpdate | null
   className?: string
+  variant?: "default" | "overlay"
 }
 
 // Helper function to extract meaningful results from content
@@ -295,14 +296,14 @@ const ResultDisplay: React.FC<{
 
   if (hasErrors && errorStep) {
     return (
-      <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-700">
+      <div className="p-3 liquid-glass-subtle glass-border rounded-lg border-destructive/50 bg-destructive/10">
         <div className="flex items-start gap-2">
-          <div className="text-red-500 text-sm">❌</div>
+          <div className="text-destructive text-sm">❌</div>
           <div className="flex-1 min-w-0">
-            <div className="text-sm font-medium text-red-800 dark:text-red-300">
+            <div className="text-sm font-medium text-destructive-foreground">
               Task encountered an error
             </div>
-            <div className="text-xs text-red-700 dark:text-red-400 mt-1">
+            <div className="text-xs text-muted-foreground mt-1">
               {errorStep.toolResult?.error || errorStep.description || "An error occurred during execution"}
             </div>
           </div>
@@ -315,11 +316,11 @@ const ResultDisplay: React.FC<{
   const getResultStyling = () => {
     if (hasErrors) {
       return {
-        bgColor: "bg-red-50 dark:bg-red-900/20",
-        borderColor: "border-red-200 dark:border-red-700",
-        iconColor: "text-red-500",
-        titleColor: "text-red-800 dark:text-red-300",
-        detailColor: "text-red-700 dark:text-red-400",
+        bgColor: "liquid-glass-subtle bg-destructive/10",
+        borderColor: "glass-border border-destructive/50",
+        iconColor: "text-destructive",
+        titleColor: "text-destructive-foreground",
+        detailColor: "text-muted-foreground",
         icon: "❌"
       }
     }
@@ -327,29 +328,29 @@ const ResultDisplay: React.FC<{
     switch (resultType) {
       case 'success':
         return {
-          bgColor: "bg-green-50 dark:bg-green-900/20",
-          borderColor: "border-green-200 dark:border-green-700",
+          bgColor: "liquid-glass-subtle bg-green-500/10",
+          borderColor: "glass-border border-green-500/50",
           iconColor: "text-green-500",
-          titleColor: "text-green-800 dark:text-green-300",
-          detailColor: "text-green-700 dark:text-green-400",
+          titleColor: "text-foreground",
+          detailColor: "text-muted-foreground",
           icon: "✅"
         }
       case 'info':
         return {
-          bgColor: "bg-blue-50 dark:bg-blue-900/20",
-          borderColor: "border-blue-200 dark:border-blue-700",
-          iconColor: "text-blue-500",
-          titleColor: "text-blue-800 dark:text-blue-300",
-          detailColor: "text-blue-700 dark:text-blue-400",
+          bgColor: "liquid-glass-subtle bg-primary/10",
+          borderColor: "glass-border border-primary/50",
+          iconColor: "text-primary",
+          titleColor: "text-foreground",
+          detailColor: "text-muted-foreground",
           icon: "ℹ️"
         }
       default:
         return {
-          bgColor: "bg-green-50 dark:bg-green-900/20",
-          borderColor: "border-green-200 dark:border-green-700",
+          bgColor: "liquid-glass-subtle bg-green-500/10",
+          borderColor: "glass-border border-green-500/50",
           iconColor: "text-green-500",
-          titleColor: "text-green-800 dark:text-green-300",
-          detailColor: "text-green-700 dark:text-green-400",
+          titleColor: "text-foreground",
+          detailColor: "text-muted-foreground",
           icon: "✅"
         }
     }
@@ -367,7 +368,7 @@ const ResultDisplay: React.FC<{
     : resultDetails.length > 0 ? resultDetails : []
 
   return (
-    <div className={`p-3 ${styling.bgColor} rounded-lg border ${styling.borderColor}`}>
+    <div className={`p-3 ${styling.bgColor} rounded-lg ${styling.borderColor}`}>
       <div className="flex items-start gap-2">
         <div className={`${styling.iconColor} text-sm`}>{styling.icon}</div>
         <div className="flex-1 min-w-0">
@@ -386,13 +387,13 @@ const ResultDisplay: React.FC<{
           {(finalContent && finalContent.length > 200) && (
             <button
               onClick={onToggleExpanded}
-              className={`text-xs ${styling.detailColor} hover:opacity-80 mt-2 underline`}
+              className={`text-xs ${styling.detailColor} hover:text-foreground mt-2 underline transition-colors`}
             >
               {isExpanded ? "Show less" : "Show full details"}
             </button>
           )}
           {isExpanded && finalContent && (
-            <div className={`mt-2 p-2 ${styling.bgColor} rounded text-xs ${styling.titleColor} max-h-48 overflow-y-auto border ${styling.borderColor} scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600`}>
+            <div className={`mt-2 p-2 ${styling.bgColor} rounded text-xs ${styling.titleColor} max-h-48 overflow-y-auto ${styling.borderColor}`}>
               <pre className="whitespace-pre-wrap font-sans">{finalContent}</pre>
             </div>
           )}
@@ -423,11 +424,11 @@ const StepIcon: React.FC<{ step: AgentProgressStep }> = ({ step }) => {
       case "pending":
         return "text-muted-foreground liquid-glass-subtle"
       case "in_progress":
-        return "text-blue-500 liquid-glass glass-border animate-pulse"
+        return "text-primary liquid-glass glass-border animate-pulse"
       case "completed":
         return "text-green-500 liquid-glass glass-border"
       case "error":
-        return "text-red-500 liquid-glass glass-border"
+        return "text-destructive liquid-glass glass-border"
       default:
         return "text-muted-foreground liquid-glass-subtle"
     }
@@ -453,7 +454,7 @@ const ProgressStep: React.FC<{ step: AgentProgressStep; isLast: boolean }> = ({ 
       case "completed":
         return "liquid-glass glass-border glass-shadow"
       case "error":
-        return "liquid-glass glass-border border-red-300/50 bg-red-500/10"
+        return "liquid-glass glass-border border-destructive/50 bg-destructive/10"
       default:
         return "liquid-glass-subtle glass-border"
     }
@@ -505,7 +506,7 @@ const ProgressStep: React.FC<{ step: AgentProgressStep; isLast: boolean }> = ({ 
   )
 }
 
-export const AgentProgress: React.FC<AgentProgressProps> = ({ progress, className }) => {
+export const AgentProgress: React.FC<AgentProgressProps> = ({ progress, className, variant = "default" }) => {
   const [isExpanded, setIsExpanded] = useState(false)
   const [showDetails, setShowDetails] = useState(false)
 
@@ -520,11 +521,13 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({ progress, classNam
   const hasMultipleSteps = steps.length > 1
   const hasErrors = steps.some(step => step.status === "error" || step.toolResult?.error)
 
+  const containerClasses = variant === "overlay"
+    ? "flex flex-col gap-3 p-3 w-full rounded-xl"
+    : "flex flex-col gap-3 p-4 liquid-glass-modal glass-border glass-shadow rounded-xl w-full"
+
   return (
     <div className={cn(
-      "flex flex-col gap-3 p-4 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md rounded-xl border border-gray-200/50 dark:border-gray-700/50 shadow-xl",
-      // Full width expansion - remove max-width constraint
-      "w-full",
+      containerClasses,
       isComplete ? "min-h-[160px]" : "min-h-[140px]",
       // Add max height and enable vertical scrolling for the entire component
       "max-h-[80vh] overflow-y-auto",
@@ -536,10 +539,10 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({ progress, classNam
           <div className={cn(
             "w-2.5 h-2.5 rounded-full",
             isComplete
-              ? hasErrors ? "bg-red-500" : "bg-green-500"
-              : "bg-blue-500 animate-pulse"
+              ? hasErrors ? "bg-destructive" : "bg-green-500"
+              : "bg-primary animate-pulse"
           )} />
-          <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">
+          <span className="text-sm font-semibold text-foreground">
             {isComplete
               ? hasErrors ? "Task Failed" : "Task Complete"
               : "Agent Working"
@@ -547,14 +550,20 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({ progress, classNam
           </span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="text-xs text-gray-500 dark:text-gray-400 font-medium">
+          <div className="text-xs text-muted-foreground font-medium">
             {isComplete ? "✓ Done" : `${currentIteration}/${maxIterations}`}
           </div>
+          {/* ESC helper text when complete */}
+          {isComplete && (
+            <div className="text-xs text-muted-foreground opacity-75">
+              • Press ESC to close
+            </div>
+          )}
           {/* Details toggle button */}
           {(hasMultipleSteps || isComplete) && (
             <button
               onClick={() => setShowDetails(!showDetails)}
-              className="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 transition-colors p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800"
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors p-1 rounded liquid-glass-button"
               title={showDetails ? "Hide details" : "Show details"}
             >
               {showDetails ? "−" : "+"}
@@ -599,7 +608,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({ progress, classNam
               )}
               {/* Show step count if there are multiple steps */}
               {hasMultipleSteps && !isComplete && (
-                <div className="text-xs text-gray-500 dark:text-gray-400 text-center">
+                <div className="text-xs text-muted-foreground text-center">
                   Step {steps.length} • Click + for details
                 </div>
               )}
@@ -610,9 +619,9 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({ progress, classNam
 
       {/* Progress Bar - Show only when not complete */}
       {!isComplete && (
-        <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5 mt-auto flex-shrink-0">
+        <div className="w-full bg-muted rounded-full h-1.5 mt-auto flex-shrink-0">
           <div
-            className="h-1.5 rounded-full transition-all duration-500 ease-out bg-blue-500"
+            className="h-1.5 rounded-full transition-all duration-500 ease-out bg-primary"
             style={{
               width: `${Math.min(100, (currentIteration / maxIterations) * 100)}%`
             }}

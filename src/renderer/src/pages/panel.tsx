@@ -268,8 +268,8 @@ export function Component() {
       {(transcribeMutation.isPending || mcpTranscribeMutation.isPending) ? (
         <div className="flex h-full w-full items-center justify-center relative liquid-glass-strong rounded-xl">
           {agentProgress ? (
-            <div className="absolute inset-0 flex items-center justify-center p-4 z-20">
-              <AgentProgress progress={agentProgress} className="w-full" />
+            <div className="absolute inset-0 flex items-center justify-center z-20">
+              <AgentProgress progress={agentProgress} variant="overlay" className="w-full mx-4" />
             </div>
           ) : (
             <Spinner />
@@ -286,7 +286,7 @@ export function Component() {
           <div className="flex shrink-0">
             {mcpMode && (
               <div className="flex items-center justify-center w-8 h-full liquid-glass-subtle rounded-l-xl">
-                <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse shadow-lg" title="MCP Tool Mode" />
+                <div className="w-2 h-2 bg-primary rounded-full animate-pulse shadow-lg" title="MCP Tool Mode" />
               </div>
             )}
           </div>
@@ -296,8 +296,8 @@ export function Component() {
           >
             {/* Agent progress overlay - positioned to not interfere with waveform */}
             {agentProgress && !mcpTranscribeMutation.isPending && (
-              <div className="absolute inset-0 flex items-center justify-start pl-4 pr-16 z-20">
-                <AgentProgress progress={agentProgress} className="w-full liquid-glass-strong rounded-lg glass-shadow" />
+              <div className="absolute inset-0 flex items-center justify-start z-20 liquid-glass-strong rounded-xl">
+                <AgentProgress progress={agentProgress} variant="overlay" className="w-full mx-3" />
               </div>
             )}
 

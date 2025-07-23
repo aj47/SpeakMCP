@@ -1,0 +1,161 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="300" height="600" viewBox="0 0 300 600">
+  <defs>
+    <!-- Navigation Panel Displacement Filter -->
+    <filter id="liquid-glass-nav-panel" x="-10%" y="-5%" width="120%" height="110%">
+      <!-- Create vertical gradient for navigation -->
+      <feImage href="#nav-gradient" result="navShape" />
+      
+      <!-- Subtle vertical turbulence -->
+      <feTurbulence 
+        type="turbulence" 
+        baseFrequency="0.008 0.02" 
+        numOctaves="2" 
+        result="navNoise" 
+        seed="4" />
+      
+      <!-- Combine for navigation effect -->
+      <feComposite 
+        in="navShape" 
+        in2="navNoise" 
+        operator="multiply" 
+        result="navMap" />
+      
+      <feDisplacementMap 
+        in="SourceGraphic" 
+        in2="navMap" 
+        scale="10" 
+        xChannelSelector="R" 
+        yChannelSelector="G" />
+    </filter>
+
+    <!-- Sidebar Border Displacement -->
+    <filter id="liquid-glass-sidebar" x="-5%" y="-5%" width="110%" height="110%">
+      <!-- Create edge-focused gradient -->
+      <feImage href="#sidebar-gradient" result="sidebarShape" />
+      
+      <!-- Fine turbulence for edge distortion -->
+      <feTurbulence 
+        type="turbulence" 
+        baseFrequency="0.01 0.015" 
+        numOctaves="1" 
+        result="sidebarNoise" 
+        seed="6" />
+      
+      <feComposite 
+        in="sidebarShape" 
+        in2="sidebarNoise" 
+        operator="screen" 
+        result="sidebarMap" />
+      
+      <feDisplacementMap 
+        in="SourceGraphic" 
+        in2="sidebarMap" 
+        scale="8" 
+        xChannelSelector="R" 
+        yChannelSelector="G" />
+    </filter>
+
+    <!-- Card/Item Displacement -->
+    <filter id="liquid-glass-card" x="-8%" y="-8%" width="116%" height="116%">
+      <!-- Create card-specific gradient -->
+      <feImage href="#card-gradient" result="cardShape" />
+      
+      <!-- Medium turbulence for card effect -->
+      <feTurbulence 
+        type="turbulence" 
+        baseFrequency="0.02 0.025" 
+        numOctaves="2" 
+        result="cardNoise" 
+        seed="8" />
+      
+      <feComposite 
+        in="cardShape" 
+        in2="cardNoise" 
+        operator="multiply" 
+        result="cardMap" />
+      
+      <feDisplacementMap 
+        in="SourceGraphic" 
+        in2="cardMap" 
+        scale="12" 
+        xChannelSelector="R" 
+        yChannelSelector="G" />
+    </filter>
+
+    <!-- Input Field Displacement -->
+    <filter id="liquid-glass-input" x="-5%" y="-10%" width="110%" height="120%">
+      <!-- Create input-specific gradient -->
+      <feImage href="#input-gradient" result="inputShape" />
+      
+      <!-- Light turbulence for subtle input effect -->
+      <feTurbulence 
+        type="turbulence" 
+        baseFrequency="0.005 0.01" 
+        numOctaves="1" 
+        result="inputNoise" 
+        seed="9" />
+      
+      <feComposite 
+        in="inputShape" 
+        in2="inputNoise" 
+        operator="overlay" 
+        result="inputMap" />
+      
+      <feDisplacementMap 
+        in="SourceGraphic" 
+        in2="inputMap" 
+        scale="5" 
+        xChannelSelector="R" 
+        yChannelSelector="G" />
+    </filter>
+
+    <!-- Gradient Definitions -->
+    
+    <!-- Navigation Panel Gradient -->
+    <linearGradient id="nav-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#FF2020;stop-opacity:1" />
+      <stop offset="5%" style="stop-color:#808080;stop-opacity:1" />
+      <stop offset="95%" style="stop-color:#808080;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#2020FF;stop-opacity:1" />
+    </linearGradient>
+
+    <!-- Sidebar Gradient -->
+    <linearGradient id="sidebar-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#808080;stop-opacity:1" />
+      <stop offset="85%" style="stop-color:#808080;stop-opacity:1" />
+      <stop offset="95%" style="stop-color:#FF4040;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#4040FF;stop-opacity:1" />
+    </linearGradient>
+
+    <!-- Card Gradient -->
+    <radialGradient id="card-gradient" cx="50%" cy="50%" r="45%">
+      <stop offset="0%" style="stop-color:#808080;stop-opacity:1" />
+      <stop offset="75%" style="stop-color:#808080;stop-opacity:1" />
+      <stop offset="90%" style="stop-color:#FF6060;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#6060FF;stop-opacity:1" />
+    </radialGradient>
+
+    <!-- Input Field Gradient -->
+    <linearGradient id="input-gradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#FF3030;stop-opacity:1" />
+      <stop offset="15%" style="stop-color:#808080;stop-opacity:1" />
+      <stop offset="85%" style="stop-color:#808080;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#3030FF;stop-opacity:1" />
+    </linearGradient>
+
+    <!-- Circular Button Gradient -->
+    <radialGradient id="circular-gradient" cx="50%" cy="50%" r="40%">
+      <stop offset="0%" style="stop-color:#808080;stop-opacity:1" />
+      <stop offset="60%" style="stop-color:#808080;stop-opacity:1" />
+      <stop offset="80%" style="stop-color:#FF5050;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#5050FF;stop-opacity:1" />
+    </radialGradient>
+  </defs>
+
+  <!-- Invisible shapes to define the displacement maps -->
+  <rect width="300" height="600" fill="url(#nav-gradient)" opacity="0" />
+  <rect width="300" height="600" fill="url(#sidebar-gradient)" opacity="0" />
+  <rect width="300" height="200" fill="url(#card-gradient)" opacity="0" />
+  <rect width="300" height="40" fill="url(#input-gradient)" opacity="0" />
+  <circle cx="150" cy="300" r="50" fill="url(#circular-gradient)" opacity="0" />
+</svg>

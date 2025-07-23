@@ -18,7 +18,7 @@ import { mcpService, MCPToolResult } from "./mcp-service"
 import { state } from "./state"
 import { updateTrayIcon } from "./tray"
 import { isAccessibilityGranted } from "./utils"
-import { writeText } from "./keyboard"
+import { writeText, writeTextWithFocusRestore } from "./keyboard"
 
 
 const t = tipc.create()
@@ -258,12 +258,17 @@ export const router = {
       // paste
       clipboard.writeText(transcript)
       if (isAccessibilityGranted()) {
-        try {
-          await writeText(transcript)
-        } catch (error) {
-          console.error(`Failed to write text:`, error)
-          // Don't throw here, just log the error so the recording still gets saved
-        }
+        // Add a small delay for regular transcripts too to be less disruptive
+        const pasteDelay = 500 // 0.5 second delay for regular transcripts
+        setTimeout(async () => {
+          try {
+            console.log(`[FOCUS] 📝 Pasting regular transcript with focus restoration`)
+            await writeTextWithFocusRestore(transcript)
+          } catch (error) {
+            console.error(`Failed to write text:`, error)
+            // Don't throw here, just log the error so the recording still gets saved
+          }
+        }, pasteDelay)
       }
     }),
 
@@ -343,6 +348,7 @@ export const router = {
         console.log(`[MCP-AGENT] Final response length: ${finalResponse.length}`)
         console.log(`[MCP-AGENT] Final response preview: "${finalResponse.substring(0, 100)}..."`)
         console.log(`[MCP-AGENT] Conversation history length: ${agentResponse.conversationHistory.length} entries`)
+        console.log(`[MCP-AGENT] Final response will be displayed in GUI`)
       } else {
         const llmResponse = await processTranscriptWithTools(transcript, availableTools)
 
@@ -391,24 +397,12 @@ export const router = {
         ).refreshRecordingHistory.send()
       }
 
-      // Copy final response to clipboard and paste
-      clipboard.writeText(finalResponse)
-      if (isAccessibilityGranted()) {
-        try {
-          await writeText(finalResponse)
-        } catch (error) {
-          console.error(`Failed to write text:`, error)
-        }
-      }
+      // Agent mode result is displayed in GUI - no clipboard or pasting logic needed
+      console.log(`[MCP-AGENT] ✅ Agent processing completed, result displayed in GUI`)
+      console.log(`[MCP-AGENT] 📋 Result will remain visible until user presses ESC to close`)
 
-      // Hide panel after a delay to allow progress visualization to complete
-      // The panel will also be hidden automatically when progress completes
-      setTimeout(() => {
-        const panel = WINDOWS.get("panel")
-        if (panel) {
-          panel.hide()
-        }
-      }, 5000) // 5 second delay to allow progress to be seen
+      // Note: Panel hiding is handled by the frontend progress component
+      // to ensure proper timing with the progress visualization
     }),
 
   getRecordingHistory: t.procedure.action(async () => getRecordingHistory()),

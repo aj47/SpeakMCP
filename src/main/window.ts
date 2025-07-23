@@ -14,6 +14,8 @@ import {
 } from "@egoist/electron-panel-window"
 import { RendererHandlers } from "./renderer-handlers"
 import { configStore } from "./config"
+import { getFocusedAppInfo } from "./keyboard"
+import { state } from "./state"
 
 type WINDOW_ID = "main" | "panel" | "setup"
 
@@ -207,12 +209,32 @@ export function showPanelWindow() {
   }
 }
 
-export function showPanelWindowAndStartRecording() {
+export async function showPanelWindowAndStartRecording() {
+  // Capture focus before showing panel
+  try {
+    const focusedApp = await getFocusedAppInfo()
+    state.focusedAppBeforeRecording = focusedApp
+    console.log(`[FOCUS] 📱 Captured focused app before regular recording: ${focusedApp}`)
+  } catch (error) {
+    console.error(`[FOCUS] ❌ Failed to capture focused app:`, error)
+    state.focusedAppBeforeRecording = null
+  }
+
   showPanelWindow()
   getWindowRendererHandlers("panel")?.startRecording.send()
 }
 
-export function showPanelWindowAndStartMcpRecording() {
+export async function showPanelWindowAndStartMcpRecording() {
+  // Capture focus before showing panel
+  try {
+    const focusedApp = await getFocusedAppInfo()
+    state.focusedAppBeforeRecording = focusedApp
+    console.log(`[FOCUS] 📱 Captured focused app before MCP recording: ${focusedApp}`)
+  } catch (error) {
+    console.error(`[FOCUS] ❌ Failed to capture focused app:`, error)
+    state.focusedAppBeforeRecording = null
+  }
+
   showPanelWindow()
   getWindowRendererHandlers("panel")?.startMcpRecording.send()
 }
@@ -239,6 +261,22 @@ export const stopRecordingAndHidePanelWindow = () => {
     if (win.isVisible()) {
       win.hide()
     }
+  }
+}
+
+export const closeAgentModeAndHidePanelWindow = () => {
+  const win = WINDOWS.get("panel")
+  if (win) {
+    // Clear agent progress and resize back to normal
+    getRendererHandlers<RendererHandlers>(win.webContents).clearAgentProgress.send()
+    resizePanelToNormal()
+
+    // Hide the panel after a small delay to ensure resize completes
+    setTimeout(() => {
+      if (win.isVisible()) {
+        win.hide()
+      }
+    }, 200)
   }
 }
 

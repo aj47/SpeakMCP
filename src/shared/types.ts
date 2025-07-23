@@ -81,6 +81,8 @@ export type Config = {
   mcpToolsGeminiModel?: string
   mcpToolsSystemPrompt?: string
   mcpAgentModeEnabled?: boolean
+  mcpAutoPasteEnabled?: boolean
+  mcpAutoPasteDelay?: number
 
   // MCP Server Configuration
   mcpConfig?: MCPConfig

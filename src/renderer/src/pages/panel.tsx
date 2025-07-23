@@ -220,41 +220,69 @@ export function Component() {
   // Agent progress handler
   useEffect(() => {
     const unlisten = rendererHandlers.agentProgressUpdate.listen((update: AgentProgressUpdate) => {
-      setAgentProgress(update)
+      console.log(`[MCP-AGENT-GUI] 📊 Progress update received:`, {
+        isComplete: update.isComplete,
+        currentIteration: update.currentIteration,
+        stepsCount: update.steps.length,
+        hasFinalContent: !!update.finalContent,
+        finalContentPreview: update.finalContent?.substring(0, 50)
+      })
+
+      // Only update if the progress has actually changed to prevent flashing
+      setAgentProgress(prevProgress => {
+        if (!prevProgress) return update
+
+        // Compare key properties to determine if update is needed
+        const hasChanged =
+          prevProgress.isComplete !== update.isComplete ||
+          prevProgress.currentIteration !== update.currentIteration ||
+          prevProgress.steps.length !== update.steps.length ||
+          JSON.stringify(prevProgress.steps) !== JSON.stringify(update.steps) ||
+          prevProgress.finalContent !== update.finalContent
+
+        return hasChanged ? update : prevProgress
+      })
 
       // Resize panel for agent mode on first progress update or when transitioning from no progress
       if (!agentProgress && update && !update.isComplete) {
+        console.log(`[MCP-AGENT-GUI] 📏 Resizing panel for agent mode`)
         // Small delay to ensure the panel is ready
         setTimeout(() => {
           tipcClient.resizePanelForAgentMode()
         }, 100)
       }
 
-      // Auto-clear progress and hide panel after completion with a delay
+      // Keep the panel open when agent completes - user will press ESC to close
       if (update.isComplete) {
-        setTimeout(() => {
-          setAgentProgress(null)
-          // Resize back to normal and hide the panel after showing completion
-          tipcClient.resizePanelToNormal()
-          setTimeout(() => {
-            tipcClient.hidePanelWindow()
-          }, 200) // Small delay to ensure resize completes before hiding
-        }, 4000) // Show completion for 4 seconds
+        console.log(`[MCP-AGENT-GUI] ✅ Agent completed, panel will remain open until user presses ESC`)
+        // No auto-hide behavior - user controls when to close with ESC
       }
     })
 
     return unlisten
   }, [agentProgress])
 
+  // Clear agent progress handler
+  useEffect(() => {
+    const unlisten = rendererHandlers.clearAgentProgress.listen(() => {
+      console.log(`[MCP-AGENT-GUI] 🔄 Clearing agent progress`)
+      setAgentProgress(null)
+      setMcpMode(false)
+      mcpModeRef.current = false
+    })
+
+    return unlisten
+  }, [])
+
 
 
   return (
-    <div className="flex h-screen dark:text-white">
+    <div className="flex h-screen liquid-glass-panel text-foreground glass-text-strong">
       {(transcribeMutation.isPending || mcpTranscribeMutation.isPending) ? (
-        <div className="flex h-full w-full items-center justify-center relative">
+        <div className="flex h-full w-full items-center justify-center relative liquid-glass-strong rounded-xl glass-text-strong">
           {agentProgress ? (
-            <div className="absolute inset-0 flex items-center justify-center p-4 z-20">
-              <AgentProgress progress={agentProgress} className="max-w-md w-full" />
+            <div className="absolute inset-0 flex items-center justify-center z-20">
+              <AgentProgress progress={agentProgress} variant="overlay" className="w-full mx-4" />
             </div>
           ) : (
             <Spinner />
@@ -267,11 +295,11 @@ export function Component() {
           )}
         </div>
       ) : (
-        <div className="flex h-full w-full rounded-xl transition-colors">
+        <div className="flex h-full w-full rounded-xl liquid-glass transition-all duration-300 glass-text-strong">
           <div className="flex shrink-0">
             {mcpMode && (
-              <div className="flex items-center justify-center w-8 h-full">
-                <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" title="MCP Tool Mode" />
+              <div className="flex items-center justify-center w-8 h-full liquid-glass-subtle rounded-l-xl">
+                <div className="w-2 h-2 bg-primary rounded-full animate-pulse shadow-lg" title="MCP Tool Mode" />
               </div>
             )}
           </div>
@@ -281,8 +309,8 @@ export function Component() {
           >
             {/* Agent progress overlay - positioned to not interfere with waveform */}
             {agentProgress && !mcpTranscribeMutation.isPending && (
-              <div className="absolute inset-0 flex items-center justify-start pl-4 pr-16 z-20">
-                <AgentProgress progress={agentProgress} className="max-w-sm w-full shadow-lg" />
+              <div className="absolute inset-0 flex items-center justify-start z-20 liquid-glass-strong rounded-xl glass-text-strong">
+                <AgentProgress progress={agentProgress} variant="overlay" className="w-full mx-3" />
               </div>
             )}
 

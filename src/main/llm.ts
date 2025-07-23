@@ -189,14 +189,32 @@ export async function processTranscriptWithTools(
   }
 
   // Create system prompt with available tools
-  const systemPrompt = config.mcpToolsSystemPrompt || `You are a helpful assistant that can execute tools based on user requests.
+  const baseSystemPrompt = config.mcpToolsSystemPrompt || `You are a helpful assistant that can execute tools based on user requests.`
+
+  // Always inject available tools into the system prompt
+  const toolsList = availableTools.length > 0 ? `
 
 Available tools:
-${availableTools.map(tool => `- ${tool.name}: ${tool.description}`).join('\n')}
+${availableTools.map(tool => `- ${tool.name}: ${tool.description}`).join('\n')}` : '\n\nNo tools are currently available.'
+
+  const systemPrompt = baseSystemPrompt + toolsList + `
 
 IMPORTANT: You must respond with ONLY a valid JSON object. Do not include any explanatory text before or after the JSON.
 
-CRITICAL: When calling tools, you MUST use the EXACT tool name as listed above, including any server prefixes (like "server:tool_name"). Do not modify or shorten the tool names.
+CRITICAL: When calling tools, you MUST use the EXACT tool name as listed above, including any server prefixes (like "server:tool_name"). Do not modify or shorten the tool names. NEVER invent or hallucinate tool names that are not in the list above.
+
+TOOL USAGE PATTERNS:
+For file system operations (like listing directories, checking desktop contents):
+1. Use "Headless Terminal:ht_create_session" to create a terminal session
+2. Use "Headless Terminal:ht_execute_command" with commands like "ls ~/Desktop", "ls -la /path/to/directory", "pwd", etc.
+
+For web operations:
+- Use any available web/search tools if present in the list above
+
+For system operations:
+- Use terminal commands via "Headless Terminal:ht_execute_command" for system tasks
+
+ALWAYS prefer using available tools over suggesting manual approaches. If you can accomplish the task with the available tools, do it!
 
 When the user's request requires using a tool, respond with this exact JSON format:
 {
@@ -216,16 +234,16 @@ If no tools are needed, respond with this exact JSON format:
 
 Examples:
 
-User: "Create a file called test.txt with hello world"
+User: "List the contents of my desktop"
 Response:
 {
   "toolCalls": [
     {
-      "name": "filesystem:write_file",
-      "arguments": { "path": "test.txt", "content": "hello world" }
+      "name": "Headless Terminal:ht_create_session",
+      "arguments": {}
     }
   ],
-  "content": "Creating test.txt file with hello world content"
+  "content": "Creating a terminal session to list your desktop contents"
 }
 
 User: "What's the weather like?"
@@ -249,17 +267,25 @@ Remember: Respond with ONLY the JSON object, no markdown formatting, no code blo
 
   const chatProviderId = config.mcpToolsProviderId
 
+  // Debug: Log non-agent mode LLM call details
+  console.log("[MCP-TOOLS-DEBUG] 🚀 Making non-agent LLM call")
+  console.log("[MCP-TOOLS-DEBUG] 🔧 Provider:", chatProviderId || "openai (default)")
+  console.log("[MCP-TOOLS-DEBUG] 📝 Messages count:", messages.length)
+  messages.forEach((msg, i) => {
+    const preview = msg.content.length > 200 ? msg.content.substring(0, 200) + "..." : msg.content
+    console.log(`[MCP-TOOLS-DEBUG]   ${i + 1}. ${msg.role}: ${preview}`)
+  })
+
   if (chatProviderId === "gemini") {
-    console.log("[MCP-DEBUG] Using Gemini for LLM processing")
+    const geminiModel = config.mcpToolsGeminiModel || "gemini-1.5-flash-002"
+    console.log("[MCP-TOOLS-DEBUG] 🤖 Using Gemini model:", geminiModel)
     if (!config.geminiApiKey) throw new Error("Gemini API key is required")
 
     const gai = new GoogleGenerativeAI(config.geminiApiKey)
-    const geminiModel = config.mcpToolsGeminiModel || "gemini-1.5-flash-002"
-    console.log(`[MCP-DEBUG] Using Gemini model: ${geminiModel}`)
     const gModel = gai.getGenerativeModel({ model: geminiModel })
 
     const prompt = messages.map(m => `${m.role}: ${m.content}`).join('\n\n')
-    console.log(`[MCP-DEBUG] Sending prompt to Gemini:`, prompt)
+    console.log("[MCP-TOOLS-DEBUG] 📤 Sending request to Gemini...")
 
     const result = await gModel.generateContent([prompt], {
       baseUrl: config.geminiBaseUrl,
@@ -376,6 +402,58 @@ function createProgressStep(
   }
 }
 
+// Helper function to analyze tool capabilities and match them to user requests
+function analyzeToolCapabilities(availableTools: MCPTool[], transcript: string): { summary: string; relevantTools: MCPTool[] } {
+  const transcriptLower = transcript.toLowerCase()
+  const relevantTools: MCPTool[] = []
+
+  // Define capability patterns (handle tool name prefixes)
+  const patterns = {
+    filesystem: {
+      keywords: ['file', 'directory', 'folder', 'desktop', 'list', 'ls', 'contents', 'browse'],
+      tools: ['ht_create_session', 'ht_execute_command']
+    },
+    terminal: {
+      keywords: ['command', 'execute', 'run', 'terminal', 'shell', 'bash'],
+      tools: ['ht_create_session', 'ht_execute_command', 'ht_send_keys']
+    },
+    system: {
+      keywords: ['system', 'process', 'status', 'info'],
+      tools: ['ht_execute_command', 'ht_take_snapshot']
+    }
+  }
+
+  // Check which patterns match the transcript
+  const matchedCapabilities: string[] = []
+
+  for (const [capability, pattern] of Object.entries(patterns)) {
+    const hasKeyword = pattern.keywords.some(keyword => transcriptLower.includes(keyword))
+    const hasTools = pattern.tools.some(toolName =>
+      availableTools.some(tool => tool.name.includes(toolName))
+    )
+
+    if (hasKeyword && hasTools) {
+      matchedCapabilities.push(capability)
+      // Add relevant tools (match by tool name suffix, handling prefixes)
+      pattern.tools.forEach(toolName => {
+        const tool = availableTools.find(t => t.name.includes(toolName))
+        if (tool && !relevantTools.includes(tool)) {
+          relevantTools.push(tool)
+        }
+      })
+    }
+  }
+
+  let summary = ""
+  if (matchedCapabilities.length > 0) {
+    summary = `Detected ${matchedCapabilities.join(', ')} capabilities. Can help with this request using terminal tools.`
+  } else {
+    summary = "Analyzing available tools for potential solutions."
+  }
+
+  return { summary, relevantTools }
+}
+
 export async function processTranscriptWithAgentMode(
   transcript: string,
   availableTools: MCPTool[],
@@ -405,6 +483,13 @@ export async function processTranscriptWithAgentMode(
   const initialStep = createProgressStep("thinking", "Analyzing request", "Processing your request and determining next steps", "in_progress")
   progressSteps.push(initialStep)
 
+  // Analyze available tool capabilities
+  const toolCapabilities = analyzeToolCapabilities(availableTools, transcript)
+
+  // Update initial step with tool analysis
+  initialStep.status = "completed"
+  initialStep.description = `Found ${availableTools.length} available tools. ${toolCapabilities.summary}`
+
   // Emit initial progress
   emitAgentProgress({
     currentIteration: 0,
@@ -414,21 +499,44 @@ export async function processTranscriptWithAgentMode(
   })
 
   // Enhanced system prompt for agent mode
-  const systemPrompt = config.mcpToolsSystemPrompt || `You are a helpful assistant that can execute tools based on user requests. You are operating in agent mode, which means you can see the results of tool executions and make follow-up tool calls as needed.
+  const baseSystemPrompt = config.mcpToolsSystemPrompt || `You are a helpful assistant that can execute tools based on user requests. You are operating in agent mode, which means you can see the results of tool executions and make follow-up tool calls as needed.`
+
+  // Always inject available tools into the system prompt
+  const toolsList = availableTools.length > 0 ? `
 
 Available tools:
 ${availableTools.map(tool => `- ${tool.name}: ${tool.description}`).join('\n')}
 
+${toolCapabilities.relevantTools.length > 0 ? `
+RELEVANT TOOLS FOR THIS REQUEST:
+${toolCapabilities.relevantTools.map(tool => `- ${tool.name}: ${tool.description}`).join('\n')}
+` : ''}` : '\n\nNo tools are currently available.'
+
+  const systemPrompt = baseSystemPrompt + toolsList + `
+
 IMPORTANT: You must respond with ONLY a valid JSON object. Do not include any explanatory text before or after the JSON.
 
-CRITICAL: When calling tools, you MUST use the EXACT tool name as listed above, including any server prefixes (like "server:tool_name"). Do not modify or shorten the tool names.
+CRITICAL: When calling tools, you MUST use the EXACT tool name as listed above, including any server prefixes (like "server:tool_name"). Do not modify or shorten the tool names. NEVER invent or hallucinate tool names that are not in the list above.
+
+TOOL USAGE PATTERNS:
+For file system operations (like listing directories, checking desktop contents):
+1. Use "Headless Terminal:ht_create_session" to create a terminal session
+2. Use "Headless Terminal:ht_execute_command" with commands like "ls ~/Desktop", "ls -la /path/to/directory", "pwd", etc.
+
+For web operations:
+- Use any available web/search tools if present in the list above
+
+For system operations:
+- Use terminal commands via "Headless Terminal:ht_execute_command" for system tasks
+
+ALWAYS prefer using available tools over suggesting manual approaches. If you can accomplish the task with the available tools, do it!
 
 In agent mode, you can:
 1. Execute tools and see their results
 2. Make follow-up tool calls based on the results
 3. Continue until the task is complete
 
-When you need to use tools, respond with this exact JSON format:
+When you need to use tools and expect to continue working after seeing the results, respond with:
 {
   "toolCalls": [
     {
@@ -438,6 +546,18 @@ When you need to use tools, respond with this exact JSON format:
   ],
   "content": "Brief explanation of what you're doing",
   "needsMoreWork": true
+}
+
+When you need to use tools and the task will be complete after executing them, respond with:
+{
+  "toolCalls": [
+    {
+      "name": "exact_tool_name_from_list_above",
+      "arguments": { "param1": "value1", "param2": "value2" }
+    }
+  ],
+  "content": "Brief explanation of what you're doing",
+  "needsMoreWork": false
 }
 
 When the task is complete and no more tools are needed, respond with:
@@ -453,6 +573,14 @@ If no tools are needed for the initial request, respond with:
 }
 
 Remember: Respond with ONLY the JSON object, no markdown formatting, no code blocks, no additional text.`
+
+  // Debug: Log the system prompt being used
+  console.log("[MCP-AGENT-DEBUG] 📝 Using custom system prompt:", !!config.mcpToolsSystemPrompt)
+  console.log("[MCP-AGENT-DEBUG] 📝 Full system prompt:")
+  console.log(systemPrompt)
+  console.log("[MCP-AGENT-DEBUG] 📝 System prompt length:", systemPrompt.length)
+  console.log("[MCP-AGENT-DEBUG] 🔧 Available tools:", availableTools.map(t => t.name).join(", "))
+  console.log("[MCP-AGENT-DEBUG] 🎯 Tool capabilities:", toolCapabilities.summary)
 
   const conversationHistory: Array<{
     role: "user" | "assistant" | "tool"
@@ -509,15 +637,20 @@ Remember: Respond with ONLY the JSON object, no markdown formatting, no code blo
     ]
 
     // Make LLM call
+    console.log(`[MCP-AGENT-DEBUG] 🧠 Making LLM call for iteration ${iteration}`)
     const llmResponse = await makeLLMCall(messages, config)
+    console.log(`[MCP-AGENT-DEBUG] 🎯 LLM response for iteration ${iteration}:`, JSON.stringify(llmResponse, null, 2))
 
     // Update thinking step to completed
     thinkingStep.status = "completed"
 
-    // Check for completion signals
-    const isComplete = !llmResponse.toolCalls ||
-                      llmResponse.toolCalls.length === 0 ||
-                      (llmResponse as any).needsMoreWork === false
+    // Check for completion signals - only complete if there are no tools to execute
+    const hasToolCalls = llmResponse.toolCalls && llmResponse.toolCalls.length > 0
+    const isComplete = !hasToolCalls && (
+      !llmResponse.toolCalls ||
+      llmResponse.toolCalls.length === 0 ||
+      (llmResponse as any).needsMoreWork === false
+    )
 
     if (isComplete) {
       // No tools to execute or agent explicitly says it's done
@@ -632,6 +765,42 @@ Remember: Respond with ONLY the JSON object, no markdown formatting, no code blo
       console.log(`[MCP-AGENT] ⚠️ Tool execution had errors, continuing to handle them`)
     }
 
+    // Check if agent indicated it was done after executing tools
+    const agentIndicatedDone = (llmResponse as any).needsMoreWork === false
+
+    if (agentIndicatedDone && allToolsSuccessful) {
+      console.log(`[MCP-AGENT] 🎯 Agent indicated task completion and tools executed successfully`)
+
+      // Create final content that includes tool results
+      const toolResultsSummary = toolResults
+        .filter(result => !result.isError)
+        .map(result => result.content.map(c => c.text).join('\n'))
+        .join('\n\n')
+
+      finalContent = toolResultsSummary || llmResponse.content || ""
+
+      // Add completion step
+      const completionStep = createProgressStep(
+        "completion",
+        "Task completed",
+        "Successfully completed the requested task with tool results",
+        "completed"
+      )
+      progressSteps.push(completionStep)
+
+      // Emit final progress
+      emitAgentProgress({
+        currentIteration: iteration,
+        maxIterations,
+        steps: progressSteps.slice(-3),
+        isComplete: true,
+        finalContent
+      })
+
+      console.log(`[MCP-AGENT] ✅ Agent completed task in ${iteration} iterations`)
+      break
+    }
+
     // Check for completion keywords in the response
     const completionKeywords = ['completed', 'finished', 'done', 'success', 'created successfully', 'task complete']
     const responseText = (llmResponse.content || "").toLowerCase()
@@ -641,8 +810,10 @@ Remember: Respond with ONLY the JSON object, no markdown formatting, no code blo
       console.log(`[MCP-AGENT] 🎯 Detected task completion signals - tools successful and completion keywords found`)
     }
 
-    // Set final content to the latest assistant response
-    finalContent = llmResponse.content || ""
+    // Set final content to the latest assistant response (fallback)
+    if (!finalContent) {
+      finalContent = llmResponse.content || ""
+    }
   }
 
   if (iteration >= maxIterations) {
@@ -679,24 +850,30 @@ async function makeLLMCall(messages: Array<{role: string, content: string}>, con
   const chatProviderId = config.mcpToolsProviderId
 
   if (chatProviderId === "gemini") {
-    console.log("[MCP-AGENT] Using Gemini for LLM processing")
+    const geminiModel = config.mcpToolsGeminiModel || "gemini-1.5-flash-002"
+    console.log("[MCP-LLM-DEBUG] 🤖 Using Gemini model:", geminiModel)
     if (!config.geminiApiKey) throw new Error("Gemini API key is required")
 
     const gai = new GoogleGenerativeAI(config.geminiApiKey)
-    const geminiModel = config.mcpToolsGeminiModel || "gemini-1.5-flash-002"
     const gModel = gai.getGenerativeModel({ model: geminiModel })
 
     const prompt = messages.map(m => `${m.role}: ${m.content}`).join('\n\n')
 
+    console.log("[MCP-LLM-DEBUG] 📤 Sending request to Gemini...")
     const result = await gModel.generateContent([prompt], {
       baseUrl: config.geminiBaseUrl,
     })
 
     const responseText = result.response.text().trim()
+    console.log("[MCP-LLM-DEBUG] 📥 Raw Gemini response:", responseText)
+
     const parsed = extractAndParseJSON(responseText)
+    console.log("[MCP-LLM-DEBUG] 🔍 Parsed response:", parsed ? "SUCCESS" : "FAILED")
     if (parsed) {
+      console.log("[MCP-LLM-DEBUG] ✅ Parsed JSON:", JSON.stringify(parsed, null, 2))
       return parsed
     } else {
+      console.log("[MCP-LLM-DEBUG] ⚠️ Fallback to content response")
       return { content: responseText }
     }
   }
@@ -710,32 +887,42 @@ async function makeLLMCall(messages: Array<{role: string, content: string}>, con
     ? config.mcpToolsGroqModel || "gemma2-9b-it"
     : config.mcpToolsOpenaiModel || "gpt-4o-mini"
 
+  const requestBody = {
+    temperature: 0,
+    model,
+    messages,
+  }
+  console.log("[MCP-LLM-DEBUG] 📋 Request body:", JSON.stringify(requestBody, null, 2))
+
   const chatResponse = await fetch(`${chatBaseUrl}/chat/completions`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${chatProviderId === "groq" ? config.groqApiKey : config.openaiApiKey}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({
-      temperature: 0,
-      model,
-      messages,
-    }),
+    body: JSON.stringify(requestBody),
   })
+
+  console.log("[MCP-LLM-DEBUG] 📊 Response status:", chatResponse.status, chatResponse.statusText)
 
   if (!chatResponse.ok) {
     const errorText = await chatResponse.text()
+    console.log("[MCP-LLM-DEBUG] ❌ Error response:", errorText)
     const message = `${chatResponse.statusText} ${errorText.slice(0, 300)}`
     throw new Error(message)
   }
 
   const chatJson = await chatResponse.json()
   const responseContent = chatJson.choices[0].message.content.trim()
+  console.log("[MCP-LLM-DEBUG] 📝 Response content:", responseContent)
 
   const parsed = extractAndParseJSON(responseContent)
+  console.log("[MCP-LLM-DEBUG] 🔍 Parsed response:", parsed ? "SUCCESS" : "FAILED")
   if (parsed) {
+    console.log("[MCP-LLM-DEBUG] ✅ Parsed JSON:", JSON.stringify(parsed, null, 2))
     return parsed
   } else {
+    console.log("[MCP-LLM-DEBUG] ⚠️ Fallback to content response")
     return { content: responseContent }
   }
 }

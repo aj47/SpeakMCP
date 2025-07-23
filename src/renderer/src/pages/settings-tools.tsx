@@ -2,6 +2,7 @@ import { useConfigQuery } from "@renderer/lib/query-client"
 import { tipcClient } from "@renderer/lib/tipc-client"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { Button } from "@renderer/components/ui/button"
+import { Input } from "@renderer/components/ui/input"
 import { Label } from "@renderer/components/ui/label"
 import { Switch } from "@renderer/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@renderer/components/ui/select"
@@ -38,20 +39,49 @@ export function Component() {
 
   const defaultSystemPrompt = `You are a helpful assistant that can execute tools based on user requests.
 
+CRITICAL: When calling tools, you MUST use the EXACT tool name as listed in the available tools, including any server prefixes (like "server:tool_name"). Do not modify or shorten the tool names. NEVER invent or hallucinate tool names that are not in the list.
+
+TOOL USAGE PATTERNS:
+For file system operations (like listing directories, checking desktop contents):
+1. Use "Headless Terminal:ht_create_session" to create a terminal session
+2. Use "Headless Terminal:ht_execute_command" with commands like "ls ~/Desktop", "ls -la /path/to/directory", "pwd", etc.
+
+For web operations:
+- Use any available web/search tools if present in the list
+
+For system operations:
+- Use terminal commands via "Headless Terminal:ht_execute_command" for system tasks
+
+ALWAYS prefer using available tools over suggesting manual approaches. If you can accomplish the task with the available tools, do it!
+
 When the user's request requires using a tool, respond with a JSON object in this format:
 {
   "toolCalls": [
     {
-      "name": "tool_name",
+      "name": "exact_tool_name_from_available_list",
       "arguments": { "param1": "value1", "param2": "value2" }
     }
   ],
-  "content": "Optional explanation of what you're doing"
+  "content": "Brief explanation of what you're doing"
 }
 
 If no tools are needed, respond with:
 {
   "content": "Your response text here"
+}
+
+Examples:
+
+User: "List the contents of my desktop"
+Response:
+{
+  "toolCalls": [
+    {
+      "name": "Headless Terminal:ht_create_session",
+      "arguments": {}
+    }
+  ],
+  "content": "Creating a terminal session to list your desktop contents"
 }
 
 Always respond with valid JSON only.`
@@ -112,6 +142,49 @@ Always respond with valid JSON only.`
                 When enabled, the agent can see tool results and make follow-up tool calls until the task is complete
               </p>
 
+              {!config.mcpAgentModeEnabled && (
+                <>
+                  <div className="flex items-center space-x-2">
+                    <Switch
+                      id="mcp-auto-paste"
+                      checked={config.mcpAutoPasteEnabled !== false}
+                      onCheckedChange={(checked) => updateConfig({ mcpAutoPasteEnabled: checked })}
+                    />
+                    <Label htmlFor="mcp-auto-paste">Auto-paste Results</Label>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Automatically paste the final result to the active input field. Disable if you prefer to manually paste from clipboard.
+                  </p>
+
+                  {config.mcpAutoPasteEnabled !== false && (
+                    <div className="space-y-2">
+                      <Label htmlFor="mcp-paste-delay">Auto-paste Delay (ms)</Label>
+                      <Input
+                        id="mcp-paste-delay"
+                        type="number"
+                        min="0"
+                        max="10000"
+                        step="100"
+                        value={config.mcpAutoPasteDelay || 1000}
+                        onChange={(e) => updateConfig({ mcpAutoPasteDelay: parseInt(e.target.value) || 1000 })}
+                        className="w-32"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Delay before pasting to allow you to return focus to the desired input field. Recommended: 1000ms (1 second).
+                      </p>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {config.mcpAgentModeEnabled && (
+                <div className="p-3 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                  <p className="text-sm text-blue-800 dark:text-blue-200">
+                    <strong>Agent Mode:</strong> Results are displayed in a floating GUI. Press <kbd className="px-1.5 py-0.5 text-xs bg-blue-100 dark:bg-blue-900 rounded">ESC</kbd> to close the results window.
+                  </p>
+                </div>
+              )}
+
               <div className="space-y-2">
                 <Label htmlFor="mcp-provider">LLM Provider</Label>
                 <Select
@@ -167,6 +240,9 @@ Always respond with valid JSON only.`
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="gemma2-9b-it">Gemma2 9B IT</SelectItem>
+                        <SelectItem value="moonshotai/kimi-k2-instruct">Moonshot AI Kimi K2 Instruct</SelectItem>
+                        <SelectItem value="deepseek-r1-distill-llama-70b">DeepSeek R1 Distill Llama 70B</SelectItem>
+                        <SelectItem value="llama-3.3-70b-versatile">Llama 3.3 70B Versatile</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>

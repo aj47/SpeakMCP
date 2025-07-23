@@ -3,6 +3,7 @@ import {
   showPanelWindowAndStartRecording,
   showPanelWindowAndStartMcpRecording,
   stopRecordingAndHidePanelWindow,
+  closeAgentModeAndHidePanelWindow,
   WINDOWS,
 } from "./window"
 import { systemPreferences } from "electron"
@@ -55,6 +56,97 @@ export const writeText = (text: string) => {
       }
     })
   })
+}
+
+export const getFocusedAppInfo = () => {
+  return new Promise<string>((resolve, reject) => {
+    const child: ChildProcess = spawn(rdevPath, ["get-focus"])
+
+    let stdout = ""
+    let stderr = ""
+
+    child.stdout?.on("data", (data) => {
+      stdout += data.toString()
+    })
+
+    child.stderr?.on("data", (data) => {
+      stderr += data.toString()
+    })
+
+    child.on("error", (error) => {
+      reject(new Error(`Failed to spawn process: ${error.message}`))
+    })
+
+    child.on("close", (code) => {
+      if (code === 0) {
+        resolve(stdout.trim())
+      } else {
+        const errorMessage = `get-focus command failed with code ${code}${stderr.trim() ? `. stderr: ${stderr.trim()}` : ""}`
+        reject(new Error(errorMessage))
+      }
+    })
+  })
+}
+
+export const restoreFocusToApp = (appInfo: string) => {
+  return new Promise<void>((resolve, reject) => {
+    const child: ChildProcess = spawn(rdevPath, ["restore-focus", appInfo])
+
+    let stderr = ""
+
+    child.stderr?.on("data", (data) => {
+      stderr += data.toString()
+    })
+
+    child.on("error", (error) => {
+      reject(new Error(`Failed to spawn process: ${error.message}`))
+    })
+
+    child.on("close", (code) => {
+      if (code === 0) {
+        resolve()
+      } else {
+        const errorMessage = `restore-focus command failed with code ${code}${stderr.trim() ? `. stderr: ${stderr.trim()}` : ""}`
+        reject(new Error(errorMessage))
+      }
+    })
+  })
+}
+
+const captureFocusBeforeRecording = async () => {
+  try {
+    const focusedApp = await getFocusedAppInfo()
+    state.focusedAppBeforeRecording = focusedApp
+    console.log(`[FOCUS] 📱 Captured focused app before recording: ${focusedApp}`)
+  } catch (error) {
+    console.error(`[FOCUS] ❌ Failed to capture focused app:`, error)
+    state.focusedAppBeforeRecording = null
+  }
+}
+
+export const writeTextWithFocusRestore = async (text: string) => {
+  const focusedApp = state.focusedAppBeforeRecording
+
+  if (focusedApp) {
+    try {
+      console.log(`[FOCUS] 🔄 Restoring focus to: ${focusedApp}`)
+      await restoreFocusToApp(focusedApp)
+      console.log(`[FOCUS] ✅ Focus restored successfully`)
+
+      // Small delay to ensure focus is restored before pasting
+      await new Promise(resolve => setTimeout(resolve, 100))
+
+      await writeText(text)
+      console.log(`[FOCUS] ✅ Text pasted to focused application`)
+    } catch (error) {
+      console.error(`[FOCUS] ❌ Failed to restore focus or paste text:`, error)
+      // Fallback to regular paste without focus restoration
+      await writeText(text)
+    }
+  } else {
+    console.log(`[FOCUS] ⚠️ No focused app captured, using regular paste`)
+    await writeText(text)
+  }
 }
 
 const parseEvent = (event: any) => {
@@ -125,10 +217,17 @@ export function listenToKeyboardEvents() {
         isPressedCtrlAltKey = isPressedCtrlKey && true
       }
 
-      if (e.data.key === "Escape" && state.isRecording) {
+      if (e.data.key === "Escape") {
         const win = WINDOWS.get("panel")
-        if (win) {
-          stopRecordingAndHidePanelWindow()
+        if (win && win.isVisible()) {
+          // Check if we're currently recording
+          if (state.isRecording) {
+            stopRecordingAndHidePanelWindow()
+          } else {
+            // Panel is visible but not recording - likely showing agent results
+            // Close agent mode and hide panel
+            closeAgentModeAndHidePanelWindow()
+          }
         }
 
         return

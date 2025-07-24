@@ -74,7 +74,7 @@ class DiagnosticsService {
     }
 
     this.errorLog.push(errorEntry)
-    
+
     // Keep log size manageable
     if (this.errorLog.length > this.maxErrorLogSize) {
       this.errorLog = this.errorLog.slice(-this.maxErrorLogSize)
@@ -94,7 +94,7 @@ class DiagnosticsService {
     }
 
     this.errorLog.push(warningEntry)
-    
+
     if (this.errorLog.length > this.maxErrorLogSize) {
       this.errorLog = this.errorLog.slice(-this.maxErrorLogSize)
     }
@@ -111,7 +111,7 @@ class DiagnosticsService {
     }
 
     this.errorLog.push(infoEntry)
-    
+
     if (this.errorLog.length > this.maxErrorLogSize) {
       this.errorLog = this.errorLog.slice(-this.maxErrorLogSize)
     }
@@ -121,7 +121,7 @@ class DiagnosticsService {
 
   async generateDiagnosticReport(): Promise<DiagnosticInfo> {
     const config = configStore.get()
-    
+
     return {
       timestamp: Date.now(),
       system: {
@@ -146,7 +146,7 @@ class DiagnosticsService {
   private async getServerStatus(): Promise<Record<string, { connected: boolean; toolCount: number }>> {
     const config = configStore.get()
     const serverStatus: Record<string, { connected: boolean; toolCount: number }> = {}
-    
+
     for (const [serverName, serverConfig] of Object.entries(config.mcpServers || {})) {
       try {
         const testResult = await mcpService.testServerConnection(serverName, serverConfig)
@@ -161,7 +161,7 @@ class DiagnosticsService {
         }
       }
     }
-    
+
     return serverStatus
   }
 
@@ -169,9 +169,9 @@ class DiagnosticsService {
     const report = await this.generateDiagnosticReport()
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
     const defaultPath = filePath || path.join(process.cwd(), `diagnostic-report-${timestamp}.json`)
-    
+
     fs.writeFileSync(defaultPath, JSON.stringify(report, null, 2))
-    
+
     console.log(`[DIAGNOSTICS] 📊 Diagnostic report saved to: ${defaultPath}`)
     return defaultPath
   }
@@ -191,7 +191,7 @@ class DiagnosticsService {
     checks: Record<string, { status: 'pass' | 'fail' | 'warning'; message: string }>
   }> {
     const checks: Record<string, { status: 'pass' | 'fail' | 'warning'; message: string }> = {}
-    
+
     // Check MCP service
     try {
       const tools = mcpService.getAvailableTools()
@@ -205,35 +205,36 @@ class DiagnosticsService {
         message: `MCP service error: ${error}`
       }
     }
-    
+
     // Check recent errors
-    const recentErrors = this.errorLog.filter(e => 
+    const recentErrors = this.errorLog.filter(e =>
       e.level === 'error' && Date.now() - e.timestamp < 5 * 60 * 1000 // Last 5 minutes
     )
-    
+
     checks.recentErrors = {
       status: recentErrors.length === 0 ? 'pass' : recentErrors.length < 5 ? 'warning' : 'fail',
       message: `${recentErrors.length} errors in last 5 minutes`
     }
-    
+
     // Check configuration
     const config = configStore.get()
+    const mcpServers = config.mcpConfig?.mcpServers || {}
     checks.configuration = {
-      status: config.mcpServers && Object.keys(config.mcpServers).length > 0 ? 'pass' : 'warning',
-      message: `${Object.keys(config.mcpServers || {}).length} MCP servers configured`
+      status: Object.keys(mcpServers).length > 0 ? 'pass' : 'warning',
+      message: `${Object.keys(mcpServers).length} MCP servers configured`
     }
-    
+
     // Determine overall status
     const failCount = Object.values(checks).filter(c => c.status === 'fail').length
     const warningCount = Object.values(checks).filter(c => c.status === 'warning').length
-    
+
     let overall: 'healthy' | 'warning' | 'critical' = 'healthy'
     if (failCount > 0) {
       overall = 'critical'
     } else if (warningCount > 0) {
       overall = 'warning'
     }
-    
+
     return { overall, checks }
   }
 }

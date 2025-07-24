@@ -1,12 +1,16 @@
 import { GoogleGenerativeAI } from "@google/generative-ai"
 import { configStore } from "./config"
-import { MCPTool, MCPToolCall, LLMToolCallResponse, MCPToolResult, mcpService } from "./mcp-service"
+import { MCPTool, MCPToolCall, LLMToolCallResponse, MCPToolResult } from "./mcp-service"
 import { AgentProgressStep, AgentProgressUpdate } from "../shared/types"
 import { getRendererHandlers } from "@egoist/tipc/main"
 import { WINDOWS, showPanelWindow } from "./window"
 import { RendererHandlers } from "./renderer-handlers"
 import { diagnosticsService } from "./diagnostics"
-import { jsonrepair } from "jsonrepair"
+import {
+  makeStructuredToolCall,
+  makeStructuredContextExtraction,
+  makeTextCompletion
+} from "./structured-output"
 
 /**
  * Use LLM to extract useful context from conversation history
@@ -67,56 +71,10 @@ Only include resources that are currently active and usable.
 Keep the contextSummary concise but informative.`
 
   try {
-    const chatProviderId = config.mcpToolsProviderId || 'openai'
-    const chatBaseUrl = chatProviderId === "groq"
-      ? config.groqBaseUrl || "https://api.groq.com/openai/v1"
-      : config.openaiBaseUrl || "https://api.openai.com/v1"
-
-    const model = chatProviderId === "groq"
-      ? config.mcpToolsGroqModel || "gemma2-9b-it"
-      : config.mcpToolsOpenaiModel || "gpt-4o-mini"
-
-    const response = await fetch(`${chatBaseUrl}/chat/completions`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${chatProviderId === "groq" ? config.groqApiKey : config.openaiApiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        temperature: 0,
-        model,
-        messages: [
-          {
-            role: "system",
-            content: "You are a context extraction assistant. Analyze conversation history and extract useful resource identifiers and context information. Always respond with valid JSON only."
-          },
-          {
-            role: "user",
-            content: contextExtractionPrompt
-          }
-        ],
-      }),
-    })
-
-    if (!response.ok) {
-      console.log(`[CONTEXT-EXTRACTION] ⚠️ LLM call failed: ${response.statusText}`)
-      return { contextSummary: "", resources: [] }
-    }
-
-    const result = await response.json()
-    const content = result.choices[0].message.content.trim()
-
-    try {
-      const parsed = JSON.parse(content)
-      console.log(`[CONTEXT-EXTRACTION] ✅ Extracted context:`, parsed)
-      return {
-        contextSummary: parsed.contextSummary || "",
-        resources: Array.isArray(parsed.resources) ? parsed.resources : []
-      }
-    } catch (parseError) {
-      console.log(`[CONTEXT-EXTRACTION] ⚠️ Failed to parse LLM response as JSON:`, content)
-      return { contextSummary: "", resources: [] }
-    }
+    console.log(`[CONTEXT-EXTRACTION] 🚀 Using structured output for context extraction`)
+    const result = await makeStructuredContextExtraction(contextExtractionPrompt, config.mcpToolsProviderId)
+    console.log(`[CONTEXT-EXTRACTION] ✅ Extracted context:`, result)
+    return result
   } catch (error) {
     console.log(`[CONTEXT-EXTRACTION] ❌ Error during context extraction:`, error)
     return { contextSummary: "", resources: [] }
@@ -174,173 +132,9 @@ function analyzeToolErrors(
   return { recoveryStrategy, errorTypes }
 }
 
-/**
- * Validates that a parsed JSON object has the expected structure for LLM tool responses
- */
-function isValidLLMResponse(obj: any): obj is LLMToolCallResponse {
-  if (!obj || typeof obj !== 'object') {
-    return false
-  }
 
-  // Must have either content or toolCalls (or both)
-  const hasContent = typeof obj.content === 'string'
-  const hasToolCalls = Array.isArray(obj.toolCalls) && obj.toolCalls.length > 0
 
-  if (!hasContent && !hasToolCalls) {
-    return false
-  }
 
-  // If toolCalls exist, validate their structure
-  if (hasToolCalls) {
-    for (const toolCall of obj.toolCalls) {
-      if (!toolCall || typeof toolCall !== 'object' ||
-          typeof toolCall.name !== 'string' ||
-          !toolCall.arguments || typeof toolCall.arguments !== 'object') {
-        return false
-      }
-    }
-  }
-
-  return true
-}
-
-/**
- * Attempts to repair malformed JSON using the jsonrepair library
- * This handles common issues like unescaped newlines, quotes, and other special characters
- */
-function repairAndParseJSON(jsonString: string): any | null {
-  try {
-    console.log("[JSON-REPAIR] 🔧 Attempting to repair JSON...")
-    const repairedJson = jsonrepair(jsonString)
-    console.log("[JSON-REPAIR] ✅ JSON repair successful")
-
-    const parsed = JSON.parse(repairedJson)
-    return parsed
-  } catch (error) {
-    console.log("[JSON-REPAIR] ❌ JSON repair failed:", error instanceof Error ? error.message : String(error))
-    return null
-  }
-}
-
-/**
- * Attempts to extract and parse JSON from various response formats
- * Handles cases where JSON is wrapped in markdown code blocks or mixed with text
- */
-function extractAndParseJSON(responseText: string): LLMToolCallResponse | null {
-  console.log("[JSON-PARSER] 🔍 Attempting to parse response:", responseText.substring(0, 200) + (responseText.length > 200 ? "..." : ""))
-
-  // Helper function to try parsing with repair fallback
-  const tryParseWithRepair = (jsonString: string, context: string): any | null => {
-    // First try direct parsing
-    try {
-      const parsed = JSON.parse(jsonString.trim())
-      if (isValidLLMResponse(parsed)) {
-        console.log(`[JSON-PARSER] ✅ Direct JSON parsing successful (${context})`)
-        return parsed
-      }
-    } catch (error) {
-      console.log(`[JSON-PARSER] ❌ Direct JSON parsing failed (${context}):`, error instanceof Error ? error.message : String(error))
-    }
-
-    // If direct parsing fails, try JSON repair
-    const repaired = repairAndParseJSON(jsonString.trim())
-    if (repaired && isValidLLMResponse(repaired)) {
-      console.log(`[JSON-PARSER] ✅ JSON repair successful (${context})`)
-      return repaired
-    } else if (repaired) {
-      console.log(`[JSON-PARSER] ❌ Repaired JSON failed validation (${context})`)
-    }
-
-    return null
-  }
-
-  // First, try direct JSON parsing with repair fallback
-  const directResult = tryParseWithRepair(responseText, "direct")
-  if (directResult) {
-    return directResult
-  }
-
-  // Try to extract JSON from markdown code blocks
-  const codeBlockRegex = /```(?:json)?\s*(\{[\s\S]*?\})\s*```/gi
-  let match = codeBlockRegex.exec(responseText)
-
-  if (match) {
-    console.log("[JSON-PARSER] 📋 Found JSON in code block")
-    const codeBlockResult = tryParseWithRepair(match[1], "code block")
-    if (codeBlockResult) {
-      return codeBlockResult
-    }
-  }
-
-  // Try to find JSON object in the text (look for { ... })
-  // Use a more sophisticated approach to find balanced braces
-  const findJsonObjects = (text: string): string[] => {
-    const objects: string[] = []
-    let braceCount = 0
-    let start = -1
-    let inString = false
-    let escapeNext = false
-
-    for (let i = 0; i < text.length; i++) {
-      const char = text[i]
-
-      if (escapeNext) {
-        escapeNext = false
-        continue
-      }
-
-      if (char === '\\') {
-        escapeNext = true
-        continue
-      }
-
-      if (char === '"' && !escapeNext) {
-        inString = !inString
-        continue
-      }
-
-      if (inString) {
-        continue
-      }
-
-      if (char === '{') {
-        if (braceCount === 0) {
-          start = i
-        }
-        braceCount++
-      } else if (char === '}') {
-        braceCount--
-        if (braceCount === 0 && start !== -1) {
-          objects.push(text.substring(start, i + 1))
-          start = -1
-        }
-      }
-    }
-
-    return objects
-  }
-
-  const jsonObjects = findJsonObjects(responseText)
-  console.log("[JSON-PARSER] 🔍 Found", jsonObjects.length, "potential JSON objects")
-
-  if (jsonObjects.length > 0) {
-    // Try each potential JSON object, starting with the largest
-    const sortedObjects = jsonObjects.sort((a, b) => b.length - a.length)
-
-    for (let i = 0; i < sortedObjects.length; i++) {
-      const potentialJson = sortedObjects[i]
-      console.log("[JSON-PARSER] 🧪 Trying JSON object", i + 1, "of", sortedObjects.length, "- length:", potentialJson.length)
-
-      const objectResult = tryParseWithRepair(potentialJson, `object ${i + 1}`)
-      if (objectResult) {
-        return objectResult
-      }
-    }
-  }
-
-  console.log("[JSON-PARSER] ❌ All parsing attempts failed")
-  return null
-}
 
 export async function postProcessTranscript(transcript: string) {
   const config = configStore.get()
@@ -372,40 +166,15 @@ export async function postProcessTranscript(transcript: string) {
     return result.response.text().trim()
   }
 
-  const chatBaseUrl =
-    chatProviderId === "groq"
-      ? config.groqBaseUrl || "https://api.groq.com/openai/v1"
-      : config.openaiBaseUrl || "https://api.openai.com/v1"
-
-  const chatResponse = await fetch(`${chatBaseUrl}/chat/completions`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${chatProviderId === "groq" ? config.groqApiKey : config.openaiApiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      temperature: 0,
-      model:
-        chatProviderId === "groq"
-          ? config.transcriptPostProcessingGroqModel || "gemma2-9b-it"
-          : config.transcriptPostProcessingOpenaiModel || "gpt-4o-mini",
-      messages: [
-        {
-          role: "system",
-          content: prompt,
-        },
-      ],
-    }),
-  })
-
-  if (!chatResponse.ok) {
-    const message = `${chatResponse.statusText} ${(await chatResponse.text()).slice(0, 300)}`
-
-    throw new Error(message)
+  // Use structured output service for OpenAI/Groq providers
+  try {
+    console.log(`[TRANSCRIPT-PROCESSING] 🚀 Using structured output service`)
+    const result = await makeTextCompletion(prompt, chatProviderId)
+    return result
+  } catch (error) {
+    console.error(`[TRANSCRIPT-PROCESSING] ❌ Error:`, error)
+    throw error
   }
-
-  const chatJson = await chatResponse.json()
-  return chatJson.choices[0].message.content.trim()
 }
 
 export async function processTranscriptWithTools(
@@ -574,59 +343,28 @@ Remember: Respond with ONLY the JSON object, no markdown formatting, no code blo
     const responseText = result.response.text().trim()
     console.log(`[MCP-DEBUG] Gemini response:`, responseText)
 
-    const parsed = extractAndParseJSON(responseText)
-    if (parsed) {
-      console.log(`[MCP-DEBUG] ✅ Successfully parsed Gemini JSON response:`, parsed)
-      return parsed
-    } else {
-      console.log(`[MCP-DEBUG] ⚠️ Failed to extract JSON from Gemini response, returning as content`)
-      return { content: responseText }
+    // For Gemini, we still need to parse manually since it doesn't support structured output
+    try {
+      const parsed = JSON.parse(responseText)
+      if (parsed && (parsed.toolCalls || parsed.content)) {
+        console.log(`[MCP-DEBUG] ✅ Successfully parsed Gemini JSON response:`, parsed)
+        return parsed
+      }
+    } catch (parseError) {
+      console.log(`[MCP-DEBUG] ⚠️ Failed to parse Gemini response as JSON, returning as content`)
     }
+    return { content: responseText }
   }
 
-  console.log(`[MCP-DEBUG] Using ${chatProviderId} for LLM processing`)
-
-  const chatBaseUrl =
-    chatProviderId === "groq"
-      ? config.groqBaseUrl || "https://api.groq.com/openai/v1"
-      : config.openaiBaseUrl || "https://api.openai.com/v1"
-
-  const model = chatProviderId === "groq"
-    ? config.mcpToolsGroqModel || "gemma2-9b-it"
-    : config.mcpToolsOpenaiModel || "gpt-4o-mini"
-
-  console.log(`[MCP-DEBUG] Using model: ${model}`)
-  console.log(`[MCP-DEBUG] Sending request to: ${chatBaseUrl}/chat/completions`)
-
-  const chatResponse = await fetch(`${chatBaseUrl}/chat/completions`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${chatProviderId === "groq" ? config.groqApiKey : config.openaiApiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      temperature: 0,
-      model,
-      messages,
-    }),
-  })
-
-  if (!chatResponse.ok) {
-    const errorText = await chatResponse.text()
-    const message = `${chatResponse.statusText} ${errorText.slice(0, 300)}`
-    throw new Error(message)
-  }
-
-  const chatJson = await chatResponse.json()
-  const responseContent = chatJson.choices[0].message.content.trim()
-
-  const parsed = extractAndParseJSON(responseContent)
-  if (parsed) {
-    console.log(`[MCP-DEBUG] ✅ Successfully parsed LLM JSON response:`, parsed)
-    return parsed
-  } else {
-    console.log(`[MCP-DEBUG] ⚠️ Failed to extract JSON from LLM response, returning as content`)
-    return { content: responseContent }
+  // Use structured output for OpenAI/Groq providers
+  try {
+    console.log(`[MCP-TOOLS-DEBUG] 🚀 Using structured output for tool calls`)
+    const result = await makeStructuredToolCall(messages, chatProviderId)
+    console.log(`[MCP-DEBUG] ✅ Successfully processed with structured output:`, result)
+    return result
+  } catch (error) {
+    console.error(`[MCP-TOOLS-DEBUG] ❌ Structured output failed:`, error)
+    throw error
   }
 }
 
@@ -1362,67 +1100,32 @@ async function makeLLMCall(messages: Array<{role: string, content: string}>, con
       const responseText = result.response.text().trim()
       console.log("[MCP-LLM-DEBUG] 📥 Raw Gemini response:", responseText)
 
-      const parsed = extractAndParseJSON(responseText)
-      console.log("[MCP-LLM-DEBUG] 🔍 Parsed response:", parsed ? "SUCCESS" : "FAILED")
-      if (parsed) {
-        console.log("[MCP-LLM-DEBUG] ✅ Parsed JSON:", JSON.stringify(parsed, null, 2))
-        return parsed
-      } else {
-        console.log("[MCP-LLM-DEBUG] ⚠️ Fallback to content response")
+      // For Gemini, we still need to parse manually since it doesn't support structured output
+      try {
+        const parsed = JSON.parse(responseText)
+        if (parsed && (parsed.toolCalls || parsed.content)) {
+          console.log("[MCP-LLM-DEBUG] ✅ Parsed JSON:", JSON.stringify(parsed, null, 2))
+          return parsed
+        }
+      } catch (parseError) {
+        console.log("[MCP-LLM-DEBUG] ⚠️ Failed to parse Gemini response as JSON")
         diagnosticsService.logWarning('llm', 'Failed to parse Gemini response as JSON', { responseText })
-        return { content: responseText }
       }
+      return { content: responseText }
     } catch (error) {
       diagnosticsService.logError('llm', 'Gemini API call failed', error)
       throw error
     }
   }
 
-  const chatBaseUrl =
-    chatProviderId === "groq"
-      ? config.groqBaseUrl || "https://api.groq.com/openai/v1"
-      : config.openaiBaseUrl || "https://api.openai.com/v1"
-
-  const model = chatProviderId === "groq"
-    ? config.mcpToolsGroqModel || "gemma2-9b-it"
-    : config.mcpToolsOpenaiModel || "gpt-4o-mini"
-
-  const requestBody = {
-    temperature: 0,
-    model,
-    messages,
-  }
-  console.log("[MCP-LLM-DEBUG] 📋 Request body:", JSON.stringify(requestBody, null, 2))
-
-  const chatResponse = await fetch(`${chatBaseUrl}/chat/completions`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${chatProviderId === "groq" ? config.groqApiKey : config.openaiApiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(requestBody),
-  })
-
-  console.log("[MCP-LLM-DEBUG] 📊 Response status:", chatResponse.status, chatResponse.statusText)
-
-  if (!chatResponse.ok) {
-    const errorText = await chatResponse.text()
-    console.log("[MCP-LLM-DEBUG] ❌ Error response:", errorText)
-    const message = `${chatResponse.statusText} ${errorText.slice(0, 300)}`
-    throw new Error(message)
-  }
-
-  const chatJson = await chatResponse.json()
-  const responseContent = chatJson.choices[0].message.content.trim()
-  console.log("[MCP-LLM-DEBUG] 📝 Response content:", responseContent)
-
-  const parsed = extractAndParseJSON(responseContent)
-  console.log("[MCP-LLM-DEBUG] 🔍 Parsed response:", parsed ? "SUCCESS" : "FAILED")
-  if (parsed) {
-    console.log("[MCP-LLM-DEBUG] ✅ Parsed JSON:", JSON.stringify(parsed, null, 2))
-    return parsed
-  } else {
-    console.log("[MCP-LLM-DEBUG] ⚠️ Fallback to content response")
-    return { content: responseContent }
+  // Use structured output for OpenAI/Groq providers
+  try {
+    console.log("[MCP-LLM-DEBUG] 🚀 Using structured output for agent mode")
+    const result = await makeStructuredToolCall(messages, chatProviderId)
+    console.log("[MCP-LLM-DEBUG] ✅ Structured output successful:", JSON.stringify(result, null, 2))
+    return result
+  } catch (error) {
+    console.error("[MCP-LLM-DEBUG] ❌ Structured output failed:", error)
+    throw error
   }
 }

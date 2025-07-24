@@ -36,7 +36,8 @@
     "@egoist/electron-panel-window": "^8.0.3",
     "@modelcontextprotocol/sdk": "^1.13.3",
     "@radix-ui/react-scroll-area": "^1.2.9",
-    "jsonrepair": "^3.13.0"
+    "openai": "^5.10.2",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@egoist/tailwindcss-icons": "^1.8.1",

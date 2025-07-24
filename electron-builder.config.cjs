@@ -27,12 +27,23 @@ module.exports = {
   asarUnpack: ["resources/**", "node_modules/**"],
   extraFiles: [
     {
-      from: "resources/bin/speakmcp-rs",
-      to: "Resources/app.asar.unpacked/resources/bin/speakmcp-rs"
+      from: "resources/bin/",
+      to: "Resources/app.asar.unpacked/resources/bin/",
+      filter: ["**/*"]
     }
   ],
   win: {
     executableName: "speakmcp",
+    target: [
+      {
+        target: "nsis",
+        arch: ["x64"]
+      },
+      {
+        target: "portable",
+        arch: ["x64"]
+      }
+    ]
   },
   nsis: {
     artifactName: "${name}-${version}-setup.${ext}",

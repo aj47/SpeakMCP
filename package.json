@@ -35,7 +35,8 @@
     "check:mas": "./scripts/check-mas-setup.sh",
     "upload:mas": "./scripts/build-and-upload-mas.sh",
     "fix-pnpm-windows": "node ./scripts/fix-pnpm-windows.js",
-    "build-rs": "sh scripts/build-rs.sh"
+    "build-rs": "node scripts/build-rs-cross-platform.js",
+    "build:win:manual": "npm run typecheck && npx electron-vite build && npm run build-rs && powershell -ExecutionPolicy Bypass -File scripts/manual-windows-build.ps1"
   },
   "dependencies": {
     "@egoist/electron-panel-window": "^8.0.3",

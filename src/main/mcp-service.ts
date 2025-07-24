@@ -7,6 +7,7 @@ import { promisify } from "util"
 import { access, constants } from "fs"
 import path from "path"
 import os from "os"
+import { diagnosticsService } from "./diagnostics"
 
 const accessAsync = promisify(access)
 
@@ -42,6 +43,107 @@ class MCPService {
   private disabledTools: Set<string> = new Set()
   private isInitializing = false
   private initializationProgress: { current: number; total: number; currentServer?: string } = { current: 0, total: 0 }
+
+  // Simplified tracking - let LLM handle context extraction
+  private activeResources = new Map<string, {
+    serverId: string
+    resourceId: string
+    resourceType: string
+    lastUsed: number
+  }>()
+
+  // Session cleanup interval
+  private sessionCleanupInterval: NodeJS.Timeout | null = null
+
+  constructor() {
+    // Start resource cleanup interval (every 5 minutes)
+    this.sessionCleanupInterval = setInterval(() => {
+      this.cleanupInactiveResources()
+    }, 5 * 60 * 1000)
+  }
+
+  /**
+   * Simple resource tracking for basic functionality
+   * The LLM-based context extraction handles the complex logic
+   */
+  trackResource(serverId: string, resourceId: string, resourceType: string = 'session'): void {
+    const key = `${serverId}:${resourceType}:${resourceId}`
+    this.activeResources.set(key, {
+      serverId,
+      resourceId,
+      resourceType,
+      lastUsed: Date.now()
+    })
+    console.log(`[MCP-RESOURCE] 📝 Tracking ${resourceType} ${resourceId} for server ${serverId}`)
+  }
+
+  /**
+   * Update resource activity (simplified)
+   */
+  updateResourceActivity(serverId: string, resourceId: string, resourceType: string = 'session'): void {
+    const key = `${serverId}:${resourceType}:${resourceId}`
+    const resource = this.activeResources.get(key)
+    if (resource) {
+      resource.lastUsed = Date.now()
+    }
+  }
+
+  /**
+   * Clean up old resources (simplified)
+   */
+  private cleanupInactiveResources(): void {
+    const thirtyMinutesAgo = Date.now() - (30 * 60 * 1000)
+    let cleanedCount = 0
+
+    for (const [key, resource] of this.activeResources) {
+      if (resource.lastUsed < thirtyMinutesAgo) {
+        this.activeResources.delete(key)
+        cleanedCount++
+      }
+    }
+
+    if (cleanedCount > 0) {
+      console.log(`[MCP-RESOURCE] 🧹 Cleaned up ${cleanedCount} old resources`)
+    }
+  }
+
+  /**
+   * Simple method to get tracked resources (for debugging)
+   */
+  getTrackedResources(): Array<{ serverId: string; resourceId: string; resourceType: string; lastUsed: number }> {
+    return Array.from(this.activeResources.values())
+  }
+
+  /**
+   * Simple resource tracking from tool results (LLM handles the complex logic)
+   */
+  private trackResourceFromResult(serverName: string, result: MCPToolResult): void {
+    if (!result.isError && result.content[0]?.text) {
+      const text = result.content[0].text
+
+      // Simple pattern matching for common resource types
+      const resourcePatterns = [
+        { pattern: /(?:Session|session)\s+(?:ID|id):\s*([a-f0-9-]+)/i, type: 'session' },
+        { pattern: /(?:Connection|connection)\s+(?:ID|id):\s*([a-f0-9-]+)/i, type: 'connection' },
+        { pattern: /(?:Handle|handle):\s*([a-f0-9-]+)/i, type: 'handle' }
+      ]
+
+      for (const { pattern, type } of resourcePatterns) {
+        const match = text.match(pattern)
+        if (match && match[1]) {
+          this.trackResource(serverName, match[1], type)
+          console.log(`[MCP-RESOURCE] 🎯 Auto-detected ${type} ${match[1]} for server ${serverName}`)
+          break
+        }
+      }
+    }
+  }
+
+
+
+
+
+
 
   async initialize(): Promise<void> {
     this.isInitializing = true
@@ -131,6 +233,7 @@ class MCPService {
       console.log(`[MCP-SERVICE] ✅ Successfully initialized server: ${serverName}`)
     } catch (error) {
       console.error(`[MCP-SERVICE] ❌ Failed to initialize server ${serverName}:`, error)
+      diagnosticsService.logError('mcp-service', `Failed to initialize server ${serverName}`, error)
 
       // Clean up any partial initialization
       this.cleanupServer(serverName)
@@ -156,11 +259,25 @@ class MCPService {
       throw new Error(`Server ${serverName} not found or not connected`)
     }
 
+    // Enhanced argument processing with session injection
+    let processedArguments = { ...arguments_ }
+
+    // The LLM-based context extraction handles resource management
+    // No need for complex session injection logic here
+    console.log(`[MCP-TOOL] 🔧 Executing ${toolName} with arguments:`, processedArguments)
+
     try {
       const result = await client.callTool({
         name: toolName,
-        arguments: arguments_
+        arguments: processedArguments
       })
+
+      // Update resource activity if resource ID was used
+      for (const [, value] of Object.entries(processedArguments)) {
+        if (typeof value === 'string' && value.match(/^[a-f0-9-]{20,}$/)) {
+          this.updateResourceActivity(serverName, value, 'session')
+        }
+      }
 
       // Ensure content is properly formatted
       const content = Array.isArray(result.content)
@@ -497,7 +614,12 @@ class MCPService {
       // Check if this is a server-prefixed tool
       if (toolCall.name.includes(':')) {
         const [serverName, toolName] = toolCall.name.split(':', 2)
-        return await this.executeServerTool(serverName, toolName, toolCall.arguments)
+        const result = await this.executeServerTool(serverName, toolName, toolCall.arguments)
+
+        // Track resource information from tool results
+        this.trackResourceFromResult(serverName, result)
+
+        return result
       }
 
       // Try to find a matching tool without prefix (fallback for LLM inconsistencies)
@@ -512,7 +634,12 @@ class MCPService {
       if (matchingTool && matchingTool.name.includes(':')) {
         console.log(`[MCP-SERVICE] 🔧 Found matching tool with prefix: ${matchingTool.name} for unprefixed call: ${toolCall.name}`)
         const [serverName, toolName] = matchingTool.name.split(':', 2)
-        return await this.executeServerTool(serverName, toolName, toolCall.arguments)
+        const result = await this.executeServerTool(serverName, toolName, toolCall.arguments)
+
+        // Track resource information from tool results
+        this.trackResourceFromResult(serverName, result)
+
+        return result
       }
 
       // No matching tools found
@@ -529,6 +656,8 @@ class MCPService {
 
     } catch (error) {
       console.error(`Tool execution error for ${toolCall.name}:`, error)
+      diagnosticsService.logError('mcp-service', `Tool execution error for ${toolCall.name}`, error)
+
       return {
         content: [{
           type: "text",

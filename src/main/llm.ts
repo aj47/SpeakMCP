@@ -1,10 +1,177 @@
 import { GoogleGenerativeAI } from "@google/generative-ai"
 import { configStore } from "./config"
-import { MCPTool, MCPToolCall, LLMToolCallResponse, MCPToolResult } from "./mcp-service"
+import { MCPTool, MCPToolCall, LLMToolCallResponse, MCPToolResult, mcpService } from "./mcp-service"
 import { AgentProgressStep, AgentProgressUpdate } from "../shared/types"
 import { getRendererHandlers } from "@egoist/tipc/main"
 import { WINDOWS, showPanelWindow } from "./window"
 import { RendererHandlers } from "./renderer-handlers"
+import { diagnosticsService } from "./diagnostics"
+
+/**
+ * Use LLM to extract useful context from conversation history
+ */
+async function extractContextFromHistory(
+  conversationHistory: Array<{
+    role: "user" | "assistant" | "tool"
+    content: string
+    toolCalls?: MCPToolCall[]
+    toolResults?: MCPToolResult[]
+  }>,
+  config: any
+): Promise<{ contextSummary: string; resources: Array<{ type: string; id: string; parameter: string }> }> {
+  if (conversationHistory.length === 0) {
+    return { contextSummary: "", resources: [] }
+  }
+
+  // Create a condensed version of the conversation for analysis
+  const conversationText = conversationHistory.map(entry => {
+    let text = `${entry.role.toUpperCase()}: ${entry.content}`
+
+    if (entry.toolCalls) {
+      text += `\nTOOL_CALLS: ${entry.toolCalls.map(tc => `${tc.name}(${JSON.stringify(tc.arguments)})`).join(', ')}`
+    }
+
+    if (entry.toolResults) {
+      text += `\nTOOL_RESULTS: ${entry.toolResults.map(tr => tr.isError ? 'ERROR' : 'SUCCESS').join(', ')}`
+    }
+
+    return text
+  }).join('\n\n')
+
+  const contextExtractionPrompt = `Analyze the following conversation history and extract useful context information that would be needed for continuing the conversation.
+
+CONVERSATION HISTORY:
+${conversationText}
+
+Your task is to identify and extract:
+1. Resource identifiers (session IDs, connection IDs, file handles, workspace IDs, etc.)
+2. Important file paths or locations mentioned
+3. Current state or status information
+4. Any other context that would be useful for subsequent tool calls
+
+Respond with a JSON object in this exact format:
+{
+  "contextSummary": "Brief summary of the current state and what has been accomplished",
+  "resources": [
+    {
+      "type": "session|connection|handle|workspace|channel|other",
+      "id": "the actual ID value",
+      "parameter": "the parameter name this ID should be used for (e.g., sessionId, connectionId)"
+    }
+  ]
+}
+
+Focus on extracting actual resource identifiers that tools would need, not just mentioning them.
+Only include resources that are currently active and usable.
+Keep the contextSummary concise but informative.`
+
+  try {
+    const chatProviderId = config.mcpToolsProviderId || 'openai'
+    const chatBaseUrl = chatProviderId === "groq"
+      ? config.groqBaseUrl || "https://api.groq.com/openai/v1"
+      : config.openaiBaseUrl || "https://api.openai.com/v1"
+
+    const model = chatProviderId === "groq"
+      ? config.mcpToolsGroqModel || "gemma2-9b-it"
+      : config.mcpToolsOpenaiModel || "gpt-4o-mini"
+
+    const response = await fetch(`${chatBaseUrl}/chat/completions`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${chatProviderId === "groq" ? config.groqApiKey : config.openaiApiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        temperature: 0,
+        model,
+        messages: [
+          {
+            role: "system",
+            content: "You are a context extraction assistant. Analyze conversation history and extract useful resource identifiers and context information. Always respond with valid JSON only."
+          },
+          {
+            role: "user",
+            content: contextExtractionPrompt
+          }
+        ],
+      }),
+    })
+
+    if (!response.ok) {
+      console.log(`[CONTEXT-EXTRACTION] ⚠️ LLM call failed: ${response.statusText}`)
+      return { contextSummary: "", resources: [] }
+    }
+
+    const result = await response.json()
+    const content = result.choices[0].message.content.trim()
+
+    try {
+      const parsed = JSON.parse(content)
+      console.log(`[CONTEXT-EXTRACTION] ✅ Extracted context:`, parsed)
+      return {
+        contextSummary: parsed.contextSummary || "",
+        resources: Array.isArray(parsed.resources) ? parsed.resources : []
+      }
+    } catch (parseError) {
+      console.log(`[CONTEXT-EXTRACTION] ⚠️ Failed to parse LLM response as JSON:`, content)
+      return { contextSummary: "", resources: [] }
+    }
+  } catch (error) {
+    console.log(`[CONTEXT-EXTRACTION] ❌ Error during context extraction:`, error)
+    return { contextSummary: "", resources: [] }
+  }
+}
+
+/**
+ * Analyze tool errors and provide recovery strategies
+ */
+function analyzeToolErrors(
+  toolResults: MCPToolResult[],
+  failedTools: string[],
+  toolCalls: MCPToolCall[]
+): { recoveryStrategy: string; errorTypes: string[] } {
+  const errorTypes: string[] = []
+  const errorMessages = toolResults
+    .filter(r => r.isError)
+    .map(r => r.content.map(c => c.text).join(' '))
+    .join(' ')
+
+  // Categorize error types
+  if (errorMessages.includes('Session not found')) {
+    errorTypes.push('session_lost')
+  }
+  if (errorMessages.includes('timeout') || errorMessages.includes('connection')) {
+    errorTypes.push('connectivity')
+  }
+  if (errorMessages.includes('permission') || errorMessages.includes('access')) {
+    errorTypes.push('permissions')
+  }
+  if (errorMessages.includes('not found') || errorMessages.includes('does not exist')) {
+    errorTypes.push('resource_missing')
+  }
+
+  // Generate recovery strategy based on error types
+  let recoveryStrategy = 'RECOVERY STRATEGIES:\n'
+
+  if (errorTypes.includes('session_lost')) {
+    recoveryStrategy += '- For session errors: Create a new session using ht_create_session first\n'
+  }
+  if (errorTypes.includes('connectivity')) {
+    recoveryStrategy += '- For connectivity issues: Wait a moment and retry, or check if the service is running\n'
+  }
+  if (errorTypes.includes('permissions')) {
+    recoveryStrategy += '- For permission errors: Try alternative file locations or check access rights\n'
+  }
+  if (errorTypes.includes('resource_missing')) {
+    recoveryStrategy += '- For missing resources: Verify the resource exists or create it first\n'
+  }
+
+  if (errorTypes.length === 0) {
+    recoveryStrategy += '- General: Try breaking down the task into smaller steps or use alternative tools\n'
+  }
+
+  return { recoveryStrategy, errorTypes }
+}
 
 /**
  * Validates that a parsed JSON object has the expected structure for LLM tool responses
@@ -709,192 +876,23 @@ If no tools are needed for the initial request, respond with:
 Remember: Respond with ONLY the JSON object, no markdown formatting, no code blocks, no additional text.`
 
   // Debug: Log the system prompt being used
-  console.log("[MCP-AGENT-DEBUG] 📝 Using custom system prompt:", !!config.mcpToolsSystemPrompt)
-  console.log("[MCP-AGENT-DEBUG] 📝 Full system prompt:")
-  console.log(systemPrompt)
-  console.log("[MCP-AGENT-DEBUG] 📝 System prompt length:", systemPrompt.length)
+  // console.log("[MCP-AGENT-DEBUG] 📝 Using custom system prompt:", !!config.mcpToolsSystemPrompt)
+  // console.log("[MCP-AGENT-DEBUG] 📝 Full system prompt:")
+  // console.log(systemPrompt)
+  // console.log("[MCP-AGENT-DEBUG] 📝 System prompt length:", systemPrompt.length)
   console.log("[MCP-AGENT-DEBUG] 🔧 Available tools:", availableTools.map(t => t.name).join(", "))
   console.log("[MCP-AGENT-DEBUG] 🎯 Tool capabilities:", toolCapabilities.summary)
 
-  // Track context across the conversation
-  const contextTracker = {
-    createdFiles: [] as string[],
-    sessionIds: new Map<string, string>(), // server -> sessionId
-    lastMentionedFile: null as string | null,
-    recentOperations: [] as Array<{ tool: string; operation: string; timestamp: number }>
+  // Generic context extraction from chat history - works with any MCP tool
+  const extractRecentContext = (history: Array<{ role: string; content: string; toolCalls?: any[]; toolResults?: any[] }>) => {
+    // Simply return the recent conversation history - let the LLM understand the context
+    // This is much simpler and works with any MCP tool, not just specific ones
+    return history.slice(-8) // Last 8 messages provide sufficient context
   }
 
-  // Initialize context from previous conversation history
-  if (previousConversationHistory) {
-    for (const message of previousConversationHistory) {
-      if (message.toolCalls) {
-        for (const toolCall of message.toolCalls) {
-          // Extract file paths from tool arguments
-          if (toolCall.arguments) {
-            const argString = JSON.stringify(toolCall.arguments)
-            const filePatterns = [
-              /([~\/][\w\/-]*\.\w+)/g, // Unix-style paths with extensions
-              /([A-Z]:\\[\w\\-]*\.\w+)/g, // Windows-style paths with extensions
-            ]
 
-            for (const pattern of filePatterns) {
-              const matches = argString.match(pattern)
-              if (matches) {
-                matches.forEach(filePath => {
-                  if (!contextTracker.createdFiles.includes(filePath)) {
-                    contextTracker.createdFiles.push(filePath)
-                    contextTracker.lastMentionedFile = filePath
-                  }
-                })
-              }
-            }
-          }
 
-          // Track operations
-          contextTracker.recentOperations.push({
-            tool: toolCall.name,
-            operation: 'completed', // Assume completed from history
-            timestamp: Date.now() - (60000 * contextTracker.recentOperations.length) // Stagger timestamps
-          })
-        }
-      }
 
-      // Look for file mentions in message content
-      if (message.content) {
-        const filePatterns = [
-          /([~\/][\w\/-]*\.\w+)/g, // Unix-style paths with extensions
-          /([A-Z]:\\[\w\\-]*\.\w+)/g, // Windows-style paths with extensions
-          /Desktop\/[\w\-_]+\.[\w]+/g, // Desktop files
-        ]
-
-        for (const pattern of filePatterns) {
-          const matches = message.content.match(pattern)
-          if (matches) {
-            matches.forEach(filePath => {
-              if (!contextTracker.createdFiles.includes(filePath)) {
-                contextTracker.createdFiles.push(filePath)
-                contextTracker.lastMentionedFile = filePath
-              }
-            })
-          }
-        }
-
-        // Extract session IDs from message content
-        const sessionPatterns = [
-          /Session ID: ([a-f0-9-]+)/i,
-          /session[_-]?id[:\s]+([a-f0-9-]+)/i,
-          /id[:\s]+([a-f0-9-]+)/i
-        ]
-
-        for (const pattern of sessionPatterns) {
-          const match = message.content.match(pattern)
-          if (match && match[1]) {
-            // Try to determine server name from context
-            const serverName = 'Headless Terminal' // Default for now
-            contextTracker.sessionIds.set(serverName, match[1])
-            break
-          }
-        }
-      }
-    }
-
-    console.log(`[MCP-AGENT-DEBUG] 📚 Initialized context from ${previousConversationHistory.length} previous messages:`)
-    console.log(`[MCP-AGENT-DEBUG]   - Created files: ${contextTracker.createdFiles.length}`)
-    console.log(`[MCP-AGENT-DEBUG]   - Active sessions: ${contextTracker.sessionIds.size}`)
-    console.log(`[MCP-AGENT-DEBUG]   - Recent operations: ${contextTracker.recentOperations.length}`)
-    if (contextTracker.lastMentionedFile) {
-      console.log(`[MCP-AGENT-DEBUG]   - Last mentioned file: ${contextTracker.lastMentionedFile}`)
-    }
-  }
-
-  // Helper function to update context based on tool calls and results
-  const updateContext = (toolCall: MCPToolCall, result: MCPToolResult) => {
-    const timestamp = Date.now()
-
-    // Extract server name from tool name
-    const [serverName] = toolCall.name.split(':')
-
-    // Generic session ID tracking - look for common session ID patterns in results
-    if (!result.isError && result.content[0]?.text) {
-      const text = result.content[0].text
-
-      // Common session ID patterns
-      const sessionPatterns = [
-        /Session ID: ([a-f0-9-]+)/i,
-        /session[_-]?id[:\s]+([a-f0-9-]+)/i,
-        /id[:\s]+([a-f0-9-]+)/i
-      ]
-
-      for (const pattern of sessionPatterns) {
-        const match = text.match(pattern)
-        if (match && match[1]) {
-          contextTracker.sessionIds.set(serverName, match[1])
-          break
-        }
-      }
-    }
-
-    // Generic file tracking - look for file paths in arguments and results
-    const trackFileOperations = () => {
-      // Check arguments for file paths
-      if (toolCall.arguments) {
-        const argString = JSON.stringify(toolCall.arguments)
-        const filePatterns = [
-          /([~\/][\w\/-]*\.\w+)/g, // Unix-style paths with extensions
-          /([A-Z]:\\[\w\\-]*\.\w+)/g, // Windows-style paths with extensions
-        ]
-
-        for (const pattern of filePatterns) {
-          const matches = argString.match(pattern)
-          if (matches) {
-            matches.forEach(filePath => {
-              if (!contextTracker.createdFiles.includes(filePath)) {
-                contextTracker.createdFiles.push(filePath)
-                contextTracker.lastMentionedFile = filePath
-              }
-            })
-          }
-        }
-      }
-
-      // Check results for file mentions
-      if (!result.isError && result.content[0]?.text) {
-        const text = result.content[0].text
-        const filePatterns = [
-          /created?\s+([~\/][\w\/-]*\.\w+)/gi,
-          /wrote\s+to\s+([~\/][\w\/-]*\.\w+)/gi,
-          /saved?\s+([~\/][\w\/-]*\.\w+)/gi,
-        ]
-
-        for (const pattern of filePatterns) {
-          const matches = text.match(pattern)
-          if (matches) {
-            matches.forEach(match => {
-              const filePath = match.replace(/^(created?|wrote\s+to|saved?)\s+/i, '')
-              if (!contextTracker.createdFiles.includes(filePath)) {
-                contextTracker.createdFiles.push(filePath)
-                contextTracker.lastMentionedFile = filePath
-              }
-            })
-          }
-        }
-      }
-    }
-
-    trackFileOperations()
-
-    // Track recent operations
-    contextTracker.recentOperations.push({
-      tool: toolCall.name,
-      operation: result.isError ? 'failed' : 'completed',
-      timestamp
-    })
-
-    // Keep only recent operations (last 10)
-    if (contextTracker.recentOperations.length > 10) {
-      contextTracker.recentOperations = contextTracker.recentOperations.slice(-10)
-    }
-  }
 
   const conversationHistory: Array<{
     role: "user" | "assistant" | "tool"
@@ -905,6 +903,15 @@ Remember: Respond with ONLY the JSON object, no markdown formatting, no code blo
     ...(previousConversationHistory || []),
     { role: "user", content: transcript }
   ]
+
+  // Get recent context for the LLM - no specific extraction needed
+  const recentContext = extractRecentContext(conversationHistory)
+
+  // Log context for debugging
+  if (previousConversationHistory) {
+    console.log(`[MCP-AGENT-DEBUG] 📚 Loaded ${previousConversationHistory.length} previous messages from conversation`)
+    console.log(`[MCP-AGENT-DEBUG] 📋 Using ${recentContext.length} recent messages for context`)
+  }
 
   let iteration = 0
   let finalContent = ""
@@ -934,36 +941,42 @@ Remember: Respond with ONLY the JSON object, no markdown formatting, no code blo
       isComplete: false
     })
 
-    // Build context-aware system prompt
+    // Use the base system prompt - let the LLM understand context from conversation history
     let contextAwarePrompt = systemPrompt
-    if (contextTracker.createdFiles.length > 0 || contextTracker.sessionIds.size > 0 || contextTracker.recentOperations.length > 0) {
-      contextAwarePrompt += `\n\nCURRENT CONTEXT:`
 
-      if (contextTracker.sessionIds.size > 0) {
-        contextAwarePrompt += `\nActive sessions:`
-        for (const [server, sessionId] of contextTracker.sessionIds) {
-          contextAwarePrompt += `\n- ${server}: ${sessionId}`
-        }
-      }
+    // Add enhanced context instruction using LLM-based context extraction
+    if (recentContext.length > 1) {
+      // Use LLM to extract useful context from conversation history
+      const contextInfo = await extractContextFromHistory(conversationHistory, config)
 
-      if (contextTracker.createdFiles.length > 0) {
-        contextAwarePrompt += `\nRecently created/mentioned files:`
-        contextTracker.createdFiles.forEach(file => {
-          contextAwarePrompt += `\n- ${file}`
-        })
+      contextAwarePrompt += `\n\nCONTEXT AWARENESS:
+You have access to the recent conversation history. Use this history to understand:
+- Any resources (sessions, files, connections, etc.) that were created or mentioned
+- Previous tool calls and their results
+- User preferences and workflow patterns
+- Any ongoing tasks or processes
 
-        if (contextTracker.lastMentionedFile) {
-          contextAwarePrompt += `\nMost recent file: ${contextTracker.lastMentionedFile}`
-        }
-      }
+${contextInfo.contextSummary ? `
+CURRENT CONTEXT:
+${contextInfo.contextSummary}
+` : ''}
 
-      if (contextTracker.recentOperations.length > 0) {
-        contextAwarePrompt += `\nRecent operations:`
-        contextTracker.recentOperations.slice(-5).forEach(op => {
-          const timeAgo = Math.round((Date.now() - op.timestamp) / 1000)
-          contextAwarePrompt += `\n- ${op.tool} (${op.operation}) ${timeAgo}s ago`
-        })
-      }
+${contextInfo.resources.length > 0 ? `
+AVAILABLE RESOURCES:
+${contextInfo.resources.map(r => `- ${r.type.toUpperCase()}: ${r.id} (use as parameter: ${r.parameter})`).join('\n')}
+
+CRITICAL: When using tools that require resource IDs, you MUST use the exact resource IDs listed above.
+DO NOT create fictional or made-up resource identifiers.
+` : ''}
+
+RESOURCE USAGE GUIDELINES:
+- Always check the conversation history for existing resource IDs before creating new ones
+- Use the exact resource ID values provided above
+- Match the resource ID to the correct parameter name as specified
+- If no suitable resource is available, create a new one using the appropriate creation tool first
+
+NEVER invent resource IDs like "my-session-123" or "temp-connection-id".
+Always use actual resource IDs from the conversation history or create new ones properly.`
     }
 
     // Build messages for LLM call
@@ -1063,7 +1076,7 @@ Remember: Respond with ONLY the JSON object, no markdown formatting, no code blo
       let retryCount = 0
       const maxRetries = 2
 
-      // Retry logic for specific error types
+      // Enhanced retry logic for specific error types
       while (result.isError && retryCount < maxRetries) {
         const errorText = result.content.map(c => c.text).join(' ').toLowerCase()
 
@@ -1073,11 +1086,21 @@ Remember: Respond with ONLY the JSON object, no markdown formatting, no code blo
           errorText.includes('connection') ||
           errorText.includes('network') ||
           errorText.includes('temporary') ||
-          errorText.includes('busy')
+          errorText.includes('busy') ||
+          errorText.includes('session not found') // Add session errors as retryable
 
         if (isRetryableError) {
           retryCount++
           console.log(`[MCP-AGENT] 🔄 Retrying tool ${toolCall.name} (attempt ${retryCount}/${maxRetries})`)
+
+          // Special handling for resource-related errors
+          if (errorText.includes('not found') || errorText.includes('invalid') || errorText.includes('expired')) {
+            console.log(`[MCP-AGENT] 🔧 Resource error detected, attempting recovery`)
+
+            // The retry mechanism will benefit from the updated context extraction
+            // which will provide the correct resource IDs from conversation history
+            console.log(`[MCP-AGENT] 🔄 Resource error detected, relying on context extraction for recovery`)
+          }
 
           // Wait before retry (exponential backoff)
           await new Promise(resolve => setTimeout(resolve, Math.pow(2, retryCount) * 1000))
@@ -1095,8 +1118,7 @@ Remember: Respond with ONLY the JSON object, no markdown formatting, no code blo
         failedTools.push(toolCall.name)
       }
 
-      // Update context tracking
-      updateContext(toolCall, result)
+      // Context is now extracted from conversation history, no need to track manually
 
       // Update tool call step with result
       toolCallStep.status = result.isError ? "error" : "completed"
@@ -1151,12 +1173,32 @@ Remember: Respond with ONLY the JSON object, no markdown formatting, no code blo
     if (hasErrors) {
       console.log(`[MCP-AGENT] ⚠️ Tool execution had errors: ${failedTools.join(', ')}`)
 
-      // Add error summary to conversation history for LLM context
+      // Enhanced error analysis and recovery suggestions
+      const errorAnalysis = analyzeToolErrors(toolResults, failedTools, llmResponse.toolCalls || [])
+
+      // Add detailed error summary to conversation history for LLM context
       const errorSummary = `Tool execution errors occurred:
 ${failedTools.map(toolName => {
   const failedResult = toolResults.find(r => r.isError)
-  return `- ${toolName}: ${failedResult?.content.map(c => c.text).join(' ') || 'Unknown error'}`
+  const errorText = failedResult?.content.map(c => c.text).join(' ') || 'Unknown error'
+
+  // Check for specific error patterns and suggest fixes
+  let suggestion = ''
+  if (errorText.includes('Session not found')) {
+    suggestion = ' (Suggestion: Create a new session using ht_create_session first)'
+  } else if (errorText.includes('timeout') || errorText.includes('connection')) {
+    suggestion = ' (Suggestion: Retry the operation or check server connectivity)'
+  } else if (errorText.includes('permission') || errorText.includes('access')) {
+    suggestion = ' (Suggestion: Check file permissions or use alternative approach)'
+  }
+
+  return `- ${toolName}: ${errorText}${suggestion}`
 }).join('\n')}
+
+${errorAnalysis.recoveryStrategy}
+
+IMPORTANT: If you see session-related errors, you MUST create a new session first using ht_create_session,
+then extract the session ID from the response and use it in subsequent tool calls.
 
 Please try alternative approaches or provide manual instructions to the user.`
 
@@ -1270,21 +1312,27 @@ async function makeLLMCall(messages: Array<{role: string, content: string}>, con
     const prompt = messages.map(m => `${m.role}: ${m.content}`).join('\n\n')
 
     console.log("[MCP-LLM-DEBUG] 📤 Sending request to Gemini...")
-    const result = await gModel.generateContent([prompt], {
-      baseUrl: config.geminiBaseUrl,
-    })
+    try {
+      const result = await gModel.generateContent([prompt], {
+        baseUrl: config.geminiBaseUrl,
+      })
 
-    const responseText = result.response.text().trim()
-    console.log("[MCP-LLM-DEBUG] 📥 Raw Gemini response:", responseText)
+      const responseText = result.response.text().trim()
+      console.log("[MCP-LLM-DEBUG] 📥 Raw Gemini response:", responseText)
 
-    const parsed = extractAndParseJSON(responseText)
-    console.log("[MCP-LLM-DEBUG] 🔍 Parsed response:", parsed ? "SUCCESS" : "FAILED")
-    if (parsed) {
-      console.log("[MCP-LLM-DEBUG] ✅ Parsed JSON:", JSON.stringify(parsed, null, 2))
-      return parsed
-    } else {
-      console.log("[MCP-LLM-DEBUG] ⚠️ Fallback to content response")
-      return { content: responseText }
+      const parsed = extractAndParseJSON(responseText)
+      console.log("[MCP-LLM-DEBUG] 🔍 Parsed response:", parsed ? "SUCCESS" : "FAILED")
+      if (parsed) {
+        console.log("[MCP-LLM-DEBUG] ✅ Parsed JSON:", JSON.stringify(parsed, null, 2))
+        return parsed
+      } else {
+        console.log("[MCP-LLM-DEBUG] ⚠️ Fallback to content response")
+        diagnosticsService.logWarning('llm', 'Failed to parse Gemini response as JSON', { responseText })
+        return { content: responseText }
+      }
+    } catch (error) {
+      diagnosticsService.logError('llm', 'Gemini API call failed', error)
+      throw error
     }
   }
 

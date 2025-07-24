@@ -93,16 +93,16 @@ export class ConversationService {
     try {
       this.ensureConversationsFolder()
       const conversationPath = this.getConversationPath(conversation.id)
-      
+
       // Update the updatedAt timestamp
       conversation.updatedAt = Date.now()
-      
+
       // Save conversation to file
       fs.writeFileSync(conversationPath, JSON.stringify(conversation, null, 2))
-      
+
       // Update the index
       this.updateConversationIndex(conversation)
-      
+
       console.log(`[CONVERSATION] Saved conversation ${conversation.id}`)
     } catch (error) {
       console.error("Failed to save conversation:", error)
@@ -113,14 +113,14 @@ export class ConversationService {
   async loadConversation(conversationId: string): Promise<Conversation | null> {
     try {
       const conversationPath = this.getConversationPath(conversationId)
-      
+
       if (!fs.existsSync(conversationPath)) {
         return null
       }
-      
+
       const conversationData = fs.readFileSync(conversationPath, "utf8")
       const conversation: Conversation = JSON.parse(conversationData)
-      
+
       console.log(`[CONVERSATION] Loaded conversation ${conversationId}`)
       return conversation
     } catch (error) {
@@ -132,14 +132,14 @@ export class ConversationService {
   async getConversationHistory(): Promise<ConversationHistoryItem[]> {
     try {
       const indexPath = this.getConversationIndexPath()
-      
+
       if (!fs.existsSync(indexPath)) {
         return []
       }
-      
+
       const indexData = fs.readFileSync(indexPath, "utf8")
       const history: ConversationHistoryItem[] = JSON.parse(indexData)
-      
+
       // Sort by updatedAt descending (most recent first)
       return history.sort((a, b) => b.updatedAt - a.updatedAt)
     } catch (error) {
@@ -151,12 +151,12 @@ export class ConversationService {
   async deleteConversation(conversationId: string): Promise<void> {
     try {
       const conversationPath = this.getConversationPath(conversationId)
-      
+
       // Delete conversation file
       if (fs.existsSync(conversationPath)) {
         fs.unlinkSync(conversationPath)
       }
-      
+
       // Update index
       const indexPath = this.getConversationIndexPath()
       if (fs.existsSync(indexPath)) {
@@ -165,7 +165,7 @@ export class ConversationService {
         index = index.filter(item => item.id !== conversationId)
         fs.writeFileSync(indexPath, JSON.stringify(index, null, 2))
       }
-      
+
       console.log(`[CONVERSATION] Deleted conversation ${conversationId}`)
     } catch (error) {
       console.error("Failed to delete conversation:", error)
@@ -177,14 +177,14 @@ export class ConversationService {
     const conversationId = this.generateConversationId()
     const messageId = this.generateMessageId()
     const now = Date.now()
-    
+
     const message: ConversationMessage = {
       id: messageId,
       role,
       content: firstMessage,
       timestamp: now
     }
-    
+
     const conversation: Conversation = {
       id: conversationId,
       title: this.generateConversationTitle(firstMessage),
@@ -192,14 +192,14 @@ export class ConversationService {
       updatedAt: now,
       messages: [message]
     }
-    
+
     await this.saveConversation(conversation)
     return conversation
   }
 
   async addMessageToConversation(
-    conversationId: string, 
-    content: string, 
+    conversationId: string,
+    content: string,
     role: "user" | "assistant" | "tool",
     toolCalls?: Array<{ name: string; arguments: any }>,
     toolResults?: Array<{ success: boolean; content: string; error?: string }>
@@ -209,7 +209,7 @@ export class ConversationService {
       if (!conversation) {
         return null
       }
-      
+
       const messageId = this.generateMessageId()
       const message: ConversationMessage = {
         id: messageId,
@@ -219,10 +219,10 @@ export class ConversationService {
         toolCalls,
         toolResults
       }
-      
+
       conversation.messages.push(message)
       await this.saveConversation(conversation)
-      
+
       return conversation
     } catch (error) {
       console.error("Failed to add message to conversation:", error)

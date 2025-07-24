@@ -9,7 +9,7 @@ import { rendererHandlers, tipcClient } from "~/lib/tipc-client"
 import { AgentProgressUpdate } from "../../../shared/types"
 import { TextInputPanel } from "@renderer/components/text-input-panel"
 import { ContinueConversation } from "@renderer/components/continue-conversation"
-import { useConversationActions, useConversationState } from "@renderer/contexts/conversation-context"
+import { useConversationActions, useConversationState, useConversation } from "@renderer/contexts/conversation-context"
 
 
 
@@ -32,7 +32,8 @@ export function Component() {
 
   // Conversation state
   const { showContinueButton, isWaitingForResponse, isConversationActive, currentConversation } = useConversationState()
-  const { addMessage, setIsWaitingForResponse, startNewConversation, endConversation } = useConversationActions()
+  const { addMessage, setIsWaitingForResponse, startNewConversation, continueConversation, endConversation } = useConversationActions()
+  const { currentConversationId } = useConversation()
 
 
 
@@ -82,10 +83,22 @@ export function Component() {
         await startNewConversation(transcript, "user")
       }
 
-      await tipcClient.createMcpRecording({
+      console.log(`[FRONTEND-DEBUG] 🎤 MCP Recording - conversationId: ${currentConversationId || 'undefined'}`)
+      console.log(`[FRONTEND-DEBUG] 🎤 MCP Recording - isConversationActive: ${isConversationActive}`)
+
+      const result = await tipcClient.createMcpRecording({
         recording: arrayBuffer,
         duration,
+        conversationId: currentConversationId || undefined,
       })
+
+      // If backend returned a conversationId, continue that conversation
+      if (result?.conversationId && result.conversationId !== currentConversationId) {
+        console.log(`[FRONTEND-DEBUG] 🔄 Continuing conversation: ${result.conversationId}`)
+        continueConversation(result.conversationId)
+      }
+
+      return result
     },
     onError(error) {
       setAgentProgress(null) // Clear progress on error

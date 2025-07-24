@@ -367,12 +367,6 @@ export function resizePanelForTextInput() {
   }
 
   const position = getPanelWindowPosition('textInput')
-  console.log("[TEXT-INPUT-DEBUG] 📏 Resizing panel for text input mode:", {
-    currentBounds: win.getBounds(),
-    targetSize: textInputPanelWindowSize,
-    targetPosition: position,
-    isTextInputActive: state.isTextInputActive
-  })
 
   // Update size constraints for text input mode
   win.setMinimumSize(textInputPanelWindowSize.width, textInputPanelWindowSize.height)
@@ -382,11 +376,6 @@ export function resizePanelForTextInput() {
   win.setSize(textInputPanelWindowSize.width, textInputPanelWindowSize.height, true) // animate = true
   win.setPosition(position.x, position.y, true) // animate = true
 
-  console.log("[TEXT-INPUT-DEBUG] ✅ Panel resized for text input mode:", {
-    newSize: textInputPanelWindowSize,
-    newPosition: position,
-    finalBounds: win.getBounds()
-  })
 }
 
 export function resizePanelToNormal() {

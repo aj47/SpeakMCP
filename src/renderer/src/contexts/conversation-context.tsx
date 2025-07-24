@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useCallback, ReactNode } from "react"
 import { Conversation, ConversationMessage } from "@shared/types"
-import { 
-  useCreateConversationMutation, 
+import {
+  useCreateConversationMutation,
   useAddMessageToConversationMutation,
   useSaveConversationMutation,
   useConversationQuery
@@ -10,14 +10,15 @@ import {
 interface ConversationContextType {
   // Current conversation state
   currentConversation: Conversation | null
+  currentConversationId: string | null
   isConversationActive: boolean
-  
+
   // Conversation management
   startNewConversation: (firstMessage: string, role?: "user" | "assistant") => Promise<Conversation | null>
   continueConversation: (conversationId: string) => void
   addMessage: (content: string, role: "user" | "assistant" | "tool", toolCalls?: any[], toolResults?: any[]) => Promise<void>
   endConversation: () => void
-  
+
   // UI state
   showContinueButton: boolean
   setShowContinueButton: (show: boolean) => void
@@ -35,18 +36,18 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null)
   const [showContinueButton, setShowContinueButton] = useState(false)
   const [isWaitingForResponse, setIsWaitingForResponse] = useState(false)
-  
+
   // Queries and mutations
   const conversationQuery = useConversationQuery(currentConversationId)
   const createConversationMutation = useCreateConversationMutation()
   const addMessageMutation = useAddMessageToConversationMutation()
   const saveConversationMutation = useSaveConversationMutation()
-  
+
   const currentConversation = conversationQuery.data || null
   const isConversationActive = !!currentConversation
-  
+
   const startNewConversation = useCallback(async (
-    firstMessage: string, 
+    firstMessage: string,
     role: "user" | "assistant" = "user"
   ): Promise<Conversation | null> => {
     try {
@@ -60,13 +61,13 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
       return null
     }
   }, [createConversationMutation])
-  
+
   const continueConversation = useCallback((conversationId: string) => {
     setCurrentConversationId(conversationId)
     setShowContinueButton(false)
     setIsWaitingForResponse(false)
   }, [])
-  
+
   const addMessage = useCallback(async (
     content: string,
     role: "user" | "assistant" | "tool",
@@ -77,7 +78,7 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
       console.error("Cannot add message: no active conversation")
       return
     }
-    
+
     try {
       await addMessageMutation.mutateAsync({
         conversationId: currentConversationId,
@@ -86,7 +87,7 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
         toolCalls,
         toolResults
       })
-      
+
       // Show continue button after assistant response
       if (role === "assistant") {
         setShowContinueButton(true)
@@ -97,15 +98,16 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
       setIsWaitingForResponse(false)
     }
   }, [currentConversationId, addMessageMutation])
-  
+
   const endConversation = useCallback(() => {
     setCurrentConversationId(null)
     setShowContinueButton(false)
     setIsWaitingForResponse(false)
   }, [])
-  
+
   const contextValue: ConversationContextType = {
     currentConversation,
+    currentConversationId,
     isConversationActive,
     startNewConversation,
     continueConversation,
@@ -116,7 +118,7 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
     isWaitingForResponse,
     setIsWaitingForResponse
   }
-  
+
   return (
     <ConversationContext.Provider value={contextValue}>
       {children}
@@ -140,7 +142,7 @@ export function useConversationState() {
     showContinueButton,
     isWaitingForResponse
   } = useConversation()
-  
+
   return {
     currentConversation,
     isConversationActive,
@@ -161,7 +163,7 @@ export function useConversationActions() {
     setShowContinueButton,
     setIsWaitingForResponse
   } = useConversation()
-  
+
   return {
     startNewConversation,
     continueConversation,

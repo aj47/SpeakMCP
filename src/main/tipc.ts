@@ -16,6 +16,120 @@ import { conversationService } from "./conversation-service"
 import { RendererHandlers } from "./renderer-handlers"
 import { postProcessTranscript, processTranscriptWithTools, processTranscriptWithAgentMode } from "./llm"
 import { mcpService, MCPToolResult } from "./mcp-service"
+
+// Unified agent mode processing function
+async function processWithAgentMode(
+  text: string,
+  conversationId?: string
+): Promise<string> {
+  const config = configStore.get()
+
+  console.log(`[UNIFIED-AGENT-DEBUG] 🚀 processWithAgentMode called`)
+  console.log(`[UNIFIED-AGENT-DEBUG] 📝 Text: "${text.substring(0, 100)}..."`)
+  console.log(`[UNIFIED-AGENT-DEBUG] 🆔 ConversationId: ${conversationId || 'undefined'}`)
+
+  if (!config.mcpToolsEnabled) {
+    throw new Error("MCP tools are not enabled")
+  }
+
+  // Initialize MCP service if not already done
+  await mcpService.initialize()
+
+  // Get available tools
+  const availableTools = mcpService.getAvailableTools()
+
+  if (config.mcpAgentModeEnabled) {
+    // Use agent mode for iterative tool calling
+    const executeToolCall = async (toolCall: any): Promise<MCPToolResult> => {
+      return await mcpService.executeToolCall(toolCall)
+    }
+
+    // Load previous conversation history if continuing a conversation
+    let previousConversationHistory: Array<{
+      role: "user" | "assistant" | "tool"
+      content: string
+      toolCalls?: any[]
+      toolResults?: any[]
+    }> | undefined
+
+    console.log(`[UNIFIED-AGENT-DEBUG] 🔍 Checking conversation context...`)
+    if (conversationId) {
+      console.log(`[UNIFIED-AGENT-DEBUG] 📂 Loading conversation: ${conversationId}`)
+      const conversation = await conversationService.loadConversation(conversationId)
+      console.log(`[UNIFIED-AGENT-DEBUG] 📋 Loaded conversation:`, conversation ? `${conversation.messages.length} messages` : 'null')
+
+      if (conversation && conversation.messages.length > 0) {
+        // Convert conversation messages to the format expected by agent mode
+        // Exclude the last message since it's the current user input that will be added
+        const messagesToConvert = conversation.messages.slice(0, -1)
+        previousConversationHistory = messagesToConvert.map(msg => ({
+          role: msg.role,
+          content: msg.content,
+          toolCalls: msg.toolCalls,
+          toolResults: msg.toolResults
+        }))
+
+        console.log(`[UNIFIED-AGENT-DEBUG] ✅ Converted ${previousConversationHistory.length} messages for agent mode`)
+        console.log(`[MCP-AGENT] 📚 Loaded ${previousConversationHistory.length} previous messages from conversation ${conversationId}`)
+      } else {
+        console.log(`[UNIFIED-AGENT-DEBUG] ❌ No conversation found or empty conversation`)
+      }
+    } else {
+      console.log(`[UNIFIED-AGENT-DEBUG] ❌ No conversationId provided - starting fresh conversation`)
+    }
+
+    const agentResult = await processTranscriptWithAgentMode(
+      text,
+      availableTools,
+      executeToolCall,
+      10, // maxIterations
+      previousConversationHistory
+    )
+
+    console.log(`[MCP-AGENT] ✅ Agent processing completed in ${agentResult.totalIterations} iterations`)
+    console.log(`[MCP-AGENT] Final response length: ${agentResult.content.length}`)
+    console.log(`[MCP-AGENT] Final response preview: "${agentResult.content.substring(0, 100)}..."`)
+    console.log(`[MCP-AGENT] Conversation history length: ${agentResult.conversationHistory.length} entries`)
+
+    return agentResult.content
+  } else {
+    // Use single-shot tool calling
+    const result = await processTranscriptWithTools(text, availableTools)
+
+    if (result.toolCalls && result.toolCalls.length > 0) {
+      // Execute tool calls and get results
+      const toolResults: MCPToolResult[] = []
+
+      for (const toolCall of result.toolCalls) {
+        try {
+          const toolResult = await mcpService.executeToolCall(toolCall)
+          toolResults.push(toolResult)
+        } catch (error) {
+          console.error(`Tool call failed for ${toolCall.name}:`, error)
+          toolResults.push({
+            content: [{
+              type: "text",
+              text: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`
+            }],
+            isError: true
+          })
+        }
+      }
+
+      // Combine tool results into final response
+      const toolResultTexts = toolResults.map(result =>
+        result.content.map(item => item.text).join('\n')
+      ).join('\n\n')
+
+      return result.content
+        ? `${result.content}\n\n${toolResultTexts}`
+        : toolResultTexts
+    } else {
+      return result.content || text
+    }
+  }
+}
+import { diagnosticsService } from "./diagnostics"
 import { state } from "./state"
 import { updateTrayIcon } from "./tray"
 import { isAccessibilityGranted } from "./utils"
@@ -342,86 +456,8 @@ export const router = {
         return router.createTextInput({ text: input.text })
       }
 
-      // Initialize MCP service if not already done
-      await mcpService.initialize()
-
-      // Process text with tools using agent mode if enabled
-      const availableTools = mcpService.getAvailableTools()
-
-      let finalResponse: string
-
-      if (config.mcpAgentModeEnabled) {
-        // Use agent mode for iterative tool calling
-        const executeToolCall = async (toolCall: any): Promise<MCPToolResult> => {
-          return await mcpService.executeToolCall(toolCall)
-        }
-
-        // Load previous conversation history if continuing a conversation
-        let previousConversationHistory: Array<{
-          role: "user" | "assistant" | "tool"
-          content: string
-          toolCalls?: any[]
-          toolResults?: any[]
-        }> | undefined
-
-        if (input.conversationId) {
-          const conversation = await conversationService.loadConversation(input.conversationId)
-          if (conversation && conversation.messages.length > 0) {
-            // Convert conversation messages to the format expected by agent mode
-            // Exclude the last message since it's the current user input that will be added
-            const messagesToConvert = conversation.messages.slice(0, -1)
-            previousConversationHistory = messagesToConvert.map(msg => ({
-              role: msg.role,
-              content: msg.content,
-              toolCalls: msg.toolCalls,
-              toolResults: msg.toolResults
-            }))
-
-            console.log(`[MCP-AGENT] 📚 Loaded ${previousConversationHistory.length} previous messages from conversation ${input.conversationId}`)
-          }
-        }
-
-        const agentResult = await processTranscriptWithAgentMode(
-          input.text,
-          availableTools,
-          executeToolCall,
-          10, // maxIterations
-          previousConversationHistory
-        )
-
-        finalResponse = agentResult.content
-      } else {
-        // Use single-shot tool calling
-        const result = await processTranscriptWithTools(input.text, availableTools)
-
-        if (result.toolCalls && result.toolCalls.length > 0) {
-          // Execute tool calls and get results
-          const toolResults: MCPToolResult[] = []
-
-          for (const toolCall of result.toolCalls) {
-            try {
-              const toolResult = await mcpService.executeToolCall(toolCall)
-              toolResults.push(toolResult)
-            } catch (error) {
-              console.error(`Tool call failed for ${toolCall.name}:`, error)
-              toolResults.push({
-                content: [{
-                  type: "text",
-                  text: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`
-                }],
-                isError: true
-              })
-            }
-          }
-
-          // Combine tool results into final response
-          finalResponse = toolResults.map(result =>
-            result.content.map(item => item.text).join('\n')
-          ).join('\n\n')
-        } else {
-          finalResponse = result.content || input.text
-        }
-      }
+      // Use unified agent mode processing
+      const finalResponse = await processWithAgentMode(input.text, input.conversationId)
 
       // Save to history
       const history = getRecordingHistory()
@@ -460,6 +496,7 @@ export const router = {
     .input<{
       recording: ArrayBuffer
       duration: number
+      conversationId?: string
     }>()
     .action(async ({ input }) => {
       fs.mkdirSync(recordingsFolder, { recursive: true })
@@ -511,51 +548,42 @@ export const router = {
       const json: { text: string } = await transcriptResponse.json()
       transcript = json.text
 
-      // Process transcript with MCP tools
-      const availableTools = mcpService.getAvailableTools()
+      // Create or continue conversation
+      let conversationId = input.conversationId
+      let conversation: Conversation | null = null
 
-      let finalResponse = ""
-
-      // Check if agent mode is enabled
-      if (config.mcpAgentModeEnabled) {
-        console.log("[MCP-AGENT] 🤖 Agent mode enabled, using agent processing...")
-
-        const agentResponse = await processTranscriptWithAgentMode(
-          transcript,
-          availableTools,
-          (toolCall) => mcpService.executeToolCall(toolCall),
-          10 // max iterations
-        )
-
-        finalResponse = agentResponse.content
-        console.log(`[MCP-AGENT] ✅ Agent processing completed in ${agentResponse.totalIterations} iterations`)
-        console.log(`[MCP-AGENT] Final response length: ${finalResponse.length}`)
-        console.log(`[MCP-AGENT] Final response preview: "${finalResponse.substring(0, 100)}..."`)
-        console.log(`[MCP-AGENT] Conversation history length: ${agentResponse.conversationHistory.length} entries`)
-        console.log(`[MCP-AGENT] Final response will be displayed in GUI`)
+      if (!conversationId) {
+        // Create new conversation with the transcript
+        console.log(`[MCP-CONVERSATION-DEBUG] 🆕 Creating new conversation for voice input`)
+        conversation = await conversationService.createConversation(transcript, "user")
+        conversationId = conversation.id
+        console.log(`[MCP-CONVERSATION-DEBUG] ✅ Created conversation: ${conversationId}`)
       } else {
-        const llmResponse = await processTranscriptWithTools(transcript, availableTools)
-
-        // Execute tool calls if any
-        if (llmResponse.toolCalls && llmResponse.toolCalls.length > 0) {
-          const toolResults: MCPToolResult[] = []
-
-          for (const toolCall of llmResponse.toolCalls) {
-            const result = await mcpService.executeToolCall(toolCall)
-            toolResults.push(result)
-          }
-
-          // Combine tool results into final response
-          const toolResultTexts = toolResults.map(result =>
-            result.content.map(c => c.text).join('\n')
-          ).join('\n\n')
-
-          finalResponse = llmResponse.content
-            ? `${llmResponse.content}\n\n${toolResultTexts}`
-            : toolResultTexts
+        // Load existing conversation and add user message
+        console.log(`[MCP-CONVERSATION-DEBUG] 📂 Loading existing conversation: ${conversationId}`)
+        conversation = await conversationService.loadConversation(conversationId)
+        if (conversation) {
+          await conversationService.addMessageToConversation(conversationId, transcript, "user")
+          console.log(`[MCP-CONVERSATION-DEBUG] ✅ Added user message to conversation`)
         } else {
-          finalResponse = llmResponse.content || transcript
+          console.log(`[MCP-CONVERSATION-DEBUG] ❌ Conversation not found, creating new one`)
+          conversation = await conversationService.createConversation(transcript, "user")
+          conversationId = conversation.id
         }
+      }
+
+      // Use unified agent mode processing
+      console.log("[MCP-AGENT] 🤖 Agent mode enabled, using agent processing...")
+      console.log(`[MCP-RECORDING-DEBUG] 📝 Transcript: "${transcript.substring(0, 100)}..."`)
+      console.log(`[MCP-RECORDING-DEBUG] 🆔 ConversationId from input: ${input.conversationId || 'undefined'}`)
+      console.log(`[MCP-RECORDING-DEBUG] 🆔 Using conversationId: ${conversationId}`)
+      const finalResponse = await processWithAgentMode(transcript, conversationId)
+      console.log(`[MCP-AGENT] Final response will be displayed in GUI`)
+
+      // Add assistant response to conversation
+      if (conversationId) {
+        await conversationService.addMessageToConversation(conversationId, finalResponse, "assistant")
+        console.log(`[MCP-CONVERSATION-DEBUG] ✅ Added assistant response to conversation`)
       }
 
       // Save to history
@@ -585,8 +613,8 @@ export const router = {
       console.log(`[MCP-AGENT] ✅ Agent processing completed, result displayed in GUI`)
       console.log(`[MCP-AGENT] 📋 Result will remain visible until user presses ESC to close`)
 
-      // Note: Panel hiding is handled by the frontend progress component
-      // to ensure proper timing with the progress visualization
+      // Return the conversation ID so frontend can use it for subsequent requests
+      return { conversationId }
     }),
 
   getRecordingHistory: t.procedure.action(async () => getRecordingHistory()),
@@ -745,6 +773,48 @@ export const router = {
 
   getMcpDisabledTools: t.procedure.action(async () => {
     return mcpService.getDisabledTools()
+  }),
+
+  // Diagnostics endpoints
+  getDiagnosticReport: t.procedure.action(async () => {
+    try {
+      return await diagnosticsService.generateDiagnosticReport()
+    } catch (error) {
+      diagnosticsService.logError('tipc', 'Failed to generate diagnostic report', error)
+      throw error
+    }
+  }),
+
+  saveDiagnosticReport: t.procedure
+    .input<{ filePath?: string }>()
+    .action(async ({ input }) => {
+      try {
+        const savedPath = await diagnosticsService.saveDiagnosticReport(input.filePath)
+        return { success: true, filePath: savedPath }
+      } catch (error) {
+        diagnosticsService.logError('tipc', 'Failed to save diagnostic report', error)
+        return { success: false, error: error instanceof Error ? error.message : String(error) }
+      }
+    }),
+
+  performHealthCheck: t.procedure.action(async () => {
+    try {
+      return await diagnosticsService.performHealthCheck()
+    } catch (error) {
+      diagnosticsService.logError('tipc', 'Failed to perform health check', error)
+      throw error
+    }
+  }),
+
+  getRecentErrors: t.procedure
+    .input<{ count?: number }>()
+    .action(async ({ input }) => {
+      return diagnosticsService.getRecentErrors(input.count || 10)
+    }),
+
+  clearErrorLog: t.procedure.action(async () => {
+    diagnosticsService.clearErrorLog()
+    return { success: true }
   }),
 
   testMcpServerConnection: t.procedure

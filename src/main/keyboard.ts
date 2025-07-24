@@ -370,9 +370,9 @@ export function listenToKeyboardEvents() {
   const child = spawn(rdevPath, ["listen"], {})
 
   child.stdout.on("data", (data) => {
-    if (import.meta.env.DEV) {
-      console.log(String(data))
-    }
+    // if (import.meta.env.DEV) {
+    //   console.log(String(data))
+    // }
 
     const event = parseEvent(data)
     if (!event) return

@@ -41,16 +41,12 @@ export function Component() {
 
 CRITICAL: When calling tools, you MUST use the EXACT tool name as listed in the available tools, including any server prefixes (like "server:tool_name"). Do not modify or shorten the tool names. NEVER invent or hallucinate tool names that are not in the list.
 
-TOOL USAGE PATTERNS:
-For file system operations (like listing directories, checking desktop contents):
-1. Use "Headless Terminal:ht_create_session" to create a terminal session
-2. Use "Headless Terminal:ht_execute_command" with commands like "ls ~/Desktop", "ls -la /path/to/directory", "pwd", etc.
-
-For web operations:
-- Use any available web/search tools if present in the list
-
-For system operations:
-- Use terminal commands via "Headless Terminal:ht_execute_command" for system tasks
+TOOL USAGE GUIDELINES:
+- Analyze the available tools to understand what capabilities are provided
+- Match user requests to appropriate tools based on their descriptions and schemas
+- Use tools that can accomplish file operations, system tasks, web requests, or other actions as available
+- Follow the parameter schemas provided by each tool's inputSchema
+- When in doubt about parameters, prefer camelCase over snake_case naming
 
 ALWAYS prefer using available tools over suggesting manual approaches. If you can accomplish the task with the available tools, do it!
 
@@ -68,20 +64,6 @@ When the user's request requires using a tool, respond with a JSON object in thi
 If no tools are needed, respond with:
 {
   "content": "Your response text here"
-}
-
-Examples:
-
-User: "List the contents of my desktop"
-Response:
-{
-  "toolCalls": [
-    {
-      "name": "Headless Terminal:ht_create_session",
-      "arguments": {}
-    }
-  ],
-  "content": "Creating a terminal session to list your desktop contents"
 }
 
 Always respond with valid JSON only.`

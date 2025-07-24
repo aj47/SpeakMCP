@@ -67,7 +67,8 @@ class MCPService {
       try {
         await this.initializeServer(serverName, serverConfig)
       } catch (error) {
-        console.error(`Failed to initialize server ${serverName}:`, error)
+        console.error(`[MCP-SERVICE] ❌ Failed to initialize server ${serverName}:`, error)
+        // Server status will be computed dynamically in getServerStatus()
       }
 
       this.initializationProgress.current++
@@ -79,42 +80,64 @@ class MCPService {
 
 
   private async initializeServer(serverName: string, serverConfig: MCPServerConfig) {
-    // Resolve command path and prepare environment
-    const resolvedCommand = await this.resolveCommandPath(serverConfig.command)
-    const environment = await this.prepareEnvironment(serverConfig.env)
+    console.log(`[MCP-SERVICE] 🚀 Initializing server: ${serverName}`)
 
-    // Create transport and client
-    const transport = new StdioClientTransport({
-      command: resolvedCommand,
-      args: serverConfig.args,
-      env: environment
-    })
+    try {
+      // Resolve command path and prepare environment
+      const resolvedCommand = await this.resolveCommandPath(serverConfig.command)
+      const environment = await this.prepareEnvironment(serverConfig.env)
 
-    const client = new Client({
-      name: "speakmcp-mcp-client",
-      version: "1.0.0"
-    }, {
-      capabilities: {}
-    })
-
-    // Connect to the server
-    await client.connect(transport)
-
-    // Get available tools from the server
-    const toolsResult = await client.listTools()
-
-    // Add tools to our registry with server prefix
-    for (const tool of toolsResult.tools) {
-      this.availableTools.push({
-        name: `${serverName}:${tool.name}`,
-        description: tool.description || `Tool from ${serverName} server`,
-        inputSchema: tool.inputSchema
+      // Create transport and client
+      const transport = new StdioClientTransport({
+        command: resolvedCommand,
+        args: serverConfig.args,
+        env: environment
       })
-    }
 
-    // Store references
-    this.transports.set(serverName, transport)
-    this.clients.set(serverName, client)
+      const client = new Client({
+        name: "speakmcp-mcp-client",
+        version: "1.0.0"
+      }, {
+        capabilities: {}
+      })
+
+      // Connect to the server with timeout
+      const connectTimeout = serverConfig.timeout || 10000
+      const connectPromise = client.connect(transport)
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error(`Connection timeout after ${connectTimeout}ms`)), connectTimeout)
+      })
+
+      await Promise.race([connectPromise, timeoutPromise])
+      console.log(`[MCP-SERVICE] ✅ Connected to server: ${serverName}`)
+
+      // Get available tools from the server
+      const toolsResult = await client.listTools()
+      console.log(`[MCP-SERVICE] 📋 Found ${toolsResult.tools.length} tools from ${serverName}`)
+
+      // Add tools to our registry with server prefix
+      for (const tool of toolsResult.tools) {
+        this.availableTools.push({
+          name: `${serverName}:${tool.name}`,
+          description: tool.description || `Tool from ${serverName} server`,
+          inputSchema: tool.inputSchema
+        })
+      }
+
+      // Store references
+      this.transports.set(serverName, transport)
+      this.clients.set(serverName, client)
+
+      console.log(`[MCP-SERVICE] ✅ Successfully initialized server: ${serverName}`)
+    } catch (error) {
+      console.error(`[MCP-SERVICE] ❌ Failed to initialize server ${serverName}:`, error)
+
+      // Clean up any partial initialization
+      this.cleanupServer(serverName)
+
+      // Re-throw to let the caller handle it
+      throw error
+    }
   }
 
   private cleanupServer(serverName: string) {
@@ -156,6 +179,42 @@ class MCPService {
       }
     } catch (error) {
       console.error(`Error executing tool ${toolName} on server ${serverName}:`, error)
+
+      // Check if this is a parameter naming issue and try to fix it
+      if (error instanceof Error) {
+        const errorMessage = error.message
+        if (errorMessage.includes("missing field") || errorMessage.includes("Invalid arguments")) {
+          // Try to fix common parameter naming issues
+          const correctedArgs = this.fixParameterNaming(arguments_, errorMessage)
+          if (JSON.stringify(correctedArgs) !== JSON.stringify(arguments_)) {
+            console.log(`[MCP-SERVICE] Retrying ${serverName}:${toolName} with corrected parameters:`, correctedArgs)
+            try {
+              const retryResult = await client.callTool({
+                name: toolName,
+                arguments: correctedArgs
+              })
+
+              const retryContent = Array.isArray(retryResult.content)
+                ? retryResult.content.map(item => ({
+                    type: "text" as const,
+                    text: typeof item === 'string' ? item : (item.text || JSON.stringify(item))
+                  }))
+                : [{
+                    type: "text" as const,
+                    text: "Tool executed successfully (after parameter correction)"
+                  }]
+
+              return {
+                content: retryContent,
+                isError: Boolean(retryResult.isError)
+              }
+            } catch (retryError) {
+              console.error(`Retry also failed:`, retryError)
+            }
+          }
+        }
+      }
+
       return {
         content: [{
           type: "text",
@@ -164,6 +223,50 @@ class MCPService {
         isError: true
       }
     }
+  }
+
+  private fixParameterNaming(args: any, errorMessage?: string): any {
+    if (!args || typeof args !== 'object') return args
+
+    const fixed = { ...args }
+
+    // General snake_case to camelCase conversion
+    const snakeToCamel = (str: string): string => {
+      return str.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase())
+    }
+
+    // If we have an error message, try to extract the expected field name
+    if (errorMessage) {
+      const missingFieldMatch = errorMessage.match(/missing field `([^`]+)`/)
+      if (missingFieldMatch) {
+        const expectedField = missingFieldMatch[1]
+        // Look for snake_case version of the expected field
+        const snakeVersion = expectedField.replace(/([A-Z])/g, '_$1').toLowerCase()
+        if (snakeVersion in fixed && !(expectedField in fixed)) {
+          fixed[expectedField] = fixed[snakeVersion]
+          delete fixed[snakeVersion]
+        }
+      }
+    }
+
+    // General conversion of common snake_case patterns to camelCase
+    const conversions: Record<string, string> = {}
+    for (const key in fixed) {
+      if (key.includes('_')) {
+        const camelKey = snakeToCamel(key)
+        if (camelKey !== key && !(camelKey in fixed)) {
+          conversions[key] = camelKey
+        }
+      }
+    }
+
+    // Apply conversions
+    for (const [oldKey, newKey] of Object.entries(conversions)) {
+      fixed[newKey] = fixed[oldKey]
+      delete fixed[oldKey]
+    }
+
+    return fixed
   }
 
   getAvailableTools(): MCPTool[] {
@@ -397,11 +500,27 @@ class MCPService {
         return await this.executeServerTool(serverName, toolName, toolCall.arguments)
       }
 
-      // No fallback tools available
+      // Try to find a matching tool without prefix (fallback for LLM inconsistencies)
+      const matchingTool = this.availableTools.find(tool => {
+        if (tool.name.includes(':')) {
+          const [, toolName] = tool.name.split(':', 2)
+          return toolName === toolCall.name
+        }
+        return tool.name === toolCall.name
+      })
+
+      if (matchingTool && matchingTool.name.includes(':')) {
+        console.log(`[MCP-SERVICE] 🔧 Found matching tool with prefix: ${matchingTool.name} for unprefixed call: ${toolCall.name}`)
+        const [serverName, toolName] = matchingTool.name.split(':', 2)
+        return await this.executeServerTool(serverName, toolName, toolCall.arguments)
+      }
+
+      // No matching tools found
+      const availableToolNames = this.availableTools.map(t => t.name).join(', ')
       const result: MCPToolResult = {
         content: [{
           type: "text",
-          text: `Unknown tool: ${toolCall.name}. Only MCP server tools are supported.`
+          text: `Unknown tool: ${toolCall.name}. Available tools: ${availableToolNames || 'none'}. Make sure to use the exact tool name including server prefix.`
         }],
         isError: true
       }

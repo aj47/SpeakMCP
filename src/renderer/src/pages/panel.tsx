@@ -31,7 +31,7 @@ export function Component() {
   const mcpModeRef = useRef(false)
 
   // Conversation state
-  const { showContinueButton, isWaitingForResponse, isConversationActive } = useConversationState()
+  const { showContinueButton, isWaitingForResponse, isConversationActive, currentConversation } = useConversationState()
   const { addMessage, setIsWaitingForResponse, startNewConversation, endConversation } = useConversationActions()
 
 
@@ -126,8 +126,8 @@ export function Component() {
   })
 
   const mcpTextInputMutation = useMutation({
-    mutationFn: async ({ text }: { text: string }) => {
-      await tipcClient.createMcpTextInput({ text })
+    mutationFn: async ({ text, conversationId }: { text: string; conversationId?: string }) => {
+      await tipcClient.createMcpTextInput({ text, conversationId })
     },
     onError(error) {
       setShowTextInput(false)
@@ -273,7 +273,10 @@ export function Component() {
     try {
       const config = await tipcClient.getConfig()
       if (config.mcpToolsEnabled) {
-        mcpTextInputMutation.mutate({ text })
+        mcpTextInputMutation.mutate({
+          text,
+          conversationId: currentConversation?.id
+        })
       } else {
         textInputMutation.mutate({ text })
       }
@@ -291,7 +294,10 @@ export function Component() {
     try {
       const config = await tipcClient.getConfig()
       if (config.mcpToolsEnabled) {
-        mcpTextInputMutation.mutate({ text: message })
+        mcpTextInputMutation.mutate({
+          text: message,
+          conversationId: currentConversation?.id
+        })
       } else {
         textInputMutation.mutate({ text: message })
       }

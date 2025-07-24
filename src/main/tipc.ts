@@ -332,6 +332,7 @@ export const router = {
   createMcpTextInput: t.procedure
     .input<{
       text: string
+      conversationId?: string
     }>()
     .action(async ({ input }) => {
       const config = configStore.get()
@@ -355,10 +356,37 @@ export const router = {
           return await mcpService.executeToolCall(toolCall)
         }
 
+        // Load previous conversation history if continuing a conversation
+        let previousConversationHistory: Array<{
+          role: "user" | "assistant" | "tool"
+          content: string
+          toolCalls?: any[]
+          toolResults?: any[]
+        }> | undefined
+
+        if (input.conversationId) {
+          const conversation = await conversationService.loadConversation(input.conversationId)
+          if (conversation && conversation.messages.length > 0) {
+            // Convert conversation messages to the format expected by agent mode
+            // Exclude the last message since it's the current user input that will be added
+            const messagesToConvert = conversation.messages.slice(0, -1)
+            previousConversationHistory = messagesToConvert.map(msg => ({
+              role: msg.role,
+              content: msg.content,
+              toolCalls: msg.toolCalls,
+              toolResults: msg.toolResults
+            }))
+
+            console.log(`[MCP-AGENT] 📚 Loaded ${previousConversationHistory.length} previous messages from conversation ${input.conversationId}`)
+          }
+        }
+
         const agentResult = await processTranscriptWithAgentMode(
           input.text,
           availableTools,
-          executeToolCall
+          executeToolCall,
+          10, // maxIterations
+          previousConversationHistory
         )
 
         finalResponse = agentResult.content

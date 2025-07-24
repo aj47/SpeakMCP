@@ -3,7 +3,15 @@
 # Script to properly sign the Rust binary with the same certificate as the main app
 
 BINARY_PATH="resources/bin/speakmcp-rs"
-ENTITLEMENTS_PATH="build/entitlements.mac.plist"
+
+# Use MAS entitlements if building for MAS, otherwise use regular entitlements
+if [ -n "${CSC_MAS_NAME:-}" ] && [ "${CSC_NAME:-}" = "${CSC_MAS_NAME:-}" ]; then
+    ENTITLEMENTS_PATH="build/entitlements.mas.plist"
+    echo "🏪 Using Mac App Store entitlements"
+else
+    ENTITLEMENTS_PATH="build/entitlements.mac.plist"
+    echo "🖥️  Using regular macOS entitlements"
+fi
 
 if [ ! -f "$BINARY_PATH" ]; then
     echo "❌ Binary not found at $BINARY_PATH"
@@ -24,7 +32,7 @@ else
     echo "🔐 Self-signing binary for development"
 fi
 
-# Sign the binary with the same entitlements as the main app
+# Sign the binary with the appropriate entitlements
 codesign --force --sign "$IDENTITY" --entitlements "$ENTITLEMENTS_PATH" "$BINARY_PATH"
 
 if [ $? -eq 0 ]; then

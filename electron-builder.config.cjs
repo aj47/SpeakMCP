@@ -71,12 +71,11 @@ module.exports = {
       {
         target: "pkg",
         arch: ["x64", "arm64"]
+      },
+      {
+        target: "mas",
+        arch: ["arm64"]
       }
-      // Temporarily disabled MAS build until installer certificate is available
-      // {
-      //   target: "mas",
-      //   arch: ["arm64"]
-      // }
     ],
     extendInfo: {
       NSCameraUsageDescription: "SpeakMCP may request camera access for enhanced AI features.",
@@ -104,12 +103,11 @@ module.exports = {
     entitlementsInherit: "build/entitlements.mas.inherit.plist",
     entitlements: "build/entitlements.mas.plist",
     hardenedRuntime: false,
-    identity: process.env.CSC_MAS_NAME || "3rd Party Mac Developer Application",
+    identity: null, // Let electron-builder auto-detect the MAS certificate
     provisioningProfile: process.env.MAS_PROVISIONING_PROFILE,
     category: "public.app-category.productivity",
-    type: "distribution",
+    type: "development",
     preAutoEntitlements: false,
-    cscInstallerLink: process.env.CSC_INSTALLER_LINK,
     extendInfo: {
       NSCameraUsageDescription: "SpeakMCP may request camera access for enhanced AI features.",
       NSMicrophoneUsageDescription: "SpeakMCP requires microphone access for voice dictation and transcription.",

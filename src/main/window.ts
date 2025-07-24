@@ -7,11 +7,22 @@ import {
 } from "electron"
 import path from "path"
 import { getRendererHandlers } from "@egoist/tipc/main"
-import {
-  makeKeyWindow,
-  makePanel,
-  makeWindow,
-} from "@egoist/electron-panel-window"
+// Simple replacements for panel window functions to avoid native dependencies
+function makeKeyWindow(win: BrowserWindow) {
+  // Make window key/focused
+  win.focus()
+}
+
+function makePanel(win: BrowserWindow) {
+  // Make window behave like a panel (always on top, etc.)
+  win.setAlwaysOnTop(true, 'floating')
+  win.setVisibleOnAllWorkspaces(true)
+}
+
+function makeWindow(win: BrowserWindow) {
+  // Make window behave like a normal window
+  win.setAlwaysOnTop(false)
+}
 import { RendererHandlers } from "./renderer-handlers"
 import { configStore } from "./config"
 
@@ -83,14 +94,14 @@ export function createMainWindow({ url }: { url?: string } = {}) {
 
   if (process.env.IS_MAC) {
     win.on("close", () => {
-      if (configStore.get().hideDockIcon) {
+      if (configStore.get().hideDockIcon && app.dock) {
         app.setActivationPolicy("accessory")
         app.dock.hide()
       }
     })
 
     win.on("show", () => {
-      if (configStore.get().hideDockIcon && !app.dock.isVisible()) {
+      if (configStore.get().hideDockIcon && app.dock && !app.dock.isVisible()) {
         app.dock.show()
       }
     })
@@ -184,18 +195,7 @@ export function createPanelWindow() {
 
 
 
-  // Only log important MCP-related console messages
-  win.webContents.on('console-message', (_event, _level, message, _line, _sourceId) => {
-    if (message.includes('[MCP-DEBUG]') && (
-      message.includes('startMcpRecording handler triggered') ||
-      message.includes('finishMcpRecording handler triggered') ||
-      message.includes('Using MCP transcription mutation') ||
-      message.includes('Recording ended, mcpMode:') ||
-      message.includes('Setting mcpMode to true')
-    )) {
-      console.log(`[MCP-DEBUG] 📝 ${message}`)
-    }
-  })
+
 
   makePanel(win)
 
@@ -217,11 +217,7 @@ export function showPanelWindowAndStartRecording() {
   getWindowRendererHandlers("panel")?.startRecording.send()
 }
 
-export function showPanelWindowAndStartMcpRecording() {
-  console.log("[MCP-DEBUG] showPanelWindowAndStartMcpRecording called")
-  showPanelWindow()
-  getWindowRendererHandlers("panel")?.startMcpRecording.send()
-}
+
 
 export function makePanelWindowClosable() {
   const panel = WINDOWS.get("panel")

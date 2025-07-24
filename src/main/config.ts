@@ -7,6 +7,8 @@ export const dataFolder = path.join(app.getPath("appData"), process.env.APP_ID)
 
 export const recordingsFolder = path.join(dataFolder, "recordings")
 
+export const conversationsFolder = path.join(dataFolder, "conversations")
+
 export const configPath = path.join(dataFolder, "config.json")
 
 const getConfig = () => {
@@ -18,6 +20,9 @@ const getConfig = () => {
     mcpAutoPasteDelay: 1000, // 1 second delay by default
     textInputEnabled: true,
     textInputShortcut: "ctrl-t",
+    conversationsEnabled: true,
+    maxConversationsToKeep: 100,
+    autoSaveConversations: true,
   }
 
   try {

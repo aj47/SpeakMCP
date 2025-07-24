@@ -8,6 +8,8 @@ import { useEffect, useRef, useState } from "react"
 import { rendererHandlers, tipcClient } from "~/lib/tipc-client"
 import { AgentProgressUpdate } from "../../../shared/types"
 import { TextInputPanel } from "@renderer/components/text-input-panel"
+import { ContinueConversation } from "@renderer/components/continue-conversation"
+import { useConversationActions, useConversationState } from "@renderer/contexts/conversation-context"
 
 
 
@@ -28,16 +30,27 @@ export function Component() {
   const isConfirmedRef = useRef(false)
   const mcpModeRef = useRef(false)
 
+  // Conversation state
+  const { showContinueButton, isWaitingForResponse, isConversationActive } = useConversationState()
+  const { addMessage, setIsWaitingForResponse, startNewConversation, endConversation } = useConversationActions()
+
 
 
   const transcribeMutation = useMutation({
     mutationFn: async ({
       blob,
       duration,
+      transcript,
     }: {
       blob: Blob
       duration: number
+      transcript?: string
     }) => {
+      // If we have a transcript, start a conversation with it
+      if (transcript && !isConversationActive) {
+        await startNewConversation(transcript, "user")
+      }
+
       await tipcClient.createRecording({
         recording: await blob.arrayBuffer(),
         duration,
@@ -56,11 +69,18 @@ export function Component() {
     mutationFn: async ({
       blob,
       duration,
+      transcript,
     }: {
       blob: Blob
       duration: number
+      transcript?: string
     }) => {
       const arrayBuffer = await blob.arrayBuffer()
+
+      // If we have a transcript, start a conversation with it
+      if (transcript && !isConversationActive) {
+        await startNewConversation(transcript, "user")
+      }
 
       await tipcClient.createMcpRecording({
         recording: arrayBuffer,
@@ -242,6 +262,13 @@ export function Component() {
   }, [])
 
   const handleTextSubmit = async (text: string) => {
+    // Start new conversation or add to existing one
+    if (!isConversationActive) {
+      await startNewConversation(text, "user")
+    } else {
+      await addMessage(text, "user")
+    }
+
     // Always try to use MCP processing first if available
     try {
       const config = await tipcClient.getConfig()
@@ -253,6 +280,24 @@ export function Component() {
     } catch (error) {
       console.error('[TEXT-INPUT] Failed to get config, using regular processing:', error)
       textInputMutation.mutate({ text })
+    }
+  }
+
+  const handleContinueConversation = async (message: string) => {
+    // Add user message to conversation
+    await addMessage(message, "user")
+
+    // Process the message through the same flow as text input
+    try {
+      const config = await tipcClient.getConfig()
+      if (config.mcpToolsEnabled) {
+        mcpTextInputMutation.mutate({ text: message })
+      } else {
+        textInputMutation.mutate({ text: message })
+      }
+    } catch (error) {
+      console.error('[CONTINUE-CONVERSATION] Failed to get config, using regular processing:', error)
+      textInputMutation.mutate({ text: message })
     }
   }
 
@@ -335,6 +380,14 @@ export function Component() {
       // Keep the panel open when agent completes - user will press ESC to close
       if (update.isComplete) {
         console.log(`[MCP-AGENT-GUI] ✅ Agent completed, panel will remain open until user presses ESC`)
+
+        // Add assistant response to conversation if we have final content
+        if (update.finalContent) {
+          addMessage(update.finalContent, "assistant").catch(error => {
+            console.error("Failed to add assistant response to conversation:", error)
+          })
+        }
+
         // No auto-hide behavior - user controls when to close with ESC
       }
     })
@@ -349,10 +402,14 @@ export function Component() {
       setAgentProgress(null)
       setMcpMode(false)
       mcpModeRef.current = false
+      // End conversation when clearing progress (user pressed ESC)
+      if (isConversationActive) {
+        endConversation()
+      }
     })
 
     return unlisten
-  }, [])
+  }, [isConversationActive, endConversation])
 
 
 
@@ -393,11 +450,27 @@ export function Component() {
                 <div className="w-2 h-2 bg-primary rounded-full animate-pulse shadow-lg" title="MCP Tool Mode" />
               </div>
             )}
+            {isConversationActive && !mcpMode && (
+              <div className="flex items-center justify-center w-8 h-full liquid-glass-subtle rounded-l-xl">
+                <div className="w-2 h-2 bg-green-500 rounded-full shadow-lg" title="Conversation Active" />
+              </div>
+            )}
           </div>
           <div
             className="relative flex grow items-center overflow-hidden"
             dir="rtl"
           >
+            {/* Continue conversation overlay - shown when conversation can be continued */}
+            {showContinueButton && !agentProgress && (
+              <div className="absolute inset-0 flex items-center justify-center z-30 p-4">
+                <ContinueConversation
+                  onSubmit={handleContinueConversation}
+                  isProcessing={isWaitingForResponse || textInputMutation.isPending || mcpTextInputMutation.isPending}
+                  className="w-full max-w-md"
+                />
+              </div>
+            )}
+
             {/* Agent progress overlay - positioned to not interfere with waveform */}
             {agentProgress && !mcpTranscribeMutation.isPending && (
               <div className="absolute inset-0 flex items-center justify-start z-20 liquid-glass-strong rounded-xl glass-text-strong">
@@ -408,7 +481,7 @@ export function Component() {
             {/* Waveform visualization - dimmed when agent progress is showing */}
             <div className={cn(
               "absolute right-0 flex h-6 items-center gap-0.5 transition-opacity duration-300",
-              agentProgress && !mcpTranscribeMutation.isPending ? "opacity-30" : "opacity-100"
+              (agentProgress && !mcpTranscribeMutation.isPending) || showContinueButton ? "opacity-30" : "opacity-100"
             )}>
               {visualizerData
                 .slice()

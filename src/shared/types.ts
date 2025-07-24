@@ -47,6 +47,57 @@ export interface AgentProgressUpdate {
   finalContent?: string
 }
 
+// Conversation Types
+export interface ConversationMessage {
+  id: string
+  role: "user" | "assistant" | "tool"
+  content: string
+  timestamp: number
+  toolCalls?: Array<{
+    name: string
+    arguments: any
+  }>
+  toolResults?: Array<{
+    success: boolean
+    content: string
+    error?: string
+  }>
+}
+
+export interface ConversationMetadata {
+  id: string
+  title: string
+  createdAt: number
+  updatedAt: number
+  messageCount: number
+  lastMessage?: string
+  tags?: string[]
+}
+
+export interface Conversation {
+  id: string
+  title: string
+  createdAt: number
+  updatedAt: number
+  messages: ConversationMessage[]
+  metadata?: {
+    totalTokens?: number
+    model?: string
+    provider?: string
+    agentMode?: boolean
+  }
+}
+
+export interface ConversationHistoryItem {
+  id: string
+  title: string
+  createdAt: number
+  updatedAt: number
+  messageCount: number
+  lastMessage: string
+  preview: string
+}
+
 export type Config = {
   shortcut?: "hold-ctrl" | "ctrl-slash"
   hideDockIcon?: boolean
@@ -90,4 +141,9 @@ export type Config = {
 
   // MCP Server Configuration
   mcpConfig?: MCPConfig
+
+  // Conversation Configuration
+  conversationsEnabled?: boolean
+  maxConversationsToKeep?: number
+  autoSaveConversations?: boolean
 }

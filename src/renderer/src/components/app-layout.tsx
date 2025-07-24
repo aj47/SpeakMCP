@@ -29,6 +29,11 @@ export const Component = () => {
       icon: "i-mingcute-history-anticlockwise-line",
     },
     {
+      text: "Conversations",
+      href: "/conversations",
+      icon: "i-mingcute-message-3-line",
+    },
+    {
       text: "Settings",
       href: "/settings",
       icon: "i-mingcute-settings-3-line",

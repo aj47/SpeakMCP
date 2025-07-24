@@ -6,6 +6,7 @@ import { getRendererHandlers } from "@egoist/tipc/main"
 import { WINDOWS, showPanelWindow } from "./window"
 import { RendererHandlers } from "./renderer-handlers"
 import { diagnosticsService } from "./diagnostics"
+import { jsonrepair } from "jsonrepair"
 
 /**
  * Use LLM to extract useful context from conversation history
@@ -204,21 +205,59 @@ function isValidLLMResponse(obj: any): obj is LLMToolCallResponse {
 }
 
 /**
+ * Attempts to repair malformed JSON using the jsonrepair library
+ * This handles common issues like unescaped newlines, quotes, and other special characters
+ */
+function repairAndParseJSON(jsonString: string): any | null {
+  try {
+    console.log("[JSON-REPAIR] 🔧 Attempting to repair JSON...")
+    const repairedJson = jsonrepair(jsonString)
+    console.log("[JSON-REPAIR] ✅ JSON repair successful")
+
+    const parsed = JSON.parse(repairedJson)
+    return parsed
+  } catch (error) {
+    console.log("[JSON-REPAIR] ❌ JSON repair failed:", error instanceof Error ? error.message : String(error))
+    return null
+  }
+}
+
+/**
  * Attempts to extract and parse JSON from various response formats
  * Handles cases where JSON is wrapped in markdown code blocks or mixed with text
  */
 function extractAndParseJSON(responseText: string): LLMToolCallResponse | null {
   console.log("[JSON-PARSER] 🔍 Attempting to parse response:", responseText.substring(0, 200) + (responseText.length > 200 ? "..." : ""))
 
-  // First, try direct JSON parsing
-  try {
-    const parsed = JSON.parse(responseText.trim())
-    if (isValidLLMResponse(parsed)) {
-      console.log("[JSON-PARSER] ✅ Direct JSON parsing successful")
-      return parsed
+  // Helper function to try parsing with repair fallback
+  const tryParseWithRepair = (jsonString: string, context: string): any | null => {
+    // First try direct parsing
+    try {
+      const parsed = JSON.parse(jsonString.trim())
+      if (isValidLLMResponse(parsed)) {
+        console.log(`[JSON-PARSER] ✅ Direct JSON parsing successful (${context})`)
+        return parsed
+      }
+    } catch (error) {
+      console.log(`[JSON-PARSER] ❌ Direct JSON parsing failed (${context}):`, error instanceof Error ? error.message : String(error))
     }
-  } catch (error) {
-    console.log("[JSON-PARSER] ❌ Direct JSON parsing failed:", error instanceof Error ? error.message : String(error))
+
+    // If direct parsing fails, try JSON repair
+    const repaired = repairAndParseJSON(jsonString.trim())
+    if (repaired && isValidLLMResponse(repaired)) {
+      console.log(`[JSON-PARSER] ✅ JSON repair successful (${context})`)
+      return repaired
+    } else if (repaired) {
+      console.log(`[JSON-PARSER] ❌ Repaired JSON failed validation (${context})`)
+    }
+
+    return null
+  }
+
+  // First, try direct JSON parsing with repair fallback
+  const directResult = tryParseWithRepair(responseText, "direct")
+  if (directResult) {
+    return directResult
   }
 
   // Try to extract JSON from markdown code blocks
@@ -227,14 +266,9 @@ function extractAndParseJSON(responseText: string): LLMToolCallResponse | null {
 
   if (match) {
     console.log("[JSON-PARSER] 📋 Found JSON in code block")
-    try {
-      const parsed = JSON.parse(match[1].trim())
-      if (isValidLLMResponse(parsed)) {
-        console.log("[JSON-PARSER] ✅ Code block JSON parsing successful")
-        return parsed
-      }
-    } catch (error) {
-      console.log("[JSON-PARSER] ❌ Code block JSON parsing failed:", error instanceof Error ? error.message : String(error))
+    const codeBlockResult = tryParseWithRepair(match[1], "code block")
+    if (codeBlockResult) {
+      return codeBlockResult
     }
   }
 
@@ -297,16 +331,9 @@ function extractAndParseJSON(responseText: string): LLMToolCallResponse | null {
       const potentialJson = sortedObjects[i]
       console.log("[JSON-PARSER] 🧪 Trying JSON object", i + 1, "of", sortedObjects.length, "- length:", potentialJson.length)
 
-      try {
-        const parsed = JSON.parse(potentialJson.trim())
-        if (isValidLLMResponse(parsed)) {
-          console.log("[JSON-PARSER] ✅ Successfully parsed JSON object", i + 1)
-          return parsed
-        } else {
-          console.log("[JSON-PARSER] ❌ JSON object", i + 1, "failed validation")
-        }
-      } catch (error) {
-        console.log("[JSON-PARSER] ❌ JSON object", i + 1, "parsing failed:", error instanceof Error ? error.message : String(error))
+      const objectResult = tryParseWithRepair(potentialJson, `object ${i + 1}`)
+      if (objectResult) {
+        return objectResult
       }
     }
   }
@@ -463,6 +490,13 @@ If no tools are needed, respond with this exact JSON format:
 {
   "content": "Your response text here"
 }
+
+CRITICAL JSON FORMATTING RULES:
+- Always escape special characters in JSON strings (newlines as \\n, quotes as \\\", backslashes as \\\\)
+- Never include unescaped newlines, tabs, or control characters in JSON string values
+- If you need to include multi-line text, use \\n for line breaks
+- Always use double quotes for JSON strings, never single quotes
+- Ensure all JSON is properly closed with matching braces and brackets
 
 Examples:
 
@@ -873,7 +907,15 @@ If no tools are needed for the initial request, respond with:
   "needsMoreWork": false
 }
 
-Remember: Respond with ONLY the JSON object, no markdown formatting, no code blocks, no additional text.`
+Remember: Respond with ONLY the JSON object, no markdown formatting, no code blocks, no additional text.
+
+CRITICAL JSON FORMATTING RULES:
+- Always escape special characters in JSON strings (newlines as \\n, quotes as \\\", backslashes as \\\\)
+- Never include unescaped newlines, tabs, or control characters in JSON string values
+- If you need to include multi-line text or commands, use \\n for line breaks
+- Always use double quotes for JSON strings, never single quotes
+- Ensure all JSON is properly closed with matching braces and brackets
+- Test your JSON mentally before responding to ensure it's valid`
 
   // Debug: Log the system prompt being used
   // console.log("[MCP-AGENT-DEBUG] 📝 Using custom system prompt:", !!config.mcpToolsSystemPrompt)

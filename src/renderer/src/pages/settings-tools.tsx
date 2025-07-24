@@ -66,6 +66,13 @@ If no tools are needed, respond with:
   "content": "Your response text here"
 }
 
+CRITICAL JSON FORMATTING RULES:
+- Always escape special characters in JSON strings (newlines as \\n, quotes as \\\", backslashes as \\\\)
+- Never include unescaped newlines, tabs, or control characters in JSON string values
+- If you need to include multi-line text, use \\n for line breaks
+- Always use double quotes for JSON strings, never single quotes
+- Ensure all JSON is properly closed with matching braces and brackets
+
 Always respond with valid JSON only.`
 
   return (

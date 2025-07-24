@@ -2,7 +2,9 @@ import {
   getWindowRendererHandlers,
   showPanelWindowAndStartRecording,
   showPanelWindowAndStartMcpRecording,
+  showPanelWindowAndShowTextInput,
   stopRecordingAndHidePanelWindow,
+  stopTextInputAndHidePanelWindow,
   closeAgentModeAndHidePanelWindow,
   WINDOWS,
 } from "./window"
@@ -181,6 +183,8 @@ export function listenToKeyboardEvents() {
   let isHoldingCtrlKey = false
   let startRecordingTimer: NodeJS.Timeout | undefined
   let isPressedCtrlKey = false
+  let isPressedShiftKey = false
+  let isPressedAltKey = false
 
   // MCP tool calling state
   let isHoldingCtrlAltKey = false
@@ -213,7 +217,12 @@ export function listenToKeyboardEvents() {
         isPressedCtrlKey = true
       }
 
+      if (e.data.key === "ShiftLeft" || e.data.key === "ShiftRight") {
+        isPressedShiftKey = true
+      }
+
       if (e.data.key === "Alt") {
+        isPressedAltKey = true
         isPressedCtrlAltKey = isPressedCtrlKey && true
       }
 
@@ -233,9 +242,25 @@ export function listenToKeyboardEvents() {
         return
       }
 
-      // Handle MCP tool calling shortcuts
+      // Handle text input shortcuts
       const config = configStore.get()
 
+      if (config.textInputEnabled) {
+        if (config.textInputShortcut === "ctrl-t" && e.data.key === "KeyT" && isPressedCtrlKey && !isPressedShiftKey && !isPressedAltKey) {
+          showPanelWindowAndShowTextInput()
+          return
+        }
+        if (config.textInputShortcut === "ctrl-shift-t" && e.data.key === "KeyT" && isPressedCtrlKey && isPressedShiftKey && !isPressedAltKey) {
+          showPanelWindowAndShowTextInput()
+          return
+        }
+        if (config.textInputShortcut === "alt-t" && e.data.key === "KeyT" && !isPressedCtrlKey && !isPressedShiftKey && isPressedAltKey) {
+          showPanelWindowAndShowTextInput()
+          return
+        }
+      }
+
+      // Handle MCP tool calling shortcuts
       if (config.mcpToolsEnabled && config.mcpToolsShortcut === "ctrl-alt-slash") {
         if (e.data.key === "Slash" && isPressedCtrlKey && isPressedCtrlAltKey) {
           getWindowRendererHandlers("panel")?.startOrFinishMcpRecording.send()
@@ -303,7 +328,12 @@ export function listenToKeyboardEvents() {
         isPressedCtrlKey = false
       }
 
+      if (e.data.key === "ShiftLeft" || e.data.key === "ShiftRight") {
+        isPressedShiftKey = false
+      }
+
       if (e.data.key === "Alt") {
+        isPressedAltKey = false
         isPressedCtrlAltKey = false
       }
 
@@ -315,7 +345,8 @@ export function listenToKeyboardEvents() {
       if (e.data.key === "ControlLeft") {
         if (isHoldingCtrlKey) {
           getWindowRendererHandlers("panel")?.finishRecording.send()
-        } else {
+        } else if (!state.isTextInputActive) {
+          // Only close panel if we're not in text input mode
           stopRecordingAndHidePanelWindow()
         }
 
@@ -326,7 +357,8 @@ export function listenToKeyboardEvents() {
         if (isHoldingCtrlAltKey) {
           const panelHandlers = getWindowRendererHandlers("panel")
           panelHandlers?.finishMcpRecording.send()
-        } else {
+        } else if (!state.isTextInputActive) {
+          // Only close panel if we're not in text input mode
           stopRecordingAndHidePanelWindow()
         }
 

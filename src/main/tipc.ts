@@ -272,6 +272,161 @@ export const router = {
       }
     }),
 
+  createTextInput: t.procedure
+    .input<{
+      text: string
+    }>()
+    .action(async ({ input }) => {
+      const config = configStore.get()
+      let processedText = input.text
+
+      // Apply post-processing if enabled
+      if (config.transcriptPostProcessingEnabled) {
+        try {
+          processedText = await postProcessTranscript(input.text)
+        } catch (error) {
+          console.error("Text post-processing failed:", error)
+          // Continue with original text if post-processing fails
+        }
+      }
+
+      // Save to history
+      const history = getRecordingHistory()
+      const item: RecordingHistoryItem = {
+        id: Date.now().toString(),
+        createdAt: Date.now(),
+        duration: 0, // Text input has no duration
+        transcript: processedText,
+      }
+      history.push(item)
+      saveRecordingsHitory(history)
+
+      const main = WINDOWS.get("main")
+      if (main) {
+        getRendererHandlers<RendererHandlers>(
+          main.webContents,
+        ).refreshRecordingHistory.send()
+      }
+
+      const panel = WINDOWS.get("panel")
+      if (panel) {
+        panel.hide()
+      }
+
+      // Auto-paste if enabled
+      if (config.mcpAutoPasteEnabled && state.focusedAppBeforeRecording) {
+        console.log(`[TEXT-INPUT] 📋 Auto-pasting text to: ${state.focusedAppBeforeRecording}`)
+
+        setTimeout(async () => {
+          try {
+            await writeText(processedText)
+            console.log(`[TEXT-INPUT] ✅ Successfully pasted text`)
+          } catch (error) {
+            console.error(`[TEXT-INPUT] ❌ Failed to paste text:`, error)
+          }
+        }, config.mcpAutoPasteDelay || 1000)
+      }
+    }),
+
+  createMcpTextInput: t.procedure
+    .input<{
+      text: string
+    }>()
+    .action(async ({ input }) => {
+      const config = configStore.get()
+
+      if (!config.mcpToolsEnabled) {
+        // Fall back to regular text input processing
+        return router.createTextInput({ text: input.text })
+      }
+
+      // Initialize MCP service if not already done
+      await mcpService.initialize()
+
+      // Process text with tools using agent mode if enabled
+      const availableTools = mcpService.getAvailableTools()
+
+      let finalResponse: string
+
+      if (config.mcpAgentModeEnabled) {
+        // Use agent mode for iterative tool calling
+        const executeToolCall = async (toolCall: any): Promise<MCPToolResult> => {
+          return await mcpService.executeToolCall(toolCall)
+        }
+
+        const agentResult = await processTranscriptWithAgentMode(
+          input.text,
+          availableTools,
+          executeToolCall
+        )
+
+        finalResponse = agentResult.content
+      } else {
+        // Use single-shot tool calling
+        const result = await processTranscriptWithTools(input.text, availableTools)
+
+        if (result.toolCalls && result.toolCalls.length > 0) {
+          // Execute tool calls and get results
+          const toolResults: MCPToolResult[] = []
+
+          for (const toolCall of result.toolCalls) {
+            try {
+              const toolResult = await mcpService.executeToolCall(toolCall)
+              toolResults.push(toolResult)
+            } catch (error) {
+              console.error(`Tool call failed for ${toolCall.name}:`, error)
+              toolResults.push({
+                content: [{
+                  type: "text",
+                  text: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`
+                }],
+                isError: true
+              })
+            }
+          }
+
+          // Combine tool results into final response
+          finalResponse = toolResults.map(result =>
+            result.content.map(item => item.text).join('\n')
+          ).join('\n\n')
+        } else {
+          finalResponse = result.content || input.text
+        }
+      }
+
+      // Save to history
+      const history = getRecordingHistory()
+      const item: RecordingHistoryItem = {
+        id: Date.now().toString(),
+        createdAt: Date.now(),
+        duration: 0, // Text input has no duration
+        transcript: finalResponse,
+      }
+      history.push(item)
+      saveRecordingsHitory(history)
+
+      const main = WINDOWS.get("main")
+      if (main) {
+        getRendererHandlers<RendererHandlers>(
+          main.webContents,
+        ).refreshRecordingHistory.send()
+      }
+
+      // Auto-paste if enabled
+      if (config.mcpAutoPasteEnabled && state.focusedAppBeforeRecording) {
+        console.log(`[MCP-TEXT-INPUT] 📋 Auto-pasting result to: ${state.focusedAppBeforeRecording}`)
+
+        setTimeout(async () => {
+          try {
+            await writeText(finalResponse)
+            console.log(`[MCP-TEXT-INPUT] ✅ Successfully pasted result`)
+          } catch (error) {
+            console.error(`[MCP-TEXT-INPUT] ❌ Failed to paste result:`, error)
+          }
+        }, config.mcpAutoPasteDelay || 1000)
+      }
+    }),
+
   createMcpRecording: t.procedure
     .input<{
       recording: ArrayBuffer
@@ -441,6 +596,11 @@ export const router = {
       }
       updateTrayIcon()
     }),
+
+  clearTextInputState: t.procedure.action(async () => {
+    state.isTextInputActive = false
+    console.log("[TEXT-INPUT-DEBUG] 🔄 Text input state cleared")
+  }),
 
   // MCP Config File Operations
   loadMcpConfigFile: t.procedure.action(async () => {

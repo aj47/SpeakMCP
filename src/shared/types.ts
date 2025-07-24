@@ -72,6 +72,10 @@ export type Config = {
   transcriptPostProcessingGroqModel?: string
   transcriptPostProcessingGeminiModel?: string
 
+  // Text Input Configuration
+  textInputEnabled?: boolean
+  textInputShortcut?: "ctrl-t" | "ctrl-shift-t" | "alt-t"
+
   // MCP Tool Calling Configuration
   mcpToolsEnabled?: boolean
   mcpToolsShortcut?: "hold-ctrl-alt" | "ctrl-alt-slash"

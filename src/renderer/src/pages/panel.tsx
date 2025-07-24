@@ -7,6 +7,7 @@ import { useMutation } from "@tanstack/react-query"
 import { useEffect, useRef, useState } from "react"
 import { rendererHandlers, tipcClient } from "~/lib/tipc-client"
 import { AgentProgressUpdate } from "../../../shared/types"
+import { TextInputPanel } from "@renderer/components/text-input-panel"
 
 
 
@@ -23,6 +24,7 @@ export function Component() {
   const [recording, setRecording] = useState(false)
   const [mcpMode, setMcpMode] = useState(false)
   const [agentProgress, setAgentProgress] = useState<AgentProgressUpdate | null>(null)
+  const [showTextInput, setShowTextInput] = useState(false)
   const isConfirmedRef = useRef(false)
   const mcpModeRef = useRef(false)
 
@@ -75,6 +77,51 @@ export function Component() {
       })
     },
     onSuccess() {
+      // Don't clear progress or hide panel on success - agent mode will handle this
+      // The panel needs to stay visible for agent mode progress updates
+    },
+  })
+
+  const textInputMutation = useMutation({
+    mutationFn: async ({ text }: { text: string }) => {
+      await tipcClient.createTextInput({ text })
+    },
+    onError(error) {
+      setShowTextInput(false)
+      tipcClient.clearTextInputState()
+      tipcClient.resizePanelToNormal()
+      tipcClient.hidePanelWindow()
+      tipcClient.displayError({
+        title: error.name,
+        message: error.message,
+      })
+    },
+    onSuccess() {
+      setShowTextInput(false)
+      // Clear text input state
+      tipcClient.clearTextInputState()
+      tipcClient.resizePanelToNormal()
+      tipcClient.hidePanelWindow()
+    },
+  })
+
+  const mcpTextInputMutation = useMutation({
+    mutationFn: async ({ text }: { text: string }) => {
+      await tipcClient.createMcpTextInput({ text })
+    },
+    onError(error) {
+      setShowTextInput(false)
+      tipcClient.clearTextInputState()
+      setAgentProgress(null) // Clear progress on error
+      tipcClient.resizePanelToNormal() // Resize back to normal on error
+      tipcClient.hidePanelWindow()
+      tipcClient.displayError({
+        title: error.name,
+        message: error.message,
+      })
+    },
+    onSuccess() {
+      setShowTextInput(false)
       // Don't clear progress or hide panel on success - agent mode will handle this
       // The panel needs to stay visible for agent mode progress updates
     },
@@ -175,6 +222,39 @@ export function Component() {
 
     return unlisten
   }, [recording])
+
+  // Text input handlers
+  useEffect(() => {
+    const unlisten = rendererHandlers.showTextInput.listen(() => {
+      setShowTextInput(true)
+      // Panel window is already shown by the keyboard handler
+    })
+
+    return unlisten
+  }, [])
+
+  useEffect(() => {
+    const unlisten = rendererHandlers.hideTextInput.listen(() => {
+      setShowTextInput(false)
+    })
+
+    return unlisten
+  }, [])
+
+  const handleTextSubmit = async (text: string) => {
+    // Always try to use MCP processing first if available
+    try {
+      const config = await tipcClient.getConfig()
+      if (config.mcpToolsEnabled) {
+        mcpTextInputMutation.mutate({ text })
+      } else {
+        textInputMutation.mutate({ text })
+      }
+    } catch (error) {
+      console.error('[TEXT-INPUT] Failed to get config, using regular processing:', error)
+      textInputMutation.mutate({ text })
+    }
+  }
 
   // MCP handlers
   useEffect(() => {
@@ -278,7 +358,18 @@ export function Component() {
 
   return (
     <div className="flex h-screen liquid-glass-panel text-foreground glass-text-strong">
-      {(transcribeMutation.isPending || mcpTranscribeMutation.isPending) ? (
+      {showTextInput ? (
+        <TextInputPanel
+          onSubmit={handleTextSubmit}
+          onCancel={() => {
+            setShowTextInput(false)
+            tipcClient.clearTextInputState()
+            tipcClient.resizePanelToNormal()
+            tipcClient.hidePanelWindow()
+          }}
+          isProcessing={textInputMutation.isPending || mcpTextInputMutation.isPending}
+        />
+      ) : (transcribeMutation.isPending || mcpTranscribeMutation.isPending || textInputMutation.isPending || mcpTextInputMutation.isPending) ? (
         <div className="flex h-full w-full items-center justify-center relative liquid-glass-strong rounded-xl glass-text-strong">
           {agentProgress ? (
             <div className="absolute inset-0 flex items-center justify-center z-20">

@@ -139,13 +139,24 @@ const agentPanelWindowSize = {
   height: 240,
 }
 
-const getPanelWindowPosition = (isAgentMode = false) => {
+const textInputPanelWindowSize = {
+  width: 380,
+  height: 180,
+}
+
+const getPanelWindowPosition = (mode: 'normal' | 'agent' | 'textInput' = 'normal') => {
   // position the window top right
   const currentScreen = screen.getDisplayNearestPoint(
     screen.getCursorScreenPoint(),
   )
   const screenSize = currentScreen.workArea
-  const size = isAgentMode ? agentPanelWindowSize : panelWindowSize
+  let size = panelWindowSize
+  if (mode === 'agent') {
+    size = agentPanelWindowSize
+  } else if (mode === 'textInput') {
+    size = textInputPanelWindowSize
+  }
+
   const position = {
     x: Math.floor(
       screenSize.x + (screenSize.width - size.width) - 10,
@@ -202,7 +213,21 @@ export function createPanelWindow() {
 export function showPanelWindow() {
   const win = WINDOWS.get("panel")
   if (win) {
-    const position = getPanelWindowPosition()
+    // Determine the correct mode based on current state
+    let mode: 'normal' | 'agent' | 'textInput' = 'normal'
+    if (state.isTextInputActive) {
+      mode = 'textInput'
+    }
+    // Note: Agent mode positioning is handled separately in resizePanelForAgentMode
+
+    const position = getPanelWindowPosition(mode)
+    console.log("[PANEL-DEBUG] 📍 Showing panel window:", {
+      mode,
+      isTextInputActive: state.isTextInputActive,
+      currentBounds: win.getBounds(),
+      targetPosition: position
+    })
+
     win.setPosition(position.x, position.y)
     win.showInactive()
     makeKeyWindow(win)
@@ -239,6 +264,24 @@ export async function showPanelWindowAndStartMcpRecording() {
   getWindowRendererHandlers("panel")?.startMcpRecording.send()
 }
 
+export async function showPanelWindowAndShowTextInput() {
+  // Capture focus before showing panel
+  try {
+    const focusedApp = await getFocusedAppInfo()
+    state.focusedAppBeforeRecording = focusedApp
+    console.log(`[FOCUS] 📱 Captured focused app before text input: ${focusedApp}`)
+  } catch (error) {
+    console.error(`[FOCUS] ❌ Failed to capture focused app:`, error)
+    state.focusedAppBeforeRecording = null
+  }
+
+  // Set text input state first, then show panel (which will use correct positioning)
+  state.isTextInputActive = true
+  resizePanelForTextInput()
+  showPanelWindow() // This will now use textInput mode positioning
+  getWindowRendererHandlers("panel")?.showTextInput.send()
+}
+
 export function makePanelWindowClosable() {
   const panel = WINDOWS.get("panel")
   if (panel && !panel.isClosable()) {
@@ -257,6 +300,19 @@ export const stopRecordingAndHidePanelWindow = () => {
   const win = WINDOWS.get("panel")
   if (win) {
     getRendererHandlers<RendererHandlers>(win.webContents).stopRecording.send()
+
+    if (win.isVisible()) {
+      win.hide()
+    }
+  }
+}
+
+export const stopTextInputAndHidePanelWindow = () => {
+  const win = WINDOWS.get("panel")
+  if (win) {
+    state.isTextInputActive = false
+    getRendererHandlers<RendererHandlers>(win.webContents).hideTextInput.send()
+    resizePanelToNormal()
 
     if (win.isVisible()) {
       win.hide()
@@ -286,7 +342,7 @@ export function resizePanelForAgentMode() {
     return
   }
 
-  const position = getPanelWindowPosition(true)
+  const position = getPanelWindowPosition('agent')
 
   // Update size constraints for agent mode
   win.setMinimumSize(agentPanelWindowSize.width, agentPanelWindowSize.height)
@@ -303,6 +359,36 @@ export function resizePanelForAgentMode() {
   })
 }
 
+export function resizePanelForTextInput() {
+  const win = WINDOWS.get("panel")
+  if (!win) {
+    console.error("[TEXT-INPUT-DEBUG] ❌ Panel window not found for text input resize!")
+    return
+  }
+
+  const position = getPanelWindowPosition('textInput')
+  console.log("[TEXT-INPUT-DEBUG] 📏 Resizing panel for text input mode:", {
+    currentBounds: win.getBounds(),
+    targetSize: textInputPanelWindowSize,
+    targetPosition: position,
+    isTextInputActive: state.isTextInputActive
+  })
+
+  // Update size constraints for text input mode
+  win.setMinimumSize(textInputPanelWindowSize.width, textInputPanelWindowSize.height)
+  win.setMaximumSize(textInputPanelWindowSize.width, textInputPanelWindowSize.height)
+
+  // Set size and position
+  win.setSize(textInputPanelWindowSize.width, textInputPanelWindowSize.height, true) // animate = true
+  win.setPosition(position.x, position.y, true) // animate = true
+
+  console.log("[TEXT-INPUT-DEBUG] ✅ Panel resized for text input mode:", {
+    newSize: textInputPanelWindowSize,
+    newPosition: position,
+    finalBounds: win.getBounds()
+  })
+}
+
 export function resizePanelToNormal() {
   console.log("[MCP-AGENT-DEBUG] 📏 Attempting to resize panel to normal...")
   const win = WINDOWS.get("panel")
@@ -311,7 +397,7 @@ export function resizePanelToNormal() {
     return
   }
 
-  const position = getPanelWindowPosition(false)
+  const position = getPanelWindowPosition('normal')
 
   // Update size constraints back to normal
   win.setMinimumSize(panelWindowSize.width, panelWindowSize.height)

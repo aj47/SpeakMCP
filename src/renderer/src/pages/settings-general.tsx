@@ -56,6 +56,7 @@ export function Component() {
   const sttProviderId: STT_PROVIDER_ID =
     configQuery.data?.sttProviderId || "openai"
   const shortcut = configQuery.data?.shortcut || "hold-ctrl"
+  const textInputShortcut = configQuery.data?.textInputShortcut || "ctrl-t"
   const transcriptPostProcessingProviderId: CHAT_PROVIDER_ID =
     configQuery.data?.transcriptPostProcessingProviderId || "openai"
 
@@ -119,6 +120,37 @@ export function Component() {
               <SelectItem value="ctrl-slash">Ctrl+{"/"}</SelectItem>
             </SelectContent>
           </Select>
+        </Control>
+
+        <Control label="Text Input" className="px-3">
+          <div className="flex items-center gap-2">
+            <Switch
+              checked={configQuery.data?.textInputEnabled ?? true}
+              onCheckedChange={(checked) => {
+                saveConfig({
+                  textInputEnabled: checked,
+                })
+              }}
+            />
+            <Select
+              value={textInputShortcut}
+              onValueChange={(value) => {
+                saveConfig({
+                  textInputShortcut: value as typeof configQuery.data.textInputShortcut,
+                })
+              }}
+              disabled={!configQuery.data?.textInputEnabled}
+            >
+              <SelectTrigger className="w-32">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ctrl-t">Ctrl+T</SelectItem>
+                <SelectItem value="ctrl-shift-t">Ctrl+Shift+T</SelectItem>
+                <SelectItem value="alt-t">Alt+T</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </Control>
       </ControlGroup>
 

@@ -13,6 +13,10 @@ export type RendererHandlers = {
   finishMcpRecording: () => void
   startOrFinishMcpRecording: () => void
 
+  // Text Input handlers
+  showTextInput: () => void
+  hideTextInput: () => void
+
   // Agent Mode Progress handlers
   agentProgressUpdate: (update: AgentProgressUpdate) => void
   clearAgentProgress: () => void

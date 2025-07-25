@@ -2,6 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import { configStore } from './config'
 import { mcpService } from './mcp-service'
+import { MCPServerConfig } from '../shared/types'
 
 export interface DiagnosticInfo {
   timestamp: number
@@ -17,7 +18,6 @@ export interface DiagnosticInfo {
   }
   mcp: {
     availableTools: number
-    activeSessions: Array<{ serverId: string; sessionId: string; lastUsed: number }>
     serverStatus: Record<string, { connected: boolean; toolCount: number }>
   }
   errors: Array<{
@@ -130,13 +130,12 @@ class DiagnosticsService {
         electronVersion: process.versions.electron || 'unknown'
       },
       config: {
-        mcpServersCount: Object.keys(config.mcpServers || {}).length,
+        mcpServersCount: Object.keys(config.mcpConfig?.mcpServers || {}).length,
         mcpToolsEnabled: config.mcpToolsEnabled || false,
         mcpAgentModeEnabled: config.mcpAgentModeEnabled || false
       },
       mcp: {
         availableTools: mcpService.getAvailableTools().length,
-        activeSessions: mcpService.getActiveSessions(),
         serverStatus: await this.getServerStatus()
       },
       errors: [...this.errorLog]
@@ -147,9 +146,9 @@ class DiagnosticsService {
     const config = configStore.get()
     const serverStatus: Record<string, { connected: boolean; toolCount: number }> = {}
 
-    for (const [serverName, serverConfig] of Object.entries(config.mcpServers || {})) {
+    for (const [serverName, serverConfig] of Object.entries(config.mcpConfig?.mcpServers || {})) {
       try {
-        const testResult = await mcpService.testServerConnection(serverName, serverConfig)
+        const testResult = await mcpService.testServerConnection(serverName, serverConfig as MCPServerConfig)
         serverStatus[serverName] = {
           connected: testResult.success,
           toolCount: testResult.toolCount || 0

@@ -64,22 +64,6 @@ QUALITY STANDARDS:
 - Fix linter errors if clear how to resolve them
 - Validate changes work as expected before marking complete`
 
-export const CODE_EDITING_GUIDELINES = `
-
-CODE EDITING BEST PRACTICES:
-- When making code changes, provide clear, minimal diffs showing only what changed
-- Use comments like "// ... existing code ..." to indicate unchanged sections
-- Include sufficient context around changes to resolve ambiguity
-- Ensure all necessary imports and dependencies are included
-- Test changes when possible before considering task complete
-- Follow existing code style and patterns in the codebase
-- Add meaningful comments only when requested or when code is complex
-
-FILE OPERATIONS:
-- Read files thoroughly before making changes to understand context
-- Use appropriate tools for file operations rather than making assumptions
-- Validate file paths and existence before attempting operations
-- Preserve existing file structure and organization`
 
 export const COMMUNICATION_GUIDELINES = `
 
@@ -111,8 +95,6 @@ export function constructSystemPrompt(
     prompt += AGENT_MODE_ADDITIONS
   }
 
-  // Add code editing and communication guidelines
-  prompt += CODE_EDITING_GUIDELINES
   prompt += COMMUNICATION_GUIDELINES
 
   // Helper function to format tool information

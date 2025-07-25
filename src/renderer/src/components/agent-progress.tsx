@@ -228,17 +228,44 @@ const ResultDisplay: React.FC<{
 
   if (!isComplete) return null
 
-  // Extract meaningful results - prioritize tool results over final content
+  // Extract meaningful results - prioritize LLM content over tool results
   const toolResult = getMostRelevantResult(steps)
   const keyResults = extractKeyResults(finalContent || "")
 
-  // Determine what to show as the main result - prefer tool results
+  // Get the most recent thinking step with LLM content
+  const thinkingStepsWithContent = steps.filter(step =>
+    step.type === "thinking" && step.llmContent && step.llmContent.trim().length > 0
+  )
+  const latestThinkingContent = thinkingStepsWithContent.length > 0
+    ? thinkingStepsWithContent[thinkingStepsWithContent.length - 1].llmContent
+    : null
+
+  // Determine what to show as the main result - prefer LLM content
   let mainResult = ""
   let resultType: 'success' | 'info' | 'generic' = 'generic'
   let resultDetails: string[] = []
 
-  // First try tool results (more likely to contain actual data)
-  if (toolResult) {
+  // First try the latest thinking step LLM content (most meaningful)
+  if (latestThinkingContent && latestThinkingContent.length > 10) {
+    const llmResults = extractKeyResults(latestThinkingContent)
+    if (llmResults.summary && llmResults.summary.length > 0) {
+      mainResult = llmResults.summary
+      resultType = llmResults.type
+      resultDetails = llmResults.details
+    }
+  }
+
+  // Fall back to final content if no thinking content
+  if (!mainResult && finalContent && finalContent.length > 10) {
+    if (keyResults.summary && keyResults.summary.length > 0) {
+      mainResult = keyResults.summary
+      resultType = keyResults.type
+      resultDetails = keyResults.details
+    }
+  }
+
+  // Finally try tool results as last resort
+  if (!mainResult && toolResult) {
     const toolResults = extractKeyResults(toolResult)
     if (toolResults.summary && toolResults.summary.length > 0) {
       mainResult = toolResults.summary
@@ -247,28 +274,7 @@ const ResultDisplay: React.FC<{
     }
   }
 
-  // Fall back to final content only if tool results are empty or generic
-  if (!mainResult || (mainResult.length < 10 && keyResults.summary.length > mainResult.length)) {
-    // Skip obviously unhelpful final content
-    const unhelpfulPhrases = [
-      'closing the terminal session',
-      'session closed',
-      'cleanup complete',
-      'done',
-      'finished',
-      'completed'
-    ]
 
-    const isUnhelpful = unhelpfulPhrases.some(phrase =>
-      keyResults.summary.toLowerCase().includes(phrase)
-    )
-
-    if (!isUnhelpful && keyResults.summary) {
-      mainResult = keyResults.summary
-      resultType = keyResults.type
-      resultDetails = keyResults.details
-    }
-  }
 
   // If still no meaningful result, try to extract from step titles/descriptions
   if (!mainResult || mainResult.length < 5) {
@@ -478,6 +484,14 @@ const ProgressStep: React.FC<{ step: AgentProgressStep; isLast: boolean }> = ({ 
         {!isMinimal && step.description && (
           <div className="text-muted-foreground mt-1 line-clamp-1 leading-relaxed">
             {step.description}
+          </div>
+        )}
+        {/* Display LLM content for thinking steps */}
+        {!isMinimal && step.type === "thinking" && step.llmContent && (
+          <div className="mt-2 p-2 liquid-glass-subtle border border-white/10 rounded text-xs">
+            <div className="text-foreground leading-relaxed whitespace-pre-wrap line-clamp-3">
+              {step.llmContent}
+            </div>
           </div>
         )}
         {!isMinimal && step.toolCall && (

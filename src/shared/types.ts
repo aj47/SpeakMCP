@@ -28,6 +28,7 @@ export interface AgentProgressStep {
   description?: string
   status: "pending" | "in_progress" | "completed" | "error"
   timestamp: number
+  llmContent?: string // Store actual LLM response content for thinking steps
   toolCall?: {
     name: string
     arguments: any

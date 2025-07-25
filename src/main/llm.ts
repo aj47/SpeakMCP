@@ -399,10 +399,10 @@ export async function processTranscriptWithAgentMode(
 
 
   // Debug: Log the system prompt being used
-  // console.log("[MCP-AGENT-DEBUG] 📝 Using custom system prompt:", !!config.mcpToolsSystemPrompt)
-  // console.log("[MCP-AGENT-DEBUG] 📝 Full system prompt:")
-  // console.log(systemPrompt)
-  // console.log("[MCP-AGENT-DEBUG] 📝 System prompt length:", systemPrompt.length)
+  console.log("[MCP-AGENT-DEBUG] 📝 Using custom system prompt:", !!config.mcpToolsSystemPrompt)
+  console.log("[MCP-AGENT-DEBUG] 📝 Full system prompt:")
+  console.log(systemPrompt)
+  console.log("[MCP-AGENT-DEBUG] 📝 System prompt length:", systemPrompt.length)
   console.log("[MCP-AGENT-DEBUG] 🔧 Available tools:", availableTools.map(t => t.name).join(", "))
   console.log("[MCP-AGENT-DEBUG] 🎯 Tool capabilities:", toolCapabilities.summary)
 
@@ -450,8 +450,8 @@ export async function processTranscriptWithAgentMode(
 
     const thinkingStep = createProgressStep(
       "thinking",
-      `Planning step ${iteration}`,
-      "Analyzing context and determining next actions",
+      `Agent thinking (step ${iteration})`,
+      "Processing request and determining next actions",
       "in_progress"
     )
     progressSteps.push(thinkingStep)
@@ -524,8 +524,16 @@ Always use actual resource IDs from the conversation history or create new ones 
     const llmResponse = await makeLLMCall(messages, config)
     console.log(`[MCP-AGENT-DEBUG] 🎯 LLM response for iteration ${iteration}:`, JSON.stringify(llmResponse, null, 2))
 
-    // Update thinking step to completed
+    // Update thinking step with actual LLM content and mark as completed
     thinkingStep.status = "completed"
+    thinkingStep.llmContent = llmResponse.content || ""
+    if (llmResponse.content) {
+      // Update title and description to be more meaningful
+      thinkingStep.title = "Agent response"
+      thinkingStep.description = llmResponse.content.length > 100
+        ? llmResponse.content.substring(0, 100) + "..."
+        : llmResponse.content
+    }
 
     // Check for completion signals - only complete if there are no tools to execute
     const hasToolCalls = llmResponse.toolCalls && llmResponse.toolCalls.length > 0

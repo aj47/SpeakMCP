@@ -835,6 +835,14 @@ export const router = {
       return mcpService.stopServer(input.serverName)
     }),
 
+  // Models Management
+  fetchAvailableModels: t.procedure
+    .input<{ providerId: string }>()
+    .action(async ({ input }) => {
+      const { fetchAvailableModels } = await import('./models-service')
+      return fetchAvailableModels(input.providerId)
+    }),
+
   // Conversation Management
   getConversationHistory: t.procedure.action(async () => {
     return conversationService.getConversationHistory()

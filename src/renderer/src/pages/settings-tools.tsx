@@ -164,69 +164,8 @@ DOMAIN-SPECIFIC RULES:
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">
-                  Choose which LLM provider to use for tool calling decisions
+                  Choose which LLM provider to use for tool calling decisions. Configure models in the Providers tab.
                 </p>
-              </div>
-
-              <div className="grid grid-cols-1 gap-4">
-                {config.mcpToolsProviderId === "openai" && (
-                  <div className="space-y-2">
-                    <Label htmlFor="mcp-openai-model">OpenAI Model</Label>
-                    <Select
-                      value={config.mcpToolsOpenaiModel || "gpt-4o-mini"}
-                      onValueChange={(value) => updateConfig({ mcpToolsOpenaiModel: value })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="gpt-4o">GPT-4o</SelectItem>
-                        <SelectItem value="gpt-4o-mini">GPT-4o Mini</SelectItem>
-                        <SelectItem value="gpt-3.5-turbo">GPT-3.5 Turbo</SelectItem>
-                        <SelectItem value="gpt-4-turbo">GPT-4 Turbo</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
-
-                {config.mcpToolsProviderId === "groq" && (
-                  <div className="space-y-2">
-                    <Label htmlFor="mcp-groq-model">Groq Model</Label>
-                    <Select
-                      value={config.mcpToolsGroqModel || "gemma2-9b-it"}
-                      onValueChange={(value) => updateConfig({ mcpToolsGroqModel: value })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="gemma2-9b-it">Gemma2 9B IT</SelectItem>
-                        <SelectItem value="moonshotai/kimi-k2-instruct">Moonshot AI Kimi K2 Instruct</SelectItem>
-                        <SelectItem value="deepseek-r1-distill-llama-70b">DeepSeek R1 Distill Llama 70B</SelectItem>
-                        <SelectItem value="llama-3.3-70b-versatile">Llama 3.3 70B Versatile</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
-
-                {config.mcpToolsProviderId === "gemini" && (
-                  <div className="space-y-2">
-                    <Label htmlFor="mcp-gemini-model">Gemini Model</Label>
-                    <Select
-                      value={config.mcpToolsGeminiModel || "gemini-1.5-flash-002"}
-                      onValueChange={(value) => updateConfig({ mcpToolsGeminiModel: value })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="gemini-1.5-flash-002">Gemini 1.5 Flash</SelectItem>
-                        <SelectItem value="gemini-1.5-pro">Gemini 1.5 Pro</SelectItem>
-                        <SelectItem value="gemini-1.0-pro">Gemini 1.0 Pro</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
               </div>
 
               <div className="space-y-2">

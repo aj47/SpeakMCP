@@ -28,13 +28,14 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@renderer/components/ui/dialog"
+import { ModelSelector } from "@renderer/components/model-selector"
 import { Button } from "@renderer/components/ui/button"
 import {
   useConfigQuery,
   useSaveConfigMutation,
 } from "@renderer/lib/query-client"
 import { tipcClient } from "@renderer/lib/tipc-client"
-import { useState } from "react"
+import { useState, useCallback } from "react"
 import { Config } from "@shared/types"
 
 export function Component() {
@@ -42,14 +43,33 @@ export function Component() {
 
   const saveConfigMutation = useSaveConfigMutation()
 
-  const saveConfig = (config: Partial<Config>) => {
+  const saveConfig = useCallback((config: Partial<Config>) => {
     saveConfigMutation.mutate({
       config: {
         ...configQuery.data,
         ...config,
       },
     })
-  }
+  }, [saveConfigMutation, configQuery.data])
+
+  // Memoize model change handler to prevent infinite re-renders
+  const handleTranscriptModelChange = useCallback((value: string) => {
+    const transcriptPostProcessingProviderId = configQuery.data?.transcriptPostProcessingProviderId || "openai"
+
+    if (transcriptPostProcessingProviderId === "openai") {
+      saveConfig({
+        transcriptPostProcessingOpenaiModel: value,
+      })
+    } else if (transcriptPostProcessingProviderId === "groq") {
+      saveConfig({
+        transcriptPostProcessingGroqModel: value,
+      })
+    } else {
+      saveConfig({
+        transcriptPostProcessingGeminiModel: value,
+      })
+    }
+  }, [saveConfig, configQuery.data?.transcriptPostProcessingProviderId])
 
 
 
@@ -234,37 +254,18 @@ export function Component() {
             </Control>
 
             <Control label="Model" className="px-3">
-              <Input
-                placeholder={
-                  transcriptPostProcessingProviderId === "openai"
-                    ? "gpt-4o-mini"
-                    : transcriptPostProcessingProviderId === "groq"
-                    ? "gemma2-9b-it"
-                    : "gemini-1.5-flash-002"
-                }
-                defaultValue={
+              <ModelSelector
+                providerId={transcriptPostProcessingProviderId}
+                value={
                   transcriptPostProcessingProviderId === "openai"
                     ? configQuery.data.transcriptPostProcessingOpenaiModel
                     : transcriptPostProcessingProviderId === "groq"
                     ? configQuery.data.transcriptPostProcessingGroqModel
                     : configQuery.data.transcriptPostProcessingGeminiModel
                 }
-                onChange={(e) => {
-                  const value = e.currentTarget.value
-                  if (transcriptPostProcessingProviderId === "openai") {
-                    saveConfig({
-                      transcriptPostProcessingOpenaiModel: value,
-                    })
-                  } else if (transcriptPostProcessingProviderId === "groq") {
-                    saveConfig({
-                      transcriptPostProcessingGroqModel: value,
-                    })
-                  } else {
-                    saveConfig({
-                      transcriptPostProcessingGeminiModel: value,
-                    })
-                  }
-                }}
+                onValueChange={handleTranscriptModelChange}
+                placeholder="Select model for transcript processing"
+                disabled={!configQuery.data.transcriptPostProcessingEnabled}
               />
             </Control>
 

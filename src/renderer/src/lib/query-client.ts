@@ -124,3 +124,14 @@ export const useSaveConfigMutation = () => useMutation({
     })
   },
 })
+
+export const useAvailableModelsQuery = (providerId: string, enabled: boolean = true) =>
+  useQuery({
+    queryKey: ["available-models", providerId],
+    queryFn: async () => {
+      return tipcClient.fetchAvailableModels({ providerId })
+    },
+    enabled: enabled && !!providerId,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    retry: 1,
+  })

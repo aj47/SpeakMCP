@@ -8,7 +8,6 @@ export const BASE_SYSTEM_PROMPT = `You are an intelligent AI assistant capable o
 CORE PRINCIPLES:
 - Work autonomously until the user's request is completely resolved
 - Use available tools iteratively and strategically to gather information and execute actions
-- Always respond with valid JSON in the specified format
 - Use exact tool names from the available tools list (including server prefixes like "server:tool_name")
 - Prefer using tools to gather information rather than asking users for details
 - Continue working until the user's request is fully satisfied - only stop when the task is complete
@@ -37,13 +36,7 @@ For final responses (no more tools needed):
 {
   "content": "Your comprehensive final response with results",
   "needsMoreWork": false
-}
-
-JSON FORMATTING RULES:
-- Escape special characters (newlines as \\n, quotes as \\\", backslashes as \\\\)
-- Use double quotes for strings
-- Ensure proper JSON structure with matching braces
-- Never include markdown formatting or code blocks in JSON responses`
+}`
 
 export const AGENT_MODE_ADDITIONS = `
 
@@ -158,8 +151,6 @@ export function constructSystemPrompt(
   if (userGuidelines?.trim()) {
     prompt += `\n\nADDITIONAL GUIDELINES:\n${userGuidelines.trim()}`
   }
-
-  prompt += `\n\nRespond with ONLY the JSON object, no markdown formatting, no code blocks, no additional text.`
 
   return prompt
 }

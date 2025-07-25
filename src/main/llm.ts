@@ -1,4 +1,3 @@
-import { GoogleGenerativeAI } from "@google/generative-ai"
 import { configStore } from "./config"
 import { MCPTool, MCPToolCall, LLMToolCallResponse, MCPToolResult } from "./mcp-service"
 import { AgentProgressStep, AgentProgressUpdate } from "../shared/types"
@@ -6,11 +5,8 @@ import { getRendererHandlers } from "@egoist/tipc/main"
 import { WINDOWS, showPanelWindow } from "./window"
 import { RendererHandlers } from "./renderer-handlers"
 import { diagnosticsService } from "./diagnostics"
-import {
-  makeStructuredToolCall,
-  makeStructuredContextExtraction,
-  makeTextCompletion
-} from "./structured-output"
+import { makeStructuredContextExtraction } from "./structured-output"
+import { makeLLMCallWithFetch, makeTextCompletionWithFetch } from "./llm-fetch"
 import { constructSystemPrompt } from "./system-prompts"
 
 /**
@@ -154,23 +150,9 @@ export async function postProcessTranscript(transcript: string) {
 
   const chatProviderId = config.transcriptPostProcessingProviderId
 
-  if (chatProviderId === "gemini") {
-    if (!config.geminiApiKey) throw new Error("Gemini API key is required")
-
-    const gai = new GoogleGenerativeAI(config.geminiApiKey)
-    const geminiModel = config.transcriptPostProcessingGeminiModel || "gemini-1.5-flash-002"
-    const gModel = gai.getGenerativeModel({ model: geminiModel })
-
-    const result = await gModel.generateContent([prompt], {
-      baseUrl: config.geminiBaseUrl,
-    })
-    return result.response.text().trim()
-  }
-
-  // Use structured output service for OpenAI/Groq providers
   try {
-    console.log(`[TRANSCRIPT-PROCESSING] 🚀 Using structured output service`)
-    const result = await makeTextCompletion(prompt, chatProviderId)
+    console.log(`[TRANSCRIPT-PROCESSING] 🚀 Using fetch-based text completion`)
+    const result = await makeTextCompletionWithFetch(prompt, chatProviderId)
     return result
   } catch (error) {
     console.error(`[TRANSCRIPT-PROCESSING] ❌ Error:`, error)
@@ -212,54 +194,16 @@ export async function processTranscriptWithTools(
 
   const chatProviderId = config.mcpToolsProviderId
 
-  // Debug: Log non-agent mode LLM call details
-  console.log("[MCP-TOOLS-DEBUG] 🚀 Making non-agent LLM call")
-  console.log("[MCP-TOOLS-DEBUG] 🔧 Provider:", chatProviderId || "openai (default)")
-  console.log("[MCP-TOOLS-DEBUG] 📝 Messages count:", messages.length)
-  messages.forEach((msg, i) => {
-    const preview = msg.content.length > 200 ? msg.content.substring(0, 200) + "..." : msg.content
-    console.log(`[MCP-TOOLS-DEBUG]   ${i + 1}. ${msg.role}: ${preview}`)
-  })
+  console.log(`[MCP-TOOLS-DEBUG] 🎯 Processing transcript with ${uniqueAvailableTools.length} tools`)
+  console.log(`[MCP-TOOLS-DEBUG] 🤖 Using provider: ${chatProviderId}`)
 
-  if (chatProviderId === "gemini") {
-    const geminiModel = config.mcpToolsGeminiModel || "gemini-1.5-flash-002"
-    console.log("[MCP-TOOLS-DEBUG] 🤖 Using Gemini model:", geminiModel)
-    if (!config.geminiApiKey) throw new Error("Gemini API key is required")
-
-    const gai = new GoogleGenerativeAI(config.geminiApiKey)
-    const gModel = gai.getGenerativeModel({ model: geminiModel })
-
-    const prompt = messages.map(m => `${m.role}: ${m.content}`).join('\n\n')
-    console.log("[MCP-TOOLS-DEBUG] 📤 Sending request to Gemini...")
-
-    const result = await gModel.generateContent([prompt], {
-      baseUrl: config.geminiBaseUrl,
-    })
-
-    const responseText = result.response.text().trim()
-    console.log(`[MCP-DEBUG] Gemini response:`, responseText)
-
-    // For Gemini, we still need to parse manually since it doesn't support structured output
-    try {
-      const parsed = JSON.parse(responseText)
-      if (parsed && (parsed.toolCalls || parsed.content)) {
-        console.log(`[MCP-DEBUG] ✅ Successfully parsed Gemini JSON response:`, parsed)
-        return parsed
-      }
-    } catch (parseError) {
-      console.log(`[MCP-DEBUG] ⚠️ Failed to parse Gemini response as JSON, returning as content`)
-    }
-    return { content: responseText }
-  }
-
-  // Use structured output for OpenAI/Groq providers
   try {
-    console.log(`[MCP-TOOLS-DEBUG] 🚀 Using structured output for tool calls`)
-    const result = await makeStructuredToolCall(messages, chatProviderId)
-    console.log(`[MCP-DEBUG] ✅ Successfully processed with structured output:`, result)
+    console.log(`[MCP-TOOLS-DEBUG] 🚀 Using fetch-based LLM call`)
+    const result = await makeLLMCallWithFetch(messages, chatProviderId)
+    console.log(`[MCP-TOOLS-DEBUG] ✅ Fetch-based call successful:`, JSON.stringify(result, null, 2))
     return result
   } catch (error) {
-    console.error(`[MCP-TOOLS-DEBUG] ❌ Structured output failed:`, error)
+    console.error(`[MCP-TOOLS-DEBUG] ❌ Fetch-based call failed:`, error)
     throw error
   }
 }
@@ -880,51 +824,15 @@ Please try alternative approaches or provide manual instructions to the user.`
 async function makeLLMCall(messages: Array<{role: string, content: string}>, config: any): Promise<LLMToolCallResponse> {
   const chatProviderId = config.mcpToolsProviderId
 
-  if (chatProviderId === "gemini") {
-    const geminiModel = config.mcpToolsGeminiModel || "gemini-1.5-flash-002"
-    console.log("[MCP-LLM-DEBUG] 🤖 Using Gemini model:", geminiModel)
-    if (!config.geminiApiKey) throw new Error("Gemini API key is required")
+  console.log(`[MCP-LLM-DEBUG] 🚀 Making agent mode LLM call with provider: ${chatProviderId}`)
 
-    const gai = new GoogleGenerativeAI(config.geminiApiKey)
-    const gModel = gai.getGenerativeModel({ model: geminiModel })
-
-    const prompt = messages.map(m => `${m.role}: ${m.content}`).join('\n\n')
-
-    console.log("[MCP-LLM-DEBUG] 📤 Sending request to Gemini...")
-    try {
-      const result = await gModel.generateContent([prompt], {
-        baseUrl: config.geminiBaseUrl,
-      })
-
-      const responseText = result.response.text().trim()
-      console.log("[MCP-LLM-DEBUG] 📥 Raw Gemini response:", responseText)
-
-      // For Gemini, we still need to parse manually since it doesn't support structured output
-      try {
-        const parsed = JSON.parse(responseText)
-        if (parsed && (parsed.toolCalls || parsed.content)) {
-          console.log("[MCP-LLM-DEBUG] ✅ Parsed JSON:", JSON.stringify(parsed, null, 2))
-          return parsed
-        }
-      } catch (parseError) {
-        console.log("[MCP-LLM-DEBUG] ⚠️ Failed to parse Gemini response as JSON")
-        diagnosticsService.logWarning('llm', 'Failed to parse Gemini response as JSON', { responseText })
-      }
-      return { content: responseText }
-    } catch (error) {
-      diagnosticsService.logError('llm', 'Gemini API call failed', error)
-      throw error
-    }
-  }
-
-  // Use structured output for OpenAI/Groq providers
   try {
-    console.log("[MCP-LLM-DEBUG] 🚀 Using structured output for agent mode")
-    const result = await makeStructuredToolCall(messages, chatProviderId)
-    console.log("[MCP-LLM-DEBUG] ✅ Structured output successful:", JSON.stringify(result, null, 2))
+    const result = await makeLLMCallWithFetch(messages, chatProviderId)
+    console.log("[MCP-LLM-DEBUG] ✅ Fetch-based agent call successful:", JSON.stringify(result, null, 2))
     return result
   } catch (error) {
-    console.error("[MCP-LLM-DEBUG] ❌ Structured output failed:", error)
+    console.error("[MCP-LLM-DEBUG] ❌ Fetch-based agent call failed:", error)
+    diagnosticsService.logError('llm', 'Agent LLM call failed', error)
     throw error
   }
 }

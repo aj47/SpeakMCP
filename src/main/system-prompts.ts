@@ -51,34 +51,7 @@ WORKFLOW:
 5. Continue iterating until the goal is fully achieved
 6. Only set needsMoreWork: false when the task is completely resolved
 
-INFORMATION GATHERING:
-- Use multiple search strategies with different wording to ensure comprehensive coverage
-- Explore alternative implementations and edge cases
-- Trace symbols back to their definitions and usages for full understanding
-- Look beyond first results - run multiple searches until confident nothing important is missed
-- Prefer broad, high-level queries initially, then narrow down based on results
-
-QUALITY STANDARDS:
-- Ensure any generated code can be executed immediately
-- Add all necessary imports, dependencies, and configurations
-- Fix linter errors if clear how to resolve them
-- Validate changes work as expected before marking complete`
-
-
-export const COMMUNICATION_GUIDELINES = `
-
-COMMUNICATION STYLE:
-- Provide clear, actionable explanations of what you're doing
-- Focus on results and progress rather than generic status messages
-- Be concise but comprehensive in your responses
-- Explain technical decisions when they might not be obvious
-- Ask for clarification only when information cannot be obtained through available tools
-
-ERROR HANDLING:
-- If a tool call fails, analyze the error and try alternative approaches
-- Don't repeat the same failing operation without modification
-- Provide helpful context when errors occur
-- Suggest solutions or workarounds when possible`
+`
 
 /**
  * Constructs the full system prompt by combining base prompt, tool information, and user guidelines
@@ -94,8 +67,6 @@ export function constructSystemPrompt(
   if (isAgentMode) {
     prompt += AGENT_MODE_ADDITIONS
   }
-
-  prompt += COMMUNICATION_GUIDELINES
 
   // Helper function to format tool information
   const formatToolInfo = (tools: Array<{ name: string; description: string; inputSchema?: any }>) => {

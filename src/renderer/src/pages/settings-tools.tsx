@@ -37,43 +37,15 @@ export function Component() {
     updateConfig({ mcpConfig })
   }
 
-  const defaultSystemPrompt = `You are a helpful assistant that can execute tools based on user requests.
+  const defaultAdditionalGuidelines = `CUSTOM GUIDELINES:
+- Prioritize user privacy and security
+- Provide clear explanations of actions taken
+- Ask for confirmation before destructive operations
 
-CRITICAL: When calling tools, you MUST use the EXACT tool name as listed in the available tools, including any server prefixes (like "server:tool_name"). Do not modify or shorten the tool names. NEVER invent or hallucinate tool names that are not in the list.
-
-TOOL USAGE GUIDELINES:
-- Analyze the available tools to understand what capabilities are provided
-- Match user requests to appropriate tools based on their descriptions and schemas
-- Use tools that can accomplish file operations, system tasks, web requests, or other actions as available
-- Follow the parameter schemas provided by each tool's inputSchema
-- When in doubt about parameters, prefer camelCase over snake_case naming
-
-ALWAYS prefer using available tools over suggesting manual approaches. If you can accomplish the task with the available tools, do it!
-
-When the user's request requires using a tool, respond with a JSON object in this format:
-{
-  "toolCalls": [
-    {
-      "name": "exact_tool_name_from_available_list",
-      "arguments": { "param1": "value1", "param2": "value2" }
-    }
-  ],
-  "content": "Brief explanation of what you're doing"
-}
-
-If no tools are needed, respond with:
-{
-  "content": "Your response text here"
-}
-
-CRITICAL JSON FORMATTING RULES:
-- Always escape special characters in JSON strings (newlines as \\n, quotes as \\\", backslashes as \\\\)
-- Never include unescaped newlines, tabs, or control characters in JSON string values
-- If you need to include multi-line text, use \\n for line breaks
-- Always use double quotes for JSON strings, never single quotes
-- Ensure all JSON is properly closed with matching braces and brackets
-
-Always respond with valid JSON only.`
+DOMAIN-SPECIFIC RULES:
+- For file operations: Always backup important files
+- For system commands: Use safe, non-destructive commands when possible
+- For API calls: Respect rate limits and handle errors gracefully`
 
   return (
     <div className="space-y-6">
@@ -258,23 +230,24 @@ Always respond with valid JSON only.`
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="mcp-system-prompt">System Prompt</Label>
+                <Label htmlFor="mcp-additional-guidelines">Additional Guidelines</Label>
                 <Textarea
-                  id="mcp-system-prompt"
-                  value={config.mcpToolsSystemPrompt || defaultSystemPrompt}
+                  id="mcp-additional-guidelines"
+                  value={config.mcpToolsSystemPrompt || ""}
                   onChange={(e) => updateConfig({ mcpToolsSystemPrompt: e.target.value })}
-                  rows={10}
+                  rows={8}
                   className="font-mono text-sm"
+                  placeholder={defaultAdditionalGuidelines}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Instructions for the LLM on how to use tools. The system will automatically include available tools in the prompt.
+                  Optional additional rules and guidelines for the AI agent. The base system prompt with tool usage instructions is automatically included.
                 </p>
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => updateConfig({ mcpToolsSystemPrompt: defaultSystemPrompt })}
+                  onClick={() => updateConfig({ mcpToolsSystemPrompt: defaultAdditionalGuidelines })}
                 >
-                  Reset to Default
+                  Use Example Guidelines
                 </Button>
               </div>
 

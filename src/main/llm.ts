@@ -11,6 +11,7 @@ import {
   makeStructuredContextExtraction,
   makeTextCompletion
 } from "./structured-output"
+import { constructSystemPrompt } from "./system-prompts"
 
 /**
  * Use LLM to extract useful context from conversation history
@@ -187,121 +188,16 @@ export async function processTranscriptWithTools(
     return { content: transcript }
   }
 
-  // Create system prompt with available tools
-  const baseSystemPrompt = config.mcpToolsSystemPrompt || `You are a helpful assistant that can execute tools based on user requests.`
-
-  // Generate dynamic tool information including schemas
-  const generateToolInfo = (tools: MCPTool[]) => {
-    return tools.map(tool => {
-      let info = `- ${tool.name}: ${tool.description}`
-
-      // Add parameter schema if available
-      if (tool.inputSchema && tool.inputSchema.properties) {
-        const params = Object.entries(tool.inputSchema.properties)
-          .map(([key, schema]: [string, any]) => {
-            const type = schema.type || 'any'
-            const required = tool.inputSchema.required?.includes(key) ? ' (required)' : ''
-            return `${key}: ${type}${required}`
-          })
-          .join(', ')
-
-        if (params) {
-          info += `\n  Parameters: {${params}}`
-        }
-      }
-
-      return info
-    }).join('\n')
-  }
-
   // Remove duplicates from available tools to prevent confusion
   const uniqueAvailableTools = availableTools.filter((tool, index, self) =>
     index === self.findIndex(t => t.name === tool.name)
   )
 
-  // Always inject available tools into the system prompt
-  const toolsList = uniqueAvailableTools.length > 0 ? `
+  // Construct system prompt using the new approach
+  const userGuidelines = config.mcpToolsSystemPrompt
+  const systemPrompt = constructSystemPrompt(uniqueAvailableTools, userGuidelines, false)
 
-Available tools:
-${generateToolInfo(uniqueAvailableTools)}` : '\n\nNo tools are currently available.'
 
-  const systemPrompt = baseSystemPrompt + toolsList + `
-
-IMPORTANT: You must respond with ONLY a valid JSON object. Do not include any explanatory text before or after the JSON.
-
-CRITICAL: When calling tools, you MUST use the EXACT tool name as listed above, including any server prefixes (like "server:tool_name"). Do not modify or shorten the tool names. NEVER invent or hallucinate tool names that are not in the list above.
-
-TOOL USAGE PATTERNS:
-- Use the exact tool names as listed above, including any server prefixes
-- Follow the parameter schemas provided by each tool's inputSchema
-- When in doubt about parameters, prefer camelCase over snake_case naming
-
-PARAMETER NAMING GUIDELINES:
-- Different MCP servers may use different parameter naming conventions
-- Common patterns: camelCase (sessionId), snake_case (session_id), kebab-case (session-id)
-- If a tool call fails due to parameter naming, the system will automatically retry with corrected parameters
-- Always use the exact parameter names specified in the tool's schema
-
-ALWAYS prefer using available tools over suggesting manual approaches. If you can accomplish the task with the available tools, do it!
-
-When the user's request requires using a tool, respond with this exact JSON format:
-{
-  "toolCalls": [
-    {
-      "name": "exact_tool_name_from_list_above",
-      "arguments": { "param1": "value1", "param2": "value2" }
-    }
-  ],
-  "content": "Brief explanation of what you're doing"
-}
-
-If no tools are needed, respond with this exact JSON format:
-{
-  "content": "Your response text here"
-}
-
-CRITICAL JSON FORMATTING RULES:
-- Always escape special characters in JSON strings (newlines as \\n, quotes as \\\", backslashes as \\\\)
-- Never include unescaped newlines, tabs, or control characters in JSON string values
-- If you need to include multi-line text, use \\n for line breaks
-- Always use double quotes for JSON strings, never single quotes
-- Ensure all JSON is properly closed with matching braces and brackets
-
-Examples:
-
-User: "List the contents of my desktop"
-Response:
-{
-  "toolCalls": [
-    {
-      "name": "Headless Terminal:ht_create_session",
-      "arguments": {}
-    }
-  ],
-  "content": "Creating a terminal session to list your desktop contents"
-}
-
-Follow-up after session created (sessionId: "abc-123"):
-{
-  "toolCalls": [
-    {
-      "name": "Headless Terminal:ht_execute_command",
-      "arguments": {
-        "sessionId": "abc-123",
-        "command": "ls ~/Desktop"
-      }
-    }
-  ],
-  "content": "Listing desktop contents"
-}
-
-User: "What's the weather like?"
-Response:
-{
-  "content": "I don't have access to weather information. You might want to check a weather app or website."
-}
-
-Remember: Respond with ONLY the JSON object, no markdown formatting, no code blocks, no additional text.`
 
   const messages = [
     {
@@ -536,124 +432,27 @@ export async function processTranscriptWithAgentMode(
     isComplete: false
   })
 
-  // Enhanced system prompt for agent mode
-  const baseSystemPrompt = config.mcpToolsSystemPrompt || `You are a helpful assistant that can execute tools based on user requests. You are operating in agent mode, which means you can see the results of tool executions and make follow-up tool calls as needed.
-
-CONTEXT AWARENESS:
-- Maintain awareness of files created, modified, or referenced in previous operations
-- When asked to read "the file" or "that file", refer to the most recently created or mentioned file
-- Remember session IDs from terminal operations to reuse them when appropriate
-- Build upon previous actions rather than starting from scratch`
-
-  // Generate dynamic tool information including schemas
-  const generateToolInfo = (tools: MCPTool[]) => {
-    return tools.map(tool => {
-      let info = `- ${tool.name}: ${tool.description}`
-
-      // Add parameter schema if available
-      if (tool.inputSchema && tool.inputSchema.properties) {
-        const params = Object.entries(tool.inputSchema.properties)
-          .map(([key, schema]: [string, any]) => {
-            const type = schema.type || 'any'
-            const required = tool.inputSchema.required?.includes(key) ? ' (required)' : ''
-            return `${key}: ${type}${required}`
-          })
-          .join(', ')
-
-        if (params) {
-          info += `\n  Parameters: {${params}}`
-        }
-      }
-
-      return info
-    }).join('\n')
-  }
-
   // Remove duplicates from available tools to prevent confusion
   const uniqueAvailableTools = availableTools.filter((tool, index, self) =>
     index === self.findIndex(t => t.name === tool.name)
   )
 
-  // Always inject available tools into the system prompt
-  const toolsList = uniqueAvailableTools.length > 0 ? `
+  // Enhanced user guidelines for agent mode
+  let agentModeGuidelines = config.mcpToolsSystemPrompt || ""
 
-Available tools:
-${generateToolInfo(uniqueAvailableTools)}
+  // Add default context awareness guidelines if no custom guidelines provided
+  if (!config.mcpToolsSystemPrompt?.trim()) {
+    agentModeGuidelines = `CONTEXT AWARENESS:
+- Maintain awareness of files created, modified, or referenced in previous operations
+- When asked to read "the file" or "that file", refer to the most recently created or mentioned file
+- Remember session IDs from terminal operations to reuse them when appropriate
+- Build upon previous actions rather than starting from scratch`
+  }
 
-${toolCapabilities.relevantTools.length > 0 && toolCapabilities.relevantTools.length < uniqueAvailableTools.length ? `
-MOST RELEVANT TOOLS FOR THIS REQUEST:
-${generateToolInfo(toolCapabilities.relevantTools)}
-` : ''}` : '\n\nNo tools are currently available.'
+  // Construct system prompt using the new approach
+  const systemPrompt = constructSystemPrompt(uniqueAvailableTools, agentModeGuidelines, true, toolCapabilities.relevantTools)
 
-  const systemPrompt = baseSystemPrompt + toolsList + `
 
-IMPORTANT: You must respond with ONLY a valid JSON object. Do not include any explanatory text before or after the JSON.
-
-CRITICAL: When calling tools, you MUST use the EXACT tool name as listed above, including any server prefixes (like "server:tool_name"). Do not modify or shorten the tool names. NEVER invent or hallucinate tool names that are not in the list above.
-
-TOOL USAGE PATTERNS:
-- Use the exact tool names as listed above, including any server prefixes
-- Follow the parameter schemas provided by each tool's inputSchema
-- When in doubt about parameters, prefer camelCase over snake_case naming
-
-PARAMETER NAMING GUIDELINES:
-- Different MCP servers may use different parameter naming conventions
-- Common patterns: camelCase (sessionId), snake_case (session_id), kebab-case (session-id)
-- If a tool call fails due to parameter naming, the system will automatically retry with corrected parameters
-- Always use the exact parameter names specified in the tool's schema
-
-ALWAYS prefer using available tools over suggesting manual approaches. If you can accomplish the task with the available tools, do it!
-
-In agent mode, you can:
-1. Execute tools and see their results
-2. Make follow-up tool calls based on the results
-3. Continue until the task is complete
-
-When you need to use tools and expect to continue working after seeing the results, respond with:
-{
-  "toolCalls": [
-    {
-      "name": "exact_tool_name_from_list_above",
-      "arguments": { "param1": "value1", "param2": "value2" }
-    }
-  ],
-  "content": "Brief explanation of what you're doing",
-  "needsMoreWork": true
-}
-
-When you need to use tools and the task will be complete after executing them, respond with:
-{
-  "toolCalls": [
-    {
-      "name": "exact_tool_name_from_list_above",
-      "arguments": { "param1": "value1", "param2": "value2" }
-    }
-  ],
-  "content": "Brief explanation of what you're doing",
-  "needsMoreWork": false
-}
-
-When the task is complete and no more tools are needed, respond with:
-{
-  "content": "Final response with task completion summary",
-  "needsMoreWork": false
-}
-
-If no tools are needed for the initial request, respond with:
-{
-  "content": "Your response text here",
-  "needsMoreWork": false
-}
-
-Remember: Respond with ONLY the JSON object, no markdown formatting, no code blocks, no additional text.
-
-CRITICAL JSON FORMATTING RULES:
-- Always escape special characters in JSON strings (newlines as \\n, quotes as \\\", backslashes as \\\\)
-- Never include unescaped newlines, tabs, or control characters in JSON string values
-- If you need to include multi-line text or commands, use \\n for line breaks
-- Always use double quotes for JSON strings, never single quotes
-- Ensure all JSON is properly closed with matching braces and brackets
-- Test your JSON mentally before responding to ensure it's valid`
 
   // Debug: Log the system prompt being used
   // console.log("[MCP-AGENT-DEBUG] 📝 Using custom system prompt:", !!config.mcpToolsSystemPrompt)

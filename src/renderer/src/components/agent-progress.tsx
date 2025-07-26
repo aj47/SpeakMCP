@@ -8,14 +8,22 @@ interface AgentProgressProps {
   variant?: "default" | "overlay"
 }
 
-// Simple conversation message component
-const ConversationMessage: React.FC<{ content: string; isComplete?: boolean }> = ({ content, isComplete = false }) => {
+// Enhanced conversation message component
+const ConversationMessage: React.FC<{ content: string; isComplete?: boolean; isThinking?: boolean }> = ({
+  content,
+  isComplete = false,
+  isThinking = false
+}) => {
   if (!content || content.trim().length === 0) return null
 
   return (
     <div className={cn(
-      "p-3 rounded-lg liquid-glass-subtle glass-border",
-      isComplete ? "bg-green-500/5 border-green-500/20" : "bg-primary/5 border-primary/20"
+      "p-3 rounded-lg liquid-glass-subtle glass-border transition-all duration-300",
+      isComplete
+        ? "bg-green-500/5 border-green-500/20"
+        : isThinking
+          ? "bg-blue-500/5 border-blue-500/20 animate-pulse"
+          : "bg-primary/5 border-primary/20"
     )}>
       <div className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">
         {content.trim()}
@@ -31,18 +39,47 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({ progress, classNam
 
   const { currentIteration, maxIterations, steps, isComplete, finalContent } = progress
 
-  // Extract all LLM content from thinking steps
-  const llmMessages = steps
-    .filter(step => step.type === "thinking" && step.llmContent && step.llmContent.trim().length > 0)
-    .map(step => step.llmContent!)
+  // Extract all LLM content from thinking steps and organize chronologically
+  const llmMessages: Array<{ content: string; isComplete: boolean; timestamp: number; isThinking: boolean }> = []
+
+  // Add thinking step content (both completed and in-progress)
+  steps
+    .filter(step => step.type === "thinking")
+    .forEach(step => {
+      if (step.llmContent && step.llmContent.trim().length > 0) {
+        // Has actual LLM content
+        llmMessages.push({
+          content: step.llmContent,
+          isComplete: step.status === "completed",
+          timestamp: step.timestamp,
+          isThinking: false
+        })
+      } else if (step.status === "in_progress") {
+        // Show thinking indicator for in-progress steps without content yet
+        llmMessages.push({
+          content: step.description || "Agent is thinking...",
+          isComplete: false,
+          timestamp: step.timestamp,
+          isThinking: true
+        })
+      }
+    })
 
   // Add final content if available and different from last thinking step
   if (finalContent && finalContent.trim().length > 0) {
     const lastMessage = llmMessages[llmMessages.length - 1]
-    if (!lastMessage || lastMessage !== finalContent) {
-      llmMessages.push(finalContent)
+    if (!lastMessage || lastMessage.content !== finalContent) {
+      llmMessages.push({
+        content: finalContent,
+        isComplete: true,
+        timestamp: Date.now(),
+        isThinking: false
+      })
     }
   }
+
+  // Sort by timestamp to ensure chronological order
+  llmMessages.sort((a, b) => a.timestamp - b.timestamp)
 
   // Check for errors
   const hasErrors = steps.some(step => step.status === "error" || step.toolResult?.error)
@@ -90,14 +127,15 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({ progress, classNam
         {llmMessages.length > 0 ? (
           llmMessages.map((message, index) => (
             <ConversationMessage
-              key={index}
-              content={message}
-              isComplete={isComplete && index === llmMessages.length - 1}
+              key={`${message.timestamp}-${index}`}
+              content={message.content}
+              isComplete={message.isComplete && (isComplete || index === llmMessages.length - 1)}
+              isThinking={message.isThinking}
             />
           ))
         ) : (
           <div className="text-sm text-muted-foreground text-center py-4">
-            {isComplete ? "Task completed" : "Agent is working..."}
+            {isComplete ? "Task completed" : "Initializing agent..."}
           </div>
         )}
       </div>

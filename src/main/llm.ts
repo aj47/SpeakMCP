@@ -208,10 +208,11 @@ export interface AgentModeResponse {
   totalIterations: number
 }
 
-// Helper function to emit progress updates to the renderer
+// Helper function to emit progress updates to the renderer with better error handling
 function emitAgentProgress(update: AgentProgressUpdate) {
   const panel = WINDOWS.get("panel")
   if (!panel) {
+    console.warn("Panel window not available for progress update")
     return
   }
 
@@ -223,12 +224,20 @@ function emitAgentProgress(update: AgentProgressUpdate) {
   try {
     const handlers = getRendererHandlers<RendererHandlers>(panel.webContents)
     if (!handlers.agentProgressUpdate) {
+      console.warn("Agent progress handler not available")
       return
     }
 
-    handlers.agentProgressUpdate.send(update)
+    // Add a small delay to ensure UI updates are processed
+    setTimeout(() => {
+      try {
+        handlers.agentProgressUpdate.send(update)
+      } catch (error) {
+        console.warn("Failed to send progress update:", error)
+      }
+    }, 10)
   } catch (error) {
-    // Silently handle progress update errors
+    console.warn("Failed to get renderer handlers:", error)
   }
 }
 
@@ -426,13 +435,13 @@ export async function processTranscriptWithAgentMode(
 
     const thinkingStep = createProgressStep(
       "thinking",
-      `Agent thinking (step ${iteration})`,
-      "Processing request and determining next actions",
+      `Processing request (iteration ${iteration})`,
+      "Analyzing request and planning next actions",
       "in_progress"
     )
     progressSteps.push(thinkingStep)
 
-    // Emit progress update
+    // Emit progress update for thinking step
     emitAgentProgress({
       currentIteration: iteration,
       maxIterations,
@@ -515,6 +524,14 @@ Always use actual resource IDs from the conversation history or create new ones 
         ? llmResponse.content.substring(0, 100) + "..."
         : llmResponse.content
     }
+
+    // Emit progress update with the LLM content immediately after setting it
+    emitAgentProgress({
+      currentIteration: iteration,
+      maxIterations,
+      steps: progressSteps.slice(-3),
+      isComplete: false
+    })
 
     // Check for completion signals - only complete if there are no tools to execute
     const hasToolCalls = llmResponse.toolCalls && llmResponse.toolCalls.length > 0
@@ -734,6 +751,37 @@ Please try alternative approaches or provide manual instructions to the user.`
       progressSteps.push(completionStep)
 
       // Emit final progress
+      emitAgentProgress({
+        currentIteration: iteration,
+        maxIterations,
+        steps: progressSteps.slice(-3),
+        isComplete: true,
+        finalContent
+      })
+
+      break
+    }
+
+    // Continue iterating if needsMoreWork is true (explicitly set) or undefined (default behavior)
+    // Only stop if needsMoreWork is explicitly false or we hit max iterations
+    const shouldContinue = (llmResponse as any).needsMoreWork !== false
+    if (!shouldContinue) {
+      // Agent explicitly indicated no more work needed, but we already handled that case above
+      // This is a fallback in case agentIndicatedDone logic missed something
+      finalContent = llmResponse.content || ""
+      conversationHistory.push({
+        role: "assistant",
+        content: finalContent
+      })
+
+      const completionStep = createProgressStep(
+        "completion",
+        "Task completed",
+        "Agent indicated no more work needed",
+        "completed"
+      )
+      progressSteps.push(completionStep)
+
       emitAgentProgress({
         currentIteration: iteration,
         maxIterations,

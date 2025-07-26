@@ -185,12 +185,9 @@ export async function makeStructuredToolCall(
   const model = getModel(providerId, 'mcp')
   const client = createOpenAIClient(providerId)
 
-  console.log(`[STRUCTURED-OUTPUT] Using model: ${model}`)
-  console.log(`[STRUCTURED-OUTPUT] Provider: ${chatProviderId}`)
 
   try {
     if (supportsStructuredOutput(model)) {
-      console.log(`[STRUCTURED-OUTPUT] Using structured output for ${model}`)
 
       const response = await client.chat.completions.create({
         model,
@@ -206,16 +203,13 @@ export async function makeStructuredToolCall(
       if (content) {
         try {
           const parsed = JSON.parse(content)
-          console.log(`[STRUCTURED-OUTPUT] ✅ Structured output successful`)
           return LLMToolCallSchema.parse(parsed)
         } catch (parseError) {
-          console.log(`[STRUCTURED-OUTPUT] ⚠️ Failed to parse structured output JSON`)
         }
       }
     }
 
     // Fallback to regular completion for unsupported models
-    console.log(`[STRUCTURED-OUTPUT] Falling back to regular completion for ${model}`)
 
     const response = await client.chat.completions.create({
       model,
@@ -229,7 +223,6 @@ export async function makeStructuredToolCall(
         const parsed = JSON.parse(content)
         return LLMToolCallSchema.parse(parsed)
       } catch (parseError) {
-        console.log(`[STRUCTURED-OUTPUT] ⚠️ JSON parsing failed, returning as content`)
         return { content }
       }
     }
@@ -237,7 +230,6 @@ export async function makeStructuredToolCall(
     throw new Error("No response content received")
 
   } catch (error) {
-    console.error(`[STRUCTURED-OUTPUT] ❌ Error:`, error)
     throw error
   }
 }
@@ -255,11 +247,9 @@ export async function makeStructuredContextExtraction(
   const model = getModel(providerId, 'mcp')
   const client = createOpenAIClient(providerId)
 
-  console.log(`[STRUCTURED-CONTEXT] Using model: ${model}`)
 
   try {
     if (supportsStructuredOutput(model)) {
-      console.log(`[STRUCTURED-CONTEXT] Using structured output for context extraction`)
 
       const response = await client.chat.completions.create({
         model,
@@ -284,16 +274,13 @@ export async function makeStructuredContextExtraction(
       if (content) {
         try {
           const parsed = JSON.parse(content)
-          console.log(`[STRUCTURED-CONTEXT] ✅ Context extraction successful`)
           return ContextExtractionSchema.parse(parsed)
         } catch (parseError) {
-          console.log(`[STRUCTURED-CONTEXT] ⚠️ Failed to parse structured output JSON`)
         }
       }
     }
 
     // Fallback for unsupported models
-    console.log(`[STRUCTURED-CONTEXT] Falling back to regular completion`)
 
     const response = await client.chat.completions.create({
       model,
@@ -316,7 +303,6 @@ export async function makeStructuredContextExtraction(
         const parsed = JSON.parse(content)
         return ContextExtractionSchema.parse(parsed)
       } catch (parseError) {
-        console.log(`[STRUCTURED-CONTEXT] ⚠️ JSON parsing failed, returning defaults`)
         return { contextSummary: "", resources: [] }
       }
     }
@@ -324,7 +310,6 @@ export async function makeStructuredContextExtraction(
     return { contextSummary: "", resources: [] }
 
   } catch (error) {
-    console.error(`[STRUCTURED-CONTEXT] ❌ Error:`, error)
     return { contextSummary: "", resources: [] }
   }
 }
@@ -342,7 +327,6 @@ export async function makeTextCompletion(
   const model = getModel(providerId, 'transcript')
   const client = createOpenAIClient(providerId)
 
-  console.log(`[TEXT-COMPLETION] Using model: ${model}`)
 
   const response = await client.chat.completions.create({
     model,

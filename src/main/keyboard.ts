@@ -119,9 +119,7 @@ const captureFocusBeforeRecording = async () => {
   try {
     const focusedApp = await getFocusedAppInfo()
     state.focusedAppBeforeRecording = focusedApp
-    console.log(`[FOCUS] 📱 Captured focused app before recording: ${focusedApp}`)
   } catch (error) {
-    console.error(`[FOCUS] ❌ Failed to capture focused app:`, error)
     state.focusedAppBeforeRecording = null
   }
 }
@@ -131,22 +129,17 @@ export const writeTextWithFocusRestore = async (text: string) => {
 
   if (focusedApp) {
     try {
-      console.log(`[FOCUS] 🔄 Restoring focus to: ${focusedApp}`)
       await restoreFocusToApp(focusedApp)
-      console.log(`[FOCUS] ✅ Focus restored successfully`)
 
       // Small delay to ensure focus is restored before pasting
       await new Promise(resolve => setTimeout(resolve, 100))
 
       await writeText(text)
-      console.log(`[FOCUS] ✅ Text pasted to focused application`)
     } catch (error) {
-      console.error(`[FOCUS] ❌ Failed to restore focus or paste text:`, error)
       // Fallback to regular paste without focus restoration
       await writeText(text)
     }
   } else {
-    console.log(`[FOCUS] ⚠️ No focused app captured, using regular paste`)
     await writeText(text)
   }
 }
@@ -370,9 +363,6 @@ export function listenToKeyboardEvents() {
   const child = spawn(rdevPath, ["listen"], {})
 
   child.stdout.on("data", (data) => {
-    // if (import.meta.env.DEV) {
-    //   console.log(String(data))
-    // }
 
     const event = parseEvent(data)
     if (!event) return

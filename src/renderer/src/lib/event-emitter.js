@@ -38,7 +38,6 @@ class EventEmitter {
   /** Emit an event */
   emit(eventName, ...args) {
     if (this.listeners[eventName]) {
-      console.debug("emit", eventName, ...args)
       this.listeners[eventName].forEach((listener) => listener(...args))
     }
   }

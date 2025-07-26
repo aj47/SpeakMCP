@@ -57,7 +57,6 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
       setIsWaitingForResponse(false)
       return conversation
     } catch (error) {
-      console.error("Failed to start new conversation:", error)
       return null
     }
   }, [createConversationMutation])
@@ -75,7 +74,6 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
     toolResults?: Array<{ success: boolean; content: string; error?: string }>
   ) => {
     if (!currentConversationId) {
-      console.error("Cannot add message: no active conversation")
       return
     }
 
@@ -94,7 +92,6 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
         setIsWaitingForResponse(false)
       }
     } catch (error) {
-      console.error("Failed to add message to conversation:", error)
       setIsWaitingForResponse(false)
     }
   }, [currentConversationId, addMessageMutation])

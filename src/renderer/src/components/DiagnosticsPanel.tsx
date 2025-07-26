@@ -48,7 +48,6 @@ export function DiagnosticsPanel() {
       setDiagnosticInfo(diagnostic)
       setHealthCheck(health)
     } catch (error) {
-      console.error('Failed to load diagnostics:', error)
     } finally {
       setLoading(false)
     }
@@ -72,7 +71,6 @@ export function DiagnosticsPanel() {
       await tipcClient.clearErrorLog()
       loadDiagnostics() // Refresh data
     } catch (error) {
-      console.error('Failed to clear error log:', error)
     }
   }
 

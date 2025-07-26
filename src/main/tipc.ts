@@ -24,9 +24,7 @@ async function processWithAgentMode(
 ): Promise<string> {
   const config = configStore.get()
 
-  console.log(`[UNIFIED-AGENT-DEBUG] 🚀 processWithAgentMode called`)
-  console.log(`[UNIFIED-AGENT-DEBUG] 📝 Text: "${text.substring(0, 100)}..."`)
-  console.log(`[UNIFIED-AGENT-DEBUG] 🆔 ConversationId: ${conversationId || 'undefined'}`)
+
 
   if (!config.mcpToolsEnabled) {
     throw new Error("MCP tools are not enabled")
@@ -52,11 +50,8 @@ async function processWithAgentMode(
       toolResults?: any[]
     }> | undefined
 
-    console.log(`[UNIFIED-AGENT-DEBUG] 🔍 Checking conversation context...`)
     if (conversationId) {
-      console.log(`[UNIFIED-AGENT-DEBUG] 📂 Loading conversation: ${conversationId}`)
       const conversation = await conversationService.loadConversation(conversationId)
-      console.log(`[UNIFIED-AGENT-DEBUG] 📋 Loaded conversation:`, conversation ? `${conversation.messages.length} messages` : 'null')
 
       if (conversation && conversation.messages.length > 0) {
         // Convert conversation messages to the format expected by agent mode
@@ -69,13 +64,7 @@ async function processWithAgentMode(
           toolResults: msg.toolResults
         }))
 
-        console.log(`[UNIFIED-AGENT-DEBUG] ✅ Converted ${previousConversationHistory.length} messages for agent mode`)
-        console.log(`[MCP-AGENT] 📚 Loaded ${previousConversationHistory.length} previous messages from conversation ${conversationId}`)
-      } else {
-        console.log(`[UNIFIED-AGENT-DEBUG] ❌ No conversation found or empty conversation`)
       }
-    } else {
-      console.log(`[UNIFIED-AGENT-DEBUG] ❌ No conversationId provided - starting fresh conversation`)
     }
 
     const agentResult = await processTranscriptWithAgentMode(
@@ -86,10 +75,7 @@ async function processWithAgentMode(
       previousConversationHistory
     )
 
-    console.log(`[MCP-AGENT] ✅ Agent processing completed in ${agentResult.totalIterations} iterations`)
-    console.log(`[MCP-AGENT] Final response length: ${agentResult.content.length}`)
-    console.log(`[MCP-AGENT] Final response preview: "${agentResult.content.substring(0, 100)}..."`)
-    console.log(`[MCP-AGENT] Conversation history length: ${agentResult.conversationHistory.length} entries`)
+
 
     return agentResult.content
   } else {
@@ -105,7 +91,6 @@ async function processWithAgentMode(
           const toolResult = await mcpService.executeToolCall(toolCall)
           toolResults.push(toolResult)
         } catch (error) {
-          console.error(`Tool call failed for ${toolCall.name}:`, error)
           toolResults.push({
             content: [{
               type: "text",
@@ -194,12 +179,10 @@ export const router = {
   }),
 
   resizePanelForAgentMode: t.procedure.action(async () => {
-    console.log("[MCP-AGENT-DEBUG] 📞 TIPC call: resizePanelForAgentMode")
     resizePanelForAgentMode()
   }),
 
   resizePanelToNormal: t.procedure.action(async () => {
-    console.log("[MCP-AGENT-DEBUG] 📞 TIPC call: resizePanelToNormal")
     resizePanelToNormal()
   }),
 
@@ -377,10 +360,8 @@ export const router = {
         const pasteDelay = 500 // 0.5 second delay for regular transcripts
         setTimeout(async () => {
           try {
-            console.log(`[FOCUS] 📝 Pasting regular transcript with focus restoration`)
             await writeTextWithFocusRestore(transcript)
           } catch (error) {
-            console.error(`Failed to write text:`, error)
             // Don't throw here, just log the error so the recording still gets saved
           }
         }, pasteDelay)
@@ -400,7 +381,6 @@ export const router = {
         try {
           processedText = await postProcessTranscript(input.text)
         } catch (error) {
-          console.error("Text post-processing failed:", error)
           // Continue with original text if post-processing fails
         }
       }
@@ -430,14 +410,11 @@ export const router = {
 
       // Auto-paste if enabled
       if (config.mcpAutoPasteEnabled && state.focusedAppBeforeRecording) {
-        console.log(`[TEXT-INPUT] 📋 Auto-pasting text to: ${state.focusedAppBeforeRecording}`)
-
         setTimeout(async () => {
           try {
             await writeText(processedText)
-            console.log(`[TEXT-INPUT] ✅ Successfully pasted text`)
           } catch (error) {
-            console.error(`[TEXT-INPUT] ❌ Failed to paste text:`, error)
+            // Ignore paste errors
           }
         }, config.mcpAutoPasteDelay || 1000)
       }
@@ -479,14 +456,11 @@ export const router = {
 
       // Auto-paste if enabled
       if (config.mcpAutoPasteEnabled && state.focusedAppBeforeRecording) {
-        console.log(`[MCP-TEXT-INPUT] 📋 Auto-pasting result to: ${state.focusedAppBeforeRecording}`)
-
         setTimeout(async () => {
           try {
             await writeText(finalResponse)
-            console.log(`[MCP-TEXT-INPUT] ✅ Successfully pasted result`)
           } catch (error) {
-            console.error(`[MCP-TEXT-INPUT] ❌ Failed to paste result:`, error)
+            // Ignore paste errors
           }
         }, config.mcpAutoPasteDelay || 1000)
       }
@@ -554,36 +528,25 @@ export const router = {
 
       if (!conversationId) {
         // Create new conversation with the transcript
-        console.log(`[MCP-CONVERSATION-DEBUG] 🆕 Creating new conversation for voice input`)
         conversation = await conversationService.createConversation(transcript, "user")
         conversationId = conversation.id
-        console.log(`[MCP-CONVERSATION-DEBUG] ✅ Created conversation: ${conversationId}`)
       } else {
         // Load existing conversation and add user message
-        console.log(`[MCP-CONVERSATION-DEBUG] 📂 Loading existing conversation: ${conversationId}`)
         conversation = await conversationService.loadConversation(conversationId)
         if (conversation) {
           await conversationService.addMessageToConversation(conversationId, transcript, "user")
-          console.log(`[MCP-CONVERSATION-DEBUG] ✅ Added user message to conversation`)
         } else {
-          console.log(`[MCP-CONVERSATION-DEBUG] ❌ Conversation not found, creating new one`)
           conversation = await conversationService.createConversation(transcript, "user")
           conversationId = conversation.id
         }
       }
 
       // Use unified agent mode processing
-      console.log("[MCP-AGENT] 🤖 Agent mode enabled, using agent processing...")
-      console.log(`[MCP-RECORDING-DEBUG] 📝 Transcript: "${transcript.substring(0, 100)}..."`)
-      console.log(`[MCP-RECORDING-DEBUG] 🆔 ConversationId from input: ${input.conversationId || 'undefined'}`)
-      console.log(`[MCP-RECORDING-DEBUG] 🆔 Using conversationId: ${conversationId}`)
       const finalResponse = await processWithAgentMode(transcript, conversationId)
-      console.log(`[MCP-AGENT] Final response will be displayed in GUI`)
 
       // Add assistant response to conversation
       if (conversationId) {
         await conversationService.addMessageToConversation(conversationId, finalResponse, "assistant")
-        console.log(`[MCP-CONVERSATION-DEBUG] ✅ Added assistant response to conversation`)
       }
 
       // Save to history
@@ -610,8 +573,6 @@ export const router = {
       }
 
       // Agent mode result is displayed in GUI - no clipboard or pasting logic needed
-      console.log(`[MCP-AGENT] ✅ Agent processing completed, result displayed in GUI`)
-      console.log(`[MCP-AGENT] 📋 Result will remain visible until user presses ESC to close`)
 
       // Return the conversation ID so frontend can use it for subsequent requests
       return { conversationId }
@@ -656,7 +617,6 @@ export const router = {
 
   clearTextInputState: t.procedure.action(async () => {
     state.isTextInputActive = false
-    console.log("[TEXT-INPUT-DEBUG] 🔄 Text input state cleared")
   }),
 
   // MCP Config File Operations

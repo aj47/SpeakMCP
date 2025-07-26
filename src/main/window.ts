@@ -55,7 +55,6 @@ function createBaseWindow({
   }
 
   win.on("close", () => {
-    console.log("close", id)
     WINDOWS.delete(id)
   })
 
@@ -221,12 +220,6 @@ export function showPanelWindow() {
     // Note: Agent mode positioning is handled separately in resizePanelForAgentMode
 
     const position = getPanelWindowPosition(mode)
-    console.log("[PANEL-DEBUG] 📍 Showing panel window:", {
-      mode,
-      isTextInputActive: state.isTextInputActive,
-      currentBounds: win.getBounds(),
-      targetPosition: position
-    })
 
     win.setPosition(position.x, position.y)
     win.showInactive()
@@ -239,9 +232,7 @@ export async function showPanelWindowAndStartRecording() {
   try {
     const focusedApp = await getFocusedAppInfo()
     state.focusedAppBeforeRecording = focusedApp
-    console.log(`[FOCUS] 📱 Captured focused app before regular recording: ${focusedApp}`)
   } catch (error) {
-    console.error(`[FOCUS] ❌ Failed to capture focused app:`, error)
     state.focusedAppBeforeRecording = null
   }
 
@@ -254,9 +245,7 @@ export async function showPanelWindowAndStartMcpRecording() {
   try {
     const focusedApp = await getFocusedAppInfo()
     state.focusedAppBeforeRecording = focusedApp
-    console.log(`[FOCUS] 📱 Captured focused app before MCP recording: ${focusedApp}`)
   } catch (error) {
-    console.error(`[FOCUS] ❌ Failed to capture focused app:`, error)
     state.focusedAppBeforeRecording = null
   }
 
@@ -269,9 +258,7 @@ export async function showPanelWindowAndShowTextInput() {
   try {
     const focusedApp = await getFocusedAppInfo()
     state.focusedAppBeforeRecording = focusedApp
-    console.log(`[FOCUS] 📱 Captured focused app before text input: ${focusedApp}`)
   } catch (error) {
-    console.error(`[FOCUS] ❌ Failed to capture focused app:`, error)
     state.focusedAppBeforeRecording = null
   }
 
@@ -352,17 +339,12 @@ export function resizePanelForAgentMode() {
   win.setSize(agentPanelWindowSize.width, agentPanelWindowSize.height, true) // animate = true
   win.setPosition(position.x, position.y, true) // animate = true
 
-  console.log("[MCP-AGENT-DEBUG] ✅ Panel resized for agent mode:", {
-    newSize: agentPanelWindowSize,
-    newPosition: position,
-    finalBounds: win.getBounds()
-  })
+
 }
 
 export function resizePanelForTextInput() {
   const win = WINDOWS.get("panel")
   if (!win) {
-    console.error("[TEXT-INPUT-DEBUG] ❌ Panel window not found for text input resize!")
     return
   }
 
@@ -379,10 +361,8 @@ export function resizePanelForTextInput() {
 }
 
 export function resizePanelToNormal() {
-  console.log("[MCP-AGENT-DEBUG] 📏 Attempting to resize panel to normal...")
   const win = WINDOWS.get("panel")
   if (!win) {
-    console.error("[MCP-AGENT-DEBUG] ❌ Panel window not found for resize!")
     return
   }
 
@@ -396,9 +376,5 @@ export function resizePanelToNormal() {
   win.setSize(panelWindowSize.width, panelWindowSize.height, true) // animate = true
   win.setPosition(position.x, position.y, true) // animate = true
 
-  console.log("[MCP-AGENT-DEBUG] ✅ Panel resized to normal:", {
-    newSize: panelWindowSize,
-    newPosition: position,
-    finalBounds: win.getBounds()
-  })
+
 }

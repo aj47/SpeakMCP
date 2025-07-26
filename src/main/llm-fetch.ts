@@ -20,7 +20,6 @@ function extractJsonObject(str: string): any | null {
       return JSON.parse(match[0])
     } catch (e) {
       // Handle parsing error
-      console.error('Error parsing JSON: ', e)
       return null
     }
   } else {
@@ -41,7 +40,6 @@ async function apiCallWithRetry<T>(call: () => Promise<T>, retryCount: number = 
       const response = await call()
       return response
     } catch (error) {
-      console.error(`Attempt ${i + 1} failed with error: ${error}`)
       if (i === retryCount - 1) {
         diagnosticsService.logError('llm-fetch', 'API call failed after retries', error)
         throw error
@@ -122,12 +120,7 @@ async function makeOpenAICompatibleCall(
   // Add structured output for supported models
   if (useStructuredOutput && supportsJsonMode(model, providerId)) {
     requestBody.response_format = { type: 'json_object' }
-    console.log(`[LLM-FETCH] Using JSON mode for model: ${model}`)
-  } else if (useStructuredOutput) {
-    console.log(`[LLM-FETCH] JSON mode not supported for model: ${model}, relying on JSON extraction`)
   }
-
-  console.log(`[LLM-FETCH] Making ${providerId} API call with model: ${model}`)
 
   return apiCallWithRetry(async () => {
     const response = await fetch(`${baseURL}/chat/completions`, {
@@ -171,8 +164,6 @@ async function makeGeminiCall(
 
   // Convert messages to Gemini format
   const prompt = messages.map(m => `${m.role}: ${m.content}`).join('\n\n')
-
-  console.log(`[LLM-FETCH] Making Gemini API call with model: ${model}`)
 
   return apiCallWithRetry(async () => {
     const response = await fetch(`${baseURL}/v1beta/models/${model}:generateContent?key=${config.geminiApiKey}`, {
@@ -228,8 +219,6 @@ export async function makeLLMCallWithFetch(
   const config = configStore.get()
   const chatProviderId = providerId || config.mcpToolsProviderId || 'openai'
 
-  console.log(`[LLM-FETCH] Making LLM call with provider: ${chatProviderId}`)
-
   try {
     let response: any
 
@@ -244,21 +233,16 @@ export async function makeLLMCallWithFetch(
       throw new Error("No response content received")
     }
 
-    console.log(`[LLM-FETCH] Raw response:`, content)
-
     // Try to extract JSON object from response
     const jsonObject = extractJsonObject(content)
     if (jsonObject && (jsonObject.toolCalls || jsonObject.content)) {
-      console.log(`[LLM-FETCH] ✅ Successfully parsed JSON response:`, jsonObject)
       return jsonObject as LLMToolCallResponse
     }
 
     // If no valid JSON found, return as content
-    console.log(`[LLM-FETCH] ⚠️ No valid JSON found, returning as content`)
     return { content }
 
   } catch (error) {
-    console.error(`[LLM-FETCH] ❌ Error:`, error)
     diagnosticsService.logError('llm-fetch', 'LLM call failed', error)
     throw error
   }
@@ -293,7 +277,6 @@ export async function makeTextCompletionWithFetch(
     return response.choices[0]?.message.content?.trim() || ""
 
   } catch (error) {
-    console.error(`[LLM-FETCH] ❌ Text completion error:`, error)
     diagnosticsService.logError('llm-fetch', 'Text completion failed', error)
     throw error
   }

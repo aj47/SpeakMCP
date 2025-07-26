@@ -129,7 +129,6 @@ async function fetchGeminiModels(baseUrl?: string, apiKey?: string): Promise<Mod
 
   // Gemini API returns models in a different format
   if (!data.models || !Array.isArray(data.models)) {
-    console.warn('[MODELS-SERVICE] Unexpected Gemini API response format:', data)
     return []
   }
 
@@ -215,11 +214,9 @@ export async function fetchAvailableModels(providerId: string): Promise<ModelInf
       timestamp: Date.now()
     })
 
-    console.log(`[MODELS-SERVICE] ✅ Fetched ${models.length} models for ${providerId}`)
     return models
 
   } catch (error) {
-    console.error(`[MODELS-SERVICE] ❌ Failed to fetch models for ${providerId}:`, error)
     diagnosticsService.logError('models-service', `Failed to fetch models for ${providerId}`, error)
 
     // Return fallback models if API call fails
@@ -259,5 +256,4 @@ function getFallbackModels(providerId: string): ModelInfo[] {
  */
 export function clearModelsCache(): void {
   modelsCache.clear()
-  console.log('[MODELS-SERVICE] Models cache cleared')
 }

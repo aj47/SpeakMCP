@@ -68,12 +68,9 @@ Only include resources that are currently active and usable.
 Keep the contextSummary concise but informative.`
 
   try {
-    console.log(`[CONTEXT-EXTRACTION] 🚀 Using structured output for context extraction`)
     const result = await makeStructuredContextExtraction(contextExtractionPrompt, config.mcpToolsProviderId)
-    console.log(`[CONTEXT-EXTRACTION] ✅ Extracted context:`, result)
     return result
   } catch (error) {
-    console.log(`[CONTEXT-EXTRACTION] ❌ Error during context extraction:`, error)
     return { contextSummary: "", resources: [] }
   }
 }
@@ -151,11 +148,9 @@ export async function postProcessTranscript(transcript: string) {
   const chatProviderId = config.transcriptPostProcessingProviderId
 
   try {
-    console.log(`[TRANSCRIPT-PROCESSING] 🚀 Using fetch-based text completion`)
     const result = await makeTextCompletionWithFetch(prompt, chatProviderId)
     return result
   } catch (error) {
-    console.error(`[TRANSCRIPT-PROCESSING] ❌ Error:`, error)
     throw error
   }
 }
@@ -194,16 +189,10 @@ export async function processTranscriptWithTools(
 
   const chatProviderId = config.mcpToolsProviderId
 
-  console.log(`[MCP-TOOLS-DEBUG] 🎯 Processing transcript with ${uniqueAvailableTools.length} tools`)
-  console.log(`[MCP-TOOLS-DEBUG] 🤖 Using provider: ${chatProviderId}`)
-
   try {
-    console.log(`[MCP-TOOLS-DEBUG] 🚀 Using fetch-based LLM call`)
     const result = await makeLLMCallWithFetch(messages, chatProviderId)
-    console.log(`[MCP-TOOLS-DEBUG] ✅ Fetch-based call successful:`, JSON.stringify(result, null, 2))
     return result
   } catch (error) {
-    console.error(`[MCP-TOOLS-DEBUG] ❌ Fetch-based call failed:`, error)
     throw error
   }
 }
@@ -239,7 +228,7 @@ function emitAgentProgress(update: AgentProgressUpdate) {
 
     handlers.agentProgressUpdate.send(update)
   } catch (error) {
-    console.error("Failed to emit progress update:", error)
+    // Silently handle progress update errors
   }
 }
 
@@ -352,8 +341,6 @@ export async function processTranscriptWithAgentMode(
     }
   }
 
-  console.log("[MCP-AGENT] 🤖 Starting agent mode processing...")
-
   // Initialize progress tracking
   const progressSteps: AgentProgressStep[] = []
 
@@ -398,13 +385,7 @@ export async function processTranscriptWithAgentMode(
 
 
 
-  // Debug: Log the system prompt being used
-  console.log("[MCP-AGENT-DEBUG] 📝 Using custom system prompt:", !!config.mcpToolsSystemPrompt)
-  console.log("[MCP-AGENT-DEBUG] 📝 Full system prompt:")
-  console.log(systemPrompt)
-  console.log("[MCP-AGENT-DEBUG] 📝 System prompt length:", systemPrompt.length)
-  console.log("[MCP-AGENT-DEBUG] 🔧 Available tools:", availableTools.map(t => t.name).join(", "))
-  console.log("[MCP-AGENT-DEBUG] 🎯 Tool capabilities:", toolCapabilities.summary)
+
 
   // Generic context extraction from chat history - works with any MCP tool
   const extractRecentContext = (history: Array<{ role: string; content: string; toolCalls?: any[]; toolResults?: any[] }>) => {
@@ -430,18 +411,13 @@ export async function processTranscriptWithAgentMode(
   // Get recent context for the LLM - no specific extraction needed
   const recentContext = extractRecentContext(conversationHistory)
 
-  // Log context for debugging
-  if (previousConversationHistory) {
-    console.log(`[MCP-AGENT-DEBUG] 📚 Loaded ${previousConversationHistory.length} previous messages from conversation`)
-    console.log(`[MCP-AGENT-DEBUG] 📋 Using ${recentContext.length} recent messages for context`)
-  }
+
 
   let iteration = 0
   let finalContent = ""
 
   while (iteration < maxIterations) {
     iteration++
-    console.log(`[MCP-AGENT] 🔄 Agent iteration ${iteration}/${maxIterations}`)
 
     // Update initial step to completed and add thinking step for this iteration
     if (iteration === 1) {
@@ -520,9 +496,14 @@ Always use actual resource IDs from the conversation history or create new ones 
     ]
 
     // Make LLM call
-    console.log(`[MCP-AGENT-DEBUG] 🧠 Making LLM call for iteration ${iteration}`)
     const llmResponse = await makeLLMCall(messages, config)
-    console.log(`[MCP-AGENT-DEBUG] 🎯 LLM response for iteration ${iteration}:`, JSON.stringify(llmResponse, null, 2))
+
+    // Display LLM response content to user
+    if (llmResponse.content) {
+      console.log("====== LLM RESPONSE ======");
+      console.log(llmResponse.content)
+      console.log("====== LLM RESPONSE ======");
+    }
 
     // Update thinking step with actual LLM content and mark as completed
     thinkingStep.status = "completed"
@@ -569,17 +550,14 @@ Always use actual resource IDs from the conversation history or create new ones 
         finalContent
       })
 
-      console.log(`[MCP-AGENT] ✅ Agent completed task in ${iteration} iterations`)
       break
     }
 
     // Execute tool calls with enhanced error handling
-    console.log(`[MCP-AGENT] 🔧 Executing ${llmResponse.toolCalls!.length} tool calls`)
     const toolResults: MCPToolResult[] = []
     const failedTools: string[] = []
 
     for (const toolCall of llmResponse.toolCalls!) {
-      console.log(`[MCP-AGENT] Executing tool: ${toolCall.name}`)
 
       // Add tool call step
       const toolCallStep = createProgressStep(
@@ -622,15 +600,11 @@ Always use actual resource IDs from the conversation history or create new ones 
 
         if (isRetryableError) {
           retryCount++
-          console.log(`[MCP-AGENT] 🔄 Retrying tool ${toolCall.name} (attempt ${retryCount}/${maxRetries})`)
 
           // Special handling for resource-related errors
           if (errorText.includes('not found') || errorText.includes('invalid') || errorText.includes('expired')) {
-            console.log(`[MCP-AGENT] 🔧 Resource error detected, attempting recovery`)
-
             // The retry mechanism will benefit from the updated context extraction
             // which will provide the correct resource IDs from conversation history
-            console.log(`[MCP-AGENT] 🔄 Resource error detected, relying on context extraction for recovery`)
           }
 
           // Wait before retry (exponential backoff)
@@ -702,8 +676,6 @@ Always use actual resource IDs from the conversation history or create new ones 
     const allToolsSuccessful = toolResults.length > 0 && !hasErrors
 
     if (hasErrors) {
-      console.log(`[MCP-AGENT] ⚠️ Tool execution had errors: ${failedTools.join(', ')}`)
-
       // Enhanced error analysis and recovery suggestions
       const errorAnalysis = analyzeToolErrors(toolResults, failedTools, llmResponse.toolCalls || [])
 
@@ -743,7 +715,6 @@ Please try alternative approaches or provide manual instructions to the user.`
     const agentIndicatedDone = (llmResponse as any).needsMoreWork === false
 
     if (agentIndicatedDone && allToolsSuccessful) {
-      console.log(`[MCP-AGENT] 🎯 Agent indicated task completion and tools executed successfully`)
 
       // Create final content that includes tool results
       const toolResultsSummary = toolResults
@@ -771,18 +742,10 @@ Please try alternative approaches or provide manual instructions to the user.`
         finalContent
       })
 
-      console.log(`[MCP-AGENT] ✅ Agent completed task in ${iteration} iterations`)
       break
     }
 
-    // Check for completion keywords in the response
-    const completionKeywords = ['completed', 'finished', 'done', 'success', 'created successfully', 'task complete']
-    const responseText = (llmResponse.content || "").toLowerCase()
-    const hasCompletionKeywords = completionKeywords.some(keyword => responseText.includes(keyword))
 
-    if (allToolsSuccessful && hasCompletionKeywords) {
-      console.log(`[MCP-AGENT] 🎯 Detected task completion signals - tools successful and completion keywords found`)
-    }
 
     // Set final content to the latest assistant response (fallback)
     if (!finalContent) {
@@ -791,7 +754,6 @@ Please try alternative approaches or provide manual instructions to the user.`
   }
 
   if (iteration >= maxIterations) {
-    console.log(`[MCP-AGENT] ⚠️ Agent reached maximum iterations (${maxIterations})`)
 
     // Provide better feedback based on what happened
     const hasRecentErrors = progressSteps.slice(-5).some(step => step.status === "error")
@@ -832,14 +794,13 @@ Please try alternative approaches or provide manual instructions to the user.`
 async function makeLLMCall(messages: Array<{role: string, content: string}>, config: any): Promise<LLMToolCallResponse> {
   const chatProviderId = config.mcpToolsProviderId
 
-  console.log(`[MCP-LLM-DEBUG] 🚀 Making agent mode LLM call with provider: ${chatProviderId}`)
-
   try {
+    console.log("====== LLM Messages ======");
+    console.log(messages)
+    console.log("====== LLM Messages ======");
     const result = await makeLLMCallWithFetch(messages, chatProviderId)
-    console.log("[MCP-LLM-DEBUG] ✅ Fetch-based agent call successful:", JSON.stringify(result, null, 2))
     return result
   } catch (error) {
-    console.error("[MCP-LLM-DEBUG] ❌ Fetch-based agent call failed:", error)
     diagnosticsService.logError('llm', 'Agent LLM call failed', error)
     throw error
   }

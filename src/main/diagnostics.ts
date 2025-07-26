@@ -80,8 +80,7 @@ class DiagnosticsService {
       this.errorLog = this.errorLog.slice(-this.maxErrorLogSize)
     }
 
-    // Also log to console with enhanced formatting
-    console.error(`[DIAGNOSTICS] 🚨 ${component.toUpperCase()}: ${message}`, details || '')
+    // Console logging removed to keep console clean
   }
 
   logWarning(component: string, message: string, details?: any): void {
@@ -99,7 +98,7 @@ class DiagnosticsService {
       this.errorLog = this.errorLog.slice(-this.maxErrorLogSize)
     }
 
-    console.warn(`[DIAGNOSTICS] ⚠️ ${component.toUpperCase()}: ${message}`, details || '')
+    // Console logging removed to keep console clean
   }
 
   logInfo(component: string, message: string, details?: any): void {
@@ -116,7 +115,7 @@ class DiagnosticsService {
       this.errorLog = this.errorLog.slice(-this.maxErrorLogSize)
     }
 
-    console.log(`[DIAGNOSTICS] ℹ️ ${component.toUpperCase()}: ${message}`, details || '')
+    // Console logging removed to keep console clean
   }
 
   async generateDiagnosticReport(): Promise<DiagnosticInfo> {
@@ -171,7 +170,6 @@ class DiagnosticsService {
 
     fs.writeFileSync(defaultPath, JSON.stringify(report, null, 2))
 
-    console.log(`[DIAGNOSTICS] 📊 Diagnostic report saved to: ${defaultPath}`)
     return defaultPath
   }
 
@@ -181,7 +179,6 @@ class DiagnosticsService {
 
   clearErrorLog(): void {
     this.errorLog = []
-    console.log('[DIAGNOSTICS] 🧹 Error log cleared')
   }
 
   // Health check method

@@ -37,7 +37,6 @@ export function MCPToolManager({ onToolToggle }: MCPToolManagerProps) {
         const toolList = await tipcClient.getMcpDetailedToolList()
         setTools(toolList)
       } catch (error) {
-        console.error("Failed to fetch tool list:", error)
       }
     }
 

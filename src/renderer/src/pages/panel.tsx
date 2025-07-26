@@ -83,8 +83,7 @@ export function Component() {
         await startNewConversation(transcript, "user")
       }
 
-      console.log(`[FRONTEND-DEBUG] 🎤 MCP Recording - conversationId: ${currentConversationId || 'undefined'}`)
-      console.log(`[FRONTEND-DEBUG] 🎤 MCP Recording - isConversationActive: ${isConversationActive}`)
+
 
       const result = await tipcClient.createMcpRecording({
         recording: arrayBuffer,
@@ -94,7 +93,6 @@ export function Component() {
 
       // If backend returned a conversationId, continue that conversation
       if (result?.conversationId && result.conversationId !== currentConversationId) {
-        console.log(`[FRONTEND-DEBUG] 🔄 Continuing conversation: ${result.conversationId}`)
         continueConversation(result.conversationId)
       }
 
@@ -294,7 +292,6 @@ export function Component() {
         textInputMutation.mutate({ text })
       }
     } catch (error) {
-      console.error('[TEXT-INPUT] Failed to get config, using regular processing:', error)
       textInputMutation.mutate({ text })
     }
   }
@@ -315,7 +312,6 @@ export function Component() {
         textInputMutation.mutate({ text: message })
       }
     } catch (error) {
-      console.error('[CONTINUE-CONVERSATION] Failed to get config, using regular processing:', error)
       textInputMutation.mutate({ text: message })
     }
   }
@@ -364,13 +360,7 @@ export function Component() {
   // Agent progress handler
   useEffect(() => {
     const unlisten = rendererHandlers.agentProgressUpdate.listen((update: AgentProgressUpdate) => {
-      console.log(`[MCP-AGENT-GUI] 📊 Progress update received:`, {
-        isComplete: update.isComplete,
-        currentIteration: update.currentIteration,
-        stepsCount: update.steps.length,
-        hasFinalContent: !!update.finalContent,
-        finalContentPreview: update.finalContent?.substring(0, 50)
-      })
+
 
       // Only update if the progress has actually changed to prevent flashing
       setAgentProgress(prevProgress => {
@@ -389,7 +379,6 @@ export function Component() {
 
       // Resize panel for agent mode on first progress update or when transitioning from no progress
       if (!agentProgress && update && !update.isComplete) {
-        console.log(`[MCP-AGENT-GUI] 📏 Resizing panel for agent mode`)
         // Small delay to ensure the panel is ready
         setTimeout(() => {
           tipcClient.resizePanelForAgentMode()
@@ -398,12 +387,10 @@ export function Component() {
 
       // Keep the panel open when agent completes - user will press ESC to close
       if (update.isComplete) {
-        console.log(`[MCP-AGENT-GUI] ✅ Agent completed, panel will remain open until user presses ESC`)
-
         // Add assistant response to conversation if we have final content
         if (update.finalContent) {
-          addMessage(update.finalContent, "assistant").catch(error => {
-            console.error("Failed to add assistant response to conversation:", error)
+          addMessage(update.finalContent, "assistant").catch(() => {
+            // Silently handle error
           })
         }
 
@@ -417,7 +404,6 @@ export function Component() {
   // Clear agent progress handler
   useEffect(() => {
     const unlisten = rendererHandlers.clearAgentProgress.listen(() => {
-      console.log(`[MCP-AGENT-GUI] 🔄 Clearing agent progress`)
       setAgentProgress(null)
       setMcpMode(false)
       mcpModeRef.current = false

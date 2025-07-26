@@ -231,7 +231,6 @@ export function MCPConfigManager({ config, onConfigChange }: MCPConfigManagerPro
         setServerStatus(status)
         setInitializationStatus(initStatus)
       } catch (error) {
-        console.error("Failed to fetch server status:", error)
       }
     }
 

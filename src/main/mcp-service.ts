@@ -74,7 +74,6 @@ class MCPService {
       resourceType,
       lastUsed: Date.now()
     })
-    console.log(`[MCP-RESOURCE] 📝 Tracking ${resourceType} ${resourceId} for server ${serverId}`)
   }
 
   /**
@@ -102,9 +101,7 @@ class MCPService {
       }
     }
 
-    if (cleanedCount > 0) {
-      console.log(`[MCP-RESOURCE] 🧹 Cleaned up ${cleanedCount} old resources`)
-    }
+
   }
 
   /**
@@ -132,7 +129,6 @@ class MCPService {
         const match = text.match(pattern)
         if (match && match[1]) {
           this.trackResource(serverName, match[1], type)
-          console.log(`[MCP-RESOURCE] 🎯 Auto-detected ${type} ${match[1]} for server ${serverName}`)
           break
         }
       }
@@ -169,7 +165,6 @@ class MCPService {
       try {
         await this.initializeServer(serverName, serverConfig)
       } catch (error) {
-        console.error(`[MCP-SERVICE] ❌ Failed to initialize server ${serverName}:`, error)
         // Server status will be computed dynamically in getServerStatus()
       }
 
@@ -182,7 +177,6 @@ class MCPService {
 
 
   private async initializeServer(serverName: string, serverConfig: MCPServerConfig) {
-    console.log(`[MCP-SERVICE] 🚀 Initializing server: ${serverName}`)
 
     try {
       // Resolve command path and prepare environment
@@ -211,11 +205,9 @@ class MCPService {
       })
 
       await Promise.race([connectPromise, timeoutPromise])
-      console.log(`[MCP-SERVICE] ✅ Connected to server: ${serverName}`)
 
       // Get available tools from the server
       const toolsResult = await client.listTools()
-      console.log(`[MCP-SERVICE] 📋 Found ${toolsResult.tools.length} tools from ${serverName}`)
 
       // Add tools to our registry with server prefix
       for (const tool of toolsResult.tools) {
@@ -230,9 +222,7 @@ class MCPService {
       this.transports.set(serverName, transport)
       this.clients.set(serverName, client)
 
-      console.log(`[MCP-SERVICE] ✅ Successfully initialized server: ${serverName}`)
     } catch (error) {
-      console.error(`[MCP-SERVICE] ❌ Failed to initialize server ${serverName}:`, error)
       diagnosticsService.logError('mcp-service', `Failed to initialize server ${serverName}`, error)
 
       // Clean up any partial initialization
@@ -264,7 +254,6 @@ class MCPService {
 
     // The LLM-based context extraction handles resource management
     // No need for complex session injection logic here
-    console.log(`[MCP-TOOL] 🔧 Executing ${toolName} with arguments:`, processedArguments)
 
     try {
       const result = await client.callTool({
@@ -295,8 +284,6 @@ class MCPService {
         isError: Boolean(result.isError)
       }
     } catch (error) {
-      console.error(`Error executing tool ${toolName} on server ${serverName}:`, error)
-
       // Check if this is a parameter naming issue and try to fix it
       if (error instanceof Error) {
         const errorMessage = error.message
@@ -304,7 +291,6 @@ class MCPService {
           // Try to fix common parameter naming issues
           const correctedArgs = this.fixParameterNaming(arguments_, errorMessage)
           if (JSON.stringify(correctedArgs) !== JSON.stringify(arguments_)) {
-            console.log(`[MCP-SERVICE] Retrying ${serverName}:${toolName} with corrected parameters:`, correctedArgs)
             try {
               const retryResult = await client.callTool({
                 name: toolName,
@@ -326,7 +312,7 @@ class MCPService {
                 isError: Boolean(retryResult.isError)
               }
             } catch (retryError) {
-              console.error(`Retry also failed:`, retryError)
+              // Retry failed, will fall through to error return
             }
           }
         }
@@ -534,14 +520,14 @@ class MCPService {
         try {
           await client.close()
         } catch (error) {
-          console.error(`Error closing test client:`, error)
+          // Ignore cleanup errors
         }
       }
       if (transport) {
         try {
           await transport.close()
         } catch (error) {
-          console.error(`Error closing test transport:`, error)
+          // Ignore cleanup errors
         }
       }
     }
@@ -567,7 +553,6 @@ class MCPService {
 
       return { success: true }
     } catch (error) {
-      console.error(`Failed to restart server ${serverName}:`, error)
       return {
         success: false,
         error: error instanceof Error ? error.message : String(error)
@@ -584,7 +569,7 @@ class MCPService {
         try {
           await client.close()
         } catch (error) {
-          console.error(`Error closing client for ${serverName}:`, error)
+          // Ignore cleanup errors
         }
       }
 
@@ -592,7 +577,7 @@ class MCPService {
         try {
           await transport.close()
         } catch (error) {
-          console.error(`Error closing transport for ${serverName}:`, error)
+          // Ignore cleanup errors
         }
       }
 
@@ -601,7 +586,6 @@ class MCPService {
 
       return { success: true }
     } catch (error) {
-      console.error(`Failed to stop server ${serverName}:`, error)
       return {
         success: false,
         error: error instanceof Error ? error.message : String(error)
@@ -632,7 +616,6 @@ class MCPService {
       })
 
       if (matchingTool && matchingTool.name.includes(':')) {
-        console.log(`[MCP-SERVICE] 🔧 Found matching tool with prefix: ${matchingTool.name} for unprefixed call: ${toolCall.name}`)
         const [serverName, toolName] = matchingTool.name.split(':', 2)
         const result = await this.executeServerTool(serverName, toolName, toolCall.arguments)
 
@@ -655,7 +638,6 @@ class MCPService {
       return result
 
     } catch (error) {
-      console.error(`Tool execution error for ${toolCall.name}:`, error)
       diagnosticsService.logError('mcp-service', `Tool execution error for ${toolCall.name}`, error)
 
       return {
@@ -779,7 +761,7 @@ class MCPService {
       try {
         await client.close()
       } catch (error) {
-        console.error(`Error closing client for ${serverName}:`, error)
+        // Ignore cleanup errors
       }
     }
 
@@ -787,7 +769,7 @@ class MCPService {
       try {
         await transport.close()
       } catch (error) {
-        console.error(`Error closing transport for ${serverName}:`, error)
+        // Ignore cleanup errors
       }
     }
 

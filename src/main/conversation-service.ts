@@ -76,7 +76,6 @@ export class ConversationService {
       // Save updated index
       fs.writeFileSync(indexPath, JSON.stringify(index, null, 2))
     } catch (error) {
-      console.error("Failed to update conversation index:", error)
     }
   }
 
@@ -103,9 +102,7 @@ export class ConversationService {
       // Update the index
       this.updateConversationIndex(conversation)
 
-      console.log(`[CONVERSATION] Saved conversation ${conversation.id}`)
     } catch (error) {
-      console.error("Failed to save conversation:", error)
       throw error
     }
   }
@@ -121,10 +118,8 @@ export class ConversationService {
       const conversationData = fs.readFileSync(conversationPath, "utf8")
       const conversation: Conversation = JSON.parse(conversationData)
 
-      console.log(`[CONVERSATION] Loaded conversation ${conversationId}`)
       return conversation
     } catch (error) {
-      console.error("Failed to load conversation:", error)
       return null
     }
   }
@@ -143,7 +138,6 @@ export class ConversationService {
       // Sort by updatedAt descending (most recent first)
       return history.sort((a, b) => b.updatedAt - a.updatedAt)
     } catch (error) {
-      console.error("Failed to get conversation history:", error)
       return []
     }
   }
@@ -166,9 +160,7 @@ export class ConversationService {
         fs.writeFileSync(indexPath, JSON.stringify(index, null, 2))
       }
 
-      console.log(`[CONVERSATION] Deleted conversation ${conversationId}`)
     } catch (error) {
-      console.error("Failed to delete conversation:", error)
       throw error
     }
   }
@@ -225,7 +217,6 @@ export class ConversationService {
 
       return conversation
     } catch (error) {
-      console.error("Failed to add message to conversation:", error)
       return null
     }
   }
@@ -236,9 +227,7 @@ export class ConversationService {
         fs.rmSync(conversationsFolder, { recursive: true, force: true })
       }
       this.ensureConversationsFolder()
-      console.log("[CONVERSATION] Deleted all conversations")
     } catch (error) {
-      console.error("Failed to delete all conversations:", error)
       throw error
     }
   }

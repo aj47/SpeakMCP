@@ -100,11 +100,11 @@ export function constructSystemPrompt(
     prompt += `\n\nNo tools are currently available.`
   }
 
+
   // Add user guidelines if provided
   if (userGuidelines?.trim()) {
-    prompt += `\n\nADDITIONAL GUIDELINES:\n${userGuidelines.trim()}`
+    prompt += userGuidelines.trim()
   }
-
   return prompt
 }
 

@@ -7,6 +7,8 @@ import { Label } from "@renderer/components/ui/label"
 import { Switch } from "@renderer/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@renderer/components/ui/select"
 import { Textarea } from "@renderer/components/ui/textarea"
+import { Save } from "lucide-react"
+import { useState, useEffect } from "react"
 
 import { CHAT_PROVIDERS } from "@shared/index"
 import { Config, MCPConfig } from "@shared/types"
@@ -28,6 +30,18 @@ export function Component() {
 
   const config = configQuery.data || {}
 
+  // Local state for additional guidelines to allow editing without auto-save
+  const [additionalGuidelines, setAdditionalGuidelines] = useState("")
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
+
+  // Initialize local state when config loads
+  useEffect(() => {
+    if (config.mcpToolsSystemPrompt !== undefined) {
+      setAdditionalGuidelines(config.mcpToolsSystemPrompt)
+      setHasUnsavedChanges(false)
+    }
+  }, [config.mcpToolsSystemPrompt])
+
   const updateConfig = (updates: Partial<Config>) => {
     const newConfig = { ...config, ...updates }
     saveConfigMutation.mutate(newConfig)
@@ -35,6 +49,21 @@ export function Component() {
 
   const updateMcpConfig = (mcpConfig: MCPConfig) => {
     updateConfig({ mcpConfig })
+  }
+
+  const saveAdditionalGuidelines = () => {
+    updateConfig({ mcpToolsSystemPrompt: additionalGuidelines })
+    setHasUnsavedChanges(false)
+  }
+
+  const revertChanges = () => {
+    setAdditionalGuidelines(config.mcpToolsSystemPrompt || "")
+    setHasUnsavedChanges(false)
+  }
+
+  const handleGuidelinesChange = (value: string) => {
+    setAdditionalGuidelines(value)
+    setHasUnsavedChanges(value !== (config.mcpToolsSystemPrompt || ""))
   }
 
   const defaultAdditionalGuidelines = `CUSTOM GUIDELINES:
@@ -191,8 +220,8 @@ DOMAIN-SPECIFIC RULES:
                 <Label htmlFor="mcp-additional-guidelines">Additional Guidelines</Label>
                 <Textarea
                   id="mcp-additional-guidelines"
-                  value={config.mcpToolsSystemPrompt || ""}
-                  onChange={(e) => updateConfig({ mcpToolsSystemPrompt: e.target.value })}
+                  value={additionalGuidelines}
+                  onChange={(e) => handleGuidelinesChange(e.target.value)}
                   rows={8}
                   className="font-mono text-sm"
                   placeholder={defaultAdditionalGuidelines}
@@ -200,13 +229,42 @@ DOMAIN-SPECIFIC RULES:
                 <p className="text-xs text-muted-foreground">
                   Optional additional rules and guidelines for the AI agent. The base system prompt with tool usage instructions is automatically included.
                 </p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => updateConfig({ mcpToolsSystemPrompt: defaultAdditionalGuidelines })}
-                >
-                  Use Example Guidelines
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setAdditionalGuidelines(defaultAdditionalGuidelines)
+                      setHasUnsavedChanges(defaultAdditionalGuidelines !== (config.mcpToolsSystemPrompt || ""))
+                    }}
+                  >
+                    Use Example Guidelines
+                  </Button>
+                  {hasUnsavedChanges && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={revertChanges}
+                      disabled={saveConfigMutation.isPending}
+                    >
+                      Revert Changes
+                    </Button>
+                  )}
+                  <Button
+                    size="sm"
+                    onClick={saveAdditionalGuidelines}
+                    disabled={!hasUnsavedChanges || saveConfigMutation.isPending}
+                    className="gap-1"
+                  >
+                    <Save className="h-3 w-3" />
+                    {saveConfigMutation.isPending ? "Saving..." : "Save Changes"}
+                  </Button>
+                </div>
+                {hasUnsavedChanges && (
+                  <p className="text-xs text-amber-600">
+                    You have unsaved changes. Click "Save Changes" to apply them.
+                  </p>
+                )}
               </div>
 
               <div className="rounded-lg border p-4 space-y-2">

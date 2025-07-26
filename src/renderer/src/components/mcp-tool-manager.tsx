@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Search, ChevronDown, ChevronRight, Settings, Eye, EyeOff } from "lucide-react"
 import { tipcClient } from "@renderer/lib/tipc-client"
 import { toast } from "sonner"
+import { UPDATE_INTERVALS } from "@shared/constants"
 
 interface DetailedTool {
   name: string
@@ -41,7 +42,7 @@ export function MCPToolManager({ onToolToggle }: MCPToolManagerProps) {
     }
 
     fetchTools()
-    const interval = setInterval(fetchTools, 5000) // Update every 5 seconds
+    const interval = setInterval(fetchTools, UPDATE_INTERVALS.MCP_TOOLS_REFRESH)
 
     return () => clearInterval(interval)
   }, [])

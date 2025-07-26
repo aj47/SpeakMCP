@@ -1,11 +1,12 @@
 import { tipcClient } from "@renderer/lib/tipc-client"
 import { useQuery } from "@tanstack/react-query"
+import { QUERY_KEYS, TIMEOUTS } from "@shared/constants"
 
 export default function Updater() {
   const infoQuery = useQuery({
-    queryKey: ["update-info"],
+    queryKey: [QUERY_KEYS.UPDATE_INFO],
     queryFn: async () => tipcClient.checkForUpdatesAndDownload(),
-    refetchInterval: 1000 * 60 * 5,
+    refetchInterval: TIMEOUTS.UPDATE_CHECK_INTERVAL,
   })
 
   const info = infoQuery.data

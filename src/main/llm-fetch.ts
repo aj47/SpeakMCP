@@ -1,6 +1,19 @@
 import { configStore } from "./config"
 import { MCPTool, LLMToolCallResponse } from "./mcp-service"
 import { diagnosticsService } from "./diagnostics"
+import { withRetry, ErrorContext } from "./utils/error-handler"
+import {
+  getProviderConfig,
+  makeApiRequest,
+  buildOpenAIUrl,
+  buildGeminiUrl,
+  extractResponseContent,
+  validateResponseContent,
+  createOpenAIRequestBody,
+  createGeminiRequestBody,
+  getStandardHeaders
+} from "./utils/api-utils"
+import { RETRY_CONFIG, ERROR_MESSAGES } from "../shared/constants"
 
 /**
  * Extracts the first JSON object from a given string.
@@ -28,26 +41,7 @@ function extractJsonObject(str: string): any | null {
   }
 }
 
-/**
- * Makes an API call with retry logic.
- * @param call - The API call function to execute.
- * @param retryCount - The number of times to retry the API call if it fails.
- * @returns A promise that resolves with the response from the successful API call.
- */
-async function apiCallWithRetry<T>(call: () => Promise<T>, retryCount: number = 3): Promise<T> {
-  for (let i = 0; i < retryCount; i++) {
-    try {
-      const response = await call()
-      return response
-    } catch (error) {
-      if (i === retryCount - 1) {
-        diagnosticsService.logError('llm-fetch', 'API call failed after retries', error)
-        throw error
-      }
-    }
-  }
-  throw new Error('Unexpected error in retry logic')
-}
+// Removed: apiCallWithRetry function - now using withRetry from error-handler utils
 
 /**
  * Get the appropriate model for the provider

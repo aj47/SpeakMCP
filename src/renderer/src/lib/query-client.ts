@@ -1,6 +1,7 @@
 import { focusManager, QueryClient, useMutation, useQuery } from "@tanstack/react-query"
 import { tipcClient } from "./tipc-client"
 import { Conversation } from "@shared/types"
+import { QUERY_KEYS } from "@shared/constants"
 
 focusManager.setEventListener((handleFocus) => {
   const handler = () => handleFocus()
@@ -18,16 +19,16 @@ export const queryClient = new QueryClient({
   },
 })
 
-export const useMicrphoneStatusQuery = () =>
+export const useMicrophoneStatusQuery = () =>
   useQuery({
-    queryKey: ["microphone-status"],
+    queryKey: [QUERY_KEYS.MICROPHONE_STATUS],
     queryFn: async () => {
       return tipcClient.getMicrophoneStatus()
     },
   })
 
 export const useConfigQuery = () => useQuery({
-  queryKey: ["config"],
+  queryKey: [QUERY_KEYS.CONFIG],
   queryFn: async () => {
     return tipcClient.getConfig()
   },

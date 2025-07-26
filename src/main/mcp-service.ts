@@ -8,6 +8,9 @@ import { access, constants } from "fs"
 import path from "path"
 import os from "os"
 import { diagnosticsService } from "./diagnostics"
+import { withTimeout, wrapServiceOperation, ErrorContext } from "./utils/error-handler"
+import { prepareEnvironmentWithPaths, resolveCommandPath } from "./utils/path-utils"
+import { TIMEOUTS, MCP_CLIENT_CONFIG, ERROR_MESSAGES } from "../shared/constants"
 
 const accessAsync = promisify(access)
 
@@ -191,20 +194,17 @@ class MCPService {
       })
 
       const client = new Client({
-        name: "speakmcp-mcp-client",
-        version: "1.0.0"
+        name: MCP_CLIENT_CONFIG.NAME,
+        version: MCP_CLIENT_CONFIG.VERSION
       }, {
         capabilities: {}
       })
 
       // Connect to the server with timeout
-      const connectTimeout = serverConfig.timeout || 10000
+      const connectTimeout = serverConfig.timeout || TIMEOUTS.MCP_SERVER_CONNECTION
       const connectPromise = client.connect(transport)
-      const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error(`Connection timeout after ${connectTimeout}ms`)), connectTimeout)
-      })
 
-      await Promise.race([connectPromise, timeoutPromise])
+      await withTimeout(connectPromise, connectTimeout, `Connection timeout after ${connectTimeout}ms`)
 
       // Get available tools from the server
       const toolsResult = await client.listTools()

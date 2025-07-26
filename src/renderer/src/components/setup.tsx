@@ -1,12 +1,13 @@
-import { useMicrphoneStatusQuery } from "@renderer/lib/query-client"
+import { useMicrophoneStatusQuery } from "@renderer/lib/query-client"
 import { Button } from "./ui/button"
 import { tipcClient } from "@renderer/lib/tipc-client"
 import { useQuery } from "@tanstack/react-query"
+import { QUERY_KEYS } from "@shared/constants"
 
 export function Setup() {
-  const microphoneStatusQuery = useMicrphoneStatusQuery()
+  const microphoneStatusQuery = useMicrophoneStatusQuery()
   const isAccessibilityGrantedQuery = useQuery({
-    queryKey: ["setup-isAccessibilityGranted"],
+    queryKey: [QUERY_KEYS.SETUP_ACCESSIBILITY],
     queryFn: () => tipcClient.isAccessibilityGranted(),
   })
 

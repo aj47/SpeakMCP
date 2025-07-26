@@ -2,6 +2,7 @@ import { app } from "electron"
 import path from "path"
 import fs from "fs"
 import { Config } from "@shared/types"
+import { DEFAULT_CONFIG } from "@shared/constants"
 
 export const dataFolder = path.join(app.getPath("appData"), process.env.APP_ID)
 
@@ -17,12 +18,12 @@ const getConfig = () => {
     mcpToolsEnabled: true,
     mcpAgentModeEnabled: true,
     mcpAutoPasteEnabled: true,
-    mcpAutoPasteDelay: 1000, // 1 second delay by default
-    mcpMaxIterations: 10, // Default max iterations for agent mode
+    mcpAutoPasteDelay: DEFAULT_CONFIG.MCP_AUTO_PASTE_DELAY,
+    mcpMaxIterations: DEFAULT_CONFIG.MCP_MAX_ITERATIONS,
     textInputEnabled: true,
     textInputShortcut: "ctrl-t",
     conversationsEnabled: true,
-    maxConversationsToKeep: 100,
+    maxConversationsToKeep: DEFAULT_CONFIG.MAX_CONVERSATIONS_TO_KEEP,
     autoSaveConversations: true,
   }
 

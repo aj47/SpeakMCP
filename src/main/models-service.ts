@@ -1,5 +1,6 @@
 import { configStore } from "./config"
 import { diagnosticsService } from "./diagnostics"
+import { CACHE_DURATION } from "../shared/constants"
 
 export interface ModelInfo {
   id: string
@@ -16,7 +17,6 @@ interface ModelsResponse {
 
 // Cache for models to avoid frequent API calls
 const modelsCache = new Map<string, { models: ModelInfo[], timestamp: number }>()
-const CACHE_DURATION = 5 * 60 * 1000 // 5 minutes
 
 /**
  * Fetch available models from OpenAI API
@@ -186,7 +186,7 @@ export async function fetchAvailableModels(providerId: string): Promise<ModelInf
   const cached = modelsCache.get(cacheKey)
 
   // Return cached result if still valid
-  if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+  if (cached && Date.now() - cached.timestamp < CACHE_DURATION.MODELS) {
     return cached.models
   }
 

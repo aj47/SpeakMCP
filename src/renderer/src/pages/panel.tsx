@@ -430,6 +430,7 @@ export function Component() {
             tipcClient.hidePanelWindow()
           }}
           isProcessing={textInputMutation.isPending || mcpTextInputMutation.isPending}
+          agentProgress={agentProgress}
         />
       ) : (transcribeMutation.isPending || mcpTranscribeMutation.isPending || textInputMutation.isPending || mcpTextInputMutation.isPending) ? (
         <div className="flex h-full w-full items-center justify-center relative liquid-glass-strong rounded-xl glass-text-strong">

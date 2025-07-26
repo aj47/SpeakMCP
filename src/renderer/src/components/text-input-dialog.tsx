@@ -9,12 +9,15 @@ import {
 import { Textarea } from "@renderer/components/ui/textarea"
 import { Button } from "@renderer/components/ui/button"
 import { cn } from "@renderer/lib/utils"
+import { AgentProgress } from "./agent-progress"
+import { AgentProgressUpdate } from "../../../shared/types"
 
 interface TextInputDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   onSubmit: (text: string) => void
   isProcessing?: boolean
+  agentProgress?: AgentProgressUpdate | null
 }
 
 export function TextInputDialog({
@@ -22,6 +25,7 @@ export function TextInputDialog({
   onOpenChange,
   onSubmit,
   isProcessing = false,
+  agentProgress,
 }: TextInputDialogProps) {
   const [text, setText] = useState("")
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -76,38 +80,46 @@ export function TextInputDialog({
         </DialogHeader>
 
         <div className="space-y-4">
-          <Textarea
-            ref={textareaRef}
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Type your message here..."
-            className={cn(
-              "min-h-[120px] resize-none liquid-glass-input glass-text-strong",
-              "focus:border-ring focus:ring-1 focus:ring-ring"
-            )}
-            disabled={isProcessing}
-            aria-label="Message input"
-            aria-describedby="text-input-description"
-          />
+          {isProcessing && agentProgress ? (
+            <div className="min-h-[200px] flex items-center justify-center">
+              <AgentProgress progress={agentProgress} variant="default" className="w-full" />
+            </div>
+          ) : (
+            <>
+              <Textarea
+                ref={textareaRef}
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="Type your message here..."
+                className={cn(
+                  "min-h-[120px] resize-none liquid-glass-input glass-text-strong",
+                  "focus:border-ring focus:ring-1 focus:ring-ring"
+                )}
+                disabled={isProcessing}
+                aria-label="Message input"
+                aria-describedby="text-input-description"
+              />
 
-          <div className="flex justify-end space-x-2">
-            <Button
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-              disabled={isProcessing}
-              className="liquid-glass-input glass-text-strong hover:liquid-glass-strong"
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleSubmit}
-              disabled={!text.trim() || isProcessing}
-              className="liquid-glass-strong glass-text-strong hover:opacity-90"
-            >
-              {isProcessing ? "Processing..." : "Send"}
-            </Button>
-          </div>
+              <div className="flex justify-end space-x-2">
+                <Button
+                  variant="outline"
+                  onClick={() => onOpenChange(false)}
+                  disabled={isProcessing}
+                  className="liquid-glass-input glass-text-strong hover:liquid-glass-strong"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleSubmit}
+                  disabled={!text.trim() || isProcessing}
+                  className="liquid-glass-strong glass-text-strong hover:opacity-90"
+                >
+                  {isProcessing ? "Processing..." : "Send"}
+                </Button>
+              </div>
+            </>
+          )}
         </div>
       </DialogContent>
     </Dialog>

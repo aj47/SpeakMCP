@@ -1,17 +1,21 @@
 import React, { useState, useRef, useEffect } from "react"
 import { Textarea } from "@renderer/components/ui/textarea"
 import { cn } from "@renderer/lib/utils"
+import { AgentProgress } from "./agent-progress"
+import { AgentProgressUpdate } from "../../../shared/types"
 
 interface TextInputPanelProps {
   onSubmit: (text: string) => void
   onCancel: () => void
   isProcessing?: boolean
+  agentProgress?: AgentProgressUpdate | null
 }
 
 export function TextInputPanel({
   onSubmit,
   onCancel,
   isProcessing = false,
+  agentProgress,
 }: TextInputPanelProps) {
   const [text, setText] = useState("")
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -47,10 +51,16 @@ export function TextInputPanel({
   if (isProcessing) {
     return (
       <div className="flex h-full w-full items-center justify-center liquid-glass-strong rounded-xl glass-text-strong">
-        <div className="flex items-center gap-2">
-          <div className="animate-spin rounded-full h-4 w-4 border-2 border-current border-t-transparent"></div>
-          <span className="text-sm">Processing...</span>
-        </div>
+        {agentProgress ? (
+          <div className="w-full mx-4">
+            <AgentProgress progress={agentProgress} variant="overlay" />
+          </div>
+        ) : (
+          <div className="flex items-center gap-2">
+            <div className="animate-spin rounded-full h-4 w-4 border-2 border-current border-t-transparent"></div>
+            <span className="text-sm">Processing...</span>
+          </div>
+        )}
       </div>
     )
   }
@@ -76,7 +86,7 @@ export function TextInputPanel({
           aria-label="Message input"
         />
       </div>
-      
+
       <div className="flex justify-between items-center text-xs glass-text-muted">
         <div>
           {text.length > 0 && (

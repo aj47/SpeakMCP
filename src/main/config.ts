@@ -18,6 +18,7 @@ const getConfig = () => {
     mcpAgentModeEnabled: true,
     mcpAutoPasteEnabled: true,
     mcpAutoPasteDelay: 1000, // 1 second delay by default
+    mcpMaxIterations: 10, // Default max iterations for agent mode
     textInputEnabled: true,
     textInputShortcut: "ctrl-t",
     conversationsEnabled: true,

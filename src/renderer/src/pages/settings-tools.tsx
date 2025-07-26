@@ -103,6 +103,25 @@ DOMAIN-SPECIFIC RULES:
                 When enabled, the agent can see tool results and make follow-up tool calls until the task is complete
               </p>
 
+              {config.mcpAgentModeEnabled && (
+                <div className="space-y-2">
+                  <Label htmlFor="mcp-max-iterations">Max Iterations</Label>
+                  <Input
+                    id="mcp-max-iterations"
+                    type="number"
+                    min="1"
+                    max="50"
+                    step="1"
+                    value={config.mcpMaxIterations || 50}
+                    onChange={(e) => updateConfig({ mcpMaxIterations: parseInt(e.target.value) || 10 })}
+                    className="w-32"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Maximum number of iterations the agent can perform before stopping. Higher values allow more complex tasks but may take longer.
+                  </p>
+                </div>
+              )}
+
               {!config.mcpAgentModeEnabled && (
                 <>
                   <div className="flex items-center space-x-2">

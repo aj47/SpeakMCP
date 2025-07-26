@@ -71,7 +71,7 @@ async function processWithAgentMode(
       text,
       availableTools,
       executeToolCall,
-      10, // maxIterations
+      config.mcpMaxIterations || 50, // Use configured max iterations or default to 50
       previousConversationHistory
     )
 

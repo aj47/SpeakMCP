@@ -11,6 +11,9 @@ import { diagnosticsService } from "./diagnostics"
 
 const accessAsync = promisify(access)
 
+// Constants
+const DEFAULT_CONNECTION_TIMEOUT_MS = 10000
+
 
 export interface MCPTool {
   name: string
@@ -198,7 +201,7 @@ class MCPService {
       })
 
       // Connect to the server with timeout
-      const connectTimeout = serverConfig.timeout || 10000
+      const connectTimeout = serverConfig.timeout || DEFAULT_CONNECTION_TIMEOUT_MS
       const connectPromise = client.connect(transport)
       const timeoutPromise = new Promise<never>((_, reject) => {
         setTimeout(() => reject(new Error(`Connection timeout after ${connectTimeout}ms`)), connectTimeout)
@@ -460,7 +463,7 @@ class MCPService {
       }
 
       // Try to create a temporary connection to test the server
-      const timeout = serverConfig.timeout || 10000
+      const timeout = serverConfig.timeout || DEFAULT_CONNECTION_TIMEOUT_MS
       const testPromise = this.createTestConnection(serverName, serverConfig)
       const timeoutPromise = new Promise<never>((_, reject) => {
         setTimeout(() => reject(new Error('Connection test timeout')), timeout)

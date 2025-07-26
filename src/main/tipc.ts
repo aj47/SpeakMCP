@@ -17,6 +17,12 @@ import { RendererHandlers } from "./renderer-handlers"
 import { postProcessTranscript, processTranscriptWithTools, processTranscriptWithAgentMode } from "./llm"
 import { mcpService, MCPToolResult } from "./mcp-service"
 
+// Constants for API URLs
+const DEFAULT_API_URLS = {
+  GROQ: "https://api.groq.com/openai/v1",
+  OPENAI: "https://api.openai.com/v1"
+} as const
+
 // Unified agent mode processing function
 async function processWithAgentMode(
   text: string,
@@ -301,8 +307,8 @@ export const router = {
           form.append("prompt", config.groqSttPrompt.trim())
         }
 
-        const groqBaseUrl = config.groqBaseUrl || "https://api.groq.com/openai/v1"
-        const openaiBaseUrl = config.openaiBaseUrl || "https://api.openai.com/v1"
+        const groqBaseUrl = config.groqBaseUrl || DEFAULT_API_URLS.GROQ
+        const openaiBaseUrl = config.openaiBaseUrl || DEFAULT_API_URLS.OPENAI
 
         const transcriptResponse = await fetch(
           config.sttProviderId === "groq"
@@ -498,8 +504,8 @@ export const router = {
         form.append("prompt", config.groqSttPrompt.trim())
       }
 
-      const groqBaseUrl = config.groqBaseUrl || "https://api.groq.com/openai/v1"
-      const openaiBaseUrl = config.openaiBaseUrl || "https://api.openai.com/v1"
+      const groqBaseUrl = config.groqBaseUrl || DEFAULT_API_URLS.GROQ
+      const openaiBaseUrl = config.openaiBaseUrl || DEFAULT_API_URLS.OPENAI
 
       const transcriptResponse = await fetch(
         config.sttProviderId === "groq"

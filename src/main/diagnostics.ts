@@ -4,6 +4,9 @@ import { configStore } from './config'
 import { mcpService } from './mcp-service'
 import { MCPServerConfig } from '../shared/types'
 
+// Constants
+const RECENT_ERRORS_TIME_WINDOW_MS = 5 * 60 * 1000 // 5 minutes
+
 export interface DiagnosticInfo {
   timestamp: number
   system: {
@@ -204,7 +207,7 @@ class DiagnosticsService {
 
     // Check recent errors
     const recentErrors = this.errorLog.filter(e =>
-      e.level === 'error' && Date.now() - e.timestamp < 5 * 60 * 1000 // Last 5 minutes
+      e.level === 'error' && Date.now() - e.timestamp < RECENT_ERRORS_TIME_WINDOW_MS
     )
 
     checks.recentErrors = {

@@ -18,7 +18,7 @@ export const queryClient = new QueryClient({
   },
 })
 
-export const useMicrphoneStatusQuery = () =>
+export const useMicrophoneStatusQuery = () =>
   useQuery({
     queryKey: ["microphone-status"],
     queryFn: async () => {

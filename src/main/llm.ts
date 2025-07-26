@@ -9,6 +9,21 @@ import { makeStructuredContextExtraction } from "./structured-output"
 import { makeLLMCallWithFetch, makeTextCompletionWithFetch } from "./llm-fetch"
 import { constructSystemPrompt } from "./system-prompts"
 
+// Constants for error patterns
+const ERROR_PATTERNS = {
+  SESSION_NOT_FOUND: 'Session not found',
+  TIMEOUT: 'timeout',
+  CONNECTION: 'connection',
+  PERMISSION: 'permission',
+  ACCESS: 'access'
+} as const
+
+const ERROR_SUGGESTIONS = {
+  SESSION_NOT_FOUND: ' (Suggestion: Create a new session using ht_create_session first)',
+  TIMEOUT_CONNECTION: ' (Suggestion: Retry the operation or check server connectivity)',
+  PERMISSION_ACCESS: ' (Suggestion: Check file permissions or use alternative approach)'
+} as const
+
 /**
  * Use LLM to extract useful context from conversation history
  */
@@ -90,13 +105,13 @@ function analyzeToolErrors(
     .join(' ')
 
   // Categorize error types
-  if (errorMessages.includes('Session not found')) {
+  if (errorMessages.includes(ERROR_PATTERNS.SESSION_NOT_FOUND)) {
     errorTypes.push('session_lost')
   }
-  if (errorMessages.includes('timeout') || errorMessages.includes('connection')) {
+  if (errorMessages.includes(ERROR_PATTERNS.TIMEOUT) || errorMessages.includes(ERROR_PATTERNS.CONNECTION)) {
     errorTypes.push('connectivity')
   }
-  if (errorMessages.includes('permission') || errorMessages.includes('access')) {
+  if (errorMessages.includes(ERROR_PATTERNS.PERMISSION) || errorMessages.includes(ERROR_PATTERNS.ACCESS)) {
     errorTypes.push('permissions')
   }
   if (errorMessages.includes('not found') || errorMessages.includes('does not exist')) {
@@ -704,12 +719,12 @@ ${failedTools.map(toolName => {
 
   // Check for specific error patterns and suggest fixes
   let suggestion = ''
-  if (errorText.includes('Session not found')) {
-    suggestion = ' (Suggestion: Create a new session using ht_create_session first)'
-  } else if (errorText.includes('timeout') || errorText.includes('connection')) {
-    suggestion = ' (Suggestion: Retry the operation or check server connectivity)'
-  } else if (errorText.includes('permission') || errorText.includes('access')) {
-    suggestion = ' (Suggestion: Check file permissions or use alternative approach)'
+  if (errorText.includes(ERROR_PATTERNS.SESSION_NOT_FOUND)) {
+    suggestion = ERROR_SUGGESTIONS.SESSION_NOT_FOUND
+  } else if (errorText.includes(ERROR_PATTERNS.TIMEOUT) || errorText.includes(ERROR_PATTERNS.CONNECTION)) {
+    suggestion = ERROR_SUGGESTIONS.TIMEOUT_CONNECTION
+  } else if (errorText.includes(ERROR_PATTERNS.PERMISSION) || errorText.includes(ERROR_PATTERNS.ACCESS)) {
+    suggestion = ERROR_SUGGESTIONS.PERMISSION_ACCESS
   }
 
   return `- ${toolName}: ${errorText}${suggestion}`

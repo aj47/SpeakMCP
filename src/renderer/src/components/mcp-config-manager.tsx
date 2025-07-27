@@ -374,7 +374,7 @@ export function MCPConfigManager({ config, onConfigChange }: MCPConfigManagerPro
                     <CardHeader className="pb-2">
                       <CardTitle className="text-sm">{example.name}</CardTitle>
                       <CardDescription className="text-xs">
-                        {example.config.command} {example.config.args.join(" ")}
+                        {example.config.command} {example.config.args?.join(" ") || ""}
                       </CardDescription>
                     </CardHeader>
                     <CardContent className="pt-0">
@@ -513,7 +513,7 @@ export function MCPConfigManager({ config, onConfigChange }: MCPConfigManagerPro
                   </div>
                 </div>
                 <CardDescription>
-                  {serverConfig.command} {serverConfig.args.join(" ")}
+                  {serverConfig.command} {serverConfig.args?.join(" ") || ""}
                 </CardDescription>
               </CardHeader>
               {(serverConfig.env || serverConfig.timeout || serverStatus[name]?.error) && (

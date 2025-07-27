@@ -235,9 +235,10 @@ export function listenToKeyboardEvents() {
         isPressedCtrlAltKey = isPressedCtrlKey && true
       }
 
-      if (e.data.key === "Escape") {
-        const config = configStore.get()
+      // Get config once at the beginning of the function
+      const config = configStore.get()
 
+      if (e.data.key === "Escape") {
         // Handle kill switch hotkey: Ctrl+Shift+Escape
         if (config.agentKillSwitchEnabled &&
             config.agentKillSwitchHotkey === "ctrl-shift-escape" &&
@@ -265,7 +266,6 @@ export function listenToKeyboardEvents() {
       }
 
       // Handle other kill switch hotkeys
-      const config = configStore.get()
       if (config.agentKillSwitchEnabled && state.isAgentModeActive) {
         if (config.agentKillSwitchHotkey === "ctrl-alt-q" &&
             e.data.key === "KeyQ" && isPressedCtrlKey && isPressedAltKey) {
@@ -281,7 +281,6 @@ export function listenToKeyboardEvents() {
       }
 
       // Handle text input shortcuts
-      const config = configStore.get()
 
       if (config.textInputEnabled) {
         if (config.textInputShortcut === "ctrl-t" && e.data.key === "KeyT" && isPressedCtrlKey && !isPressedShiftKey && !isPressedAltKey) {

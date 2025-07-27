@@ -105,7 +105,7 @@ export function ModelSelector({
                 : placeholder || "Select a model"
           } />
         </SelectTrigger>
-        <SelectContent>
+        <SelectContent className="w-[300px] max-h-[400px]">
           {/* Search input */}
           <div className="flex items-center border-b px-3 pb-2 mb-2" onMouseDown={(e) => e.preventDefault()}>
             <Search className="h-4 w-4 mr-2 text-muted-foreground" />
@@ -132,42 +132,45 @@ export function ModelSelector({
             />
           </div>
 
-          {isLoading && (
-            <div className="flex items-center justify-center py-2">
-              <Loader2 className="h-4 w-4 animate-spin mr-2" />
-              <span className="text-sm text-muted-foreground">Loading models...</span>
-            </div>
-          )}
-
-          {hasError && (
-            <div className="flex items-center justify-center py-2 text-destructive">
-              <AlertCircle className="h-4 w-4 mr-2" />
-              <span className="text-sm">Failed to load models</span>
-            </div>
-          )}
-
-          {!isLoading && !hasError && allModels.length === 0 && (
-            <div className="flex items-center justify-center py-2">
-              <span className="text-sm text-muted-foreground">No models available</span>
-            </div>
-          )}
-
-          {!isLoading && !hasError && filteredModels.length === 0 && searchQuery.trim() && (
-            <div className="flex items-center justify-center py-2">
-              <span className="text-sm text-muted-foreground">No models match "{searchQuery}"</span>
-            </div>
-          )}
-
-          {filteredModels.map((model) => (
-            <SelectItem key={model.id} value={model.id}>
-              <div className="flex flex-col min-w-0 w-full">
-                <span className="truncate">{model.name}</span>
-                {model.description && (
-                  <span className="text-xs text-muted-foreground truncate">{model.description}</span>
-                )}
+          {/* Scrollable content area with fixed height */}
+          <div className="min-h-[200px] max-h-[300px] overflow-y-auto">
+            {isLoading && (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                <span className="text-sm text-muted-foreground">Loading models...</span>
               </div>
-            </SelectItem>
-          ))}
+            )}
+
+            {hasError && (
+              <div className="flex items-center justify-center py-8 text-destructive">
+                <AlertCircle className="h-4 w-4 mr-2" />
+                <span className="text-sm">Failed to load models</span>
+              </div>
+            )}
+
+            {!isLoading && !hasError && allModels.length === 0 && (
+              <div className="flex items-center justify-center py-8">
+                <span className="text-sm text-muted-foreground">No models available</span>
+              </div>
+            )}
+
+            {!isLoading && !hasError && filteredModels.length === 0 && searchQuery.trim() && (
+              <div className="flex items-center justify-center py-8">
+                <span className="text-sm text-muted-foreground">No models match "{searchQuery}"</span>
+              </div>
+            )}
+
+            {filteredModels.map((model) => (
+              <SelectItem key={model.id} value={model.id}>
+                <div className="flex flex-col min-w-0 w-full">
+                  <span className="truncate">{model.name}</span>
+                  {model.description && (
+                    <span className="text-xs text-muted-foreground truncate">{model.description}</span>
+                  )}
+                </div>
+              </SelectItem>
+            ))}
+          </div>
         </SelectContent>
       </Select>
 

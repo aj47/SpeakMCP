@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@renderer/components/ui/select"
 import { Label } from "@renderer/components/ui/label"
+import { Input } from "@renderer/components/ui/input"
 import { useAvailableModelsQuery } from "@renderer/lib/query-client"
-import { Loader2, AlertCircle, RefreshCw } from "lucide-react"
+import { Loader2, AlertCircle, RefreshCw, Search } from "lucide-react"
 import { Button } from "@renderer/components/ui/button"
 
 interface ModelSelectorProps {
@@ -25,6 +26,9 @@ export function ModelSelector({
   disabled = false
 }: ModelSelectorProps) {
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const [searchQuery, setSearchQuery] = useState("")
+  const [isOpen, setIsOpen] = useState(false)
+  const searchInputRef = useRef<HTMLInputElement>(null)
 
   const modelsQuery = useAvailableModelsQuery(providerId, !!providerId)
 
@@ -41,9 +45,32 @@ export function ModelSelector({
     }
   }, [value, modelsQuery.data]) // Remove onValueChange from dependencies to prevent infinite loops
 
+  // Clear search when dropdown closes and manage focus
+  useEffect(() => {
+    if (!isOpen) {
+      setSearchQuery("")
+    } else {
+      // Focus the search input when dropdown opens
+      setTimeout(() => {
+        searchInputRef.current?.focus()
+      }, 100)
+    }
+  }, [isOpen])
+
   const isLoading = modelsQuery.isLoading || isRefreshing
   const hasError = modelsQuery.isError && !modelsQuery.data
-  const models = modelsQuery.data || []
+  const allModels = modelsQuery.data || []
+
+  // Filter models based on search query
+  const filteredModels = allModels.filter(model => {
+    if (!searchQuery.trim()) return true
+    const query = searchQuery.toLowerCase()
+    return (
+      model.id.toLowerCase().includes(query) ||
+      model.name.toLowerCase().includes(query) ||
+      (model.description && model.description.toLowerCase().includes(query))
+    )
+  })
 
   return (
     <div className={`space-y-2 ${className}`}>
@@ -65,7 +92,9 @@ export function ModelSelector({
       <Select
         value={value}
         onValueChange={onValueChange}
-        disabled={disabled || isLoading || models.length === 0}
+        disabled={disabled || isLoading || allModels.length === 0}
+        open={isOpen}
+        onOpenChange={setIsOpen}
       >
         <SelectTrigger className="w-full max-w-[200px] min-w-[120px]">
           <SelectValue placeholder={
@@ -76,7 +105,33 @@ export function ModelSelector({
                 : placeholder || "Select a model"
           } />
         </SelectTrigger>
-        <SelectContent className="max-w-[200px] min-w-[120px]">
+        <SelectContent>
+          {/* Search input */}
+          <div className="flex items-center border-b px-3 pb-2 mb-2" onMouseDown={(e) => e.preventDefault()}>
+            <Search className="h-4 w-4 mr-2 text-muted-foreground" />
+            <Input
+              ref={searchInputRef}
+              placeholder="Search models..."
+              value={searchQuery}
+              onChange={(e) => {
+                e.stopPropagation()
+                setSearchQuery(e.target.value)
+              }}
+              onKeyDown={(e) => {
+                e.stopPropagation()
+                if (e.key === 'Escape') {
+                  setIsOpen(false)
+                } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                  // Allow arrow keys to navigate through the list
+                  e.preventDefault()
+                }
+              }}
+              onMouseDown={(e) => e.stopPropagation()}
+              onFocus={(e) => e.stopPropagation()}
+              className="border-0 p-0 h-auto focus-visible:ring-0 focus-visible:ring-offset-0"
+            />
+          </div>
+
           {isLoading && (
             <div className="flex items-center justify-center py-2">
               <Loader2 className="h-4 w-4 animate-spin mr-2" />
@@ -91,13 +146,19 @@ export function ModelSelector({
             </div>
           )}
 
-          {!isLoading && !hasError && models.length === 0 && (
+          {!isLoading && !hasError && allModels.length === 0 && (
             <div className="flex items-center justify-center py-2">
               <span className="text-sm text-muted-foreground">No models available</span>
             </div>
           )}
 
-          {models.map((model) => (
+          {!isLoading && !hasError && filteredModels.length === 0 && searchQuery.trim() && (
+            <div className="flex items-center justify-center py-2">
+              <span className="text-sm text-muted-foreground">No models match "{searchQuery}"</span>
+            </div>
+          )}
+
+          {filteredModels.map((model) => (
             <SelectItem key={model.id} value={model.id}>
               <div className="flex flex-col min-w-0 w-full">
                 <span className="truncate">{model.name}</span>
@@ -116,9 +177,12 @@ export function ModelSelector({
         </p>
       )}
 
-      {!hasError && models.length > 0 && (
+      {!hasError && allModels.length > 0 && (
         <p className="text-xs text-muted-foreground">
-          {models.length} model{models.length !== 1 ? 's' : ''} available
+          {searchQuery.trim()
+            ? `${filteredModels.length} of ${allModels.length} models match "${searchQuery}"`
+            : `${allModels.length} model${allModels.length !== 1 ? 's' : ''} available`
+          }
         </p>
       )}
     </div>

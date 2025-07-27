@@ -37,6 +37,10 @@ module.exports = {
     identity: process.env.CSC_NAME || "Apple Development",
     target: [
       {
+        target: "dmg",
+        arch: ["x64", "arm64"]
+      },
+      {
         target: "zip",
         arch: ["x64", "arm64"]
       },

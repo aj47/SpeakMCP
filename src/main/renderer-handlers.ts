@@ -20,6 +20,7 @@ export type RendererHandlers = {
   // Agent Mode Progress handlers
   agentProgressUpdate: (update: AgentProgressUpdate) => void
   clearAgentProgress: () => void
+  emergencyStopAgent: () => void
 
   updateAvailable: (e: UpdateDownloadedEvent) => void
   navigate: (url: string) => void

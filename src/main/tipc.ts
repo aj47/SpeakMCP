@@ -16,6 +16,7 @@ import { conversationService } from "./conversation-service"
 import { RendererHandlers } from "./renderer-handlers"
 import { postProcessTranscript, processTranscriptWithTools, processTranscriptWithAgentMode } from "./llm"
 import { mcpService, MCPToolResult } from "./mcp-service"
+import { state, agentProcessManager } from "./state"
 
 // Unified agent mode processing function
 async function processWithAgentMode(
@@ -24,17 +25,21 @@ async function processWithAgentMode(
 ): Promise<string> {
   const config = configStore.get()
 
+  // Set agent mode state
+  state.isAgentModeActive = true
+  state.shouldStopAgent = false
+  state.agentIterationCount = 0
 
+  try {
+    if (!config.mcpToolsEnabled) {
+      throw new Error("MCP tools are not enabled")
+    }
 
-  if (!config.mcpToolsEnabled) {
-    throw new Error("MCP tools are not enabled")
-  }
+    // Initialize MCP service if not already done
+    await mcpService.initialize()
 
-  // Initialize MCP service if not already done
-  await mcpService.initialize()
-
-  // Get available tools
-  const availableTools = mcpService.getAvailableTools()
+    // Get available tools
+    const availableTools = mcpService.getAvailableTools()
 
   if (config.mcpAgentModeEnabled) {
     // Use agent mode for iterative tool calling
@@ -75,8 +80,6 @@ async function processWithAgentMode(
       previousConversationHistory
     )
 
-
-
     return agentResult.content
   } else {
     // Use single-shot tool calling
@@ -112,6 +115,12 @@ async function processWithAgentMode(
     } else {
       return result.content || text
     }
+  }
+  } finally {
+    // Clean up agent state
+    state.isAgentModeActive = false
+    state.shouldStopAgent = false
+    state.agentIterationCount = 0
   }
 }
 import { diagnosticsService } from "./diagnostics"
@@ -196,6 +205,25 @@ export const router = {
       isAlwaysOnTop: panel?.isAlwaysOnTop() || false
     }
     return state
+  }),
+
+  emergencyStopAgent: t.procedure.action(async () => {
+    const { emergencyStopAgentMode } = await import("./window")
+    await emergencyStopAgentMode()
+
+    // Also stop MCP processes
+    mcpService.emergencyStopAllProcesses()
+
+    return { success: true, message: "Agent mode emergency stopped" }
+  }),
+
+  getAgentStatus: t.procedure.action(async () => {
+    return {
+      isAgentModeActive: state.isAgentModeActive,
+      shouldStopAgent: state.shouldStopAgent,
+      agentIterationCount: state.agentIterationCount,
+      activeProcessCount: agentProcessManager.getActiveProcessCount()
+    }
   }),
 
   showContextMenu: t.procedure

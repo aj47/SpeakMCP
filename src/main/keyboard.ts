@@ -6,11 +6,12 @@ import {
   stopRecordingAndHidePanelWindow,
   stopTextInputAndHidePanelWindow,
   closeAgentModeAndHidePanelWindow,
+  emergencyStopAgentMode,
   WINDOWS,
 } from "./window"
 import { systemPreferences } from "electron"
 import { configStore } from "./config"
-import { state } from "./state"
+import { state, agentProcessManager } from "./state"
 import { spawn, ChildProcess } from "child_process"
 import path from "path"
 
@@ -34,6 +35,11 @@ type RdevEvent = {
 export const writeText = (text: string) => {
   return new Promise<void>((resolve, reject) => {
     const child: ChildProcess = spawn(rdevPath, ["write", text])
+
+    // Register process if agent mode is active
+    if (state.isAgentModeActive) {
+      agentProcessManager.registerProcess(child)
+    }
 
     let stderr = ""
 
@@ -64,6 +70,11 @@ export const getFocusedAppInfo = () => {
   return new Promise<string>((resolve, reject) => {
     const child: ChildProcess = spawn(rdevPath, ["get-focus"])
 
+    // Register process if agent mode is active
+    if (state.isAgentModeActive) {
+      agentProcessManager.registerProcess(child)
+    }
+
     let stdout = ""
     let stderr = ""
 
@@ -93,6 +104,11 @@ export const getFocusedAppInfo = () => {
 export const restoreFocusToApp = (appInfo: string) => {
   return new Promise<void>((resolve, reject) => {
     const child: ChildProcess = spawn(rdevPath, ["restore-focus", appInfo])
+
+    // Register process if agent mode is active
+    if (state.isAgentModeActive) {
+      agentProcessManager.registerProcess(child)
+    }
 
     let stderr = ""
 
@@ -220,6 +236,19 @@ export function listenToKeyboardEvents() {
       }
 
       if (e.data.key === "Escape") {
+        const config = configStore.get()
+
+        // Handle kill switch hotkey: Ctrl+Shift+Escape
+        if (config.agentKillSwitchEnabled &&
+            config.agentKillSwitchHotkey === "ctrl-shift-escape" &&
+            isPressedCtrlKey && isPressedShiftKey) {
+          // Emergency stop agent mode
+          if (state.isAgentModeActive) {
+            emergencyStopAgentMode()
+          }
+          return
+        }
+
         const win = WINDOWS.get("panel")
         if (win && win.isVisible()) {
           // Check if we're currently recording
@@ -233,6 +262,22 @@ export function listenToKeyboardEvents() {
         }
 
         return
+      }
+
+      // Handle other kill switch hotkeys
+      const config = configStore.get()
+      if (config.agentKillSwitchEnabled && state.isAgentModeActive) {
+        if (config.agentKillSwitchHotkey === "ctrl-alt-q" &&
+            e.data.key === "KeyQ" && isPressedCtrlKey && isPressedAltKey) {
+          emergencyStopAgentMode()
+          return
+        }
+
+        if (config.agentKillSwitchHotkey === "ctrl-shift-q" &&
+            e.data.key === "KeyQ" && isPressedCtrlKey && isPressedShiftKey) {
+          emergencyStopAgentMode()
+          return
+        }
       }
 
       // Handle text input shortcuts

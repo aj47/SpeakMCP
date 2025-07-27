@@ -15,7 +15,7 @@ import {
 import { RendererHandlers } from "./renderer-handlers"
 import { configStore } from "./config"
 import { getFocusedAppInfo } from "./keyboard"
-import { state } from "./state"
+import { state, agentProcessManager } from "./state"
 
 type WINDOW_ID = "main" | "panel" | "setup"
 
@@ -310,6 +310,11 @@ export const stopTextInputAndHidePanelWindow = () => {
 export const closeAgentModeAndHidePanelWindow = () => {
   const win = WINDOWS.get("panel")
   if (win) {
+    // Update agent state
+    state.isAgentModeActive = false
+    state.shouldStopAgent = false
+    state.agentIterationCount = 0
+
     // Clear agent progress and resize back to normal
     getRendererHandlers<RendererHandlers>(win.webContents).clearAgentProgress.send()
     resizePanelToNormal()
@@ -320,6 +325,46 @@ export const closeAgentModeAndHidePanelWindow = () => {
         win.hide()
       }
     }, 200)
+  }
+}
+
+export const emergencyStopAgentMode = async () => {
+  console.log("Emergency stop triggered for agent mode")
+
+  // Set stop flag immediately
+  state.shouldStopAgent = true
+
+  const win = WINDOWS.get("panel")
+  if (win) {
+    // Send emergency stop signal to renderer
+    getRendererHandlers<RendererHandlers>(win.webContents).emergencyStopAgent?.send()
+
+    // Clear agent progress immediately
+    getRendererHandlers<RendererHandlers>(win.webContents).clearAgentProgress.send()
+  }
+
+  try {
+    // Kill all agent processes immediately (emergency stop)
+    agentProcessManager.emergencyStop()
+
+    // Update state
+    state.isAgentModeActive = false
+    state.shouldStopAgent = false
+    state.agentIterationCount = 0
+
+    console.log(`Emergency stop completed. Killed ${agentProcessManager.getActiveProcessCount()} processes.`)
+  } catch (error) {
+    console.error("Error during emergency stop:", error)
+  }
+
+  // Close panel and resize
+  if (win) {
+    resizePanelToNormal()
+    setTimeout(() => {
+      if (win.isVisible()) {
+        win.hide()
+      }
+    }, 100) // Shorter delay for emergency stop
   }
 }
 

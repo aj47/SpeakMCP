@@ -1,4 +1,4 @@
-import { MCPService } from '../mcp-service'
+import { mcpService } from '../mcp-service'
 import { configStore } from '../config'
 import { MCPConfig, MCPServerConfig } from '../../shared/types'
 
@@ -25,11 +25,9 @@ jest.mock('@modelcontextprotocol/sdk/client/stdio.js', () => ({
 }))
 
 describe('MCPService', () => {
-  let mcpService: MCPService
   const mockConfigStore = configStore as jest.Mocked<typeof configStore>
 
   beforeEach(() => {
-    mcpService = new MCPService()
     jest.clearAllMocks()
   })
 
@@ -72,12 +70,114 @@ describe('MCPService', () => {
       const tools = mcpService.getAvailableTools()
       expect(tools).toHaveLength(0) // No tools when servers are disabled
     })
+
+    it('should not re-initialize runtime-disabled servers on subsequent calls', async () => {
+      const mcpConfig: MCPConfig = {
+        mcpServers: {
+          'test-server': {
+            command: 'echo',
+            args: ['test']
+          }
+        }
+      }
+
+      mockConfigStore.get.mockReturnValue({ mcpConfig })
+
+      // First initialization - should initialize the server
+      await mcpService.initialize()
+      expect(mcpService.isServerRuntimeEnabled('test-server')).toBe(true)
+
+      // User disables the server at runtime
+      mcpService.setServerRuntimeEnabled('test-server', false)
+      expect(mcpService.isServerRuntimeEnabled('test-server')).toBe(false)
+
+      // Second initialization (like agent mode trigger) - should NOT re-enable the server
+      await mcpService.initialize()
+      expect(mcpService.isServerRuntimeEnabled('test-server')).toBe(false)
+    })
   })
 
   describe('getServerStatus', () => {
     it('should return empty status when no servers are configured', () => {
+      mockConfigStore.get.mockReturnValue({})
       const status = mcpService.getServerStatus()
       expect(status).toEqual({})
+    })
+
+    it('should include runtime state information', () => {
+      const mcpConfig: MCPConfig = {
+        mcpServers: {
+          'test-server': {
+            command: 'echo',
+            args: ['test'],
+            disabled: false
+          }
+        }
+      }
+
+      mockConfigStore.get.mockReturnValue({ mcpConfig })
+      const status = mcpService.getServerStatus()
+
+      expect(status['test-server']).toEqual({
+        connected: false,
+        toolCount: 0,
+        runtimeEnabled: true,
+        configDisabled: false
+      })
+    })
+  })
+
+  describe('runtime server state management', () => {
+    it('should allow setting server runtime enabled state', () => {
+      const mcpConfig: MCPConfig = {
+        mcpServers: {
+          'test-server': {
+            command: 'echo',
+            args: ['test']
+          }
+        }
+      }
+
+      mockConfigStore.get.mockReturnValue({ mcpConfig })
+
+      // Initially enabled
+      expect(mcpService.isServerRuntimeEnabled('test-server')).toBe(true)
+      expect(mcpService.isServerAvailable('test-server')).toBe(true)
+
+      // Disable runtime
+      const result = mcpService.setServerRuntimeEnabled('test-server', false)
+      expect(result).toBe(true)
+      expect(mcpService.isServerRuntimeEnabled('test-server')).toBe(false)
+      expect(mcpService.isServerAvailable('test-server')).toBe(false)
+
+      // Re-enable
+      mcpService.setServerRuntimeEnabled('test-server', true)
+      expect(mcpService.isServerRuntimeEnabled('test-server')).toBe(true)
+      expect(mcpService.isServerAvailable('test-server')).toBe(true)
+    })
+
+    it('should respect config disabled flag even when runtime enabled', () => {
+      const mcpConfig: MCPConfig = {
+        mcpServers: {
+          'disabled-server': {
+            command: 'echo',
+            args: ['test'],
+            disabled: true
+          }
+        }
+      }
+
+      mockConfigStore.get.mockReturnValue({ mcpConfig })
+
+      // Even if runtime enabled, config disabled should make it unavailable
+      expect(mcpService.isServerRuntimeEnabled('disabled-server')).toBe(true)
+      expect(mcpService.isServerAvailable('disabled-server')).toBe(false)
+    })
+
+    it('should return false when setting state for non-existent server', () => {
+      mockConfigStore.get.mockReturnValue({})
+      const result = mcpService.setServerRuntimeEnabled('non-existent', false)
+      expect(result).toBe(false)
     })
   })
 

@@ -215,30 +215,31 @@ class MCPService {
     diagnosticsService.logInfo('mcp-service', `Initializing server: ${serverName}`)
 
     try {
-      // Resolve command path and prepare environment
-      const resolvedCommand = await this.resolveCommandPath(serverConfig.command)
-      const environment = await this.prepareEnvironment(serverConfig.env)
+      const transportType = serverConfig.transport || "stdio"
 
-      // Spawn the process manually so we can track it
-      const childProcess = spawn(resolvedCommand, serverConfig.args || [], {
-        env: { ...process.env, ...environment },
-        stdio: ['pipe', 'pipe', 'pipe']
-      })
+      // Handle stdio transport (local command-based servers)
+      if (transportType === "stdio") {
+        // Resolve command path and prepare environment
+        const resolvedCommand = await this.resolveCommandPath(serverConfig.command!)
+        const environment = await this.prepareEnvironment(serverConfig.env)
 
-      // Register process with agent process manager if agent mode is active
-      if (state.isAgentModeActive) {
-        agentProcessManager.registerProcess(childProcess)
+        // Spawn the process manually so we can track it
+        const childProcess = spawn(resolvedCommand, serverConfig.args || [], {
+          env: { ...process.env, ...environment },
+          stdio: ['pipe', 'pipe', 'pipe']
+        })
+
+        // Register process with agent process manager if agent mode is active
+        if (state.isAgentModeActive) {
+          agentProcessManager.registerProcess(childProcess)
+        }
+
+        // Store the process reference
+        this.serverProcesses.set(serverName, childProcess)
       }
 
-      // Store the process reference
-      this.serverProcesses.set(serverName, childProcess)
-
-      // Create transport using the spawned process
-      const transport = new StdioClientTransport({
-        command: resolvedCommand,
-        args: serverConfig.args,
-        env: environment
-      })
+      // Create appropriate transport based on configuration
+      const transport = await this.createTransport(serverConfig)
 
       const client = new Client({
         name: "speakmcp-mcp-client",
@@ -286,6 +287,17 @@ class MCPService {
   private cleanupServer(serverName: string) {
     this.transports.delete(serverName)
     this.clients.delete(serverName)
+
+    // Clean up server process if it exists
+    const serverProcess = this.serverProcesses.get(serverName)
+    if (serverProcess) {
+      try {
+        serverProcess.kill('SIGTERM')
+      } catch (error) {
+        // Ignore cleanup errors
+      }
+      this.serverProcesses.delete(serverName)
+    }
 
     // Remove tools from this server
     this.availableTools = this.availableTools.filter(tool =>

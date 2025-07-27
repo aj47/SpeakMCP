@@ -1,12 +1,14 @@
 import { useCallback } from "react"
 import { Control, ControlGroup } from "@renderer/components/ui/control"
 import { Input } from "@renderer/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@renderer/components/ui/select"
 import {
   useConfigQuery,
   useSaveConfigMutation,
 } from "@renderer/lib/query-client"
 import { Config } from "@shared/types"
 import { ProviderModelSelector } from "@renderer/components/model-selector"
+import { STT_PROVIDERS, CHAT_PROVIDERS, STT_PROVIDER_ID, CHAT_PROVIDER_ID } from "@shared/index"
 
 export function Component() {
   const configQuery = useConfigQuery()
@@ -51,6 +53,82 @@ export function Component() {
 
   return (
     <div className="grid gap-4">
+      <ControlGroup title="Provider Selection">
+        <Control label="Voice Transcription Provider" className="px-3">
+          <Select
+            value={configQuery.data.sttProviderId || "openai"}
+            onValueChange={(value) => {
+              saveConfig({
+                sttProviderId: value as STT_PROVIDER_ID,
+              })
+            }}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {STT_PROVIDERS.map((provider) => (
+                <SelectItem key={provider.value} value={provider.value}>
+                  {provider.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground mt-1">
+            Choose which provider to use for speech-to-text transcription
+          </p>
+        </Control>
+
+        <Control label="Transcript Post-Processing Provider" className="px-3">
+          <Select
+            value={configQuery.data.transcriptPostProcessingProviderId || "openai"}
+            onValueChange={(value) => {
+              saveConfig({
+                transcriptPostProcessingProviderId: value as CHAT_PROVIDER_ID,
+              })
+            }}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {CHAT_PROVIDERS.map((provider) => (
+                <SelectItem key={provider.value} value={provider.value}>
+                  {provider.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground mt-1">
+            Choose which provider to use for transcript post-processing
+          </p>
+        </Control>
+
+        <Control label="Agent/MCP Tools Provider" className="px-3">
+          <Select
+            value={configQuery.data.mcpToolsProviderId || "openai"}
+            onValueChange={(value) => {
+              saveConfig({
+                mcpToolsProviderId: value as CHAT_PROVIDER_ID,
+              })
+            }}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {CHAT_PROVIDERS.map((provider) => (
+                <SelectItem key={provider.value} value={provider.value}>
+                  {provider.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground mt-1">
+            Choose which provider to use for agent mode and MCP tool calling
+          </p>
+        </Control>
+      </ControlGroup>
       <ControlGroup title="OpenAI">
         <Control label="API Key" className="px-3">
           <Input
@@ -84,6 +162,8 @@ export function Component() {
             transcriptModel={configQuery.data.transcriptPostProcessingOpenaiModel}
             onMcpModelChange={handleOpenAIMcpModelChange}
             onTranscriptModelChange={handleOpenAITranscriptModelChange}
+            showMcpModel={configQuery.data.mcpToolsProviderId === "openai"}
+            showTranscriptModel={configQuery.data.transcriptPostProcessingProviderId === "openai"}
             disabled={!configQuery.data.openaiApiKey}
           />
         </Control>
@@ -122,6 +202,8 @@ export function Component() {
             transcriptModel={configQuery.data.transcriptPostProcessingGroqModel}
             onMcpModelChange={handleGroqMcpModelChange}
             onTranscriptModelChange={handleGroqTranscriptModelChange}
+            showMcpModel={configQuery.data.mcpToolsProviderId === "groq"}
+            showTranscriptModel={configQuery.data.transcriptPostProcessingProviderId === "groq"}
             disabled={!configQuery.data.groqApiKey}
           />
         </Control>
@@ -160,6 +242,8 @@ export function Component() {
             transcriptModel={configQuery.data.transcriptPostProcessingGeminiModel}
             onMcpModelChange={handleGeminiMcpModelChange}
             onTranscriptModelChange={handleGeminiTranscriptModelChange}
+            showMcpModel={configQuery.data.mcpToolsProviderId === "gemini"}
+            showTranscriptModel={configQuery.data.transcriptPostProcessingProviderId === "gemini"}
             disabled={!configQuery.data.geminiApiKey}
           />
         </Control>

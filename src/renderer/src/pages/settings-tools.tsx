@@ -195,24 +195,17 @@ DOMAIN-SPECIFIC RULES:
               )}
 
               <div className="space-y-2">
-                <Label htmlFor="mcp-provider">LLM Provider</Label>
-                <Select
-                  value={config.mcpToolsProviderId || "openai"}
-                  onValueChange={(value) => updateConfig({ mcpToolsProviderId: value as any })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {CHAT_PROVIDERS.map((provider) => (
-                      <SelectItem key={provider.value} value={provider.value}>
-                        {provider.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label htmlFor="mcp-provider">Current LLM Provider</Label>
+                <div className="flex items-center justify-between p-3 border rounded-md bg-muted/50">
+                  <span className="text-sm">
+                    {CHAT_PROVIDERS.find(p => p.value === (config.mcpToolsProviderId || "openai"))?.label || "OpenAI"}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    Configure in Providers tab
+                  </span>
+                </div>
                 <p className="text-xs text-muted-foreground">
-                  Choose which LLM provider to use for tool calling decisions. Configure models in the Providers tab.
+                  Configure which LLM provider and model to use for tool calling decisions in the Providers tab.
                 </p>
               </div>
 

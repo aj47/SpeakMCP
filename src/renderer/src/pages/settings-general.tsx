@@ -175,26 +175,15 @@ export function Component() {
       </ControlGroup>
 
       <ControlGroup title="Speech to Text">
-        <Control label="Provider" className="px-3">
-          <Select
-            defaultValue={sttProviderId}
-            onValueChange={(value) => {
-              saveConfig({
-                sttProviderId: value as STT_PROVIDER_ID,
-              })
-            }}
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {STT_PROVIDERS.map((p) => (
-                <SelectItem key={p.value} value={p.value}>
-                  {p.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        <Control label="Current Provider" className="px-3">
+          <div className="flex items-center justify-between">
+            <span className="text-sm">
+              {STT_PROVIDERS.find(p => p.value === sttProviderId)?.label || "OpenAI"}
+            </span>
+            <span className="text-xs text-muted-foreground">
+              Configure in Providers tab
+            </span>
+          </div>
         </Control>
 
         {sttProviderId === "groq" && (
@@ -230,43 +219,15 @@ export function Component() {
 
         {configQuery.data.transcriptPostProcessingEnabled && (
           <>
-            <Control label="Provider" className="px-3">
-              <Select
-                defaultValue={transcriptPostProcessingProviderId}
-                onValueChange={(value) => {
-                  saveConfig({
-                    transcriptPostProcessingProviderId:
-                      value as CHAT_PROVIDER_ID,
-                  })
-                }}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {CHAT_PROVIDERS.map((p) => (
-                    <SelectItem key={p.value} value={p.value}>
-                      {p.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Control>
-
-            <Control label="Model" className="px-3">
-              <ModelSelector
-                providerId={transcriptPostProcessingProviderId}
-                value={
-                  transcriptPostProcessingProviderId === "openai"
-                    ? configQuery.data.transcriptPostProcessingOpenaiModel
-                    : transcriptPostProcessingProviderId === "groq"
-                    ? configQuery.data.transcriptPostProcessingGroqModel
-                    : configQuery.data.transcriptPostProcessingGeminiModel
-                }
-                onValueChange={handleTranscriptModelChange}
-                placeholder="Select model for transcript processing"
-                disabled={!configQuery.data.transcriptPostProcessingEnabled}
-              />
+            <Control label="Current Provider" className="px-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm">
+                  {CHAT_PROVIDERS.find(p => p.value === transcriptPostProcessingProviderId)?.label || "OpenAI"}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  Configure provider and model in Providers tab
+                </span>
+              </div>
             </Control>
 
             <Control label="Prompt" className="px-3">

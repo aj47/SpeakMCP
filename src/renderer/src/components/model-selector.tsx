@@ -161,7 +161,7 @@ export function ProviderModelSelector({
           providerId={providerId}
           value={mcpModel}
           onValueChange={onMcpModelChange}
-          label={`${providerName} Model (MCP Tools)`}
+          label={`${providerName} Model (Agent/MCP Tools)`}
           placeholder="Select model for tool calling"
           disabled={disabled}
         />
@@ -176,6 +176,12 @@ export function ProviderModelSelector({
           placeholder="Select model for transcript processing"
           disabled={disabled}
         />
+      )}
+
+      {!showMcpModel && !showTranscriptModel && (
+        <div className="text-sm text-muted-foreground p-3 bg-muted/50 rounded-md">
+          This provider is not currently selected for any functions. Configure provider selection above to use {providerName} models.
+        </div>
       )}
     </div>
   )

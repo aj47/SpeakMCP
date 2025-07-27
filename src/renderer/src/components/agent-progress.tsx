@@ -1,4 +1,4 @@
-import React from "react"
+import React, { useEffect, useRef, useState } from "react"
 import { cn } from "~/lib/utils"
 import { AgentProgressUpdate } from "../../../shared/types"
 
@@ -99,6 +99,11 @@ const ConversationMessage: React.FC<{
 }
 
 export const AgentProgress: React.FC<AgentProgressProps> = ({ progress, className, variant = "default" }) => {
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const [isUserScrolling, setIsUserScrolling] = useState(false)
+  const [shouldAutoScroll, setShouldAutoScroll] = useState(true)
+  const lastMessageCountRef = useRef(0)
+
   if (!progress) {
     return null
   }
@@ -193,6 +198,53 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({ progress, classNam
   // Sort by timestamp to ensure chronological order
   messages.sort((a, b) => a.timestamp - b.timestamp)
 
+  // Auto-scroll logic
+  useEffect(() => {
+    const scrollContainer = scrollContainerRef.current
+    if (!scrollContainer) return
+
+    // Check if new messages were added
+    if (messages.length > lastMessageCountRef.current) {
+      lastMessageCountRef.current = messages.length
+
+      // Only auto-scroll if we should (user hasn't manually scrolled up)
+      if (shouldAutoScroll) {
+        scrollContainer.scrollTop = scrollContainer.scrollHeight
+      }
+    }
+  }, [messages.length, shouldAutoScroll])
+
+  // Initial scroll to bottom on mount
+  useEffect(() => {
+    const scrollContainer = scrollContainerRef.current
+    if (!scrollContainer) return
+
+    // Small delay to ensure content is rendered
+    setTimeout(() => {
+      scrollContainer.scrollTop = scrollContainer.scrollHeight
+    }, 50)
+  }, [])
+
+  // Handle scroll events to detect user interaction
+  const handleScroll = () => {
+    const scrollContainer = scrollContainerRef.current
+    if (!scrollContainer) return
+
+    const { scrollTop, scrollHeight, clientHeight } = scrollContainer
+    const isAtBottom = Math.abs(scrollHeight - clientHeight - scrollTop) < 5 // 5px tolerance
+
+    // If user scrolled to bottom, resume auto-scroll
+    if (isAtBottom && !shouldAutoScroll) {
+      setShouldAutoScroll(true)
+      setIsUserScrolling(false)
+    }
+    // If user scrolled up from bottom, stop auto-scroll
+    else if (!isAtBottom && shouldAutoScroll) {
+      setShouldAutoScroll(false)
+      setIsUserScrolling(true)
+    }
+  }
+
   // Check for errors
   const hasErrors = steps.some(step => step.status === "error" || step.toolResult?.error)
 
@@ -235,22 +287,35 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({ progress, classNam
       </div>
 
       {/* Conversation History */}
-      <div className="flex flex-col gap-2 flex-1 min-h-0 overflow-y-auto">
-        {messages.length > 0 ? (
-          messages.map((message, index) => (
-            <ConversationMessage
-              key={`${message.timestamp}-${index}`}
-              role={message.role}
-              content={message.content}
-              isComplete={message.isComplete && (isComplete || index === messages.length - 1)}
-              isThinking={message.isThinking}
-              toolCalls={message.toolCalls}
-              toolResults={message.toolResults}
-            />
-          ))
-        ) : (
-          <div className="text-sm text-muted-foreground text-center py-4">
-            {isComplete ? "Task completed" : "Initializing agent..."}
+      <div className="relative flex-1 min-h-0">
+        <div
+          ref={scrollContainerRef}
+          onScroll={handleScroll}
+          className="flex flex-col gap-2 h-full overflow-y-auto scroll-smooth"
+        >
+          {messages.length > 0 ? (
+            messages.map((message, index) => (
+              <ConversationMessage
+                key={`${message.timestamp}-${index}`}
+                role={message.role}
+                content={message.content}
+                isComplete={message.isComplete && (isComplete || index === messages.length - 1)}
+                isThinking={message.isThinking}
+                toolCalls={message.toolCalls}
+                toolResults={message.toolResults}
+              />
+            ))
+          ) : (
+            <div className="text-sm text-muted-foreground text-center py-4">
+              {isComplete ? "Task completed" : "Initializing agent..."}
+            </div>
+          )}
+        </div>
+
+        {/* Auto-scroll indicator */}
+        {isUserScrolling && !isComplete && (
+          <div className="absolute bottom-2 right-2 bg-primary/80 text-primary-foreground text-xs px-2 py-1 rounded-full shadow-lg animate-pulse">
+            Scroll to bottom to resume auto-scroll
           </div>
         )}
       </div>

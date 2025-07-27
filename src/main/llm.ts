@@ -8,6 +8,7 @@ import { diagnosticsService } from "./diagnostics"
 import { makeStructuredContextExtraction } from "./structured-output"
 import { makeLLMCallWithFetch, makeTextCompletionWithFetch } from "./llm-fetch"
 import { constructSystemPrompt } from "./system-prompts"
+import { state } from "./state"
 
 /**
  * Use LLM to extract useful context from conversation history
@@ -446,6 +447,35 @@ export async function processTranscriptWithAgentMode(
   while (iteration < maxIterations) {
     iteration++
 
+    // Check for stop signal
+    if (state.shouldStopAgent) {
+      console.log("Agent mode stopped by kill switch")
+
+      // Add emergency stop step
+      const stopStep = createProgressStep(
+        "completion",
+        "Agent stopped",
+        "Agent mode was stopped by emergency kill switch",
+        "error"
+      )
+      progressSteps.push(stopStep)
+
+      // Emit final progress
+      emitAgentProgress({
+        currentIteration: iteration,
+        maxIterations,
+        steps: progressSteps.slice(-3),
+        isComplete: true,
+        finalContent: finalContent + "\n\n(Agent mode was stopped by emergency kill switch)",
+        conversationHistory: formatConversationForProgress(conversationHistory)
+      })
+
+      break
+    }
+
+    // Update iteration count in state
+    state.agentIterationCount = iteration
+
     // Update initial step to completed and add thinking step for this iteration
     if (iteration === 1) {
       initialStep.status = "completed"
@@ -596,6 +626,11 @@ Always use actual resource IDs from the conversation history or create new ones 
     const failedTools: string[] = []
 
     for (const toolCall of llmResponse.toolCalls!) {
+      // Check for stop signal before executing each tool
+      if (state.shouldStopAgent) {
+        console.log("Agent mode stopped during tool execution")
+        break
+      }
 
       // Add tool call step
       const toolCallStep = createProgressStep(

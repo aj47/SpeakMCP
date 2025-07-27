@@ -8,10 +8,21 @@ export type RecordingHistoryItem = {
 }
 
 // MCP Server Configuration Types
+export type MCPTransportType = "stdio" | "websocket" | "streamableHttp"
+
 export interface MCPServerConfig {
-  command: string
-  args: string[]
+  // Transport configuration
+  transport?: MCPTransportType // defaults to "stdio" for backward compatibility
+
+  // For stdio transport (local command-based servers)
+  command?: string
+  args?: string[]
   env?: Record<string, string>
+
+  // For remote transports (websocket/streamableHttp)
+  url?: string
+
+  // Common configuration
   timeout?: number
   disabled?: boolean
 }
@@ -134,6 +145,10 @@ export type Config = {
   // Text Input Configuration
   textInputEnabled?: boolean
   textInputShortcut?: "ctrl-t" | "ctrl-shift-t" | "alt-t"
+
+  // Agent Kill Switch Configuration
+  agentKillSwitchEnabled?: boolean
+  agentKillSwitchHotkey?: "ctrl-shift-escape" | "ctrl-alt-q" | "ctrl-shift-q"
 
   // MCP Tool Calling Configuration
   mcpToolsEnabled?: boolean

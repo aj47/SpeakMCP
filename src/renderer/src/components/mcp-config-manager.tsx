@@ -6,10 +6,11 @@ import { Textarea } from "@renderer/components/ui/textarea"
 import { Switch } from "@renderer/components/ui/switch"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@renderer/components/ui/card"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@renderer/components/ui/dialog"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@renderer/components/ui/select"
 import { Badge } from "@renderer/components/ui/badge"
 import { Trash2, Edit, Plus, Upload, Download, Server, CheckCircle, XCircle, AlertCircle, BookOpen, RotateCcw, Square } from "lucide-react"
 import { Spinner } from "@renderer/components/ui/spinner"
-import { MCPConfig, MCPServerConfig } from "@shared/types"
+import { MCPConfig, MCPServerConfig, MCPTransportType } from "@shared/types"
 import { tipcClient } from "@renderer/lib/tipc-client"
 import { toast } from "sonner"
 
@@ -26,8 +27,10 @@ interface ServerDialogProps {
 
 function ServerDialog({ server, onSave, onCancel }: ServerDialogProps) {
   const [name, setName] = useState(server?.name || "")
+  const [transport, setTransport] = useState<MCPTransportType>(server?.config.transport || "stdio")
   const [command, setCommand] = useState(server?.config.command || "")
-  const [args, setArgs] = useState(server?.config.args?.join(" ") || "")
+  const [args, setArgs] = useState(server?.config.args ? server.config.args.join(" ") : "")
+  const [url, setUrl] = useState(server?.config.url || "")
   const [env, setEnv] = useState(
     server?.config.env ? Object.entries(server.config.env).map(([k, v]) => `${k}=${v}`).join("\n") : ""
   )
@@ -35,9 +38,29 @@ function ServerDialog({ server, onSave, onCancel }: ServerDialogProps) {
   const [disabled, setDisabled] = useState(server?.config.disabled || false)
 
   const handleSave = () => {
-    if (!name.trim() || !command.trim()) {
-      toast.error("Server name and command are required")
+    if (!name.trim()) {
+      toast.error("Server name is required")
       return
+    }
+
+    // Validate based on transport type
+    if (transport === "stdio") {
+      if (!command.trim()) {
+        toast.error("Command is required for stdio transport")
+        return
+      }
+    } else if (transport === "websocket" || transport === "streamableHttp") {
+      if (!url.trim()) {
+        toast.error("URL is required for remote transport")
+        return
+      }
+      // Basic URL validation
+      try {
+        new URL(url.trim())
+      } catch (error) {
+        toast.error("Invalid URL format")
+        return
+      }
     }
 
     const envObject: Record<string, string> = {}
@@ -56,8 +79,14 @@ function ServerDialog({ server, onSave, onCancel }: ServerDialogProps) {
     }
 
     const serverConfig: MCPServerConfig = {
-      command: command.trim(),
-      args: args.trim() ? args.trim().split(/\s+/) : [],
+      transport,
+      ...(transport === "stdio" && {
+        command: command.trim(),
+        args: args.trim() ? args.trim().split(/\s+/) : [],
+      }),
+      ...(transport !== "stdio" && {
+        url: url.trim(),
+      }),
       ...(Object.keys(envObject).length > 0 && { env: envObject }),
       ...(timeout && { timeout: parseInt(timeout) }),
       ...(disabled && { disabled })
@@ -87,27 +116,64 @@ function ServerDialog({ server, onSave, onCancel }: ServerDialogProps) {
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="command">Command</Label>
-          <Input
-            id="command"
-            value={command}
-            onChange={(e) => setCommand(e.target.value)}
-            placeholder="e.g., npx"
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="args">Arguments</Label>
-          <Input
-            id="args"
-            value={args}
-            onChange={(e) => setArgs(e.target.value)}
-            placeholder="e.g., -y @modelcontextprotocol/server-google-maps"
-          />
+          <Label htmlFor="transport">Transport Type</Label>
+          <Select value={transport} onValueChange={(value: MCPTransportType) => setTransport(value)}>
+            <SelectTrigger>
+              <SelectValue placeholder="Select transport type" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="stdio">Local Command (stdio)</SelectItem>
+              <SelectItem value="websocket">WebSocket</SelectItem>
+              <SelectItem value="streamableHttp">Streamable HTTP</SelectItem>
+            </SelectContent>
+          </Select>
           <p className="text-xs text-muted-foreground">
-            Space-separated command arguments
+            Choose how to connect to the MCP server
           </p>
         </div>
+
+        {transport === "stdio" ? (
+          <>
+            <div className="space-y-2">
+              <Label htmlFor="command">Command</Label>
+              <Input
+                id="command"
+                value={command}
+                onChange={(e) => setCommand(e.target.value)}
+                placeholder="e.g., npx"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="args">Arguments</Label>
+              <Input
+                id="args"
+                value={args}
+                onChange={(e) => setArgs(e.target.value)}
+                placeholder="e.g., -y @modelcontextprotocol/server-google-maps"
+              />
+              <p className="text-xs text-muted-foreground">
+                Space-separated command arguments
+              </p>
+            </div>
+          </>
+        ) : (
+          <div className="space-y-2">
+            <Label htmlFor="url">Server URL</Label>
+            <Input
+              id="url"
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              placeholder={transport === "websocket" ? "ws://localhost:8080" : "http://localhost:8080"}
+            />
+            <p className="text-xs text-muted-foreground">
+              {transport === "websocket"
+                ? "WebSocket URL (e.g., ws://localhost:8080 or wss://example.com/mcp)"
+                : "HTTP URL for streamable HTTP transport (e.g., http://localhost:8080/mcp)"
+              }
+            </p>
+          </div>
+        )}
 
         <div className="space-y-2">
           <Label htmlFor="env">Environment Variables</Label>
@@ -163,6 +229,7 @@ const MCP_EXAMPLES = {
   "google-maps": {
     name: "google-maps",
     config: {
+      transport: "stdio" as MCPTransportType,
       command: "npx",
       args: ["-y", "@modelcontextprotocol/server-google-maps"],
       env: {
@@ -173,6 +240,7 @@ const MCP_EXAMPLES = {
   "slack": {
     name: "slack",
     config: {
+      transport: "stdio" as MCPTransportType,
       command: "npx",
       args: ["-y", "@modelcontextprotocol/server-slack"],
       env: {
@@ -184,6 +252,7 @@ const MCP_EXAMPLES = {
   "filesystem": {
     name: "filesystem",
     config: {
+      transport: "stdio" as MCPTransportType,
       command: "npx",
       args: ["-y", "@modelcontextprotocol/server-filesystem", "/path/to/allowed/directory"],
       env: {}
@@ -192,6 +261,7 @@ const MCP_EXAMPLES = {
   "github": {
     name: "github",
     config: {
+      transport: "stdio" as MCPTransportType,
       command: "npx",
       args: ["-y", "@modelcontextprotocol/server-github"],
       env: {
@@ -202,11 +272,28 @@ const MCP_EXAMPLES = {
   "postgres": {
     name: "postgres",
     config: {
+      transport: "stdio" as MCPTransportType,
       command: "npx",
       args: ["-y", "@modelcontextprotocol/server-postgres"],
       env: {
         POSTGRES_CONNECTION_STRING: "postgresql://user:password@localhost:5432/database"
       }
+    }
+  },
+  "remote-websocket": {
+    name: "remote-websocket",
+    config: {
+      transport: "websocket" as MCPTransportType,
+      url: "ws://localhost:8080",
+      timeout: 10000
+    }
+  },
+  "remote-http": {
+    name: "remote-http",
+    config: {
+      transport: "streamableHttp" as MCPTransportType,
+      url: "http://localhost:8080/mcp",
+      timeout: 10000
     }
   }
 }
@@ -374,7 +461,10 @@ export function MCPConfigManager({ config, onConfigChange }: MCPConfigManagerPro
                     <CardHeader className="pb-2">
                       <CardTitle className="text-sm">{example.name}</CardTitle>
                       <CardDescription className="text-xs">
-                        {example.config.command} {example.config.args.join(" ")}
+                        {example.config.transport === "stdio"
+                          ? `${example.config.command} ${example.config.args ? example.config.args.join(" ") : ""}`
+                          : `${example.config.transport}: ${example.config.url}`
+                        }
                       </CardDescription>
                     </CardHeader>
                     <CardContent className="pt-0">
@@ -513,7 +603,10 @@ export function MCPConfigManager({ config, onConfigChange }: MCPConfigManagerPro
                   </div>
                 </div>
                 <CardDescription>
-                  {serverConfig.command} {serverConfig.args.join(" ")}
+                  {serverConfig.transport === "stdio" || !serverConfig.transport
+                    ? `${serverConfig.command || ""} ${serverConfig.args ? serverConfig.args.join(" ") : ""}`
+                    : `${serverConfig.transport}: ${serverConfig.url || ""}`
+                  }
                 </CardDescription>
               </CardHeader>
               {(serverConfig.env || serverConfig.timeout || serverStatus[name]?.error) && (

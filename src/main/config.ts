@@ -24,6 +24,9 @@ const getConfig = () => {
     conversationsEnabled: true,
     maxConversationsToKeep: 100,
     autoSaveConversations: true,
+    // Agent kill switch defaults
+    agentKillSwitchEnabled: true,
+    agentKillSwitchHotkey: "ctrl-shift-escape",
   }
 
   try {

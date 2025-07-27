@@ -1,13 +1,16 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
+import { WebSocketClientTransport } from "@modelcontextprotocol/sdk/client/websocket.js"
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js"
 import { configStore } from "./config"
-import { MCPConfig, MCPServerConfig } from "../shared/types"
+import { MCPConfig, MCPServerConfig, MCPTransportType } from "../shared/types"
 import { spawn, ChildProcess } from "child_process"
 import { promisify } from "util"
 import { access, constants } from "fs"
 import path from "path"
 import os from "os"
 import { diagnosticsService } from "./diagnostics"
+import { state, agentProcessManager } from "./state"
 
 const accessAsync = promisify(access)
 
@@ -38,7 +41,8 @@ export interface LLMToolCallResponse {
 
 class MCPService {
   private clients: Map<string, Client> = new Map()
-  private transports: Map<string, StdioClientTransport> = new Map()
+  private serverProcesses: Map<string, ChildProcess> = new Map()
+  private transports: Map<string, StdioClientTransport | WebSocketClientTransport | StreamableHTTPClientTransport> = new Map()
   private availableTools: MCPTool[] = []
   private disabledTools: Set<string> = new Set()
   private isInitializing = false
@@ -200,21 +204,68 @@ class MCPService {
     this.hasBeenInitialized = true
   }
 
+  private async createTransport(serverConfig: MCPServerConfig): Promise<StdioClientTransport | WebSocketClientTransport | StreamableHTTPClientTransport> {
+    const transportType = serverConfig.transport || "stdio" // default to stdio for backward compatibility
 
+    switch (transportType) {
+      case "stdio":
+        if (!serverConfig.command) {
+          throw new Error("Command is required for stdio transport")
+        }
+        const resolvedCommand = await this.resolveCommandPath(serverConfig.command)
+        const environment = await this.prepareEnvironment(serverConfig.env)
+        return new StdioClientTransport({
+          command: resolvedCommand,
+          args: serverConfig.args || [],
+          env: environment
+        })
+
+      case "websocket":
+        if (!serverConfig.url) {
+          throw new Error("URL is required for websocket transport")
+        }
+        return new WebSocketClientTransport(new URL(serverConfig.url))
+
+      case "streamableHttp":
+        if (!serverConfig.url) {
+          throw new Error("URL is required for streamableHttp transport")
+        }
+        return new StreamableHTTPClientTransport(new URL(serverConfig.url))
+
+      default:
+        throw new Error(`Unsupported transport type: ${transportType}`)
+    }
+  }
 
   private async initializeServer(serverName: string, serverConfig: MCPServerConfig) {
+    diagnosticsService.logInfo('mcp-service', `Initializing server: ${serverName}`)
 
     try {
-      // Resolve command path and prepare environment
-      const resolvedCommand = await this.resolveCommandPath(serverConfig.command)
-      const environment = await this.prepareEnvironment(serverConfig.env)
+      const transportType = serverConfig.transport || "stdio"
 
-      // Create transport and client
-      const transport = new StdioClientTransport({
-        command: resolvedCommand,
-        args: serverConfig.args,
-        env: environment
-      })
+      // Handle stdio transport (local command-based servers)
+      if (transportType === "stdio") {
+        // Resolve command path and prepare environment
+        const resolvedCommand = await this.resolveCommandPath(serverConfig.command!)
+        const environment = await this.prepareEnvironment(serverConfig.env)
+
+        // Spawn the process manually so we can track it
+        const childProcess = spawn(resolvedCommand, serverConfig.args || [], {
+          env: { ...process.env, ...environment },
+          stdio: ['pipe', 'pipe', 'pipe']
+        })
+
+        // Register process with agent process manager if agent mode is active
+        if (state.isAgentModeActive) {
+          agentProcessManager.registerProcess(childProcess)
+        }
+
+        // Store the process reference
+        this.serverProcesses.set(serverName, childProcess)
+      }
+
+      // Create appropriate transport based on configuration
+      const transport = await this.createTransport(serverConfig)
 
       const client = new Client({
         name: "speakmcp-mcp-client",
@@ -263,6 +314,17 @@ class MCPService {
     this.transports.delete(serverName)
     this.clients.delete(serverName)
     this.initializedServers.delete(serverName)
+
+    // Clean up server process if it exists
+    const serverProcess = this.serverProcesses.get(serverName)
+    if (serverProcess) {
+      try {
+        serverProcess.kill('SIGTERM')
+      } catch (error) {
+        // Ignore cleanup errors
+      }
+      this.serverProcesses.delete(serverName)
+    }
 
     // Remove tools from this server
     this.availableTools = this.availableTools.filter(tool =>
@@ -540,23 +602,40 @@ class MCPService {
 
   async testServerConnection(serverName: string, serverConfig: MCPServerConfig): Promise<{ success: boolean; error?: string; toolCount?: number }> {
     try {
-      // Basic validation
-      if (!serverConfig.command) {
-        return { success: false, error: "Command is required" }
-      }
+      // Basic validation based on transport type
+      const transportType = serverConfig.transport || "stdio"
 
-      if (!Array.isArray(serverConfig.args)) {
-        return { success: false, error: "Args must be an array" }
-      }
-
-      // Try to resolve the command path
-      try {
-        const resolvedCommand = await this.resolveCommandPath(serverConfig.command)
-      } catch (error) {
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : `Failed to resolve command: ${serverConfig.command}`
+      if (transportType === "stdio") {
+        if (!serverConfig.command) {
+          return { success: false, error: "Command is required for stdio transport" }
         }
+        if (!Array.isArray(serverConfig.args)) {
+          return { success: false, error: "Args must be an array for stdio transport" }
+        }
+        // Try to resolve the command path
+        try {
+          const resolvedCommand = await this.resolveCommandPath(serverConfig.command)
+        } catch (error) {
+          return {
+            success: false,
+            error: error instanceof Error ? error.message : `Failed to resolve command: ${serverConfig.command}`
+          }
+        }
+      } else if (transportType === "websocket" || transportType === "streamableHttp") {
+        if (!serverConfig.url) {
+          return { success: false, error: `URL is required for ${transportType} transport` }
+        }
+        // Basic URL validation
+        try {
+          new URL(serverConfig.url)
+        } catch (error) {
+          return {
+            success: false,
+            error: `Invalid URL: ${serverConfig.url}`
+          }
+        }
+      } else {
+        return { success: false, error: `Unsupported transport type: ${transportType}` }
       }
 
       // Try to create a temporary connection to test the server
@@ -577,20 +656,12 @@ class MCPService {
   }
 
   private async createTestConnection(serverName: string, serverConfig: MCPServerConfig): Promise<{ success: boolean; error?: string; toolCount?: number }> {
-    let transport: StdioClientTransport | null = null
+    let transport: StdioClientTransport | WebSocketClientTransport | StreamableHTTPClientTransport | null = null
     let client: Client | null = null
 
     try {
-      // Resolve command and prepare environment
-      const resolvedCommand = await this.resolveCommandPath(serverConfig.command)
-      const environment = await this.prepareEnvironment(serverConfig.env)
-
-      // Create a temporary transport and client for testing
-      transport = new StdioClientTransport({
-        command: resolvedCommand,
-        args: serverConfig.args,
-        env: environment
-      })
+      // Create appropriate transport for testing
+      transport = await this.createTransport(serverConfig)
 
       client = new Client({
         name: "speakmcp-mcp-test-client",
@@ -873,10 +944,64 @@ class MCPService {
       }
     }
 
+    // Gracefully terminate server processes
+    await this.terminateAllServerProcesses()
+
     // Clear all maps
     this.clients.clear()
     this.transports.clear()
+    this.serverProcesses.clear()
     this.availableTools = []
+  }
+
+  /**
+   * Gracefully terminate all MCP server processes
+   */
+  async terminateAllServerProcesses(): Promise<void> {
+    const terminationPromises: Promise<void>[] = []
+
+    for (const [serverName, process] of this.serverProcesses) {
+      terminationPromises.push(new Promise<void>((resolve) => {
+        if (process.killed || process.exitCode !== null) {
+          resolve()
+          return
+        }
+
+        // Try graceful shutdown first
+        process.kill('SIGTERM')
+
+        // Force kill after timeout
+        const forceKillTimeout = setTimeout(() => {
+          if (!process.killed && process.exitCode === null) {
+            process.kill('SIGKILL')
+          }
+          resolve()
+        }, 3000) // 3 second timeout
+
+        process.on('exit', () => {
+          clearTimeout(forceKillTimeout)
+          resolve()
+        })
+      }))
+    }
+
+    await Promise.all(terminationPromises)
+  }
+
+  /**
+   * Emergency stop - immediately kill all MCP server processes
+   */
+  emergencyStopAllProcesses(): void {
+    for (const [serverName, process] of this.serverProcesses) {
+      try {
+        if (!process.killed && process.exitCode === null) {
+          process.kill('SIGKILL')
+        }
+      } catch (error) {
+        // Ignore errors during emergency stop
+      }
+    }
+    this.serverProcesses.clear()
   }
 }
 

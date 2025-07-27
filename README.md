@@ -203,18 +203,21 @@ SpeakMCP/
 
 ### MCP Server Configuration
 
-Configure external tools and services through MCP servers:
+Configure external tools and services through MCP servers. SpeakMCP supports both local command-based servers and remote servers via WebSocket or Streamable HTTP transports.
 
+#### Local Command-Based Servers
 ```json
 {
   "mcpServers": {
     "filesystem": {
+      "transport": "stdio",
       "command": "npx",
       "args": ["@modelcontextprotocol/server-filesystem", "/path/to/workspace"],
       "env": {},
       "disabled": false
     },
     "brave-search": {
+      "transport": "stdio",
       "command": "npx",
       "args": ["@modelcontextprotocol/server-brave-search"],
       "env": {
@@ -224,6 +227,31 @@ Configure external tools and services through MCP servers:
   }
 }
 ```
+
+#### Remote Servers
+```json
+{
+  "mcpServers": {
+    "remote-websocket": {
+      "transport": "websocket",
+      "url": "ws://localhost:8080",
+      "timeout": 10000,
+      "disabled": false
+    },
+    "remote-http": {
+      "transport": "streamableHttp",
+      "url": "http://localhost:8080/mcp",
+      "timeout": 10000,
+      "disabled": false
+    }
+  }
+}
+```
+
+**Supported Transport Types:**
+- **stdio** (default): Local command-based servers using stdin/stdout communication
+- **websocket**: Remote servers accessible via WebSocket protocol (ws:// or wss://)
+- **streamableHttp**: Remote servers using the MCP Streamable HTTP transport
 
 ### Keyboard Shortcuts
 

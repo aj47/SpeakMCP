@@ -243,4 +243,73 @@ describe('MCPService', () => {
       expect(tools).toHaveLength(0)
     })
   })
+
+  describe('runtime server management', () => {
+    it('should mark server as runtime disabled when setServerRuntimeEnabled is called with false', () => {
+      mockConfigStore.get.mockReturnValue({
+        mcpConfig: {
+          mcpServers: {
+            'test-server': {
+              command: 'echo',
+              args: ['test'],
+              transport: 'stdio'
+            }
+          }
+        }
+      })
+
+      const result = mcpService.setServerRuntimeEnabled('test-server', false)
+      expect(result).toBe(true)
+      expect(mcpService.isServerRuntimeEnabled('test-server')).toBe(false)
+    })
+
+    it('should not initialize runtime disabled servers on subsequent initialize calls', async () => {
+      mockConfigStore.get.mockReturnValue({
+        mcpConfig: {
+          mcpServers: {
+            'test-server': {
+              command: 'echo',
+              args: ['test'],
+              transport: 'stdio'
+            }
+          }
+        }
+      })
+
+      // First initialization should work
+      await mcpService.initialize()
+
+      // Mark server as runtime disabled
+      mcpService.setServerRuntimeEnabled('test-server', false)
+
+      // Second initialization should not reinitialize the disabled server
+      await mcpService.initialize()
+
+      // Server should still be marked as runtime disabled
+      expect(mcpService.isServerRuntimeEnabled('test-server')).toBe(false)
+    })
+
+    it('should include runtime enabled state in server status', () => {
+      mockConfigStore.get.mockReturnValue({
+        mcpConfig: {
+          mcpServers: {
+            'test-server': {
+              command: 'echo',
+              args: ['test'],
+              transport: 'stdio'
+            }
+          }
+        }
+      })
+
+      // Initially should be runtime enabled
+      let status = mcpService.getServerStatus()
+      expect(status['test-server']?.runtimeEnabled).toBe(true)
+
+      // After disabling, should be runtime disabled
+      mcpService.setServerRuntimeEnabled('test-server', false)
+      status = mcpService.getServerStatus()
+      expect(status['test-server']?.runtimeEnabled).toBe(false)
+    })
+  })
 })

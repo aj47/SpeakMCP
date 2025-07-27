@@ -130,7 +130,6 @@ async function processWithAgentMode(
   }
 }
 import { diagnosticsService } from "./diagnostics"
-import { state } from "./state"
 import { updateTrayIcon } from "./tray"
 import { isAccessibilityGranted } from "./utils"
 import { writeText, writeTextWithFocusRestore } from "./keyboard"

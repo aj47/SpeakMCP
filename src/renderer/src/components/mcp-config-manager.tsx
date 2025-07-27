@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@rend
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@renderer/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@renderer/components/ui/select"
 import { Badge } from "@renderer/components/ui/badge"
-import { Trash2, Edit, Plus, Upload, Download, Server, CheckCircle, XCircle, AlertCircle, BookOpen, RotateCcw, Square } from "lucide-react"
+import { Trash2, Edit, Plus, Upload, Download, Server, CheckCircle, XCircle, AlertCircle, BookOpen, RotateCcw, Square, Play } from "lucide-react"
 import { Spinner } from "@renderer/components/ui/spinner"
 import { MCPConfig, MCPServerConfig, MCPTransportType } from "@shared/types"
 import { tipcClient } from "@renderer/lib/tipc-client"
@@ -302,7 +302,7 @@ export function MCPConfigManager({ config, onConfigChange }: MCPConfigManagerPro
   const [editingServer, setEditingServer] = useState<{ name: string; config: MCPServerConfig } | null>(null)
   const [showAddDialog, setShowAddDialog] = useState(false)
   const [showExamples, setShowExamples] = useState(false)
-  const [serverStatus, setServerStatus] = useState<Record<string, { connected: boolean; toolCount: number; error?: string }>>({})
+  const [serverStatus, setServerStatus] = useState<Record<string, { connected: boolean; toolCount: number; error?: string; runtimeEnabled?: boolean; configDisabled?: boolean }>>({})
   const [initializationStatus, setInitializationStatus] = useState<{ isInitializing: boolean; progress: { current: number; total: number; currentServer?: string } }>({ isInitializing: false, progress: { current: 0, total: 0 } })
 
   const servers = config.mcpServers || {}
@@ -412,6 +412,14 @@ export function MCPConfigManager({ config, onConfigChange }: MCPConfigManagerPro
 
   const handleStopServer = async (serverName: string) => {
     try {
+      // First mark the server as runtime-disabled so it stays stopped
+      const runtimeResult = await tipcClient.setMcpServerRuntimeEnabled({ serverName, enabled: false })
+      if (!runtimeResult.success) {
+        toast.error(`Failed to disable server: Server not found`)
+        return
+      }
+
+      // Then stop the server
       const result = await tipcClient.stopMcpServer({ serverName })
       if (result.success) {
         toast.success(`Server ${serverName} stopped successfully`)
@@ -420,6 +428,27 @@ export function MCPConfigManager({ config, onConfigChange }: MCPConfigManagerPro
       }
     } catch (error) {
       toast.error(`Failed to stop server: ${error.message}`)
+    }
+  }
+
+  const handleStartServer = async (serverName: string) => {
+    try {
+      // Mark the server as runtime-enabled so it can be initialized
+      const runtimeResult = await tipcClient.setMcpServerRuntimeEnabled({ serverName, enabled: true })
+      if (!runtimeResult.success) {
+        toast.error(`Failed to enable server: Server not found`)
+        return
+      }
+
+      // Restart the server to initialize it
+      const result = await tipcClient.restartMcpServer({ serverName })
+      if (result.success) {
+        toast.success(`Server ${serverName} started successfully`)
+      } else {
+        toast.error(`Failed to start server: ${result.error}`)
+      }
+    } catch (error) {
+      toast.error(`Failed to start server: ${error.message}`)
     }
   }
 
@@ -542,6 +571,11 @@ export function MCPConfigManager({ config, onConfigChange }: MCPConfigManagerPro
                     <CardTitle className="text-base">{name}</CardTitle>
                     {serverConfig.disabled ? (
                       <Badge variant="secondary">Disabled</Badge>
+                    ) : serverStatus[name]?.runtimeEnabled === false ? (
+                      <div className="flex items-center gap-2">
+                        <Square className="h-4 w-4 text-orange-500" />
+                        <Badge variant="outline" className="text-orange-600 border-orange-300">Stopped by User</Badge>
+                      </div>
                     ) : (
                       <>
                         {serverStatus[name]?.connected ? (
@@ -566,22 +600,35 @@ export function MCPConfigManager({ config, onConfigChange }: MCPConfigManagerPro
                   <div className="flex gap-1">
                     {!serverConfig.disabled && (
                       <>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleRestartServer(name)}
-                          title="Restart server"
-                        >
-                          <RotateCcw className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleStopServer(name)}
-                          title="Stop server"
-                        >
-                          <Square className="h-4 w-4" />
-                        </Button>
+                        {serverStatus[name]?.runtimeEnabled === false ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleStartServer(name)}
+                            title="Start server"
+                          >
+                            <Play className="h-4 w-4" />
+                          </Button>
+                        ) : (
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleRestartServer(name)}
+                              title="Restart server"
+                            >
+                              <RotateCcw className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleStopServer(name)}
+                              title="Stop server"
+                            >
+                              <Square className="h-4 w-4" />
+                            </Button>
+                          </>
+                        )}
                       </>
                     )}
                     <Button

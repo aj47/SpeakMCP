@@ -64,7 +64,7 @@ cd speakmcp-rs && cargo build --release
 
 ### Multi-Process Architecture
 - **Main Process** (`src/main/`): Electron main process handling system integration, API calls, MCP orchestration
-- **Renderer Process** (`src/renderer/`): React-based UI with real-time progress tracking and conversation management  
+- **Renderer Process** (`src/renderer/`): React-based UI with real-time progress tracking and conversation management
 - **Preload Scripts** (`src/preload/`): Secure communication bridge between main and renderer processes
 - **Rust Binary** (`speakmcp-rs/`): Low-level system integration for keyboard monitoring and text injection
 
@@ -91,7 +91,7 @@ cd speakmcp-rs && cargo build --release
 ### MCP Integration
 The app implements a full MCP client that connects to external tool servers. Key aspects:
 - **PATH Resolution**: Fixes `spawn npx ENOENT` errors in Electron environments
-- **Multi-Server Support**: Connect to multiple MCP servers simultaneously  
+- **Multi-Server Support**: Connect to multiple MCP servers simultaneously
 - **Agent Mode**: Iterative tool calling with intelligent decision making
 - **Tool Management**: Enable/disable individual tools, test connections, restart servers
 
@@ -105,10 +105,13 @@ Configuration is managed through Electron's storage system with these key areas:
 - **Custom Base URLs**: Support for self-hosted APIs
 
 ### MCP Server Configuration
-MCP servers are configured in the `mcpConfig.mcpServers` object:
+MCP servers are configured in the `mcpConfig.mcpServers` object. The app supports both local command-based servers and remote servers via WebSocket or Streamable HTTP transports.
+
+#### Local Command-Based Servers (stdio transport)
 ```typescript
 {
   "filesystem": {
+    "transport": "stdio",
     "command": "npx",
     "args": ["@modelcontextprotocol/server-filesystem", "/path/to/workspace"],
     "env": {},
@@ -117,8 +120,37 @@ MCP servers are configured in the `mcpConfig.mcpServers` object:
 }
 ```
 
+#### Remote WebSocket Servers
+```typescript
+{
+  "remote-websocket": {
+    "transport": "websocket",
+    "url": "ws://localhost:8080",
+    "timeout": 10000,
+    "disabled": false
+  }
+}
+```
+
+#### Remote Streamable HTTP Servers
+```typescript
+{
+  "remote-http": {
+    "transport": "streamableHttp",
+    "url": "http://localhost:8080/mcp",
+    "timeout": 10000,
+    "disabled": false
+  }
+}
+```
+
+**Transport Types:**
+- `stdio` (default): Local command-based servers using stdin/stdout communication
+- `websocket`: Remote servers accessible via WebSocket protocol
+- `streamableHttp`: Remote servers using the MCP Streamable HTTP transport
+
 ### Keyboard Shortcuts
-- **Voice Recording**: Hold Ctrl or Ctrl+/ 
+- **Voice Recording**: Hold Ctrl or Ctrl+/
 - **MCP Agent Mode**: Hold Ctrl+Alt or Ctrl+Alt+/
 - **Text Input**: Ctrl+T, Ctrl+Shift+T, or Alt+T
 

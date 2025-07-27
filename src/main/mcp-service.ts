@@ -1,7 +1,9 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
+import { WebSocketClientTransport } from "@modelcontextprotocol/sdk/client/websocket.js"
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js"
 import { configStore } from "./config"
-import { MCPConfig, MCPServerConfig } from "../shared/types"
+import { MCPConfig, MCPServerConfig, MCPTransportType } from "../shared/types"
 import { spawn, ChildProcess } from "child_process"
 import { promisify } from "util"
 import { access, constants } from "fs"
@@ -38,7 +40,7 @@ export interface LLMToolCallResponse {
 
 class MCPService {
   private clients: Map<string, Client> = new Map()
-  private transports: Map<string, StdioClientTransport> = new Map()
+  private transports: Map<string, StdioClientTransport | WebSocketClientTransport | StreamableHTTPClientTransport> = new Map()
   private availableTools: MCPTool[] = []
   private disabledTools: Set<string> = new Set()
   private isInitializing = false
@@ -174,21 +176,45 @@ class MCPService {
     this.isInitializing = false
   }
 
+  private async createTransport(serverConfig: MCPServerConfig): Promise<StdioClientTransport | WebSocketClientTransport | StreamableHTTPClientTransport> {
+    const transportType = serverConfig.transport || "stdio" // default to stdio for backward compatibility
 
+    switch (transportType) {
+      case "stdio":
+        if (!serverConfig.command) {
+          throw new Error("Command is required for stdio transport")
+        }
+        const resolvedCommand = await this.resolveCommandPath(serverConfig.command)
+        const environment = await this.prepareEnvironment(serverConfig.env)
+        return new StdioClientTransport({
+          command: resolvedCommand,
+          args: serverConfig.args || [],
+          env: environment
+        })
+
+      case "websocket":
+        if (!serverConfig.url) {
+          throw new Error("URL is required for websocket transport")
+        }
+        return new WebSocketClientTransport(new URL(serverConfig.url))
+
+      case "streamableHttp":
+        if (!serverConfig.url) {
+          throw new Error("URL is required for streamableHttp transport")
+        }
+        return new StreamableHTTPClientTransport(new URL(serverConfig.url))
+
+      default:
+        throw new Error(`Unsupported transport type: ${transportType}`)
+    }
+  }
 
   private async initializeServer(serverName: string, serverConfig: MCPServerConfig) {
+    diagnosticsService.logInfo('mcp-service', `Initializing server: ${serverName}`)
 
     try {
-      // Resolve command path and prepare environment
-      const resolvedCommand = await this.resolveCommandPath(serverConfig.command)
-      const environment = await this.prepareEnvironment(serverConfig.env)
-
-      // Create transport and client
-      const transport = new StdioClientTransport({
-        command: resolvedCommand,
-        args: serverConfig.args,
-        env: environment
-      })
+      // Create appropriate transport based on configuration
+      const transport = await this.createTransport(serverConfig)
 
       const client = new Client({
         name: "speakmcp-mcp-client",
@@ -440,23 +466,40 @@ class MCPService {
 
   async testServerConnection(serverName: string, serverConfig: MCPServerConfig): Promise<{ success: boolean; error?: string; toolCount?: number }> {
     try {
-      // Basic validation
-      if (!serverConfig.command) {
-        return { success: false, error: "Command is required" }
-      }
+      // Basic validation based on transport type
+      const transportType = serverConfig.transport || "stdio"
 
-      if (!Array.isArray(serverConfig.args)) {
-        return { success: false, error: "Args must be an array" }
-      }
-
-      // Try to resolve the command path
-      try {
-        const resolvedCommand = await this.resolveCommandPath(serverConfig.command)
-      } catch (error) {
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : `Failed to resolve command: ${serverConfig.command}`
+      if (transportType === "stdio") {
+        if (!serverConfig.command) {
+          return { success: false, error: "Command is required for stdio transport" }
         }
+        if (!Array.isArray(serverConfig.args)) {
+          return { success: false, error: "Args must be an array for stdio transport" }
+        }
+        // Try to resolve the command path
+        try {
+          const resolvedCommand = await this.resolveCommandPath(serverConfig.command)
+        } catch (error) {
+          return {
+            success: false,
+            error: error instanceof Error ? error.message : `Failed to resolve command: ${serverConfig.command}`
+          }
+        }
+      } else if (transportType === "websocket" || transportType === "streamableHttp") {
+        if (!serverConfig.url) {
+          return { success: false, error: `URL is required for ${transportType} transport` }
+        }
+        // Basic URL validation
+        try {
+          new URL(serverConfig.url)
+        } catch (error) {
+          return {
+            success: false,
+            error: `Invalid URL: ${serverConfig.url}`
+          }
+        }
+      } else {
+        return { success: false, error: `Unsupported transport type: ${transportType}` }
       }
 
       // Try to create a temporary connection to test the server
@@ -477,20 +520,12 @@ class MCPService {
   }
 
   private async createTestConnection(serverName: string, serverConfig: MCPServerConfig): Promise<{ success: boolean; error?: string; toolCount?: number }> {
-    let transport: StdioClientTransport | null = null
+    let transport: StdioClientTransport | WebSocketClientTransport | StreamableHTTPClientTransport | null = null
     let client: Client | null = null
 
     try {
-      // Resolve command and prepare environment
-      const resolvedCommand = await this.resolveCommandPath(serverConfig.command)
-      const environment = await this.prepareEnvironment(serverConfig.env)
-
-      // Create a temporary transport and client for testing
-      transport = new StdioClientTransport({
-        command: resolvedCommand,
-        args: serverConfig.args,
-        env: environment
-      })
+      // Create appropriate transport for testing
+      transport = await this.createTransport(serverConfig)
 
       client = new Client({
         name: "speakmcp-mcp-test-client",

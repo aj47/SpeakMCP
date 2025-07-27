@@ -33,10 +33,6 @@ export const router: ReturnType<typeof createBrowserRouter> =
           lazy: () => import("./pages/settings-about"),
         },
         {
-          path: "history",
-          lazy: () => import("./pages/index"),
-        },
-        {
           path: "conversations",
           lazy: () => import("./pages/conversations"),
         },

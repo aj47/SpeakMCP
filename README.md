@@ -11,7 +11,7 @@
 
 ### Download
 
-Currently building for **macOS (Apple Silicon)** and **Windows x64**.
+Currently building for **macOS (Apple Silicon)**
 
 **[📥 Download Latest Release](https://github.com/aj47/SpeakMCP/releases/latest)**
 

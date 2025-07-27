@@ -30,7 +30,10 @@ async function processWithAgentMode(
     throw new Error("MCP tools are not enabled")
   }
 
-  // Initialize MCP service if not already done
+  // Initialize MCP service respecting user preferences
+  // This will only initialize servers that:
+  // 1. Are not disabled in config AND
+  // 2. Are not runtime-disabled by user (unless first initialization)
   await mcpService.initialize()
 
   // Get available tools
@@ -729,6 +732,22 @@ export const router = {
     .action(async ({ input }) => {
       const success = mcpService.setToolEnabled(input.toolName, input.enabled)
       return { success }
+    }),
+
+  setMcpServerRuntimeEnabled: t.procedure
+    .input<{ serverName: string; enabled: boolean }>()
+    .action(async ({ input }) => {
+      const success = mcpService.setServerRuntimeEnabled(input.serverName, input.enabled)
+      return { success }
+    }),
+
+  getMcpServerRuntimeState: t.procedure
+    .input<{ serverName: string }>()
+    .action(async ({ input }) => {
+      return {
+        runtimeEnabled: mcpService.isServerRuntimeEnabled(input.serverName),
+        available: mcpService.isServerAvailable(input.serverName)
+      }
     }),
 
   getMcpDisabledTools: t.procedure.action(async () => {

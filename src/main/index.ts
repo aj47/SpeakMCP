@@ -14,6 +14,7 @@ import { registerServeProtocol, registerServeSchema } from "./serve"
 import { createAppMenu } from "./menu"
 import { initTray } from "./tray"
 import { isAccessibilityGranted } from "./utils"
+import { mcpService } from "./mcp-service"
 
 registerServeSchema()
 
@@ -43,6 +44,11 @@ app.whenReady().then(() => {
   listenToKeyboardEvents()
 
   initTray()
+
+  // Initialize MCP service on app startup
+  mcpService.initialize().catch((error) => {
+    console.error("Failed to initialize MCP service on startup:", error)
+  })
 
   import("./updater").then((res) => res.init()).catch(console.error)
 

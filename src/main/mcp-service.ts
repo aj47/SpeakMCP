@@ -44,6 +44,11 @@ class MCPService {
   private isInitializing = false
   private initializationProgress: { current: number; total: number; currentServer?: string } = { current: 0, total: 0 }
 
+  // Track runtime server states - separate from config disabled flag
+  private runtimeDisabledServers: Set<string> = new Set()
+  private initializedServers: Set<string> = new Set()
+  private hasBeenInitialized = false
+
   // Simplified tracking - let LLM handle context extraction
   private activeResources = new Map<string, {
     serverId: string
@@ -151,19 +156,39 @@ class MCPService {
     if (!mcpConfig || !mcpConfig.mcpServers || Object.keys(mcpConfig.mcpServers).length === 0) {
       this.availableTools = []
       this.isInitializing = false
+      this.hasBeenInitialized = true
       return
     }
 
-    // Count enabled servers for progress tracking
-    const enabledServers = Object.entries(mcpConfig.mcpServers).filter(([_, config]) => !config.disabled)
-    this.initializationProgress.total = enabledServers.length
+    // Get servers that should be initialized:
+    // 1. Not disabled in config AND
+    // 2. Not runtime-disabled by user (unless this is first initialization)
+    const serversToInitialize = Object.entries(mcpConfig.mcpServers).filter(([serverName, serverConfig]) => {
+      // Skip if disabled in config
+      if ((serverConfig as MCPServerConfig).disabled) {
+        return false
+      }
 
-    // Initialize configured MCP servers
-    for (const [serverName, serverConfig] of enabledServers) {
+      // On first initialization, initialize all non-config-disabled servers
+      if (!this.hasBeenInitialized) {
+        return true
+      }
+
+      // On subsequent calls (like agent mode), only initialize if:
+      // - Server is not runtime-disabled by user AND
+      // - Server is not already initialized
+      return !this.runtimeDisabledServers.has(serverName) && !this.initializedServers.has(serverName)
+    })
+
+    this.initializationProgress.total = serversToInitialize.length
+
+    // Initialize servers
+    for (const [serverName, serverConfig] of serversToInitialize) {
       this.initializationProgress.currentServer = serverName
 
       try {
-        await this.initializeServer(serverName, serverConfig)
+        await this.initializeServer(serverName, serverConfig as MCPServerConfig)
+        this.initializedServers.add(serverName)
       } catch (error) {
         // Server status will be computed dynamically in getServerStatus()
       }
@@ -172,6 +197,7 @@ class MCPService {
     }
 
     this.isInitializing = false
+    this.hasBeenInitialized = true
   }
 
 
@@ -236,11 +262,62 @@ class MCPService {
   private cleanupServer(serverName: string) {
     this.transports.delete(serverName)
     this.clients.delete(serverName)
+    this.initializedServers.delete(serverName)
 
     // Remove tools from this server
     this.availableTools = this.availableTools.filter(tool =>
       !tool.name.startsWith(`${serverName}:`)
     )
+  }
+
+  /**
+   * Set runtime enabled/disabled state for a server
+   * This is separate from the config disabled flag and represents user preference
+   */
+  setServerRuntimeEnabled(serverName: string, enabled: boolean): boolean {
+    const config = configStore.get()
+    const mcpConfig = config.mcpConfig
+
+    // Check if server exists in config
+    if (!mcpConfig?.mcpServers?.[serverName]) {
+      return false
+    }
+
+    if (enabled) {
+      this.runtimeDisabledServers.delete(serverName)
+    } else {
+      this.runtimeDisabledServers.add(serverName)
+      // If server is currently running, stop it
+      if (this.initializedServers.has(serverName)) {
+        this.stopServer(serverName).catch(() => {
+          // Ignore cleanup errors
+        })
+      }
+    }
+
+    return true
+  }
+
+  /**
+   * Get the runtime enabled state of a server
+   */
+  isServerRuntimeEnabled(serverName: string): boolean {
+    return !this.runtimeDisabledServers.has(serverName)
+  }
+
+  /**
+   * Check if a server should be available (not config-disabled and not runtime-disabled)
+   */
+  isServerAvailable(serverName: string): boolean {
+    const config = configStore.get()
+    const mcpConfig = config.mcpConfig
+    const serverConfig = mcpConfig?.mcpServers?.[serverName]
+
+    if (!serverConfig || serverConfig.disabled) {
+      return false
+    }
+
+    return !this.runtimeDisabledServers.has(serverName)
   }
 
   private async executeServerTool(serverName: string, toolName: string, arguments_: any): Promise<MCPToolResult> {
@@ -396,16 +473,39 @@ class MCPService {
     })
   }
 
-  getServerStatus(): Record<string, { connected: boolean; toolCount: number; error?: string }> {
-    const status: Record<string, { connected: boolean; toolCount: number; error?: string }> = {}
+  getServerStatus(): Record<string, { connected: boolean; toolCount: number; error?: string; runtimeEnabled?: boolean; configDisabled?: boolean }> {
+    const status: Record<string, { connected: boolean; toolCount: number; error?: string; runtimeEnabled?: boolean; configDisabled?: boolean }> = {}
+    const config = configStore.get()
+    const mcpConfig = config.mcpConfig
 
+    // Include all configured servers, not just connected ones
+    if (mcpConfig?.mcpServers) {
+      for (const [serverName, serverConfig] of Object.entries(mcpConfig.mcpServers)) {
+        const client = this.clients.get(serverName)
+        const transport = this.transports.get(serverName)
+        const toolCount = this.availableTools.filter(tool => tool.name.startsWith(`${serverName}:`)).length
+
+        status[serverName] = {
+          connected: !!client && !!transport,
+          toolCount,
+          runtimeEnabled: !this.runtimeDisabledServers.has(serverName),
+          configDisabled: !!(serverConfig as MCPServerConfig).disabled
+        }
+      }
+    }
+
+    // Also include any servers that are currently connected but not in config (edge case)
     for (const [serverName, client] of this.clients) {
-      const transport = this.transports.get(serverName)
-      const toolCount = this.availableTools.filter(tool => tool.name.startsWith(`${serverName}:`)).length
+      if (!status[serverName]) {
+        const transport = this.transports.get(serverName)
+        const toolCount = this.availableTools.filter(tool => tool.name.startsWith(`${serverName}:`)).length
 
-      status[serverName] = {
-        connected: !!client && !!transport,
-        toolCount
+        status[serverName] = {
+          connected: !!client && !!transport,
+          toolCount,
+          runtimeEnabled: !this.runtimeDisabledServers.has(serverName),
+          configDisabled: false
+        }
       }
     }
 

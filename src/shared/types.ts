@@ -46,6 +46,13 @@ export interface AgentProgressUpdate {
   steps: AgentProgressStep[]
   isComplete: boolean
   finalContent?: string
+  conversationHistory?: Array<{
+    role: "user" | "assistant" | "tool"
+    content: string
+    toolCalls?: Array<{ name: string; arguments: any }>
+    toolResults?: Array<{ success: boolean; content: string; error?: string }>
+    timestamp?: number
+  }>
 }
 
 // Conversation Types

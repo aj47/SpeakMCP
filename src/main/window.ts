@@ -134,8 +134,8 @@ const panelWindowSize = {
 }
 
 const agentPanelWindowSize = {
-  width: 420,
-  height: 240,
+  width: 600,
+  height: 400,
 }
 
 const textInputPanelWindowSize = {

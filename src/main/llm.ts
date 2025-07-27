@@ -364,13 +364,7 @@ export async function processTranscriptWithAgentMode(
   initialStep.status = "completed"
   initialStep.description = `Found ${availableTools.length} available tools. ${toolCapabilities.summary}`
 
-  // Emit initial progress
-  emitAgentProgress({
-    currentIteration: 0,
-    maxIterations,
-    steps: progressSteps.slice(-3), // Show max 3 steps
-    isComplete: false
-  })
+
 
   // Remove duplicates from available tools to prevent confusion
   const uniqueAvailableTools = availableTools.filter((tool, index, self) =>
@@ -417,6 +411,30 @@ export async function processTranscriptWithAgentMode(
     { role: "user", content: transcript }
   ]
 
+  // Helper function to convert conversation history to the format expected by AgentProgressUpdate
+  const formatConversationForProgress = (history: typeof conversationHistory) => {
+    return history.map(entry => ({
+      role: entry.role,
+      content: entry.content,
+      toolCalls: entry.toolCalls?.map(tc => ({ name: tc.name, arguments: tc.arguments })),
+      toolResults: entry.toolResults?.map(tr => ({
+        success: !tr.isError,
+        content: tr.content.map(c => c.text).join('\n'),
+        error: tr.isError ? tr.content.map(c => c.text).join('\n') : undefined
+      })),
+      timestamp: Date.now()
+    }))
+  }
+
+  // Emit initial progress
+  emitAgentProgress({
+    currentIteration: 0,
+    maxIterations,
+    steps: progressSteps.slice(-3), // Show max 3 steps
+    isComplete: false,
+    conversationHistory: formatConversationForProgress(conversationHistory)
+  })
+
   // Get recent context for the LLM - no specific extraction needed
   const recentContext = extractRecentContext(conversationHistory)
 
@@ -446,7 +464,8 @@ export async function processTranscriptWithAgentMode(
       currentIteration: iteration,
       maxIterations,
       steps: progressSteps.slice(-3),
-      isComplete: false
+      isComplete: false,
+      conversationHistory: formatConversationForProgress(conversationHistory)
     })
 
     // Use the base system prompt - let the LLM understand context from conversation history
@@ -530,7 +549,8 @@ Always use actual resource IDs from the conversation history or create new ones 
       currentIteration: iteration,
       maxIterations,
       steps: progressSteps.slice(-3),
-      isComplete: false
+      isComplete: false,
+      conversationHistory: formatConversationForProgress(conversationHistory)
     })
 
     // Check for completion signals - only complete if there are no tools to execute
@@ -564,7 +584,8 @@ Always use actual resource IDs from the conversation history or create new ones 
         maxIterations,
         steps: progressSteps.slice(-3),
         isComplete: true,
-        finalContent
+        finalContent,
+        conversationHistory: formatConversationForProgress(conversationHistory)
       })
 
       break
@@ -594,7 +615,8 @@ Always use actual resource IDs from the conversation history or create new ones 
         currentIteration: iteration,
         maxIterations,
         steps: progressSteps.slice(-3),
-        isComplete: false
+        isComplete: false,
+        conversationHistory: formatConversationForProgress(conversationHistory)
       })
 
       // Execute tool with retry logic for transient failures
@@ -667,7 +689,8 @@ Always use actual resource IDs from the conversation history or create new ones 
         currentIteration: iteration,
         maxIterations,
         steps: progressSteps.slice(-3),
-        isComplete: false
+        isComplete: false,
+        conversationHistory: formatConversationForProgress(conversationHistory)
       })
     }
 
@@ -756,7 +779,8 @@ Please try alternative approaches or provide manual instructions to the user.`
         maxIterations,
         steps: progressSteps.slice(-3),
         isComplete: true,
-        finalContent
+        finalContent,
+        conversationHistory: formatConversationForProgress(conversationHistory)
       })
 
       break
@@ -787,7 +811,8 @@ Please try alternative approaches or provide manual instructions to the user.`
         maxIterations,
         steps: progressSteps.slice(-3),
         isComplete: true,
-        finalContent
+        finalContent,
+        conversationHistory: formatConversationForProgress(conversationHistory)
       })
 
       break
@@ -828,7 +853,8 @@ Please try alternative approaches or provide manual instructions to the user.`
       maxIterations,
       steps: progressSteps.slice(-3),
       isComplete: true,
-      finalContent
+      finalContent,
+      conversationHistory: formatConversationForProgress(conversationHistory)
     })
   }
 

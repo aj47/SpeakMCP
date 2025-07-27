@@ -9,25 +9,91 @@ interface AgentProgressProps {
 }
 
 // Enhanced conversation message component
-const ConversationMessage: React.FC<{ content: string; isComplete?: boolean; isThinking?: boolean }> = ({
+const ConversationMessage: React.FC<{
+  role: "user" | "assistant" | "tool"
+  content: string
+  isComplete?: boolean
+  isThinking?: boolean
+  toolCalls?: Array<{ name: string; arguments: any }>
+  toolResults?: Array<{ success: boolean; content: string; error?: string }>
+}> = ({
+  role,
   content,
   isComplete = false,
-  isThinking = false
+  isThinking = false,
+  toolCalls,
+  toolResults
 }) => {
   if (!content || content.trim().length === 0) return null
+
+  const getRoleStyles = () => {
+    switch (role) {
+      case "user":
+        return "bg-blue-500/10 border-blue-500/30 text-blue-100"
+      case "assistant":
+        return isComplete
+          ? "bg-green-500/10 border-green-500/30 text-green-100"
+          : isThinking
+            ? "bg-blue-500/10 border-blue-500/30 animate-pulse text-blue-100"
+            : "bg-primary/10 border-primary/30 text-foreground"
+      case "tool":
+        return "bg-orange-500/10 border-orange-500/30 text-orange-100"
+      default:
+        return "bg-primary/10 border-primary/30 text-foreground"
+    }
+  }
+
+  const getRoleLabel = () => {
+    switch (role) {
+      case "user": return "You"
+      case "assistant": return "Assistant"
+      case "tool": return "Tool Result"
+      default: return role
+    }
+  }
 
   return (
     <div className={cn(
       "p-3 rounded-lg liquid-glass-subtle glass-border transition-all duration-300",
-      isComplete
-        ? "bg-green-500/5 border-green-500/20"
-        : isThinking
-          ? "bg-blue-500/5 border-blue-500/20 animate-pulse"
-          : "bg-primary/5 border-primary/20"
+      getRoleStyles()
     )}>
-      <div className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">
+      <div className="flex items-center gap-2 mb-2">
+        <div className={cn(
+          "w-2 h-2 rounded-full",
+          role === "user" ? "bg-blue-500" :
+          role === "assistant" ? "bg-green-500" :
+          "bg-orange-500"
+        )} />
+        <span className="text-xs font-semibold opacity-80">
+          {getRoleLabel()}
+        </span>
+      </div>
+      <div className="text-sm leading-relaxed whitespace-pre-wrap">
         {content.trim()}
       </div>
+      {toolCalls && toolCalls.length > 0 && (
+        <div className="mt-2 pt-2 border-t border-white/10">
+          <div className="text-xs opacity-70 mb-1">Tool Calls:</div>
+          {toolCalls.map((call, index) => (
+            <div key={index} className="text-xs opacity-80 font-mono">
+              {call.name}({Object.keys(call.arguments).length > 0 ? "..." : ""})
+            </div>
+          ))}
+        </div>
+      )}
+      {toolResults && toolResults.length > 0 && (
+        <div className="mt-2 pt-2 border-t border-white/10">
+          {toolResults.map((result, index) => (
+            <div key={index} className={cn(
+              "text-xs p-2 rounded",
+              result.success ? "bg-green-500/20" : "bg-red-500/20"
+            )}>
+              {result.error || result.content.substring(0, 100)}
+              {result.content.length > 100 && "..."}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -37,100 +103,149 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({ progress, classNam
     return null
   }
 
-  const { currentIteration, maxIterations, steps, isComplete, finalContent } = progress
+  const { currentIteration, maxIterations, steps, isComplete, finalContent, conversationHistory } = progress
 
-  // Extract all LLM content from thinking steps and organize chronologically
-  const llmMessages: Array<{ content: string; isComplete: boolean; timestamp: number; isThinking: boolean }> = []
+  // Use conversation history if available, otherwise fall back to extracting from steps
+  let messages: Array<{
+    role: "user" | "assistant" | "tool"
+    content: string
+    isComplete: boolean
+    timestamp: number
+    isThinking: boolean
+    toolCalls?: Array<{ name: string; arguments: any }>
+    toolResults?: Array<{ success: boolean; content: string; error?: string }>
+  }> = []
 
-  // Add thinking step content (both completed and in-progress)
-  steps
-    .filter(step => step.type === "thinking")
-    .forEach(step => {
-      if (step.llmContent && step.llmContent.trim().length > 0) {
-        // Has actual LLM content
-        llmMessages.push({
-          content: step.llmContent,
-          isComplete: step.status === "completed",
-          timestamp: step.timestamp,
+  if (conversationHistory && conversationHistory.length > 0) {
+    // Use the complete conversation history
+    messages = conversationHistory.map(entry => ({
+      role: entry.role,
+      content: entry.content,
+      isComplete: true,
+      timestamp: entry.timestamp || Date.now(),
+      isThinking: false,
+      toolCalls: entry.toolCalls,
+      toolResults: entry.toolResults
+    }))
+
+    // Add any in-progress thinking from current steps
+    const currentThinkingStep = steps.find(step =>
+      step.type === "thinking" && step.status === "in_progress"
+    )
+    if (currentThinkingStep) {
+      if (currentThinkingStep.llmContent && currentThinkingStep.llmContent.trim().length > 0) {
+        messages.push({
+          role: "assistant",
+          content: currentThinkingStep.llmContent,
+          isComplete: false,
+          timestamp: currentThinkingStep.timestamp,
           isThinking: false
         })
-      } else if (step.status === "in_progress") {
-        // Show thinking indicator for in-progress steps without content yet
-        llmMessages.push({
-          content: step.description || "Agent is thinking...",
+      } else {
+        messages.push({
+          role: "assistant",
+          content: currentThinkingStep.description || "Agent is thinking...",
           isComplete: false,
-          timestamp: step.timestamp,
+          timestamp: currentThinkingStep.timestamp,
           isThinking: true
         })
       }
-    })
-
-  // Add final content if available and different from last thinking step
-  if (finalContent && finalContent.trim().length > 0) {
-    const lastMessage = llmMessages[llmMessages.length - 1]
-    if (!lastMessage || lastMessage.content !== finalContent) {
-      llmMessages.push({
-        content: finalContent,
-        isComplete: true,
-        timestamp: Date.now(),
-        isThinking: false
+    }
+  } else {
+    // Fallback to old behavior - extract from thinking steps
+    steps
+      .filter(step => step.type === "thinking")
+      .forEach(step => {
+        if (step.llmContent && step.llmContent.trim().length > 0) {
+          messages.push({
+            role: "assistant",
+            content: step.llmContent,
+            isComplete: step.status === "completed",
+            timestamp: step.timestamp,
+            isThinking: false
+          })
+        } else if (step.status === "in_progress") {
+          messages.push({
+            role: "assistant",
+            content: step.description || "Agent is thinking...",
+            isComplete: false,
+            timestamp: step.timestamp,
+            isThinking: true
+          })
+        }
       })
+
+    // Add final content if available and different from last thinking step
+    if (finalContent && finalContent.trim().length > 0) {
+      const lastMessage = messages[messages.length - 1]
+      if (!lastMessage || lastMessage.content !== finalContent) {
+        messages.push({
+          role: "assistant",
+          content: finalContent,
+          isComplete: true,
+          timestamp: Date.now(),
+          isThinking: false
+        })
+      }
     }
   }
 
   // Sort by timestamp to ensure chronological order
-  llmMessages.sort((a, b) => a.timestamp - b.timestamp)
+  messages.sort((a, b) => a.timestamp - b.timestamp)
 
   // Check for errors
   const hasErrors = steps.some(step => step.status === "error" || step.toolResult?.error)
 
   const containerClasses = variant === "overlay"
-    ? "flex flex-col gap-3 p-3 w-full rounded-xl liquid-glass-strong glass-text-strong"
-    : "flex flex-col gap-3 p-4 liquid-glass-modal glass-border glass-shadow rounded-xl w-full glass-text-strong"
+    ? "flex flex-col gap-2 p-2 w-full h-full rounded-xl liquid-glass-strong glass-text-strong"
+    : "flex flex-col gap-2 p-3 liquid-glass-modal glass-border glass-shadow rounded-xl w-full h-full glass-text-strong"
 
   return (
     <div className={cn(
       containerClasses,
-      "max-h-[80vh] overflow-y-auto",
+      "min-h-0 overflow-hidden",
       className
     )}>
-      {/* Header */}
-      <div className="flex items-center justify-between flex-shrink-0">
+      {/* Header - Compact */}
+      <div className="flex items-center justify-between flex-shrink-0 pb-1">
         <div className="flex items-center gap-2">
           <div className={cn(
-            "w-2.5 h-2.5 rounded-full",
+            "w-2 h-2 rounded-full",
             isComplete
               ? hasErrors ? "bg-destructive" : "bg-green-500"
               : "bg-primary animate-pulse"
           )} />
-          <span className="text-sm font-semibold text-foreground">
+          <span className="text-xs font-semibold text-foreground">
             {isComplete
-              ? hasErrors ? "Task Failed" : "Task Complete"
-              : "Agent Working"
+              ? hasErrors ? "Failed" : "Complete"
+              : "Working"
             }
           </span>
         </div>
         <div className="flex items-center gap-2">
           <div className="text-xs text-muted-foreground font-medium">
-            {isComplete ? "✓ Done" : `${currentIteration}/${maxIterations}`}
+            {isComplete ? "✓" : `${currentIteration}/${maxIterations}`}
           </div>
           {isComplete && (
             <div className="text-xs text-muted-foreground opacity-75">
-              • Press ESC to close
+              ESC
             </div>
           )}
         </div>
       </div>
 
       {/* Conversation History */}
-      <div className="flex flex-col gap-3 flex-1 min-h-0 overflow-y-auto">
-        {llmMessages.length > 0 ? (
-          llmMessages.map((message, index) => (
+      <div className="flex flex-col gap-2 flex-1 min-h-0 overflow-y-auto">
+        {messages.length > 0 ? (
+          messages.map((message, index) => (
             <ConversationMessage
               key={`${message.timestamp}-${index}`}
+              role={message.role}
               content={message.content}
-              isComplete={message.isComplete && (isComplete || index === llmMessages.length - 1)}
+              isComplete={message.isComplete && (isComplete || index === messages.length - 1)}
               isThinking={message.isThinking}
+              toolCalls={message.toolCalls}
+              toolResults={message.toolResults}
             />
           ))
         ) : (
@@ -142,9 +257,9 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({ progress, classNam
 
       {/* Progress Bar - Show only when not complete */}
       {!isComplete && (
-        <div className="w-full bg-muted rounded-full h-1.5 mt-auto flex-shrink-0">
+        <div className="w-full bg-muted rounded-full h-1 mt-1 flex-shrink-0">
           <div
-            className="h-1.5 rounded-full transition-all duration-500 ease-out bg-primary"
+            className="h-1 rounded-full transition-all duration-500 ease-out bg-primary"
             style={{
               width: `${Math.min(100, (currentIteration / maxIterations) * 100)}%`
             }}

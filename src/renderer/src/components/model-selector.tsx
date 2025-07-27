@@ -67,7 +67,7 @@ export function ModelSelector({
         onValueChange={onValueChange}
         disabled={disabled || isLoading || models.length === 0}
       >
-        <SelectTrigger>
+        <SelectTrigger className="w-full max-w-[200px] min-w-[120px]">
           <SelectValue placeholder={
             isLoading
               ? "Loading models..."
@@ -76,7 +76,7 @@ export function ModelSelector({
                 : placeholder || "Select a model"
           } />
         </SelectTrigger>
-        <SelectContent>
+        <SelectContent className="max-w-[200px] min-w-[120px]">
           {isLoading && (
             <div className="flex items-center justify-center py-2">
               <Loader2 className="h-4 w-4 animate-spin mr-2" />
@@ -99,10 +99,10 @@ export function ModelSelector({
 
           {models.map((model) => (
             <SelectItem key={model.id} value={model.id}>
-              <div className="flex flex-col">
-                <span>{model.name}</span>
+              <div className="flex flex-col min-w-0 w-full">
+                <span className="truncate">{model.name}</span>
                 {model.description && (
-                  <span className="text-xs text-muted-foreground">{model.description}</span>
+                  <span className="text-xs text-muted-foreground truncate">{model.description}</span>
                 )}
               </div>
             </SelectItem>

@@ -133,22 +133,61 @@ DOMAIN-SPECIFIC RULES:
               </p>
 
               {config.mcpAgentModeEnabled && (
-                <div className="space-y-2">
-                  <Label htmlFor="mcp-max-iterations">Max Iterations</Label>
-                  <Input
-                    id="mcp-max-iterations"
-                    type="number"
-                    min="1"
-                    max="50"
-                    step="1"
-                    value={config.mcpMaxIterations || 50}
-                    onChange={(e) => updateConfig({ mcpMaxIterations: parseInt(e.target.value) || 10 })}
-                    className="w-32"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Maximum number of iterations the agent can perform before stopping. Higher values allow more complex tasks but may take longer.
-                  </p>
-                </div>
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="mcp-max-iterations">Max Iterations</Label>
+                    <Input
+                      id="mcp-max-iterations"
+                      type="number"
+                      min="1"
+                      max="50"
+                      step="1"
+                      value={config.mcpMaxIterations || 50}
+                      onChange={(e) => updateConfig({ mcpMaxIterations: parseInt(e.target.value) || 10 })}
+                      className="w-32"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Maximum number of iterations the agent can perform before stopping. Higher values allow more complex tasks but may take longer.
+                    </p>
+                  </div>
+
+                  <div className="space-y-4 p-4 border rounded-lg bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800">
+                    <div className="flex items-center space-x-2">
+                      <Switch
+                        id="agent-kill-switch"
+                        checked={config.agentKillSwitchEnabled !== false}
+                        onCheckedChange={(checked) => updateConfig({ agentKillSwitchEnabled: checked })}
+                      />
+                      <Label htmlFor="agent-kill-switch" className="text-red-800 dark:text-red-200 font-medium">
+                        Enable Emergency Kill Switch
+                      </Label>
+                    </div>
+                    <p className="text-xs text-red-700 dark:text-red-300">
+                      Provides a global hotkey to immediately stop agent mode and kill all agent-created processes.
+                    </p>
+
+                    {config.agentKillSwitchEnabled !== false && (
+                      <div className="space-y-2">
+                        <Label htmlFor="kill-switch-hotkey" className="text-red-800 dark:text-red-200">
+                          Kill Switch Hotkey
+                        </Label>
+                        <select
+                          id="kill-switch-hotkey"
+                          value={config.agentKillSwitchHotkey || "ctrl-shift-escape"}
+                          onChange={(e) => updateConfig({ agentKillSwitchHotkey: e.target.value as any })}
+                          className="w-full p-2 border rounded-md bg-background"
+                        >
+                          <option value="ctrl-shift-escape">Ctrl + Shift + Escape</option>
+                          <option value="ctrl-alt-q">Ctrl + Alt + Q</option>
+                          <option value="ctrl-shift-q">Ctrl + Shift + Q</option>
+                        </select>
+                        <p className="text-xs text-red-700 dark:text-red-300">
+                          Press this key combination to immediately stop the agent and kill all processes.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </>
               )}
 
               {!config.mcpAgentModeEnabled && (

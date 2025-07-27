@@ -146,6 +146,10 @@ export type Config = {
   textInputEnabled?: boolean
   textInputShortcut?: "ctrl-t" | "ctrl-shift-t" | "alt-t"
 
+  // Agent Kill Switch Configuration
+  agentKillSwitchEnabled?: boolean
+  agentKillSwitchHotkey?: "ctrl-shift-escape" | "ctrl-alt-q" | "ctrl-shift-q"
+
   // MCP Tool Calling Configuration
   mcpToolsEnabled?: boolean
   mcpToolsShortcut?: "hold-ctrl-alt" | "ctrl-alt-slash"

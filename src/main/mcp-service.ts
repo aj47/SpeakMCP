@@ -10,6 +10,7 @@ import { access, constants } from "fs"
 import path from "path"
 import os from "os"
 import { diagnosticsService } from "./diagnostics"
+import { state, agentProcessManager } from "./state"
 
 const accessAsync = promisify(access)
 
@@ -40,6 +41,7 @@ export interface LLMToolCallResponse {
 
 class MCPService {
   private clients: Map<string, Client> = new Map()
+  private serverProcesses: Map<string, ChildProcess> = new Map()
   private transports: Map<string, StdioClientTransport | WebSocketClientTransport | StreamableHTTPClientTransport> = new Map()
   private availableTools: MCPTool[] = []
   private disabledTools: Set<string> = new Set()
@@ -213,8 +215,30 @@ class MCPService {
     diagnosticsService.logInfo('mcp-service', `Initializing server: ${serverName}`)
 
     try {
-      // Create appropriate transport based on configuration
-      const transport = await this.createTransport(serverConfig)
+      // Resolve command path and prepare environment
+      const resolvedCommand = await this.resolveCommandPath(serverConfig.command)
+      const environment = await this.prepareEnvironment(serverConfig.env)
+
+      // Spawn the process manually so we can track it
+      const childProcess = spawn(resolvedCommand, serverConfig.args || [], {
+        env: { ...process.env, ...environment },
+        stdio: ['pipe', 'pipe', 'pipe']
+      })
+
+      // Register process with agent process manager if agent mode is active
+      if (state.isAgentModeActive) {
+        agentProcessManager.registerProcess(childProcess)
+      }
+
+      // Store the process reference
+      this.serverProcesses.set(serverName, childProcess)
+
+      // Create transport using the spawned process
+      const transport = new StdioClientTransport({
+        command: resolvedCommand,
+        args: serverConfig.args,
+        env: environment
+      })
 
       const client = new Client({
         name: "speakmcp-mcp-client",
@@ -808,10 +832,64 @@ class MCPService {
       }
     }
 
+    // Gracefully terminate server processes
+    await this.terminateAllServerProcesses()
+
     // Clear all maps
     this.clients.clear()
     this.transports.clear()
+    this.serverProcesses.clear()
     this.availableTools = []
+  }
+
+  /**
+   * Gracefully terminate all MCP server processes
+   */
+  async terminateAllServerProcesses(): Promise<void> {
+    const terminationPromises: Promise<void>[] = []
+
+    for (const [serverName, process] of this.serverProcesses) {
+      terminationPromises.push(new Promise<void>((resolve) => {
+        if (process.killed || process.exitCode !== null) {
+          resolve()
+          return
+        }
+
+        // Try graceful shutdown first
+        process.kill('SIGTERM')
+
+        // Force kill after timeout
+        const forceKillTimeout = setTimeout(() => {
+          if (!process.killed && process.exitCode === null) {
+            process.kill('SIGKILL')
+          }
+          resolve()
+        }, 3000) // 3 second timeout
+
+        process.on('exit', () => {
+          clearTimeout(forceKillTimeout)
+          resolve()
+        })
+      }))
+    }
+
+    await Promise.all(terminationPromises)
+  }
+
+  /**
+   * Emergency stop - immediately kill all MCP server processes
+   */
+  emergencyStopAllProcesses(): void {
+    for (const [serverName, process] of this.serverProcesses) {
+      try {
+        if (!process.killed && process.exitCode === null) {
+          process.kill('SIGKILL')
+        }
+      } catch (error) {
+        // Ignore errors during emergency stop
+      }
+    }
+    this.serverProcesses.clear()
   }
 }
 

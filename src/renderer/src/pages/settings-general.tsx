@@ -85,7 +85,7 @@ export function Component() {
   return (
     <div className="h-full overflow-auto px-6 py-4 liquid-glass-panel">
       <header className="mb-5 liquid-glass-card glass-border rounded-lg p-4 glass-shadow">
-        <h2 className="text-2xl font-bold">Settings</h2>
+        <h2 className="text-2xl font-bold">General</h2>
       </header>
 
       <div className="grid gap-4">
@@ -278,6 +278,15 @@ export function Component() {
             </Control>
           </>
         )}
+      </ControlGroup>
+
+      {/* About Section */}
+      <ControlGroup title="About">
+        <Control label="Version" className="px-3">
+          <div className="text-sm">
+            {process.env.APP_VERSION}
+          </div>
+        </Control>
       </ControlGroup>
       </div>
     </div>

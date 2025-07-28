@@ -15,19 +15,14 @@ export const Component = () => {
 
   const navLinks: NavLink[] = [
     {
-      text: "About",
-      href: "/",
-      icon: "i-mingcute-information-line",
+      text: "General",
+      href: "/settings",
+      icon: "i-mingcute-settings-3-line",
     },
     {
       text: "Conversations",
       href: "/conversations",
       icon: "i-mingcute-message-3-line",
-    },
-    {
-      text: "Settings",
-      href: "/settings",
-      icon: "i-mingcute-settings-3-line",
     },
     {
       text: "Providers",
@@ -62,14 +57,16 @@ export const Component = () => {
               to={link.href}
               role="button"
               draggable={false}
-              className={({ isActive }) =>
-                cn(
+              className={({ isActive }) => {
+                // For exact matching, check if the current location exactly matches the link href
+                const isExactMatch = location.pathname === link.href
+                return cn(
                   "flex h-7 items-center gap-2 rounded-md px-2 font-medium transition-all duration-200",
-                  isActive
+                  isExactMatch
                     ? "bg-accent text-accent-foreground"
                     : "text-muted-foreground hover:text-foreground hover:bg-accent/50",
                 )
-              }
+              }}
             >
               <span className={link.icon}></span>
               <span className="font-medium">{link.text}</span>

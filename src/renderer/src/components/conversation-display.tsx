@@ -13,11 +13,13 @@ interface ConversationDisplayProps {
   maxHeight?: string
 }
 
-export function ConversationDisplay({ 
-  messages, 
+export function ConversationDisplay({
+  messages,
   className,
   maxHeight = "400px"
 }: ConversationDisplayProps) {
+  const isFullHeight = maxHeight === "100%"
+
   if (messages.length === 0) {
     return (
       <Card className={cn("liquid-glass-subtle glass-border", className)}>
@@ -30,13 +32,34 @@ export function ConversationDisplay({
     )
   }
 
+  if (isFullHeight) {
+    // For full height, use direct overflow-y-auto approach like agent-progress
+    return (
+      <Card className={cn("liquid-glass-subtle glass-border h-full flex flex-col", className)}>
+        <div
+          className="flex-1 overflow-y-auto scroll-smooth p-4 space-y-4"
+          style={{ minHeight: 0 }} // Important for flex child to shrink
+        >
+          {messages.map((message, index) => (
+            <ConversationMessageItem
+              key={message.id}
+              message={message}
+              isLast={index === messages.length - 1}
+            />
+          ))}
+        </div>
+      </Card>
+    )
+  }
+
+  // For fixed height, use ScrollArea
   return (
     <Card className={cn("liquid-glass-subtle glass-border", className)}>
       <ScrollArea className="h-full" style={{ maxHeight }}>
         <CardContent className="p-4 space-y-4">
           {messages.map((message, index) => (
-            <ConversationMessageItem 
-              key={message.id} 
+            <ConversationMessageItem
+              key={message.id}
               message={message}
               isLast={index === messages.length - 1}
             />
@@ -82,7 +105,7 @@ function ConversationMessageItem({ message, isLast }: ConversationMessageItemPro
   const formatTimestamp = (timestamp: number) => {
     const now = Date.now()
     const diff = now - timestamp
-    
+
     if (diff < 60000) { // Less than 1 minute
       return "Just now"
     } else if (diff < 3600000) { // Less than 1 hour
@@ -107,7 +130,7 @@ function ConversationMessageItem({ message, isLast }: ConversationMessageItemPro
           {getRoleIcon(message.role)}
         </div>
       </div>
-      
+
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-1">
           <Badge variant="secondary" className="text-xs capitalize">
@@ -117,11 +140,11 @@ function ConversationMessageItem({ message, isLast }: ConversationMessageItemPro
             {formatTimestamp(message.timestamp)}
           </span>
         </div>
-        
+
         <div className="glass-text-strong whitespace-pre-wrap break-words">
           {message.content}
         </div>
-        
+
         {message.toolCalls && message.toolCalls.length > 0 && (
           <div className="mt-2 space-y-1">
             <div className="text-xs glass-text-muted">Tool Calls:</div>
@@ -137,15 +160,15 @@ function ConversationMessageItem({ message, isLast }: ConversationMessageItemPro
             ))}
           </div>
         )}
-        
+
         {message.toolResults && message.toolResults.length > 0 && (
           <div className="mt-2 space-y-1">
             <div className="text-xs glass-text-muted">Tool Results:</div>
             {message.toolResults.map((result, index) => (
               <div key={index} className={cn(
                 "text-xs rounded p-2",
-                result.success 
-                  ? "bg-green-500/10 text-green-600 dark:text-green-400" 
+                result.success
+                  ? "bg-green-500/10 text-green-600 dark:text-green-400"
                   : "bg-red-500/10 text-red-600 dark:text-red-400"
               )}>
                 <div className="font-medium">
@@ -169,8 +192,8 @@ function ConversationMessageItem({ message, isLast }: ConversationMessageItemPro
 }
 
 // Compact version for smaller displays
-export function ConversationDisplayCompact({ 
-  messages, 
+export function ConversationDisplayCompact({
+  messages,
   className,
   maxHeight = "200px"
 }: ConversationDisplayProps) {

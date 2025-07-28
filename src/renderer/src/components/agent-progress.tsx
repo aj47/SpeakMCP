@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react"
 import { cn } from "~/lib/utils"
 import { AgentProgressUpdate } from "../../../shared/types"
+import { ChevronDown, ChevronRight } from "lucide-react"
 
 interface AgentProgressProps {
   progress: AgentProgressUpdate | null
@@ -16,14 +17,18 @@ const ConversationMessage: React.FC<{
   isThinking?: boolean
   toolCalls?: Array<{ name: string; arguments: any }>
   toolResults?: Array<{ success: boolean; content: string; error?: string }>
+  defaultCollapsed?: boolean
 }> = ({
   role,
   content,
   isComplete = false,
   isThinking = false,
   toolCalls,
-  toolResults
+  toolResults,
+  defaultCollapsed = false
 }) => {
+  const [isCollapsed, setIsCollapsed] = useState(defaultCollapsed)
+
   if (!content || content.trim().length === 0) return null
 
   const getRoleStyles = () => {
@@ -52,6 +57,9 @@ const ConversationMessage: React.FC<{
     }
   }
 
+  const shouldShowCollapse = content.length > 200 || (toolCalls && toolCalls.length > 0) || (toolResults && toolResults.length > 0)
+  const truncatedContent = content.length > 100 ? content.substring(0, 100) + "..." : content
+
   return (
     <div className={cn(
       "p-3 rounded-lg liquid-glass-subtle glass-border transition-all duration-300",
@@ -67,11 +75,24 @@ const ConversationMessage: React.FC<{
         <span className="text-xs font-semibold opacity-80">
           {getRoleLabel()}
         </span>
+        {shouldShowCollapse && (
+          <button
+            onClick={() => setIsCollapsed(!isCollapsed)}
+            className="ml-auto p-1 hover:bg-white/10 rounded transition-colors"
+            aria-label={isCollapsed ? "Expand message" : "Collapse message"}
+          >
+            {isCollapsed ? (
+              <ChevronRight className="w-3 h-3" />
+            ) : (
+              <ChevronDown className="w-3 h-3" />
+            )}
+          </button>
+        )}
       </div>
       <div className="text-sm leading-relaxed whitespace-pre-wrap">
-        {content.trim()}
+        {isCollapsed ? truncatedContent : content.trim()}
       </div>
-      {toolCalls && toolCalls.length > 0 && (
+      {!isCollapsed && toolCalls && toolCalls.length > 0 && (
         <div className="mt-2 pt-2 border-t border-white/10">
           <div className="text-xs opacity-70 mb-1">Tool Calls:</div>
           {toolCalls.map((call, index) => (
@@ -81,7 +102,7 @@ const ConversationMessage: React.FC<{
           ))}
         </div>
       )}
-      {toolResults && toolResults.length > 0 && (
+      {!isCollapsed && toolResults && toolResults.length > 0 && (
         <div className="mt-2 pt-2 border-t border-white/10">
           {toolResults.map((result, index) => (
             <div key={index} className={cn(
@@ -103,6 +124,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({ progress, classNam
   const [isUserScrolling, setIsUserScrolling] = useState(false)
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true)
   const lastMessageCountRef = useRef(0)
+  const lastContentLengthRef = useRef(0)
 
   if (!progress) {
     return null
@@ -198,32 +220,53 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({ progress, classNam
   // Sort by timestamp to ensure chronological order
   messages.sort((a, b) => a.timestamp - b.timestamp)
 
-  // Auto-scroll logic
+  // Improved auto-scroll logic
   useEffect(() => {
     const scrollContainer = scrollContainerRef.current
     if (!scrollContainer) return
 
-    // Check if new messages were added
-    if (messages.length > lastMessageCountRef.current) {
+    const scrollToBottom = () => {
+      scrollContainer.scrollTop = scrollContainer.scrollHeight
+    }
+
+    // Calculate total content length for streaming detection
+    const totalContentLength = messages.reduce((sum, msg) => sum + msg.content.length, 0)
+
+    // Check if new messages were added or content changed (streaming)
+    const hasNewMessages = messages.length > lastMessageCountRef.current
+    const hasContentChanged = totalContentLength > lastContentLengthRef.current
+
+    if (hasNewMessages || hasContentChanged) {
       lastMessageCountRef.current = messages.length
+      lastContentLengthRef.current = totalContentLength
 
       // Only auto-scroll if we should (user hasn't manually scrolled up)
       if (shouldAutoScroll) {
-        scrollContainer.scrollTop = scrollContainer.scrollHeight
+        // Use requestAnimationFrame to ensure DOM is updated
+        requestAnimationFrame(() => {
+          scrollToBottom()
+        })
       }
     }
-  }, [messages.length, shouldAutoScroll])
+  }, [messages.length, shouldAutoScroll, messages])
 
-  // Initial scroll to bottom on mount
+  // Initial scroll to bottom on mount and when first message appears
   useEffect(() => {
     const scrollContainer = scrollContainerRef.current
     if (!scrollContainer) return
 
-    // Small delay to ensure content is rendered
-    setTimeout(() => {
+    const scrollToBottom = () => {
       scrollContainer.scrollTop = scrollContainer.scrollHeight
-    }, 50)
-  }, [])
+    }
+
+    // Multiple attempts to ensure scrolling works with dynamic content
+    const scrollAttempts = [0, 50, 100, 200]
+    scrollAttempts.forEach(delay => {
+      setTimeout(() => {
+        requestAnimationFrame(scrollToBottom)
+      }, delay)
+    })
+  }, [messages.length > 0])
 
   // Handle scroll events to detect user interaction
   const handleScroll = () => {
@@ -303,6 +346,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({ progress, classNam
                 isThinking={message.isThinking}
                 toolCalls={message.toolCalls}
                 toolResults={message.toolResults}
+                defaultCollapsed={message.role === "tool" || (message.toolCalls && message.toolCalls.length > 0)}
               />
             ))
           ) : (

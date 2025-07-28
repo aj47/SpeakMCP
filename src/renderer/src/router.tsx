@@ -7,34 +7,28 @@ export const router: ReturnType<typeof createBrowserRouter> =
       lazy: () => import("./components/app-layout"),
       children: [
         {
-          path: "settings",
-          lazy: () => import("./pages/settings"),
-          children: [
-            {
-              path: "",
-              lazy: () => import("./pages/settings-general"),
-            },
-            {
-              path: "about",
-              lazy: () => import("./pages/settings-about"),
-            },
-            {
-              path: "providers",
-              lazy: () => import("./pages/settings-providers"),
-            },
-            {
-              path: "tools",
-              lazy: () => import("./pages/settings-tools"),
-            },
-          ],
-        },
-        {
           path: "",
           lazy: () => import("./pages/settings-about"),
         },
         {
           path: "conversations",
           lazy: () => import("./pages/conversations"),
+        },
+        {
+          path: "settings",
+          lazy: () => import("./pages/settings-general"),
+        },
+        {
+          path: "settings/providers",
+          lazy: () => import("./pages/settings-providers"),
+        },
+        {
+          path: "settings/tools",
+          lazy: () => import("./pages/settings-tools"),
+        },
+        {
+          path: "settings/about",
+          lazy: () => import("./pages/settings-about"),
         },
       ],
     },

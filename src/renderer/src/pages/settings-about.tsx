@@ -2,7 +2,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@rend
 
 export function Component() {
   return (
-    <div className="p-6 space-y-6">
+    <div className="h-full overflow-auto px-6 py-4 liquid-glass-panel">
+      <header className="mb-5 liquid-glass-card glass-border rounded-lg p-4 glass-shadow">
+        <h2 className="text-2xl font-bold">About</h2>
+      </header>
+
+      <div className="space-y-6">
       {/* App Info */}
       <Card className="p-6">
         <div className="text-center">
@@ -54,6 +59,7 @@ export function Component() {
           </div>
         </CardContent>
       </Card>
+      </div>
     </div>
   )
 }

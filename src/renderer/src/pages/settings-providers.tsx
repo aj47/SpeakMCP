@@ -52,7 +52,12 @@ export function Component() {
   if (!configQuery.data) return null
 
   return (
-    <div className="grid gap-4">
+    <div className="h-full overflow-auto px-6 py-4 liquid-glass-panel">
+      <header className="mb-5 liquid-glass-card glass-border rounded-lg p-4 glass-shadow">
+        <h2 className="text-2xl font-bold">Providers</h2>
+      </header>
+
+      <div className="grid gap-4">
       <ControlGroup title="Provider Selection">
         <Control label="Voice Transcription Provider" className="px-3">
           <Select
@@ -248,6 +253,7 @@ export function Component() {
           />
         </Control>
       </ControlGroup>
+      </div>
     </div>
   )
 }

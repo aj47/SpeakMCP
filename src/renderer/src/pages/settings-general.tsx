@@ -83,7 +83,12 @@ export function Component() {
   if (!configQuery.data) return null
 
   return (
-    <div className="grid gap-4">
+    <div className="h-full overflow-auto px-6 py-4 liquid-glass-panel">
+      <header className="mb-5 liquid-glass-card glass-border rounded-lg p-4 glass-shadow">
+        <h2 className="text-2xl font-bold">Settings</h2>
+      </header>
+
+      <div className="grid gap-4">
       {process.env.IS_MAC && (
         <ControlGroup title="App">
           <Control label="Hide Dock Icon" className="px-3">
@@ -274,6 +279,7 @@ export function Component() {
           </>
         )}
       </ControlGroup>
+      </div>
     </div>
   )
 }

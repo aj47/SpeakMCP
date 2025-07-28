@@ -77,17 +77,22 @@ DOMAIN-SPECIFIC RULES:
 - For API calls: Respect rate limits and handle errors gracefully`
 
   return (
-    <div className="space-y-6">
-      <div className="space-y-4">
-        <div className="space-y-2">
-          <h3 className="text-lg font-semibold">MCP Tool Calling</h3>
-          <p className="text-sm text-muted-foreground">
-            Enable voice-activated tool execution using Model Context Protocol (MCP).
-            This allows you to perform actions like creating files, sending notifications, and more through voice commands.
-          </p>
-        </div>
+    <div className="h-full overflow-auto px-6 py-4 liquid-glass-panel">
+      <header className="mb-5 liquid-glass-card glass-border rounded-lg p-4 glass-shadow">
+        <h2 className="text-2xl font-bold">Agents</h2>
+      </header>
 
+      <div className="space-y-6">
         <div className="space-y-4">
+          <div className="space-y-2">
+            <h3 className="text-lg font-semibold">MCP Tool Calling</h3>
+            <p className="text-sm text-muted-foreground">
+              Enable voice-activated tool execution using Model Context Protocol (MCP).
+              This allows you to perform actions like creating files, sending notifications, and more through voice commands.
+            </p>
+          </div>
+
+          <div className="space-y-4">
           <div className="flex items-center space-x-2">
             <Switch
               id="mcp-enabled"
@@ -324,6 +329,7 @@ DOMAIN-SPECIFIC RULES:
             </div>
           </div>
         )}
+        </div>
       </div>
     </div>
   )

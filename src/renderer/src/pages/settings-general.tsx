@@ -37,6 +37,8 @@ import {
 import { tipcClient } from "@renderer/lib/tipc-client"
 import { useState, useCallback } from "react"
 import { Config } from "@shared/types"
+import { KeyRecorder } from "@renderer/components/key-recorder"
+import { getEffectiveShortcut, formatKeyComboForDisplay } from "@shared/key-utils"
 
 export function Component() {
   const configQuery = useConfigQuery()
@@ -129,52 +131,82 @@ export function Component() {
         }
       >
         <Control label="Recording" className="px-3">
-          <Select
-            defaultValue={shortcut}
-            onValueChange={(value) => {
-              saveConfig({
-                shortcut: value as typeof configQuery.data.shortcut,
-              })
-            }}
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="hold-ctrl">Hold Ctrl</SelectItem>
-              <SelectItem value="ctrl-slash">Ctrl+{"/"}</SelectItem>
-            </SelectContent>
-          </Select>
-        </Control>
-
-        <Control label="Text Input" className="px-3">
-          <div className="flex items-center gap-2">
-            <Switch
-              checked={configQuery.data?.textInputEnabled ?? true}
-              onCheckedChange={(checked) => {
-                saveConfig({
-                  textInputEnabled: checked,
-                })
-              }}
-            />
+          <div className="space-y-2">
             <Select
-              value={textInputShortcut}
+              defaultValue={shortcut}
               onValueChange={(value) => {
                 saveConfig({
-                  textInputShortcut: value as typeof configQuery.data.textInputShortcut,
+                  shortcut: value as typeof configQuery.data.shortcut,
                 })
               }}
-              disabled={!configQuery.data?.textInputEnabled}
             >
-              <SelectTrigger className="w-32">
+              <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="ctrl-t">Ctrl+T</SelectItem>
-                <SelectItem value="ctrl-shift-t">Ctrl+Shift+T</SelectItem>
-                <SelectItem value="alt-t">Alt+T</SelectItem>
+                <SelectItem value="hold-ctrl">Hold Ctrl</SelectItem>
+                <SelectItem value="ctrl-slash">Ctrl+{"/"}</SelectItem>
+                <SelectItem value="custom">Custom</SelectItem>
               </SelectContent>
             </Select>
+
+            {shortcut === "custom" && (
+              <KeyRecorder
+                value={configQuery.data?.customShortcut || ""}
+                onChange={(keyCombo) => {
+                  saveConfig({
+                    customShortcut: keyCombo,
+                  })
+                }}
+                placeholder="Click to record custom shortcut"
+              />
+            )}
+          </div>
+        </Control>
+
+        <Control label="Text Input" className="px-3">
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <Switch
+                checked={configQuery.data?.textInputEnabled ?? true}
+                onCheckedChange={(checked) => {
+                  saveConfig({
+                    textInputEnabled: checked,
+                  })
+                }}
+              />
+              <Select
+                value={textInputShortcut}
+                onValueChange={(value) => {
+                  saveConfig({
+                    textInputShortcut: value as typeof configQuery.data.textInputShortcut,
+                  })
+                }}
+                disabled={!configQuery.data?.textInputEnabled}
+              >
+                <SelectTrigger className="w-40">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ctrl-t">Ctrl+T</SelectItem>
+                  <SelectItem value="ctrl-shift-t">Ctrl+Shift+T</SelectItem>
+                  <SelectItem value="alt-t">Alt+T</SelectItem>
+                  <SelectItem value="custom">Custom</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {textInputShortcut === "custom" && configQuery.data?.textInputEnabled && (
+              <KeyRecorder
+                value={configQuery.data?.customTextInputShortcut || ""}
+                onChange={(keyCombo) => {
+                  saveConfig({
+                    customTextInputShortcut: keyCombo,
+                  })
+                }}
+                placeholder="Click to record custom text input shortcut"
+              />
+            )}
           </div>
         </Control>
       </ControlGroup>

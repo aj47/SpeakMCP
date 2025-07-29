@@ -14,6 +14,7 @@ import { configStore } from "./config"
 import { state, agentProcessManager } from "./state"
 import { spawn, ChildProcess } from "child_process"
 import path from "path"
+import { matchesKeyCombo, getEffectiveShortcut } from "../shared/key-utils"
 
 const rdevPath = path
   .join(
@@ -267,6 +268,8 @@ export function listenToKeyboardEvents() {
 
       // Handle other kill switch hotkeys
       if (config.agentKillSwitchEnabled && state.isAgentModeActive) {
+        const effectiveKillSwitchHotkey = getEffectiveShortcut(config.agentKillSwitchHotkey, config.customAgentKillSwitchHotkey)
+
         if (config.agentKillSwitchHotkey === "ctrl-alt-q" &&
             e.data.key === "KeyQ" && isPressedCtrlKey && isPressedAltKey) {
           emergencyStopAgentMode()
@@ -278,11 +281,21 @@ export function listenToKeyboardEvents() {
           emergencyStopAgentMode()
           return
         }
+
+        // Handle custom kill switch hotkey
+        if (config.agentKillSwitchHotkey === "custom" && effectiveKillSwitchHotkey) {
+          if (matchesKeyCombo(e.data, { ctrl: isPressedCtrlKey, shift: isPressedShiftKey, alt: isPressedAltKey }, effectiveKillSwitchHotkey)) {
+            emergencyStopAgentMode()
+            return
+          }
+        }
       }
 
       // Handle text input shortcuts
 
       if (config.textInputEnabled) {
+        const effectiveTextInputShortcut = getEffectiveShortcut(config.textInputShortcut, config.customTextInputShortcut)
+
         if (config.textInputShortcut === "ctrl-t" && e.data.key === "KeyT" && isPressedCtrlKey && !isPressedShiftKey && !isPressedAltKey) {
           showPanelWindowAndShowTextInput()
           return
@@ -295,21 +308,53 @@ export function listenToKeyboardEvents() {
           showPanelWindowAndShowTextInput()
           return
         }
+
+        // Handle custom text input shortcut
+        if (config.textInputShortcut === "custom" && effectiveTextInputShortcut) {
+          if (matchesKeyCombo(e.data, { ctrl: isPressedCtrlKey, shift: isPressedShiftKey, alt: isPressedAltKey }, effectiveTextInputShortcut)) {
+            showPanelWindowAndShowTextInput()
+            return
+          }
+        }
       }
 
       // Handle MCP tool calling shortcuts
-      if (config.mcpToolsEnabled && config.mcpToolsShortcut === "ctrl-alt-slash") {
-        if (e.data.key === "Slash" && isPressedCtrlKey && isPressedCtrlAltKey) {
-          getWindowRendererHandlers("panel")?.startOrFinishMcpRecording.send()
-          return
+      if (config.mcpToolsEnabled) {
+        const effectiveMcpToolsShortcut = getEffectiveShortcut(config.mcpToolsShortcut, config.customMcpToolsShortcut)
+
+        if (config.mcpToolsShortcut === "ctrl-alt-slash") {
+          if (e.data.key === "Slash" && isPressedCtrlKey && isPressedCtrlAltKey) {
+            getWindowRendererHandlers("panel")?.startOrFinishMcpRecording.send()
+            return
+          }
+        }
+
+        // Handle custom MCP tools shortcut
+        if (config.mcpToolsShortcut === "custom" && effectiveMcpToolsShortcut) {
+          if (matchesKeyCombo(e.data, { ctrl: isPressedCtrlKey, shift: isPressedShiftKey, alt: isPressedAltKey }, effectiveMcpToolsShortcut)) {
+            getWindowRendererHandlers("panel")?.startOrFinishMcpRecording.send()
+            return
+          }
         }
       }
+
+      // Handle recording shortcuts
+      const effectiveRecordingShortcut = getEffectiveShortcut(config.shortcut, config.customShortcut)
 
       if (config.shortcut === "ctrl-slash") {
         if (e.data.key === "Slash" && isPressedCtrlKey) {
           getWindowRendererHandlers("panel")?.startOrFinishRecording.send()
         }
-      } else {
+      } else if (config.shortcut === "custom" && effectiveRecordingShortcut) {
+        // Handle custom recording shortcut
+        if (matchesKeyCombo(e.data, { ctrl: isPressedCtrlKey, shift: isPressedShiftKey, alt: isPressedAltKey }, effectiveRecordingShortcut)) {
+          getWindowRendererHandlers("panel")?.startOrFinishRecording.send()
+          return
+        }
+      }
+
+      // Handle hold-ctrl mode (default behavior)
+      if (config.shortcut !== "ctrl-slash" && config.shortcut !== "custom") {
         if (e.data.key === "ControlLeft") {
           if (hasRecentKeyPress()) {
             return
@@ -374,7 +419,8 @@ export function listenToKeyboardEvents() {
         isPressedCtrlAltKey = false
       }
 
-      if (configStore.get().shortcut === "ctrl-slash") return
+      const currentConfig = configStore.get()
+      if (currentConfig.shortcut === "ctrl-slash" || currentConfig.shortcut === "custom") return
 
       cancelRecordingTimer()
       cancelMcpRecordingTimer()

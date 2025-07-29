@@ -27,6 +27,11 @@ const getConfig = () => {
     // Agent kill switch defaults
     agentKillSwitchEnabled: true,
     agentKillSwitchHotkey: "ctrl-shift-escape",
+    // Custom shortcut defaults
+    customShortcut: "",
+    customTextInputShortcut: "",
+    customAgentKillSwitchHotkey: "",
+    customMcpToolsShortcut: "",
   }
 
   try {

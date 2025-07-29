@@ -14,6 +14,7 @@ import { CHAT_PROVIDERS } from "@shared/index"
 import { Config, MCPConfig } from "@shared/types"
 import { MCPConfigManager } from "@renderer/components/mcp-config-manager"
 import { MCPToolManager } from "@renderer/components/mcp-tool-manager"
+import { KeyRecorder } from "@renderer/components/key-recorder"
 
 export function Component() {
   const configQuery = useConfigQuery()
@@ -108,7 +109,7 @@ DOMAIN-SPECIFIC RULES:
                 <Label htmlFor="mcp-shortcut">Shortcut</Label>
                 <Select
                   value={config.mcpToolsShortcut || "hold-ctrl-alt"}
-                  onValueChange={(value: "hold-ctrl-alt" | "ctrl-alt-slash") =>
+                  onValueChange={(value: "hold-ctrl-alt" | "ctrl-alt-slash" | "custom") =>
                     updateConfig({ mcpToolsShortcut: value })
                   }
                 >
@@ -118,8 +119,20 @@ DOMAIN-SPECIFIC RULES:
                   <SelectContent>
                     <SelectItem value="hold-ctrl-alt">Hold Ctrl+Alt</SelectItem>
                     <SelectItem value="ctrl-alt-slash">Ctrl+Alt+/</SelectItem>
+                    <SelectItem value="custom">Custom</SelectItem>
                   </SelectContent>
                 </Select>
+
+                {config.mcpToolsShortcut === "custom" && (
+                  <KeyRecorder
+                    value={config.customMcpToolsShortcut || ""}
+                    onChange={(keyCombo) => {
+                      updateConfig({ customMcpToolsShortcut: keyCombo })
+                    }}
+                    placeholder="Click to record custom MCP tools shortcut"
+                  />
+                )}
+
                 <p className="text-xs text-muted-foreground">
                   Choose how to activate MCP tool calling mode
                 </p>
@@ -185,7 +198,19 @@ DOMAIN-SPECIFIC RULES:
                           <option value="ctrl-shift-escape">Ctrl + Shift + Escape</option>
                           <option value="ctrl-alt-q">Ctrl + Alt + Q</option>
                           <option value="ctrl-shift-q">Ctrl + Shift + Q</option>
+                          <option value="custom">Custom</option>
                         </select>
+
+                        {config.agentKillSwitchHotkey === "custom" && (
+                          <KeyRecorder
+                            value={config.customAgentKillSwitchHotkey || ""}
+                            onChange={(keyCombo) => {
+                              updateConfig({ customAgentKillSwitchHotkey: keyCombo })
+                            }}
+                            placeholder="Click to record custom kill switch hotkey"
+                          />
+                        )}
+
                         <p className="text-xs text-red-700 dark:text-red-300">
                           Press this key combination to immediately stop the agent and kill all processes.
                         </p>

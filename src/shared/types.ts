@@ -118,7 +118,8 @@ export interface ConversationHistoryItem {
 }
 
 export type Config = {
-  shortcut?: "hold-ctrl" | "ctrl-slash"
+  shortcut?: "hold-ctrl" | "ctrl-slash" | "custom"
+  customShortcut?: string
   hideDockIcon?: boolean
 
   sttProviderId?: STT_PROVIDER_ID
@@ -144,15 +145,18 @@ export type Config = {
 
   // Text Input Configuration
   textInputEnabled?: boolean
-  textInputShortcut?: "ctrl-t" | "ctrl-shift-t" | "alt-t"
+  textInputShortcut?: "ctrl-t" | "ctrl-shift-t" | "alt-t" | "custom"
+  customTextInputShortcut?: string
 
   // Agent Kill Switch Configuration
   agentKillSwitchEnabled?: boolean
-  agentKillSwitchHotkey?: "ctrl-shift-escape" | "ctrl-alt-q" | "ctrl-shift-q"
+  agentKillSwitchHotkey?: "ctrl-shift-escape" | "ctrl-alt-q" | "ctrl-shift-q" | "custom"
+  customAgentKillSwitchHotkey?: string
 
   // MCP Tool Calling Configuration
   mcpToolsEnabled?: boolean
-  mcpToolsShortcut?: "hold-ctrl-alt" | "ctrl-alt-slash"
+  mcpToolsShortcut?: "hold-ctrl-alt" | "ctrl-alt-slash" | "custom"
+  customMcpToolsShortcut?: string
   mcpToolsProviderId?: CHAT_PROVIDER_ID
   mcpToolsOpenaiModel?: string
   mcpToolsGroqModel?: string

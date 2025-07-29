@@ -26,6 +26,10 @@ export const router: ReturnType<typeof createBrowserRouter> =
           path: "settings/tools",
           lazy: () => import("./pages/settings-tools"),
         },
+        {
+          path: "settings/wake-word",
+          lazy: () => import("./pages/settings-wake-word"),
+        },
 
       ],
     },

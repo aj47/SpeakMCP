@@ -15,6 +15,7 @@ import { createAppMenu } from "./menu"
 import { initTray } from "./tray"
 import { isAccessibilityGranted } from "./utils"
 import { mcpService } from "./mcp-service"
+import { wakeWordService } from "./wake-word-service"
 
 registerServeSchema()
 
@@ -50,6 +51,22 @@ app.whenReady().then(() => {
     console.error("Failed to initialize MCP service on startup:", error)
   })
 
+  // Initialize wake word service on app startup
+  wakeWordService.initialize().catch((error) => {
+    console.error("Failed to initialize wake word service on startup:", error)
+  })
+
+  // Set up wake word detection event handler
+  wakeWordService.on("wakeWordDetected", async (event) => {
+    console.log("Wake word detected:", event)
+
+    // Import window functions dynamically to avoid circular dependencies
+    const { showPanelWindowAndStartRecording } = await import("./window")
+
+    // Trigger recording when wake word is detected
+    await showPanelWindowAndStartRecording()
+  })
+
   import("./updater").then((res) => res.init()).catch(console.error)
 
   // Default open or close DevTools by F12 in development
@@ -71,8 +88,21 @@ app.whenReady().then(() => {
     }
   })
 
-  app.on("before-quit", () => {
+  app.on("before-quit", async () => {
     makePanelWindowClosable()
+
+    // Cleanup services
+    try {
+      await wakeWordService.cleanup()
+    } catch (error) {
+      console.error("Failed to cleanup wake word service:", error)
+    }
+
+    try {
+      await mcpService.cleanup()
+    } catch (error) {
+      console.error("Failed to cleanup MCP service:", error)
+    }
   })
 })
 

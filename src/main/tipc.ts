@@ -11,11 +11,12 @@ import {
 } from "electron"
 import path from "path"
 import { configStore, recordingsFolder } from "./config"
-import { Config, RecordingHistoryItem, MCPConfig, MCPServerConfig, Conversation, ConversationHistoryItem } from "../shared/types"
+import { Config, RecordingHistoryItem, MCPConfig, MCPServerConfig, Conversation, ConversationHistoryItem, WakeWordConfig } from "../shared/types"
 import { conversationService } from "./conversation-service"
 import { RendererHandlers } from "./renderer-handlers"
 import { postProcessTranscript, processTranscriptWithTools, processTranscriptWithAgentMode } from "./llm"
 import { mcpService, MCPToolResult } from "./mcp-service"
+import { wakeWordService } from "./wake-word-service"
 import { state, agentProcessManager } from "./state"
 
 // Unified agent mode processing function
@@ -901,6 +902,56 @@ export const router = {
 
   deleteAllConversations: t.procedure.action(async () => {
     await conversationService.deleteAllConversations()
+  }),
+
+  // Wake Word Management
+  initializeWakeWordService: t.procedure.action(async () => {
+    try {
+      await wakeWordService.initialize()
+      return { success: true }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
+    }
+  }),
+
+  startWakeWordDetection: t.procedure.action(async () => {
+    try {
+      await wakeWordService.startDetection()
+      return { success: true }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
+    }
+  }),
+
+  stopWakeWordDetection: t.procedure.action(async () => {
+    try {
+      await wakeWordService.stopDetection()
+      return { success: true }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
+    }
+  }),
+
+  getWakeWordStatus: t.procedure.action(async () => {
+    return {
+      isActive: wakeWordService.isDetectionActive(),
+      config: wakeWordService.getConfig()
+    }
+  }),
+
+  updateWakeWordSettings: t.procedure
+    .input<{ settings: Partial<WakeWordConfig> }>()
+    .action(async ({ input }) => {
+      try {
+        await wakeWordService.updateSettings(input.settings)
+        return { success: true }
+      } catch (error) {
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
+      }
+    }),
+
+  getAvailableWakeWords: t.procedure.action(async () => {
+    return wakeWordService.getAvailableWakeWords()
   }),
 }
 

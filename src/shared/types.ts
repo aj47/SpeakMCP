@@ -117,6 +117,16 @@ export interface ConversationHistoryItem {
   preview: string
 }
 
+// Wake Word Configuration Types
+export interface WakeWordConfig {
+  enabled?: boolean
+  wakeWord?: "hey computer" | "hey porcupine" | "alexa" | "americano" | "blueberry" | "bumblebee" | "grapefruit" | "grasshopper" | "picovoice" | "porcupine" | "terminator"
+  sensitivity?: number // 0.1 to 1.0
+  recordingTimeout?: number // seconds before resuming detection
+  confirmationMode?: boolean // show confirmation dialog before recording
+  accessKey?: string // Picovoice access key
+}
+
 export type Config = {
   shortcut?: "hold-ctrl" | "ctrl-slash"
   hideDockIcon?: boolean
@@ -170,4 +180,7 @@ export type Config = {
   conversationsEnabled?: boolean
   maxConversationsToKeep?: number
   autoSaveConversations?: boolean
+
+  // Wake Word Configuration
+  wakeWord?: WakeWordConfig
 }

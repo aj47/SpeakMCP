@@ -35,6 +35,11 @@ export const Component = () => {
       href: "/settings/tools",
       icon: "i-mingcute-android-2-line",
     },
+    {
+      text: "Wake Word",
+      href: "/settings/wake-word",
+      icon: "i-mingcute-mic-line",
+    },
   ]
 
   useEffect(() => {

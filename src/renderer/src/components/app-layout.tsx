@@ -45,7 +45,7 @@ export const Component = () => {
 
   return (
     <div className="flex h-dvh">
-      <div className="app-drag-region flex w-44 shrink-0 flex-col bg-background border-r">
+      <div className="app-drag-region flex w-44 shrink-0 flex-col border-r bg-background">
         <header
           className={process.env.IS_MAC ? "h-10" : "h-2"}
           aria-hidden
@@ -65,7 +65,7 @@ export const Component = () => {
                   "flex h-7 items-center gap-2 rounded-md px-2 font-medium transition-all duration-200",
                   isExactMatch
                     ? "bg-accent text-accent-foreground"
-                    : "text-muted-foreground hover:text-foreground hover:bg-accent/50",
+                    : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
                 )
               }}
             >
@@ -76,8 +76,12 @@ export const Component = () => {
         </div>
 
         {/* Loading spinner at the bottom of the sidebar */}
-        <div className="flex-1 flex items-end justify-center pb-4">
-          <LoadingSpinner size="lg" />
+        <div className="flex flex-1 flex-col justify-end">
+          <div className="flex flex-col items-center space-y-2 pb-4">
+            <LoadingSpinner size="lg" />
+            <div>SpeakMCP</div>
+            <div className="text-xs">{process.env.APP_VERSION}</div>
+          </div>
         </div>
       </div>
       <div className="flex grow flex-col overflow-auto bg-background">

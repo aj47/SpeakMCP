@@ -5,6 +5,8 @@ import { ScrollArea } from "@renderer/components/ui/scroll-area"
 import { User, Bot, Wrench } from "lucide-react"
 import { cn } from "@renderer/lib/utils"
 import { ConversationMessage } from "@shared/types"
+import { useConversationState } from "@renderer/contexts/conversation-context"
+import { AgentProgress } from "@renderer/components/agent-progress"
 import dayjs from "dayjs"
 
 interface ConversationDisplayProps {
@@ -19,6 +21,7 @@ export function ConversationDisplay({
   maxHeight = "400px"
 }: ConversationDisplayProps) {
   const isFullHeight = maxHeight === "100%"
+  const { agentProgress, isAgentProcessing } = useConversationState()
 
   if (messages.length === 0) {
     return (
@@ -47,6 +50,13 @@ export function ConversationDisplay({
               isLast={index === messages.length - 1}
             />
           ))}
+
+          {/* Show agent progress at the bottom if processing */}
+          {isAgentProcessing && agentProgress && (
+            <div className="mt-4 p-4 liquid-glass-strong rounded-lg">
+              <AgentProgress progress={agentProgress} variant="default" className="w-full" />
+            </div>
+          )}
         </div>
       </Card>
     )
@@ -64,6 +74,13 @@ export function ConversationDisplay({
               isLast={index === messages.length - 1}
             />
           ))}
+
+          {/* Show agent progress at the bottom if processing */}
+          {isAgentProcessing && agentProgress && (
+            <div className="mt-4 p-4 liquid-glass-strong rounded-lg">
+              <AgentProgress progress={agentProgress} variant="default" className="w-full" />
+            </div>
+          )}
         </CardContent>
       </ScrollArea>
     </Card>

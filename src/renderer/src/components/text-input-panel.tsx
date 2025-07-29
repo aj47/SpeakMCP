@@ -67,25 +67,32 @@ export function TextInputPanel({
 
   return (
     <div className="flex h-full w-full flex-col liquid-glass-strong rounded-xl glass-text-strong p-3 gap-3">
-      <div className="flex-1 flex flex-col gap-2">
-        <div className="text-xs glass-text-muted">
-          Type your message • Enter to send • Shift+Enter for new line • Esc to cancel
+      {/* Show agent progress if available */}
+      {isProcessing && agentProgress ? (
+        <div className="flex-1 flex items-center justify-center">
+          <AgentProgress progress={agentProgress} variant="default" className="w-full" />
         </div>
-        <Textarea
-          ref={textareaRef}
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="Type your message here..."
-          className={cn(
-            "flex-1 min-h-0 resize-none liquid-glass-input glass-text-strong border-0",
-            "focus:border-ring focus:ring-1 focus:ring-ring bg-transparent",
-            "placeholder:glass-text-muted"
-          )}
-          disabled={isProcessing}
-          aria-label="Message input"
-        />
-      </div>
+      ) : (
+        <div className="flex-1 flex flex-col gap-2">
+          <div className="text-xs glass-text-muted">
+            Type your message • Enter to send • Shift+Enter for new line • Esc to cancel
+          </div>
+          <Textarea
+            ref={textareaRef}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Type your message here..."
+            className={cn(
+              "flex-1 min-h-0 resize-none liquid-glass-input glass-text-strong border-0",
+              "focus:border-ring focus:ring-1 focus:ring-ring bg-transparent",
+              "placeholder:glass-text-muted"
+            )}
+            disabled={isProcessing}
+            aria-label="Message input"
+          />
+        </div>
+      )}
 
       <div className="flex justify-between items-center text-xs glass-text-muted">
         <div>

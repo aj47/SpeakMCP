@@ -1,11 +1,12 @@
-import React, { createContext, useContext, useState, useCallback, ReactNode } from "react"
-import { Conversation, ConversationMessage } from "@shared/types"
+import React, { createContext, useContext, useState, useCallback, ReactNode, useEffect } from "react"
+import { Conversation, ConversationMessage, AgentProgressUpdate } from "@shared/types"
 import {
   useCreateConversationMutation,
   useAddMessageToConversationMutation,
   useSaveConversationMutation,
   useConversationQuery
 } from "@renderer/lib/query-client"
+import { rendererHandlers } from "@renderer/lib/tipc-client"
 
 interface ConversationContextType {
   // Current conversation state
@@ -24,6 +25,11 @@ interface ConversationContextType {
   setShowContinueButton: (show: boolean) => void
   isWaitingForResponse: boolean
   setIsWaitingForResponse: (waiting: boolean) => void
+
+  // Agent progress state
+  agentProgress: AgentProgressUpdate | null
+  setAgentProgress: (progress: AgentProgressUpdate | null) => void
+  isAgentProcessing: boolean
 }
 
 const ConversationContext = createContext<ConversationContextType | undefined>(undefined)
@@ -36,6 +42,7 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null)
   const [showContinueButton, setShowContinueButton] = useState(false)
   const [isWaitingForResponse, setIsWaitingForResponse] = useState(false)
+  const [agentProgress, setAgentProgress] = useState<AgentProgressUpdate | null>(null)
 
   // Queries and mutations
   const conversationQuery = useConversationQuery(currentConversationId)
@@ -45,6 +52,45 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
 
   const currentConversation = conversationQuery.data || null
   const isConversationActive = !!currentConversation
+  const isAgentProcessing = !!agentProgress && !agentProgress.isComplete
+
+  // Listen for agent progress updates
+  useEffect(() => {
+    const unlisten = rendererHandlers.agentProgressUpdate.listen((update: AgentProgressUpdate) => {
+      // Only update if the progress has actually changed to prevent flashing
+      setAgentProgress(prevProgress => {
+        if (!prevProgress) return update
+
+        // Compare key properties to determine if update is needed
+        const hasChanged =
+          prevProgress.isComplete !== update.isComplete ||
+          prevProgress.currentIteration !== update.currentIteration ||
+          prevProgress.steps.length !== update.steps.length ||
+          JSON.stringify(prevProgress.steps) !== JSON.stringify(update.steps) ||
+          prevProgress.finalContent !== update.finalContent
+
+        return hasChanged ? update : prevProgress
+      })
+
+      // Add assistant response to conversation if we have final content and agent is complete
+      if (update.isComplete && update.finalContent && currentConversationId) {
+        addMessage(update.finalContent, "assistant").catch(() => {
+          // Silently handle error
+        })
+      }
+    })
+
+    return unlisten
+  }, [currentConversationId])
+
+  // Listen for agent progress clear
+  useEffect(() => {
+    const unlisten = rendererHandlers.clearAgentProgress.listen(() => {
+      setAgentProgress(null)
+    })
+
+    return unlisten
+  }, [])
 
   const startNewConversation = useCallback(async (
     firstMessage: string,
@@ -113,7 +159,10 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
     showContinueButton,
     setShowContinueButton,
     isWaitingForResponse,
-    setIsWaitingForResponse
+    setIsWaitingForResponse,
+    agentProgress,
+    setAgentProgress,
+    isAgentProcessing
   }
 
   return (
@@ -137,7 +186,9 @@ export function useConversationState() {
     currentConversation,
     isConversationActive,
     showContinueButton,
-    isWaitingForResponse
+    isWaitingForResponse,
+    agentProgress,
+    isAgentProcessing
   } = useConversation()
 
   return {
@@ -145,6 +196,8 @@ export function useConversationState() {
     isConversationActive,
     showContinueButton,
     isWaitingForResponse,
+    agentProgress,
+    isAgentProcessing,
     hasMessages: currentConversation?.messages.length ?? 0 > 0,
     lastMessage: currentConversation?.messages[currentConversation.messages.length - 1] || null
   }
@@ -158,7 +211,8 @@ export function useConversationActions() {
     addMessage,
     endConversation,
     setShowContinueButton,
-    setIsWaitingForResponse
+    setIsWaitingForResponse,
+    setAgentProgress
   } = useConversation()
 
   return {
@@ -167,6 +221,7 @@ export function useConversationActions() {
     addMessage,
     endConversation,
     setShowContinueButton,
-    setIsWaitingForResponse
+    setIsWaitingForResponse,
+    setAgentProgress
   }
 }

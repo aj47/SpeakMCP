@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react"
-import { cn } from "~/lib/utils"
+import { cn } from "@renderer/lib/utils"
 import { AgentProgressUpdate } from "../../../shared/types"
 import { ChevronDown, ChevronRight } from "lucide-react"
 
@@ -27,7 +27,10 @@ const ConversationMessage: React.FC<{
   toolResults,
   defaultCollapsed = false
 }) => {
-  const [isCollapsed, setIsCollapsed] = useState(defaultCollapsed)
+  // Show collapse button if content likely spans multiple lines or has tool calls/results
+  const shouldShowCollapse = content.length > 80 || content.includes('\n') || (toolCalls && toolCalls.length > 0) || (toolResults && toolResults.length > 0)
+
+  const [isCollapsed, setIsCollapsed] = useState(defaultCollapsed && shouldShowCollapse)
 
   if (!content || content.trim().length === 0) return null
 
@@ -57,8 +60,7 @@ const ConversationMessage: React.FC<{
     }
   }
 
-  const shouldShowCollapse = content.length > 200 || (toolCalls && toolCalls.length > 0) || (toolResults && toolResults.length > 0)
-  const truncatedContent = content.length > 100 ? content.substring(0, 100) + "..." : content
+
 
   return (
     <div className={cn(
@@ -78,8 +80,15 @@ const ConversationMessage: React.FC<{
         {shouldShowCollapse && (
           <button
             onClick={() => setIsCollapsed(!isCollapsed)}
-            className="ml-auto p-1 hover:bg-white/10 rounded transition-colors"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                setIsCollapsed(!isCollapsed)
+              }
+            }}
+            className="ml-auto p-1 hover:bg-white/10 focus:bg-white/10 focus:outline-none focus:ring-1 focus:ring-white/20 rounded transition-colors"
             aria-label={isCollapsed ? "Expand message" : "Collapse message"}
+            aria-expanded={!isCollapsed}
           >
             {isCollapsed ? (
               <ChevronRight className="w-3 h-3" />
@@ -89,14 +98,22 @@ const ConversationMessage: React.FC<{
           </button>
         )}
       </div>
-      <div className="text-sm leading-relaxed whitespace-pre-wrap">
-        {isCollapsed ? truncatedContent : content.trim()}
+      <div
+        className={cn(
+          "text-sm leading-relaxed select-text cursor-text",
+          isCollapsed ? "line-clamp-1" : "whitespace-pre-wrap"
+        )}
+        role="region"
+        aria-label={`${getRoleLabel()} message content`}
+        aria-expanded={!isCollapsed}
+      >
+        {content.trim()}
       </div>
       {!isCollapsed && toolCalls && toolCalls.length > 0 && (
         <div className="mt-2 pt-2 border-t border-white/10">
           <div className="text-xs opacity-70 mb-1">Tool Calls:</div>
           {toolCalls.map((call, index) => (
-            <div key={index} className="text-xs opacity-80 font-mono">
+            <div key={index} className="text-xs opacity-80 font-mono select-text cursor-text">
               {call.name}({Object.keys(call.arguments).length > 0 ? "..." : ""})
             </div>
           ))}
@@ -106,11 +123,11 @@ const ConversationMessage: React.FC<{
         <div className="mt-2 pt-2 border-t border-white/10">
           {toolResults.map((result, index) => (
             <div key={index} className={cn(
-              "text-xs p-2 rounded",
+              "text-xs p-2 rounded select-text cursor-text whitespace-pre-wrap",
               result.success ? "bg-green-500/20" : "bg-red-500/20"
             )}>
-              {result.error || result.content.substring(0, 100)}
-              {result.content.length > 100 && "..."}
+              {result.error || result.content.substring(0, 300)}
+              {result.content.length > 300 && "..."}
             </div>
           ))}
         </div>
@@ -346,7 +363,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({ progress, classNam
                 isThinking={message.isThinking}
                 toolCalls={message.toolCalls}
                 toolResults={message.toolResults}
-                defaultCollapsed={message.role === "tool" || (message.toolCalls && message.toolCalls.length > 0)}
+                defaultCollapsed={true}
               />
             ))
           ) : (
@@ -366,7 +383,14 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({ progress, classNam
 
       {/* Progress Bar - Show only when not complete */}
       {!isComplete && (
-        <div className="w-full bg-muted rounded-full h-1 mt-1 flex-shrink-0">
+        <div
+          className="w-full bg-muted rounded-full h-1 mt-1 flex-shrink-0"
+          role="progressbar"
+          aria-valuenow={currentIteration}
+          aria-valuemin={0}
+          aria-valuemax={maxIterations}
+          aria-label="Agent progress"
+        >
           <div
             className="h-1 rounded-full transition-all duration-500 ease-out bg-primary"
             style={{

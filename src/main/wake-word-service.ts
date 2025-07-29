@@ -2,10 +2,8 @@ import { EventEmitter } from "events"
 import { configStore } from "./config"
 import { WakeWordConfig } from "../shared/types"
 import { diagnosticsService } from "./diagnostics"
-
-// For production use, uncomment these imports:
-// import { Porcupine } from "@picovoice/porcupine-node"
-// import { PvRecorder } from "@picovoice/pvrecorder-node"
+import { BrowserWindow } from "electron"
+import { WINDOWS } from "./window"
 
 export interface WakeWordDetectionEvent {
   wakeWord: string
@@ -16,12 +14,8 @@ export interface WakeWordDetectionEvent {
 export class WakeWordService extends EventEmitter {
   private isActive = false
   private isDetecting = false
-  private demoTimer?: NodeJS.Timeout
   private config: WakeWordConfig = {}
-  
-  // For production use:
-  // private porcupine?: Porcupine
-  // private recorder?: PvRecorder
+  private recognitionWindow?: BrowserWindow
 
   constructor() {
     super()
@@ -36,31 +30,17 @@ export class WakeWordService extends EventEmitter {
   async initialize(): Promise<void> {
     try {
       this.updateConfig()
-      
+
       if (!this.config.enabled) {
         return
       }
 
-      // Demo mode implementation
-      // In production, this would initialize Picovoice Porcupine
-      console.log("Wake word service initialized in demo mode")
-      diagnosticsService.logInfo("wake-word-service", "Initialized in demo mode")
-      
-      // For production use:
-      /*
-      if (!this.config.accessKey) {
-        throw new Error("Picovoice access key is required")
-      }
+      // Create a hidden window for Web Speech API
+      await this.createRecognitionWindow()
 
-      this.porcupine = new Porcupine(
-        this.config.accessKey,
-        [this.config.wakeWord || "hey computer"],
-        [this.config.sensitivity || 0.5]
-      )
+      console.log("Wake word service initialized with Web Speech API")
+      diagnosticsService.logInfo("wake-word-service", "Initialized with Web Speech API")
 
-      this.recorder = new PvRecorder(512) // Frame length
-      */
-      
     } catch (error) {
       diagnosticsService.logError("wake-word-service", "Failed to initialize", error)
       throw error
@@ -74,46 +54,21 @@ export class WakeWordService extends EventEmitter {
 
     try {
       this.updateConfig()
-      
+
       if (!this.config.enabled) {
         throw new Error("Wake word detection is disabled")
       }
 
-      this.isDetecting = true
-      this.emit("detectionStarted")
-      
-      // Demo mode: simulate detection every 30 seconds
-      this.startDemoMode()
-      
-      // For production use:
-      /*
-      if (!this.recorder || !this.porcupine) {
-        await this.initialize()
+      if (!this.recognitionWindow) {
+        await this.createRecognitionWindow()
       }
 
-      this.recorder!.start()
-      
-      const frameLength = this.porcupine!.frameLength
-      
-      while (this.isDetecting) {
-        const pcm = await this.recorder!.read()
-        const keywordIndex = this.porcupine!.process(pcm)
-        
-        if (keywordIndex >= 0) {
-          const detectionEvent: WakeWordDetectionEvent = {
-            wakeWord: this.config.wakeWord || "hey computer",
-            timestamp: Date.now(),
-            confidence: this.config.sensitivity
-          }
-          
-          this.emit("wakeWordDetected", detectionEvent)
-          
-          // Pause detection for the configured timeout
-          await this.pauseDetection()
-        }
-      }
-      */
-      
+      this.isDetecting = true
+      this.emit("detectionStarted")
+
+      // Start Web Speech API recognition
+      await this.startWebSpeechRecognition()
+
     } catch (error) {
       this.isDetecting = false
       diagnosticsService.logError("wake-word-service", "Failed to start detection", error)
@@ -122,32 +77,151 @@ export class WakeWordService extends EventEmitter {
     }
   }
 
-  private startDemoMode(): void {
-    if (this.demoTimer) {
-      clearTimeout(this.demoTimer)
+  private async createRecognitionWindow(): Promise<void> {
+    if (this.recognitionWindow && !this.recognitionWindow.isDestroyed()) {
+      return
     }
 
-    const scheduleNextDetection = () => {
-      if (!this.isDetecting) return
-      
-      this.demoTimer = setTimeout(() => {
-        if (this.isDetecting) {
-          const detectionEvent: WakeWordDetectionEvent = {
-            wakeWord: this.config.wakeWord || "hey computer",
-            timestamp: Date.now(),
-            confidence: this.config.sensitivity || 0.5
+    this.recognitionWindow = new BrowserWindow({
+      width: 1,
+      height: 1,
+      show: false,
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true,
+        sandbox: false,
+      },
+    })
+
+    // Load a minimal HTML page for Web Speech API
+    await this.recognitionWindow.loadURL(`data:text/html,
+      <!DOCTYPE html>
+      <html>
+        <head><title>Wake Word Recognition</title></head>
+        <body>
+          <script>
+            let recognition = null;
+            let isListening = false;
+
+            window.electronAPI = {
+              startRecognition: (config) => {
+                if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+                  throw new Error('Web Speech API not supported');
+                }
+
+                const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                recognition = new SpeechRecognition();
+
+                recognition.continuous = true;
+                recognition.interimResults = true;
+                recognition.lang = 'en-US';
+
+                recognition.onresult = (event) => {
+                  for (let i = event.resultIndex; i < event.results.length; i++) {
+                    const transcript = event.results[i][0].transcript.toLowerCase().trim();
+
+                    if (transcript.includes(config.wakeWord.toLowerCase())) {
+                      window.postMessage({
+                        type: 'wakeWordDetected',
+                        data: {
+                          wakeWord: config.wakeWord,
+                          transcript: transcript,
+                          timestamp: Date.now(),
+                          confidence: event.results[i][0].confidence || config.sensitivity
+                        }
+                      }, '*');
+                    }
+                  }
+                };
+
+                recognition.onerror = (event) => {
+                  window.postMessage({
+                    type: 'recognitionError',
+                    data: { error: event.error }
+                  }, '*');
+                };
+
+                recognition.onend = () => {
+                  if (isListening) {
+                    // Restart recognition if we're still supposed to be listening
+                    setTimeout(() => {
+                      if (isListening && recognition) {
+                        recognition.start();
+                      }
+                    }, 100);
+                  }
+                };
+
+                isListening = true;
+                recognition.start();
+              },
+
+              stopRecognition: () => {
+                isListening = false;
+                if (recognition) {
+                  recognition.stop();
+                  recognition = null;
+                }
+              }
+            };
+          </script>
+        </body>
+      </html>
+    `)
+
+    // Set up message handling
+    this.recognitionWindow.webContents.on('console-message', (_event, _level, message) => {
+      console.log('Recognition window:', message)
+    })
+  }
+
+  private async startWebSpeechRecognition(): Promise<void> {
+    if (!this.recognitionWindow || this.recognitionWindow.isDestroyed()) {
+      throw new Error("Recognition window not available")
+    }
+
+    // Set up message listener for wake word detection
+    this.recognitionWindow.webContents.on('did-finish-load', () => {
+      this.recognitionWindow!.webContents.executeJavaScript(`
+        window.addEventListener('message', (event) => {
+          if (event.data.type === 'wakeWordDetected') {
+            console.log('Wake word detected:', event.data.data);
+          } else if (event.data.type === 'recognitionError') {
+            console.error('Recognition error:', event.data.data);
           }
-          
-          console.log("Demo wake word detected:", detectionEvent)
-          this.emit("wakeWordDetected", detectionEvent)
-          
-          // Schedule next detection
-          scheduleNextDetection()
-        }
-      }, 30000) // 30 seconds for demo
-    }
+        });
 
-    scheduleNextDetection()
+        window.electronAPI.startRecognition({
+          wakeWord: '${this.config.wakeWord || "hey computer"}',
+          sensitivity: ${this.config.sensitivity || 0.5}
+        });
+      `)
+    })
+
+    // Handle messages from the recognition window
+    this.recognitionWindow.webContents.on('console-message', (_event, _level, message) => {
+      if (message.includes('Wake word detected:')) {
+        try {
+          const data = JSON.parse(message.split('Wake word detected: ')[1])
+          const detectionEvent: WakeWordDetectionEvent = {
+            wakeWord: data.wakeWord,
+            timestamp: data.timestamp,
+            confidence: data.confidence
+          }
+
+          console.log("Web Speech API wake word detected:", detectionEvent)
+          this.emit("wakeWordDetected", detectionEvent)
+
+          // Pause detection for the configured timeout
+          this.pauseDetection()
+        } catch (error) {
+          console.error("Failed to parse wake word detection data:", error)
+        }
+      } else if (message.includes('Recognition error:')) {
+        console.error("Web Speech API error:", message)
+        this.emit("detectionError", new Error(message))
+      }
+    })
   }
 
   async stopDetection(): Promise<void> {
@@ -156,29 +230,25 @@ export class WakeWordService extends EventEmitter {
     }
 
     this.isDetecting = false
-    
-    // Clear demo timer
-    if (this.demoTimer) {
-      clearTimeout(this.demoTimer)
-      this.demoTimer = undefined
+
+    // Stop Web Speech API recognition
+    if (this.recognitionWindow && !this.recognitionWindow.isDestroyed()) {
+      await this.recognitionWindow.webContents.executeJavaScript(`
+        if (window.electronAPI && window.electronAPI.stopRecognition) {
+          window.electronAPI.stopRecognition();
+        }
+      `)
     }
-    
-    // For production use:
-    /*
-    if (this.recorder) {
-      this.recorder.stop()
-    }
-    */
-    
+
     this.emit("detectionStopped")
     diagnosticsService.logInfo("wake-word-service", "Detection stopped")
   }
 
   private async pauseDetection(): Promise<void> {
     const timeout = (this.config.recordingTimeout || 5) * 1000
-    
+
     await this.stopDetection()
-    
+
     setTimeout(async () => {
       if (this.config.enabled) {
         await this.startDetection()
@@ -188,20 +258,13 @@ export class WakeWordService extends EventEmitter {
 
   async cleanup(): Promise<void> {
     await this.stopDetection()
-    
-    // For production use:
-    /*
-    if (this.porcupine) {
-      this.porcupine.release()
-      this.porcupine = undefined
+
+    // Close recognition window
+    if (this.recognitionWindow && !this.recognitionWindow.isDestroyed()) {
+      this.recognitionWindow.close()
+      this.recognitionWindow = undefined
     }
-    
-    if (this.recorder) {
-      this.recorder.release()
-      this.recorder = undefined
-    }
-    */
-    
+
     this.removeAllListeners()
     diagnosticsService.logInfo("wake-word-service", "Service cleaned up")
   }
@@ -240,16 +303,16 @@ export class WakeWordService extends EventEmitter {
   getAvailableWakeWords(): string[] {
     return [
       "hey computer",
-      "hey porcupine", 
-      "alexa",
-      "americano",
-      "blueberry",
-      "bumblebee",
-      "grapefruit",
-      "grasshopper",
-      "picovoice",
-      "porcupine",
-      "terminator"
+      "hey assistant",
+      "wake up",
+      "listen up",
+      "computer",
+      "assistant",
+      "hello computer",
+      "hello assistant",
+      "start listening",
+      "activate",
+      "voice command"
     ]
   }
 }

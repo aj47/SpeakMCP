@@ -34,7 +34,6 @@ const getConfig = () => {
       sensitivity: 0.5,
       recordingTimeout: 5,
       confirmationMode: false,
-      accessKey: "",
     },
   }
 

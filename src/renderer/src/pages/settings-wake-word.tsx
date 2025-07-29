@@ -269,17 +269,17 @@ export function Component() {
           </ControlGroup>
         )}
 
-        <ControlGroup title="Demo Mode">
-          <div className="px-3 py-2 bg-blue-50 dark:bg-blue-950/20 rounded-lg">
-            <p className="text-sm text-blue-800 dark:text-blue-200">
-              <strong>Demo Mode Active:</strong> This implementation simulates wake word detection every 30 seconds when active.
-              For production use with real wake word detection, you'll need to:
+        <ControlGroup title="Web Speech API">
+          <div className="px-3 py-2 bg-green-50 dark:bg-green-950/20 rounded-lg">
+            <p className="text-sm text-green-800 dark:text-green-200">
+              <strong>Powered by Web Speech API:</strong> This implementation uses your browser's built-in speech recognition for wake word detection.
             </p>
-            <ol className="text-xs text-blue-700 dark:text-blue-300 mt-2 ml-4 list-decimal space-y-1">
-              <li>Get a Picovoice access key from <a href="https://console.picovoice.ai/" target="_blank" rel="noopener noreferrer" className="underline">console.picovoice.ai</a></li>
-              <li>Install Picovoice dependencies</li>
-              <li>Configure the access key in settings</li>
-            </ol>
+            <ul className="text-xs text-green-700 dark:text-green-300 mt-2 ml-4 list-disc space-y-1">
+              <li>No external dependencies or API keys required</li>
+              <li>Works completely offline and locally</li>
+              <li>Uses your system's native speech recognition</li>
+              <li>Supports custom wake phrases</li>
+            </ul>
           </div>
         </ControlGroup>
 

@@ -4,7 +4,7 @@ This document describes the wake word detection feature implementation in SpeakM
 
 ## Overview
 
-The wake word feature allows users to activate SpeakMCP by speaking a predefined wake word (e.g., "Hey Computer") instead of using keyboard shortcuts. This implementation provides a complete wake word detection system with both demo and production-ready architecture.
+The wake word feature allows users to activate SpeakMCP by speaking a predefined wake word (e.g., "Hey Computer") instead of using keyboard shortcuts. This implementation uses the Web Speech API for completely local, free, and privacy-focused wake word detection.
 
 ## Architecture
 
@@ -14,7 +14,7 @@ The wake word feature allows users to activate SpeakMCP by speaking a predefined
    - Event-driven architecture using Node.js EventEmitter
    - Manages detection lifecycle (initialize, start, stop, cleanup)
    - Handles configuration updates and state management
-   - Provides demo mode for testing without external dependencies
+   - Uses Web Speech API through a hidden Electron window
 
 2. **Configuration System** (`src/shared/types.ts`, `src/main/config.ts`)
    - Type-safe wake word configuration
@@ -43,23 +43,22 @@ interface WakeWordConfig {
   sensitivity?: number                // Detection sensitivity (0.1 - 1.0)
   recordingTimeout?: number           // Timeout before resuming detection (seconds)
   confirmationMode?: boolean          // Show confirmation dialog before recording
-  accessKey?: string                  // Picovoice access key (for production)
 }
 ```
 
 ### Available Wake Words
 
 - "hey computer" (default)
-- "hey porcupine"
-- "alexa"
-- "americano"
-- "blueberry"
-- "bumblebee"
-- "grapefruit"
-- "grasshopper"
-- "picovoice"
-- "porcupine"
-- "terminator"
+- "hey assistant"
+- "wake up"
+- "listen up"
+- "computer"
+- "assistant"
+- "hello computer"
+- "hello assistant"
+- "start listening"
+- "activate"
+- "voice command"
 
 ### Default Settings
 
@@ -70,60 +69,51 @@ wakeWord: {
   sensitivity: 0.5,
   recordingTimeout: 5,
   confirmationMode: false,
-  accessKey: "",
 }
 ```
 
-## Demo Mode
+## Web Speech API Implementation
 
-The current implementation includes a demo mode that:
+The implementation uses the Web Speech API for wake word detection:
 
-- Simulates wake word detection every 30 seconds when active
-- Provides full UI functionality without requiring external setup
-- Logs detection events for testing and debugging
-- Demonstrates the complete workflow from detection to recording
+### How It Works
 
-### Demo Mode Features
+1. **Hidden Window**: Creates a hidden Electron BrowserWindow for Web Speech API access
+2. **Continuous Recognition**: Uses `webkitSpeechRecognition` with continuous listening
+3. **Wake Word Matching**: Monitors transcript for configured wake words
+4. **Event Emission**: Triggers recording when wake word is detected
+5. **Auto-Restart**: Automatically restarts recognition if it stops
 
-- **Automatic Detection**: Triggers every 30 seconds when detection is active
-- **Event Emission**: Emits proper `wakeWordDetected` events
-- **Status Updates**: Updates UI with detection status
-- **Timeout Handling**: Respects recording timeout settings
+### Key Features
 
-## Production Setup
+- **No External Dependencies**: Uses browser's built-in speech recognition
+- **Completely Local**: All processing happens on device
+- **Free**: No API keys or subscriptions required
+- **Real-time**: Immediate wake word detection
+- **Customizable**: Support for any wake phrase
 
-For production use with real wake word detection:
-
-### Prerequisites
-
-1. **Picovoice Account**: Get an access key from [console.picovoice.ai](https://console.picovoice.ai/)
-2. **Dependencies**: Already installed via npm:
-   - `@picovoice/porcupine-node`
-   - `@picovoice/pvrecorder-node`
-
-### Configuration Steps
-
-1. **Enable Production Code**: Uncomment Picovoice imports in `wake-word-service.ts`
-2. **Replace Demo Implementation**: Replace demo mode with actual Porcupine integration
-3. **Set Access Key**: Configure access key through the settings UI
-4. **Test Detection**: Verify wake word detection works with your voice
-
-### Production Code Structure
+### Technical Implementation
 
 ```typescript
-// Uncomment these imports
-import { Porcupine } from "@picovoice/porcupine-node"
-import { PvRecorder } from "@picovoice/pvrecorder-node"
+// Web Speech API setup in hidden window
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+recognition = new SpeechRecognition();
 
-// Initialize Porcupine
-this.porcupine = new Porcupine(
-  this.config.accessKey,
-  [this.config.wakeWord || "hey computer"],
-  [this.config.sensitivity || 0.5]
-)
+recognition.continuous = true;
+recognition.interimResults = true;
+recognition.lang = 'en-US';
 
-// Initialize recorder
-this.recorder = new PvRecorder(512) // Frame length
+recognition.onresult = (event) => {
+  const transcript = event.results[i][0].transcript.toLowerCase().trim();
+
+  if (transcript.includes(config.wakeWord.toLowerCase())) {
+    // Wake word detected!
+    window.postMessage({
+      type: 'wakeWordDetected',
+      data: { wakeWord, transcript, timestamp, confidence }
+    }, '*');
+  }
+};
 ```
 
 ## Integration with Recording System

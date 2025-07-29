@@ -2,6 +2,7 @@ import { rendererHandlers } from "@renderer/lib/tipc-client"
 import { cn } from "@renderer/lib/utils"
 import { useEffect } from "react"
 import { NavLink, Outlet, useNavigate, useLocation } from "react-router-dom"
+import { LoadingSpinner } from "@renderer/components/ui/loading-spinner"
 
 type NavLink = {
   text: string
@@ -72,6 +73,11 @@ export const Component = () => {
               <span className="font-medium">{link.text}</span>
             </NavLink>
           ))}
+        </div>
+
+        {/* Loading spinner at the bottom of the sidebar */}
+        <div className="flex-1 flex items-end justify-center pb-4">
+          <LoadingSpinner size="lg" />
         </div>
       </div>
       <div className="flex grow flex-col overflow-auto bg-background">

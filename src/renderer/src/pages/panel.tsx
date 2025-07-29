@@ -1,4 +1,4 @@
-import { Spinner } from "@renderer/components/ui/spinner"
+
 import { AgentProgress } from "@renderer/components/agent-progress"
 import { Recorder } from "@renderer/lib/recorder"
 import { playSound } from "@renderer/lib/sound"
@@ -439,12 +439,12 @@ export function Component() {
               <AgentProgress progress={agentProgress} variant="overlay" className="w-full mx-4" />
             </div>
           ) : (
-            <Spinner />
+            <div className="text-sm text-muted-foreground">Processing...</div>
           )}
-          {/* Show a subtle background spinner when agent progress is active */}
+          {/* Show a subtle background indicator when agent progress is active */}
           {agentProgress && (
             <div className="absolute inset-0 flex items-center justify-center opacity-20">
-              <Spinner />
+              <div className="text-xs text-muted-foreground">Processing...</div>
             </div>
           )}
         </div>

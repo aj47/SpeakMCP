@@ -3,7 +3,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@renderer/components/ui/label"
 import { Input } from "@renderer/components/ui/input"
 import { useAvailableModelsQuery } from "@renderer/lib/query-client"
-import { Loader2, AlertCircle, RefreshCw, Search } from "lucide-react"
+import { AlertCircle, RefreshCw, Search } from "lucide-react"
 import { Button } from "@renderer/components/ui/button"
 
 interface ModelSelectorProps {
@@ -136,7 +136,6 @@ export function ModelSelector({
           <div className="min-h-[200px] max-h-[300px] overflow-y-auto">
             {isLoading && (
               <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-4 w-4 animate-spin mr-2" />
                 <span className="text-sm text-muted-foreground">Loading models...</span>
               </div>
             )}

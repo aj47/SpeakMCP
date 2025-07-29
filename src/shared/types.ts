@@ -170,4 +170,11 @@ export type Config = {
   conversationsEnabled?: boolean
   maxConversationsToKeep?: number
   autoSaveConversations?: boolean
+
+  // Wake Word Configuration
+  wakeWordEnabled?: boolean
+  wakeWordKeyword?: string
+  wakeWordSensitivity?: number
+  wakeWordTimeout?: number
+  wakeWordRequireConfirmation?: boolean
 }

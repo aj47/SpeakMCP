@@ -17,6 +17,7 @@ import { RendererHandlers } from "./renderer-handlers"
 import { postProcessTranscript, processTranscriptWithTools, processTranscriptWithAgentMode } from "./llm"
 import { mcpService, MCPToolResult } from "./mcp-service"
 import { state, agentProcessManager } from "./state"
+import { wakeWordService } from "./wake-word-service"
 
 // Unified agent mode processing function
 async function processWithAgentMode(
@@ -902,6 +903,33 @@ export const router = {
   deleteAllConversations: t.procedure.action(async () => {
     await conversationService.deleteAllConversations()
   }),
+
+  // Wake Word Methods
+  startWakeWordDetection: t.procedure.action(async () => {
+    await wakeWordService.startListening()
+    return { success: true }
+  }),
+
+  stopWakeWordDetection: t.procedure.action(async () => {
+    await wakeWordService.stopListening()
+    return { success: true }
+  }),
+
+  getWakeWordStatus: t.procedure.action(async () => {
+    return wakeWordService.getStatus()
+  }),
+
+  updateWakeWordConfiguration: t.procedure.action(async () => {
+    await wakeWordService.updateConfiguration()
+    return { success: true }
+  }),
+
+  setWakeWordAccessKey: t.procedure
+    .input<{ accessKey: string }>()
+    .action(async ({ input }) => {
+      wakeWordService.setAccessKey(input.accessKey)
+      return { success: true }
+    }),
 }
 
 export type Router = typeof router

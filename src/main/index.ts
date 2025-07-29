@@ -15,6 +15,7 @@ import { createAppMenu } from "./menu"
 import { initTray } from "./tray"
 import { isAccessibilityGranted } from "./utils"
 import { mcpService } from "./mcp-service"
+import { wakeWordService } from "./wake-word-service"
 
 registerServeSchema()
 
@@ -50,6 +51,11 @@ app.whenReady().then(() => {
     console.error("Failed to initialize MCP service on startup:", error)
   })
 
+  // Initialize wake word service on app startup
+  wakeWordService.initialize().catch((error) => {
+    console.error("Failed to initialize wake word service on startup:", error)
+  })
+
   import("./updater").then((res) => res.init()).catch(console.error)
 
   // Default open or close DevTools by F12 in development
@@ -73,6 +79,10 @@ app.whenReady().then(() => {
 
   app.on("before-quit", () => {
     makePanelWindowClosable()
+    // Cleanup wake word service
+    wakeWordService.destroy().catch((error) => {
+      console.error("Failed to cleanup wake word service:", error)
+    })
   })
 })
 

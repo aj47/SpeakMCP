@@ -27,6 +27,12 @@ const getConfig = () => {
     // Agent kill switch defaults
     agentKillSwitchEnabled: true,
     agentKillSwitchHotkey: "ctrl-shift-escape",
+    // Wake word defaults
+    wakeWordEnabled: false,
+    wakeWordKeyword: "hey computer",
+    wakeWordSensitivity: 0.5,
+    wakeWordTimeout: 5000,
+    wakeWordRequireConfirmation: false,
   }
 
   try {

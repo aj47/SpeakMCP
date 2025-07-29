@@ -6,13 +6,6 @@ out
 target/
 bin/
 
-# Lightning Whisper MLX model files and cache
-mlx_models/
-*.npz
-*.safetensors
-*.bin
-.cache/
-
 # Python cache and temporary files
 __pycache__/
 *.pyc
@@ -35,3 +28,5 @@ temp/
 .env.production
 .env
 backend/.wrangler
+
+*.DS_Store*

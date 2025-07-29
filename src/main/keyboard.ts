@@ -26,7 +26,7 @@ const rdevPath = path
 type RdevEvent = {
   event_type: "KeyPress" | "KeyRelease"
   data: {
-    key: "ControlLeft" | "BackSlash" | string
+    key: "ControlLeft" | "ControlRight" | "ShiftLeft" | "ShiftRight" | "Alt" | "BackSlash" | string
   }
   time: {
     secs_since_epoch: number
@@ -223,7 +223,7 @@ export function listenToKeyboardEvents() {
 
   const handleEvent = (e: RdevEvent) => {
     if (e.event_type === "KeyPress") {
-      if (e.data.key === "ControlLeft") {
+      if (e.data.key === "ControlLeft" || e.data.key === "ControlRight") {
         isPressedCtrlKey = true
       }
 
@@ -355,7 +355,7 @@ export function listenToKeyboardEvents() {
 
       // Handle hold-ctrl mode (default behavior)
       if (config.shortcut !== "ctrl-slash" && config.shortcut !== "custom") {
-        if (e.data.key === "ControlLeft") {
+        if (e.data.key === "ControlLeft" || e.data.key === "ControlRight") {
           if (hasRecentKeyPress()) {
             return
           }
@@ -406,7 +406,7 @@ export function listenToKeyboardEvents() {
     } else if (e.event_type === "KeyRelease") {
       keysPressed.delete(e.data.key)
 
-      if (e.data.key === "ControlLeft") {
+      if (e.data.key === "ControlLeft" || e.data.key === "ControlRight") {
         isPressedCtrlKey = false
       }
 
@@ -425,7 +425,7 @@ export function listenToKeyboardEvents() {
       cancelRecordingTimer()
       cancelMcpRecordingTimer()
 
-      if (e.data.key === "ControlLeft") {
+      if (e.data.key === "ControlLeft" || e.data.key === "ControlRight") {
         if (isHoldingCtrlKey) {
           getWindowRendererHandlers("panel")?.finishRecording.send()
         } else if (!state.isTextInputActive) {

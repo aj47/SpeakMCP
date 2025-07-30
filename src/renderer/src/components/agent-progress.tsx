@@ -363,7 +363,13 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({ progress, classNam
                 isThinking={message.isThinking}
                 toolCalls={message.toolCalls}
                 toolResults={message.toolResults}
-                defaultCollapsed={true}
+                defaultCollapsed={
+                  // Expand the final message when complete (especially for summaries)
+                  // or when there are errors
+                  isComplete && index === messages.length - 1 ? false :
+                  hasErrors && index === messages.length - 1 ? false :
+                  true
+                }
               />
             ))
           ) : (

@@ -10,6 +10,8 @@ import { AgentProgressUpdate } from "../../../shared/types"
 import { TextInputPanel } from "@renderer/components/text-input-panel"
 import { ContinueConversation } from "@renderer/components/continue-conversation"
 import { useConversationActions, useConversationState, useConversation } from "@renderer/contexts/conversation-context"
+import { PanelDragBar } from "@renderer/components/panel-drag-bar"
+import { useConfigQuery } from "@renderer/lib/query-client"
 
 
 
@@ -34,6 +36,10 @@ export function Component() {
   const { showContinueButton, isWaitingForResponse, isConversationActive, currentConversation } = useConversationState()
   const { addMessage, setIsWaitingForResponse, startNewConversation, continueConversation, endConversation } = useConversationActions()
   const { currentConversationId } = useConversation()
+
+  // Config for drag functionality
+  const configQuery = useConfigQuery()
+  const isDragEnabled = configQuery.data?.panelDragEnabled ?? true
 
 
 
@@ -419,20 +425,29 @@ export function Component() {
 
 
   return (
-    <div className="flex h-screen liquid-glass-panel text-foreground glass-text-strong">
-      {showTextInput ? (
-        <TextInputPanel
-          onSubmit={handleTextSubmit}
-          onCancel={() => {
-            setShowTextInput(false)
-            tipcClient.clearTextInputState()
-            tipcClient.resizePanelToNormal()
-            tipcClient.hidePanelWindow()
-          }}
-          isProcessing={textInputMutation.isPending || mcpTextInputMutation.isPending}
-          agentProgress={agentProgress}
+    <div className="flex flex-col h-screen liquid-glass-panel text-foreground glass-text-strong">
+      {/* Drag bar - show when drag is enabled and not in text input mode */}
+      {isDragEnabled && !showTextInput && (
+        <PanelDragBar
+          className="shrink-0"
+          disabled={!isDragEnabled}
         />
-      ) : (transcribeMutation.isPending || mcpTranscribeMutation.isPending || textInputMutation.isPending || mcpTextInputMutation.isPending) ? (
+      )}
+
+      <div className="flex flex-1 min-h-0">
+        {showTextInput ? (
+          <TextInputPanel
+            onSubmit={handleTextSubmit}
+            onCancel={() => {
+              setShowTextInput(false)
+              tipcClient.clearTextInputState()
+              tipcClient.resizePanelToNormal()
+              tipcClient.hidePanelWindow()
+            }}
+            isProcessing={textInputMutation.isPending || mcpTextInputMutation.isPending}
+            agentProgress={agentProgress}
+          />
+        ) : (transcribeMutation.isPending || mcpTranscribeMutation.isPending || textInputMutation.isPending || mcpTextInputMutation.isPending) ? (
         <div className="flex h-full w-full items-center justify-center relative liquid-glass-strong rounded-xl glass-text-strong">
           {agentProgress ? (
             <div className="absolute inset-0 flex items-center justify-center z-20">
@@ -511,6 +526,7 @@ export function Component() {
           </div>
         </div>
       )}
+      </div>
     </div>
   )
 }

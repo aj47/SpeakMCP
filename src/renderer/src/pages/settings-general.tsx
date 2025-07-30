@@ -312,6 +312,57 @@ export function Component() {
         )}
       </ControlGroup>
 
+      {/* Panel Position Settings */}
+      <ControlGroup title="Panel Position">
+        <Control label="Default Position" className="px-3">
+          <Select
+            value={configQuery.data?.panelPosition || "top-right"}
+            onValueChange={(value: "top-left" | "top-center" | "top-right" | "bottom-left" | "bottom-center" | "bottom-right" | "custom") => {
+              saveConfig({
+                panelPosition: value,
+              })
+              // Update panel position immediately if it's visible
+              tipcClient.setPanelPosition({ position: value })
+            }}
+          >
+            <SelectTrigger className="w-[180px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="top-left">Top Left</SelectItem>
+              <SelectItem value="top-center">Top Center</SelectItem>
+              <SelectItem value="top-right">Top Right</SelectItem>
+              <SelectItem value="bottom-left">Bottom Left</SelectItem>
+              <SelectItem value="bottom-center">Bottom Center</SelectItem>
+              <SelectItem value="bottom-right">Bottom Right</SelectItem>
+              <SelectItem value="custom">Custom (Draggable)</SelectItem>
+            </SelectContent>
+          </Select>
+        </Control>
+
+        <Control label="Enable Dragging" className="px-3">
+          <Switch
+            defaultChecked={configQuery.data?.panelDragEnabled ?? true}
+            onCheckedChange={(value) => {
+              saveConfig({
+                panelDragEnabled: value,
+              })
+            }}
+          />
+        </Control>
+
+        <Control label="Description" className="px-3">
+          <div className="text-sm text-muted-foreground">
+            Choose where the floating panel appears on your screen. Enable dragging to move it by holding the top bar.
+            {configQuery.data?.panelPosition === "custom" && (
+              <div className="mt-1 text-xs">
+                Custom position: Panel can be dragged to any location and will remember its position.
+              </div>
+            )}
+          </div>
+        </Control>
+      </ControlGroup>
+
       {/* About Section */}
       <ControlGroup title="About">
         <Control label="Version" className="px-3">

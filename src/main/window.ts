@@ -16,6 +16,7 @@ import { RendererHandlers } from "./renderer-handlers"
 import { configStore } from "./config"
 import { getFocusedAppInfo } from "./keyboard"
 import { state, agentProcessManager } from "./state"
+import { calculatePanelPosition } from "./panel-position"
 
 type WINDOW_ID = "main" | "panel" | "setup"
 
@@ -144,11 +145,6 @@ const textInputPanelWindowSize = {
 }
 
 const getPanelWindowPosition = (mode: 'normal' | 'agent' | 'textInput' = 'normal') => {
-  // position the window top right
-  const currentScreen = screen.getDisplayNearestPoint(
-    screen.getCursorScreenPoint(),
-  )
-  const screenSize = currentScreen.workArea
   let size = panelWindowSize
   if (mode === 'agent') {
     size = agentPanelWindowSize
@@ -156,14 +152,7 @@ const getPanelWindowPosition = (mode: 'normal' | 'agent' | 'textInput' = 'normal
     size = textInputPanelWindowSize
   }
 
-  const position = {
-    x: Math.floor(
-      screenSize.x + (screenSize.width - size.width) - 10,
-    ),
-    y: screenSize.y + 10,
-  }
-
-  return position
+  return calculatePanelPosition(size, mode)
 }
 
 export function createPanelWindow() {

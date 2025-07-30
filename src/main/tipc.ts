@@ -16,6 +16,7 @@ import { conversationService } from "./conversation-service"
 import { RendererHandlers } from "./renderer-handlers"
 import { postProcessTranscript, processTranscriptWithTools, processTranscriptWithAgentMode } from "./llm"
 import { mcpService, MCPToolResult } from "./mcp-service"
+import { saveCustomPosition, updatePanelPosition, constrainPositionToScreen, PanelPosition } from "./panel-position"
 import { state, agentProcessManager } from "./state"
 
 // Unified agent mode processing function
@@ -210,6 +211,62 @@ export const router = {
       isAlwaysOnTop: panel?.isAlwaysOnTop() || false
     }
     return state
+  }),
+
+  // Panel position management
+  setPanelPosition: t.procedure
+    .input<{ position: PanelPosition }>()
+    .action(async ({ input }) => {
+      updatePanelPosition(input.position)
+
+      // Update the panel position if it's currently visible
+      const panel = WINDOWS.get("panel")
+      if (panel && panel.isVisible()) {
+        showPanelWindow()
+      }
+    }),
+
+  savePanelCustomPosition: t.procedure
+    .input<{ x: number; y: number }>()
+    .action(async ({ input }) => {
+      // Get current panel size to constrain position
+      const panel = WINDOWS.get("panel")
+      if (panel) {
+        const bounds = panel.getBounds()
+        const constrainedPosition = constrainPositionToScreen(
+          { x: input.x, y: input.y },
+          { width: bounds.width, height: bounds.height }
+        )
+
+        saveCustomPosition(constrainedPosition)
+
+        // Update the panel position immediately
+        panel.setPosition(constrainedPosition.x, constrainedPosition.y)
+      }
+    }),
+
+  updatePanelPosition: t.procedure
+    .input<{ x: number; y: number }>()
+    .action(async ({ input }) => {
+      const panel = WINDOWS.get("panel")
+      if (panel) {
+        const bounds = panel.getBounds()
+        const constrainedPosition = constrainPositionToScreen(
+          { x: input.x, y: input.y },
+          { width: bounds.width, height: bounds.height }
+        )
+
+        panel.setPosition(constrainedPosition.x, constrainedPosition.y)
+      }
+    }),
+
+  getPanelPosition: t.procedure.action(async () => {
+    const panel = WINDOWS.get("panel")
+    if (panel) {
+      const bounds = panel.getBounds()
+      return { x: bounds.x, y: bounds.y }
+    }
+    return { x: 0, y: 0 }
   }),
 
   emergencyStopAgent: t.procedure.action(async () => {

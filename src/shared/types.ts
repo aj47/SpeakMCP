@@ -177,4 +177,9 @@ export type Config = {
   conversationsEnabled?: boolean
   maxConversationsToKeep?: number
   autoSaveConversations?: boolean
+
+  // Panel Position Configuration
+  panelPosition?: "top-left" | "top-center" | "top-right" | "bottom-left" | "bottom-center" | "bottom-right" | "custom"
+  panelCustomPosition?: { x: number; y: number }
+  panelDragEnabled?: boolean
 }

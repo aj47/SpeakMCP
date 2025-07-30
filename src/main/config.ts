@@ -34,6 +34,9 @@ const getConfig = () => {
     customMcpToolsShortcut: "",
     // Persisted MCP runtime state
     mcpRuntimeDisabledServers: [],
+    // Panel position defaults
+    panelPosition: "top-right",
+    panelDragEnabled: true,
   }
 
   try {

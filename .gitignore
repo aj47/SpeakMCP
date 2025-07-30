@@ -30,3 +30,4 @@ temp/
 backend/.wrangler
 
 *.DS_Store*
+.augment

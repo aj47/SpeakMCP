@@ -3,7 +3,7 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { WebSocketClientTransport } from "@modelcontextprotocol/sdk/client/websocket.js"
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js"
 import { configStore } from "./config"
-import { MCPConfig, MCPServerConfig, MCPTransportType } from "../shared/types"
+import { MCPConfig, MCPServerConfig, MCPTransportType, Config } from "../shared/types"
 import { spawn, ChildProcess } from "child_process"
 import { promisify } from "util"
 import { access, constants } from "fs"
@@ -39,7 +39,7 @@ export interface LLMToolCallResponse {
   toolCalls?: MCPToolCall[]
 }
 
-class MCPService {
+export class MCPService {
   private clients: Map<string, Client> = new Map()
   private serverProcesses: Map<string, ChildProcess> = new Map()
   private transports: Map<string, StdioClientTransport | WebSocketClientTransport | StreamableHTTPClientTransport> = new Map()
@@ -69,6 +69,18 @@ class MCPService {
     this.sessionCleanupInterval = setInterval(() => {
       this.cleanupInactiveResources()
     }, 5 * 60 * 1000)
+
+    // Seed runtime disabled servers from persisted config so we respect user choices across sessions
+    try {
+      const persisted = configStore.get()?.mcpRuntimeDisabledServers
+      if (Array.isArray(persisted)) {
+        for (const serverName of persisted) {
+          this.runtimeDisabledServers.add(serverName)
+        }
+      }
+    } catch (e) {
+      // Ignore persistence loading errors
+    }
   }
 
   /**
@@ -166,22 +178,26 @@ class MCPService {
 
     // Get servers that should be initialized:
     // 1. Not disabled in config AND
-    // 2. Not runtime-disabled by user (unless this is first initialization)
+    // 2. Not runtime-disabled by user (persisted) AND
+    // 3. If this is not the first initialization in-session, not already initialized
     const serversToInitialize = Object.entries(mcpConfig.mcpServers).filter(([serverName, serverConfig]) => {
       // Skip if disabled in config
       if ((serverConfig as MCPServerConfig).disabled) {
         return false
       }
 
-      // On first initialization, initialize all non-config-disabled servers
+      // Always respect user runtime-disabled preference (persisted across sessions)
+      if (this.runtimeDisabledServers.has(serverName)) {
+        return false
+      }
+
+      // On first initialization, initialize all eligible servers
       if (!this.hasBeenInitialized) {
         return true
       }
 
-      // On subsequent calls (like agent mode), only initialize if:
-      // - Server is not runtime-disabled by user AND
-      // - Server is not already initialized
-      return !this.runtimeDisabledServers.has(serverName) && !this.initializedServers.has(serverName)
+      // On subsequent calls (like agent mode), only initialize if not already initialized
+      return !this.initializedServers.has(serverName)
     })
 
     this.initializationProgress.total = serversToInitialize.length
@@ -355,6 +371,14 @@ class MCPService {
           // Ignore cleanup errors
         })
       }
+    }
+
+    // Persist runtime disabled servers list to config so it survives app restarts
+    try {
+      const cfg: Config = { ...config, mcpRuntimeDisabledServers: Array.from(this.runtimeDisabledServers) }
+      configStore.save(cfg)
+    } catch (e) {
+      // Ignore persistence errors; runtime state will still be respected in-session
     }
 
     return true

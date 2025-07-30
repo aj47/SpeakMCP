@@ -32,6 +32,8 @@ const getConfig = () => {
     customTextInputShortcut: "",
     customAgentKillSwitchHotkey: "",
     customMcpToolsShortcut: "",
+    // Persisted MCP runtime state
+    mcpRuntimeDisabledServers: [],
   }
 
   try {

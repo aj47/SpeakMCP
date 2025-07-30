@@ -5,7 +5,8 @@ import { MCPConfig, MCPServerConfig } from '../../shared/types'
 // Mock the dependencies
 jest.mock('../config', () => ({
   configStore: {
-    get: jest.fn()
+    get: jest.fn(),
+    save: jest.fn(),
   }
 }))
 

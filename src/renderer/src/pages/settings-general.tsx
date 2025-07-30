@@ -212,17 +212,6 @@ export function Component() {
       </ControlGroup>
 
       <ControlGroup title="Speech to Text">
-        <Control label="Current Provider" className="px-3">
-          <div className="flex items-center justify-between">
-            <span className="text-sm">
-              {STT_PROVIDERS.find(p => p.value === sttProviderId)?.label || "OpenAI"}
-            </span>
-            <span className="text-xs text-muted-foreground">
-              Configure in Providers tab
-            </span>
-          </div>
-        </Control>
-
         {sttProviderId === "groq" && (
           <Control label="Prompt" className="px-3">
             <Textarea
@@ -351,16 +340,6 @@ export function Component() {
           />
         </Control>
 
-        <Control label="Description" className="px-3">
-          <div className="text-sm text-muted-foreground">
-            Choose where the floating panel appears on your screen. Enable dragging to move it by holding the top bar.
-            {configQuery.data?.panelPosition === "custom" && (
-              <div className="mt-1 text-xs">
-                Custom position: Panel can be dragged to any location and will remember its position.
-              </div>
-            )}
-          </div>
-        </Control>
       </ControlGroup>
 
       {/* About Section */}

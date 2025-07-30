@@ -79,9 +79,6 @@ export function Component() {
               ))}
             </SelectContent>
           </Select>
-          <p className="text-xs text-muted-foreground mt-1">
-            Choose which provider to use for speech-to-text transcription
-          </p>
         </Control>
 
         <Control label="Transcript Post-Processing Provider" className="px-3">
@@ -104,9 +101,6 @@ export function Component() {
               ))}
             </SelectContent>
           </Select>
-          <p className="text-xs text-muted-foreground mt-1">
-            Choose which provider to use for transcript post-processing
-          </p>
         </Control>
 
         <Control label="Agent/MCP Tools Provider" className="px-3">
@@ -129,9 +123,6 @@ export function Component() {
               ))}
             </SelectContent>
           </Select>
-          <p className="text-xs text-muted-foreground mt-1">
-            Choose which provider to use for agent mode and MCP tool calling
-          </p>
         </Control>
       </ControlGroup>
       <ControlGroup title="OpenAI">

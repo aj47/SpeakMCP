@@ -7,14 +7,39 @@ import { Label } from "@renderer/components/ui/label"
 import { Switch } from "@renderer/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@renderer/components/ui/select"
 import { Textarea } from "@renderer/components/ui/textarea"
-import { Save } from "lucide-react"
+import { Save, HelpCircle } from "lucide-react"
 import { useState, useEffect } from "react"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@renderer/components/ui/tooltip"
 
-import { CHAT_PROVIDERS } from "@shared/index"
+
 import { Config, MCPConfig } from "@shared/types"
 import { MCPConfigManager } from "@renderer/components/mcp-config-manager"
 import { MCPToolManager } from "@renderer/components/mcp-tool-manager"
 import { KeyRecorder } from "@renderer/components/key-recorder"
+
+// Helper component for labels with tooltips
+function LabelWithTooltip({ htmlFor, children, tooltip }: { htmlFor?: string; children: React.ReactNode; tooltip: string }) {
+  return (
+    <div className="flex items-center gap-2">
+      <Label htmlFor={htmlFor}>{children}</Label>
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <HelpCircle className="h-4 w-4 text-muted-foreground cursor-help" />
+          </TooltipTrigger>
+          <TooltipContent>
+            <p className="max-w-xs">{tooltip}</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    </div>
+  )
+}
 
 export function Component() {
   const configQuery = useConfigQuery()
@@ -46,6 +71,18 @@ export function Component() {
   const updateConfig = (updates: Partial<Config>) => {
     const newConfig = { ...config, ...updates }
     saveConfigMutation.mutate(newConfig)
+  }
+
+  // When agent mode is toggled, ensure MCP tools are enabled if agent mode is on
+  const handleAgentModeToggle = (checked: boolean) => {
+    const updates: Partial<Config> = { mcpAgentModeEnabled: checked }
+
+    // If enabling agent mode, also enable MCP tools
+    if (checked) {
+      updates.mcpToolsEnabled = true
+    }
+
+    updateConfig(updates)
   }
 
   const updateMcpConfig = (mcpConfig: MCPConfig) => {
@@ -86,27 +123,33 @@ DOMAIN-SPECIFIC RULES:
       <div className="space-y-6">
         <div className="space-y-4">
           <div className="space-y-2">
-            <h3 className="text-lg font-semibold">MCP Tool Calling</h3>
-            <p className="text-sm text-muted-foreground">
-              Enable voice-activated tool execution using Model Context Protocol (MCP).
-              This allows you to perform actions like creating files, sending notifications, and more through voice commands.
-            </p>
+            <h3 className="text-lg font-semibold">Agent Mode</h3>
           </div>
 
           <div className="space-y-4">
           <div className="flex items-center space-x-2">
             <Switch
-              id="mcp-enabled"
-              checked={config.mcpToolsEnabled || false}
-              onCheckedChange={(checked) => updateConfig({ mcpToolsEnabled: checked })}
+              id="mcp-agent-mode"
+              checked={config.mcpAgentModeEnabled || false}
+              onCheckedChange={handleAgentModeToggle}
             />
-            <Label htmlFor="mcp-enabled">Enable MCP Tool Calling</Label>
+            <LabelWithTooltip
+              htmlFor="mcp-agent-mode"
+              tooltip="Enable voice-activated agent mode with tool execution using Model Context Protocol (MCP). The agent can see tool results and make follow-up tool calls until the task is complete."
+            >
+              Enable Agent Mode
+            </LabelWithTooltip>
           </div>
 
-          {config.mcpToolsEnabled && (
+          {(config.mcpAgentModeEnabled || config.mcpToolsEnabled) && (
             <>
               <div className="space-y-2">
-                <Label htmlFor="mcp-shortcut">Shortcut</Label>
+                <LabelWithTooltip
+                  htmlFor="mcp-shortcut"
+                  tooltip="Choose how to activate MCP tool calling mode"
+                >
+                  Shortcut
+                </LabelWithTooltip>
                 <Select
                   value={config.mcpToolsShortcut || "hold-ctrl-alt"}
                   onValueChange={(value: "hold-ctrl-alt" | "ctrl-alt-slash" | "custom") =>
@@ -132,28 +175,19 @@ DOMAIN-SPECIFIC RULES:
                     placeholder="Click to record custom MCP tools shortcut"
                   />
                 )}
-
-                <p className="text-xs text-muted-foreground">
-                  Choose how to activate MCP tool calling mode
-                </p>
               </div>
 
-              <div className="flex items-center space-x-2">
-                <Switch
-                  id="mcp-agent-mode"
-                  checked={config.mcpAgentModeEnabled || false}
-                  onCheckedChange={(checked) => updateConfig({ mcpAgentModeEnabled: checked })}
-                />
-                <Label htmlFor="mcp-agent-mode">Enable Agent Mode</Label>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                When enabled, the agent can see tool results and make follow-up tool calls until the task is complete
-              </p>
+
 
               {config.mcpAgentModeEnabled && (
                 <>
                   <div className="space-y-2">
-                    <Label htmlFor="mcp-max-iterations">Max Iterations</Label>
+                    <LabelWithTooltip
+                      htmlFor="mcp-max-iterations"
+                      tooltip="Maximum number of iterations the agent can perform before stopping. Higher values allow more complex tasks but may take longer."
+                    >
+                      Max Iterations
+                    </LabelWithTooltip>
                     <Input
                       id="mcp-max-iterations"
                       type="number"
@@ -164,9 +198,6 @@ DOMAIN-SPECIFIC RULES:
                       onChange={(e) => updateConfig({ mcpMaxIterations: parseInt(e.target.value) || 10 })}
                       className="w-32"
                     />
-                    <p className="text-xs text-muted-foreground">
-                      Maximum number of iterations the agent can perform before stopping. Higher values allow more complex tasks but may take longer.
-                    </p>
                   </div>
 
                   <div className="space-y-4 p-4 border rounded-lg bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800">
@@ -176,19 +207,40 @@ DOMAIN-SPECIFIC RULES:
                         checked={config.agentKillSwitchEnabled !== false}
                         onCheckedChange={(checked) => updateConfig({ agentKillSwitchEnabled: checked })}
                       />
-                      <Label htmlFor="agent-kill-switch" className="text-red-800 dark:text-red-200 font-medium">
-                        Enable Emergency Kill Switch
-                      </Label>
+                      <div className="flex items-center gap-2">
+                        <Label htmlFor="agent-kill-switch" className="text-red-800 dark:text-red-200 font-medium">
+                          Enable Emergency Kill Switch
+                        </Label>
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <HelpCircle className="h-4 w-4 text-red-600 dark:text-red-400 cursor-help" />
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p className="max-w-xs">Provides a global hotkey to immediately stop agent mode and kill all agent-created processes.</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      </div>
                     </div>
-                    <p className="text-xs text-red-700 dark:text-red-300">
-                      Provides a global hotkey to immediately stop agent mode and kill all agent-created processes.
-                    </p>
 
                     {config.agentKillSwitchEnabled !== false && (
                       <div className="space-y-2">
-                        <Label htmlFor="kill-switch-hotkey" className="text-red-800 dark:text-red-200">
-                          Kill Switch Hotkey
-                        </Label>
+                        <div className="flex items-center gap-2">
+                          <Label htmlFor="kill-switch-hotkey" className="text-red-800 dark:text-red-200">
+                            Kill Switch Hotkey
+                          </Label>
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <HelpCircle className="h-4 w-4 text-red-600 dark:text-red-400 cursor-help" />
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p className="max-w-xs">Press this key combination to immediately stop the agent and kill all processes.</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        </div>
                         <select
                           id="kill-switch-hotkey"
                           value={config.agentKillSwitchHotkey || "ctrl-shift-escape"}
@@ -210,17 +262,13 @@ DOMAIN-SPECIFIC RULES:
                             placeholder="Click to record custom kill switch hotkey"
                           />
                         )}
-
-                        <p className="text-xs text-red-700 dark:text-red-300">
-                          Press this key combination to immediately stop the agent and kill all processes.
-                        </p>
                       </div>
                     )}
                   </div>
                 </>
               )}
 
-              {!config.mcpAgentModeEnabled && (
+              {!config.mcpAgentModeEnabled && config.mcpToolsEnabled && (
                 <>
                   <div className="flex items-center space-x-2">
                     <Switch
@@ -228,15 +276,22 @@ DOMAIN-SPECIFIC RULES:
                       checked={config.mcpAutoPasteEnabled !== false}
                       onCheckedChange={(checked) => updateConfig({ mcpAutoPasteEnabled: checked })}
                     />
-                    <Label htmlFor="mcp-auto-paste">Auto-paste Results</Label>
+                    <LabelWithTooltip
+                      htmlFor="mcp-auto-paste"
+                      tooltip="Automatically paste the final result to the active input field. Disable if you prefer to manually paste from clipboard."
+                    >
+                      Auto-paste Results
+                    </LabelWithTooltip>
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    Automatically paste the final result to the active input field. Disable if you prefer to manually paste from clipboard.
-                  </p>
 
                   {config.mcpAutoPasteEnabled !== false && (
                     <div className="space-y-2">
-                      <Label htmlFor="mcp-paste-delay">Auto-paste Delay (ms)</Label>
+                      <LabelWithTooltip
+                        htmlFor="mcp-paste-delay"
+                        tooltip="Delay before pasting to allow you to return focus to the desired input field. Recommended: 1000ms (1 second)."
+                      >
+                        Auto-paste Delay (ms)
+                      </LabelWithTooltip>
                       <Input
                         id="mcp-paste-delay"
                         type="number"
@@ -247,39 +302,22 @@ DOMAIN-SPECIFIC RULES:
                         onChange={(e) => updateConfig({ mcpAutoPasteDelay: parseInt(e.target.value) || 1000 })}
                         className="w-32"
                       />
-                      <p className="text-xs text-muted-foreground">
-                        Delay before pasting to allow you to return focus to the desired input field. Recommended: 1000ms (1 second).
-                      </p>
                     </div>
                   )}
                 </>
               )}
 
-              {config.mcpAgentModeEnabled && (
-                <div className="p-3 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
-                  <p className="text-sm text-blue-800 dark:text-blue-200">
-                    <strong>Agent Mode:</strong> Results are displayed in a floating GUI. Press <kbd className="px-1.5 py-0.5 text-xs bg-blue-100 dark:bg-blue-900 rounded">ESC</kbd> to close the results window.
-                  </p>
-                </div>
-              )}
+
+
+
 
               <div className="space-y-2">
-                <Label htmlFor="mcp-provider">Current LLM Provider</Label>
-                <div className="flex items-center justify-between p-3 border rounded-md bg-muted/50">
-                  <span className="text-sm">
-                    {CHAT_PROVIDERS.find(p => p.value === (config.mcpToolsProviderId || "openai"))?.label || "OpenAI"}
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    Configure in Providers tab
-                  </span>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Configure which LLM provider and model to use for tool calling decisions in the Providers tab.
-                </p>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="mcp-additional-guidelines">Additional Guidelines</Label>
+                <LabelWithTooltip
+                  htmlFor="mcp-additional-guidelines"
+                  tooltip="Optional additional rules and guidelines for the AI agent. The base system prompt with tool usage instructions is automatically included."
+                >
+                  Additional Guidelines
+                </LabelWithTooltip>
                 <Textarea
                   id="mcp-additional-guidelines"
                   value={additionalGuidelines}
@@ -288,9 +326,6 @@ DOMAIN-SPECIFIC RULES:
                   className="font-mono text-sm"
                   placeholder={defaultAdditionalGuidelines}
                 />
-                <p className="text-xs text-muted-foreground">
-                  Optional additional rules and guidelines for the AI agent. The base system prompt with tool usage instructions is automatically included.
-                </p>
                 <div className="flex gap-2">
                   <Button
                     variant="outline"
@@ -329,29 +364,28 @@ DOMAIN-SPECIFIC RULES:
                 )}
               </div>
 
-              <div className="rounded-lg border p-4 space-y-2">
-                <h4 className="font-medium">MCP Tools</h4>
-                <div className="text-sm text-muted-foreground">
-                  <p>Tools are provided by MCP (Model Context Protocol) servers that you configure.</p>
-                  <p className="mt-2">Configure MCP servers below to add tools for file operations, API integrations, and more.</p>
-                </div>
-              </div>
+
             </>
           )}
         </div>
 
-        {/* MCP Server Configuration Section */}
-        {config.mcpToolsEnabled && (
-          <div className="mt-8 pt-6 border-t space-y-8">
+
+        {/* Server Configuration Section */}
+        {(config.mcpAgentModeEnabled || config.mcpToolsEnabled) && (
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold">Server Configuration</h3>
             <MCPConfigManager
               config={config.mcpConfig || { mcpServers: {} }}
               onConfigChange={updateMcpConfig}
             />
+          </div>
+        )}
 
-            {/* MCP Tool Management Section */}
-            <div className="pt-6 border-t">
-              <MCPToolManager />
-            </div>
+        {/* Tool Management Section */}
+        {(config.mcpAgentModeEnabled || config.mcpToolsEnabled) && (
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold">Tool Management</h3>
+            <MCPToolManager />
           </div>
         )}
         </div>

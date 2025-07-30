@@ -122,6 +122,9 @@ export type Config = {
   customShortcut?: string
   hideDockIcon?: boolean
 
+  // Theme Configuration
+  themePreference?: "system" | "light" | "dark"
+
   sttProviderId?: STT_PROVIDER_ID
 
   openaiApiKey?: string

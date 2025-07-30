@@ -12,6 +12,7 @@ import { ContinueConversation } from "@renderer/components/continue-conversation
 import { useConversationActions, useConversationState, useConversation } from "@renderer/contexts/conversation-context"
 import { PanelDragBar } from "@renderer/components/panel-drag-bar"
 import { useConfigQuery } from "@renderer/lib/query-client"
+import { Spinner } from "@renderer/components/ui/spinner"
 
 
 
@@ -466,15 +467,24 @@ export function Component() {
       ) : (
         <div className="flex h-full w-full rounded-xl liquid-glass transition-all duration-300 glass-text-strong">
           <div className="flex shrink-0">
-            {mcpMode && (
+            {/* Show loading spinner when processing */}
+            {(transcribeMutation.isPending || mcpTranscribeMutation.isPending || textInputMutation.isPending || mcpTextInputMutation.isPending) ? (
               <div className="flex items-center justify-center w-8 h-full liquid-glass-subtle rounded-l-xl">
-                <div className="w-2 h-2 bg-primary rounded-full animate-pulse shadow-lg" title="MCP Tool Mode" />
+                <Spinner className="w-3 h-3" />
               </div>
-            )}
-            {isConversationActive && !mcpMode && (
-              <div className="flex items-center justify-center w-8 h-full liquid-glass-subtle rounded-l-xl">
-                <div className="w-2 h-2 bg-green-500 rounded-full shadow-lg" title="Conversation Active" />
-              </div>
+            ) : (
+              <>
+                {mcpMode && (
+                  <div className="flex items-center justify-center w-8 h-full liquid-glass-subtle rounded-l-xl">
+                    <div className="w-2 h-2 bg-primary rounded-full animate-pulse shadow-lg" title="MCP Tool Mode" />
+                  </div>
+                )}
+                {isConversationActive && !mcpMode && (
+                  <div className="flex items-center justify-center w-8 h-full liquid-glass-subtle rounded-l-xl">
+                    <div className="w-2 h-2 bg-green-500 rounded-full shadow-lg" title="Conversation Active" />
+                  </div>
+                )}
+              </>
             )}
           </div>
           <div

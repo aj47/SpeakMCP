@@ -35,7 +35,7 @@ import {
   useSaveConfigMutation,
 } from "@renderer/lib/query-client"
 import { tipcClient } from "@renderer/lib/tipc-client"
-import { useState, useCallback } from "react"
+import { useState, useCallback, useEffect } from "react"
 import { Config } from "@shared/types"
 import { KeyRecorder } from "@renderer/components/key-recorder"
 import { getEffectiveShortcut, formatKeyComboForDisplay } from "@shared/key-utils"
@@ -53,6 +53,16 @@ export function Component() {
       },
     })
   }, [saveConfigMutation, configQuery.data])
+
+  // Sync theme preference from config to localStorage when config loads
+  useEffect(() => {
+    if (configQuery.data?.themePreference) {
+      localStorage.setItem('theme-preference', configQuery.data.themePreference)
+      window.dispatchEvent(new CustomEvent('theme-preference-changed', {
+        detail: configQuery.data.themePreference
+      }))
+    }
+  }, [configQuery.data?.themePreference])
 
   // Memoize model change handler to prevent infinite re-renders
   const handleTranscriptModelChange = useCallback((value: string) => {
@@ -105,6 +115,32 @@ export function Component() {
           </Control>
         </ControlGroup>
       )}
+
+      <ControlGroup title="Appearance">
+        <Control label="Theme" className="px-3">
+          <Select
+            value={configQuery.data.themePreference || "system"}
+            onValueChange={(value: "system" | "light" | "dark") => {
+              saveConfig({
+                themePreference: value,
+              })
+              // Apply theme immediately
+              window.dispatchEvent(new CustomEvent('theme-preference-changed', {
+                detail: value
+              }))
+            }}
+          >
+            <SelectTrigger className="w-[140px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="system">System</SelectItem>
+              <SelectItem value="light">Light</SelectItem>
+              <SelectItem value="dark">Dark</SelectItem>
+            </SelectContent>
+          </Select>
+        </Control>
+      </ControlGroup>
 
       <ControlGroup
         title="Shortcuts"

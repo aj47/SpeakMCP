@@ -7,6 +7,7 @@ import { cn } from "@renderer/lib/utils"
 import { ConversationMessage } from "@shared/types"
 import { useConversationState } from "@renderer/contexts/conversation-context"
 import { AgentProgress } from "@renderer/components/agent-progress"
+import { MarkdownRenderer } from "@renderer/components/markdown-renderer"
 import dayjs from "dayjs"
 
 interface ConversationDisplayProps {
@@ -158,8 +159,8 @@ function ConversationMessageItem({ message, isLast }: ConversationMessageItemPro
           </span>
         </div>
 
-        <div className="glass-text-strong whitespace-pre-wrap break-words">
-          {message.content}
+        <div className="glass-text-strong">
+          <MarkdownRenderer content={message.content} />
         </div>
 
         {message.toolCalls && message.toolCalls.length > 0 && (

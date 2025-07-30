@@ -2,6 +2,51 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Dark mode syntax highlighting override */
+@media (prefers-color-scheme: dark) {
+  .hljs {
+    background: rgba(0, 0, 0, 0.3) !important;
+    color: #e6edf3 !important;
+  }
+
+  .hljs-keyword,
+  .hljs-selector-tag,
+  .hljs-literal,
+  .hljs-section,
+  .hljs-link {
+    color: #ff7b72 !important;
+  }
+
+  .hljs-string {
+    color: #a5d6ff !important;
+  }
+
+  .hljs-title,
+  .hljs-name,
+  .hljs-type,
+  .hljs-attribute,
+  .hljs-symbol,
+  .hljs-bullet,
+  .hljs-built_in,
+  .hljs-addition,
+  .hljs-variable,
+  .hljs-template-tag,
+  .hljs-template-variable {
+    color: #79c0ff !important;
+  }
+
+  .hljs-comment,
+  .hljs-quote,
+  .hljs-deletion,
+  .hljs-meta {
+    color: #8b949e !important;
+  }
+
+  .hljs-number {
+    color: #79c0ff !important;
+  }
+}
+
 /* Custom scrollbar styles for agent progress */
 @layer utilities {
   .scrollbar-thin {

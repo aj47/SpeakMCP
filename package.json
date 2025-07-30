@@ -36,7 +36,11 @@
     "@egoist/electron-panel-window": "^8.0.3",
     "@modelcontextprotocol/sdk": "^1.13.3",
     "@radix-ui/react-scroll-area": "^1.2.9",
+    "highlight.js": "^11.11.1",
     "openai": "^5.10.2",
+    "react-markdown": "^10.1.0",
+    "rehype-highlight": "^7.0.2",
+    "remark-gfm": "^4.0.1",
     "zod": "^3.25.76"
   },
   "devDependencies": {

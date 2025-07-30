@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react"
 import { cn } from "@renderer/lib/utils"
 import { AgentProgressUpdate } from "../../../shared/types"
 import { ChevronDown, ChevronRight } from "lucide-react"
+import { MarkdownRenderer } from "@renderer/components/markdown-renderer"
 
 interface AgentProgressProps {
   progress: AgentProgressUpdate | null
@@ -101,13 +102,17 @@ const ConversationMessage: React.FC<{
       <div
         className={cn(
           "text-sm leading-relaxed select-text cursor-text",
-          isCollapsed ? "line-clamp-1" : "whitespace-pre-wrap"
+          isCollapsed ? "line-clamp-1" : ""
         )}
         role="region"
         aria-label={`${getRoleLabel()} message content`}
         aria-expanded={!isCollapsed}
       >
-        {content.trim()}
+        {isCollapsed ? (
+          <div className="truncate">{content.trim()}</div>
+        ) : (
+          <MarkdownRenderer content={content.trim()} />
+        )}
       </div>
       {!isCollapsed && toolCalls && toolCalls.length > 0 && (
         <div className="mt-2 pt-2 border-t border-white/10">

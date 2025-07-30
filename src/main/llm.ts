@@ -80,9 +80,7 @@ Keep the contextSummary concise but informative.`
  * Analyze tool errors and provide recovery strategies
  */
 function analyzeToolErrors(
-  toolResults: MCPToolResult[],
-  failedTools: string[],
-  toolCalls: MCPToolCall[]
+  toolResults: MCPToolResult[]
 ): { recoveryStrategy: string; errorTypes: string[] } {
   const errorTypes: string[] = []
   const errorMessages = toolResults
@@ -593,7 +591,23 @@ Always use actual resource IDs from the conversation history or create new ones 
 
     if (isComplete) {
       // No tools to execute or agent explicitly says it's done
-      finalContent = llmResponse.content || ""
+      const assistantContent = llmResponse.content || ""
+      
+      // Ensure the agent provides a meaningful summary
+      if (!assistantContent.trim() || assistantContent.length < 20) {
+        // Force the agent to provide a summary by continuing the conversation
+        const summaryPrompt = `Please provide a brief summary of your response and what you determined regarding the user's request.`
+        
+        conversationHistory.push({
+          role: "user",
+          content: summaryPrompt
+        })
+
+        // Continue to next iteration to get the summary
+        continue
+      }
+
+      finalContent = assistantContent
       conversationHistory.push({
         role: "assistant",
         content: finalContent
@@ -752,7 +766,7 @@ Always use actual resource IDs from the conversation history or create new ones 
 
     if (hasErrors) {
       // Enhanced error analysis and recovery suggestions
-      const errorAnalysis = analyzeToolErrors(toolResults, failedTools, llmResponse.toolCalls || [])
+      const errorAnalysis = analyzeToolErrors(toolResults)
 
       // Add detailed error summary to conversation history for LLM context
       const errorSummary = `Tool execution errors occurred:
@@ -790,20 +804,36 @@ Please try alternative approaches or provide manual instructions to the user.`
     const agentIndicatedDone = (llmResponse as any).needsMoreWork === false
 
     if (agentIndicatedDone && allToolsSuccessful) {
+      // Agent indicated completion, but we need to ensure it provides a summary
+      // Check if the last assistant message provides a meaningful summary
+      const lastAssistantContent = llmResponse.content || ""
+      
+      // If the agent only made tool calls without providing a summary, request one
+      if (!lastAssistantContent.trim() || lastAssistantContent.length < 20) {
+        // Force the agent to provide a summary by continuing the conversation
+        const summaryPrompt = `Please provide a brief summary of what you accomplished and the results of your actions. Include what worked well and any issues encountered.`
+        
+        conversationHistory.push({
+          role: "user",
+          content: summaryPrompt
+        })
 
-      // Create final content that includes tool results
-      const toolResultsSummary = toolResults
-        .filter(result => !result.isError)
-        .map(result => result.content.map(c => c.text).join('\n'))
-        .join('\n\n')
+        // Continue to next iteration to get the summary
+        // Set final content to the latest assistant response (fallback)
+        if (!finalContent) {
+          finalContent = llmResponse.content || ""
+        }
+        continue
+      }
 
-      finalContent = toolResultsSummary || llmResponse.content || ""
+      // Create final content that includes the agent's summary
+      finalContent = lastAssistantContent
 
       // Add completion step
       const completionStep = createProgressStep(
         "completion",
         "Task completed",
-        "Successfully completed the requested task with tool results",
+        "Successfully completed the requested task with summary",
         "completed"
       )
       progressSteps.push(completionStep)
@@ -825,9 +855,24 @@ Please try alternative approaches or provide manual instructions to the user.`
     // Only stop if needsMoreWork is explicitly false or we hit max iterations
     const shouldContinue = (llmResponse as any).needsMoreWork !== false
     if (!shouldContinue) {
-      // Agent explicitly indicated no more work needed, but we already handled that case above
-      // This is a fallback in case agentIndicatedDone logic missed something
-      finalContent = llmResponse.content || ""
+      // Agent explicitly indicated no more work needed, but ensure it provides a summary
+      const assistantContent = llmResponse.content || ""
+      
+      // Ensure the agent provides a meaningful summary
+      if (!assistantContent.trim() || assistantContent.length < 20) {
+        // Force the agent to provide a summary by continuing the conversation
+        const summaryPrompt = `Please provide a brief summary of what you accomplished and the current status of the task.`
+        
+        conversationHistory.push({
+          role: "user",
+          content: summaryPrompt
+        })
+
+        // Continue to next iteration to get the summary
+        continue
+      }
+
+      finalContent = assistantContent
       conversationHistory.push({
         role: "assistant",
         content: finalContent
@@ -862,14 +907,41 @@ Please try alternative approaches or provide manual instructions to the user.`
   }
 
   if (iteration >= maxIterations) {
-
-    // Provide better feedback based on what happened
+    // Handle maximum iterations reached - always ensure we have a meaningful summary
     const hasRecentErrors = progressSteps.slice(-5).some(step => step.status === "error")
-    const errorMessage = hasRecentErrors
+    
+    // If we don't have meaningful final content, get the last assistant response or provide fallback
+    if (!finalContent || finalContent.trim().length < 20) {
+      const lastAssistantMessage = conversationHistory
+        .slice()
+        .reverse()
+        .find(msg => msg.role === "assistant")
+      
+      if (lastAssistantMessage && lastAssistantMessage.content.trim().length >= 20) {
+        finalContent = lastAssistantMessage.content
+      } else {
+        // Provide a fallback summary
+        finalContent = hasRecentErrors
+          ? "Task was interrupted due to repeated tool failures. Please review the errors above and try again with alternative approaches."
+          : "Task reached maximum iteration limit while still in progress. Some actions may have been completed successfully - please review the tool results above."
+      }
+    }
+
+    // Add context about the termination reason
+    const terminationNote = hasRecentErrors
       ? "\n\n(Note: Task incomplete due to repeated tool failures. Please try again or use alternative methods.)"
       : "\n\n(Note: Task may not be fully complete - reached maximum iteration limit. The agent was still working on the request.)"
 
-    finalContent += errorMessage
+    finalContent += terminationNote
+
+    // Make sure the final message is added to conversation history
+    const lastMessage = conversationHistory[conversationHistory.length - 1]
+    if (!lastMessage || lastMessage.role !== "assistant" || lastMessage.content !== finalContent) {
+      conversationHistory.push({
+        role: "assistant",
+        content: finalContent
+      })
+    }
 
     // Add timeout completion step with better context
     const timeoutStep = createProgressStep(

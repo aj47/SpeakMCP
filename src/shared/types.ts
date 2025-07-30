@@ -1,4 +1,5 @@
 import type { CHAT_PROVIDER_ID, STT_PROVIDER_ID } from "."
+import type { ChildProcess } from "child_process"
 
 export type RecordingHistoryItem = {
   id: string
@@ -115,6 +116,56 @@ export interface ConversationHistoryItem {
   messageCount: number
   lastMessage: string
   preview: string
+}
+
+// Agent Pool Types
+export interface AgentInstance {
+  id: string
+  conversationId: string
+  status: "idle" | "processing" | "completed" | "error" | "stopped"
+  createdAt: number
+  startedAt?: number
+  completedAt?: number
+  currentIteration: number
+  maxIterations: number
+  processes: Set<ChildProcess>
+  metadata: {
+    initialPrompt: string
+    totalTokens?: number
+    model?: string
+    provider?: string
+    templateId?: string
+    templateName?: string
+    customName?: string
+  }
+}
+
+export interface AgentPoolStats {
+  totalAgents: number
+  activeAgents: number
+  completedAgents: number
+  erroredAgents: number
+  averageCompletionTime: number
+  totalResourceUsage: {
+    processes: number
+    conversations: number
+  }
+}
+
+// Enhanced Conversation Types for Agent Support
+export interface AgentConversationMetadata {
+  agentId?: string
+  agentStatus?: "idle" | "processing" | "completed" | "error" | "stopped"
+  agentStartedAt?: number
+  agentCompletedAt?: number
+  agentIterations?: number
+  agentMaxIterations?: number
+  isParallelAgent?: boolean
+  parentConversationId?: string
+}
+
+export interface EnhancedConversation extends Conversation {
+  agentMetadata?: AgentConversationMetadata
 }
 
 export type Config = {

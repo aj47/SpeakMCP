@@ -16,6 +16,8 @@ import { conversationService } from "./conversation-service"
 import { RendererHandlers } from "./renderer-handlers"
 import { postProcessTranscript, processTranscriptWithTools, processTranscriptWithAgentMode } from "./llm"
 import { mcpService, MCPToolResult } from "./mcp-service"
+import { agentPoolService } from "./agent-pool-service"
+import { enhancedConversationService } from "./enhanced-conversation-service"
 import { saveCustomPosition, updatePanelPosition, constrainPositionToScreen, PanelPosition } from "./panel-position"
 import { state, agentProcessManager } from "./state"
 
@@ -959,6 +961,86 @@ export const router = {
   deleteAllConversations: t.procedure.action(async () => {
     await conversationService.deleteAllConversations()
   }),
+
+  // Agent Pool Management
+  createAgent: t.procedure
+    .input<{
+      prompt: string
+      options?: {
+        maxIterations?: number
+        conversationId?: string
+        metadata?: any
+      }
+    }>()
+    .action(async ({ input }) => {
+      return await agentPoolService.createAgent(input.prompt, input.options || {})
+    }),
+
+  startAgent: t.procedure
+    .input<{ agentId: string }>()
+    .action(async ({ input }) => {
+      await agentPoolService.startAgent(input.agentId)
+    }),
+
+  stopAgent: t.procedure
+    .input<{ agentId: string }>()
+    .action(async ({ input }) => {
+      await agentPoolService.stopAgent(input.agentId)
+    }),
+
+  getAgent: t.procedure
+    .input<{ agentId: string }>()
+    .action(async ({ input }) => {
+      return agentPoolService.getAgent(input.agentId)
+    }),
+
+  getAgentPoolAgents: t.procedure
+    .action(async () => {
+      return agentPoolService.getAllAgents()
+    }),
+
+  getAgentPoolStats: t.procedure
+    .action(async () => {
+      return agentPoolService.getStats()
+    }),
+
+  stopAllAgents: t.procedure
+    .action(async () => {
+      await agentPoolService.stopAllAgents()
+    }),
+
+  setMaxConcurrentAgents: t.procedure
+    .input<{ max: number }>()
+    .action(async ({ input }) => {
+      agentPoolService.setMaxConcurrentAgents(input.max)
+    }),
+
+  // Enhanced Conversation Management for Agents
+  getAgentConversations: t.procedure
+    .action(async () => {
+      return enhancedConversationService.getAgentConversations()
+    }),
+
+  getActiveAgentConversations: t.procedure
+    .action(async () => {
+      return enhancedConversationService.getActiveAgentConversations()
+    }),
+
+  updateAgentStatus: t.procedure
+    .input<{
+      conversationId: string
+      agentId: string
+      status: "idle" | "processing" | "completed" | "error" | "stopped"
+      additionalMetadata?: any
+    }>()
+    .action(async ({ input }) => {
+      await enhancedConversationService.updateAgentStatus(
+        input.conversationId,
+        input.agentId,
+        input.status,
+        input.additionalMetadata
+      )
+    }),
 }
 
 export type Router = typeof router

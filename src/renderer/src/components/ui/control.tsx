@@ -13,14 +13,14 @@ export const Control = ({
   return (
     <div
       className={cn(
-        "flex items-center justify-between gap-5 py-2",
+        "flex flex-col gap-3 py-2 sm:flex-row sm:items-center sm:justify-between sm:gap-5",
         className
       )}
     >
       <div className="shrink-0">
         <span className="text-sm font-medium">{label}</span>
       </div>
-      <div className="flex max-w-[50%] grow items-center justify-end">
+      <div className="flex w-full items-center justify-start sm:max-w-[50%] sm:grow sm:justify-end">
         {children}
       </div>
     </div>

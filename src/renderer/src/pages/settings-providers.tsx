@@ -60,84 +60,91 @@ export function Component() {
       <div className="grid gap-4">
       <ControlGroup title="Provider Selection">
         <Control label="Voice Transcription Provider" className="px-3">
-          <Select
-            value={configQuery.data.sttProviderId || "openai"}
-            onValueChange={(value) => {
-              saveConfig({
-                sttProviderId: value as STT_PROVIDER_ID,
-              })
-            }}
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {STT_PROVIDERS.map((provider) => (
-                <SelectItem key={provider.value} value={provider.value}>
-                  {provider.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <p className="text-xs text-muted-foreground mt-1">
-            Choose which provider to use for speech-to-text transcription
-          </p>
+          <div className="w-full space-y-1">
+            <Select
+              value={configQuery.data.sttProviderId || "openai"}
+              onValueChange={(value) => {
+                saveConfig({
+                  sttProviderId: value as STT_PROVIDER_ID,
+                })
+              }}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {STT_PROVIDERS.map((provider) => (
+                  <SelectItem key={provider.value} value={provider.value}>
+                    {provider.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Choose which provider to use for speech-to-text transcription
+            </p>
+          </div>
         </Control>
 
         <Control label="Transcript Post-Processing Provider" className="px-3">
-          <Select
-            value={configQuery.data.transcriptPostProcessingProviderId || "openai"}
-            onValueChange={(value) => {
-              saveConfig({
-                transcriptPostProcessingProviderId: value as CHAT_PROVIDER_ID,
-              })
-            }}
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {CHAT_PROVIDERS.map((provider) => (
-                <SelectItem key={provider.value} value={provider.value}>
-                  {provider.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <p className="text-xs text-muted-foreground mt-1">
-            Choose which provider to use for transcript post-processing
-          </p>
+          <div className="w-full space-y-1">
+            <Select
+              value={configQuery.data.transcriptPostProcessingProviderId || "openai"}
+              onValueChange={(value) => {
+                saveConfig({
+                  transcriptPostProcessingProviderId: value as CHAT_PROVIDER_ID,
+                })
+              }}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {CHAT_PROVIDERS.map((provider) => (
+                  <SelectItem key={provider.value} value={provider.value}>
+                    {provider.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Choose which provider to use for transcript post-processing
+            </p>
+          </div>
         </Control>
 
         <Control label="Agent/MCP Tools Provider" className="px-3">
-          <Select
-            value={configQuery.data.mcpToolsProviderId || "openai"}
-            onValueChange={(value) => {
-              saveConfig({
-                mcpToolsProviderId: value as CHAT_PROVIDER_ID,
-              })
-            }}
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {CHAT_PROVIDERS.map((provider) => (
-                <SelectItem key={provider.value} value={provider.value}>
-                  {provider.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <p className="text-xs text-muted-foreground mt-1">
-            Choose which provider to use for agent mode and MCP tool calling
-          </p>
+          <div className="w-full space-y-1">
+            <Select
+              value={configQuery.data.mcpToolsProviderId || "openai"}
+              onValueChange={(value) => {
+                saveConfig({
+                  mcpToolsProviderId: value as CHAT_PROVIDER_ID,
+                })
+              }}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {CHAT_PROVIDERS.map((provider) => (
+                  <SelectItem key={provider.value} value={provider.value}>
+                    {provider.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Choose which provider to use for agent mode and MCP tool calling
+            </p>
+          </div>
         </Control>
       </ControlGroup>
       <ControlGroup title="OpenAI">
         <Control label="API Key" className="px-3">
           <Input
             type="password"
+            className="w-full"
             defaultValue={configQuery.data.openaiApiKey}
             onChange={(e) => {
               saveConfig({
@@ -150,6 +157,7 @@ export function Component() {
         <Control label="API Base URL" className="px-3">
           <Input
             type="url"
+            className="w-full"
             placeholder="https://api.openai.com/v1"
             defaultValue={configQuery.data.openaiBaseUrl}
             onChange={(e) => {
@@ -178,6 +186,7 @@ export function Component() {
         <Control label="API Key" className="px-3">
           <Input
             type="password"
+            className="w-full"
             defaultValue={configQuery.data.groqApiKey}
             onChange={(e) => {
               saveConfig({
@@ -190,6 +199,7 @@ export function Component() {
         <Control label="API Base URL" className="px-3">
           <Input
             type="url"
+            className="w-full"
             placeholder="https://api.groq.com/openai/v1"
             defaultValue={configQuery.data.groqBaseUrl}
             onChange={(e) => {
@@ -218,6 +228,7 @@ export function Component() {
         <Control label="API Key" className="px-3">
           <Input
             type="password"
+            className="w-full"
             defaultValue={configQuery.data.geminiApiKey}
             onChange={(e) => {
               saveConfig({
@@ -230,6 +241,7 @@ export function Component() {
         <Control label="API Base URL" className="px-3">
           <Input
             type="url"
+            className="w-full"
             placeholder="https://generativelanguage.googleapis.com"
             defaultValue={configQuery.data.geminiBaseUrl}
             onChange={(e) => {

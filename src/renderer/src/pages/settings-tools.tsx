@@ -113,7 +113,7 @@ DOMAIN-SPECIFIC RULES:
                     updateConfig({ mcpToolsShortcut: value })
                   }
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="w-full sm:w-auto">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>

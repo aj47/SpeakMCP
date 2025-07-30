@@ -165,8 +165,8 @@ export function Component() {
         </Control>
 
         <Control label="Text Input" className="px-3">
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
+          <div className="w-full space-y-2">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
               <Switch
                 checked={configQuery.data?.textInputEnabled ?? true}
                 onCheckedChange={(checked) => {
@@ -184,7 +184,7 @@ export function Component() {
                 }}
                 disabled={!configQuery.data?.textInputEnabled}
               >
-                <SelectTrigger className="w-40">
+                <SelectTrigger className="w-full min-w-[120px] sm:w-40">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -325,7 +325,7 @@ export function Component() {
               tipcClient.setPanelPosition({ position: value })
             }}
           >
-            <SelectTrigger className="w-[180px]">
+            <SelectTrigger className="w-full min-w-[140px] sm:w-[180px]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -352,7 +352,7 @@ export function Component() {
         </Control>
 
         <Control label="Description" className="px-3">
-          <div className="text-sm text-muted-foreground">
+          <div className="w-full text-sm text-muted-foreground">
             Choose where the floating panel appears on your screen. Enable dragging to move it by holding the top bar.
             {configQuery.data?.panelPosition === "custom" && (
               <div className="mt-1 text-xs">

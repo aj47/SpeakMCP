@@ -96,7 +96,7 @@ export function ModelSelector({
         open={isOpen}
         onOpenChange={setIsOpen}
       >
-        <SelectTrigger className="w-full max-w-[200px] min-w-[120px]">
+        <SelectTrigger className="w-full min-w-[120px] sm:max-w-[200px]">
           <SelectValue placeholder={
             isLoading
               ? "Loading models..."

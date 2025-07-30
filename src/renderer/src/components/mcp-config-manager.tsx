@@ -474,7 +474,7 @@ export function MCPConfigManager({ config, onConfigChange }: MCPConfigManagerPro
             <DialogTrigger asChild>
               <Button variant="outline" size="sm">
                 <BookOpen className="h-4 w-4 mr-2" />
-                Examples
+                Library
               </Button>
             </DialogTrigger>
             <DialogContent className="max-w-4xl">

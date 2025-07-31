@@ -130,7 +130,7 @@ export function Component() {
           </div>
         }
       >
-        <Control label="Recording" className="px-3">
+        <Control label="Voice Input" className="px-3">
           <div className="space-y-2">
             <Select
               defaultValue={shortcut}
@@ -166,7 +166,7 @@ export function Component() {
 
         <Control label="Text Input" className="px-3">
           <div className="space-y-2">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-col items-end gap-2">
               <Switch
                 checked={configQuery.data?.textInputEnabled ?? true}
                 onCheckedChange={(checked) => {

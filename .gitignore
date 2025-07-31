@@ -31,3 +31,4 @@ backend/.wrangler
 
 *.DS_Store*
 .augment
+augment.mjs

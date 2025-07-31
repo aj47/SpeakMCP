@@ -373,7 +373,6 @@ DOMAIN-SPECIFIC RULES:
         {/* Server Configuration Section */}
         {(config.mcpAgentModeEnabled || config.mcpToolsEnabled) && (
           <div className="space-y-4">
-            <h3 className="text-lg font-semibold">Server Configuration</h3>
             <MCPConfigManager
               config={config.mcpConfig || { mcpServers: {} }}
               onConfigChange={updateMcpConfig}
@@ -384,7 +383,6 @@ DOMAIN-SPECIFIC RULES:
         {/* Tool Management Section */}
         {(config.mcpAgentModeEnabled || config.mcpToolsEnabled) && (
           <div className="space-y-4">
-            <h3 className="text-lg font-semibold">Tool Management</h3>
             <MCPToolManager />
           </div>
         )}

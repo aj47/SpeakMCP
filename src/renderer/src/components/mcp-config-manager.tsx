@@ -565,7 +565,7 @@ export function MCPConfigManager({ config, onConfigChange }: MCPConfigManagerPro
         ) : (
           Object.entries(servers).map(([name, serverConfig]) => (
             <Card key={name}>
-              <CardHeader className="pb-3">
+              <CardHeader className="p-1 pl-2">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <CardTitle className="text-base">{name}</CardTitle>
@@ -574,14 +574,13 @@ export function MCPConfigManager({ config, onConfigChange }: MCPConfigManagerPro
                     ) : serverStatus[name]?.runtimeEnabled === false ? (
                       <div className="flex items-center gap-2">
                         <Square className="h-4 w-4 text-orange-500" />
-                        <Badge variant="outline" className="text-orange-600 border-orange-300">Stopped by User</Badge>
                       </div>
                     ) : (
                       <>
                         {serverStatus[name]?.connected ? (
                           <div className="flex items-center gap-2">
                             <CheckCircle className="h-4 w-4 text-green-500" />
-                            <Badge variant="default">Connected ({serverStatus[name].toolCount} tools)</Badge>
+                            <Badge variant="default">({serverStatus[name].toolCount} tools)</Badge>
                           </div>
                         ) : serverStatus[name]?.error ? (
                           <div className="flex items-center gap-2">
@@ -649,34 +648,7 @@ export function MCPConfigManager({ config, onConfigChange }: MCPConfigManagerPro
                     </Button>
                   </div>
                 </div>
-                <CardDescription>
-                  {serverConfig.transport === "stdio" || !serverConfig.transport
-                    ? `${serverConfig.command || ""} ${serverConfig.args ? serverConfig.args.join(" ") : ""}`
-                    : `${serverConfig.transport}: ${serverConfig.url || ""}`
-                  }
-                </CardDescription>
               </CardHeader>
-              {(serverConfig.env || serverConfig.timeout || serverStatus[name]?.error) && (
-                <CardContent className="pt-0">
-                  <div className="text-xs text-muted-foreground space-y-1">
-                    {serverConfig.env && (
-                      <div>
-                        <strong>Environment:</strong> {Object.keys(serverConfig.env).join(", ")}
-                      </div>
-                    )}
-                    {serverConfig.timeout && (
-                      <div>
-                        <strong>Timeout:</strong> {serverConfig.timeout}ms
-                      </div>
-                    )}
-                    {serverStatus[name]?.error && (
-                      <div className="text-red-500">
-                        <strong>Error:</strong> {serverStatus[name].error}
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              )}
             </Card>
           ))
         )}

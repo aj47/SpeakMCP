@@ -491,8 +491,8 @@ export function Component() {
             className="relative flex grow items-center overflow-hidden"
             dir="rtl"
           >
-            {/* Continue conversation overlay - shown when conversation can be continued */}
-            {showContinueButton && !agentProgress && (
+            {/* Continue conversation overlay - shown when conversation can be continued and not recording */}
+            {showContinueButton && !agentProgress && !recording && (
               <div className="absolute inset-0 flex items-center justify-center z-30 p-4">
                 <ContinueConversation
                   onSubmit={handleContinueConversation}
@@ -509,10 +509,10 @@ export function Component() {
               </div>
             )}
 
-            {/* Waveform visualization - dimmed when agent progress is showing */}
+            {/* Waveform visualization - dimmed when agent progress is showing or continue button is visible (but not during recording) */}
             <div className={cn(
               "absolute right-0 flex h-6 items-center gap-0.5 transition-opacity duration-300",
-              (agentProgress && !mcpTranscribeMutation.isPending) || showContinueButton ? "opacity-30" : "opacity-100"
+              (agentProgress && !mcpTranscribeMutation.isPending) || (showContinueButton && !recording) ? "opacity-30" : "opacity-100"
             )}>
               {visualizerData
                 .slice()

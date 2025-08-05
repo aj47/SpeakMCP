@@ -426,8 +426,8 @@ export function Component() {
 
   return (
     <div className="flex flex-col h-screen liquid-glass-panel text-foreground glass-text-strong">
-      {/* Drag bar - show when drag is enabled and not in text input mode */}
-      {isDragEnabled && !showTextInput && (
+      {/* Drag bar - show whenever dragging is enabled (all states of floating GUI) */}
+      {isDragEnabled && (
         <PanelDragBar
           className="shrink-0"
           disabled={!isDragEnabled}

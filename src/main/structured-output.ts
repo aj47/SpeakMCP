@@ -223,7 +223,7 @@ export async function makeStructuredToolCall(
         const parsed = JSON.parse(content)
         return LLMToolCallSchema.parse(parsed)
       } catch (parseError) {
-        return { content }
+        return { content, needsMoreWork: true }
       }
     }
 

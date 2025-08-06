@@ -37,6 +37,7 @@ export interface MCPToolResult {
 export interface LLMToolCallResponse {
   content?: string
   toolCalls?: MCPToolCall[]
+  needsMoreWork?: boolean
 }
 
 export class MCPService {

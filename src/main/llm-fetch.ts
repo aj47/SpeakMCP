@@ -236,11 +236,16 @@ export async function makeLLMCallWithFetch(
     // Try to extract JSON object from response
     const jsonObject = extractJsonObject(content)
     if (jsonObject && (jsonObject.toolCalls || jsonObject.content)) {
-      return jsonObject as LLMToolCallResponse
+      // If JSON lacks both toolCalls and needsMoreWork, default needsMoreWork to true (continue)
+      const response = jsonObject as LLMToolCallResponse
+      if (response.needsMoreWork === undefined && !response.toolCalls) {
+        response.needsMoreWork = true
+      }
+      return response
     }
 
-    // If no valid JSON found, return as content
-    return { content }
+    // If no valid JSON found, return as content with needsMoreWork=true to continue
+    return { content, needsMoreWork: true }
 
   } catch (error) {
     diagnosticsService.logError('llm-fetch', 'LLM call failed', error)

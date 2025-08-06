@@ -441,6 +441,7 @@ export async function processTranscriptWithAgentMode(
 
   let iteration = 0
   let finalContent = ""
+  let noOpCount = 0 // Track iterations without meaningful progress
 
   while (iteration < maxIterations) {
     iteration++
@@ -581,23 +582,19 @@ Always use actual resource IDs from the conversation history or create new ones 
       conversationHistory: formatConversationForProgress(conversationHistory)
     })
 
-    // Check for completion signals - only complete if there are no tools to execute
+    // Check for explicit completion signal
     const hasToolCalls = llmResponse.toolCalls && llmResponse.toolCalls.length > 0
-    const isComplete = !hasToolCalls && (
-      !llmResponse.toolCalls ||
-      llmResponse.toolCalls.length === 0 ||
-      (llmResponse as any).needsMoreWork === false
-    )
+    const explicitlyComplete = llmResponse.needsMoreWork === false
 
-    if (isComplete) {
-      // No tools to execute or agent explicitly says it's done
+    if (explicitlyComplete && !hasToolCalls) {
+      // Agent explicitly indicated completion
       const assistantContent = llmResponse.content || ""
-      
+
       // Ensure the agent provides a meaningful summary
       if (!assistantContent.trim() || assistantContent.length < 20) {
         // Force the agent to provide a summary by continuing the conversation
         const summaryPrompt = `Please provide a brief summary of your response and what you determined regarding the user's request.`
-        
+
         conversationHistory.push({
           role: "user",
           content: summaryPrompt
@@ -633,6 +630,37 @@ Always use actual resource IDs from the conversation history or create new ones 
       })
 
       break
+    }
+
+    // Handle no-op iterations (no tool calls and no explicit completion)
+    if (!hasToolCalls) {
+      noOpCount++
+
+      // Check if this is an actionable request that should have executed tools
+      const isActionableRequest = toolCapabilities.relevantTools.length > 0
+
+      if (noOpCount >= 2 || (isActionableRequest && noOpCount >= 1)) {
+        // Add nudge to push the agent forward
+        conversationHistory.push({
+          role: "assistant",
+          content: llmResponse.content || ""
+        })
+
+        const nudgeMessage = isActionableRequest
+          ? "You have relevant tools available for this request. Please choose and call at least one tool to make progress, or if you truly cannot proceed, explicitly set needsMoreWork=false and provide a detailed explanation of why no action can be taken."
+          : "Please either take action using available tools or explicitly set needsMoreWork=false if the task is complete."
+
+        conversationHistory.push({
+          role: "user",
+          content: nudgeMessage
+        })
+
+        noOpCount = 0 // Reset counter after nudge
+        continue
+      }
+    } else {
+      // Reset no-op counter when tools are called
+      noOpCount = 0
     }
 
     // Execute tool calls with enhanced error handling
@@ -801,7 +829,7 @@ Please try alternative approaches or provide manual instructions to the user.`
     }
 
     // Check if agent indicated it was done after executing tools
-    const agentIndicatedDone = (llmResponse as any).needsMoreWork === false
+    const agentIndicatedDone = llmResponse.needsMoreWork === false
 
     if (agentIndicatedDone && allToolsSuccessful) {
       // Agent indicated completion, but we need to ensure it provides a summary
@@ -853,7 +881,7 @@ Please try alternative approaches or provide manual instructions to the user.`
 
     // Continue iterating if needsMoreWork is true (explicitly set) or undefined (default behavior)
     // Only stop if needsMoreWork is explicitly false or we hit max iterations
-    const shouldContinue = (llmResponse as any).needsMoreWork !== false
+    const shouldContinue = llmResponse.needsMoreWork !== false
     if (!shouldContinue) {
       // Agent explicitly indicated no more work needed, but ensure it provides a summary
       const assistantContent = llmResponse.content || ""

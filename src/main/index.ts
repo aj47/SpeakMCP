@@ -15,6 +15,7 @@ import { createAppMenu } from "./menu"
 import { initTray } from "./tray"
 import { isAccessibilityGranted } from "./utils"
 import { mcpService } from "./mcp-service"
+import { initDebugFlags } from "./debug"
 
 registerServeSchema()
 
@@ -22,6 +23,9 @@ registerServeSchema()
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(() => {
+  // Initialize debug flags from CLI/env early
+  initDebugFlags(process.argv)
+
   // Set app user model id for windows
   electronApp.setAppUserModelId(process.env.APP_ID)
 

@@ -9,6 +9,7 @@ import { makeStructuredContextExtraction } from "./structured-output"
 import { makeLLMCallWithFetch, makeTextCompletionWithFetch } from "./llm-fetch"
 import { constructSystemPrompt } from "./system-prompts"
 import { state } from "./state"
+import { isDebugLLM, logLLM, isDebugTools, logTools } from "./debug"
 
 /**
  * Use LLM to extract useful context from conversation history
@@ -557,7 +558,6 @@ Always use actual resource IDs from the conversation history or create new ones 
 
     // Display LLM response content to user
     if (llmResponse.content) {
-      console.log("====== LLM RESPONSE ======");
       console.log(llmResponse.content)
       console.log("====== LLM RESPONSE ======");
     }
@@ -583,7 +583,19 @@ Always use actual resource IDs from the conversation history or create new ones 
     })
 
     // Check for explicit completion signal
-    const hasToolCalls = llmResponse.toolCalls && llmResponse.toolCalls.length > 0
+    const toolCallsArray: MCPToolCall[] = Array.isArray((llmResponse as any).toolCalls)
+      ? (llmResponse as any).toolCalls
+      : []
+    if (isDebugTools()) {
+      if ((llmResponse as any).toolCalls && !Array.isArray((llmResponse as any).toolCalls)) {
+        logTools('Non-array toolCalls received from LLM', {
+          receivedType: typeof (llmResponse as any).toolCalls,
+          value: (llmResponse as any).toolCalls
+        })
+      }
+      logTools('Planned tool calls from LLM', toolCallsArray)
+    }
+    const hasToolCalls = toolCallsArray.length > 0
     const explicitlyComplete = llmResponse.needsMoreWork === false
 
     if (explicitlyComplete && !hasToolCalls) {
@@ -667,7 +679,10 @@ Always use actual resource IDs from the conversation history or create new ones 
     const toolResults: MCPToolResult[] = []
     const failedTools: string[] = []
 
-    for (const toolCall of llmResponse.toolCalls!) {
+    for (const toolCall of toolCallsArray) {
+      if (isDebugTools()) {
+        logTools('Executing planned tool call', toolCall)
+      }
       // Check for stop signal before executing each tool
       if (state.shouldStopAgent) {
         console.log("Agent mode stopped during tool execution")
@@ -835,12 +850,12 @@ Please try alternative approaches or provide manual instructions to the user.`
       // Agent indicated completion, but we need to ensure it provides a summary
       // Check if the last assistant message provides a meaningful summary
       const lastAssistantContent = llmResponse.content || ""
-      
+
       // If the agent only made tool calls without providing a summary, request one
       if (!lastAssistantContent.trim() || lastAssistantContent.length < 20) {
         // Force the agent to provide a summary by continuing the conversation
         const summaryPrompt = `Please provide a brief summary of what you accomplished and the results of your actions. Include what worked well and any issues encountered.`
-        
+
         conversationHistory.push({
           role: "user",
           content: summaryPrompt
@@ -885,12 +900,12 @@ Please try alternative approaches or provide manual instructions to the user.`
     if (!shouldContinue) {
       // Agent explicitly indicated no more work needed, but ensure it provides a summary
       const assistantContent = llmResponse.content || ""
-      
+
       // Ensure the agent provides a meaningful summary
       if (!assistantContent.trim() || assistantContent.length < 20) {
         // Force the agent to provide a summary by continuing the conversation
         const summaryPrompt = `Please provide a brief summary of what you accomplished and the current status of the task.`
-        
+
         conversationHistory.push({
           role: "user",
           content: summaryPrompt
@@ -937,14 +952,14 @@ Please try alternative approaches or provide manual instructions to the user.`
   if (iteration >= maxIterations) {
     // Handle maximum iterations reached - always ensure we have a meaningful summary
     const hasRecentErrors = progressSteps.slice(-5).some(step => step.status === "error")
-    
+
     // If we don't have meaningful final content, get the last assistant response or provide fallback
     if (!finalContent || finalContent.trim().length < 20) {
       const lastAssistantMessage = conversationHistory
         .slice()
         .reverse()
         .find(msg => msg.role === "assistant")
-      
+
       if (lastAssistantMessage && lastAssistantMessage.content.trim().length >= 20) {
         finalContent = lastAssistantMessage.content
       } else {
@@ -1004,10 +1019,13 @@ async function makeLLMCall(messages: Array<{role: string, content: string}>, con
   const chatProviderId = config.mcpToolsProviderId
 
   try {
-    console.log("====== LLM Messages ======");
-    console.log(messages)
-    console.log("====== LLM Messages ======");
+    if (isDebugLLM()) {
+      logLLM("Messages →", messages)
+    }
     const result = await makeLLMCallWithFetch(messages, chatProviderId)
+    if (isDebugLLM()) {
+      logLLM("Response ←", result)
+    }
     return result
   } catch (error) {
     diagnosticsService.logError('llm', 'Agent LLM call failed', error)

@@ -11,6 +11,7 @@ import path from "path"
 import os from "os"
 import { diagnosticsService } from "./diagnostics"
 import { state, agentProcessManager } from "./state"
+import { isDebugTools, logTools } from "./debug"
 
 const accessAsync = promisify(access)
 
@@ -420,10 +421,17 @@ export class MCPService {
     // No need for complex session injection logic here
 
     try {
+      if (isDebugTools()) {
+        logTools('Executing tool', { serverName, toolName, arguments: processedArguments })
+      }
       const result = await client.callTool({
         name: toolName,
         arguments: processedArguments
       })
+
+      if (isDebugTools()) {
+        logTools('Tool result', { serverName, toolName, result })
+      }
 
       // Update resource activity if resource ID was used
       for (const [, value] of Object.entries(processedArguments)) {
@@ -443,10 +451,16 @@ export class MCPService {
             text: "Tool executed successfully"
           }]
 
-      return {
+      const finalResult = {
         content,
         isError: Boolean(result.isError)
       }
+
+      if (isDebugTools()) {
+        logTools('Normalized tool result', finalResult)
+      }
+
+      return finalResult
     } catch (error) {
       // Check if this is a parameter naming issue and try to fix it
       if (error instanceof Error) {
@@ -456,10 +470,16 @@ export class MCPService {
           const correctedArgs = this.fixParameterNaming(arguments_, errorMessage)
           if (JSON.stringify(correctedArgs) !== JSON.stringify(arguments_)) {
             try {
+              if (isDebugTools()) {
+                logTools('Retrying with corrected args', { serverName, toolName, correctedArgs })
+              }
               const retryResult = await client.callTool({
                 name: toolName,
                 arguments: correctedArgs
               })
+              if (isDebugTools()) {
+                logTools('Retry result', { serverName, toolName, retryResult })
+              }
 
               const retryContent = Array.isArray(retryResult.content)
                 ? retryResult.content.map(item => ({
@@ -791,6 +811,9 @@ export class MCPService {
 
   async executeToolCall(toolCall: MCPToolCall): Promise<MCPToolResult> {
     try {
+      if (isDebugTools()) {
+        logTools('Requested tool call', toolCall)
+      }
       // Check if this is a server-prefixed tool
       if (toolCall.name.includes(':')) {
         const [serverName, toolName] = toolCall.name.split(':', 2)

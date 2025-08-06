@@ -1,6 +1,7 @@
 import { configStore } from "./config"
 import { MCPTool, LLMToolCallResponse } from "./mcp-service"
 import { diagnosticsService } from "./diagnostics"
+import { isDebugLLM, logLLM } from "./debug"
 
 /**
  * Extracts the first JSON object from a given string.
@@ -123,6 +124,10 @@ async function makeOpenAICompatibleCall(
   }
 
   return apiCallWithRetry(async () => {
+    if (isDebugLLM()) {
+      logLLM('HTTP Request', { url: `${baseURL}/chat/completions`, model, messagesCount: messages.length, useStructuredOutput })
+      logLLM('Request Body', requestBody)
+    }
     const response = await fetch(`${baseURL}/chat/completions`, {
       method: 'POST',
       headers: {
@@ -134,13 +139,23 @@ async function makeOpenAICompatibleCall(
 
     if (!response.ok) {
       const errorText = await response.text()
+      if (isDebugLLM()) {
+        logLLM('HTTP Error', response.status, errorText)
+      }
       throw new Error(`HTTP ${response.status}: ${errorText}`)
     }
 
     const data = await response.json()
 
     if (data.error) {
+      if (isDebugLLM()) {
+        logLLM('API Error', data.error)
+      }
       throw new Error(data.error.message)
+    }
+
+    if (isDebugLLM()) {
+      logLLM('HTTP Response', data)
     }
 
     return data
@@ -166,6 +181,10 @@ async function makeGeminiCall(
   const prompt = messages.map(m => `${m.role}: ${m.content}`).join('\n\n')
 
   return apiCallWithRetry(async () => {
+    if (isDebugLLM()) {
+      logLLM('Gemini HTTP Request', { url: `${baseURL}/v1beta/models/${model}:generateContent`, model })
+      logLLM('Gemini Request Body', { prompt })
+    }
     const response = await fetch(`${baseURL}/v1beta/models/${model}:generateContent?key=${config.geminiApiKey}`, {
       method: 'POST',
       headers: {
@@ -183,12 +202,18 @@ async function makeGeminiCall(
 
     if (!response.ok) {
       const errorText = await response.text()
+      if (isDebugLLM()) {
+        logLLM('Gemini HTTP Error', response.status, errorText)
+      }
       throw new Error(`HTTP ${response.status}: ${errorText}`)
     }
 
     const data = await response.json()
 
     if (data.error) {
+      if (isDebugLLM()) {
+        logLLM('Gemini API Error', data.error)
+      }
       throw new Error(data.error.message)
     }
 
@@ -196,6 +221,10 @@ async function makeGeminiCall(
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text
     if (!text) {
       throw new Error('No text content in Gemini response')
+    }
+
+    if (isDebugLLM()) {
+      logLLM('Gemini HTTP Response', data)
     }
 
     // Return in OpenAI-compatible format

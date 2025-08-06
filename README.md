@@ -152,6 +152,43 @@ pnpm typecheck             # Type checking
 pnpm lint                  # ESLint
 ```
 
+### Debug logging
+
+You can enable targeted debug logs for LLM calls and MCP tool calls during development.
+
+Run dev with CLI flags (recommended):
+
+```bash
+# LLM logs only
+pnpm run dev -- --debug-llm
+
+# Tool-call logs only
+pnpm run dev -- --debug-tools
+
+# Both
+pnpm run dev -- --debug-llm --debug-tools
+# or
+pnpm run dev -- --debug-all
+```
+
+Environment variable alternatives:
+
+```bash
+# Enable LLM logs
+DEBUG_LLM=1 pnpm run dev
+
+# Enable tool logs
+DEBUG_TOOLS=1 pnpm run dev
+
+# Enable all debug logs
+DEBUG=all pnpm run dev
+```
+
+What you’ll see:
+- LLM: request metadata, messages, HTTP request/response, errors
+- Tools: planned tool calls from the LLM, each execution’s args/result, normalized results, and retries with corrected args
+
+
 ### Project Structure
 
 ```

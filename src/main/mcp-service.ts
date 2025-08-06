@@ -1037,6 +1037,18 @@ export class MCPService {
   }
 
   /**
+   * Register all existing MCP server processes with the agent process manager
+   * This is called when agent mode is activated to ensure all processes are tracked
+   */
+  registerExistingProcessesWithAgentManager(): void {
+    for (const [serverName, process] of this.serverProcesses) {
+      if (!process.killed && process.exitCode === null) {
+        agentProcessManager.registerProcess(process)
+      }
+    }
+  }
+
+  /**
    * Emergency stop - immediately kill all MCP server processes
    */
   emergencyStopAllProcesses(): void {

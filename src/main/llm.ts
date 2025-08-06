@@ -1008,6 +1008,9 @@ Please try alternative approaches or provide manual instructions to the user.`
     })
   }
 
+  // Reset the stop flag at the end of agent processing
+  state.shouldStopAgent = false
+
   return {
     content: finalContent,
     conversationHistory,

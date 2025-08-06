@@ -8,6 +8,7 @@ import { ConversationMessage } from "@shared/types"
 import { useConversationState } from "@renderer/contexts/conversation-context"
 import { AgentProgress } from "@renderer/components/agent-progress"
 import { MarkdownRenderer } from "@renderer/components/markdown-renderer"
+import { tipcClient } from "@renderer/lib/tipc-client"
 import dayjs from "dayjs"
 
 interface ConversationDisplayProps {
@@ -94,6 +95,29 @@ interface ConversationMessageItemProps {
 }
 
 function ConversationMessageItem({ message, isLast }: ConversationMessageItemProps) {
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+
+    console.log('[DEBUG][COPY_MESSAGE] Context menu triggered for message:', {
+      messageId: message.id,
+      role: message.role,
+      contentLength: message.content.length,
+      contentPreview: message.content.substring(0, 50) + (message.content.length > 50 ? '...' : ''),
+      coordinates: { x: e.clientX, y: e.clientY }
+    })
+
+    tipcClient.showContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+      messageContext: {
+        content: message.content,
+        role: message.role,
+        messageId: message.id,
+      },
+    })
+  }
+
   const getRoleIcon = (role: string) => {
     switch (role) {
       case "user":
@@ -136,10 +160,13 @@ function ConversationMessageItem({ message, isLast }: ConversationMessageItemPro
   }
 
   return (
-    <div className={cn(
-      "flex gap-3 p-3 rounded-lg transition-colors",
-      isLast ? "liquid-glass-interactive" : "hover:liquid-glass-subtle"
-    )}>
+    <div
+      className={cn(
+        "flex gap-3 p-3 rounded-lg transition-colors cursor-pointer",
+        isLast ? "liquid-glass-interactive" : "hover:liquid-glass-subtle"
+      )}
+      onContextMenu={handleContextMenu}
+    >
       <div className="flex-shrink-0">
         <div className={cn(
           "w-8 h-8 rounded-full flex items-center justify-center",

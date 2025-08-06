@@ -18,6 +18,11 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
 )
 
 document.addEventListener("contextmenu", (e) => {
+  // Check if the context menu event was already handled by a specific component
+  if (e.defaultPrevented) {
+    return
+  }
+
   e.preventDefault()
 
   const selectedText = window.getSelection()?.toString()

@@ -39,11 +39,9 @@ async function processWithAgentMode(
     // Initialize MCP service if not already done
     await mcpService.initialize()
 
-  // Initialize MCP service respecting user preferences
-  // This will only initialize servers that:
-  // 1. Are not disabled in config AND
-  // 2. Are not runtime-disabled by user (unless first initialization)
-  await mcpService.initialize()
+    // Register any existing MCP server processes with the agent process manager
+    // This handles the case where servers were already initialized before agent mode was activated
+    mcpService.registerExistingProcessesWithAgentManager()
 
   // Get available tools
   const availableTools = mcpService.getAvailableTools()
@@ -289,7 +287,16 @@ export const router = {
   }),
 
   showContextMenu: t.procedure
-    .input<{ x: number; y: number; selectedText?: string }>()
+    .input<{
+      x: number;
+      y: number;
+      selectedText?: string;
+      messageContext?: {
+        content: string;
+        role: "user" | "assistant" | "tool";
+        messageId: string;
+      };
+    }>()
     .action(async ({ input, context }) => {
       const items: Electron.MenuItemConstructorOptions[] = []
 
@@ -300,6 +307,24 @@ export const router = {
             clipboard.writeText(input.selectedText || "")
           },
         })
+      }
+
+      // Add message-specific context menu items
+      if (input.messageContext) {
+        const { content, role } = input.messageContext
+
+        // Add "Copy Message" option for all message types
+        items.push({
+          label: "Copy Message",
+          click() {
+            clipboard.writeText(content)
+          },
+        })
+
+        // Add separator if we have other items
+        if (items.length > 0) {
+          items.push({ type: "separator" })
+        }
       }
 
       if (import.meta.env.DEV) {

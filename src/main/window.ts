@@ -333,15 +333,19 @@ export const emergencyStopAgentMode = async () => {
   }
 
   try {
+    const processCountBefore = agentProcessManager.getActiveProcessCount()
+
     // Kill all agent processes immediately (emergency stop)
     agentProcessManager.emergencyStop()
 
-    // Update state
+    const processCountAfter = agentProcessManager.getActiveProcessCount()
+
+    // Update state - but keep shouldStopAgent = true so the agent loop can see it
     state.isAgentModeActive = false
-    state.shouldStopAgent = false
+    // DON'T reset shouldStopAgent here - let the agent loop handle it
     state.agentIterationCount = 0
 
-    console.log(`Emergency stop completed. Killed ${agentProcessManager.getActiveProcessCount()} processes.`)
+    console.log(`Emergency stop completed. Killed ${processCountBefore} processes. Remaining: ${processCountAfter}`)
   } catch (error) {
     console.error("Error during emergency stop:", error)
   }

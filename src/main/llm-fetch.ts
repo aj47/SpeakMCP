@@ -9,24 +9,35 @@ import { isDebugLLM, logLLM } from "./debug"
  * @returns The parsed JSON object, or null if no valid JSON object is found.
  */
 function extractJsonObject(str: string): any | null {
-  // Regular expression to match JSON objects
-  const jsonRegex = /{(?:[^{}]|{(?:[^{}]|{[^{}]*})*})*}/g
+  // Try to find JSON by looking for balanced braces
+  let braceCount = 0
+  let startIndex = -1
 
-  // Find the first match in the string
-  const match = str.match(jsonRegex)
+  for (let i = 0; i < str.length; i++) {
+    const char = str[i]
 
-  if (match) {
-    try {
-      // Parse the matched string into a JSON object
-      return JSON.parse(match[0])
-    } catch (e) {
-      // Handle parsing error
-      return null
+    if (char === '{') {
+      if (braceCount === 0) {
+        startIndex = i
+      }
+      braceCount++
+    } else if (char === '}') {
+      braceCount--
+
+      if (braceCount === 0 && startIndex !== -1) {
+        // Found a complete JSON object
+        const jsonStr = str.substring(startIndex, i + 1)
+        try {
+          return JSON.parse(jsonStr)
+        } catch (e) {
+          // Continue looking for the next JSON object
+          startIndex = -1
+        }
+      }
     }
-  } else {
-    // No JSON found in the string
-    return null
   }
+
+  return null
 }
 
 /**
@@ -264,6 +275,11 @@ export async function makeLLMCallWithFetch(
 
     // Try to extract JSON object from response
     const jsonObject = extractJsonObject(content)
+    if (isDebugLLM()) {
+      logLLM('Extracted JSON object', jsonObject)
+      logLLM('JSON object has toolCalls:', !!jsonObject?.toolCalls)
+      logLLM('JSON object has content:', !!jsonObject?.content)
+    }
     if (jsonObject && (jsonObject.toolCalls || jsonObject.content)) {
       // If JSON lacks both toolCalls and needsMoreWork, default needsMoreWork to true (continue)
       const response = jsonObject as LLMToolCallResponse

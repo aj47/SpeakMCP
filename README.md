@@ -154,7 +154,7 @@ pnpm lint                  # ESLint
 
 ### Debug logging
 
-You can enable targeted debug logs for LLM calls and MCP tool calls during development.
+You can enable targeted debug logs for LLM calls, MCP tool calls, and keybind handling during development.
 
 Run dev with CLI flags (recommended):
 
@@ -165,8 +165,11 @@ pnpm run dev -- --debug-llm
 # Tool-call logs only
 pnpm run dev -- --debug-tools
 
-# Both
-pnpm run dev -- --debug-llm --debug-tools
+# Keybind logs only
+pnpm run dev -- --debug-keybinds
+
+# Multiple flags
+pnpm run dev -- --debug-llm --debug-tools --debug-keybinds
 # or
 pnpm run dev -- --debug-all
 ```
@@ -180,6 +183,9 @@ DEBUG_LLM=1 pnpm run dev
 # Enable tool logs
 DEBUG_TOOLS=1 pnpm run dev
 
+# Enable keybind logs
+DEBUG_KEYBINDS=1 pnpm run dev
+
 # Enable all debug logs
 DEBUG=all pnpm run dev
 ```
@@ -187,6 +193,7 @@ DEBUG=all pnpm run dev
 What you’ll see:
 - LLM: request metadata, messages, HTTP request/response, errors
 - Tools: planned tool calls from the LLM, each execution’s args/result, normalized results, and retries with corrected args
+- Keybinds: raw key events, modifier state changes, shortcut matching logic, and triggered actions
 
 
 ### Project Structure

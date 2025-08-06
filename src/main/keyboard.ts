@@ -15,6 +15,7 @@ import { state, agentProcessManager } from "./state"
 import { spawn, ChildProcess } from "child_process"
 import path from "path"
 import { matchesKeyCombo, getEffectiveShortcut } from "../shared/key-utils"
+import { isDebugKeybinds, logKeybinds } from "./debug"
 
 const rdevPath = path
   .join(
@@ -166,7 +167,10 @@ const parseEvent = (event: any) => {
     const e = JSON.parse(String(event))
     e.data = JSON.parse(e.data)
     return e as RdevEvent
-  } catch {
+  } catch (error) {
+    if (isDebugKeybinds()) {
+      logKeybinds('Failed to parse event:', event, 'Error:', error)
+    }
     return null
   }
 }
@@ -201,6 +205,10 @@ export function listenToKeyboardEvents() {
   let startMcpRecordingTimer: NodeJS.Timeout | undefined
   let isPressedCtrlAltKey = false
 
+  // Debug state tracking
+  let lastLoggedConfig: any = null
+  let configChangeCount = 0
+
   if (process.env.IS_MAC) {
     if (!systemPreferences.isTrustedAccessibilityClient(false)) {
       return
@@ -225,25 +233,73 @@ export function listenToKeyboardEvents() {
     if (e.event_type === "KeyPress") {
       if (e.data.key === "ControlLeft" || e.data.key === "ControlRight") {
         isPressedCtrlKey = true
+        if (isDebugKeybinds()) {
+          logKeybinds('Ctrl key pressed, isPressedCtrlKey =', isPressedCtrlKey)
+        }
       }
 
       if (e.data.key === "ShiftLeft" || e.data.key === "ShiftRight") {
         isPressedShiftKey = true
+        if (isDebugKeybinds()) {
+          logKeybinds('Shift key pressed, isPressedShiftKey =', isPressedShiftKey)
+        }
       }
 
       if (e.data.key === "Alt") {
         isPressedAltKey = true
-        isPressedCtrlAltKey = isPressedCtrlKey && true
+        isPressedCtrlAltKey = isPressedCtrlKey && isPressedAltKey
+        if (isDebugKeybinds()) {
+          logKeybinds('Alt key pressed, isPressedAltKey =', isPressedAltKey, 'isPressedCtrlAltKey =', isPressedCtrlAltKey)
+        }
       }
 
       // Get config once at the beginning of the function
       const config = configStore.get()
 
+      // Only log config changes, not every key press
+      if (isDebugKeybinds()) {
+        const configHash = JSON.stringify({
+          agentKillSwitchEnabled: config.agentKillSwitchEnabled,
+          agentKillSwitchHotkey: config.agentKillSwitchHotkey,
+          textInputEnabled: config.textInputEnabled,
+          textInputShortcut: config.textInputShortcut,
+          mcpToolsEnabled: config.mcpToolsEnabled,
+          mcpToolsShortcut: config.mcpToolsShortcut,
+          shortcut: config.shortcut
+        })
+
+        if (lastLoggedConfig !== configHash) {
+          lastLoggedConfig = configHash
+          configChangeCount++
+          logKeybinds(`Config change #${configChangeCount}:`, {
+            agentKillSwitchEnabled: config.agentKillSwitchEnabled,
+            agentKillSwitchHotkey: config.agentKillSwitchHotkey,
+            textInputEnabled: config.textInputEnabled,
+            textInputShortcut: config.textInputShortcut,
+            mcpToolsEnabled: config.mcpToolsEnabled,
+            mcpToolsShortcut: config.mcpToolsShortcut,
+            shortcut: config.shortcut
+          })
+        }
+      }
+
       if (e.data.key === "Escape") {
+        if (isDebugKeybinds() && (isPressedCtrlKey || isPressedShiftKey || isPressedAltKey)) {
+          logKeybinds('Escape key pressed with modifiers, checking kill switch conditions:', {
+            agentKillSwitchEnabled: config.agentKillSwitchEnabled,
+            agentKillSwitchHotkey: config.agentKillSwitchHotkey,
+            modifiers: { ctrl: isPressedCtrlKey, shift: isPressedShiftKey, alt: isPressedAltKey },
+            isAgentModeActive: state.isAgentModeActive
+          })
+        }
+
         // Handle kill switch hotkey: Ctrl+Shift+Escape
         if (config.agentKillSwitchEnabled &&
             config.agentKillSwitchHotkey === "ctrl-shift-escape" &&
             isPressedCtrlKey && isPressedShiftKey) {
+          if (isDebugKeybinds()) {
+            logKeybinds('Kill switch triggered: Ctrl+Shift+Escape')
+          }
           // Emergency stop agent mode
           if (state.isAgentModeActive) {
             emergencyStopAgentMode()
@@ -272,19 +328,29 @@ export function listenToKeyboardEvents() {
 
         if (config.agentKillSwitchHotkey === "ctrl-alt-q" &&
             e.data.key === "KeyQ" && isPressedCtrlKey && isPressedAltKey) {
+          if (isDebugKeybinds()) {
+            logKeybinds('Kill switch triggered: Ctrl+Alt+Q')
+          }
           emergencyStopAgentMode()
           return
         }
 
         if (config.agentKillSwitchHotkey === "ctrl-shift-q" &&
             e.data.key === "KeyQ" && isPressedCtrlKey && isPressedShiftKey) {
+          if (isDebugKeybinds()) {
+            logKeybinds('Kill switch triggered: Ctrl+Shift+Q')
+          }
           emergencyStopAgentMode()
           return
         }
 
         // Handle custom kill switch hotkey
         if (config.agentKillSwitchHotkey === "custom" && effectiveKillSwitchHotkey) {
-          if (matchesKeyCombo(e.data, { ctrl: isPressedCtrlKey, shift: isPressedShiftKey, alt: isPressedAltKey }, effectiveKillSwitchHotkey)) {
+          const matches = matchesKeyCombo(e.data, { ctrl: isPressedCtrlKey, shift: isPressedShiftKey, alt: isPressedAltKey }, effectiveKillSwitchHotkey)
+          if (isDebugKeybinds() && matches) {
+            logKeybinds('Kill switch triggered: Custom hotkey', effectiveKillSwitchHotkey)
+          }
+          if (matches) {
             emergencyStopAgentMode()
             return
           }
@@ -292,26 +358,38 @@ export function listenToKeyboardEvents() {
       }
 
       // Handle text input shortcuts
-
       if (config.textInputEnabled) {
         const effectiveTextInputShortcut = getEffectiveShortcut(config.textInputShortcut, config.customTextInputShortcut)
 
         if (config.textInputShortcut === "ctrl-t" && e.data.key === "KeyT" && isPressedCtrlKey && !isPressedShiftKey && !isPressedAltKey) {
+          if (isDebugKeybinds()) {
+            logKeybinds('Text input triggered: Ctrl+T')
+          }
           showPanelWindowAndShowTextInput()
           return
         }
         if (config.textInputShortcut === "ctrl-shift-t" && e.data.key === "KeyT" && isPressedCtrlKey && isPressedShiftKey && !isPressedAltKey) {
+          if (isDebugKeybinds()) {
+            logKeybinds('Text input triggered: Ctrl+Shift+T')
+          }
           showPanelWindowAndShowTextInput()
           return
         }
         if (config.textInputShortcut === "alt-t" && e.data.key === "KeyT" && !isPressedCtrlKey && !isPressedShiftKey && isPressedAltKey) {
+          if (isDebugKeybinds()) {
+            logKeybinds('Text input triggered: Alt+T')
+          }
           showPanelWindowAndShowTextInput()
           return
         }
 
         // Handle custom text input shortcut
         if (config.textInputShortcut === "custom" && effectiveTextInputShortcut) {
-          if (matchesKeyCombo(e.data, { ctrl: isPressedCtrlKey, shift: isPressedShiftKey, alt: isPressedAltKey }, effectiveTextInputShortcut)) {
+          const matches = matchesKeyCombo(e.data, { ctrl: isPressedCtrlKey, shift: isPressedShiftKey, alt: isPressedAltKey }, effectiveTextInputShortcut)
+          if (isDebugKeybinds() && matches) {
+            logKeybinds('Text input triggered: Custom hotkey', effectiveTextInputShortcut)
+          }
+          if (matches) {
             showPanelWindowAndShowTextInput()
             return
           }
@@ -323,7 +401,10 @@ export function listenToKeyboardEvents() {
         const effectiveMcpToolsShortcut = getEffectiveShortcut(config.mcpToolsShortcut, config.customMcpToolsShortcut)
 
         if (config.mcpToolsShortcut === "ctrl-alt-slash") {
-          if (e.data.key === "Slash" && isPressedCtrlKey && isPressedCtrlAltKey) {
+          if (e.data.key === "Slash" && isPressedCtrlKey && isPressedAltKey) {
+            if (isDebugKeybinds()) {
+              logKeybinds('MCP tools triggered: Ctrl+Alt+/')
+            }
             getWindowRendererHandlers("panel")?.startOrFinishMcpRecording.send()
             return
           }
@@ -331,7 +412,11 @@ export function listenToKeyboardEvents() {
 
         // Handle custom MCP tools shortcut
         if (config.mcpToolsShortcut === "custom" && effectiveMcpToolsShortcut) {
-          if (matchesKeyCombo(e.data, { ctrl: isPressedCtrlKey, shift: isPressedShiftKey, alt: isPressedAltKey }, effectiveMcpToolsShortcut)) {
+          const matches = matchesKeyCombo(e.data, { ctrl: isPressedCtrlKey, shift: isPressedShiftKey, alt: isPressedAltKey }, effectiveMcpToolsShortcut)
+          if (isDebugKeybinds() && matches) {
+            logKeybinds('MCP tools triggered: Custom hotkey', effectiveMcpToolsShortcut)
+          }
+          if (matches) {
             getWindowRendererHandlers("panel")?.startOrFinishMcpRecording.send()
             return
           }
@@ -343,11 +428,18 @@ export function listenToKeyboardEvents() {
 
       if (config.shortcut === "ctrl-slash") {
         if (e.data.key === "Slash" && isPressedCtrlKey) {
+          if (isDebugKeybinds()) {
+            logKeybinds('Recording triggered: Ctrl+/')
+          }
           getWindowRendererHandlers("panel")?.startOrFinishRecording.send()
         }
       } else if (config.shortcut === "custom" && effectiveRecordingShortcut) {
         // Handle custom recording shortcut
-        if (matchesKeyCombo(e.data, { ctrl: isPressedCtrlKey, shift: isPressedShiftKey, alt: isPressedAltKey }, effectiveRecordingShortcut)) {
+        const matches = matchesKeyCombo(e.data, { ctrl: isPressedCtrlKey, shift: isPressedShiftKey, alt: isPressedAltKey }, effectiveRecordingShortcut)
+        if (isDebugKeybinds() && matches) {
+          logKeybinds('Recording triggered: Custom hotkey', effectiveRecordingShortcut)
+        }
+        if (matches) {
           getWindowRendererHandlers("panel")?.startOrFinishRecording.send()
           return
         }
@@ -408,15 +500,24 @@ export function listenToKeyboardEvents() {
 
       if (e.data.key === "ControlLeft" || e.data.key === "ControlRight") {
         isPressedCtrlKey = false
+        if (isDebugKeybinds()) {
+          logKeybinds('Ctrl key released, isPressedCtrlKey =', isPressedCtrlKey)
+        }
       }
 
       if (e.data.key === "ShiftLeft" || e.data.key === "ShiftRight") {
         isPressedShiftKey = false
+        if (isDebugKeybinds()) {
+          logKeybinds('Shift key released, isPressedShiftKey =', isPressedShiftKey)
+        }
       }
 
       if (e.data.key === "Alt") {
         isPressedAltKey = false
         isPressedCtrlAltKey = false
+        if (isDebugKeybinds()) {
+          logKeybinds('Alt key released, isPressedAltKey =', isPressedAltKey, 'isPressedCtrlAltKey =', isPressedCtrlAltKey)
+        }
       }
 
       const currentConfig = configStore.get()
@@ -452,11 +553,32 @@ export function listenToKeyboardEvents() {
 
   const child = spawn(rdevPath, ["listen"], {})
 
-  child.stdout.on("data", (data) => {
+  if (isDebugKeybinds()) {
+    logKeybinds('Starting keyboard event listener with rdev path:', rdevPath)
+  }
 
+  child.stdout.on("data", (data) => {
     const event = parseEvent(data)
     if (!event) return
 
     handleEvent(event)
+  })
+
+  child.stderr?.on("data", (data) => {
+    if (isDebugKeybinds()) {
+      logKeybinds('Keyboard listener stderr:', data.toString())
+    }
+  })
+
+  child.on("error", (error) => {
+    if (isDebugKeybinds()) {
+      logKeybinds('Keyboard listener process error:', error)
+    }
+  })
+
+  child.on("exit", (code, signal) => {
+    if (isDebugKeybinds()) {
+      logKeybinds('Keyboard listener process exited:', { code, signal })
+    }
   })
 }

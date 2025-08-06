@@ -1,12 +1,14 @@
 export interface DebugFlags {
   llm: boolean
   tools: boolean
+  keybinds: boolean
   all: boolean
 }
 
 const flags: DebugFlags = {
   llm: false,
   tools: false,
+  keybinds: false,
   all: false,
 }
 
@@ -25,18 +27,21 @@ export function initDebugFlags(argv: string[] = process.argv): DebugFlags {
 
   const envLLM = strToBool(process.env.DEBUG_LLM) || envParts.includes('llm') || envDebug === '*' || envDebug.includes('all')
   const envTools = strToBool(process.env.DEBUG_TOOLS) || envParts.includes('tools') || envDebug === '*' || envDebug.includes('all')
+  const envKeybinds = strToBool(process.env.DEBUG_KEYBINDS) || envParts.includes('keybinds') || envDebug === '*' || envDebug.includes('all')
 
   const all = has('--debug') || has('--debug-all') || envDebug === '*' || envParts.includes('all')
 
   flags.llm = all || has('--debug-llm') || envLLM
   flags.tools = all || has('--debug-tools') || envTools
+  flags.keybinds = all || has('--debug-keybinds') || envKeybinds
   flags.all = all
 
-  if (flags.llm || flags.tools) {
+  if (flags.llm || flags.tools || flags.keybinds) {
     // Small banner so users can see debugs are enabled
     const enabled: string[] = []
     if (flags.llm) enabled.push('LLM')
     if (flags.tools) enabled.push('TOOLS')
+    if (flags.keybinds) enabled.push('KEYBINDS')
     // eslint-disable-next-line no-console
     console.log(`[DEBUG] Enabled: ${enabled.join(', ')} (argv: ${argv.filter(a => a.startsWith('--debug')).join(' ') || 'none'})`)
   }
@@ -50,6 +55,10 @@ export function isDebugLLM(): boolean {
 
 export function isDebugTools(): boolean {
   return flags.tools || flags.all
+}
+
+export function isDebugKeybinds(): boolean {
+  return flags.keybinds || flags.all
 }
 
 function ts(): string {
@@ -67,6 +76,12 @@ export function logTools(...args: any[]) {
   if (!isDebugTools()) return
   // eslint-disable-next-line no-console
   console.log(`[${ts()}] [DEBUG][TOOLS]`, ...args)
+}
+
+export function logKeybinds(...args: any[]) {
+  if (!isDebugKeybinds()) return
+  // eslint-disable-next-line no-console
+  console.log(`[${ts()}] [DEBUG][KEYBINDS]`, ...args)
 }
 
 export function getDebugFlags(): DebugFlags {

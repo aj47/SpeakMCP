@@ -61,7 +61,7 @@ export function matchesKeyCombo(event: { key: string }, modifiers: { ctrl: boole
   if (!combo) return false
 
   const parsed = parseKeyCombo(combo)
-  
+
   // Check modifiers
   if (parsed.ctrl !== modifiers.ctrl) return false
   if (parsed.shift !== modifiers.shift) return false
@@ -73,13 +73,13 @@ export function matchesKeyCombo(event: { key: string }, modifiers: { ctrl: boole
 
   // Convert event key to our internal format
   let eventKey = event.key.toLowerCase()
-  
+
   // Handle special key mappings from Rust rdev format
   if (eventKey.startsWith("key")) {
     // Convert "KeyT" to "t", "KeyA" to "a", etc.
     eventKey = eventKey.substring(3).toLowerCase()
   }
-  
+
   // Handle special keys
   const keyMappings: Record<string, string> = {
     "slash": "/",
@@ -107,7 +107,8 @@ export function matchesKeyCombo(event: { key: string }, modifiers: { ctrl: boole
   const normalizedEventKey = keyMappings[eventKey] || eventKey
   const normalizedComboKey = keyMappings[parsed.key] || parsed.key
 
-  return normalizedEventKey === normalizedComboKey
+  const matches = normalizedEventKey === normalizedComboKey
+  return matches
 }
 
 /**
@@ -127,7 +128,7 @@ export function formatKeyComboForDisplay(combo: string): string {
 
   if (parsed.key) {
     let displayKey = parsed.key
-    
+
     // Format special keys for display
     const displayMappings: Record<string, string> = {
       " ": "Space",

@@ -16,6 +16,8 @@ const getConfig = () => {
     mcpToolsShortcut: "hold-ctrl-alt",
     mcpToolsEnabled: true,
     mcpAgentModeEnabled: true,
+    // Safety: optional approval prompt before each tool call (off by default)
+    mcpRequireApprovalBeforeToolCall: false,
     mcpAutoPasteEnabled: true,
     mcpAutoPasteDelay: 1000, // 1 second delay by default
     mcpMaxIterations: 10, // Default max iterations for agent mode
@@ -42,7 +44,9 @@ const getConfig = () => {
   }
 
   try {
-    const savedConfig = JSON.parse(fs.readFileSync(configPath, "utf8")) as Config
+    const savedConfig = JSON.parse(
+      fs.readFileSync(configPath, "utf8"),
+    ) as Config
     return { ...defaultConfig, ...savedConfig }
   } catch {
     return defaultConfig

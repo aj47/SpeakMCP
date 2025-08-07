@@ -1,6 +1,9 @@
 import { useMutation } from "@tanstack/react-query"
 import { tipcClient } from "~/lib/tipc-client"
-import { useConversationActions, useConversationState } from "@renderer/contexts/conversation-context"
+import {
+  useConversationActions,
+  useConversationState,
+} from "@renderer/contexts/conversation-context"
 
 interface UseInputProcessingOptions {
   onError?: (error: Error) => void
@@ -26,7 +29,13 @@ export function useInputProcessing(options: UseInputProcessingOptions = {}) {
 
   // MCP text input mutation (primary)
   const mcpTextInputMutation = useMutation({
-    mutationFn: async ({ text, conversationId }: { text: string; conversationId?: string }) => {
+    mutationFn: async ({
+      text,
+      conversationId,
+    }: {
+      text: string
+      conversationId?: string
+    }) => {
       await tipcClient.createMcpTextInput({ text, conversationId })
     },
     onError: options.onError,
@@ -78,7 +87,7 @@ export function useInputProcessing(options: UseInputProcessingOptions = {}) {
       if (config.mcpToolsEnabled) {
         mcpTextInputMutation.mutate({
           text,
-          conversationId: currentConversation?.id
+          conversationId: currentConversation?.id,
         })
       } else {
         textInputMutation.mutate({ text })
@@ -97,9 +106,9 @@ export function useInputProcessing(options: UseInputProcessingOptions = {}) {
     })
   }
 
-  const isProcessing = 
-    textInputMutation.isPending || 
-    mcpTextInputMutation.isPending || 
+  const isProcessing =
+    textInputMutation.isPending ||
+    mcpTextInputMutation.isPending ||
     mcpTranscribeMutation.isPending
 
   return {
@@ -110,6 +119,6 @@ export function useInputProcessing(options: UseInputProcessingOptions = {}) {
       textInput: textInputMutation,
       mcpTextInput: mcpTextInputMutation,
       mcpTranscribe: mcpTranscribeMutation,
-    }
+    },
   }
 }

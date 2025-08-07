@@ -4,7 +4,11 @@ import { Textarea } from "@renderer/components/ui/textarea"
 import { Card, CardContent } from "@renderer/components/ui/card"
 import { MessageCircle, Send, X } from "lucide-react"
 import { cn } from "@renderer/lib/utils"
-import { useConversation, useConversationActions, useConversationState } from "@renderer/contexts/conversation-context"
+import {
+  useConversation,
+  useConversationActions,
+  useConversationState,
+} from "@renderer/contexts/conversation-context"
 import { AgentProgress } from "@renderer/components/agent-progress"
 
 interface ContinueConversationProps {
@@ -16,12 +20,14 @@ interface ContinueConversationProps {
 export function ContinueConversation({
   onSubmit,
   isProcessing = false,
-  className
+  className,
 }: ContinueConversationProps) {
   const [message, setMessage] = useState("")
   const [isExpanded, setIsExpanded] = useState(false)
-  const { showContinueButton, agentProgress, isAgentProcessing } = useConversationState()
-  const { setShowContinueButton, setIsWaitingForResponse } = useConversationActions()
+  const { showContinueButton, agentProgress, isAgentProcessing } =
+    useConversationState()
+  const { setShowContinueButton, setIsWaitingForResponse } =
+    useConversationActions()
 
   if (!showContinueButton) {
     return null
@@ -72,9 +78,9 @@ export function ContinueConversation({
 
   return (
     <Card className={cn("liquid-glass-strong glass-border", className)}>
-      <CardContent className="p-4 space-y-3">
+      <CardContent className="space-y-3 p-4">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 text-sm glass-text-strong">
+          <div className="glass-text-strong flex items-center gap-2 text-sm">
             <MessageCircle className="h-4 w-4" />
             Continue the conversation
           </div>
@@ -82,7 +88,7 @@ export function ContinueConversation({
             variant="ghost"
             size="sm"
             onClick={handleCancel}
-            className="h-6 w-6 p-0 glass-text-muted hover:glass-text-strong"
+            className="glass-text-muted hover:glass-text-strong h-6 w-6 p-0"
           >
             <X className="h-4 w-4" />
           </Button>
@@ -91,8 +97,12 @@ export function ContinueConversation({
         <div className="space-y-2">
           {/* Show agent progress if processing */}
           {isAgentProcessing && agentProgress ? (
-            <div className="min-h-[200px] flex items-center justify-center">
-              <AgentProgress progress={agentProgress} variant="default" className="w-full" />
+            <div className="flex min-h-[200px] items-center justify-center">
+              <AgentProgress
+                progress={agentProgress}
+                variant="default"
+                className="w-full"
+              />
             </div>
           ) : (
             <>
@@ -102,16 +112,16 @@ export function ContinueConversation({
                 onKeyDown={handleKeyDown}
                 placeholder="Type your follow-up message..."
                 className={cn(
-                  "min-h-[80px] resize-none liquid-glass-input glass-text-strong border-0",
-                  "focus:border-ring focus:ring-1 focus:ring-ring bg-transparent",
-                  "placeholder:glass-text-muted"
+                  "liquid-glass-input glass-text-strong min-h-[80px] resize-none border-0",
+                  "bg-transparent focus:border-ring focus:ring-1 focus:ring-ring",
+                  "placeholder:glass-text-muted",
                 )}
                 disabled={isProcessing}
                 autoFocus
               />
 
               <div className="flex items-center justify-between">
-                <div className="text-xs glass-text-muted">
+                <div className="glass-text-muted text-xs">
                   Enter to send • Shift+Enter for new line • Esc to cancel
                 </div>
 
@@ -148,11 +158,13 @@ export function ContinueConversation({
 export function ContinueConversationCompact({
   onSubmit,
   isProcessing = false,
-  className
+  className,
 }: ContinueConversationProps) {
   const [message, setMessage] = useState("")
-  const { showContinueButton, agentProgress, isAgentProcessing } = useConversationState()
-  const { setShowContinueButton, setIsWaitingForResponse } = useConversationActions()
+  const { showContinueButton, agentProgress, isAgentProcessing } =
+    useConversationState()
+  const { setShowContinueButton, setIsWaitingForResponse } =
+    useConversationActions()
 
   if (!showContinueButton) {
     return null
@@ -177,14 +189,23 @@ export function ContinueConversationCompact({
   // Show agent progress if processing
   if (isAgentProcessing && agentProgress) {
     return (
-      <div className={cn("min-h-[120px] flex items-center justify-center liquid-glass-subtle rounded-lg", className)}>
-        <AgentProgress progress={agentProgress} variant="overlay" className="w-full mx-4" />
+      <div
+        className={cn(
+          "liquid-glass-subtle flex min-h-[120px] items-center justify-center rounded-lg",
+          className,
+        )}
+      >
+        <AgentProgress
+          progress={agentProgress}
+          variant="overlay"
+          className="mx-4 w-full"
+        />
       </div>
     )
   }
 
   return (
-    <div className={cn("flex gap-2 items-end", className)}>
+    <div className={cn("flex items-end gap-2", className)}>
       <div className="flex-1">
         <Textarea
           value={message}
@@ -192,9 +213,9 @@ export function ContinueConversationCompact({
           onKeyDown={handleKeyDown}
           placeholder="Continue conversation..."
           className={cn(
-            "min-h-[40px] resize-none liquid-glass-input glass-text-strong border-0",
-            "focus:border-ring focus:ring-1 focus:ring-ring bg-transparent",
-            "placeholder:glass-text-muted"
+            "liquid-glass-input glass-text-strong min-h-[40px] resize-none border-0",
+            "bg-transparent focus:border-ring focus:ring-1 focus:ring-ring",
+            "placeholder:glass-text-muted",
           )}
           disabled={isProcessing}
           rows={1}
@@ -215,13 +236,14 @@ export function ContinueConversationCompact({
 // Hook for managing continue conversation state
 export function useContinueConversation() {
   const { showContinueButton, isWaitingForResponse } = useConversationState()
-  const { setShowContinueButton, setIsWaitingForResponse } = useConversationActions()
+  const { setShowContinueButton, setIsWaitingForResponse } =
+    useConversationActions()
 
   return {
     showContinueButton,
     isWaitingForResponse,
     hideContinueButton: () => setShowContinueButton(false),
     showContinueButtonAgain: () => setShowContinueButton(true),
-    setWaitingForResponse: setIsWaitingForResponse
+    setWaitingForResponse: setIsWaitingForResponse,
   }
 }

@@ -21,29 +21,31 @@ export function AgentProcessingView({
   isProcessing,
   className,
   variant = "overlay",
-  showBackgroundSpinner = true
+  showBackgroundSpinner = true,
 }: AgentProcessingViewProps) {
   if (!isProcessing && !agentProgress) {
     return null
   }
 
   return (
-    <div className={cn(
-      "flex h-full w-full items-center justify-center relative liquid-glass-strong rounded-xl glass-text-strong",
-      className
-    )}>
+    <div
+      className={cn(
+        "liquid-glass-strong glass-text-strong relative flex h-full w-full items-center justify-center rounded-xl",
+        className,
+      )}
+    >
       {agentProgress ? (
-        <div className="absolute inset-0 flex items-center justify-center z-20">
-          <AgentProgress 
-            progress={agentProgress} 
-            variant={variant} 
-            className="w-full mx-4" 
+        <div className="absolute inset-0 z-20 flex items-center justify-center">
+          <AgentProgress
+            progress={agentProgress}
+            variant={variant}
+            className="mx-4 w-full"
           />
         </div>
       ) : (
         <Spinner />
       )}
-      
+
       {/* Show a subtle background spinner when agent progress is active */}
       {agentProgress && showBackgroundSpinner && (
         <div className="absolute inset-0 flex items-center justify-center opacity-20">

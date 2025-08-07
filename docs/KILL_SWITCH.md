@@ -44,7 +44,7 @@ The system automatically tracks processes created during agent mode:
 When the kill switch hotkey is pressed:
 
 1. **Immediate Stop Signal**: Sets `shouldStopAgent` flag to stop current iterations
-2. **Process Termination**: 
+2. **Process Termination**:
    - First attempts graceful shutdown (SIGTERM)
    - After 3-second timeout, force kills (SIGKILL)
 3. **State Cleanup**: Resets agent mode state and counters

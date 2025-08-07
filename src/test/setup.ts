@@ -1,11 +1,11 @@
-import '@testing-library/jest-dom'
-import { vi, beforeAll, afterAll } from 'vitest'
+import "@testing-library/jest-dom"
+import { vi, beforeAll, afterAll } from "vitest"
 
 // Mock Electron APIs
 global.window = global.window || {}
 
 // Mock tipc client
-vi.mock('@renderer/lib/tipc-client', () => ({
+vi.mock("@renderer/lib/tipc-client", () => ({
   tipcClient: {
     loadMcpConfigFile: vi.fn(),
     saveMcpConfigFile: vi.fn(),
@@ -15,37 +15,37 @@ vi.mock('@renderer/lib/tipc-client', () => ({
     restartMcpServer: vi.fn(),
     stopMcpServer: vi.fn(),
     saveConfig: vi.fn(),
-    getConfig: vi.fn()
-  }
+    getConfig: vi.fn(),
+  },
 }))
 
 // Mock sonner toast
-vi.mock('sonner', () => ({
+vi.mock("sonner", () => ({
   toast: {
     success: vi.fn(),
     error: vi.fn(),
     info: vi.fn(),
-    warning: vi.fn()
-  }
+    warning: vi.fn(),
+  },
 }))
 
 // Mock React Router
-vi.mock('react-router-dom', async () => {
-  const actual = await vi.importActual('react-router-dom')
+vi.mock("react-router-dom", async () => {
+  const actual = await vi.importActual("react-router-dom")
   return {
     ...actual,
     useNavigate: () => vi.fn(),
-    useLocation: () => ({ pathname: '/test' })
+    useLocation: () => ({ pathname: "/test" }),
   }
 })
 
 // Mock query client
-vi.mock('@renderer/lib/query-client', () => ({
+vi.mock("@renderer/lib/query-client", () => ({
   useConfigQuery: () => ({
     data: {},
     isLoading: false,
-    error: null
-  })
+    error: null,
+  }),
 }))
 
 // Suppress console warnings in tests

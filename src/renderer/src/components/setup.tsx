@@ -13,7 +13,8 @@ export function Setup() {
   // Check if all required permissions are granted
   const microphoneGranted = microphoneStatusQuery.data === "granted"
   const accessibilityGranted = isAccessibilityGrantedQuery.data
-  const allPermissionsGranted = microphoneGranted && (process.env.IS_MAC ? accessibilityGranted : true)
+  const allPermissionsGranted =
+    microphoneGranted && (process.env.IS_MAC ? accessibilityGranted : true)
 
   return (
     <div className="app-drag-region flex h-dvh items-center justify-center p-10">
@@ -65,7 +66,8 @@ export function Setup() {
               <span className="font-semibold">All permissions granted!</span>
             </div>
             <p className="mt-2 text-sm text-green-600 dark:text-green-400">
-              Please restart the app to complete the setup and start using {process.env.PRODUCT_NAME}.
+              Please restart the app to complete the setup and start using{" "}
+              {process.env.PRODUCT_NAME}.
             </p>
           </div>
         )}
@@ -79,7 +81,9 @@ export function Setup() {
             }}
           >
             <span className="i-mingcute-refresh-2-line"></span>
-            <span>{allPermissionsGranted ? "Restart App Now" : "Restart App"}</span>
+            <span>
+              {allPermissionsGranted ? "Restart App Now" : "Restart App"}
+            </span>
           </Button>
         </div>
       </div>

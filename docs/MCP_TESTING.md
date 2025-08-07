@@ -28,6 +28,7 @@ The MCP testing suite addresses the original `spawn npx ENOENT` error and provid
 **Problem**: Electron's child process environment has limited PATH, causing `spawn npx ENOENT` errors.
 
 **Solution**:
+
 - `resolveCommandPath()` - Cross-platform command resolution
 - `prepareEnvironment()` - Proper environment variable setup
 - Automatic addition of Node.js paths (`/usr/local/bin`, `/opt/homebrew/bin`, etc.)
@@ -47,12 +48,14 @@ The MCP testing suite addresses the original `spawn npx ENOENT` error and provid
 ## Running Tests
 
 ### All MCP Tests
+
 ```bash
 npm test src/main/__tests__/mcp-path-resolution.test.ts
 npm test src/main/__tests__/mcp-e2e.test.ts
 ```
 
 ### Individual Test Suites
+
 ```bash
 # PATH resolution tests (12 tests)
 npm test src/main/__tests__/mcp-path-resolution.test.ts
@@ -65,6 +68,7 @@ npm test src/main/__tests__/mcp-service.test.ts
 ```
 
 ### Manual Testing
+
 ```bash
 # Test PATH resolution manually
 node scripts/test-mcp-path-fix.mjs
@@ -94,6 +98,7 @@ The mock server (`scripts/mock-mcp-server.mjs`) provides:
 - **Error Testing**: Simulates various error conditions
 
 ### Usage
+
 ```bash
 # Start mock server
 node scripts/mock-mcp-server.mjs
@@ -105,6 +110,7 @@ echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | node scripts/mock-mcp-se
 ## Test Coverage
 
 ### PATH Resolution
+
 - ✅ Absolute path handling
 - ✅ Command resolution in PATH
 - ✅ Missing command handling
@@ -112,6 +118,7 @@ echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | node scripts/mock-mcp-se
 - ✅ Cross-platform compatibility
 
 ### MCP Server Management
+
 - ✅ Server initialization
 - ✅ Server restart functionality
 - ✅ Multiple server support
@@ -119,12 +126,14 @@ echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | node scripts/mock-mcp-se
 - ✅ Connection testing
 
 ### Tool Execution
+
 - ✅ Successful tool calls
 - ✅ Error handling
 - ✅ Multiple server tool execution
 - ✅ Fallback tool support
 
 ### Integration Testing
+
 - ✅ Real process spawning
 - ✅ JSON-RPC communication
 - ✅ Server lifecycle management
@@ -141,6 +150,7 @@ echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | node scripts/mock-mcp-se
 ### Debug Mode
 
 Enable debug logging by setting environment variables:
+
 ```bash
 DEBUG=mcp* npm test
 ```

@@ -1,7 +1,11 @@
 import fs from "fs"
 import path from "path"
 import { conversationsFolder } from "./config"
-import { Conversation, ConversationMessage, ConversationHistoryItem } from "../shared/types"
+import {
+  Conversation,
+  ConversationMessage,
+  ConversationHistoryItem,
+} from "../shared/types"
 
 export class ConversationService {
   private static instance: ConversationService | null = null
@@ -56,10 +60,11 @@ export class ConversationService {
       }
 
       // Remove existing entry if it exists
-      index = index.filter(item => item.id !== conversation.id)
+      index = index.filter((item) => item.id !== conversation.id)
 
       // Create new index entry
-      const lastMessage = conversation.messages[conversation.messages.length - 1]
+      const lastMessage =
+        conversation.messages[conversation.messages.length - 1]
       const indexItem: ConversationHistoryItem = {
         id: conversation.id,
         title: conversation.title,
@@ -67,7 +72,7 @@ export class ConversationService {
         updatedAt: conversation.updatedAt,
         messageCount: conversation.messages.length,
         lastMessage: lastMessage?.content || "",
-        preview: this.generatePreview(conversation.messages)
+        preview: this.generatePreview(conversation.messages),
       }
 
       // Add to beginning of array (most recent first)
@@ -75,15 +80,14 @@ export class ConversationService {
 
       // Save updated index
       fs.writeFileSync(indexPath, JSON.stringify(index, null, 2))
-    } catch (error) {
-    }
+    } catch (error) {}
   }
 
   private generatePreview(messages: ConversationMessage[]): string {
     // Generate a preview from the first few messages
     const previewMessages = messages.slice(0, 3)
     const preview = previewMessages
-      .map(msg => `${msg.role}: ${msg.content.slice(0, 100)}`)
+      .map((msg) => `${msg.role}: ${msg.content.slice(0, 100)}`)
       .join(" | ")
     return preview.length > 200 ? `${preview.slice(0, 200)}...` : preview
   }
@@ -101,7 +105,6 @@ export class ConversationService {
 
       // Update the index
       this.updateConversationIndex(conversation)
-
     } catch (error) {
       throw error
     }
@@ -156,16 +159,18 @@ export class ConversationService {
       if (fs.existsSync(indexPath)) {
         const indexData = fs.readFileSync(indexPath, "utf8")
         let index: ConversationHistoryItem[] = JSON.parse(indexData)
-        index = index.filter(item => item.id !== conversationId)
+        index = index.filter((item) => item.id !== conversationId)
         fs.writeFileSync(indexPath, JSON.stringify(index, null, 2))
       }
-
     } catch (error) {
       throw error
     }
   }
 
-  async createConversation(firstMessage: string, role: "user" | "assistant" = "user"): Promise<Conversation> {
+  async createConversation(
+    firstMessage: string,
+    role: "user" | "assistant" = "user",
+  ): Promise<Conversation> {
     const conversationId = this.generateConversationId()
     const messageId = this.generateMessageId()
     const now = Date.now()
@@ -174,7 +179,7 @@ export class ConversationService {
       id: messageId,
       role,
       content: firstMessage,
-      timestamp: now
+      timestamp: now,
     }
 
     const conversation: Conversation = {
@@ -182,7 +187,7 @@ export class ConversationService {
       title: this.generateConversationTitle(firstMessage),
       createdAt: now,
       updatedAt: now,
-      messages: [message]
+      messages: [message],
     }
 
     await this.saveConversation(conversation)
@@ -194,7 +199,7 @@ export class ConversationService {
     content: string,
     role: "user" | "assistant" | "tool",
     toolCalls?: Array<{ name: string; arguments: any }>,
-    toolResults?: Array<{ success: boolean; content: string; error?: string }>
+    toolResults?: Array<{ success: boolean; content: string; error?: string }>,
   ): Promise<Conversation | null> {
     try {
       const conversation = await this.loadConversation(conversationId)
@@ -209,7 +214,7 @@ export class ConversationService {
         content,
         timestamp: Date.now(),
         toolCalls,
-        toolResults
+        toolResults,
       }
 
       conversation.messages.push(message)

@@ -38,52 +38,62 @@ import { tipcClient } from "@renderer/lib/tipc-client"
 import { useState, useCallback, useEffect } from "react"
 import { Config } from "@shared/types"
 import { KeyRecorder } from "@renderer/components/key-recorder"
-import { getEffectiveShortcut, formatKeyComboForDisplay } from "@shared/key-utils"
+import {
+  getEffectiveShortcut,
+  formatKeyComboForDisplay,
+} from "@shared/key-utils"
 
 export function Component() {
   const configQuery = useConfigQuery()
 
   const saveConfigMutation = useSaveConfigMutation()
 
-  const saveConfig = useCallback((config: Partial<Config>) => {
-    saveConfigMutation.mutate({
-      config: {
-        ...configQuery.data,
-        ...config,
-      },
-    })
-  }, [saveConfigMutation, configQuery.data])
+  const saveConfig = useCallback(
+    (config: Partial<Config>) => {
+      saveConfigMutation.mutate({
+        config: {
+          ...configQuery.data,
+          ...config,
+        },
+      })
+    },
+    [saveConfigMutation, configQuery.data],
+  )
 
   // Sync theme preference from config to localStorage when config loads
   useEffect(() => {
     if (configQuery.data?.themePreference) {
-      localStorage.setItem('theme-preference', configQuery.data.themePreference)
-      window.dispatchEvent(new CustomEvent('theme-preference-changed', {
-        detail: configQuery.data.themePreference
-      }))
+      localStorage.setItem("theme-preference", configQuery.data.themePreference)
+      window.dispatchEvent(
+        new CustomEvent("theme-preference-changed", {
+          detail: configQuery.data.themePreference,
+        }),
+      )
     }
   }, [configQuery.data?.themePreference])
 
   // Memoize model change handler to prevent infinite re-renders
-  const handleTranscriptModelChange = useCallback((value: string) => {
-    const transcriptPostProcessingProviderId = configQuery.data?.transcriptPostProcessingProviderId || "openai"
+  const handleTranscriptModelChange = useCallback(
+    (value: string) => {
+      const transcriptPostProcessingProviderId =
+        configQuery.data?.transcriptPostProcessingProviderId || "openai"
 
-    if (transcriptPostProcessingProviderId === "openai") {
-      saveConfig({
-        transcriptPostProcessingOpenaiModel: value,
-      })
-    } else if (transcriptPostProcessingProviderId === "groq") {
-      saveConfig({
-        transcriptPostProcessingGroqModel: value,
-      })
-    } else {
-      saveConfig({
-        transcriptPostProcessingGeminiModel: value,
-      })
-    }
-  }, [saveConfig, configQuery.data?.transcriptPostProcessingProviderId])
-
-
+      if (transcriptPostProcessingProviderId === "openai") {
+        saveConfig({
+          transcriptPostProcessingOpenaiModel: value,
+        })
+      } else if (transcriptPostProcessingProviderId === "groq") {
+        saveConfig({
+          transcriptPostProcessingGroqModel: value,
+        })
+      } else {
+        saveConfig({
+          transcriptPostProcessingGeminiModel: value,
+        })
+      }
+    },
+    [saveConfig, configQuery.data?.transcriptPostProcessingProviderId],
+  )
 
   const sttProviderId: STT_PROVIDER_ID =
     configQuery.data?.sttProviderId || "openai"
@@ -95,318 +105,333 @@ export function Component() {
   if (!configQuery.data) return null
 
   return (
-    <div className="h-full overflow-auto px-6 py-4 liquid-glass-panel">
-      <header className="mb-5 liquid-glass-card glass-border rounded-lg p-4 glass-shadow">
+    <div className="liquid-glass-panel h-full overflow-auto px-6 py-4">
+      <header className="liquid-glass-card glass-border glass-shadow mb-5 rounded-lg p-4">
         <h2 className="text-2xl font-bold">General</h2>
       </header>
 
       <div className="grid gap-4">
-      {process.env.IS_MAC && (
-        <ControlGroup title="App">
-          <Control label="Hide Dock Icon" className="px-3">
-            <Switch
-              defaultChecked={configQuery.data.hideDockIcon}
-              onCheckedChange={(value) => {
-                saveConfig({
-                  hideDockIcon: value,
-                })
-              }}
-            />
-          </Control>
-        </ControlGroup>
-      )}
+        {process.env.IS_MAC && (
+          <ControlGroup title="App">
+            <Control label="Hide Dock Icon" className="px-3">
+              <Switch
+                defaultChecked={configQuery.data.hideDockIcon}
+                onCheckedChange={(value) => {
+                  saveConfig({
+                    hideDockIcon: value,
+                  })
+                }}
+              />
+            </Control>
+          </ControlGroup>
+        )}
 
-      <ControlGroup title="Appearance">
-        <Control label="Theme" className="px-3">
-          <Select
-            value={configQuery.data.themePreference || "system"}
-            onValueChange={(value: "system" | "light" | "dark") => {
-              saveConfig({
-                themePreference: value,
-              })
-              // Apply theme immediately
-              window.dispatchEvent(new CustomEvent('theme-preference-changed', {
-                detail: value
-              }))
-            }}
-          >
-            <SelectTrigger className="w-[140px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="system">System</SelectItem>
-              <SelectItem value="light">Light</SelectItem>
-              <SelectItem value="dark">Dark</SelectItem>
-            </SelectContent>
-          </Select>
-        </Control>
-      </ControlGroup>
-
-      <ControlGroup
-        title="Shortcuts"
-        endDescription={
-          <div className="flex items-center gap-1">
-            <div>
-              {shortcut === "hold-ctrl"
-                ? "Hold Ctrl key to record, release it to finish recording"
-                : "Press Ctrl+/ to start and finish recording"}
-            </div>
-            <TooltipProvider disableHoverableContent delayDuration={0}>
-              <Tooltip>
-                <TooltipTrigger className="inline-flex items-center justify-center">
-                  <span className="i-mingcute-information-fill text-base"></span>
-                </TooltipTrigger>
-                <TooltipContent collisionPadding={5}>
-                  {shortcut === "hold-ctrl"
-                    ? "Press any key to cancel"
-                    : "Press Esc to cancel"}
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          </div>
-        }
-      >
-        <Control label="Recording" className="px-3">
-          <div className="space-y-2">
+        <ControlGroup title="Appearance">
+          <Control label="Theme" className="px-3">
             <Select
-              defaultValue={shortcut}
-              onValueChange={(value) => {
+              value={configQuery.data.themePreference || "system"}
+              onValueChange={(value: "system" | "light" | "dark") => {
                 saveConfig({
-                  shortcut: value as typeof configQuery.data.shortcut,
+                  themePreference: value,
                 })
+                // Apply theme immediately
+                window.dispatchEvent(
+                  new CustomEvent("theme-preference-changed", {
+                    detail: value,
+                  }),
+                )
               }}
             >
-              <SelectTrigger>
+              <SelectTrigger className="w-[140px]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="hold-ctrl">Hold Ctrl</SelectItem>
-                <SelectItem value="ctrl-slash">Ctrl+{"/"}</SelectItem>
-                <SelectItem value="custom">Custom</SelectItem>
+                <SelectItem value="system">System</SelectItem>
+                <SelectItem value="light">Light</SelectItem>
+                <SelectItem value="dark">Dark</SelectItem>
               </SelectContent>
             </Select>
+          </Control>
+        </ControlGroup>
 
-            {shortcut === "custom" && (
-              <KeyRecorder
-                value={configQuery.data?.customShortcut || ""}
-                onChange={(keyCombo) => {
-                  saveConfig({
-                    customShortcut: keyCombo,
-                  })
-                }}
-                placeholder="Click to record custom shortcut"
-              />
-            )}
-          </div>
-        </Control>
-
-        <Control label="Text Input" className="px-3">
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <Switch
-                checked={configQuery.data?.textInputEnabled ?? true}
-                onCheckedChange={(checked) => {
-                  saveConfig({
-                    textInputEnabled: checked,
-                  })
-                }}
-              />
+        <ControlGroup
+          title="Shortcuts"
+          endDescription={
+            <div className="flex items-center gap-1">
+              <div>
+                {shortcut === "hold-ctrl"
+                  ? "Hold Ctrl key to record, release it to finish recording"
+                  : "Press Ctrl+/ to start and finish recording"}
+              </div>
+              <TooltipProvider disableHoverableContent delayDuration={0}>
+                <Tooltip>
+                  <TooltipTrigger className="inline-flex items-center justify-center">
+                    <span className="i-mingcute-information-fill text-base"></span>
+                  </TooltipTrigger>
+                  <TooltipContent collisionPadding={5}>
+                    {shortcut === "hold-ctrl"
+                      ? "Press any key to cancel"
+                      : "Press Esc to cancel"}
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
+          }
+        >
+          <Control label="Recording" className="px-3">
+            <div className="space-y-2">
               <Select
-                value={textInputShortcut}
+                defaultValue={shortcut}
                 onValueChange={(value) => {
                   saveConfig({
-                    textInputShortcut: value as typeof configQuery.data.textInputShortcut,
+                    shortcut: value as typeof configQuery.data.shortcut,
                   })
                 }}
-                disabled={!configQuery.data?.textInputEnabled}
               >
-                <SelectTrigger className="w-40">
+                <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="ctrl-t">Ctrl+T</SelectItem>
-                  <SelectItem value="ctrl-shift-t">Ctrl+Shift+T</SelectItem>
-                  <SelectItem value="alt-t">Alt+T</SelectItem>
+                  <SelectItem value="hold-ctrl">Hold Ctrl</SelectItem>
+                  <SelectItem value="ctrl-slash">Ctrl+{"/"}</SelectItem>
                   <SelectItem value="custom">Custom</SelectItem>
                 </SelectContent>
               </Select>
-            </div>
 
-            {textInputShortcut === "custom" && configQuery.data?.textInputEnabled && (
-              <KeyRecorder
-                value={configQuery.data?.customTextInputShortcut || ""}
-                onChange={(keyCombo) => {
+              {shortcut === "custom" && (
+                <KeyRecorder
+                  value={configQuery.data?.customShortcut || ""}
+                  onChange={(keyCombo) => {
+                    saveConfig({
+                      customShortcut: keyCombo,
+                    })
+                  }}
+                  placeholder="Click to record custom shortcut"
+                />
+              )}
+            </div>
+          </Control>
+
+          <Control label="Text Input" className="px-3">
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <Switch
+                  checked={configQuery.data?.textInputEnabled ?? true}
+                  onCheckedChange={(checked) => {
+                    saveConfig({
+                      textInputEnabled: checked,
+                    })
+                  }}
+                />
+                <Select
+                  value={textInputShortcut}
+                  onValueChange={(value) => {
+                    saveConfig({
+                      textInputShortcut:
+                        value as typeof configQuery.data.textInputShortcut,
+                    })
+                  }}
+                  disabled={!configQuery.data?.textInputEnabled}
+                >
+                  <SelectTrigger className="w-40">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ctrl-t">Ctrl+T</SelectItem>
+                    <SelectItem value="ctrl-shift-t">Ctrl+Shift+T</SelectItem>
+                    <SelectItem value="alt-t">Alt+T</SelectItem>
+                    <SelectItem value="custom">Custom</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {textInputShortcut === "custom" &&
+                configQuery.data?.textInputEnabled && (
+                  <KeyRecorder
+                    value={configQuery.data?.customTextInputShortcut || ""}
+                    onChange={(keyCombo) => {
+                      saveConfig({
+                        customTextInputShortcut: keyCombo,
+                      })
+                    }}
+                    placeholder="Click to record custom text input shortcut"
+                  />
+                )}
+            </div>
+          </Control>
+        </ControlGroup>
+
+        <ControlGroup title="Speech to Text">
+          <Control label="Current Provider" className="px-3">
+            <div className="flex items-center justify-between">
+              <span className="text-sm">
+                {STT_PROVIDERS.find((p) => p.value === sttProviderId)?.label ||
+                  "OpenAI"}
+              </span>
+              <span className="text-xs text-muted-foreground">
+                Configure in Providers tab
+              </span>
+            </div>
+          </Control>
+
+          {sttProviderId === "groq" && (
+            <Control label="Prompt" className="px-3">
+              <Textarea
+                placeholder="Optional prompt to guide the model's style or specify how to spell unfamiliar words (limited to 224 tokens)"
+                defaultValue={configQuery.data.groqSttPrompt || ""}
+                onChange={(e) => {
                   saveConfig({
-                    customTextInputShortcut: keyCombo,
+                    groqSttPrompt: e.currentTarget.value,
                   })
                 }}
-                placeholder="Click to record custom text input shortcut"
+                className="min-h-[80px]"
               />
-            )}
-          </div>
-        </Control>
-      </ControlGroup>
+            </Control>
+          )}
+        </ControlGroup>
 
-      <ControlGroup title="Speech to Text">
-        <Control label="Current Provider" className="px-3">
-          <div className="flex items-center justify-between">
-            <span className="text-sm">
-              {STT_PROVIDERS.find(p => p.value === sttProviderId)?.label || "OpenAI"}
-            </span>
-            <span className="text-xs text-muted-foreground">
-              Configure in Providers tab
-            </span>
-          </div>
-        </Control>
-
-        {sttProviderId === "groq" && (
-          <Control label="Prompt" className="px-3">
-            <Textarea
-              placeholder="Optional prompt to guide the model's style or specify how to spell unfamiliar words (limited to 224 tokens)"
-              defaultValue={configQuery.data.groqSttPrompt || ""}
-              onChange={(e) => {
+        <ControlGroup title="Transcript Post-Processing">
+          <Control label="Enabled" className="px-3">
+            <Switch
+              defaultChecked={configQuery.data.transcriptPostProcessingEnabled}
+              onCheckedChange={(value) => {
                 saveConfig({
-                  groqSttPrompt: e.currentTarget.value,
+                  transcriptPostProcessingEnabled: value,
                 })
               }}
-              className="min-h-[80px]"
             />
           </Control>
-        )}
 
+          {configQuery.data.transcriptPostProcessingEnabled && (
+            <>
+              <Control label="Current Provider" className="px-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm">
+                    {CHAT_PROVIDERS.find(
+                      (p) => p.value === transcriptPostProcessingProviderId,
+                    )?.label || "OpenAI"}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    Configure provider and model in Providers tab
+                  </span>
+                </div>
+              </Control>
 
-
-      </ControlGroup>
-
-      <ControlGroup title="Transcript Post-Processing">
-        <Control label="Enabled" className="px-3">
-          <Switch
-            defaultChecked={configQuery.data.transcriptPostProcessingEnabled}
-            onCheckedChange={(value) => {
-              saveConfig({
-                transcriptPostProcessingEnabled: value,
-              })
-            }}
-          />
-        </Control>
-
-        {configQuery.data.transcriptPostProcessingEnabled && (
-          <>
-            <Control label="Current Provider" className="px-3">
-              <div className="flex items-center justify-between">
-                <span className="text-sm">
-                  {CHAT_PROVIDERS.find(p => p.value === transcriptPostProcessingProviderId)?.label || "OpenAI"}
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  Configure provider and model in Providers tab
-                </span>
-              </div>
-            </Control>
-
-            <Control label="Prompt" className="px-3">
-              <div className="flex flex-col items-end gap-1 text-right">
-                {configQuery.data.transcriptPostProcessingPrompt && (
-                  <div className="line-clamp-3 text-sm text-neutral-500 dark:text-neutral-400">
-                    {configQuery.data.transcriptPostProcessingPrompt}
-                  </div>
-                )}
-                <Dialog>
-                  <DialogTrigger className="" asChild>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-6 gap-1 px-2"
-                    >
-                      <span className="i-mingcute-edit-2-line"></span>
-                      Edit
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>Edit Prompt</DialogTitle>
-                    </DialogHeader>
-                    <Textarea
-                      rows={10}
-                      defaultValue={
-                        configQuery.data.transcriptPostProcessingPrompt
-                      }
-                      onChange={(e) => {
-                        saveConfig({
-                          transcriptPostProcessingPrompt: e.currentTarget.value,
-                        })
-                      }}
-                    ></Textarea>
-                    <div className="text-sm text-muted-foreground">
-                      Use <span className="select-text">{"{transcript}"}</span>{" "}
-                      placeholder to insert the original transcript
+              <Control label="Prompt" className="px-3">
+                <div className="flex flex-col items-end gap-1 text-right">
+                  {configQuery.data.transcriptPostProcessingPrompt && (
+                    <div className="line-clamp-3 text-sm text-neutral-500 dark:text-neutral-400">
+                      {configQuery.data.transcriptPostProcessingPrompt}
                     </div>
-                  </DialogContent>
-                </Dialog>
-              </div>
-            </Control>
-          </>
-        )}
-      </ControlGroup>
+                  )}
+                  <Dialog>
+                    <DialogTrigger className="" asChild>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-6 gap-1 px-2"
+                      >
+                        <span className="i-mingcute-edit-2-line"></span>
+                        Edit
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>Edit Prompt</DialogTitle>
+                      </DialogHeader>
+                      <Textarea
+                        rows={10}
+                        defaultValue={
+                          configQuery.data.transcriptPostProcessingPrompt
+                        }
+                        onChange={(e) => {
+                          saveConfig({
+                            transcriptPostProcessingPrompt:
+                              e.currentTarget.value,
+                          })
+                        }}
+                      ></Textarea>
+                      <div className="text-sm text-muted-foreground">
+                        Use{" "}
+                        <span className="select-text">{"{transcript}"}</span>{" "}
+                        placeholder to insert the original transcript
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+                </div>
+              </Control>
+            </>
+          )}
+        </ControlGroup>
 
-      {/* Panel Position Settings */}
-      <ControlGroup title="Panel Position">
-        <Control label="Default Position" className="px-3">
-          <Select
-            value={configQuery.data?.panelPosition || "top-right"}
-            onValueChange={(value: "top-left" | "top-center" | "top-right" | "bottom-left" | "bottom-center" | "bottom-right" | "custom") => {
-              saveConfig({
-                panelPosition: value,
-              })
-              // Update panel position immediately if it's visible
-              tipcClient.setPanelPosition({ position: value })
-            }}
-          >
-            <SelectTrigger className="w-[180px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="top-left">Top Left</SelectItem>
-              <SelectItem value="top-center">Top Center</SelectItem>
-              <SelectItem value="top-right">Top Right</SelectItem>
-              <SelectItem value="bottom-left">Bottom Left</SelectItem>
-              <SelectItem value="bottom-center">Bottom Center</SelectItem>
-              <SelectItem value="bottom-right">Bottom Right</SelectItem>
-              <SelectItem value="custom">Custom (Draggable)</SelectItem>
-            </SelectContent>
-          </Select>
-        </Control>
+        {/* Panel Position Settings */}
+        <ControlGroup title="Panel Position">
+          <Control label="Default Position" className="px-3">
+            <Select
+              value={configQuery.data?.panelPosition || "top-right"}
+              onValueChange={(
+                value:
+                  | "top-left"
+                  | "top-center"
+                  | "top-right"
+                  | "bottom-left"
+                  | "bottom-center"
+                  | "bottom-right"
+                  | "custom",
+              ) => {
+                saveConfig({
+                  panelPosition: value,
+                })
+                // Update panel position immediately if it's visible
+                tipcClient.setPanelPosition({ position: value })
+              }}
+            >
+              <SelectTrigger className="w-[180px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="top-left">Top Left</SelectItem>
+                <SelectItem value="top-center">Top Center</SelectItem>
+                <SelectItem value="top-right">Top Right</SelectItem>
+                <SelectItem value="bottom-left">Bottom Left</SelectItem>
+                <SelectItem value="bottom-center">Bottom Center</SelectItem>
+                <SelectItem value="bottom-right">Bottom Right</SelectItem>
+                <SelectItem value="custom">Custom (Draggable)</SelectItem>
+              </SelectContent>
+            </Select>
+          </Control>
 
-        <Control label="Enable Dragging" className="px-3">
-          <Switch
-            defaultChecked={configQuery.data?.panelDragEnabled ?? true}
-            onCheckedChange={(value) => {
-              saveConfig({
-                panelDragEnabled: value,
-              })
-            }}
-          />
-        </Control>
+          <Control label="Enable Dragging" className="px-3">
+            <Switch
+              defaultChecked={configQuery.data?.panelDragEnabled ?? true}
+              onCheckedChange={(value) => {
+                saveConfig({
+                  panelDragEnabled: value,
+                })
+              }}
+            />
+          </Control>
 
-        <Control label="Description" className="px-3">
-          <div className="text-sm text-muted-foreground">
-            Choose where the floating panel appears on your screen. Enable dragging to move it by holding the top bar.
-            {configQuery.data?.panelPosition === "custom" && (
-              <div className="mt-1 text-xs">
-                Custom position: Panel can be dragged to any location and will remember its position.
-              </div>
-            )}
-          </div>
-        </Control>
-      </ControlGroup>
+          <Control label="Description" className="px-3">
+            <div className="text-sm text-muted-foreground">
+              Choose where the floating panel appears on your screen. Enable
+              dragging to move it by holding the top bar.
+              {configQuery.data?.panelPosition === "custom" && (
+                <div className="mt-1 text-xs">
+                  Custom position: Panel can be dragged to any location and will
+                  remember its position.
+                </div>
+              )}
+            </div>
+          </Control>
+        </ControlGroup>
 
-      {/* About Section */}
-      <ControlGroup title="About">
-        <Control label="Version" className="px-3">
-          <div className="text-sm">
-            {process.env.APP_VERSION}
-          </div>
-        </Control>
-      </ControlGroup>
+        {/* About Section */}
+        <ControlGroup title="About">
+          <Control label="Version" className="px-3">
+            <div className="text-sm">{process.env.APP_VERSION}</div>
+          </Control>
+        </ControlGroup>
       </div>
     </div>
   )

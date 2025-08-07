@@ -13,27 +13,30 @@ interface LoadingSpinnerProps {
 const sizeClasses = {
   sm: "w-6 h-6",
   md: "w-8 h-8",
-  lg: "w-12 h-12"
+  lg: "w-12 h-12",
 }
 
 // Hook to detect theme changes
 function useTheme() {
   const [isDark, setIsDark] = useState(() => {
-    return document.documentElement.classList.contains('dark')
+    return document.documentElement.classList.contains("dark")
   })
 
   useEffect(() => {
     const observer = new MutationObserver((mutations) => {
       mutations.forEach((mutation) => {
-        if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
-          setIsDark(document.documentElement.classList.contains('dark'))
+        if (
+          mutation.type === "attributes" &&
+          mutation.attributeName === "class"
+        ) {
+          setIsDark(document.documentElement.classList.contains("dark"))
         }
       })
     })
 
     observer.observe(document.documentElement, {
       attributes: true,
-      attributeFilter: ['class']
+      attributeFilter: ["class"],
     })
 
     return () => observer.disconnect()
@@ -46,7 +49,7 @@ export function LoadingSpinner({
   className,
   size = "md",
   showText = false,
-  text = "Loading..."
+  text = "Loading...",
 }: LoadingSpinnerProps) {
   const { isDark } = useTheme()
   const spinnerSrc = isDark ? loadingSpinnerGif : lightSpinnerGif

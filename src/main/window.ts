@@ -144,11 +144,13 @@ const textInputPanelWindowSize = {
   height: 180,
 }
 
-const getPanelWindowPosition = (mode: 'normal' | 'agent' | 'textInput' = 'normal') => {
+const getPanelWindowPosition = (
+  mode: "normal" | "agent" | "textInput" = "normal",
+) => {
   let size = panelWindowSize
-  if (mode === 'agent') {
+  if (mode === "agent") {
     size = agentPanelWindowSize
-  } else if (mode === 'textInput') {
+  } else if (mode === "textInput") {
     size = textInputPanelWindowSize
   }
 
@@ -189,10 +191,6 @@ export function createPanelWindow() {
     getRendererHandlers<RendererHandlers>(win.webContents).stopRecording.send()
   })
 
-
-
-
-
   makePanel(win)
 
   return win
@@ -202,9 +200,9 @@ export function showPanelWindow() {
   const win = WINDOWS.get("panel")
   if (win) {
     // Determine the correct mode based on current state
-    let mode: 'normal' | 'agent' | 'textInput' = 'normal'
+    let mode: "normal" | "agent" | "textInput" = "normal"
     if (state.isTextInputActive) {
-      mode = 'textInput'
+      mode = "textInput"
     }
     // Note: Agent mode positioning is handled separately in resizePanelForAgentMode
 
@@ -305,7 +303,9 @@ export const closeAgentModeAndHidePanelWindow = () => {
     state.agentIterationCount = 0
 
     // Clear agent progress and resize back to normal
-    getRendererHandlers<RendererHandlers>(win.webContents).clearAgentProgress.send()
+    getRendererHandlers<RendererHandlers>(
+      win.webContents,
+    ).clearAgentProgress.send()
     resizePanelToNormal()
 
     // Hide the panel after a small delay to ensure resize completes
@@ -326,10 +326,14 @@ export const emergencyStopAgentMode = async () => {
   const win = WINDOWS.get("panel")
   if (win) {
     // Send emergency stop signal to renderer
-    getRendererHandlers<RendererHandlers>(win.webContents).emergencyStopAgent?.send()
+    getRendererHandlers<RendererHandlers>(
+      win.webContents,
+    ).emergencyStopAgent?.send()
 
     // Clear agent progress immediately
-    getRendererHandlers<RendererHandlers>(win.webContents).clearAgentProgress.send()
+    getRendererHandlers<RendererHandlers>(
+      win.webContents,
+    ).clearAgentProgress.send()
   }
 
   try {
@@ -345,7 +349,9 @@ export const emergencyStopAgentMode = async () => {
     // DON'T reset shouldStopAgent here - let the agent loop handle it
     state.agentIterationCount = 0
 
-    console.log(`Emergency stop completed. Killed ${processCountBefore} processes. Remaining: ${processCountAfter}`)
+    console.log(
+      `Emergency stop completed. Killed ${processCountBefore} processes. Remaining: ${processCountAfter}`,
+    )
   } catch (error) {
     console.error("Error during emergency stop:", error)
   }
@@ -367,7 +373,7 @@ export function resizePanelForAgentMode() {
     return
   }
 
-  const position = getPanelWindowPosition('agent')
+  const position = getPanelWindowPosition("agent")
 
   // Update size constraints for agent mode
   win.setMinimumSize(agentPanelWindowSize.width, agentPanelWindowSize.height)
@@ -376,8 +382,6 @@ export function resizePanelForAgentMode() {
   // Set size and position
   win.setSize(agentPanelWindowSize.width, agentPanelWindowSize.height, true) // animate = true
   win.setPosition(position.x, position.y, true) // animate = true
-
-
 }
 
 export function resizePanelForTextInput() {
@@ -386,16 +390,25 @@ export function resizePanelForTextInput() {
     return
   }
 
-  const position = getPanelWindowPosition('textInput')
+  const position = getPanelWindowPosition("textInput")
 
   // Update size constraints for text input mode
-  win.setMinimumSize(textInputPanelWindowSize.width, textInputPanelWindowSize.height)
-  win.setMaximumSize(textInputPanelWindowSize.width, textInputPanelWindowSize.height)
+  win.setMinimumSize(
+    textInputPanelWindowSize.width,
+    textInputPanelWindowSize.height,
+  )
+  win.setMaximumSize(
+    textInputPanelWindowSize.width,
+    textInputPanelWindowSize.height,
+  )
 
   // Set size and position
-  win.setSize(textInputPanelWindowSize.width, textInputPanelWindowSize.height, true) // animate = true
+  win.setSize(
+    textInputPanelWindowSize.width,
+    textInputPanelWindowSize.height,
+    true,
+  ) // animate = true
   win.setPosition(position.x, position.y, true) // animate = true
-
 }
 
 export function resizePanelToNormal() {
@@ -404,7 +417,7 @@ export function resizePanelToNormal() {
     return
   }
 
-  const position = getPanelWindowPosition('normal')
+  const position = getPanelWindowPosition("normal")
 
   // Update size constraints back to normal
   win.setMinimumSize(panelWindowSize.width, panelWindowSize.height)
@@ -413,6 +426,4 @@ export function resizePanelToNormal() {
   // Set size and position
   win.setSize(panelWindowSize.width, panelWindowSize.height, true) // animate = true
   win.setPosition(position.x, position.y, true) // animate = true
-
-
 }

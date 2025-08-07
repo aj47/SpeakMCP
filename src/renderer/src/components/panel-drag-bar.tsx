@@ -7,9 +7,17 @@ interface PanelDragBarProps {
   disabled?: boolean
 }
 
-export function PanelDragBar({ className, disabled = false }: PanelDragBarProps) {
+export function PanelDragBar({
+  className,
+  disabled = false,
+}: PanelDragBarProps) {
   const [isDragging, setIsDragging] = useState(false)
-  const [dragStart, setDragStart] = useState<{ x: number; y: number; windowX: number; windowY: number } | null>(null)
+  const [dragStart, setDragStart] = useState<{
+    x: number
+    y: number
+    windowX: number
+    windowY: number
+  } | null>(null)
   const dragBarRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -88,30 +96,32 @@ export function PanelDragBar({ className, disabled = false }: PanelDragBarProps)
     <div
       ref={dragBarRef}
       className={cn(
-        "flex items-center justify-center h-6 w-full transition-colors duration-200",
+        "flex h-6 w-full items-center justify-center transition-colors duration-200",
         disabled
           ? "cursor-default"
           : isDragging
             ? "cursor-grabbing"
             : "cursor-grab hover:bg-white/5",
-        className
+        className,
       )}
       onMouseDown={handleMouseDown}
       style={{
-        WebkitAppRegion: disabled ? "no-drag" : "drag" as any,
-        userSelect: "none"
+        WebkitAppRegion: disabled ? "no-drag" : ("drag" as any),
+        userSelect: "none",
       }}
     >
       {/* Drag handle visual indicator */}
-      <div className={cn(
-        "flex items-center gap-0.5 transition-opacity duration-200",
-        disabled ? "opacity-30" : "opacity-60 hover:opacity-80"
-      )}>
-        <div className="w-1 h-1 bg-current rounded-full" />
-        <div className="w-1 h-1 bg-current rounded-full" />
-        <div className="w-1 h-1 bg-current rounded-full" />
-        <div className="w-1 h-1 bg-current rounded-full" />
-        <div className="w-1 h-1 bg-current rounded-full" />
+      <div
+        className={cn(
+          "flex items-center gap-0.5 transition-opacity duration-200",
+          disabled ? "opacity-30" : "opacity-60 hover:opacity-80",
+        )}
+      >
+        <div className="h-1 w-1 rounded-full bg-current" />
+        <div className="h-1 w-1 rounded-full bg-current" />
+        <div className="h-1 w-1 rounded-full bg-current" />
+        <div className="h-1 w-1 rounded-full bg-current" />
+        <div className="h-1 w-1 rounded-full bg-current" />
       </div>
     </div>
   )

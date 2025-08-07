@@ -80,7 +80,7 @@ export function Component() {
 
   return (
     <>
-      <header className="app-drag-region flex h-12 shrink-0 items-center justify-between bg-background border-b px-4 text-sm">
+      <header className="app-drag-region flex h-12 shrink-0 items-center justify-between border-b bg-background px-4 text-sm">
         <span className="font-bold">History</span>
 
         <div className="flex items-center gap-2">
@@ -118,7 +118,7 @@ export function Component() {
           {!keyword && (
             <span className="text-sm text-muted-foreground">
               Hold{" "}
-              <span className="inline-flex h-6 items-center rounded-lg liquid-glass-interactive glass-border glass-shine p-1 text-sm">
+              <span className="liquid-glass-interactive glass-border glass-shine inline-flex h-6 items-center rounded-lg p-1 text-sm">
                 Ctrl
               </span>{" "}
               to record
@@ -145,12 +145,12 @@ export function Component() {
                     return (
                       <div
                         key={item.id}
-                        className="flex items-center justify-between gap-5 p-4 hover:liquid-glass-subtle transition-all duration-200 rounded-lg"
+                        className="hover:liquid-glass-subtle flex items-center justify-between gap-5 rounded-lg p-4 transition-all duration-200"
                       >
                         <TooltipProvider>
                           <Tooltip delayDuration={0} disableHoverableContent>
                             <TooltipTrigger asChild>
-                              <span className="inline-flex h-5 shrink-0 cursor-default items-center justify-center rounded liquid-glass-subtle glass-border px-1 text-xs text-muted-foreground">
+                              <span className="liquid-glass-subtle glass-border inline-flex h-5 shrink-0 cursor-default items-center justify-center rounded px-1 text-xs text-muted-foreground">
                                 {dayjs(item.createdAt).format("HH:mm")}
                               </span>
                             </TooltipTrigger>

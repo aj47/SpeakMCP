@@ -12,10 +12,7 @@ export const Control = ({
 }) => {
   return (
     <div
-      className={cn(
-        "flex items-center justify-between gap-5 py-2",
-        className
-      )}
+      className={cn("flex items-center justify-between gap-5 py-2", className)}
     >
       <div className="shrink-0">
         <span className="text-sm font-medium">{label}</span>

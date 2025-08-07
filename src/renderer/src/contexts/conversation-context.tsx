@@ -1,10 +1,21 @@
-import React, { createContext, useContext, useState, useCallback, ReactNode, useEffect } from "react"
-import { Conversation, ConversationMessage, AgentProgressUpdate } from "@shared/types"
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  ReactNode,
+  useEffect,
+} from "react"
+import {
+  Conversation,
+  ConversationMessage,
+  AgentProgressUpdate,
+} from "@shared/types"
 import {
   useCreateConversationMutation,
   useAddMessageToConversationMutation,
   useSaveConversationMutation,
-  useConversationQuery
+  useConversationQuery,
 } from "@renderer/lib/query-client"
 import { rendererHandlers } from "@renderer/lib/tipc-client"
 
@@ -15,9 +26,17 @@ interface ConversationContextType {
   isConversationActive: boolean
 
   // Conversation management
-  startNewConversation: (firstMessage: string, role?: "user" | "assistant") => Promise<Conversation | null>
+  startNewConversation: (
+    firstMessage: string,
+    role?: "user" | "assistant",
+  ) => Promise<Conversation | null>
   continueConversation: (conversationId: string) => void
-  addMessage: (content: string, role: "user" | "assistant" | "tool", toolCalls?: any[], toolResults?: any[]) => Promise<void>
+  addMessage: (
+    content: string,
+    role: "user" | "assistant" | "tool",
+    toolCalls?: any[],
+    toolResults?: any[],
+  ) => Promise<void>
   endConversation: () => void
 
   // UI state
@@ -32,17 +51,22 @@ interface ConversationContextType {
   isAgentProcessing: boolean
 }
 
-const ConversationContext = createContext<ConversationContextType | undefined>(undefined)
+const ConversationContext = createContext<ConversationContextType | undefined>(
+  undefined,
+)
 
 interface ConversationProviderProps {
   children: ReactNode
 }
 
 export function ConversationProvider({ children }: ConversationProviderProps) {
-  const [currentConversationId, setCurrentConversationId] = useState<string | null>(null)
+  const [currentConversationId, setCurrentConversationId] = useState<
+    string | null
+  >(null)
   const [showContinueButton, setShowContinueButton] = useState(false)
   const [isWaitingForResponse, setIsWaitingForResponse] = useState(false)
-  const [agentProgress, setAgentProgress] = useState<AgentProgressUpdate | null>(null)
+  const [agentProgress, setAgentProgress] =
+    useState<AgentProgressUpdate | null>(null)
 
   // Queries and mutations
   const conversationQuery = useConversationQuery(currentConversationId)
@@ -56,29 +80,32 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
 
   // Listen for agent progress updates
   useEffect(() => {
-    const unlisten = rendererHandlers.agentProgressUpdate.listen((update: AgentProgressUpdate) => {
-      // Only update if the progress has actually changed to prevent flashing
-      setAgentProgress(prevProgress => {
-        if (!prevProgress) return update
+    const unlisten = rendererHandlers.agentProgressUpdate.listen(
+      (update: AgentProgressUpdate) => {
+        // Only update if the progress has actually changed to prevent flashing
+        setAgentProgress((prevProgress) => {
+          if (!prevProgress) return update
 
-        // Compare key properties to determine if update is needed
-        const hasChanged =
-          prevProgress.isComplete !== update.isComplete ||
-          prevProgress.currentIteration !== update.currentIteration ||
-          prevProgress.steps.length !== update.steps.length ||
-          JSON.stringify(prevProgress.steps) !== JSON.stringify(update.steps) ||
-          prevProgress.finalContent !== update.finalContent
+          // Compare key properties to determine if update is needed
+          const hasChanged =
+            prevProgress.isComplete !== update.isComplete ||
+            prevProgress.currentIteration !== update.currentIteration ||
+            prevProgress.steps.length !== update.steps.length ||
+            JSON.stringify(prevProgress.steps) !==
+              JSON.stringify(update.steps) ||
+            prevProgress.finalContent !== update.finalContent
 
-        return hasChanged ? update : prevProgress
-      })
-
-      // Add assistant response to conversation if we have final content and agent is complete
-      if (update.isComplete && update.finalContent && currentConversationId) {
-        addMessage(update.finalContent, "assistant").catch(() => {
-          // Silently handle error
+          return hasChanged ? update : prevProgress
         })
-      }
-    })
+
+        // Add assistant response to conversation if we have final content and agent is complete
+        if (update.isComplete && update.finalContent && currentConversationId) {
+          addMessage(update.finalContent, "assistant").catch(() => {
+            // Silently handle error
+          })
+        }
+      },
+    )
 
     return unlisten
   }, [currentConversationId])
@@ -92,20 +119,26 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
     return unlisten
   }, [])
 
-  const startNewConversation = useCallback(async (
-    firstMessage: string,
-    role: "user" | "assistant" = "user"
-  ): Promise<Conversation | null> => {
-    try {
-      const conversation = await createConversationMutation.mutateAsync({ firstMessage, role })
-      setCurrentConversationId(conversation.id)
-      setShowContinueButton(false)
-      setIsWaitingForResponse(false)
-      return conversation
-    } catch (error) {
-      return null
-    }
-  }, [createConversationMutation])
+  const startNewConversation = useCallback(
+    async (
+      firstMessage: string,
+      role: "user" | "assistant" = "user",
+    ): Promise<Conversation | null> => {
+      try {
+        const conversation = await createConversationMutation.mutateAsync({
+          firstMessage,
+          role,
+        })
+        setCurrentConversationId(conversation.id)
+        setShowContinueButton(false)
+        setIsWaitingForResponse(false)
+        return conversation
+      } catch (error) {
+        return null
+      }
+    },
+    [createConversationMutation],
+  )
 
   const continueConversation = useCallback((conversationId: string) => {
     setCurrentConversationId(conversationId)
@@ -113,34 +146,41 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
     setIsWaitingForResponse(false)
   }, [])
 
-  const addMessage = useCallback(async (
-    content: string,
-    role: "user" | "assistant" | "tool",
-    toolCalls?: Array<{ name: string; arguments: any }>,
-    toolResults?: Array<{ success: boolean; content: string; error?: string }>
-  ) => {
-    if (!currentConversationId) {
-      return
-    }
+  const addMessage = useCallback(
+    async (
+      content: string,
+      role: "user" | "assistant" | "tool",
+      toolCalls?: Array<{ name: string; arguments: any }>,
+      toolResults?: Array<{
+        success: boolean
+        content: string
+        error?: string
+      }>,
+    ) => {
+      if (!currentConversationId) {
+        return
+      }
 
-    try {
-      await addMessageMutation.mutateAsync({
-        conversationId: currentConversationId,
-        content,
-        role,
-        toolCalls,
-        toolResults
-      })
+      try {
+        await addMessageMutation.mutateAsync({
+          conversationId: currentConversationId,
+          content,
+          role,
+          toolCalls,
+          toolResults,
+        })
 
-      // Show continue button after assistant response
-      if (role === "assistant") {
-        setShowContinueButton(true)
+        // Show continue button after assistant response
+        if (role === "assistant") {
+          setShowContinueButton(true)
+          setIsWaitingForResponse(false)
+        }
+      } catch (error) {
         setIsWaitingForResponse(false)
       }
-    } catch (error) {
-      setIsWaitingForResponse(false)
-    }
-  }, [currentConversationId, addMessageMutation])
+    },
+    [currentConversationId, addMessageMutation],
+  )
 
   const endConversation = useCallback(() => {
     setCurrentConversationId(null)
@@ -162,7 +202,7 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
     setIsWaitingForResponse,
     agentProgress,
     setAgentProgress,
-    isAgentProcessing
+    isAgentProcessing,
   }
 
   return (
@@ -175,7 +215,9 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
 export function useConversation() {
   const context = useContext(ConversationContext)
   if (context === undefined) {
-    throw new Error("useConversation must be used within a ConversationProvider")
+    throw new Error(
+      "useConversation must be used within a ConversationProvider",
+    )
   }
   return context
 }
@@ -188,7 +230,7 @@ export function useConversationState() {
     showContinueButton,
     isWaitingForResponse,
     agentProgress,
-    isAgentProcessing
+    isAgentProcessing,
   } = useConversation()
 
   return {
@@ -199,7 +241,9 @@ export function useConversationState() {
     agentProgress,
     isAgentProcessing,
     hasMessages: currentConversation?.messages.length ?? 0 > 0,
-    lastMessage: currentConversation?.messages[currentConversation.messages.length - 1] || null
+    lastMessage:
+      currentConversation?.messages[currentConversation.messages.length - 1] ||
+      null,
   }
 }
 
@@ -212,7 +256,7 @@ export function useConversationActions() {
     endConversation,
     setShowContinueButton,
     setIsWaitingForResponse,
-    setAgentProgress
+    setAgentProgress,
   } = useConversation()
 
   return {
@@ -222,6 +266,6 @@ export function useConversationActions() {
     endConversation,
     setShowContinueButton,
     setIsWaitingForResponse,
-    setAgentProgress
+    setAgentProgress,
   }
 }

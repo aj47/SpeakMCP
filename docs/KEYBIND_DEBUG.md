@@ -37,11 +37,13 @@ DEBUG=keybinds,llm,tools pnpm run dev
 When keybind debug is enabled, you'll see targeted logging for:
 
 ### 1. Configuration Changes
+
 ```
 [DEBUG][KEYBINDS] Config change #1: { agentKillSwitchEnabled: true, agentKillSwitchHotkey: "ctrl-shift-escape", textInputEnabled: true, textInputShortcut: "ctrl-t", mcpToolsEnabled: true, mcpToolsShortcut: "ctrl-alt-slash", shortcut: "hold-ctrl" }
 ```
 
 ### 2. Modifier State Changes
+
 ```
 [DEBUG][KEYBINDS] Ctrl key pressed, isPressedCtrlKey = true
 [DEBUG][KEYBINDS] Shift key pressed, isPressedShiftKey = true
@@ -49,11 +51,13 @@ When keybind debug is enabled, you'll see targeted logging for:
 ```
 
 ### 3. Potential Shortcut Matches (Only when modifiers are active)
+
 ```
 [DEBUG][KEYBINDS] Escape key pressed with modifiers, checking kill switch conditions: { agentKillSwitchEnabled: true, agentKillSwitchHotkey: "ctrl-shift-escape", modifiers: { ctrl: true, shift: true, alt: false }, isAgentModeActive: true }
 ```
 
 ### 4. Triggered Actions
+
 ```
 [DEBUG][KEYBINDS] Kill switch triggered: Ctrl+Shift+Escape
 [DEBUG][KEYBINDS] MCP tools triggered: Ctrl+Alt+/
@@ -61,6 +65,7 @@ When keybind debug is enabled, you'll see targeted logging for:
 ```
 
 ### 5. Custom Shortcut Matches (Only when they match)
+
 ```
 [DEBUG][KEYBINDS] Kill switch triggered: Custom hotkey ctrl-alt-k
 [DEBUG][KEYBINDS] Recording triggered: Custom hotkey ctrl-shift-r
@@ -75,11 +80,13 @@ When keybind debug is enabled, you'll see targeted logging for:
 **Fix**: Corrected the logic to properly track when both Ctrl and Alt are pressed simultaneously.
 
 **Before**:
+
 ```typescript
-isPressedCtrlAltKey = isPressedCtrlKey && true  // BUG!
+isPressedCtrlAltKey = isPressedCtrlKey && true // BUG!
 ```
 
 **After**:
+
 ```typescript
 isPressedCtrlAltKey = isPressedCtrlKey && isPressedAltKey
 ```
@@ -91,11 +98,13 @@ isPressedCtrlAltKey = isPressedCtrlKey && isPressedAltKey
 **Fix**: Changed to check `isPressedCtrlKey && isPressedAltKey` directly.
 
 **Before**:
+
 ```typescript
 if (e.data.key === "Slash" && isPressedCtrlKey && isPressedCtrlAltKey)
 ```
 
 **After**:
+
 ```typescript
 if (e.data.key === "Slash" && isPressedCtrlKey && isPressedAltKey)
 ```

@@ -1,6 +1,11 @@
 import fs from "fs"
 import { getRendererHandlers, tipc } from "@egoist/tipc/main"
-import { showPanelWindow, WINDOWS, resizePanelForAgentMode, resizePanelToNormal } from "./window"
+import {
+  showPanelWindow,
+  WINDOWS,
+  resizePanelForAgentMode,
+  resizePanelToNormal,
+} from "./window"
 import {
   app,
   clipboard,
@@ -11,18 +16,34 @@ import {
 } from "electron"
 import path from "path"
 import { configStore, recordingsFolder } from "./config"
-import { Config, RecordingHistoryItem, MCPConfig, MCPServerConfig, Conversation, ConversationHistoryItem } from "../shared/types"
+import {
+  Config,
+  RecordingHistoryItem,
+  MCPConfig,
+  MCPServerConfig,
+  Conversation,
+  ConversationHistoryItem,
+} from "../shared/types"
 import { conversationService } from "./conversation-service"
 import { RendererHandlers } from "./renderer-handlers"
-import { postProcessTranscript, processTranscriptWithTools, processTranscriptWithAgentMode } from "./llm"
+import {
+  postProcessTranscript,
+  processTranscriptWithTools,
+  processTranscriptWithAgentMode,
+} from "./llm"
 import { mcpService, MCPToolResult } from "./mcp-service"
-import { saveCustomPosition, updatePanelPosition, constrainPositionToScreen, PanelPosition } from "./panel-position"
+import {
+  saveCustomPosition,
+  updatePanelPosition,
+  constrainPositionToScreen,
+  PanelPosition,
+} from "./panel-position"
 import { state, agentProcessManager } from "./state"
 
 // Unified agent mode processing function
 async function processWithAgentMode(
   text: string,
-  conversationId?: string
+  conversationId?: string,
 ): Promise<string> {
   const config = configStore.get()
 
@@ -43,84 +64,88 @@ async function processWithAgentMode(
     // This handles the case where servers were already initialized before agent mode was activated
     mcpService.registerExistingProcessesWithAgentManager()
 
-  // Get available tools
-  const availableTools = mcpService.getAvailableTools()
+    // Get available tools
+    const availableTools = mcpService.getAvailableTools()
 
-  if (config.mcpAgentModeEnabled) {
-    // Use agent mode for iterative tool calling
-    const executeToolCall = async (toolCall: any): Promise<MCPToolResult> => {
-      return await mcpService.executeToolCall(toolCall)
-    }
-
-    // Load previous conversation history if continuing a conversation
-    let previousConversationHistory: Array<{
-      role: "user" | "assistant" | "tool"
-      content: string
-      toolCalls?: any[]
-      toolResults?: any[]
-    }> | undefined
-
-    if (conversationId) {
-      const conversation = await conversationService.loadConversation(conversationId)
-
-      if (conversation && conversation.messages.length > 0) {
-        // Convert conversation messages to the format expected by agent mode
-        // Exclude the last message since it's the current user input that will be added
-        const messagesToConvert = conversation.messages.slice(0, -1)
-        previousConversationHistory = messagesToConvert.map(msg => ({
-          role: msg.role,
-          content: msg.content,
-          toolCalls: msg.toolCalls,
-          toolResults: msg.toolResults
-        }))
-
+    if (config.mcpAgentModeEnabled) {
+      // Use agent mode for iterative tool calling
+      const executeToolCall = async (toolCall: any): Promise<MCPToolResult> => {
+        return await mcpService.executeToolCall(toolCall)
       }
-    }
 
-    const agentResult = await processTranscriptWithAgentMode(
-      text,
-      availableTools,
-      executeToolCall,
-      config.mcpMaxIterations || 50, // Use configured max iterations or default to 50
-      previousConversationHistory
-    )
+      // Load previous conversation history if continuing a conversation
+      let previousConversationHistory:
+        | Array<{
+            role: "user" | "assistant" | "tool"
+            content: string
+            toolCalls?: any[]
+            toolResults?: any[]
+          }>
+        | undefined
 
-    return agentResult.content
-  } else {
-    // Use single-shot tool calling
-    const result = await processTranscriptWithTools(text, availableTools)
+      if (conversationId) {
+        const conversation =
+          await conversationService.loadConversation(conversationId)
 
-    if (result.toolCalls && result.toolCalls.length > 0) {
-      // Execute tool calls and get results
-      const toolResults: MCPToolResult[] = []
-
-      for (const toolCall of result.toolCalls) {
-        try {
-          const toolResult = await mcpService.executeToolCall(toolCall)
-          toolResults.push(toolResult)
-        } catch (error) {
-          toolResults.push({
-            content: [{
-              type: "text",
-              text: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`
-            }],
-            isError: true
-          })
+        if (conversation && conversation.messages.length > 0) {
+          // Convert conversation messages to the format expected by agent mode
+          // Exclude the last message since it's the current user input that will be added
+          const messagesToConvert = conversation.messages.slice(0, -1)
+          previousConversationHistory = messagesToConvert.map((msg) => ({
+            role: msg.role,
+            content: msg.content,
+            toolCalls: msg.toolCalls,
+            toolResults: msg.toolResults,
+          }))
         }
       }
 
-      // Combine tool results into final response
-      const toolResultTexts = toolResults.map(result =>
-        result.content.map(item => item.text).join('\n')
-      ).join('\n\n')
+      const agentResult = await processTranscriptWithAgentMode(
+        text,
+        availableTools,
+        executeToolCall,
+        config.mcpMaxIterations || 50, // Use configured max iterations or default to 50
+        previousConversationHistory,
+      )
 
-      return result.content
-        ? `${result.content}\n\n${toolResultTexts}`
-        : toolResultTexts
+      return agentResult.content
     } else {
-      return result.content || text
+      // Use single-shot tool calling
+      const result = await processTranscriptWithTools(text, availableTools)
+
+      if (result.toolCalls && result.toolCalls.length > 0) {
+        // Execute tool calls and get results
+        const toolResults: MCPToolResult[] = []
+
+        for (const toolCall of result.toolCalls) {
+          try {
+            const toolResult = await mcpService.executeToolCall(toolCall)
+            toolResults.push(toolResult)
+          } catch (error) {
+            toolResults.push({
+              content: [
+                {
+                  type: "text",
+                  text: `Error: ${error instanceof Error ? error.message : "Unknown error"}`,
+                },
+              ],
+              isError: true,
+            })
+          }
+        }
+
+        // Combine tool results into final response
+        const toolResultTexts = toolResults
+          .map((result) => result.content.map((item) => item.text).join("\n"))
+          .join("\n\n")
+
+        return result.content
+          ? `${result.content}\n\n${toolResultTexts}`
+          : toolResultTexts
+      } else {
+        return result.content || text
+      }
     }
-  }
   } finally {
     // Clean up agent state
     state.isAgentModeActive = false
@@ -132,7 +157,6 @@ import { diagnosticsService } from "./diagnostics"
 import { updateTrayIcon } from "./tray"
 import { isAccessibilityGranted } from "./utils"
 import { writeText, writeTextWithFocusRestore } from "./keyboard"
-
 
 const t = tipc.create()
 
@@ -206,7 +230,7 @@ export const router = {
       isVisible: panel?.isVisible() || false,
       isDestroyed: panel?.isDestroyed() || false,
       bounds: panel?.getBounds() || null,
-      isAlwaysOnTop: panel?.isAlwaysOnTop() || false
+      isAlwaysOnTop: panel?.isAlwaysOnTop() || false,
     }
     return state
   }),
@@ -233,7 +257,7 @@ export const router = {
         const bounds = panel.getBounds()
         const constrainedPosition = constrainPositionToScreen(
           { x: input.x, y: input.y },
-          { width: bounds.width, height: bounds.height }
+          { width: bounds.width, height: bounds.height },
         )
 
         saveCustomPosition(constrainedPosition)
@@ -251,7 +275,7 @@ export const router = {
         const bounds = panel.getBounds()
         const constrainedPosition = constrainPositionToScreen(
           { x: input.x, y: input.y },
-          { width: bounds.width, height: bounds.height }
+          { width: bounds.width, height: bounds.height },
         )
 
         panel.setPosition(constrainedPosition.x, constrainedPosition.y)
@@ -282,20 +306,20 @@ export const router = {
       isAgentModeActive: state.isAgentModeActive,
       shouldStopAgent: state.shouldStopAgent,
       agentIterationCount: state.agentIterationCount,
-      activeProcessCount: agentProcessManager.getActiveProcessCount()
+      activeProcessCount: agentProcessManager.getActiveProcessCount(),
     }
   }),
 
   showContextMenu: t.procedure
     .input<{
-      x: number;
-      y: number;
-      selectedText?: string;
+      x: number
+      y: number
+      selectedText?: string
       messageContext?: {
-        content: string;
-        role: "user" | "assistant" | "tool";
-        messageId: string;
-      };
+        content: string
+        role: "user" | "assistant" | "tool"
+        messageId: string
+      }
     }>()
     .action(async ({ input, context }) => {
       const items: Electron.MenuItemConstructorOptions[] = []
@@ -363,10 +387,6 @@ export const router = {
     return isAccessibilityGranted()
   }),
 
-
-
-
-
   requestAccesssbilityAccess: t.procedure.action(async () => {
     if (process.platform === "win32") return true
 
@@ -393,53 +413,52 @@ export const router = {
       duration: number
     }>()
     .action(async ({ input }) => {
-
       fs.mkdirSync(recordingsFolder, { recursive: true })
 
       const config = configStore.get()
       let transcript: string
 
       // Use OpenAI or Groq for transcription
-        const form = new FormData()
-        form.append(
-          "file",
-          new File([input.recording], "recording.webm", { type: "audio/webm" }),
-        )
-        form.append(
-          "model",
-          config.sttProviderId === "groq" ? "whisper-large-v3" : "whisper-1",
-        )
-        form.append("response_format", "json")
+      const form = new FormData()
+      form.append(
+        "file",
+        new File([input.recording], "recording.webm", { type: "audio/webm" }),
+      )
+      form.append(
+        "model",
+        config.sttProviderId === "groq" ? "whisper-large-v3" : "whisper-1",
+      )
+      form.append("response_format", "json")
 
-        // Add prompt parameter for Groq if provided
-        if (config.sttProviderId === "groq" && config.groqSttPrompt?.trim()) {
-          form.append("prompt", config.groqSttPrompt.trim())
-        }
+      // Add prompt parameter for Groq if provided
+      if (config.sttProviderId === "groq" && config.groqSttPrompt?.trim()) {
+        form.append("prompt", config.groqSttPrompt.trim())
+      }
 
-        const groqBaseUrl = config.groqBaseUrl || "https://api.groq.com/openai/v1"
-        const openaiBaseUrl = config.openaiBaseUrl || "https://api.openai.com/v1"
+      const groqBaseUrl = config.groqBaseUrl || "https://api.groq.com/openai/v1"
+      const openaiBaseUrl = config.openaiBaseUrl || "https://api.openai.com/v1"
 
-        const transcriptResponse = await fetch(
-          config.sttProviderId === "groq"
-            ? `${groqBaseUrl}/audio/transcriptions`
-            : `${openaiBaseUrl}/audio/transcriptions`,
-          {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${config.sttProviderId === "groq" ? config.groqApiKey : config.openaiApiKey}`,
-            },
-            body: form,
+      const transcriptResponse = await fetch(
+        config.sttProviderId === "groq"
+          ? `${groqBaseUrl}/audio/transcriptions`
+          : `${openaiBaseUrl}/audio/transcriptions`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${config.sttProviderId === "groq" ? config.groqApiKey : config.openaiApiKey}`,
           },
-        )
+          body: form,
+        },
+      )
 
-        if (!transcriptResponse.ok) {
-          const message = `${transcriptResponse.statusText} ${(await transcriptResponse.text()).slice(0, 300)}`
+      if (!transcriptResponse.ok) {
+        const message = `${transcriptResponse.statusText} ${(await transcriptResponse.text()).slice(0, 300)}`
 
-          throw new Error(message)
-        }
+        throw new Error(message)
+      }
 
-        const json: { text: string } = await transcriptResponse.json()
-        transcript = await postProcessTranscript(json.text)
+      const json: { text: string } = await transcriptResponse.json()
+      transcript = await postProcessTranscript(json.text)
 
       const history = getRecordingHistory()
       const item: RecordingHistoryItem = {
@@ -549,7 +568,10 @@ export const router = {
       }
 
       // Use unified agent mode processing
-      const finalResponse = await processWithAgentMode(input.text, input.conversationId)
+      const finalResponse = await processWithAgentMode(
+        input.text,
+        input.conversationId,
+      )
 
       // Save to history
       const history = getRecordingHistory()
@@ -643,25 +665,43 @@ export const router = {
 
       if (!conversationId) {
         // Create new conversation with the transcript
-        conversation = await conversationService.createConversation(transcript, "user")
+        conversation = await conversationService.createConversation(
+          transcript,
+          "user",
+        )
         conversationId = conversation.id
       } else {
         // Load existing conversation and add user message
-        conversation = await conversationService.loadConversation(conversationId)
+        conversation =
+          await conversationService.loadConversation(conversationId)
         if (conversation) {
-          await conversationService.addMessageToConversation(conversationId, transcript, "user")
+          await conversationService.addMessageToConversation(
+            conversationId,
+            transcript,
+            "user",
+          )
         } else {
-          conversation = await conversationService.createConversation(transcript, "user")
+          conversation = await conversationService.createConversation(
+            transcript,
+            "user",
+          )
           conversationId = conversation.id
         }
       }
 
       // Use unified agent mode processing
-      const finalResponse = await processWithAgentMode(transcript, conversationId)
+      const finalResponse = await processWithAgentMode(
+        transcript,
+        conversationId,
+      )
 
       // Add assistant response to conversation
       if (conversationId) {
-        await conversationService.addMessageToConversation(conversationId, finalResponse, "assistant")
+        await conversationService.addMessageToConversation(
+          conversationId,
+          finalResponse,
+          "assistant",
+        )
       }
 
       // Save to history
@@ -740,9 +780,9 @@ export const router = {
       title: "Load MCP Configuration",
       filters: [
         { name: "JSON Files", extensions: ["json"] },
-        { name: "All Files", extensions: ["*"] }
+        { name: "All Files", extensions: ["*"] },
       ],
-      properties: ["openFile"]
+      properties: ["openFile"],
     })
 
     if (result.canceled || !result.filePaths.length) {
@@ -759,15 +799,21 @@ export const router = {
       }
 
       // Validate each server config
-      for (const [serverName, serverConfig] of Object.entries(mcpConfig.mcpServers)) {
+      for (const [serverName, serverConfig] of Object.entries(
+        mcpConfig.mcpServers,
+      )) {
         if (!serverConfig.command || !Array.isArray(serverConfig.args)) {
-          throw new Error(`Invalid server config for "${serverName}": missing command or args`)
+          throw new Error(
+            `Invalid server config for "${serverName}": missing command or args`,
+          )
         }
       }
 
       return mcpConfig
     } catch (error) {
-      throw new Error(`Failed to load MCP config: ${error instanceof Error ? error.message : String(error)}`)
+      throw new Error(
+        `Failed to load MCP config: ${error instanceof Error ? error.message : String(error)}`,
+      )
     }
   }),
 
@@ -779,8 +825,8 @@ export const router = {
         defaultPath: "mcp.json",
         filters: [
           { name: "JSON Files", extensions: ["json"] },
-          { name: "All Files", extensions: ["*"] }
-        ]
+          { name: "All Files", extensions: ["*"] },
+        ],
       })
 
       if (result.canceled || !result.filePath) {
@@ -791,7 +837,9 @@ export const router = {
         fs.writeFileSync(result.filePath, JSON.stringify(input.config, null, 2))
         return true
       } catch (error) {
-        throw new Error(`Failed to save MCP config: ${error instanceof Error ? error.message : String(error)}`)
+        throw new Error(
+          `Failed to save MCP config: ${error instanceof Error ? error.message : String(error)}`,
+        )
       }
     }),
 
@@ -799,31 +847,60 @@ export const router = {
     .input<{ config: MCPConfig }>()
     .action(async ({ input }) => {
       try {
-        if (!input.config.mcpServers || typeof input.config.mcpServers !== "object") {
+        if (
+          !input.config.mcpServers ||
+          typeof input.config.mcpServers !== "object"
+        ) {
           return { valid: false, error: "Missing or invalid mcpServers" }
         }
 
-        for (const [serverName, serverConfig] of Object.entries(input.config.mcpServers)) {
+        for (const [serverName, serverConfig] of Object.entries(
+          input.config.mcpServers,
+        )) {
           if (!serverConfig.command) {
-            return { valid: false, error: `Server "${serverName}": missing command` }
+            return {
+              valid: false,
+              error: `Server "${serverName}": missing command`,
+            }
           }
           if (!Array.isArray(serverConfig.args)) {
-            return { valid: false, error: `Server "${serverName}": args must be an array` }
+            return {
+              valid: false,
+              error: `Server "${serverName}": args must be an array`,
+            }
           }
           if (serverConfig.env && typeof serverConfig.env !== "object") {
-            return { valid: false, error: `Server "${serverName}": env must be an object` }
+            return {
+              valid: false,
+              error: `Server "${serverName}": env must be an object`,
+            }
           }
-          if (serverConfig.timeout && typeof serverConfig.timeout !== "number") {
-            return { valid: false, error: `Server "${serverName}": timeout must be a number` }
+          if (
+            serverConfig.timeout &&
+            typeof serverConfig.timeout !== "number"
+          ) {
+            return {
+              valid: false,
+              error: `Server "${serverName}": timeout must be a number`,
+            }
           }
-          if (serverConfig.disabled && typeof serverConfig.disabled !== "boolean") {
-            return { valid: false, error: `Server "${serverName}": disabled must be a boolean` }
+          if (
+            serverConfig.disabled &&
+            typeof serverConfig.disabled !== "boolean"
+          ) {
+            return {
+              valid: false,
+              error: `Server "${serverName}": disabled must be a boolean`,
+            }
           }
         }
 
         return { valid: true }
       } catch (error) {
-        return { valid: false, error: error instanceof Error ? error.message : String(error) }
+        return {
+          valid: false,
+          error: error instanceof Error ? error.message : String(error),
+        }
       }
     }),
 
@@ -849,7 +926,10 @@ export const router = {
   setMcpServerRuntimeEnabled: t.procedure
     .input<{ serverName: string; enabled: boolean }>()
     .action(async ({ input }) => {
-      const success = mcpService.setServerRuntimeEnabled(input.serverName, input.enabled)
+      const success = mcpService.setServerRuntimeEnabled(
+        input.serverName,
+        input.enabled,
+      )
       return { success }
     }),
 
@@ -858,7 +938,7 @@ export const router = {
     .action(async ({ input }) => {
       return {
         runtimeEnabled: mcpService.isServerRuntimeEnabled(input.serverName),
-        available: mcpService.isServerAvailable(input.serverName)
+        available: mcpService.isServerAvailable(input.serverName),
       }
     }),
 
@@ -871,7 +951,11 @@ export const router = {
     try {
       return await diagnosticsService.generateDiagnosticReport()
     } catch (error) {
-      diagnosticsService.logError('tipc', 'Failed to generate diagnostic report', error)
+      diagnosticsService.logError(
+        "tipc",
+        "Failed to generate diagnostic report",
+        error,
+      )
       throw error
     }
   }),
@@ -880,11 +964,20 @@ export const router = {
     .input<{ filePath?: string }>()
     .action(async ({ input }) => {
       try {
-        const savedPath = await diagnosticsService.saveDiagnosticReport(input.filePath)
+        const savedPath = await diagnosticsService.saveDiagnosticReport(
+          input.filePath,
+        )
         return { success: true, filePath: savedPath }
       } catch (error) {
-        diagnosticsService.logError('tipc', 'Failed to save diagnostic report', error)
-        return { success: false, error: error instanceof Error ? error.message : String(error) }
+        diagnosticsService.logError(
+          "tipc",
+          "Failed to save diagnostic report",
+          error,
+        )
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+        }
       }
     }),
 
@@ -892,7 +985,11 @@ export const router = {
     try {
       return await diagnosticsService.performHealthCheck()
     } catch (error) {
-      diagnosticsService.logError('tipc', 'Failed to perform health check', error)
+      diagnosticsService.logError(
+        "tipc",
+        "Failed to perform health check",
+        error,
+      )
       throw error
     }
   }),
@@ -911,7 +1008,10 @@ export const router = {
   testMcpServerConnection: t.procedure
     .input<{ serverName: string; serverConfig: MCPServerConfig }>()
     .action(async ({ input }) => {
-      return mcpService.testServerConnection(input.serverName, input.serverConfig)
+      return mcpService.testServerConnection(
+        input.serverName,
+        input.serverConfig,
+      )
     }),
 
   restartMcpServer: t.procedure
@@ -930,7 +1030,7 @@ export const router = {
   fetchAvailableModels: t.procedure
     .input<{ providerId: string }>()
     .action(async ({ input }) => {
-      const { fetchAvailableModels } = await import('./models-service')
+      const { fetchAvailableModels } = await import("./models-service")
       return fetchAvailableModels(input.providerId)
     }),
 
@@ -954,7 +1054,10 @@ export const router = {
   createConversation: t.procedure
     .input<{ firstMessage: string; role?: "user" | "assistant" }>()
     .action(async ({ input }) => {
-      return conversationService.createConversation(input.firstMessage, input.role)
+      return conversationService.createConversation(
+        input.firstMessage,
+        input.role,
+      )
     }),
 
   addMessageToConversation: t.procedure
@@ -971,7 +1074,7 @@ export const router = {
         input.content,
         input.role,
         input.toolCalls,
-        input.toolResults
+        input.toolResults,
       )
     }),
 

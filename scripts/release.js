@@ -21,7 +21,7 @@ const desktopDir = process.cwd()
 
 run(`rm -rf dist`, { cwd: desktopDir })
 
-run (`pnpm build-rs`)
+run(`pnpm build-rs`)
 
 if (process.platform === "darwin") {
   run(`pnpm build:mac --arm64 --publish always`, {

@@ -8,7 +8,10 @@ import {
 } from "./window"
 import { state } from "./state"
 
-const defaultIcon = path.join(__dirname, `../../resources/${process.env.IS_MAC ? 'trayIconTemplate.png' : 'trayIcon.ico'}`)
+const defaultIcon = path.join(
+  __dirname,
+  `../../resources/${process.env.IS_MAC ? "trayIconTemplate.png" : "trayIcon.ico"}`,
+)
 const stopIcon = path.join(
   __dirname,
   "../../resources/stopTrayIconTemplate.png",

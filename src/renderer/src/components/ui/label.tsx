@@ -1,7 +1,8 @@
 import * as React from "react"
 import { cn } from "@renderer/lib/utils"
 
-export interface LabelProps extends React.LabelHTMLAttributes<HTMLLabelElement> {}
+export interface LabelProps
+  extends React.LabelHTMLAttributes<HTMLLabelElement> {}
 
 const Label = React.forwardRef<HTMLLabelElement, LabelProps>(
   ({ className, ...props }, ref) => (
@@ -9,11 +10,11 @@ const Label = React.forwardRef<HTMLLabelElement, LabelProps>(
       ref={ref}
       className={cn(
         "text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70",
-        className
+        className,
       )}
       {...props}
     />
-  )
+  ),
 )
 Label.displayName = "Label"
 

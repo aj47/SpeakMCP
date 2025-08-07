@@ -21,26 +21,28 @@
       function getThemePreference() {
         try {
           // Try to get theme preference from config
-          const configData = localStorage.getItem('theme-preference')
+          const configData = localStorage.getItem("theme-preference")
           if (configData) {
             return configData
           }
         } catch (e) {
           // Fallback to system preference
         }
-        return 'system'
+        return "system"
       }
 
       function applyTheme(themePreference = null) {
         const preference = themePreference || getThemePreference()
 
-        if (preference === 'light') {
+        if (preference === "light") {
           toggleThemeClass(false)
-        } else if (preference === 'dark') {
+        } else if (preference === "dark") {
           toggleThemeClass(true)
         } else {
           // System preference
-          const darkMode = window.matchMedia("(prefers-color-scheme: dark)").matches
+          const darkMode = window.matchMedia(
+            "(prefers-color-scheme: dark)",
+          ).matches
           toggleThemeClass(darkMode)
         }
       }
@@ -54,15 +56,15 @@
         .matchMedia("(prefers-color-scheme: dark)")
         .addEventListener("change", (e) => {
           const preference = getThemePreference()
-          if (preference === 'system') {
+          if (preference === "system") {
             toggleThemeClass(e.matches)
           }
         })
 
       // Listen for theme preference changes from the app
-      window.addEventListener('theme-preference-changed', (e) => {
+      window.addEventListener("theme-preference-changed", (e) => {
         const newPreference = e.detail
-        localStorage.setItem('theme-preference', newPreference)
+        localStorage.setItem("theme-preference", newPreference)
         applyTheme(newPreference)
       })
 

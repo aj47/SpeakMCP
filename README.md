@@ -18,17 +18,20 @@ Currently building for **macOS (Apple Silicon)**
 ### Basic Usage
 
 **Voice Recording:**
+
 1. **Hold `Ctrl`** key to start recording your voice
 2. **Release `Ctrl`** to stop recording and transcribe
 3. Text is automatically inserted into your active application
 
 **MCP Agent Mode:**
+
 1. **Hold `Ctrl+Alt`** to start recording for agent mode
 2. **Release `Ctrl+Alt`** to process with MCP tools
 3. Watch real-time progress as the agent executes tools
 4. Results are automatically inserted or displayed
 
 **Text Input:**
+
 - **Press `Ctrl+T`** to open text input mode for direct typing
 
 ## 🎬 Preview
@@ -38,6 +41,7 @@ https://github.com/user-attachments/assets/2344a817-f36c-42b0-9ebc-cdd6e926b7a0
 ## ✨ Features
 
 ### 🎯 Core Functionality
+
 - **Voice-to-Text**: Hold `Ctrl` key to record, release to transcribe
 - **MCP Agent Mode**: Hold `Ctrl+Alt` for intelligent tool execution
 - **Text Input Mode**: Press `Ctrl+T` for direct text input
@@ -46,12 +50,14 @@ https://github.com/user-attachments/assets/2344a817-f36c-42b0-9ebc-cdd6e926b7a0
 - **Real-time Feedback**: Visual audio waveform and agent progress tracking
 
 ### 🤖 AI-Powered Processing
+
 - **Speech Recognition**: OpenAI Whisper and Groq for high-accuracy transcription
 - **LLM Integration**: OpenAI GPT, Groq, and Google Gemini for intelligent processing
 - **Structured Output**: Reliable JSON responses using OpenAI SDK and Zod validation
 - **Custom Endpoints**: Support for self-hosted APIs and custom base URLs
 
 ### 🛠️ MCP Tool Integration
+
 - **Model Context Protocol**: Connect to any MCP-compatible tools and services
 - **Agent Mode**: Iterative tool calling with intelligent decision making
 - **Real-time Progress**: Visual feedback showing agent thinking and tool execution
@@ -59,12 +65,14 @@ https://github.com/user-attachments/assets/2344a817-f36c-42b0-9ebc-cdd6e926b7a0
 - **Tool Discovery**: Automatic detection and configuration of available tools
 
 ### 🧠 Intelligent Conversations
+
 - **Context Persistence**: Maintain conversation history across voice interactions
 - **Multi-turn Dialogues**: Continue conversations with follow-up questions
 - **Tool Memory**: Agents remember previous tool results and context
 - **Conversation Management**: Create, continue, and manage multiple conversation threads
 
 ### 🔧 Advanced Configuration
+
 - **Multiple Shortcuts**: Configurable keyboard shortcuts for different modes
 - **Provider Selection**: Choose between multiple STT and LLM providers
 - **Model Customization**: Select specific models for each provider and use case
@@ -76,6 +84,7 @@ https://github.com/user-attachments/assets/2344a817-f36c-42b0-9ebc-cdd6e926b7a0
 SpeakMCP is built with a modern, multi-process architecture designed for performance, reliability, and extensibility:
 
 ### System Overview
+
 ```
 ┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
 │   Electron      │    │   Rust Binary    │    │   MCP Servers   │
@@ -115,17 +124,20 @@ SpeakMCP is built with a modern, multi-process architecture designed for perform
 ### Setup
 
 1. **Clone the repository**
+
    ```bash
    git clone https://github.com/aj47/SpeakMCP.git
    cd SpeakMCP
    ```
 
 2. **Install dependencies**
+
    ```bash
    pnpm install
    ```
 
 3. **Build Rust binary**
+
    ```bash
    pnpm build-rs
    ```
@@ -191,10 +203,10 @@ DEBUG=all pnpm run dev
 ```
 
 What you’ll see:
+
 - LLM: request metadata, messages, HTTP request/response, errors
 - Tools: planned tool calls from the LLM, each execution’s args/result, normalized results, and retries with corrected args
 - Keybinds: raw key events, modifier state changes, shortcut matching logic, and triggered actions
-
 
 ### Project Structure
 
@@ -233,14 +245,15 @@ SpeakMCP/
 
 ### Speech-to-Text Providers
 
-| Provider | Platform | Speed | Quality | Privacy | Cost |
-|----------|----------|-------|---------|---------|------|
-| **OpenAI Whisper** | All | 🐌 Moderate | 🎯 High | ☁️ Cloud | 💰 Paid |
-| **Groq** | All | ⚡ Fast | 🎯 High | ☁️ Cloud | 💰 Paid |
+| Provider           | Platform | Speed       | Quality | Privacy  | Cost    |
+| ------------------ | -------- | ----------- | ------- | -------- | ------- |
+| **OpenAI Whisper** | All      | 🐌 Moderate | 🎯 High | ☁️ Cloud | 💰 Paid |
+| **Groq**           | All      | ⚡ Fast     | 🎯 High | ☁️ Cloud | 💰 Paid |
 
 ### LLM Providers
 
 **Supported Providers and Models:**
+
 - **OpenAI**: GPT-4o, GPT-4o-mini, GPT-3.5-turbo
 - **Groq**: Gemma2-9b-it, Llama-3.1-70b, Mixtral-8x7b
 - **Google Gemini**: Gemini-1.5-flash, Gemini-1.5-pro
@@ -250,6 +263,7 @@ SpeakMCP/
 Configure external tools and services through MCP servers. SpeakMCP supports both local command-based servers and remote servers via WebSocket or Streamable HTTP transports.
 
 #### Local Command-Based Servers
+
 ```json
 {
   "mcpServers": {
@@ -273,6 +287,7 @@ Configure external tools and services through MCP servers. SpeakMCP supports bot
 ```
 
 #### Remote Servers
+
 ```json
 {
   "mcpServers": {
@@ -293,6 +308,7 @@ Configure external tools and services through MCP servers. SpeakMCP supports bot
 ```
 
 **Supported Transport Types:**
+
 - **stdio** (default): Local command-based servers using stdin/stdout communication
 - **websocket**: Remote servers accessible via WebSocket protocol (ws:// or wss://)
 - **streamableHttp**: Remote servers using the MCP Streamable HTTP transport
@@ -300,22 +316,24 @@ Configure external tools and services through MCP servers. SpeakMCP supports bot
 ### Keyboard Shortcuts
 
 **Voice Recording:**
+
 - **Hold Ctrl**: Press and hold to record, release to transcribe
 - **Ctrl + /**: Press once to start, press again to stop
 
 **MCP Agent Mode:**
+
 - **Hold Ctrl+Alt**: Press and hold to record for agent mode
 - **Ctrl+Alt + /**: Press once to start agent mode, press again to stop
 
 **Text Input:**
+
 - **Ctrl + T**: Open text input mode
 - **Ctrl + Shift + T**: Alternative text input shortcut
 - **Alt + T**: Alternative text input shortcut
 
 **General:**
+
 - **Escape**: Cancel current recording or close agent mode
-
-
 
 ## 🔧 API Configuration
 
@@ -342,6 +360,7 @@ Configure external tools and services through MCP servers. SpeakMCP supports bot
 ### MCP Server Setup
 
 1. **Install MCP Servers**: Use npm to install MCP-compatible servers
+
    ```bash
    npm install -g @modelcontextprotocol/server-filesystem
    npm install -g @modelcontextprotocol/server-brave-search
@@ -368,18 +387,21 @@ The Model Context Protocol (MCP) is an open standard that enables AI assistants 
 ### Agent Mode Features
 
 **Intelligent Tool Execution:**
+
 - Automatically determines which tools to use based on your voice input
 - Executes multiple tools in sequence when needed
 - Provides real-time progress feedback with step-by-step updates
 - Handles errors gracefully with fallback strategies
 
 **Real-time Progress Tracking:**
+
 - Visual progress indicators showing current agent status
 - Step-by-step breakdown of agent thinking and tool execution
 - Tool call details with arguments and results
 - Error handling and retry mechanisms
 
 **Conversation Continuity:**
+
 - Maintains context across multiple voice interactions
 - Remembers previous tool results and conversation history
 - Allows follow-up questions and iterative refinement
@@ -388,21 +410,25 @@ The Model Context Protocol (MCP) is an open standard that enables AI assistants 
 ### Example Use Cases
 
 **File Management:**
+
 - "Create a new project folder and add a README file"
 - "Find all Python files in my workspace and show their sizes"
 - "Backup my important documents to a new folder"
 
 **Web Research:**
+
 - "Search for the latest news about AI developments"
 - "Find documentation for the React useEffect hook"
 - "Look up the weather forecast for tomorrow"
 
 **Development Tasks:**
+
 - "Create a new Git branch and switch to it"
 - "Run the test suite and show me any failures"
 - "Deploy the latest changes to staging"
 
 **Communication:**
+
 - "Send a message to the team about the meeting delay"
 - "Create a calendar event for next week's review"
 - "Update the project status in our tracking system"
@@ -412,29 +438,34 @@ The Model Context Protocol (MCP) is an open standard that enables AI assistants 
 ### Common Issues
 
 **🎤 Microphone not working**
+
 - Grant microphone permissions in system settings
 - Check microphone access in SpeakMCP settings
 - Restart application after granting permissions
 
 **⌨️ Text not inserting**
+
 - Enable accessibility permissions (macOS)
 - Run as administrator (Windows)
 - Check target application supports text input
 - Verify focus restoration is working correctly
 
 **🔧 MCP tools not working**
+
 - Check MCP server configuration and paths
 - Verify environment variables are set correctly
 - Test server connection in settings
 - Check logs for `spawn npx ENOENT` errors (PATH issues)
 
 **🤖 Agent mode issues**
+
 - Ensure MCP tools are enabled in settings
 - Check that at least one MCP server is configured and connected
 - Verify LLM provider supports structured output (OpenAI/Groq recommended)
 - Check conversation history if context seems lost
 
 **🌐 API errors**
+
 - Verify API keys are correct
 - Check internet connection for cloud providers
 - Validate custom base URLs if configured
@@ -443,16 +474,19 @@ The Model Context Protocol (MCP) is an open standard that enables AI assistants 
 ### Performance Optimization
 
 **For Cloud APIs:**
+
 - Use Groq for fastest cloud transcription and tool calling
 - Configure custom prompts for better accuracy
 - Enable post-processing for grammar correction
 
 **For MCP Integration:**
+
 - Use local MCP servers when possible for faster response times
 - Configure appropriate timeouts for external services
 - Enable agent mode for complex multi-step tasks
 
 **For Conversations:**
+
 - Set reasonable conversation history limits
 - Use conversation management to organize different topics
 - Clear old conversations periodically to maintain performance

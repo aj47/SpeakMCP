@@ -4,11 +4,45 @@ import { Input } from "@renderer/components/ui/input"
 import { Label } from "@renderer/components/ui/label"
 import { Textarea } from "@renderer/components/ui/textarea"
 import { Switch } from "@renderer/components/ui/switch"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@renderer/components/ui/card"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@renderer/components/ui/dialog"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@renderer/components/ui/select"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@renderer/components/ui/card"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@renderer/components/ui/dialog"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@renderer/components/ui/select"
 import { Badge } from "@renderer/components/ui/badge"
-import { Trash2, Edit, Plus, Upload, Download, Server, CheckCircle, XCircle, AlertCircle, BookOpen, RotateCcw, Square, Play } from "lucide-react"
+import {
+  Trash2,
+  Edit,
+  Plus,
+  Upload,
+  Download,
+  Server,
+  CheckCircle,
+  XCircle,
+  AlertCircle,
+  BookOpen,
+  RotateCcw,
+  Square,
+  Play,
+} from "lucide-react"
 import { Spinner } from "@renderer/components/ui/spinner"
 import { MCPConfig, MCPServerConfig, MCPTransportType } from "@shared/types"
 import { tipcClient } from "@renderer/lib/tipc-client"
@@ -27,14 +61,24 @@ interface ServerDialogProps {
 
 function ServerDialog({ server, onSave, onCancel }: ServerDialogProps) {
   const [name, setName] = useState(server?.name || "")
-  const [transport, setTransport] = useState<MCPTransportType>(server?.config.transport || "stdio")
+  const [transport, setTransport] = useState<MCPTransportType>(
+    server?.config.transport || "stdio",
+  )
   const [command, setCommand] = useState(server?.config.command || "")
-  const [args, setArgs] = useState(server?.config.args ? server.config.args.join(" ") : "")
+  const [args, setArgs] = useState(
+    server?.config.args ? server.config.args.join(" ") : "",
+  )
   const [url, setUrl] = useState(server?.config.url || "")
   const [env, setEnv] = useState(
-    server?.config.env ? Object.entries(server.config.env).map(([k, v]) => `${k}=${v}`).join("\n") : ""
+    server?.config.env
+      ? Object.entries(server.config.env)
+          .map(([k, v]) => `${k}=${v}`)
+          .join("\n")
+      : "",
   )
-  const [timeout, setTimeout] = useState(server?.config.timeout?.toString() || "")
+  const [timeout, setTimeout] = useState(
+    server?.config.timeout?.toString() || "",
+  )
   const [disabled, setDisabled] = useState(server?.config.disabled || false)
 
   const handleSave = () => {
@@ -66,7 +110,7 @@ function ServerDialog({ server, onSave, onCancel }: ServerDialogProps) {
     const envObject: Record<string, string> = {}
     if (env.trim()) {
       try {
-        env.split("\n").forEach(line => {
+        env.split("\n").forEach((line) => {
           const [key, ...valueParts] = line.split("=")
           if (key && valueParts.length > 0) {
             envObject[key.trim()] = valueParts.join("=").trim()
@@ -89,7 +133,7 @@ function ServerDialog({ server, onSave, onCancel }: ServerDialogProps) {
       }),
       ...(Object.keys(envObject).length > 0 && { env: envObject }),
       ...(timeout && { timeout: parseInt(timeout) }),
-      ...(disabled && { disabled })
+      ...(disabled && { disabled }),
     }
 
     onSave(name.trim(), serverConfig)
@@ -117,7 +161,10 @@ function ServerDialog({ server, onSave, onCancel }: ServerDialogProps) {
 
         <div className="space-y-2">
           <Label htmlFor="transport">Transport Type</Label>
-          <Select value={transport} onValueChange={(value: MCPTransportType) => setTransport(value)}>
+          <Select
+            value={transport}
+            onValueChange={(value: MCPTransportType) => setTransport(value)}
+          >
             <SelectTrigger>
               <SelectValue placeholder="Select transport type" />
             </SelectTrigger>
@@ -164,13 +211,16 @@ function ServerDialog({ server, onSave, onCancel }: ServerDialogProps) {
               id="url"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
-              placeholder={transport === "websocket" ? "ws://localhost:8080" : "http://localhost:8080"}
+              placeholder={
+                transport === "websocket"
+                  ? "ws://localhost:8080"
+                  : "http://localhost:8080"
+              }
             />
             <p className="text-xs text-muted-foreground">
               {transport === "websocket"
                 ? "WebSocket URL (e.g., ws://localhost:8080 or wss://example.com/mcp)"
-                : "HTTP URL for streamable HTTP transport (e.g., http://localhost:8080/mcp)"
-              }
+                : "HTTP URL for streamable HTTP transport (e.g., http://localhost:8080/mcp)"}
             </p>
           </div>
         )}
@@ -216,9 +266,7 @@ function ServerDialog({ server, onSave, onCancel }: ServerDialogProps) {
         <Button variant="outline" onClick={onCancel}>
           Cancel
         </Button>
-        <Button onClick={handleSave}>
-          {server ? "Update" : "Add"} Server
-        </Button>
+        <Button onClick={handleSave}>{server ? "Update" : "Add"} Server</Button>
       </DialogFooter>
     </DialogContent>
   )
@@ -233,11 +281,11 @@ const MCP_EXAMPLES = {
       command: "npx",
       args: ["-y", "@modelcontextprotocol/server-google-maps"],
       env: {
-        GOOGLE_MAPS_API_KEY: "your-api-key-here"
-      }
-    }
+        GOOGLE_MAPS_API_KEY: "your-api-key-here",
+      },
+    },
   },
-  "slack": {
+  slack: {
     name: "slack",
     config: {
       transport: "stdio" as MCPTransportType,
@@ -245,65 +293,90 @@ const MCP_EXAMPLES = {
       args: ["-y", "@modelcontextprotocol/server-slack"],
       env: {
         SLACK_BOT_TOKEN: "xoxb-your-bot-token",
-        SLACK_TEAM_ID: "T1234567890"
-      }
-    }
+        SLACK_TEAM_ID: "T1234567890",
+      },
+    },
   },
-  "filesystem": {
+  filesystem: {
     name: "filesystem",
     config: {
       transport: "stdio" as MCPTransportType,
       command: "npx",
-      args: ["-y", "@modelcontextprotocol/server-filesystem", "/path/to/allowed/directory"],
-      env: {}
-    }
+      args: [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "/path/to/allowed/directory",
+      ],
+      env: {},
+    },
   },
-  "github": {
+  github: {
     name: "github",
     config: {
       transport: "stdio" as MCPTransportType,
       command: "npx",
       args: ["-y", "@modelcontextprotocol/server-github"],
       env: {
-        GITHUB_PERSONAL_ACCESS_TOKEN: "ghp_your_token_here"
-      }
-    }
+        GITHUB_PERSONAL_ACCESS_TOKEN: "ghp_your_token_here",
+      },
+    },
   },
-  "postgres": {
+  postgres: {
     name: "postgres",
     config: {
       transport: "stdio" as MCPTransportType,
       command: "npx",
       args: ["-y", "@modelcontextprotocol/server-postgres"],
       env: {
-        POSTGRES_CONNECTION_STRING: "postgresql://user:password@localhost:5432/database"
-      }
-    }
+        POSTGRES_CONNECTION_STRING:
+          "postgresql://user:password@localhost:5432/database",
+      },
+    },
   },
   "remote-websocket": {
     name: "remote-websocket",
     config: {
       transport: "websocket" as MCPTransportType,
       url: "ws://localhost:8080",
-      timeout: 10000
-    }
+      timeout: 10000,
+    },
   },
   "remote-http": {
     name: "remote-http",
     config: {
       transport: "streamableHttp" as MCPTransportType,
       url: "http://localhost:8080/mcp",
-      timeout: 10000
-    }
-  }
+      timeout: 10000,
+    },
+  },
 }
 
-export function MCPConfigManager({ config, onConfigChange }: MCPConfigManagerProps) {
-  const [editingServer, setEditingServer] = useState<{ name: string; config: MCPServerConfig } | null>(null)
+export function MCPConfigManager({
+  config,
+  onConfigChange,
+}: MCPConfigManagerProps) {
+  const [editingServer, setEditingServer] = useState<{
+    name: string
+    config: MCPServerConfig
+  } | null>(null)
   const [showAddDialog, setShowAddDialog] = useState(false)
   const [showExamples, setShowExamples] = useState(false)
-  const [serverStatus, setServerStatus] = useState<Record<string, { connected: boolean; toolCount: number; error?: string; runtimeEnabled?: boolean; configDisabled?: boolean }>>({})
-  const [initializationStatus, setInitializationStatus] = useState<{ isInitializing: boolean; progress: { current: number; total: number; currentServer?: string } }>({ isInitializing: false, progress: { current: 0, total: 0 } })
+  const [serverStatus, setServerStatus] = useState<
+    Record<
+      string,
+      {
+        connected: boolean
+        toolCount: number
+        error?: string
+        runtimeEnabled?: boolean
+        configDisabled?: boolean
+      }
+    >
+  >({})
+  const [initializationStatus, setInitializationStatus] = useState<{
+    isInitializing: boolean
+    progress: { current: number; total: number; currentServer?: string }
+  }>({ isInitializing: false, progress: { current: 0, total: 0 } })
 
   const servers = config.mcpServers || {}
 
@@ -313,12 +386,11 @@ export function MCPConfigManager({ config, onConfigChange }: MCPConfigManagerPro
       try {
         const [status, initStatus] = await Promise.all([
           tipcClient.getMcpServerStatus(),
-          tipcClient.getMcpInitializationStatus()
+          tipcClient.getMcpInitializationStatus(),
         ])
         setServerStatus(status)
         setInitializationStatus(initStatus)
-      } catch (error) {
-      }
+      } catch (error) {}
     }
 
     fetchStatus()
@@ -332,14 +404,18 @@ export function MCPConfigManager({ config, onConfigChange }: MCPConfigManagerPro
       ...config,
       mcpServers: {
         ...servers,
-        [name]: serverConfig
-      }
+        [name]: serverConfig,
+      },
     }
     onConfigChange(newConfig)
     setShowAddDialog(false)
   }
 
-  const handleEditServer = (oldName: string, newName: string, serverConfig: MCPServerConfig) => {
+  const handleEditServer = (
+    oldName: string,
+    newName: string,
+    serverConfig: MCPServerConfig,
+  ) => {
     const newServers = { ...servers }
     if (oldName !== newName) {
       delete newServers[oldName]
@@ -348,7 +424,7 @@ export function MCPConfigManager({ config, onConfigChange }: MCPConfigManagerPro
 
     const newConfig = {
       ...config,
-      mcpServers: newServers
+      mcpServers: newServers,
     }
     onConfigChange(newConfig)
     setEditingServer(null)
@@ -360,7 +436,7 @@ export function MCPConfigManager({ config, onConfigChange }: MCPConfigManagerPro
 
     const newConfig = {
       ...config,
-      mcpServers: newServers
+      mcpServers: newServers,
     }
     onConfigChange(newConfig)
   }
@@ -413,7 +489,10 @@ export function MCPConfigManager({ config, onConfigChange }: MCPConfigManagerPro
   const handleStopServer = async (serverName: string) => {
     try {
       // First mark the server as runtime-disabled so it stays stopped
-      const runtimeResult = await tipcClient.setMcpServerRuntimeEnabled({ serverName, enabled: false })
+      const runtimeResult = await tipcClient.setMcpServerRuntimeEnabled({
+        serverName,
+        enabled: false,
+      })
       if (!runtimeResult.success) {
         toast.error(`Failed to disable server: Server not found`)
         return
@@ -434,7 +513,10 @@ export function MCPConfigManager({ config, onConfigChange }: MCPConfigManagerPro
   const handleStartServer = async (serverName: string) => {
     try {
       // Mark the server as runtime-enabled so it can be initialized
-      const runtimeResult = await tipcClient.setMcpServerRuntimeEnabled({ serverName, enabled: true })
+      const runtimeResult = await tipcClient.setMcpServerRuntimeEnabled({
+        serverName,
+        enabled: true,
+      })
       if (!runtimeResult.success) {
         toast.error(`Failed to enable server: Server not found`)
         return
@@ -461,19 +543,19 @@ export function MCPConfigManager({ config, onConfigChange }: MCPConfigManagerPro
             Manage Model Context Protocol server connections
           </p>
         </div>
-        <div className="flex flex-wrap gap-2 justify-start sm:justify-end">
+        <div className="flex flex-wrap justify-start gap-2 sm:justify-end">
           <Button variant="outline" size="sm" onClick={handleImportConfig}>
-            <Upload className="h-4 w-4 mr-2" />
+            <Upload className="mr-2 h-4 w-4" />
             Import
           </Button>
           <Button variant="outline" size="sm" onClick={handleExportConfig}>
-            <Download className="h-4 w-4 mr-2" />
+            <Download className="mr-2 h-4 w-4" />
             Export
           </Button>
           <Dialog open={showExamples} onOpenChange={setShowExamples}>
             <DialogTrigger asChild>
               <Button variant="outline" size="sm">
-                <BookOpen className="h-4 w-4 mr-2" />
+                <BookOpen className="mr-2 h-4 w-4" />
                 Examples
               </Button>
             </DialogTrigger>
@@ -481,26 +563,31 @@ export function MCPConfigManager({ config, onConfigChange }: MCPConfigManagerPro
               <DialogHeader>
                 <DialogTitle>MCP Server Examples</DialogTitle>
                 <DialogDescription>
-                  Choose from popular MCP server configurations to get started quickly
+                  Choose from popular MCP server configurations to get started
+                  quickly
                 </DialogDescription>
               </DialogHeader>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-96 overflow-y-auto">
+              <div className="grid max-h-96 grid-cols-1 gap-4 overflow-y-auto md:grid-cols-2">
                 {Object.entries(MCP_EXAMPLES).map(([key, example]) => (
-                  <Card key={key} className="cursor-pointer hover:bg-accent" onClick={() => handleAddExample(key)}>
+                  <Card
+                    key={key}
+                    className="cursor-pointer hover:bg-accent"
+                    onClick={() => handleAddExample(key)}
+                  >
                     <CardHeader className="pb-2">
                       <CardTitle className="text-sm">{example.name}</CardTitle>
                       <CardDescription className="text-xs">
                         {example.config.transport === "stdio"
                           ? `${example.config.command} ${example.config.args ? example.config.args.join(" ") : ""}`
-                          : `${example.config.transport}: ${example.config.url}`
-                        }
+                          : `${example.config.transport}: ${example.config.url}`}
                       </CardDescription>
                     </CardHeader>
                     <CardContent className="pt-0">
                       <div className="text-xs text-muted-foreground">
                         {Object.keys(example.config.env || {}).length > 0 && (
                           <div>
-                            <strong>Environment variables:</strong> {Object.keys(example.config.env).join(", ")}
+                            <strong>Environment variables:</strong>{" "}
+                            {Object.keys(example.config.env).join(", ")}
                           </div>
                         )}
                       </div>
@@ -509,7 +596,10 @@ export function MCPConfigManager({ config, onConfigChange }: MCPConfigManagerPro
                 ))}
               </div>
               <DialogFooter>
-                <Button variant="outline" onClick={() => setShowExamples(false)}>
+                <Button
+                  variant="outline"
+                  onClick={() => setShowExamples(false)}
+                >
                   Close
                 </Button>
               </DialogFooter>
@@ -518,7 +608,7 @@ export function MCPConfigManager({ config, onConfigChange }: MCPConfigManagerPro
           <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
             <DialogTrigger asChild>
               <Button size="sm">
-                <Plus className="h-4 w-4 mr-2" />
+                <Plus className="mr-2 h-4 w-4" />
                 Add Server
               </Button>
             </DialogTrigger>
@@ -540,10 +630,17 @@ export function MCPConfigManager({ config, onConfigChange }: MCPConfigManagerPro
                 <div className="font-medium">Initializing MCP servers...</div>
                 <div className="text-muted-foreground">
                   {initializationStatus.progress.currentServer && (
-                    <>Connecting to {initializationStatus.progress.currentServer}</>
+                    <>
+                      Connecting to{" "}
+                      {initializationStatus.progress.currentServer}
+                    </>
                   )}
                   {initializationStatus.progress.total > 0 && (
-                    <> ({initializationStatus.progress.current}/{initializationStatus.progress.total})</>
+                    <>
+                      {" "}
+                      ({initializationStatus.progress.current}/
+                      {initializationStatus.progress.total})
+                    </>
                   )}
                 </div>
               </div>
@@ -556,8 +653,8 @@ export function MCPConfigManager({ config, onConfigChange }: MCPConfigManagerPro
         {Object.entries(servers).length === 0 ? (
           <Card>
             <CardContent className="flex flex-col items-center justify-center py-8">
-              <Server className="h-12 w-12 text-muted-foreground mb-4" />
-              <p className="text-muted-foreground text-center">
+              <Server className="mb-4 h-12 w-12 text-muted-foreground" />
+              <p className="text-center text-muted-foreground">
                 No MCP servers configured. Add a server to get started.
               </p>
             </CardContent>
@@ -574,14 +671,21 @@ export function MCPConfigManager({ config, onConfigChange }: MCPConfigManagerPro
                     ) : serverStatus[name]?.runtimeEnabled === false ? (
                       <div className="flex items-center gap-2">
                         <Square className="h-4 w-4 text-orange-500" />
-                        <Badge variant="outline" className="text-orange-600 border-orange-300">Stopped by User</Badge>
+                        <Badge
+                          variant="outline"
+                          className="border-orange-300 text-orange-600"
+                        >
+                          Stopped by User
+                        </Badge>
                       </div>
                     ) : (
                       <>
                         {serverStatus[name]?.connected ? (
                           <div className="flex items-center gap-2">
                             <CheckCircle className="h-4 w-4 text-green-500" />
-                            <Badge variant="default">Connected ({serverStatus[name].toolCount} tools)</Badge>
+                            <Badge variant="default">
+                              Connected ({serverStatus[name].toolCount} tools)
+                            </Badge>
                           </div>
                         ) : serverStatus[name]?.error ? (
                           <div className="flex items-center gap-2">
@@ -634,7 +738,9 @@ export function MCPConfigManager({ config, onConfigChange }: MCPConfigManagerPro
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => setEditingServer({ name, config: serverConfig })}
+                      onClick={() =>
+                        setEditingServer({ name, config: serverConfig })
+                      }
                       title="Edit server"
                     >
                       <Edit className="h-4 w-4" />
@@ -652,16 +758,18 @@ export function MCPConfigManager({ config, onConfigChange }: MCPConfigManagerPro
                 <CardDescription>
                   {serverConfig.transport === "stdio" || !serverConfig.transport
                     ? `${serverConfig.command || ""} ${serverConfig.args ? serverConfig.args.join(" ") : ""}`
-                    : `${serverConfig.transport}: ${serverConfig.url || ""}`
-                  }
+                    : `${serverConfig.transport}: ${serverConfig.url || ""}`}
                 </CardDescription>
               </CardHeader>
-              {(serverConfig.env || serverConfig.timeout || serverStatus[name]?.error) && (
+              {(serverConfig.env ||
+                serverConfig.timeout ||
+                serverStatus[name]?.error) && (
                 <CardContent className="pt-0">
-                  <div className="text-xs text-muted-foreground space-y-1">
+                  <div className="space-y-1 text-xs text-muted-foreground">
                     {serverConfig.env && (
                       <div>
-                        <strong>Environment:</strong> {Object.keys(serverConfig.env).join(", ")}
+                        <strong>Environment:</strong>{" "}
+                        {Object.keys(serverConfig.env).join(", ")}
                       </div>
                     )}
                     {serverConfig.timeout && (
@@ -686,7 +794,9 @@ export function MCPConfigManager({ config, onConfigChange }: MCPConfigManagerPro
         <Dialog open={true} onOpenChange={() => setEditingServer(null)}>
           <ServerDialog
             server={editingServer}
-            onSave={(newName, config) => handleEditServer(editingServer.name, newName, config)}
+            onSave={(newName, config) =>
+              handleEditServer(editingServer.name, newName, config)
+            }
             onCancel={() => setEditingServer(null)}
           />
         </Dialog>

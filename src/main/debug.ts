@@ -15,35 +15,53 @@ const flags: DebugFlags = {
 function strToBool(v: string | undefined): boolean {
   if (!v) return false
   const s = v.toLowerCase()
-  return s === '1' || s === 'true' || s === 'yes' || s === 'on'
+  return s === "1" || s === "true" || s === "yes" || s === "on"
 }
 
 export function initDebugFlags(argv: string[] = process.argv): DebugFlags {
   // CLI flags
   const has = (name: string) => argv.includes(name)
 
-  const envDebug = (process.env.DEBUG || '').toLowerCase()
+  const envDebug = (process.env.DEBUG || "").toLowerCase()
   const envParts = envDebug.split(/[,:\s]+/).filter(Boolean)
 
-  const envLLM = strToBool(process.env.DEBUG_LLM) || envParts.includes('llm') || envDebug === '*' || envDebug.includes('all')
-  const envTools = strToBool(process.env.DEBUG_TOOLS) || envParts.includes('tools') || envDebug === '*' || envDebug.includes('all')
-  const envKeybinds = strToBool(process.env.DEBUG_KEYBINDS) || envParts.includes('keybinds') || envDebug === '*' || envDebug.includes('all')
+  const envLLM =
+    strToBool(process.env.DEBUG_LLM) ||
+    envParts.includes("llm") ||
+    envDebug === "*" ||
+    envDebug.includes("all")
+  const envTools =
+    strToBool(process.env.DEBUG_TOOLS) ||
+    envParts.includes("tools") ||
+    envDebug === "*" ||
+    envDebug.includes("all")
+  const envKeybinds =
+    strToBool(process.env.DEBUG_KEYBINDS) ||
+    envParts.includes("keybinds") ||
+    envDebug === "*" ||
+    envDebug.includes("all")
 
-  const all = has('--debug') || has('--debug-all') || envDebug === '*' || envParts.includes('all')
+  const all =
+    has("--debug") ||
+    has("--debug-all") ||
+    envDebug === "*" ||
+    envParts.includes("all")
 
-  flags.llm = all || has('--debug-llm') || envLLM
-  flags.tools = all || has('--debug-tools') || envTools
-  flags.keybinds = all || has('--debug-keybinds') || envKeybinds
+  flags.llm = all || has("--debug-llm") || envLLM
+  flags.tools = all || has("--debug-tools") || envTools
+  flags.keybinds = all || has("--debug-keybinds") || envKeybinds
   flags.all = all
 
   if (flags.llm || flags.tools || flags.keybinds) {
     // Small banner so users can see debugs are enabled
     const enabled: string[] = []
-    if (flags.llm) enabled.push('LLM')
-    if (flags.tools) enabled.push('TOOLS')
-    if (flags.keybinds) enabled.push('KEYBINDS')
+    if (flags.llm) enabled.push("LLM")
+    if (flags.tools) enabled.push("TOOLS")
+    if (flags.keybinds) enabled.push("KEYBINDS")
     // eslint-disable-next-line no-console
-    console.log(`[DEBUG] Enabled: ${enabled.join(', ')} (argv: ${argv.filter(a => a.startsWith('--debug')).join(' ') || 'none'})`)
+    console.log(
+      `[DEBUG] Enabled: ${enabled.join(", ")} (argv: ${argv.filter((a) => a.startsWith("--debug")).join(" ") || "none"})`,
+    )
   }
 
   return { ...flags }
@@ -87,4 +105,3 @@ export function logKeybinds(...args: any[]) {
 export function getDebugFlags(): DebugFlags {
   return { ...flags }
 }
-

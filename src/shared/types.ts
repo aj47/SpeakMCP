@@ -137,8 +137,6 @@ export type Config = {
   geminiApiKey?: string
   geminiBaseUrl?: string
 
-
-
   transcriptPostProcessingEnabled?: boolean
   transcriptPostProcessingProviderId?: CHAT_PROVIDER_ID
   transcriptPostProcessingPrompt?: string
@@ -153,7 +151,11 @@ export type Config = {
 
   // Agent Kill Switch Configuration
   agentKillSwitchEnabled?: boolean
-  agentKillSwitchHotkey?: "ctrl-shift-escape" | "ctrl-alt-q" | "ctrl-shift-q" | "custom"
+  agentKillSwitchHotkey?:
+    | "ctrl-shift-escape"
+    | "ctrl-alt-q"
+    | "ctrl-shift-q"
+    | "custom"
   customAgentKillSwitchHotkey?: string
 
   // MCP Tool Calling Configuration
@@ -166,6 +168,8 @@ export type Config = {
   mcpToolsGeminiModel?: string
   mcpToolsSystemPrompt?: string
   mcpAgentModeEnabled?: boolean
+  // When enabled, require manual user approval before each tool call executes
+  mcpRequireApprovalBeforeToolCall?: boolean
   mcpAutoPasteEnabled?: boolean
   mcpAutoPasteDelay?: number
   mcpMaxIterations?: number
@@ -182,7 +186,14 @@ export type Config = {
   autoSaveConversations?: boolean
 
   // Panel Position Configuration
-  panelPosition?: "top-left" | "top-center" | "top-right" | "bottom-left" | "bottom-center" | "bottom-right" | "custom"
+  panelPosition?:
+    | "top-left"
+    | "top-center"
+    | "top-right"
+    | "bottom-left"
+    | "bottom-center"
+    | "bottom-right"
+    | "custom"
   panelCustomPosition?: { x: number; y: number }
   panelDragEnabled?: boolean
 }

@@ -50,14 +50,14 @@ export function TextInputPanel({
 
   if (isProcessing) {
     return (
-      <div className="flex h-full w-full items-center justify-center liquid-glass-strong rounded-xl glass-text-strong">
+      <div className="liquid-glass-strong glass-text-strong flex h-full w-full items-center justify-center rounded-xl">
         {agentProgress ? (
-          <div className="w-full mx-4">
+          <div className="mx-4 w-full">
             <AgentProgress progress={agentProgress} variant="overlay" />
           </div>
         ) : (
           <div className="flex items-center gap-2">
-            <div className="animate-spin rounded-full h-4 w-4 border-2 border-current border-t-transparent"></div>
+            <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"></div>
             <span className="text-sm">Processing...</span>
           </div>
         )}
@@ -66,16 +66,21 @@ export function TextInputPanel({
   }
 
   return (
-    <div className="flex h-full w-full flex-col liquid-glass-strong rounded-xl glass-text-strong p-3 gap-3">
+    <div className="liquid-glass-strong glass-text-strong flex h-full w-full flex-col gap-3 rounded-xl p-3">
       {/* Show agent progress if available */}
       {isProcessing && agentProgress ? (
-        <div className="flex-1 flex items-center justify-center">
-          <AgentProgress progress={agentProgress} variant="default" className="w-full" />
+        <div className="flex flex-1 items-center justify-center">
+          <AgentProgress
+            progress={agentProgress}
+            variant="default"
+            className="w-full"
+          />
         </div>
       ) : (
-        <div className="flex-1 flex flex-col gap-2">
-          <div className="text-xs glass-text-muted">
-            Type your message • Enter to send • Shift+Enter for new line • Esc to cancel
+        <div className="flex flex-1 flex-col gap-2">
+          <div className="glass-text-muted text-xs">
+            Type your message • Enter to send • Shift+Enter for new line • Esc
+            to cancel
           </div>
           <Textarea
             ref={textareaRef}
@@ -84,9 +89,9 @@ export function TextInputPanel({
             onKeyDown={handleKeyDown}
             placeholder="Type your message here..."
             className={cn(
-              "flex-1 min-h-0 resize-none liquid-glass-input glass-text-strong border-0",
-              "focus:border-ring focus:ring-1 focus:ring-ring bg-transparent",
-              "placeholder:glass-text-muted"
+              "liquid-glass-input glass-text-strong min-h-0 flex-1 resize-none border-0",
+              "bg-transparent focus:border-ring focus:ring-1 focus:ring-ring",
+              "placeholder:glass-text-muted",
             )}
             disabled={isProcessing}
             aria-label="Message input"
@@ -94,17 +99,19 @@ export function TextInputPanel({
         </div>
       )}
 
-      <div className="flex justify-between items-center text-xs glass-text-muted">
+      <div className="glass-text-muted flex items-center justify-between text-xs">
         <div>
           {text.length > 0 && (
-            <span>{text.length} character{text.length !== 1 ? 's' : ''}</span>
+            <span>
+              {text.length} character{text.length !== 1 ? "s" : ""}
+            </span>
           )}
         </div>
         <div className="flex gap-2">
           <button
             onClick={onCancel}
             disabled={isProcessing}
-            className="px-2 py-1 rounded hover:bg-white/10 transition-colors"
+            className="rounded px-2 py-1 transition-colors hover:bg-white/10"
           >
             Cancel
           </button>
@@ -112,10 +119,10 @@ export function TextInputPanel({
             onClick={handleSubmit}
             disabled={!text.trim() || isProcessing}
             className={cn(
-              "px-2 py-1 rounded transition-colors",
+              "rounded px-2 py-1 transition-colors",
               text.trim() && !isProcessing
-                ? "bg-blue-500/20 hover:bg-blue-500/30 text-blue-300"
-                : "opacity-50 cursor-not-allowed"
+                ? "bg-blue-500/20 text-blue-300 hover:bg-blue-500/30"
+                : "cursor-not-allowed opacity-50",
             )}
           >
             Send

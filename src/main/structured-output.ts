@@ -4,12 +4,16 @@ import { configStore } from "./config"
 
 // Define the schema for LLM tool call responses
 const LLMToolCallSchema = z.object({
-  toolCalls: z.array(z.object({
-    name: z.string(),
-    arguments: z.record(z.any())
-  })).optional(),
+  toolCalls: z
+    .array(
+      z.object({
+        name: z.string(),
+        arguments: z.record(z.any()),
+      }),
+    )
+    .optional(),
   content: z.string().optional(),
-  needsMoreWork: z.boolean().optional()
+  needsMoreWork: z.boolean().optional(),
 })
 
 export type LLMToolCallResponse = z.infer<typeof LLMToolCallSchema>
@@ -17,7 +21,8 @@ export type LLMToolCallResponse = z.infer<typeof LLMToolCallSchema>
 // Define the JSON schema for OpenAI structured output
 const toolCallResponseSchema: OpenAI.ResponseFormatJSONSchema["json_schema"] = {
   name: "LLMToolCallResponse",
-  description: "Response format for LLM tool calls with optional tool execution and content",
+  description:
+    "Response format for LLM tool calls with optional tool execution and content",
   schema: {
     type: "object",
     properties: {
@@ -29,98 +34,106 @@ const toolCallResponseSchema: OpenAI.ResponseFormatJSONSchema["json_schema"] = {
           properties: {
             name: {
               type: "string",
-              description: "Name of the tool to call"
+              description: "Name of the tool to call",
             },
             arguments: {
               type: "object",
               description: "Arguments to pass to the tool",
-              additionalProperties: true
-            }
+              additionalProperties: true,
+            },
           },
           required: ["name", "arguments"],
-          additionalProperties: false
-        }
+          additionalProperties: false,
+        },
       },
       content: {
         type: "string",
-        description: "Text content of the response"
+        description: "Text content of the response",
       },
       needsMoreWork: {
         type: "boolean",
-        description: "Whether more work is needed after this response"
-      }
+        description: "Whether more work is needed after this response",
+      },
     },
-    additionalProperties: false
+    additionalProperties: false,
   },
-  strict: true
+  strict: true,
 }
 
 // Context extraction schema
 const ContextExtractionSchema = z.object({
   contextSummary: z.string(),
-  resources: z.array(z.object({
-    type: z.string(),
-    id: z.string(),
-    parameter: z.string()
-  }))
+  resources: z.array(
+    z.object({
+      type: z.string(),
+      id: z.string(),
+      parameter: z.string(),
+    }),
+  ),
 })
 
 export type ContextExtractionResponse = z.infer<typeof ContextExtractionSchema>
 
-const contextExtractionSchema: OpenAI.ResponseFormatJSONSchema["json_schema"] = {
-  name: "ContextExtraction",
-  description: "Extract context summary and resource identifiers from conversation",
-  schema: {
-    type: "object",
-    properties: {
-      contextSummary: {
-        type: "string",
-        description: "Brief summary of the current state and what has been accomplished"
-      },
-      resources: {
-        type: "array",
-        description: "Array of resource objects with type, id, and parameter information",
-        items: {
-          type: "object",
-          properties: {
-            type: {
-              type: "string",
-              description: "Type of resource (session, connection, handle, workspace, channel, other)"
+const contextExtractionSchema: OpenAI.ResponseFormatJSONSchema["json_schema"] =
+  {
+    name: "ContextExtraction",
+    description:
+      "Extract context summary and resource identifiers from conversation",
+    schema: {
+      type: "object",
+      properties: {
+        contextSummary: {
+          type: "string",
+          description:
+            "Brief summary of the current state and what has been accomplished",
+        },
+        resources: {
+          type: "array",
+          description:
+            "Array of resource objects with type, id, and parameter information",
+          items: {
+            type: "object",
+            properties: {
+              type: {
+                type: "string",
+                description:
+                  "Type of resource (session, connection, handle, workspace, channel, other)",
+              },
+              id: {
+                type: "string",
+                description: "The actual ID value",
+              },
+              parameter: {
+                type: "string",
+                description:
+                  "The parameter name this ID should be used for (e.g., sessionId, connectionId)",
+              },
             },
-            id: {
-              type: "string",
-              description: "The actual ID value"
-            },
-            parameter: {
-              type: "string",
-              description: "The parameter name this ID should be used for (e.g., sessionId, connectionId)"
-            }
+            required: ["type", "id", "parameter"],
+            additionalProperties: false,
           },
-          required: ["type", "id", "parameter"],
-          additionalProperties: false
-        }
-      }
+        },
+      },
+      required: ["contextSummary", "resources"],
+      additionalProperties: false,
     },
-    required: ["contextSummary", "resources"],
-    additionalProperties: false
-  },
-  strict: true
-}
+    strict: true,
+  }
 
 /**
  * Create an OpenAI client instance based on the current configuration
  */
 function createOpenAIClient(providerId?: string): OpenAI {
   const config = configStore.get()
-  const chatProviderId = providerId || config.mcpToolsProviderId || 'openai'
+  const chatProviderId = providerId || config.mcpToolsProviderId || "openai"
 
-  const baseURL = chatProviderId === "groq"
-    ? config.groqBaseUrl || "https://api.groq.com/openai/v1"
-    : config.openaiBaseUrl || "https://api.openai.com/v1"
+  const baseURL =
+    chatProviderId === "groq"
+      ? config.groqBaseUrl || "https://api.groq.com/openai/v1"
+      : config.openaiBaseUrl || "https://api.openai.com/v1"
 
-  const apiKey = chatProviderId === "groq"
-    ? config.groqApiKey
-    : config.openaiApiKey
+  const apiKey =
+    chatProviderId === "groq" ? config.groqApiKey : config.openaiApiKey
 
   if (!apiKey) {
     throw new Error(`API key is required for ${chatProviderId}`)
@@ -128,18 +141,21 @@ function createOpenAIClient(providerId?: string): OpenAI {
 
   return new OpenAI({
     baseURL,
-    apiKey
+    apiKey,
   })
 }
 
 /**
  * Get the appropriate model for the provider
  */
-function getModel(providerId?: string, context: 'mcp' | 'transcript' = 'mcp'): string {
+function getModel(
+  providerId?: string,
+  context: "mcp" | "transcript" = "mcp",
+): string {
   const config = configStore.get()
-  const chatProviderId = providerId || config.mcpToolsProviderId || 'openai'
+  const chatProviderId = providerId || config.mcpToolsProviderId || "openai"
 
-  if (context === 'transcript') {
+  if (context === "transcript") {
     return chatProviderId === "groq"
       ? config.transcriptPostProcessingGroqModel || "gemma2-9b-it"
       : config.transcriptPostProcessingOpenaiModel || "gpt-4o-mini"
@@ -156,15 +172,17 @@ function getModel(providerId?: string, context: 'mcp' | 'transcript' = 'mcp'): s
 function supportsStructuredOutput(model: string): boolean {
   // Models that support structured output
   const supportedModels = [
-    'gpt-4o-mini-2024-07-18',
-    'gpt-4o-2024-08-06',
-    'gpt-4o-mini',
-    'gpt-4o',
-    'o1-2024-12-17',
-    'o3-mini-2025-1-31'
+    "gpt-4o-mini-2024-07-18",
+    "gpt-4o-2024-08-06",
+    "gpt-4o-mini",
+    "gpt-4o",
+    "o1-2024-12-17",
+    "o3-mini-2025-1-31",
   ]
 
-  return supportedModels.some(supported => model.includes(supported.split('-')[0]))
+  return supportedModels.some((supported) =>
+    model.includes(supported.split("-")[0]),
+  )
 }
 
 /**
@@ -172,31 +190,30 @@ function supportsStructuredOutput(model: string): boolean {
  */
 export async function makeStructuredToolCall(
   messages: Array<{ role: string; content: string }>,
-  providerId?: string
+  providerId?: string,
 ): Promise<LLMToolCallResponse> {
   const config = configStore.get()
-  const chatProviderId = providerId || config.mcpToolsProviderId || 'openai'
+  const chatProviderId = providerId || config.mcpToolsProviderId || "openai"
 
   // For Gemini, fall back to the existing implementation
   if (chatProviderId === "gemini") {
     throw new Error("Gemini provider should use existing implementation")
   }
 
-  const model = getModel(providerId, 'mcp')
+  const model = getModel(providerId, "mcp")
   const client = createOpenAIClient(providerId)
-
 
   try {
     if (supportsStructuredOutput(model)) {
-
       const response = await client.chat.completions.create({
         model,
-        messages: messages as OpenAI.Chat.Completions.ChatCompletionMessageParam[],
+        messages:
+          messages as OpenAI.Chat.Completions.ChatCompletionMessageParam[],
         temperature: 0,
         response_format: {
           type: "json_schema",
-          json_schema: toolCallResponseSchema
-        }
+          json_schema: toolCallResponseSchema,
+        },
       })
 
       const content = response.choices[0]?.message.content
@@ -204,8 +221,7 @@ export async function makeStructuredToolCall(
         try {
           const parsed = JSON.parse(content)
           return LLMToolCallSchema.parse(parsed)
-        } catch (parseError) {
-        }
+        } catch (parseError) {}
       }
     }
 
@@ -213,8 +229,9 @@ export async function makeStructuredToolCall(
 
     const response = await client.chat.completions.create({
       model,
-      messages: messages as OpenAI.Chat.Completions.ChatCompletionMessageParam[],
-      temperature: 0
+      messages:
+        messages as OpenAI.Chat.Completions.ChatCompletionMessageParam[],
+      temperature: 0,
     })
 
     const content = response.choices[0]?.message.content?.trim()
@@ -228,7 +245,6 @@ export async function makeStructuredToolCall(
     }
 
     throw new Error("No response content received")
-
   } catch (error) {
     throw error
   }
@@ -239,35 +255,34 @@ export async function makeStructuredToolCall(
  */
 export async function makeStructuredContextExtraction(
   prompt: string,
-  providerId?: string
+  providerId?: string,
 ): Promise<ContextExtractionResponse> {
   const config = configStore.get()
-  const chatProviderId = providerId || config.mcpToolsProviderId || 'openai'
+  const chatProviderId = providerId || config.mcpToolsProviderId || "openai"
 
-  const model = getModel(providerId, 'mcp')
+  const model = getModel(providerId, "mcp")
   const client = createOpenAIClient(providerId)
-
 
   try {
     if (supportsStructuredOutput(model)) {
-
       const response = await client.chat.completions.create({
         model,
         messages: [
           {
             role: "system",
-            content: "You are a context extraction assistant. Analyze conversation history and extract useful resource identifiers and context information."
+            content:
+              "You are a context extraction assistant. Analyze conversation history and extract useful resource identifiers and context information.",
           },
           {
             role: "user",
-            content: prompt
-          }
+            content: prompt,
+          },
         ],
         temperature: 0,
         response_format: {
           type: "json_schema",
-          json_schema: contextExtractionSchema
-        }
+          json_schema: contextExtractionSchema,
+        },
       })
 
       const content = response.choices[0]?.message.content
@@ -275,8 +290,7 @@ export async function makeStructuredContextExtraction(
         try {
           const parsed = JSON.parse(content)
           return ContextExtractionSchema.parse(parsed)
-        } catch (parseError) {
-        }
+        } catch (parseError) {}
       }
     }
 
@@ -287,14 +301,15 @@ export async function makeStructuredContextExtraction(
       messages: [
         {
           role: "system",
-          content: "You are a context extraction assistant. Always respond with valid JSON only."
+          content:
+            "You are a context extraction assistant. Always respond with valid JSON only.",
         },
         {
           role: "user",
-          content: prompt
-        }
+          content: prompt,
+        },
       ],
-      temperature: 0
+      temperature: 0,
     })
 
     const content = response.choices[0]?.message.content?.trim()
@@ -308,7 +323,6 @@ export async function makeStructuredContextExtraction(
     }
 
     return { contextSummary: "", resources: [] }
-
   } catch (error) {
     return { contextSummary: "", resources: [] }
   }
@@ -319,24 +333,24 @@ export async function makeStructuredContextExtraction(
  */
 export async function makeTextCompletion(
   prompt: string,
-  providerId?: string
+  providerId?: string,
 ): Promise<string> {
   const config = configStore.get()
-  const chatProviderId = providerId || config.transcriptPostProcessingProviderId || 'openai'
+  const chatProviderId =
+    providerId || config.transcriptPostProcessingProviderId || "openai"
 
-  const model = getModel(providerId, 'transcript')
+  const model = getModel(providerId, "transcript")
   const client = createOpenAIClient(providerId)
-
 
   const response = await client.chat.completions.create({
     model,
     messages: [
       {
         role: "system",
-        content: prompt
-      }
+        content: prompt,
+      },
     ],
-    temperature: 0
+    temperature: 0,
   })
 
   return response.choices[0]?.message.content?.trim() || ""

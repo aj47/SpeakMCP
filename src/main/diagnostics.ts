@@ -1,8 +1,8 @@
-import fs from 'fs'
-import path from 'path'
-import { configStore } from './config'
-import { mcpService } from './mcp-service'
-import { MCPServerConfig } from '../shared/types'
+import fs from "fs"
+import path from "path"
+import { configStore } from "./config"
+import { mcpService } from "./mcp-service"
+import { MCPServerConfig } from "../shared/types"
 
 export interface DiagnosticInfo {
   timestamp: number
@@ -22,7 +22,7 @@ export interface DiagnosticInfo {
   }
   errors: Array<{
     timestamp: number
-    level: 'error' | 'warning' | 'info'
+    level: "error" | "warning" | "info"
     component: string
     message: string
     stack?: string
@@ -31,7 +31,7 @@ export interface DiagnosticInfo {
 
 class DiagnosticsService {
   private static instance: DiagnosticsService | null = null
-  private errorLog: DiagnosticInfo['errors'] = []
+  private errorLog: DiagnosticInfo["errors"] = []
   private maxErrorLogSize = 100
 
   static getInstance(): DiagnosticsService {
@@ -48,18 +48,18 @@ class DiagnosticsService {
 
   private setupErrorHandlers(): void {
     // Capture unhandled promise rejections
-    process.on('unhandledRejection', (reason, promise) => {
-      this.logError('system', 'Unhandled Promise Rejection', {
+    process.on("unhandledRejection", (reason, promise) => {
+      this.logError("system", "Unhandled Promise Rejection", {
         reason: String(reason),
-        promise: String(promise)
+        promise: String(promise),
       })
     })
 
     // Capture uncaught exceptions
-    process.on('uncaughtException', (error) => {
-      this.logError('system', 'Uncaught Exception', {
+    process.on("uncaughtException", (error) => {
+      this.logError("system", "Uncaught Exception", {
         message: error.message,
-        stack: error.stack
+        stack: error.stack,
       })
     })
   }
@@ -67,10 +67,10 @@ class DiagnosticsService {
   logError(component: string, message: string, details?: any): void {
     const errorEntry = {
       timestamp: Date.now(),
-      level: 'error' as const,
+      level: "error" as const,
       component,
       message,
-      stack: details?.stack || new Error().stack
+      stack: details?.stack || new Error().stack,
     }
 
     this.errorLog.push(errorEntry)
@@ -86,10 +86,10 @@ class DiagnosticsService {
   logWarning(component: string, message: string, details?: any): void {
     const warningEntry = {
       timestamp: Date.now(),
-      level: 'warning' as const,
+      level: "warning" as const,
       component,
       message,
-      stack: details?.stack
+      stack: details?.stack,
     }
 
     this.errorLog.push(warningEntry)
@@ -104,9 +104,9 @@ class DiagnosticsService {
   logInfo(component: string, message: string, details?: any): void {
     const infoEntry = {
       timestamp: Date.now(),
-      level: 'info' as const,
+      level: "info" as const,
       component,
-      message
+      message,
     }
 
     this.errorLog.push(infoEntry)
@@ -126,36 +126,46 @@ class DiagnosticsService {
       system: {
         platform: process.platform,
         nodeVersion: process.version,
-        electronVersion: process.versions.electron || 'unknown'
+        electronVersion: process.versions.electron || "unknown",
       },
       config: {
         mcpServersCount: Object.keys(config.mcpConfig?.mcpServers || {}).length,
         mcpToolsEnabled: config.mcpToolsEnabled || false,
-        mcpAgentModeEnabled: config.mcpAgentModeEnabled || false
+        mcpAgentModeEnabled: config.mcpAgentModeEnabled || false,
       },
       mcp: {
         availableTools: mcpService.getAvailableTools().length,
-        serverStatus: await this.getServerStatus()
+        serverStatus: await this.getServerStatus(),
       },
-      errors: [...this.errorLog]
+      errors: [...this.errorLog],
     }
   }
 
-  private async getServerStatus(): Promise<Record<string, { connected: boolean; toolCount: number }>> {
+  private async getServerStatus(): Promise<
+    Record<string, { connected: boolean; toolCount: number }>
+  > {
     const config = configStore.get()
-    const serverStatus: Record<string, { connected: boolean; toolCount: number }> = {}
+    const serverStatus: Record<
+      string,
+      { connected: boolean; toolCount: number }
+    > = {}
 
-    for (const [serverName, serverConfig] of Object.entries(config.mcpConfig?.mcpServers || {})) {
+    for (const [serverName, serverConfig] of Object.entries(
+      config.mcpConfig?.mcpServers || {},
+    )) {
       try {
-        const testResult = await mcpService.testServerConnection(serverName, serverConfig as MCPServerConfig)
+        const testResult = await mcpService.testServerConnection(
+          serverName,
+          serverConfig as MCPServerConfig,
+        )
         serverStatus[serverName] = {
           connected: testResult.success,
-          toolCount: testResult.toolCount || 0
+          toolCount: testResult.toolCount || 0,
         }
       } catch (error) {
         serverStatus[serverName] = {
           connected: false,
-          toolCount: 0
+          toolCount: 0,
         }
       }
     }
@@ -165,15 +175,17 @@ class DiagnosticsService {
 
   async saveDiagnosticReport(filePath?: string): Promise<string> {
     const report = await this.generateDiagnosticReport()
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
-    const defaultPath = filePath || path.join(process.cwd(), `diagnostic-report-${timestamp}.json`)
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-")
+    const defaultPath =
+      filePath ||
+      path.join(process.cwd(), `diagnostic-report-${timestamp}.json`)
 
     fs.writeFileSync(defaultPath, JSON.stringify(report, null, 2))
 
     return defaultPath
   }
 
-  getRecentErrors(count: number = 10): DiagnosticInfo['errors'] {
+  getRecentErrors(count: number = 10): DiagnosticInfo["errors"] {
     return this.errorLog.slice(-count)
   }
 
@@ -183,52 +195,67 @@ class DiagnosticsService {
 
   // Health check method
   async performHealthCheck(): Promise<{
-    overall: 'healthy' | 'warning' | 'critical'
-    checks: Record<string, { status: 'pass' | 'fail' | 'warning'; message: string }>
+    overall: "healthy" | "warning" | "critical"
+    checks: Record<
+      string,
+      { status: "pass" | "fail" | "warning"; message: string }
+    >
   }> {
-    const checks: Record<string, { status: 'pass' | 'fail' | 'warning'; message: string }> = {}
+    const checks: Record<
+      string,
+      { status: "pass" | "fail" | "warning"; message: string }
+    > = {}
 
     // Check MCP service
     try {
       const tools = mcpService.getAvailableTools()
       checks.mcpService = {
-        status: tools.length > 0 ? 'pass' : 'warning',
-        message: `${tools.length} tools available`
+        status: tools.length > 0 ? "pass" : "warning",
+        message: `${tools.length} tools available`,
       }
     } catch (error) {
       checks.mcpService = {
-        status: 'fail',
-        message: `MCP service error: ${error}`
+        status: "fail",
+        message: `MCP service error: ${error}`,
       }
     }
 
     // Check recent errors
-    const recentErrors = this.errorLog.filter(e =>
-      e.level === 'error' && Date.now() - e.timestamp < 5 * 60 * 1000 // Last 5 minutes
+    const recentErrors = this.errorLog.filter(
+      (e) => e.level === "error" && Date.now() - e.timestamp < 5 * 60 * 1000, // Last 5 minutes
     )
 
     checks.recentErrors = {
-      status: recentErrors.length === 0 ? 'pass' : recentErrors.length < 5 ? 'warning' : 'fail',
-      message: `${recentErrors.length} errors in last 5 minutes`
+      status:
+        recentErrors.length === 0
+          ? "pass"
+          : recentErrors.length < 5
+            ? "warning"
+            : "fail",
+      message: `${recentErrors.length} errors in last 5 minutes`,
     }
 
     // Check configuration
     const config = configStore.get()
     const mcpServers = config.mcpConfig?.mcpServers || {}
     checks.configuration = {
-      status: Object.keys(mcpServers).length > 0 ? 'pass' : 'warning',
-      message: `${Object.keys(mcpServers).length} MCP servers configured`
+      status: Object.keys(mcpServers).length > 0 ? "pass" : "warning",
+      message: `${Object.keys(mcpServers).length} MCP servers configured`,
     }
 
     // Determine overall status
-    const failCount = Object.values(checks).filter(c => c.status === 'fail').length
-    const warningCount = Object.values(checks).filter(c => c.status === 'warning').length
+    const failCount = Object.values(checks).filter(
+      (c) => c.status === "fail",
+    ).length
+    const warningCount = Object.values(checks).filter(
+      (c) => c.status === "warning",
+    ).length
 
-    let overall: 'healthy' | 'warning' | 'critical' = 'healthy'
+    let overall: "healthy" | "warning" | "critical" = "healthy"
     if (failCount > 0) {
-      overall = 'critical'
+      overall = "critical"
     } else if (warningCount > 0) {
-      overall = 'warning'
+      overall = "warning"
     }
 
     return { overall, checks }

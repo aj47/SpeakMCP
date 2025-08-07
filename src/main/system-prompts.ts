@@ -102,10 +102,18 @@ WORKFLOW:
  * Constructs the full system prompt by combining base prompt, tool information, and user guidelines
  */
 export function constructSystemPrompt(
-  availableTools: Array<{ name: string; description: string; inputSchema?: any }>,
+  availableTools: Array<{
+    name: string
+    description: string
+    inputSchema?: any
+  }>,
   userGuidelines?: string,
   isAgentMode: boolean = false,
-  relevantTools?: Array<{ name: string; description: string; inputSchema?: any }>
+  relevantTools?: Array<{
+    name: string
+    description: string
+    inputSchema?: any
+  }>,
 ): string {
   let prompt = BASE_SYSTEM_PROMPT
 
@@ -114,23 +122,29 @@ export function constructSystemPrompt(
   }
 
   // Helper function to format tool information
-  const formatToolInfo = (tools: Array<{ name: string; description: string; inputSchema?: any }>) => {
-    return tools.map(tool => {
-      let info = `- ${tool.name}: ${tool.description}`
-      if (tool.inputSchema?.properties) {
-        const params = Object.entries(tool.inputSchema.properties)
-          .map(([key, schema]: [string, any]) => {
-            const type = schema.type || 'any'
-            const required = tool.inputSchema.required?.includes(key) ? ' (required)' : ''
-            return `${key}: ${type}${required}`
-          })
-          .join(', ')
-        if (params) {
-          info += `\n  Parameters: {${params}}`
+  const formatToolInfo = (
+    tools: Array<{ name: string; description: string; inputSchema?: any }>,
+  ) => {
+    return tools
+      .map((tool) => {
+        let info = `- ${tool.name}: ${tool.description}`
+        if (tool.inputSchema?.properties) {
+          const params = Object.entries(tool.inputSchema.properties)
+            .map(([key, schema]: [string, any]) => {
+              const type = schema.type || "any"
+              const required = tool.inputSchema.required?.includes(key)
+                ? " (required)"
+                : ""
+              return `${key}: ${type}${required}`
+            })
+            .join(", ")
+          if (params) {
+            info += `\n  Parameters: {${params}}`
+          }
         }
-      }
-      return info
-    }).join('\n')
+        return info
+      })
+      .join("\n")
   }
 
   // Add available tools
@@ -138,13 +152,16 @@ export function constructSystemPrompt(
     prompt += `\n\nAVAILABLE TOOLS:\n${formatToolInfo(availableTools)}`
 
     // Add relevant tools section if provided and different from all tools
-    if (relevantTools && relevantTools.length > 0 && relevantTools.length < availableTools.length) {
+    if (
+      relevantTools &&
+      relevantTools.length > 0 &&
+      relevantTools.length < availableTools.length
+    ) {
       prompt += `\n\nMOST RELEVANT TOOLS FOR THIS REQUEST:\n${formatToolInfo(relevantTools)}`
     }
   } else {
     prompt += `\n\nNo tools are currently available.`
   }
-
 
   // Add user guidelines if provided
   if (userGuidelines?.trim()) {
@@ -187,20 +204,33 @@ FOCUS: Codebase Exploration
 - Trace relationships between components and modules
 - Identify patterns and architectural decisions
 - Document findings clearly for the user
-- Ask targeted questions to clarify understanding when needed`
+- Ask targeted questions to clarify understanding when needed`,
 }
 
 /**
  * Enhanced system prompt constructor with task-specific optimizations
  */
 export function constructEnhancedSystemPrompt(
-  availableTools: Array<{ name: string; description: string; inputSchema?: any }>,
+  availableTools: Array<{
+    name: string
+    description: string
+    inputSchema?: any
+  }>,
   taskType?: keyof typeof TASK_SPECIFIC_PROMPTS,
   userGuidelines?: string,
   isAgentMode: boolean = false,
-  relevantTools?: Array<{ name: string; description: string; inputSchema?: any }>
+  relevantTools?: Array<{
+    name: string
+    description: string
+    inputSchema?: any
+  }>,
 ): string {
-  let prompt = constructSystemPrompt(availableTools, userGuidelines, isAgentMode, relevantTools)
+  let prompt = constructSystemPrompt(
+    availableTools,
+    userGuidelines,
+    isAgentMode,
+    relevantTools,
+  )
 
   // Add task-specific guidance if provided
   if (taskType && TASK_SPECIFIC_PROMPTS[taskType]) {

@@ -20,7 +20,7 @@ interface ConversationDisplayProps {
 export function ConversationDisplay({
   messages,
   className,
-  maxHeight = "400px"
+  maxHeight = "400px",
 }: ConversationDisplayProps) {
   const isFullHeight = maxHeight === "100%"
   const { agentProgress, isAgentProcessing } = useConversationState()
@@ -40,9 +40,14 @@ export function ConversationDisplay({
   if (isFullHeight) {
     // For full height, use direct overflow-y-auto approach like agent-progress
     return (
-      <Card className={cn("liquid-glass-subtle glass-border h-full flex flex-col", className)}>
+      <Card
+        className={cn(
+          "liquid-glass-subtle glass-border flex h-full flex-col",
+          className,
+        )}
+      >
         <div
-          className="flex-1 overflow-y-auto scroll-smooth p-4 space-y-4"
+          className="flex-1 space-y-4 overflow-y-auto scroll-smooth p-4"
           style={{ minHeight: 0 }} // Important for flex child to shrink
         >
           {messages.map((message, index) => (
@@ -55,8 +60,12 @@ export function ConversationDisplay({
 
           {/* Show agent progress at the bottom if processing */}
           {isAgentProcessing && agentProgress && (
-            <div className="mt-4 p-4 liquid-glass-strong rounded-lg">
-              <AgentProgress progress={agentProgress} variant="default" className="w-full" />
+            <div className="liquid-glass-strong mt-4 rounded-lg p-4">
+              <AgentProgress
+                progress={agentProgress}
+                variant="default"
+                className="w-full"
+              />
             </div>
           )}
         </div>
@@ -68,7 +77,7 @@ export function ConversationDisplay({
   return (
     <Card className={cn("liquid-glass-subtle glass-border", className)}>
       <ScrollArea className="h-full" style={{ maxHeight }}>
-        <CardContent className="p-4 space-y-4">
+        <CardContent className="space-y-4 p-4">
           {messages.map((message, index) => (
             <ConversationMessageItem
               key={message.id}
@@ -79,8 +88,12 @@ export function ConversationDisplay({
 
           {/* Show agent progress at the bottom if processing */}
           {isAgentProcessing && agentProgress && (
-            <div className="mt-4 p-4 liquid-glass-strong rounded-lg">
-              <AgentProgress progress={agentProgress} variant="default" className="w-full" />
+            <div className="liquid-glass-strong mt-4 rounded-lg p-4">
+              <AgentProgress
+                progress={agentProgress}
+                variant="default"
+                className="w-full"
+              />
             </div>
           )}
         </CardContent>
@@ -94,17 +107,22 @@ interface ConversationMessageItemProps {
   isLast?: boolean
 }
 
-function ConversationMessageItem({ message, isLast }: ConversationMessageItemProps) {
+function ConversationMessageItem({
+  message,
+  isLast,
+}: ConversationMessageItemProps) {
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
 
-    console.log('[DEBUG][COPY_MESSAGE] Context menu triggered for message:', {
+    console.log("[DEBUG][COPY_MESSAGE] Context menu triggered for message:", {
       messageId: message.id,
       role: message.role,
       contentLength: message.content.length,
-      contentPreview: message.content.substring(0, 50) + (message.content.length > 50 ? '...' : ''),
-      coordinates: { x: e.clientX, y: e.clientY }
+      contentPreview:
+        message.content.substring(0, 50) +
+        (message.content.length > 50 ? "..." : ""),
+      coordinates: { x: e.clientX, y: e.clientY },
     })
 
     tipcClient.showContextMenu({
@@ -148,11 +166,14 @@ function ConversationMessageItem({ message, isLast }: ConversationMessageItemPro
     const now = Date.now()
     const diff = now - timestamp
 
-    if (diff < 60000) { // Less than 1 minute
+    if (diff < 60000) {
+      // Less than 1 minute
       return "Just now"
-    } else if (diff < 3600000) { // Less than 1 hour
+    } else if (diff < 3600000) {
+      // Less than 1 hour
       return `${Math.floor(diff / 60000)}m ago`
-    } else if (diff < 86400000) { // Less than 1 day
+    } else if (diff < 86400000) {
+      // Less than 1 day
       return dayjs(timestamp).format("HH:mm")
     } else {
       return dayjs(timestamp).format("MMM D, HH:mm")
@@ -162,26 +183,28 @@ function ConversationMessageItem({ message, isLast }: ConversationMessageItemPro
   return (
     <div
       className={cn(
-        "flex gap-3 p-3 rounded-lg transition-colors cursor-pointer",
-        isLast ? "liquid-glass-interactive" : "hover:liquid-glass-subtle"
+        "flex cursor-pointer gap-3 rounded-lg p-3 transition-colors",
+        isLast ? "liquid-glass-interactive" : "hover:liquid-glass-subtle",
       )}
       onContextMenu={handleContextMenu}
     >
       <div className="flex-shrink-0">
-        <div className={cn(
-          "w-8 h-8 rounded-full flex items-center justify-center",
-          getRoleColor(message.role)
-        )}>
+        <div
+          className={cn(
+            "flex h-8 w-8 items-center justify-center rounded-full",
+            getRoleColor(message.role),
+          )}
+        >
           {getRoleIcon(message.role)}
         </div>
       </div>
 
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-1">
+      <div className="min-w-0 flex-1">
+        <div className="mb-1 flex items-center gap-2">
           <Badge variant="secondary" className="text-xs capitalize">
             {message.role}
           </Badge>
-          <span className="text-xs glass-text-muted">
+          <span className="glass-text-muted text-xs">
             {formatTimestamp(message.timestamp)}
           </span>
         </div>
@@ -192,12 +215,15 @@ function ConversationMessageItem({ message, isLast }: ConversationMessageItemPro
 
         {message.toolCalls && message.toolCalls.length > 0 && (
           <div className="mt-2 space-y-1">
-            <div className="text-xs glass-text-muted">Tool Calls:</div>
+            <div className="glass-text-muted text-xs">Tool Calls:</div>
             {message.toolCalls.map((toolCall, index) => (
-              <div key={index} className="text-xs liquid-glass-subtle rounded p-2">
+              <div
+                key={index}
+                className="liquid-glass-subtle rounded p-2 text-xs"
+              >
                 <span className="font-mono">{toolCall.name}</span>
                 {toolCall.arguments && (
-                  <pre className="mt-1 text-xs glass-text-muted overflow-x-auto">
+                  <pre className="glass-text-muted mt-1 overflow-x-auto text-xs">
                     {JSON.stringify(toolCall.arguments, null, 2)}
                   </pre>
                 )}
@@ -208,22 +234,23 @@ function ConversationMessageItem({ message, isLast }: ConversationMessageItemPro
 
         {message.toolResults && message.toolResults.length > 0 && (
           <div className="mt-2 space-y-1">
-            <div className="text-xs glass-text-muted">Tool Results:</div>
+            <div className="glass-text-muted text-xs">Tool Results:</div>
             {message.toolResults.map((result, index) => (
-              <div key={index} className={cn(
-                "text-xs rounded p-2",
-                result.success
-                  ? "bg-green-500/10 text-green-600 dark:text-green-400"
-                  : "bg-red-500/10 text-red-600 dark:text-red-400"
-              )}>
+              <div
+                key={index}
+                className={cn(
+                  "rounded p-2 text-xs",
+                  result.success
+                    ? "bg-green-500/10 text-green-600 dark:text-green-400"
+                    : "bg-red-500/10 text-red-600 dark:text-red-400",
+                )}
+              >
                 <div className="font-medium">
                   {result.success ? "Success" : "Error"}
                 </div>
-                <div className="mt-1 whitespace-pre-wrap">
-                  {result.content}
-                </div>
+                <div className="mt-1 whitespace-pre-wrap">{result.content}</div>
                 {result.error && (
-                  <div className="mt-1 text-red-500 text-xs">
+                  <div className="mt-1 text-xs text-red-500">
                     Error: {result.error}
                   </div>
                 )}
@@ -240,11 +267,13 @@ function ConversationMessageItem({ message, isLast }: ConversationMessageItemPro
 export function ConversationDisplayCompact({
   messages,
   className,
-  maxHeight = "200px"
+  maxHeight = "200px",
 }: ConversationDisplayProps) {
   if (messages.length === 0) {
     return (
-      <div className={cn("glass-text-muted text-sm text-center p-4", className)}>
+      <div
+        className={cn("glass-text-muted p-4 text-center text-sm", className)}
+      >
         No conversation history
       </div>
     )
@@ -253,21 +282,27 @@ export function ConversationDisplayCompact({
   return (
     <ScrollArea className={cn("w-full", className)} style={{ maxHeight }}>
       <div className="space-y-2 p-2">
-        {messages.slice(-5).map((message) => ( // Show only last 5 messages
-          <div key={message.id} className="flex gap-2 text-sm">
-            <div className={cn(
-              "w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0",
-              getRoleColorCompact(message.role)
-            )}>
-              {getRoleIconCompact(message.role)}
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="glass-text-strong truncate">
-                {message.content}
+        {messages.slice(-5).map(
+          (
+            message, // Show only last 5 messages
+          ) => (
+            <div key={message.id} className="flex gap-2 text-sm">
+              <div
+                className={cn(
+                  "flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full",
+                  getRoleColorCompact(message.role),
+                )}
+              >
+                {getRoleIconCompact(message.role)}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="glass-text-strong truncate">
+                  {message.content}
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          ),
+        )}
       </div>
     </ScrollArea>
   )

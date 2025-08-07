@@ -8,7 +8,7 @@ export const state = {
   isAgentModeActive: false,
   agentProcesses: new Set<ChildProcess>(),
   shouldStopAgent: false,
-  agentIterationCount: 0
+  agentIterationCount: 0,
 }
 
 // Process management for agent mode
@@ -18,11 +18,11 @@ export const agentProcessManager = {
     state.agentProcesses.add(process)
 
     // Clean up when process exits
-    process.on('exit', (code, signal) => {
+    process.on("exit", (code, signal) => {
       state.agentProcesses.delete(process)
     })
 
-    process.on('error', (error) => {
+    process.on("error", (error) => {
       state.agentProcesses.delete(process)
     })
   },
@@ -33,28 +33,30 @@ export const agentProcessManager = {
     const killPromises: Promise<void>[] = []
 
     for (const process of processes) {
-      killPromises.push(new Promise<void>((resolve) => {
-        if (process.killed || process.exitCode !== null) {
-          resolve()
-          return
-        }
-
-        // Try graceful shutdown first
-        process.kill('SIGTERM')
-
-        // Force kill after timeout
-        const forceKillTimeout = setTimeout(() => {
-          if (!process.killed && process.exitCode === null) {
-            process.kill('SIGKILL')
+      killPromises.push(
+        new Promise<void>((resolve) => {
+          if (process.killed || process.exitCode !== null) {
+            resolve()
+            return
           }
-          resolve()
-        }, 3000) // 3 second timeout
 
-        process.on('exit', () => {
-          clearTimeout(forceKillTimeout)
-          resolve()
-        })
-      }))
+          // Try graceful shutdown first
+          process.kill("SIGTERM")
+
+          // Force kill after timeout
+          const forceKillTimeout = setTimeout(() => {
+            if (!process.killed && process.exitCode === null) {
+              process.kill("SIGKILL")
+            }
+            resolve()
+          }, 3000) // 3 second timeout
+
+          process.on("exit", () => {
+            clearTimeout(forceKillTimeout)
+            resolve()
+          })
+        }),
+      )
     }
 
     await Promise.all(killPromises)
@@ -66,7 +68,7 @@ export const agentProcessManager = {
     for (const process of state.agentProcesses) {
       try {
         if (!process.killed && process.exitCode === null) {
-          process.kill('SIGKILL')
+          process.kill("SIGKILL")
         }
       } catch (error) {
         // Ignore errors during emergency stop
@@ -78,5 +80,5 @@ export const agentProcessManager = {
   // Get count of active processes
   getActiveProcessCount(): number {
     return state.agentProcesses.size
-  }
+  },
 }

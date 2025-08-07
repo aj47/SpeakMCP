@@ -69,20 +69,30 @@ export function TextInputDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="sm:max-w-md liquid-glass-strong"
+        className="liquid-glass-strong sm:max-w-md"
         aria-describedby="text-input-description"
       >
         <DialogHeader>
-          <DialogTitle className="glass-text-strong">Type Your Message</DialogTitle>
-          <DialogDescription id="text-input-description" className="glass-text-muted">
-            Enter your message below. Press Enter to submit, Shift+Enter for new line, or Escape to cancel.
+          <DialogTitle className="glass-text-strong">
+            Type Your Message
+          </DialogTitle>
+          <DialogDescription
+            id="text-input-description"
+            className="glass-text-muted"
+          >
+            Enter your message below. Press Enter to submit, Shift+Enter for new
+            line, or Escape to cancel.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
           {isProcessing && agentProgress ? (
-            <div className="min-h-[200px] flex items-center justify-center">
-              <AgentProgress progress={agentProgress} variant="default" className="w-full" />
+            <div className="flex min-h-[200px] items-center justify-center">
+              <AgentProgress
+                progress={agentProgress}
+                variant="default"
+                className="w-full"
+              />
             </div>
           ) : (
             <>
@@ -93,8 +103,8 @@ export function TextInputDialog({
                 onKeyDown={handleKeyDown}
                 placeholder="Type your message here..."
                 className={cn(
-                  "min-h-[120px] resize-none liquid-glass-input glass-text-strong",
-                  "focus:border-ring focus:ring-1 focus:ring-ring"
+                  "liquid-glass-input glass-text-strong min-h-[120px] resize-none",
+                  "focus:border-ring focus:ring-1 focus:ring-ring",
                 )}
                 disabled={isProcessing}
                 aria-label="Message input"

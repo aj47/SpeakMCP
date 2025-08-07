@@ -1,5 +1,10 @@
 import { configStore } from "./config"
-import { MCPTool, MCPToolCall, LLMToolCallResponse, MCPToolResult } from "./mcp-service"
+import {
+  MCPTool,
+  MCPToolCall,
+  LLMToolCallResponse,
+  MCPToolResult,
+} from "./mcp-service"
 import { AgentProgressStep, AgentProgressUpdate } from "../shared/types"
 import { getRendererHandlers } from "@egoist/tipc/main"
 import { WINDOWS, showPanelWindow } from "./window"
@@ -21,26 +26,31 @@ async function extractContextFromHistory(
     toolCalls?: MCPToolCall[]
     toolResults?: MCPToolResult[]
   }>,
-  config: any
-): Promise<{ contextSummary: string; resources: Array<{ type: string; id: string; parameter: string }> }> {
+  config: any,
+): Promise<{
+  contextSummary: string
+  resources: Array<{ type: string; id: string; parameter: string }>
+}> {
   if (conversationHistory.length === 0) {
     return { contextSummary: "", resources: [] }
   }
 
   // Create a condensed version of the conversation for analysis
-  const conversationText = conversationHistory.map(entry => {
-    let text = `${entry.role.toUpperCase()}: ${entry.content}`
+  const conversationText = conversationHistory
+    .map((entry) => {
+      let text = `${entry.role.toUpperCase()}: ${entry.content}`
 
-    if (entry.toolCalls) {
-      text += `\nTOOL_CALLS: ${entry.toolCalls.map(tc => `${tc.name}(${JSON.stringify(tc.arguments)})`).join(', ')}`
-    }
+      if (entry.toolCalls) {
+        text += `\nTOOL_CALLS: ${entry.toolCalls.map((tc) => `${tc.name}(${JSON.stringify(tc.arguments)})`).join(", ")}`
+      }
 
-    if (entry.toolResults) {
-      text += `\nTOOL_RESULTS: ${entry.toolResults.map(tr => tr.isError ? 'ERROR' : 'SUCCESS').join(', ')}`
-    }
+      if (entry.toolResults) {
+        text += `\nTOOL_RESULTS: ${entry.toolResults.map((tr) => (tr.isError ? "ERROR" : "SUCCESS")).join(", ")}`
+      }
 
-    return text
-  }).join('\n\n')
+      return text
+    })
+    .join("\n\n")
 
   const contextExtractionPrompt = `Analyze the following conversation history and extract useful context information that would be needed for continuing the conversation.
 
@@ -70,7 +80,10 @@ Only include resources that are currently active and usable.
 Keep the contextSummary concise but informative.`
 
   try {
-    const result = await makeStructuredContextExtraction(contextExtractionPrompt, config.mcpToolsProviderId)
+    const result = await makeStructuredContextExtraction(
+      contextExtractionPrompt,
+      config.mcpToolsProviderId,
+    )
     return result
   } catch (error) {
     return { contextSummary: "", resources: [] }
@@ -80,55 +93,66 @@ Keep the contextSummary concise but informative.`
 /**
  * Analyze tool errors and provide recovery strategies
  */
-function analyzeToolErrors(
-  toolResults: MCPToolResult[]
-): { recoveryStrategy: string; errorTypes: string[] } {
+function analyzeToolErrors(toolResults: MCPToolResult[]): {
+  recoveryStrategy: string
+  errorTypes: string[]
+} {
   const errorTypes: string[] = []
   const errorMessages = toolResults
-    .filter(r => r.isError)
-    .map(r => r.content.map(c => c.text).join(' '))
-    .join(' ')
+    .filter((r) => r.isError)
+    .map((r) => r.content.map((c) => c.text).join(" "))
+    .join(" ")
 
   // Categorize error types
-  if (errorMessages.includes('Session not found')) {
-    errorTypes.push('session_lost')
+  if (errorMessages.includes("Session not found")) {
+    errorTypes.push("session_lost")
   }
-  if (errorMessages.includes('timeout') || errorMessages.includes('connection')) {
-    errorTypes.push('connectivity')
+  if (
+    errorMessages.includes("timeout") ||
+    errorMessages.includes("connection")
+  ) {
+    errorTypes.push("connectivity")
   }
-  if (errorMessages.includes('permission') || errorMessages.includes('access')) {
-    errorTypes.push('permissions')
+  if (
+    errorMessages.includes("permission") ||
+    errorMessages.includes("access")
+  ) {
+    errorTypes.push("permissions")
   }
-  if (errorMessages.includes('not found') || errorMessages.includes('does not exist')) {
-    errorTypes.push('resource_missing')
+  if (
+    errorMessages.includes("not found") ||
+    errorMessages.includes("does not exist")
+  ) {
+    errorTypes.push("resource_missing")
   }
 
   // Generate recovery strategy based on error types
-  let recoveryStrategy = 'RECOVERY STRATEGIES:\n'
+  let recoveryStrategy = "RECOVERY STRATEGIES:\n"
 
-  if (errorTypes.includes('session_lost')) {
-    recoveryStrategy += '- For session errors: Create a new session using ht_create_session first\n'
+  if (errorTypes.includes("session_lost")) {
+    recoveryStrategy +=
+      "- For session errors: Create a new session using ht_create_session first\n"
   }
-  if (errorTypes.includes('connectivity')) {
-    recoveryStrategy += '- For connectivity issues: Wait a moment and retry, or check if the service is running\n'
+  if (errorTypes.includes("connectivity")) {
+    recoveryStrategy +=
+      "- For connectivity issues: Wait a moment and retry, or check if the service is running\n"
   }
-  if (errorTypes.includes('permissions')) {
-    recoveryStrategy += '- For permission errors: Try alternative file locations or check access rights\n'
+  if (errorTypes.includes("permissions")) {
+    recoveryStrategy +=
+      "- For permission errors: Try alternative file locations or check access rights\n"
   }
-  if (errorTypes.includes('resource_missing')) {
-    recoveryStrategy += '- For missing resources: Verify the resource exists or create it first\n'
+  if (errorTypes.includes("resource_missing")) {
+    recoveryStrategy +=
+      "- For missing resources: Verify the resource exists or create it first\n"
   }
 
   if (errorTypes.length === 0) {
-    recoveryStrategy += '- General: Try breaking down the task into smaller steps or use alternative tools\n'
+    recoveryStrategy +=
+      "- General: Try breaking down the task into smaller steps or use alternative tools\n"
   }
 
   return { recoveryStrategy, errorTypes }
 }
-
-
-
-
 
 export async function postProcessTranscript(transcript: string) {
   const config = configStore.get()
@@ -157,7 +181,7 @@ export async function postProcessTranscript(transcript: string) {
 
 export async function processTranscriptWithTools(
   transcript: string,
-  availableTools: MCPTool[]
+  availableTools: MCPTool[],
 ): Promise<LLMToolCallResponse> {
   const config = configStore.get()
 
@@ -166,25 +190,28 @@ export async function processTranscriptWithTools(
   }
 
   // Remove duplicates from available tools to prevent confusion
-  const uniqueAvailableTools = availableTools.filter((tool, index, self) =>
-    index === self.findIndex(t => t.name === tool.name)
+  const uniqueAvailableTools = availableTools.filter(
+    (tool, index, self) =>
+      index === self.findIndex((t) => t.name === tool.name),
   )
 
   // Construct system prompt using the new approach
   const userGuidelines = config.mcpToolsSystemPrompt
-  const systemPrompt = constructSystemPrompt(uniqueAvailableTools, userGuidelines, false)
-
-
+  const systemPrompt = constructSystemPrompt(
+    uniqueAvailableTools,
+    userGuidelines,
+    false,
+  )
 
   const messages = [
     {
       role: "system",
-      content: systemPrompt
+      content: systemPrompt,
     },
     {
       role: "user",
-      content: transcript
-    }
+      content: transcript,
+    },
   ]
 
   const chatProviderId = config.mcpToolsProviderId
@@ -246,7 +273,7 @@ function createProgressStep(
   type: AgentProgressStep["type"],
   title: string,
   description?: string,
-  status: AgentProgressStep["status"] = "pending"
+  status: AgentProgressStep["status"] = "pending",
 ): AgentProgressStep {
   return {
     id: `step_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`,
@@ -254,52 +281,126 @@ function createProgressStep(
     title,
     description,
     status,
-    timestamp: Date.now()
+    timestamp: Date.now(),
   }
 }
 
 // Helper function to analyze tool capabilities and match them to user requests
-function analyzeToolCapabilities(availableTools: MCPTool[], transcript: string): { summary: string; relevantTools: MCPTool[] } {
+function analyzeToolCapabilities(
+  availableTools: MCPTool[],
+  transcript: string,
+): { summary: string; relevantTools: MCPTool[] } {
   const transcriptLower = transcript.toLowerCase()
   const relevantTools: MCPTool[] = []
 
   // Define capability patterns based on common keywords and tool descriptions
   const patterns = {
     filesystem: {
-      keywords: ['file', 'directory', 'folder', 'desktop', 'list', 'ls', 'contents', 'browse', 'create', 'write', 'read'],
-      toolDescriptionKeywords: ['file', 'directory', 'folder', 'filesystem', 'path', 'create', 'write', 'read', 'list']
+      keywords: [
+        "file",
+        "directory",
+        "folder",
+        "desktop",
+        "list",
+        "ls",
+        "contents",
+        "browse",
+        "create",
+        "write",
+        "read",
+      ],
+      toolDescriptionKeywords: [
+        "file",
+        "directory",
+        "folder",
+        "filesystem",
+        "path",
+        "create",
+        "write",
+        "read",
+        "list",
+      ],
     },
     terminal: {
-      keywords: ['command', 'execute', 'run', 'terminal', 'shell', 'bash', 'script'],
-      toolDescriptionKeywords: ['command', 'execute', 'terminal', 'shell', 'session', 'run']
+      keywords: [
+        "command",
+        "execute",
+        "run",
+        "terminal",
+        "shell",
+        "bash",
+        "script",
+      ],
+      toolDescriptionKeywords: [
+        "command",
+        "execute",
+        "terminal",
+        "shell",
+        "session",
+        "run",
+      ],
     },
     system: {
-      keywords: ['system', 'process', 'status', 'info', 'monitor', 'snapshot'],
-      toolDescriptionKeywords: ['system', 'process', 'status', 'monitor', 'snapshot', 'info']
+      keywords: ["system", "process", "status", "info", "monitor", "snapshot"],
+      toolDescriptionKeywords: [
+        "system",
+        "process",
+        "status",
+        "monitor",
+        "snapshot",
+        "info",
+      ],
     },
     web: {
-      keywords: ['web', 'http', 'api', 'request', 'url', 'fetch', 'search'],
-      toolDescriptionKeywords: ['web', 'http', 'api', 'request', 'url', 'fetch', 'search', 'browser']
+      keywords: ["web", "http", "api", "request", "url", "fetch", "search"],
+      toolDescriptionKeywords: [
+        "web",
+        "http",
+        "api",
+        "request",
+        "url",
+        "fetch",
+        "search",
+        "browser",
+      ],
     },
     communication: {
-      keywords: ['send', 'message', 'email', 'notification', 'slack', 'discord'],
-      toolDescriptionKeywords: ['send', 'message', 'email', 'notification', 'slack', 'discord', 'communicate']
-    }
+      keywords: [
+        "send",
+        "message",
+        "email",
+        "notification",
+        "slack",
+        "discord",
+      ],
+      toolDescriptionKeywords: [
+        "send",
+        "message",
+        "email",
+        "notification",
+        "slack",
+        "discord",
+        "communicate",
+      ],
+    },
   }
 
   // Check which patterns match the transcript
   const matchedCapabilities: string[] = []
 
   for (const [capability, pattern] of Object.entries(patterns)) {
-    const hasKeyword = pattern.keywords.some(keyword => transcriptLower.includes(keyword))
+    const hasKeyword = pattern.keywords.some((keyword) =>
+      transcriptLower.includes(keyword),
+    )
 
     // Find tools that match this capability based on their descriptions
-    const capabilityTools = availableTools.filter(tool => {
+    const capabilityTools = availableTools.filter((tool) => {
       const toolNameLower = tool.name.toLowerCase()
       const toolDescLower = tool.description.toLowerCase()
 
-      return pattern.toolDescriptionKeywords.some(keyword =>
-        toolNameLower.includes(keyword) || toolDescLower.includes(keyword)
+      return pattern.toolDescriptionKeywords.some(
+        (keyword) =>
+          toolNameLower.includes(keyword) || toolDescLower.includes(keyword),
       )
     })
 
@@ -311,14 +412,15 @@ function analyzeToolCapabilities(availableTools: MCPTool[], transcript: string):
 
   let summary = ""
   if (matchedCapabilities.length > 0) {
-    summary = `Detected ${matchedCapabilities.join(', ')} capabilities. Can help with this request using available tools.`
+    summary = `Detected ${matchedCapabilities.join(", ")} capabilities. Can help with this request using available tools.`
   } else {
     summary = "Analyzing available tools for potential solutions."
   }
 
   // Remove duplicates from relevant tools
-  const uniqueRelevantTools = relevantTools.filter((tool, index, self) =>
-    index === self.findIndex(t => t.name === tool.name)
+  const uniqueRelevantTools = relevantTools.filter(
+    (tool, index, self) =>
+      index === self.findIndex((t) => t.name === tool.name),
   )
 
   return { summary, relevantTools: uniqueRelevantTools }
@@ -334,19 +436,22 @@ export async function processTranscriptWithAgentMode(
     content: string
     toolCalls?: MCPToolCall[]
     toolResults?: MCPToolResult[]
-  }>
+  }>,
 ): Promise<AgentModeResponse> {
   const config = configStore.get()
 
   if (!config.mcpToolsEnabled || !config.mcpAgentModeEnabled) {
-    const fallbackResponse = await processTranscriptWithTools(transcript, availableTools)
+    const fallbackResponse = await processTranscriptWithTools(
+      transcript,
+      availableTools,
+    )
     return {
       content: fallbackResponse.content || "",
       conversationHistory: [
         { role: "user", content: transcript },
-        { role: "assistant", content: fallbackResponse.content || "" }
+        { role: "assistant", content: fallbackResponse.content || "" },
       ],
-      totalIterations: 1
+      totalIterations: 1,
     }
   }
 
@@ -354,7 +459,12 @@ export async function processTranscriptWithAgentMode(
   const progressSteps: AgentProgressStep[] = []
 
   // Add initial step
-  const initialStep = createProgressStep("thinking", "Analyzing request", "Processing your request and determining next steps", "in_progress")
+  const initialStep = createProgressStep(
+    "thinking",
+    "Analyzing request",
+    "Processing your request and determining next steps",
+    "in_progress",
+  )
   progressSteps.push(initialStep)
 
   // Analyze available tool capabilities
@@ -364,11 +474,10 @@ export async function processTranscriptWithAgentMode(
   initialStep.status = "completed"
   initialStep.description = `Found ${availableTools.length} available tools. ${toolCapabilities.summary}`
 
-
-
   // Remove duplicates from available tools to prevent confusion
-  const uniqueAvailableTools = availableTools.filter((tool, index, self) =>
-    index === self.findIndex(t => t.name === tool.name)
+  const uniqueAvailableTools = availableTools.filter(
+    (tool, index, self) =>
+      index === self.findIndex((t) => t.name === tool.name),
   )
 
   // Enhanced user guidelines for agent mode
@@ -384,22 +493,26 @@ export async function processTranscriptWithAgentMode(
   }
 
   // Construct system prompt using the new approach
-  const systemPrompt = constructSystemPrompt(uniqueAvailableTools, agentModeGuidelines, true, toolCapabilities.relevantTools)
-
-
-
-
+  const systemPrompt = constructSystemPrompt(
+    uniqueAvailableTools,
+    agentModeGuidelines,
+    true,
+    toolCapabilities.relevantTools,
+  )
 
   // Generic context extraction from chat history - works with any MCP tool
-  const extractRecentContext = (history: Array<{ role: string; content: string; toolCalls?: any[]; toolResults?: any[] }>) => {
+  const extractRecentContext = (
+    history: Array<{
+      role: string
+      content: string
+      toolCalls?: any[]
+      toolResults?: any[]
+    }>,
+  ) => {
     // Simply return the recent conversation history - let the LLM understand the context
     // This is much simpler and works with any MCP tool, not just specific ones
     return history.slice(-8) // Last 8 messages provide sufficient context
   }
-
-
-
-
 
   const conversationHistory: Array<{
     role: "user" | "assistant" | "tool"
@@ -408,21 +521,28 @@ export async function processTranscriptWithAgentMode(
     toolResults?: MCPToolResult[]
   }> = [
     ...(previousConversationHistory || []),
-    { role: "user", content: transcript }
+    { role: "user", content: transcript },
   ]
 
   // Helper function to convert conversation history to the format expected by AgentProgressUpdate
-  const formatConversationForProgress = (history: typeof conversationHistory) => {
-    return history.map(entry => ({
+  const formatConversationForProgress = (
+    history: typeof conversationHistory,
+  ) => {
+    return history.map((entry) => ({
       role: entry.role,
       content: entry.content,
-      toolCalls: entry.toolCalls?.map(tc => ({ name: tc.name, arguments: tc.arguments })),
-      toolResults: entry.toolResults?.map(tr => ({
-        success: !tr.isError,
-        content: tr.content.map(c => c.text).join('\n'),
-        error: tr.isError ? tr.content.map(c => c.text).join('\n') : undefined
+      toolCalls: entry.toolCalls?.map((tc) => ({
+        name: tc.name,
+        arguments: tc.arguments,
       })),
-      timestamp: Date.now()
+      toolResults: entry.toolResults?.map((tr) => ({
+        success: !tr.isError,
+        content: tr.content.map((c) => c.text).join("\n"),
+        error: tr.isError
+          ? tr.content.map((c) => c.text).join("\n")
+          : undefined,
+      })),
+      timestamp: Date.now(),
     }))
   }
 
@@ -432,13 +552,11 @@ export async function processTranscriptWithAgentMode(
     maxIterations,
     steps: progressSteps.slice(-3), // Show max 3 steps
     isComplete: false,
-    conversationHistory: formatConversationForProgress(conversationHistory)
+    conversationHistory: formatConversationForProgress(conversationHistory),
   })
 
   // Get recent context for the LLM - no specific extraction needed
   const recentContext = extractRecentContext(conversationHistory)
-
-
 
   let iteration = 0
   let finalContent = ""
@@ -456,7 +574,7 @@ export async function processTranscriptWithAgentMode(
         "completion",
         "Agent stopped",
         "Agent mode was stopped by emergency kill switch",
-        "error"
+        "error",
       )
       progressSteps.push(stopStep)
 
@@ -466,8 +584,10 @@ export async function processTranscriptWithAgentMode(
         maxIterations,
         steps: progressSteps.slice(-3),
         isComplete: true,
-        finalContent: finalContent + "\n\n(Agent mode was stopped by emergency kill switch)",
-        conversationHistory: formatConversationForProgress(conversationHistory)
+        finalContent:
+          finalContent +
+          "\n\n(Agent mode was stopped by emergency kill switch)",
+        conversationHistory: formatConversationForProgress(conversationHistory),
       })
 
       break
@@ -485,7 +605,7 @@ export async function processTranscriptWithAgentMode(
       "thinking",
       `Processing request (iteration ${iteration})`,
       "Analyzing request and planning next actions",
-      "in_progress"
+      "in_progress",
     )
     progressSteps.push(thinkingStep)
 
@@ -495,7 +615,7 @@ export async function processTranscriptWithAgentMode(
       maxIterations,
       steps: progressSteps.slice(-3),
       isComplete: false,
-      conversationHistory: formatConversationForProgress(conversationHistory)
+      conversationHistory: formatConversationForProgress(conversationHistory),
     })
 
     // Use the base system prompt - let the LLM understand context from conversation history
@@ -504,7 +624,10 @@ export async function processTranscriptWithAgentMode(
     // Add enhanced context instruction using LLM-based context extraction
     if (recentContext.length > 1) {
       // Use LLM to extract useful context from conversation history
-      const contextInfo = await extractContextFromHistory(conversationHistory, config)
+      const contextInfo = await extractContextFromHistory(
+        conversationHistory,
+        config,
+      )
 
       contextAwarePrompt += `\n\nCONTEXT AWARENESS:
 You have access to the recent conversation history. Use this history to understand:
@@ -513,18 +636,26 @@ You have access to the recent conversation history. Use this history to understa
 - User preferences and workflow patterns
 - Any ongoing tasks or processes
 
-${contextInfo.contextSummary ? `
+${
+  contextInfo.contextSummary
+    ? `
 CURRENT CONTEXT:
 ${contextInfo.contextSummary}
-` : ''}
+`
+    : ""
+}
 
-${contextInfo.resources.length > 0 ? `
+${
+  contextInfo.resources.length > 0
+    ? `
 AVAILABLE RESOURCES:
-${contextInfo.resources.map(r => `- ${r.type.toUpperCase()}: ${r.id} (use as parameter: ${r.parameter})`).join('\n')}
+${contextInfo.resources.map((r) => `- ${r.type.toUpperCase()}: ${r.id} (use as parameter: ${r.parameter})`).join("\n")}
 
 CRITICAL: When using tools that require resource IDs, you MUST use the exact resource IDs listed above.
 DO NOT create fictional or made-up resource identifiers.
-` : ''}
+`
+    : ""
+}
 
 RESOURCE USAGE GUIDELINES:
 - Always check the conversation history for existing resource IDs before creating new ones
@@ -539,18 +670,18 @@ Always use actual resource IDs from the conversation history or create new ones 
     // Build messages for LLM call
     const messages = [
       { role: "system", content: contextAwarePrompt },
-      ...conversationHistory.map(entry => {
+      ...conversationHistory.map((entry) => {
         if (entry.role === "tool") {
           return {
             role: "user" as const,
-            content: `Tool execution results:\n${entry.content}`
+            content: `Tool execution results:\n${entry.content}`,
           }
         }
         return {
           role: entry.role as "user" | "assistant",
-          content: entry.content
+          content: entry.content,
         }
-      })
+      }),
     ]
 
     // Make LLM call
@@ -559,7 +690,7 @@ Always use actual resource IDs from the conversation history or create new ones 
     // Display LLM response content to user
     if (llmResponse.content) {
       console.log(llmResponse.content)
-      console.log("====== LLM RESPONSE ======");
+      console.log("====== LLM RESPONSE ======")
     }
 
     // Update thinking step with actual LLM content and mark as completed
@@ -568,9 +699,10 @@ Always use actual resource IDs from the conversation history or create new ones 
     if (llmResponse.content) {
       // Update title and description to be more meaningful
       thinkingStep.title = "Agent response"
-      thinkingStep.description = llmResponse.content.length > 100
-        ? llmResponse.content.substring(0, 100) + "..."
-        : llmResponse.content
+      thinkingStep.description =
+        llmResponse.content.length > 100
+          ? llmResponse.content.substring(0, 100) + "..."
+          : llmResponse.content
     }
 
     // Emit progress update with the LLM content immediately after setting it
@@ -579,21 +711,26 @@ Always use actual resource IDs from the conversation history or create new ones 
       maxIterations,
       steps: progressSteps.slice(-3),
       isComplete: false,
-      conversationHistory: formatConversationForProgress(conversationHistory)
+      conversationHistory: formatConversationForProgress(conversationHistory),
     })
 
     // Check for explicit completion signal
-    const toolCallsArray: MCPToolCall[] = Array.isArray((llmResponse as any).toolCalls)
+    const toolCallsArray: MCPToolCall[] = Array.isArray(
+      (llmResponse as any).toolCalls,
+    )
       ? (llmResponse as any).toolCalls
       : []
     if (isDebugTools()) {
-      if ((llmResponse as any).toolCalls && !Array.isArray((llmResponse as any).toolCalls)) {
-        logTools('Non-array toolCalls received from LLM', {
+      if (
+        (llmResponse as any).toolCalls &&
+        !Array.isArray((llmResponse as any).toolCalls)
+      ) {
+        logTools("Non-array toolCalls received from LLM", {
           receivedType: typeof (llmResponse as any).toolCalls,
-          value: (llmResponse as any).toolCalls
+          value: (llmResponse as any).toolCalls,
         })
       }
-      logTools('Planned tool calls from LLM', toolCallsArray)
+      logTools("Planned tool calls from LLM", toolCallsArray)
     }
     const hasToolCalls = toolCallsArray.length > 0
     const explicitlyComplete = llmResponse.needsMoreWork === false
@@ -609,7 +746,7 @@ Always use actual resource IDs from the conversation history or create new ones 
 
         conversationHistory.push({
           role: "user",
-          content: summaryPrompt
+          content: summaryPrompt,
         })
 
         // Continue to next iteration to get the summary
@@ -619,7 +756,7 @@ Always use actual resource IDs from the conversation history or create new ones 
       finalContent = assistantContent
       conversationHistory.push({
         role: "assistant",
-        content: finalContent
+        content: finalContent,
       })
 
       // Add completion step
@@ -627,7 +764,7 @@ Always use actual resource IDs from the conversation history or create new ones 
         "completion",
         "Task completed",
         "Successfully completed the requested task",
-        "completed"
+        "completed",
       )
       progressSteps.push(completionStep)
 
@@ -638,7 +775,7 @@ Always use actual resource IDs from the conversation history or create new ones 
         steps: progressSteps.slice(-3),
         isComplete: true,
         finalContent,
-        conversationHistory: formatConversationForProgress(conversationHistory)
+        conversationHistory: formatConversationForProgress(conversationHistory),
       })
 
       break
@@ -655,7 +792,7 @@ Always use actual resource IDs from the conversation history or create new ones 
         // Add nudge to push the agent forward
         conversationHistory.push({
           role: "assistant",
-          content: llmResponse.content || ""
+          content: llmResponse.content || "",
         })
 
         const nudgeMessage = isActionableRequest
@@ -664,7 +801,7 @@ Always use actual resource IDs from the conversation history or create new ones 
 
         conversationHistory.push({
           role: "user",
-          content: nudgeMessage
+          content: nudgeMessage,
         })
 
         noOpCount = 0 // Reset counter after nudge
@@ -681,7 +818,7 @@ Always use actual resource IDs from the conversation history or create new ones 
 
     for (const toolCall of toolCallsArray) {
       if (isDebugTools()) {
-        logTools('Executing planned tool call', toolCall)
+        logTools("Executing planned tool call", toolCall)
       }
       // Check for stop signal before executing each tool
       if (state.shouldStopAgent) {
@@ -694,11 +831,11 @@ Always use actual resource IDs from the conversation history or create new ones 
         "tool_call",
         `Executing ${toolCall.name}`,
         `Running tool with arguments: ${JSON.stringify(toolCall.arguments)}`,
-        "in_progress"
+        "in_progress",
       )
       toolCallStep.toolCall = {
         name: toolCall.name,
-        arguments: toolCall.arguments
+        arguments: toolCall.arguments,
       }
       progressSteps.push(toolCallStep)
 
@@ -708,7 +845,7 @@ Always use actual resource IDs from the conversation history or create new ones 
         maxIterations,
         steps: progressSteps.slice(-3),
         isComplete: false,
-        conversationHistory: formatConversationForProgress(conversationHistory)
+        conversationHistory: formatConversationForProgress(conversationHistory),
       })
 
       // Execute tool with retry logic for transient failures
@@ -718,28 +855,37 @@ Always use actual resource IDs from the conversation history or create new ones 
 
       // Enhanced retry logic for specific error types
       while (result.isError && retryCount < maxRetries) {
-        const errorText = result.content.map(c => c.text).join(' ').toLowerCase()
+        const errorText = result.content
+          .map((c) => c.text)
+          .join(" ")
+          .toLowerCase()
 
         // Check if this is a retryable error
         const isRetryableError =
-          errorText.includes('timeout') ||
-          errorText.includes('connection') ||
-          errorText.includes('network') ||
-          errorText.includes('temporary') ||
-          errorText.includes('busy') ||
-          errorText.includes('session not found') // Add session errors as retryable
+          errorText.includes("timeout") ||
+          errorText.includes("connection") ||
+          errorText.includes("network") ||
+          errorText.includes("temporary") ||
+          errorText.includes("busy") ||
+          errorText.includes("session not found") // Add session errors as retryable
 
         if (isRetryableError) {
           retryCount++
 
           // Special handling for resource-related errors
-          if (errorText.includes('not found') || errorText.includes('invalid') || errorText.includes('expired')) {
+          if (
+            errorText.includes("not found") ||
+            errorText.includes("invalid") ||
+            errorText.includes("expired")
+          ) {
             // The retry mechanism will benefit from the updated context extraction
             // which will provide the correct resource IDs from conversation history
           }
 
           // Wait before retry (exponential backoff)
-          await new Promise(resolve => setTimeout(resolve, Math.pow(2, retryCount) * 1000))
+          await new Promise((resolve) =>
+            setTimeout(resolve, Math.pow(2, retryCount) * 1000),
+          )
 
           result = await executeToolCall(toolCall)
         } else {
@@ -760,18 +906,20 @@ Always use actual resource IDs from the conversation history or create new ones 
       toolCallStep.status = result.isError ? "error" : "completed"
       toolCallStep.toolResult = {
         success: !result.isError,
-        content: result.content.map(c => c.text).join('\n'),
-        error: result.isError ? result.content.map(c => c.text).join('\n') : undefined
+        content: result.content.map((c) => c.text).join("\n"),
+        error: result.isError
+          ? result.content.map((c) => c.text).join("\n")
+          : undefined,
       }
 
       // Add tool result step with enhanced error information
       const toolResultStep = createProgressStep(
         "tool_result",
-        `${toolCall.name} ${result.isError ? 'failed' : 'completed'}`,
+        `${toolCall.name} ${result.isError ? "failed" : "completed"}`,
         result.isError
-          ? `Tool execution failed${retryCount > 0 ? ` after ${retryCount} retries` : ''}`
-          : 'Tool executed successfully',
-        result.isError ? "error" : "completed"
+          ? `Tool execution failed${retryCount > 0 ? ` after ${retryCount} retries` : ""}`
+          : "Tool executed successfully",
+        result.isError ? "error" : "completed",
       )
       toolResultStep.toolResult = toolCallStep.toolResult
       progressSteps.push(toolResultStep)
@@ -782,7 +930,7 @@ Always use actual resource IDs from the conversation history or create new ones 
         maxIterations,
         steps: progressSteps.slice(-3),
         isComplete: false,
-        conversationHistory: formatConversationForProgress(conversationHistory)
+        conversationHistory: formatConversationForProgress(conversationHistory),
       })
     }
 
@@ -790,21 +938,21 @@ Always use actual resource IDs from the conversation history or create new ones 
     conversationHistory.push({
       role: "assistant",
       content: llmResponse.content || "",
-      toolCalls: llmResponse.toolCalls!
+      toolCalls: llmResponse.toolCalls!,
     })
 
-    const toolResultsText = toolResults.map(result =>
-      result.content.map(c => c.text).join('\n')
-    ).join('\n\n')
+    const toolResultsText = toolResults
+      .map((result) => result.content.map((c) => c.text).join("\n"))
+      .join("\n\n")
 
     conversationHistory.push({
       role: "tool",
       content: toolResultsText,
-      toolResults
+      toolResults,
     })
 
     // Enhanced completion detection with better error handling
-    const hasErrors = toolResults.some(result => result.isError)
+    const hasErrors = toolResults.some((result) => result.isError)
     const allToolsSuccessful = toolResults.length > 0 && !hasErrors
 
     if (hasErrors) {
@@ -813,22 +961,34 @@ Always use actual resource IDs from the conversation history or create new ones 
 
       // Add detailed error summary to conversation history for LLM context
       const errorSummary = `Tool execution errors occurred:
-${failedTools.map(toolName => {
-  const failedResult = toolResults.find(r => r.isError)
-  const errorText = failedResult?.content.map(c => c.text).join(' ') || 'Unknown error'
+${failedTools
+  .map((toolName) => {
+    const failedResult = toolResults.find((r) => r.isError)
+    const errorText =
+      failedResult?.content.map((c) => c.text).join(" ") || "Unknown error"
 
-  // Check for specific error patterns and suggest fixes
-  let suggestion = ''
-  if (errorText.includes('Session not found')) {
-    suggestion = ' (Suggestion: Create a new session using ht_create_session first)'
-  } else if (errorText.includes('timeout') || errorText.includes('connection')) {
-    suggestion = ' (Suggestion: Retry the operation or check server connectivity)'
-  } else if (errorText.includes('permission') || errorText.includes('access')) {
-    suggestion = ' (Suggestion: Check file permissions or use alternative approach)'
-  }
+    // Check for specific error patterns and suggest fixes
+    let suggestion = ""
+    if (errorText.includes("Session not found")) {
+      suggestion =
+        " (Suggestion: Create a new session using ht_create_session first)"
+    } else if (
+      errorText.includes("timeout") ||
+      errorText.includes("connection")
+    ) {
+      suggestion =
+        " (Suggestion: Retry the operation or check server connectivity)"
+    } else if (
+      errorText.includes("permission") ||
+      errorText.includes("access")
+    ) {
+      suggestion =
+        " (Suggestion: Check file permissions or use alternative approach)"
+    }
 
-  return `- ${toolName}: ${errorText}${suggestion}`
-}).join('\n')}
+    return `- ${toolName}: ${errorText}${suggestion}`
+  })
+  .join("\n")}
 
 ${errorAnalysis.recoveryStrategy}
 
@@ -839,7 +999,7 @@ Please try alternative approaches or provide manual instructions to the user.`
 
       conversationHistory.push({
         role: "tool",
-        content: errorSummary
+        content: errorSummary,
       })
     }
 
@@ -858,7 +1018,7 @@ Please try alternative approaches or provide manual instructions to the user.`
 
         conversationHistory.push({
           role: "user",
-          content: summaryPrompt
+          content: summaryPrompt,
         })
 
         // Continue to next iteration to get the summary
@@ -877,7 +1037,7 @@ Please try alternative approaches or provide manual instructions to the user.`
         "completion",
         "Task completed",
         "Successfully completed the requested task with summary",
-        "completed"
+        "completed",
       )
       progressSteps.push(completionStep)
 
@@ -888,7 +1048,7 @@ Please try alternative approaches or provide manual instructions to the user.`
         steps: progressSteps.slice(-3),
         isComplete: true,
         finalContent,
-        conversationHistory: formatConversationForProgress(conversationHistory)
+        conversationHistory: formatConversationForProgress(conversationHistory),
       })
 
       break
@@ -908,7 +1068,7 @@ Please try alternative approaches or provide manual instructions to the user.`
 
         conversationHistory.push({
           role: "user",
-          content: summaryPrompt
+          content: summaryPrompt,
         })
 
         // Continue to next iteration to get the summary
@@ -918,14 +1078,14 @@ Please try alternative approaches or provide manual instructions to the user.`
       finalContent = assistantContent
       conversationHistory.push({
         role: "assistant",
-        content: finalContent
+        content: finalContent,
       })
 
       const completionStep = createProgressStep(
         "completion",
         "Task completed",
         "Agent indicated no more work needed",
-        "completed"
+        "completed",
       )
       progressSteps.push(completionStep)
 
@@ -935,13 +1095,11 @@ Please try alternative approaches or provide manual instructions to the user.`
         steps: progressSteps.slice(-3),
         isComplete: true,
         finalContent,
-        conversationHistory: formatConversationForProgress(conversationHistory)
+        conversationHistory: formatConversationForProgress(conversationHistory),
       })
 
       break
     }
-
-
 
     // Set final content to the latest assistant response (fallback)
     if (!finalContent) {
@@ -951,16 +1109,21 @@ Please try alternative approaches or provide manual instructions to the user.`
 
   if (iteration >= maxIterations) {
     // Handle maximum iterations reached - always ensure we have a meaningful summary
-    const hasRecentErrors = progressSteps.slice(-5).some(step => step.status === "error")
+    const hasRecentErrors = progressSteps
+      .slice(-5)
+      .some((step) => step.status === "error")
 
     // If we don't have meaningful final content, get the last assistant response or provide fallback
     if (!finalContent || finalContent.trim().length < 20) {
       const lastAssistantMessage = conversationHistory
         .slice()
         .reverse()
-        .find(msg => msg.role === "assistant")
+        .find((msg) => msg.role === "assistant")
 
-      if (lastAssistantMessage && lastAssistantMessage.content.trim().length >= 20) {
+      if (
+        lastAssistantMessage &&
+        lastAssistantMessage.content.trim().length >= 20
+      ) {
         finalContent = lastAssistantMessage.content
       } else {
         // Provide a fallback summary
@@ -979,10 +1142,14 @@ Please try alternative approaches or provide manual instructions to the user.`
 
     // Make sure the final message is added to conversation history
     const lastMessage = conversationHistory[conversationHistory.length - 1]
-    if (!lastMessage || lastMessage.role !== "assistant" || lastMessage.content !== finalContent) {
+    if (
+      !lastMessage ||
+      lastMessage.role !== "assistant" ||
+      lastMessage.content !== finalContent
+    ) {
       conversationHistory.push({
         role: "assistant",
-        content: finalContent
+        content: finalContent,
       })
     }
 
@@ -993,7 +1160,7 @@ Please try alternative approaches or provide manual instructions to the user.`
       hasRecentErrors
         ? "Task stopped due to repeated tool failures"
         : "Task stopped due to iteration limit",
-      "error"
+      "error",
     )
     progressSteps.push(timeoutStep)
 
@@ -1004,7 +1171,7 @@ Please try alternative approaches or provide manual instructions to the user.`
       steps: progressSteps.slice(-3),
       isComplete: true,
       finalContent,
-      conversationHistory: formatConversationForProgress(conversationHistory)
+      conversationHistory: formatConversationForProgress(conversationHistory),
     })
   }
 
@@ -1014,11 +1181,14 @@ Please try alternative approaches or provide manual instructions to the user.`
   return {
     content: finalContent,
     conversationHistory,
-    totalIterations: iteration
+    totalIterations: iteration,
   }
 }
 
-async function makeLLMCall(messages: Array<{role: string, content: string}>, config: any): Promise<LLMToolCallResponse> {
+async function makeLLMCall(
+  messages: Array<{ role: string; content: string }>,
+  config: any,
+): Promise<LLMToolCallResponse> {
   const chatProviderId = config.mcpToolsProviderId
 
   try {
@@ -1031,7 +1201,7 @@ async function makeLLMCall(messages: Array<{role: string, content: string}>, con
     }
     return result
   } catch (error) {
-    diagnosticsService.logError('llm', 'Agent LLM call failed', error)
+    diagnosticsService.logError("llm", "Agent LLM call failed", error)
     throw error
   }
 }

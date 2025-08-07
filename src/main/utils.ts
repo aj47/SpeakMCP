@@ -5,5 +5,3 @@ export const isAccessibilityGranted = () => {
 
   return systemPreferences.isTrustedAccessibilityClient(false)
 }
-
-

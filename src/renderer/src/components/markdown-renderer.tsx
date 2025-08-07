@@ -16,33 +16,33 @@ interface ThinkSectionProps {
   defaultCollapsed?: boolean
 }
 
-const ThinkSection: React.FC<ThinkSectionProps> = ({ 
-  content, 
-  defaultCollapsed = true 
+const ThinkSection: React.FC<ThinkSectionProps> = ({
+  content,
+  defaultCollapsed = true,
 }) => {
   const [isCollapsed, setIsCollapsed] = useState(defaultCollapsed)
 
   return (
-    <div className="my-4 border border-amber-200 dark:border-amber-800 rounded-lg overflow-hidden bg-amber-50 dark:bg-amber-950/30">
+    <div className="my-4 overflow-hidden rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30">
       <button
         onClick={() => setIsCollapsed(!isCollapsed)}
-        className="w-full flex items-center gap-2 p-3 text-left hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors"
+        className="flex w-full items-center gap-2 p-3 text-left transition-colors hover:bg-amber-100 dark:hover:bg-amber-900/30"
         aria-expanded={!isCollapsed}
         aria-controls="think-content"
       >
         {isCollapsed ? (
-          <ChevronRight className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+          <ChevronRight className="h-4 w-4 text-amber-600 dark:text-amber-400" />
         ) : (
-          <ChevronDown className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+          <ChevronDown className="h-4 w-4 text-amber-600 dark:text-amber-400" />
         )}
-        <Brain className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+        <Brain className="h-4 w-4 text-amber-600 dark:text-amber-400" />
         <span className="text-sm font-medium text-amber-800 dark:text-amber-200">
           {isCollapsed ? "Show thinking process" : "Hide thinking process"}
         </span>
       </button>
-      
+
       {!isCollapsed && (
-        <div 
+        <div
           id="think-content"
           className="px-3 pb-3 text-sm text-amber-900 dark:text-amber-100"
         >
@@ -52,7 +52,7 @@ const ThinkSection: React.FC<ThinkSectionProps> = ({
               rehypePlugins={[rehypeHighlight]}
               components={{
                 // Prevent nested think sections
-                think: ({ children }) => <span>{children}</span>
+                think: ({ children }) => <span>{children}</span>,
               }}
             >
               {content}
@@ -65,55 +65,57 @@ const ThinkSection: React.FC<ThinkSectionProps> = ({
 }
 
 const parseThinkSections = (content: string) => {
-  const parts: Array<{ type: 'text' | 'think'; content: string }> = []
+  const parts: Array<{ type: "text" | "think"; content: string }> = []
   let currentIndex = 0
-  
+
   // Regex to match <think>...</think> tags (including multiline)
   const thinkRegex = /<think>([\s\S]*?)<\/think>/gi
   let match
-  
+
   while ((match = thinkRegex.exec(content)) !== null) {
     // Add text before the think section
     if (match.index > currentIndex) {
       const textBefore = content.slice(currentIndex, match.index)
       if (textBefore.trim()) {
-        parts.push({ type: 'text', content: textBefore })
+        parts.push({ type: "text", content: textBefore })
       }
     }
-    
+
     // Add the think section content (without the tags)
-    parts.push({ type: 'think', content: match[1].trim() })
+    parts.push({ type: "think", content: match[1].trim() })
     currentIndex = match.index + match[0].length
   }
-  
+
   // Add remaining text after the last think section
   if (currentIndex < content.length) {
     const remainingText = content.slice(currentIndex)
     if (remainingText.trim()) {
-      parts.push({ type: 'text', content: remainingText })
+      parts.push({ type: "text", content: remainingText })
     }
   }
-  
+
   // If no think sections found, return the original content as text
   if (parts.length === 0) {
-    parts.push({ type: 'text', content })
+    parts.push({ type: "text", content })
   }
-  
+
   return parts
 }
 
-export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ 
-  content, 
-  className 
+export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
+  content,
+  className,
 }) => {
   const parts = parseThinkSections(content)
-  
+
   return (
-    <div className={cn("prose prose-sm dark:prose-invert max-w-none", className)}>
+    <div
+      className={cn("prose prose-sm dark:prose-invert max-w-none", className)}
+    >
       {parts.map((part, index) => {
-        if (part.type === 'think') {
+        if (part.type === "think") {
           return (
-            <ThinkSection 
+            <ThinkSection
               key={`think-${index}`}
               content={part.content}
               defaultCollapsed={true}
@@ -128,36 +130,48 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
               components={{
                 // Custom components for better styling
                 h1: ({ children }) => (
-                  <h1 className="text-xl font-bold mb-3 text-foreground">{children}</h1>
+                  <h1 className="mb-3 text-xl font-bold text-foreground">
+                    {children}
+                  </h1>
                 ),
                 h2: ({ children }) => (
-                  <h2 className="text-lg font-semibold mb-2 text-foreground">{children}</h2>
+                  <h2 className="mb-2 text-lg font-semibold text-foreground">
+                    {children}
+                  </h2>
                 ),
                 h3: ({ children }) => (
-                  <h3 className="text-base font-medium mb-2 text-foreground">{children}</h3>
+                  <h3 className="mb-2 text-base font-medium text-foreground">
+                    {children}
+                  </h3>
                 ),
                 p: ({ children }) => (
-                  <p className="mb-3 text-foreground leading-relaxed">{children}</p>
+                  <p className="mb-3 leading-relaxed text-foreground">
+                    {children}
+                  </p>
                 ),
                 ul: ({ children }) => (
-                  <ul className="list-disc list-inside mb-3 space-y-1 text-foreground">{children}</ul>
+                  <ul className="mb-3 list-inside list-disc space-y-1 text-foreground">
+                    {children}
+                  </ul>
                 ),
                 ol: ({ children }) => (
-                  <ol className="list-decimal list-inside mb-3 space-y-1 text-foreground">{children}</ol>
+                  <ol className="mb-3 list-inside list-decimal space-y-1 text-foreground">
+                    {children}
+                  </ol>
                 ),
                 li: ({ children }) => (
                   <li className="text-foreground">{children}</li>
                 ),
                 blockquote: ({ children }) => (
-                  <blockquote className="border-l-4 border-muted-foreground pl-4 italic text-muted-foreground mb-3">
+                  <blockquote className="mb-3 border-l-4 border-muted-foreground pl-4 italic text-muted-foreground">
                     {children}
                   </blockquote>
                 ),
                 code: ({ inline, children, ...props }) => {
                   if (inline) {
                     return (
-                      <code 
-                        className="bg-muted px-1.5 py-0.5 rounded text-sm font-mono text-foreground"
+                      <code
+                        className="rounded bg-muted px-1.5 py-0.5 font-mono text-sm text-foreground"
                         {...props}
                       >
                         {children}
@@ -165,8 +179,8 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
                     )
                   }
                   return (
-                    <code 
-                      className="block bg-muted p-3 rounded-lg text-sm font-mono overflow-x-auto text-foreground"
+                    <code
+                      className="block overflow-x-auto rounded-lg bg-muted p-3 font-mono text-sm text-foreground"
                       {...props}
                     >
                       {children}
@@ -174,14 +188,14 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
                   )
                 },
                 pre: ({ children }) => (
-                  <pre className="bg-muted p-3 rounded-lg overflow-x-auto mb-3">
+                  <pre className="mb-3 overflow-x-auto rounded-lg bg-muted p-3">
                     {children}
                   </pre>
                 ),
                 a: ({ children, href }) => (
-                  <a 
+                  <a
                     href={href}
-                    className="text-primary hover:text-primary/80 underline"
+                    className="text-primary underline hover:text-primary/80"
                     target="_blank"
                     rel="noopener noreferrer"
                   >
@@ -189,24 +203,22 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
                   </a>
                 ),
                 table: ({ children }) => (
-                  <div className="overflow-x-auto mb-3">
+                  <div className="mb-3 overflow-x-auto">
                     <table className="min-w-full border-collapse border border-border">
                       {children}
                     </table>
                   </div>
                 ),
                 th: ({ children }) => (
-                  <th className="border border-border px-3 py-2 bg-muted font-semibold text-left">
+                  <th className="border border-border bg-muted px-3 py-2 text-left font-semibold">
                     {children}
                   </th>
                 ),
                 td: ({ children }) => (
-                  <td className="border border-border px-3 py-2">
-                    {children}
-                  </td>
+                  <td className="border border-border px-3 py-2">{children}</td>
                 ),
                 // Prevent processing think tags as regular elements
-                think: ({ children }) => <span>{children}</span>
+                think: ({ children }) => <span>{children}</span>,
               }}
             >
               {part.content}

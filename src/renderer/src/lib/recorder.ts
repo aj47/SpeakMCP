@@ -3,8 +3,6 @@ import { playSound } from "./sound"
 
 const MIN_DECIBELS = -45
 
-
-
 const calculateRMS = (data: Uint8Array) => {
   let sumSquares = 0
   for (let i = 0; i < data.length; i++) {
@@ -132,8 +130,6 @@ export class Recorder extends EventEmitter<{
       this.stream = null
     }
 
-
     this.emit("destroy")
-
   }
 }

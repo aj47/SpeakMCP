@@ -25,7 +25,7 @@ export function parseKeyCombo(combo: string): ParsedKeyCombo {
     shift: false,
     alt: false,
     meta: false,
-    key: ""
+    key: "",
   }
 
   for (const part of parts) {
@@ -57,7 +57,11 @@ export function parseKeyCombo(combo: string): ParsedKeyCombo {
  * @param event - Keyboard event data from the Rust binary
  * @param combo - Key combination string to match against
  */
-export function matchesKeyCombo(event: { key: string }, modifiers: { ctrl: boolean, shift: boolean, alt: boolean, meta?: boolean }, combo: string): boolean {
+export function matchesKeyCombo(
+  event: { key: string },
+  modifiers: { ctrl: boolean; shift: boolean; alt: boolean; meta?: boolean },
+  combo: string,
+): boolean {
   if (!combo) return false
 
   const parsed = parseKeyCombo(combo)
@@ -82,25 +86,34 @@ export function matchesKeyCombo(event: { key: string }, modifiers: { ctrl: boole
 
   // Handle special keys
   const keyMappings: Record<string, string> = {
-    "slash": "/",
-    "space": " ",
-    "escape": "escape",
-    "enter": "enter",
-    "tab": "tab",
-    "backspace": "backspace",
-    "delete": "delete",
-    "arrowup": "up",
-    "arrowdown": "down",
-    "arrowleft": "left",
-    "arrowright": "right",
-    "home": "home",
-    "end": "end",
-    "pageup": "pageup",
-    "pagedown": "pagedown",
-    "insert": "insert",
-    "f1": "f1", "f2": "f2", "f3": "f3", "f4": "f4",
-    "f5": "f5", "f6": "f6", "f7": "f7", "f8": "f8",
-    "f9": "f9", "f10": "f10", "f11": "f11", "f12": "f12"
+    slash: "/",
+    space: " ",
+    escape: "escape",
+    enter: "enter",
+    tab: "tab",
+    backspace: "backspace",
+    delete: "delete",
+    arrowup: "up",
+    arrowdown: "down",
+    arrowleft: "left",
+    arrowright: "right",
+    home: "home",
+    end: "end",
+    pageup: "pageup",
+    pagedown: "pagedown",
+    insert: "insert",
+    f1: "f1",
+    f2: "f2",
+    f3: "f3",
+    f4: "f4",
+    f5: "f5",
+    f6: "f6",
+    f7: "f7",
+    f8: "f8",
+    f9: "f9",
+    f10: "f10",
+    f11: "f11",
+    f12: "f12",
   }
 
   // Apply key mappings
@@ -133,20 +146,20 @@ export function formatKeyComboForDisplay(combo: string): string {
     const displayMappings: Record<string, string> = {
       " ": "Space",
       "/": "/",
-      "escape": "Esc",
-      "enter": "Enter",
-      "tab": "Tab",
-      "backspace": "Backspace",
-      "delete": "Delete",
-      "up": "↑",
-      "down": "↓",
-      "left": "←",
-      "right": "→",
-      "home": "Home",
-      "end": "End",
-      "pageup": "Page Up",
-      "pagedown": "Page Down",
-      "insert": "Insert"
+      escape: "Esc",
+      enter: "Enter",
+      tab: "Tab",
+      backspace: "Backspace",
+      delete: "Delete",
+      up: "↑",
+      down: "↓",
+      left: "←",
+      right: "→",
+      home: "Home",
+      end: "End",
+      pageup: "Page Up",
+      pagedown: "Page Down",
+      insert: "Insert",
     }
 
     displayKey = displayMappings[parsed.key] || parsed.key.toUpperCase()
@@ -160,7 +173,10 @@ export function formatKeyComboForDisplay(combo: string): string {
  * Validate if a key combination is valid and safe to use
  * @param combo - Key combination string to validate
  */
-export function validateKeyCombo(combo: string): { valid: boolean, error?: string } {
+export function validateKeyCombo(combo: string): {
+  valid: boolean
+  error?: string
+} {
   if (!combo) {
     return { valid: false, error: "Key combination cannot be empty" }
   }
@@ -172,7 +188,11 @@ export function validateKeyCombo(combo: string): { valid: boolean, error?: strin
   const isFunctionKey = parsed.key && parsed.key.match(/^f\d+$/)
 
   if (!hasModifier && !isFunctionKey) {
-    return { valid: false, error: "Key combination must include at least one modifier key (Ctrl, Shift, Alt, Meta) or be a function key" }
+    return {
+      valid: false,
+      error:
+        "Key combination must include at least one modifier key (Ctrl, Shift, Alt, Meta) or be a function key",
+    }
   }
 
   // Must have a main key
@@ -182,15 +202,18 @@ export function validateKeyCombo(combo: string): { valid: boolean, error?: strin
 
   // Check for potentially dangerous combinations
   const dangerousCombos = [
-    "ctrl-alt-delete",  // System shortcut
+    "ctrl-alt-delete", // System shortcut
     "ctrl-shift-escape", // Task manager (but we allow this for kill switch)
-    "alt-f4",           // Close window
-    "ctrl-w",           // Close tab
-    "ctrl-q",           // Quit application
+    "alt-f4", // Close window
+    "ctrl-w", // Close tab
+    "ctrl-q", // Quit application
   ]
 
   if (dangerousCombos.includes(combo.toLowerCase())) {
-    return { valid: false, error: "This key combination is reserved by the system" }
+    return {
+      valid: false,
+      error: "This key combination is reserved by the system",
+    }
   }
 
   return { valid: true }
@@ -201,7 +224,10 @@ export function validateKeyCombo(combo: string): { valid: boolean, error?: strin
  * @param shortcutType - The shortcut type value (e.g., "ctrl-t", "custom")
  * @param customShortcut - The custom shortcut value if type is "custom"
  */
-export function getEffectiveShortcut(shortcutType: string | undefined, customShortcut: string | undefined): string | undefined {
+export function getEffectiveShortcut(
+  shortcutType: string | undefined,
+  customShortcut: string | undefined,
+): string | undefined {
   if (shortcutType === "custom") {
     return customShortcut
   }

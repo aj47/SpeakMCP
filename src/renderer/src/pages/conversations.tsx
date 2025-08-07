@@ -1,7 +1,12 @@
 import React, { useState, useMemo } from "react"
 import { Button } from "@renderer/components/ui/button"
 import { Input } from "@renderer/components/ui/input"
-import { Card, CardContent, CardHeader, CardTitle } from "@renderer/components/ui/card"
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@renderer/components/ui/card"
 import { Badge } from "@renderer/components/ui/badge"
 import { ScrollArea } from "@renderer/components/ui/scroll-area"
 import {
@@ -10,7 +15,7 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger
+  DialogTrigger,
 } from "@renderer/components/ui/dialog"
 import {
   MessageCircle,
@@ -21,14 +26,14 @@ import {
   Bot,
   Eye,
   MoreVertical,
-  ArrowLeft
+  ArrowLeft,
 } from "lucide-react"
 import { cn } from "@renderer/lib/utils"
 import {
   useConversationHistoryQuery,
   useDeleteConversationMutation,
   useDeleteAllConversationsMutation,
-  useConversationQuery
+  useConversationQuery,
 } from "@renderer/lib/query-client"
 import { useConversationActions } from "@renderer/contexts/conversation-context"
 import { ConversationDisplay } from "@renderer/components/conversation-display"
@@ -38,8 +43,10 @@ import { toast } from "sonner"
 
 export function Component() {
   const [searchQuery, setSearchQuery] = useState("")
-  const [selectedConversation, setSelectedConversation] = useState<string | null>(null)
-  const [viewMode, setViewMode] = useState<'list' | 'detail'>('list')
+  const [selectedConversation, setSelectedConversation] = useState<
+    string | null
+  >(null)
+  const [viewMode, setViewMode] = useState<"list" | "detail">("list")
 
   const conversationHistoryQuery = useConversationHistoryQuery()
   const deleteConversationMutation = useDeleteConversationMutation()
@@ -51,9 +58,10 @@ export function Component() {
   const filteredConversations = useMemo(() => {
     if (!conversationHistoryQuery.data) return []
 
-    return conversationHistoryQuery.data.filter(conversation =>
-      conversation.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      conversation.preview.toLowerCase().includes(searchQuery.toLowerCase())
+    return conversationHistoryQuery.data.filter(
+      (conversation) =>
+        conversation.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        conversation.preview.toLowerCase().includes(searchQuery.toLowerCase()),
     )
   }, [conversationHistoryQuery.data, searchQuery])
 
@@ -81,7 +89,7 @@ export function Component() {
 
     return Array.from(groups.entries()).map(([date, items]) => ({
       date,
-      items: items.sort((a, b) => b.updatedAt - a.updatedAt)
+      items: items.sort((a, b) => b.updatedAt - a.updatedAt),
     }))
   }, [filteredConversations])
 
@@ -91,7 +99,7 @@ export function Component() {
       toast.success("Conversation deleted")
       if (selectedConversation === conversationId) {
         setSelectedConversation(null)
-        setViewMode('list')
+        setViewMode("list")
       }
     } catch (error) {
       toast.error("Failed to delete conversation")
@@ -99,7 +107,11 @@ export function Component() {
   }
 
   const handleDeleteAllConversations = async () => {
-    if (!window.confirm("Are you sure you want to delete all conversations? This action cannot be undone.")) {
+    if (
+      !window.confirm(
+        "Are you sure you want to delete all conversations? This action cannot be undone.",
+      )
+    ) {
       return
     }
 
@@ -107,7 +119,7 @@ export function Component() {
       await deleteAllConversationsMutation.mutateAsync()
       toast.success("All conversations deleted")
       setSelectedConversation(null)
-      setViewMode('list')
+      setViewMode("list")
     } catch (error) {
       toast.error("Failed to delete conversations")
     }
@@ -115,11 +127,11 @@ export function Component() {
 
   const handleSelectConversation = (conversationId: string) => {
     setSelectedConversation(conversationId)
-    setViewMode('detail')
+    setViewMode("detail")
   }
 
   const handleBackToList = () => {
-    setViewMode('list')
+    setViewMode("list")
     setSelectedConversation(null)
   }
 
@@ -131,10 +143,10 @@ export function Component() {
 
   return (
     <>
-      {viewMode === 'list' ? (
+      {viewMode === "list" ? (
         // List View
         <>
-          <header className="app-drag-region flex h-12 shrink-0 items-center justify-between bg-background border-b px-4 text-sm">
+          <header className="app-drag-region flex h-12 shrink-0 items-center justify-between border-b bg-background px-4 text-sm">
             <span className="font-bold">Conversations</span>
 
             <div className="flex items-center gap-2">
@@ -153,7 +165,7 @@ export function Component() {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search conversations..."
-                  className="pl-8 w-64"
+                  className="w-64 pl-8"
                 />
               </div>
             </div>
@@ -161,24 +173,25 @@ export function Component() {
 
           <div className="flex-1 overflow-hidden bg-background">
             {groupedConversations.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-full text-center p-8">
-                <MessageCircle className="h-12 w-12 text-muted-foreground mb-4" />
-                <h3 className="text-lg font-semibold mb-2">
-                  {searchQuery ? "No matching conversations" : "No conversations yet"}
+              <div className="flex h-full flex-col items-center justify-center p-8 text-center">
+                <MessageCircle className="mb-4 h-12 w-12 text-muted-foreground" />
+                <h3 className="mb-2 text-lg font-semibold">
+                  {searchQuery
+                    ? "No matching conversations"
+                    : "No conversations yet"}
                 </h3>
                 <p className="text-muted-foreground">
                   {searchQuery
                     ? "Try adjusting your search terms"
-                    : "Start a conversation using Ctrl+T or voice recording"
-                  }
+                    : "Start a conversation using Ctrl+T or voice recording"}
                 </p>
               </div>
             ) : (
               <ScrollArea className="h-full">
-                <div className="p-4 space-y-6">
+                <div className="space-y-6 p-4">
                   {groupedConversations.map(({ date, items }) => (
                     <div key={date}>
-                      <h4 className="text-sm font-medium text-muted-foreground mb-3 flex items-center gap-2">
+                      <h4 className="mb-3 flex items-center gap-2 text-sm font-medium text-muted-foreground">
                         <Calendar className="h-4 w-4" />
                         {date}
                       </h4>
@@ -188,9 +201,15 @@ export function Component() {
                             key={conversation.id}
                             conversation={conversation}
                             isSelected={false}
-                            onSelect={() => handleSelectConversation(conversation.id)}
-                            onDelete={() => handleDeleteConversation(conversation.id)}
-                            onContinue={() => handleContinueConversation(conversation.id)}
+                            onSelect={() =>
+                              handleSelectConversation(conversation.id)
+                            }
+                            onDelete={() =>
+                              handleDeleteConversation(conversation.id)
+                            }
+                            onContinue={() =>
+                              handleContinueConversation(conversation.id)
+                            }
                             isDeleting={deleteConversationMutation.isPending}
                           />
                         ))}
@@ -205,7 +224,7 @@ export function Component() {
       ) : (
         // Detail View
         <>
-          <header className="app-drag-region flex h-12 shrink-0 items-center justify-between bg-background border-b px-4 text-sm">
+          <header className="app-drag-region flex h-12 shrink-0 items-center justify-between border-b bg-background px-4 text-sm">
             <div className="flex items-center gap-3">
               <Button
                 variant="ghost"
@@ -222,8 +241,11 @@ export function Component() {
             </div>
 
             <Button
-              onClick={() => selectedConversation && handleContinueConversation(selectedConversation)}
-              className="gap-2 h-7 px-3 py-0"
+              onClick={() =>
+                selectedConversation &&
+                handleContinueConversation(selectedConversation)
+              }
+              className="h-7 gap-2 px-3 py-0"
               disabled={!selectedConversation}
             >
               <MessageCircle className="h-4 w-4" />
@@ -233,7 +255,7 @@ export function Component() {
 
           <div className="flex-1 overflow-hidden bg-muted/30">
             {selectedConversation && selectedConversationQuery.data ? (
-              <div className="h-full flex flex-col">
+              <div className="flex h-full flex-col">
                 <div className="border-b bg-background p-4">
                   <div className="flex items-center justify-between">
                     <div>
@@ -241,8 +263,11 @@ export function Component() {
                         {selectedConversationQuery.data.title}
                       </h2>
                       <p className="text-sm text-muted-foreground">
-                        {selectedConversationQuery.data.messages.length} messages •
-                        Last updated {dayjs(selectedConversationQuery.data.updatedAt).format("MMM D, YYYY h:mm A")}
+                        {selectedConversationQuery.data.messages.length}{" "}
+                        messages • Last updated{" "}
+                        {dayjs(selectedConversationQuery.data.updatedAt).format(
+                          "MMM D, YYYY h:mm A",
+                        )}
                       </p>
                     </div>
                   </div>
@@ -256,10 +281,12 @@ export function Component() {
                 </div>
               </div>
             ) : (
-              <div className="flex items-center justify-center h-full text-center p-8">
+              <div className="flex h-full items-center justify-center p-8 text-center">
                 <div>
-                  <Eye className="h-12 w-12 text-muted-foreground mb-4 mx-auto" />
-                  <h3 className="text-lg font-semibold mb-2">Loading conversation...</h3>
+                  <Eye className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
+                  <h3 className="mb-2 text-lg font-semibold">
+                    Loading conversation...
+                  </h3>
                   <p className="text-muted-foreground">
                     Please wait while we load the conversation details
                   </p>
@@ -288,23 +315,21 @@ function ConversationCard({
   onSelect,
   onDelete,
   onContinue,
-  isDeleting
+  isDeleting,
 }: ConversationCardProps) {
   return (
     <Card
       className={cn(
         "cursor-pointer transition-all hover:shadow-md",
-        isSelected && "ring-2 ring-primary"
+        isSelected && "ring-2 ring-primary",
       )}
       onClick={onSelect}
     >
       <CardContent className="p-4">
         <div className="flex items-start justify-between gap-3">
-          <div className="flex-1 min-w-0">
-            <h3 className="font-medium truncate mb-1">
-              {conversation.title}
-            </h3>
-            <p className="text-sm text-muted-foreground line-clamp-2 mb-2">
+          <div className="min-w-0 flex-1">
+            <h3 className="mb-1 truncate font-medium">{conversation.title}</h3>
+            <p className="mb-2 line-clamp-2 text-sm text-muted-foreground">
               {conversation.preview}
             </p>
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -312,7 +337,9 @@ function ConversationCard({
                 {conversation.messageCount} messages
               </Badge>
               <span>•</span>
-              <span>{dayjs(conversation.updatedAt).format("MMM D, h:mm A")}</span>
+              <span>
+                {dayjs(conversation.updatedAt).format("MMM D, h:mm A")}
+              </span>
             </div>
           </div>
           <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>

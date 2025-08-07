@@ -85,21 +85,22 @@ That's the complete solution! Let me know if you need any clarification.`
 
 export const MarkdownDemo: React.FC = () => {
   return (
-    <div className="p-6 space-y-6">
+    <div className="space-y-6 p-6">
       <Card className="liquid-glass-subtle glass-border">
         <CardHeader>
           <CardTitle>Markdown Rendering Demo</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-muted-foreground mb-4">
-            This demonstrates the new markdown rendering with collapsible &lt;think&gt; sections:
+          <p className="mb-4 text-sm text-muted-foreground">
+            This demonstrates the new markdown rendering with collapsible
+            &lt;think&gt; sections:
           </p>
-          <div className="border rounded-lg p-4 bg-background/50">
+          <div className="rounded-lg border bg-background/50 p-4">
             <MarkdownRenderer content={sampleMarkdownWithThink} />
           </div>
         </CardContent>
       </Card>
-      
+
       <Card className="liquid-glass-subtle glass-border">
         <CardHeader>
           <CardTitle>Features Implemented</CardTitle>
@@ -107,24 +108,29 @@ export const MarkdownDemo: React.FC = () => {
         <CardContent>
           <ul className="space-y-2 text-sm">
             <li className="flex items-center gap-2">
-              <span className="w-2 h-2 bg-green-500 rounded-full"></span>
-              <strong>Markdown Rendering:</strong> Full support for headers, lists, code blocks, tables, etc.
+              <span className="h-2 w-2 rounded-full bg-green-500"></span>
+              <strong>Markdown Rendering:</strong> Full support for headers,
+              lists, code blocks, tables, etc.
             </li>
             <li className="flex items-center gap-2">
-              <span className="w-2 h-2 bg-green-500 rounded-full"></span>
-              <strong>Collapsible Think Sections:</strong> &lt;think&gt; tags are automatically converted to collapsible sections
+              <span className="h-2 w-2 rounded-full bg-green-500"></span>
+              <strong>Collapsible Think Sections:</strong> &lt;think&gt; tags
+              are automatically converted to collapsible sections
             </li>
             <li className="flex items-center gap-2">
-              <span className="w-2 h-2 bg-green-500 rounded-full"></span>
-              <strong>Syntax Highlighting:</strong> Code blocks have proper syntax highlighting
+              <span className="h-2 w-2 rounded-full bg-green-500"></span>
+              <strong>Syntax Highlighting:</strong> Code blocks have proper
+              syntax highlighting
             </li>
             <li className="flex items-center gap-2">
-              <span className="w-2 h-2 bg-green-500 rounded-full"></span>
-              <strong>Dark Mode Support:</strong> Proper styling for both light and dark themes
+              <span className="h-2 w-2 rounded-full bg-green-500"></span>
+              <strong>Dark Mode Support:</strong> Proper styling for both light
+              and dark themes
             </li>
             <li className="flex items-center gap-2">
-              <span className="w-2 h-2 bg-green-500 rounded-full"></span>
-              <strong>Responsive Design:</strong> Works well on different screen sizes
+              <span className="h-2 w-2 rounded-full bg-green-500"></span>
+              <strong>Responsive Design:</strong> Works well on different screen
+              sizes
             </li>
           </ul>
         </CardContent>

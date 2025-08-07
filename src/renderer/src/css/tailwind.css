@@ -119,21 +119,23 @@
   }
 
   .liquid-glass::before {
-    content: '';
+    content: "";
     position: absolute;
     inset: 0;
     z-index: -1;
     border-radius: inherit;
-    background: linear-gradient(135deg,
+    background: linear-gradient(
+      135deg,
       rgba(255, 255, 255, 0.1) 0%,
       rgba(255, 255, 255, 0.05) 50%,
-      rgba(255, 255, 255, 0.15) 100%);
+      rgba(255, 255, 255, 0.15) 100%
+    );
     box-shadow: inset 0 0 20px -5px rgba(255, 255, 255, 0.6);
     pointer-events: none;
   }
 
   .dark .liquid-glass {
-    background: rgba(0, 0, 0, 1.0);
+    background: rgba(0, 0, 0, 1);
     border: 1px solid rgba(255, 255, 255, 0.18);
     box-shadow:
       0 8px 32px rgba(0, 0, 0, 0.4),
@@ -143,16 +145,18 @@
   }
 
   .dark .liquid-glass::before {
-    background: linear-gradient(135deg,
+    background: linear-gradient(
+      135deg,
       rgba(255, 255, 255, 0.08) 0%,
       rgba(255, 255, 255, 0.03) 50%,
-      rgba(255, 255, 255, 0.12) 100%);
+      rgba(255, 255, 255, 0.12) 100%
+    );
     box-shadow: inset 0 0 20px -5px rgba(255, 255, 255, 0.3);
   }
 
   /* Liquid Glass with Shine Effect */
   .liquid-glass-shine::after {
-    content: '';
+    content: "";
     position: absolute;
     top: 0;
     left: 0;
@@ -191,7 +195,7 @@
   }
 
   .dark .liquid-glass-subtle {
-    background: rgba(0, 0, 0, 1.0);
+    background: rgba(0, 0, 0, 1);
     backdrop-filter: blur(8px) saturate(150%) brightness(1.1);
     -webkit-backdrop-filter: blur(8px) saturate(150%) brightness(1.1);
     border: 1px solid rgba(255, 255, 255, 0.15);
@@ -213,7 +217,7 @@
   }
 
   .dark .liquid-glass-strong {
-    background: rgba(0, 0, 0, 1.0);
+    background: rgba(0, 0, 0, 1);
     backdrop-filter: blur(16px) saturate(200%) brightness(1.15);
     -webkit-backdrop-filter: blur(16px) saturate(200%) brightness(1.15);
     border: 1px solid rgba(255, 255, 255, 0.25);
@@ -239,13 +243,15 @@
   }
 
   .liquid-glass-nav::before {
-    content: '';
+    content: "";
     position: absolute;
     inset: 0;
     z-index: -1;
-    background: linear-gradient(180deg,
+    background: linear-gradient(
+      180deg,
       rgba(255, 255, 255, 0.12) 0%,
-      rgba(255, 255, 255, 0.04) 100%);
+      rgba(255, 255, 255, 0.04) 100%
+    );
     pointer-events: none;
   }
 
@@ -259,9 +265,11 @@
   }
 
   .dark .liquid-glass-nav::before {
-    background: linear-gradient(180deg,
+    background: linear-gradient(
+      180deg,
       rgba(255, 255, 255, 0.08) 0%,
-      rgba(255, 255, 255, 0.02) 100%);
+      rgba(255, 255, 255, 0.02) 100%
+    );
   }
 
   /* Apple 2025 Liquid Glass Button States */
@@ -280,15 +288,17 @@
   }
 
   .liquid-glass-button::before {
-    content: '';
+    content: "";
     position: absolute;
     inset: 0;
     z-index: -1;
     border-radius: inherit;
-    background: linear-gradient(135deg,
+    background: linear-gradient(
+      135deg,
       rgba(255, 255, 255, 0.2) 0%,
       rgba(255, 255, 255, 0.05) 50%,
-      rgba(255, 255, 255, 0.15) 100%);
+      rgba(255, 255, 255, 0.15) 100%
+    );
     opacity: 0.8;
     pointer-events: none;
   }
@@ -320,10 +330,12 @@
   }
 
   .dark .liquid-glass-button::before {
-    background: linear-gradient(135deg,
+    background: linear-gradient(
+      135deg,
       rgba(255, 255, 255, 0.12) 0%,
       rgba(255, 255, 255, 0.03) 50%,
-      rgba(255, 255, 255, 0.08) 100%);
+      rgba(255, 255, 255, 0.08) 100%
+    );
   }
 
   .dark .liquid-glass-button:hover {
@@ -480,7 +492,7 @@
     .dark .liquid-glass-card,
     .dark .liquid-glass-modal,
     .dark .liquid-glass-panel {
-      background: rgba(0, 0, 0, 1.0);
+      background: rgba(0, 0, 0, 1);
       border: 2px solid rgba(255, 255, 255, 0.8);
     }
   }
@@ -508,43 +520,55 @@
     .dark .liquid-glass-card,
     .dark .liquid-glass-modal,
     .dark .liquid-glass-panel {
-      background: rgba(0, 0, 0, 1.0);
+      background: rgba(0, 0, 0, 1);
     }
   }
 
   /* Apple 2025 Advanced Liquid Glass with SVG Displacement */
   .liquid-glass-distortion {
-    backdrop-filter: blur(16px) saturate(180%) contrast(1.05) url('./assets/apple-2025-liquid-glass.svg#apple-2025-liquid-glass');
-    -webkit-backdrop-filter: blur(16px) saturate(180%) contrast(1.05) url('./assets/apple-2025-liquid-glass.svg#apple-2025-liquid-glass');
+    backdrop-filter: blur(16px) saturate(180%) contrast(1.05)
+      url("./assets/apple-2025-liquid-glass.svg#apple-2025-liquid-glass");
+    -webkit-backdrop-filter: blur(16px) saturate(180%) contrast(1.05)
+      url("./assets/apple-2025-liquid-glass.svg#apple-2025-liquid-glass");
   }
 
   .liquid-glass-nav-distortion {
-    backdrop-filter: blur(20px) saturate(160%) brightness(1.02) url('./assets/apple-2025-liquid-glass.svg#apple-2025-floating');
-    -webkit-backdrop-filter: blur(20px) saturate(160%) brightness(1.02) url('./assets/apple-2025-liquid-glass.svg#apple-2025-floating');
+    backdrop-filter: blur(20px) saturate(160%) brightness(1.02)
+      url("./assets/apple-2025-liquid-glass.svg#apple-2025-floating");
+    -webkit-backdrop-filter: blur(20px) saturate(160%) brightness(1.02)
+      url("./assets/apple-2025-liquid-glass.svg#apple-2025-floating");
   }
 
   .liquid-glass-button-distortion {
-    backdrop-filter: blur(12px) saturate(170%) brightness(1.05) url('./assets/apple-2025-liquid-glass.svg#apple-2025-interactive');
-    -webkit-backdrop-filter: blur(12px) saturate(170%) brightness(1.05) url('./assets/apple-2025-liquid-glass.svg#apple-2025-interactive');
+    backdrop-filter: blur(12px) saturate(170%) brightness(1.05)
+      url("./assets/apple-2025-liquid-glass.svg#apple-2025-interactive");
+    -webkit-backdrop-filter: blur(12px) saturate(170%) brightness(1.05)
+      url("./assets/apple-2025-liquid-glass.svg#apple-2025-interactive");
   }
 
   .liquid-glass-modal-distortion {
-    backdrop-filter: blur(24px) saturate(190%) brightness(1.03) url('./assets/apple-2025-liquid-glass.svg#apple-2025-floating');
-    -webkit-backdrop-filter: blur(24px) saturate(190%) brightness(1.03) url('./assets/apple-2025-liquid-glass.svg#apple-2025-floating');
+    backdrop-filter: blur(24px) saturate(190%) brightness(1.03)
+      url("./assets/apple-2025-liquid-glass.svg#apple-2025-floating");
+    -webkit-backdrop-filter: blur(24px) saturate(190%) brightness(1.03)
+      url("./assets/apple-2025-liquid-glass.svg#apple-2025-floating");
   }
 
   .liquid-glass-card-distortion {
-    backdrop-filter: blur(14px) saturate(175%) contrast(1.03) url('./assets/apple-2025-liquid-glass.svg#apple-2025-liquid-glass');
-    -webkit-backdrop-filter: blur(14px) saturate(175%) contrast(1.03) url('./assets/apple-2025-liquid-glass.svg#apple-2025-liquid-glass');
+    backdrop-filter: blur(14px) saturate(175%) contrast(1.03)
+      url("./assets/apple-2025-liquid-glass.svg#apple-2025-liquid-glass");
+    -webkit-backdrop-filter: blur(14px) saturate(175%) contrast(1.03)
+      url("./assets/apple-2025-liquid-glass.svg#apple-2025-liquid-glass");
   }
 
   .liquid-glass-input-distortion {
-    backdrop-filter: blur(8px) saturate(140%) brightness(1.02) url('./assets/apple-2025-liquid-glass.svg#apple-2025-ripple');
-    -webkit-backdrop-filter: blur(8px) saturate(140%) brightness(1.02) url('./assets/apple-2025-liquid-glass.svg#apple-2025-ripple');
+    backdrop-filter: blur(8px) saturate(140%) brightness(1.02)
+      url("./assets/apple-2025-liquid-glass.svg#apple-2025-ripple");
+    -webkit-backdrop-filter: blur(8px) saturate(140%) brightness(1.02)
+      url("./assets/apple-2025-liquid-glass.svg#apple-2025-ripple");
   }
 
   /* Fallback for browsers that don't support SVG filters in backdrop-filter */
-  @supports not (backdrop-filter: url('#test')) {
+  @supports not (backdrop-filter: url("#test")) {
     .liquid-glass-distortion,
     .liquid-glass-nav-distortion,
     .liquid-glass-button-distortion,
@@ -629,30 +653,34 @@
   }
 
   .liquid-glass-interactive::before {
-    content: '';
+    content: "";
     position: absolute;
     inset: 0;
     z-index: -1;
-    background: linear-gradient(135deg,
+    background: linear-gradient(
+      135deg,
       rgba(255, 255, 255, 0.15) 0%,
       rgba(255, 255, 255, 0.05) 50%,
-      rgba(255, 255, 255, 0.2) 100%);
+      rgba(255, 255, 255, 0.2) 100%
+    );
     opacity: 0;
     transition: opacity 0.4s ease;
     pointer-events: none;
   }
 
   .liquid-glass-interactive::after {
-    content: '';
+    content: "";
     position: absolute;
     top: -50%;
     left: -50%;
     width: 200%;
     height: 200%;
-    background: linear-gradient(45deg,
+    background: linear-gradient(
+      45deg,
       transparent 30%,
       rgba(255, 255, 255, 0.1) 50%,
-      transparent 70%);
+      transparent 70%
+    );
     transform: translateX(-100%) translateY(-100%) rotate(45deg);
     transition: transform 0.6s ease;
     pointer-events: none;
@@ -682,10 +710,12 @@
   }
 
   .dark .liquid-glass-interactive::before {
-    background: linear-gradient(135deg,
+    background: linear-gradient(
+      135deg,
       rgba(255, 255, 255, 0.1) 0%,
       rgba(255, 255, 255, 0.03) 50%,
-      rgba(255, 255, 255, 0.12) 100%);
+      rgba(255, 255, 255, 0.12) 100%
+    );
   }
 
   .dark .liquid-glass-interactive:hover {
@@ -712,7 +742,8 @@
   }
 
   @keyframes liquid-glass-float {
-    0%, 100% {
+    0%,
+    100% {
       transform: translateY(0px) rotate(0deg);
       box-shadow:
         0 20px 60px rgba(31, 38, 135, 0.15),
@@ -749,13 +780,15 @@
   }
 
   .liquid-glass-ripple::before {
-    content: '';
+    content: "";
     position: absolute;
     inset: 0;
-    background: radial-gradient(circle at var(--ripple-x, 50%) var(--ripple-y, 50%),
+    background: radial-gradient(
+      circle at var(--ripple-x, 50%) var(--ripple-y, 50%),
       rgba(255, 255, 255, 0.3) 0%,
       rgba(255, 255, 255, 0.1) 30%,
-      transparent 70%);
+      transparent 70%
+    );
     opacity: 0;
     transform: scale(0);
     transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
@@ -774,10 +807,12 @@
   }
 
   .dark .liquid-glass-ripple::before {
-    background: radial-gradient(circle at var(--ripple-x, 50%) var(--ripple-y, 50%),
+    background: radial-gradient(
+      circle at var(--ripple-x, 50%) var(--ripple-y, 50%),
       rgba(255, 255, 255, 0.2) 0%,
       rgba(255, 255, 255, 0.08) 30%,
-      transparent 70%);
+      transparent 70%
+    );
   }
 
   /* Apple 2025 Liquid Glass - Enhanced Utilities */
@@ -793,7 +828,8 @@
 
   .glass-blur-heavy {
     backdrop-filter: blur(24px) saturate(200%) brightness(1.05) contrast(1.03);
-    -webkit-backdrop-filter: blur(24px) saturate(200%) brightness(1.05) contrast(1.03);
+    -webkit-backdrop-filter: blur(24px) saturate(200%) brightness(1.05)
+      contrast(1.03);
   }
 
   .glass-shine {
@@ -802,16 +838,18 @@
   }
 
   .glass-shine::after {
-    content: '';
+    content: "";
     position: absolute;
     top: -50%;
     left: -50%;
     width: 200%;
     height: 200%;
-    background: linear-gradient(45deg,
+    background: linear-gradient(
+      45deg,
       transparent 30%,
       rgba(255, 255, 255, 0.1) 50%,
-      transparent 70%);
+      transparent 70%
+    );
     transform: translateX(-100%) translateY(-100%) rotate(45deg);
     transition: transform 0.6s ease;
     pointer-events: none;

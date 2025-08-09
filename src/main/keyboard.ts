@@ -207,6 +207,12 @@ export function listenToKeyboardEvents() {
   let isPressedShiftKey = false
   let isPressedAltKey = false
 
+  // Track last press times for modifier keys to recover from missed KeyRelease events
+  // We sometimes miss KeyRelease (observed via rdev). Use timestamps to auto-clear stale modifier state.
+  let lastCtrlPressTime = 0
+  let lastShiftPressTime = 0
+  let lastAltPressTime = 0
+
   // MCP tool calling state
   let isHoldingCtrlAltKey = false
   let startMcpRecordingTimer: NodeJS.Timeout | undefined
@@ -236,10 +242,44 @@ export function listenToKeyboardEvents() {
     }
   }
 
+  // Clear stale modifier states if they've been "pressed" for too long without activity.
+  // This helps recover when rdev drops a KeyRelease and Ctrl/Shift/Alt get stuck as true.
+  const clearStaleModifiers = (nowSec: number) => {
+    // Keep threshold conservative to avoid breaking intentional long holds.
+    const THRESHOLD_SECONDS = 10
+
+    if (isPressedCtrlKey && lastCtrlPressTime && nowSec - lastCtrlPressTime > THRESHOLD_SECONDS) {
+      isPressedCtrlKey = false
+      if (isDebugKeybinds()) {
+        logKeybinds("Auto-clearing stale Ctrl modifier")
+      }
+    }
+    if (isPressedShiftKey && lastShiftPressTime && nowSec - lastShiftPressTime > THRESHOLD_SECONDS) {
+      isPressedShiftKey = false
+      if (isDebugKeybinds()) {
+        logKeybinds("Auto-clearing stale Shift modifier")
+      }
+    }
+    if (isPressedAltKey && lastAltPressTime && nowSec - lastAltPressTime > THRESHOLD_SECONDS) {
+      isPressedAltKey = false
+      if (isDebugKeybinds()) {
+        logKeybinds("Auto-clearing stale Alt modifier")
+      }
+    }
+
+    // Keep the combined flag in sync
+    isPressedCtrlAltKey = isPressedCtrlKey && isPressedAltKey
+  }
+
   const handleEvent = (e: RdevEvent) => {
     if (e.event_type === "KeyPress") {
+      const nowSec = e.time?.secs_since_epoch || Date.now() / 1000
+
       if (e.data.key === "ControlLeft" || e.data.key === "ControlRight") {
         isPressedCtrlKey = true
+        lastCtrlPressTime = nowSec
+        // Keep combined flag in sync regardless of which modifier changed
+        isPressedCtrlAltKey = isPressedCtrlKey && isPressedAltKey
         if (isDebugKeybinds()) {
           logKeybinds("Ctrl key pressed, isPressedCtrlKey =", isPressedCtrlKey)
         }
@@ -247,6 +287,7 @@ export function listenToKeyboardEvents() {
 
       if (e.data.key === "ShiftLeft" || e.data.key === "ShiftRight") {
         isPressedShiftKey = true
+        lastShiftPressTime = nowSec
         if (isDebugKeybinds()) {
           logKeybinds(
             "Shift key pressed, isPressedShiftKey =",
@@ -257,6 +298,7 @@ export function listenToKeyboardEvents() {
 
       if (e.data.key === "Alt") {
         isPressedAltKey = true
+        lastAltPressTime = nowSec
         isPressedCtrlAltKey = isPressedCtrlKey && isPressedAltKey
         if (isDebugKeybinds()) {
           logKeybinds(
@@ -266,6 +308,19 @@ export function listenToKeyboardEvents() {
             isPressedCtrlAltKey,
           )
         }
+      }
+
+      // Before handling combos, clear any stale modifier states
+      clearStaleModifiers(nowSec)
+
+      // Compute effective modifier states for combo matching.
+      // Treat a modifier as active only if it was pressed recently.
+      const RECENT_MODIFIER_WINDOW = 2
+      const isRecent = (t?: number) => !!t && nowSec - t < RECENT_MODIFIER_WINDOW
+      const eff = {
+        ctrl: isPressedCtrlKey && isRecent(lastCtrlPressTime),
+        shift: isPressedShiftKey && isRecent(lastShiftPressTime),
+        alt: isPressedAltKey && isRecent(lastAltPressTime),
       }
 
       // Get config once at the beginning of the function
@@ -322,8 +377,8 @@ export function listenToKeyboardEvents() {
         if (
           config.agentKillSwitchEnabled &&
           config.agentKillSwitchHotkey === "ctrl-shift-escape" &&
-          isPressedCtrlKey &&
-          isPressedShiftKey
+          eff.ctrl &&
+          eff.shift
         ) {
           if (isDebugKeybinds()) {
             logKeybinds("Kill switch triggered: Ctrl+Shift+Escape")
@@ -360,8 +415,8 @@ export function listenToKeyboardEvents() {
         if (
           config.agentKillSwitchHotkey === "ctrl-alt-q" &&
           e.data.key === "KeyQ" &&
-          isPressedCtrlKey &&
-          isPressedAltKey
+          eff.ctrl &&
+          eff.alt
         ) {
           if (isDebugKeybinds()) {
             logKeybinds("Kill switch triggered: Ctrl+Alt+Q")
@@ -373,8 +428,8 @@ export function listenToKeyboardEvents() {
         if (
           config.agentKillSwitchHotkey === "ctrl-shift-q" &&
           e.data.key === "KeyQ" &&
-          isPressedCtrlKey &&
-          isPressedShiftKey
+          eff.ctrl &&
+          eff.shift
         ) {
           if (isDebugKeybinds()) {
             logKeybinds("Kill switch triggered: Ctrl+Shift+Q")
@@ -391,9 +446,9 @@ export function listenToKeyboardEvents() {
           const matches = matchesKeyCombo(
             e.data,
             {
-              ctrl: isPressedCtrlKey,
-              shift: isPressedShiftKey,
-              alt: isPressedAltKey,
+              ctrl: eff.ctrl,
+              shift: eff.shift,
+              alt: eff.alt,
             },
             effectiveKillSwitchHotkey,
           )
@@ -420,9 +475,9 @@ export function listenToKeyboardEvents() {
         if (
           config.textInputShortcut === "ctrl-t" &&
           e.data.key === "KeyT" &&
-          isPressedCtrlKey &&
-          !isPressedShiftKey &&
-          !isPressedAltKey
+          eff.ctrl &&
+          !eff.shift &&
+          !eff.alt
         ) {
           if (isDebugKeybinds()) {
             logKeybinds("Text input triggered: Ctrl+T")
@@ -433,9 +488,9 @@ export function listenToKeyboardEvents() {
         if (
           config.textInputShortcut === "ctrl-shift-t" &&
           e.data.key === "KeyT" &&
-          isPressedCtrlKey &&
-          isPressedShiftKey &&
-          !isPressedAltKey
+          eff.ctrl &&
+          eff.shift &&
+          !eff.alt
         ) {
           if (isDebugKeybinds()) {
             logKeybinds("Text input triggered: Ctrl+Shift+T")
@@ -446,9 +501,9 @@ export function listenToKeyboardEvents() {
         if (
           config.textInputShortcut === "alt-t" &&
           e.data.key === "KeyT" &&
-          !isPressedCtrlKey &&
-          !isPressedShiftKey &&
-          isPressedAltKey
+          !eff.ctrl &&
+          !eff.shift &&
+          eff.alt
         ) {
           if (isDebugKeybinds()) {
             logKeybinds("Text input triggered: Alt+T")
@@ -465,9 +520,9 @@ export function listenToKeyboardEvents() {
           const matches = matchesKeyCombo(
             e.data,
             {
-              ctrl: isPressedCtrlKey,
-              shift: isPressedShiftKey,
-              alt: isPressedAltKey,
+              ctrl: eff.ctrl,
+              shift: eff.shift,
+              alt: eff.alt,
             },
             effectiveTextInputShortcut,
           )
@@ -492,7 +547,7 @@ export function listenToKeyboardEvents() {
         )
 
         if (config.mcpToolsShortcut === "ctrl-alt-slash") {
-          if (e.data.key === "Slash" && isPressedCtrlKey && isPressedAltKey) {
+          if (e.data.key === "Slash" && eff.ctrl && eff.alt) {
             if (isDebugKeybinds()) {
               logKeybinds("MCP tools triggered: Ctrl+Alt+/")
             }
@@ -506,9 +561,9 @@ export function listenToKeyboardEvents() {
           const matches = matchesKeyCombo(
             e.data,
             {
-              ctrl: isPressedCtrlKey,
-              shift: isPressedShiftKey,
-              alt: isPressedAltKey,
+              ctrl: eff.ctrl,
+              shift: eff.shift,
+              alt: eff.alt,
             },
             effectiveMcpToolsShortcut,
           )
@@ -532,7 +587,7 @@ export function listenToKeyboardEvents() {
       )
 
       if (config.shortcut === "ctrl-slash") {
-        if (e.data.key === "Slash" && isPressedCtrlKey) {
+        if (e.data.key === "Slash" && eff.ctrl) {
           if (isDebugKeybinds()) {
             logKeybinds("Recording triggered: Ctrl+/")
           }

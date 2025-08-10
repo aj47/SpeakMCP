@@ -17,9 +17,9 @@ import { Save } from "lucide-react"
 import { useState, useEffect } from "react"
 
 import { CHAT_PROVIDERS } from "@shared/index"
-import { Config, MCPConfig } from "@shared/types"
-import { MCPConfigManager } from "@renderer/components/mcp-config-manager"
-import { MCPToolManager } from "@renderer/components/mcp-tool-manager"
+import { Config } from "@shared/types"
+
+
 import { KeyRecorder } from "@renderer/components/key-recorder"
 
 export function Component() {
@@ -54,9 +54,7 @@ export function Component() {
     saveConfigMutation.mutate(newConfig)
   }
 
-  const updateMcpConfig = (mcpConfig: MCPConfig) => {
-    updateConfig({ mcpConfig })
-  }
+
 
   const saveAdditionalGuidelines = () => {
     updateConfig({ mcpToolsSystemPrompt: additionalGuidelines })
@@ -425,37 +423,12 @@ DOMAIN-SPECIFIC RULES:
                   )}
                 </div>
 
-                <div className="space-y-2 rounded-lg border p-4">
-                  <h4 className="font-medium">MCP Tools</h4>
-                  <div className="text-sm text-muted-foreground">
-                    <p>
-                      Tools are provided by MCP (Model Context Protocol) servers
-                      that you configure.
-                    </p>
-                    <p className="mt-2">
-                      Configure MCP servers below to add tools for file
-                      operations, API integrations, and more.
-                    </p>
-                  </div>
-                </div>
+
               </>
             )}
           </div>
 
-          {/* MCP Server Configuration Section */}
-          {config.mcpToolsEnabled && (
-            <div className="mt-8 space-y-8 border-t pt-6">
-              <MCPConfigManager
-                config={config.mcpConfig || { mcpServers: {} }}
-                onConfigChange={updateMcpConfig}
-              />
 
-              {/* MCP Tool Management Section */}
-              <div className="border-t pt-6">
-                <MCPToolManager />
-              </div>
-            </div>
-          )}
         </div>
       </div>
     </div>

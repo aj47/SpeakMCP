@@ -35,6 +35,11 @@ export const Component = () => {
       href: "/settings/tools",
       icon: "i-mingcute-android-2-line",
     },
+    {
+      text: "MCP Tools",
+      href: "/settings/mcp-tools",
+      icon: "i-mingcute-tool-line",
+    },
   ]
 
   useEffect(() => {

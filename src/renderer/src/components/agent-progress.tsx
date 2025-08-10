@@ -74,7 +74,7 @@ const ConversationMessage: React.FC<{
   return (
     <div
       className={cn(
-        "liquid-glass-subtle glass-border rounded-lg p-3 transition-all duration-300",
+        "liquid-glass-subtle glass-border rounded-lg p-3 transition-all duration-300 text-left",
         getRoleStyles(),
       )}
     >
@@ -115,8 +115,8 @@ const ConversationMessage: React.FC<{
       </div>
       <div
         className={cn(
-          "cursor-text select-text text-sm leading-relaxed",
-          isCollapsed ? "line-clamp-1" : "",
+          "cursor-text select-text text-sm leading-relaxed text-left",
+          isCollapsed ? "line-clamp-1" : "whitespace-pre-wrap",
         )}
         role="region"
         aria-label={`${getRoleLabel()} message content`}
@@ -354,8 +354,8 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
 
   const containerClasses =
     variant === "overlay"
-      ? "flex flex-col gap-2 p-2 w-full h-full rounded-xl liquid-glass-strong glass-text-strong"
-      : "flex flex-col gap-2 p-3 liquid-glass-modal glass-border glass-shadow rounded-xl w-full h-full glass-text-strong"
+      ? "flex flex-col gap-2 p-2 w-full h-full rounded-xl liquid-glass-strong glass-text-strong text-left"
+      : "flex flex-col gap-2 p-3 liquid-glass-modal glass-border glass-shadow rounded-xl w-full h-full glass-text-strong text-left"
 
   return (
     <div className={cn(containerClasses, "min-h-0 overflow-hidden", className)}>
@@ -391,7 +391,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
         <div
           ref={scrollContainerRef}
           onScroll={handleScroll}
-          className="flex h-full flex-col gap-2 overflow-y-auto scroll-smooth"
+          className="flex h-full flex-col gap-2 overflow-y-auto scroll-smooth text-left"
         >
           {messages.length > 0 ? (
             messages.map((message, index) => (
@@ -418,7 +418,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
               />
             ))
           ) : (
-            <div className="py-4 text-center text-sm text-muted-foreground">
+            <div className="py-4 text-left text-sm text-muted-foreground">
               {isComplete ? "Task completed" : "Initializing agent..."}
             </div>
           )}

@@ -238,6 +238,10 @@ export function Component() {
 
   useEffect(() => {
     const unlisten = rendererHandlers.startRecording.listen(() => {
+      // Ensure we are in normal dictation mode (not MCP/agent)
+      setMcpMode(false)
+      mcpModeRef.current = false
+      setAgentProgress(null)
       setVisualizerData(() => getInitialVisualizerData())
       recorderRef.current?.startRecording()
     })
@@ -269,6 +273,10 @@ export function Component() {
         isConfirmedRef.current = true
         recorderRef.current?.stopRecording()
       } else {
+        // Force normal dictation mode when using the normal hotkey
+        setMcpMode(false)
+        mcpModeRef.current = false
+        setAgentProgress(null)
         tipcClient.showPanelWindow()
         recorderRef.current?.startRecording()
       }

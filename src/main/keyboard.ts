@@ -235,11 +235,41 @@ export function listenToKeyboardEvents() {
       startMcpRecordingTimer = undefined
     }
   }
+  const tryStartMcpHoldIfEligible = () => {
+    const config = configStore.get()
+    if (
+      !config.mcpToolsEnabled ||
+      config.mcpToolsShortcut !== "hold-ctrl-alt"
+    ) {
+      return
+    }
+
+    // Both modifiers must be down
+    if (!isPressedCtrlKey || !isPressedAltKey) return
+
+    // Guard against recent non-modifier presses
+    if (hasRecentKeyPress()) return
+
+    // Prevent duplicate timers
+    if (startMcpRecordingTimer) return
+
+    // Cancel regular recording timer since MCP is prioritized when both held
+    cancelRecordingTimer()
+
+    startMcpRecordingTimer = setTimeout(() => {
+      // Re-check modifiers before firing
+      if (!isPressedCtrlKey || !isPressedAltKey) return
+      isHoldingCtrlAltKey = true
+      showPanelWindowAndStartMcpRecording()
+    }, 800)
+  }
+
 
   const handleEvent = (e: RdevEvent) => {
     if (e.event_type === "KeyPress") {
       if (e.data.key === "ControlLeft" || e.data.key === "ControlRight") {
         isPressedCtrlKey = true
+        tryStartMcpHoldIfEligible()
         if (isDebugKeybinds()) {
           logKeybinds("Ctrl key pressed, isPressedCtrlKey =", isPressedCtrlKey)
         }
@@ -258,6 +288,7 @@ export function listenToKeyboardEvents() {
       if (e.data.key === "Alt") {
         isPressedAltKey = true
         isPressedCtrlAltKey = isPressedCtrlKey && isPressedAltKey
+        tryStartMcpHoldIfEligible()
         if (isDebugKeybinds()) {
           logKeybinds(
             "Alt key pressed, isPressedAltKey =",
@@ -573,6 +604,10 @@ export function listenToKeyboardEvents() {
           }
 
           startRecordingTimer = setTimeout(() => {
+            // Guard: ensure Ctrl is still held and Alt is not held when timer fires
+            if (!isPressedCtrlKey || isPressedAltKey) {
+              return
+            }
             isHoldingCtrlKey = true
             showPanelWindowAndStartRecording()
           }, 800)
@@ -582,6 +617,8 @@ export function listenToKeyboardEvents() {
           config.mcpToolsEnabled &&
           config.mcpToolsShortcut === "hold-ctrl-alt"
         ) {
+          // Legacy path kept for clarity; unified by tryStartMcpHoldIfEligible()
+          tryStartMcpHoldIfEligible()
           if (hasRecentKeyPress()) {
             return
           }
@@ -594,6 +631,10 @@ export function listenToKeyboardEvents() {
           cancelRecordingTimer()
 
           startMcpRecordingTimer = setTimeout(() => {
+            // Guard: ensure Ctrl+Alt are still held when timer fires
+            if (!isPressedCtrlKey || !isPressedAltKey) {
+              return
+            }
             isHoldingCtrlAltKey = true
             showPanelWindowAndStartMcpRecording()
           }, 800)
@@ -659,27 +700,33 @@ export function listenToKeyboardEvents() {
       cancelRecordingTimer()
       cancelMcpRecordingTimer()
 
+      // Finish MCP hold on either modifier release
       if (e.data.key === "ControlLeft" || e.data.key === "ControlRight") {
-        if (isHoldingCtrlKey) {
-          getWindowRendererHandlers("panel")?.finishRecording.send()
-        } else if (!state.isTextInputActive) {
-          // Only close panel if we're not in text input mode
-          stopRecordingAndHidePanelWindow()
-        }
+        if (isHoldingCtrlAltKey) {
+          const panelHandlers = getWindowRendererHandlers("panel")
+          panelHandlers?.finishMcpRecording.send()
+          isHoldingCtrlAltKey = false
+        } else {
+          if (isHoldingCtrlKey) {
+            getWindowRendererHandlers("panel")?.finishRecording.send()
+          } else if (!state.isTextInputActive) {
+            // Only close panel if we're not in text input mode
+            stopRecordingAndHidePanelWindow()
+          }
 
-        isHoldingCtrlKey = false
+          isHoldingCtrlKey = false
+        }
       }
 
       if (e.data.key === "Alt") {
         if (isHoldingCtrlAltKey) {
           const panelHandlers = getWindowRendererHandlers("panel")
           panelHandlers?.finishMcpRecording.send()
+          isHoldingCtrlAltKey = false
         } else if (!state.isTextInputActive) {
           // Only close panel if we're not in text input mode
           stopRecordingAndHidePanelWindow()
         }
-
-        isHoldingCtrlAltKey = false
       }
     }
   }

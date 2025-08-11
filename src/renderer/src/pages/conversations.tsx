@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from "react"
+import React, { useState, useMemo, useEffect } from "react"
+import { useParams } from "react-router-dom"
 import { Button } from "@renderer/components/ui/button"
 import { Input } from "@renderer/components/ui/input"
 import {
@@ -42,6 +43,7 @@ import dayjs from "dayjs"
 import { toast } from "sonner"
 
 export function Component() {
+  const { id: routeConversationId } = useParams<{ id: string }>()
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedConversation, setSelectedConversation] = useState<
     string | null
@@ -54,6 +56,14 @@ export function Component() {
   const selectedConversationQuery = useConversationQuery(selectedConversation)
 
   const { continueConversation } = useConversationActions()
+
+  // Handle route parameter for deep-linking to specific conversation
+  useEffect(() => {
+    if (routeConversationId) {
+      setSelectedConversation(routeConversationId)
+      setViewMode("detail")
+    }
+  }, [routeConversationId])
 
   const filteredConversations = useMemo(() => {
     if (!conversationHistoryQuery.data) return []

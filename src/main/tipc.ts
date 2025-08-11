@@ -2,6 +2,7 @@ import fs from "fs"
 import { getRendererHandlers, tipc } from "@egoist/tipc/main"
 import {
   showPanelWindow,
+  showMainWindow,
   WINDOWS,
   resizePanelForAgentMode,
   resizePanelToNormal,
@@ -400,6 +401,12 @@ export const router = {
   showPanelWindow: t.procedure.action(async () => {
     showPanelWindow()
   }),
+
+  showMainWindow: t.procedure
+    .input<{ url?: string }>()
+    .action(async ({ input }) => {
+      showMainWindow(input.url)
+    }),
 
   displayError: t.procedure
     .input<{ title?: string; message: string }>()

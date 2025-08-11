@@ -1,8 +1,11 @@
 import React, { useEffect, useRef, useState } from "react"
 import { cn } from "@renderer/lib/utils"
 import { AgentProgressUpdate } from "../../../shared/types"
-import { ChevronDown, ChevronRight } from "lucide-react"
+import { ChevronDown, ChevronRight, ExternalLink } from "lucide-react"
 import { MarkdownRenderer } from "@renderer/components/markdown-renderer"
+import { Button } from "./ui/button"
+import { tipcClient } from "@renderer/lib/tipc-client"
+import { useConversation } from "@renderer/contexts/conversation-context"
 
 interface AgentProgressProps {
   progress: AgentProgressUpdate | null
@@ -171,6 +174,9 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true)
   const lastMessageCountRef = useRef(0)
   const lastContentLengthRef = useRef(0)
+
+  // Get current conversation ID for deep-linking
+  const { currentConversationId } = useConversation()
 
   if (!progress) {
     return null
@@ -380,6 +386,22 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
           <div className="text-xs font-medium text-muted-foreground">
             {isComplete ? "✓" : `${currentIteration}/${maxIterations}`}
           </div>
+          {isComplete && finalContent && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                const url = currentConversationId
+                  ? `/conversations/${currentConversationId}`
+                  : "/conversations"
+                tipcClient.showMainWindow({ url })
+              }}
+              className="h-6 gap-1 px-2 py-0 text-xs"
+            >
+              <ExternalLink className="h-3 w-3" />
+              View Full Results
+            </Button>
+          )}
           {isComplete && (
             <div className="text-xs text-muted-foreground opacity-75">ESC</div>
           )}

@@ -63,17 +63,17 @@ const CompactMessage: React.FC<{
       getRoleStyle(),
       !isExpanded && shouldCollapse && "hover:bg-white/10"
     )}>
-      <div className="flex items-center gap-2 px-2 py-1">
-        <span className="opacity-60">{getRoleIcon()}</span>
-        <div className="flex-1">
+      <div className="flex items-start gap-2 px-2 py-1 text-left">
+        <span className="opacity-60 mt-0.5 flex-shrink-0">{getRoleIcon()}</span>
+        <div className="flex-1 min-w-0">
           <div className={cn(
-            "leading-relaxed",
+            "leading-relaxed text-left",
             !isExpanded && shouldCollapse && "line-clamp-2"
           )}>
             <MarkdownRenderer content={message.content.trim()} />
           </div>
           {hasExtras && isExpanded && (
-            <div className="mt-1 space-y-1">
+            <div className="mt-1 space-y-1 text-left">
               {message.toolCalls && (
                 <div className="text-xs opacity-70">
                   Tools: {message.toolCalls.map(c => c.name).join(", ")}
@@ -90,7 +90,7 @@ const CompactMessage: React.FC<{
         {shouldCollapse && (
           <button
             onClick={() => setIsExpanded(!isExpanded)}
-            className="p-1 rounded hover:bg-white/20 transition-colors"
+            className="p-1 rounded hover:bg-white/20 transition-colors flex-shrink-0"
           >
             {isExpanded ? (
               <ChevronUp className="h-3 w-3" />
@@ -304,7 +304,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
       : "flex flex-col w-full h-full bg-white/10 backdrop-blur-sm rounded-xl overflow-hidden border border-white/20"
 
   return (
-    <div className={cn(containerClasses, "min-h-0", className)}>
+    <div className={cn(containerClasses, "min-h-0", className)} dir="ltr">
       {/* Unified Header */}
       <div className="flex items-center justify-between px-3 py-2 border-b border-white/10 bg-white/5 backdrop-blur-sm">
         <div className="flex items-center gap-2">
@@ -348,7 +348,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
         </div>
       </div>
 
-      {/* Compact Message Stream */}
+      {/* Message Stream - Left-aligned content */}
       <div className="relative flex-1 overflow-hidden">
         <div
           ref={scrollContainerRef}
@@ -356,7 +356,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
           className="absolute inset-0 overflow-y-auto"
         >
           {messages.length > 0 ? (
-            <div className="space-y-1">
+            <div className="space-y-1 p-2">
               {messages.map((message, index) => (
                 <CompactMessage
                   key={`${message.timestamp}-${index}`}

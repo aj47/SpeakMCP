@@ -169,16 +169,34 @@ export const writeTextWithFocusRestore = async (text: string) => {
   }
 }
 
-const parseEvent = (event: any) => {
+const parseEvents = (data: any): RdevEvent[] => {
   try {
-    const e = JSON.parse(String(event))
-    e.data = JSON.parse(e.data)
-    return e as RdevEvent
+    const eventStr = String(data).trim()
+    if (!eventStr) return []
+
+    // Handle multiple JSON objects in a single buffer by splitting on newlines
+    const lines = eventStr.split('\n').filter(line => line.trim())
+    const events: RdevEvent[] = []
+
+    for (const line of lines) {
+      try {
+        const e = JSON.parse(line.trim())
+        e.data = JSON.parse(e.data)
+        events.push(e as RdevEvent)
+      } catch (lineError) {
+        if (isDebugKeybinds()) {
+          logKeybinds("Failed to parse line:", line, "Error:", lineError)
+        }
+        // Continue processing other lines
+      }
+    }
+
+    return events
   } catch (error) {
     if (isDebugKeybinds()) {
-      logKeybinds("Failed to parse event:", event, "Error:", error)
+      logKeybinds("Failed to parse events:", data, "Error:", error)
     }
-    return null
+    return []
   }
 }
 
@@ -738,10 +756,10 @@ export function listenToKeyboardEvents() {
   }
 
   child.stdout.on("data", (data) => {
-    const event = parseEvent(data)
-    if (!event) return
-
-    handleEvent(event)
+    const events = parseEvents(data)
+    for (const event of events) {
+      handleEvent(event)
+    }
   })
 
   child.stderr?.on("data", (data) => {

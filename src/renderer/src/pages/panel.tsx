@@ -476,10 +476,7 @@ export function Component() {
                 </div>
               )}
             </div>
-            <div
-              className="relative flex grow items-center overflow-hidden"
-              dir="rtl"
-            >
+            <div className="relative flex grow items-center overflow-hidden">
               {/* Conversation continuation indicator - subtle overlay that doesn't block waveform */}
               {showContinueButton && !agentProgress && (
                 <div className="absolute left-3 top-3 z-10 flex items-center gap-2">
@@ -492,20 +489,18 @@ export function Component() {
                 </div>
               )}
 
-              {/* Agent progress overlay - compact and efficient */}
+              {/* Agent progress overlay - left-aligned and full coverage */}
               {agentProgress && !mcpTranscribeMutation.isPending && (
-                <div className="absolute inset-0 z-20 flex items-center justify-center">
-                  <div className="w-full h-full">
-                    <AgentProgress
-                      progress={agentProgress}
-                      variant="overlay"
-                      className="w-full h-full"
-                    />
-                  </div>
+                <div className="absolute inset-0 z-20">
+                  <AgentProgress
+                    progress={agentProgress}
+                    variant="overlay"
+                    className="w-full h-full"
+                  />
                 </div>
               )}
 
-              {/* Waveform visualization - dimmed when agent progress is showing */}
+              {/* Waveform visualization - right-aligned, dimmed when agent progress is showing */}
               <div
                 className={cn(
                   "absolute right-0 flex h-6 items-center gap-0.5 transition-opacity duration-300",
@@ -513,6 +508,7 @@ export function Component() {
                     ? "opacity-30"
                     : "opacity-100",
                 )}
+                dir="rtl"
               >
                 {visualizerData
                   .slice()

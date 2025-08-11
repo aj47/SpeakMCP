@@ -205,11 +205,18 @@ export class MCPService {
     const config = configStore.get()
     const mcpConfig = config.mcpConfig
 
+    if (isDebugTools()) {
+      logTools("MCP Service initialization starting")
+    }
+
     if (
       !mcpConfig ||
       !mcpConfig.mcpServers ||
       Object.keys(mcpConfig.mcpServers).length === 0
     ) {
+      if (isDebugTools()) {
+        logTools("MCP Service initialization complete - no servers configured")
+      }
       this.availableTools = []
       this.isInitializing = false
       this.hasBeenInitialized = true
@@ -224,11 +231,17 @@ export class MCPService {
       ([serverName, serverConfig]) => {
         // Skip if disabled in config
         if ((serverConfig as MCPServerConfig).disabled) {
+          if (isDebugTools()) {
+            logTools(`Skipping server ${serverName} - disabled in config`)
+          }
           return false
         }
 
         // Always respect user runtime-disabled preference (persisted across sessions)
         if (this.runtimeDisabledServers.has(serverName)) {
+          if (isDebugTools()) {
+            logTools(`Skipping server ${serverName} - runtime disabled by user`)
+          }
           return false
         }
 
@@ -238,9 +251,18 @@ export class MCPService {
         }
 
         // On subsequent calls (like agent mode), only initialize if not already initialized
-        return !this.initializedServers.has(serverName)
+        const alreadyInitialized = this.initializedServers.has(serverName)
+        if (isDebugTools() && alreadyInitialized) {
+          logTools(`Skipping server ${serverName} - already initialized`)
+        }
+        return !alreadyInitialized
       },
     )
+
+    if (isDebugTools()) {
+      logTools(`Found ${serversToInitialize.length} servers to initialize`,
+        serversToInitialize.map(([name]) => name))
+    }
 
     this.initializationProgress.total = serversToInitialize.length
 
@@ -248,10 +270,20 @@ export class MCPService {
     for (const [serverName, serverConfig] of serversToInitialize) {
       this.initializationProgress.currentServer = serverName
 
+      if (isDebugTools()) {
+        logTools(`Starting initialization of server: ${serverName}`)
+      }
+
       try {
         await this.initializeServer(serverName, serverConfig as MCPServerConfig)
         this.initializedServers.add(serverName)
+        if (isDebugTools()) {
+          logTools(`Successfully initialized server: ${serverName}`)
+        }
       } catch (error) {
+        if (isDebugTools()) {
+          logTools(`Failed to initialize server: ${serverName}`, error)
+        }
         // Server status will be computed dynamically in getServerStatus()
       }
 
@@ -260,6 +292,10 @@ export class MCPService {
 
     this.isInitializing = false
     this.hasBeenInitialized = true
+
+    if (isDebugTools()) {
+      logTools(`MCP Service initialization complete. Total tools available: ${this.availableTools.length}`)
+    }
   }
 
   private async createTransport(
@@ -311,6 +347,15 @@ export class MCPService {
       "mcp-service",
       `Initializing server: ${serverName}`,
     )
+
+    if (isDebugTools()) {
+      logTools(`Initializing server: ${serverName}`, {
+        transport: serverConfig.transport || "stdio",
+        command: serverConfig.command,
+        args: serverConfig.args,
+        env: Object.keys(serverConfig.env || {}),
+      })
+    }
 
     try {
       const transportType = serverConfig.transport || "stdio"
@@ -367,6 +412,13 @@ export class MCPService {
       // Get available tools from the server
       const toolsResult = await client.listTools()
 
+      if (isDebugTools()) {
+        logTools(`Server ${serverName} connected successfully`, {
+          toolCount: toolsResult.tools.length,
+          tools: toolsResult.tools.map(t => ({ name: t.name, description: t.description }))
+        })
+      }
+
       // Add tools to our registry with server prefix
       for (const tool of toolsResult.tools) {
         this.availableTools.push({
@@ -385,6 +437,13 @@ export class MCPService {
         `Failed to initialize server ${serverName}`,
         error,
       )
+
+      if (isDebugTools()) {
+        logTools(`Server initialization failed: ${serverName}`, {
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined
+        })
+      }
 
       // Clean up any partial initialization
       this.cleanupServer(serverName)

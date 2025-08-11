@@ -23,6 +23,36 @@ export const Control = ({
     </div>
   )
 }
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./tooltip"
+import { Info } from "lucide-react"
+
+export const ControlLabel = ({
+  label,
+  tooltip,
+}: {
+  label: React.ReactNode
+  tooltip?: React.ReactNode
+}) => {
+  if (!tooltip) {
+    return <span className="text-sm font-medium">{label}</span>
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-sm font-medium">{label}</span>
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help hover:text-foreground transition-colors" />
+          </TooltipTrigger>
+          <TooltipContent>
+            <p className="max-w-xs">{tooltip}</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    </div>
+  )
+}
 
 export const ControlGroup = ({
   children,

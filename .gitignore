@@ -6,15 +6,6 @@ out
 target/
 bin/
 
-# Python cache and temporary files
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-.Python
-temp/
-*.tmp
-
 # Large model files
 *.model
 *.pt

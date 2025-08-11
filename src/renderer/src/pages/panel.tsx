@@ -492,14 +492,16 @@ export function Component() {
                 </div>
               )}
 
-              {/* Agent progress overlay - positioned to not interfere with waveform */}
+              {/* Agent progress overlay - compact and efficient */}
               {agentProgress && !mcpTranscribeMutation.isPending && (
-                <div className="liquid-glass-strong glass-text-strong absolute inset-0 z-20 flex items-center justify-start rounded-xl">
-                  <AgentProgress
-                    progress={agentProgress}
-                    variant="overlay"
-                    className="mx-3 w-full"
-                  />
+                <div className="absolute inset-0 z-20 flex items-center justify-center">
+                  <div className="w-full h-full">
+                    <AgentProgress
+                      progress={agentProgress}
+                      variant="overlay"
+                      className="w-full h-full"
+                    />
+                  </div>
                 </div>
               )}
 

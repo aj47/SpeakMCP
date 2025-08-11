@@ -28,22 +28,19 @@ export function AgentProcessingView({
   }
 
   return (
-    <div
-      className={cn(
-        "liquid-glass-strong glass-text-strong relative flex h-full w-full items-center justify-center rounded-xl",
-        className,
-      )}
-    >
+    <div className={cn("relative flex h-full w-full", className)}>
       {agentProgress ? (
-        <div className="absolute inset-0 z-20 flex items-center justify-center">
+        <div className="absolute inset-0">
           <AgentProgress
             progress={agentProgress}
             variant={variant}
-            className="mx-4 w-full"
+            className="w-full h-full"
           />
         </div>
       ) : (
-        <Spinner />
+        <div className="flex h-full w-full items-center justify-center">
+          <Spinner />
+        </div>
       )}
 
       {/* Show a subtle background spinner when agent progress is active */}

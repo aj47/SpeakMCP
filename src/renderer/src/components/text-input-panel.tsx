@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from "react"
 import { Textarea } from "@renderer/components/ui/textarea"
 import { cn } from "@renderer/lib/utils"
-import { AgentProgress } from "./agent-progress"
+import { AgentProcessingView } from "./agent-processing-view"
 import { AgentProgressUpdate } from "../../../shared/types"
 
 interface TextInputPanelProps {
@@ -52,9 +52,13 @@ export function TextInputPanel({
     return (
       <div className="liquid-glass-strong glass-text-strong flex h-full w-full items-center justify-center rounded-xl">
         {agentProgress ? (
-          <div className="mx-4 w-full">
-            <AgentProgress progress={agentProgress} variant="overlay" />
-          </div>
+          <AgentProcessingView
+            agentProgress={agentProgress}
+            isProcessing={isProcessing}
+            variant="overlay"
+            showBackgroundSpinner={true}
+            className="mx-4 w-full"
+          />
         ) : (
           <div className="flex items-center gap-2">
             <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"></div>
@@ -69,13 +73,13 @@ export function TextInputPanel({
     <div className="liquid-glass-strong glass-text-strong flex h-full w-full flex-col gap-3 rounded-xl p-3">
       {/* Show agent progress if available */}
       {isProcessing && agentProgress ? (
-        <div className="flex flex-1 items-center justify-center">
-          <AgentProgress
-            progress={agentProgress}
-            variant="default"
-            className="w-full"
-          />
-        </div>
+        <AgentProcessingView
+          agentProgress={agentProgress}
+          isProcessing={isProcessing}
+          variant="default"
+          showBackgroundSpinner={true}
+          className="flex-1"
+        />
       ) : (
         <div className="flex flex-1 flex-col gap-2">
           <div className="glass-text-muted text-xs">

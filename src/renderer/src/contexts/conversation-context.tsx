@@ -99,7 +99,9 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
         })
 
         // Add assistant response to conversation if we have final content and agent is complete
-        if (update.isComplete && update.finalContent && currentConversationId) {
+        // Only add message from panel window to prevent duplicates when main window also receives updates
+        if (update.isComplete && update.finalContent && currentConversationId &&
+            window.location.pathname === "/panel") {
           addMessage(update.finalContent, "assistant").catch(() => {
             // Silently handle error
           })

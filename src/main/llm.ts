@@ -248,6 +248,13 @@ function emitAgentProgress(update: AgentProgressUpdate) {
     showPanelWindow()
   }
 
+  // Also send updates to main window if it's open for live progress visualization
+  const main = WINDOWS.get("main")
+  if (main && main.isVisible()) {
+    const mainHandlers = getRendererHandlers<RendererHandlers>(main.webContents)
+    setTimeout(() => mainHandlers.agentProgressUpdate.send(update), 10)
+  }
+
   try {
     const handlers = getRendererHandlers<RendererHandlers>(panel.webContents)
     if (!handlers.agentProgressUpdate) {

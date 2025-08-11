@@ -1,4 +1,5 @@
 import { AgentProgress } from "@renderer/components/agent-progress"
+import { AgentProcessingView } from "@renderer/components/agent-processing-view"
 import { Recorder } from "@renderer/lib/recorder"
 import { playSound } from "@renderer/lib/sound"
 import { cn } from "@renderer/lib/utils"
@@ -417,13 +418,7 @@ export function Component() {
 
         // Keep the panel open when agent completes - user will press ESC to close
         if (update.isComplete) {
-          // Add assistant response to conversation if we have final content
-          if (update.finalContent) {
-            addMessage(update.finalContent, "assistant").catch(() => {
-              // Silently handle error
-            })
-          }
-
+          // Note: Final message insertion is handled by ConversationProvider to prevent duplicates
           // No auto-hide behavior - user controls when to close with ESC
         }
       },
@@ -473,27 +468,12 @@ export function Component() {
           mcpTranscribeMutation.isPending ||
           textInputMutation.isPending ||
           mcpTextInputMutation.isPending ? (
-          <div className="liquid-glass-strong glass-text-strong relative flex h-full w-full items-center justify-center rounded-xl">
-            {agentProgress ? (
-              <div className="absolute inset-0 z-20 flex items-center justify-center">
-                <AgentProgress
-                  progress={agentProgress}
-                  variant="overlay"
-                  className="mx-4 w-full"
-                />
-              </div>
-            ) : (
-              <div className="text-sm text-muted-foreground">Processing...</div>
-            )}
-            {/* Show a subtle background indicator when agent progress is active */}
-            {agentProgress && (
-              <div className="absolute inset-0 flex items-center justify-center opacity-20">
-                <div className="text-xs text-muted-foreground">
-                  Processing...
-                </div>
-              </div>
-            )}
-          </div>
+          <AgentProcessingView
+            agentProgress={agentProgress}
+            isProcessing={true}
+            variant="overlay"
+            showBackgroundSpinner={true}
+          />
         ) : (
           <div className="liquid-glass glass-text-strong flex h-full w-full rounded-xl transition-all duration-300">
             <div className="flex shrink-0">
@@ -505,7 +485,15 @@ export function Component() {
                   />
                 </div>
               )}
-              {isConversationActive && !mcpMode && (
+              {showTextInput && !mcpMode && (
+                <div className="liquid-glass-subtle flex h-full w-8 items-center justify-center rounded-l-xl">
+                  <div
+                    className="h-2 w-2 rounded-full bg-blue-500 shadow-lg"
+                    title="Text Input Mode"
+                  />
+                </div>
+              )}
+              {isConversationActive && !mcpMode && !showTextInput && (
                 <div className="liquid-glass-subtle flex h-full w-8 items-center justify-center rounded-l-xl">
                   <div
                     className="h-2 w-2 rounded-full bg-green-500 shadow-lg"

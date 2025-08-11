@@ -8,7 +8,6 @@ import { useEffect, useRef, useState } from "react"
 import { rendererHandlers, tipcClient } from "~/lib/tipc-client"
 import { AgentProgressUpdate } from "../../../shared/types"
 import { TextInputPanel } from "@renderer/components/text-input-panel"
-import { ContinueConversation } from "@renderer/components/continue-conversation"
 import {
   useConversationActions,
   useConversationState,
@@ -45,7 +44,6 @@ export function Component() {
     addMessage,
     setIsWaitingForResponse,
     startNewConversation,
-    continueConversation,
     endConversation,
   } = useConversationActions()
   const { currentConversationId } = useConversation()
@@ -106,13 +104,7 @@ export function Component() {
         conversationId: currentConversationId || undefined,
       })
 
-      // If backend returned a conversationId, continue that conversation
-      if (
-        result?.conversationId &&
-        result.conversationId !== currentConversationId
-      ) {
-        continueConversation(result.conversationId)
-      }
+      // Note: Conversation continuation is handled automatically by the conversation context
 
       return result
     },
@@ -328,25 +320,7 @@ export function Component() {
     }
   }
 
-  const handleContinueConversation = async (message: string) => {
-    // Add user message to conversation
-    await addMessage(message, "user")
 
-    // Process the message through the same flow as text input
-    try {
-      const config = await tipcClient.getConfig()
-      if (config.mcpToolsEnabled) {
-        mcpTextInputMutation.mutate({
-          text: message,
-          conversationId: currentConversation?.id,
-        })
-      } else {
-        textInputMutation.mutate({ text: message })
-      }
-    } catch (error) {
-      textInputMutation.mutate({ text: message })
-    }
-  }
 
   // MCP handlers
   useEffect(() => {
@@ -506,18 +480,15 @@ export function Component() {
               className="relative flex grow items-center overflow-hidden"
               dir="rtl"
             >
-              {/* Continue conversation overlay - shown when conversation can be continued */}
+              {/* Conversation continuation indicator - subtle overlay that doesn't block waveform */}
               {showContinueButton && !agentProgress && (
-                <div className="absolute inset-0 z-30 flex items-center justify-center p-4">
-                  <ContinueConversation
-                    onSubmit={handleContinueConversation}
-                    isProcessing={
-                      isWaitingForResponse ||
-                      textInputMutation.isPending ||
-                      mcpTextInputMutation.isPending
-                    }
-                    className="w-full max-w-md"
-                  />
+                <div className="absolute left-3 top-3 z-10 flex items-center gap-2">
+                  <div className="flex items-center gap-1.5 rounded-full bg-black/20 px-2 py-1 backdrop-blur-sm">
+                    <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-green-400" />
+                    <span className="text-xs font-medium text-white/90">
+                      Continue conversation
+                    </span>
+                  </div>
                 </div>
               )}
 
@@ -536,8 +507,7 @@ export function Component() {
               <div
                 className={cn(
                   "absolute right-0 flex h-6 items-center gap-0.5 transition-opacity duration-300",
-                  (agentProgress && !mcpTranscribeMutation.isPending) ||
-                    showContinueButton
+                  agentProgress && !mcpTranscribeMutation.isPending
                     ? "opacity-30"
                     : "opacity-100",
                 )}

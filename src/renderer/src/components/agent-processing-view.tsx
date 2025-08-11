@@ -45,7 +45,7 @@ export function AgentProcessingView({
 
       {/* Show a subtle background spinner when agent progress is active */}
       {agentProgress && showBackgroundSpinner && (
-        <div className="absolute inset-0 flex items-center justify-center opacity-20">
+        <div className="absolute inset-0 flex items-center justify-center opacity-20 pointer-events-none">
           <Spinner />
         </div>
       )}

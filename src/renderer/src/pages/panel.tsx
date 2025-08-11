@@ -491,13 +491,11 @@ export function Component() {
 
               {/* Agent progress overlay - left-aligned and full coverage */}
               {agentProgress && !mcpTranscribeMutation.isPending && (
-                <div className="absolute inset-0 z-20">
-                  <AgentProgress
-                    progress={agentProgress}
-                    variant="overlay"
-                    className="w-full h-full"
-                  />
-                </div>
+                <AgentProgress
+                  progress={agentProgress}
+                  variant="overlay"
+                  className="absolute inset-0 z-20"
+                />
               )}
 
               {/* Waveform visualization - right-aligned, dimmed when agent progress is showing */}

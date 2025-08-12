@@ -100,7 +100,7 @@ export function Component() {
                 })
               }}
             >
-              <SelectTrigger>
+              <SelectTrigger title="Choose which provider to use for speech-to-text transcription">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -111,9 +111,6 @@ export function Component() {
                 ))}
               </SelectContent>
             </Select>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Choose which provider to use for speech-to-text transcription
-            </p>
           </Control>
 
           <Control label="Transcript Post-Processing Provider" className="px-3">
@@ -127,7 +124,7 @@ export function Component() {
                 })
               }}
             >
-              <SelectTrigger>
+              <SelectTrigger title="Choose which provider to use for transcript post-processing">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -138,9 +135,6 @@ export function Component() {
                 ))}
               </SelectContent>
             </Select>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Choose which provider to use for transcript post-processing
-            </p>
           </Control>
 
           <Control label="Agent/MCP Tools Provider" className="px-3">
@@ -152,7 +146,7 @@ export function Component() {
                 })
               }}
             >
-              <SelectTrigger>
+              <SelectTrigger title="Choose which provider to use for agent mode and MCP tool calling">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -163,9 +157,6 @@ export function Component() {
                 ))}
               </SelectContent>
             </Select>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Choose which provider to use for agent mode and MCP tool calling
-            </p>
           </Control>
         </ControlGroup>
         <ControlGroup title="OpenAI">

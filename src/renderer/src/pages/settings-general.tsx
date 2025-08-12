@@ -386,7 +386,7 @@ export function Component() {
                 tipcClient.setPanelPosition({ position: value })
               }}
             >
-              <SelectTrigger className="w-[180px]">
+              <SelectTrigger className="w-[180px]" title="Choose where the floating panel appears on your screen. Enable dragging to move it by holding the top bar. Custom position: Panel can be dragged to any location and will remember its position.">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -409,21 +409,11 @@ export function Component() {
                   panelDragEnabled: value,
                 })
               }}
+              title="Enable dragging to move the panel by holding the top bar."
             />
           </Control>
 
-          <Control label="Description" className="px-3">
-            <div className="text-sm text-muted-foreground">
-              Choose where the floating panel appears on your screen. Enable
-              dragging to move it by holding the top bar.
-              {configQuery.data?.panelPosition === "custom" && (
-                <div className="mt-1 text-xs">
-                  Custom position: Panel can be dragged to any location and will
-                  remember its position.
-                </div>
-              )}
-            </div>
-          </Control>
+          
         </ControlGroup>
 
         {/* About Section */}

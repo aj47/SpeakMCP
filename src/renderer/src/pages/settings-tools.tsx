@@ -120,7 +120,7 @@ DOMAIN-SPECIFIC RULES:
                       value: "hold-ctrl-alt" | "ctrl-alt-slash" | "custom",
                     ) => updateConfig({ mcpToolsShortcut: value })}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger title="Choose how to activate MCP tool calling mode">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -142,9 +142,7 @@ DOMAIN-SPECIFIC RULES:
                     />
                   )}
 
-                  <p className="text-xs text-muted-foreground">
-                    Choose how to activate MCP tool calling mode
-                  </p>
+                  
                 </div>
 
                 <div className="flex items-center space-x-2">
@@ -154,13 +152,11 @@ DOMAIN-SPECIFIC RULES:
                     onCheckedChange={(checked) =>
                       updateConfig({ mcpAgentModeEnabled: checked })
                     }
+                    title="When enabled, the agent can see tool results and make follow-up tool calls until the task is complete"
                   />
                   <Label htmlFor="mcp-agent-mode">Enable Agent Mode</Label>
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  When enabled, the agent can see tool results and make
-                  follow-up tool calls until the task is complete
-                </p>
+                
 
                 <div className="flex items-center space-x-2">
                   <Switch
@@ -171,15 +167,13 @@ DOMAIN-SPECIFIC RULES:
                         mcpRequireApprovalBeforeToolCall: checked,
                       })
                     }
+                    title="Adds a confirmation dialog before any tool executes. Recommended for safety, especially in production environments."
                   />
                   <Label htmlFor="mcp-require-approval">
                     Require approval before each tool call
                   </Label>
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  Adds a confirmation dialog before any tool executes.
-                  Recommended for safety, especially in production environments.
-                </p>
+                
 
                 {config.mcpAgentModeEnabled && (
                   <>
@@ -198,12 +192,9 @@ DOMAIN-SPECIFIC RULES:
                           })
                         }
                         className="w-32"
+                        title="Maximum number of iterations the agent can perform before stopping. Higher values allow more complex tasks but may take longer."
                       />
-                      <p className="text-xs text-muted-foreground">
-                        Maximum number of iterations the agent can perform
-                        before stopping. Higher values allow more complex tasks
-                        but may take longer.
-                      </p>
+                      
                     </div>
 
                     <div className="space-y-4 rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-950/20">
@@ -214,6 +205,7 @@ DOMAIN-SPECIFIC RULES:
                           onCheckedChange={(checked) =>
                             updateConfig({ agentKillSwitchEnabled: checked })
                           }
+                          title="Provides a global hotkey to immediately stop agent mode and kill all agent-created processes"
                         />
                         <Label
                           htmlFor="agent-kill-switch"
@@ -270,10 +262,7 @@ DOMAIN-SPECIFIC RULES:
                             />
                           )}
 
-                          <p className="text-xs text-red-700 dark:text-red-300">
-                            Press this key combination to immediately stop the
-                            agent and kill all processes.
-                          </p>
+                          
                         </div>
                       )}
                     </div>
@@ -292,11 +281,7 @@ DOMAIN-SPECIFIC RULES:
                       />
                       <Label htmlFor="mcp-auto-paste">Auto-paste Results</Label>
                     </div>
-                    <p className="text-xs text-muted-foreground">
-                      Automatically paste the final result to the active input
-                      field. Disable if you prefer to manually paste from
-                      clipboard.
-                    </p>
+                    
 
                     {config.mcpAutoPasteEnabled !== false && (
                       <div className="space-y-2">
@@ -317,12 +302,9 @@ DOMAIN-SPECIFIC RULES:
                             })
                           }
                           className="w-32"
+                          title="Delay before pasting to allow you to return focus to the desired input field. Recommended: 1000ms (1 second)."
                         />
-                        <p className="text-xs text-muted-foreground">
-                          Delay before pasting to allow you to return focus to
-                          the desired input field. Recommended: 1000ms (1
-                          second).
-                        </p>
+                        
                       </div>
                     )}
                   </>
@@ -354,10 +336,7 @@ DOMAIN-SPECIFIC RULES:
                       Configure in Providers tab
                     </span>
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    Configure which LLM provider and model to use for tool
-                    calling decisions in the Providers tab.
-                  </p>
+                  
                 </div>
 
                 <div className="space-y-2">
@@ -371,12 +350,9 @@ DOMAIN-SPECIFIC RULES:
                     rows={8}
                     className="font-mono text-sm"
                     placeholder={defaultAdditionalGuidelines}
+                    title="Optional additional rules and guidelines for the AI agent. The base system prompt with tool usage instructions is automatically included."
                   />
-                  <p className="text-xs text-muted-foreground">
-                    Optional additional rules and guidelines for the AI agent.
-                    The base system prompt with tool usage instructions is
-                    automatically included.
-                  </p>
+                  
                   <div className="flex gap-2">
                     <Button
                       variant="outline"

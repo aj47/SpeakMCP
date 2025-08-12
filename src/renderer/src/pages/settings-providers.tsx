@@ -1,5 +1,5 @@
 import { useCallback } from "react"
-import { Control, ControlGroup } from "@renderer/components/ui/control"
+import { Control, ControlGroup, ControlLabel } from "@renderer/components/ui/control"
 import { Input } from "@renderer/components/ui/input"
 import {
   Select,
@@ -91,7 +91,7 @@ export function Component() {
 
       <div className="grid gap-4">
         <ControlGroup title="Provider Selection">
-          <Control label="Voice Transcription Provider" className="px-3">
+          <Control label={<ControlLabel label="Voice Transcription Provider" tooltip="Choose which provider to use for speech-to-text transcription" />} className="px-3">
             <Select
               value={configQuery.data.sttProviderId || "openai"}
               onValueChange={(value) => {
@@ -100,7 +100,7 @@ export function Component() {
                 })
               }}
             >
-              <SelectTrigger title="Choose which provider to use for speech-to-text transcription">
+              <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -113,7 +113,7 @@ export function Component() {
             </Select>
           </Control>
 
-          <Control label="Transcript Post-Processing Provider" className="px-3">
+          <Control label={<ControlLabel label="Transcript Post-Processing Provider" tooltip="Choose which provider to use for transcript post-processing" />} className="px-3">
             <Select
               value={
                 configQuery.data.transcriptPostProcessingProviderId || "openai"
@@ -124,7 +124,7 @@ export function Component() {
                 })
               }}
             >
-              <SelectTrigger title="Choose which provider to use for transcript post-processing">
+              <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -137,7 +137,7 @@ export function Component() {
             </Select>
           </Control>
 
-          <Control label="Agent/MCP Tools Provider" className="px-3">
+          <Control label={<ControlLabel label="Agent/MCP Tools Provider" tooltip="Choose which provider to use for agent mode and MCP tool calling" />} className="px-3">
             <Select
               value={configQuery.data.mcpToolsProviderId || "openai"}
               onValueChange={(value) => {
@@ -146,7 +146,7 @@ export function Component() {
                 })
               }}
             >
-              <SelectTrigger title="Choose which provider to use for agent mode and MCP tool calling">
+              <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>

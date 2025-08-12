@@ -1,4 +1,4 @@
-import { Control, ControlGroup } from "@renderer/components/ui/control"
+import { Control, ControlGroup, ControlLabel } from "@renderer/components/ui/control"
 import {
   Select,
   SelectContent,
@@ -366,7 +366,7 @@ export function Component() {
 
         {/* Panel Position Settings */}
         <ControlGroup title="Panel Position">
-          <Control label="Default Position" className="px-3">
+          <Control label={<ControlLabel label="Default Position" tooltip="Choose where the floating panel appears on your screen. Custom position: Panel can be dragged to any location and will remember its position." />} className="px-3">
             <Select
               value={configQuery.data?.panelPosition || "top-right"}
               onValueChange={(
@@ -386,7 +386,7 @@ export function Component() {
                 tipcClient.setPanelPosition({ position: value })
               }}
             >
-              <SelectTrigger className="w-[180px]" title="Choose where the floating panel appears on your screen. Enable dragging to move it by holding the top bar. Custom position: Panel can be dragged to any location and will remember its position.">
+              <SelectTrigger className="w-[180px]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -401,7 +401,7 @@ export function Component() {
             </Select>
           </Control>
 
-          <Control label="Enable Dragging" className="px-3">
+          <Control label={<ControlLabel label="Enable Dragging" tooltip="Enable dragging to move the panel by holding the top bar." />} className="px-3">
             <Switch
               defaultChecked={configQuery.data?.panelDragEnabled ?? true}
               onCheckedChange={(value) => {
@@ -409,11 +409,10 @@ export function Component() {
                   panelDragEnabled: value,
                 })
               }}
-              title="Enable dragging to move the panel by holding the top bar."
             />
           </Control>
 
-          
+
         </ControlGroup>
 
         {/* About Section */}

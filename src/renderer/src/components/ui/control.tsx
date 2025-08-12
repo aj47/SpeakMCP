@@ -40,13 +40,20 @@ export const ControlLabel = ({
   return (
     <div className="flex items-center gap-2">
       <span className="text-sm font-medium">{label}</span>
-      <TooltipProvider>
+      <TooltipProvider delayDuration={0} disableHoverableContent>
         <Tooltip>
           <TooltipTrigger asChild>
             <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help hover:text-foreground transition-colors" />
           </TooltipTrigger>
-          <TooltipContent>
-            <p className="max-w-xs">{tooltip}</p>
+          <TooltipContent
+            side="right"
+            align="start"
+            collisionPadding={20}
+            avoidCollisions={true}
+            sideOffset={8}
+            className="z-[99999] max-w-xs"
+          >
+            <p>{tooltip}</p>
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>

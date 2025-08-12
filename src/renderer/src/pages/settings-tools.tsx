@@ -13,12 +13,57 @@ import {
   SelectValue,
 } from "@renderer/components/ui/select"
 import { Textarea } from "@renderer/components/ui/textarea"
-import { Save } from "lucide-react"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@renderer/components/ui/tooltip"
+import { Save, Info } from "lucide-react"
 import { useState, useEffect } from "react"
 
 import { CHAT_PROVIDERS } from "@shared/index"
 import { Config } from "@shared/types"
 
+// Helper component for labels with tooltips
+const LabelWithTooltip = ({
+  htmlFor,
+  children,
+  tooltip,
+  className
+}: {
+  htmlFor?: string
+  children: React.ReactNode
+  tooltip?: string
+  className?: string
+}) => {
+  if (!tooltip) {
+    return <Label htmlFor={htmlFor} className={className}>{children}</Label>
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      <Label htmlFor={htmlFor} className={className}>{children}</Label>
+      <TooltipProvider delayDuration={0} disableHoverableContent>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help hover:text-foreground transition-colors" />
+          </TooltipTrigger>
+          <TooltipContent
+            side="right"
+            align="start"
+            collisionPadding={20}
+            avoidCollisions={true}
+            sideOffset={8}
+            className="z-[99999] max-w-xs"
+          >
+            <p>{tooltip}</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    </div>
+  )
+}
 
 import { KeyRecorder } from "@renderer/components/key-recorder"
 
@@ -113,14 +158,14 @@ DOMAIN-SPECIFIC RULES:
             {config.mcpToolsEnabled && (
               <>
                 <div className="space-y-2">
-                  <Label htmlFor="mcp-shortcut">Shortcut</Label>
+                  <LabelWithTooltip htmlFor="mcp-shortcut" tooltip="Choose how to activate MCP tool calling mode">Shortcut</LabelWithTooltip>
                   <Select
                     value={config.mcpToolsShortcut || "hold-ctrl-alt"}
                     onValueChange={(
                       value: "hold-ctrl-alt" | "ctrl-alt-slash" | "custom",
                     ) => updateConfig({ mcpToolsShortcut: value })}
                   >
-                    <SelectTrigger title="Choose how to activate MCP tool calling mode">
+                    <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -142,7 +187,7 @@ DOMAIN-SPECIFIC RULES:
                     />
                   )}
 
-                  
+
                 </div>
 
                 <div className="flex items-center space-x-2">
@@ -152,11 +197,10 @@ DOMAIN-SPECIFIC RULES:
                     onCheckedChange={(checked) =>
                       updateConfig({ mcpAgentModeEnabled: checked })
                     }
-                    title="When enabled, the agent can see tool results and make follow-up tool calls until the task is complete"
                   />
-                  <Label htmlFor="mcp-agent-mode">Enable Agent Mode</Label>
+                  <LabelWithTooltip htmlFor="mcp-agent-mode" tooltip="When enabled, the agent can see tool results and make follow-up tool calls until the task is complete">Enable Agent Mode</LabelWithTooltip>
                 </div>
-                
+
 
                 <div className="flex items-center space-x-2">
                   <Switch
@@ -167,18 +211,17 @@ DOMAIN-SPECIFIC RULES:
                         mcpRequireApprovalBeforeToolCall: checked,
                       })
                     }
-                    title="Adds a confirmation dialog before any tool executes. Recommended for safety, especially in production environments."
                   />
-                  <Label htmlFor="mcp-require-approval">
+                  <LabelWithTooltip htmlFor="mcp-require-approval" tooltip="Adds a confirmation dialog before any tool executes. Recommended for safety, especially in production environments.">
                     Require approval before each tool call
-                  </Label>
+                  </LabelWithTooltip>
                 </div>
-                
+
 
                 {config.mcpAgentModeEnabled && (
                   <>
                     <div className="space-y-2">
-                      <Label htmlFor="mcp-max-iterations">Max Iterations</Label>
+                      <LabelWithTooltip htmlFor="mcp-max-iterations" tooltip="Maximum number of iterations the agent can perform before stopping. Higher values allow more complex tasks but may take longer.">Max Iterations</LabelWithTooltip>
                       <Input
                         id="mcp-max-iterations"
                         type="number"
@@ -192,9 +235,8 @@ DOMAIN-SPECIFIC RULES:
                           })
                         }
                         className="w-32"
-                        title="Maximum number of iterations the agent can perform before stopping. Higher values allow more complex tasks but may take longer."
                       />
-                      
+
                     </div>
 
                     <div className="space-y-4 rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-950/20">
@@ -205,14 +247,14 @@ DOMAIN-SPECIFIC RULES:
                           onCheckedChange={(checked) =>
                             updateConfig({ agentKillSwitchEnabled: checked })
                           }
-                          title="Provides a global hotkey to immediately stop agent mode and kill all agent-created processes"
                         />
-                        <Label
+                        <LabelWithTooltip
                           htmlFor="agent-kill-switch"
                           className="font-medium text-red-800 dark:text-red-200"
+                          tooltip="Provides a global hotkey to immediately stop agent mode and kill all agent-created processes"
                         >
                           Enable Emergency Kill Switch
-                        </Label>
+                        </LabelWithTooltip>
                       </div>
                       <p className="text-xs text-red-700 dark:text-red-300">
                         Provides a global hotkey to immediately stop agent mode
@@ -262,7 +304,7 @@ DOMAIN-SPECIFIC RULES:
                             />
                           )}
 
-                          
+
                         </div>
                       )}
                     </div>
@@ -281,13 +323,13 @@ DOMAIN-SPECIFIC RULES:
                       />
                       <Label htmlFor="mcp-auto-paste">Auto-paste Results</Label>
                     </div>
-                    
+
 
                     {config.mcpAutoPasteEnabled !== false && (
                       <div className="space-y-2">
-                        <Label htmlFor="mcp-paste-delay">
+                        <LabelWithTooltip htmlFor="mcp-paste-delay" tooltip="Delay before pasting to allow you to return focus to the desired input field. Recommended: 1000ms (1 second).">
                           Auto-paste Delay (ms)
-                        </Label>
+                        </LabelWithTooltip>
                         <Input
                           id="mcp-paste-delay"
                           type="number"
@@ -302,9 +344,8 @@ DOMAIN-SPECIFIC RULES:
                             })
                           }
                           className="w-32"
-                          title="Delay before pasting to allow you to return focus to the desired input field. Recommended: 1000ms (1 second)."
                         />
-                        
+
                       </div>
                     )}
                   </>
@@ -336,13 +377,13 @@ DOMAIN-SPECIFIC RULES:
                       Configure in Providers tab
                     </span>
                   </div>
-                  
+
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="mcp-additional-guidelines">
+                  <LabelWithTooltip htmlFor="mcp-additional-guidelines" tooltip="Optional additional rules and guidelines for the AI agent. The base system prompt with tool usage instructions is automatically included.">
                     Additional Guidelines
-                  </Label>
+                  </LabelWithTooltip>
                   <Textarea
                     id="mcp-additional-guidelines"
                     value={additionalGuidelines}
@@ -350,9 +391,8 @@ DOMAIN-SPECIFIC RULES:
                     rows={8}
                     className="font-mono text-sm"
                     placeholder={defaultAdditionalGuidelines}
-                    title="Optional additional rules and guidelines for the AI agent. The base system prompt with tool usage instructions is automatically included."
                   />
-                  
+
                   <div className="flex gap-2">
                     <Button
                       variant="outline"

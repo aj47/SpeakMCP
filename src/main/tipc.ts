@@ -23,7 +23,6 @@ import {
   MCPConfig,
   MCPServerConfig,
   Conversation,
-  ConversationHistoryItem,
 } from "../shared/types"
 import { conversationService } from "./conversation-service"
 import { RendererHandlers } from "./renderer-handlers"
@@ -40,6 +39,11 @@ import {
   PanelPosition,
 } from "./panel-position"
 import { state, agentProcessManager } from "./state"
+import { dynamicToolManager } from "./dynamic-tool-manager"
+import {
+  ToolControlRequest,
+  DynamicToolManagerConfig
+} from "../shared/types"
 
 // Unified agent mode processing function
 async function processWithAgentMode(
@@ -1032,6 +1036,89 @@ export const router = {
     .action(async ({ input }) => {
       return mcpService.stopServer(input.serverName)
     }),
+
+  // Dynamic Tool Management endpoints
+  getDynamicToolStates: t.procedure.action(async () => {
+    return dynamicToolManager.getAllToolStates()
+  }),
+
+  getDynamicToolState: t.procedure
+    .input<{ toolName: string }>()
+    .action(async ({ input }) => {
+      const state = dynamicToolManager.getToolState(input.toolName)
+      if (!state) {
+        throw new Error(`Tool not found: ${input.toolName}`)
+      }
+      return state
+    }),
+
+  processToolControlRequest: t.procedure
+    .input<ToolControlRequest>()
+    .action(async ({ input }) => {
+      return dynamicToolManager.processToolControlRequest(input)
+    }),
+
+  getDynamicToolManagerConfig: t.procedure.action(async () => {
+    const config = configStore.get()
+    return config.dynamicToolManagerConfig || {}
+  }),
+
+  updateDynamicToolManagerConfig: t.procedure
+    .input<{ config: Partial<DynamicToolManagerConfig> }>()
+    .action(async ({ input }) => {
+      const currentConfig = configStore.get()
+
+      // Get the current dynamic tool manager config or use defaults
+      const currentDynamicConfig = currentConfig.dynamicToolManagerConfig || {
+        enableAgentToolControl: true,
+        defaultToolPermissions: {
+          canBeDisabledByAgent: true,
+          canBeEnabledByAgent: true,
+          requiresApproval: false,
+          maxDisableDuration: 30 * 60 * 1000,
+          allowedOperations: ['enable', 'disable', 'query'] as const,
+        },
+        auditLogging: true,
+        maxTemporaryDisableDuration: 60 * 60 * 1000,
+        allowedAgentOperations: ['enable', 'disable', 'query'] as const,
+      }
+
+      // Filter out undefined values from the input config
+      const filteredConfig = Object.fromEntries(
+        Object.entries(input.config).filter(([_, value]) => value !== undefined)
+      )
+
+      const newConfig = {
+        ...currentConfig,
+        dynamicToolManagerConfig: {
+          ...currentDynamicConfig,
+          ...filteredConfig,
+        } as DynamicToolManagerConfig,
+      }
+      configStore.save(newConfig)
+      return { success: true }
+    }),
+
+  getToolUsageStats: t.procedure
+    .input<{ toolName: string }>()
+    .action(async ({ input }) => {
+      const state = dynamicToolManager.getToolState(input.toolName)
+      if (!state) {
+        throw new Error(`Tool not found: ${input.toolName}`)
+      }
+      return state.usageStats
+    }),
+
+  getToolAuditLog: t.procedure
+    .input<{ limit?: number }>()
+    .action(async ({ input }) => {
+      return dynamicToolManager.getAuditLog(input.limit || 100)
+    }),
+
+  cleanupExpiredToolDisables: t.procedure.action(async () => {
+    dynamicToolManager.cleanupExpiredDisables()
+    return { success: true }
+  }),
 
   // Models Management
   fetchAvailableModels: t.procedure

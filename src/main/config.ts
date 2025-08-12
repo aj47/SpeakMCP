@@ -1,7 +1,7 @@
 import { app } from "electron"
 import path from "path"
 import fs from "fs"
-import { Config } from "@shared/types"
+import { Config, DynamicToolManagerConfig } from "@shared/types"
 
 export const dataFolder = path.join(app.getPath("appData"), process.env.APP_ID)
 
@@ -12,6 +12,20 @@ export const conversationsFolder = path.join(dataFolder, "conversations")
 export const configPath = path.join(dataFolder, "config.json")
 
 const getConfig = () => {
+  const defaultDynamicToolManagerConfig: DynamicToolManagerConfig = {
+    enableAgentToolControl: true,
+    defaultToolPermissions: {
+      canBeDisabledByAgent: true,
+      canBeEnabledByAgent: true,
+      requiresApproval: false,
+      maxDisableDuration: 30 * 60 * 1000, // 30 minutes
+      allowedOperations: ['enable', 'disable', 'query'],
+    },
+    auditLogging: true,
+    maxTemporaryDisableDuration: 60 * 60 * 1000, // 1 hour
+    allowedAgentOperations: ['enable', 'disable', 'query'],
+  }
+
   const defaultConfig: Partial<Config> = {
     mcpToolsShortcut: "hold-ctrl-alt",
     mcpToolsEnabled: true,
@@ -36,6 +50,9 @@ const getConfig = () => {
     customMcpToolsShortcut: "",
     // Persisted MCP runtime state
     mcpRuntimeDisabledServers: [],
+    // Dynamic tool management defaults
+    dynamicToolManagerConfig: defaultDynamicToolManagerConfig,
+    dynamicToolStates: {},
     // Panel position defaults
     panelPosition: "top-right",
     panelDragEnabled: true,

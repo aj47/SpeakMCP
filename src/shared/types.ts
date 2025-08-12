@@ -31,6 +31,62 @@ export interface MCPConfig {
   mcpServers: Record<string, MCPServerConfig>
 }
 
+// Dynamic Tool Management Types
+export interface ToolPermissions {
+  canBeDisabledByAgent: boolean
+  canBeEnabledByAgent: boolean
+  requiresApproval: boolean
+  maxDisableDuration?: number // in milliseconds
+  allowedOperations: ('enable' | 'disable' | 'query')[]
+}
+
+export interface ToolUsageStats {
+  totalCalls: number
+  successfulCalls: number
+  failedCalls: number
+  lastUsed: number
+  averageExecutionTime: number
+  firstUsed: number
+}
+
+export interface DynamicToolState {
+  toolName: string
+  serverName: string
+  enabled: boolean
+  dynamicallyControlled: boolean
+  lastModified: number
+  modifiedBy: 'user' | 'agent' | 'system'
+  permissions: ToolPermissions
+  usageStats: ToolUsageStats
+  temporaryDisableUntil?: number // timestamp when temporary disable expires
+  disableReason?: string
+}
+
+export interface ToolControlRequest {
+  toolName: string
+  action: 'enable' | 'disable' | 'query'
+  reason?: string
+  duration?: number // for temporary disable
+  requestedBy: 'user' | 'agent' | 'system'
+}
+
+export interface ToolControlResponse {
+  success: boolean
+  toolName: string
+  newState?: boolean
+  error?: string
+  requiresApproval?: boolean
+  approvalToken?: string
+}
+
+export interface DynamicToolManagerConfig {
+  enableAgentToolControl: boolean
+  defaultToolPermissions: ToolPermissions
+  auditLogging: boolean
+  maxTemporaryDisableDuration: number
+  allowedAgentOperations: ('enable' | 'disable' | 'query')[]
+}
+
 // Agent Mode Progress Tracking Types
 export interface AgentProgressStep {
   id: string
@@ -179,6 +235,12 @@ export type Config = {
 
   // Persisted MCP runtime state: servers the user explicitly stopped (do not auto-start)
   mcpRuntimeDisabledServers?: string[]
+
+  // Dynamic Tool Management Configuration
+  dynamicToolManagerConfig?: DynamicToolManagerConfig
+
+  // Persisted dynamic tool states
+  dynamicToolStates?: Record<string, DynamicToolState>
 
   // Conversation Configuration
   conversationsEnabled?: boolean

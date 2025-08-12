@@ -18,6 +18,7 @@ import { diagnosticsService } from "./diagnostics"
 import { state, agentProcessManager } from "./state"
 import { isDebugTools, logTools } from "./debug"
 import { dialog } from "electron"
+import { dynamicToolManager } from "./dynamic-tool-manager"
 
 const accessAsync = promisify(access)
 
@@ -88,6 +89,8 @@ export class MCPService {
     this.sessionCleanupInterval = setInterval(
       () => {
         this.cleanupInactiveResources()
+        // Also cleanup expired temporary tool disables
+        dynamicToolManager.cleanupExpiredDisables()
       },
       5 * 60 * 1000,
     )
@@ -209,6 +212,12 @@ export class MCPService {
       logTools("MCP Service initialization starting")
     }
 
+    // Always initialize with empty tools array
+    this.availableTools = []
+
+    // Add built-in tool management tools (always available)
+    this.addToolManagerTools()
+
     if (
       !mcpConfig ||
       !mcpConfig.mcpServers ||
@@ -217,7 +226,6 @@ export class MCPService {
       if (isDebugTools()) {
         logTools("MCP Service initialization complete - no servers configured")
       }
-      this.availableTools = []
       this.isInitializing = false
       this.hasBeenInitialized = true
       return
@@ -421,11 +429,17 @@ export class MCPService {
 
       // Add tools to our registry with server prefix
       for (const tool of toolsResult.tools) {
+        const toolName = `${serverName}:${tool.name}`
+
         this.availableTools.push({
-          name: `${serverName}:${tool.name}`,
+          name: toolName,
           description: tool.description || `Tool from ${serverName} server`,
           inputSchema: tool.inputSchema,
         })
+
+        // Initialize dynamic tool state
+        const isSystemTool = this.isSystemTool(toolName)
+        dynamicToolManager.initializeToolState(toolName, serverName, isSystemTool)
       }
 
       // Store references
@@ -536,6 +550,222 @@ export class MCPService {
     return !this.runtimeDisabledServers.has(serverName)
   }
 
+  /**
+   * Execute a tool manager tool
+   */
+  private async executeToolManagerTool(
+    toolName: string,
+    arguments_: any,
+  ): Promise<MCPToolResult> {
+    const startTime = Date.now()
+    const fullToolName = `tool_manager:${toolName}`
+
+    try {
+      let result: any
+
+      switch (toolName) {
+        case "list_tools":
+          result = await this.handleListTools(arguments_)
+          break
+        case "get_tool_status":
+          result = await this.handleGetToolStatus(arguments_)
+          break
+        case "enable_tool":
+          result = await this.handleEnableTool(arguments_)
+          break
+        case "disable_tool":
+          result = await this.handleDisableTool(arguments_)
+          break
+        case "get_tool_permissions":
+          result = await this.handleGetToolPermissions(arguments_)
+          break
+        case "get_tool_usage_stats":
+          result = await this.handleGetToolUsageStats(arguments_)
+          break
+        default:
+          throw new Error(`Unknown tool manager tool: ${toolName}`)
+      }
+
+      const executionTime = Date.now() - startTime
+      dynamicToolManager.recordToolUsage(fullToolName, true, executionTime)
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: typeof result === "string" ? result : JSON.stringify(result, null, 2),
+          },
+        ],
+        isError: false,
+      }
+    } catch (error) {
+      const executionTime = Date.now() - startTime
+      dynamicToolManager.recordToolUsage(fullToolName, false, executionTime)
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Error: ${error instanceof Error ? error.message : String(error)}`,
+          },
+        ],
+        isError: true,
+      }
+    }
+  }
+
+  /**
+   * Handle list_tools tool manager command
+   */
+  private async handleListTools(args: any) {
+    const { includeDisabled = true, serverFilter } = args || {}
+
+    // Get all available tools from MCP service
+    const allTools = this.getDetailedToolList()
+
+    // Filter tools based on parameters
+    let filteredTools = allTools
+
+    if (!includeDisabled) {
+      filteredTools = filteredTools.filter(tool => tool.enabled)
+    }
+
+    if (serverFilter) {
+      filteredTools = filteredTools.filter(tool => tool.serverName === serverFilter)
+    }
+
+    // Enhance with dynamic tool manager information
+    const enhancedTools = filteredTools.map(tool => {
+      const dynamicState = dynamicToolManager.getToolState(tool.name)
+      return {
+        ...tool,
+        dynamicallyControlled: dynamicState?.dynamicallyControlled || false,
+        permissions: dynamicState?.permissions,
+        usageStats: dynamicState?.usageStats,
+        temporaryDisableUntil: dynamicState?.temporaryDisableUntil,
+        disableReason: dynamicState?.disableReason,
+      }
+    })
+
+    return {
+      totalTools: enhancedTools.length,
+      enabledTools: enhancedTools.filter(t => t.enabled).length,
+      disabledTools: enhancedTools.filter(t => !t.enabled).length,
+      tools: enhancedTools,
+    }
+  }
+
+  /**
+   * Handle get_tool_status tool manager command
+   */
+  private async handleGetToolStatus(args: any) {
+    const { toolName } = args
+
+    if (!toolName) {
+      throw new Error("toolName is required")
+    }
+
+    const dynamicState = dynamicToolManager.getToolState(toolName)
+    if (!dynamicState) {
+      throw new Error(`Tool not found: ${toolName}`)
+    }
+
+    const toolInfo = this.getDetailedToolList().find(t => t.name === toolName)
+    if (!toolInfo) {
+      throw new Error(`Tool not found in MCP service: ${toolName}`)
+    }
+
+    return {
+      ...toolInfo,
+      ...dynamicState,
+      isTemporarilyDisabled: dynamicState.temporaryDisableUntil ?
+        Date.now() < dynamicState.temporaryDisableUntil : false,
+    }
+  }
+
+  /**
+   * Handle enable_tool tool manager command
+   */
+  private async handleEnableTool(args: any) {
+    const { toolName, reason } = args
+
+    if (!toolName) {
+      throw new Error("toolName is required")
+    }
+
+    return await dynamicToolManager.processToolControlRequest({
+      toolName,
+      action: 'enable',
+      reason,
+      requestedBy: 'agent',
+    })
+  }
+
+  /**
+   * Handle disable_tool tool manager command
+   */
+  private async handleDisableTool(args: any) {
+    const { toolName, reason, duration } = args
+
+    if (!toolName) {
+      throw new Error("toolName is required")
+    }
+
+    return await dynamicToolManager.processToolControlRequest({
+      toolName,
+      action: 'disable',
+      reason,
+      duration,
+      requestedBy: 'agent',
+    })
+  }
+
+  /**
+   * Handle get_tool_permissions tool manager command
+   */
+  private async handleGetToolPermissions(args: any) {
+    const { toolName } = args
+
+    if (!toolName) {
+      throw new Error("toolName is required")
+    }
+
+    const dynamicState = dynamicToolManager.getToolState(toolName)
+    if (!dynamicState) {
+      throw new Error(`Tool not found: ${toolName}`)
+    }
+
+    return {
+      toolName,
+      permissions: dynamicState.permissions,
+      currentlyEnabled: dynamicState.enabled,
+      dynamicallyControlled: dynamicState.dynamicallyControlled,
+    }
+  }
+
+  /**
+   * Handle get_tool_usage_stats tool manager command
+   */
+  private async handleGetToolUsageStats(args: any) {
+    const { toolName } = args
+
+    if (!toolName) {
+      throw new Error("toolName is required")
+    }
+
+    const dynamicState = dynamicToolManager.getToolState(toolName)
+    if (!dynamicState) {
+      throw new Error(`Tool not found: ${toolName}`)
+    }
+
+    return {
+      toolName,
+      usageStats: dynamicState.usageStats,
+      lastModified: dynamicState.lastModified,
+      modifiedBy: dynamicState.modifiedBy,
+    }
+  }
+
   private async executeServerTool(
     serverName: string,
     toolName: string,
@@ -545,6 +775,9 @@ export class MCPService {
     if (!client) {
       throw new Error(`Server ${serverName} not found or not connected`)
     }
+
+    const fullToolName = `${serverName}:${toolName}`
+    const startTime = Date.now()
 
     // Enhanced argument processing with session injection
     let processedArguments = { ...arguments_ }
@@ -601,6 +834,10 @@ export class MCPService {
         logTools("Normalized tool result", finalResult)
       }
 
+      // Record successful tool usage
+      const executionTime = Date.now() - startTime
+      dynamicToolManager.recordToolUsage(fullToolName, true, executionTime)
+
       return finalResult
     } catch (error) {
       // Check if this is a parameter naming issue and try to fix it
@@ -647,6 +884,10 @@ export class MCPService {
                     },
                   ]
 
+              // Record successful retry
+              const retryExecutionTime = Date.now() - startTime
+              dynamicToolManager.recordToolUsage(fullToolName, true, retryExecutionTime)
+
               return {
                 content: retryContent,
                 isError: Boolean(retryResult.isError),
@@ -657,6 +898,10 @@ export class MCPService {
           }
         }
       }
+
+      // Record failed tool usage
+      const errorExecutionTime = Date.now() - startTime
+      dynamicToolManager.recordToolUsage(fullToolName, false, errorExecutionTime)
 
       return {
         content: [
@@ -716,10 +961,152 @@ export class MCPService {
     return fixed
   }
 
+  /**
+   * Add built-in tool management tools to the available tools list
+   */
+  private addToolManagerTools(): void {
+    const toolManagerTools = [
+      {
+        name: "tool_manager:list_tools",
+        description: "List all available MCP tools and their current status",
+        inputSchema: {
+          type: "object",
+          properties: {
+            includeDisabled: {
+              type: "boolean",
+              description: "Whether to include disabled tools in the list",
+              default: true,
+            },
+            serverFilter: {
+              type: "string",
+              description: "Optional server name to filter tools by",
+            },
+          },
+        },
+      },
+      {
+        name: "tool_manager:get_tool_status",
+        description: "Get detailed status information for a specific tool",
+        inputSchema: {
+          type: "object",
+          properties: {
+            toolName: {
+              type: "string",
+              description: "Full name of the tool (including server prefix)",
+            },
+          },
+          required: ["toolName"],
+        },
+      },
+      {
+        name: "tool_manager:enable_tool",
+        description: "Enable a specific MCP tool",
+        inputSchema: {
+          type: "object",
+          properties: {
+            toolName: {
+              type: "string",
+              description: "Full name of the tool to enable (including server prefix)",
+            },
+            reason: {
+              type: "string",
+              description: "Optional reason for enabling the tool",
+            },
+          },
+          required: ["toolName"],
+        },
+      },
+      {
+        name: "tool_manager:disable_tool",
+        description: "Disable a specific MCP tool",
+        inputSchema: {
+          type: "object",
+          properties: {
+            toolName: {
+              type: "string",
+              description: "Full name of the tool to disable (including server prefix)",
+            },
+            reason: {
+              type: "string",
+              description: "Reason for disabling the tool",
+            },
+            duration: {
+              type: "number",
+              description: "Optional duration in milliseconds for temporary disable",
+            },
+          },
+          required: ["toolName"],
+        },
+      },
+      {
+        name: "tool_manager:get_tool_permissions",
+        description: "Check what operations are allowed for a specific tool",
+        inputSchema: {
+          type: "object",
+          properties: {
+            toolName: {
+              type: "string",
+              description: "Full name of the tool (including server prefix)",
+            },
+          },
+          required: ["toolName"],
+        },
+      },
+      {
+        name: "tool_manager:get_tool_usage_stats",
+        description: "Get usage statistics for a specific tool",
+        inputSchema: {
+          type: "object",
+          properties: {
+            toolName: {
+              type: "string",
+              description: "Full name of the tool (including server prefix)",
+            },
+          },
+          required: ["toolName"],
+        },
+      },
+    ]
+
+    // Add tool manager tools to available tools
+    for (const tool of toolManagerTools) {
+      this.availableTools.push(tool)
+
+      // Initialize dynamic tool state for tool manager tools (they are system tools)
+      dynamicToolManager.initializeToolState(tool.name, "tool_manager", true)
+    }
+
+    if (isDebugTools()) {
+      logTools(`Added ${toolManagerTools.length} tool manager tools`)
+    }
+  }
+
+  /**
+   * Check if a tool is considered a system tool that should have restricted permissions
+   */
+  private isSystemTool(toolName: string): boolean {
+    // Define patterns for system tools that should not be controlled by agents
+    const systemToolPatterns = [
+      /^tool_manager:/,  // Our own tool management tools
+      /^system:/,        // System namespace tools
+      /^admin:/,         // Admin namespace tools
+    ]
+
+    return systemToolPatterns.some(pattern => pattern.test(toolName))
+  }
+
   getAvailableTools(): MCPTool[] {
-    const enabledTools = this.availableTools.filter(
-      (tool) => !this.disabledTools.has(tool.name),
-    )
+    // Filter tools based on both legacy disabled tools and dynamic tool manager
+    const enabledTools = this.availableTools.filter((tool) => {
+      // Check legacy disabled tools
+      if (this.disabledTools.has(tool.name)) {
+        return false
+      }
+
+      // Check dynamic tool manager state
+      return dynamicToolManager.isToolEnabled(tool.name)
+    })
+
     return enabledTools
   }
 
@@ -734,11 +1121,16 @@ export class MCPService {
       const serverName = tool.name.includes(":")
         ? tool.name.split(":")[0]
         : "unknown"
+
+      // Check both legacy disabled tools and dynamic tool manager state
+      const legacyDisabled = this.disabledTools.has(tool.name)
+      const dynamicallyEnabled = dynamicToolManager.isToolEnabled(tool.name)
+
       return {
         name: tool.name,
         description: tool.description,
         serverName,
-        enabled: !this.disabledTools.has(tool.name),
+        enabled: !legacyDisabled && dynamicallyEnabled,
         inputSchema: tool.inputSchema,
       }
     })
@@ -1083,6 +1475,12 @@ export class MCPService {
       // Check if this is a server-prefixed tool
       if (toolCall.name.includes(":")) {
         const [serverName, toolName] = toolCall.name.split(":", 2)
+
+        // Handle tool manager tools specially
+        if (serverName === "tool_manager") {
+          return await this.executeToolManagerTool(toolName, toolCall.arguments)
+        }
+
         const result = await this.executeServerTool(
           serverName,
           toolName,

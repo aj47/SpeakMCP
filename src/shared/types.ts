@@ -7,6 +7,28 @@ export type RecordingHistoryItem = {
   transcript: string
 }
 
+// Multimodal Content Types
+export interface ImageContent {
+  type: "image"
+  data: string // base64 encoded image data
+  mimeType: string // e.g., "image/jpeg", "image/png"
+  source: "screenshot" | "clipboard"
+}
+
+export interface TextContent {
+  type: "text"
+  text: string
+}
+
+export type MultimodalContent = TextContent | ImageContent
+
+export interface MultimodalMessage {
+  role: "user" | "assistant" | "system" | "tool"
+  content: string | MultimodalContent[]
+  toolCalls?: Array<{ name: string; arguments: any }>
+  toolResults?: Array<{ content: Array<{ type: string; text?: string }>; isError?: boolean }>
+}
+
 // MCP Server Configuration Types
 export type MCPTransportType = "stdio" | "websocket" | "streamableHttp"
 
@@ -196,4 +218,13 @@ export type Config = {
     | "custom"
   panelCustomPosition?: { x: number; y: number }
   panelDragEnabled?: boolean
+
+  // Visual Context Configuration
+  visualContextEnabled?: boolean
+  screenshotEnabled?: boolean
+  clipboardImageEnabled?: boolean
+  screenshotShortcut?: "ctrl-shift-s" | "custom"
+  customScreenshotShortcut?: string
+  screenshotQuality?: number // 0.1 to 1.0 for JPEG compression
+  maxImageSize?: number // Maximum image dimension in pixels
 }

@@ -17,6 +17,10 @@ export type RendererHandlers = {
   showTextInput: () => void
   hideTextInput: () => void
 
+  // Screenshot handlers
+  startScreenshotRecording: () => void
+  finishScreenshotRecording: () => void
+
   // Agent Mode Progress handlers
   agentProgressUpdate: (update: AgentProgressUpdate) => void
   clearAgentProgress: () => void

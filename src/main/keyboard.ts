@@ -2,6 +2,7 @@ import {
   getWindowRendererHandlers,
   showPanelWindowAndStartRecording,
   showPanelWindowAndStartMcpRecording,
+  showPanelWindowAndStartScreenshotRecording,
   showPanelWindowAndShowTextInput,
   stopRecordingAndHidePanelWindow,
   stopTextInputAndHidePanelWindow,
@@ -16,6 +17,7 @@ import { spawn, ChildProcess } from "child_process"
 import path from "path"
 import { matchesKeyCombo, getEffectiveShortcut } from "../shared/key-utils"
 import { isDebugKeybinds, logKeybinds } from "./debug"
+import { isVisualContextSupported } from "./screenshot-service"
 
 const rdevPath = path
   .join(
@@ -569,6 +571,60 @@ export function listenToKeyboardEvents() {
           }
           if (matches) {
             getWindowRendererHandlers("panel")?.startOrFinishMcpRecording.send()
+            return
+          }
+        }
+      }
+
+      // Handle screenshot shortcuts
+      if (config.visualContextEnabled && config.screenshotEnabled) {
+        const effectiveScreenshotShortcut = getEffectiveShortcut(
+          config.screenshotShortcut,
+          config.customScreenshotShortcut,
+        )
+
+        if (config.screenshotShortcut === "ctrl-shift-s") {
+          if (e.data.key === "KeyS" && isPressedCtrlKey && isPressedShiftKey) {
+            if (isDebugKeybinds()) {
+              logKeybinds("Screenshot triggered: Ctrl+Shift+S")
+            }
+            // Check if current provider supports vision
+            const currentProviderId = config.mcpToolsProviderId || "openai"
+            if (isVisualContextSupported(currentProviderId)) {
+              showPanelWindowAndStartScreenshotRecording()
+            } else {
+              if (isDebugKeybinds()) {
+                logKeybinds("Screenshot skipped: Provider does not support vision", currentProviderId)
+              }
+            }
+            return
+          }
+        } else if (config.screenshotShortcut === "custom" && effectiveScreenshotShortcut) {
+          const matches = matchesKeyCombo(
+            e.data,
+            {
+              ctrl: isPressedCtrlKey,
+              shift: isPressedShiftKey,
+              alt: isPressedAltKey,
+            },
+            effectiveScreenshotShortcut,
+          )
+          if (isDebugKeybinds() && matches) {
+            logKeybinds(
+              "Screenshot triggered: Custom hotkey",
+              effectiveScreenshotShortcut,
+            )
+          }
+          if (matches) {
+            // Check if current provider supports vision
+            const currentProviderId = config.mcpToolsProviderId || "openai"
+            if (isVisualContextSupported(currentProviderId)) {
+              showPanelWindowAndStartScreenshotRecording()
+            } else {
+              if (isDebugKeybinds()) {
+                logKeybinds("Screenshot skipped: Provider does not support vision", currentProviderId)
+              }
+            }
             return
           }
         }

@@ -41,6 +41,14 @@ const getConfig = () => {
     panelDragEnabled: true,
     // Theme preference defaults
     themePreference: "system",
+    // Visual context defaults
+    visualContextEnabled: false,
+    screenshotEnabled: false,
+    clipboardImageEnabled: false,
+    screenshotShortcut: "ctrl-shift-s",
+    customScreenshotShortcut: "",
+    screenshotQuality: 0.7,
+    maxImageSize: 1920,
   }
 
   try {

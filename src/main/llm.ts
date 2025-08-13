@@ -5,13 +5,13 @@ import {
   LLMToolCallResponse,
   MCPToolResult,
 } from "./mcp-service"
-import { AgentProgressStep, AgentProgressUpdate } from "../shared/types"
+import { AgentProgressStep, AgentProgressUpdate, MultimodalMessage } from "../shared/types"
 import { getRendererHandlers } from "@egoist/tipc/main"
 import { WINDOWS, showPanelWindow } from "./window"
 import { RendererHandlers } from "./renderer-handlers"
 import { diagnosticsService } from "./diagnostics"
 import { makeStructuredContextExtraction } from "./structured-output"
-import { makeLLMCallWithFetch, makeTextCompletionWithFetch } from "./llm-fetch"
+import { makeLLMCallWithFetch, makeTextCompletionWithFetch, makeMultimodalLLMCallWithFetch } from "./llm-fetch"
 import { constructSystemPrompt } from "./system-prompts"
 import { state } from "./state"
 import { isDebugLLM, logLLM, isDebugTools, logTools } from "./debug"
@@ -1209,6 +1209,275 @@ async function makeLLMCall(
     return result
   } catch (error) {
     diagnosticsService.logError("llm", "Agent LLM call failed", error)
+    throw error
+  }
+}
+
+/**
+ * Process multimodal transcript with agent mode
+ */
+export async function processMultimodalTranscriptWithAgentMode(
+  multimodalMessage: MultimodalMessage,
+  availableTools: MCPTool[],
+  executeToolCall: (toolCall: MCPToolCall) => Promise<MCPToolResult>,
+  maxIterations: number = 10,
+  conversationId?: string,
+): Promise<AgentModeResponse> {
+  const config = configStore.get()
+
+  if (!config.mcpToolsEnabled || !config.mcpAgentModeEnabled) {
+    // Fallback to simple processing without tools
+    const fallbackResponse = await processMultimodalTranscriptWithTools(
+      multimodalMessage,
+      availableTools,
+    )
+    return {
+      content: fallbackResponse.content || "",
+      conversationHistory: [
+        { role: "user", content: "Multimodal input with visual context" },
+        { role: "assistant", content: fallbackResponse.content || "" },
+      ],
+      totalIterations: 1,
+    }
+  }
+
+  const conversationHistory: Array<{
+    role: "user" | "assistant" | "tool"
+    content: string
+    toolCalls?: MCPToolCall[]
+    toolResults?: MCPToolResult[]
+  }> = []
+
+  // Add initial multimodal message to history
+  conversationHistory.push({
+    role: "user",
+    content: typeof multimodalMessage.content === "string"
+      ? multimodalMessage.content
+      : "Multimodal input with visual context",
+  })
+
+  let currentIteration = 0
+  let lastAssistantResponse = ""
+
+  while (currentIteration < maxIterations) {
+    currentIteration++
+
+    // Send progress update
+    const thinkingStep = {
+      id: `thinking-${currentIteration}`,
+      type: "thinking" as const,
+      title: `Iteration ${currentIteration}: Analyzing multimodal input...`,
+      description: "Processing visual and text content",
+      status: "in_progress" as const,
+      timestamp: Date.now(),
+    }
+
+    const progressUpdate: AgentProgressUpdate = {
+      currentIteration,
+      maxIterations,
+      steps: [thinkingStep],
+      isComplete: false,
+      conversationHistory: conversationHistory.map(msg => ({
+        role: msg.role,
+        content: msg.content,
+        timestamp: Date.now(),
+        toolCalls: msg.toolCalls?.map(tc => ({ name: tc.name, arguments: tc.arguments })),
+        toolResults: msg.toolResults?.map(tr => ({
+          success: !tr.isError,
+          content: tr.content.map(c => c.type === "text" ? c.text : "[Non-text content]").join("\n"),
+          error: tr.isError ? "Tool execution failed" : undefined
+        })),
+      })),
+    }
+
+    const panel = WINDOWS.get("panel")
+    if (panel) {
+      const panelHandlers = getRendererHandlers<RendererHandlers>(panel.webContents)
+      panelHandlers?.agentProgressUpdate.send(progressUpdate)
+    }
+
+    try {
+      // Build messages for LLM call
+      const messages: MultimodalMessage[] = []
+
+      // Add system prompt
+      messages.push({
+        role: "system",
+        content: constructSystemPrompt(availableTools),
+      })
+
+      // Add the initial multimodal message only on first iteration
+      if (currentIteration === 1) {
+        messages.push(multimodalMessage)
+      } else {
+        // For subsequent iterations, add conversation history as text
+        conversationHistory.forEach(msg => {
+          messages.push({
+            role: msg.role as "user" | "assistant" | "system",
+            content: msg.content,
+          })
+        })
+      }
+
+      // Make LLM call with multimodal support
+      const result = await makeMultimodalLLMCallWithFetch(messages, config.mcpToolsProviderId)
+
+      if (isDebugLLM()) {
+        logLLM("Multimodal Agent iteration", currentIteration, "result:", result)
+      }
+
+      lastAssistantResponse = result.content || ""
+
+      // Add assistant response to conversation history
+      conversationHistory.push({
+        role: "assistant",
+        content: result.content || "",
+        toolCalls: result.toolCalls,
+      })
+
+      // If no tool calls, we're done
+      if (!result.toolCalls || result.toolCalls.length === 0) {
+        break
+      }
+
+      // Execute tool calls
+      const toolResults: MCPToolResult[] = []
+      for (const toolCall of result.toolCalls) {
+        // Send progress update for tool execution
+        const toolStep = {
+          id: `tool-${currentIteration}-${toolCall.name}`,
+          type: "tool_call" as const,
+          title: `Executing tool: ${toolCall.name}`,
+          description: `Running ${toolCall.name} with provided arguments`,
+          status: "in_progress" as const,
+          timestamp: Date.now(),
+          toolCall: {
+            name: toolCall.name,
+            arguments: toolCall.arguments,
+          },
+        }
+
+        const toolProgressUpdate: AgentProgressUpdate = {
+          currentIteration,
+          maxIterations,
+          steps: [toolStep],
+          isComplete: false,
+          conversationHistory: conversationHistory.map(msg => ({
+            role: msg.role,
+            content: msg.content,
+            timestamp: Date.now(),
+            toolCalls: msg.toolCalls?.map(tc => ({ name: tc.name, arguments: tc.arguments })),
+            toolResults: msg.toolResults?.map(tr => ({
+              success: !tr.isError,
+              content: tr.content.map(c => c.type === "text" ? c.text : "[Non-text content]").join("\n"),
+              error: tr.isError ? "Tool execution failed" : undefined
+            })),
+          })),
+        }
+
+        if (panel) {
+          const panelHandlers = getRendererHandlers<RendererHandlers>(panel.webContents)
+          panelHandlers?.agentProgressUpdate.send(toolProgressUpdate)
+        }
+
+        try {
+          const toolResult = await executeToolCall(toolCall)
+          toolResults.push(toolResult)
+        } catch (error) {
+          const errorResult: MCPToolResult = {
+            content: [{ type: "text", text: `Error executing ${toolCall.name}: ${error}` }],
+            isError: true,
+          }
+          toolResults.push(errorResult)
+        }
+      }
+
+      // Add tool results to conversation history
+      conversationHistory.push({
+        role: "tool",
+        content: toolResults.map(r =>
+          r.content.map(c => c.type === "text" ? c.text : "[Non-text content]").join("\n")
+        ).join("\n"),
+        toolResults,
+      })
+
+    } catch (error) {
+      diagnosticsService.logError("llm", "Multimodal agent iteration failed", error)
+
+      // Add error to conversation history and break
+      conversationHistory.push({
+        role: "assistant",
+        content: `Error in iteration ${currentIteration}: ${error}`,
+      })
+      break
+    }
+  }
+
+  // Send completion update
+  const completionStep = {
+    id: `completion-${currentIteration}`,
+    type: "completion" as const,
+    title: `Completed in ${currentIteration} iterations`,
+    description: "Multimodal processing complete",
+    status: "completed" as const,
+    timestamp: Date.now(),
+  }
+
+  const completionUpdate: AgentProgressUpdate = {
+    currentIteration,
+    maxIterations,
+    steps: [completionStep],
+    isComplete: true,
+    finalContent: lastAssistantResponse,
+    conversationHistory: conversationHistory.map(msg => ({
+      role: msg.role,
+      content: msg.content,
+      timestamp: Date.now(),
+      toolCalls: msg.toolCalls?.map(tc => ({ name: tc.name, arguments: tc.arguments })),
+      toolResults: msg.toolResults?.map(tr => ({
+        success: !tr.isError,
+        content: tr.content.map(c => c.type === "text" ? c.text : "[Non-text content]").join("\n"),
+        error: tr.isError ? "Tool execution failed" : undefined
+      })),
+    })),
+  }
+
+  const panel = WINDOWS.get("panel")
+  if (panel) {
+    const panelHandlers = getRendererHandlers<RendererHandlers>(panel.webContents)
+    panelHandlers?.agentProgressUpdate.send(completionUpdate)
+  }
+
+  return {
+    content: lastAssistantResponse,
+    conversationHistory,
+    totalIterations: currentIteration,
+  }
+}
+
+/**
+ * Process multimodal transcript with tools (simple version without agent mode)
+ */
+async function processMultimodalTranscriptWithTools(
+  multimodalMessage: MultimodalMessage,
+  availableTools: MCPTool[],
+): Promise<LLMToolCallResponse> {
+  const config = configStore.get()
+
+  const messages: MultimodalMessage[] = [
+    {
+      role: "system",
+      content: constructSystemPrompt(availableTools),
+    },
+    multimodalMessage,
+  ]
+
+  const chatProviderId = config.mcpToolsProviderId
+
+  try {
+    const result = await makeMultimodalLLMCallWithFetch(messages, chatProviderId)
+    return result
+  } catch (error) {
     throw error
   }
 }

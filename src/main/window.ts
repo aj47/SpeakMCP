@@ -240,6 +240,19 @@ export async function showPanelWindowAndStartMcpRecording() {
   getWindowRendererHandlers("panel")?.startMcpRecording.send()
 }
 
+export async function showPanelWindowAndStartScreenshotRecording() {
+  // Capture focus before showing panel
+  try {
+    const focusedApp = await getFocusedAppInfo()
+    state.focusedAppBeforeRecording = focusedApp
+  } catch (error) {
+    state.focusedAppBeforeRecording = null
+  }
+
+  showPanelWindow()
+  getWindowRendererHandlers("panel")?.startScreenshotRecording.send()
+}
+
 export async function showPanelWindowAndShowTextInput() {
   // Capture focus before showing panel
   try {

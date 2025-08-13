@@ -42,6 +42,13 @@
     <key>com.apple.security.cs.allow-dyld-environment-variables</key>
     <true/>
 
+    <!-- Screen capture access for screenshot functionality -->
+    <key>com.apple.security.device.camera</key>
+    <true/>
+
+    <!-- Screen recording access -->
+    <key>com.apple.security.personal-information.screen-capture</key>
+    <true/>
 
   </dict>
 </plist>

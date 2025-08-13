@@ -24,6 +24,8 @@ import {
   MCPServerConfig,
   Conversation,
   ConversationHistoryItem,
+  MultimodalContent,
+  MultimodalMessage,
 } from "../shared/types"
 import { conversationService } from "./conversation-service"
 import { RendererHandlers } from "./renderer-handlers"
@@ -735,6 +737,176 @@ export const router = {
       }
 
       // Agent mode result is displayed in GUI - no clipboard or pasting logic needed
+
+      // Return the conversation ID so frontend can use it for subsequent requests
+      return { conversationId }
+    }),
+
+  createScreenshotRecording: t.procedure
+    .input<{
+      recording?: ArrayBuffer
+      duration?: number
+      text?: string
+      conversationId?: string
+    }>()
+    .action(async ({ input }) => {
+      const config = configStore.get()
+
+      // Initialize MCP service if not already done
+      await mcpService.initialize()
+
+      let transcript = ""
+
+      // If we have audio recording, transcribe it first
+      if (input.recording && input.duration) {
+        fs.mkdirSync(recordingsFolder, { recursive: true })
+
+        const form = new FormData()
+        form.append(
+          "file",
+          new File([input.recording], "recording.webm", { type: "audio/webm" }),
+        )
+        form.append(
+          "model",
+          config.sttProviderId === "groq" ? "whisper-large-v3" : "whisper-1",
+        )
+        form.append("response_format", "json")
+
+        if (config.sttProviderId === "groq" && config.groqSttPrompt?.trim()) {
+          form.append("prompt", config.groqSttPrompt.trim())
+        }
+
+        const groqBaseUrl = config.groqBaseUrl || "https://api.groq.com/openai/v1"
+        const openaiBaseUrl = config.openaiBaseUrl || "https://api.openai.com/v1"
+
+        const transcriptResponse = await fetch(
+          config.sttProviderId === "groq"
+            ? `${groqBaseUrl}/audio/transcriptions`
+            : `${openaiBaseUrl}/audio/transcriptions`,
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${
+                config.sttProviderId === "groq"
+                  ? config.groqApiKey
+                  : config.openaiApiKey
+              }`,
+            },
+            body: form,
+          },
+        )
+
+        if (!transcriptResponse.ok) {
+          throw new Error(
+            `Transcription failed: ${transcriptResponse.status} ${transcriptResponse.statusText}`,
+          )
+        }
+
+        const json: { text: string } = await transcriptResponse.json()
+        transcript = await postProcessTranscript(json.text)
+      } else if (input.text) {
+        transcript = input.text
+      }
+
+      // Get visual context (screenshot and clipboard)
+      const { captureScreenshot, getClipboardImage, getClipboardText } = await import("./screenshot-service")
+
+      const screenshot = await captureScreenshot()
+      const clipboardImage = getClipboardImage()
+      const clipboardText = getClipboardText()
+
+      // Build multimodal content
+      const content: MultimodalContent[] = []
+
+      // Add text content (transcript + clipboard text)
+      let textContent = transcript
+      if (clipboardText && clipboardText.trim()) {
+        textContent += clipboardText.trim() ? `\n\nClipboard text: ${clipboardText.trim()}` : ""
+      }
+
+      if (textContent.trim()) {
+        content.push({
+          type: "text",
+          text: textContent.trim()
+        })
+      }
+
+      // Add visual content
+      if (screenshot) {
+        content.push(screenshot)
+      }
+      if (clipboardImage) {
+        content.push(clipboardImage)
+      }
+
+      // If no content, return early
+      if (content.length === 0) {
+        throw new Error("No content to process")
+      }
+
+      // Create multimodal message
+      const multimodalMessage: MultimodalMessage = {
+        role: "user",
+        content
+      }
+
+      // Process with agent mode using multimodal content
+      const { processMultimodalTranscriptWithAgentMode } = await import("./llm")
+
+      const availableTools = mcpService.getAvailableTools()
+      const executeToolCall = mcpService.executeToolCall.bind(mcpService)
+
+      let conversationId = input.conversationId
+      if (!conversationId) {
+        const conversation = await conversationService.createConversation("Screenshot recording")
+        conversationId = conversation.id
+      }
+
+      const agentResponse = await processMultimodalTranscriptWithAgentMode(
+        multimodalMessage,
+        availableTools,
+        executeToolCall,
+        config.mcpMaxIterations || 10,
+        conversationId
+      )
+
+      // Save to conversation history
+      await conversationService.addMessageToConversation(
+        conversationId,
+        typeof multimodalMessage.content === "string" ? multimodalMessage.content : "Multimodal input with visual context",
+        "user"
+      )
+
+      await conversationService.addMessageToConversation(
+        conversationId,
+        agentResponse.content,
+        "assistant"
+      )
+
+      // Save recording history if we had audio
+      if (input.recording && input.duration) {
+        const history = getRecordingHistory()
+        const item: RecordingHistoryItem = {
+          id: Date.now().toString(),
+          createdAt: Date.now(),
+          duration: input.duration,
+          transcript: transcript || "Screenshot recording",
+        }
+        history.push(item)
+        saveRecordingsHitory(history)
+
+        fs.writeFileSync(
+          path.join(recordingsFolder, `${item.id}.webm`),
+          Buffer.from(input.recording),
+        )
+
+        const main = WINDOWS.get("main")
+        if (main) {
+          getRendererHandlers<RendererHandlers>(
+            main.webContents,
+          ).refreshRecordingHistory.send()
+        }
+      }
 
       // Return the conversation ID so frontend can use it for subsequent requests
       return { conversationId }

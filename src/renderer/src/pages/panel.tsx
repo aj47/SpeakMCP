@@ -27,11 +27,13 @@ export function Component() {
   )
   const [recording, setRecording] = useState(false)
   const [mcpMode, setMcpMode] = useState(false)
+  const [screenshotMode, setScreenshotMode] = useState(false)
   const [agentProgress, setAgentProgress] =
     useState<AgentProgressUpdate | null>(null)
   const [showTextInput, setShowTextInput] = useState(false)
   const isConfirmedRef = useRef(false)
   const mcpModeRef = useRef(false)
+  const screenshotModeRef = useRef(false)
 
   // Conversation state
   const {
@@ -174,6 +176,45 @@ export function Component() {
     },
   })
 
+  const screenshotMutation = useMutation({
+    mutationFn: async ({
+      blob,
+      duration,
+      text,
+      conversationId,
+    }: {
+      blob?: Blob
+      duration?: number
+      text?: string
+      conversationId?: string
+    }) => {
+      const recording = blob ? await blob.arrayBuffer() : undefined
+      await tipcClient.createScreenshotRecording({
+        recording,
+        duration,
+        text,
+        conversationId,
+      })
+    },
+    onError(error) {
+      setScreenshotMode(false)
+      screenshotModeRef.current = false
+      setAgentProgress(null) // Clear progress on error
+      tipcClient.resizePanelToNormal() // Resize back to normal on error
+      tipcClient.hidePanelWindow()
+      tipcClient.displayError({
+        title: error.name,
+        message: error.message,
+      })
+    },
+    onSuccess() {
+      setScreenshotMode(false)
+      screenshotModeRef.current = false
+      // Don't clear progress or hide panel on success - agent mode will handle this
+      // The panel needs to stay visible for agent mode progress updates
+    },
+  })
+
   const recorderRef = useRef<Recorder | null>(null)
 
   useEffect(() => {
@@ -200,6 +241,7 @@ export function Component() {
 
     recorder.on("record-end", (blob, duration) => {
       const currentMcpMode = mcpModeRef.current
+      const currentScreenshotMode = screenshotModeRef.current
       setRecording(false)
       setVisualizerData(() => getInitialVisualizerData())
       tipcClient.recordEvent({ type: "end" })
@@ -211,7 +253,13 @@ export function Component() {
       playSound("end_record")
 
       // Use appropriate mutation based on mode
-      if (currentMcpMode) {
+      if (currentScreenshotMode) {
+        screenshotMutation.mutate({
+          blob,
+          duration,
+          conversationId: currentConversation?.id,
+        })
+      } else if (currentMcpMode) {
         mcpTranscribeMutation.mutate({
           blob,
           duration,
@@ -223,11 +271,13 @@ export function Component() {
         })
       }
 
-      // Reset MCP mode after recording
+      // Reset modes after recording
       setMcpMode(false)
       mcpModeRef.current = false
+      setScreenshotMode(false)
+      screenshotModeRef.current = false
     })
-  }, [mcpMode, mcpTranscribeMutation, transcribeMutation])
+  }, [mcpMode, screenshotMode, mcpTranscribeMutation, transcribeMutation, screenshotMutation, currentConversation?.id])
 
   useEffect(() => {
     const unlisten = rendererHandlers.startRecording.listen(() => {
@@ -361,6 +411,34 @@ export function Component() {
 
     return unlisten
   }, [recording])
+
+  // Screenshot recording handlers
+  useEffect(() => {
+    const unlisten = rendererHandlers.startScreenshotRecording.listen(() => {
+      setMcpMode(true)
+      mcpModeRef.current = true
+      setScreenshotMode(true)
+      screenshotModeRef.current = true
+      setAgentProgress(null) // Clear any previous progress
+      tipcClient.resizePanelToNormal() // Ensure panel is normal size for recording
+      setVisualizerData(() => getInitialVisualizerData())
+
+      // For screenshot mode, we can optionally start recording audio too
+      // or just show a visual indicator that we're capturing context
+      recorderRef.current?.startRecording()
+    })
+
+    return unlisten
+  }, [])
+
+  useEffect(() => {
+    const unlisten = rendererHandlers.finishScreenshotRecording.listen(() => {
+      isConfirmedRef.current = true
+      recorderRef.current?.stopRecording()
+    })
+
+    return unlisten
+  }, [])
 
   // Agent progress handler
   useEffect(() => {

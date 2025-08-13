@@ -3,7 +3,6 @@ import { ChildProcess } from "child_process"
 export const state = {
   isRecording: false,
   isTextInputActive: false,
-  focusedAppBeforeRecording: null as string | null,
   // Agent mode state
   isAgentModeActive: false,
   agentProcesses: new Set<ChildProcess>(),

@@ -157,7 +157,7 @@ async function processWithAgentMode(
 import { diagnosticsService } from "./diagnostics"
 import { updateTrayIcon } from "./tray"
 import { isAccessibilityGranted } from "./utils"
-import { writeText, writeTextWithFocusRestore } from "./keyboard"
+import { writeText } from "./keyboard"
 
 const t = tipc.create()
 
@@ -501,7 +501,7 @@ export const router = {
         const pasteDelay = 500 // 0.5 second delay for regular transcripts
         setTimeout(async () => {
           try {
-            await writeTextWithFocusRestore(transcript)
+            await writeText(transcript)
           } catch (error) {
             // Don't throw here, just log the error so the recording still gets saved
           }
@@ -550,7 +550,7 @@ export const router = {
       }
 
       // Auto-paste if enabled
-      if (config.mcpAutoPasteEnabled && state.focusedAppBeforeRecording) {
+      if (config.mcpAutoPasteEnabled) {
         setTimeout(async () => {
           try {
             await writeText(processedText)
@@ -599,7 +599,7 @@ export const router = {
       }
 
       // Auto-paste if enabled
-      if (config.mcpAutoPasteEnabled && state.focusedAppBeforeRecording) {
+      if (config.mcpAutoPasteEnabled) {
         setTimeout(async () => {
           try {
             await writeText(finalResponse)

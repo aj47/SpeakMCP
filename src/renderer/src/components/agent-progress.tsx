@@ -322,7 +322,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
     <div
       className={cn(containerClasses, "min-h-0", className)}
       dir="ltr"
-      style={{ WebkitAppRegion: "no-drag" }}
+      style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
     >
       {/* Unified Header */}
       <div className="flex items-center justify-between px-3 py-2 border-b border-white/10 bg-white/5 backdrop-blur-sm">
@@ -348,7 +348,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
           {isComplete && finalContent && (
             <Button
               variant="ghost"
-              size="xs"
+              size="sm"
               onClick={() => {
                 const url = currentConversationId
                   ? `/conversations/${currentConversationId}`

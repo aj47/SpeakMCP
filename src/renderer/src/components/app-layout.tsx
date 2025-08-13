@@ -63,7 +63,7 @@ export const Component = () => {
               to={link.href}
               role="button"
               draggable={false}
-              className={({ isActive }) => {
+              className={({ isActive: _isActive }) => {
                 // For exact matching, check if the current location exactly matches the link href
                 const isExactMatch = location.pathname === link.href
                 return cn(

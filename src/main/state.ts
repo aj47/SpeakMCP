@@ -18,11 +18,11 @@ export const agentProcessManager = {
     state.agentProcesses.add(process)
 
     // Clean up when process exits
-    process.on("exit", (code, signal) => {
+    process.on("exit", (_code, _signal) => {
       state.agentProcesses.delete(process)
     })
 
-    process.on("error", (error) => {
+    process.on("error", (_error) => {
       state.agentProcesses.delete(process)
     })
   },

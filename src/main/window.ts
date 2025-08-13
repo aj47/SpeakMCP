@@ -14,7 +14,6 @@ import {
 } from "@egoist/electron-panel-window"
 import { RendererHandlers } from "./renderer-handlers"
 import { configStore } from "./config"
-import { getFocusedAppInfo } from "./keyboard"
 import { state, agentProcessManager } from "./state"
 import { calculatePanelPosition } from "./panel-position"
 
@@ -215,40 +214,16 @@ export function showPanelWindow() {
 }
 
 export async function showPanelWindowAndStartRecording() {
-  // Capture focus before showing panel
-  try {
-    const focusedApp = await getFocusedAppInfo()
-    state.focusedAppBeforeRecording = focusedApp
-  } catch (error) {
-    state.focusedAppBeforeRecording = null
-  }
-
   showPanelWindow()
   getWindowRendererHandlers("panel")?.startRecording.send()
 }
 
 export async function showPanelWindowAndStartMcpRecording() {
-  // Capture focus before showing panel
-  try {
-    const focusedApp = await getFocusedAppInfo()
-    state.focusedAppBeforeRecording = focusedApp
-  } catch (error) {
-    state.focusedAppBeforeRecording = null
-  }
-
   showPanelWindow()
   getWindowRendererHandlers("panel")?.startMcpRecording.send()
 }
 
 export async function showPanelWindowAndShowTextInput() {
-  // Capture focus before showing panel
-  try {
-    const focusedApp = await getFocusedAppInfo()
-    state.focusedAppBeforeRecording = focusedApp
-  } catch (error) {
-    state.focusedAppBeforeRecording = null
-  }
-
   // Set text input state first, then show panel (which will use correct positioning)
   state.isTextInputActive = true
   resizePanelForTextInput()

@@ -104,9 +104,13 @@ export class OAuthClient {
       throw new Error('Dynamic client registration not supported by server')
     }
 
+    // Determine redirect URI based on environment
+    const isDevelopment = process.env.NODE_ENV === 'development' || !!process.env.ELECTRON_RENDERER_URL
+    const redirectUri = isDevelopment ? 'http://localhost:3000/callback' : 'speakmcp://oauth/callback'
+
     const clientMetadata: OAuthClientMetadata = {
       client_name: 'SpeakMCP',
-      redirect_uris: ['speakmcp://oauth/callback'],
+      redirect_uris: [redirectUri],
       grant_types: ['authorization_code', 'refresh_token'],
       response_types: ['code'],
       scope: this.config.scope || 'user',
@@ -168,7 +172,10 @@ export class OAuthClient {
     const authUrl = new URL(metadata.authorization_endpoint)
     authUrl.searchParams.set('response_type', 'code')
     authUrl.searchParams.set('client_id', clientId)
-    authUrl.searchParams.set('redirect_uri', this.config.clientMetadata?.redirect_uris[0] || 'speakmcp://oauth/callback')
+    // Use appropriate redirect URI based on environment
+    const isDevelopment = process.env.NODE_ENV === 'development' || !!process.env.ELECTRON_RENDERER_URL
+    const redirectUri = isDevelopment ? 'http://localhost:3000/callback' : 'speakmcp://oauth/callback'
+    authUrl.searchParams.set('redirect_uri', this.config.clientMetadata?.redirect_uris[0] || redirectUri)
     authUrl.searchParams.set('scope', this.config.scope || 'user')
     authUrl.searchParams.set('state', state)
     authUrl.searchParams.set('code_challenge', codeChallenge)
@@ -188,10 +195,14 @@ export class OAuthClient {
     const metadata = await this.discoverServerMetadata()
     const { clientId, clientSecret } = await this.registerClient()
 
+    // Use appropriate redirect URI based on environment
+    const isDevelopment = process.env.NODE_ENV === 'development' || !!process.env.ELECTRON_RENDERER_URL
+    const redirectUri = isDevelopment ? 'http://localhost:3000/callback' : 'speakmcp://oauth/callback'
+
     const tokenRequest = new URLSearchParams({
       grant_type: 'authorization_code',
       code: request.code,
-      redirect_uri: this.config.clientMetadata?.redirect_uris[0] || 'speakmcp://oauth/callback',
+      redirect_uri: this.config.clientMetadata?.redirect_uris[0] || redirectUri,
       client_id: clientId,
       code_verifier: request.codeVerifier,
     })
@@ -330,38 +341,77 @@ export class OAuthClient {
   }
 
   /**
-   * Complete OAuth flow with deep link callback
+   * Complete OAuth flow with callback (deep link in production, localhost in dev)
    */
   async completeAuthorizationFlow(): Promise<OAuthTokens> {
-    const { handleOAuthCallback } = await import('./oauth-deeplink-handler')
+    // Determine if we're in development mode
+    const isDevelopment = process.env.NODE_ENV === 'development' || !!process.env.ELECTRON_RENDERER_URL
 
-    // Start authorization flow
-    const authRequest = await this.startAuthorizationFlow()
+    if (isDevelopment) {
+      console.log('🔧 Development mode: Using localhost callback for OAuth')
+      // Use localhost callback server in development
+      const { handleOAuthCallback } = await import('./oauth-callback-server')
 
-    // Open authorization URL
-    await this.openAuthorizationUrl(authRequest.authorizationUrl)
+      // Start authorization flow
+      const authRequest = await this.startAuthorizationFlow()
 
-    // Wait for deep link callback
-    const callbackResult = await handleOAuthCallback(300000) // 5 minute timeout
+      // Open authorization URL
+      await this.openAuthorizationUrl(authRequest.authorizationUrl)
 
-    if (callbackResult.error) {
-      throw new Error(`OAuth authorization failed: ${callbackResult.error} - ${callbackResult.error_description || 'Unknown error'}`)
+      // Wait for localhost callback
+      const callbackResult = await handleOAuthCallback(300000) // 5 minute timeout
+
+      if (callbackResult.error) {
+        throw new Error(`OAuth authorization failed: ${callbackResult.error} - ${callbackResult.error_description || 'Unknown error'}`)
+      }
+
+      if (!callbackResult.code) {
+        throw new Error('No authorization code received')
+      }
+
+      if (callbackResult.state !== authRequest.state) {
+        throw new Error('Invalid OAuth state parameter')
+      }
+
+      // Exchange code for tokens
+      return await this.exchangeCodeForToken({
+        code: callbackResult.code,
+        codeVerifier: authRequest.codeVerifier,
+        state: callbackResult.state,
+      })
+    } else {
+      console.log('🚀 Production mode: Using deep link callback for OAuth')
+      // Use deep link callback in production
+      const { handleOAuthCallback } = await import('./oauth-deeplink-handler')
+
+      // Start authorization flow
+      const authRequest = await this.startAuthorizationFlow()
+
+      // Open authorization URL
+      await this.openAuthorizationUrl(authRequest.authorizationUrl)
+
+      // Wait for deep link callback
+      const callbackResult = await handleOAuthCallback(300000) // 5 minute timeout
+
+      if (callbackResult.error) {
+        throw new Error(`OAuth authorization failed: ${callbackResult.error} - ${callbackResult.error_description || 'Unknown error'}`)
+      }
+
+      if (!callbackResult.code) {
+        throw new Error('No authorization code received')
+      }
+
+      if (callbackResult.state !== authRequest.state) {
+        throw new Error('Invalid OAuth state parameter')
+      }
+
+      // Exchange code for tokens
+      return await this.exchangeCodeForToken({
+        code: callbackResult.code,
+        codeVerifier: authRequest.codeVerifier,
+        state: callbackResult.state,
+      })
     }
-
-    if (!callbackResult.code) {
-      throw new Error('No authorization code received')
-    }
-
-    if (callbackResult.state !== authRequest.state) {
-      throw new Error('Invalid OAuth state parameter')
-    }
-
-    // Exchange code for tokens
-    return await this.exchangeCodeForToken({
-      code: callbackResult.code,
-      codeVerifier: authRequest.codeVerifier,
-      state: callbackResult.state,
-    })
   }
 
   /**

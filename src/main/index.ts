@@ -20,15 +20,15 @@ import { initializeDeepLinkHandling } from "./oauth-deeplink-handler"
 
 registerServeSchema()
 
-// Initialize deep link handling before app is ready
-initializeDeepLinkHandling()
-
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(() => {
   // Initialize debug flags from CLI/env early
   initDebugFlags(process.argv)
+
+  // Initialize deep link handling after app is ready
+  initializeDeepLinkHandling()
 
   // Set app user model id for windows
   electronApp.setAppUserModelId(process.env.APP_ID)

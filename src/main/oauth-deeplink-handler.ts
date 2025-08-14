@@ -205,26 +205,58 @@ export async function handleOAuthCallback(timeoutMs?: number): Promise<OAuthCall
  * Should be called once during app initialization
  */
 export function initializeDeepLinkHandling(): void {
-  // Ensure app is set as default protocol handler
-  if (!app.isDefaultProtocolClient('speakmcp')) {
-    app.setAsDefaultProtocolClient('speakmcp')
+  // Only register protocol handler in production builds
+  // In development, deep links won't work but we'll provide fallback
+  if (process.env.NODE_ENV === 'production' || !process.env.ELECTRON_RENDERER_URL) {
+    try {
+      if (!app.isDefaultProtocolClient('speakmcp')) {
+        const success = app.setAsDefaultProtocolClient('speakmcp')
+        if (success) {
+          console.log('✅ Registered speakmcp:// protocol handler')
+        } else {
+          console.warn('⚠️ Failed to register speakmcp:// protocol handler')
+        }
+      } else {
+        console.log('✅ speakmcp:// protocol handler already registered')
+      }
+    } catch (error) {
+      console.warn('⚠️ Could not register protocol handler:', error)
+    }
+  } else {
+    console.log('🔧 Development mode: skipping protocol registration (deep links will use localhost fallback)')
   }
 
   // Handle deep links when app is not running (Windows/Linux)
   if (process.platform === 'win32' || process.platform === 'linux') {
-    // Make sure only one instance of the app runs
-    const gotTheLock = app.requestSingleInstanceLock()
+    // Only request single instance lock in production
+    if (process.env.NODE_ENV === 'production' || !process.env.ELECTRON_RENDERER_URL) {
+      try {
+        const gotTheLock = app.requestSingleInstanceLock()
 
-    if (!gotTheLock) {
-      app.quit()
-    } else {
-      app.on('second-instance', (event, commandLine, workingDirectory) => {
-        // Someone tried to run a second instance, focus our window instead
-        // and handle any deep link arguments
-        console.log('Second instance launched with args:', commandLine)
-      })
+        if (!gotTheLock) {
+          console.log('Another instance is already running, quitting...')
+          app.quit()
+          return
+        } else {
+          app.on('second-instance', (event, commandLine, workingDirectory) => {
+            // Someone tried to run a second instance, focus our window instead
+            // and handle any deep link arguments
+            console.log('Second instance launched with args:', commandLine)
+
+            // Focus the main window if it exists
+            const { WINDOWS } = require('./window')
+            const mainWindow = WINDOWS.get('main')
+            if (mainWindow) {
+              if (mainWindow.isMinimized()) mainWindow.restore()
+              mainWindow.focus()
+            }
+          })
+        }
+      } catch (error) {
+        console.warn('⚠️ Could not request single instance lock:', error)
+      }
     }
   }
 
-  console.log('Deep link handling initialized for speakmcp:// protocol')
+  console.log('🔗 Deep link handling initialized')
 }

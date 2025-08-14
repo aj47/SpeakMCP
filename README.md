@@ -159,7 +159,7 @@ pnpm build:mac             # Build for macOS
 pnpm build:win             # Build for Windows
 pnpm build:linux           # Build for Linux
 
-# Testing
+# Developer Tasks
 pnpm typecheck             # Type checking
 pnpm lint                  # ESLint
 ```
@@ -234,11 +234,8 @@ SpeakMCP/
 ├── speakmcp-rs/                # Rust binary for system integration
 ├── resources/                  # Static resources and assets
 ├── docs/                       # Documentation
-│   ├── MCP_TESTING.md         # MCP testing infrastructure
 │   └── issues/                # Issue tracking and analysis
 └── scripts/                    # Build and utility scripts
-    ├── mock-mcp-server.mjs    # Mock MCP server for testing
-    └── test-mcp-path-fix.mjs  # PATH resolution testing
 ```
 
 ## ⚙️ Configuration
@@ -511,7 +508,6 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 - 🔧 New MCP server integrations
 - 🤖 Agent mode improvements and optimizations
 - 📚 Documentation improvements
-- 🧪 Test coverage expansion (see `docs/MCP_TESTING.md`)
 - 🌍 Internationalization support
 - 🎨 UI/UX improvements
 - 🔒 Security enhancements

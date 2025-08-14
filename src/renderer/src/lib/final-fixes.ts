@@ -11,10 +11,6 @@ declare global {
       testMCPServer: (serverName: string, config: any) => Promise<{ success: boolean; error?: string }>
     }
   }
-  namespace vi {
-    export const mock: (fn?: any) => any
-    export const fn: () => any
-  }
 }
 
 // Type-safe utilities
@@ -54,7 +50,4 @@ export const safe = {
     Array.isArray(arr) ? arr.map(mapper) : [],
 }
 
-// Global vi fix
-export const vi = typeof globalThis !== 'undefined' 
-  ? (globalThis as any).vi 
-  : { mock: () => ({}), fn: () => () => {} }
+

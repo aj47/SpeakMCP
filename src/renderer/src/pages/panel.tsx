@@ -451,14 +451,6 @@ export function Component() {
         ) : (
           <div className="modern-panel modern-text-strong flex h-full w-full rounded-xl transition-all duration-300">
             <div className="flex shrink-0">
-              {mcpMode && (
-                <div className="modern-panel-subtle flex h-full w-8 items-center justify-center rounded-l-xl">
-                  <div
-                    className="h-2 w-2 animate-pulse rounded-full bg-primary shadow-lg"
-                    title="MCP Tool Mode"
-                  />
-                </div>
-              )}
               {showTextInput && !mcpMode && (
                 <div className="modern-panel-subtle flex h-full w-8 items-center justify-center rounded-l-xl">
                   <div

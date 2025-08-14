@@ -176,7 +176,7 @@ describe("AgentProgress", () => {
 
     // Check that messages have appropriate styling classes
     messages.forEach((message) => {
-      const parentDiv = message.closest(".liquid-glass-subtle")
+      const parentDiv = message.closest(".modern-panel-subtle")
       expect(parentDiv).toBeInTheDocument()
     })
   })

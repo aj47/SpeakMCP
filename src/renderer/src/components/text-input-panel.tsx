@@ -50,7 +50,7 @@ export function TextInputPanel({
 
   if (isProcessing) {
     return (
-      <div className="liquid-glass-strong glass-text-strong flex h-full w-full items-center justify-center rounded-xl">
+      <div className="modern-panel-strong modern-text-strong flex h-full w-full items-center justify-center rounded-xl">
         {agentProgress ? (
           <AgentProcessingView
             agentProgress={agentProgress}
@@ -70,7 +70,7 @@ export function TextInputPanel({
   }
 
   return (
-    <div className="liquid-glass-strong glass-text-strong flex h-full w-full flex-col gap-3 rounded-xl p-3">
+    <div className="modern-panel-strong modern-text-strong flex h-full w-full flex-col gap-3 rounded-xl p-3">
       {/* Show agent progress if available */}
       {isProcessing && agentProgress ? (
         <AgentProcessingView
@@ -82,7 +82,7 @@ export function TextInputPanel({
         />
       ) : (
         <div className="flex flex-1 flex-col gap-2">
-          <div className="glass-text-muted text-xs">
+          <div className="modern-text-muted text-xs">
             Type your message • Enter to send • Shift+Enter for new line • Esc
             to cancel
           </div>
@@ -93,9 +93,9 @@ export function TextInputPanel({
             onKeyDown={handleKeyDown}
             placeholder="Type your message here..."
             className={cn(
-              "liquid-glass-input glass-text-strong min-h-0 flex-1 resize-none border-0",
+              "modern-input modern-text-strong min-h-0 flex-1 resize-none border-0",
               "bg-transparent focus:border-ring focus:ring-1 focus:ring-ring",
-              "placeholder:glass-text-muted",
+              "placeholder:modern-text-muted",
             )}
             disabled={isProcessing}
             aria-label="Message input"
@@ -103,7 +103,7 @@ export function TextInputPanel({
         </div>
       )}
 
-      <div className="glass-text-muted flex items-center justify-between text-xs">
+      <div className="modern-text-muted flex items-center justify-between text-xs">
         <div>
           {text.length > 0 && (
             <span>

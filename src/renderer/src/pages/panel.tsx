@@ -417,7 +417,7 @@ export function Component() {
   }, [isConversationActive, endConversation])
 
   return (
-    <div className="liquid-glass-panel glass-text-strong flex h-screen flex-col text-foreground">
+    <div className="modern-panel modern-text-strong flex h-screen flex-col text-foreground">
       {/* Drag bar - show whenever dragging is enabled (all states of floating GUI) */}
       {isDragEnabled && (
         <PanelDragBar className="shrink-0" disabled={!isDragEnabled} />
@@ -449,10 +449,10 @@ export function Component() {
             showBackgroundSpinner={true}
           />
         ) : (
-          <div className="liquid-glass glass-text-strong flex h-full w-full rounded-xl transition-all duration-300">
+          <div className="modern-panel modern-text-strong flex h-full w-full rounded-xl transition-all duration-300">
             <div className="flex shrink-0">
               {mcpMode && (
-                <div className="liquid-glass-subtle flex h-full w-8 items-center justify-center rounded-l-xl">
+                <div className="modern-panel-subtle flex h-full w-8 items-center justify-center rounded-l-xl">
                   <div
                     className="h-2 w-2 animate-pulse rounded-full bg-primary shadow-lg"
                     title="MCP Tool Mode"
@@ -460,7 +460,7 @@ export function Component() {
                 </div>
               )}
               {showTextInput && !mcpMode && (
-                <div className="liquid-glass-subtle flex h-full w-8 items-center justify-center rounded-l-xl">
+                <div className="modern-panel-subtle flex h-full w-8 items-center justify-center rounded-l-xl">
                   <div
                     className="h-2 w-2 rounded-full bg-blue-500 shadow-lg"
                     title="Text Input Mode"
@@ -468,7 +468,7 @@ export function Component() {
                 </div>
               )}
               {isConversationActive && !mcpMode && !showTextInput && (
-                <div className="liquid-glass-subtle flex h-full w-8 items-center justify-center rounded-l-xl">
+                <div className="modern-panel-subtle flex h-full w-8 items-center justify-center rounded-l-xl">
                   <div
                     className="h-2 w-2 rounded-full bg-green-500 shadow-lg"
                     title="Conversation Active"

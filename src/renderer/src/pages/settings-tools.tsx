@@ -127,8 +127,8 @@ DOMAIN-SPECIFIC RULES:
 - For API calls: Respect rate limits and handle errors gracefully`
 
   return (
-    <div className="liquid-glass-panel h-full overflow-auto px-6 py-4">
-      <header className="liquid-glass-card glass-border glass-shadow mb-5 rounded-lg p-4">
+    <div className="modern-panel h-full overflow-auto px-6 py-4">
+      <header className="modern-card modern-border mb-5 rounded-lg p-4">
         <h2 className="text-2xl font-bold">Agents</h2>
       </header>
 

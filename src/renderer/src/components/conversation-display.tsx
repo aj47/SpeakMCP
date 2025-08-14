@@ -27,9 +27,9 @@ export function ConversationDisplay({
 
   if (messages.length === 0) {
     return (
-      <Card className={cn("liquid-glass-subtle glass-border", className)}>
+      <Card className={cn("modern-panel-subtle modern-border", className)}>
         <CardContent className="p-6 text-center">
-          <div className="glass-text-muted">
+          <div className="modern-text-muted">
             No messages in this conversation yet.
           </div>
         </CardContent>
@@ -42,7 +42,7 @@ export function ConversationDisplay({
     return (
       <Card
         className={cn(
-          "liquid-glass-subtle glass-border flex h-full flex-col",
+          "modern-panel-subtle modern-border flex h-full flex-col",
           className,
         )}
       >
@@ -60,7 +60,7 @@ export function ConversationDisplay({
 
           {/* Show agent progress at the bottom if processing */}
           {isAgentProcessing && agentProgress && (
-            <div className="liquid-glass-strong mt-4 rounded-lg p-4">
+            <div className="modern-panel-strong mt-4 rounded-lg p-4">
               <AgentProgress
                 progress={agentProgress}
                 variant="default"
@@ -75,7 +75,7 @@ export function ConversationDisplay({
 
   // For fixed height, use ScrollArea
   return (
-    <Card className={cn("liquid-glass-subtle glass-border", className)}>
+    <Card className={cn("modern-panel-subtle modern-border", className)}>
       <ScrollArea className="h-full" style={{ maxHeight }}>
         <CardContent className="space-y-4 p-4">
           {messages.map((message, index) => (
@@ -88,7 +88,7 @@ export function ConversationDisplay({
 
           {/* Show agent progress at the bottom if processing */}
           {isAgentProcessing && agentProgress && (
-            <div className="liquid-glass-strong mt-4 rounded-lg p-4">
+            <div className="modern-panel-strong mt-4 rounded-lg p-4">
               <AgentProgress
                 progress={agentProgress}
                 variant="default"
@@ -184,7 +184,7 @@ function ConversationMessageItem({
     <div
       className={cn(
         "flex cursor-pointer gap-3 rounded-lg p-3 transition-colors",
-        isLast ? "liquid-glass-interactive" : "hover:liquid-glass-subtle",
+        isLast ? "modern-interactive" : "hover:modern-panel-subtle",
       )}
       onContextMenu={handleContextMenu}
     >
@@ -204,26 +204,26 @@ function ConversationMessageItem({
           <Badge variant="secondary" className="text-xs capitalize">
             {message.role}
           </Badge>
-          <span className="glass-text-muted text-xs">
+          <span className="modern-text-muted text-xs">
             {formatTimestamp(message.timestamp)}
           </span>
         </div>
 
-        <div className="glass-text-strong">
+        <div className="modern-text-strong">
           <MarkdownRenderer content={message.content} />
         </div>
 
         {message.toolCalls && message.toolCalls.length > 0 && (
           <div className="mt-2 space-y-1">
-            <div className="glass-text-muted text-xs">Tool Calls:</div>
+            <div className="modern-text-muted text-xs">Tool Calls:</div>
             {message.toolCalls.map((toolCall, index) => (
               <div
                 key={index}
-                className="liquid-glass-subtle rounded p-2 text-xs"
+                className="modern-panel-subtle rounded p-2 text-xs"
               >
                 <span className="font-mono">{toolCall.name}</span>
                 {toolCall.arguments && (
-                  <pre className="glass-text-muted mt-1 overflow-x-auto text-xs">
+                  <pre className="modern-text-muted mt-1 overflow-x-auto text-xs">
                     {JSON.stringify(toolCall.arguments, null, 2)}
                   </pre>
                 )}
@@ -234,7 +234,7 @@ function ConversationMessageItem({
 
         {message.toolResults && message.toolResults.length > 0 && (
           <div className="mt-2 space-y-1">
-            <div className="glass-text-muted text-xs">Tool Results:</div>
+            <div className="modern-text-muted text-xs">Tool Results:</div>
             {message.toolResults.map((result, index) => (
               <div
                 key={index}
@@ -272,7 +272,7 @@ export function ConversationDisplayCompact({
   if (messages.length === 0) {
     return (
       <div
-        className={cn("glass-text-muted p-4 text-center text-sm", className)}
+        className={cn("modern-text-muted p-4 text-center text-sm", className)}
       >
         No conversation history
       </div>
@@ -296,7 +296,7 @@ export function ConversationDisplayCompact({
                 {getRoleIconCompact(message.role)}
               </div>
               <div className="min-w-0 flex-1">
-                <div className="glass-text-strong truncate">
+                <div className="modern-text-strong truncate">
                   {message.content}
                 </div>
               </div>

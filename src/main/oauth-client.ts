@@ -192,12 +192,23 @@ export class OAuthClient {
    * Exchange authorization code for access token
    */
   async exchangeCodeForToken(request: OAuthTokenRequest): Promise<OAuthTokens> {
+    console.log('🔄 Starting token exchange...')
+
     const metadata = await this.discoverServerMetadata()
     const { clientId, clientSecret } = await this.registerClient()
 
     // Use appropriate redirect URI based on environment
     const isDevelopment = process.env.NODE_ENV === 'development' || !!process.env.ELECTRON_RENDERER_URL
     const redirectUri = isDevelopment ? 'http://localhost:3000/callback' : 'speakmcp://oauth/callback'
+
+    console.log('📋 Token exchange details:', {
+      tokenEndpoint: metadata.token_endpoint,
+      clientId: clientId,
+      hasClientSecret: !!clientSecret,
+      hasCode: !!request.code,
+      hasCodeVerifier: !!request.codeVerifier,
+      redirectUri: this.config.clientMetadata?.redirect_uris[0] || redirectUri
+    })
 
     const tokenRequest = new URLSearchParams({
       grant_type: 'authorization_code',
@@ -212,6 +223,7 @@ export class OAuthClient {
     }
 
     try {
+      console.log('🌐 Making token exchange request to:', metadata.token_endpoint)
       const response = await fetch(metadata.token_endpoint, {
         method: 'POST',
         headers: {
@@ -221,28 +233,50 @@ export class OAuthClient {
         body: tokenRequest.toString(),
       })
 
+      console.log('📡 Token exchange response:', {
+        status: response.status,
+        statusText: response.statusText,
+        ok: response.ok,
+        headers: Object.fromEntries(response.headers.entries())
+      })
+
       if (!response.ok) {
         const errorText = await response.text()
+        console.error('❌ Token exchange failed:', {
+          status: response.status,
+          statusText: response.statusText,
+          errorText: errorText
+        })
         throw new Error(`Token exchange failed: ${response.status} ${response.statusText} - ${errorText}`)
       }
 
       const tokenResponse = await response.json()
-      
+      console.log('📦 Token response received:', {
+        hasAccessToken: !!tokenResponse.access_token,
+        hasRefreshToken: !!tokenResponse.refresh_token,
+        tokenType: tokenResponse.token_type,
+        expiresIn: tokenResponse.expires_in,
+        scope: tokenResponse.scope
+      })
+
       const tokens: OAuthTokens = {
         access_token: tokenResponse.access_token,
         token_type: tokenResponse.token_type,
         expires_in: tokenResponse.expires_in,
         refresh_token: tokenResponse.refresh_token,
         scope: tokenResponse.scope,
-        expires_at: tokenResponse.expires_in 
+        expires_at: tokenResponse.expires_in
           ? Date.now() + (tokenResponse.expires_in * 1000)
           : undefined,
       }
 
       this.config.tokens = tokens
+      console.log('✅ Tokens stored successfully')
       return tokens
     } catch (error) {
-      throw new Error(`Failed to exchange code for token: ${error instanceof Error ? error.message : String(error)}`)
+      const errorMsg = `Failed to exchange code for token: ${error instanceof Error ? error.message : String(error)}`
+      console.error('❌', errorMsg)
+      throw new Error(errorMsg)
     }
   }
 
@@ -347,70 +381,139 @@ export class OAuthClient {
     // Determine if we're in development mode
     const isDevelopment = process.env.NODE_ENV === 'development' || !!process.env.ELECTRON_RENDERER_URL
 
+    console.log(`🔄 Starting OAuth authorization flow for ${this.serverUrl}`)
+    console.log(`📍 Environment: ${isDevelopment ? 'Development' : 'Production'}`)
+
     if (isDevelopment) {
       console.log('🔧 Development mode: Using localhost callback for OAuth')
       // Use localhost callback server in development
       const { handleOAuthCallback } = await import('./oauth-callback-server')
 
       // Start authorization flow
+      console.log('🚀 Starting authorization flow...')
       const authRequest = await this.startAuthorizationFlow()
+      console.log('✅ Authorization request created:', {
+        state: authRequest.state,
+        hasCodeVerifier: !!authRequest.codeVerifier,
+        authUrlLength: authRequest.authorizationUrl.length
+      })
 
       // Open authorization URL
+      console.log('🌐 Opening authorization URL in browser...')
       await this.openAuthorizationUrl(authRequest.authorizationUrl)
 
       // Wait for localhost callback
+      console.log('⏳ Waiting for OAuth callback (5 minute timeout)...')
       const callbackResult = await handleOAuthCallback(300000) // 5 minute timeout
 
+      console.log('📥 OAuth callback received:', {
+        hasCode: !!callbackResult.code,
+        hasState: !!callbackResult.state,
+        hasError: !!callbackResult.error,
+        error: callbackResult.error,
+        errorDescription: callbackResult.error_description
+      })
+
       if (callbackResult.error) {
-        throw new Error(`OAuth authorization failed: ${callbackResult.error} - ${callbackResult.error_description || 'Unknown error'}`)
+        const errorMsg = `OAuth authorization failed: ${callbackResult.error} - ${callbackResult.error_description || 'Unknown error'}`
+        console.error('❌', errorMsg)
+        throw new Error(errorMsg)
       }
 
       if (!callbackResult.code) {
+        console.error('❌ No authorization code received in callback')
         throw new Error('No authorization code received')
       }
 
       if (callbackResult.state !== authRequest.state) {
+        console.error('❌ OAuth state mismatch:', {
+          expected: authRequest.state,
+          received: callbackResult.state
+        })
         throw new Error('Invalid OAuth state parameter')
       }
 
+      console.log('✅ OAuth callback validation successful, exchanging code for tokens...')
       // Exchange code for tokens
-      return await this.exchangeCodeForToken({
+      const tokens = await this.exchangeCodeForToken({
         code: callbackResult.code,
         codeVerifier: authRequest.codeVerifier,
         state: callbackResult.state,
       })
+
+      console.log('🎉 OAuth flow completed successfully:', {
+        hasAccessToken: !!tokens.access_token,
+        hasRefreshToken: !!tokens.refresh_token,
+        expiresIn: tokens.expires_in,
+        tokenType: tokens.token_type
+      })
+
+      return tokens
     } else {
       console.log('🚀 Production mode: Using deep link callback for OAuth')
       // Use deep link callback in production
       const { handleOAuthCallback } = await import('./oauth-deeplink-handler')
 
       // Start authorization flow
+      console.log('🚀 Starting authorization flow...')
       const authRequest = await this.startAuthorizationFlow()
+      console.log('✅ Authorization request created:', {
+        state: authRequest.state,
+        hasCodeVerifier: !!authRequest.codeVerifier,
+        authUrlLength: authRequest.authorizationUrl.length
+      })
 
       // Open authorization URL
+      console.log('🌐 Opening authorization URL in browser...')
       await this.openAuthorizationUrl(authRequest.authorizationUrl)
 
       // Wait for deep link callback
+      console.log('⏳ Waiting for deep link callback (5 minute timeout)...')
       const callbackResult = await handleOAuthCallback(300000) // 5 minute timeout
 
+      console.log('📥 Deep link callback received:', {
+        hasCode: !!callbackResult.code,
+        hasState: !!callbackResult.state,
+        hasError: !!callbackResult.error,
+        error: callbackResult.error,
+        errorDescription: callbackResult.error_description
+      })
+
       if (callbackResult.error) {
-        throw new Error(`OAuth authorization failed: ${callbackResult.error} - ${callbackResult.error_description || 'Unknown error'}`)
+        const errorMsg = `OAuth authorization failed: ${callbackResult.error} - ${callbackResult.error_description || 'Unknown error'}`
+        console.error('❌', errorMsg)
+        throw new Error(errorMsg)
       }
 
       if (!callbackResult.code) {
+        console.error('❌ No authorization code received in deep link')
         throw new Error('No authorization code received')
       }
 
       if (callbackResult.state !== authRequest.state) {
+        console.error('❌ OAuth state mismatch:', {
+          expected: authRequest.state,
+          received: callbackResult.state
+        })
         throw new Error('Invalid OAuth state parameter')
       }
 
+      console.log('✅ Deep link callback validation successful, exchanging code for tokens...')
       // Exchange code for tokens
-      return await this.exchangeCodeForToken({
+      const tokens = await this.exchangeCodeForToken({
         code: callbackResult.code,
         codeVerifier: authRequest.codeVerifier,
         state: callbackResult.state,
       })
+
+      console.log('🎉 OAuth flow completed successfully:', {
+        hasAccessToken: !!tokens.access_token,
+        hasRefreshToken: !!tokens.refresh_token,
+        expiresIn: tokens.expires_in,
+        tokenType: tokens.token_type
+      })
+
+      return tokens
     }
   }
 

@@ -1133,10 +1133,12 @@ export class MCPService {
       throw new Error("URL is required for OAuth flow")
     }
 
-    console.log(`Server ${serverName} requires OAuth authentication, initiating flow...`)
+    console.log(`🔐 Server ${serverName} requires OAuth authentication, initiating flow...`)
+    diagnosticsService.logInfo("mcp-service", `Server ${serverName} requires OAuth authentication, initiating flow`)
 
     // Ensure OAuth configuration exists
     if (!serverConfig.oauth) {
+      console.log(`📝 Creating default OAuth configuration for ${serverName}`)
       // Create default OAuth configuration for the server
       serverConfig.oauth = {
         scope: 'user',
@@ -1149,27 +1151,39 @@ export class MCPService {
       if (config.mcpConfig?.mcpServers?.[serverName]) {
         config.mcpConfig.mcpServers[serverName] = serverConfig
         configStore.save(config)
+        console.log(`✅ OAuth configuration saved for ${serverName}`)
       }
     }
 
     try {
+      console.log(`🚀 Creating OAuth client for ${serverName}...`)
       // Create OAuth client and complete the full flow
       const oauthClient = await this.getOrCreateOAuthClient(serverName, serverConfig)
+
+      console.log(`🔄 Starting OAuth authorization flow for ${serverName}...`)
       const tokens = await oauthClient.completeAuthorizationFlow()
 
+      console.log(`💾 Storing OAuth tokens for ${serverName}...`)
       // Store the tokens
       await oauthStorage.storeTokens(serverConfig.url, tokens)
 
+      console.log(`🌐 Creating authenticated transport for ${serverName}...`)
       // Create authenticated transport
-      return new StreamableHTTPClientTransport(new URL(serverConfig.url), {
+      const transport = new StreamableHTTPClientTransport(new URL(serverConfig.url), {
         requestInit: {
           headers: {
             'Authorization': `Bearer ${tokens.access_token}`,
           },
         },
       })
+
+      console.log(`✅ OAuth authentication completed successfully for ${serverName}`)
+      return transport
     } catch (error) {
-      throw new Error(`OAuth authentication failed for server ${serverName}: ${error instanceof Error ? error.message : String(error)}`)
+      const errorMsg = `OAuth authentication failed for server ${serverName}: ${error instanceof Error ? error.message : String(error)}`
+      console.error(`❌ ${errorMsg}`)
+      diagnosticsService.logError("mcp-service", errorMsg)
+      throw new Error(errorMsg)
     }
   }
 

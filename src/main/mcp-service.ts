@@ -917,7 +917,7 @@ export class MCPService {
   }
 
   private async createTestConnection(
-    serverName: string,
+    _serverName: string,
     serverConfig: MCPServerConfig,
   ): Promise<{ success: boolean; error?: string; toolCount?: number }> {
     let transport:

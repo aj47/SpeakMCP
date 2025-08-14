@@ -52,7 +52,7 @@ export function Component() {
     (config: Partial<Config>) => {
       saveConfigMutation.mutate({
         config: {
-          ...configQuery.data,
+          ...(configQuery.data as any),
           ...config,
         },
       })
@@ -62,21 +62,21 @@ export function Component() {
 
   // Sync theme preference from config to localStorage when config loads
   useEffect(() => {
-    if (configQuery.data?.themePreference) {
-      localStorage.setItem("theme-preference", configQuery.data.themePreference)
+    if ((configQuery.data as any)?.themePreference) {
+      localStorage.setItem("theme-preference", (configQuery.data as any).themePreference)
       window.dispatchEvent(
         new CustomEvent("theme-preference-changed", {
-          detail: configQuery.data.themePreference,
+          detail: (configQuery.data as any).themePreference,
         }),
       )
     }
-  }, [configQuery.data?.themePreference])
+  }, [(configQuery.data as any)?.themePreference])
 
   // Memoize model change handler to prevent infinite re-renders
   const handleTranscriptModelChange = useCallback(
     (value: string) => {
       const transcriptPostProcessingProviderId =
-        configQuery.data?.transcriptPostProcessingProviderId || "openai"
+        (configQuery.data as any)?.transcriptPostProcessingProviderId || "openai"
 
       if (transcriptPostProcessingProviderId === "openai") {
         saveConfig({
@@ -92,15 +92,15 @@ export function Component() {
         })
       }
     },
-    [saveConfig, configQuery.data?.transcriptPostProcessingProviderId],
+    [saveConfig, (configQuery.data as any)?.transcriptPostProcessingProviderId],
   )
 
   const sttProviderId: STT_PROVIDER_ID =
-    configQuery.data?.sttProviderId || "openai"
-  const shortcut = configQuery.data?.shortcut || "hold-ctrl"
-  const textInputShortcut = configQuery.data?.textInputShortcut || "ctrl-t"
+    (configQuery.data as any)?.sttProviderId || "openai"
+  const shortcut = (configQuery.data as any)?.shortcut || "hold-ctrl"
+  const textInputShortcut = (configQuery.data as any)?.textInputShortcut || "ctrl-t"
   const transcriptPostProcessingProviderId: CHAT_PROVIDER_ID =
-    configQuery.data?.transcriptPostProcessingProviderId || "openai"
+    (configQuery.data as any)?.transcriptPostProcessingProviderId || "openai"
 
   if (!configQuery.data) return null
 

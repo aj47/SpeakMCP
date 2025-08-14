@@ -27,7 +27,7 @@ const PANEL_MARGIN = 10
  */
 export function calculatePanelPosition(
   size: PanelSize,
-  mode: "normal" | "agent" | "textInput" = "normal",
+  _mode: "normal" | "agent" | "textInput" = "normal",
 ): Position {
   const config = configStore.get()
   const position = config.panelPosition || "top-right"

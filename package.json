@@ -24,7 +24,8 @@
     "build:mas": "npm run build && electron-builder --mac mas --config electron-builder.config.cjs",
     "build:mas:dev": "npm run build && electron-builder --mac mas-dev --config electron-builder.config.cjs",
     "build:linux": "electron-vite build && electron-builder --linux --config electron-builder.config.cjs",
-    "build-rs": "sh scripts/build-rs.sh"
+    "build-rs": "sh scripts/build-rs.sh",
+    "build-rs:win": "powershell -ExecutionPolicy Bypass -File scripts/build-rs.ps1"
   },
   "dependencies": {
     "@egoist/electron-panel-window": "^8.0.3",
@@ -55,6 +56,7 @@
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.0.1",
     "@testing-library/user-event": "^14.5.2",
+    "@types/jest": "^30.0.0",
     "@types/node": "^20.14.8",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",

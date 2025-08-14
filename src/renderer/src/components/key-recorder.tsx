@@ -194,6 +194,7 @@ export function KeyRecorder({
         document.removeEventListener("keyup", handleKeyUp, true)
       }
     }
+    return undefined
   }, [isRecording, handleKeyDown, handleKeyUp])
 
   const startRecording = () => {

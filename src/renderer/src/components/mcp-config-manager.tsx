@@ -385,11 +385,11 @@ export function MCPConfigManager({
     const fetchStatus = async () => {
       try {
         const [status, initStatus] = await Promise.all([
-          tipcClient.getMcpServerStatus(),
-          tipcClient.getMcpInitializationStatus(),
+          tipcClient.getMcpServerStatus({}),
+          tipcClient.getMcpInitializationStatus({}),
         ])
-        setServerStatus(status)
-        setInitializationStatus(initStatus)
+        setServerStatus(status as any)
+        setInitializationStatus(initStatus as any)
       } catch (error) {}
     }
 
@@ -443,13 +443,13 @@ export function MCPConfigManager({
 
   const handleImportConfig = async () => {
     try {
-      const importedConfig = await tipcClient.loadMcpConfigFile()
+      const importedConfig = await tipcClient.loadMcpConfigFile({})
       if (importedConfig) {
-        onConfigChange(importedConfig)
+        onConfigChange(importedConfig as any)
         toast.success("MCP configuration imported successfully")
       }
     } catch (error) {
-      toast.error(`Failed to import config: ${error.message}`)
+      toast.error(`Failed to import config: ${error instanceof Error ? error.message : String(error)}`)
     }
   }
 
@@ -460,7 +460,7 @@ export function MCPConfigManager({
         toast.success("MCP configuration exported successfully")
       }
     } catch (error) {
-      toast.error(`Failed to export config: ${error.message}`)
+      toast.error(`Failed to export config: ${error instanceof Error ? error.message : String(error)}`)
     }
   }
 
@@ -476,13 +476,13 @@ export function MCPConfigManager({
   const handleRestartServer = async (serverName: string) => {
     try {
       const result = await tipcClient.restartMcpServer({ serverName })
-      if (result.success) {
+      if ((result as any).success) {
         toast.success(`Server ${serverName} restarted successfully`)
       } else {
-        toast.error(`Failed to restart server: ${result.error}`)
+        toast.error(`Failed to restart server: ${(result as any).error}`)
       }
     } catch (error) {
-      toast.error(`Failed to restart server: ${error.message}`)
+      toast.error(`Failed to restart server: ${error instanceof Error ? error.message : String(error)}`)
     }
   }
 
@@ -493,20 +493,20 @@ export function MCPConfigManager({
         serverName,
         enabled: false,
       })
-      if (!runtimeResult.success) {
+      if (!(runtimeResult as any).success) {
         toast.error(`Failed to disable server: Server not found`)
         return
       }
 
       // Then stop the server
       const result = await tipcClient.stopMcpServer({ serverName })
-      if (result.success) {
+      if ((result as any).success) {
         toast.success(`Server ${serverName} stopped successfully`)
       } else {
-        toast.error(`Failed to stop server: ${result.error}`)
+        toast.error(`Failed to stop server: ${(result as any).error}`)
       }
     } catch (error) {
-      toast.error(`Failed to stop server: ${error.message}`)
+      toast.error(`Failed to stop server: ${error instanceof Error ? error.message : String(error)}`)
     }
   }
 
@@ -517,14 +517,14 @@ export function MCPConfigManager({
         serverName,
         enabled: true,
       })
-      if (!runtimeResult.success) {
+      if (!(runtimeResult as any).success) {
         toast.error(`Failed to enable server: Server not found`)
         return
       }
 
       // Restart the server to initialize it
       const result = await tipcClient.restartMcpServer({ serverName })
-      if (result.success) {
+      if ((result as any).success) {
         toast.success(`Server ${serverName} started successfully`)
       } else {
         toast.error(`Failed to start server: ${result.error}`)

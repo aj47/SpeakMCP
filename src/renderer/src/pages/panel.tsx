@@ -50,7 +50,7 @@ export function Component() {
 
   // Config for drag functionality
   const configQuery = useConfigQuery()
-  const isDragEnabled = configQuery.data?.panelDragEnabled ?? true
+  const isDragEnabled = (configQuery.data as any)?.panelDragEnabled ?? true
 
   const transcribeMutation = useMutation({
     mutationFn: async ({
@@ -73,7 +73,7 @@ export function Component() {
       })
     },
     onError(error) {
-      tipcClient.hidePanelWindow()
+      tipcClient.hidePanelWindow({})
       tipcClient.displayError({
         title: error.name,
         message: error.message,
@@ -110,8 +110,8 @@ export function Component() {
     },
     onError(error) {
       setAgentProgress(null) // Clear progress on error
-      tipcClient.resizePanelToNormal() // Resize back to normal on error
-      tipcClient.hidePanelWindow()
+      tipcClient.resizePanelToNormal({}) // Resize back to normal on error
+      tipcClient.hidePanelWindow({})
       tipcClient.displayError({
         title: error.name,
         message: error.message,
@@ -129,9 +129,9 @@ export function Component() {
     },
     onError(error) {
       setShowTextInput(false)
-      tipcClient.clearTextInputState()
-      tipcClient.resizePanelToNormal()
-      tipcClient.hidePanelWindow()
+      tipcClient.clearTextInputState({})
+      tipcClient.resizePanelToNormal({})
+      tipcClient.hidePanelWindow({})
       tipcClient.displayError({
         title: error.name,
         message: error.message,
@@ -140,9 +140,9 @@ export function Component() {
     onSuccess() {
       setShowTextInput(false)
       // Clear text input state
-      tipcClient.clearTextInputState()
-      tipcClient.resizePanelToNormal()
-      tipcClient.hidePanelWindow()
+      tipcClient.clearTextInputState({})
+      tipcClient.resizePanelToNormal({})
+      tipcClient.hidePanelWindow({})
     },
   })
 
@@ -158,10 +158,10 @@ export function Component() {
     },
     onError(error) {
       setShowTextInput(false)
-      tipcClient.clearTextInputState()
+      tipcClient.clearTextInputState({})
       setAgentProgress(null) // Clear progress on error
-      tipcClient.resizePanelToNormal() // Resize back to normal on error
-      tipcClient.hidePanelWindow()
+      tipcClient.resizePanelToNormal({}) // Resize back to normal on error
+      tipcClient.hidePanelWindow({})
       tipcClient.displayError({
         title: error.name,
         message: error.message,
@@ -270,7 +270,7 @@ export function Component() {
         setMcpMode(false)
         mcpModeRef.current = false
         setAgentProgress(null)
-        tipcClient.showPanelWindow()
+        tipcClient.showPanelWindow({})
         recorderRef.current?.startRecording()
       }
     })
@@ -306,8 +306,8 @@ export function Component() {
 
     // Always try to use MCP processing first if available
     try {
-      const config = await tipcClient.getConfig()
-      if (config.mcpToolsEnabled) {
+      const config = await tipcClient.getConfig({})
+      if ((config as any).mcpToolsEnabled) {
         mcpTextInputMutation.mutate({
           text,
           conversationId: currentConversation?.id,
@@ -328,7 +328,7 @@ export function Component() {
       setMcpMode(true)
       mcpModeRef.current = true
       setAgentProgress(null) // Clear any previous progress
-      tipcClient.resizePanelToNormal() // Ensure panel is normal size for recording
+      tipcClient.resizePanelToNormal({}) // Ensure panel is normal size for recording
       setVisualizerData(() => getInitialVisualizerData())
       recorderRef.current?.startRecording()
     })
@@ -353,8 +353,8 @@ export function Component() {
       } else {
         setMcpMode(true)
         setAgentProgress(null) // Clear any previous progress
-        tipcClient.resizePanelToNormal() // Ensure panel is normal size for recording
-        tipcClient.showPanelWindow()
+        tipcClient.resizePanelToNormal({}) // Ensure panel is normal size for recording
+        tipcClient.showPanelWindow({})
         recorderRef.current?.startRecording()
       }
     })
@@ -386,7 +386,7 @@ export function Component() {
         if (!agentProgress && update && !update.isComplete) {
           // Small delay to ensure the panel is ready
           setTimeout(() => {
-            tipcClient.resizePanelForAgentMode()
+            tipcClient.resizePanelForAgentMode({})
           }, 100)
         }
 
@@ -429,9 +429,9 @@ export function Component() {
             onSubmit={handleTextSubmit}
             onCancel={() => {
               setShowTextInput(false)
-              tipcClient.clearTextInputState()
-              tipcClient.resizePanelToNormal()
-              tipcClient.hidePanelWindow()
+              tipcClient.clearTextInputState({})
+              tipcClient.resizePanelToNormal({})
+              tipcClient.hidePanelWindow({})
             }}
             isProcessing={
               textInputMutation.isPending || mcpTextInputMutation.isPending

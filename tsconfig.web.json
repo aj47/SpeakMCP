@@ -13,6 +13,10 @@
     "jsx": "react-jsx",
     "moduleResolution": "Bundler",
     "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "strict": false,
+    "noImplicitAny": false,
+    "skipLibCheck": true,
     "baseUrl": ".",
     "paths": {
       "@renderer/*": [

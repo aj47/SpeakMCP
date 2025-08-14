@@ -101,7 +101,7 @@ class DiagnosticsService {
     // Console logging removed to keep console clean
   }
 
-  logInfo(component: string, message: string, details?: any): void {
+  logInfo(component: string, message: string, _details?: any): void {
     const infoEntry = {
       timestamp: Date.now(),
       level: "info" as const,

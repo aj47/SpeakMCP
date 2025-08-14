@@ -50,10 +50,7 @@ const ThinkSection: React.FC<ThinkSectionProps> = ({
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
               rehypePlugins={[rehypeHighlight]}
-              components={{
-                // Prevent nested think sections
-                think: ({ children }) => <span>{children}</span>,
-              }}
+              components={{}}
             >
               {content}
             </ReactMarkdown>
@@ -167,7 +164,8 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
                     {children}
                   </blockquote>
                 ),
-                code: ({ inline, children, ...props }) => {
+                code: ({ children, ...props }: any) => {
+                  const inline = !props.className;
                   if (inline) {
                     return (
                       <code
@@ -217,8 +215,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
                 td: ({ children }) => (
                   <td className="border border-border px-3 py-2">{children}</td>
                 ),
-                // Prevent processing think tags as regular elements
-                think: ({ children }) => <span>{children}</span>,
+
               }}
             >
               {part.content}

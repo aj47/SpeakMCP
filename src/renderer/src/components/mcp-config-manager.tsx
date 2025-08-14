@@ -388,8 +388,8 @@ export function MCPConfigManager({
           tipcClient.getMcpServerStatus(),
           tipcClient.getMcpInitializationStatus(),
         ])
-        setServerStatus(status as any)
-        setInitializationStatus(initStatus as any)
+        setServerStatus(status)
+        setInitializationStatus(initStatus)
       } catch (error) {}
     }
 

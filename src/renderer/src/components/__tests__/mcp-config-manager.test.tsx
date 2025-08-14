@@ -3,6 +3,7 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react"
 import { MCPConfigManager } from "../mcp-config-manager"
 import { MCPConfig } from "@shared/types"
 import { toast } from "sonner"
+import { vi, describe, it, expect, beforeEach } from 'vitest'
 
 // Mock dependencies
 vi.mock("@renderer/lib/tipc-client", () => ({

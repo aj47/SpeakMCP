@@ -5,7 +5,7 @@ import {
   useQuery,
 } from "@tanstack/react-query"
 import { tipcClient } from "./tipc-client"
-import { Conversation } from "@shared/types"
+import { Conversation, ConversationHistoryItem } from "@shared/types"
 
 focusManager.setEventListener((handleFocus) => {
   const handler = () => handleFocus()
@@ -43,7 +43,8 @@ export const useConversationHistoryQuery = () =>
   useQuery({
     queryKey: ["conversation-history"],
     queryFn: async () => {
-      return tipcClient.getConversationHistory()
+      const result = await tipcClient.getConversationHistory()
+      return result
     },
   })
 
@@ -52,15 +53,16 @@ export const useConversationQuery = (conversationId: string | null) =>
     queryKey: ["conversation", conversationId],
     queryFn: async () => {
       if (!conversationId) return null
-      return tipcClient.loadConversation({ conversationId })
+      const result = await tipcClient.loadConversation({ conversationId })
+      return result
     },
     enabled: !!conversationId,
   })
 
 export const useSaveConversationMutation = () =>
   useMutation({
-    mutationFn: async (conversation: Conversation) => {
-      return tipcClient.saveConversation({ conversation })
+    mutationFn: async ({ conversation }: { conversation: any }) => {
+      await tipcClient.saveConversation({ conversation })
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["conversation-history"] })
@@ -76,7 +78,8 @@ export const useCreateConversationMutation = () =>
       firstMessage: string
       role?: "user" | "assistant"
     }) => {
-      return tipcClient.createConversation({ firstMessage, role })
+      const result = await tipcClient.createConversation({ firstMessage, role })
+      return result
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["conversation-history"] })

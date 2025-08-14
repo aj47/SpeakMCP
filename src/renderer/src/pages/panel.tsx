@@ -8,6 +8,7 @@ import { useEffect, useRef, useState } from "react"
 import { rendererHandlers, tipcClient } from "~/lib/tipc-client"
 import { AgentProgressUpdate } from "../../../shared/types"
 import { TextInputPanel } from "@renderer/components/text-input-panel"
+import { PanelResizeWrapper } from "@renderer/components/panel-resize-wrapper"
 import {
   useConversationActions,
   useConversationState,
@@ -417,7 +418,12 @@ export function Component() {
   }, [isConversationActive, endConversation])
 
   return (
-    <div className="modern-panel modern-text-strong flex h-screen flex-col text-foreground">
+    <PanelResizeWrapper
+      enableResize={true}
+      minWidth={200}
+      minHeight={100}
+      className="modern-panel modern-text-strong flex h-screen flex-col text-foreground"
+    >
       {/* Drag bar - show whenever dragging is enabled (all states of floating GUI) */}
       {isDragEnabled && (
         <PanelDragBar className="shrink-0" disabled={!isDragEnabled} />
@@ -523,6 +529,6 @@ export function Component() {
           </div>
         )}
       </div>
-    </div>
+    </PanelResizeWrapper>
   )
 }

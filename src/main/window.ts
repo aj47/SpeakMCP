@@ -175,10 +175,9 @@ export function createPanelWindow() {
       // hasShadow: false,
       width: panelWindowSize.width,
       height: panelWindowSize.height,
-      maxWidth: panelWindowSize.width,
-      maxHeight: panelWindowSize.height,
-      minWidth: panelWindowSize.width,
-      minHeight: panelWindowSize.height,
+      minWidth: 200, // Allow resizing down to minimum
+      minHeight: 100, // Allow resizing down to minimum
+      resizable: true, // Enable resizing
       visualEffectState: "active",
       vibrancy: "under-window",
       alwaysOnTop: true,
@@ -375,9 +374,9 @@ export function resizePanelForAgentMode() {
 
   const position = getPanelWindowPosition("agent")
 
-  // Update size constraints for agent mode
-  win.setMinimumSize(agentPanelWindowSize.width, agentPanelWindowSize.height)
-  win.setMaximumSize(agentPanelWindowSize.width, agentPanelWindowSize.height)
+  // Update size constraints for agent mode (allow resizing)
+  win.setMinimumSize(200, 100) // Keep minimum constraints
+  // Don't set maximum size to allow user resizing
 
   // Set size and position
   win.setSize(agentPanelWindowSize.width, agentPanelWindowSize.height, true) // animate = true
@@ -392,15 +391,9 @@ export function resizePanelForTextInput() {
 
   const position = getPanelWindowPosition("textInput")
 
-  // Update size constraints for text input mode
-  win.setMinimumSize(
-    textInputPanelWindowSize.width,
-    textInputPanelWindowSize.height,
-  )
-  win.setMaximumSize(
-    textInputPanelWindowSize.width,
-    textInputPanelWindowSize.height,
-  )
+  // Update size constraints for text input mode (allow resizing)
+  win.setMinimumSize(200, 100) // Keep minimum constraints
+  // Don't set maximum size to allow user resizing
 
   // Set size and position
   win.setSize(
@@ -419,9 +412,9 @@ export function resizePanelToNormal() {
 
   const position = getPanelWindowPosition("normal")
 
-  // Update size constraints back to normal
-  win.setMinimumSize(panelWindowSize.width, panelWindowSize.height)
-  win.setMaximumSize(panelWindowSize.width, panelWindowSize.height)
+  // Update size constraints back to normal (allow resizing)
+  win.setMinimumSize(200, 100) // Keep minimum constraints
+  // Don't set maximum size to allow user resizing
 
   // Set size and position
   win.setSize(panelWindowSize.width, panelWindowSize.height, true) // animate = true

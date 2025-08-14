@@ -39,6 +39,7 @@ const getConfig = () => {
     // Panel position defaults
     panelPosition: "top-right",
     panelDragEnabled: true,
+    panelCustomSize: { width: 300, height: 200 },
     // Theme preference defaults
     themePreference: "system",
   }

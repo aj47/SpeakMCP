@@ -196,4 +196,5 @@ export type Config = {
     | "custom"
   panelCustomPosition?: { x: number; y: number }
   panelDragEnabled?: boolean
+  panelCustomSize?: { width: number; height: number }
 }

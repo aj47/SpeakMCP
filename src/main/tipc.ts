@@ -1094,6 +1094,74 @@ export const router = {
   deleteAllConversations: t.procedure.action(async () => {
     await conversationService.deleteAllConversations()
   }),
+
+  // Panel resize endpoints
+  getPanelSize: t.procedure.action(async () => {
+    const win = WINDOWS.get("panel")
+    if (!win) {
+      throw new Error("Panel window not found")
+    }
+    const [width, height] = win.getSize()
+    return { width, height }
+  }),
+
+  updatePanelSize: t.procedure
+    .input<{ width: number; height: number }>()
+    .action(async ({ input }) => {
+      const win = WINDOWS.get("panel")
+      if (!win) {
+        throw new Error("Panel window not found")
+      }
+
+      // Apply minimum size constraints
+      const minWidth = 200
+      const minHeight = 100
+      const finalWidth = Math.max(minWidth, input.width)
+      const finalHeight = Math.max(minHeight, input.height)
+
+      // Update size constraints to allow resizing
+      win.setMinimumSize(minWidth, minHeight)
+      win.setMaximumSize(finalWidth + 1000, finalHeight + 1000) // Allow growth
+
+      // Set the actual size
+      win.setSize(finalWidth, finalHeight, true) // animate = true
+      return { width: finalWidth, height: finalHeight }
+    }),
+
+  savePanelCustomSize: t.procedure
+    .input<{ width: number; height: number }>()
+    .action(async ({ input }) => {
+      const config = configStore.get()
+      const updatedConfig = {
+        ...config,
+        panelCustomSize: { width: input.width, height: input.height }
+      }
+      configStore.save(updatedConfig)
+      return updatedConfig.panelCustomSize
+    }),
+
+  initializePanelSize: t.procedure.action(async () => {
+    const win = WINDOWS.get("panel")
+    if (!win) {
+      throw new Error("Panel window not found")
+    }
+
+    const config = configStore.get()
+    if (config.panelCustomSize) {
+      // Apply saved custom size
+      const { width, height } = config.panelCustomSize
+      const finalWidth = Math.max(200, width)
+      const finalHeight = Math.max(100, height)
+
+      win.setMinimumSize(200, 100)
+      win.setSize(finalWidth, finalHeight, false) // no animation on init
+      return { width: finalWidth, height: finalHeight }
+    }
+
+    // Return current size if no custom size saved
+    const [width, height] = win.getSize()
+    return { width, height }
+  }),
 }
 
 export type Router = typeof router

@@ -16,6 +16,7 @@ import { initTray } from "./tray"
 import { isAccessibilityGranted } from "./utils"
 import { mcpService } from "./mcp-service"
 import { initDebugFlags } from "./debug"
+import { initializeDeepLinkHandling } from "./oauth-deeplink-handler"
 
 registerServeSchema()
 
@@ -25,6 +26,9 @@ registerServeSchema()
 app.whenReady().then(() => {
   // Initialize debug flags from CLI/env early
   initDebugFlags(process.argv)
+
+  // Initialize deep link handling after app is ready
+  initializeDeepLinkHandling()
 
   // Set app user model id for windows
   electronApp.setAppUserModelId(process.env.APP_ID)

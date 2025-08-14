@@ -54,8 +54,8 @@ export function MCPToolManager({ onToolToggle }: MCPToolManagerProps) {
   useEffect(() => {
     const fetchTools = async () => {
       try {
-        const toolList = await tipcClient.getMcpDetailedToolList()
-        setTools(toolList)
+        const toolList = await tipcClient.getMcpDetailedToolList({})
+        setTools(toolList as any)
       } catch (error) {}
     }
 
@@ -113,7 +113,7 @@ export function MCPToolManager({ onToolToggle }: MCPToolManagerProps) {
       // Call the backend API
       const result = await tipcClient.setMcpToolEnabled({ toolName, enabled })
 
-      if (result.success) {
+      if ((result as any).success) {
         // Call the callback if provided
         if (onToolToggle) {
           onToolToggle(toolName, enabled)

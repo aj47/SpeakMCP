@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from "react"
 import { cn } from "@renderer/lib/utils"
 import { tipcClient } from "@renderer/lib/tipc-client"
+import { LoadingSpinner } from "@renderer/components/ui/loading-spinner"
 
 interface PanelDragBarProps {
   className?: string
@@ -113,15 +114,11 @@ export function PanelDragBar({
       {/* Drag handle visual indicator */}
       <div
         className={cn(
-          "flex items-center gap-0.5 transition-opacity duration-200",
+          "flex items-center justify-center transition-opacity duration-200",
           disabled ? "opacity-30" : "opacity-60 hover:opacity-80",
         )}
       >
-        <div className="h-1 w-1 rounded-full bg-current" />
-        <div className="h-1 w-1 rounded-full bg-current" />
-        <div className="h-1 w-1 rounded-full bg-current" />
-        <div className="h-1 w-1 rounded-full bg-current" />
-        <div className="h-1 w-1 rounded-full bg-current" />
+        <LoadingSpinner size="sm" />
       </div>
     </div>
   )

@@ -85,9 +85,7 @@ function ServerDialog({ server, onSave, onCancel }: ServerDialogProps) {
   const [oauthConfig, setOAuthConfig] = useState<OAuthConfig>(
     server?.config.oauth || {}
   )
-  const [showOAuthConfig, setShowOAuthConfig] = useState(
-    Boolean(server?.config.oauth) || transport === "streamableHttp"
-  )
+  // OAuth configuration is automatically shown for streamableHttp transport
 
   const handleSave = () => {
     if (!name.trim()) {
@@ -142,7 +140,7 @@ function ServerDialog({ server, onSave, onCancel }: ServerDialogProps) {
       ...(Object.keys(envObject).length > 0 && { env: envObject }),
       ...(timeout && { timeout: parseInt(timeout) }),
       ...(disabled && { disabled }),
-      ...(showOAuthConfig && Object.keys(oauthConfig).length > 0 && { oauth: oauthConfig }),
+      ...(transport === "streamableHttp" && Object.keys(oauthConfig).length > 0 && { oauth: oauthConfig }),
     }
 
     onSave(name.trim(), serverConfig)
@@ -270,20 +268,9 @@ function ServerDialog({ server, onSave, onCancel }: ServerDialogProps) {
           </div>
         </div>
 
-        {/* OAuth Configuration Toggle */}
-        {(transport === "streamableHttp" || showOAuthConfig) && (
-          <div className="space-y-4">
-            <div className="flex items-center space-x-2">
-              <Switch
-                id="enable-oauth"
-                checked={showOAuthConfig}
-                onCheckedChange={setShowOAuthConfig}
-              />
-              <Label htmlFor="enable-oauth">Enable OAuth Authentication</Label>
-            </div>
-
-            {showOAuthConfig && url && (
-              <OAuthServerConfig
+        {/* OAuth Configuration - automatically shown for streamableHttp transport */}
+        {transport === "streamableHttp" && url && (
+          <OAuthServerConfig
                 serverName={name || "New Server"}
                 serverUrl={url}
                 oauthConfig={oauthConfig}
@@ -338,7 +325,7 @@ function ServerDialog({ server, onSave, onCancel }: ServerDialogProps) {
                       ...(Object.keys(envObject).length > 0 && { env: envObject }),
                       ...(timeout && { timeout: parseInt(timeout) }),
                       ...(disabled && { disabled }),
-                      ...(showOAuthConfig && Object.keys(oauthConfig).length > 0 && { oauth: oauthConfig }),
+                      ...(transport === "streamableHttp" && Object.keys(oauthConfig).length > 0 && { oauth: oauthConfig }),
                     }
 
                     const result = await window.electronAPI.testMCPServer(name, testServerConfig)
@@ -352,8 +339,6 @@ function ServerDialog({ server, onSave, onCancel }: ServerDialogProps) {
                   }
                 }}
               />
-            )}
-          </div>
         )}
       </div>
 

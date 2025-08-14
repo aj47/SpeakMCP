@@ -381,7 +381,7 @@ export class OAuthClient {
     // Determine if we're in development mode
     const isDevelopment = process.env.NODE_ENV === 'development' || !!process.env.ELECTRON_RENDERER_URL
 
-    console.log(`🔄 Starting OAuth authorization flow for ${this.serverUrl}`)
+    console.log(`🔄 Starting OAuth authorization flow for ${this.baseUrl}`)
     console.log(`📍 Environment: ${isDevelopment ? 'Development' : 'Production'}`)
 
     if (isDevelopment) {

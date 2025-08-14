@@ -44,9 +44,11 @@ import {
   Play,
 } from "lucide-react"
 import { Spinner } from "@renderer/components/ui/spinner"
-import { MCPConfig, MCPServerConfig, MCPTransportType } from "@shared/types"
+import { MCPConfig, MCPServerConfig, MCPTransportType, OAuthConfig } from "@shared/types"
 import { tipcClient } from "@renderer/lib/tipc-client"
 import { toast } from "sonner"
+import { OAuthServerConfig } from "./OAuthServerConfig"
+import { OAUTH_MCP_EXAMPLES, getOAuthExample } from "@shared/oauth-examples"
 
 interface MCPConfigManagerProps {
   config: MCPConfig
@@ -80,6 +82,12 @@ function ServerDialog({ server, onSave, onCancel }: ServerDialogProps) {
     server?.config.timeout?.toString() || "",
   )
   const [disabled, setDisabled] = useState(server?.config.disabled || false)
+  const [oauthConfig, setOAuthConfig] = useState<OAuthConfig>(
+    server?.config.oauth || {}
+  )
+  const [showOAuthConfig, setShowOAuthConfig] = useState(
+    Boolean(server?.config.oauth) || transport === "streamableHttp"
+  )
 
   const handleSave = () => {
     if (!name.trim()) {
@@ -134,6 +142,7 @@ function ServerDialog({ server, onSave, onCancel }: ServerDialogProps) {
       ...(Object.keys(envObject).length > 0 && { env: envObject }),
       ...(timeout && { timeout: parseInt(timeout) }),
       ...(disabled && { disabled }),
+      ...(showOAuthConfig && Object.keys(oauthConfig).length > 0 && { oauth: oauthConfig }),
     }
 
     onSave(name.trim(), serverConfig)
@@ -260,6 +269,92 @@ function ServerDialog({ server, onSave, onCancel }: ServerDialogProps) {
             <Label htmlFor="disabled">Disabled</Label>
           </div>
         </div>
+
+        {/* OAuth Configuration Toggle */}
+        {(transport === "streamableHttp" || showOAuthConfig) && (
+          <div className="space-y-4">
+            <div className="flex items-center space-x-2">
+              <Switch
+                id="enable-oauth"
+                checked={showOAuthConfig}
+                onCheckedChange={setShowOAuthConfig}
+              />
+              <Label htmlFor="enable-oauth">Enable OAuth Authentication</Label>
+            </div>
+
+            {showOAuthConfig && url && (
+              <OAuthServerConfig
+                serverName={name || "New Server"}
+                serverUrl={url}
+                oauthConfig={oauthConfig}
+                onConfigChange={setOAuthConfig}
+                onStartAuth={async () => {
+                  if (!name) {
+                    toast.error("Please save the server configuration first")
+                    return
+                  }
+                  try {
+                    await window.electronAPI.initiateOAuthFlow(name)
+                    toast.success("OAuth authentication started. Please complete the flow in your browser.")
+                  } catch (error) {
+                    toast.error(`Failed to start OAuth flow: ${error instanceof Error ? error.message : String(error)}`)
+                  }
+                }}
+                onRevokeAuth={async () => {
+                  if (!name) return
+                  try {
+                    await window.electronAPI.revokeOAuthTokens(name)
+                    toast.success("OAuth tokens revoked successfully")
+                  } catch (error) {
+                    toast.error(`Failed to revoke OAuth tokens: ${error instanceof Error ? error.message : String(error)}`)
+                  }
+                }}
+                onTestConnection={async () => {
+                  if (!name) {
+                    toast.error("Please save the server configuration first")
+                    return
+                  }
+                  try {
+                    // Create server config for testing
+                    const envObject: Record<string, string> = {}
+                    if (env.trim()) {
+                      env.split("\n").forEach((line) => {
+                        const [key, ...valueParts] = line.split("=")
+                        if (key && valueParts.length > 0) {
+                          envObject[key.trim()] = valueParts.join("=").trim()
+                        }
+                      })
+                    }
+
+                    const testServerConfig: MCPServerConfig = {
+                      transport,
+                      ...(transport === "stdio" && {
+                        command: command.trim(),
+                        args: args.trim() ? args.trim().split(/\s+/) : [],
+                      }),
+                      ...(transport !== "stdio" && {
+                        url: url.trim(),
+                      }),
+                      ...(Object.keys(envObject).length > 0 && { env: envObject }),
+                      ...(timeout && { timeout: parseInt(timeout) }),
+                      ...(disabled && { disabled }),
+                      ...(showOAuthConfig && Object.keys(oauthConfig).length > 0 && { oauth: oauthConfig }),
+                    }
+
+                    const result = await window.electronAPI.testMCPServer(name, testServerConfig)
+                    if (result.success) {
+                      toast.success("Connection test successful!")
+                    } else {
+                      toast.error(`Connection test failed: ${result.error}`)
+                    }
+                  } catch (error) {
+                    toast.error(`Connection test failed: ${error instanceof Error ? error.message : String(error)}`)
+                  }
+                }}
+              />
+            )}
+          </div>
+        )}
       </div>
 
       <DialogFooter>
@@ -385,11 +480,11 @@ export function MCPConfigManager({
     const fetchStatus = async () => {
       try {
         const [status, initStatus] = await Promise.all([
-          tipcClient.getMcpServerStatus(),
-          tipcClient.getMcpInitializationStatus(),
+          tipcClient.getMcpServerStatus({}),
+          tipcClient.getMcpInitializationStatus({}),
         ])
-        setServerStatus(status)
-        setInitializationStatus(initStatus)
+        setServerStatus(status as any)
+        setInitializationStatus(initStatus as any)
       } catch (error) {}
     }
 
@@ -443,7 +538,7 @@ export function MCPConfigManager({
 
   const handleImportConfig = async () => {
     try {
-      const importedConfig = await tipcClient.loadMcpConfigFile()
+      const importedConfig = await tipcClient.loadMcpConfigFile({})
       if (importedConfig) {
         onConfigChange(importedConfig as any)
         toast.success("MCP configuration imported successfully")
@@ -470,6 +565,22 @@ export function MCPConfigManager({
       handleAddServer(example.name, example.config)
       setShowExamples(false)
       toast.success(`Added ${example.name} server configuration`)
+    }
+  }
+
+  const handleAddOAuthExample = (exampleKey: string) => {
+    const example = getOAuthExample(exampleKey)
+    if (example) {
+      handleAddServer(example.name, example.config)
+      setShowExamples(false)
+      toast.success(`Added ${example.name} OAuth server configuration`)
+
+      // Show setup instructions
+      if (example.setupInstructions.length > 0) {
+        toast.info(`Setup required: ${example.setupInstructions[0]}`, {
+          duration: 5000,
+        })
+      }
     }
   }
 
@@ -591,6 +702,41 @@ export function MCPConfigManager({
                           </div>
                         )}
                       </div>
+                    </CardContent>
+                  </Card>
+                ))}
+
+                {/* OAuth Examples Section */}
+                <div className="col-span-full">
+                  <h4 className="text-sm font-medium mb-2 text-muted-foreground">OAuth-Enabled Servers</h4>
+                </div>
+                {Object.entries(OAUTH_MCP_EXAMPLES).map(([key, example]) => (
+                  <Card
+                    key={`oauth-${key}`}
+                    className="cursor-pointer hover:bg-accent border-blue-200"
+                    onClick={() => handleAddOAuthExample(key)}
+                  >
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm flex items-center gap-2">
+                        {example.name}
+                        <Badge variant="secondary" className="text-xs">OAuth</Badge>
+                      </CardTitle>
+                      <CardDescription className="text-xs">
+                        URL: {example.config.url}
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="pt-0">
+                      <p className="text-xs text-muted-foreground">
+                        {example.description}
+                      </p>
+                      {example.requiredScopes && (
+                        <div className="mt-2">
+                          <span className="text-xs font-medium">Scopes: </span>
+                          <span className="text-xs text-muted-foreground">
+                            {example.requiredScopes.join(", ")}
+                          </span>
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
                 ))}

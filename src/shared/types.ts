@@ -10,6 +10,62 @@ export type RecordingHistoryItem = {
 // MCP Server Configuration Types
 export type MCPTransportType = "stdio" | "websocket" | "streamableHttp"
 
+// OAuth 2.1 Configuration Types
+export interface OAuthClientMetadata {
+  client_name: string
+  redirect_uris: string[]
+  grant_types: string[]
+  response_types: string[]
+  scope?: string
+  token_endpoint_auth_method?: string
+}
+
+export interface OAuthTokens {
+  access_token: string
+  token_type: string
+  expires_in?: number
+  refresh_token?: string
+  scope?: string
+  expires_at?: number // Calculated expiration timestamp
+}
+
+export interface OAuthServerMetadata {
+  issuer: string
+  authorization_endpoint: string
+  token_endpoint: string
+  registration_endpoint?: string
+  jwks_uri?: string
+  scopes_supported?: string[]
+  response_types_supported?: string[]
+  grant_types_supported?: string[]
+  token_endpoint_auth_methods_supported?: string[]
+  code_challenge_methods_supported?: string[]
+}
+
+export interface OAuthConfig {
+  // Server metadata (discovered or manually configured)
+  serverMetadata?: OAuthServerMetadata
+
+  // Client registration info (from dynamic registration or manual config)
+  clientId?: string
+  clientSecret?: string
+  clientMetadata?: OAuthClientMetadata
+
+  // Stored tokens
+  tokens?: OAuthTokens
+
+  // Configuration options
+  scope?: string
+  useDiscovery?: boolean // Whether to use .well-known/oauth-authorization-server
+  useDynamicRegistration?: boolean // Whether to use RFC7591 dynamic client registration
+
+  // Pending authorization state (used during OAuth flow)
+  pendingAuth?: {
+    codeVerifier: string
+    state: string
+  }
+}
+
 export interface MCPServerConfig {
   // Transport configuration
   transport?: MCPTransportType // defaults to "stdio" for backward compatibility
@@ -22,6 +78,9 @@ export interface MCPServerConfig {
   // For remote transports (websocket/streamableHttp)
   url?: string
 
+  // OAuth configuration for protected servers
+  oauth?: OAuthConfig
+
   // Common configuration
   timeout?: number
   disabled?: boolean
@@ -29,6 +88,18 @@ export interface MCPServerConfig {
 
 export interface MCPConfig {
   mcpServers: Record<string, MCPServerConfig>
+
+  // Global OAuth settings
+  oauthSettings?: {
+    // Default redirect URI for OAuth flows
+    defaultRedirectUri?: string
+    // Default scopes to request
+    defaultScopes?: string[]
+    // Timeout for OAuth operations (in milliseconds)
+    oauthTimeout?: number
+    // Whether to automatically refresh tokens
+    autoRefreshTokens?: boolean
+  }
 }
 
 // Agent Mode Progress Tracking Types

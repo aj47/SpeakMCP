@@ -16,8 +16,12 @@ import { initTray } from "./tray"
 import { isAccessibilityGranted } from "./utils"
 import { mcpService } from "./mcp-service"
 import { initDebugFlags } from "./debug"
+import { initializeDeepLinkHandling } from "./oauth-deeplink-handler"
 
 registerServeSchema()
+
+// Initialize deep link handling before app is ready
+initializeDeepLinkHandling()
 
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.

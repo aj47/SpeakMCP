@@ -4,6 +4,7 @@
 module.exports = {
   appId: "app.speakmcp",
   productName: "SpeakMCP",
+  icon: "build/icon.png",
   directories: {
     buildResources: "build",
   },

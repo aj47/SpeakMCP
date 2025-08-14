@@ -16,6 +16,8 @@ import path from "path"
 import os from "os"
 import { diagnosticsService } from "./diagnostics"
 import { state, agentProcessManager } from "./state"
+import { OAuthClient } from "./oauth-client"
+import { oauthStorage } from "./oauth-storage"
 import { isDebugTools, logTools } from "./debug"
 import { dialog } from "electron"
 
@@ -55,6 +57,7 @@ export class MCPService {
     | WebSocketClientTransport
     | StreamableHTTPClientTransport
   > = new Map()
+  private oauthClients: Map<string, OAuthClient> = new Map()
   private availableTools: MCPTool[] = []
   private disabledTools: Set<string> = new Set()
   private isInitializing = false
@@ -299,6 +302,7 @@ export class MCPService {
   }
 
   private async createTransport(
+    serverName: string,
     serverConfig: MCPServerConfig,
   ): Promise<
     | StdioClientTransport
@@ -332,7 +336,9 @@ export class MCPService {
         if (!serverConfig.url) {
           throw new Error("URL is required for streamableHttp transport")
         }
-        return new StreamableHTTPClientTransport(new URL(serverConfig.url))
+
+        // For streamableHttp, we need to handle OAuth properly
+        return await this.createStreamableHttpTransport(serverName, serverConfig)
 
       default:
         throw new Error(`Unsupported transport type: ${transportType}`)
@@ -384,30 +390,87 @@ export class MCPService {
       }
 
       // Create appropriate transport based on configuration
-      const transport = await this.createTransport(serverConfig)
+      let transport = await this.createTransport(serverName, serverConfig)
+      let client: Client | null = null
+      let retryWithOAuth = false
 
-      const client = new Client(
-        {
-          name: "speakmcp-mcp-client",
-          version: "1.0.0",
-        },
-        {
-          capabilities: {},
-        },
-      )
-
-      // Connect to the server with timeout
       const connectTimeout = serverConfig.timeout || 10000
-      const connectPromise = client.connect(transport)
-      const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(
-          () =>
-            reject(new Error(`Connection timeout after ${connectTimeout}ms`)),
-          connectTimeout,
-        )
-      })
 
-      await Promise.race([connectPromise, timeoutPromise])
+      try {
+        client = new Client(
+          {
+            name: "speakmcp-mcp-client",
+            version: "1.0.0",
+          },
+          {
+            capabilities: {},
+          },
+        )
+
+        // Connect to the server with timeout
+        const connectPromise = client.connect(transport)
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          setTimeout(
+            () =>
+              reject(new Error(`Connection timeout after ${connectTimeout}ms`)),
+            connectTimeout,
+          )
+        })
+
+        await Promise.race([connectPromise, timeoutPromise])
+      } catch (error) {
+        // Check if this is a 401 Unauthorized error for streamableHttp transport
+        if (serverConfig.transport === "streamableHttp" &&
+            error instanceof Error &&
+            (error.message.includes("HTTP 401") || error.message.includes("invalid_token"))) {
+
+          console.log(`Server ${serverName} returned 401, attempting OAuth authentication...`)
+          diagnosticsService.logInfo("mcp-service", `Server ${serverName} requires OAuth authentication, initiating flow`)
+          retryWithOAuth = true
+
+          // Clean up the failed client
+          if (client) {
+            try {
+              await client.close()
+            } catch (closeError) {
+              // Ignore close errors
+            }
+          }
+
+          // Create new transport with OAuth
+          transport = await this.handle401AndRetryWithOAuth(serverName, serverConfig)
+
+          // Create new client
+          client = new Client(
+            {
+              name: "speakmcp-mcp-client",
+              version: "1.0.0",
+            },
+            {
+              capabilities: {},
+            },
+          )
+
+          // Retry connection with OAuth
+          const retryConnectPromise = client.connect(transport)
+          const retryTimeoutPromise = new Promise<never>((_, reject) => {
+            setTimeout(
+              () =>
+                reject(new Error(`OAuth retry connection timeout after ${connectTimeout}ms`)),
+              connectTimeout,
+            )
+          })
+
+          await Promise.race([retryConnectPromise, retryTimeoutPromise])
+        } else {
+          // Re-throw non-401 errors
+          throw error
+        }
+      }
+
+      // Store the client and transport
+      this.clients.set(serverName, client!)
+      this.transports.set(serverName, transport)
 
       // Get available tools from the server
       const toolsResult = await client.listTools()
@@ -929,7 +992,7 @@ export class MCPService {
 
     try {
       // Create appropriate transport for testing
-      transport = await this.createTransport(serverConfig)
+      transport = await this.createTransport(_serverName, serverConfig)
 
       client = new Client(
         {
@@ -941,15 +1004,33 @@ export class MCPService {
         },
       )
 
-      // Try to connect
-      await client.connect(transport)
+      try {
+        // Try to connect
+        await client.connect(transport)
 
-      // Try to list tools
-      const toolsResult = await client.listTools()
+        // Try to list tools
+        const toolsResult = await client.listTools()
 
-      return {
-        success: true,
-        toolCount: toolsResult.tools.length,
+        return {
+          success: true,
+          toolCount: toolsResult.tools.length,
+        }
+      } catch (error) {
+        // Check if this is a 401 Unauthorized error for streamableHttp transport
+        if (serverConfig.transport === "streamableHttp" &&
+            error instanceof Error &&
+            (error.message.includes("HTTP 401") || error.message.includes("invalid_token"))) {
+
+          // For test connections, we don't want to initiate OAuth flow automatically
+          // Instead, we return a specific message indicating OAuth is required
+          return {
+            success: false,
+            error: "Server requires OAuth authentication. Please configure OAuth settings and authenticate.",
+          }
+        } else {
+          // Re-throw non-401 errors to be handled by outer catch
+          throw error
+        }
       }
     } catch (error) {
       return {
@@ -997,6 +1078,297 @@ export class MCPService {
 
       // Reinitialize the server
       await this.initializeServer(serverName, serverConfig)
+
+      return { success: true }
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      }
+    }
+  }
+
+  /**
+   * Create streamable HTTP transport with proper OAuth handling
+   * Implements MCP OAuth specification: try without auth first, handle 401, then retry with OAuth
+   */
+  private async createStreamableHttpTransport(serverName: string, serverConfig: MCPServerConfig): Promise<StreamableHTTPClientTransport> {
+    if (!serverConfig.url) {
+      throw new Error("URL is required for streamableHttp transport")
+    }
+
+    // First, check if we have valid OAuth tokens
+    const hasValidTokens = await oauthStorage.hasValidTokens(serverConfig.url)
+
+    if (hasValidTokens || serverConfig.oauth) {
+      // We have tokens or OAuth is configured, try with authentication
+      try {
+        const oauthClient = await this.getOrCreateOAuthClient(serverName, serverConfig)
+        const accessToken = await oauthClient.getValidToken()
+
+        return new StreamableHTTPClientTransport(new URL(serverConfig.url), {
+          requestInit: {
+            headers: {
+              'Authorization': `Bearer ${accessToken}`,
+            },
+          },
+        })
+      } catch (error) {
+        // Token invalid and can't be refreshed - fall through to try without auth
+        console.warn(`OAuth authentication failed for ${serverName}, will try without auth: ${error instanceof Error ? error.message : String(error)}`)
+      }
+    }
+
+    // Create transport without authentication
+    // If server requires OAuth, it will return 401 and we'll handle it in the connection logic
+    return new StreamableHTTPClientTransport(new URL(serverConfig.url))
+  }
+
+  /**
+   * Handle 401 Unauthorized response by initiating OAuth flow
+   * Implements MCP OAuth specification requirement
+   */
+  private async handle401AndRetryWithOAuth(serverName: string, serverConfig: MCPServerConfig): Promise<StreamableHTTPClientTransport> {
+    if (!serverConfig.url) {
+      throw new Error("URL is required for OAuth flow")
+    }
+
+    console.log(`🔐 Server ${serverName} requires OAuth authentication, initiating flow...`)
+    diagnosticsService.logInfo("mcp-service", `Server ${serverName} requires OAuth authentication, initiating flow`)
+
+    // Ensure OAuth configuration exists
+    if (!serverConfig.oauth) {
+      console.log(`📝 Creating default OAuth configuration for ${serverName}`)
+      // Create default OAuth configuration for the server
+      serverConfig.oauth = {
+        scope: 'user',
+        useDiscovery: true,
+        useDynamicRegistration: true,
+      }
+
+      // Update the server configuration
+      const config = configStore.get()
+      if (config.mcpConfig?.mcpServers?.[serverName]) {
+        config.mcpConfig.mcpServers[serverName] = serverConfig
+        configStore.save(config)
+        console.log(`✅ OAuth configuration saved for ${serverName}`)
+      }
+    }
+
+    try {
+      console.log(`🚀 Creating OAuth client for ${serverName}...`)
+      // Create OAuth client and complete the full flow
+      const oauthClient = await this.getOrCreateOAuthClient(serverName, serverConfig)
+
+      console.log(`🔄 Starting OAuth authorization flow for ${serverName}...`)
+      const tokens = await oauthClient.completeAuthorizationFlow()
+
+      console.log(`💾 Storing OAuth tokens for ${serverName}...`)
+      // Store the tokens
+      await oauthStorage.storeTokens(serverConfig.url, tokens)
+
+      console.log(`🌐 Creating authenticated transport for ${serverName}...`)
+      // Create authenticated transport
+      const transport = new StreamableHTTPClientTransport(new URL(serverConfig.url), {
+        requestInit: {
+          headers: {
+            'Authorization': `Bearer ${tokens.access_token}`,
+          },
+        },
+      })
+
+      console.log(`✅ OAuth authentication completed successfully for ${serverName}`)
+      return transport
+    } catch (error) {
+      const errorMsg = `OAuth authentication failed for server ${serverName}: ${error instanceof Error ? error.message : String(error)}`
+      console.error(`❌ ${errorMsg}`)
+      diagnosticsService.logError("mcp-service", errorMsg)
+      throw new Error(errorMsg)
+    }
+  }
+
+  /**
+   * Get or create OAuth client for a server
+   */
+  private async getOrCreateOAuthClient(serverName: string, serverConfig: MCPServerConfig): Promise<OAuthClient> {
+    if (!serverConfig.url || !serverConfig.oauth) {
+      throw new Error(`OAuth configuration missing for server ${serverName}`)
+    }
+
+    // Check if we already have an OAuth client for this server
+    let oauthClient = this.oauthClients.get(serverName)
+
+    if (!oauthClient) {
+      // Load stored OAuth config
+      const storedConfig = await oauthStorage.load(serverConfig.url)
+      const mergedConfig = { ...serverConfig.oauth, ...storedConfig }
+
+      // Create new OAuth client
+      oauthClient = new OAuthClient(serverConfig.url, mergedConfig)
+      this.oauthClients.set(serverName, oauthClient)
+    }
+
+    return oauthClient
+  }
+
+  /**
+   * Initiate OAuth flow for a server
+   */
+  async initiateOAuthFlow(serverName: string): Promise<{ authorizationUrl: string; state: string }> {
+    const config = configStore.get()
+    const serverConfig = config.mcpConfig?.mcpServers?.[serverName]
+
+    if (!serverConfig?.oauth || !serverConfig.url) {
+      throw new Error(`OAuth not configured for server ${serverName}`)
+    }
+
+    const oauthClient = await this.getOrCreateOAuthClient(serverName, serverConfig)
+
+    try {
+      const authRequest = await oauthClient.startAuthorizationFlow()
+
+      // Store the code verifier and state for later use
+      const currentConfig = oauthClient.getConfig()
+      currentConfig.pendingAuth = {
+        codeVerifier: authRequest.codeVerifier,
+        state: authRequest.state,
+      }
+      oauthClient.updateConfig(currentConfig)
+
+      // Save updated config
+      await oauthStorage.save(serverConfig.url, currentConfig)
+
+      // Open authorization URL in browser
+      await oauthClient.openAuthorizationUrl(authRequest.authorizationUrl)
+
+      return {
+        authorizationUrl: authRequest.authorizationUrl,
+        state: authRequest.state,
+      }
+    } catch (error) {
+      throw new Error(`Failed to initiate OAuth flow for ${serverName}: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+
+  /**
+   * Complete OAuth flow with authorization code
+   */
+  async completeOAuthFlow(serverName: string, code: string, state: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      const config = configStore.get()
+      const serverConfig = config.mcpConfig?.mcpServers?.[serverName]
+
+      if (!serverConfig?.oauth || !serverConfig.url) {
+        return {
+          success: false,
+          error: `OAuth not configured for server ${serverName}`,
+        }
+      }
+
+      const oauthClient = this.oauthClients.get(serverName)
+      if (!oauthClient) {
+        return {
+          success: false,
+          error: `OAuth client not found for server ${serverName}`,
+        }
+      }
+
+      const currentConfig = oauthClient.getConfig()
+      const pendingAuth = (currentConfig as any).pendingAuth
+
+      if (!pendingAuth || pendingAuth.state !== state) {
+        return {
+          success: false,
+          error: 'Invalid or expired OAuth state',
+        }
+      }
+
+      // Exchange code for tokens
+      const tokens = await oauthClient.exchangeCodeForToken({
+        code,
+        codeVerifier: pendingAuth.codeVerifier,
+        state,
+      })
+
+      // Clean up pending auth
+      delete (currentConfig as any).pendingAuth
+      oauthClient.updateConfig(currentConfig)
+
+      // Save tokens
+      await oauthStorage.storeTokens(serverConfig.url, tokens)
+
+      // Try to restart the server with new tokens
+      const restartResult = await this.restartServer(serverName)
+
+      return restartResult
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      }
+    }
+  }
+
+  /**
+   * Check OAuth status for a server
+   */
+  async getOAuthStatus(serverName: string): Promise<{
+    configured: boolean
+    authenticated: boolean
+    tokenExpiry?: number
+    error?: string
+  }> {
+    try {
+      const config = configStore.get()
+      const serverConfig = config.mcpConfig?.mcpServers?.[serverName]
+
+      if (!serverConfig?.oauth || !serverConfig.url) {
+        return {
+          configured: false,
+          authenticated: false,
+        }
+      }
+
+      const hasValidTokens = await oauthStorage.hasValidTokens(serverConfig.url)
+      const tokens = await oauthStorage.getTokens(serverConfig.url)
+
+      return {
+        configured: true,
+        authenticated: hasValidTokens,
+        tokenExpiry: tokens?.expires_at,
+      }
+    } catch (error) {
+      return {
+        configured: false,
+        authenticated: false,
+        error: error instanceof Error ? error.message : String(error),
+      }
+    }
+  }
+
+  /**
+   * Revoke OAuth tokens for a server
+   */
+  async revokeOAuthTokens(serverName: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      const config = configStore.get()
+      const serverConfig = config.mcpConfig?.mcpServers?.[serverName]
+
+      if (!serverConfig?.url) {
+        return {
+          success: false,
+          error: `Server ${serverName} not found`,
+        }
+      }
+
+      // Clear stored tokens
+      await oauthStorage.clearTokens(serverConfig.url)
+
+      // Remove OAuth client
+      this.oauthClients.delete(serverName)
+
+      // Stop the server since it will no longer be able to authenticate
+      await this.stopServer(serverName)
 
       return { success: true }
     } catch (error) {

@@ -1,5 +1,5 @@
 import "@testing-library/jest-dom"
-import { vi, beforeAll, afterAll } from "vitest"
+import { vi, beforeAll, afterAll, describe, it, expect, beforeEach } from "vitest"
 
 // Mock Electron APIs
 global.window = global.window || {}

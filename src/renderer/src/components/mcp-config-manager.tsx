@@ -385,8 +385,8 @@ export function MCPConfigManager({
     const fetchStatus = async () => {
       try {
         const [status, initStatus] = await Promise.all([
-          tipcClient.getMcpServerStatus({}),
-          tipcClient.getMcpInitializationStatus({}),
+          tipcClient.getMcpServerStatus(),
+          tipcClient.getMcpInitializationStatus(),
         ])
         setServerStatus(status as any)
         setInitializationStatus(initStatus as any)
@@ -443,7 +443,7 @@ export function MCPConfigManager({
 
   const handleImportConfig = async () => {
     try {
-      const importedConfig = await tipcClient.loadMcpConfigFile({})
+      const importedConfig = await tipcClient.loadMcpConfigFile()
       if (importedConfig) {
         onConfigChange(importedConfig as any)
         toast.success("MCP configuration imported successfully")
@@ -527,7 +527,7 @@ export function MCPConfigManager({
       if ((result as any).success) {
         toast.success(`Server ${serverName} started successfully`)
       } else {
-        toast.error(`Failed to start server: ${result.error}`)
+        toast.error(`Failed to start server: ${(result as any).error}`)
       }
     } catch (error) {
       toast.error(`Failed to start server: ${error.message}`)
@@ -578,16 +578,16 @@ export function MCPConfigManager({
                       <CardTitle className="text-sm">{example.name}</CardTitle>
                       <CardDescription className="text-xs">
                         {example.config.transport === "stdio"
-                          ? `${example.config.command} ${example.config.args ? example.config.args.join(" ") : ""}`
-                          : `${example.config.transport}: ${example.config.url}`}
+                          ? `${(example.config as any).command} ${(example.config as any).args ? (example.config as any).args.join(" ") : ""}`
+                          : `${example.config.transport}: ${(example.config as any).url}`}
                       </CardDescription>
                     </CardHeader>
                     <CardContent className="pt-0">
                       <div className="text-xs text-muted-foreground">
-                        {Object.keys(example.config.env || {}).length > 0 && (
+                        {Object.keys((example.config as any).env || {}).length > 0 && (
                           <div>
                             <strong>Environment variables:</strong>{" "}
-                            {Object.keys(example.config.env).join(", ")}
+                            {Object.keys((example.config as any).env).join(", ")}
                           </div>
                         )}
                       </div>

@@ -10,7 +10,7 @@ import { getRendererHandlers } from "@egoist/tipc/main"
 import { WINDOWS, showPanelWindow } from "./window"
 import { RendererHandlers } from "./renderer-handlers"
 import { diagnosticsService } from "./diagnostics"
-import { makeStructuredContextExtraction } from "./structured-output"
+import { makeStructuredContextExtraction, ContextExtractionResponse } from "./structured-output"
 import { makeLLMCallWithFetch, makeTextCompletionWithFetch } from "./llm-fetch"
 import { constructSystemPrompt } from "./system-prompts"
 import { state } from "./state"
@@ -84,7 +84,7 @@ Keep the contextSummary concise but informative.`
       contextExtractionPrompt,
       config.mcpToolsProviderId,
     )
-    return result
+    return result as { contextSummary: string; resources: Array<{ type: string; id: string; parameter: string }> }
   } catch (error) {
     return { contextSummary: "", resources: [] }
   }

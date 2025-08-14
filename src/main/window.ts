@@ -266,7 +266,7 @@ export function makePanelWindowClosable() {
 
 export const getWindowRendererHandlers = (id: WINDOW_ID) => {
   const win = WINDOWS.get(id)
-  if (!win) return
+  if (!win) return undefined
   return getRendererHandlers<RendererHandlers>(win.webContents)
 }
 

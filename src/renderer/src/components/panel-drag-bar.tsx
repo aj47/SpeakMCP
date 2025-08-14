@@ -21,7 +21,7 @@ export function PanelDragBar({
   const dragBarRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    if (!isDragging || disabled) return
+    if (!isDragging || disabled) return undefined
 
     const handleMouseMove = (e: MouseEvent) => {
       if (!dragStart) return

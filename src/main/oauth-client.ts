@@ -1,6 +1,6 @@
 /**
  * OAuth 2.1 Client Implementation for MCP Servers
- * 
+ *
  * Implements OAuth 2.1 with PKCE, dynamic client registration (RFC7591),
  * and authorization server metadata discovery (RFC8414) for secure
  * authentication with MCP servers.
@@ -44,6 +44,21 @@ export class OAuthClient {
       return this.config.serverMetadata
     }
 
+    // Handle Notion server with specific metadata
+    const isNotion = this.baseUrl && this.baseUrl.includes('notion.com')
+    if (isNotion) {
+      return {
+        issuer: 'https://api.notion.com',
+        authorization_endpoint: 'https://api.notion.com/v1/oauth/authorize',
+        token_endpoint: 'https://api.notion.com/v1/oauth/token',
+        scopes_supported: ['user'],
+        response_types_supported: ['code'],
+        grant_types_supported: ['authorization_code', 'refresh_token'],
+        token_endpoint_auth_methods_supported: ['none'],
+        code_challenge_methods_supported: ['S256'],
+      }
+    }
+
     const url = new URL(this.baseUrl)
     const metadataUrl = `${url.protocol}//${url.host}/.well-known/oauth-authorization-server`
 
@@ -60,7 +75,7 @@ export class OAuthClient {
       }
 
       const metadata = await response.json() as OAuthServerMetadata
-      
+
       // Validate required fields
       if (!metadata.authorization_endpoint || !metadata.token_endpoint) {
         throw new Error('Invalid server metadata: missing required endpoints')
@@ -91,6 +106,16 @@ export class OAuthClient {
    * Register OAuth client dynamically using RFC7591
    */
   async registerClient(): Promise<{ clientId: string; clientSecret?: string }> {
+    // Handle Notion-specific client ID
+    const isNotionServer = this.baseUrl && this.baseUrl.includes('notion.com')
+    if (isNotionServer) {
+      // Use the actual Notion client ID for MCP
+      return {
+        clientId: '1f8d872b-594c-80a4-b2f4-00370af2b13f',
+        clientSecret: undefined,
+      }
+    }
+
     if (this.config.clientId) {
       return {
         clientId: this.config.clientId,
@@ -99,14 +124,19 @@ export class OAuthClient {
     }
 
     const metadata = await this.discoverServerMetadata()
-    
+
     if (!metadata.registration_endpoint) {
       throw new Error('Dynamic client registration not supported by server')
     }
 
-    // Determine redirect URI based on environment
+    // Always determine redirect URI based on current environment, ignoring stored config
     const isDevelopment = process.env.NODE_ENV === 'development' || !!process.env.ELECTRON_RENDERER_URL
-    const redirectUri = isDevelopment ? 'http://localhost:3000/callback' : 'speakmcp://oauth/callback'
+
+    // Check if this is the Notion server and use appropriate redirect URI
+    const isNotionRedirect = this.baseUrl && this.baseUrl.includes('notion.com')
+    const redirectUri = isNotionRedirect
+      ? 'https://mcp.notion.com/callback' // Notion-specific redirect URI
+      : (isDevelopment ? 'http://localhost:3000/callback' : 'speakmcp://oauth/callback')
 
     const clientMetadata: OAuthClientMetadata = {
       client_name: 'SpeakMCP',
@@ -115,7 +145,14 @@ export class OAuthClient {
       response_types: ['code'],
       scope: this.config.scope || 'user',
       token_endpoint_auth_method: 'none', // Public client
-      ...this.config.clientMetadata,
+      // Don't merge stored clientMetadata to ensure we use the correct redirect URI for current environment
+      ...(this.config.clientMetadata && {
+        client_name: this.config.clientMetadata.client_name || 'SpeakMCP',
+        grant_types: this.config.clientMetadata.grant_types || ['authorization_code', 'refresh_token'],
+        response_types: this.config.clientMetadata.response_types || ['code'],
+        scope: this.config.clientMetadata.scope || this.config.scope || 'user',
+        token_endpoint_auth_method: this.config.clientMetadata.token_endpoint_auth_method || 'none',
+      }),
     }
 
     try {
@@ -133,7 +170,7 @@ export class OAuthClient {
       }
 
       const registrationResponse = await response.json()
-      
+
       this.config.clientId = registrationResponse.client_id
       this.config.clientSecret = registrationResponse.client_secret
       this.config.clientMetadata = clientMetadata
@@ -172,14 +209,66 @@ export class OAuthClient {
     const authUrl = new URL(metadata.authorization_endpoint)
     authUrl.searchParams.set('response_type', 'code')
     authUrl.searchParams.set('client_id', clientId)
-    // Use appropriate redirect URI based on environment
+
+    // Always determine redirect URI based on current environment, ignoring stored config
     const isDevelopment = process.env.NODE_ENV === 'development' || !!process.env.ELECTRON_RENDERER_URL
     const redirectUri = isDevelopment ? 'http://localhost:3000/callback' : 'speakmcp://oauth/callback'
-    authUrl.searchParams.set('redirect_uri', this.config.clientMetadata?.redirect_uris[0] || redirectUri)
+
+    console.log('🔗 OAuth Authorization URL Details:')
+    console.log('  📍 Authorization endpoint:', metadata.authorization_endpoint)
+    console.log('  🎯 Redirect URI:', redirectUri)
+    console.log('  🆔 Client ID:', clientId)
+    console.log('  🔐 State:', state)
+    console.log('  📋 Scope:', this.config.scope || 'user')
+    console.log('  🔑 Code challenge method: S256')
+
+    // Ensure consistent parameter encoding - use manual encoding for better control
+    authUrl.searchParams.set('redirect_uri', redirectUri)
     authUrl.searchParams.set('scope', this.config.scope || 'user')
     authUrl.searchParams.set('state', state)
     authUrl.searchParams.set('code_challenge', codeChallenge)
     authUrl.searchParams.set('code_challenge_method', 'S256')
+
+    // Check URL format for potential issues
+    const urlCheck = authUrl.toString()
+    if (urlCheck.length > 2048) {
+      console.warn('⚠️ URL exceeds 2048 characters, may cause issues')
+    }
+
+    // Validate URL encoding
+    const encodedCheck = encodeURIComponent(redirectUri)
+    console.log('Redirect URI encoding check:', encodedCheck)
+
+    // Check if this is the Notion server and log specific details
+    if (metadata.authorization_endpoint.includes('notion')) {
+      console.log('📝 Notion-specific URL validation:')
+      console.log('  Base URL:', metadata.authorization_endpoint)
+      console.log('  Final URL:', authUrl.toString())
+      console.log('  URL length:', authUrl.toString().length)
+      console.log('  All parameters:')
+      for (const [key, value] of authUrl.searchParams) {
+        console.log(`    ${key}: ${value} (${encodeURIComponent(value)})`)
+      }
+
+      // Also log the raw URL for manual testing
+      console.log('  Manual test URL:', authUrl.toString())
+    }
+
+    // Log the exact URL format for debugging
+    const finalUrl = authUrl.toString()
+    console.log('🌐 Complete authorization URL:', finalUrl)
+    console.log('📏 URL length:', finalUrl.length)
+
+    // Debug: Log URL components for validation
+    const debugUrl = new URL(finalUrl)
+    console.log('🔍 URL validation:')
+    console.log('  response_type:', debugUrl.searchParams.get('response_type'))
+    console.log('  client_id:', debugUrl.searchParams.get('client_id'))
+    console.log('  redirect_uri:', debugUrl.searchParams.get('redirect_uri'))
+    console.log('  scope:', debugUrl.searchParams.get('scope'))
+    console.log('  state:', debugUrl.searchParams.get('state'))
+    console.log('  code_challenge:', debugUrl.searchParams.get('code_challenge'))
+    console.log('  code_challenge_method:', debugUrl.searchParams.get('code_challenge_method'))
 
     return {
       authorizationUrl: authUrl.toString(),
@@ -197,23 +286,29 @@ export class OAuthClient {
     const metadata = await this.discoverServerMetadata()
     const { clientId, clientSecret } = await this.registerClient()
 
-    // Use appropriate redirect URI based on environment
+    // Always use appropriate redirect URI based on current environment, ignoring stored config
     const isDevelopment = process.env.NODE_ENV === 'development' || !!process.env.ELECTRON_RENDERER_URL
-    const redirectUri = isDevelopment ? 'http://localhost:3000/callback' : 'speakmcp://oauth/callback'
 
-    console.log('📋 Token exchange details:', {
-      tokenEndpoint: metadata.token_endpoint,
-      clientId: clientId,
-      hasClientSecret: !!clientSecret,
-      hasCode: !!request.code,
-      hasCodeVerifier: !!request.codeVerifier,
-      redirectUri: this.config.clientMetadata?.redirect_uris[0] || redirectUri
-    })
+    // Check if this is the Notion server and use appropriate redirect URI
+    const isNotion = this.baseUrl && this.baseUrl.includes('notion.com')
+    const redirectUri = isNotion
+      ? 'https://mcp.notion.com/callback' // Notion-specific redirect URI
+      : (isDevelopment ? 'http://localhost:3000/callback' : 'speakmcp://oauth/callback')
+
+    console.log('🔗 Token Exchange URL Details:')
+    console.log('  📍 Token endpoint:', metadata.token_endpoint)
+    console.log('  🆔 Client ID:', clientId)
+    console.log('  🎯 Redirect URI used:', redirectUri)
+    console.log('  🔐 State:', request.state)
+    console.log('  🔑 Has code verifier:', !!request.codeVerifier)
+    console.log('  📦 Has authorization code:', !!request.code)
+
+    console.log('📋 Complete token exchange request URL:', metadata.token_endpoint)
 
     const tokenRequest = new URLSearchParams({
       grant_type: 'authorization_code',
       code: request.code,
-      redirect_uri: this.config.clientMetadata?.redirect_uris[0] || redirectUri,
+      redirect_uri: redirectUri,
       client_id: clientId,
       code_verifier: request.codeVerifier,
     })
@@ -317,14 +412,14 @@ export class OAuthClient {
       }
 
       const tokenResponse = await response.json()
-      
+
       const tokens: OAuthTokens = {
         access_token: tokenResponse.access_token,
         token_type: tokenResponse.token_type,
         expires_in: tokenResponse.expires_in,
         refresh_token: tokenResponse.refresh_token || this.config.tokens.refresh_token,
         scope: tokenResponse.scope,
-        expires_at: tokenResponse.expires_in 
+        expires_at: tokenResponse.expires_in
           ? Date.now() + (tokenResponse.expires_in * 1000)
           : undefined,
       }
@@ -378,11 +473,13 @@ export class OAuthClient {
    * Complete OAuth flow with callback (deep link in production, localhost in dev)
    */
   async completeAuthorizationFlow(): Promise<OAuthTokens> {
-    // Determine if we're in development mode
+    // Always determine redirect URI based on current environment, ignoring stored config
     const isDevelopment = process.env.NODE_ENV === 'development' || !!process.env.ELECTRON_RENDERER_URL
+    const redirectUri = isDevelopment ? 'http://localhost:3000/callback' : 'speakmcp://oauth/callback'
 
     console.log(`🔄 Starting OAuth authorization flow for ${this.baseUrl}`)
     console.log(`📍 Environment: ${isDevelopment ? 'Development' : 'Production'}`)
+    console.log(`🎯 Callback URL that will be used: ${redirectUri}`)
 
     if (isDevelopment) {
       console.log('🔧 Development mode: Using localhost callback for OAuth')
@@ -398,13 +495,17 @@ export class OAuthClient {
         authUrlLength: authRequest.authorizationUrl.length
       })
 
-      // Open authorization URL
+      // Start callback server first
+      console.log('🚀 Starting OAuth callback server...')
+      const callbackPromise = handleOAuthCallback(300000) // 5 minute timeout
+
+      // Open authorization URL after server is ready
       console.log('🌐 Opening authorization URL in browser...')
       await this.openAuthorizationUrl(authRequest.authorizationUrl)
 
       // Wait for localhost callback
       console.log('⏳ Waiting for OAuth callback (5 minute timeout)...')
-      const callbackResult = await handleOAuthCallback(300000) // 5 minute timeout
+      const callbackResult = await callbackPromise
 
       console.log('📥 OAuth callback received:', {
         hasCode: !!callbackResult.code,
@@ -463,13 +564,17 @@ export class OAuthClient {
         authUrlLength: authRequest.authorizationUrl.length
       })
 
-      // Open authorization URL
+      // Start deep link handler first
+      console.log('🚀 Starting deep link handler...')
+      const callbackPromise = handleOAuthCallback(300000) // 5 minute timeout
+
+      // Open authorization URL after handler is ready
       console.log('🌐 Opening authorization URL in browser...')
       await this.openAuthorizationUrl(authRequest.authorizationUrl)
 
       // Wait for deep link callback
       console.log('⏳ Waiting for deep link callback (5 minute timeout)...')
-      const callbackResult = await handleOAuthCallback(300000) // 5 minute timeout
+      const callbackResult = await callbackPromise
 
       console.log('📥 Deep link callback received:', {
         hasCode: !!callbackResult.code,

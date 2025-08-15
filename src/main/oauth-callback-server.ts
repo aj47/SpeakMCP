@@ -1,6 +1,6 @@
 /**
  * OAuth Callback Server for Electron
- * 
+ *
  * Provides a temporary HTTP server to handle OAuth callbacks
  * during the authorization flow. This server runs locally
  * and captures the authorization code from the redirect.
@@ -31,7 +31,40 @@ export class OAuthCallbackServer {
   }
 
   /**
-   * Start the callback server and wait for OAuth callback
+   * Start the callback server and wait for it to be ready
+   */
+  async startServer(): Promise<void> {
+    return new Promise((resolve, reject) => {
+      if (this.server) {
+        resolve() // Already started
+        return
+      }
+
+      // Create HTTP server
+      this.server = createServer((req, res) => {
+        this.handleRequest(req, res)
+      })
+
+      // Start listening
+      this.server.listen(this.port, 'localhost', () => {
+        console.log(`✅ OAuth callback server listening on ${this.redirectUri}`)
+        resolve()
+      })
+
+      this.server.on('error', (error) => {
+        console.error(`❌ OAuth callback server error:`, error)
+        this.cleanup()
+        reject(new Error(`Failed to start OAuth callback server: ${error.message}`))
+      })
+
+      this.server.on('listening', () => {
+        console.log(`🎯 OAuth callback server ready to receive requests on port ${this.port}`)
+      })
+    })
+  }
+
+  /**
+   * Wait for OAuth callback (server must be started first)
    */
   async waitForCallback(timeoutMs: number = 300000): Promise<OAuthCallbackResult> {
     return new Promise((resolve, reject) => {
@@ -43,21 +76,6 @@ export class OAuthCallbackServer {
         this.cleanup()
         reject(new Error('OAuth callback timeout'))
       }, timeoutMs)
-
-      // Create HTTP server
-      this.server = createServer((req, res) => {
-        this.handleRequest(req, res)
-      })
-
-      // Start listening
-      this.server.listen(this.port, 'localhost', () => {
-        console.log(`OAuth callback server listening on ${this.redirectUri}`)
-      })
-
-      this.server.on('error', (error) => {
-        this.cleanup()
-        reject(new Error(`Failed to start OAuth callback server: ${error.message}`))
-      })
     })
   }
 
@@ -65,14 +83,21 @@ export class OAuthCallbackServer {
    * Handle incoming HTTP requests
    */
   private handleRequest(req: IncomingMessage, res: ServerResponse): void {
-    const url = new URL(req.url || '', `http://localhost:${this.port}`)
+    try {
+      console.log(`📥 OAuth callback server received request: ${req.method} ${req.url}`)
+      const url = new URL(req.url || '', `http://localhost:${this.port}`)
 
-    if (url.pathname === '/callback') {
-      this.handleOAuthCallback(url, res)
-    } else if (url.pathname === '/') {
-      this.handleRootRequest(res)
-    } else {
-      this.handleNotFound(res)
+      if (url.pathname === '/callback') {
+        this.handleOAuthCallback(url, res)
+      } else if (url.pathname === '/') {
+        this.handleRootRequest(res)
+      } else {
+        this.handleNotFound(res)
+      }
+    } catch (error) {
+      console.error('❌ Error handling OAuth callback request:', error)
+      res.writeHead(500, { 'Content-Type': 'text/plain' })
+      res.end('Internal Server Error')
     }
   }
 
@@ -85,18 +110,27 @@ export class OAuthCallbackServer {
     const error = url.searchParams.get('error')
     const errorDescription = url.searchParams.get('error_description')
 
-    console.log('📥 OAuth callback received on localhost:', {
+    console.log('🔗 OAuth localhost callback received:')
+    console.log('  🌐 Full callback URL:', url.toString())
+    console.log('  📍 Path:', url.pathname)
+    console.log('  📋 Query parameters:')
+    console.log('    🔑 Code:', code)
+    console.log('    🆔 State:', state)
+    console.log('    ❌ Error:', error)
+    console.log('    📖 Error description:', errorDescription)
+    console.log('  🔍 Parsed URL:', {
       hasCode: !!code,
       hasState: !!state,
       hasError: !!error,
-      error: error,
-      errorDescription: errorDescription,
-      fullUrl: url.toString()
+      protocol: url.protocol,
+      hostname: url.hostname,
+      port: url.port,
+      search: url.search
     })
 
     // Send success response to browser
     res.writeHead(200, { 'Content-Type': 'text/html' })
-    
+
     if (error) {
       res.end(`
         <!DOCTYPE html>
@@ -293,8 +327,12 @@ export function getOAuthCallbackServer(port?: number): OAuthCallbackServer {
  */
 export async function handleOAuthCallback(timeoutMs?: number): Promise<OAuthCallbackResult> {
   const server = getOAuthCallbackServer()
-  
+
   try {
+    // First, start the server and wait for it to be ready
+    await server.startServer()
+
+    // Then wait for the OAuth callback
     return await server.waitForCallback(timeoutMs)
   } finally {
     server.stop()

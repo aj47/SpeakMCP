@@ -1,6 +1,6 @@
 /**
  * OAuth Deep Link Handler for Electron
- * 
+ *
  * Handles OAuth callbacks via custom URL scheme (speakmcp://)
  * instead of localhost HTTP server for better native app experience.
  */
@@ -73,7 +73,7 @@ export class OAuthDeepLinkHandler {
       }
 
       // Listen for second instance (when app is already running)
-      this.secondInstanceHandler = (event: Electron.Event, commandLine: string[]) => {
+      this.secondInstanceHandler = (_event: Electron.Event, commandLine: string[]) => {
         for (const arg of commandLine) {
           if (arg.startsWith('speakmcp://')) {
             this.handleDeepLink(null as any, arg)
@@ -97,7 +97,7 @@ export class OAuthDeepLinkHandler {
 
     try {
       const parsedUrl = new URL(url)
-      
+
       // Check if this is an OAuth callback
       if (parsedUrl.protocol === 'speakmcp:' && parsedUrl.pathname === '/oauth/callback') {
         const code = parsedUrl.searchParams.get('code')
@@ -112,25 +112,85 @@ export class OAuthDeepLinkHandler {
           error_description: errorDescription || undefined,
         }
 
-        console.log('OAuth callback received:', { 
-          hasCode: !!code, 
-          hasState: !!state, 
-          hasError: !!error 
-        })
+        console.log('🔗 OAuth deeplink callback received:')
+        console.log('  🌐 Full callback URL:', url)
+        console.log('  🎯 Protocol:', parsedUrl.protocol)
+        console.log('  📍 Path:', parsedUrl.pathname)
+        console.log('  📋 Query parameters:')
+        console.log('    🔑 Code:', code)
+        console.log('    🆔 State:', state)
+        console.log('    ❌ Error:', error)
+        console.log('    📖 Error description:', errorDescription)
+        console.log('  🔍 Raw URL:', url)
 
-        this.cleanup()
-        
+        // If there's an active callback waiting, resolve it
         if (this.resolveCallback) {
+          this.cleanup()
           this.resolveCallback(result)
+        } else {
+          // No active callback waiting - this means the OAuth flow was initiated
+          // but not through completeAuthorizationFlow. We need to handle it automatically.
+          console.log('🔄 No active OAuth callback listener - attempting automatic completion...')
+          this.handleAutomaticOAuthCompletion(result)
         }
       }
     } catch (error) {
       console.error('Failed to parse deep link URL:', error)
       this.cleanup()
-      
+
       if (this.rejectCallback) {
         this.rejectCallback(new Error(`Invalid deep link URL: ${url}`))
       }
+    }
+  }
+
+  /**
+   * Handle OAuth callback when no active listener is waiting
+   */
+  private async handleAutomaticOAuthCompletion(result: OAuthCallbackResult): Promise<void> {
+    try {
+      if (result.error) {
+        console.error('❌ OAuth callback contains error:', result.error, result.error_description)
+        return
+      }
+
+      if (!result.code || !result.state) {
+        console.error('❌ OAuth callback missing required parameters')
+        return
+      }
+
+      // Import mcpService to complete the OAuth flow
+      const { mcpService } = await import('./mcp-service')
+
+      // We need to find which server this OAuth callback is for
+      // We can do this by checking which server has a pending auth with matching state
+      const serverName = await mcpService.findServerByOAuthState(result.state)
+
+      if (!serverName) {
+        console.error('❌ No server found with matching OAuth state:', result.state)
+        return
+      }
+
+      console.log(`🔄 Completing OAuth flow for server: ${serverName}`)
+      const completionResult = await mcpService.completeOAuthFlow(serverName, result.code, result.state)
+
+      if (completionResult.success) {
+        console.log('✅ OAuth flow completed successfully for server:', serverName)
+
+        // Notify the UI that OAuth was completed
+        const { WINDOWS } = await import('./window')
+
+        const mainWindow = WINDOWS.get('main')
+        if (mainWindow) {
+          // You could add a custom handler to refresh OAuth status in the UI
+          // For now, we'll just log success
+          console.log('📢 OAuth completion notification sent to UI')
+        }
+      } else {
+        console.error('❌ OAuth flow completion failed:', completionResult.error)
+      }
+    } catch (error) {
+      console.error('❌ Failed to handle automatic OAuth completion:', error)
     }
   }
 
@@ -191,7 +251,7 @@ export function getOAuthDeepLinkHandler(): OAuthDeepLinkHandler {
  */
 export async function handleOAuthCallback(timeoutMs?: number): Promise<OAuthCallbackResult> {
   const handler = getOAuthDeepLinkHandler()
-  
+
   try {
     return await handler.waitForCallback(timeoutMs)
   } finally {
@@ -238,7 +298,7 @@ export function initializeDeepLinkHandling(): void {
           app.quit()
           return
         } else {
-          app.on('second-instance', (event, commandLine, workingDirectory) => {
+          app.on('second-instance', (_event, commandLine, _workingDirectory) => {
             // Someone tried to run a second instance, focus our window instead
             // and handle any deep link arguments
             console.log('Second instance launched with args:', commandLine)

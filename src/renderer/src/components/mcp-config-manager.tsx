@@ -42,6 +42,7 @@ import {
   RotateCcw,
   Square,
   Play,
+  ExternalLink,
 } from "lucide-react"
 import { Spinner } from "@renderer/components/ui/spinner"
 import { MCPConfig, MCPServerConfig, MCPTransportType, OAuthConfig } from "@shared/types"
@@ -457,6 +458,29 @@ export function MCPConfigManager({
     isInitializing: boolean
     progress: { current: number; total: number; currentServer?: string }
   }>({ isInitializing: false, progress: { current: 0, total: 0 } })
+  const [oauthStatus, setOAuthStatus] = useState<Record<string, { configured: boolean; authenticated: boolean; tokenExpiry?: number; error?: string }>>({})
+
+  // Load OAuth status for all servers
+  const refreshOAuthStatus = async (serverName?: string) => {
+    try {
+      if (serverName) {
+        const status = await window.electronAPI.getOAuthStatus(serverName)
+        setOAuthStatus(prev => ({ ...prev, [serverName]: status }))
+      } else {
+        // Load status for all servers
+        const newStatus: Record<string, any> = {}
+        for (const [name, config] of Object.entries(servers)) {
+          if (config.transport === "streamableHttp" && config.url) {
+            const status = await window.electronAPI.getOAuthStatus(name)
+            newStatus[name] = status
+          }
+        }
+        setOAuthStatus(newStatus)
+      }
+    } catch (error) {
+      console.error('Failed to load OAuth status:', error)
+    }
+  }
 
   const servers = config.mcpServers || {}
 
@@ -470,6 +494,7 @@ export function MCPConfigManager({
         ])
         setServerStatus(status as any)
         setInitializationStatus(initStatus as any)
+        await refreshOAuthStatus()
       } catch (error) {}
     }
 
@@ -833,6 +858,57 @@ export function MCPConfigManager({
                     )}
                   </div>
                   <div className="flex gap-1">
+                    {/* OAuth authorization controls - moved to top level */}
+                    {serverConfig.transport === "streamableHttp" && serverConfig.url && (
+                      <>
+                        {oauthStatus[name]?.authenticated ? (
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={async () => {
+                                try {
+                                  await window.electronAPI.revokeOAuthTokens(name)
+                                  toast.success("OAuth authentication revoked")
+                                  refreshOAuthStatus()
+                                } catch (error) {
+                                  toast.error(`Failed to revoke authentication: ${error instanceof Error ? error.message : String(error)}`)
+                                }
+                              }}
+                              title="Revoke OAuth authentication"
+                            >
+                              <XCircle className="h-4 w-4" />
+                            </Button>
+                          </>
+                        ) : oauthStatus[name]?.configured ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={async () => {
+                              try {
+                                await window.electronAPI.initiateOAuthFlow(name)
+                                toast.success("OAuth authentication started")
+                                // Poll for completion
+                                const checkCompletion = setInterval(async () => {
+                                  const status = await window.electronAPI.getOAuthStatus(name)
+                                  if (status.authenticated) {
+                                    clearInterval(checkCompletion)
+                                    refreshOAuthStatus()
+                                    toast.success("OAuth authentication completed")
+                                  }
+                                }, 2000)
+                                setTimeout(() => clearInterval(checkCompletion), 60000)
+                              } catch (error) {
+                                toast.error(`Failed to start OAuth flow: ${error instanceof Error ? error.message : String(error)}`)
+                              }
+                            }}
+                            title="Start OAuth authentication"
+                          >
+                            <ExternalLink className="h-4 w-4" />
+                          </Button>
+                        ) : null}
+                      </>
+                    )}
                     {!serverConfig.disabled && (
                       <>
                         {serverStatus[name]?.runtimeEnabled === false ? (
@@ -876,6 +952,55 @@ export function MCPConfigManager({
                     >
                       <Edit className="h-4 w-4" />
                     </Button>
+                    {/* OAuth authorization controls - moved to top level */}
+                    {serverConfig.transport === "streamableHttp" && serverConfig.url && (
+                      <>
+                        {oauthStatus[name]?.authenticated ? (
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={async () => {
+                              try {
+                                await window.electronAPI.revokeOAuthTokens(name)
+                                toast.success("OAuth authentication revoked")
+                                refreshOAuthStatus()
+                              } catch (error) {
+                                toast.error(`Failed to revoke authentication: ${error instanceof Error ? error.message : String(error)}`)
+                              }
+                            }}
+                            title="Revoke OAuth authentication"
+                          >
+                            <XCircle className="h-4 w-4" />
+                          </Button>
+                        ) : oauthStatus[name]?.configured ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={async () => {
+                              try {
+                                await window.electronAPI.initiateOAuthFlow(name)
+                                toast.success("OAuth authentication started")
+                                // Poll for completion
+                                const checkCompletion = setInterval(async () => {
+                                  const status = await window.electronAPI.getOAuthStatus(name)
+                                  if (status.authenticated) {
+                                    clearInterval(checkCompletion)
+                                    refreshOAuthStatus()
+                                    toast.success("OAuth authentication completed")
+                                  }
+                                }, 2000)
+                                setTimeout(() => clearInterval(checkCompletion), 60000)
+                              } catch (error) {
+                                toast.error(`Failed to start OAuth flow: ${error instanceof Error ? error.message : String(error)}`)
+                              }
+                            }}
+                            title="Start OAuth authentication"
+                          >
+                            <ExternalLink className="h-4 w-4" />
+                          </Button>
+                        ) : null}
+                      </>
+                    )}
                     <Button
                       variant="ghost"
                       size="sm"

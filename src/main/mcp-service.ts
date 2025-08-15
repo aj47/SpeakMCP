@@ -1400,6 +1400,28 @@ export class MCPService {
     }
   }
 
+  /**
+   * Find server by OAuth state parameter
+   */
+  async findServerByOAuthState(state: string): Promise<string | null> {
+    try {
+      // Check all OAuth clients for matching pending auth state
+      for (const [serverName, oauthClient] of this.oauthClients.entries()) {
+        const config = oauthClient.getConfig()
+        const pendingAuth = (config as any).pendingAuth
+
+        if (pendingAuth && pendingAuth.state === state) {
+          return serverName
+        }
+      }
+
+      return null
+    } catch (error) {
+      console.error('Error finding server by OAuth state:', error)
+      return null
+    }
+  }
+
   async stopServer(
     serverName: string,
   ): Promise<{ success: boolean; error?: string }> {

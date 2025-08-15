@@ -1,6 +1,6 @@
 /**
  * OAuth Server Configuration Component
- * 
+ *
  * Provides UI for configuring OAuth settings for MCP servers,
  * managing authentication flows, and displaying connection status.
  */
@@ -135,15 +135,15 @@ export function OAuthServerConfig({
     const date = new Date(expiry)
     const now = new Date()
     const diffMs = expiry - now.getTime()
-    
+
     if (diffMs <= 0) return "Expired"
-    
+
     const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
     const diffDays = Math.floor(diffHours / 24)
-    
+
     if (diffDays > 0) return `${diffDays} day${diffDays > 1 ? 's' : ''}`
     if (diffHours > 0) return `${diffHours} hour${diffHours > 1 ? 's' : ''}`
-    
+
     const diffMinutes = Math.floor(diffMs / (1000 * 60))
     return `${diffMinutes} minute${diffMinutes > 1 ? 's' : ''}`
   }
@@ -161,48 +161,19 @@ export function OAuthServerConfig({
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle className="text-lg">OAuth Configuration</CardTitle>
-            <CardDescription>
-              Configure OAuth 2.1 authentication for {serverName}
-            </CardDescription>
-          </div>
-          <div className="flex items-center gap-2">
-            {getStatusBadge()}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={loadOAuthStatus}
-              disabled={isLoading}
-            >
-              <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
-            </Button>
-          </div>
+        <div>
+          <CardTitle className="text-lg">OAuth Configuration</CardTitle>
+          <CardDescription>
+            Configure OAuth 2.1 authentication for {serverName}
+          </CardDescription>
         </div>
       </CardHeader>
       <CardContent className="space-y-6">
-        {/* Authentication Status */}
-        {status.configured && (
-          <div className="space-y-3">
-            <Label className="text-sm font-medium">Authentication Status</Label>
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <span className="text-muted-foreground">Status:</span>
-                <div className="mt-1">{getStatusBadge()}</div>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Token Expires:</span>
-                <div className="mt-1">{formatTokenExpiry(status.tokenExpiry)}</div>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* OAuth Settings */}
         <div className="space-y-4">
           <Label className="text-sm font-medium">OAuth Settings</Label>
-          
+
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="scope">Scope</Label>
@@ -247,52 +218,9 @@ export function OAuthServerConfig({
           </div>
         </div>
 
-        {/* Actions */}
-        <div className="flex flex-wrap gap-2">
-          {!status.authenticated ? (
-            <Button
-              onClick={handleStartAuth}
-              disabled={isAuthenticating || !serverUrl}
-              className="flex items-center gap-2"
-            >
-              {isAuthenticating ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <ExternalLink className="w-4 h-4" />
-              )}
-              {isAuthenticating ? "Authenticating..." : "Start Authentication"}
-            </Button>
-          ) : (
-            <Button
-              variant="destructive"
-              onClick={handleRevokeAuth}
-              disabled={isLoading}
-              className="flex items-center gap-2"
-            >
-              {isLoading ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <XCircle className="w-4 h-4" />
-              )}
-              Revoke Authentication
-            </Button>
-          )}
-
-          {status.authenticated && onTestConnection && (
-            <Button
-              variant="outline"
-              onClick={handleTestConnection}
-              disabled={isLoading}
-              className="flex items-center gap-2"
-            >
-              {isLoading ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <CheckCircle className="w-4 h-4" />
-              )}
-              Test Connection
-            </Button>
-          )}
+        {/* OAuth Configuration Summary */}
+        <div className="text-sm text-muted-foreground">
+          <p>OAuth authentication can be started from the main server controls once configuration is complete.</p>
         </div>
 
         {/* Server Information */}

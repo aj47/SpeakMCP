@@ -348,6 +348,7 @@ export class MCPService {
   private async initializeServer(
     serverName: string,
     serverConfig: MCPServerConfig,
+    options: { allowAutoOAuth?: boolean } = {},
   ) {
     diagnosticsService.logInfo(
       "mcp-service",
@@ -424,44 +425,64 @@ export class MCPService {
             error instanceof Error &&
             (error.message.includes("HTTP 401") || error.message.includes("invalid_token"))) {
 
-          console.log(`Server ${serverName} returned 401, attempting OAuth authentication...`)
-          diagnosticsService.logInfo("mcp-service", `Server ${serverName} requires OAuth authentication, initiating flow`)
-          retryWithOAuth = true
+          // Only attempt automatic OAuth if explicitly allowed (not during app startup)
+          if (options.allowAutoOAuth) {
+            console.log(`Server ${serverName} returned 401, attempting OAuth authentication...`)
+            diagnosticsService.logInfo("mcp-service", `Server ${serverName} requires OAuth authentication, initiating flow`)
+            retryWithOAuth = true
 
-          // Clean up the failed client
-          if (client) {
-            try {
-              await client.close()
-            } catch (closeError) {
-              // Ignore close errors
+            // Clean up the failed client
+            if (client) {
+              try {
+                await client.close()
+              } catch (closeError) {
+                // Ignore close errors
+              }
             }
-          }
 
-          // Create new transport with OAuth
-          transport = await this.handle401AndRetryWithOAuth(serverName, serverConfig)
+            // Create new transport with OAuth
+            transport = await this.handle401AndRetryWithOAuth(serverName, serverConfig)
 
-          // Create new client
-          client = new Client(
-            {
-              name: "speakmcp-mcp-client",
-              version: "1.0.0",
-            },
-            {
-              capabilities: {},
-            },
-          )
-
-          // Retry connection with OAuth
-          const retryConnectPromise = client.connect(transport)
-          const retryTimeoutPromise = new Promise<never>((_, reject) => {
-            setTimeout(
-              () =>
-                reject(new Error(`OAuth retry connection timeout after ${connectTimeout}ms`)),
-              connectTimeout,
+            // Create new client
+            client = new Client(
+              {
+                name: "speakmcp-mcp-client",
+                version: "1.0.0",
+              },
+              {
+                capabilities: {},
+              },
             )
-          })
 
-          await Promise.race([retryConnectPromise, retryTimeoutPromise])
+            // Retry connection with OAuth
+            const retryConnectPromise = client.connect(transport)
+            const retryTimeoutPromise = new Promise<never>((_, reject) => {
+              setTimeout(
+                () =>
+                  reject(new Error(`OAuth retry connection timeout after ${connectTimeout}ms`)),
+                connectTimeout,
+              )
+            })
+
+            await Promise.race([retryConnectPromise, retryTimeoutPromise])
+          } else {
+            // During app startup, don't trigger OAuth flow automatically
+            // Just log the requirement and let the server remain disconnected
+            console.log(`Server ${serverName} requires OAuth authentication but auto-OAuth is disabled during startup`)
+            diagnosticsService.logInfo("mcp-service", `Server ${serverName} requires OAuth authentication - user must manually authenticate`)
+
+            // Clean up the failed client
+            if (client) {
+              try {
+                await client.close()
+              } catch (closeError) {
+                // Ignore close errors
+              }
+            }
+
+            // Throw a specific error that indicates OAuth is required
+            throw new Error(`Server requires OAuth authentication. Please configure OAuth settings and authenticate manually.`)
+          }
         } else {
           // Re-throw non-401 errors
           throw error
@@ -1076,8 +1097,8 @@ export class MCPService {
       // Clean up existing server
       await this.stopServer(serverName)
 
-      // Reinitialize the server
-      await this.initializeServer(serverName, serverConfig)
+      // Reinitialize the server with auto-OAuth allowed (manual restart)
+      await this.initializeServer(serverName, serverConfig, { allowAutoOAuth: true })
 
       return { success: true }
     } catch (error) {

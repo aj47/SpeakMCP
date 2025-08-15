@@ -131,12 +131,7 @@ export class OAuthClient {
 
     // Always determine redirect URI based on current environment, ignoring stored config
     const isDevelopment = process.env.NODE_ENV === 'development' || !!process.env.ELECTRON_RENDERER_URL
-
-    // Check if this is the Notion server and use appropriate redirect URI
-    const isNotionRedirect = this.baseUrl && this.baseUrl.includes('notion.com')
-    const redirectUri = isNotionRedirect
-      ? 'https://mcp.notion.com/callback' // Notion-specific redirect URI
-      : (isDevelopment ? 'http://localhost:3000/callback' : 'speakmcp://oauth/callback')
+    const redirectUri = isDevelopment ? 'http://localhost:3000/callback' : 'speakmcp://oauth/callback'
 
     const clientMetadata: OAuthClientMetadata = {
       client_name: 'SpeakMCP',
@@ -288,12 +283,7 @@ export class OAuthClient {
 
     // Always use appropriate redirect URI based on current environment, ignoring stored config
     const isDevelopment = process.env.NODE_ENV === 'development' || !!process.env.ELECTRON_RENDERER_URL
-
-    // Check if this is the Notion server and use appropriate redirect URI
-    const isNotion = this.baseUrl && this.baseUrl.includes('notion.com')
-    const redirectUri = isNotion
-      ? 'https://mcp.notion.com/callback' // Notion-specific redirect URI
-      : (isDevelopment ? 'http://localhost:3000/callback' : 'speakmcp://oauth/callback')
+    const redirectUri = isDevelopment ? 'http://localhost:3000/callback' : 'speakmcp://oauth/callback'
 
     console.log('🔗 Token Exchange URL Details:')
     console.log('  📍 Token endpoint:', metadata.token_endpoint)

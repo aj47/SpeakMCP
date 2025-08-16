@@ -36,7 +36,7 @@ Currently building for **macOS (Apple Silicon)**
 
 ## 🎬 Preview
 
-https://github.com/aj47/SpeakMCP/raw/main/assets/speakmcp-vid.mp4
+https://github.com/aj47/SpeakMCP/releases/download/v0.1.0/speakmcp-vid.mp4
 
 ## ✨ Features
 

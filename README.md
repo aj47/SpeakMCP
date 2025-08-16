@@ -176,6 +176,8 @@ pnpm dev -- --debug-all  # Enable all debug logs
 
 We welcome contributions! Fork the repo, create a feature branch, and open a Pull Request.
 
+**💬 Get help on [Discord](https://discord.gg/naGJHsKc)** | **🌐 More info at [techfren.net](https://techfren.net)**
+
 ## 📄 License
 
 This project is licensed under the [AGPL-3.0 License](./LICENSE).

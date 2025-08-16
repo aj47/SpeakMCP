@@ -93,8 +93,6 @@ export class OAuthDeepLinkHandler {
       event.preventDefault()
     }
 
-    console.log('Received deep link:', url)
-
     try {
       const parsedUrl = new URL(url)
 
@@ -112,17 +110,6 @@ export class OAuthDeepLinkHandler {
           error_description: errorDescription || undefined,
         }
 
-        console.log('🔗 OAuth deeplink callback received:')
-        console.log('  🌐 Full callback URL:', url)
-        console.log('  🎯 Protocol:', parsedUrl.protocol)
-        console.log('  📍 Path:', parsedUrl.pathname)
-        console.log('  📋 Query parameters:')
-        console.log('    🔑 Code:', code)
-        console.log('    🆔 State:', state)
-        console.log('    ❌ Error:', error)
-        console.log('    📖 Error description:', errorDescription)
-        console.log('  🔍 Raw URL:', url)
-
         // If there's an active callback waiting, resolve it
         if (this.resolveCallback) {
           this.cleanup()
@@ -130,12 +117,10 @@ export class OAuthDeepLinkHandler {
         } else {
           // No active callback waiting - this means the OAuth flow was initiated
           // but not through completeAuthorizationFlow. We need to handle it automatically.
-          console.log('🔄 No active OAuth callback listener - attempting automatic completion...')
           this.handleAutomaticOAuthCompletion(result)
         }
       }
     } catch (error) {
-      console.error('Failed to parse deep link URL:', error)
       this.cleanup()
 
       if (this.rejectCallback) {
@@ -149,13 +134,7 @@ export class OAuthDeepLinkHandler {
    */
   private async handleAutomaticOAuthCompletion(result: OAuthCallbackResult): Promise<void> {
     try {
-      if (result.error) {
-        console.error('❌ OAuth callback contains error:', result.error, result.error_description)
-        return
-      }
-
-      if (!result.code || !result.state) {
-        console.error('❌ OAuth callback missing required parameters')
+      if (result.error || !result.code || !result.state) {
         return
       }
 
@@ -167,30 +146,12 @@ export class OAuthDeepLinkHandler {
       const serverName = await mcpService.findServerByOAuthState(result.state)
 
       if (!serverName) {
-        console.error('❌ No server found with matching OAuth state:', result.state)
         return
       }
 
-      console.log(`🔄 Completing OAuth flow for server: ${serverName}`)
-      const completionResult = await mcpService.completeOAuthFlow(serverName, result.code, result.state)
-
-      if (completionResult.success) {
-        console.log('✅ OAuth flow completed successfully for server:', serverName)
-
-        // Notify the UI that OAuth was completed
-        const { WINDOWS } = await import('./window')
-
-        const mainWindow = WINDOWS.get('main')
-        if (mainWindow) {
-          // You could add a custom handler to refresh OAuth status in the UI
-          // For now, we'll just log success
-          console.log('📢 OAuth completion notification sent to UI')
-        }
-      } else {
-        console.error('❌ OAuth flow completion failed:', completionResult.error)
-      }
+      await mcpService.completeOAuthFlow(serverName, result.code, result.state)
     } catch (error) {
-      console.error('❌ Failed to handle automatic OAuth completion:', error)
+      // Silently fail - the user can retry the OAuth flow if needed
     }
   }
 
@@ -270,20 +231,11 @@ export function initializeDeepLinkHandling(): void {
   if (process.env.NODE_ENV === 'production' || !process.env.ELECTRON_RENDERER_URL) {
     try {
       if (!app.isDefaultProtocolClient('speakmcp')) {
-        const success = app.setAsDefaultProtocolClient('speakmcp')
-        if (success) {
-          console.log('✅ Registered speakmcp:// protocol handler')
-        } else {
-          console.warn('⚠️ Failed to register speakmcp:// protocol handler')
-        }
-      } else {
-        console.log('✅ speakmcp:// protocol handler already registered')
+        app.setAsDefaultProtocolClient('speakmcp')
       }
     } catch (error) {
-      console.warn('⚠️ Could not register protocol handler:', error)
+      // Silently fail - protocol registration is not critical
     }
-  } else {
-    console.log('🔧 Development mode: skipping protocol registration (deep links will use localhost fallback)')
   }
 
   // Handle deep links when app is not running (Windows/Linux)
@@ -294,14 +246,12 @@ export function initializeDeepLinkHandling(): void {
         const gotTheLock = app.requestSingleInstanceLock()
 
         if (!gotTheLock) {
-          console.log('Another instance is already running, quitting...')
           app.quit()
           return
         } else {
           app.on('second-instance', (_event, commandLine, _workingDirectory) => {
             // Someone tried to run a second instance, focus our window instead
             // and handle any deep link arguments
-            console.log('Second instance launched with args:', commandLine)
 
             // Focus the main window if it exists
             const { WINDOWS } = require('./window')
@@ -313,10 +263,10 @@ export function initializeDeepLinkHandling(): void {
           })
         }
       } catch (error) {
-        console.warn('⚠️ Could not request single instance lock:', error)
+        // Silently fail - single instance lock is not critical
       }
     }
   }
 
-  console.log('🔗 Deep link handling initialized')
+
 }

@@ -47,18 +47,12 @@ export class OAuthCallbackServer {
 
       // Start listening
       this.server.listen(this.port, 'localhost', () => {
-        console.log(`✅ OAuth callback server listening on ${this.redirectUri}`)
         resolve()
       })
 
       this.server.on('error', (error) => {
-        console.error(`❌ OAuth callback server error:`, error)
         this.cleanup()
         reject(new Error(`Failed to start OAuth callback server: ${error.message}`))
-      })
-
-      this.server.on('listening', () => {
-        console.log(`🎯 OAuth callback server ready to receive requests on port ${this.port}`)
       })
     })
   }
@@ -84,7 +78,6 @@ export class OAuthCallbackServer {
    */
   private handleRequest(req: IncomingMessage, res: ServerResponse): void {
     try {
-      console.log(`📥 OAuth callback server received request: ${req.method} ${req.url}`)
       const url = new URL(req.url || '', `http://localhost:${this.port}`)
 
       if (url.pathname === '/callback') {
@@ -95,7 +88,6 @@ export class OAuthCallbackServer {
         this.handleNotFound(res)
       }
     } catch (error) {
-      console.error('❌ Error handling OAuth callback request:', error)
       res.writeHead(500, { 'Content-Type': 'text/plain' })
       res.end('Internal Server Error')
     }
@@ -110,23 +102,7 @@ export class OAuthCallbackServer {
     const error = url.searchParams.get('error')
     const errorDescription = url.searchParams.get('error_description')
 
-    console.log('🔗 OAuth localhost callback received:')
-    console.log('  🌐 Full callback URL:', url.toString())
-    console.log('  📍 Path:', url.pathname)
-    console.log('  📋 Query parameters:')
-    console.log('    🔑 Code:', code)
-    console.log('    🆔 State:', state)
-    console.log('    ❌ Error:', error)
-    console.log('    📖 Error description:', errorDescription)
-    console.log('  🔍 Parsed URL:', {
-      hasCode: !!code,
-      hasState: !!state,
-      hasError: !!error,
-      protocol: url.protocol,
-      hostname: url.hostname,
-      port: url.port,
-      search: url.search
-    })
+
 
     // Send success response to browser
     res.writeHead(200, { 'Content-Type': 'text/html' })
@@ -205,22 +181,12 @@ export class OAuthCallbackServer {
       error_description: errorDescription || undefined,
     }
 
-    console.log('📤 OAuth callback response sent to browser')
-    console.log('🔄 Preparing to resolve OAuth callback promise with result:', {
-      hasCode: !!result.code,
-      hasState: !!result.state,
-      hasError: !!result.error
-    })
-
     // Delay cleanup to allow browser to render response
     setTimeout(() => {
       if (this.resolveCallback) {
-        console.log('✅ Resolving OAuth callback promise...')
         this.resolveCallback(result)
-        console.log('🧹 Cleaning up OAuth callback server...')
         this.cleanup()
       } else {
-        console.warn('⚠️ No callback resolver available!')
         this.cleanup()
       }
     }, 1000)

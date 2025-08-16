@@ -1,6 +1,6 @@
 /**
  * Secure OAuth Token Storage for Electron
- * 
+ *
  * Provides secure storage for OAuth tokens and client credentials
  * using Electron's safeStorage API when available, with fallback
  * to encrypted file storage.
@@ -43,7 +43,6 @@ export class OAuthStorage {
         fs.writeFileSync(ENCRYPTION_KEY_FILE, this.encryptionKey, { mode: 0o600 })
       }
     } catch (error) {
-      console.error('Failed to initialize OAuth encryption key:', error)
       this.encryptionKey = crypto.randomBytes(32) // Use in-memory key as fallback
     }
   }
@@ -112,7 +111,6 @@ export class OAuthStorage {
       const decryptedData = this.decryptData(encryptedData)
       return JSON.parse(decryptedData) as StoredOAuthData
     } catch (error) {
-      console.error('Failed to load OAuth storage:', error)
       return {}
     }
   }
@@ -286,9 +284,9 @@ export const oauthStorage = new OAuthStorage()
 app.whenReady().then(() => {
   // Clean up expired tokens every hour
   setInterval(() => {
-    oauthStorage.cleanup().catch(console.error)
+    oauthStorage.cleanup().catch(() => {})
   }, 60 * 60 * 1000)
 
   // Initial cleanup
-  oauthStorage.cleanup().catch(console.error)
+  oauthStorage.cleanup().catch(() => {})
 })

@@ -697,7 +697,6 @@ Always use actual resource IDs from the conversation history or create new ones 
     // Display LLM response content to user
     if (llmResponse.content) {
       console.log(llmResponse.content)
-      console.log("====== LLM RESPONSE ======")
     }
 
     // Update thinking step with actual LLM content and mark as completed

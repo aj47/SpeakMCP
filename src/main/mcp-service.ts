@@ -427,7 +427,6 @@ export class MCPService {
 
           // Only attempt automatic OAuth if explicitly allowed (not during app startup)
           if (options.allowAutoOAuth) {
-            console.log(`Server ${serverName} returned 401, attempting OAuth authentication...`)
             diagnosticsService.logInfo("mcp-service", `Server ${serverName} requires OAuth authentication, initiating flow`)
             retryWithOAuth = true
 
@@ -468,7 +467,6 @@ export class MCPService {
           } else {
             // During app startup, don't trigger OAuth flow automatically
             // Just log the requirement and let the server remain disconnected
-            console.log(`Server ${serverName} requires OAuth authentication but auto-OAuth is disabled during startup`)
             diagnosticsService.logInfo("mcp-service", `Server ${serverName} requires OAuth authentication - user must manually authenticate`)
 
             // Clean up the failed client
@@ -1136,7 +1134,6 @@ export class MCPService {
         })
       } catch (error) {
         // Token invalid and can't be refreshed - fall through to try without auth
-        console.warn(`OAuth authentication failed for ${serverName}, will try without auth: ${error instanceof Error ? error.message : String(error)}`)
       }
     }
 
@@ -1177,18 +1174,14 @@ export class MCPService {
     }
 
     try {
-      console.log(`🚀 Creating OAuth client for ${serverName}...`)
       // Create OAuth client and complete the full flow
       const oauthClient = await this.getOrCreateOAuthClient(serverName, serverConfig)
 
-      console.log(`🔄 Starting OAuth authorization flow for ${serverName}...`)
       const tokens = await oauthClient.completeAuthorizationFlow()
 
-      console.log(`💾 Storing OAuth tokens for ${serverName}...`)
       // Store the tokens
       await oauthStorage.storeTokens(serverConfig.url, tokens)
 
-      console.log(`🌐 Creating authenticated transport for ${serverName}...`)
       // Create authenticated transport
       const transport = new StreamableHTTPClientTransport(new URL(serverConfig.url), {
         requestInit: {

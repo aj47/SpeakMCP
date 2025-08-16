@@ -1304,6 +1304,12 @@ export class MCPService {
         }
       }
 
+      // Ensure client registration is saved before token exchange
+      const clientConfig = oauthClient.getConfig()
+      if (clientConfig.clientId) {
+        await oauthStorage.save(serverConfig.url, clientConfig)
+      }
+
       // Exchange code for tokens
       const tokens = await oauthClient.exchangeCodeForToken({
         code,
@@ -1315,7 +1321,7 @@ export class MCPService {
       delete (currentConfig as any).pendingAuth
       oauthClient.updateConfig(currentConfig)
 
-      // Save tokens
+      // Save tokens (which also saves the client config)
       await oauthStorage.storeTokens(serverConfig.url, tokens)
 
       // Try to restart the server with new tokens

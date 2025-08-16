@@ -44,21 +44,6 @@ export class OAuthClient {
       return this.config.serverMetadata
     }
 
-    // Handle Notion server with specific metadata
-    const isNotion = this.baseUrl && this.baseUrl.includes('notion.com')
-    if (isNotion) {
-      return {
-        issuer: 'https://api.notion.com',
-        authorization_endpoint: 'https://api.notion.com/v1/oauth/authorize',
-        token_endpoint: 'https://api.notion.com/v1/oauth/token',
-        scopes_supported: ['user'],
-        response_types_supported: ['code'],
-        grant_types_supported: ['authorization_code', 'refresh_token'],
-        token_endpoint_auth_methods_supported: ['none'],
-        code_challenge_methods_supported: ['S256'],
-      }
-    }
-
     const url = new URL(this.baseUrl)
     const metadataUrl = `${url.protocol}//${url.host}/.well-known/oauth-authorization-server`
 
@@ -106,17 +91,9 @@ export class OAuthClient {
    * Register OAuth client dynamically using RFC7591
    */
   async registerClient(): Promise<{ clientId: string; clientSecret?: string }> {
-    // Handle Notion-specific client ID
-    const isNotionServer = this.baseUrl && this.baseUrl.includes('notion.com')
-    if (isNotionServer) {
-      // Use the actual Notion client ID for MCP
-      return {
-        clientId: '1f8d872b-594c-80a4-b2f4-00370af2b13f',
-        clientSecret: undefined,
-      }
-    }
-
+    // If we already have a client ID, use it consistently
     if (this.config.clientId) {
+      console.log('🔑 Using existing client ID:', this.config.clientId)
       return {
         clientId: this.config.clientId,
         clientSecret: this.config.clientSecret,
@@ -169,6 +146,14 @@ export class OAuthClient {
       this.config.clientId = registrationResponse.client_id
       this.config.clientSecret = registrationResponse.client_secret
       this.config.clientMetadata = clientMetadata
+
+      console.log('✅ Client registration successful:', {
+        clientId: registrationResponse.client_id,
+        hasClientSecret: !!registrationResponse.client_secret
+      })
+
+      // Ensure client configuration is saved
+      await this.saveClientConfig()
 
       return {
         clientId: registrationResponse.client_id,
@@ -234,21 +219,6 @@ export class OAuthClient {
     const encodedCheck = encodeURIComponent(redirectUri)
     console.log('Redirect URI encoding check:', encodedCheck)
 
-    // Check if this is the Notion server and log specific details
-    if (metadata.authorization_endpoint.includes('notion')) {
-      console.log('📝 Notion-specific URL validation:')
-      console.log('  Base URL:', metadata.authorization_endpoint)
-      console.log('  Final URL:', authUrl.toString())
-      console.log('  URL length:', authUrl.toString().length)
-      console.log('  All parameters:')
-      for (const [key, value] of authUrl.searchParams) {
-        console.log(`    ${key}: ${value} (${encodeURIComponent(value)})`)
-      }
-
-      // Also log the raw URL for manual testing
-      console.log('  Manual test URL:', authUrl.toString())
-    }
-
     // Log the exact URL format for debugging
     const finalUrl = authUrl.toString()
     console.log('🌐 Complete authorization URL:', finalUrl)
@@ -279,7 +249,18 @@ export class OAuthClient {
     console.log('🔄 Starting token exchange...')
 
     const metadata = await this.discoverServerMetadata()
-    const { clientId, clientSecret } = await this.registerClient()
+
+    // Ensure we have a consistent client registration
+    let { clientId, clientSecret } = this.config
+
+    if (!clientId) {
+      console.log('🔑 No existing client ID, registering new client...')
+      const registration = await this.registerClient()
+      clientId = registration.clientId
+      clientSecret = registration.clientSecret
+    } else {
+      console.log('🔑 Using existing client ID:', clientId)
+    }
 
     // Always use appropriate redirect URI based on current environment, ignoring stored config
     const isDevelopment = process.env.NODE_ENV === 'development' || !!process.env.ELECTRON_RENDERER_URL
@@ -525,6 +506,11 @@ export class OAuthClient {
       }
 
       console.log('✅ OAuth callback validation successful, exchanging code for tokens...')
+
+      // Ensure we use the same client registration as authorization
+      const { clientId } = await this.registerClient()
+      console.log('🔑 Using client ID for token exchange:', clientId)
+
       // Exchange code for tokens
       const tokens = await this.exchangeCodeForToken({
         code: callbackResult.code,
@@ -594,6 +580,11 @@ export class OAuthClient {
       }
 
       console.log('✅ Deep link callback validation successful, exchanging code for tokens...')
+
+      // Ensure we use the same client registration as authorization
+      const { clientId } = await this.registerClient()
+      console.log('🔑 Using client ID for token exchange:', clientId)
+
       // Exchange code for tokens
       const tokens = await this.exchangeCodeForToken({
         code: callbackResult.code,
@@ -624,5 +615,19 @@ export class OAuthClient {
    */
   updateConfig(updates: Partial<OAuthConfig>): void {
     this.config = { ...this.config, ...updates }
+  }
+
+  /**
+   * Save client configuration to persistent storage
+   */
+  private async saveClientConfig(): Promise<void> {
+    try {
+      // Import OAuth storage and save client configuration
+      const { oauthStorage } = await import('./oauth-storage')
+      await oauthStorage.save(this.baseUrl, this.config)
+      console.log('💾 Client configuration saved to storage')
+    } catch (error) {
+      console.error('❌ Failed to save client configuration:', error)
+    }
   }
 }

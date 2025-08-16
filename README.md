@@ -7,6 +7,10 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.6.3-blue.svg)](https://www.typescriptlang.org/)
 [![React](https://img.shields.io/badge/React-18.3.1-61dafb.svg)](https://reactjs.org/)
 
+## 🎬 Preview
+
+https://github.com/user-attachments/assets/0c181c70-d1f1-4c5d-a6f5-a73147e75182
+
 ## 🚀 Quick Start
 
 ### Download
@@ -34,10 +38,6 @@ Currently building for **macOS (Apple Silicon)**
 
 - **Press `Ctrl+T`** to open text input mode for direct typing
 
-## 🎬 Preview
-
-
-https://github.com/user-attachments/assets/0c181c70-d1f1-4c5d-a6f5-a73147e75182
 
 
 ## ✨ Features

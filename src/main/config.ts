@@ -18,7 +18,7 @@ const getConfig = () => {
     mcpAgentModeEnabled: true,
     // Safety: optional approval prompt before each tool call (off by default)
     mcpRequireApprovalBeforeToolCall: false,
-    mcpAutoPasteEnabled: true,
+    mcpAutoPasteEnabled: false,
     mcpAutoPasteDelay: 1000, // 1 second delay by default
     mcpMaxIterations: 10, // Default max iterations for agent mode
     textInputEnabled: true,

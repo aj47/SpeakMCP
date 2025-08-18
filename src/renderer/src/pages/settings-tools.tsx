@@ -228,10 +228,10 @@ DOMAIN-SPECIFIC RULES:
                         min="1"
                         max="50"
                         step="1"
-                        value={config.mcpMaxIterations || 50}
+                        value={config.mcpMaxIterations ?? 10}
                         onChange={(e) =>
                           updateConfig({
-                            mcpMaxIterations: parseInt(e.target.value) || 10,
+                            mcpMaxIterations: parseInt(e.target.value) || 1,
                           })
                         }
                         className="w-32"

@@ -105,7 +105,7 @@ async function processWithAgentMode(
         text,
         availableTools,
         executeToolCall,
-        config.mcpMaxIterations || 50, // Use configured max iterations or default to 50
+        config.mcpMaxIterations ?? 10, // Use configured max iterations or default to 10
         previousConversationHistory,
       )
 
@@ -848,6 +848,36 @@ export const router = {
       )
     }
   }),
+
+  validateMcpConfigText: t.procedure
+    .input<{ text: string }>()
+    .action(async ({ input }) => {
+      try {
+        const mcpConfig = JSON.parse(input.text) as MCPConfig
+
+        // Basic validation - same as file upload
+        if (!mcpConfig.mcpServers || typeof mcpConfig.mcpServers !== "object") {
+          throw new Error("Invalid MCP config: missing or invalid mcpServers")
+        }
+
+        // Validate each server config
+        for (const [serverName, serverConfig] of Object.entries(
+          mcpConfig.mcpServers,
+        )) {
+          if (!serverConfig.command || !Array.isArray(serverConfig.args)) {
+            throw new Error(
+              `Invalid server config for "${serverName}": missing command or args`,
+            )
+          }
+        }
+
+        return mcpConfig
+      } catch (error) {
+        throw new Error(
+          `Invalid MCP config: ${error instanceof Error ? error.message : String(error)}`,
+        )
+      }
+    }),
 
   saveMcpConfigFile: t.procedure
     .input<{ config: MCPConfig }>()

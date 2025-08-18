@@ -27,6 +27,8 @@ import {
   Settings,
   Eye,
   EyeOff,
+  Power,
+  PowerOff,
 } from "lucide-react"
 import { tipcClient } from "@renderer/lib/tipc-client"
 import { toast } from "sonner"
@@ -153,6 +155,63 @@ export function MCPToolManager({ onToolToggle }: MCPToolManagerProps) {
     })
   }
 
+  const handleToggleAllTools = async (serverName: string, enable: boolean) => {
+    const serverTools = tools.filter((tool) => tool.serverName === serverName)
+    if (serverTools.length === 0) return
+
+    // Update local state immediately for better UX
+    const updatedTools = tools.map((tool) => {
+      if (tool.serverName === serverName) {
+        return { ...tool, enabled: enable }
+      }
+      return tool
+    })
+    setTools(updatedTools)
+
+    // Track promises for all backend calls
+    const promises = serverTools.map((tool) =>
+      tipcClient.setMcpToolEnabled({ toolName: tool.name, enabled: enable }),
+    )
+
+    try {
+      const results = await Promise.allSettled(promises)
+      const successful = results.filter((r) => r.status === "fulfilled").length
+      const failed = results.length - successful
+
+      if (failed === 0) {
+        toast.success(
+          `All ${serverTools.length} tools for ${serverName} ${enable ? "enabled" : "disabled"}`,
+        )
+      } else {
+        // Revert local state for failed calls
+        const failedTools = serverTools.filter(
+          (_, index) => results[index].status === "rejected",
+        )
+        const revertedTools = tools.map((tool) => {
+          if (tool.serverName === serverName && failedTools.includes(tool)) {
+            return { ...tool, enabled: !enable }
+          }
+          return tool
+        })
+        setTools(revertedTools)
+
+        toast.warning(
+          `${successful}/${serverTools.length} tools ${enable ? "enabled" : "disabled"} for ${serverName} (${failed} failed)`,
+        )
+      }
+    } catch (error) {
+      // Revert all tools on error
+      const revertedTools = tools.map((tool) => {
+        if (tool.serverName === serverName) {
+          return { ...tool, enabled: !enable }
+        }
+        return tool
+      })
+      setTools(revertedTools)
+      toast.error(`Error toggling tools for ${serverName}: ${error.message}`)
+    }
+  }
+
   const serverNames = Object.keys(toolsByServer)
   const totalTools = tools.length
   const enabledTools = tools.filter((tool) => tool.enabled).length
@@ -245,6 +304,32 @@ export function MCPToolManager({ onToolToggle }: MCPToolManagerProps) {
                         {serverTools.filter((t) => t.enabled).length}/
                         {serverTools.length} enabled
                       </Badge>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleToggleAllTools(serverName, true)
+                        }}
+                        className="h-7 px-2 text-xs"
+                      >
+                        <Power className="mr-1 h-3 w-3" />
+                        All ON
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleToggleAllTools(serverName, false)
+                        }}
+                        className="h-7 px-2 text-xs"
+                      >
+                        <PowerOff className="mr-1 h-3 w-3" />
+                        All OFF
+                      </Button>
                     </div>
                   </div>
                 </CardHeader>

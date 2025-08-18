@@ -13,7 +13,7 @@ import {
   useSaveConfigMutation,
 } from "@renderer/lib/query-client"
 import { Config } from "@shared/types"
-import { ProviderModelSelector } from "@renderer/components/model-selector"
+
 import {
   STT_PROVIDERS,
   CHAT_PROVIDERS,
@@ -38,48 +38,7 @@ export function Component() {
     [saveConfigMutation, configQuery.data],
   )
 
-  // Memoize model change handlers to prevent infinite re-renders
-  const handleOpenAIMcpModelChange = useCallback(
-    (value: string) => {
-      saveConfig({ mcpToolsOpenaiModel: value })
-    },
-    [saveConfig],
-  )
 
-  const handleOpenAITranscriptModelChange = useCallback(
-    (value: string) => {
-      saveConfig({ transcriptPostProcessingOpenaiModel: value })
-    },
-    [saveConfig],
-  )
-
-  const handleGroqMcpModelChange = useCallback(
-    (value: string) => {
-      saveConfig({ mcpToolsGroqModel: value })
-    },
-    [saveConfig],
-  )
-
-  const handleGroqTranscriptModelChange = useCallback(
-    (value: string) => {
-      saveConfig({ transcriptPostProcessingGroqModel: value })
-    },
-    [saveConfig],
-  )
-
-  const handleGeminiMcpModelChange = useCallback(
-    (value: string) => {
-      saveConfig({ mcpToolsGeminiModel: value })
-    },
-    [saveConfig],
-  )
-
-  const handleGeminiTranscriptModelChange = useCallback(
-    (value: string) => {
-      saveConfig({ transcriptPostProcessingGeminiModel: value })
-    },
-    [saveConfig],
-  )
 
   if (!configQuery.data) return null
 
@@ -185,22 +144,7 @@ export function Component() {
             />
           </Control>
 
-          <Control label="Models" className="px-3">
-            <ProviderModelSelector
-              providerId="openai"
-              mcpModel={configQuery.data.mcpToolsOpenaiModel}
-              transcriptModel={
-                configQuery.data.transcriptPostProcessingOpenaiModel
-              }
-              onMcpModelChange={handleOpenAIMcpModelChange}
-              onTranscriptModelChange={handleOpenAITranscriptModelChange}
-              showMcpModel={configQuery.data.mcpToolsProviderId === "openai"}
-              showTranscriptModel={
-                configQuery.data.transcriptPostProcessingProviderId === "openai"
-              }
-              disabled={!configQuery.data.openaiApiKey}
-            />
-          </Control>
+
         </ControlGroup>
 
         <ControlGroup title="Groq">
@@ -229,22 +173,7 @@ export function Component() {
             />
           </Control>
 
-          <Control label="Models" className="px-3">
-            <ProviderModelSelector
-              providerId="groq"
-              mcpModel={configQuery.data.mcpToolsGroqModel}
-              transcriptModel={
-                configQuery.data.transcriptPostProcessingGroqModel
-              }
-              onMcpModelChange={handleGroqMcpModelChange}
-              onTranscriptModelChange={handleGroqTranscriptModelChange}
-              showMcpModel={configQuery.data.mcpToolsProviderId === "groq"}
-              showTranscriptModel={
-                configQuery.data.transcriptPostProcessingProviderId === "groq"
-              }
-              disabled={!configQuery.data.groqApiKey}
-            />
-          </Control>
+
         </ControlGroup>
 
         <ControlGroup title="Gemini">
@@ -273,22 +202,7 @@ export function Component() {
             />
           </Control>
 
-          <Control label="Models" className="px-3">
-            <ProviderModelSelector
-              providerId="gemini"
-              mcpModel={configQuery.data.mcpToolsGeminiModel}
-              transcriptModel={
-                configQuery.data.transcriptPostProcessingGeminiModel
-              }
-              onMcpModelChange={handleGeminiMcpModelChange}
-              onTranscriptModelChange={handleGeminiTranscriptModelChange}
-              showMcpModel={configQuery.data.mcpToolsProviderId === "gemini"}
-              showTranscriptModel={
-                configQuery.data.transcriptPostProcessingProviderId === "gemini"
-              }
-              disabled={!configQuery.data.geminiApiKey}
-            />
-          </Control>
+
         </ControlGroup>
       </div>
     </div>

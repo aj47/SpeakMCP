@@ -82,13 +82,13 @@ export function ModelSelector({
     <div className={`space-y-2 ${className}`}>
       {label && (
         <div className="flex items-center justify-between">
-          <Label>{label}</Label>
+          <Label className="text-sm font-medium">{label}</Label>
           <Button
             variant="ghost"
             size="sm"
             onClick={handleRefresh}
             disabled={isLoading || disabled}
-            className="h-6 px-2 text-xs"
+            className="h-6 px-2 text-xs ml-2 flex-shrink-0"
           >
             <RefreshCw
               className={`h-3 w-3 ${isLoading ? "animate-spin" : ""}`}
@@ -104,7 +104,7 @@ export function ModelSelector({
         open={isOpen}
         onOpenChange={setIsOpen}
       >
-        <SelectTrigger className="w-full min-w-[120px] max-w-[200px]">
+        <SelectTrigger className="w-full">
           <SelectValue
             placeholder={
               isLoading
@@ -185,11 +185,7 @@ export function ModelSelector({
               <SelectItem key={model.id} value={model.id}>
                 <div className="flex w-full min-w-0 flex-col">
                   <span className="truncate">{model.name}</span>
-                  {model.description && (
-                    <span className="truncate text-xs text-muted-foreground">
-                      {model.description}
-                    </span>
-                  )}
+
                 </div>
               </SelectItem>
             ))}

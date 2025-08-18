@@ -43,6 +43,7 @@ import {
   Square,
   Play,
   ExternalLink,
+  FileText,
 } from "lucide-react"
 import { Spinner } from "@renderer/components/ui/spinner"
 import { MCPConfig, MCPServerConfig, MCPTransportType, OAuthConfig } from "@shared/types"
@@ -64,6 +65,7 @@ interface ServerDialogProps {
 
 function ServerDialog({ server, onSave, onCancel }: ServerDialogProps) {
   const [name, setName] = useState(server?.name || "")
+  const [activeTab, setActiveTab] = useState<'manual' | 'examples' | 'json'>('manual')
   const [transport, setTransport] = useState<MCPTransportType>(
     server?.config.transport || "stdio",
   )
@@ -82,6 +84,8 @@ function ServerDialog({ server, onSave, onCancel }: ServerDialogProps) {
   const [timeout, setTimeout] = useState(
     server?.config.timeout?.toString() || "",
   )
+  const [jsonInputText, setJsonInputText] = useState("")
+  const [selectedExample, setSelectedExample] = useState<string>("")
   const [disabled, setDisabled] = useState(server?.config.disabled || false)
   const [oauthConfig, setOAuthConfig] = useState<OAuthConfig>(
     server?.config.oauth || {}
@@ -148,130 +152,160 @@ function ServerDialog({ server, onSave, onCancel }: ServerDialogProps) {
   }
 
   return (
-    <DialogContent className="max-w-2xl">
+    <DialogContent className="max-w-4xl">
       <DialogHeader>
         <DialogTitle>{server ? "Edit Server" : "Add Server"}</DialogTitle>
         <DialogDescription>
-          Configure an MCP server connection
+          Add or configure an MCP server
         </DialogDescription>
       </DialogHeader>
 
-      <div className="space-y-4">
-        <div className="space-y-2">
-          <Label htmlFor="server-name">Server Name</Label>
-          <Input
-            id="server-name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="e.g., google-maps"
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="transport">Transport Type</Label>
-          <Select
-            value={transport}
-            onValueChange={(value: MCPTransportType) => setTransport(value)}
+      <div className="w-full">
+        <div className="flex space-x-1 mb-4">
+          <Button
+            variant={activeTab === 'manual' ? 'default' : 'outline'}
+            onClick={() => setActiveTab('manual')}
+            className="flex-1"
+            size="sm"
           >
-            <SelectTrigger>
-              <SelectValue placeholder="Select transport type" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="stdio">Local Command (stdio)</SelectItem>
-              <SelectItem value="websocket">WebSocket</SelectItem>
-              <SelectItem value="streamableHttp">Streamable HTTP</SelectItem>
-            </SelectContent>
-          </Select>
-          <p className="text-xs text-muted-foreground">
-            Choose how to connect to the MCP server
-          </p>
+            Manual
+          </Button>
+          <Button
+            variant={activeTab === 'examples' ? 'default' : 'outline'}
+            onClick={() => setActiveTab('examples')}
+            className="flex-1"
+            size="sm"
+          >
+            Examples
+          </Button>
+          <Button
+            variant={activeTab === 'json' ? 'default' : 'outline'}
+            onClick={() => setActiveTab('json')}
+            className="flex-1"
+            size="sm"
+          >
+            JSON Import
+          </Button>
         </div>
 
-        {transport === "stdio" ? (
-          <>
+        {/* Manual Configuration Tab */}
+        {activeTab === 'manual' && (
+          <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="command">Command</Label>
+              <Label htmlFor="server-name">Server Name</Label>
               <Input
-                id="command"
-                value={command}
-                onChange={(e) => setCommand(e.target.value)}
-                placeholder="e.g., npx"
+                id="server-name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="e.g., google-maps"
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="args">Arguments</Label>
-              <Input
-                id="args"
-                value={args}
-                onChange={(e) => setArgs(e.target.value)}
-                placeholder="e.g., -y @modelcontextprotocol/server-google-maps"
-              />
+              <Label htmlFor="transport">Transport Type</Label>
+              <Select
+                value={transport}
+                onValueChange={(value: MCPTransportType) => setTransport(value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select transport type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="stdio">Local Command (stdio)</SelectItem>
+                  <SelectItem value="websocket">WebSocket</SelectItem>
+                  <SelectItem value="streamableHttp">Streamable HTTP</SelectItem>
+                </SelectContent>
+              </Select>
               <p className="text-xs text-muted-foreground">
-                Space-separated command arguments
+                Choose how to connect to the MCP server
               </p>
             </div>
-          </>
-        ) : (
-          <div className="space-y-2">
-            <Label htmlFor="url">Server URL</Label>
-            <Input
-              id="url"
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              placeholder={
-                transport === "websocket"
-                  ? "ws://localhost:8080"
-                  : "http://localhost:8080"
-              }
-            />
-            <p className="text-xs text-muted-foreground">
-              {transport === "websocket"
-                ? "WebSocket URL (e.g., ws://localhost:8080 or wss://example.com/mcp)"
-                : "HTTP URL for streamable HTTP transport (e.g., http://localhost:8080/mcp)"}
-            </p>
-          </div>
-        )}
 
-        <div className="space-y-2">
-          <Label htmlFor="env">Environment Variables</Label>
-          <Textarea
-            id="env"
-            value={env}
-            onChange={(e) => setEnv(e.target.value)}
-            placeholder="API_KEY=your-key-here&#10;ANOTHER_VAR=value"
-            rows={4}
-          />
-          <p className="text-xs text-muted-foreground">
-            One per line in KEY=value format
-          </p>
-        </div>
+            {transport === "stdio" ? (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="command">Command</Label>
+                  <Input
+                    id="command"
+                    value={command}
+                    onChange={(e) => setCommand(e.target.value)}
+                    placeholder="e.g., npx"
+                  />
+                </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label htmlFor="timeout">Timeout (ms)</Label>
-            <Input
-              id="timeout"
-              type="number"
-              value={timeout}
-              onChange={(e) => setTimeout(e.target.value)}
-              placeholder="60000"
-            />
-          </div>
+                <div className="space-y-2">
+                  <Label htmlFor="args">Arguments</Label>
+                  <Input
+                    id="args"
+                    value={args}
+                    onChange={(e) => setArgs(e.target.value)}
+                    placeholder="e.g., -y @modelcontextprotocol/server-google-maps"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Space-separated command arguments
+                  </p>
+                </div>
+              </>
+            ) : (
+              <div className="space-y-2">
+                <Label htmlFor="url">Server URL</Label>
+                <Input
+                  id="url"
+                  value={url}
+                  onChange={(e) => setUrl(e.target.value)}
+                  placeholder={
+                    transport === "websocket"
+                      ? "ws://localhost:8080"
+                      : "http://localhost:8080"
+                  }
+                />
+                <p className="text-xs text-muted-foreground">
+                  {transport === "websocket"
+                    ? "WebSocket URL (e.g., ws://localhost:8080 or wss://example.com/mcp)"
+                    : "HTTP URL for streamable HTTP transport (e.g., http://localhost:8080/mcp)"}
+                </p>
+              </div>
+            )}
 
-          <div className="flex items-center space-x-2 pt-6">
-            <Switch
-              id="disabled"
-              checked={disabled}
-              onCheckedChange={setDisabled}
-            />
-            <Label htmlFor="disabled">Disabled</Label>
-          </div>
-        </div>
+            <div className="space-y-2">
+              <Label htmlFor="env">Environment Variables</Label>
+              <Textarea
+                id="env"
+                value={env}
+                onChange={(e) => setEnv(e.target.value)}
+                placeholder="API_KEY=your-key-here&#10;ANOTHER_VAR=value"
+                rows={4}
+              />
+              <p className="text-xs text-muted-foreground">
+                One per line in KEY=value format
+              </p>
+            </div>
 
-        {/* OAuth Configuration - automatically shown for streamableHttp transport */}
-        {transport === "streamableHttp" && url && (
-          <OAuthServerConfig
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="timeout">Timeout (ms)</Label>
+                <Input
+                  id="timeout"
+                  type="number"
+                  value={timeout}
+                  onChange={(e) => setTimeout(e.target.value)}
+                  placeholder="60000"
+                />
+              </div>
+
+              <div className="flex items-center space-x-2 pt-6">
+                <Switch
+                  id="disabled"
+                  checked={disabled}
+                  onCheckedChange={setDisabled}
+                />
+                <Label htmlFor="disabled">Disabled</Label>
+              </div>
+            </div>
+
+            {/* OAuth Configuration - automatically shown for streamableHttp transport */}
+            {transport === "streamableHttp" && url && (
+              <OAuthServerConfig
                 serverName={name || "New Server"}
                 serverUrl={url}
                 oauthConfig={oauthConfig}
@@ -340,6 +374,225 @@ function ServerDialog({ server, onSave, onCancel }: ServerDialogProps) {
                   }
                 }}
               />
+            )}
+          </div>
+        )}
+
+        {/* Examples Tab */}
+        {activeTab === 'examples' && (
+          <div className="space-y-4">
+            <div className="text-sm text-muted-foreground mb-4">
+              Choose from popular MCP server configurations to get started quickly.
+            </div>
+
+            <div className="space-y-3 max-h-96 overflow-y-auto">
+              {/* Standard MCP Examples */}
+              <div className="space-y-2">
+                <h4 className="font-medium text-sm">Standard MCP Servers</h4>
+                {Object.entries(MCP_EXAMPLES).map(([key, example]) => (
+                  <Card key={key} className="p-3">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <h5 className="font-medium text-sm">{example.name}</h5>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {example.config.transport === "stdio"
+                            ? `Command: ${example.config.command} ${example.config.args?.join(" ") || ""}`
+                            : `URL: ${example.config.url}`
+                          }
+                        </p>
+                        {example.config.env && Object.keys(example.config.env).length > 0 && (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Environment: {Object.keys(example.config.env).join(", ")}
+                          </p>
+                        )}
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setName(example.name)
+                          setTransport(example.config.transport)
+                          setCommand(example.config.command || "")
+                          setArgs(example.config.args?.join(" ") || "")
+                          setUrl(example.config.url || "")
+                          setEnv(
+                            example.config.env
+                              ? Object.entries(example.config.env)
+                                  .map(([k, v]) => `${k}=${v}`)
+                                  .join("\n")
+                              : ""
+                          )
+                          setTimeout(example.config.timeout?.toString() || "")
+                          setDisabled(example.config.disabled || false)
+                          setActiveTab('manual')
+                        }}
+                      >
+                        Use
+                      </Button>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+
+              {/* OAuth MCP Examples */}
+              {Object.keys(OAUTH_MCP_EXAMPLES).length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="font-medium text-sm">OAuth-Enabled MCP Servers</h4>
+                  {Object.entries(OAUTH_MCP_EXAMPLES).map(([key, example]) => (
+                    <Card key={key} className="p-3">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <h5 className="font-medium text-sm">{example.name}</h5>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {example.description}
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            URL: {example.config.url}
+                          </p>
+                          {example.requiredScopes && (
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Scopes: {example.requiredScopes.join(", ")}
+                            </p>
+                          )}
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setName(example.name)
+                            setTransport(example.config.transport)
+                            setCommand(example.config.command || "")
+                            setArgs(example.config.args?.join(" ") || "")
+                            setUrl(example.config.url || "")
+                            setEnv(
+                              example.config.env
+                                ? Object.entries(example.config.env)
+                                    .map(([k, v]) => `${k}=${v}`)
+                                    .join("\n")
+                                : ""
+                            )
+                            setTimeout(example.config.timeout?.toString() || "")
+                            setDisabled(example.config.disabled || false)
+                            setOAuthConfig(example.config.oauth || {})
+                            setActiveTab('manual')
+                          }}
+                        >
+                          Use
+                        </Button>
+                      </div>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* JSON Import Tab */}
+        {activeTab === 'json' && (
+          <div className="space-y-4">
+            <div className="text-sm text-muted-foreground">
+              Paste a JSON configuration for a single MCP server.
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="json-input">JSON Configuration</Label>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    try {
+                      const formatted = JSON.stringify(JSON.parse(jsonInputText), null, 2)
+                      setJsonInputText(formatted)
+                    } catch {
+                      // Ignore formatting errors
+                    }
+                  }}
+                  disabled={!jsonInputText.trim()}
+                >
+                  Format
+                </Button>
+              </div>
+              <Textarea
+                id="json-input"
+                value={jsonInputText}
+                onChange={(e) => setJsonInputText(e.target.value)}
+                placeholder={`{
+  "transport": "stdio",
+  "command": "npx",
+  "args": ["-y", "@modelcontextprotocol/server-filesystem", "/path/to/directory"],
+  "env": {
+    "API_KEY": "your-key-here"
+  }
+}`}
+                rows={12}
+                className="font-mono text-sm"
+              />
+              <p className="text-xs text-muted-foreground">
+                Paste the JSON configuration for an MCP server. The server name will be taken from the "Server Name" field above.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="json-server-name">Server Name</Label>
+              <Input
+                id="json-server-name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="e.g., my-server"
+              />
+            </div>
+
+            <Button
+              onClick={() => {
+                try {
+                  const config = JSON.parse(jsonInputText) as MCPServerConfig
+
+                  // Validate required fields
+                  if (!config.transport) {
+                    toast.error("JSON must include 'transport' field")
+                    return
+                  }
+
+                  if (config.transport === "stdio" && !config.command) {
+                    toast.error("stdio transport requires 'command' field")
+                    return
+                  }
+
+                  if (config.transport !== "stdio" && !config.url) {
+                    toast.error(`${config.transport} transport requires 'url' field`)
+                    return
+                  }
+
+                  // Apply the configuration
+                  setTransport(config.transport)
+                  setCommand(config.command || "")
+                  setArgs(config.args?.join(" ") || "")
+                  setUrl(config.url || "")
+                  setEnv(
+                    config.env
+                      ? Object.entries(config.env)
+                          .map(([k, v]) => `${k}=${v}`)
+                          .join("\n")
+                      : ""
+                  )
+                  setTimeout(config.timeout?.toString() || "")
+                  setDisabled(config.disabled || false)
+                  setOAuthConfig(config.oauth || {})
+
+                  setActiveTab('manual')
+                  toast.success("JSON configuration loaded successfully")
+                } catch (error) {
+                  toast.error(`Invalid JSON: ${error instanceof Error ? error.message : String(error)}`)
+                }
+              }}
+              disabled={!jsonInputText.trim() || !name.trim()}
+              className="w-full"
+            >
+              Load Configuration
+            </Button>
+          </div>
         )}
       </div>
 
@@ -442,6 +695,10 @@ export function MCPConfigManager({
   } | null>(null)
   const [showAddDialog, setShowAddDialog] = useState(false)
   const [showExamples, setShowExamples] = useState(false)
+  const [showImportDialog, setShowImportDialog] = useState(false)
+  const [importTab, setImportTab] = useState<'file' | 'text' | 'examples'>('file')
+  const [jsonInputText, setJsonInputText] = useState("")
+  const [isValidatingJson, setIsValidatingJson] = useState(false)
   const [serverStatus, setServerStatus] = useState<
     Record<
       string,
@@ -546,12 +803,21 @@ export function MCPConfigManager({
     onConfigChange(newConfig)
   }
 
-  const handleImportConfig = async () => {
+  const handleImportConfigFromFile = async () => {
     try {
       const importedConfig = await tipcClient.loadMcpConfigFile({})
       if (importedConfig) {
-        onConfigChange(importedConfig as any)
-        toast.success("MCP configuration imported successfully")
+        // Merge new servers with existing ones
+        const newConfig = {
+          ...config,
+          mcpServers: {
+            ...config.mcpServers,
+            ...importedConfig.mcpServers,
+          },
+        }
+        onConfigChange(newConfig)
+        setShowImportDialog(false)
+        toast.success(`Successfully imported ${Object.keys(importedConfig.mcpServers).length} server(s)`)
       }
     } catch (error) {
       toast.error(`Failed to import config: ${error instanceof Error ? error.message : String(error)}`)
@@ -566,6 +832,47 @@ export function MCPConfigManager({
       }
     } catch (error) {
       toast.error(`Failed to export config: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+
+  const formatJsonPreview = (jsonText: string): string => {
+    try {
+      if (!jsonText.trim()) return jsonText
+      const parsed = JSON.parse(jsonText)
+      return JSON.stringify(parsed, null, 2)
+    } catch {
+      return jsonText
+    }
+  }
+
+  const handleImportFromText = async () => {
+    try {
+      setIsValidatingJson(true)
+
+      // Format the JSON before validation for better readability
+      const formattedJson = formatJsonPreview(jsonInputText)
+      setJsonInputText(formattedJson)
+
+      const importedConfig = await tipcClient.validateMcpConfigText({ text: formattedJson })
+
+      if (importedConfig) {
+        // Merge new servers with existing ones instead of overwriting
+        const newConfig = {
+          ...config,
+          mcpServers: {
+            ...config.mcpServers,
+            ...importedConfig.mcpServers,
+          },
+        }
+        onConfigChange(newConfig)
+        setShowImportDialog(false)
+        setJsonInputText("")
+        toast.success(`Successfully imported ${Object.keys(importedConfig.mcpServers).length} new server(s)`)
+      }
+    } catch (error) {
+      toast.error(`Invalid JSON: ${error instanceof Error ? error.message : String(error)}`)
+    } finally {
+      setIsValidatingJson(false)
     }
   }
 
@@ -665,7 +972,7 @@ export function MCPConfigManager({
           </p>
         </div>
         <div className="flex flex-wrap justify-start gap-2 sm:justify-end">
-          <Button variant="outline" size="sm" onClick={handleImportConfig}>
+          <Button variant="outline" size="sm" onClick={() => setShowImportDialog(true)}>
             <Upload className="mr-2 h-4 w-4" />
             Import
           </Button>
@@ -673,94 +980,6 @@ export function MCPConfigManager({
             <Download className="mr-2 h-4 w-4" />
             Export
           </Button>
-          <Dialog open={showExamples} onOpenChange={setShowExamples}>
-            <DialogTrigger asChild>
-              <Button variant="outline" size="sm">
-                <BookOpen className="mr-2 h-4 w-4" />
-                Examples
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-4xl">
-              <DialogHeader>
-                <DialogTitle>MCP Server Examples</DialogTitle>
-                <DialogDescription>
-                  Choose from popular MCP server configurations to get started
-                  quickly
-                </DialogDescription>
-              </DialogHeader>
-              <div className="grid max-h-96 grid-cols-1 gap-4 overflow-y-auto md:grid-cols-2">
-                {Object.entries(MCP_EXAMPLES).map(([key, example]) => (
-                  <Card
-                    key={key}
-                    className="cursor-pointer hover:bg-accent"
-                    onClick={() => handleAddExample(key)}
-                  >
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-sm">{example.name}</CardTitle>
-                      <CardDescription className="text-xs">
-                        {example.config.transport === "stdio"
-                          ? `${(example.config as any).command} ${(example.config as any).args ? (example.config as any).args.join(" ") : ""}`
-                          : `${example.config.transport}: ${(example.config as any).url}`}
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="pt-0">
-                      <div className="text-xs text-muted-foreground">
-                        {Object.keys((example.config as any).env || {}).length > 0 && (
-                          <div>
-                            <strong>Environment variables:</strong>{" "}
-                            {Object.keys((example.config as any).env).join(", ")}
-                          </div>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-
-                {/* OAuth Examples Section */}
-                <div className="col-span-full">
-                  <h4 className="text-sm font-medium mb-2 text-muted-foreground">OAuth-Enabled Servers</h4>
-                </div>
-                {Object.entries(OAUTH_MCP_EXAMPLES).map(([key, example]) => (
-                  <Card
-                    key={`oauth-${key}`}
-                    className="cursor-pointer hover:bg-accent border-blue-200"
-                    onClick={() => handleAddOAuthExample(key)}
-                  >
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-sm flex items-center gap-2">
-                        {example.name}
-                        <Badge variant="secondary" className="text-xs">OAuth</Badge>
-                      </CardTitle>
-                      <CardDescription className="text-xs">
-                        URL: {example.config.url}
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="pt-0">
-                      <p className="text-xs text-muted-foreground">
-                        {example.description}
-                      </p>
-                      {example.requiredScopes && (
-                        <div className="mt-2">
-                          <span className="text-xs font-medium">Scopes: </span>
-                          <span className="text-xs text-muted-foreground">
-                            {example.requiredScopes.join(", ")}
-                          </span>
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-              <DialogFooter>
-                <Button
-                  variant="outline"
-                  onClick={() => setShowExamples(false)}
-                >
-                  Close
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
           <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
             <DialogTrigger asChild>
               <Button size="sm">
@@ -1057,6 +1276,175 @@ export function MCPConfigManager({
           />
         </Dialog>
       )}
+
+      {/* Unified Import Dialog */}
+      <Dialog open={showImportDialog} onOpenChange={setShowImportDialog}>
+        <DialogContent className="max-w-4xl max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle>Import MCP Configuration</DialogTitle>
+            <DialogDescription>
+              Choose how you want to import MCP server configurations
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="w-full">
+            <div className="flex space-x-1 mb-4">
+              <Button
+                variant={importTab === 'file' ? 'default' : 'outline'}
+                onClick={() => setImportTab('file')}
+                className="flex-1"
+              >
+                <Upload className="mr-2 h-4 w-4" />
+                From File
+              </Button>
+              <Button
+                variant={importTab === 'text' ? 'default' : 'outline'}
+                onClick={() => setImportTab('text')}
+                className="flex-1"
+              >
+                <FileText className="mr-2 h-4 w-4" />
+                Paste Text
+              </Button>
+              <Button
+                variant={importTab === 'examples' ? 'default' : 'outline'}
+                onClick={() => setImportTab('examples')}
+                className="flex-1"
+              >
+                <BookOpen className="mr-2 h-4 w-4" />
+                Examples
+              </Button>
+            </div>
+
+            {/* File Import Tab */}
+            {importTab === 'file' && (
+              <div className="space-y-4">
+                <div className="border-2 border-dashed border-border rounded-lg p-8 text-center">
+                  <Upload className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+                  <h3 className="text-lg font-medium mb-2">Import from JSON file</h3>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    Select a JSON file containing MCP server configurations
+                  </p>
+                  <Button onClick={handleImportConfigFromFile}>
+                    Choose File
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Text Import Tab */}
+            {importTab === 'text' && (
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="json-text">Paste JSON Configuration</Label>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        try {
+                          const formatted = JSON.stringify(JSON.parse(jsonInputText), null, 2)
+                          setJsonInputText(formatted)
+                        } catch {
+                          // Ignore formatting errors
+                        }
+                      }}
+                      disabled={!jsonInputText.trim()}
+                    >
+                      Format
+                    </Button>
+                  </div>
+                  <Textarea
+                    id="json-text"
+                    value={jsonInputText}
+                    onChange={(e) => setJsonInputText(e.target.value)}
+                    placeholder='{
+  "mcpServers": {
+    "server-name": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-name"]
+    }
+  }
+}'
+                    rows={15}
+                    className="font-mono text-sm whitespace-pre"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Paste valid JSON configuration. New servers will be merged with existing ones.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Examples Tab */}
+            {importTab === 'examples' && (
+              <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
+                <div className="grid gap-4">
+                  {mcpExamples.map((example, index) => (
+                    <Card key={index} className="p-4">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <h4 className="font-medium mb-2">{example.name}</h4>
+                          <p className="text-sm text-muted-foreground mb-2">{example.description}</p>
+                          <pre className="bg-muted p-3 rounded-md text-sm overflow-x-auto">
+                            <code>{JSON.stringify(example.config, null, 2)}</code>
+                          </pre>
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            const newConfig = {
+                              ...config,
+                              mcpServers: {
+                                ...config.mcpServers,
+                                ...example.config.mcpServers,
+                              },
+                            }
+                            onConfigChange(newConfig)
+                            setShowImportDialog(false)
+                            setJsonInputText("")
+                            toast.success(`Added ${example.name} server`)
+                          }}
+                        >
+                          Add
+                        </Button>
+                      </div>
+                    </Card>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowImportDialog(false)
+                setJsonInputText("")
+                setImportTab('file')
+              }}
+            >
+              Cancel
+            </Button>
+            {importTab === 'text' && (
+              <Button
+                onClick={handleImportFromText}
+                disabled={isValidatingJson || !jsonInputText.trim()}
+              >
+                {isValidatingJson ? (
+                  <>
+                    <Spinner className="mr-2 h-4 w-4" />
+                    Validating...
+                  </>
+                ) : (
+                  "Import Configuration"
+                )}
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

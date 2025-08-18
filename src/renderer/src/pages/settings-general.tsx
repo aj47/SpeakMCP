@@ -13,12 +13,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@renderer/components/ui/tooltip"
-import {
-  CHAT_PROVIDER_ID,
-  CHAT_PROVIDERS,
-  STT_PROVIDER_ID,
-  STT_PROVIDERS,
-} from "@shared/index"
+import { STT_PROVIDER_ID } from "@shared/index"
 import { SUPPORTED_LANGUAGES } from "@shared/languages"
 import { Textarea } from "@renderer/components/ui/textarea"
 import { Input } from "@renderer/components/ui/input"
@@ -100,8 +95,7 @@ export function Component() {
     (configQuery.data as any)?.sttProviderId || "openai"
   const shortcut = (configQuery.data as any)?.shortcut || "hold-ctrl"
   const textInputShortcut = (configQuery.data as any)?.textInputShortcut || "ctrl-t"
-  const transcriptPostProcessingProviderId: CHAT_PROVIDER_ID =
-    (configQuery.data as any)?.transcriptPostProcessingProviderId || "openai"
+
 
   if (!configQuery.data) return null
 
@@ -263,18 +257,6 @@ export function Component() {
         </ControlGroup>
 
         <ControlGroup title="Speech to Text">
-          <Control label="Current Provider" className="px-3">
-            <div className="flex items-center justify-between">
-              <span className="text-sm">
-                {STT_PROVIDERS.find((p) => p.value === sttProviderId)?.label ||
-                  "OpenAI"}
-              </span>
-              <span className="text-xs text-muted-foreground">
-                Configure in Providers tab
-              </span>
-            </div>
-          </Control>
-
           <Control label="Language" className="px-3">
             <Select
               value={configQuery.data.sttLanguage || "auto"}
@@ -378,20 +360,6 @@ export function Component() {
           </Control>
 
           {configQuery.data.transcriptPostProcessingEnabled && (
-            <>
-              <Control label="Current Provider" className="px-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm">
-                    {CHAT_PROVIDERS.find(
-                      (p) => p.value === transcriptPostProcessingProviderId,
-                    )?.label || "OpenAI"}
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    Configure provider and model in Providers tab
-                  </span>
-                </div>
-              </Control>
-
               <Control label="Prompt" className="px-3">
                 <div className="flex flex-col items-end gap-1 text-right">
                   {configQuery.data.transcriptPostProcessingPrompt && (
@@ -435,8 +403,7 @@ export function Component() {
                   </Dialog>
                 </div>
               </Control>
-            </>
-          )}
+            )}
         </ControlGroup>
 
         {/* Panel Position Settings */}

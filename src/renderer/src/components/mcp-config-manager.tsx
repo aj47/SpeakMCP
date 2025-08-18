@@ -87,6 +87,13 @@ function ServerDialog({ server, onSave, onCancel }: ServerDialogProps) {
   const [jsonInputText, setJsonInputText] = useState("")
   const [selectedExample, setSelectedExample] = useState<string>("")
   const [disabled, setDisabled] = useState(server?.config.disabled || false)
+  const [headers, setHeaders] = useState(
+    server?.config.headers
+      ? Object.entries(server.config.headers)
+          .map(([k, v]) => `${k}=${v}`)
+          .join("\n")
+      : "",
+  )
   const [oauthConfig, setOAuthConfig] = useState<OAuthConfig>(
     server?.config.oauth || {}
   )
@@ -133,6 +140,21 @@ function ServerDialog({ server, onSave, onCancel }: ServerDialogProps) {
       }
     }
 
+    const headersObject: Record<string, string> = {}
+    if (headers.trim()) {
+      try {
+        headers.split("\n").forEach((line) => {
+          const [key, ...valueParts] = line.split("=")
+          if (key && valueParts.length > 0) {
+            headersObject[key.trim()] = valueParts.join("=").trim()
+          }
+        })
+      } catch (error) {
+        toast.error("Invalid headers format")
+        return
+      }
+    }
+
     const serverConfig: MCPServerConfig = {
       transport,
       ...(transport === "stdio" && {
@@ -143,6 +165,7 @@ function ServerDialog({ server, onSave, onCancel }: ServerDialogProps) {
         url: url.trim(),
       }),
       ...(Object.keys(envObject).length > 0 && { env: envObject }),
+      ...(transport === "streamableHttp" && Object.keys(headersObject).length > 0 && { headers: headersObject }),
       ...(timeout && { timeout: parseInt(timeout) }),
       ...(disabled && { disabled }),
       ...(transport === "streamableHttp" && Object.keys(oauthConfig).length > 0 && { oauth: oauthConfig }),
@@ -267,6 +290,23 @@ function ServerDialog({ server, onSave, onCancel }: ServerDialogProps) {
               </div>
             )}
 
+            {/* Custom Headers - only shown for streamableHttp transport */}
+            {transport === "streamableHttp" && (
+              <div className="space-y-2">
+                <Label htmlFor="headers">Custom HTTP Headers</Label>
+                <Textarea
+                  id="headers"
+                  value={headers}
+                  onChange={(e) => setHeaders(e.target.value)}
+                  placeholder="X-API-Key=your-api-key&#10;User-Agent=MyApp/1.0&#10;Content-Type=application/json"
+                  rows={4}
+                />
+                <p className="text-xs text-muted-foreground">
+                  One per line in Header-Name=value format. These headers will be included in all HTTP requests to the server.
+                </p>
+              </div>
+            )}
+
             <div className="space-y-2">
               <Label htmlFor="env">Environment Variables</Label>
               <Textarea
@@ -348,6 +388,16 @@ function ServerDialog({ server, onSave, onCancel }: ServerDialogProps) {
                       })
                     }
 
+                    const headersObject: Record<string, string> = {}
+                    if (headers.trim()) {
+                      headers.split("\n").forEach((line) => {
+                        const [key, ...valueParts] = line.split("=")
+                        if (key && valueParts.length > 0) {
+                          headersObject[key.trim()] = valueParts.join("=").trim()
+                        }
+                      })
+                    }
+
                     const testServerConfig: MCPServerConfig = {
                       transport,
                       ...(transport === "stdio" && {
@@ -358,6 +408,7 @@ function ServerDialog({ server, onSave, onCancel }: ServerDialogProps) {
                         url: url.trim(),
                       }),
                       ...(Object.keys(envObject).length > 0 && { env: envObject }),
+                      ...(transport === "streamableHttp" && Object.keys(headersObject).length > 0 && { headers: headersObject }),
                       ...(timeout && { timeout: parseInt(timeout) }),
                       ...(disabled && { disabled }),
                       ...(transport === "streamableHttp" && Object.keys(oauthConfig).length > 0 && { oauth: oauthConfig }),

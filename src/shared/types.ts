@@ -78,6 +78,9 @@ export interface MCPServerConfig {
   // For remote transports (websocket/streamableHttp)
   url?: string
 
+  // Custom HTTP headers for streamableHttp transport
+  headers?: Record<string, string>
+
   // OAuth configuration for protected servers
   oauth?: OAuthConfig
 

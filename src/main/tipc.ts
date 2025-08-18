@@ -16,7 +16,7 @@ import {
   dialog,
 } from "electron"
 import path from "path"
-import { configStore, recordingsFolder } from "./config"
+import { configStore, recordingsFolder, conversationsFolder } from "./config"
 import {
   Config,
   RecordingHistoryItem,
@@ -1148,6 +1148,10 @@ export const router = {
 
   deleteAllConversations: t.procedure.action(async () => {
     await conversationService.deleteAllConversations()
+  }),
+
+  openConversationsFolder: t.procedure.action(async () => {
+    await shell.openPath(conversationsFolder)
   }),
 
   // Panel resize endpoints

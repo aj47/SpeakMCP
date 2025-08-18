@@ -1116,6 +1116,9 @@ export class MCPService {
       throw new Error("URL is required for streamableHttp transport")
     }
 
+    // Prepare custom headers from configuration
+    const customHeaders = serverConfig.headers || {}
+
     // First, check if we have valid OAuth tokens
     const hasValidTokens = await oauthStorage.hasValidTokens(serverConfig.url)
 
@@ -1128,6 +1131,7 @@ export class MCPService {
         return new StreamableHTTPClientTransport(new URL(serverConfig.url), {
           requestInit: {
             headers: {
+              ...customHeaders,
               'Authorization': `Bearer ${accessToken}`,
             },
           },
@@ -1139,6 +1143,14 @@ export class MCPService {
 
     // Create transport without authentication
     // If server requires OAuth, it will return 401 and we'll handle it in the connection logic
+    if (Object.keys(customHeaders).length > 0) {
+      return new StreamableHTTPClientTransport(new URL(serverConfig.url), {
+        requestInit: {
+          headers: customHeaders,
+        },
+      })
+    }
+
     return new StreamableHTTPClientTransport(new URL(serverConfig.url))
   }
 
@@ -1182,10 +1194,12 @@ export class MCPService {
       // Store the tokens
       await oauthStorage.storeTokens(serverConfig.url, tokens)
 
-      // Create authenticated transport
+      // Create authenticated transport with custom headers
+      const customHeaders = serverConfig.headers || {}
       const transport = new StreamableHTTPClientTransport(new URL(serverConfig.url), {
         requestInit: {
           headers: {
+            ...customHeaders,
             'Authorization': `Bearer ${tokens.access_token}`,
           },
         },

@@ -38,6 +38,24 @@ export function TextInputPanel({
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    // Allow zoom shortcuts to pass through (Cmd/Ctrl + Plus/Minus/0)
+    const isModifierPressed = e.metaKey || e.ctrlKey;
+
+    // Zoom in: Cmd/Ctrl + Plus/Equals (with or without Shift)
+    if (isModifierPressed && (e.key === '=' || e.key === 'Equal' || e.key === '+')) {
+      return;
+    }
+
+    // Zoom out: Cmd/Ctrl + Minus
+    if (isModifierPressed && e.key === '-') {
+      return;
+    }
+
+    // Zoom reset: Cmd/Ctrl + 0
+    if (isModifierPressed && e.key === '0') {
+      return;
+    }
+
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault()
       handleSubmit()

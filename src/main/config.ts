@@ -42,6 +42,9 @@ const getConfig = () => {
     panelCustomSize: { width: 300, height: 200 },
     // Theme preference defaults
     themePreference: "system",
+    // Onboarding defaults
+    hasSeenOnboarding: false,
+    showOnboardingAgain: true,
   }
 
   try {

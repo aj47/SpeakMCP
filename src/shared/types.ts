@@ -264,4 +264,8 @@ export type Config = {
   panelCustomPosition?: { x: number; y: number }
   panelDragEnabled?: boolean
   panelCustomSize?: { width: number; height: number }
+
+  // Onboarding Configuration
+  hasSeenOnboarding?: boolean
+  showOnboardingAgain?: boolean
 }

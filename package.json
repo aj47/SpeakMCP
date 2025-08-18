@@ -1,6 +1,6 @@
 {
   "name": "speakmcp",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "description": "AI-powered dictation tool with MCP integration",
   "main": "./out/main/index.js",
@@ -25,7 +25,8 @@
     "build:mas:dev": "npm run build && electron-builder --mac mas-dev --config electron-builder.config.cjs",
     "build:linux": "electron-vite build && electron-builder --linux --config electron-builder.config.cjs",
     "build-rs": "sh scripts/build-rs.sh",
-    "build-rs:win": "powershell -ExecutionPolicy Bypass -File scripts/build-rs.ps1"
+    "build-rs:win": "powershell -ExecutionPolicy Bypass -File scripts/build-rs.ps1",
+    "release": "node scripts/release.js"
   },
   "dependencies": {
     "@egoist/electron-panel-window": "^8.0.3",

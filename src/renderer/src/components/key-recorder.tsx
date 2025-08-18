@@ -139,6 +139,14 @@ export function KeyRecorder({
     (e: KeyboardEvent) => {
       if (!isRecording) return
 
+      // Allow zoom shortcuts to pass through (Cmd/Ctrl + Plus/Minus/0)
+      const isZoomShortcut = (e.metaKey || e.ctrlKey) &&
+        (e.key === '+' || e.key === '=' || e.key === '-' || e.key === '0')
+
+      if (isZoomShortcut) {
+        return
+      }
+
       e.preventDefault()
       e.stopPropagation()
 
@@ -178,6 +186,15 @@ export function KeyRecorder({
   const handleKeyUp = useCallback(
     (e: KeyboardEvent) => {
       if (!isRecording) return
+
+      // Allow zoom shortcuts to pass through (Cmd/Ctrl + Plus/Minus/0)
+      const isZoomShortcut = (e.metaKey || e.ctrlKey) &&
+        (e.key === '+' || e.key === '=' || e.key === '-' || e.key === '0')
+
+      if (isZoomShortcut) {
+        return
+      }
+
       e.preventDefault()
       e.stopPropagation()
     },

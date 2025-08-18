@@ -28,6 +28,7 @@ import {
   Eye,
   MoreVertical,
   ArrowLeft,
+  FolderOpen,
 } from "lucide-react"
 import { cn } from "@renderer/lib/utils"
 import {
@@ -37,6 +38,7 @@ import {
   useConversationQuery,
 } from "@renderer/lib/query-client"
 import { useConversationActions } from "@renderer/contexts/conversation-context"
+import { tipcClient } from "@renderer/lib/tipc-client"
 import { ConversationDisplay } from "@renderer/components/conversation-display"
 import { ConversationHistoryItem } from "@shared/types"
 import dayjs from "dayjs"
@@ -49,6 +51,7 @@ export function Component() {
     string | null
   >(null)
   const [viewMode, setViewMode] = useState<"list" | "detail">("list")
+  const [showDeleteAllDialog, setShowDeleteAllDialog] = useState(false)
 
   const conversationHistoryQuery = useConversationHistoryQuery()
   const deleteConversationMutation = useDeleteConversationMutation()
@@ -151,6 +154,15 @@ export function Component() {
     toast.success("Conversation activated. Use Ctrl+T to continue.")
   }
 
+  const handleOpenConversationsFolder = async () => {
+    try {
+      await tipcClient.openConversationsFolder()
+      toast.success("Conversations folder opened")
+    } catch (error) {
+      toast.error("Failed to open conversations folder")
+    }
+  }
+
   return (
     <>
       {viewMode === "list" ? (
@@ -162,8 +174,18 @@ export function Component() {
             <div className="flex items-center gap-2">
               <Button
                 variant="ghost"
+                size="sm"
+                onClick={handleOpenConversationsFolder}
+                className="h-7 gap-1 px-2 py-0"
+                title="Open conversations folder for debugging"
+              >
+                <FolderOpen className="h-4 w-4" />
+                <span className="hidden sm:inline">Open Folder</span>
+              </Button>
+              <Button
+                variant="ghost"
                 className="h-7 gap-1 px-2 py-0 text-red-500 hover:text-red-500"
-                onClick={handleDeleteAllConversations}
+                onClick={() => setShowDeleteAllDialog(true)}
                 disabled={deleteAllConversationsMutation.isPending}
               >
                 <Trash2 className="h-4 w-4" />

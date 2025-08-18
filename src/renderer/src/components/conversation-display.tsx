@@ -200,13 +200,30 @@ function ConversationMessageItem({
       </div>
 
       <div className="min-w-0 flex-1">
-        <div className="mb-1 flex items-center gap-2">
+        <div className="mb-1 flex items-center gap-2 flex-wrap">
           <Badge variant="secondary" className="text-xs capitalize">
             {message.role}
           </Badge>
           <span className="modern-text-muted text-xs">
             {formatTimestamp(message.timestamp)}
           </span>
+          {(message.toolCalls || message.toolResults) && (
+            <>
+              <span className="modern-text-muted text-xs">•</span>
+              <div className="flex items-center gap-1">
+                {message.toolCalls && message.toolCalls.length > 0 && (
+                  <Badge variant="outline" className="text-xs">
+                    {message.toolCalls.length} tool call{message.toolCalls.length > 1 ? 's' : ''}
+                  </Badge>
+                )}
+                {message.toolResults && message.toolResults.length > 0 && (
+                  <Badge variant="outline" className="text-xs">
+                    {message.toolResults.length} result{message.toolResults.length > 1 ? 's' : ''}
+                  </Badge>
+                )}
+              </div>
+            </>
+          )}
         </div>
 
         <div className="modern-text-strong">
@@ -214,18 +231,30 @@ function ConversationMessageItem({
         </div>
 
         {message.toolCalls && message.toolCalls.length > 0 && (
-          <div className="mt-2 space-y-1">
-            <div className="modern-text-muted text-xs">Tool Calls:</div>
+          <div className="mt-3 space-y-2">
+            <div className="modern-text-muted text-xs font-semibold">Tool Calls ({message.toolCalls.length}):</div>
             {message.toolCalls.map((toolCall, index) => (
               <div
                 key={index}
-                className="modern-panel-subtle rounded p-2 text-xs"
+                className="modern-panel-subtle rounded-lg border p-3 text-xs"
               >
-                <span className="font-mono">{toolCall.name}</span>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="font-mono font-semibold text-primary">
+                    {toolCall.name}
+                  </span>
+                  <Badge variant="outline" className="text-xs">
+                    Tool {index + 1}
+                  </Badge>
+                </div>
                 {toolCall.arguments && (
-                  <pre className="modern-text-muted mt-1 overflow-x-auto text-xs">
-                    {JSON.stringify(toolCall.arguments, null, 2)}
-                  </pre>
+                  <div>
+                    <div className="mb-1 text-xs font-medium text-muted-foreground">
+                      Parameters:
+                    </div>
+                    <pre className="modern-panel rounded bg-muted/50 p-2 overflow-x-auto text-xs">
+                      {JSON.stringify(toolCall.arguments, null, 2)}
+                    </pre>
+                  </div>
                 )}
               </div>
             ))}
@@ -233,27 +262,56 @@ function ConversationMessageItem({
         )}
 
         {message.toolResults && message.toolResults.length > 0 && (
-          <div className="mt-2 space-y-1">
-            <div className="modern-text-muted text-xs">Tool Results:</div>
+          <div className="mt-3 space-y-2">
+            <div className="modern-text-muted text-xs font-semibold">Tool Results ({message.toolResults.length}):</div>
             {message.toolResults.map((result, index) => (
               <div
                 key={index}
                 className={cn(
-                  "rounded p-2 text-xs",
+                  "rounded-lg border p-3 text-xs",
                   result.success
-                    ? "bg-green-500/10 text-green-600 dark:text-green-400"
-                    : "bg-red-500/10 text-red-600 dark:text-red-400",
+                    ? "border-green-200 bg-green-50/50 text-green-700 dark:border-green-800 dark:bg-green-900/20 dark:text-green-300"
+                    : "border-red-200 bg-red-50/50 text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300",
                 )}
               >
-                <div className="font-medium">
-                  {result.success ? "Success" : "Error"}
+                <div className="flex items-center justify-between mb-2">
+                  <Badge
+                    variant={result.success ? "default" : "destructive"}
+                    className={cn(
+                      "text-xs",
+                      result.success
+                        ? "bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100"
+                        : "bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-100"
+                    )}
+                  >
+                    {result.success ? "✅ Success" : "❌ Error"}
+                  </Badge>
+                  <span className="text-muted-foreground text-xs">
+                    Result {index + 1}
+                  </span>
                 </div>
-                <div className="mt-1 whitespace-pre-wrap">{result.content}</div>
-                {result.error && (
-                  <div className="mt-1 text-xs text-red-500">
-                    Error: {result.error}
+
+                <div className="space-y-2">
+                  <div>
+                    <div className="text-xs font-medium text-muted-foreground mb-1">
+                      Content:
+                    </div>
+                    <pre className="modern-panel rounded bg-muted/30 p-2 overflow-x-auto text-xs whitespace-pre-wrap break-all">
+                      {result.content || "No content returned"}
+                    </pre>
                   </div>
-                )}
+
+                  {result.error && (
+                    <div>
+                      <div className="text-xs font-medium text-destructive mb-1">
+                        Error Details:
+                      </div>
+                      <pre className="modern-panel rounded bg-destructive/10 p-2 overflow-x-auto text-xs whitespace-pre-wrap break-all">
+                        {result.error}
+                      </pre>
+                    </div>
+                  )}
+                </div>
               </div>
             ))}
           </div>

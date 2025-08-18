@@ -32,6 +32,11 @@ export const Component = () => {
       icon: "i-mingcute-plugin-2-line",
     },
     {
+      text: "Models",
+      href: "/settings/models",
+      icon: "i-mingcute-robot-2-line",
+    },
+    {
       text: "Agents",
       href: "/settings/tools",
       icon: "i-mingcute-android-2-line",

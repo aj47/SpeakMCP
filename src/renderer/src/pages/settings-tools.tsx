@@ -22,7 +22,7 @@ import {
 import { Save, Info } from "lucide-react"
 import { useState, useEffect } from "react"
 
-import { CHAT_PROVIDERS } from "@shared/index"
+
 import { Config } from "@shared/types"
 
 // Helper component for labels with tooltips
@@ -392,21 +392,7 @@ DOMAIN-SPECIFIC RULES:
                   </div>
                 )}
 
-                <div className="space-y-2">
-                  <Label htmlFor="mcp-provider">Current LLM Provider</Label>
-                  <div className="flex items-center justify-between rounded-md border bg-muted/50 p-3">
-                    <span className="text-sm">
-                      {CHAT_PROVIDERS.find(
-                        (p) =>
-                          p.value === (config.mcpToolsProviderId || "openai"),
-                      )?.label || "OpenAI"}
-                    </span>
-                    <span className="text-xs text-muted-foreground">
-                      Configure in Providers tab
-                    </span>
-                  </div>
 
-                </div>
 
                 <div className="space-y-2">
                   <LabelWithTooltip htmlFor="mcp-additional-guidelines" tooltip="Optional additional rules and guidelines for the AI agent. The base system prompt with tool usage instructions is automatically included.">

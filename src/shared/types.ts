@@ -78,6 +78,9 @@ export interface MCPServerConfig {
   // For remote transports (websocket/streamableHttp)
   url?: string
 
+  // Custom HTTP headers for streamableHttp transport
+  headers?: Record<string, string>
+
   // OAuth configuration for protected servers
   oauth?: OAuthConfig
 
@@ -237,6 +240,10 @@ export type Config = {
   mcpAutoPasteEnabled?: boolean
   mcpAutoPasteDelay?: number
   mcpMaxIterations?: number
+
+  // MCP Toggle Shortcuts
+  mcpToggleShortcut?: "ctrl-shift-m" | "ctrl-alt-t" | "custom" | "disabled"
+  customMcpToggleShortcut?: string
 
   // MCP Server Configuration
   mcpConfig?: MCPConfig

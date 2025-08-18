@@ -32,6 +32,7 @@ import {
   processTranscriptWithTools,
   processTranscriptWithAgentMode,
 } from "./llm"
+import { processMcpVoiceCommand } from "./mcp-voice-commands"
 import { mcpService, MCPToolResult } from "./mcp-service"
 import {
   saveCustomPosition,
@@ -105,7 +106,7 @@ async function processWithAgentMode(
         text,
         availableTools,
         executeToolCall,
-        config.mcpMaxIterations || 50, // Use configured max iterations or default to 50
+        config.mcpMaxIterations ?? 10, // Use configured max iterations or default to 10
         previousConversationHistory,
       )
 
@@ -739,11 +740,21 @@ export const router = {
         }
       }
 
-      // Use unified agent mode processing
-      const finalResponse = await processWithAgentMode(
-        transcript,
-        conversationId,
-      )
+      // Check for MCP voice commands first
+      const voiceCommandResult = await processMcpVoiceCommand(transcript)
+
+      let finalResponse: string
+
+      if (voiceCommandResult.handled) {
+        // Voice command was handled, use the response
+        finalResponse = voiceCommandResult.response || "Command processed successfully."
+      } else {
+        // No voice command detected, proceed with normal agent mode processing
+        finalResponse = await processWithAgentMode(
+          transcript,
+          conversationId,
+        )
+      }
 
       // Add assistant response to conversation
       if (conversationId) {
@@ -867,6 +878,36 @@ export const router = {
     }
   }),
 
+  validateMcpConfigText: t.procedure
+    .input<{ text: string }>()
+    .action(async ({ input }) => {
+      try {
+        const mcpConfig = JSON.parse(input.text) as MCPConfig
+
+        // Basic validation - same as file upload
+        if (!mcpConfig.mcpServers || typeof mcpConfig.mcpServers !== "object") {
+          throw new Error("Invalid MCP config: missing or invalid mcpServers")
+        }
+
+        // Validate each server config
+        for (const [serverName, serverConfig] of Object.entries(
+          mcpConfig.mcpServers,
+        )) {
+          if (!serverConfig.command || !Array.isArray(serverConfig.args)) {
+            throw new Error(
+              `Invalid server config for "${serverName}": missing command or args`,
+            )
+          }
+        }
+
+        return mcpConfig
+      } catch (error) {
+        throw new Error(
+          `Invalid MCP config: ${error instanceof Error ? error.message : String(error)}`,
+        )
+      }
+    }),
+
   saveMcpConfigFile: t.procedure
     .input<{ config: MCPConfig }>()
     .action(async ({ input }) => {
@@ -976,11 +1017,10 @@ export const router = {
   setMcpServerRuntimeEnabled: t.procedure
     .input<{ serverName: string; enabled: boolean }>()
     .action(async ({ input }) => {
-      const success = mcpService.setServerRuntimeEnabled(
+      return mcpService.setServerRuntimeEnabled(
         input.serverName,
         input.enabled,
       )
-      return { success }
     }),
 
   getMcpServerRuntimeState: t.procedure
@@ -991,6 +1031,97 @@ export const router = {
         available: mcpService.isServerAvailable(input.serverName),
       }
     }),
+
+  toggleMcpGlobally: t.procedure.action(async () => {
+    const config = configStore.get()
+    const newState = !config.mcpToolsEnabled
+
+    // Update config
+    configStore.save({
+      ...config,
+      mcpToolsEnabled: newState
+    })
+
+    if (newState) {
+      // Enable MCP and initialize servers
+      await mcpService.initialize()
+      return {
+        success: true,
+        enabled: true,
+        message: "MCP tools have been enabled and servers are starting up."
+      }
+    } else {
+      // Disable MCP and stop all servers
+      const stopResult = await mcpService.stopAllServers()
+      return {
+        success: stopResult.success,
+        enabled: false,
+        message: stopResult.success
+          ? "MCP tools have been disabled and all servers have been stopped."
+          : `MCP tools disabled but some servers failed to stop: ${stopResult.errors?.join(", ")}`,
+        errors: stopResult.errors
+      }
+    }
+  }),
+
+  enableMcpGlobally: t.procedure.action(async () => {
+    const config = configStore.get()
+
+    if (config.mcpToolsEnabled) {
+      return {
+        success: true,
+        enabled: true,
+        message: "MCP tools are already enabled."
+      }
+    }
+
+    // Enable MCP
+    configStore.save({
+      ...config,
+      mcpToolsEnabled: true
+    })
+
+    await mcpService.initialize()
+
+    return {
+      success: true,
+      enabled: true,
+      message: "MCP tools have been enabled and servers are starting up."
+    }
+  }),
+
+  disableMcpGlobally: t.procedure.action(async () => {
+    const config = configStore.get()
+
+    if (!config.mcpToolsEnabled) {
+      return {
+        success: true,
+        enabled: false,
+        message: "MCP tools are already disabled."
+      }
+    }
+
+    // Disable MCP
+    configStore.save({
+      ...config,
+      mcpToolsEnabled: false
+    })
+
+    const stopResult = await mcpService.stopAllServers()
+
+    return {
+      success: stopResult.success,
+      enabled: false,
+      message: stopResult.success
+        ? "MCP tools have been disabled and all servers have been stopped."
+        : `MCP tools disabled but some servers failed to stop: ${stopResult.errors?.join(", ")}`,
+      errors: stopResult.errors
+    }
+  }),
+
+  stopAllMcpServers: t.procedure.action(async () => {
+    return await mcpService.stopAllServers()
+  }),
 
   getMcpDisabledTools: t.procedure.action(async () => {
     return mcpService.getDisabledTools()

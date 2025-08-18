@@ -561,13 +561,13 @@ export class MCPService {
    * Set runtime enabled/disabled state for a server
    * This is separate from the config disabled flag and represents user preference
    */
-  setServerRuntimeEnabled(serverName: string, enabled: boolean): boolean {
+  setServerRuntimeEnabled(serverName: string, enabled: boolean): { success: boolean; error?: string } {
     const config = configStore.get()
     const mcpConfig = config.mcpConfig
 
     // Check if server exists in config
     if (!mcpConfig?.mcpServers?.[serverName]) {
-      return false
+      return { success: false, error: `Server ${serverName} not found in configuration` }
     }
 
     if (enabled) {
@@ -593,7 +593,7 @@ export class MCPService {
       // Ignore persistence errors; runtime state will still be respected in-session
     }
 
-    return true
+    return { success: true }
   }
 
   /**
@@ -1116,6 +1116,9 @@ export class MCPService {
       throw new Error("URL is required for streamableHttp transport")
     }
 
+    // Prepare custom headers from configuration
+    const customHeaders = serverConfig.headers || {}
+
     // First, check if we have valid OAuth tokens
     const hasValidTokens = await oauthStorage.hasValidTokens(serverConfig.url)
 
@@ -1128,6 +1131,7 @@ export class MCPService {
         return new StreamableHTTPClientTransport(new URL(serverConfig.url), {
           requestInit: {
             headers: {
+              ...customHeaders,
               'Authorization': `Bearer ${accessToken}`,
             },
           },
@@ -1139,6 +1143,14 @@ export class MCPService {
 
     // Create transport without authentication
     // If server requires OAuth, it will return 401 and we'll handle it in the connection logic
+    if (Object.keys(customHeaders).length > 0) {
+      return new StreamableHTTPClientTransport(new URL(serverConfig.url), {
+        requestInit: {
+          headers: customHeaders,
+        },
+      })
+    }
+
     return new StreamableHTTPClientTransport(new URL(serverConfig.url))
   }
 
@@ -1182,10 +1194,12 @@ export class MCPService {
       // Store the tokens
       await oauthStorage.storeTokens(serverConfig.url, tokens)
 
-      // Create authenticated transport
+      // Create authenticated transport with custom headers
+      const customHeaders = serverConfig.headers || {}
       const transport = new StreamableHTTPClientTransport(new URL(serverConfig.url), {
         requestInit: {
           headers: {
+            ...customHeaders,
             'Authorization': `Bearer ${tokens.access_token}`,
           },
         },
@@ -1453,6 +1467,41 @@ export class MCPService {
         success: false,
         error: error instanceof Error ? error.message : String(error),
       }
+    }
+  }
+
+  /**
+   * Stop all running MCP servers
+   */
+  async stopAllServers(): Promise<{ success: boolean; errors?: string[] }> {
+    const errors: string[] = []
+    const serverNames = Array.from(this.clients.keys())
+
+    if (isDebugTools()) {
+      logTools(`Stopping all MCP servers: ${serverNames.join(", ")}`)
+    }
+
+    // Stop all servers in parallel
+    const stopPromises = serverNames.map(async (serverName) => {
+      try {
+        const result = await this.stopServer(serverName)
+        if (!result.success && result.error) {
+          errors.push(`${serverName}: ${result.error}`)
+        }
+      } catch (error) {
+        errors.push(`${serverName}: ${error instanceof Error ? error.message : String(error)}`)
+      }
+    })
+
+    await Promise.all(stopPromises)
+
+    if (isDebugTools()) {
+      logTools(`Stopped all MCP servers. Errors: ${errors.length}`)
+    }
+
+    return {
+      success: errors.length === 0,
+      errors: errors.length > 0 ? errors : undefined
     }
   }
 

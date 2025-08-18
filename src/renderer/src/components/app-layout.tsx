@@ -28,12 +28,12 @@ export const Component = () => {
     {
       text: "Providers",
       href: "/settings/providers",
-      icon: "i-mingcute-plugin-2-line",
+      icon: "i-mingcute-cloud-line",
     },
     {
       text: "Models",
       href: "/settings/models",
-      icon: "i-mingcute-robot-2-line",
+      icon: "i-mingcute-brain-line",
     },
     {
       text: "Agents",

@@ -467,6 +467,15 @@ export const router = {
         form.append("prompt", config.groqSttPrompt.trim())
       }
 
+      // Add language parameter if specified
+      const languageCode = config.sttProviderId === "groq"
+        ? config.groqSttLanguage || config.sttLanguage
+        : config.openaiSttLanguage || config.sttLanguage;
+
+      if (languageCode && languageCode !== "auto") {
+        form.append("language", languageCode)
+      }
+
       const groqBaseUrl = config.groqBaseUrl || "https://api.groq.com/openai/v1"
       const openaiBaseUrl = config.openaiBaseUrl || "https://api.openai.com/v1"
 
@@ -665,6 +674,15 @@ export const router = {
 
       if (config.sttProviderId === "groq" && config.groqSttPrompt?.trim()) {
         form.append("prompt", config.groqSttPrompt.trim())
+      }
+
+      // Add language parameter if specified
+      const languageCode = config.sttProviderId === "groq"
+        ? config.groqSttLanguage || config.sttLanguage
+        : config.openaiSttLanguage || config.sttLanguage;
+
+      if (languageCode && languageCode !== "auto") {
+        form.append("language", languageCode)
       }
 
       const groqBaseUrl = config.groqBaseUrl || "https://api.groq.com/openai/v1"

@@ -22,6 +22,42 @@ type WINDOW_ID = "main" | "panel" | "setup"
 
 export const WINDOWS = new Map<WINDOW_ID, BrowserWindow>()
 
+// Helper function to add zoom functionality to any window
+function addZoomHandling(win: BrowserWindow) {
+  // Explicitly handle zoom shortcuts for all windows
+  win.webContents.on('before-input-event', (event, input) => {
+    const isModifierPressed = input.meta || input.control;
+
+    // Zoom in: Meta/Ctrl + Plus/Equals (handles Cmd+= for zoom in)
+    if (isModifierPressed && (input.key === '=' || input.key === 'Equal')) {
+      event.preventDefault();
+      win.webContents.zoomIn();
+      return;
+    }
+
+    // Zoom in: Meta/Ctrl + Plus with Shift (Cmd+Shift+=)
+    if (isModifierPressed && input.shift && input.key === '+') {
+      event.preventDefault();
+      win.webContents.zoomIn();
+      return;
+    }
+
+    // Zoom out: Meta/Ctrl + Minus
+    if (isModifierPressed && input.key === '-') {
+      event.preventDefault();
+      win.webContents.zoomOut();
+      return;
+    }
+
+    // Zoom reset: Meta/Ctrl + 0
+    if (isModifierPressed && input.key === '0') {
+      event.preventDefault();
+      win.webContents.setZoomLevel(0);
+      return;
+    }
+  })
+}
+
 function createBaseWindow({
   id,
   url,
@@ -48,6 +84,9 @@ function createBaseWindow({
   })
 
   WINDOWS.set(id, win)
+
+  // Add zoom handling to all windows
+  addZoomHandling(win)
 
   if (showWhenReady) {
     win.on("ready-to-show", () => {
@@ -188,39 +227,6 @@ export function createPanelWindow() {
 
   win.on("hide", () => {
     getRendererHandlers<RendererHandlers>(win.webContents).stopRecording.send()
-  })
-
-  // Explicitly handle zoom shortcuts for the panel window
-  win.webContents.on('before-input-event', (event, input) => {
-    const isModifierPressed = input.meta || input.control;
-
-    // Zoom in: Meta/Ctrl + Plus/Equals (handles Cmd+= for zoom in)
-    if (isModifierPressed && (input.key === '=' || input.key === 'Equal')) {
-      event.preventDefault();
-      win.webContents.zoomIn();
-      return;
-    }
-
-    // Zoom in: Meta/Ctrl + Plus with Shift (Cmd+Shift+=)
-    if (isModifierPressed && input.shift && input.key === '+') {
-      event.preventDefault();
-      win.webContents.zoomIn();
-      return;
-    }
-
-    // Zoom out: Meta/Ctrl + Minus
-    if (isModifierPressed && input.key === '-') {
-      event.preventDefault();
-      win.webContents.zoomOut();
-      return;
-    }
-
-    // Zoom reset: Meta/Ctrl + 0
-    if (isModifierPressed && input.key === '0') {
-      event.preventDefault();
-      win.webContents.setZoomLevel(0);
-      return;
-    }
   })
 
   makePanel(win)

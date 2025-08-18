@@ -19,6 +19,7 @@ import {
   STT_PROVIDER_ID,
   STT_PROVIDERS,
 } from "@shared/index"
+import { SUPPORTED_LANGUAGES } from "@shared/languages"
 import { Textarea } from "@renderer/components/ui/textarea"
 import { Input } from "@renderer/components/ui/input"
 import {
@@ -273,6 +274,80 @@ export function Component() {
               </span>
             </div>
           </Control>
+
+          <Control label="Language" className="px-3">
+            <Select
+              value={configQuery.data.sttLanguage || "auto"}
+              onValueChange={(value) => {
+                saveConfig({
+                  sttLanguage: value,
+                })
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {SUPPORTED_LANGUAGES.map((language) => (
+                  <SelectItem key={language.code} value={language.code}>
+                    {language.nativeName} ({language.name})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground mt-1">
+              Select the language for speech transcription. "Auto-detect" lets the
+              model determine the language automatically.
+            </p>
+          </Control>
+
+          {sttProviderId === "openai" && configQuery.data.openaiSttLanguage && configQuery.data.openaiSttLanguage !== configQuery.data.sttLanguage && (
+            <Control label="OpenAI Language Override" className="px-3">
+              <Select
+                value={configQuery.data.openaiSttLanguage || "auto"}
+                onValueChange={(value) => {
+                  saveConfig({
+                    openaiSttLanguage: value,
+                  })
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {SUPPORTED_LANGUAGES.map((language) => (
+                    <SelectItem key={language.code} value={language.code}>
+                      {language.nativeName} ({language.name})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Control>
+          )}
+
+          {sttProviderId === "groq" && configQuery.data.groqSttLanguage && configQuery.data.groqSttLanguage !== configQuery.data.sttLanguage && (
+            <Control label="Groq Language Override" className="px-3">
+              <Select
+                value={configQuery.data.groqSttLanguage || "auto"}
+                onValueChange={(value) => {
+                  saveConfig({
+                    groqSttLanguage: value,
+                  })
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {SUPPORTED_LANGUAGES.map((language) => (
+                    <SelectItem key={language.code} value={language.code}>
+                      {language.nativeName} ({language.name})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Control>
+          )}
 
           {sttProviderId === "groq" && (
             <Control label="Prompt" className="px-3">

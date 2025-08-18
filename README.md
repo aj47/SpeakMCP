@@ -208,12 +208,20 @@ When debug modes are enabled, you'll see detailed logs:
 - Verify LLM provider supports structured output (OpenAI/Groq recommended)
 - Check conversation history if context seems lost
 
-**🌐 API errors**
+**🌐 Multi-language Support**
+- **Speech Recognition**: Support for 30+ languages including Spanish, French, German, Chinese, Japanese, Arabic, Hindi, and more
+- **Language Detection**: Automatic language detection or manual language selection
+- **Provider-specific**: Language parameters work with OpenAI Whisper and Groq Whisper
+- **ISO 639-1 Compliant**: Standard language codes for consistent API integration
+- **Configurable**: Set global language preference or provider-specific overrides
+
+**🌍 API errors**
 
 - Verify API keys are correct
 - Check internet connection for cloud providers
 - Validate custom base URLs if configured
 - Monitor rate limits and usage quotas
+- Validate language codes (ISO 639-1 format)
 
 ### Performance Optimization
 

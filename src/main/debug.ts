@@ -52,6 +52,17 @@ export function initDebugFlags(argv: string[] = process.argv): DebugFlags {
   flags.keybinds = all || has("--debug-keybinds") || envKeybinds
   flags.all = all
 
+  // Force debug output to console for verification
+  console.log("[DEBUG INIT] Debug flags initialized:", {
+    llm: flags.llm,
+    tools: flags.tools,
+    keybinds: flags.keybinds,
+    all: flags.all,
+    argv: argv.filter(a => a.startsWith('--debug')),
+    envDebug: process.env.DEBUG,
+    envLLM: process.env.DEBUG_LLM
+  })
+
   if (flags.llm || flags.tools || flags.keybinds) {
     // Small banner so users can see debugs are enabled
     const enabled: string[] = []

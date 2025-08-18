@@ -148,15 +148,30 @@ async function makeOpenAICompatibleCall(
     requestBody.response_format = { type: "json_object" }
   }
 
-  return apiCallWithRetry(async () => {
+  // Estimate tokens (rough approximation: 4 chars per token)
+    const estimatedTokens = Math.ceil(messages.reduce((sum, msg) => sum + msg.content.length, 0) / 4);
+
+    return apiCallWithRetry(async () => {
     if (isDebugLLM()) {
+      logLLM("=== OPENAI API REQUEST ===")
       logLLM("HTTP Request", {
         url: `${baseURL}/chat/completions`,
         model,
         messagesCount: messages.length,
         useStructuredOutput,
+        estimatedTokens,
+        totalPromptLength: messages.reduce((sum, msg) => sum + msg.content.length, 0),
+        contextWarning: estimatedTokens > 8000 ? "WARNING: High token count, may exceed context limit" : null
       })
-      logLLM("Request Body", requestBody)
+      logLLM("Request Body (truncated)", {
+        ...requestBody,
+        messages: requestBody.messages.map(msg => ({
+          role: msg.role,
+          content: msg.content.length > 200 ?
+            msg.content.substring(0, 200) + "... [" + msg.content.length + " chars]" :
+            msg.content
+        }))
+      })
     }
     const response = await fetch(`${baseURL}/chat/completions`, {
       method: "POST",
@@ -170,7 +185,31 @@ async function makeOpenAICompatibleCall(
     if (!response.ok) {
       const errorText = await response.text()
       if (isDebugLLM()) {
-        logLLM("HTTP Error", response.status, errorText)
+        logLLM("=== HTTP ERROR ===")
+        logLLM("HTTP Error Details:", {
+          status: response.status,
+          statusText: response.statusText,
+          errorText,
+          estimatedTokens,
+          model: requestBody.model
+        })
+
+        // Parse error for context length specifically
+        try {
+          const errorJson = JSON.parse(errorText);
+          if (errorJson.error?.code === "context_length_exceeded") {
+            logLLM("CONTEXT LENGTH ERROR DETECTED", {
+              message: errorJson.error.message,
+              suggestedActions: [
+                "Reduce conversation history",
+                "Use a model with larger context",
+                "Split the request into smaller chunks"
+              ]
+            })
+          }
+        } catch (e) {
+          // Keep original error if not JSON
+        }
       }
       throw new Error(`HTTP ${response.status}: ${errorText}`)
     }

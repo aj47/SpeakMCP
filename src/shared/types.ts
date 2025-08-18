@@ -91,18 +91,6 @@ export interface MCPServerConfig {
 
 export interface MCPConfig {
   mcpServers: Record<string, MCPServerConfig>
-
-  // Global OAuth settings
-  oauthSettings?: {
-    // Default redirect URI for OAuth flows
-    defaultRedirectUri?: string
-    // Default scopes to request
-    defaultScopes?: string[]
-    // Timeout for OAuth operations (in milliseconds)
-    oauthTimeout?: number
-    // Whether to automatically refresh tokens
-    autoRefreshTokens?: boolean
-  }
 }
 
 // Agent Mode Progress Tracking Types
@@ -210,6 +198,11 @@ export type Config = {
 
   geminiApiKey?: string
   geminiBaseUrl?: string
+
+  // Speech-to-Text Language Configuration
+  sttLanguage?: string
+  openaiSttLanguage?: string
+  groqSttLanguage?: string
 
   transcriptPostProcessingEnabled?: boolean
   transcriptPostProcessingProviderId?: CHAT_PROVIDER_ID

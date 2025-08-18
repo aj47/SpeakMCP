@@ -8,7 +8,6 @@ import { tipcClient } from "@renderer/lib/tipc-client"
 import { Config, MCPConfig } from "@shared/types"
 import { MCPConfigManager } from "@renderer/components/mcp-config-manager"
 import { MCPToolManager } from "@renderer/components/mcp-tool-manager"
-import { MCPQuickAccess } from "@renderer/components/mcp-quick-access"
 
 export function Component() {
   const navigate = useNavigate()
@@ -46,8 +45,6 @@ export function Component() {
 
       {!config.mcpToolsEnabled ? (
         <div className="space-y-4">
-          <MCPQuickAccess />
-
           <div className="rounded-lg border p-4">
             <h3 className="text-lg font-semibold">MCP Tool Calling is disabled</h3>
             <p className="text-sm text-muted-foreground">
@@ -72,8 +69,6 @@ export function Component() {
         </div>
       ) : (
         <div className="space-y-8">
-          <MCPQuickAccess />
-
           <div className="space-y-2 rounded-lg border p-4">
             <h4 className="font-medium">MCP Tools</h4>
             <div className="text-sm text-muted-foreground">

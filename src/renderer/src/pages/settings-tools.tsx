@@ -186,36 +186,8 @@ DOMAIN-SPECIFIC RULES:
                       placeholder="Click to record custom MCP tools shortcut"
                     />
                   )}
-                </div>
 
-                <div className="space-y-2">
-                  <LabelWithTooltip htmlFor="mcp-toggle-shortcut" tooltip="Choose a keyboard shortcut to quickly toggle MCP tools on/off">MCP Toggle Shortcut</LabelWithTooltip>
-                  <Select
-                    value={config.mcpToggleShortcut || "ctrl-shift-m"}
-                    onValueChange={(
-                      value: "ctrl-shift-m" | "ctrl-alt-t" | "custom" | "disabled",
-                    ) => updateConfig({ mcpToggleShortcut: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="ctrl-shift-m">Ctrl+Shift+M</SelectItem>
-                      <SelectItem value="ctrl-alt-t">Ctrl+Alt+T</SelectItem>
-                      <SelectItem value="custom">Custom</SelectItem>
-                      <SelectItem value="disabled">Disabled</SelectItem>
-                    </SelectContent>
-                  </Select>
 
-                  {config.mcpToggleShortcut === "custom" && (
-                    <KeyRecorder
-                      value={config.customMcpToggleShortcut || ""}
-                      onChange={(keyCombo) => {
-                        updateConfig({ customMcpToggleShortcut: keyCombo })
-                      }}
-                      placeholder="Click to record custom MCP toggle shortcut"
-                    />
-                  )}
                 </div>
 
                 <div className="flex items-center space-x-2">

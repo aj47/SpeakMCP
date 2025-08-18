@@ -3,7 +3,6 @@ import { cn } from "@renderer/lib/utils"
 import { useEffect } from "react"
 import { NavLink, Outlet, useNavigate, useLocation } from "react-router-dom"
 import { LoadingSpinner } from "@renderer/components/ui/loading-spinner"
-import { MCPQuickAccess } from "@renderer/components/mcp-quick-access"
 
 type NavLink = {
   text: string
@@ -86,11 +85,8 @@ export const Component = () => {
           ))}
         </div>
 
-        {/* MCP Status and Loading spinner at the bottom of the sidebar */}
+        {/* Loading spinner at the bottom of the sidebar */}
         <div className="flex flex-1 flex-col justify-end">
-          <div className="px-2 pb-2">
-            <MCPQuickAccess variant="compact" showTitle={false} />
-          </div>
           <div className="flex flex-col items-center space-y-2 pb-4">
             <LoadingSpinner size="lg" />
             <div>SpeakMCP</div>

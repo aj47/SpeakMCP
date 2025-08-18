@@ -16,7 +16,6 @@ import { spawn, ChildProcess } from "child_process"
 import path from "path"
 import { matchesKeyCombo, getEffectiveShortcut } from "../shared/key-utils"
 import { isDebugKeybinds, logKeybinds } from "./debug"
-import { mcpService } from "./mcp-service"
 
 const rdevPath = path
   .join(
@@ -39,44 +38,6 @@ type RdevEvent = {
   }
   time: {
     secs_since_epoch: number
-  }
-}
-
-/**
- * Handle MCP toggle keyboard shortcut
- */
-async function handleMcpToggle() {
-  try {
-    const config = configStore.get()
-    const newState = !config.mcpToolsEnabled
-
-    if (isDebugKeybinds()) {
-      logKeybinds(`MCP toggle: ${config.mcpToolsEnabled ? "disabling" : "enabling"} MCP tools`)
-    }
-
-    // Update config
-    configStore.save({
-      ...config,
-      mcpToolsEnabled: newState
-    })
-
-    if (newState) {
-      // Enable MCP and initialize servers
-      await mcpService.initialize()
-      if (isDebugKeybinds()) {
-        logKeybinds("MCP tools enabled and servers starting up")
-      }
-    } else {
-      // Disable MCP and stop all servers
-      await mcpService.stopAllServers()
-      if (isDebugKeybinds()) {
-        logKeybinds("MCP tools disabled and all servers stopped")
-      }
-    }
-  } catch (error) {
-    if (isDebugKeybinds()) {
-      logKeybinds("Error toggling MCP:", error)
-    }
   }
 }
 
@@ -608,53 +569,6 @@ export function listenToKeyboardEvents() {
           }
           if (matches) {
             getWindowRendererHandlers("panel")?.startOrFinishMcpRecording.send()
-            return
-          }
-        }
-      }
-
-      // Handle MCP toggle shortcuts
-      if (config.mcpToggleShortcut && config.mcpToggleShortcut !== "disabled") {
-        const effectiveMcpToggleShortcut = getEffectiveShortcut(
-          config.mcpToggleShortcut,
-          config.customMcpToggleShortcut,
-        )
-
-        if (config.mcpToggleShortcut === "ctrl-shift-m") {
-          if (e.data.key === "KeyM" && isPressedCtrlKey && isPressedShiftKey) {
-            if (isDebugKeybinds()) {
-              logKeybinds("MCP toggle triggered: Ctrl+Shift+M")
-            }
-            handleMcpToggle()
-            return
-          }
-        } else if (config.mcpToggleShortcut === "ctrl-alt-t") {
-          if (e.data.key === "KeyT" && isPressedCtrlKey && isPressedAltKey) {
-            if (isDebugKeybinds()) {
-              logKeybinds("MCP toggle triggered: Ctrl+Alt+T")
-            }
-            handleMcpToggle()
-            return
-          }
-        } else if (config.mcpToggleShortcut === "custom" && effectiveMcpToggleShortcut) {
-          // Handle custom MCP toggle shortcut
-          const matches = matchesKeyCombo(
-            e.data,
-            {
-              ctrl: isPressedCtrlKey,
-              shift: isPressedShiftKey,
-              alt: isPressedAltKey,
-            },
-            effectiveMcpToggleShortcut,
-          )
-          if (isDebugKeybinds() && matches) {
-            logKeybinds(
-              "MCP toggle triggered: Custom hotkey",
-              effectiveMcpToggleShortcut,
-            )
-          }
-          if (matches) {
-            handleMcpToggle()
             return
           }
         }

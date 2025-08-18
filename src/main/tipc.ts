@@ -32,7 +32,6 @@ import {
   processTranscriptWithTools,
   processTranscriptWithAgentMode,
 } from "./llm"
-import { processMcpVoiceCommand } from "./mcp-voice-commands"
 import { mcpService, MCPToolResult } from "./mcp-service"
 import {
   saveCustomPosition,
@@ -740,21 +739,11 @@ export const router = {
         }
       }
 
-      // Check for MCP voice commands first
-      const voiceCommandResult = await processMcpVoiceCommand(transcript)
-
-      let finalResponse: string
-
-      if (voiceCommandResult.handled) {
-        // Voice command was handled, use the response
-        finalResponse = voiceCommandResult.response || "Command processed successfully."
-      } else {
-        // No voice command detected, proceed with normal agent mode processing
-        finalResponse = await processWithAgentMode(
-          transcript,
-          conversationId,
-        )
-      }
+      // Use unified agent mode processing
+      const finalResponse = await processWithAgentMode(
+        transcript,
+        conversationId,
+      )
 
       // Add assistant response to conversation
       if (conversationId) {
@@ -1017,10 +1006,11 @@ export const router = {
   setMcpServerRuntimeEnabled: t.procedure
     .input<{ serverName: string; enabled: boolean }>()
     .action(async ({ input }) => {
-      return mcpService.setServerRuntimeEnabled(
+      const success = mcpService.setServerRuntimeEnabled(
         input.serverName,
         input.enabled,
       )
+      return { success }
     }),
 
   getMcpServerRuntimeState: t.procedure
@@ -1031,97 +1021,6 @@ export const router = {
         available: mcpService.isServerAvailable(input.serverName),
       }
     }),
-
-  toggleMcpGlobally: t.procedure.action(async () => {
-    const config = configStore.get()
-    const newState = !config.mcpToolsEnabled
-
-    // Update config
-    configStore.save({
-      ...config,
-      mcpToolsEnabled: newState
-    })
-
-    if (newState) {
-      // Enable MCP and initialize servers
-      await mcpService.initialize()
-      return {
-        success: true,
-        enabled: true,
-        message: "MCP tools have been enabled and servers are starting up."
-      }
-    } else {
-      // Disable MCP and stop all servers
-      const stopResult = await mcpService.stopAllServers()
-      return {
-        success: stopResult.success,
-        enabled: false,
-        message: stopResult.success
-          ? "MCP tools have been disabled and all servers have been stopped."
-          : `MCP tools disabled but some servers failed to stop: ${stopResult.errors?.join(", ")}`,
-        errors: stopResult.errors
-      }
-    }
-  }),
-
-  enableMcpGlobally: t.procedure.action(async () => {
-    const config = configStore.get()
-
-    if (config.mcpToolsEnabled) {
-      return {
-        success: true,
-        enabled: true,
-        message: "MCP tools are already enabled."
-      }
-    }
-
-    // Enable MCP
-    configStore.save({
-      ...config,
-      mcpToolsEnabled: true
-    })
-
-    await mcpService.initialize()
-
-    return {
-      success: true,
-      enabled: true,
-      message: "MCP tools have been enabled and servers are starting up."
-    }
-  }),
-
-  disableMcpGlobally: t.procedure.action(async () => {
-    const config = configStore.get()
-
-    if (!config.mcpToolsEnabled) {
-      return {
-        success: true,
-        enabled: false,
-        message: "MCP tools are already disabled."
-      }
-    }
-
-    // Disable MCP
-    configStore.save({
-      ...config,
-      mcpToolsEnabled: false
-    })
-
-    const stopResult = await mcpService.stopAllServers()
-
-    return {
-      success: stopResult.success,
-      enabled: false,
-      message: stopResult.success
-        ? "MCP tools have been disabled and all servers have been stopped."
-        : `MCP tools disabled but some servers failed to stop: ${stopResult.errors?.join(", ")}`,
-      errors: stopResult.errors
-    }
-  }),
-
-  stopAllMcpServers: t.procedure.action(async () => {
-    return await mcpService.stopAllServers()
-  }),
 
   getMcpDisabledTools: t.procedure.action(async () => {
     return mcpService.getDisabledTools()

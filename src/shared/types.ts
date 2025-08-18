@@ -241,10 +241,6 @@ export type Config = {
   mcpAutoPasteDelay?: number
   mcpMaxIterations?: number
 
-  // MCP Toggle Shortcuts
-  mcpToggleShortcut?: "ctrl-shift-m" | "ctrl-alt-t" | "custom" | "disabled"
-  customMcpToggleShortcut?: string
-
   // MCP Server Configuration
   mcpConfig?: MCPConfig
 

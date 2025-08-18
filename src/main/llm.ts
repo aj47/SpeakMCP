@@ -91,7 +91,7 @@ Keep the contextSummary concise but informative.`
 }
 
 /**
- * Analyze tool errors and provide recovery strategies
+ * Analyze tool errors and provide generic recovery strategies
  */
 function analyzeToolErrors(toolResults: MCPToolResult[]): {
   recoveryStrategy: string
@@ -103,10 +103,7 @@ function analyzeToolErrors(toolResults: MCPToolResult[]): {
     .map((r) => r.content.map((c) => c.text).join(" "))
     .join(" ")
 
-  // Categorize error types
-  if (errorMessages.includes("Session not found")) {
-    errorTypes.push("session_lost")
-  }
+  // Categorize error types generically
   if (
     errorMessages.includes("timeout") ||
     errorMessages.includes("connection")
@@ -115,41 +112,38 @@ function analyzeToolErrors(toolResults: MCPToolResult[]): {
   }
   if (
     errorMessages.includes("permission") ||
-    errorMessages.includes("access")
+    errorMessages.includes("access") ||
+    errorMessages.includes("denied")
   ) {
     errorTypes.push("permissions")
   }
   if (
     errorMessages.includes("not found") ||
-    errorMessages.includes("does not exist")
+    errorMessages.includes("does not exist") ||
+    errorMessages.includes("missing")
   ) {
     errorTypes.push("resource_missing")
   }
 
-  // Generate recovery strategy based on error types
+  // Generate generic recovery strategy
   let recoveryStrategy = "RECOVERY STRATEGIES:\n"
 
-  if (errorTypes.includes("session_lost")) {
-    recoveryStrategy +=
-      "- For session errors: Create a new session using ht_create_session first\n"
-  }
   if (errorTypes.includes("connectivity")) {
     recoveryStrategy +=
-      "- For connectivity issues: Wait a moment and retry, or check if the service is running\n"
+      "- For connectivity issues: Wait a moment and retry, or check if the service is available\n"
   }
   if (errorTypes.includes("permissions")) {
     recoveryStrategy +=
-      "- For permission errors: Try alternative file locations or check access rights\n"
+      "- For permission errors: Try alternative approaches or check access rights\n"
   }
   if (errorTypes.includes("resource_missing")) {
     recoveryStrategy +=
-      "- For missing resources: Verify the resource exists or create it first\n"
+      "- For missing resources: Verify the resource exists or try creating it first\n"
   }
 
-  if (errorTypes.length === 0) {
-    recoveryStrategy +=
-      "- General: Try breaking down the task into smaller steps or use alternative tools\n"
-  }
+  // Always provide generic fallback advice
+  recoveryStrategy +=
+    "- General: Try breaking down the task into smaller steps, use alternative tools, or try a different approach\n"
 
   return { recoveryStrategy, errorTypes }
 }
@@ -872,8 +866,7 @@ Always use actual resource IDs from the conversation history or create new ones 
           errorText.includes("connection") ||
           errorText.includes("network") ||
           errorText.includes("temporary") ||
-          errorText.includes("busy") ||
-          errorText.includes("session not found") // Add session errors as retryable
+          errorText.includes("busy")
 
         if (isRetryableError) {
           retryCount++
@@ -973,23 +966,26 @@ ${failedTools
     const errorText =
       failedResult?.content.map((c) => c.text).join(" ") || "Unknown error"
 
-    // Check for specific error patterns and suggest fixes
+    // Check for error patterns and provide generic suggestions
     let suggestion = ""
-    if (errorText.includes("Session not found")) {
-      suggestion =
-        " (Suggestion: Create a new session using ht_create_session first)"
-    } else if (
+    if (
       errorText.includes("timeout") ||
-      errorText.includes("connection")
+      errorText.includes("connection") ||
+      errorText.includes("network")
     ) {
-      suggestion =
-        " (Suggestion: Retry the operation or check server connectivity)"
+      suggestion = " (Suggestion: Try again or check connectivity)"
     } else if (
       errorText.includes("permission") ||
-      errorText.includes("access")
+      errorText.includes("access") ||
+      errorText.includes("denied")
     ) {
-      suggestion =
-        " (Suggestion: Check file permissions or use alternative approach)"
+      suggestion = " (Suggestion: Try a different approach)"
+    } else if (
+      errorText.includes("not found") ||
+      errorText.includes("missing") ||
+      errorText.includes("does not exist")
+    ) {
+      suggestion = " (Suggestion: Verify the resource exists or try alternatives)"
     }
 
     return `- ${toolName}: ${errorText}${suggestion}`
@@ -998,10 +994,7 @@ ${failedTools
 
 ${errorAnalysis.recoveryStrategy}
 
-IMPORTANT: If you see session-related errors, you MUST create a new session first using ht_create_session,
-then extract the session ID from the response and use it in subsequent tool calls.
-
-Please try alternative approaches or provide manual instructions to the user.`
+Please try alternative approaches, break down the task into smaller steps, or provide manual instructions to the user.`
 
       conversationHistory.push({
         role: "tool",
@@ -1199,14 +1192,23 @@ async function makeLLMCall(
 
   try {
     if (isDebugLLM()) {
-      logLLM("Messages →", messages)
+      logLLM("=== LLM CALL START ===")
+      logLLM("Messages →", {
+        count: messages.length,
+        totalChars: messages.reduce((sum, msg) => sum + msg.content.length, 0),
+        messages: messages,
+      })
     }
     const result = await makeLLMCallWithFetch(messages, chatProviderId)
     if (isDebugLLM()) {
       logLLM("Response ←", result)
+      logLLM("=== LLM CALL END ===")
     }
     return result
   } catch (error) {
+    if (isDebugLLM()) {
+      logLLM("LLM CALL ERROR:", error)
+    }
     diagnosticsService.logError("llm", "Agent LLM call failed", error)
     throw error
   }

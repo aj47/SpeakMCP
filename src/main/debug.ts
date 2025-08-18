@@ -19,8 +19,9 @@ function strToBool(v: string | undefined): boolean {
 }
 
 export function initDebugFlags(argv: string[] = process.argv): DebugFlags {
-  // CLI flags
+  // CLI flags - support both long and short forms, with and without dashes
   const has = (name: string) => argv.includes(name)
+  const hasAny = (...names: string[]) => names.some(name => argv.includes(name))
 
   const envDebug = (process.env.DEBUG || "").toLowerCase()
   const envParts = envDebug.split(/[,:\s]+/).filter(Boolean)
@@ -42,14 +43,13 @@ export function initDebugFlags(argv: string[] = process.argv): DebugFlags {
     envDebug.includes("all")
 
   const all =
-    has("--debug") ||
-    has("--debug-all") ||
+    hasAny("--debug", "--debug-all", "-d", "-da", "debug", "debug-all", "d", "da") ||
     envDebug === "*" ||
     envParts.includes("all")
 
-  flags.llm = all || has("--debug-llm") || envLLM
-  flags.tools = all || has("--debug-tools") || envTools
-  flags.keybinds = all || has("--debug-keybinds") || envKeybinds
+  flags.llm = all || hasAny("--debug-llm", "-dl", "debug-llm", "dl") || envLLM
+  flags.tools = all || hasAny("--debug-tools", "-dt", "debug-tools", "dt") || envTools
+  flags.keybinds = all || hasAny("--debug-keybinds", "-dk", "debug-keybinds", "dk") || envKeybinds
   flags.all = all
 
   // Force debug output to console for verification
@@ -58,7 +58,7 @@ export function initDebugFlags(argv: string[] = process.argv): DebugFlags {
     tools: flags.tools,
     keybinds: flags.keybinds,
     all: flags.all,
-    argv: argv.filter(a => a.startsWith('--debug')),
+    argv: argv.filter(a => a.startsWith('--debug') || a.startsWith('-d') || a.startsWith('debug') || a === 'd' || a === 'dt' || a === 'dl' || a === 'dk'),
     envDebug: process.env.DEBUG,
     envLLM: process.env.DEBUG_LLM
   })
@@ -71,7 +71,7 @@ export function initDebugFlags(argv: string[] = process.argv): DebugFlags {
     if (flags.keybinds) enabled.push("KEYBINDS")
     // eslint-disable-next-line no-console
     console.log(
-      `[DEBUG] Enabled: ${enabled.join(", ")} (argv: ${argv.filter((a) => a.startsWith("--debug")).join(" ") || "none"})`,
+      `[DEBUG] Enabled: ${enabled.join(", ")} (argv: ${argv.filter((a) => a.startsWith("--debug") || a.startsWith("-d") || a.startsWith("debug") || ["d", "dt", "dl", "dk", "da"].includes(a)).join(" ") || "none"})`,
     )
   }
 

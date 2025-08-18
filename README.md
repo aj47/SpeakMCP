@@ -76,8 +76,12 @@ pnpm build:mac    # macOS build
 pnpm build:win    # Windows build
 pnpm build:linux  # Linux build
 
-# Debug (optional)
-pnpm dev -- --debug-all  # Enable all debug logs
+# Debug (optional) - Multiple convenient options!
+pnpm dev d               # Enable all debug logs (shortest!)
+pnpm dev debug-llm       # Enable LLM debug only
+pnpm dev dl              # Enable LLM debug (short)
+pnpm dev dt              # Enable tools debug (short)
+pnpm dev -- --debug-all  # Traditional format
 ```
 
 ## ⚙️ Configuration
@@ -115,6 +119,63 @@ pnpm dev -- --debug-all  # Enable all debug logs
 - "Create a new project folder and add a README"
 - "Search for latest AI news"
 - "Send a message to the team"
+
+## 🐛 Debug Mode
+
+SpeakMCP includes comprehensive debug logging to help troubleshoot issues and understand system behavior.
+
+### Quick Debug Commands
+
+**Enable all debug modes (recommended):**
+```bash
+pnpm dev d               # Shortest - just one letter!
+pnpm dev debug-all       # Readable format
+```
+
+**Enable specific debug modes:**
+```bash
+pnpm dev debug-llm       # LLM calls and responses
+pnpm dev debug-tools     # MCP tool execution
+pnpm dev debug-keybinds  # Keyboard event handling
+pnpm dev dl              # LLM debug (short)
+pnpm dev dt              # Tools debug (short)
+pnpm dev dk              # Keybinds debug (short)
+```
+
+**Traditional format (with dashes):**
+```bash
+pnpm dev -- --debug-all
+pnpm dev -- --debug-llm
+pnpm dev -- -d           # Short with dashes
+```
+
+**Environment variables:**
+```bash
+DEBUG=* pnpm dev         # Enable all
+DEBUG_LLM=true pnpm dev  # LLM only
+DEBUG=llm,tools pnpm dev # Multiple modes
+```
+
+### Debug Output
+
+When debug modes are enabled, you'll see detailed logs:
+
+**LLM Debug (`debug-llm` or `dl`):**
+- Request messages sent to LLM providers
+- Response content and structured output
+- Token usage and timing information
+- Error details for failed calls
+
+**Tools Debug (`debug-tools` or `dt`):**
+- MCP server connection status
+- Tool discovery and registration
+- Tool execution requests and responses
+- Error handling and retry logic
+
+**Keybinds Debug (`debug-keybinds` or `dk`):**
+- Keyboard event capture and processing
+- Hotkey activation and release
+- Focus management and text insertion
 
 ## 🚨 Troubleshooting
 

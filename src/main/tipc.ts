@@ -17,6 +17,8 @@ import {
 } from "electron"
 import path from "path"
 import { configStore, recordingsFolder, conversationsFolder } from "./config"
+import { MobileBridge } from "./mobile-bridge"
+import jwt from "jsonwebtoken"
 import {
   Config,
   RecordingHistoryItem,
@@ -40,6 +42,9 @@ import {
   PanelPosition,
 } from "./panel-position"
 import { state, agentProcessManager } from "./state"
+
+// Global mobile bridge instance
+let mobileBridge: MobileBridge | null = null
 
 // Unified agent mode processing function
 async function processWithAgentMode(
@@ -1238,6 +1243,78 @@ export const router = {
     // Return current size if no custom size saved
     const [width, height] = win.getSize()
     return { width, height }
+  }),
+  // Mobile Server IPC Handlers
+  startMobileServer: t.procedure.action(async () => {
+    const config = configStore.get()
+
+    if (!config.mobileServerEnabled) {
+      throw new Error("Mobile server not enabled in settings")
+    }
+
+    if (!config.livekitApiKey || !config.livekitApiSecret) {
+      throw new Error("LiveKit API credentials not configured")
+    }
+
+    if (!config.ngrokAuthToken) {
+      throw new Error("Ngrok auth token not configured")
+    }
+
+    if (mobileBridge) {
+      await mobileBridge.stop()
+    }
+
+    const { MobileBridge } = await import("./mobile-bridge")
+    mobileBridge = new MobileBridge({
+      livekit: {
+        apiKey: config.livekitApiKey,
+        apiSecret: config.livekitApiSecret,
+        serverPort: config.livekitServerPort || 7880,
+        serverUrl: `http://localhost:${config.livekitServerPort || 7880}`
+      },
+      ngrok: {
+        authToken: config.ngrokAuthToken,
+        region: config.ngrokRegion || "us"
+      },
+      audio: {
+        sampleRate: config.mobileAudioSampleRate || 44100,
+        channels: 1,
+        bitrate: config.mobileAudioBitrate || 128000,
+        bufferSize: config.audioBufferSize || 1024
+      }
+    })
+
+    await mobileBridge.start()
+    return { success: true }
+  }),
+  stopMobileServer: t.procedure.action(async () => {
+    if (mobileBridge) {
+      await mobileBridge.stop()
+      mobileBridge = null
+    }
+    return { success: true }
+  }),
+  getMobileStatus: t.procedure.action(async () => {
+    if (!mobileBridge) {
+      return {
+        mobileServer: { enabled: false, status: "stopped" },
+        ngrokTunnel: { enabled: false, status: "disconnected" },
+        activeSessions: []
+      }
+    }
+    return await mobileBridge.getStatus()
+  }),
+  generateQRCode: t.procedure.action(async (input: { roomName: string; participantId: string }) => {
+    if (!mobileBridge) {
+      throw new Error("Mobile server not running")
+    }
+    return await mobileBridge.generateQRCode(input.roomName, input.participantId)
+  }),
+  getMobileSessions: t.procedure.action(async () => {
+    if (!mobileBridge) {
+      return []
+    }
+    return mobileBridge.getActiveSessions()
   }),
 }
 

@@ -264,4 +264,25 @@ export type Config = {
   panelCustomPosition?: { x: number; y: number }
   panelDragEnabled?: boolean
   panelCustomSize?: { width: number; height: number }
+
+  // Mobile Server Configuration
+  mobileServerEnabled?: boolean
+  livekitServerPort?: number
+  livekitApiKey?: string
+  livekitApiSecret?: string
+
+  // Ngrok Configuration
+  ngrokTunnelEnabled?: boolean
+  ngrokAuthToken?: string
+  ngrokRegion?: string
+
+  // Mobile Session Settings
+  qrCodeDisplayEnabled?: boolean
+  mobileSessionTimeout?: number
+  maxConcurrentMobileSessions?: number
+
+  // Audio Processing
+  mobileAudioSampleRate?: number
+  mobileAudioBitrate?: number
+  audioBufferSize?: number
 }

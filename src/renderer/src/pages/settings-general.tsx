@@ -457,6 +457,159 @@ export function Component() {
 
         </ControlGroup>
 
+        {/* Mobile Server Settings */}
+        <ControlGroup title="Mobile Server">
+          <Control label={<ControlLabel label="Enable Mobile Server" tooltip="Enable mobile app connectivity via LiveKit and ngrok tunneling." />} className="px-3">
+            <Switch
+              checked={configQuery.data?.mobileServerEnabled ?? false}
+              onCheckedChange={(value) => {
+                saveConfig({
+                  mobileServerEnabled: value,
+                })
+              }}
+            />
+          </Control>
+
+          <Control label={<ControlLabel label="LiveKit API Key" tooltip="Your LiveKit API key for mobile server authentication." />} className="px-3">
+            <Input
+              type="password"
+              placeholder="LiveKit API Key"
+              value={configQuery.data?.livekitApiKey || ""}
+              onChange={(e) => {
+                saveConfig({
+                  livekitApiKey: e.target.value,
+                })
+              }}
+            />
+          </Control>
+
+          <Control label={<ControlLabel label="LiveKit API Secret" tooltip="Your LiveKit API secret for mobile server authentication." />} className="px-3">
+            <Input
+              type="password"
+              placeholder="LiveKit API Secret"
+              value={configQuery.data?.livekitApiSecret || ""}
+              onChange={(e) => {
+                saveConfig({
+                  livekitApiSecret: e.target.value,
+                })
+              }}
+            />
+          </Control>
+
+          <Control label={<ControlLabel label="LiveKit Server Port" tooltip="Port for the LiveKit server (default: 7880)." />} className="px-3">
+            <Input
+              type="number"
+              placeholder="7880"
+              value={configQuery.data?.livekitServerPort || 7880}
+              onChange={(e) => {
+                saveConfig({
+                  livekitServerPort: parseInt(e.target.value) || 7880,
+                })
+              }}
+            />
+          </Control>
+
+          <Control label={<ControlLabel label="Ngrok Auth Token" tooltip="Your ngrok auth token for tunneling mobile connections." />} className="px-3">
+            <Input
+              type="password"
+              placeholder="Ngrok Auth Token"
+              value={configQuery.data?.ngrokAuthToken || ""}
+              onChange={(e) => {
+                saveConfig({
+                  ngrokAuthToken: e.target.value,
+                })
+              }}
+            />
+          </Control>
+
+          <Control label={<ControlLabel label="Ngrok Region" tooltip="Ngrok tunnel region for optimal performance." />} className="px-3">
+            <Select
+              value={configQuery.data?.ngrokRegion || "us"}
+              onValueChange={(value) => {
+                saveConfig({
+                  ngrokRegion: value,
+                })
+              }}
+            >
+              <SelectTrigger className="w-[180px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="us">United States</SelectItem>
+                <SelectItem value="eu">Europe</SelectItem>
+                <SelectItem value="ap">Asia Pacific</SelectItem>
+                <SelectItem value="au">Australia</SelectItem>
+                <SelectItem value="sa">South America</SelectItem>
+                <SelectItem value="jp">Japan</SelectItem>
+                <SelectItem value="in">India</SelectItem>
+              </SelectContent>
+            </Select>
+          </Control>
+
+          <Control label={<ControlLabel label="Mobile Audio Sample Rate" tooltip="Audio sample rate for mobile connections (default: 44100 Hz)." />} className="px-3">
+            <Input
+              type="number"
+              placeholder="44100"
+              value={configQuery.data?.mobileAudioSampleRate || 44100}
+              onChange={(e) => {
+                saveConfig({
+                  mobileAudioSampleRate: parseInt(e.target.value) || 44100,
+                })
+              }}
+            />
+          </Control>
+
+          <Control label={<ControlLabel label="Mobile Audio Bitrate" tooltip="Audio bitrate for mobile connections in kbps (default: 128)." />} className="px-3">
+            <Input
+              type="number"
+              placeholder="128"
+              value={configQuery.data?.mobileAudioBitrate || 128}
+              onChange={(e) => {
+                saveConfig({
+                  mobileAudioBitrate: parseInt(e.target.value) || 128,
+                })
+              }}
+            />
+          </Control>
+
+          <Control label={<ControlLabel label="QR Code Display" tooltip="Enable QR code generation for mobile app connections." />} className="px-3">
+            <Switch
+              checked={configQuery.data?.qrCodeDisplayEnabled ?? true}
+              onCheckedChange={(value) => {
+                saveConfig({
+                  qrCodeDisplayEnabled: value,
+                })
+              }}
+            />
+          </Control>
+
+          <Control label={<ControlLabel label="Mobile Session Timeout" tooltip="Session timeout in minutes for mobile connections (default: 60)." />} className="px-3">
+            <Input
+              type="number"
+              placeholder="60"
+              value={configQuery.data?.mobileSessionTimeout || 60}
+              onChange={(e) => {
+                saveConfig({
+                  mobileSessionTimeout: parseInt(e.target.value) || 60,
+                })
+              }}
+            />
+          </Control>
+
+          <Control label={<ControlLabel label="Max Concurrent Sessions" tooltip="Maximum number of concurrent mobile sessions (default: 5)." />} className="px-3">
+            <Input
+              type="number"
+              placeholder="5"
+              value={configQuery.data?.maxConcurrentMobileSessions || 5}
+              onChange={(e) => {
+                saveConfig({
+                  maxConcurrentMobileSessions: parseInt(e.target.value) || 5,
+                })
+              }}
+            />
+          </Control>
+        </ControlGroup>
+
         {/* About Section */}
         <ControlGroup title="About">
           <Control label="Version" className="px-3">

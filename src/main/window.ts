@@ -24,38 +24,66 @@ export const WINDOWS = new Map<WINDOW_ID, BrowserWindow>()
 
 // Helper function to add zoom functionality to any window
 function addZoomHandling(win: BrowserWindow) {
-  // Explicitly handle zoom shortcuts for all windows
-  win.webContents.on('before-input-event', (event, input) => {
-    const isModifierPressed = input.meta || input.control;
+  const { globalShortcut } = require('electron');
 
-    // Zoom in: Meta/Ctrl + Plus/Equals (handles Cmd+= for zoom in)
-    if (isModifierPressed && (input.key === '=' || input.key === 'Equal')) {
-      event.preventDefault();
-      win.webContents.zoomIn();
-      return;
-    }
+  // Zoom implementation using setZoomFactor for reliable results
+  const zoomIn = () => {
+    const currentFactor = win.webContents.getZoomFactor();
+    const newFactor = Math.min(currentFactor * 1.2, 5.0); // Max 5x zoom
+    win.webContents.setZoomFactor(newFactor);
+  };
 
-    // Zoom in: Meta/Ctrl + Plus with Shift (Cmd+Shift+=)
-    if (isModifierPressed && input.shift && input.key === '+') {
-      event.preventDefault();
-      win.webContents.zoomIn();
-      return;
-    }
+  const zoomOut = () => {
+    const currentFactor = win.webContents.getZoomFactor();
+    const newFactor = Math.max(currentFactor / 1.2, 0.25); // Min 0.25x zoom
+    win.webContents.setZoomFactor(newFactor);
+  };
 
-    // Zoom out: Meta/Ctrl + Minus
-    if (isModifierPressed && input.key === '-') {
-      event.preventDefault();
-      win.webContents.zoomOut();
-      return;
-    }
+  const zoomReset = () => {
+    win.webContents.setZoomFactor(1.0);
+  };
 
-    // Zoom reset: Meta/Ctrl + 0
-    if (isModifierPressed && input.key === '0') {
-      event.preventDefault();
-      win.webContents.setZoomLevel(0);
-      return;
+  // Register global shortcuts when window gains focus
+  win.on('focus', () => {
+    try {
+      // Unregister first to avoid conflicts
+      globalShortcut.unregister('CommandOrControl+=');
+      globalShortcut.unregister('CommandOrControl+-');
+      globalShortcut.unregister('CommandOrControl+0');
+
+      // Register zoom shortcuts
+      globalShortcut.register('CommandOrControl+=', () => {
+        if (win.isFocused()) {
+          zoomIn();
+        }
+      });
+
+      globalShortcut.register('CommandOrControl+-', () => {
+        if (win.isFocused()) {
+          zoomOut();
+        }
+      });
+
+      globalShortcut.register('CommandOrControl+0', () => {
+        if (win.isFocused()) {
+          zoomReset();
+        }
+      });
+    } catch (error) {
+      console.error('Error registering zoom shortcuts:', error);
     }
-  })
+  });
+
+  // Unregister shortcuts when window loses focus
+  win.on('blur', () => {
+    try {
+      globalShortcut.unregister('CommandOrControl+=');
+      globalShortcut.unregister('CommandOrControl+-');
+      globalShortcut.unregister('CommandOrControl+0');
+    } catch (error) {
+      console.error('Error unregistering zoom shortcuts:', error);
+    }
+  });
 }
 
 function createBaseWindow({
@@ -229,38 +257,8 @@ export function createPanelWindow() {
     getRendererHandlers<RendererHandlers>(win.webContents).stopRecording.send()
   })
 
-  // Explicitly handle zoom shortcuts for the panel window
-  win.webContents.on('before-input-event', (event, input) => {
-    const isModifierPressed = input.meta || input.control;
-
-    // Zoom in: Meta/Ctrl + Plus/Equals (handles Cmd+= for zoom in)
-    if (isModifierPressed && (input.key === '=' || input.key === 'Equal')) {
-      event.preventDefault();
-      win.webContents.zoomIn();
-      return;
-    }
-
-    // Zoom in: Meta/Ctrl + Plus with Shift (Cmd+Shift+=)
-    if (isModifierPressed && input.shift && input.key === '+') {
-      event.preventDefault();
-      win.webContents.zoomIn();
-      return;
-    }
-
-    // Zoom out: Meta/Ctrl + Minus
-    if (isModifierPressed && input.key === '-') {
-      event.preventDefault();
-      win.webContents.zoomOut();
-      return;
-    }
-
-    // Zoom reset: Meta/Ctrl + 0
-    if (isModifierPressed && input.key === '0') {
-      event.preventDefault();
-      win.webContents.setZoomLevel(0);
-      return;
-    }
-  })
+  // Note: Zoom handling is now handled by addZoomHandling() function above
+  // Removed duplicate zoom handler to prevent conflicts
 
   makePanel(win)
 

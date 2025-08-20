@@ -24,6 +24,74 @@ export const WINDOWS = new Map<WINDOW_ID, BrowserWindow>()
 
 // Helper function to add zoom functionality to any window
 function addZoomHandling(win: BrowserWindow) {
+  // Alternative zoom implementation using setZoomFactor
+  const zoomIn = () => {
+    const currentFactor = win.webContents.getZoomFactor();
+    const newFactor = Math.min(currentFactor * 1.2, 5.0); // Max 5x zoom
+    console.log(`Manual zoom in: ${currentFactor} -> ${newFactor}`);
+    win.webContents.setZoomFactor(newFactor);
+  };
+
+  const zoomOut = () => {
+    const currentFactor = win.webContents.getZoomFactor();
+    const newFactor = Math.max(currentFactor / 1.2, 0.25); // Min 0.25x zoom
+    console.log(`Manual zoom out: ${currentFactor} -> ${newFactor}`);
+    win.webContents.setZoomFactor(newFactor);
+  };
+
+  const zoomReset = () => {
+    console.log('Manual zoom reset to 1.0');
+    win.webContents.setZoomFactor(1.0);
+  };
+
+  // Try using globalShortcut approach instead of before-input-event
+  const { globalShortcut } = require('electron');
+
+  // Register global shortcuts when window gains focus
+  win.on('focus', () => {
+    try {
+      // Unregister first to avoid conflicts
+      globalShortcut.unregister('CommandOrControl+=');
+      globalShortcut.unregister('CommandOrControl+-');
+      globalShortcut.unregister('CommandOrControl+0');
+
+      // Register zoom shortcuts
+      globalShortcut.register('CommandOrControl+=', () => {
+        console.log('Global shortcut zoom in triggered');
+        if (win.isFocused()) {
+          zoomIn();
+        }
+      });
+
+      globalShortcut.register('CommandOrControl+-', () => {
+        console.log('Global shortcut zoom out triggered');
+        if (win.isFocused()) {
+          zoomOut();
+        }
+      });
+
+      globalShortcut.register('CommandOrControl+0', () => {
+        console.log('Global shortcut zoom reset triggered');
+        if (win.isFocused()) {
+          zoomReset();
+        }
+      });
+    } catch (error) {
+      console.error('Error registering global shortcuts:', error);
+    }
+  });
+
+  // Unregister shortcuts when window loses focus
+  win.on('blur', () => {
+    try {
+      globalShortcut.unregister('CommandOrControl+=');
+      globalShortcut.unregister('CommandOrControl+-');
+      globalShortcut.unregister('CommandOrControl+0');
+    } catch (error) {
+      console.error('Error unregistering global shortcuts:', error);
+    }
+  });
+
   // Explicitly handle zoom shortcuts for all windows
   win.webContents.on('before-input-event', (event, input) => {
     const isModifierPressed = input.meta || input.control;
@@ -43,7 +111,29 @@ function addZoomHandling(win: BrowserWindow) {
     if (isModifierPressed && (input.key === '=' || input.key === 'Equal')) {
       console.log('Executing zoom in (=)');
       event.preventDefault();
-      win.webContents.zoomIn();
+
+      // Try both built-in method and manual fallback
+      try {
+        const currentZoom = win.webContents.getZoomLevel();
+        const currentFactor = win.webContents.getZoomFactor();
+        console.log('Current zoom - level:', currentZoom, 'factor:', currentFactor);
+
+        // Try built-in method first
+        win.webContents.zoomIn();
+
+        // Also try manual method as fallback
+        zoomIn();
+
+        // Check result after a short delay
+        setTimeout(() => {
+          const newZoom = win.webContents.getZoomLevel();
+          const newFactor = win.webContents.getZoomFactor();
+          console.log('New zoom - level:', newZoom, 'factor:', newFactor);
+        }, 100);
+      } catch (error) {
+        console.error('Error during zoom in:', error);
+      }
+
       return;
     }
 
@@ -51,7 +141,14 @@ function addZoomHandling(win: BrowserWindow) {
     if (isModifierPressed && input.shift && input.key === '+') {
       console.log('Executing zoom in (+)');
       event.preventDefault();
-      win.webContents.zoomIn();
+
+      try {
+        win.webContents.zoomIn();
+        zoomIn(); // Also try manual method
+      } catch (error) {
+        console.error('Error during zoom in (+):', error);
+      }
+
       return;
     }
 
@@ -59,7 +156,24 @@ function addZoomHandling(win: BrowserWindow) {
     if (isModifierPressed && input.key === '-') {
       console.log('Executing zoom out (-)');
       event.preventDefault();
-      win.webContents.zoomOut();
+
+      try {
+        const currentZoom = win.webContents.getZoomLevel();
+        const currentFactor = win.webContents.getZoomFactor();
+        console.log('Current zoom - level:', currentZoom, 'factor:', currentFactor);
+
+        win.webContents.zoomOut();
+        zoomOut(); // Also try manual method
+
+        setTimeout(() => {
+          const newZoom = win.webContents.getZoomLevel();
+          const newFactor = win.webContents.getZoomFactor();
+          console.log('New zoom - level:', newZoom, 'factor:', newFactor);
+        }, 100);
+      } catch (error) {
+        console.error('Error during zoom out:', error);
+      }
+
       return;
     }
 
@@ -67,7 +181,20 @@ function addZoomHandling(win: BrowserWindow) {
     if (isModifierPressed && input.key === '0') {
       console.log('Executing zoom reset (0)');
       event.preventDefault();
-      win.webContents.setZoomLevel(0);
+
+      try {
+        win.webContents.setZoomLevel(0);
+        zoomReset(); // Also try manual method
+
+        setTimeout(() => {
+          const newZoom = win.webContents.getZoomLevel();
+          const newFactor = win.webContents.getZoomFactor();
+          console.log('Reset zoom - level:', newZoom, 'factor:', newFactor);
+        }, 100);
+      } catch (error) {
+        console.error('Error during zoom reset:', error);
+      }
+
       return;
     }
   })
@@ -102,6 +229,32 @@ function createBaseWindow({
 
   // Add zoom handling to all windows
   addZoomHandling(win)
+
+  // Add test zoom functionality via DevTools console
+  if (import.meta.env.DEV) {
+    win.webContents.once('dom-ready', () => {
+      win.webContents.executeJavaScript(`
+        window.testZoom = {
+          zoomIn: () => {
+            console.log('Test zoom in triggered from renderer');
+            return window.electron.ipcRenderer.invoke('test-zoom-in');
+          },
+          zoomOut: () => {
+            console.log('Test zoom out triggered from renderer');
+            return window.electron.ipcRenderer.invoke('test-zoom-out');
+          },
+          zoomReset: () => {
+            console.log('Test zoom reset triggered from renderer');
+            return window.electron.ipcRenderer.invoke('test-zoom-reset');
+          },
+          getZoom: () => {
+            return window.electron.ipcRenderer.invoke('get-zoom-info');
+          }
+        };
+        console.log('Test zoom functions available: window.testZoom');
+      `);
+    });
+  }
 
   if (showWhenReady) {
     win.on("ready-to-show", () => {

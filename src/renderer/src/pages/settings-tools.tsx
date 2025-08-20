@@ -128,19 +128,11 @@ DOMAIN-SPECIFIC RULES:
 
   return (
     <div className="modern-panel h-full overflow-auto px-6 py-4">
-      <header className="modern-card modern-border mb-5 rounded-lg p-4">
-        <h2 className="text-2xl font-bold">Agents</h2>
-      </header>
 
       <div className="space-y-6">
         <div className="space-y-4">
           <div className="space-y-2">
             <h3 className="text-lg font-semibold">MCP Tool Calling</h3>
-            <p className="text-sm text-muted-foreground">
-              Enable voice-activated tool execution using Model Context Protocol
-              (MCP). This allows you to perform actions like creating files,
-              sending notifications, and more through voice commands.
-            </p>
           </div>
 
           <div className="space-y-4">
@@ -238,76 +230,6 @@ DOMAIN-SPECIFIC RULES:
                       />
 
                     </div>
-
-                    <div className="space-y-4 rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-950/20">
-                      <div className="flex items-center space-x-2">
-                        <Switch
-                          id="agent-kill-switch"
-                          checked={config.agentKillSwitchEnabled !== false}
-                          onCheckedChange={(checked) =>
-                            updateConfig({ agentKillSwitchEnabled: checked })
-                          }
-                        />
-                        <LabelWithTooltip
-                          htmlFor="agent-kill-switch"
-                          className="font-medium text-red-800 dark:text-red-200"
-                          tooltip="Provides a global hotkey to immediately stop agent mode and kill all agent-created processes"
-                        >
-                          Enable Emergency Kill Switch
-                        </LabelWithTooltip>
-                      </div>
-                      <p className="text-xs text-red-700 dark:text-red-300">
-                        Provides a global hotkey to immediately stop agent mode
-                        and kill all agent-created processes.
-                      </p>
-
-                      {config.agentKillSwitchEnabled !== false && (
-                        <div className="space-y-2">
-                          <Label
-                            htmlFor="kill-switch-hotkey"
-                            className="text-red-800 dark:text-red-200"
-                          >
-                            Kill Switch Hotkey
-                          </Label>
-                          <select
-                            id="kill-switch-hotkey"
-                            value={
-                              config.agentKillSwitchHotkey ||
-                              "ctrl-shift-escape"
-                            }
-                            onChange={(e) =>
-                              updateConfig({
-                                agentKillSwitchHotkey: e.target.value as any,
-                              })
-                            }
-                            className="w-full rounded-md border bg-background p-2"
-                          >
-                            <option value="ctrl-shift-escape">
-                              Ctrl + Shift + Escape
-                            </option>
-                            <option value="ctrl-alt-q">Ctrl + Alt + Q</option>
-                            <option value="ctrl-shift-q">
-                              Ctrl + Shift + Q
-                            </option>
-                            <option value="custom">Custom</option>
-                          </select>
-
-                          {config.agentKillSwitchHotkey === "custom" && (
-                            <KeyRecorder
-                              value={config.customAgentKillSwitchHotkey || ""}
-                              onChange={(keyCombo) => {
-                                updateConfig({
-                                  customAgentKillSwitchHotkey: keyCombo,
-                                })
-                              }}
-                              placeholder="Click to record custom kill switch hotkey"
-                            />
-                          )}
-
-
-                        </div>
-                      )}
-                    </div>
                   </>
                 )}
 
@@ -351,18 +273,7 @@ DOMAIN-SPECIFIC RULES:
                   </>
                 )}
 
-                {config.mcpAgentModeEnabled && (
-                  <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 dark:border-blue-800 dark:bg-blue-950/20">
-                    <p className="text-sm text-blue-800 dark:text-blue-200">
-                      <strong>Agent Mode:</strong> Results are displayed in a
-                      floating GUI. Press{" "}
-                      <kbd className="rounded bg-blue-100 px-1.5 py-0.5 text-xs dark:bg-blue-900">
-                        ESC
-                      </kbd>{" "}
-                      to close the results window.
-                    </p>
-                  </div>
-                )}
+                
 
 
 
@@ -430,8 +341,77 @@ DOMAIN-SPECIFIC RULES:
             )}
           </div>
 
+        {config.mcpAgentModeEnabled && (
+          <div className="space-y-4 rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-950/20">
+            <div className="flex items-center space-x-2">
+              <Switch
+                id="agent-kill-switch"
+                checked={config.agentKillSwitchEnabled !== false}
+                onCheckedChange={(checked) =>
+                  updateConfig({ agentKillSwitchEnabled: checked })
+                }
+              />
+              <LabelWithTooltip
+                htmlFor="agent-kill-switch"
+                className="font-medium text-red-800 dark:text-red-200"
+                tooltip="Provides a global hotkey to immediately stop agent mode and kill all agent-created processes"
+              >
+                Enable Emergency Kill Switch
+              </LabelWithTooltip>
+            </div>
+            <p className="text-xs text-red-700 dark:text-red-300">
+              Provides a global hotkey to immediately stop agent mode
+              and kill all agent-created processes.
+            </p>
 
-        </div>
+            {config.agentKillSwitchEnabled !== false && (
+              <div className="space-y-2">
+                <Label
+                  htmlFor="kill-switch-hotkey"
+                  className="text-red-800 dark:text-red-200"
+                >
+                  Kill Switch Hotkey
+                </Label>
+                <select
+                  id="kill-switch-hotkey"
+                  value={
+                    config.agentKillSwitchHotkey ||
+                    "ctrl-shift-escape"
+                  }
+                  onChange={(e) =>
+                    updateConfig({
+                      agentKillSwitchHotkey: e.target.value as any,
+                    })
+                  }
+                  className="w-full rounded-md border bg-background p-2"
+                >
+                  <option value="ctrl-shift-escape">
+                    Ctrl + Shift + Escape
+                  </option>
+                  <option value="ctrl-alt-q">Ctrl + Alt + Q</option>
+                  <option value="ctrl-shift-q">
+                    Ctrl + Shift + Q
+                  </option>
+                  <option value="custom">Custom</option>
+                </select>
+
+                {config.agentKillSwitchHotkey === "custom" && (
+                  <KeyRecorder
+                    value={config.customAgentKillSwitchHotkey || ""}
+                    onChange={(keyCombo) => {
+                      updateConfig({
+                        customAgentKillSwitchHotkey: keyCombo,
+                      })
+                    }}
+                    placeholder="Click to record custom kill switch hotkey"
+                  />
+                )}
+
+              </div>
+            )}
+          </div>
+        )}
+
       </div>
     </div>
   )

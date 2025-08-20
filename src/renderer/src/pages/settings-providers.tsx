@@ -44,9 +44,6 @@ export function Component() {
 
   return (
     <div className="modern-panel h-full overflow-auto px-6 py-4">
-      <header className="modern-card modern-border mb-5 rounded-lg p-4">
-        <h2 className="text-2xl font-bold">Providers</h2>
-      </header>
 
       <div className="grid gap-4">
         <ControlGroup title="Provider Selection">

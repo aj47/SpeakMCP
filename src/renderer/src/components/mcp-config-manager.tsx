@@ -1018,9 +1018,6 @@ export function MCPConfigManager({
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h3 className="text-lg font-medium">MCP Server Configuration</h3>
-          <p className="text-sm text-muted-foreground">
-            Manage Model Context Protocol server connections
-          </p>
         </div>
         <div className="flex flex-wrap justify-start gap-2 sm:justify-end">
           <Button variant="outline" size="sm" onClick={() => setShowImportDialog(true)}>

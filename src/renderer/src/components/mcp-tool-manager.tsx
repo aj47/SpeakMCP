@@ -221,10 +221,6 @@ export function MCPToolManager({ onToolToggle }: MCPToolManagerProps) {
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-lg font-medium">MCP Tool Management</h3>
-          <p className="text-sm text-muted-foreground">
-            View and manage individual MCP tools ({enabledTools}/{totalTools}{" "}
-            enabled)
-          </p>
         </div>
         <div className="flex items-center gap-2">
           <Button

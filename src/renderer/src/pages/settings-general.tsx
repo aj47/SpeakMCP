@@ -101,9 +101,6 @@ export function Component() {
 
   return (
     <div className="modern-panel h-full overflow-auto px-6 py-4">
-      <header className="modern-card modern-border mb-5 rounded-lg p-4">
-        <h2 className="text-2xl font-bold">General</h2>
-      </header>
 
       <div className="grid gap-4">
         {process.env.IS_MAC && (
@@ -257,7 +254,7 @@ export function Component() {
         </ControlGroup>
 
         <ControlGroup title="Speech to Text">
-          <Control label="Language" className="px-3">
+          <Control label={<ControlLabel label="Language" tooltip="Select the language for speech transcription. 'Auto-detect' lets the model determine the language automatically based on your speech." />} className="px-3">
             <Select
               value={configQuery.data.sttLanguage || "auto"}
               onValueChange={(value) => {
@@ -277,14 +274,10 @@ export function Component() {
                 ))}
               </SelectContent>
             </Select>
-            <p className="text-xs text-muted-foreground mt-1">
-              Select the language for speech transcription. "Auto-detect" lets the
-              model determine the language automatically.
-            </p>
           </Control>
 
           {sttProviderId === "openai" && configQuery.data.openaiSttLanguage && configQuery.data.openaiSttLanguage !== configQuery.data.sttLanguage && (
-            <Control label="OpenAI Language Override" className="px-3">
+            <Control label={<ControlLabel label="OpenAI Language Override" tooltip="Override the global language setting specifically for OpenAI's Whisper transcription service." />} className="px-3">
               <Select
                 value={configQuery.data.openaiSttLanguage || "auto"}
                 onValueChange={(value) => {
@@ -308,7 +301,7 @@ export function Component() {
           )}
 
           {sttProviderId === "groq" && configQuery.data.groqSttLanguage && configQuery.data.groqSttLanguage !== configQuery.data.sttLanguage && (
-            <Control label="Groq Language Override" className="px-3">
+            <Control label={<ControlLabel label="Groq Language Override" tooltip="Override the global language setting specifically for Groq's Whisper transcription service." />} className="px-3">
               <Select
                 value={configQuery.data.groqSttLanguage || "auto"}
                 onValueChange={(value) => {
@@ -332,7 +325,7 @@ export function Component() {
           )}
 
           {sttProviderId === "groq" && (
-            <Control label="Prompt" className="px-3">
+            <Control label={<ControlLabel label="Prompt" tooltip="Optional prompt to guide the model's style or specify how to spell unfamiliar words. Limited to 224 tokens." />} className="px-3">
               <Textarea
                 placeholder="Optional prompt to guide the model's style or specify how to spell unfamiliar words (limited to 224 tokens)"
                 defaultValue={configQuery.data.groqSttPrompt || ""}

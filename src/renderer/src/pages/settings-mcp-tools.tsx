@@ -39,9 +39,6 @@ export function Component() {
 
   return (
     <div className="modern-panel h-full overflow-auto px-6 py-4">
-      <header className="modern-card modern-border mb-5 rounded-lg p-4">
-        <h2 className="text-2xl font-bold">MCP Tools</h2>
-      </header>
 
       {!config.mcpToolsEnabled ? (
         <div className="space-y-4">
@@ -55,31 +52,11 @@ export function Component() {
             </div>
           </div>
 
-          <div className="space-y-2 rounded-lg border p-4">
-            <h4 className="font-medium">About MCP Tools</h4>
-            <div className="text-sm text-muted-foreground">
-              <p>
-                Tools are provided by MCP (Model Context Protocol) servers that you configure.
-              </p>
-              <p className="mt-2">
-                Once enabled, you can add servers to access tools for file operations, API integrations, and more.
-              </p>
-            </div>
-          </div>
+          
         </div>
       ) : (
         <div className="space-y-8">
-          <div className="space-y-2 rounded-lg border p-4">
-            <h4 className="font-medium">MCP Tools</h4>
-            <div className="text-sm text-muted-foreground">
-              <p>
-                Tools are provided by MCP (Model Context Protocol) servers that you configure.
-              </p>
-              <p className="mt-2">
-                Configure MCP servers below to add tools for file operations, API integrations, and more.
-              </p>
-            </div>
-          </div>
+          
 
           <div className="space-y-8 border-t pt-6">
             <MCPConfigManager

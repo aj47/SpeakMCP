@@ -270,13 +270,7 @@ export function ResizeHandle({
         userSelect: "none",
       }}
     >
-      {/* Visual indicator for corner handles */}
-      {(position === 'top-left' || position === 'top-right' || 
-        position === 'bottom-left' || position === 'bottom-right') && (
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="h-2 w-2 rounded-full bg-white/80 border border-black/20"></div>
-        </div>
-      )}
+
     </div>
   )
 }

@@ -657,21 +657,6 @@ export function listenToKeyboardEvents() {
             showPanelWindowAndStartMcpRecording()
           }, 800)
         } else {
-          // Check if this is a zoom shortcut that should be allowed to pass through
-          // Handle various key representations for zoom shortcuts
-          const isZoomShortcut = (isPressedCtrlKey || (process.env.IS_MAC && e.data.key.startsWith('Meta'))) &&
-            (e.data.key === 'Equal' || e.data.key === 'Minus' || e.data.key === 'Digit0' ||
-             e.data.key === 'NumpadAdd' || e.data.key === 'NumpadSubtract' ||
-             e.data.key === 'Plus' || e.data.key === '=' || e.data.key === '-' || e.data.key === '0');
-
-          if (isZoomShortcut) {
-            if (isDebugKeybinds()) {
-              logKeybinds("Allowing zoom shortcut to pass through:", e.data.key)
-            }
-            // Don't interfere with zoom shortcuts - let them pass through to the window handlers
-            return
-          }
-
           keysPressed.set(e.data.key, e.time.secs_since_epoch)
           cancelRecordingTimer()
           cancelMcpRecordingTimer()

@@ -28,8 +28,20 @@ function addZoomHandling(win: BrowserWindow) {
   win.webContents.on('before-input-event', (event, input) => {
     const isModifierPressed = input.meta || input.control;
 
+    // Debug logging for zoom events
+    if (isModifierPressed && (input.key === '=' || input.key === 'Equal' || input.key === '+' || input.key === '-' || input.key === '0')) {
+      console.log('Zoom event received:', {
+        key: input.key,
+        meta: input.meta,
+        control: input.control,
+        shift: input.shift,
+        windowId: win.id
+      });
+    }
+
     // Zoom in: Meta/Ctrl + Plus/Equals (handles Cmd+= for zoom in)
     if (isModifierPressed && (input.key === '=' || input.key === 'Equal')) {
+      console.log('Executing zoom in (=)');
       event.preventDefault();
       win.webContents.zoomIn();
       return;
@@ -37,6 +49,7 @@ function addZoomHandling(win: BrowserWindow) {
 
     // Zoom in: Meta/Ctrl + Plus with Shift (Cmd+Shift+=)
     if (isModifierPressed && input.shift && input.key === '+') {
+      console.log('Executing zoom in (+)');
       event.preventDefault();
       win.webContents.zoomIn();
       return;
@@ -44,6 +57,7 @@ function addZoomHandling(win: BrowserWindow) {
 
     // Zoom out: Meta/Ctrl + Minus
     if (isModifierPressed && input.key === '-') {
+      console.log('Executing zoom out (-)');
       event.preventDefault();
       win.webContents.zoomOut();
       return;
@@ -51,6 +65,7 @@ function addZoomHandling(win: BrowserWindow) {
 
     // Zoom reset: Meta/Ctrl + 0
     if (isModifierPressed && input.key === '0') {
+      console.log('Executing zoom reset (0)');
       event.preventDefault();
       win.webContents.setZoomLevel(0);
       return;
@@ -229,38 +244,8 @@ export function createPanelWindow() {
     getRendererHandlers<RendererHandlers>(win.webContents).stopRecording.send()
   })
 
-  // Explicitly handle zoom shortcuts for the panel window
-  win.webContents.on('before-input-event', (event, input) => {
-    const isModifierPressed = input.meta || input.control;
-
-    // Zoom in: Meta/Ctrl + Plus/Equals (handles Cmd+= for zoom in)
-    if (isModifierPressed && (input.key === '=' || input.key === 'Equal')) {
-      event.preventDefault();
-      win.webContents.zoomIn();
-      return;
-    }
-
-    // Zoom in: Meta/Ctrl + Plus with Shift (Cmd+Shift+=)
-    if (isModifierPressed && input.shift && input.key === '+') {
-      event.preventDefault();
-      win.webContents.zoomIn();
-      return;
-    }
-
-    // Zoom out: Meta/Ctrl + Minus
-    if (isModifierPressed && input.key === '-') {
-      event.preventDefault();
-      win.webContents.zoomOut();
-      return;
-    }
-
-    // Zoom reset: Meta/Ctrl + 0
-    if (isModifierPressed && input.key === '0') {
-      event.preventDefault();
-      win.webContents.setZoomLevel(0);
-      return;
-    }
-  })
+  // Note: Zoom handling is now handled by addZoomHandling() function above
+  // Removed duplicate zoom handler to prevent conflicts
 
   makePanel(win)
 

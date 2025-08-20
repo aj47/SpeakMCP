@@ -1,6 +1,6 @@
 # SpeakMCP
 
-🎤 **AI-powered voice assistant with MCP integration** - A fork of [Whispo](https://github.com/whispo/whispo) that transforms your voice into intelligent actions with advanced speech recognition, LLM processing, and Model Context Protocol (MCP) tool execution.
+🎤 **AI-powered voice assistant with MCP integration** - A fork of [Whispo](https://github.com/egoist/whispo) that transforms your voice into intelligent actions with advanced speech recognition, LLM processing, and Model Context Protocol (MCP) tool execution.
 
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL%203.0-blue.svg)](./LICENSE)
 [![Electron](https://img.shields.io/badge/Electron-31.0.2-47848f.svg)](https://electronjs.org/)
@@ -255,7 +255,7 @@ This project is licensed under the [AGPL-3.0 License](./LICENSE).
 
 ## 🙏 Acknowledgments
 
-- **[Whispo](https://github.com/whispo/whispo)** - This project is a fork of Whispo, the original AI voice assistant
+- **[Whispo](https://github.com/egoist/whispo)** - This project is a fork of Whispo, the original AI voice assistant
 - [OpenAI](https://openai.com/) for Whisper speech recognition and GPT models
 - [Anthropic](https://anthropic.com/) for Claude and MCP protocol development
 - [Model Context Protocol](https://modelcontextprotocol.io/) for the extensible tool integration standard

@@ -158,10 +158,16 @@ export async function postProcessTranscript(transcript: string) {
     return transcript
   }
 
-  const prompt = config.transcriptPostProcessingPrompt.replace(
-    "{transcript}",
-    transcript,
-  )
+  let prompt = config.transcriptPostProcessingPrompt
+
+  // Check if the prompt contains the {transcript} placeholder
+  if (prompt.includes("{transcript}")) {
+    // Replace all occurrences of the placeholder with the actual transcript
+    prompt = prompt.replaceAll("{transcript}", transcript)
+  } else {
+    // If no placeholder is found, append the transcript to the prompt
+    prompt = prompt + "\n\n" + transcript
+  }
 
   const chatProviderId = config.transcriptPostProcessingProviderId
 

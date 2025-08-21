@@ -114,6 +114,8 @@ export function matchesKeyCombo(
     f10: "f10",
     f11: "f11",
     f12: "f12",
+    fn: "fn",
+    function: "fn",
   }
 
   // Apply key mappings
@@ -160,6 +162,19 @@ export function formatKeyComboForDisplay(combo: string): string {
       pageup: "Page Up",
       pagedown: "Page Down",
       insert: "Insert",
+      fn: "Fn",
+      f1: "F1",
+      f2: "F2",
+      f3: "F3",
+      f4: "F4",
+      f5: "F5",
+      f6: "F6",
+      f7: "F7",
+      f8: "F8",
+      f9: "F9",
+      f10: "F10",
+      f11: "F11",
+      f12: "F12",
     }
 
     displayKey = displayMappings[parsed.key] || parsed.key.toUpperCase()
@@ -183,9 +198,9 @@ export function validateKeyCombo(combo: string): {
 
   const parsed = parseKeyCombo(combo)
 
-  // Must have at least one modifier or be a function key
+  // Must have at least one modifier or be a function key (including Fn)
   const hasModifier = parsed.ctrl || parsed.shift || parsed.alt || parsed.meta
-  const isFunctionKey = parsed.key && parsed.key.match(/^f\d+$/)
+  const isFunctionKey = parsed.key && (parsed.key.match(/^f\d+$/) || parsed.key === "fn")
 
   if (!hasModifier && !isFunctionKey) {
     return {

@@ -204,6 +204,69 @@ export function Component() {
             </div>
           </Control>
 
+          <Control label="Toggle Voice Dictation" className="px-3">
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <Switch
+                  checked={configQuery.data?.toggleVoiceDictationEnabled || false}
+                  onCheckedChange={(checked) => {
+                    saveConfig({
+                      toggleVoiceDictationEnabled: checked,
+                    })
+                  }}
+                />
+                <span className="text-sm text-muted-foreground">
+                  Enable toggle mode (press once to start, press again to stop)
+                </span>
+              </div>
+
+              {configQuery.data?.toggleVoiceDictationEnabled && (
+                <>
+                  <Select
+                    defaultValue={configQuery.data?.toggleVoiceDictationHotkey || "fn"}
+                    onValueChange={(value) => {
+                      saveConfig({
+                        toggleVoiceDictationHotkey: value as typeof configQuery.data.toggleVoiceDictationHotkey,
+                      })
+                    }}
+                  >
+                    <SelectTrigger className="w-40">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="fn">Fn</SelectItem>
+                      <SelectItem value="f1">F1</SelectItem>
+                      <SelectItem value="f2">F2</SelectItem>
+                      <SelectItem value="f3">F3</SelectItem>
+                      <SelectItem value="f4">F4</SelectItem>
+                      <SelectItem value="f5">F5</SelectItem>
+                      <SelectItem value="f6">F6</SelectItem>
+                      <SelectItem value="f7">F7</SelectItem>
+                      <SelectItem value="f8">F8</SelectItem>
+                      <SelectItem value="f9">F9</SelectItem>
+                      <SelectItem value="f10">F10</SelectItem>
+                      <SelectItem value="f11">F11</SelectItem>
+                      <SelectItem value="f12">F12</SelectItem>
+                      <SelectItem value="custom">Custom</SelectItem>
+                    </SelectContent>
+                  </Select>
+
+                  {configQuery.data?.toggleVoiceDictationHotkey === "custom" && (
+                    <KeyRecorder
+                      value={configQuery.data?.customToggleVoiceDictationHotkey || ""}
+                      onChange={(keyCombo) => {
+                        saveConfig({
+                          customToggleVoiceDictationHotkey: keyCombo,
+                        })
+                      }}
+                      placeholder="Click to record custom toggle shortcut"
+                    />
+                  )}
+                </>
+              )}
+            </div>
+          </Control>
+
           <Control label="Text Input" className="px-3">
             <div className="space-y-2">
               <div className="flex items-center gap-2">

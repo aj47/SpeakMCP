@@ -574,6 +574,85 @@ export function listenToKeyboardEvents() {
         }
       }
 
+      // Handle toggle voice dictation shortcuts
+      if (config.toggleVoiceDictationEnabled) {
+        const effectiveToggleShortcut = getEffectiveShortcut(
+          config.toggleVoiceDictationHotkey,
+          config.customToggleVoiceDictationHotkey,
+        )
+
+        const toggleHotkey = config.toggleVoiceDictationHotkey
+
+        if (toggleHotkey === "fn") {
+          if (e.data.key === "Function" || e.data.key === "Fn") {
+            if (isDebugKeybinds()) {
+              logKeybinds("Toggle voice dictation triggered: Fn")
+            }
+            if (state.isToggleRecordingActive) {
+              // Stop toggle recording
+              state.isToggleRecordingActive = false
+              getWindowRendererHandlers("panel")?.finishRecording.send()
+            } else {
+              // Start toggle recording
+              state.isToggleRecordingActive = true
+              showPanelWindowAndStartRecording()
+            }
+            return
+          }
+        } else if (toggleHotkey && toggleHotkey !== "custom" && toggleHotkey.startsWith("f")) {
+          // Handle F1-F12 keys
+          const fKeyMap: Record<string, string> = {
+            f1: "F1", f2: "F2", f3: "F3", f4: "F4", f5: "F5", f6: "F6",
+            f7: "F7", f8: "F8", f9: "F9", f10: "F10", f11: "F11", f12: "F12"
+          }
+          const expectedKey = fKeyMap[toggleHotkey]
+          if (e.data.key === expectedKey) {
+            if (isDebugKeybinds()) {
+              logKeybinds(`Toggle voice dictation triggered: ${expectedKey}`)
+            }
+            if (state.isToggleRecordingActive) {
+              // Stop toggle recording
+              state.isToggleRecordingActive = false
+              getWindowRendererHandlers("panel")?.finishRecording.send()
+            } else {
+              // Start toggle recording
+              state.isToggleRecordingActive = true
+              showPanelWindowAndStartRecording()
+            }
+            return
+          }
+        } else if (toggleHotkey === "custom" && effectiveToggleShortcut) {
+          // Handle custom toggle shortcut
+          const matches = matchesKeyCombo(
+            e.data,
+            {
+              ctrl: isPressedCtrlKey,
+              shift: isPressedShiftKey,
+              alt: isPressedAltKey,
+            },
+            effectiveToggleShortcut,
+          )
+          if (isDebugKeybinds() && matches) {
+            logKeybinds(
+              "Toggle voice dictation triggered: Custom hotkey",
+              effectiveToggleShortcut,
+            )
+          }
+          if (matches) {
+            if (state.isToggleRecordingActive) {
+              // Stop toggle recording
+              state.isToggleRecordingActive = false
+              getWindowRendererHandlers("panel")?.finishRecording.send()
+            } else {
+              // Start toggle recording
+              state.isToggleRecordingActive = true
+              showPanelWindowAndStartRecording()
+            }
+            return
+          }
+        }
+      }
+
       // Handle recording shortcuts
       const effectiveRecordingShortcut = getEffectiveShortcut(
         config.shortcut,

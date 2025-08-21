@@ -327,16 +327,6 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
       {/* Unified Header */}
       <div className="flex items-center justify-between px-3 py-2 border-b border-white/10 bg-white/5 backdrop-blur-sm">
         <div className="flex items-center gap-2">
-          <div
-            className={cn(
-              "h-2 w-2 rounded-full",
-              isComplete
-                ? hasErrors
-                  ? "bg-destructive"
-                  : "bg-green-500"
-                : "animate-pulse bg-primary",
-            )}
-          />
           <span className="text-xs font-medium">
             {isComplete ? (hasErrors ? "Failed" : "Complete") : "Processing"}
           </span>

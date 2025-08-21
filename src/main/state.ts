@@ -4,6 +4,8 @@ export const state = {
   isRecording: false,
   isTextInputActive: false,
   focusedAppBeforeRecording: null as string | null,
+  // Toggle voice dictation state
+  isToggleRecordingActive: false,
   // Agent mode state
   isAgentModeActive: false,
   agentProcesses: new Set<ChildProcess>(),

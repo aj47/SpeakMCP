@@ -29,11 +29,15 @@ const getConfig = () => {
     // Agent kill switch defaults
     agentKillSwitchEnabled: true,
     agentKillSwitchHotkey: "ctrl-shift-escape",
+    // Toggle voice dictation defaults
+    toggleVoiceDictationEnabled: false,
+    toggleVoiceDictationHotkey: "fn",
     // Custom shortcut defaults
     customShortcut: "",
     customTextInputShortcut: "",
     customAgentKillSwitchHotkey: "",
     customMcpToolsShortcut: "",
+    customToggleVoiceDictationHotkey: "",
     // Persisted MCP runtime state
     mcpRuntimeDisabledServers: [],
     // Panel position defaults

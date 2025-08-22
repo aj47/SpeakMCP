@@ -1,4 +1,4 @@
-import React from "react"
+import React, { useState } from "react"
 import { Card, CardContent } from "@renderer/components/ui/card"
 import { Badge } from "@renderer/components/ui/badge"
 import { ScrollArea } from "@renderer/components/ui/scroll-area"
@@ -8,7 +8,9 @@ import { ConversationMessage } from "@shared/types"
 import { useConversationState } from "@renderer/contexts/conversation-context"
 import { AgentProgress } from "@renderer/components/agent-progress"
 import { MarkdownRenderer } from "@renderer/components/markdown-renderer"
+import { AudioPlayer } from "@renderer/components/audio-player"
 import { tipcClient } from "@renderer/lib/tipc-client"
+import { useConfigQuery } from "@renderer/lib/queries"
 import dayjs from "dayjs"
 
 interface ConversationDisplayProps {
@@ -111,6 +113,50 @@ function ConversationMessageItem({
   message,
   isLast,
 }: ConversationMessageItemProps) {
+  const configQuery = useConfigQuery()
+  const [audioData, setAudioData] = useState<ArrayBuffer | null>(null)
+  const [isGeneratingAudio, setIsGeneratingAudio] = useState(false)
+  const [ttsError, setTtsError] = useState<string | null>(null)
+
+  const generateAudio = async (): Promise<ArrayBuffer> => {
+    if (!configQuery.data?.ttsEnabled) {
+      throw new Error("TTS is not enabled")
+    }
+
+    setIsGeneratingAudio(true)
+    setTtsError(null)
+
+    try {
+      const result = await tipcClient.generateSpeech({
+        text: message.content,
+      })
+      setAudioData(result.audio)
+      return result.audio
+    } catch (error) {
+      console.error("Failed to generate TTS audio:", error)
+
+      // Set user-friendly error message
+      let errorMessage = "Failed to generate audio"
+      if (error instanceof Error) {
+        if (error.message.includes("API key")) {
+          errorMessage = "TTS API key not configured"
+        } else if (error.message.includes("rate limit")) {
+          errorMessage = "Rate limit exceeded. Please try again later"
+        } else if (error.message.includes("network") || error.message.includes("fetch")) {
+          errorMessage = "Network error. Please check your connection"
+        } else if (error.message.includes("validation")) {
+          errorMessage = "Text content is not suitable for TTS"
+        } else {
+          errorMessage = `TTS error: ${error.message}`
+        }
+      }
+
+      setTtsError(errorMessage)
+      throw error
+    } finally {
+      setIsGeneratingAudio(false)
+    }
+  }
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
@@ -229,6 +275,25 @@ function ConversationMessageItem({
         <div className="modern-text-strong">
           <MarkdownRenderer content={message.content} />
         </div>
+
+        {/* TTS Audio Player - only show for assistant messages */}
+        {message.role === "assistant" && configQuery.data?.ttsEnabled && (
+          <div className="mt-3">
+            <AudioPlayer
+              audioData={audioData || undefined}
+              text={message.content}
+              onGenerateAudio={generateAudio}
+              isGenerating={isGeneratingAudio}
+              error={ttsError}
+              compact={true}
+            />
+            {ttsError && (
+              <div className="mt-2 rounded-md bg-red-50 p-2 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-300">
+                <span className="font-medium">Audio generation failed:</span> {ttsError}
+              </div>
+            )}
+          </div>
+        )}
 
         {message.toolCalls && message.toolCalls.length > 0 && (
           <div className="mt-3 space-y-2">

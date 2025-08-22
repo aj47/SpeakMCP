@@ -12,11 +12,15 @@ import {
   makePanel,
   makeWindow,
 } from "@egoist/electron-panel-window"
+import liquidGlass from "electron-liquid-glass"
 import { RendererHandlers } from "./renderer-handlers"
 import { configStore } from "./config"
 import { getFocusedAppInfo } from "./keyboard"
 import { state, agentProcessManager } from "./state"
 import { calculatePanelPosition } from "./panel-position"
+
+
+const isMac = process.platform === "darwin"
 
 type WINDOW_ID = "main" | "panel" | "setup"
 
@@ -147,8 +151,29 @@ export function createMainWindow({ url }: { url?: string } = {}) {
     url,
     windowOptions: {
       titleBarStyle: "hiddenInset",
+      ...(isMac ? { transparent: true } : {}),
     },
   })
+
+  if (isMac) {
+    // Required for traffic light buttons when using transparent windows
+    try {
+      win.setWindowButtonVisibility(true)
+    } catch (err) {
+      // noop on non-mac or older electron
+    }
+
+    // Apply native Liquid Glass effect after the content loads
+    win.webContents.once("did-finish-load", () => {
+      try {
+        liquidGlass.addView(win.getNativeWindowHandle(), {
+          cornerRadius: 12,
+        })
+      } catch (e) {
+        console.warn("Failed to apply liquid glass to main window:", e)
+      }
+    })
+  }
 
   if (process.env.IS_MAC) {
     win.on("close", () => {
@@ -237,7 +262,7 @@ export function createPanelWindow() {
       closable: false,
       maximizable: false,
       frame: false,
-      // transparent: true,
+      ...(isMac ? { transparent: true as const } : {}),
       paintWhenInitiallyHidden: true,
       // hasShadow: false,
       width: panelWindowSize.width,
@@ -246,12 +271,26 @@ export function createPanelWindow() {
       minHeight: 100, // Allow resizing down to minimum
       resizable: true, // Enable resizing
       visualEffectState: "active",
-      vibrancy: "under-window",
+      ...(isMac ? {} : { vibrancy: "under-window" as const }),
       alwaysOnTop: true,
       x: position.x,
       y: position.y,
     },
   })
+
+  if (isMac) {
+    // Use native glass on macOS for the panel window
+    win.webContents.once("did-finish-load", () => {
+      try {
+        liquidGlass.addView(win.getNativeWindowHandle(), {
+          cornerRadius: 12,
+          opaque: false,
+        })
+      } catch (e) {
+        console.warn("Failed to apply liquid glass to panel window:", e)
+      }
+    })
+  }
 
   win.on("hide", () => {
     getRendererHandlers<RendererHandlers>(win.webContents).stopRecording.send()

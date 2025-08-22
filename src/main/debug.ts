@@ -2,6 +2,7 @@ export interface DebugFlags {
   llm: boolean
   tools: boolean
   keybinds: boolean
+  tts: boolean
   all: boolean
 }
 
@@ -9,6 +10,7 @@ const flags: DebugFlags = {
   llm: false,
   tools: false,
   keybinds: false,
+  tts: false,
   all: false,
 }
 
@@ -41,6 +43,11 @@ export function initDebugFlags(argv: string[] = process.argv): DebugFlags {
     envParts.includes("keybinds") ||
     envDebug === "*" ||
     envDebug.includes("all")
+  const envTTS =
+    strToBool(process.env.DEBUG_TTS) ||
+    envParts.includes("tts") ||
+    envDebug === "*" ||
+    envDebug.includes("all")
 
   const all =
     hasAny("--debug", "--debug-all", "-d", "-da", "debug", "debug-all", "d", "da") ||
@@ -50,6 +57,7 @@ export function initDebugFlags(argv: string[] = process.argv): DebugFlags {
   flags.llm = all || hasAny("--debug-llm", "-dl", "debug-llm", "dl") || envLLM
   flags.tools = all || hasAny("--debug-tools", "-dt", "debug-tools", "dt") || envTools
   flags.keybinds = all || hasAny("--debug-keybinds", "-dk", "debug-keybinds", "dk") || envKeybinds
+  flags.tts = all || hasAny("--debug-tts", "-dts", "debug-tts", "dts") || envTTS
   flags.all = all
 
   // Force debug output to console for verification
@@ -57,21 +65,24 @@ export function initDebugFlags(argv: string[] = process.argv): DebugFlags {
     llm: flags.llm,
     tools: flags.tools,
     keybinds: flags.keybinds,
+    tts: flags.tts,
     all: flags.all,
-    argv: argv.filter(a => a.startsWith('--debug') || a.startsWith('-d') || a.startsWith('debug') || a === 'd' || a === 'dt' || a === 'dl' || a === 'dk'),
+    argv: argv.filter(a => a.startsWith('--debug') || a.startsWith('-d') || a.startsWith('debug') || a === 'd' || a === 'dt' || a === 'dl' || a === 'dk' || a === 'dts'),
     envDebug: process.env.DEBUG,
-    envLLM: process.env.DEBUG_LLM
+    envLLM: process.env.DEBUG_LLM,
+    envTTS: process.env.DEBUG_TTS
   })
 
-  if (flags.llm || flags.tools || flags.keybinds) {
+  if (flags.llm || flags.tools || flags.keybinds || flags.tts) {
     // Small banner so users can see debugs are enabled
     const enabled: string[] = []
     if (flags.llm) enabled.push("LLM")
     if (flags.tools) enabled.push("TOOLS")
     if (flags.keybinds) enabled.push("KEYBINDS")
+    if (flags.tts) enabled.push("TTS")
     // eslint-disable-next-line no-console
     console.log(
-      `[DEBUG] Enabled: ${enabled.join(", ")} (argv: ${argv.filter((a) => a.startsWith("--debug") || a.startsWith("-d") || a.startsWith("debug") || ["d", "dt", "dl", "dk", "da"].includes(a)).join(" ") || "none"})`,
+      `[DEBUG] Enabled: ${enabled.join(", ")} (argv: ${argv.filter((a) => a.startsWith("--debug") || a.startsWith("-d") || a.startsWith("debug") || ["d", "dt", "dl", "dk", "dts", "da"].includes(a)).join(" ") || "none"})`,
     )
   }
 
@@ -88,6 +99,10 @@ export function isDebugTools(): boolean {
 
 export function isDebugKeybinds(): boolean {
   return flags.keybinds || flags.all
+}
+
+export function isDebugTTS(): boolean {
+  return flags.tts || flags.all
 }
 
 function ts(): string {
@@ -111,6 +126,12 @@ export function logKeybinds(...args: any[]) {
   if (!isDebugKeybinds()) return
   // eslint-disable-next-line no-console
   console.log(`[${ts()}] [DEBUG][KEYBINDS]`, ...args)
+}
+
+export function logTTS(...args: any[]) {
+  if (!isDebugTTS()) return
+  // eslint-disable-next-line no-console
+  console.log(`[${ts()}] [DEBUG][TTS]`, ...args)
 }
 
 export function getDebugFlags(): DebugFlags {

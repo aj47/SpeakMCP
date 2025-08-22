@@ -14,11 +14,13 @@ pnpm dev d
 **Individual debug modes:**
 ```bash
 pnpm dev debug-llm    # Enable LLM debug
-pnpm dev debug-tools  # Enable tools debug  
+pnpm dev debug-tools  # Enable tools debug
+pnpm dev debug-tts    # Enable TTS debug
 pnpm dev debug-all    # Enable all debug modes
 pnpm dev dl           # Enable LLM debug (short)
 pnpm dev dt           # Enable tools debug (short)
 pnpm dev dk           # Enable keybinds debug (short)
+pnpm dev dts          # Enable TTS debug (short)
 ```
 
 ### Traditional Formats
@@ -36,7 +38,8 @@ pnpm dev -- --debug-all     # All debug modes (long)
 DEBUG=* pnpm dev             # Enable all debug modes
 DEBUG_LLM=true pnpm dev      # LLM debug only
 DEBUG_TOOLS=true pnpm dev    # Tools debug only
-DEBUG=llm,tools pnpm dev     # Multiple specific modes
+DEBUG_TTS=true pnpm dev      # TTS debug only
+DEBUG=llm,tools,tts pnpm dev # Multiple specific modes
 ```
 
 ## 🔍 Debug Output Details
@@ -116,6 +119,74 @@ When keybinds debug is enabled, you'll see:
 - Recording state changes
 - Text insertion and focus management
 
+### TTS Debug (`debug-tts` or `dts`)
+
+When TTS debug is enabled, you'll see:
+
+```
+[DEBUG][TTS] === TTS GENERATION START ===
+[DEBUG][TTS] Input → {
+  textLength: 245,
+  providerId: "openai",
+  voice: "alloy",
+  model: "tts-1",
+  ttsEnabled: true,
+  preprocessingEnabled: true
+}
+[DEBUG][TTS] Text preprocessing → {
+  originalLength: 245,
+  processedLength: 198,
+  preprocessingEnabled: true,
+  options: { removeCodeBlocks: true, removeUrls: true, convertMarkdown: true },
+  originalText: "Here's some code: ```javascript\nconsole.log('hello');\n```...",
+  processedText: "Here's some code: [code block] Visit our website for more info..."
+}
+[DEBUG][TTS] TTS validation passed → {
+  isValid: true,
+  issues: [],
+  processedLength: 198
+}
+[DEBUG][TTS] Calling openai TTS API → {
+  provider: "openai",
+  textLength: 198,
+  voice: "alloy",
+  model: "tts-1"
+}
+[DEBUG][TTS] OpenAI TTS API call → {
+  baseUrl: "https://api.openai.com/v1",
+  model: "tts-1",
+  voice: "alloy",
+  speed: 1,
+  responseFormat: "mp3",
+  textLength: 198,
+  hasApiKey: true
+}
+[DEBUG][TTS] OpenAI TTS response → {
+  status: 200,
+  statusText: "OK",
+  ok: true,
+  headers: { "content-type": "audio/mpeg", "content-length": "15234" }
+}
+[DEBUG][TTS] OpenAI TTS success → {
+  audioBufferSize: 15234,
+  audioSizeKB: 15
+}
+[DEBUG][TTS] TTS generation successful → {
+  provider: "openai",
+  audioBufferSize: 15234,
+  audioSizeKB: 15
+}
+[DEBUG][TTS] === TTS GENERATION END ===
+```
+
+**What it shows:**
+- Complete TTS generation pipeline
+- Text preprocessing transformations
+- API request/response details for each provider
+- Audio buffer sizes and formats
+- Error details and validation failures
+- Provider-specific configuration and parameters
+
 ## 🛠️ Advanced Debugging
 
 ### Custom Debug Combinations
@@ -126,8 +197,14 @@ You can combine multiple debug modes:
 # LLM + Tools (most common combination)
 pnpm dev dl dt
 
+# LLM + TTS (for voice-related debugging)
+pnpm dev dl dts
+
+# Tools + TTS (for agent mode with voice output)
+pnpm dev dt dts
+
 # All modes explicitly
-pnpm dev debug-llm debug-tools debug-keybinds
+pnpm dev debug-llm debug-tools debug-tts debug-keybinds
 ```
 
 ### Environment Variable Debugging
@@ -192,6 +269,21 @@ pnpm dev dk  # Enable keybinds debug
 - Focus management issues
 - Text insertion failures
 - Accessibility permission problems
+
+### Debugging TTS Issues
+
+```bash
+pnpm dev dts  # Enable TTS debug
+```
+
+**Look for:**
+- Text preprocessing problems
+- API key configuration issues
+- Provider-specific errors
+- Audio generation failures
+- Network connectivity problems
+- Voice/model availability
+- Audio format compatibility
 
 ## 📊 Performance Debugging
 

@@ -1,4 +1,4 @@
-import type { CHAT_PROVIDER_ID, STT_PROVIDER_ID } from "."
+import type { CHAT_PROVIDER_ID, STT_PROVIDER_ID, TTS_PROVIDER_ID } from "."
 
 export type RecordingHistoryItem = {
   id: string
@@ -208,6 +208,31 @@ export type Config = {
   sttLanguage?: string
   openaiSttLanguage?: string
   groqSttLanguage?: string
+
+  // Text-to-Speech Configuration
+  ttsEnabled?: boolean
+  ttsProviderId?: TTS_PROVIDER_ID
+
+  // OpenAI TTS Configuration
+  openaiTtsModel?: "tts-1" | "tts-1-hd"
+  openaiTtsVoice?: "alloy" | "echo" | "fable" | "onyx" | "nova" | "shimmer"
+  openaiTtsSpeed?: number // 0.25 to 4.0
+  openaiTtsResponseFormat?: "mp3" | "opus" | "aac" | "flac" | "wav" | "pcm"
+
+  // Groq TTS Configuration
+  groqTtsModel?: "playai-tts" | "playai-tts-arabic"
+  groqTtsVoice?: string // Will be populated with available voices
+
+  // Gemini TTS Configuration
+  geminiTtsModel?: "gemini-2.5-flash-preview-tts" | "gemini-2.5-pro-preview-tts"
+  geminiTtsVoice?: string // Will be populated with available voices
+  geminiTtsLanguage?: string // Language code for TTS
+
+  // TTS Text Preprocessing Configuration
+  ttsPreprocessingEnabled?: boolean
+  ttsRemoveCodeBlocks?: boolean
+  ttsRemoveUrls?: boolean
+  ttsConvertMarkdown?: boolean
 
   transcriptPostProcessingEnabled?: boolean
   transcriptPostProcessingProviderId?: CHAT_PROVIDER_ID

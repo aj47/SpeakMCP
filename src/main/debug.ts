@@ -60,18 +60,7 @@ export function initDebugFlags(argv: string[] = process.argv): DebugFlags {
   flags.tts = all || hasAny("--debug-tts", "-dts", "debug-tts", "dts") || envTTS
   flags.all = all
 
-  // Force debug output to console for verification
-  console.log("[DEBUG INIT] Debug flags initialized:", {
-    llm: flags.llm,
-    tools: flags.tools,
-    keybinds: flags.keybinds,
-    tts: flags.tts,
-    all: flags.all,
-    argv: argv.filter(a => a.startsWith('--debug') || a.startsWith('-d') || a.startsWith('debug') || a === 'd' || a === 'dt' || a === 'dl' || a === 'dk' || a === 'dts'),
-    envDebug: process.env.DEBUG,
-    envLLM: process.env.DEBUG_LLM,
-    envTTS: process.env.DEBUG_TTS
-  })
+
 
   if (flags.llm || flags.tools || flags.keybinds || flags.tts) {
     // Small banner so users can see debugs are enabled

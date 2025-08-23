@@ -119,7 +119,15 @@ function ConversationMessageItem({
   const [ttsError, setTtsError] = useState<string | null>(null)
 
   const generateAudio = async (): Promise<ArrayBuffer> => {
+    console.log("[TTS UI] generateAudio called", {
+      messageRole: message.role,
+      messageLength: message.content.length,
+      ttsEnabled: configQuery.data?.ttsEnabled,
+      ttsProviderId: configQuery.data?.ttsProviderId
+    })
+
     if (!configQuery.data?.ttsEnabled) {
+      console.log("[TTS UI] TTS not enabled in config")
       throw new Error("TTS is not enabled")
     }
 
@@ -127,19 +135,26 @@ function ConversationMessageItem({
     setTtsError(null)
 
     try {
+      console.log("[TTS UI] Calling tipcClient.generateSpeech...")
       const result = await tipcClient.generateSpeech({
         text: message.content,
+      })
+      console.log("[TTS UI] TTS generation successful", {
+        audioSize: result.audio.byteLength,
+        provider: result.provider
       })
       setAudioData(result.audio)
       return result.audio
     } catch (error) {
-      console.error("Failed to generate TTS audio:", error)
+      console.error("[TTS UI] Failed to generate TTS audio:", error)
 
       // Set user-friendly error message
       let errorMessage = "Failed to generate audio"
       if (error instanceof Error) {
         if (error.message.includes("API key")) {
           errorMessage = "TTS API key not configured"
+        } else if (error.message.includes("terms acceptance")) {
+          errorMessage = "Groq TTS model requires terms acceptance. Please visit the Groq console to accept terms for the PlayAI TTS model."
         } else if (error.message.includes("rate limit")) {
           errorMessage = "Rate limit exceeded. Please try again later"
         } else if (error.message.includes("network") || error.message.includes("fetch")) {
@@ -277,7 +292,22 @@ function ConversationMessageItem({
         </div>
 
         {/* TTS Audio Player - only show for assistant messages */}
-        {message.role === "assistant" && configQuery.data?.ttsEnabled && (
+        {(() => {
+          console.log("[TTS UI] COMPONENT RENDERING - Message role:", message.role)
+          console.log("[TTS UI] CONFIG DATA:", configQuery.data)
+          const shouldShowTTS = message.role === "assistant" && configQuery.data?.ttsEnabled
+          console.log("[TTS UI] TTS visibility check", {
+            messageRole: message.role,
+            ttsEnabled: configQuery.data?.ttsEnabled,
+            shouldShow: shouldShowTTS,
+            messageId: message.id,
+            messagePreview: message.content.substring(0, 50) + "..."
+          })
+          if (message.role === "assistant") {
+            console.log("[TTS UI] ASSISTANT MESSAGE DETECTED - TTS enabled:", configQuery.data?.ttsEnabled)
+          }
+          return shouldShowTTS
+        })() && (
           <div className="mt-3">
             <AudioPlayer
               audioData={audioData || undefined}
@@ -289,7 +319,23 @@ function ConversationMessageItem({
             />
             {ttsError && (
               <div className="mt-2 rounded-md bg-red-50 p-2 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-300">
-                <span className="font-medium">Audio generation failed:</span> {ttsError}
+                <span className="font-medium">Audio generation failed:</span>{" "}
+                {ttsError.includes("terms acceptance") ? (
+                  <>
+                    Groq TTS model requires terms acceptance.{" "}
+                    <a
+                      href="https://console.groq.com/playground?model=playai-tts"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="underline hover:no-underline"
+                    >
+                      Click here to accept terms
+                    </a>{" "}
+                    for the PlayAI TTS model.
+                  </>
+                ) : (
+                  ttsError
+                )}
               </div>
             )}
           </div>

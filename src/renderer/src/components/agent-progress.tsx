@@ -109,6 +109,17 @@ const CompactMessage: React.FC<{
     messagePreview: message.content.substring(0, 50) + "..."
   })
 
+  // Auto-play TTS when assistant message completes
+  useEffect(() => {
+    if (shouldShowTTS && configQuery.data?.ttsAutoPlay && !audioData && !isGeneratingAudio && !ttsError) {
+      console.log("[TTS UI] Auto-playing TTS for completed assistant message")
+      generateAudio().catch((error) => {
+        console.log("[TTS UI] Auto-play TTS failed:", error)
+        // Error is already handled in generateAudio function
+      })
+    }
+  }, [shouldShowTTS, configQuery.data?.ttsAutoPlay, audioData, isGeneratingAudio, ttsError])
+
   const getRoleStyle = () => {
     switch (message.role) {
       case "user":
@@ -185,6 +196,7 @@ const CompactMessage: React.FC<{
                 isGenerating={isGeneratingAudio}
                 error={ttsError}
                 compact={true}
+                autoPlay={configQuery.data?.ttsAutoPlay ?? true}
               />
               {ttsError && (
                 <div className="mt-1 rounded-md bg-red-50 p-2 text-xs text-red-700 dark:bg-red-900/20 dark:text-red-300">

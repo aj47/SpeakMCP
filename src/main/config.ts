@@ -48,6 +48,7 @@ const getConfig = () => {
     themePreference: "system",
     // TTS defaults
     ttsEnabled: true,
+    ttsAutoPlay: true,
     ttsProviderId: "openai",
     ttsPreprocessingEnabled: true,
     ttsRemoveCodeBlocks: true,

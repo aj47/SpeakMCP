@@ -12,6 +12,7 @@ interface AudioPlayerProps {
   compact?: boolean
   isGenerating?: boolean
   error?: string | null
+  autoPlay?: boolean
 }
 
 export function AudioPlayer({
@@ -22,6 +23,7 @@ export function AudioPlayer({
   compact = false,
   isGenerating = false,
   error = null,
+  autoPlay = false,
 }: AudioPlayerProps) {
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
@@ -29,6 +31,7 @@ export function AudioPlayer({
   const [volume, setVolume] = useState(1)
   const [isMuted, setIsMuted] = useState(false)
   const [hasAudio, setHasAudio] = useState(!!audioData)
+  const [hasAutoPlayed, setHasAutoPlayed] = useState(false)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const audioUrlRef = useRef<string | null>(null)
 
@@ -44,6 +47,7 @@ export function AudioPlayer({
       const blob = new Blob([audioData], { type: "audio/wav" })
       audioUrlRef.current = URL.createObjectURL(blob)
       setHasAudio(true)
+      setHasAutoPlayed(false) // Reset auto-play flag for new audio
 
       // Create audio element
       if (audioRef.current) {
@@ -98,6 +102,17 @@ export function AudioPlayer({
       audio.removeEventListener("pause", handlePause)
     }
   }, [hasAudio])
+
+  // Auto-play effect
+  useEffect(() => {
+    if (autoPlay && hasAudio && audioRef.current && !isPlaying && !hasAutoPlayed) {
+      console.log("[AudioPlayer] Auto-playing audio")
+      setHasAutoPlayed(true)
+      audioRef.current.play().catch((error) => {
+        console.error("[AudioPlayer] Auto-play failed:", error)
+      })
+    }
+  }, [autoPlay, hasAudio, isPlaying, hasAutoPlayed])
 
   const handlePlayPause = async () => {
     console.log("[AudioPlayer] Play button clicked", {

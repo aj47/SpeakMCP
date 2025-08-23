@@ -416,6 +416,19 @@ export function Component() {
           </Control>
 
           {configQuery.data.ttsEnabled && (
+            <Control label={<ControlLabel label="Auto-play" tooltip="Automatically play TTS audio when assistant responses complete" />} className="px-3">
+              <Switch
+                defaultChecked={configQuery.data.ttsAutoPlay ?? true}
+                onCheckedChange={(value) => {
+                  saveConfig({
+                    ttsAutoPlay: value,
+                  })
+                }}
+              />
+            </Control>
+          )}
+
+          {configQuery.data.ttsEnabled && (
             <>
               <Control label={<ControlLabel label="Text Preprocessing" tooltip="Enable preprocessing to make text more speech-friendly by removing code blocks, URLs, and converting markdown" />} className="px-3">
                 <Switch

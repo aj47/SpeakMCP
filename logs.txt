@@ -1,0 +1,2084 @@
+
+> speakmcp@0.1.2 dev /Users/ajjoobandi/Development/SpeakMCP
+> electron-vite dev --watch -- "d"
+
+vite v5.4.8 building SSR bundle for development...
+
+watching for file changes...
+
+build started...
+transforming...
+✓ 395 modules transformed.
+rendering chunks...
+out/main/oauth-callback-server-fzqzUOMc.js    6.84 kB
+out/main/models-service-D5ybgteb.js          10.13 kB
+out/main/index.js                           222.24 kB
+out/main/updater-HHDJRCo3.js                472.95 kB
+built in 833ms.
+
+build the electron main process successfully
+
+-----
+
+vite v5.4.8 building SSR bundle for development...
+
+watching for file changes...
+
+build started...
+transforming...
+✓ 2 modules transformed.
+rendering chunks...
+out/preload/index.mjs  2.83 kB
+built in 8ms.
+
+build the electron preload files successfully
+
+-----
+
+dev server running for the electron renderer process at:
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose
+
+start electron app...
+
+[DEBUG INIT] Debug flags initialized: {
+  llm: true,
+  tools: true,
+  keybinds: true,
+  tts: true,
+  all: true,
+  argv: [ 'd' ],
+  envDebug: undefined,
+  envLLM: undefined,
+  envTTS: undefined
+}
+[DEBUG] Enabled: LLM, TOOLS, KEYBINDS, TTS (argv: d)
+[2025-08-22T20:40:31.821Z] [DEBUG][KEYBINDS] Starting keyboard event listener with rdev path: /Users/ajjoobandi/Development/SpeakMCP/resources/bin/speakmcp-rs
+[2025-08-22T20:40:31.833Z] [DEBUG][TOOLS] MCP Service initialization starting
+[2025-08-22T20:40:31.833Z] [DEBUG][TOOLS] Found 2 servers to initialize [ 'github', 'filesystem' ]
+[2025-08-22T20:40:31.833Z] [DEBUG][TOOLS] Starting initialization of server: github
+[2025-08-22T20:40:31.833Z] [DEBUG][TOOLS] Initializing server: github {
+  transport: 'stdio',
+  command: 'npx',
+  args: [ '-y', '@modelcontextprotocol/server-github' ],
+  env: [ 'GITHUB_PERSONAL_ACCESS_TOKEN' ]
+}
+Skip checkForUpdates because application is not packed and dev update config is not forced
+Skip checkForUpdates because application is not packed and dev update config is not forced
+[2025-08-22T20:40:34.862Z] [DEBUG][TOOLS] Server github connected successfully {
+  toolCount: 26,
+  tools: [
+    {
+      name: 'create_or_update_file',
+      description: 'Create or update a single file in a GitHub repository'
+    },
+    {
+      name: 'search_repositories',
+      description: 'Search for GitHub repositories'
+    },
+    {
+      name: 'create_repository',
+      description: 'Create a new GitHub repository in your account'
+    },
+    {
+      name: 'get_file_contents',
+      description: 'Get the contents of a file or directory from a GitHub repository'
+    },
+    {
+      name: 'push_files',
+      description: 'Push multiple files to a GitHub repository in a single commit'
+    },
+    {
+      name: 'create_issue',
+      description: 'Create a new issue in a GitHub repository'
+    },
+    {
+      name: 'create_pull_request',
+      description: 'Create a new pull request in a GitHub repository'
+    },
+    {
+      name: 'fork_repository',
+      description: 'Fork a GitHub repository to your account or specified organization'
+    },
+    {
+      name: 'create_branch',
+      description: 'Create a new branch in a GitHub repository'
+    },
+    {
+      name: 'list_commits',
+      description: 'Get list of commits of a branch in a GitHub repository'
+    },
+    {
+      name: 'list_issues',
+      description: 'List issues in a GitHub repository with filtering options'
+    },
+    {
+      name: 'update_issue',
+      description: 'Update an existing issue in a GitHub repository'
+    },
+    {
+      name: 'add_issue_comment',
+      description: 'Add a comment to an existing issue'
+    },
+    {
+      name: 'search_code',
+      description: 'Search for code across GitHub repositories'
+    },
+    {
+      name: 'search_issues',
+      description: 'Search for issues and pull requests across GitHub repositories'
+    },
+    { name: 'search_users', description: 'Search for users on GitHub' },
+    {
+      name: 'get_issue',
+      description: 'Get details of a specific issue in a GitHub repository.'
+    },
+    {
+      name: 'get_pull_request',
+      description: 'Get details of a specific pull request'
+    },
+    {
+      name: 'list_pull_requests',
+      description: 'List and filter repository pull requests'
+    },
+    {
+      name: 'create_pull_request_review',
+      description: 'Create a review on a pull request'
+    },
+    { name: 'merge_pull_request', description: 'Merge a pull request' },
+    {
+      name: 'get_pull_request_files',
+      description: 'Get the list of files changed in a pull request'
+    },
+    {
+      name: 'get_pull_request_status',
+      description: 'Get the combined status of all status checks for a pull request'
+    },
+    {
+      name: 'update_pull_request_branch',
+      description: 'Update a pull request branch with the latest changes from the base branch'
+    },
+    {
+      name: 'get_pull_request_comments',
+      description: 'Get the review comments on a pull request'
+    },
+    {
+      name: 'get_pull_request_reviews',
+      description: 'Get the reviews on a pull request'
+    }
+  ]
+}
+[2025-08-22T20:40:34.863Z] [DEBUG][TOOLS] Successfully initialized server: github
+[2025-08-22T20:40:34.863Z] [DEBUG][TOOLS] Starting initialization of server: filesystem
+[2025-08-22T20:40:34.863Z] [DEBUG][TOOLS] Initializing server: filesystem {
+  transport: 'stdio',
+  command: 'npx',
+  args: [ '-y', '@modelcontextprotocol/server-filesystem' ],
+  env: []
+}
+[2025-08-22T20:40:36.730Z] [DEBUG][KEYBINDS] Ctrl key pressed, isPressedCtrlKey = true
+[2025-08-22T20:40:36.730Z] [DEBUG][KEYBINDS] Config change #1: {
+  agentKillSwitchEnabled: true,
+  agentKillSwitchHotkey: 'ctrl-shift-q',
+  textInputEnabled: true,
+  textInputShortcut: 'ctrl-t',
+  mcpToolsEnabled: true,
+  mcpToolsShortcut: 'hold-ctrl-alt',
+  shortcut: undefined
+}
+[2025-08-22T20:40:36.730Z] [DEBUG][KEYBINDS] Alt key pressed, isPressedAltKey = true isPressedCtrlAltKey = true
+[2025-08-22T20:40:37.377Z] [DEBUG][TOOLS] Server filesystem connected successfully {
+  toolCount: 14,
+  tools: [
+    {
+      name: 'read_file',
+      description: 'Read the complete contents of a file as text. DEPRECATED: Use read_text_file instead.'
+    },
+    {
+      name: 'read_text_file',
+      description: "Read the complete contents of a file from the file system as text. Handles various text encodings and provides detailed error messages if the file cannot be read. Use this tool when you need to examine the contents of a single file. Use the 'head' parameter to read only the first N lines of a file, or the 'tail' parameter to read only the last N lines of a file. Operates on the file as text regardless of extension. Only works within allowed directories."
+    },
+    {
+      name: 'read_media_file',
+      description: 'Read an image or audio file. Returns the base64 encoded data and MIME type. Only works within allowed directories.'
+    },
+    {
+      name: 'read_multiple_files',
+      description: "Read the contents of multiple files simultaneously. This is more efficient than reading files one by one when you need to analyze or compare multiple files. Each file's content is returned with its path as a reference. Failed reads for individual files won't stop the entire operation. Only works within allowed directories."
+    },
+    {
+      name: 'write_file',
+      description: 'Create a new file or completely overwrite an existing file with new content. Use with caution as it will overwrite existing files without warning. Handles text content with proper encoding. Only works within allowed directories.'
+    },
+    {
+      name: 'edit_file',
+      description: 'Make line-based edits to a text file. Each edit replaces exact line sequences with new content. Returns a git-style diff showing the changes made. Only works within allowed directories.'
+    },
+    {
+      name: 'create_directory',
+      description: 'Create a new directory or ensure a directory exists. Can create multiple nested directories in one operation. If the directory already exists, this operation will succeed silently. Perfect for setting up directory structures for projects or ensuring required paths exist. Only works within allowed directories.'
+    },
+    {
+      name: 'list_directory',
+      description: 'Get a detailed listing of all files and directories in a specified path. Results clearly distinguish between files and directories with [FILE] and [DIR] prefixes. This tool is essential for understanding directory structure and finding specific files within a directory. Only works within allowed directories.'
+    },
+    {
+      name: 'list_directory_with_sizes',
+      description: 'Get a detailed listing of all files and directories in a specified path, including sizes. Results clearly distinguish between files and directories with [FILE] and [DIR] prefixes. This tool is useful for understanding directory structure and finding specific files within a directory. Only works within allowed directories.'
+    },
+    {
+      name: 'directory_tree',
+      description: "Get a recursive tree view of files and directories as a JSON structure. Each entry includes 'name', 'type' (file/directory), and 'children' for directories. Files have no children array, while directories always have a children array (which may be empty). The output is formatted with 2-space indentation for readability. Only works within allowed directories."
+    },
+    {
+      name: 'move_file',
+      description: 'Move or rename files and directories. Can move files between directories and rename them in a single operation. If the destination exists, the operation will fail. Works across different directories and can be used for simple renaming within the same directory. Both source and destination must be within allowed directories.'
+    },
+    {
+      name: 'search_files',
+      description: "Recursively search for files and directories matching a pattern. Searches through all subdirectories from the starting path. The search is case-insensitive and matches partial names. Returns full paths to all matching items. Great for finding files when you don't know their exact location. Only searches within allowed directories."
+    },
+    {
+      name: 'get_file_info',
+      description: 'Retrieve detailed metadata about a file or directory. Returns comprehensive information including size, creation time, last modified time, permissions, and type. This tool is perfect for understanding file characteristics without reading the actual content. Only works within allowed directories.'
+    },
+    {
+      name: 'list_allowed_directories',
+      description: 'Returns the list of directories that this server is allowed to access. Subdirectories within these allowed directories are also accessible. Use this to understand which directories and their nested paths are available before trying to access files.'
+    }
+  ]
+}
+[2025-08-22T20:40:37.377Z] [DEBUG][TOOLS] Successfully initialized server: filesystem
+[2025-08-22T20:40:37.377Z] [DEBUG][TOOLS] MCP Service initialization complete. Total tools available: 40
+Skip checkForUpdates because application is not packed and dev update config is not forced
+[2025-08-22T20:40:39.945Z] [DEBUG][KEYBINDS] Alt key released, isPressedAltKey = false isPressedCtrlAltKey = false
+[2025-08-22T20:40:39.952Z] [DEBUG][TOOLS] MCP Service initialization starting
+[2025-08-22T20:40:39.952Z] [DEBUG][TOOLS] Skipping server github - already initialized
+[2025-08-22T20:40:39.952Z] [DEBUG][TOOLS] Skipping server filesystem - already initialized
+[2025-08-22T20:40:39.952Z] [DEBUG][TOOLS] Found 0 servers to initialize []
+[2025-08-22T20:40:39.952Z] [DEBUG][TOOLS] MCP Service initialization complete. Total tools available: 40
+[2025-08-22T20:40:40.099Z] [DEBUG][KEYBINDS] Ctrl key released, isPressedCtrlKey = false
+Skip checkForUpdates because application is not packed and dev update config is not forced
+[2025-08-22T20:40:40.372Z] [DEBUG][TOOLS] MCP Service initialization starting
+[2025-08-22T20:40:40.372Z] [DEBUG][TOOLS] Skipping server github - already initialized
+[2025-08-22T20:40:40.372Z] [DEBUG][TOOLS] Skipping server filesystem - already initialized
+[2025-08-22T20:40:40.372Z] [DEBUG][TOOLS] Found 0 servers to initialize []
+[2025-08-22T20:40:40.372Z] [DEBUG][TOOLS] MCP Service initialization complete. Total tools available: 40
+[2025-08-22T20:40:40.375Z] [DEBUG][LLM] === LLM CALL START ===
+[2025-08-22T20:40:40.376Z] [DEBUG][LLM] Messages → {
+  count: 2,
+  totalChars: 14647,
+  messages: [
+    {
+      role: 'system',
+      content: 'You are an intelligent AI assistant capable of executing tools to help users accomplish complex tasks. You operate autonomously and work iteratively until goals are fully achieved.\n' +
+        '\n' +
+        'CORE PRINCIPLES:\n' +
+        "- Work autonomously until the user's request is completely resolved\n" +
+        '- Use available tools iteratively and strategically to gather information and execute actions\n' +
+        '- Use exact tool names from the available tools list (including server prefixes like "server:tool_name")\n' +
+        '- Prefer using tools to gather information rather than asking users for details\n' +
+        "- Continue working until the user's request is fully satisfied - only stop when the task is complete\n" +
+        '\n' +
+        'TOOL USAGE PHILOSOPHY:\n' +
+        '- ALWAYS follow tool schemas exactly as specified with all required parameters\n' +
+        '- NEVER call tools that are not explicitly provided in the available tools list\n' +
+        '- If you need additional information that you can get via tool calls, prefer that over asking the user\n' +
+        '- Use tools proactively to explore and understand the context before making changes\n' +
+        '- When making code changes, ensure they can be executed immediately by the user\n' +
+        '\n' +
+        '# Tone and style\n' +
+        'You should be concise, direct, and to the point.\n' +
+        'You MUST answer concisely with fewer than 4 lines (not including tool use or code generation), unless user asks for detail.\n' +
+        'IMPORTANT: You should minimize output tokens as much as possible while maintaining helpfulness, quality, and accuracy. Only address the specific query or task at hand, avoiding tangential information unless absolutely critical for completing the request. If you can answer in 1-3 sentences or a short paragraph, please do.\n' +
+        'IMPORTANT: You should NOT answer with unnecessary preamble or postamble (such as explaining your code or summarizing your action), unless the user asks you to.\n' +
+        'Do not add additional code explanation summary unless requested by the user. After working on a file, just stop, rather than providing an explanation of what you did.\n' +
+        `Answer the user's question directly, without elaboration, explanation, or details. One word answers are best. Avoid introductions, conclusions, and explanations. You MUST avoid text before/after your response, such as "The answer is <answer>.", "Here is the content of the file..." or "Based on the information provided, the answer is..." or "Here is what I will do next...". Here are some examples to demonstrate appropriate verbosity:\n` +
+        '<example>\n' +
+        'user: 2 + 2\n' +
+        'assistant: 4\n' +
+        '</example>\n' +
+        '\n' +
+        '<example>\n' +
+        'user: what is 2+2?\n' +
+        'assistant: 4\n' +
+        '</example>\n' +
+        '\n' +
+        '<example>\n' +
+        'user: is 11 a prime number?\n' +
+        'assistant: Yes\n' +
+        '</example>\n' +
+        '\n' +
+        '<example>\n' +
+        'user: what command should I run to list files in the current directory?\n' +
+        'assistant: ls\n' +
+        '</example>\n' +
+        '\n' +
+        '<example>\n' +
+        'user: what command should I run to watch files in the current directory?\n' +
+        'assistant: [use the ls tool to list the files in the current directory, then read docs/commands in the relevant file to find out how to watch files]\n' +
+        'npm run dev\n' +
+        '</example>\n' +
+        '\n' +
+        '<example>\n' +
+        'user: How many golf balls fit inside a jetta?\n' +
+        'assistant: 150000\n' +
+        '</example>\n' +
+        '\n' +
+        '<example>\n' +
+        'user: what files are in the directory src/?\n' +
+        'assistant: [runs ls and sees foo.c, bar.c, baz.c]\n' +
+        'user: which file contains the implementation of foo?\n' +
+        'assistant: src/foo.c\n' +
+        '</example>\n' +
+        '\n' +
+        'RESPONSE FORMAT:\n' +
+        'For tool calls:\n' +
+        '{\n' +
+        '  "toolCalls": [\n' +
+        '    {\n' +
+        '      "name": "exact_tool_name_from_available_list",\n' +
+        '      "arguments": { "param1": "value1", "param2": "value2" }\n' +
+        '    }\n' +
+        '  ],\n' +
+        `  "content": "Clear explanation of what you're doing and why",\n` +
+        '  "needsMoreWork": true\n' +
+        '}\n' +
+        '\n' +
+        'For final responses (no more tools needed):\n' +
+        '{\n' +
+        '  "content": "Your comprehensive final response with results",\n' +
+        '  "needsMoreWork": false\n' +
+        '}\n' +
+        '\n' +
+        'AGENT MODE - AUTONOMOUS OPERATION:\n' +
+        'You can see tool results and make follow-up calls. Work iteratively and thoroughly:\n' +
+        '\n' +
+        'WORKFLOW:\n' +
+        "1. Analyze the user's request comprehensively\n" +
+        '2. Gather necessary information using available tools\n' +
+        '3. Execute appropriate tools in logical sequence\n' +
+        '4. Review results and determine next steps\n' +
+        '5. Continue iterating until the goal is fully achieved\n' +
+        '6. Only set needsMoreWork: false when the task is completely resolved\n' +
+        '\n' +
+        '\n' +
+        '\n' +
+        'AVAILABLE TOOLS:\n' +
+        '- github:create_or_update_file: Create or update a single file in a GitHub repository\n' +
+        '  Parameters: {owner: string (required), repo: string (required), path: string (required), content: string (required), message: string (required), branch: string (required), sha: string}\n' +
+        '- github:search_repositories: Search for GitHub repositories\n' +
+        '  Parameters: {query: string (required), page: number, perPage: number}\n' +
+        '- github:create_repository: Create a new GitHub repository in your account\n' +
+        '  Parameters: {name: string (required), description: string, private: boolean, autoInit: boolean}\n' +
+        '- github:get_file_contents: Get the contents of a file or directory from a GitHub repository\n' +
+        '  Parameters: {owner: string (required), repo: string (required), path: string (required), branch: string}\n' +
+        '- github:push_files: Push multiple files to a GitHub repository in a single commit\n' +
+        '  Parameters: {owner: string (required), repo: string (required), branch: string (required), files: array (required), message: string (required)}\n' +
+        '- github:create_issue: Create a new issue in a GitHub repository\n' +
+        '  Parameters: {owner: string (required), repo: string (required), title: string (required), body: string, assignees: array, milestone: number, labels: array}\n' +
+        '- github:create_pull_request: Create a new pull request in a GitHub repository\n' +
+        '  Parameters: {owner: string (required), repo: string (required), title: string (required), body: string, head: string (required), base: string (required), draft: boolean, maintainer_can_modify: boolean}\n' +
+        '- github:fork_repository: Fork a GitHub repository to your account or specified organization\n' +
+        '  Parameters: {owner: string (required), repo: string (required), organization: string}\n' +
+        '- github:create_branch: Create a new branch in a GitHub repository\n' +
+        '  Parameters: {owner: string (required), repo: string (required), branch: string (required), from_branch: string}\n' +
+        '- github:list_commits: Get list of commits of a branch in a GitHub repository\n' +
+        '  Parameters: {owner: string (required), repo: string (required), sha: string, page: number, perPage: number}\n' +
+        '- github:list_issues: List issues in a GitHub repository with filtering options\n' +
+        '  Parameters: {owner: string (required), repo: string (required), direction: string, labels: array, page: number, per_page: number, since: string, sort: string, state: string}\n' +
+        '- github:update_issue: Update an existing issue in a GitHub repository\n' +
+        '  Parameters: {owner: string (required), repo: string (required), issue_number: number (required), title: string, body: string, assignees: array, milestone: number, labels: array, state: string}\n' +
+        '- github:add_issue_comment: Add a comment to an existing issue\n' +
+        '  Parameters: {owner: string (required), repo: string (required), issue_number: number (required), body: string (required)}\n' +
+        '- github:search_code: Search for code across GitHub repositories\n' +
+        '  Parameters: {q: string (required), order: string, page: number, per_page: number}\n' +
+        '- github:search_issues: Search for issues and pull requests across GitHub repositories\n' +
+        '  Parameters: {q: string (required), order: string, page: number, per_page: number, sort: string}\n' +
+        '- github:search_users: Search for users on GitHub\n' +
+        '  Parameters: {q: string (required), order: string, page: number, per_page: number, sort: string}\n' +
+        '- github:get_issue: Get details of a specific issue in a GitHub repository.\n' +
+        '  Parameters: {owner: string (required), repo: string (required), issue_number: number (required)}\n' +
+        '- github:get_pull_request: Get details of a specific pull request\n' +
+        '  Parameters: {owner: string (required), repo: string (required), pull_number: number (required)}\n' +
+        '- github:list_pull_requests: List and filter repository pull requests\n' +
+        '  Parameters: {owner: string (required), repo: string (required), state: string, head: string, base: string, sort: string, direction: string, per_page: number, page: number}\n' +
+        '- github:create_pull_request_review: Create a review on a pull request\n' +
+        '  Parameters: {owner: string (required), repo: string (required), pull_number: number (required), commit_id: string, body: string (required), event: string (required), comments: array}\n' +
+        '- github:merge_pull_request: Merge a pull request\n' +
+        '  Parameters: {owner: string (required), repo: string (required), pull_number: number (required), commit_title: string, commit_message: string, merge_method: string}\n' +
+        '- github:get_pull_request_files: Get the list of files changed in a pull request\n' +
+        '  Parameters: {owner: string (required), repo: string (required), pull_number: number (required)}\n' +
+        '- github:get_pull_request_status: Get the combined status of all status checks for a pull request\n' +
+        '  Parameters: {owner: string (required), repo: string (required), pull_number: number (required)}\n' +
+        '- github:update_pull_request_branch: Update a pull request branch with the latest changes from the base branch\n' +
+        '  Parameters: {owner: string (required), repo: string (required), pull_number: number (required), expected_head_sha: string}\n' +
+        '- github:get_pull_request_comments: Get the review comments on a pull request\n' +
+        '  Parameters: {owner: string (required), repo: string (required), pull_number: number (required)}\n' +
+        '- github:get_pull_request_reviews: Get the reviews on a pull request\n' +
+        '  Parameters: {owner: string (required), repo: string (required), pull_number: number (required)}\n' +
+        '- filesystem:read_file: Read the complete contents of a file as text. DEPRECATED: Use read_text_file instead.\n' +
+        '  Parameters: {path: string (required), tail: number, head: number}\n' +
+        "- filesystem:read_text_file: Read the complete contents of a file from the file system as text. Handles various text encodings and provides detailed error messages if the file cannot be read. Use this tool when you need to examine the contents of a single file. Use the 'head' parameter to read only the first N lines of a file, or the 'tail' parameter to read only the last N lines of a file. Operates on the file as text regardless of extension. Only works within allowed directories.\n" +
+        '  Parameters'... 4614 more characters
+    },
+    { role: 'user', content: ' How many GitHub issues you open?' }
+  ]
+}
+[2025-08-22T20:40:40.376Z] [DEBUG][LLM] === OPENAI API REQUEST ===
+[2025-08-22T20:40:40.376Z] [DEBUG][LLM] HTTP Request {
+  url: 'https://api.groq.com/openai/v1/chat/completions',
+  model: 'moonshotai/kimi-k2-instruct',
+  messagesCount: 2,
+  useStructuredOutput: true,
+  estimatedTokens: 3662,
+  totalPromptLength: 14647,
+  contextWarning: null
+}
+[2025-08-22T20:40:40.376Z] [DEBUG][LLM] Request Body (truncated) {
+  model: 'moonshotai/kimi-k2-instruct',
+  messages: [
+    {
+      role: 'system',
+      content: 'You are an intelligent AI assistant capable of executing tools to help users accomplish complex tasks. You operate autonomously and work iteratively until goals are fully achieved.\n' +
+        '\n' +
+        'CORE PRINCIPLES:\n' +
+        '-... [14614 chars]'
+    },
+    { role: 'user', content: ' How many GitHub issues you open?' }
+  ],
+  temperature: 0,
+  frequency_penalty: 0.5,
+  seed: 1
+}
+[2025-08-22T20:40:40.880Z] [DEBUG][LLM] HTTP Response {
+  id: 'chatcmpl-78418776-a7c1-40d6-a22e-ecedcb5d6544',
+  object: 'chat.completion',
+  created: 1755895240,
+  model: 'moonshotai/kimi-k2-instruct',
+  choices: [
+    {
+      index: 0,
+      message: [Object],
+      logprobs: null,
+      finish_reason: 'stop'
+    }
+  ],
+  usage: {
+    queue_time: 0.08451818,
+    prompt_tokens: 3159,
+    prompt_time: 0.145390993,
+    completion_tokens: 99,
+    completion_time: 0.212086357,
+    total_tokens: 3258,
+    total_time: 0.35747735
+  },
+  usage_breakdown: null,
+  system_fingerprint: 'fp_b8565bb333',
+  x_groq: { id: 'req_01k39r65q7ee0tg17s22fkngts' },
+  service_tier: 'on_demand'
+}
+[2025-08-22T20:40:40.880Z] [DEBUG][LLM] Extracted JSON object {
+  toolCalls: [ { name: 'github:list_issues', arguments: [Object] } ],
+  content: 'Checking open issues in aj47/SpeakMCP repository',
+  needsMoreWork: true
+}
+[2025-08-22T20:40:40.880Z] [DEBUG][LLM] JSON object has toolCalls: true
+[2025-08-22T20:40:40.880Z] [DEBUG][LLM] JSON object has content: true
+[2025-08-22T20:40:40.880Z] [DEBUG][LLM] Response ← {
+  toolCalls: [ { name: 'github:list_issues', arguments: [Object] } ],
+  content: 'Checking open issues in aj47/SpeakMCP repository',
+  needsMoreWork: true
+}
+[2025-08-22T20:40:40.880Z] [DEBUG][LLM] === LLM CALL END ===
+Checking open issues in aj47/SpeakMCP repository
+[2025-08-22T20:40:40.881Z] [DEBUG][TOOLS] Planned tool calls from LLM [
+  {
+    name: 'github:list_issues',
+    arguments: { owner: 'aj47', repo: 'SpeakMCP', state: 'open' }
+  }
+]
+[2025-08-22T20:40:40.881Z] [DEBUG][TOOLS] Executing planned tool call {
+  name: 'github:list_issues',
+  arguments: { owner: 'aj47', repo: 'SpeakMCP', state: 'open' }
+}
+[2025-08-22T20:40:40.881Z] [DEBUG][TOOLS] Requested tool call {
+  name: 'github:list_issues',
+  arguments: { owner: 'aj47', repo: 'SpeakMCP', state: 'open' }
+}
+[2025-08-22T20:40:40.881Z] [DEBUG][TOOLS] Executing tool {
+  serverName: 'github',
+  toolName: 'list_issues',
+  arguments: { owner: 'aj47', repo: 'SpeakMCP', state: 'open' }
+}
+[2025-08-22T20:40:41.430Z] [DEBUG][TOOLS] Tool result {
+  serverName: 'github',
+  toolName: 'list_issues',
+  result: { content: [ [Object] ] }
+}
+[2025-08-22T20:40:41.430Z] [DEBUG][TOOLS] Normalized tool result {
+  content: [
+    {
+      type: 'text',
+      text: '[\n' +
+        '  {\n' +
+        '    "url": "https://api.github.com/repos/aj47/SpeakMCP/issues/90",\n' +
+        '    "repository_url": "https://api.github.com/repos/aj47/SpeakMCP",\n' +
+        '    "labels_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/90/labels{/name}",\n' +
+        '    "comments_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/90/comments",\n' +
+        '    "events_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/90/events",\n' +
+        '    "html_url": "https://github.com/aj47/SpeakMCP/issues/90",\n' +
+        '    "id": 3332807521,\n' +
+        '    "node_id": "I_kwDOO5IaBs7Gppth",\n' +
+        '    "number": 90,\n' +
+        '    "title": "Add windows support",\n' +
+        '    "user": {\n' +
+        '      "login": "TheDarkSkyXD",\n' +
+        '      "id": 34119991,\n' +
+        '      "node_id": "MDQ6VXNlcjM0MTE5OTkx",\n' +
+        '      "avatar_url": "https://avatars.githubusercontent.com/u/34119991?v=4",\n' +
+        '      "gravatar_id": "",\n' +
+        '      "url": "https://api.github.com/users/TheDarkSkyXD",\n' +
+        '      "html_url": "https://github.com/TheDarkSkyXD",\n' +
+        '      "followers_url": "https://api.github.com/users/TheDarkSkyXD/followers",\n' +
+        '      "following_url": "https://api.github.com/users/TheDarkSkyXD/following{/other_user}",\n' +
+        '      "gists_url": "https://api.github.com/users/TheDarkSkyXD/gists{/gist_id}",\n' +
+        '      "starred_url": "https://api.github.com/users/TheDarkSkyXD/starred{/owner}{/repo}",\n' +
+        '      "subscriptions_url": "https://api.github.com/users/TheDarkSkyXD/subscriptions",\n' +
+        '      "organizations_url": "https://api.github.com/users/TheDarkSkyXD/orgs",\n' +
+        '      "repos_url": "https://api.github.com/users/TheDarkSkyXD/repos",\n' +
+        '      "events_url": "https://api.github.com/users/TheDarkSkyXD/events{/privacy}",\n' +
+        '      "received_events_url": "https://api.github.com/users/TheDarkSkyXD/received_events",\n' +
+        '      "type": "User",\n' +
+        '      "user_view_type": "public",\n' +
+        '      "site_admin": false\n' +
+        '    },\n' +
+        '    "labels": [],\n' +
+        '    "state": "open",\n' +
+        '    "locked": false,\n' +
+        '    "assignee": null,\n' +
+        '    "assignees": [],\n' +
+        '    "milestone": null,\n' +
+        '    "comments": 1,\n' +
+        '    "created_at": "2025-08-19T04:04:55Z",\n' +
+        '    "updated_at": "2025-08-19T14:03:05Z",\n' +
+        '    "closed_at": null,\n' +
+        '    "author_association": "NONE",\n' +
+        '    "active_lock_reason": null,\n' +
+        '    "sub_issues_summary": {\n' +
+        '      "total": 0,\n' +
+        '      "completed": 0,\n' +
+        '      "percent_completed": 0\n' +
+        '    },\n' +
+        '    "issue_dependencies_summary": {\n' +
+        '      "blocked_by": 0,\n' +
+        '      "total_blocked_by": 0,\n' +
+        '      "blocking": 0,\n' +
+        '      "total_blocking": 0\n' +
+        '    },\n' +
+        '    "body": "Add support for windows and cursor etc mcp support. ",\n' +
+        '    "closed_by": null,\n' +
+        '    "reactions": {\n' +
+        '      "url": "https://api.github.com/repos/aj47/SpeakMCP/issues/90/reactions",\n' +
+        '      "total_count": 0,\n' +
+        '      "+1": 0,\n' +
+        '      "-1": 0,\n' +
+        '      "laugh": 0,\n' +
+        '      "hooray": 0,\n' +
+        '      "confused": 0,\n' +
+        '      "heart": 0,\n' +
+        '      "rocket": 0,\n' +
+        '      "eyes": 0\n' +
+        '    },\n' +
+        '    "timeline_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/90/timeline",\n' +
+        '    "performed_via_github_app": null,\n' +
+        '    "state_reason": null\n' +
+        '  },\n' +
+        '  {\n' +
+        '    "url": "https://api.github.com/repos/aj47/SpeakMCP/issues/88",\n' +
+        '    "repository_url": "https://api.github.com/repos/aj47/SpeakMCP",\n' +
+        '    "labels_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/88/labels{/name}",\n' +
+        '    "comments_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/88/comments",\n' +
+        '    "events_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/88/events",\n' +
+        '    "html_url": "https://github.com/aj47/SpeakMCP/pull/88",\n' +
+        '    "id": 3332585603,\n' +
+        '    "node_id": "PR_kwDOO5IaBs6kNNSl",\n' +
+        '    "number": 88,\n' +
+        '    "title": "Add mobile server integration with LiveKit and ngrok",\n' +
+        '    "user": {\n' +
+        '      "login": "aj47",\n' +
+        '      "id": 8023513,\n' +
+        '      "node_id": "MDQ6VXNlcjgwMjM1MTM=",\n' +
+        '      "avatar_url": "https://avatars.githubusercontent.com/u/8023513?v=4",\n' +
+        '      "gravatar_id": "",\n' +
+        '      "url": "https://api.github.com/users/aj47",\n' +
+        '      "html_url": "https://github.com/aj47",\n' +
+        '      "followers_url": "https://api.github.com/users/aj47/followers",\n' +
+        '      "following_url": "https://api.github.com/users/aj47/following{/other_user}",\n' +
+        '      "gists_url": "https://api.github.com/users/aj47/gists{/gist_id}",\n' +
+        '      "starred_url": "https://api.github.com/users/aj47/starred{/owner}{/repo}",\n' +
+        '      "subscriptions_url": "https://api.github.com/users/aj47/subscriptions",\n' +
+        '      "organizations_url": "https://api.github.com/users/aj47/orgs",\n' +
+        '      "repos_url": "https://api.github.com/users/aj47/repos",\n' +
+        '      "events_url": "https://api.github.com/users/aj47/events{/privacy}",\n' +
+        '      "received_events_url": "https://api.github.com/users/aj47/received_events",\n' +
+        '      "type": "User",\n' +
+        '      "user_view_type": "public",\n' +
+        '      "site_admin": false\n' +
+        '    },\n' +
+        '    "labels": [],\n' +
+        '    "state": "open",\n' +
+        '    "locked": false,\n' +
+        '    "assignee": null,\n' +
+        '    "assignees": [],\n' +
+        '    "milestone": null,\n' +
+        '    "comments": 0,\n' +
+        '    "created_at": "2025-08-19T01:29:25Z",\n' +
+        '    "updated_at": "2025-08-19T01:29:25Z",\n' +
+        '    "closed_at": null,\n' +
+        '    "author_association": "OWNER",\n' +
+        '    "active_lock_reason": null,\n' +
+        '    "draft": true,\n' +
+        '    "pull_request": {\n' +
+        '      "url": "https://api.github.com/repos/aj47/SpeakMCP/pulls/88",\n' +
+        '      "html_url": "https://github.com/aj47/SpeakMCP/pull/88",\n' +
+        '      "diff_url": "https://github.com/aj47/SpeakMCP/pull/88.diff",\n' +
+        '      "patch_url": "https://github.com/aj47/SpeakMCP/pull/88.patch",\n' +
+        '      "merged_at": null\n' +
+        '    },\n' +
+        '    "body": "## Overview\\n\\nThis PR adds comprehensive mobile server integration to SpeakMCP, enabling real-time audio communication between the desktop app and mobile devices.\\n\\n## Features Added\\n\\n### Core Components\\n- **Mobile Bridge Server**: WebSocket-based communication server for mobile clients\\n- **LiveKit Integration**: Real-time audio streaming capabilities\\n- **Ngrok Tunnel**: Secure external access for mobile devices\\n- **QR Code Generation**: Easy connection setup for mobile clients\\n\\n### UI Components\\n- **Mobile Server Panel**: New settings panel for mobile server configuration\\n- **Settings Integration**: Added mobile server options to general settings\\n\\n### Documentation\\n- **Implementation Plan**: Detailed technical documentation\\n- **Mobile Server README**: Setup and usage instructions\\n- **Environment Configuration**: Example environment variables\\n\\n## Technical Details\\n\\n### New Files\\n- `src/main/mobile-bridge.ts` - Main mobile server implementation\\n- `src/main/livekit-server.ts` - LiveKit audio streaming server\\n- `src/main/ngrok-tunnel.ts` - Ngrok tunnel management\\n- `src/main/qr-generator.ts` - QR code generation utilities\\n- `src/main/audio-pipeline.ts` - Audio processing pipeline\\n- `src/renderer/src/components/mobile-server-panel.tsx` - Mobile server UI\\n\\n### Modified Files\\n- Updated package dependencies for LiveKit, ngrok, and QR code generation\\n- Enhanced IPC types for mobile server communication\\n- Integrated mobile server panel into settings\\n\\n## Testing\\n\\nIncluded test script (`test-mobile-server.js`) for validating mobile server functionality.\\n\\n## Next Steps\\n\\n- [ ] Test mobile client integration\\n- [ ] Add error handling and logging\\n- [ ] Implement security features\\n- [ ] Add mobile app companion\\n\\n## Breaking Changes\\n\\nNone - this is an additive feature that doesn\'t affect existing functionality.\\n\\n---\\nPull Request opened by [Augment Code](https://www.augmentcode.com/) with guidance from the PR author",\n' +
+        '    "closed_by": null,\n' +
+        '    "reactions": {\n' +
+        '      "url": "https://api.github.com/repos/aj47/SpeakMCP/issues/88/reactions",\n' +
+        '      "total_count": 0,\n' +
+        '      "+1": 0,\n' +
+        '      "-1": 0,\n' +
+        '      "laugh": 0,\n' +
+        '      "hooray": 0,\n' +
+        '      "confused": 0,\n' +
+        '      "heart": 0,\n' +
+        '      "rocket": 0,\n' +
+        '      "eyes": 0\n' +
+        '    },\n' +
+        '    "timeline_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/88/timeline",\n' +
+        '    "performed_via_github_app": null,\n' +
+        '    "state_reason": null\n' +
+        '  },\n' +
+        '  {\n' +
+        '    "url": "https://api.github.com/repos/aj47/SpeakMCP/issues/87",\n' +
+        '    "repository_url": "https://api.github.com/repos/aj47/SpeakMCP",\n' +
+        '    "labels_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/87/labels{/name}",\n' +
+        '    "comments_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/87/comments",\n' +
+        '    "events_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/87/events",\n' +
+        '    "html_url": "https://github.com/aj47/SpeakMCP/pull/87",\n' +
+        '    "id": 3332300117,\n' +
+        '    "node_id": "PR_kwDOO5IaBs6kMS35",\n' +
+        '    "number": 87,\n' +
+        '    "title": "feat: Add 3-slide onboarding process for new users",\n' +
+        '    "user": {\n' +
+        '      "login": "aj47",\n' +
+        '      "id": 8023513,\n' +
+        '      "node_id": "MDQ6VXNlcjgwMjM1MTM=",\n' +
+        '      "avatar_url": "https://avatars.githubusercontent.com/u/8023513?v=4",\n' +
+        '      "gravatar_id": "",\n' +
+        '      "url": "https://api.github.com/users/aj47",\n' +
+        '      "html_url": "https://github.com/aj47",\n' +
+        '      "followers_url": "https://api.github.com/users/aj47/followers",\n' +
+        '      "following_url": "https://api.github.com/users/aj47/following{/other_user}",\n' +
+        '      "gists_url": "https://api.github.com/users/aj47/gists{/gist_id}",\n' +
+        '      "starred_url": "https://api.github.com/users/aj47/starred{/owner}{/repo}",\n' +
+        '      "subscriptions_url": "https://api.github.com/users/aj47/subscriptions",\n' +
+        '      "organizations_url": "https://api.github.com/users/aj47/orgs",\n' +
+        '      "repos_url": "https://api.github.com/users/aj47/repos",\n' +
+        '      "events_url": "https://api.github.com/users/aj47/events{/privacy}",\n' +
+        '      "received_events_url": "https://api.github.com/users/aj47/received_events",\n' +
+        '      "type": "User",\n' +
+        '      "user_view_type": "public",\n' +
+        '      "site_admin": false\n' +
+        '    },\n' +
+        '    "labels": [],\n' +
+        '    "state": "open",\n' +
+        '    "locked": false,\n' +
+        '    "assignee": null,\n' +
+        '    "assignees": [],\n' +
+        '    "milestone": null,\n' +
+        '    "comments": 0,\n' +
+        '    "created_at": "2025-08-18T22:18:31Z",\n' +
+        '    "updated_at": "2025-08-18T22:18:31Z",\n' +
+        '    "closed_at": null,\n' +
+        '    "author_association": "OWNER",\n' +
+        '    "active_lock_reason": null,\n' +
+        '    "draft": false,\n' +
+        '    "pull_request": {\n' +
+        '      "url": "https://api.github.com/repos/aj47/SpeakMCP/pulls/87",\n' +
+        '      "html_url": "https://github.com/aj47/SpeakMCP/pull/87",\n' +
+        '      "diff_url": "https://github.com/aj47/SpeakMCP/pull/87.diff",\n' +
+        '      "patch_url": "https://github.com/aj47/SpeakMCP/pull/87.patch",\n' +
+        '      "merged_at": null\n' +
+        '    },\n' +
+        '    "body": "## 🎯 Overview\\n\\nImplements a comprehensive 3-slide onboarding process for new users as requested in issue #57.\\n\\n## ✨ Fea'... 40385 more characters
+    }
+  ],
+  isError: false
+}
+[2025-08-22T20:40:41.431Z] [DEBUG][LLM] === LLM CALL START ===
+[2025-08-22T20:40:41.431Z] [DEBUG][LLM] Messages → {
+  count: 4,
+  totalChars: 65104,
+  messages: [
+    {
+      role: 'system',
+      content: 'You are an intelligent AI assistant capable of executing tools to help users accomplish complex tasks. You operate autonomously and work iteratively until goals are fully achieved.\n' +
+        '\n' +
+        'CORE PRINCIPLES:\n' +
+        "- Work autonomously until the user's request is completely resolved\n" +
+        '- Use available tools iteratively and strategically to gather information and execute actions\n' +
+        '- Use exact tool names from the available tools list (including server prefixes like "server:tool_name")\n' +
+        '- Prefer using tools to gather information rather than asking users for details\n' +
+        "- Continue working until the user's request is fully satisfied - only stop when the task is complete\n" +
+        '\n' +
+        'TOOL USAGE PHILOSOPHY:\n' +
+        '- ALWAYS follow tool schemas exactly as specified with all required parameters\n' +
+        '- NEVER call tools that are not explicitly provided in the available tools list\n' +
+        '- If you need additional information that you can get via tool calls, prefer that over asking the user\n' +
+        '- Use tools proactively to explore and understand the context before making changes\n' +
+        '- When making code changes, ensure they can be executed immediately by the user\n' +
+        '\n' +
+        '# Tone and style\n' +
+        'You should be concise, direct, and to the point.\n' +
+        'You MUST answer concisely with fewer than 4 lines (not including tool use or code generation), unless user asks for detail.\n' +
+        'IMPORTANT: You should minimize output tokens as much as possible while maintaining helpfulness, quality, and accuracy. Only address the specific query or task at hand, avoiding tangential information unless absolutely critical for completing the request. If you can answer in 1-3 sentences or a short paragraph, please do.\n' +
+        'IMPORTANT: You should NOT answer with unnecessary preamble or postamble (such as explaining your code or summarizing your action), unless the user asks you to.\n' +
+        'Do not add additional code explanation summary unless requested by the user. After working on a file, just stop, rather than providing an explanation of what you did.\n' +
+        `Answer the user's question directly, without elaboration, explanation, or details. One word answers are best. Avoid introductions, conclusions, and explanations. You MUST avoid text before/after your response, such as "The answer is <answer>.", "Here is the content of the file..." or "Based on the information provided, the answer is..." or "Here is what I will do next...". Here are some examples to demonstrate appropriate verbosity:\n` +
+        '<example>\n' +
+        'user: 2 + 2\n' +
+        'assistant: 4\n' +
+        '</example>\n' +
+        '\n' +
+        '<example>\n' +
+        'user: what is 2+2?\n' +
+        'assistant: 4\n' +
+        '</example>\n' +
+        '\n' +
+        '<example>\n' +
+        'user: is 11 a prime number?\n' +
+        'assistant: Yes\n' +
+        '</example>\n' +
+        '\n' +
+        '<example>\n' +
+        'user: what command should I run to list files in the current directory?\n' +
+        'assistant: ls\n' +
+        '</example>\n' +
+        '\n' +
+        '<example>\n' +
+        'user: what command should I run to watch files in the current directory?\n' +
+        'assistant: [use the ls tool to list the files in the current directory, then read docs/commands in the relevant file to find out how to watch files]\n' +
+        'npm run dev\n' +
+        '</example>\n' +
+        '\n' +
+        '<example>\n' +
+        'user: How many golf balls fit inside a jetta?\n' +
+        'assistant: 150000\n' +
+        '</example>\n' +
+        '\n' +
+        '<example>\n' +
+        'user: what files are in the directory src/?\n' +
+        'assistant: [runs ls and sees foo.c, bar.c, baz.c]\n' +
+        'user: which file contains the implementation of foo?\n' +
+        'assistant: src/foo.c\n' +
+        '</example>\n' +
+        '\n' +
+        'RESPONSE FORMAT:\n' +
+        'For tool calls:\n' +
+        '{\n' +
+        '  "toolCalls": [\n' +
+        '    {\n' +
+        '      "name": "exact_tool_name_from_available_list",\n' +
+        '      "arguments": { "param1": "value1", "param2": "value2" }\n' +
+        '    }\n' +
+        '  ],\n' +
+        `  "content": "Clear explanation of what you're doing and why",\n` +
+        '  "needsMoreWork": true\n' +
+        '}\n' +
+        '\n' +
+        'For final responses (no more tools needed):\n' +
+        '{\n' +
+        '  "content": "Your comprehensive final response with results",\n' +
+        '  "needsMoreWork": false\n' +
+        '}\n' +
+        '\n' +
+        'AGENT MODE - AUTONOMOUS OPERATION:\n' +
+        'You can see tool results and make follow-up calls. Work iteratively and thoroughly:\n' +
+        '\n' +
+        'WORKFLOW:\n' +
+        "1. Analyze the user's request comprehensively\n" +
+        '2. Gather necessary information using available tools\n' +
+        '3. Execute appropriate tools in logical sequence\n' +
+        '4. Review results and determine next steps\n' +
+        '5. Continue iterating until the goal is fully achieved\n' +
+        '6. Only set needsMoreWork: false when the task is completely resolved\n' +
+        '\n' +
+        '\n' +
+        '\n' +
+        'AVAILABLE TOOLS:\n' +
+        '- github:create_or_update_file: Create or update a single file in a GitHub repository\n' +
+        '  Parameters: {owner: string (required), repo: string (required), path: string (required), content: string (required), message: string (required), branch: string (required), sha: string}\n' +
+        '- github:search_repositories: Search for GitHub repositories\n' +
+        '  Parameters: {query: string (required), page: number, perPage: number}\n' +
+        '- github:create_repository: Create a new GitHub repository in your account\n' +
+        '  Parameters: {name: string (required), description: string, private: boolean, autoInit: boolean}\n' +
+        '- github:get_file_contents: Get the contents of a file or directory from a GitHub repository\n' +
+        '  Parameters: {owner: string (required), repo: string (required), path: string (required), branch: string}\n' +
+        '- github:push_files: Push multiple files to a GitHub repository in a single commit\n' +
+        '  Parameters: {owner: string (required), repo: string (required), branch: string (required), files: array (required), message: string (required)}\n' +
+        '- github:create_issue: Create a new issue in a GitHub repository\n' +
+        '  Parameters: {owner: string (required), repo: string (required), title: string (required), body: string, assignees: array, milestone: number, labels: array}\n' +
+        '- github:create_pull_request: Create a new pull request in a GitHub repository\n' +
+        '  Parameters: {owner: string (required), repo: string (required), title: string (required), body: string, head: string (required), base: string (required), draft: boolean, maintainer_can_modify: boolean}\n' +
+        '- github:fork_repository: Fork a GitHub repository to your account or specified organization\n' +
+        '  Parameters: {owner: string (required), repo: string (required), organization: string}\n' +
+        '- github:create_branch: Create a new branch in a GitHub repository\n' +
+        '  Parameters: {owner: string (required), repo: string (required), branch: string (required), from_branch: string}\n' +
+        '- github:list_commits: Get list of commits of a branch in a GitHub repository\n' +
+        '  Parameters: {owner: string (required), repo: string (required), sha: string, page: number, perPage: number}\n' +
+        '- github:list_issues: List issues in a GitHub repository with filtering options\n' +
+        '  Parameters: {owner: string (required), repo: string (required), direction: string, labels: array, page: number, per_page: number, since: string, sort: string, state: string}\n' +
+        '- github:update_issue: Update an existing issue in a GitHub repository\n' +
+        '  Parameters: {owner: string (required), repo: string (required), issue_number: number (required), title: string, body: string, assignees: array, milestone: number, labels: array, state: string}\n' +
+        '- github:add_issue_comment: Add a comment to an existing issue\n' +
+        '  Parameters: {owner: string (required), repo: string (required), issue_number: number (required), body: string (required)}\n' +
+        '- github:search_code: Search for code across GitHub repositories\n' +
+        '  Parameters: {q: string (required), order: string, page: number, per_page: number}\n' +
+        '- github:search_issues: Search for issues and pull requests across GitHub repositories\n' +
+        '  Parameters: {q: string (required), order: string, page: number, per_page: number, sort: string}\n' +
+        '- github:search_users: Search for users on GitHub\n' +
+        '  Parameters: {q: string (required), order: string, page: number, per_page: number, sort: string}\n' +
+        '- github:get_issue: Get details of a specific issue in a GitHub repository.\n' +
+        '  Parameters: {owner: string (required), repo: string (required), issue_number: number (required)}\n' +
+        '- github:get_pull_request: Get details of a specific pull request\n' +
+        '  Parameters: {owner: string (required), repo: string (required), pull_number: number (required)}\n' +
+        '- github:list_pull_requests: List and filter repository pull requests\n' +
+        '  Parameters: {owner: string (required), repo: string (required), state: string, head: string, base: string, sort: string, direction: string, per_page: number, page: number}\n' +
+        '- github:create_pull_request_review: Create a review on a pull request\n' +
+        '  Parameters: {owner: string (required), repo: string (required), pull_number: number (required), commit_id: string, body: string (required), event: string (required), comments: array}\n' +
+        '- github:merge_pull_request: Merge a pull request\n' +
+        '  Parameters: {owner: string (required), repo: string (required), pull_number: number (required), commit_title: string, commit_message: string, merge_method: string}\n' +
+        '- github:get_pull_request_files: Get the list of files changed in a pull request\n' +
+        '  Parameters: {owner: string (required), repo: string (required), pull_number: number (required)}\n' +
+        '- github:get_pull_request_status: Get the combined status of all status checks for a pull request\n' +
+        '  Parameters: {owner: string (required), repo: string (required), pull_number: number (required)}\n' +
+        '- github:update_pull_request_branch: Update a pull request branch with the latest changes from the base branch\n' +
+        '  Parameters: {owner: string (required), repo: string (required), pull_number: number (required), expected_head_sha: string}\n' +
+        '- github:get_pull_request_comments: Get the review comments on a pull request\n' +
+        '  Parameters: {owner: string (required), repo: string (required), pull_number: number (required)}\n' +
+        '- github:get_pull_request_reviews: Get the reviews on a pull request\n' +
+        '  Parameters: {owner: string (required), repo: string (required), pull_number: number (required)}\n' +
+        '- filesystem:read_file: Read the complete contents of a file as text. DEPRECATED: Use read_text_file instead.\n' +
+        '  Parameters: {path: string (required), tail: number, head: number}\n' +
+        "- filesystem:read_text_file: Read the complete contents of a file from the file system as text. Handles various text encodings and provides detailed error messages if the file cannot be read. Use this tool when you need to examine the contents of a single file. Use the 'head' parameter to read only the first N lines of a file, or the 'tail' parameter to read only the last N lines of a file. Operates on the file as text regardless of extension. Only works within allowed directories.\n" +
+        '  Parameters'... 4614 more characters
+    },
+    { role: 'user', content: ' How many GitHub issues you open?' },
+    {
+      role: 'assistant',
+      content: 'Checking open issues in aj47/SpeakMCP repository'
+    },
+    {
+      role: 'user',
+      content: 'Tool execution results:\n' +
+        '[\n' +
+        '  {\n' +
+        '    "url": "https://api.github.com/repos/aj47/SpeakMCP/issues/90",\n' +
+        '    "repository_url": "https://api.github.com/repos/aj47/SpeakMCP",\n' +
+        '    "labels_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/90/labels{/name}",\n' +
+        '    "comments_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/90/comments",\n' +
+        '    "events_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/90/events",\n' +
+        '    "html_url": "https://github.com/aj47/SpeakMCP/issues/90",\n' +
+        '    "id": 3332807521,\n' +
+        '    "node_id": "I_kwDOO5IaBs7Gppth",\n' +
+        '    "number": 90,\n' +
+        '    "title": "Add windows support",\n' +
+        '    "user": {\n' +
+        '      "login": "TheDarkSkyXD",\n' +
+        '      "id": 34119991,\n' +
+        '      "node_id": "MDQ6VXNlcjM0MTE5OTkx",\n' +
+        '      "avatar_url": "https://avatars.githubusercontent.com/u/34119991?v=4",\n' +
+        '      "gravatar_id": "",\n' +
+        '      "url": "https://api.github.com/users/TheDarkSkyXD",\n' +
+        '      "html_url": "https://github.com/TheDarkSkyXD",\n' +
+        '      "followers_url": "https://api.github.com/users/TheDarkSkyXD/followers",\n' +
+        '      "following_url": "https://api.github.com/users/TheDarkSkyXD/following{/other_user}",\n' +
+        '      "gists_url": "https://api.github.com/users/TheDarkSkyXD/gists{/gist_id}",\n' +
+        '      "starred_url": "https://api.github.com/users/TheDarkSkyXD/starred{/owner}{/repo}",\n' +
+        '      "subscriptions_url": "https://api.github.com/users/TheDarkSkyXD/subscriptions",\n' +
+        '      "organizations_url": "https://api.github.com/users/TheDarkSkyXD/orgs",\n' +
+        '      "repos_url": "https://api.github.com/users/TheDarkSkyXD/repos",\n' +
+        '      "events_url": "https://api.github.com/users/TheDarkSkyXD/events{/privacy}",\n' +
+        '      "received_events_url": "https://api.github.com/users/TheDarkSkyXD/received_events",\n' +
+        '      "type": "User",\n' +
+        '      "user_view_type": "public",\n' +
+        '      "site_admin": false\n' +
+        '    },\n' +
+        '    "labels": [],\n' +
+        '    "state": "open",\n' +
+        '    "locked": false,\n' +
+        '    "assignee": null,\n' +
+        '    "assignees": [],\n' +
+        '    "milestone": null,\n' +
+        '    "comments": 1,\n' +
+        '    "created_at": "2025-08-19T04:04:55Z",\n' +
+        '    "updated_at": "2025-08-19T14:03:05Z",\n' +
+        '    "closed_at": null,\n' +
+        '    "author_association": "NONE",\n' +
+        '    "active_lock_reason": null,\n' +
+        '    "sub_issues_summary": {\n' +
+        '      "total": 0,\n' +
+        '      "completed": 0,\n' +
+        '      "percent_completed": 0\n' +
+        '    },\n' +
+        '    "issue_dependencies_summary": {\n' +
+        '      "blocked_by": 0,\n' +
+        '      "total_blocked_by": 0,\n' +
+        '      "blocking": 0,\n' +
+        '      "total_blocking": 0\n' +
+        '    },\n' +
+        '    "body": "Add support for windows and cursor etc mcp support. ",\n' +
+        '    "closed_by": null,\n' +
+        '    "reactions": {\n' +
+        '      "url": "https://api.github.com/repos/aj47/SpeakMCP/issues/90/reactions",\n' +
+        '      "total_count": 0,\n' +
+        '      "+1": 0,\n' +
+        '      "-1": 0,\n' +
+        '      "laugh": 0,\n' +
+        '      "hooray": 0,\n' +
+        '      "confused": 0,\n' +
+        '      "heart": 0,\n' +
+        '      "rocket": 0,\n' +
+        '      "eyes": 0\n' +
+        '    },\n' +
+        '    "timeline_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/90/timeline",\n' +
+        '    "performed_via_github_app": null,\n' +
+        '    "state_reason": null\n' +
+        '  },\n' +
+        '  {\n' +
+        '    "url": "https://api.github.com/repos/aj47/SpeakMCP/issues/88",\n' +
+        '    "repository_url": "https://api.github.com/repos/aj47/SpeakMCP",\n' +
+        '    "labels_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/88/labels{/name}",\n' +
+        '    "comments_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/88/comments",\n' +
+        '    "events_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/88/events",\n' +
+        '    "html_url": "https://github.com/aj47/SpeakMCP/pull/88",\n' +
+        '    "id": 3332585603,\n' +
+        '    "node_id": "PR_kwDOO5IaBs6kNNSl",\n' +
+        '    "number": 88,\n' +
+        '    "title": "Add mobile server integration with LiveKit and ngrok",\n' +
+        '    "user": {\n' +
+        '      "login": "aj47",\n' +
+        '      "id": 8023513,\n' +
+        '      "node_id": "MDQ6VXNlcjgwMjM1MTM=",\n' +
+        '      "avatar_url": "https://avatars.githubusercontent.com/u/8023513?v=4",\n' +
+        '      "gravatar_id": "",\n' +
+        '      "url": "https://api.github.com/users/aj47",\n' +
+        '      "html_url": "https://github.com/aj47",\n' +
+        '      "followers_url": "https://api.github.com/users/aj47/followers",\n' +
+        '      "following_url": "https://api.github.com/users/aj47/following{/other_user}",\n' +
+        '      "gists_url": "https://api.github.com/users/aj47/gists{/gist_id}",\n' +
+        '      "starred_url": "https://api.github.com/users/aj47/starred{/owner}{/repo}",\n' +
+        '      "subscriptions_url": "https://api.github.com/users/aj47/subscriptions",\n' +
+        '      "organizations_url": "https://api.github.com/users/aj47/orgs",\n' +
+        '      "repos_url": "https://api.github.com/users/aj47/repos",\n' +
+        '      "events_url": "https://api.github.com/users/aj47/events{/privacy}",\n' +
+        '      "received_events_url": "https://api.github.com/users/aj47/received_events",\n' +
+        '      "type": "User",\n' +
+        '      "user_view_type": "public",\n' +
+        '      "site_admin": false\n' +
+        '    },\n' +
+        '    "labels": [],\n' +
+        '    "state": "open",\n' +
+        '    "locked": false,\n' +
+        '    "assignee": null,\n' +
+        '    "assignees": [],\n' +
+        '    "milestone": null,\n' +
+        '    "comments": 0,\n' +
+        '    "created_at": "2025-08-19T01:29:25Z",\n' +
+        '    "updated_at": "2025-08-19T01:29:25Z",\n' +
+        '    "closed_at": null,\n' +
+        '    "author_association": "OWNER",\n' +
+        '    "active_lock_reason": null,\n' +
+        '    "draft": true,\n' +
+        '    "pull_request": {\n' +
+        '      "url": "https://api.github.com/repos/aj47/SpeakMCP/pulls/88",\n' +
+        '      "html_url": "https://github.com/aj47/SpeakMCP/pull/88",\n' +
+        '      "diff_url": "https://github.com/aj47/SpeakMCP/pull/88.diff",\n' +
+        '      "patch_url": "https://github.com/aj47/SpeakMCP/pull/88.patch",\n' +
+        '      "merged_at": null\n' +
+        '    },\n' +
+        '    "body": "## Overview\\n\\nThis PR adds comprehensive mobile server integration to SpeakMCP, enabling real-time audio communication between the desktop app and mobile devices.\\n\\n## Features Added\\n\\n### Core Components\\n- **Mobile Bridge Server**: WebSocket-based communication server for mobile clients\\n- **LiveKit Integration**: Real-time audio streaming capabilities\\n- **Ngrok Tunnel**: Secure external access for mobile devices\\n- **QR Code Generation**: Easy connection setup for mobile clients\\n\\n### UI Components\\n- **Mobile Server Panel**: New settings panel for mobile server configuration\\n- **Settings Integration**: Added mobile server options to general settings\\n\\n### Documentation\\n- **Implementation Plan**: Detailed technical documentation\\n- **Mobile Server README**: Setup and usage instructions\\n- **Environment Configuration**: Example environment variables\\n\\n## Technical Details\\n\\n### New Files\\n- `src/main/mobile-bridge.ts` - Main mobile server implementation\\n- `src/main/livekit-server.ts` - LiveKit audio streaming server\\n- `src/main/ngrok-tunnel.ts` - Ngrok tunnel management\\n- `src/main/qr-generator.ts` - QR code generation utilities\\n- `src/main/audio-pipeline.ts` - Audio processing pipeline\\n- `src/renderer/src/components/mobile-server-panel.tsx` - Mobile server UI\\n\\n### Modified Files\\n- Updated package dependencies for LiveKit, ngrok, and QR code generation\\n- Enhanced IPC types for mobile server communication\\n- Integrated mobile server panel into settings\\n\\n## Testing\\n\\nIncluded test script (`test-mobile-server.js`) for validating mobile server functionality.\\n\\n## Next Steps\\n\\n- [ ] Test mobile client integration\\n- [ ] Add error handling and logging\\n- [ ] Implement security features\\n- [ ] Add mobile app companion\\n\\n## Breaking Changes\\n\\nNone - this is an additive feature that doesn\'t affect existing functionality.\\n\\n---\\nPull Request opened by [Augment Code](https://www.augmentcode.com/) with guidance from the PR author",\n' +
+        '    "closed_by": null,\n' +
+        '    "reactions": {\n' +
+        '      "url": "https://api.github.com/repos/aj47/SpeakMCP/issues/88/reactions",\n' +
+        '      "total_count": 0,\n' +
+        '      "+1": 0,\n' +
+        '      "-1": 0,\n' +
+        '      "laugh": 0,\n' +
+        '      "hooray": 0,\n' +
+        '      "confused": 0,\n' +
+        '      "heart": 0,\n' +
+        '      "rocket": 0,\n' +
+        '      "eyes": 0\n' +
+        '    },\n' +
+        '    "timeline_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/88/timeline",\n' +
+        '    "performed_via_github_app": null,\n' +
+        '    "state_reason": null\n' +
+        '  },\n' +
+        '  {\n' +
+        '    "url": "https://api.github.com/repos/aj47/SpeakMCP/issues/87",\n' +
+        '    "repository_url": "https://api.github.com/repos/aj47/SpeakMCP",\n' +
+        '    "labels_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/87/labels{/name}",\n' +
+        '    "comments_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/87/comments",\n' +
+        '    "events_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/87/events",\n' +
+        '    "html_url": "https://github.com/aj47/SpeakMCP/pull/87",\n' +
+        '    "id": 3332300117,\n' +
+        '    "node_id": "PR_kwDOO5IaBs6kMS35",\n' +
+        '    "number": 87,\n' +
+        '    "title": "feat: Add 3-slide onboarding process for new users",\n' +
+        '    "user": {\n' +
+        '      "login": "aj47",\n' +
+        '      "id": 8023513,\n' +
+        '      "node_id": "MDQ6VXNlcjgwMjM1MTM=",\n' +
+        '      "avatar_url": "https://avatars.githubusercontent.com/u/8023513?v=4",\n' +
+        '      "gravatar_id": "",\n' +
+        '      "url": "https://api.github.com/users/aj47",\n' +
+        '      "html_url": "https://github.com/aj47",\n' +
+        '      "followers_url": "https://api.github.com/users/aj47/followers",\n' +
+        '      "following_url": "https://api.github.com/users/aj47/following{/other_user}",\n' +
+        '      "gists_url": "https://api.github.com/users/aj47/gists{/gist_id}",\n' +
+        '      "starred_url": "https://api.github.com/users/aj47/starred{/owner}{/repo}",\n' +
+        '      "subscriptions_url": "https://api.github.com/users/aj47/subscriptions",\n' +
+        '      "organizations_url": "https://api.github.com/users/aj47/orgs",\n' +
+        '      "repos_url": "https://api.github.com/users/aj47/repos",\n' +
+        '      "events_url": "https://api.github.com/users/aj47/events{/privacy}",\n' +
+        '      "received_events_url": "https://api.github.com/users/aj47/received_events",\n' +
+        '      "type": "User",\n' +
+        '      "user_view_type": "public",\n' +
+        '      "site_admin": false\n' +
+        '    },\n' +
+        '    "labels": [],\n' +
+        '    "state": "open",\n' +
+        '    "locked": false,\n' +
+        '    "assignee": null,\n' +
+        '    "assignees": [],\n' +
+        '    "milestone": null,\n' +
+        '    "comments": 0,\n' +
+        '    "created_at": "2025-08-18T22:18:31Z",\n' +
+        '    "updated_at": "2025-08-18T22:18:31Z",\n' +
+        '    "closed_at": null,\n' +
+        '    "author_association": "OWNER",\n' +
+        '    "active_lock_reason": null,\n' +
+        '    "draft": false,\n' +
+        '    "pull_request": {\n' +
+        '      "url": "https://api.github.com/repos/aj47/SpeakMCP/pulls/87",\n' +
+        '      "html_url": "https://github.com/aj47/SpeakMCP/pull/87",\n' +
+        '      "diff_url": "https://github.com/aj47/SpeakMCP/pull/87.diff",\n' +
+        '      "patch_url": "https://github.com/aj47/SpeakMCP/pull/87.patch",\n' +
+        '      "merged_at": null\n' +
+        '    },\n' +
+        '    "body": "## 🎯 Overview\\n\\nImplements a comprehensive 3-slide onboarding process for new users as requested i'... 40409 more characters
+    }
+  ]
+}
+[2025-08-22T20:40:41.431Z] [DEBUG][LLM] === OPENAI API REQUEST ===
+[2025-08-22T20:40:41.431Z] [DEBUG][LLM] HTTP Request {
+  url: 'https://api.groq.com/openai/v1/chat/completions',
+  model: 'moonshotai/kimi-k2-instruct',
+  messagesCount: 4,
+  useStructuredOutput: true,
+  estimatedTokens: 16276,
+  totalPromptLength: 65104,
+  contextWarning: 'WARNING: High token count, may exceed context limit'
+}
+[2025-08-22T20:40:41.432Z] [DEBUG][LLM] Request Body (truncated) {
+  model: 'moonshotai/kimi-k2-instruct',
+  messages: [
+    {
+      role: 'system',
+      content: 'You are an intelligent AI assistant capable of executing tools to help users accomplish complex tasks. You operate autonomously and work iteratively until goals are fully achieved.\n' +
+        '\n' +
+        'CORE PRINCIPLES:\n' +
+        '-... [14614 chars]'
+    },
+    { role: 'user', content: ' How many GitHub issues you open?' },
+    {
+      role: 'assistant',
+      content: 'Checking open issues in aj47/SpeakMCP repository'
+    },
+    {
+      role: 'user',
+      content: 'Tool execution results:\n' +
+        '[\n' +
+        '  {\n' +
+        '    "url": "https://api.github.com/repos/aj47/SpeakMCP/issues/90",\n' +
+        '    "repository_url": "https://api.github.com/repos/aj47/SpeakMCP",\n' +
+        '    "labels_url": "https://api.gith... [50409 chars]'
+    }
+  ],
+  temperature: 0,
+  frequency_penalty: 0.5,
+  seed: 1
+}
+[2025-08-22T20:40:42.770Z] [DEBUG][LLM] HTTP Response {
+  id: 'chatcmpl-76e85a1a-9edb-4fec-ab9f-ecbc273983df',
+  object: 'chat.completion',
+  created: 1755895242,
+  model: 'moonshotai/kimi-k2-instruct',
+  choices: [
+    {
+      index: 0,
+      message: [Object],
+      logprobs: null,
+      finish_reason: 'stop'
+    }
+  ],
+  usage: {
+    queue_time: 0.094366804,
+    prompt_tokens: 17169,
+    prompt_time: 1.009075707,
+    completion_tokens: 19,
+    completion_time: 0.113865372,
+    total_tokens: 17188,
+    total_time: 1.122941079
+  },
+  usage_breakdown: null,
+  system_fingerprint: 'fp_b8565bb333',
+  x_groq: { id: 'req_01k39r66rpfrbanzm82fgv2acj' },
+  service_tier: 'on_demand'
+}
+[2025-08-22T20:40:42.770Z] [DEBUG][LLM] Extracted JSON object null
+[2025-08-22T20:40:42.770Z] [DEBUG][LLM] JSON object has toolCalls: false
+[2025-08-22T20:40:42.770Z] [DEBUG][LLM] JSON object has content: false
+[2025-08-22T20:40:42.770Z] [DEBUG][LLM] Response ← {
+  content: 'There are 11 open GitHub issues in the aj47/SpeakMCP repository.',
+  needsMoreWork: true
+}
+[2025-08-22T20:40:42.770Z] [DEBUG][LLM] === LLM CALL END ===
+There are 11 open GitHub issues in the aj47/SpeakMCP repository.
+[2025-08-22T20:40:42.770Z] [DEBUG][TOOLS] Planned tool calls from LLM []
+[2025-08-22T20:40:42.771Z] [DEBUG][LLM] === LLM CALL START ===
+[2025-08-22T20:40:42.771Z] [DEBUG][LLM] Messages → {
+  count: 6,
+  totalChars: 65192,
+  messages: [
+    {
+      role: 'system',
+      content: 'You are an intelligent AI assistant capable of executing tools to help users accomplish complex tasks. You operate autonomously and work iteratively until goals are fully achieved.\n' +
+        '\n' +
+        'CORE PRINCIPLES:\n' +
+        "- Work autonomously until the user's request is completely resolved\n" +
+        '- Use available tools iteratively and strategically to gather information and execute actions\n' +
+        '- Use exact tool names from the available tools list (including server prefixes like "server:tool_name")\n' +
+        '- Prefer using tools to gather information rather than asking users for details\n' +
+        "- Continue working until the user's request is fully satisfied - only stop when the task is complete\n" +
+        '\n' +
+        'TOOL USAGE PHILOSOPHY:\n' +
+        '- ALWAYS follow tool schemas exactly as specified with all required parameters\n' +
+        '- NEVER call tools that are not explicitly provided in the available tools list\n' +
+        '- If you need additional information that you can get via tool calls, prefer that over asking the user\n' +
+        '- Use tools proactively to explore and understand the context before making changes\n' +
+        '- When making code changes, ensure they can be executed immediately by the user\n' +
+        '\n' +
+        '# Tone and style\n' +
+        'You should be concise, direct, and to the point.\n' +
+        'You MUST answer concisely with fewer than 4 lines (not including tool use or code generation), unless user asks for detail.\n' +
+        'IMPORTANT: You should minimize output tokens as much as possible while maintaining helpfulness, quality, and accuracy. Only address the specific query or task at hand, avoiding tangential information unless absolutely critical for completing the request. If you can answer in 1-3 sentences or a short paragraph, please do.\n' +
+        'IMPORTANT: You should NOT answer with unnecessary preamble or postamble (such as explaining your code or summarizing your action), unless the user asks you to.\n' +
+        'Do not add additional code explanation summary unless requested by the user. After working on a file, just stop, rather than providing an explanation of what you did.\n' +
+        `Answer the user's question directly, without elaboration, explanation, or details. One word answers are best. Avoid introductions, conclusions, and explanations. You MUST avoid text before/after your response, such as "The answer is <answer>.", "Here is the content of the file..." or "Based on the information provided, the answer is..." or "Here is what I will do next...". Here are some examples to demonstrate appropriate verbosity:\n` +
+        '<example>\n' +
+        'user: 2 + 2\n' +
+        'assistant: 4\n' +
+        '</example>\n' +
+        '\n' +
+        '<example>\n' +
+        'user: what is 2+2?\n' +
+        'assistant: 4\n' +
+        '</example>\n' +
+        '\n' +
+        '<example>\n' +
+        'user: is 11 a prime number?\n' +
+        'assistant: Yes\n' +
+        '</example>\n' +
+        '\n' +
+        '<example>\n' +
+        'user: what command should I run to list files in the current directory?\n' +
+        'assistant: ls\n' +
+        '</example>\n' +
+        '\n' +
+        '<example>\n' +
+        'user: what command should I run to watch files in the current directory?\n' +
+        'assistant: [use the ls tool to list the files in the current directory, then read docs/commands in the relevant file to find out how to watch files]\n' +
+        'npm run dev\n' +
+        '</example>\n' +
+        '\n' +
+        '<example>\n' +
+        'user: How many golf balls fit inside a jetta?\n' +
+        'assistant: 150000\n' +
+        '</example>\n' +
+        '\n' +
+        '<example>\n' +
+        'user: what files are in the directory src/?\n' +
+        'assistant: [runs ls and sees foo.c, bar.c, baz.c]\n' +
+        'user: which file contains the implementation of foo?\n' +
+        'assistant: src/foo.c\n' +
+        '</example>\n' +
+        '\n' +
+        'RESPONSE FORMAT:\n' +
+        'For tool calls:\n' +
+        '{\n' +
+        '  "toolCalls": [\n' +
+        '    {\n' +
+        '      "name": "exact_tool_name_from_available_list",\n' +
+        '      "arguments": { "param1": "value1", "param2": "value2" }\n' +
+        '    }\n' +
+        '  ],\n' +
+        `  "content": "Clear explanation of what you're doing and why",\n` +
+        '  "needsMoreWork": true\n' +
+        '}\n' +
+        '\n' +
+        'For final responses (no more tools needed):\n' +
+        '{\n' +
+        '  "content": "Your comprehensive final response with results",\n' +
+        '  "needsMoreWork": false\n' +
+        '}\n' +
+        '\n' +
+        'AGENT MODE - AUTONOMOUS OPERATION:\n' +
+        'You can see tool results and make follow-up calls. Work iteratively and thoroughly:\n' +
+        '\n' +
+        'WORKFLOW:\n' +
+        "1. Analyze the user's request comprehensively\n" +
+        '2. Gather necessary information using available tools\n' +
+        '3. Execute appropriate tools in logical sequence\n' +
+        '4. Review results and determine next steps\n' +
+        '5. Continue iterating until the goal is fully achieved\n' +
+        '6. Only set needsMoreWork: false when the task is completely resolved\n' +
+        '\n' +
+        '\n' +
+        '\n' +
+        'AVAILABLE TOOLS:\n' +
+        '- github:create_or_update_file: Create or update a single file in a GitHub repository\n' +
+        '  Parameters: {owner: string (required), repo: string (required), path: string (required), content: string (required), message: string (required), branch: string (required), sha: string}\n' +
+        '- github:search_repositories: Search for GitHub repositories\n' +
+        '  Parameters: {query: string (required), page: number, perPage: number}\n' +
+        '- github:create_repository: Create a new GitHub repository in your account\n' +
+        '  Parameters: {name: string (required), description: string, private: boolean, autoInit: boolean}\n' +
+        '- github:get_file_contents: Get the contents of a file or directory from a GitHub repository\n' +
+        '  Parameters: {owner: string (required), repo: string (required), path: string (required), branch: string}\n' +
+        '- github:push_files: Push multiple files to a GitHub repository in a single commit\n' +
+        '  Parameters: {owner: string (required), repo: string (required), branch: string (required), files: array (required), message: string (required)}\n' +
+        '- github:create_issue: Create a new issue in a GitHub repository\n' +
+        '  Parameters: {owner: string (required), repo: string (required), title: string (required), body: string, assignees: array, milestone: number, labels: array}\n' +
+        '- github:create_pull_request: Create a new pull request in a GitHub repository\n' +
+        '  Parameters: {owner: string (required), repo: string (required), title: string (required), body: string, head: string (required), base: string (required), draft: boolean, maintainer_can_modify: boolean}\n' +
+        '- github:fork_repository: Fork a GitHub repository to your account or specified organization\n' +
+        '  Parameters: {owner: string (required), repo: string (required), organization: string}\n' +
+        '- github:create_branch: Create a new branch in a GitHub repository\n' +
+        '  Parameters: {owner: string (required), repo: string (required), branch: string (required), from_branch: string}\n' +
+        '- github:list_commits: Get list of commits of a branch in a GitHub repository\n' +
+        '  Parameters: {owner: string (required), repo: string (required), sha: string, page: number, perPage: number}\n' +
+        '- github:list_issues: List issues in a GitHub repository with filtering options\n' +
+        '  Parameters: {owner: string (required), repo: string (required), direction: string, labels: array, page: number, per_page: number, since: string, sort: string, state: string}\n' +
+        '- github:update_issue: Update an existing issue in a GitHub repository\n' +
+        '  Parameters: {owner: string (required), repo: string (required), issue_number: number (required), title: string, body: string, assignees: array, milestone: number, labels: array, state: string}\n' +
+        '- github:add_issue_comment: Add a comment to an existing issue\n' +
+        '  Parameters: {owner: string (required), repo: string (required), issue_number: number (required), body: string (required)}\n' +
+        '- github:search_code: Search for code across GitHub repositories\n' +
+        '  Parameters: {q: string (required), order: string, page: number, per_page: number}\n' +
+        '- github:search_issues: Search for issues and pull requests across GitHub repositories\n' +
+        '  Parameters: {q: string (required), order: string, page: number, per_page: number, sort: string}\n' +
+        '- github:search_users: Search for users on GitHub\n' +
+        '  Parameters: {q: string (required), order: string, page: number, per_page: number, sort: string}\n' +
+        '- github:get_issue: Get details of a specific issue in a GitHub repository.\n' +
+        '  Parameters: {owner: string (required), repo: string (required), issue_number: number (required)}\n' +
+        '- github:get_pull_request: Get details of a specific pull request\n' +
+        '  Parameters: {owner: string (required), repo: string (required), pull_number: number (required)}\n' +
+        '- github:list_pull_requests: List and filter repository pull requests\n' +
+        '  Parameters: {owner: string (required), repo: string (required), state: string, head: string, base: string, sort: string, direction: string, per_page: number, page: number}\n' +
+        '- github:create_pull_request_review: Create a review on a pull request\n' +
+        '  Parameters: {owner: string (required), repo: string (required), pull_number: number (required), commit_id: string, body: string (required), event: string (required), comments: array}\n' +
+        '- github:merge_pull_request: Merge a pull request\n' +
+        '  Parameters: {owner: string (required), repo: string (required), pull_number: number (required), commit_title: string, commit_message: string, merge_method: string}\n' +
+        '- github:get_pull_request_files: Get the list of files changed in a pull request\n' +
+        '  Parameters: {owner: string (required), repo: string (required), pull_number: number (required)}\n' +
+        '- github:get_pull_request_status: Get the combined status of all status checks for a pull request\n' +
+        '  Parameters: {owner: string (required), repo: string (required), pull_number: number (required)}\n' +
+        '- github:update_pull_request_branch: Update a pull request branch with the latest changes from the base branch\n' +
+        '  Parameters: {owner: string (required), repo: string (required), pull_number: number (required), expected_head_sha: string}\n' +
+        '- github:get_pull_request_comments: Get the review comments on a pull request\n' +
+        '  Parameters: {owner: string (required), repo: string (required), pull_number: number (required)}\n' +
+        '- github:get_pull_request_reviews: Get the reviews on a pull request\n' +
+        '  Parameters: {owner: string (required), repo: string (required), pull_number: number (required)}\n' +
+        '- filesystem:read_file: Read the complete contents of a file as text. DEPRECATED: Use read_text_file instead.\n' +
+        '  Parameters: {path: string (required), tail: number, head: number}\n' +
+        "- filesystem:read_text_file: Read the complete contents of a file from the file system as text. Handles various text encodings and provides detailed error messages if the file cannot be read. Use this tool when you need to examine the contents of a single file. Use the 'head' parameter to read only the first N lines of a file, or the 'tail' parameter to read only the last N lines of a file. Operates on the file as text regardless of extension. Only works within allowed directories.\n" +
+        '  Parameters'... 4614 more characters
+    },
+    { role: 'user', content: ' How many GitHub issues you open?' },
+    {
+      role: 'assistant',
+      content: 'Checking open issues in aj47/SpeakMCP repository'
+    },
+    {
+      role: 'user',
+      content: 'Tool execution results:\n' +
+        '[\n' +
+        '  {\n' +
+        '    "url": "https://api.github.com/repos/aj47/SpeakMCP/issues/90",\n' +
+        '    "repository_url": "https://api.github.com/repos/aj47/SpeakMCP",\n' +
+        '    "labels_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/90/labels{/name}",\n' +
+        '    "comments_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/90/comments",\n' +
+        '    "events_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/90/events",\n' +
+        '    "html_url": "https://github.com/aj47/SpeakMCP/issues/90",\n' +
+        '    "id": 3332807521,\n' +
+        '    "node_id": "I_kwDOO5IaBs7Gppth",\n' +
+        '    "number": 90,\n' +
+        '    "title": "Add windows support",\n' +
+        '    "user": {\n' +
+        '      "login": "TheDarkSkyXD",\n' +
+        '      "id": 34119991,\n' +
+        '      "node_id": "MDQ6VXNlcjM0MTE5OTkx",\n' +
+        '      "avatar_url": "https://avatars.githubusercontent.com/u/34119991?v=4",\n' +
+        '      "gravatar_id": "",\n' +
+        '      "url": "https://api.github.com/users/TheDarkSkyXD",\n' +
+        '      "html_url": "https://github.com/TheDarkSkyXD",\n' +
+        '      "followers_url": "https://api.github.com/users/TheDarkSkyXD/followers",\n' +
+        '      "following_url": "https://api.github.com/users/TheDarkSkyXD/following{/other_user}",\n' +
+        '      "gists_url": "https://api.github.com/users/TheDarkSkyXD/gists{/gist_id}",\n' +
+        '      "starred_url": "https://api.github.com/users/TheDarkSkyXD/starred{/owner}{/repo}",\n' +
+        '      "subscriptions_url": "https://api.github.com/users/TheDarkSkyXD/subscriptions",\n' +
+        '      "organizations_url": "https://api.github.com/users/TheDarkSkyXD/orgs",\n' +
+        '      "repos_url": "https://api.github.com/users/TheDarkSkyXD/repos",\n' +
+        '      "events_url": "https://api.github.com/users/TheDarkSkyXD/events{/privacy}",\n' +
+        '      "received_events_url": "https://api.github.com/users/TheDarkSkyXD/received_events",\n' +
+        '      "type": "User",\n' +
+        '      "user_view_type": "public",\n' +
+        '      "site_admin": false\n' +
+        '    },\n' +
+        '    "labels": [],\n' +
+        '    "state": "open",\n' +
+        '    "locked": false,\n' +
+        '    "assignee": null,\n' +
+        '    "assignees": [],\n' +
+        '    "milestone": null,\n' +
+        '    "comments": 1,\n' +
+        '    "created_at": "2025-08-19T04:04:55Z",\n' +
+        '    "updated_at": "2025-08-19T14:03:05Z",\n' +
+        '    "closed_at": null,\n' +
+        '    "author_association": "NONE",\n' +
+        '    "active_lock_reason": null,\n' +
+        '    "sub_issues_summary": {\n' +
+        '      "total": 0,\n' +
+        '      "completed": 0,\n' +
+        '      "percent_completed": 0\n' +
+        '    },\n' +
+        '    "issue_dependencies_summary": {\n' +
+        '      "blocked_by": 0,\n' +
+        '      "total_blocked_by": 0,\n' +
+        '      "blocking": 0,\n' +
+        '      "total_blocking": 0\n' +
+        '    },\n' +
+        '    "body": "Add support for windows and cursor etc mcp support. ",\n' +
+        '    "closed_by": null,\n' +
+        '    "reactions": {\n' +
+        '      "url": "https://api.github.com/repos/aj47/SpeakMCP/issues/90/reactions",\n' +
+        '      "total_count": 0,\n' +
+        '      "+1": 0,\n' +
+        '      "-1": 0,\n' +
+        '      "laugh": 0,\n' +
+        '      "hooray": 0,\n' +
+        '      "confused": 0,\n' +
+        '      "heart": 0,\n' +
+        '      "rocket": 0,\n' +
+        '      "eyes": 0\n' +
+        '    },\n' +
+        '    "timeline_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/90/timeline",\n' +
+        '    "performed_via_github_app": null,\n' +
+        '    "state_reason": null\n' +
+        '  },\n' +
+        '  {\n' +
+        '    "url": "https://api.github.com/repos/aj47/SpeakMCP/issues/88",\n' +
+        '    "repository_url": "https://api.github.com/repos/aj47/SpeakMCP",\n' +
+        '    "labels_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/88/labels{/name}",\n' +
+        '    "comments_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/88/comments",\n' +
+        '    "events_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/88/events",\n' +
+        '    "html_url": "https://github.com/aj47/SpeakMCP/pull/88",\n' +
+        '    "id": 3332585603,\n' +
+        '    "node_id": "PR_kwDOO5IaBs6kNNSl",\n' +
+        '    "number": 88,\n' +
+        '    "title": "Add mobile server integration with LiveKit and ngrok",\n' +
+        '    "user": {\n' +
+        '      "login": "aj47",\n' +
+        '      "id": 8023513,\n' +
+        '      "node_id": "MDQ6VXNlcjgwMjM1MTM=",\n' +
+        '      "avatar_url": "https://avatars.githubusercontent.com/u/8023513?v=4",\n' +
+        '      "gravatar_id": "",\n' +
+        '      "url": "https://api.github.com/users/aj47",\n' +
+        '      "html_url": "https://github.com/aj47",\n' +
+        '      "followers_url": "https://api.github.com/users/aj47/followers",\n' +
+        '      "following_url": "https://api.github.com/users/aj47/following{/other_user}",\n' +
+        '      "gists_url": "https://api.github.com/users/aj47/gists{/gist_id}",\n' +
+        '      "starred_url": "https://api.github.com/users/aj47/starred{/owner}{/repo}",\n' +
+        '      "subscriptions_url": "https://api.github.com/users/aj47/subscriptions",\n' +
+        '      "organizations_url": "https://api.github.com/users/aj47/orgs",\n' +
+        '      "repos_url": "https://api.github.com/users/aj47/repos",\n' +
+        '      "events_url": "https://api.github.com/users/aj47/events{/privacy}",\n' +
+        '      "received_events_url": "https://api.github.com/users/aj47/received_events",\n' +
+        '      "type": "User",\n' +
+        '      "user_view_type": "public",\n' +
+        '      "site_admin": false\n' +
+        '    },\n' +
+        '    "labels": [],\n' +
+        '    "state": "open",\n' +
+        '    "locked": false,\n' +
+        '    "assignee": null,\n' +
+        '    "assignees": [],\n' +
+        '    "milestone": null,\n' +
+        '    "comments": 0,\n' +
+        '    "created_at": "2025-08-19T01:29:25Z",\n' +
+        '    "updated_at": "2025-08-19T01:29:25Z",\n' +
+        '    "closed_at": null,\n' +
+        '    "author_association": "OWNER",\n' +
+        '    "active_lock_reason": null,\n' +
+        '    "draft": true,\n' +
+        '    "pull_request": {\n' +
+        '      "url": "https://api.github.com/repos/aj47/SpeakMCP/pulls/88",\n' +
+        '      "html_url": "https://github.com/aj47/SpeakMCP/pull/88",\n' +
+        '      "diff_url": "https://github.com/aj47/SpeakMCP/pull/88.diff",\n' +
+        '      "patch_url": "https://github.com/aj47/SpeakMCP/pull/88.patch",\n' +
+        '      "merged_at": null\n' +
+        '    },\n' +
+        '    "body": "## Overview\\n\\nThis PR adds comprehensive mobile server integration to SpeakMCP, enabling real-time audio communication between the desktop app and mobile devices.\\n\\n## Features Added\\n\\n### Core Components\\n- **Mobile Bridge Server**: WebSocket-based communication server for mobile clients\\n- **LiveKit Integration**: Real-time audio streaming capabilities\\n- **Ngrok Tunnel**: Secure external access for mobile devices\\n- **QR Code Generation**: Easy connection setup for mobile clients\\n\\n### UI Components\\n- **Mobile Server Panel**: New settings panel for mobile server configuration\\n- **Settings Integration**: Added mobile server options to general settings\\n\\n### Documentation\\n- **Implementation Plan**: Detailed technical documentation\\n- **Mobile Server README**: Setup and usage instructions\\n- **Environment Configuration**: Example environment variables\\n\\n## Technical Details\\n\\n### New Files\\n- `src/main/mobile-bridge.ts` - Main mobile server implementation\\n- `src/main/livekit-server.ts` - LiveKit audio streaming server\\n- `src/main/ngrok-tunnel.ts` - Ngrok tunnel management\\n- `src/main/qr-generator.ts` - QR code generation utilities\\n- `src/main/audio-pipeline.ts` - Audio processing pipeline\\n- `src/renderer/src/components/mobile-server-panel.tsx` - Mobile server UI\\n\\n### Modified Files\\n- Updated package dependencies for LiveKit, ngrok, and QR code generation\\n- Enhanced IPC types for mobile server communication\\n- Integrated mobile server panel into settings\\n\\n## Testing\\n\\nIncluded test script (`test-mobile-server.js`) for validating mobile server functionality.\\n\\n## Next Steps\\n\\n- [ ] Test mobile client integration\\n- [ ] Add error handling and logging\\n- [ ] Implement security features\\n- [ ] Add mobile app companion\\n\\n## Breaking Changes\\n\\nNone - this is an additive feature that doesn\'t affect existing functionality.\\n\\n---\\nPull Request opened by [Augment Code](https://www.augmentcode.com/) with guidance from the PR author",\n' +
+        '    "closed_by": null,\n' +
+        '    "reactions": {\n' +
+        '      "url": "https://api.github.com/repos/aj47/SpeakMCP/issues/88/reactions",\n' +
+        '      "total_count": 0,\n' +
+        '      "+1": 0,\n' +
+        '      "-1": 0,\n' +
+        '      "laugh": 0,\n' +
+        '      "hooray": 0,\n' +
+        '      "confused": 0,\n' +
+        '      "heart": 0,\n' +
+        '      "rocket": 0,\n' +
+        '      "eyes": 0\n' +
+        '    },\n' +
+        '    "timeline_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/88/timeline",\n' +
+        '    "performed_via_github_app": null,\n' +
+        '    "state_reason": null\n' +
+        '  },\n' +
+        '  {\n' +
+        '    "url": "https://api.github.com/repos/aj47/SpeakMCP/issues/87",\n' +
+        '    "repository_url": "https://api.github.com/repos/aj47/SpeakMCP",\n' +
+        '    "labels_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/87/labels{/name}",\n' +
+        '    "comments_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/87/comments",\n' +
+        '    "events_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/87/events",\n' +
+        '    "html_url": "https://github.com/aj47/SpeakMCP/pull/87",\n' +
+        '    "id": 3332300117,\n' +
+        '    "node_id": "PR_kwDOO5IaBs6kMS35",\n' +
+        '    "number": 87,\n' +
+        '    "title": "feat: Add 3-slide onboarding process for new users",\n' +
+        '    "user": {\n' +
+        '      "login": "aj47",\n' +
+        '      "id": 8023513,\n' +
+        '      "node_id": "MDQ6VXNlcjgwMjM1MTM=",\n' +
+        '      "avatar_url": "https://avatars.githubusercontent.com/u/8023513?v=4",\n' +
+        '      "gravatar_id": "",\n' +
+        '      "url": "https://api.github.com/users/aj47",\n' +
+        '      "html_url": "https://github.com/aj47",\n' +
+        '      "followers_url": "https://api.github.com/users/aj47/followers",\n' +
+        '      "following_url": "https://api.github.com/users/aj47/following{/other_user}",\n' +
+        '      "gists_url": "https://api.github.com/users/aj47/gists{/gist_id}",\n' +
+        '      "starred_url": "https://api.github.com/users/aj47/starred{/owner}{/repo}",\n' +
+        '      "subscriptions_url": "https://api.github.com/users/aj47/subscriptions",\n' +
+        '      "organizations_url": "https://api.github.com/users/aj47/orgs",\n' +
+        '      "repos_url": "https://api.github.com/users/aj47/repos",\n' +
+        '      "events_url": "https://api.github.com/users/aj47/events{/privacy}",\n' +
+        '      "received_events_url": "https://api.github.com/users/aj47/received_events",\n' +
+        '      "type": "User",\n' +
+        '      "user_view_type": "public",\n' +
+        '      "site_admin": false\n' +
+        '    },\n' +
+        '    "labels": [],\n' +
+        '    "state": "open",\n' +
+        '    "locked": false,\n' +
+        '    "assignee": null,\n' +
+        '    "assignees": [],\n' +
+        '    "milestone": null,\n' +
+        '    "comments": 0,\n' +
+        '    "created_at": "2025-08-18T22:18:31Z",\n' +
+        '    "updated_at": "2025-08-18T22:18:31Z",\n' +
+        '    "closed_at": null,\n' +
+        '    "author_association": "OWNER",\n' +
+        '    "active_lock_reason": null,\n' +
+        '    "draft": false,\n' +
+        '    "pull_request": {\n' +
+        '      "url": "https://api.github.com/repos/aj47/SpeakMCP/pulls/87",\n' +
+        '      "html_url": "https://github.com/aj47/SpeakMCP/pull/87",\n' +
+        '      "diff_url": "https://github.com/aj47/SpeakMCP/pull/87.diff",\n' +
+        '      "patch_url": "https://github.com/aj47/SpeakMCP/pull/87.patch",\n' +
+        '      "merged_at": null\n' +
+        '    },\n' +
+        '    "body": "## 🎯 Overview\\n\\nImplements a comprehensive 3-slide onboarding process for new users as requested i'... 40409 more characters
+    },
+    {
+      role: 'assistant',
+      content: 'There are 11 open GitHub issues in the aj47/SpeakMCP repository.'
+    },
+    { role: 'user', content: 'Tool execution results:\n' }
+  ]
+}
+[2025-08-22T20:40:42.771Z] [DEBUG][LLM] === OPENAI API REQUEST ===
+[2025-08-22T20:40:42.771Z] [DEBUG][LLM] HTTP Request {
+  url: 'https://api.groq.com/openai/v1/chat/completions',
+  model: 'moonshotai/kimi-k2-instruct',
+  messagesCount: 6,
+  useStructuredOutput: true,
+  estimatedTokens: 16298,
+  totalPromptLength: 65192,
+  contextWarning: 'WARNING: High token count, may exceed context limit'
+}
+[2025-08-22T20:40:42.771Z] [DEBUG][LLM] Request Body (truncated) {
+  model: 'moonshotai/kimi-k2-instruct',
+  messages: [
+    {
+      role: 'system',
+      content: 'You are an intelligent AI assistant capable of executing tools to help users accomplish complex tasks. You operate autonomously and work iteratively until goals are fully achieved.\n' +
+        '\n' +
+        'CORE PRINCIPLES:\n' +
+        '-... [14614 chars]'
+    },
+    { role: 'user', content: ' How many GitHub issues you open?' },
+    {
+      role: 'assistant',
+      content: 'Checking open issues in aj47/SpeakMCP repository'
+    },
+    {
+      role: 'user',
+      content: 'Tool execution results:\n' +
+        '[\n' +
+        '  {\n' +
+        '    "url": "https://api.github.com/repos/aj47/SpeakMCP/issues/90",\n' +
+        '    "repository_url": "https://api.github.com/repos/aj47/SpeakMCP",\n' +
+        '    "labels_url": "https://api.gith... [50409 chars]'
+    },
+    {
+      role: 'assistant',
+      content: 'There are 11 open GitHub issues in the aj47/SpeakMCP repository.'
+    },
+    { role: 'user', content: 'Tool execution results:\n' }
+  ],
+  temperature: 0,
+  frequency_penalty: 0.5,
+  seed: 1
+}
+[2025-08-22T20:40:44.252Z] [DEBUG][LLM] HTTP Response {
+  id: 'chatcmpl-a834b345-25b1-4665-9b57-44b89c97ef2b',
+  object: 'chat.completion',
+  created: 1755895244,
+  model: 'moonshotai/kimi-k2-instruct',
+  choices: [
+    {
+      index: 0,
+      message: [Object],
+      logprobs: null,
+      finish_reason: 'stop'
+    }
+  ],
+  usage: {
+    queue_time: 0.106970138,
+    prompt_tokens: 17199,
+    prompt_time: 1.25729534,
+    completion_tokens: 2,
+    completion_time: 0.006262251,
+    total_tokens: 17201,
+    total_time: 1.263557591
+  },
+  usage_breakdown: null,
+  system_fingerprint: 'fp_b8565bb333',
+  x_groq: { id: 'req_01k39r6829frgamk3s63sngwx3' },
+  service_tier: 'on_demand'
+}
+[2025-08-22T20:40:44.253Z] [DEBUG][LLM] Extracted JSON object null
+[2025-08-22T20:40:44.253Z] [DEBUG][LLM] JSON object has toolCalls: false
+[2025-08-22T20:40:44.253Z] [DEBUG][LLM] JSON object has content: false
+[2025-08-22T20:40:44.253Z] [DEBUG][LLM] Response ← { content: '11', needsMoreWork: true }
+[2025-08-22T20:40:44.253Z] [DEBUG][LLM] === LLM CALL END ===
+11
+[2025-08-22T20:40:44.253Z] [DEBUG][TOOLS] Planned tool calls from LLM []
+[2025-08-22T20:40:44.253Z] [DEBUG][LLM] === LLM CALL START ===
+[2025-08-22T20:40:44.253Z] [DEBUG][LLM] Messages → {
+  count: 8,
+  totalChars: 65304,
+  messages: [
+    {
+      role: 'system',
+      content: 'You are an intelligent AI assistant capable of executing tools to help users accomplish complex tasks. You operate autonomously and work iteratively until goals are fully achieved.\n' +
+        '\n' +
+        'CORE PRINCIPLES:\n' +
+        "- Work autonomously until the user's request is completely resolved\n" +
+        '- Use available tools iteratively and strategically to gather information and execute actions\n' +
+        '- Use exact tool names from the available tools list (including server prefixes like "server:tool_name")\n' +
+        '- Prefer using tools to gather information rather than asking users for details\n' +
+        "- Continue working until the user's request is fully satisfied - only stop when the task is complete\n" +
+        '\n' +
+        'TOOL USAGE PHILOSOPHY:\n' +
+        '- ALWAYS follow tool schemas exactly as specified with all required parameters\n' +
+        '- NEVER call tools that are not explicitly provided in the available tools list\n' +
+        '- If you need additional information that you can get via tool calls, prefer that over asking the user\n' +
+        '- Use tools proactively to explore and understand the context before making changes\n' +
+        '- When making code changes, ensure they can be executed immediately by the user\n' +
+        '\n' +
+        '# Tone and style\n' +
+        'You should be concise, direct, and to the point.\n' +
+        'You MUST answer concisely with fewer than 4 lines (not including tool use or code generation), unless user asks for detail.\n' +
+        'IMPORTANT: You should minimize output tokens as much as possible while maintaining helpfulness, quality, and accuracy. Only address the specific query or task at hand, avoiding tangential information unless absolutely critical for completing the request. If you can answer in 1-3 sentences or a short paragraph, please do.\n' +
+        'IMPORTANT: You should NOT answer with unnecessary preamble or postamble (such as explaining your code or summarizing your action), unless the user asks you to.\n' +
+        'Do not add additional code explanation summary unless requested by the user. After working on a file, just stop, rather than providing an explanation of what you did.\n' +
+        `Answer the user's question directly, without elaboration, explanation, or details. One word answers are best. Avoid introductions, conclusions, and explanations. You MUST avoid text before/after your response, such as "The answer is <answer>.", "Here is the content of the file..." or "Based on the information provided, the answer is..." or "Here is what I will do next...". Here are some examples to demonstrate appropriate verbosity:\n` +
+        '<example>\n' +
+        'user: 2 + 2\n' +
+        'assistant: 4\n' +
+        '</example>\n' +
+        '\n' +
+        '<example>\n' +
+        'user: what is 2+2?\n' +
+        'assistant: 4\n' +
+        '</example>\n' +
+        '\n' +
+        '<example>\n' +
+        'user: is 11 a prime number?\n' +
+        'assistant: Yes\n' +
+        '</example>\n' +
+        '\n' +
+        '<example>\n' +
+        'user: what command should I run to list files in the current directory?\n' +
+        'assistant: ls\n' +
+        '</example>\n' +
+        '\n' +
+        '<example>\n' +
+        'user: what command should I run to watch files in the current directory?\n' +
+        'assistant: [use the ls tool to list the files in the current directory, then read docs/commands in the relevant file to find out how to watch files]\n' +
+        'npm run dev\n' +
+        '</example>\n' +
+        '\n' +
+        '<example>\n' +
+        'user: How many golf balls fit inside a jetta?\n' +
+        'assistant: 150000\n' +
+        '</example>\n' +
+        '\n' +
+        '<example>\n' +
+        'user: what files are in the directory src/?\n' +
+        'assistant: [runs ls and sees foo.c, bar.c, baz.c]\n' +
+        'user: which file contains the implementation of foo?\n' +
+        'assistant: src/foo.c\n' +
+        '</example>\n' +
+        '\n' +
+        'RESPONSE FORMAT:\n' +
+        'For tool calls:\n' +
+        '{\n' +
+        '  "toolCalls": [\n' +
+        '    {\n' +
+        '      "name": "exact_tool_name_from_available_list",\n' +
+        '      "arguments": { "param1": "value1", "param2": "value2" }\n' +
+        '    }\n' +
+        '  ],\n' +
+        `  "content": "Clear explanation of what you're doing and why",\n` +
+        '  "needsMoreWork": true\n' +
+        '}\n' +
+        '\n' +
+        'For final responses (no more tools needed):\n' +
+        '{\n' +
+        '  "content": "Your comprehensive final response with results",\n' +
+        '  "needsMoreWork": false\n' +
+        '}\n' +
+        '\n' +
+        'AGENT MODE - AUTONOMOUS OPERATION:\n' +
+        'You can see tool results and make follow-up calls. Work iteratively and thoroughly:\n' +
+        '\n' +
+        'WORKFLOW:\n' +
+        "1. Analyze the user's request comprehensively\n" +
+        '2. Gather necessary information using available tools\n' +
+        '3. Execute appropriate tools in logical sequence\n' +
+        '4. Review results and determine next steps\n' +
+        '5. Continue iterating until the goal is fully achieved\n' +
+        '6. Only set needsMoreWork: false when the task is completely resolved\n' +
+        '\n' +
+        '\n' +
+        '\n' +
+        'AVAILABLE TOOLS:\n' +
+        '- github:create_or_update_file: Create or update a single file in a GitHub repository\n' +
+        '  Parameters: {owner: string (required), repo: string (required), path: string (required), content: string (required), message: string (required), branch: string (required), sha: string}\n' +
+        '- github:search_repositories: Search for GitHub repositories\n' +
+        '  Parameters: {query: string (required), page: number, perPage: number}\n' +
+        '- github:create_repository: Create a new GitHub repository in your account\n' +
+        '  Parameters: {name: string (required), description: string, private: boolean, autoInit: boolean}\n' +
+        '- github:get_file_contents: Get the contents of a file or directory from a GitHub repository\n' +
+        '  Parameters: {owner: string (required), repo: string (required), path: string (required), branch: string}\n' +
+        '- github:push_files: Push multiple files to a GitHub repository in a single commit\n' +
+        '  Parameters: {owner: string (required), repo: string (required), branch: string (required), files: array (required), message: string (required)}\n' +
+        '- github:create_issue: Create a new issue in a GitHub repository\n' +
+        '  Parameters: {owner: string (required), repo: string (required), title: string (required), body: string, assignees: array, milestone: number, labels: array}\n' +
+        '- github:create_pull_request: Create a new pull request in a GitHub repository\n' +
+        '  Parameters: {owner: string (required), repo: string (required), title: string (required), body: string, head: string (required), base: string (required), draft: boolean, maintainer_can_modify: boolean}\n' +
+        '- github:fork_repository: Fork a GitHub repository to your account or specified organization\n' +
+        '  Parameters: {owner: string (required), repo: string (required), organization: string}\n' +
+        '- github:create_branch: Create a new branch in a GitHub repository\n' +
+        '  Parameters: {owner: string (required), repo: string (required), branch: string (required), from_branch: string}\n' +
+        '- github:list_commits: Get list of commits of a branch in a GitHub repository\n' +
+        '  Parameters: {owner: string (required), repo: string (required), sha: string, page: number, perPage: number}\n' +
+        '- github:list_issues: List issues in a GitHub repository with filtering options\n' +
+        '  Parameters: {owner: string (required), repo: string (required), direction: string, labels: array, page: number, per_page: number, since: string, sort: string, state: string}\n' +
+        '- github:update_issue: Update an existing issue in a GitHub repository\n' +
+        '  Parameters: {owner: string (required), repo: string (required), issue_number: number (required), title: string, body: string, assignees: array, milestone: number, labels: array, state: string}\n' +
+        '- github:add_issue_comment: Add a comment to an existing issue\n' +
+        '  Parameters: {owner: string (required), repo: string (required), issue_number: number (required), body: string (required)}\n' +
+        '- github:search_code: Search for code across GitHub repositories\n' +
+        '  Parameters: {q: string (required), order: string, page: number, per_page: number}\n' +
+        '- github:search_issues: Search for issues and pull requests across GitHub repositories\n' +
+        '  Parameters: {q: string (required), order: string, page: number, per_page: number, sort: string}\n' +
+        '- github:search_users: Search for users on GitHub\n' +
+        '  Parameters: {q: string (required), order: string, page: number, per_page: number, sort: string}\n' +
+        '- github:get_issue: Get details of a specific issue in a GitHub repository.\n' +
+        '  Parameters: {owner: string (required), repo: string (required), issue_number: number (required)}\n' +
+        '- github:get_pull_request: Get details of a specific pull request\n' +
+        '  Parameters: {owner: string (required), repo: string (required), pull_number: number (required)}\n' +
+        '- github:list_pull_requests: List and filter repository pull requests\n' +
+        '  Parameters: {owner: string (required), repo: string (required), state: string, head: string, base: string, sort: string, direction: string, per_page: number, page: number}\n' +
+        '- github:create_pull_request_review: Create a review on a pull request\n' +
+        '  Parameters: {owner: string (required), repo: string (required), pull_number: number (required), commit_id: string, body: string (required), event: string (required), comments: array}\n' +
+        '- github:merge_pull_request: Merge a pull request\n' +
+        '  Parameters: {owner: string (required), repo: string (required), pull_number: number (required), commit_title: string, commit_message: string, merge_method: string}\n' +
+        '- github:get_pull_request_files: Get the list of files changed in a pull request\n' +
+        '  Parameters: {owner: string (required), repo: string (required), pull_number: number (required)}\n' +
+        '- github:get_pull_request_status: Get the combined status of all status checks for a pull request\n' +
+        '  Parameters: {owner: string (required), repo: string (required), pull_number: number (required)}\n' +
+        '- github:update_pull_request_branch: Update a pull request branch with the latest changes from the base branch\n' +
+        '  Parameters: {owner: string (required), repo: string (required), pull_number: number (required), expected_head_sha: string}\n' +
+        '- github:get_pull_request_comments: Get the review comments on a pull request\n' +
+        '  Parameters: {owner: string (required), repo: string (required), pull_number: number (required)}\n' +
+        '- github:get_pull_request_reviews: Get the reviews on a pull request\n' +
+        '  Parameters: {owner: string (required), repo: string (required), pull_number: number (required)}\n' +
+        '- filesystem:read_file: Read the complete contents of a file as text. DEPRECATED: Use read_text_file instead.\n' +
+        '  Parameters: {path: string (required), tail: number, head: number}\n' +
+        "- filesystem:read_text_file: Read the complete contents of a file from the file system as text. Handles various text encodings and provides detailed error messages if the file cannot be read. Use this tool when you need to examine the contents of a single file. Use the 'head' parameter to read only the first N lines of a file, or the 'tail' parameter to read only the last N lines of a file. Operates on the file as text regardless of extension. Only works within allowed directories.\n" +
+        '  Parameters'... 4614 more characters
+    },
+    { role: 'user', content: ' How many GitHub issues you open?' },
+    {
+      role: 'assistant',
+      content: 'Checking open issues in aj47/SpeakMCP repository'
+    },
+    {
+      role: 'user',
+      content: 'Tool execution results:\n' +
+        '[\n' +
+        '  {\n' +
+        '    "url": "https://api.github.com/repos/aj47/SpeakMCP/issues/90",\n' +
+        '    "repository_url": "https://api.github.com/repos/aj47/SpeakMCP",\n' +
+        '    "labels_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/90/labels{/name}",\n' +
+        '    "comments_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/90/comments",\n' +
+        '    "events_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/90/events",\n' +
+        '    "html_url": "https://github.com/aj47/SpeakMCP/issues/90",\n' +
+        '    "id": 3332807521,\n' +
+        '    "node_id": "I_kwDOO5IaBs7Gppth",\n' +
+        '    "number": 90,\n' +
+        '    "title": "Add windows support",\n' +
+        '    "user": {\n' +
+        '      "login": "TheDarkSkyXD",\n' +
+        '      "id": 34119991,\n' +
+        '      "node_id": "MDQ6VXNlcjM0MTE5OTkx",\n' +
+        '      "avatar_url": "https://avatars.githubusercontent.com/u/34119991?v=4",\n' +
+        '      "gravatar_id": "",\n' +
+        '      "url": "https://api.github.com/users/TheDarkSkyXD",\n' +
+        '      "html_url": "https://github.com/TheDarkSkyXD",\n' +
+        '      "followers_url": "https://api.github.com/users/TheDarkSkyXD/followers",\n' +
+        '      "following_url": "https://api.github.com/users/TheDarkSkyXD/following{/other_user}",\n' +
+        '      "gists_url": "https://api.github.com/users/TheDarkSkyXD/gists{/gist_id}",\n' +
+        '      "starred_url": "https://api.github.com/users/TheDarkSkyXD/starred{/owner}{/repo}",\n' +
+        '      "subscriptions_url": "https://api.github.com/users/TheDarkSkyXD/subscriptions",\n' +
+        '      "organizations_url": "https://api.github.com/users/TheDarkSkyXD/orgs",\n' +
+        '      "repos_url": "https://api.github.com/users/TheDarkSkyXD/repos",\n' +
+        '      "events_url": "https://api.github.com/users/TheDarkSkyXD/events{/privacy}",\n' +
+        '      "received_events_url": "https://api.github.com/users/TheDarkSkyXD/received_events",\n' +
+        '      "type": "User",\n' +
+        '      "user_view_type": "public",\n' +
+        '      "site_admin": false\n' +
+        '    },\n' +
+        '    "labels": [],\n' +
+        '    "state": "open",\n' +
+        '    "locked": false,\n' +
+        '    "assignee": null,\n' +
+        '    "assignees": [],\n' +
+        '    "milestone": null,\n' +
+        '    "comments": 1,\n' +
+        '    "created_at": "2025-08-19T04:04:55Z",\n' +
+        '    "updated_at": "2025-08-19T14:03:05Z",\n' +
+        '    "closed_at": null,\n' +
+        '    "author_association": "NONE",\n' +
+        '    "active_lock_reason": null,\n' +
+        '    "sub_issues_summary": {\n' +
+        '      "total": 0,\n' +
+        '      "completed": 0,\n' +
+        '      "percent_completed": 0\n' +
+        '    },\n' +
+        '    "issue_dependencies_summary": {\n' +
+        '      "blocked_by": 0,\n' +
+        '      "total_blocked_by": 0,\n' +
+        '      "blocking": 0,\n' +
+        '      "total_blocking": 0\n' +
+        '    },\n' +
+        '    "body": "Add support for windows and cursor etc mcp support. ",\n' +
+        '    "closed_by": null,\n' +
+        '    "reactions": {\n' +
+        '      "url": "https://api.github.com/repos/aj47/SpeakMCP/issues/90/reactions",\n' +
+        '      "total_count": 0,\n' +
+        '      "+1": 0,\n' +
+        '      "-1": 0,\n' +
+        '      "laugh": 0,\n' +
+        '      "hooray": 0,\n' +
+        '      "confused": 0,\n' +
+        '      "heart": 0,\n' +
+        '      "rocket": 0,\n' +
+        '      "eyes": 0\n' +
+        '    },\n' +
+        '    "timeline_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/90/timeline",\n' +
+        '    "performed_via_github_app": null,\n' +
+        '    "state_reason": null\n' +
+        '  },\n' +
+        '  {\n' +
+        '    "url": "https://api.github.com/repos/aj47/SpeakMCP/issues/88",\n' +
+        '    "repository_url": "https://api.github.com/repos/aj47/SpeakMCP",\n' +
+        '    "labels_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/88/labels{/name}",\n' +
+        '    "comments_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/88/comments",\n' +
+        '    "events_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/88/events",\n' +
+        '    "html_url": "https://github.com/aj47/SpeakMCP/pull/88",\n' +
+        '    "id": 3332585603,\n' +
+        '    "node_id": "PR_kwDOO5IaBs6kNNSl",\n' +
+        '    "number": 88,\n' +
+        '    "title": "Add mobile server integration with LiveKit and ngrok",\n' +
+        '    "user": {\n' +
+        '      "login": "aj47",\n' +
+        '      "id": 8023513,\n' +
+        '      "node_id": "MDQ6VXNlcjgwMjM1MTM=",\n' +
+        '      "avatar_url": "https://avatars.githubusercontent.com/u/8023513?v=4",\n' +
+        '      "gravatar_id": "",\n' +
+        '      "url": "https://api.github.com/users/aj47",\n' +
+        '      "html_url": "https://github.com/aj47",\n' +
+        '      "followers_url": "https://api.github.com/users/aj47/followers",\n' +
+        '      "following_url": "https://api.github.com/users/aj47/following{/other_user}",\n' +
+        '      "gists_url": "https://api.github.com/users/aj47/gists{/gist_id}",\n' +
+        '      "starred_url": "https://api.github.com/users/aj47/starred{/owner}{/repo}",\n' +
+        '      "subscriptions_url": "https://api.github.com/users/aj47/subscriptions",\n' +
+        '      "organizations_url": "https://api.github.com/users/aj47/orgs",\n' +
+        '      "repos_url": "https://api.github.com/users/aj47/repos",\n' +
+        '      "events_url": "https://api.github.com/users/aj47/events{/privacy}",\n' +
+        '      "received_events_url": "https://api.github.com/users/aj47/received_events",\n' +
+        '      "type": "User",\n' +
+        '      "user_view_type": "public",\n' +
+        '      "site_admin": false\n' +
+        '    },\n' +
+        '    "labels": [],\n' +
+        '    "state": "open",\n' +
+        '    "locked": false,\n' +
+        '    "assignee": null,\n' +
+        '    "assignees": [],\n' +
+        '    "milestone": null,\n' +
+        '    "comments": 0,\n' +
+        '    "created_at": "2025-08-19T01:29:25Z",\n' +
+        '    "updated_at": "2025-08-19T01:29:25Z",\n' +
+        '    "closed_at": null,\n' +
+        '    "author_association": "OWNER",\n' +
+        '    "active_lock_reason": null,\n' +
+        '    "draft": true,\n' +
+        '    "pull_request": {\n' +
+        '      "url": "https://api.github.com/repos/aj47/SpeakMCP/pulls/88",\n' +
+        '      "html_url": "https://github.com/aj47/SpeakMCP/pull/88",\n' +
+        '      "diff_url": "https://github.com/aj47/SpeakMCP/pull/88.diff",\n' +
+        '      "patch_url": "https://github.com/aj47/SpeakMCP/pull/88.patch",\n' +
+        '      "merged_at": null\n' +
+        '    },\n' +
+        '    "body": "## Overview\\n\\nThis PR adds comprehensive mobile server integration to SpeakMCP, enabling real-time audio communication between the desktop app and mobile devices.\\n\\n## Features Added\\n\\n### Core Components\\n- **Mobile Bridge Server**: WebSocket-based communication server for mobile clients\\n- **LiveKit Integration**: Real-time audio streaming capabilities\\n- **Ngrok Tunnel**: Secure external access for mobile devices\\n- **QR Code Generation**: Easy connection setup for mobile clients\\n\\n### UI Components\\n- **Mobile Server Panel**: New settings panel for mobile server configuration\\n- **Settings Integration**: Added mobile server options to general settings\\n\\n### Documentation\\n- **Implementation Plan**: Detailed technical documentation\\n- **Mobile Server README**: Setup and usage instructions\\n- **Environment Configuration**: Example environment variables\\n\\n## Technical Details\\n\\n### New Files\\n- `src/main/mobile-bridge.ts` - Main mobile server implementation\\n- `src/main/livekit-server.ts` - LiveKit audio streaming server\\n- `src/main/ngrok-tunnel.ts` - Ngrok tunnel management\\n- `src/main/qr-generator.ts` - QR code generation utilities\\n- `src/main/audio-pipeline.ts` - Audio processing pipeline\\n- `src/renderer/src/components/mobile-server-panel.tsx` - Mobile server UI\\n\\n### Modified Files\\n- Updated package dependencies for LiveKit, ngrok, and QR code generation\\n- Enhanced IPC types for mobile server communication\\n- Integrated mobile server panel into settings\\n\\n## Testing\\n\\nIncluded test script (`test-mobile-server.js`) for validating mobile server functionality.\\n\\n## Next Steps\\n\\n- [ ] Test mobile client integration\\n- [ ] Add error handling and logging\\n- [ ] Implement security features\\n- [ ] Add mobile app companion\\n\\n## Breaking Changes\\n\\nNone - this is an additive feature that doesn\'t affect existing functionality.\\n\\n---\\nPull Request opened by [Augment Code](https://www.augmentcode.com/) with guidance from the PR author",\n' +
+        '    "closed_by": null,\n' +
+        '    "reactions": {\n' +
+        '      "url": "https://api.github.com/repos/aj47/SpeakMCP/issues/88/reactions",\n' +
+        '      "total_count": 0,\n' +
+        '      "+1": 0,\n' +
+        '      "-1": 0,\n' +
+        '      "laugh": 0,\n' +
+        '      "hooray": 0,\n' +
+        '      "confused": 0,\n' +
+        '      "heart": 0,\n' +
+        '      "rocket": 0,\n' +
+        '      "eyes": 0\n' +
+        '    },\n' +
+        '    "timeline_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/88/timeline",\n' +
+        '    "performed_via_github_app": null,\n' +
+        '    "state_reason": null\n' +
+        '  },\n' +
+        '  {\n' +
+        '    "url": "https://api.github.com/repos/aj47/SpeakMCP/issues/87",\n' +
+        '    "repository_url": "https://api.github.com/repos/aj47/SpeakMCP",\n' +
+        '    "labels_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/87/labels{/name}",\n' +
+        '    "comments_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/87/comments",\n' +
+        '    "events_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/87/events",\n' +
+        '    "html_url": "https://github.com/aj47/SpeakMCP/pull/87",\n' +
+        '    "id": 3332300117,\n' +
+        '    "node_id": "PR_kwDOO5IaBs6kMS35",\n' +
+        '    "number": 87,\n' +
+        '    "title": "feat: Add 3-slide onboarding process for new users",\n' +
+        '    "user": {\n' +
+        '      "login": "aj47",\n' +
+        '      "id": 8023513,\n' +
+        '      "node_id": "MDQ6VXNlcjgwMjM1MTM=",\n' +
+        '      "avatar_url": "https://avatars.githubusercontent.com/u/8023513?v=4",\n' +
+        '      "gravatar_id": "",\n' +
+        '      "url": "https://api.github.com/users/aj47",\n' +
+        '      "html_url": "https://github.com/aj47",\n' +
+        '      "followers_url": "https://api.github.com/users/aj47/followers",\n' +
+        '      "following_url": "https://api.github.com/users/aj47/following{/other_user}",\n' +
+        '      "gists_url": "https://api.github.com/users/aj47/gists{/gist_id}",\n' +
+        '      "starred_url": "https://api.github.com/users/aj47/starred{/owner}{/repo}",\n' +
+        '      "subscriptions_url": "https://api.github.com/users/aj47/subscriptions",\n' +
+        '      "organizations_url": "https://api.github.com/users/aj47/orgs",\n' +
+        '      "repos_url": "https://api.github.com/users/aj47/repos",\n' +
+        '      "events_url": "https://api.github.com/users/aj47/events{/privacy}",\n' +
+        '      "received_events_url": "https://api.github.com/users/aj47/received_events",\n' +
+        '      "type": "User",\n' +
+        '      "user_view_type": "public",\n' +
+        '      "site_admin": false\n' +
+        '    },\n' +
+        '    "labels": [],\n' +
+        '    "state": "open",\n' +
+        '    "locked": false,\n' +
+        '    "assignee": null,\n' +
+        '    "assignees": [],\n' +
+        '    "milestone": null,\n' +
+        '    "comments": 0,\n' +
+        '    "created_at": "2025-08-18T22:18:31Z",\n' +
+        '    "updated_at": "2025-08-18T22:18:31Z",\n' +
+        '    "closed_at": null,\n' +
+        '    "author_association": "OWNER",\n' +
+        '    "active_lock_reason": null,\n' +
+        '    "draft": false,\n' +
+        '    "pull_request": {\n' +
+        '      "url": "https://api.github.com/repos/aj47/SpeakMCP/pulls/87",\n' +
+        '      "html_url": "https://github.com/aj47/SpeakMCP/pull/87",\n' +
+        '      "diff_url": "https://github.com/aj47/SpeakMCP/pull/87.diff",\n' +
+        '      "patch_url": "https://github.com/aj47/SpeakMCP/pull/87.patch",\n' +
+        '      "merged_at": null\n' +
+        '    },\n' +
+        '    "body": "## 🎯 Overview\\n\\nImplements a comprehensive 3-slide onboarding process for new users as requested i'... 40409 more characters
+    },
+    {
+      role: 'assistant',
+      content: 'There are 11 open GitHub issues in the aj47/SpeakMCP repository.'
+    },
+    { role: 'user', content: 'Tool execution results:\n' },
+    { role: 'assistant', content: '11' },
+    {
+      role: 'user',
+      content: 'Please either take action using available tools or explicitly set needsMoreWork=false if the task is complete.'
+    }
+  ]
+}
+[2025-08-22T20:40:44.254Z] [DEBUG][LLM] === OPENAI API REQUEST ===
+[2025-08-22T20:40:44.254Z] [DEBUG][LLM] HTTP Request {
+  url: 'https://api.groq.com/openai/v1/chat/completions',
+  model: 'moonshotai/kimi-k2-instruct',
+  messagesCount: 8,
+  useStructuredOutput: true,
+  estimatedTokens: 16326,
+  totalPromptLength: 65304,
+  contextWarning: 'WARNING: High token count, may exceed context limit'
+}
+[2025-08-22T20:40:44.254Z] [DEBUG][LLM] Request Body (truncated) {
+  model: 'moonshotai/kimi-k2-instruct',
+  messages: [
+    {
+      role: 'system',
+      content: 'You are an intelligent AI assistant capable of executing tools to help users accomplish complex tasks. You operate autonomously and work iteratively until goals are fully achieved.\n' +
+        '\n' +
+        'CORE PRINCIPLES:\n' +
+        '-... [14614 chars]'
+    },
+    { role: 'user', content: ' How many GitHub issues you open?' },
+    {
+      role: 'assistant',
+      content: 'Checking open issues in aj47/SpeakMCP repository'
+    },
+    {
+      role: 'user',
+      content: 'Tool execution results:\n' +
+        '[\n' +
+        '  {\n' +
+        '    "url": "https://api.github.com/repos/aj47/SpeakMCP/issues/90",\n' +
+        '    "repository_url": "https://api.github.com/repos/aj47/SpeakMCP",\n' +
+        '    "labels_url": "https://api.gith... [50409 chars]'
+    },
+    {
+      role: 'assistant',
+      content: 'There are 11 open GitHub issues in the aj47/SpeakMCP repository.'
+    },
+    { role: 'user', content: 'Tool execution results:\n' },
+    { role: 'assistant', content: '11' },
+    {
+      role: 'user',
+      content: 'Please either take action using available tools or explicitly set needsMoreWork=false if the task is complete.'
+    }
+  ],
+  temperature: 0,
+  frequency_penalty: 0.5,
+  seed: 1
+}
+[2025-08-22T20:40:44.661Z] [DEBUG][LLM] HTTP Response {
+  id: 'chatcmpl-c8b38101-9d99-48cb-88bd-414669f7255e',
+  object: 'chat.completion',
+  created: 1755895244,
+  model: 'moonshotai/kimi-k2-instruct',
+  choices: [
+    {
+      index: 0,
+      message: [Object],
+      logprobs: null,
+      finish_reason: 'stop'
+    }
+  ],
+  usage: {
+    queue_time: 0.104895251,
+    prompt_tokens: 17228,
+    prompt_time: 0.02132107,
+    completion_tokens: 30,
+    completion_time: 0.176756337,
+    total_tokens: 17258,
+    total_time: 0.198077407,
+    prompt_tokens_details: { cached_tokens: 17152 }
+  },
+  usage_breakdown: null,
+  system_fingerprint: 'fp_b8565bb333',
+  x_groq: { id: 'req_01k39r69gzfw9956z0dxw7eavf' },
+  service_tier: 'on_demand'
+}
+[2025-08-22T20:40:44.661Z] [DEBUG][LLM] Extracted JSON object {
+  content: '11 open GitHub issues in aj47/SpeakMCP repository',
+  needsMoreWork: false
+}
+[2025-08-22T20:40:44.661Z] [DEBUG][LLM] JSON object has toolCalls: false
+[2025-08-22T20:40:44.661Z] [DEBUG][LLM] JSON object has content: true
+[2025-08-22T20:40:44.661Z] [DEBUG][LLM] Response ← {
+  content: '11 open GitHub issues in aj47/SpeakMCP repository',
+  needsMoreWork: false
+}
+[2025-08-22T20:40:44.661Z] [DEBUG][LLM] === LLM CALL END ===
+11 open GitHub issues in aj47/SpeakMCP repository
+[2025-08-22T20:40:44.661Z] [DEBUG][TOOLS] Planned tool calls from LLM []
+Skip checkForUpdates because application is not packed and dev update config is not forced
+[2025-08-22T20:40:55.025Z] [DEBUG][KEYBINDS] Ctrl key pressed, isPressedCtrlKey = true
+[2025-08-22T20:40:55.384Z] [DEBUG][KEYBINDS] Keyboard listener process exited: { code: null, signal: 'SIGINT' }

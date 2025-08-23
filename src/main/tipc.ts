@@ -1515,6 +1515,12 @@ async function generateGroqTTS(
         errorText
       })
     }
+
+    // Check for specific error cases and provide helpful messages
+    if (errorText.includes("requires terms acceptance")) {
+      throw new Error("Groq TTS model requires terms acceptance. Please visit https://console.groq.com/playground?model=playai-tts to accept the terms for the PlayAI TTS model.")
+    }
+
     throw new Error(`Groq TTS API error: ${response.statusText} - ${errorText}`)
   }
 

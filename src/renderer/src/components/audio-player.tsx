@@ -100,18 +100,29 @@ export function AudioPlayer({
   }, [hasAudio])
 
   const handlePlayPause = async () => {
+    console.log("[AudioPlayer] Play button clicked", {
+      hasAudio,
+      isGenerating,
+      error,
+      hasOnGenerateAudio: !!onGenerateAudio,
+      textLength: text.length
+    })
+
     if (!hasAudio && onGenerateAudio && !isGenerating && !error) {
+      console.log("[AudioPlayer] Generating new audio...")
       try {
         const generatedAudio = await onGenerateAudio()
+        console.log("[AudioPlayer] Audio generation completed")
         // audioData will be updated via props, which will trigger useEffect
       } catch (error) {
-        console.error("Failed to generate audio:", error)
+        console.error("[AudioPlayer] Failed to generate audio:", error)
         // Error handling is done in the parent component
         return
       }
     }
 
     if (audioRef.current && hasAudio) {
+      console.log("[AudioPlayer] Playing existing audio", { isPlaying })
       try {
         if (isPlaying) {
           audioRef.current.pause()
@@ -119,7 +130,7 @@ export function AudioPlayer({
           await audioRef.current.play()
         }
       } catch (playError) {
-        console.error("Failed to play audio:", playError)
+        console.error("[AudioPlayer] Failed to play audio:", playError)
         // Audio playback failed, but we don't need to show an error
         // as the text is still available as fallback
       }

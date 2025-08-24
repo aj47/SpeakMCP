@@ -23,6 +23,7 @@ module.exports = {
   ],
   asarUnpack: ["resources/**", "node_modules/**"],
   win: {
+    icon: "build/icon.ico",
     executableName: "speakmcp",
     target: [
       {
@@ -34,7 +35,7 @@ module.exports = {
         arch: ["x64"]
       }
     ],
-    artifactName: "${productName}-${version}-${arch}-setup.${ext}",
+    artifactName: "${productName}-${version}-${arch}.${ext}",
     requestedExecutionLevel: "asInvoker",
     sign: null,
     signAndEditExecutable: false,
@@ -52,6 +53,9 @@ module.exports = {
     shortcutName: "${productName}",
     uninstallDisplayName: "${productName}",
     createDesktopShortcut: "always",
+  },
+  portable: {
+    artifactName: "${productName}-${version}-${arch}-portable.${ext}",
   },
   mac: {
     binaries: [

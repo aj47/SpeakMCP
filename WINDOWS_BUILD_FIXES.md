@@ -94,6 +94,22 @@ strip = true
 - Helpful error messages with solutions
 - Better user experience for Windows developers
 
+### 5. **Windows Build Process Cleanup Script** ✅
+**File:** `scripts/build-win-clean.ps1`
+
+**New Features:**
+- ✅ Automatic process cleanup (kills running SpeakMCP instances)
+- ✅ Intelligent dist directory cleaning with retries
+- ✅ Handles file locking issues common on Windows
+- ✅ Graceful error handling and user guidance
+- ✅ Support for both full and type-skipped builds
+
+**Benefits:**
+- Resolves "Access is denied" errors during builds
+- Eliminates need to manually kill processes
+- Handles antivirus interference gracefully
+- Provides clear feedback on build progress
+
 ### 5. **Updated Documentation** ✅
 **File:** `WINDOWS_BUILD_SETUP.md`
 
@@ -118,9 +134,20 @@ To test these fixes on Windows:
    pnpm run build-rs:win
    ```
 
-3. **Build Windows application:**
+3. **Build Windows application (RECOMMENDED - handles process cleanup):**
    ```powershell
+   # Full build with type checking
+   pnpm run build:win:clean
+
+   # Fast build without type checking
+   pnpm run build:win:clean:skip-types
+   ```
+
+4. **Alternative build methods (if cleanup script fails):**
+   ```powershell
+   # Standard builds (may fail if processes are running)
    pnpm run build:win
+   pnpm run build:win:skip-types
    ```
 
 ## Expected Improvements
@@ -154,5 +181,20 @@ To test these fixes on Windows:
 3. **Binary crashes** → Static linking and better error handling
 4. **Dependency compilation errors** → Updated to compatible versions
 5. **Cross-compilation failures** → Added proper Cargo configuration
+6. **"Access is denied" during build** → Automatic process cleanup script
+7. **"Device or resource busy"** → Intelligent file locking handling
+8. **Multiple running instances** → Automatic process termination
+
+## Recommended Build Commands
+
+For the best Windows build experience, use the new cleanup scripts:
+
+```powershell
+# Recommended: Full build with automatic cleanup
+pnpm run build:win:clean
+
+# Fast build for development (skips TypeScript checking)
+pnpm run build:win:clean:skip-types
+```
 
 These fixes should significantly improve the Windows build experience and reduce the gap between Mac and Windows build reliability.

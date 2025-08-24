@@ -1,0 +1,2186 @@
+
+> speakmcp@0.1.2 dev /Users/ajjoobandi/Development/SpeakMCP
+> electron-vite dev --watch -- "d"
+
+vite v5.4.8 building SSR bundle for development...
+
+watching for file changes...
+
+build started...
+transforming...
+✓ 395 modules transformed.
+rendering chunks...
+out/main/oauth-callback-server-fzqzUOMc.js    6.84 kB
+out/main/models-service-D5ybgteb.js          10.13 kB
+out/main/index.js                           221.96 kB
+out/main/updater-HHDJRCo3.js                472.95 kB
+built in 778ms.
+
+build the electron main process successfully
+
+-----
+
+vite v5.4.8 building SSR bundle for development...
+
+watching for file changes...
+
+build started...
+transforming...
+✓ 2 modules transformed.
+rendering chunks...
+out/preload/index.mjs  2.83 kB
+built in 8ms.
+
+build the electron preload files successfully
+
+-----
+
+dev server running for the electron renderer process at:
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose
+
+start electron app...
+
+[DEBUG] Enabled: LLM, TOOLS, KEYBINDS, TTS (argv: d)
+[2025-08-24T20:04:17.310Z] [DEBUG][KEYBINDS] Starting keyboard event listener with rdev path: /Users/ajjoobandi/Development/SpeakMCP/resources/bin/speakmcp-rs
+[2025-08-24T20:04:17.319Z] [DEBUG][TOOLS] MCP Service initialization starting
+[2025-08-24T20:04:17.319Z] [DEBUG][TOOLS] Found 2 servers to initialize [ 'github', 'filesystem' ]
+[2025-08-24T20:04:17.320Z] [DEBUG][TOOLS] Starting initialization of server: github
+[2025-08-24T20:04:17.320Z] [DEBUG][TOOLS] Initializing server: github {
+  transport: 'stdio',
+  command: 'npx',
+  args: [ '-y', '@modelcontextprotocol/server-github' ],
+  env: [ 'GITHUB_PERSONAL_ACCESS_TOKEN' ]
+}
+[2025-08-24T20:04:17.866Z] [DEBUG][KEYBINDS] Ctrl key pressed, isPressedCtrlKey = true
+[2025-08-24T20:04:17.866Z] [DEBUG][KEYBINDS] Config change #1: {
+  agentKillSwitchEnabled: true,
+  agentKillSwitchHotkey: 'ctrl-shift-q',
+  textInputEnabled: true,
+  textInputShortcut: 'ctrl-t',
+  mcpToolsEnabled: true,
+  mcpToolsShortcut: 'hold-ctrl-alt',
+  shortcut: undefined
+}
+Skip checkForUpdates because application is not packed and dev update config is not forced
+Skip checkForUpdates because application is not packed and dev update config is not forced
+[2025-08-24T20:04:18.360Z] [DEBUG][KEYBINDS] Text input triggered: Ctrl+T
+Skip checkForUpdates because application is not packed and dev update config is not forced
+[2025-08-24T20:04:18.580Z] [DEBUG][KEYBINDS] Ctrl key released, isPressedCtrlKey = false
+[2025-08-24T20:04:20.183Z] [DEBUG][TOOLS] Server github connected successfully {
+  toolCount: 26,
+  tools: [
+    {
+      name: 'create_or_update_file',
+      description: 'Create or update a single file in a GitHub repository'
+    },
+    {
+      name: 'search_repositories',
+      description: 'Search for GitHub repositories'
+    },
+    {
+      name: 'create_repository',
+      description: 'Create a new GitHub repository in your account'
+    },
+    {
+      name: 'get_file_contents',
+      description: 'Get the contents of a file or directory from a GitHub repository'
+    },
+    {
+      name: 'push_files',
+      description: 'Push multiple files to a GitHub repository in a single commit'
+    },
+    {
+      name: 'create_issue',
+      description: 'Create a new issue in a GitHub repository'
+    },
+    {
+      name: 'create_pull_request',
+      description: 'Create a new pull request in a GitHub repository'
+    },
+    {
+      name: 'fork_repository',
+      description: 'Fork a GitHub repository to your account or specified organization'
+    },
+    {
+      name: 'create_branch',
+      description: 'Create a new branch in a GitHub repository'
+    },
+    {
+      name: 'list_commits',
+      description: 'Get list of commits of a branch in a GitHub repository'
+    },
+    {
+      name: 'list_issues',
+      description: 'List issues in a GitHub repository with filtering options'
+    },
+    {
+      name: 'update_issue',
+      description: 'Update an existing issue in a GitHub repository'
+    },
+    {
+      name: 'add_issue_comment',
+      description: 'Add a comment to an existing issue'
+    },
+    {
+      name: 'search_code',
+      description: 'Search for code across GitHub repositories'
+    },
+    {
+      name: 'search_issues',
+      description: 'Search for issues and pull requests across GitHub repositories'
+    },
+    { name: 'search_users', description: 'Search for users on GitHub' },
+    {
+      name: 'get_issue',
+      description: 'Get details of a specific issue in a GitHub repository.'
+    },
+    {
+      name: 'get_pull_request',
+      description: 'Get details of a specific pull request'
+    },
+    {
+      name: 'list_pull_requests',
+      description: 'List and filter repository pull requests'
+    },
+    {
+      name: 'create_pull_request_review',
+      description: 'Create a review on a pull request'
+    },
+    { name: 'merge_pull_request', description: 'Merge a pull request' },
+    {
+      name: 'get_pull_request_files',
+      description: 'Get the list of files changed in a pull request'
+    },
+    {
+      name: 'get_pull_request_status',
+      description: 'Get the combined status of all status checks for a pull request'
+    },
+    {
+      name: 'update_pull_request_branch',
+      description: 'Update a pull request branch with the latest changes from the base branch'
+    },
+    {
+      name: 'get_pull_request_comments',
+      description: 'Get the review comments on a pull request'
+    },
+    {
+      name: 'get_pull_request_reviews',
+      description: 'Get the reviews on a pull request'
+    }
+  ]
+}
+[2025-08-24T20:04:20.184Z] [DEBUG][TOOLS] Successfully initialized server: github
+[2025-08-24T20:04:20.184Z] [DEBUG][TOOLS] Starting initialization of server: filesystem
+[2025-08-24T20:04:20.184Z] [DEBUG][TOOLS] Initializing server: filesystem {
+  transport: 'stdio',
+  command: 'npx',
+  args: [ '-y', '@modelcontextprotocol/server-filesystem' ],
+  env: []
+}
+[2025-08-24T20:04:22.511Z] [DEBUG][TOOLS] Server filesystem connected successfully {
+  toolCount: 14,
+  tools: [
+    {
+      name: 'read_file',
+      description: 'Read the complete contents of a file as text. DEPRECATED: Use read_text_file instead.'
+    },
+    {
+      name: 'read_text_file',
+      description: "Read the complete contents of a file from the file system as text. Handles various text encodings and provides detailed error messages if the file cannot be read. Use this tool when you need to examine the contents of a single file. Use the 'head' parameter to read only the first N lines of a file, or the 'tail' parameter to read only the last N lines of a file. Operates on the file as text regardless of extension. Only works within allowed directories."
+    },
+    {
+      name: 'read_media_file',
+      description: 'Read an image or audio file. Returns the base64 encoded data and MIME type. Only works within allowed directories.'
+    },
+    {
+      name: 'read_multiple_files',
+      description: "Read the contents of multiple files simultaneously. This is more efficient than reading files one by one when you need to analyze or compare multiple files. Each file's content is returned with its path as a reference. Failed reads for individual files won't stop the entire operation. Only works within allowed directories."
+    },
+    {
+      name: 'write_file',
+      description: 'Create a new file or completely overwrite an existing file with new content. Use with caution as it will overwrite existing files without warning. Handles text content with proper encoding. Only works within allowed directories.'
+    },
+    {
+      name: 'edit_file',
+      description: 'Make line-based edits to a text file. Each edit replaces exact line sequences with new content. Returns a git-style diff showing the changes made. Only works within allowed directories.'
+    },
+    {
+      name: 'create_directory',
+      description: 'Create a new directory or ensure a directory exists. Can create multiple nested directories in one operation. If the directory already exists, this operation will succeed silently. Perfect for setting up directory structures for projects or ensuring required paths exist. Only works within allowed directories.'
+    },
+    {
+      name: 'list_directory',
+      description: 'Get a detailed listing of all files and directories in a specified path. Results clearly distinguish between files and directories with [FILE] and [DIR] prefixes. This tool is essential for understanding directory structure and finding specific files within a directory. Only works within allowed directories.'
+    },
+    {
+      name: 'list_directory_with_sizes',
+      description: 'Get a detailed listing of all files and directories in a specified path, including sizes. Results clearly distinguish between files and directories with [FILE] and [DIR] prefixes. This tool is useful for understanding directory structure and finding specific files within a directory. Only works within allowed directories.'
+    },
+    {
+      name: 'directory_tree',
+      description: "Get a recursive tree view of files and directories as a JSON structure. Each entry includes 'name', 'type' (file/directory), and 'children' for directories. Files have no children array, while directories always have a children array (which may be empty). The output is formatted with 2-space indentation for readability. Only works within allowed directories."
+    },
+    {
+      name: 'move_file',
+      description: 'Move or rename files and directories. Can move files between directories and rename them in a single operation. If the destination exists, the operation will fail. Works across different directories and can be used for simple renaming within the same directory. Both source and destination must be within allowed directories.'
+    },
+    {
+      name: 'search_files',
+      description: "Recursively search for files and directories matching a pattern. Searches through all subdirectories from the starting path. The search is case-insensitive and matches partial names. Returns full paths to all matching items. Great for finding files when you don't know their exact location. Only searches within allowed directories."
+    },
+    {
+      name: 'get_file_info',
+      description: 'Retrieve detailed metadata about a file or directory. Returns comprehensive information including size, creation time, last modified time, permissions, and type. This tool is perfect for understanding file characteristics without reading the actual content. Only works within allowed directories.'
+    },
+    {
+      name: 'list_allowed_directories',
+      description: 'Returns the list of directories that this server is allowed to access. Subdirectories within these allowed directories are also accessible. Use this to understand which directories and their nested paths are available before trying to access files.'
+    }
+  ]
+}
+[2025-08-24T20:04:22.511Z] [DEBUG][TOOLS] Successfully initialized server: filesystem
+[2025-08-24T20:04:22.511Z] [DEBUG][TOOLS] MCP Service initialization complete. Total tools available: 40
+[2025-08-24T20:04:24.323Z] [DEBUG][TOOLS] MCP Service initialization starting
+[2025-08-24T20:04:24.323Z] [DEBUG][TOOLS] Skipping server github - already initialized
+[2025-08-24T20:04:24.323Z] [DEBUG][TOOLS] Skipping server filesystem - already initialized
+[2025-08-24T20:04:24.323Z] [DEBUG][TOOLS] Found 0 servers to initialize []
+[2025-08-24T20:04:24.323Z] [DEBUG][TOOLS] MCP Service initialization complete. Total tools available: 40
+[2025-08-24T20:04:24.325Z] [DEBUG][LLM] === LLM CALL START ===
+[2025-08-24T20:04:24.325Z] [DEBUG][LLM] Messages → {
+  count: 2,
+  totalChars: 14641,
+  messages: [
+    {
+      role: 'system',
+      content: 'You are an intelligent AI assistant capable of executing tools to help users accomplish complex tasks. You operate autonomously and work iteratively until goals are fully achieved.\n' +
+        '\n' +
+        'CORE PRINCIPLES:\n' +
+        "- Work autonomously until the user's request is completely resolved\n" +
+        '- Use available tools iteratively and strategically to gather information and execute actions\n' +
+        '- Use exact tool names from the available tools list (including server prefixes like "server:tool_name")\n' +
+        '- Prefer using tools to gather information rather than asking users for details\n' +
+        "- Continue working until the user's request is fully satisfied - only stop when the task is complete\n" +
+        '\n' +
+        'TOOL USAGE PHILOSOPHY:\n' +
+        '- ALWAYS follow tool schemas exactly as specified with all required parameters\n' +
+        '- NEVER call tools that are not explicitly provided in the available tools list\n' +
+        '- If you need additional information that you can get via tool calls, prefer that over asking the user\n' +
+        '- Use tools proactively to explore and understand the context before making changes\n' +
+        '- When making code changes, ensure they can be executed immediately by the user\n' +
+        '\n' +
+        '# Tone and style\n' +
+        'You should be concise, direct, and to the point.\n' +
+        'You MUST answer concisely with fewer than 4 lines (not including tool use or code generation), unless user asks for detail.\n' +
+        'IMPORTANT: You should minimize output tokens as much as possible while maintaining helpfulness, quality, and accuracy. Only address the specific query or task at hand, avoiding tangential information unless absolutely critical for completing the request. If you can answer in 1-3 sentences or a short paragraph, please do.\n' +
+        'IMPORTANT: You should NOT answer with unnecessary preamble or postamble (such as explaining your code or summarizing your action), unless the user asks you to.\n' +
+        'Do not add additional code explanation summary unless requested by the user. After working on a file, just stop, rather than providing an explanation of what you did.\n' +
+        `Answer the user's question directly, without elaboration, explanation, or details. One word answers are best. Avoid introductions, conclusions, and explanations. You MUST avoid text before/after your response, such as "The answer is <answer>.", "Here is the content of the file..." or "Based on the information provided, the answer is..." or "Here is what I will do next...". Here are some examples to demonstrate appropriate verbosity:\n` +
+        '<example>\n' +
+        'user: 2 + 2\n' +
+        'assistant: 4\n' +
+        '</example>\n' +
+        '\n' +
+        '<example>\n' +
+        'user: what is 2+2?\n' +
+        'assistant: 4\n' +
+        '</example>\n' +
+        '\n' +
+        '<example>\n' +
+        'user: is 11 a prime number?\n' +
+        'assistant: Yes\n' +
+        '</example>\n' +
+        '\n' +
+        '<example>\n' +
+        'user: what command should I run to list files in the current directory?\n' +
+        'assistant: ls\n' +
+        '</example>\n' +
+        '\n' +
+        '<example>\n' +
+        'user: what command should I run to watch files in the current directory?\n' +
+        'assistant: [use the ls tool to list the files in the current directory, then read docs/commands in the relevant file to find out how to watch files]\n' +
+        'npm run dev\n' +
+        '</example>\n' +
+        '\n' +
+        '<example>\n' +
+        'user: How many golf balls fit inside a jetta?\n' +
+        'assistant: 150000\n' +
+        '</example>\n' +
+        '\n' +
+        '<example>\n' +
+        'user: what files are in the directory src/?\n' +
+        'assistant: [runs ls and sees foo.c, bar.c, baz.c]\n' +
+        'user: which file contains the implementation of foo?\n' +
+        'assistant: src/foo.c\n' +
+        '</example>\n' +
+        '\n' +
+        'RESPONSE FORMAT:\n' +
+        'For tool calls:\n' +
+        '{\n' +
+        '  "toolCalls": [\n' +
+        '    {\n' +
+        '      "name": "exact_tool_name_from_available_list",\n' +
+        '      "arguments": { "param1": "value1", "param2": "value2" }\n' +
+        '    }\n' +
+        '  ],\n' +
+        `  "content": "Clear explanation of what you're doing and why",\n` +
+        '  "needsMoreWork": true\n' +
+        '}\n' +
+        '\n' +
+        'For final responses (no more tools needed):\n' +
+        '{\n' +
+        '  "content": "Your comprehensive final response with results",\n' +
+        '  "needsMoreWork": false\n' +
+        '}\n' +
+        '\n' +
+        'AGENT MODE - AUTONOMOUS OPERATION:\n' +
+        'You can see tool results and make follow-up calls. Work iteratively and thoroughly:\n' +
+        '\n' +
+        'WORKFLOW:\n' +
+        "1. Analyze the user's request comprehensively\n" +
+        '2. Gather necessary information using available tools\n' +
+        '3. Execute appropriate tools in logical sequence\n' +
+        '4. Review results and determine next steps\n' +
+        '5. Continue iterating until the goal is fully achieved\n' +
+        '6. Only set needsMoreWork: false when the task is completely resolved\n' +
+        '\n' +
+        '\n' +
+        '\n' +
+        'AVAILABLE TOOLS:\n' +
+        '- github:create_or_update_file: Create or update a single file in a GitHub repository\n' +
+        '  Parameters: {owner: string (required), repo: string (required), path: string (required), content: string (required), message: string (required), branch: string (required), sha: string}\n' +
+        '- github:search_repositories: Search for GitHub repositories\n' +
+        '  Parameters: {query: string (required), page: number, perPage: number}\n' +
+        '- github:create_repository: Create a new GitHub repository in your account\n' +
+        '  Parameters: {name: string (required), description: string, private: boolean, autoInit: boolean}\n' +
+        '- github:get_file_contents: Get the contents of a file or directory from a GitHub repository\n' +
+        '  Parameters: {owner: string (required), repo: string (required), path: string (required), branch: string}\n' +
+        '- github:push_files: Push multiple files to a GitHub repository in a single commit\n' +
+        '  Parameters: {owner: string (required), repo: string (required), branch: string (required), files: array (required), message: string (required)}\n' +
+        '- github:create_issue: Create a new issue in a GitHub repository\n' +
+        '  Parameters: {owner: string (required), repo: string (required), title: string (required), body: string, assignees: array, milestone: number, labels: array}\n' +
+        '- github:create_pull_request: Create a new pull request in a GitHub repository\n' +
+        '  Parameters: {owner: string (required), repo: string (required), title: string (required), body: string, head: string (required), base: string (required), draft: boolean, maintainer_can_modify: boolean}\n' +
+        '- github:fork_repository: Fork a GitHub repository to your account or specified organization\n' +
+        '  Parameters: {owner: string (required), repo: string (required), organization: string}\n' +
+        '- github:create_branch: Create a new branch in a GitHub repository\n' +
+        '  Parameters: {owner: string (required), repo: string (required), branch: string (required), from_branch: string}\n' +
+        '- github:list_commits: Get list of commits of a branch in a GitHub repository\n' +
+        '  Parameters: {owner: string (required), repo: string (required), sha: string, page: number, perPage: number}\n' +
+        '- github:list_issues: List issues in a GitHub repository with filtering options\n' +
+        '  Parameters: {owner: string (required), repo: string (required), direction: string, labels: array, page: number, per_page: number, since: string, sort: string, state: string}\n' +
+        '- github:update_issue: Update an existing issue in a GitHub repository\n' +
+        '  Parameters: {owner: string (required), repo: string (required), issue_number: number (required), title: string, body: string, assignees: array, milestone: number, labels: array, state: string}\n' +
+        '- github:add_issue_comment: Add a comment to an existing issue\n' +
+        '  Parameters: {owner: string (required), repo: string (required), issue_number: number (required), body: string (required)}\n' +
+        '- github:search_code: Search for code across GitHub repositories\n' +
+        '  Parameters: {q: string (required), order: string, page: number, per_page: number}\n' +
+        '- github:search_issues: Search for issues and pull requests across GitHub repositories\n' +
+        '  Parameters: {q: string (required), order: string, page: number, per_page: number, sort: string}\n' +
+        '- github:search_users: Search for users on GitHub\n' +
+        '  Parameters: {q: string (required), order: string, page: number, per_page: number, sort: string}\n' +
+        '- github:get_issue: Get details of a specific issue in a GitHub repository.\n' +
+        '  Parameters: {owner: string (required), repo: string (required), issue_number: number (required)}\n' +
+        '- github:get_pull_request: Get details of a specific pull request\n' +
+        '  Parameters: {owner: string (required), repo: string (required), pull_number: number (required)}\n' +
+        '- github:list_pull_requests: List and filter repository pull requests\n' +
+        '  Parameters: {owner: string (required), repo: string (required), state: string, head: string, base: string, sort: string, direction: string, per_page: number, page: number}\n' +
+        '- github:create_pull_request_review: Create a review on a pull request\n' +
+        '  Parameters: {owner: string (required), repo: string (required), pull_number: number (required), commit_id: string, body: string (required), event: string (required), comments: array}\n' +
+        '- github:merge_pull_request: Merge a pull request\n' +
+        '  Parameters: {owner: string (required), repo: string (required), pull_number: number (required), commit_title: string, commit_message: string, merge_method: string}\n' +
+        '- github:get_pull_request_files: Get the list of files changed in a pull request\n' +
+        '  Parameters: {owner: string (required), repo: string (required), pull_number: number (required)}\n' +
+        '- github:get_pull_request_status: Get the combined status of all status checks for a pull request\n' +
+        '  Parameters: {owner: string (required), repo: string (required), pull_number: number (required)}\n' +
+        '- github:update_pull_request_branch: Update a pull request branch with the latest changes from the base branch\n' +
+        '  Parameters: {owner: string (required), repo: string (required), pull_number: number (required), expected_head_sha: string}\n' +
+        '- github:get_pull_request_comments: Get the review comments on a pull request\n' +
+        '  Parameters: {owner: string (required), repo: string (required), pull_number: number (required)}\n' +
+        '- github:get_pull_request_reviews: Get the reviews on a pull request\n' +
+        '  Parameters: {owner: string (required), repo: string (required), pull_number: number (required)}\n' +
+        '- filesystem:read_file: Read the complete contents of a file as text. DEPRECATED: Use read_text_file instead.\n' +
+        '  Parameters: {path: string (required), tail: number, head: number}\n' +
+        "- filesystem:read_text_file: Read the complete contents of a file from the file system as text. Handles various text encodings and provides detailed error messages if the file cannot be read. Use this tool when you need to examine the contents of a single file. Use the 'head' parameter to read only the first N lines of a file, or the 'tail' parameter to read only the last N lines of a file. Operates on the file as text regardless of extension. Only works within allowed directories.\n" +
+        '  Parameters'... 4614 more characters
+    },
+    { role: 'user', content: 'how many open github issues' }
+  ]
+}
+[2025-08-24T20:04:24.326Z] [DEBUG][LLM] === OPENAI API REQUEST ===
+[2025-08-24T20:04:24.326Z] [DEBUG][LLM] HTTP Request {
+  url: 'https://api.groq.com/openai/v1/chat/completions',
+  model: 'moonshotai/kimi-k2-instruct',
+  messagesCount: 2,
+  useStructuredOutput: true,
+  estimatedTokens: 3661,
+  totalPromptLength: 14641,
+  contextWarning: null
+}
+[2025-08-24T20:04:24.326Z] [DEBUG][LLM] Request Body (truncated) {
+  model: 'moonshotai/kimi-k2-instruct',
+  messages: [
+    {
+      role: 'system',
+      content: 'You are an intelligent AI assistant capable of executing tools to help users accomplish complex tasks. You operate autonomously and work iteratively until goals are fully achieved.\n' +
+        '\n' +
+        'CORE PRINCIPLES:\n' +
+        '-... [14614 chars]'
+    },
+    { role: 'user', content: 'how many open github issues' }
+  ],
+  temperature: 0,
+  frequency_penalty: 0.5,
+  seed: 1
+}
+[2025-08-24T20:04:24.978Z] [DEBUG][LLM] HTTP Response {
+  id: 'chatcmpl-b7151305-bc38-40e9-9bbf-16bbe604f0b0',
+  object: 'chat.completion',
+  created: 1756065864,
+  model: 'moonshotai/kimi-k2-instruct',
+  choices: [
+    {
+      index: 0,
+      message: [Object],
+      logprobs: null,
+      finish_reason: 'stop'
+    }
+  ],
+  usage: {
+    queue_time: 0.061666809,
+    prompt_tokens: 3156,
+    prompt_time: 0.201960135,
+    completion_tokens: 97,
+    completion_time: 0.186922771,
+    total_tokens: 3253,
+    total_time: 0.388882906
+  },
+  usage_breakdown: null,
+  system_fingerprint: 'fp_c5bd0a648b',
+  x_groq: { id: 'req_01k3etx6srf4b8kva7q0twycjf' },
+  service_tier: 'on_demand'
+}
+[2025-08-24T20:04:24.978Z] [DEBUG][LLM] Raw API response structure: {
+  hasChoices: true,
+  choicesLength: 1,
+  firstChoiceExists: true,
+  hasMessage: true,
+  hasContent: true
+}
+[2025-08-24T20:04:24.978Z] [DEBUG][LLM] Extracted JSON object {
+  toolCalls: [ { name: 'github:list_issues', arguments: [Object] } ],
+  content: 'Checking open issues in aj47/SpeakMCP repository',
+  needsMoreWork: true
+}
+[2025-08-24T20:04:24.978Z] [DEBUG][LLM] JSON object has toolCalls: true
+[2025-08-24T20:04:24.978Z] [DEBUG][LLM] JSON object has content: true
+[2025-08-24T20:04:24.978Z] [DEBUG][LLM] Response ← {
+  toolCalls: [ { name: 'github:list_issues', arguments: [Object] } ],
+  content: 'Checking open issues in aj47/SpeakMCP repository',
+  needsMoreWork: true
+}
+[2025-08-24T20:04:24.978Z] [DEBUG][LLM] === LLM CALL END ===
+[2025-08-24T20:04:24.978Z] [DEBUG][TOOLS] Planned tool calls from LLM [
+  {
+    name: 'github:list_issues',
+    arguments: { owner: 'aj47', repo: 'SpeakMCP', state: 'open' }
+  }
+]
+[2025-08-24T20:04:24.978Z] [DEBUG][TOOLS] Executing planned tool call {
+  name: 'github:list_issues',
+  arguments: { owner: 'aj47', repo: 'SpeakMCP', state: 'open' }
+}
+[2025-08-24T20:04:24.979Z] [DEBUG][TOOLS] Requested tool call {
+  name: 'github:list_issues',
+  arguments: { owner: 'aj47', repo: 'SpeakMCP', state: 'open' }
+}
+[2025-08-24T20:04:24.979Z] [DEBUG][TOOLS] Executing tool {
+  serverName: 'github',
+  toolName: 'list_issues',
+  arguments: { owner: 'aj47', repo: 'SpeakMCP', state: 'open' }
+}
+[2025-08-24T20:04:25.583Z] [DEBUG][TOOLS] Tool result {
+  serverName: 'github',
+  toolName: 'list_issues',
+  result: { content: [ [Object] ] }
+}
+[2025-08-24T20:04:25.583Z] [DEBUG][TOOLS] Normalized tool result {
+  content: [
+    {
+      type: 'text',
+      text: '[\n' +
+        '  {\n' +
+        '    "url": "https://api.github.com/repos/aj47/SpeakMCP/issues/100",\n' +
+        '    "repository_url": "https://api.github.com/repos/aj47/SpeakMCP",\n' +
+        '    "labels_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/100/labels{/name}",\n' +
+        '    "comments_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/100/comments",\n' +
+        '    "events_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/100/events",\n' +
+        '    "html_url": "https://github.com/aj47/SpeakMCP/pull/100",\n' +
+        '    "id": 3349678368,\n' +
+        '    "node_id": "PR_kwDOO5IaBs6lGnTH",\n' +
+        '    "number": 100,\n' +
+        '    "title": "Fix agent mode infinite loop issues",\n' +
+        '    "user": {\n' +
+        '      "login": "aj47",\n' +
+        '      "id": 8023513,\n' +
+        '      "node_id": "MDQ6VXNlcjgwMjM1MTM=",\n' +
+        '      "avatar_url": "https://avatars.githubusercontent.com/u/8023513?v=4",\n' +
+        '      "gravatar_id": "",\n' +
+        '      "url": "https://api.github.com/users/aj47",\n' +
+        '      "html_url": "https://github.com/aj47",\n' +
+        '      "followers_url": "https://api.github.com/users/aj47/followers",\n' +
+        '      "following_url": "https://api.github.com/users/aj47/following{/other_user}",\n' +
+        '      "gists_url": "https://api.github.com/users/aj47/gists{/gist_id}",\n' +
+        '      "starred_url": "https://api.github.com/users/aj47/starred{/owner}{/repo}",\n' +
+        '      "subscriptions_url": "https://api.github.com/users/aj47/subscriptions",\n' +
+        '      "organizations_url": "https://api.github.com/users/aj47/orgs",\n' +
+        '      "repos_url": "https://api.github.com/users/aj47/repos",\n' +
+        '      "events_url": "https://api.github.com/users/aj47/events{/privacy}",\n' +
+        '      "received_events_url": "https://api.github.com/users/aj47/received_events",\n' +
+        '      "type": "User",\n' +
+        '      "user_view_type": "public",\n' +
+        '      "site_admin": false\n' +
+        '    },\n' +
+        '    "labels": [],\n' +
+        '    "state": "open",\n' +
+        '    "locked": false,\n' +
+        '    "assignee": null,\n' +
+        '    "assignees": [],\n' +
+        '    "milestone": null,\n' +
+        '    "comments": 0,\n' +
+        '    "created_at": "2025-08-24T16:26:10Z",\n' +
+        '    "updated_at": "2025-08-24T16:26:10Z",\n' +
+        '    "closed_at": null,\n' +
+        '    "author_association": "OWNER",\n' +
+        '    "active_lock_reason": null,\n' +
+        '    "draft": false,\n' +
+        '    "pull_request": {\n' +
+        '      "url": "https://api.github.com/repos/aj47/SpeakMCP/pulls/100",\n' +
+        '      "html_url": "https://github.com/aj47/SpeakMCP/pull/100",\n' +
+        '      "diff_url": "https://github.com/aj47/SpeakMCP/pull/100.diff",\n' +
+        '      "patch_url": "https://github.com/aj47/SpeakMCP/pull/100.patch",\n' +
+        '      "merged_at": null\n' +
+        '    },\n' +
+        '    "body": "## Problem\\n\\nThe agent mode was getting stuck in infinite loops when handling simple queries like \\"how many github issues open\\". The agent would:\\n\\n1. Successfully execute tools (e.g., list GitHub issues)\\n2. Get the results\\n3. Set `needsMoreWork: false` to indicate completion\\n4. But then the system would continue asking for more work or summaries\\n5. This created an infinite loop that never terminated\\n\\n## Root Cause Analysis\\n\\nThe issue was caused by multiple problems in the agent mode conversation management:\\n\\n1. **Overly aggressive summary enforcement** - The system forced lengthy summaries even for simple queries that only needed short answers\\n2. **Nudging logic override** - The no-op counter continued nudging even when `needsMoreWork=false` was explicitly set\\n3. **Large tool results** - Tool results could be very large (thousands of lines of JSON), causing context window issues\\n4. **Lack of request type awareness** - The system didn\'t differentiate between simple queries and complex requests\\n\\n## Solution\\n\\nImplemented comprehensive fixes:\\n\\n### 1. Request Type Analysis\\n- Added `analyzeRequestType()` function to categorize requests as simple queries vs actionable requests\\n- Detects patterns like \\"how many\\", \\"what is\\", math expressions, etc. as simple queries\\n- Sets appropriate minimum response length requirements based on request type\\n\\n### 2. Intelligent Summary Enforcement\\n- Modified summary enforcement to respect `needsMoreWork=false` for appropriate request types\\n- Simple queries (like \\"how many github issues open\\") now accept short answers like \\"3\\"\\n- Complex requests still require detailed summaries when tools are executed\\n\\n### 3. Fixed Nudging Logic\\n- Updated the no-op counter to respect explicit `needsMoreWork=false` responses\\n- Prevents the system from continuing to ask for more work when the agent has explicitly indicated completion\\n\\n### 4. Tool Results Processing\\n- Added intelligent truncation of large tool results to prevent context window issues\\n- For simple queries, extracts key information (e.g., issue count and titles) instead of including full JSON\\n- Limits tool results to 5000 characters with smart summarization\\n\\n### 5. Response Validation\\n- Added `isResponseAppropriate()` function to validate responses based on request type\\n- Added `shouldForceCompletion()` function to prevent infinite loops near max iterations\\n- Integrated force completion logic into the main conversation loop\\n\\n### 6. Enhanced Debugging\\n- Added better logging and diagnostic information for troubleshooting\\n- Improved error messages and debugging output\\n\\n## Testing\\n\\nTested with the original problematic query \\"how many github issues open\\":\\n- ✅ Successfully executes GitHub API call\\n- ✅ Processes tool results efficiently\\n- ✅ Provides appropriate short answer without infinite loop\\n- ✅ Respects `needsMoreWork=false` completion signals\\n\\n## Benefits\\n\\n1. **Eliminates infinite loops** - Simple queries now properly terminate with appropriate answers\\n2. **Maintains quality for complex requests** - Actionable requests still get proper summaries when needed\\n3. **Better performance** - Reduced context window usage through intelligent tool result processing\\n4. **Improved user experience** - Faster responses for simple queries, appropriate detail for complex requests\\n5. **Better debugging** - Enhanced logging and error reporting for troubleshooting\\n\\n## Files Changed\\n\\n- `src/main/llm.ts` - Main agent mode logic improvements\\n- `src/main/llm-fetch.ts` - Enhanced error handling and debugging\\n- `src/shared/types.ts` - Added missing `ttsAutoPlay` config option\\n\\n## Breaking Changes\\n\\nNone - all changes are backward compatible and improve existing functionality.\\n\\n## Related Issues\\n\\nFixes the infinite loop issue reported where agent mode would continue indefinitely for simple informational queries.\\n\\n---\\nPull Request opened by [Augment Code](https://www.augmentcode.com/) with guidance from the PR author",\n' +
+        '    "closed_by": null,\n' +
+        '    "reactions": {\n' +
+        '      "url": "https://api.github.com/repos/aj47/SpeakMCP/issues/100/reactions",\n' +
+        '      "total_count": 0,\n' +
+        '      "+1": 0,\n' +
+        '      "-1": 0,\n' +
+        '      "laugh": 0,\n' +
+        '      "hooray": 0,\n' +
+        '      "confused": 0,\n' +
+        '      "heart": 0,\n' +
+        '      "rocket": 0,\n' +
+        '      "eyes": 0\n' +
+        '    },\n' +
+        '    "timeline_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/100/timeline",\n' +
+        '    "performed_via_github_app": null,\n' +
+        '    "state_reason": null\n' +
+        '  },\n' +
+        '  {\n' +
+        '    "url": "https://api.github.com/repos/aj47/SpeakMCP/issues/99",\n' +
+        '    "repository_url": "https://api.github.com/repos/aj47/SpeakMCP",\n' +
+        '    "labels_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/99/labels{/name}",\n' +
+        '    "comments_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/99/comments",\n' +
+        '    "events_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/99/events",\n' +
+        '    "html_url": "https://github.com/aj47/SpeakMCP/issues/99",\n' +
+        '    "id": 3348395680,\n' +
+        '    "node_id": "I_kwDOO5IaBs7HlHag",\n' +
+        '    "number": 99,\n' +
+        '    "title": "Work with Claude Code? thx",\n' +
+        '    "user": {\n' +
+        '      "login": "unmasSk",\n' +
+        '      "id": 106980456,\n' +
+        '      "node_id": "U_kgDOBmBkaA",\n' +
+        '      "avatar_url": "https://avatars.githubusercontent.com/u/106980456?v=4",\n' +
+        '      "gravatar_id": "",\n' +
+        '      "url": "https://api.github.com/users/unmasSk",\n' +
+        '      "html_url": "https://github.com/unmasSk",\n' +
+        '      "followers_url": "https://api.github.com/users/unmasSk/followers",\n' +
+        '      "following_url": "https://api.github.com/users/unmasSk/following{/other_user}",\n' +
+        '      "gists_url": "https://api.github.com/users/unmasSk/gists{/gist_id}",\n' +
+        '      "starred_url": "https://api.github.com/users/unmasSk/starred{/owner}{/repo}",\n' +
+        '      "subscriptions_url": "https://api.github.com/users/unmasSk/subscriptions",\n' +
+        '      "organizations_url": "https://api.github.com/users/unmasSk/orgs",\n' +
+        '      "repos_url": "https://api.github.com/users/unmasSk/repos",\n' +
+        '      "events_url": "https://api.github.com/users/unmasSk/events{/privacy}",\n' +
+        '      "received_events_url": "https://api.github.com/users/unmasSk/received_events",\n' +
+        '      "type": "User",\n' +
+        '      "user_view_type": "public",\n' +
+        '      "site_admin": false\n' +
+        '    },\n' +
+        '    "labels": [],\n' +
+        '    "state": "open",\n' +
+        '    "locked": false,\n' +
+        '    "assignee": null,\n' +
+        '    "assignees": [],\n' +
+        '    "milestone": null,\n' +
+        '    "comments": 0,\n' +
+        '    "created_at": "2025-08-23T15:39:37Z",\n' +
+        '    "updated_at": "2025-08-23T15:39:37Z",\n' +
+        '    "closed_at": null,\n' +
+        '    "author_association": "NONE",\n' +
+        '    "active_lock_reason": null,\n' +
+        '    "sub_issues_summary": {\n' +
+        '      "total": 0,\n' +
+        '      "completed": 0,\n' +
+        '      "percent_completed": 0\n' +
+        '    },\n' +
+        '    "issue_dependencies_summary": {\n' +
+        '      "blocked_by": 0,\n' +
+        '      "total_blocked_by": 0,\n' +
+        '      "blocking": 0,\n' +
+        '      "total_blocking": 0\n' +
+        '    },\n' +
+        '    "body": null,\n' +
+        '    "closed_by": null,\n' +
+        '    "reactions": {\n' +
+        '      "url": "https://api.github.com/repos/aj47/SpeakMCP/issues/99/reactions",\n' +
+        '      "total_count": 0,\n' +
+        '      "+1": 0,\n' +
+        '      "-1": 0,\n' +
+        '      "laugh": 0,\n' +
+        '      "hooray": 0,\n' +
+        '      "confused": 0,\n' +
+        '      "heart": 0,\n' +
+        '      "rocket": 0,\n' +
+        '      "eyes": 0\n' +
+        '    },\n' +
+        '    "timeline_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/99/timeline",\n' +
+        '    "performed_via_github_app": null,\n' +
+        '    "state_reason": null\n' +
+        '  },\n' +
+        '  {\n' +
+        '    "url": "https://api.github.com/repos/aj47/SpeakMCP/issues/97",\n' +
+        '    "repository_url": "https://api.github.com/repos/aj47/SpeakMCP",\n' +
+        '    "labels_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/97/labels{/name}",\n' +
+        '    "comments_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/97/comments",\n' +
+        '    "events_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/97/events",\n' +
+        '    "html_url": "https://github.com/aj47/SpeakMCP/issues/97",\n' +
+        '    "id": 3346693474,\n' +
+        '    "node_id": "I_kwDOO5IaBs7Hen1i",\n' +
+        '    '... 56847 more characters
+    }
+  ],
+  isError: false
+}
+[2025-08-24T20:04:25.584Z] [DEBUG][LLM] === LLM CALL START ===
+[2025-08-24T20:04:25.584Z] [DEBUG][LLM] Messages → {
+  count: 4,
+  totalChars: 81560,
+  messages: [
+    {
+      role: 'system',
+      content: 'You are an intelligent AI assistant capable of executing tools to help users accomplish complex tasks. You operate autonomously and work iteratively until goals are fully achieved.\n' +
+        '\n' +
+        'CORE PRINCIPLES:\n' +
+        "- Work autonomously until the user's request is completely resolved\n" +
+        '- Use available tools iteratively and strategically to gather information and execute actions\n' +
+        '- Use exact tool names from the available tools list (including server prefixes like "server:tool_name")\n' +
+        '- Prefer using tools to gather information rather than asking users for details\n' +
+        "- Continue working until the user's request is fully satisfied - only stop when the task is complete\n" +
+        '\n' +
+        'TOOL USAGE PHILOSOPHY:\n' +
+        '- ALWAYS follow tool schemas exactly as specified with all required parameters\n' +
+        '- NEVER call tools that are not explicitly provided in the available tools list\n' +
+        '- If you need additional information that you can get via tool calls, prefer that over asking the user\n' +
+        '- Use tools proactively to explore and understand the context before making changes\n' +
+        '- When making code changes, ensure they can be executed immediately by the user\n' +
+        '\n' +
+        '# Tone and style\n' +
+        'You should be concise, direct, and to the point.\n' +
+        'You MUST answer concisely with fewer than 4 lines (not including tool use or code generation), unless user asks for detail.\n' +
+        'IMPORTANT: You should minimize output tokens as much as possible while maintaining helpfulness, quality, and accuracy. Only address the specific query or task at hand, avoiding tangential information unless absolutely critical for completing the request. If you can answer in 1-3 sentences or a short paragraph, please do.\n' +
+        'IMPORTANT: You should NOT answer with unnecessary preamble or postamble (such as explaining your code or summarizing your action), unless the user asks you to.\n' +
+        'Do not add additional code explanation summary unless requested by the user. After working on a file, just stop, rather than providing an explanation of what you did.\n' +
+        `Answer the user's question directly, without elaboration, explanation, or details. One word answers are best. Avoid introductions, conclusions, and explanations. You MUST avoid text before/after your response, such as "The answer is <answer>.", "Here is the content of the file..." or "Based on the information provided, the answer is..." or "Here is what I will do next...". Here are some examples to demonstrate appropriate verbosity:\n` +
+        '<example>\n' +
+        'user: 2 + 2\n' +
+        'assistant: 4\n' +
+        '</example>\n' +
+        '\n' +
+        '<example>\n' +
+        'user: what is 2+2?\n' +
+        'assistant: 4\n' +
+        '</example>\n' +
+        '\n' +
+        '<example>\n' +
+        'user: is 11 a prime number?\n' +
+        'assistant: Yes\n' +
+        '</example>\n' +
+        '\n' +
+        '<example>\n' +
+        'user: what command should I run to list files in the current directory?\n' +
+        'assistant: ls\n' +
+        '</example>\n' +
+        '\n' +
+        '<example>\n' +
+        'user: what command should I run to watch files in the current directory?\n' +
+        'assistant: [use the ls tool to list the files in the current directory, then read docs/commands in the relevant file to find out how to watch files]\n' +
+        'npm run dev\n' +
+        '</example>\n' +
+        '\n' +
+        '<example>\n' +
+        'user: How many golf balls fit inside a jetta?\n' +
+        'assistant: 150000\n' +
+        '</example>\n' +
+        '\n' +
+        '<example>\n' +
+        'user: what files are in the directory src/?\n' +
+        'assistant: [runs ls and sees foo.c, bar.c, baz.c]\n' +
+        'user: which file contains the implementation of foo?\n' +
+        'assistant: src/foo.c\n' +
+        '</example>\n' +
+        '\n' +
+        'RESPONSE FORMAT:\n' +
+        'For tool calls:\n' +
+        '{\n' +
+        '  "toolCalls": [\n' +
+        '    {\n' +
+        '      "name": "exact_tool_name_from_available_list",\n' +
+        '      "arguments": { "param1": "value1", "param2": "value2" }\n' +
+        '    }\n' +
+        '  ],\n' +
+        `  "content": "Clear explanation of what you're doing and why",\n` +
+        '  "needsMoreWork": true\n' +
+        '}\n' +
+        '\n' +
+        'For final responses (no more tools needed):\n' +
+        '{\n' +
+        '  "content": "Your comprehensive final response with results",\n' +
+        '  "needsMoreWork": false\n' +
+        '}\n' +
+        '\n' +
+        'AGENT MODE - AUTONOMOUS OPERATION:\n' +
+        'You can see tool results and make follow-up calls. Work iteratively and thoroughly:\n' +
+        '\n' +
+        'WORKFLOW:\n' +
+        "1. Analyze the user's request comprehensively\n" +
+        '2. Gather necessary information using available tools\n' +
+        '3. Execute appropriate tools in logical sequence\n' +
+        '4. Review results and determine next steps\n' +
+        '5. Continue iterating until the goal is fully achieved\n' +
+        '6. Only set needsMoreWork: false when the task is completely resolved\n' +
+        '\n' +
+        '\n' +
+        '\n' +
+        'AVAILABLE TOOLS:\n' +
+        '- github:create_or_update_file: Create or update a single file in a GitHub repository\n' +
+        '  Parameters: {owner: string (required), repo: string (required), path: string (required), content: string (required), message: string (required), branch: string (required), sha: string}\n' +
+        '- github:search_repositories: Search for GitHub repositories\n' +
+        '  Parameters: {query: string (required), page: number, perPage: number}\n' +
+        '- github:create_repository: Create a new GitHub repository in your account\n' +
+        '  Parameters: {name: string (required), description: string, private: boolean, autoInit: boolean}\n' +
+        '- github:get_file_contents: Get the contents of a file or directory from a GitHub repository\n' +
+        '  Parameters: {owner: string (required), repo: string (required), path: string (required), branch: string}\n' +
+        '- github:push_files: Push multiple files to a GitHub repository in a single commit\n' +
+        '  Parameters: {owner: string (required), repo: string (required), branch: string (required), files: array (required), message: string (required)}\n' +
+        '- github:create_issue: Create a new issue in a GitHub repository\n' +
+        '  Parameters: {owner: string (required), repo: string (required), title: string (required), body: string, assignees: array, milestone: number, labels: array}\n' +
+        '- github:create_pull_request: Create a new pull request in a GitHub repository\n' +
+        '  Parameters: {owner: string (required), repo: string (required), title: string (required), body: string, head: string (required), base: string (required), draft: boolean, maintainer_can_modify: boolean}\n' +
+        '- github:fork_repository: Fork a GitHub repository to your account or specified organization\n' +
+        '  Parameters: {owner: string (required), repo: string (required), organization: string}\n' +
+        '- github:create_branch: Create a new branch in a GitHub repository\n' +
+        '  Parameters: {owner: string (required), repo: string (required), branch: string (required), from_branch: string}\n' +
+        '- github:list_commits: Get list of commits of a branch in a GitHub repository\n' +
+        '  Parameters: {owner: string (required), repo: string (required), sha: string, page: number, perPage: number}\n' +
+        '- github:list_issues: List issues in a GitHub repository with filtering options\n' +
+        '  Parameters: {owner: string (required), repo: string (required), direction: string, labels: array, page: number, per_page: number, since: string, sort: string, state: string}\n' +
+        '- github:update_issue: Update an existing issue in a GitHub repository\n' +
+        '  Parameters: {owner: string (required), repo: string (required), issue_number: number (required), title: string, body: string, assignees: array, milestone: number, labels: array, state: string}\n' +
+        '- github:add_issue_comment: Add a comment to an existing issue\n' +
+        '  Parameters: {owner: string (required), repo: string (required), issue_number: number (required), body: string (required)}\n' +
+        '- github:search_code: Search for code across GitHub repositories\n' +
+        '  Parameters: {q: string (required), order: string, page: number, per_page: number}\n' +
+        '- github:search_issues: Search for issues and pull requests across GitHub repositories\n' +
+        '  Parameters: {q: string (required), order: string, page: number, per_page: number, sort: string}\n' +
+        '- github:search_users: Search for users on GitHub\n' +
+        '  Parameters: {q: string (required), order: string, page: number, per_page: number, sort: string}\n' +
+        '- github:get_issue: Get details of a specific issue in a GitHub repository.\n' +
+        '  Parameters: {owner: string (required), repo: string (required), issue_number: number (required)}\n' +
+        '- github:get_pull_request: Get details of a specific pull request\n' +
+        '  Parameters: {owner: string (required), repo: string (required), pull_number: number (required)}\n' +
+        '- github:list_pull_requests: List and filter repository pull requests\n' +
+        '  Parameters: {owner: string (required), repo: string (required), state: string, head: string, base: string, sort: string, direction: string, per_page: number, page: number}\n' +
+        '- github:create_pull_request_review: Create a review on a pull request\n' +
+        '  Parameters: {owner: string (required), repo: string (required), pull_number: number (required), commit_id: string, body: string (required), event: string (required), comments: array}\n' +
+        '- github:merge_pull_request: Merge a pull request\n' +
+        '  Parameters: {owner: string (required), repo: string (required), pull_number: number (required), commit_title: string, commit_message: string, merge_method: string}\n' +
+        '- github:get_pull_request_files: Get the list of files changed in a pull request\n' +
+        '  Parameters: {owner: string (required), repo: string (required), pull_number: number (required)}\n' +
+        '- github:get_pull_request_status: Get the combined status of all status checks for a pull request\n' +
+        '  Parameters: {owner: string (required), repo: string (required), pull_number: number (required)}\n' +
+        '- github:update_pull_request_branch: Update a pull request branch with the latest changes from the base branch\n' +
+        '  Parameters: {owner: string (required), repo: string (required), pull_number: number (required), expected_head_sha: string}\n' +
+        '- github:get_pull_request_comments: Get the review comments on a pull request\n' +
+        '  Parameters: {owner: string (required), repo: string (required), pull_number: number (required)}\n' +
+        '- github:get_pull_request_reviews: Get the reviews on a pull request\n' +
+        '  Parameters: {owner: string (required), repo: string (required), pull_number: number (required)}\n' +
+        '- filesystem:read_file: Read the complete contents of a file as text. DEPRECATED: Use read_text_file instead.\n' +
+        '  Parameters: {path: string (required), tail: number, head: number}\n' +
+        "- filesystem:read_text_file: Read the complete contents of a file from the file system as text. Handles various text encodings and provides detailed error messages if the file cannot be read. Use this tool when you need to examine the contents of a single file. Use the 'head' parameter to read only the first N lines of a file, or the 'tail' parameter to read only the last N lines of a file. Operates on the file as text regardless of extension. Only works within allowed directories.\n" +
+        '  Parameters'... 4614 more characters
+    },
+    { role: 'user', content: 'how many open github issues' },
+    {
+      role: 'assistant',
+      content: 'Checking open issues in aj47/SpeakMCP repository'
+    },
+    {
+      role: 'user',
+      content: 'Tool execution results:\n' +
+        '[\n' +
+        '  {\n' +
+        '    "url": "https://api.github.com/repos/aj47/SpeakMCP/issues/100",\n' +
+        '    "repository_url": "https://api.github.com/repos/aj47/SpeakMCP",\n' +
+        '    "labels_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/100/labels{/name}",\n' +
+        '    "comments_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/100/comments",\n' +
+        '    "events_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/100/events",\n' +
+        '    "html_url": "https://github.com/aj47/SpeakMCP/pull/100",\n' +
+        '    "id": 3349678368,\n' +
+        '    "node_id": "PR_kwDOO5IaBs6lGnTH",\n' +
+        '    "number": 100,\n' +
+        '    "title": "Fix agent mode infinite loop issues",\n' +
+        '    "user": {\n' +
+        '      "login": "aj47",\n' +
+        '      "id": 8023513,\n' +
+        '      "node_id": "MDQ6VXNlcjgwMjM1MTM=",\n' +
+        '      "avatar_url": "https://avatars.githubusercontent.com/u/8023513?v=4",\n' +
+        '      "gravatar_id": "",\n' +
+        '      "url": "https://api.github.com/users/aj47",\n' +
+        '      "html_url": "https://github.com/aj47",\n' +
+        '      "followers_url": "https://api.github.com/users/aj47/followers",\n' +
+        '      "following_url": "https://api.github.com/users/aj47/following{/other_user}",\n' +
+        '      "gists_url": "https://api.github.com/users/aj47/gists{/gist_id}",\n' +
+        '      "starred_url": "https://api.github.com/users/aj47/starred{/owner}{/repo}",\n' +
+        '      "subscriptions_url": "https://api.github.com/users/aj47/subscriptions",\n' +
+        '      "organizations_url": "https://api.github.com/users/aj47/orgs",\n' +
+        '      "repos_url": "https://api.github.com/users/aj47/repos",\n' +
+        '      "events_url": "https://api.github.com/users/aj47/events{/privacy}",\n' +
+        '      "received_events_url": "https://api.github.com/users/aj47/received_events",\n' +
+        '      "type": "User",\n' +
+        '      "user_view_type": "public",\n' +
+        '      "site_admin": false\n' +
+        '    },\n' +
+        '    "labels": [],\n' +
+        '    "state": "open",\n' +
+        '    "locked": false,\n' +
+        '    "assignee": null,\n' +
+        '    "assignees": [],\n' +
+        '    "milestone": null,\n' +
+        '    "comments": 0,\n' +
+        '    "created_at": "2025-08-24T16:26:10Z",\n' +
+        '    "updated_at": "2025-08-24T16:26:10Z",\n' +
+        '    "closed_at": null,\n' +
+        '    "author_association": "OWNER",\n' +
+        '    "active_lock_reason": null,\n' +
+        '    "draft": false,\n' +
+        '    "pull_request": {\n' +
+        '      "url": "https://api.github.com/repos/aj47/SpeakMCP/pulls/100",\n' +
+        '      "html_url": "https://github.com/aj47/SpeakMCP/pull/100",\n' +
+        '      "diff_url": "https://github.com/aj47/SpeakMCP/pull/100.diff",\n' +
+        '      "patch_url": "https://github.com/aj47/SpeakMCP/pull/100.patch",\n' +
+        '      "merged_at": null\n' +
+        '    },\n' +
+        '    "body": "## Problem\\n\\nThe agent mode was getting stuck in infinite loops when handling simple queries like \\"how many github issues open\\". The agent would:\\n\\n1. Successfully execute tools (e.g., list GitHub issues)\\n2. Get the results\\n3. Set `needsMoreWork: false` to indicate completion\\n4. But then the system would continue asking for more work or summaries\\n5. This created an infinite loop that never terminated\\n\\n## Root Cause Analysis\\n\\nThe issue was caused by multiple problems in the agent mode conversation management:\\n\\n1. **Overly aggressive summary enforcement** - The system forced lengthy summaries even for simple queries that only needed short answers\\n2. **Nudging logic override** - The no-op counter continued nudging even when `needsMoreWork=false` was explicitly set\\n3. **Large tool results** - Tool results could be very large (thousands of lines of JSON), causing context window issues\\n4. **Lack of request type awareness** - The system didn\'t differentiate between simple queries and complex requests\\n\\n## Solution\\n\\nImplemented comprehensive fixes:\\n\\n### 1. Request Type Analysis\\n- Added `analyzeRequestType()` function to categorize requests as simple queries vs actionable requests\\n- Detects patterns like \\"how many\\", \\"what is\\", math expressions, etc. as simple queries\\n- Sets appropriate minimum response length requirements based on request type\\n\\n### 2. Intelligent Summary Enforcement\\n- Modified summary enforcement to respect `needsMoreWork=false` for appropriate request types\\n- Simple queries (like \\"how many github issues open\\") now accept short answers like \\"3\\"\\n- Complex requests still require detailed summaries when tools are executed\\n\\n### 3. Fixed Nudging Logic\\n- Updated the no-op counter to respect explicit `needsMoreWork=false` responses\\n- Prevents the system from continuing to ask for more work when the agent has explicitly indicated completion\\n\\n### 4. Tool Results Processing\\n- Added intelligent truncation of large tool results to prevent context window issues\\n- For simple queries, extracts key information (e.g., issue count and titles) instead of including full JSON\\n- Limits tool results to 5000 characters with smart summarization\\n\\n### 5. Response Validation\\n- Added `isResponseAppropriate()` function to validate responses based on request type\\n- Added `shouldForceCompletion()` function to prevent infinite loops near max iterations\\n- Integrated force completion logic into the main conversation loop\\n\\n### 6. Enhanced Debugging\\n- Added better logging and diagnostic information for troubleshooting\\n- Improved error messages and debugging output\\n\\n## Testing\\n\\nTested with the original problematic query \\"how many github issues open\\":\\n- ✅ Successfully executes GitHub API call\\n- ✅ Processes tool results efficiently\\n- ✅ Provides appropriate short answer without infinite loop\\n- ✅ Respects `needsMoreWork=false` completion signals\\n\\n## Benefits\\n\\n1. **Eliminates infinite loops** - Simple queries now properly terminate with appropriate answers\\n2. **Maintains quality for complex requests** - Actionable requests still get proper summaries when needed\\n3. **Better performance** - Reduced context window usage through intelligent tool result processing\\n4. **Improved user experience** - Faster responses for simple queries, appropriate detail for complex requests\\n5. **Better debugging** - Enhanced logging and error reporting for troubleshooting\\n\\n## Files Changed\\n\\n- `src/main/llm.ts` - Main agent mode logic improvements\\n- `src/main/llm-fetch.ts` - Enhanced error handling and debugging\\n- `src/shared/types.ts` - Added missing `ttsAutoPlay` config option\\n\\n## Breaking Changes\\n\\nNone - all changes are backward compatible and improve existing functionality.\\n\\n## Related Issues\\n\\nFixes the infinite loop issue reported where agent mode would continue indefinitely for simple informational queries.\\n\\n---\\nPull Request opened by [Augment Code](https://www.augmentcode.com/) with guidance from the PR author",\n' +
+        '    "closed_by": null,\n' +
+        '    "reactions": {\n' +
+        '      "url": "https://api.github.com/repos/aj47/SpeakMCP/issues/100/reactions",\n' +
+        '      "total_count": 0,\n' +
+        '      "+1": 0,\n' +
+        '      "-1": 0,\n' +
+        '      "laugh": 0,\n' +
+        '      "hooray": 0,\n' +
+        '      "confused": 0,\n' +
+        '      "heart": 0,\n' +
+        '      "rocket": 0,\n' +
+        '      "eyes": 0\n' +
+        '    },\n' +
+        '    "timeline_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/100/timeline",\n' +
+        '    "performed_via_github_app": null,\n' +
+        '    "state_reason": null\n' +
+        '  },\n' +
+        '  {\n' +
+        '    "url": "https://api.github.com/repos/aj47/SpeakMCP/issues/99",\n' +
+        '    "repository_url": "https://api.github.com/repos/aj47/SpeakMCP",\n' +
+        '    "labels_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/99/labels{/name}",\n' +
+        '    "comments_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/99/comments",\n' +
+        '    "events_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/99/events",\n' +
+        '    "html_url": "https://github.com/aj47/SpeakMCP/issues/99",\n' +
+        '    "id": 3348395680,\n' +
+        '    "node_id": "I_kwDOO5IaBs7HlHag",\n' +
+        '    "number": 99,\n' +
+        '    "title": "Work with Claude Code? thx",\n' +
+        '    "user": {\n' +
+        '      "login": "unmasSk",\n' +
+        '      "id": 106980456,\n' +
+        '      "node_id": "U_kgDOBmBkaA",\n' +
+        '      "avatar_url": "https://avatars.githubusercontent.com/u/106980456?v=4",\n' +
+        '      "gravatar_id": "",\n' +
+        '      "url": "https://api.github.com/users/unmasSk",\n' +
+        '      "html_url": "https://github.com/unmasSk",\n' +
+        '      "followers_url": "https://api.github.com/users/unmasSk/followers",\n' +
+        '      "following_url": "https://api.github.com/users/unmasSk/following{/other_user}",\n' +
+        '      "gists_url": "https://api.github.com/users/unmasSk/gists{/gist_id}",\n' +
+        '      "starred_url": "https://api.github.com/users/unmasSk/starred{/owner}{/repo}",\n' +
+        '      "subscriptions_url": "https://api.github.com/users/unmasSk/subscriptions",\n' +
+        '      "organizations_url": "https://api.github.com/users/unmasSk/orgs",\n' +
+        '      "repos_url": "https://api.github.com/users/unmasSk/repos",\n' +
+        '      "events_url": "https://api.github.com/users/unmasSk/events{/privacy}",\n' +
+        '      "received_events_url": "https://api.github.com/users/unmasSk/received_events",\n' +
+        '      "type": "User",\n' +
+        '      "user_view_type": "public",\n' +
+        '      "site_admin": false\n' +
+        '    },\n' +
+        '    "labels": [],\n' +
+        '    "state": "open",\n' +
+        '    "locked": false,\n' +
+        '    "assignee": null,\n' +
+        '    "assignees": [],\n' +
+        '    "milestone": null,\n' +
+        '    "comments": 0,\n' +
+        '    "created_at": "2025-08-23T15:39:37Z",\n' +
+        '    "updated_at": "2025-08-23T15:39:37Z",\n' +
+        '    "closed_at": null,\n' +
+        '    "author_association": "NONE",\n' +
+        '    "active_lock_reason": null,\n' +
+        '    "sub_issues_summary": {\n' +
+        '      "total": 0,\n' +
+        '      "completed": 0,\n' +
+        '      "percent_completed": 0\n' +
+        '    },\n' +
+        '    "issue_dependencies_summary": {\n' +
+        '      "blocked_by": 0,\n' +
+        '      "total_blocked_by": 0,\n' +
+        '      "blocking": 0,\n' +
+        '      "total_blocking": 0\n' +
+        '    },\n' +
+        '    "body": null,\n' +
+        '    "closed_by": null,\n' +
+        '    "reactions": {\n' +
+        '      "url": "https://api.github.com/repos/aj47/SpeakMCP/issues/99/reactions",\n' +
+        '      "total_count": 0,\n' +
+        '      "+1": 0,\n' +
+        '      "-1": 0,\n' +
+        '      "laugh": 0,\n' +
+        '      "hooray": 0,\n' +
+        '      "confused": 0,\n' +
+        '      "heart": 0,\n' +
+        '      "rocket": 0,\n' +
+        '      "eyes": 0\n' +
+        '    },\n' +
+        '    "timeline_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/99/timeline",\n' +
+        '    "performed_via_github_app": null,\n' +
+        '    "state_reason": null\n' +
+        '  },\n' +
+        '  {\n' +
+        '    "url": "https://api.github.com/repos/aj47/SpeakMCP/issues/97",\n' +
+        '    "repository_url": "https://api.github.com/repos/aj47/SpeakMCP",\n' +
+        '    "labels_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/97/labels{/name}",\n' +
+        '    "comments_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/97/comments",\n' +
+        '    "events_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/97/events",\n' +
+        '    "html_url": "https://github.com/aj47/SpeakMCP/issues/97",\n' +
+        '    "id": 3346693474,\n' +
+        '    "node_id": "I'... 56871 more characters
+    }
+  ]
+}
+[2025-08-24T20:04:25.585Z] [DEBUG][LLM] === OPENAI API REQUEST ===
+[2025-08-24T20:04:25.585Z] [DEBUG][LLM] HTTP Request {
+  url: 'https://api.groq.com/openai/v1/chat/completions',
+  model: 'moonshotai/kimi-k2-instruct',
+  messagesCount: 4,
+  useStructuredOutput: true,
+  estimatedTokens: 20390,
+  totalPromptLength: 81560,
+  contextWarning: 'WARNING: High token count, may exceed context limit'
+}
+[2025-08-24T20:04:25.585Z] [DEBUG][LLM] Request Body (truncated) {
+  model: 'moonshotai/kimi-k2-instruct',
+  messages: [
+    {
+      role: 'system',
+      content: 'You are an intelligent AI assistant capable of executing tools to help users accomplish complex tasks. You operate autonomously and work iteratively until goals are fully achieved.\n' +
+        '\n' +
+        'CORE PRINCIPLES:\n' +
+        '-... [14614 chars]'
+    },
+    { role: 'user', content: 'how many open github issues' },
+    {
+      role: 'assistant',
+      content: 'Checking open issues in aj47/SpeakMCP repository'
+    },
+    {
+      role: 'user',
+      content: 'Tool execution results:\n' +
+        '[\n' +
+        '  {\n' +
+        '    "url": "https://api.github.com/repos/aj47/SpeakMCP/issues/100",\n' +
+        '    "repository_url": "https://api.github.com/repos/aj47/SpeakMCP",\n' +
+        '    "labels_url": "https://api.git... [66871 chars]'
+    }
+  ],
+  temperature: 0,
+  frequency_penalty: 0.5,
+  seed: 1
+}
+[2025-08-24T20:04:27.236Z] [DEBUG][LLM] HTTP Response {
+  id: 'chatcmpl-60a5c7c8-ee9b-48a0-a918-d52cf5d58950',
+  object: 'chat.completion',
+  created: 1756065867,
+  model: 'moonshotai/kimi-k2-instruct',
+  choices: [
+    {
+      index: 0,
+      message: [Object],
+      logprobs: null,
+      finish_reason: 'stop'
+    }
+  ],
+  usage: {
+    queue_time: 0.069847677,
+    prompt_tokens: 21643,
+    prompt_time: 1.48127213,
+    completion_tokens: 2,
+    completion_time: 0.006328473,
+    total_tokens: 21645,
+    total_time: 1.487600603
+  },
+  usage_breakdown: null,
+  system_fingerprint: 'fp_b8565bb333',
+  x_groq: { id: 'req_01k3etx7xpf4cssn73r0f3h1yr' },
+  service_tier: 'on_demand'
+}
+[2025-08-24T20:04:27.236Z] [DEBUG][LLM] Raw API response structure: {
+  hasChoices: true,
+  choicesLength: 1,
+  firstChoiceExists: true,
+  hasMessage: true,
+  hasContent: true
+}
+[2025-08-24T20:04:27.236Z] [DEBUG][LLM] Extracted JSON object null
+[2025-08-24T20:04:27.236Z] [DEBUG][LLM] JSON object has toolCalls: false
+[2025-08-24T20:04:27.236Z] [DEBUG][LLM] JSON object has content: false
+[2025-08-24T20:04:27.236Z] [DEBUG][LLM] Response ← { content: '3', needsMoreWork: true }
+[2025-08-24T20:04:27.236Z] [DEBUG][LLM] === LLM CALL END ===
+[2025-08-24T20:04:27.236Z] [DEBUG][TOOLS] Planned tool calls from LLM []
+[2025-08-24T20:04:27.236Z] [DEBUG][LLM] === LLM CALL START ===
+[2025-08-24T20:04:27.236Z] [DEBUG][LLM] Messages → {
+  count: 6,
+  totalChars: 81585,
+  messages: [
+    {
+      role: 'system',
+      content: 'You are an intelligent AI assistant capable of executing tools to help users accomplish complex tasks. You operate autonomously and work iteratively until goals are fully achieved.\n' +
+        '\n' +
+        'CORE PRINCIPLES:\n' +
+        "- Work autonomously until the user's request is completely resolved\n" +
+        '- Use available tools iteratively and strategically to gather information and execute actions\n' +
+        '- Use exact tool names from the available tools list (including server prefixes like "server:tool_name")\n' +
+        '- Prefer using tools to gather information rather than asking users for details\n' +
+        "- Continue working until the user's request is fully satisfied - only stop when the task is complete\n" +
+        '\n' +
+        'TOOL USAGE PHILOSOPHY:\n' +
+        '- ALWAYS follow tool schemas exactly as specified with all required parameters\n' +
+        '- NEVER call tools that are not explicitly provided in the available tools list\n' +
+        '- If you need additional information that you can get via tool calls, prefer that over asking the user\n' +
+        '- Use tools proactively to explore and understand the context before making changes\n' +
+        '- When making code changes, ensure they can be executed immediately by the user\n' +
+        '\n' +
+        '# Tone and style\n' +
+        'You should be concise, direct, and to the point.\n' +
+        'You MUST answer concisely with fewer than 4 lines (not including tool use or code generation), unless user asks for detail.\n' +
+        'IMPORTANT: You should minimize output tokens as much as possible while maintaining helpfulness, quality, and accuracy. Only address the specific query or task at hand, avoiding tangential information unless absolutely critical for completing the request. If you can answer in 1-3 sentences or a short paragraph, please do.\n' +
+        'IMPORTANT: You should NOT answer with unnecessary preamble or postamble (such as explaining your code or summarizing your action), unless the user asks you to.\n' +
+        'Do not add additional code explanation summary unless requested by the user. After working on a file, just stop, rather than providing an explanation of what you did.\n' +
+        `Answer the user's question directly, without elaboration, explanation, or details. One word answers are best. Avoid introductions, conclusions, and explanations. You MUST avoid text before/after your response, such as "The answer is <answer>.", "Here is the content of the file..." or "Based on the information provided, the answer is..." or "Here is what I will do next...". Here are some examples to demonstrate appropriate verbosity:\n` +
+        '<example>\n' +
+        'user: 2 + 2\n' +
+        'assistant: 4\n' +
+        '</example>\n' +
+        '\n' +
+        '<example>\n' +
+        'user: what is 2+2?\n' +
+        'assistant: 4\n' +
+        '</example>\n' +
+        '\n' +
+        '<example>\n' +
+        'user: is 11 a prime number?\n' +
+        'assistant: Yes\n' +
+        '</example>\n' +
+        '\n' +
+        '<example>\n' +
+        'user: what command should I run to list files in the current directory?\n' +
+        'assistant: ls\n' +
+        '</example>\n' +
+        '\n' +
+        '<example>\n' +
+        'user: what command should I run to watch files in the current directory?\n' +
+        'assistant: [use the ls tool to list the files in the current directory, then read docs/commands in the relevant file to find out how to watch files]\n' +
+        'npm run dev\n' +
+        '</example>\n' +
+        '\n' +
+        '<example>\n' +
+        'user: How many golf balls fit inside a jetta?\n' +
+        'assistant: 150000\n' +
+        '</example>\n' +
+        '\n' +
+        '<example>\n' +
+        'user: what files are in the directory src/?\n' +
+        'assistant: [runs ls and sees foo.c, bar.c, baz.c]\n' +
+        'user: which file contains the implementation of foo?\n' +
+        'assistant: src/foo.c\n' +
+        '</example>\n' +
+        '\n' +
+        'RESPONSE FORMAT:\n' +
+        'For tool calls:\n' +
+        '{\n' +
+        '  "toolCalls": [\n' +
+        '    {\n' +
+        '      "name": "exact_tool_name_from_available_list",\n' +
+        '      "arguments": { "param1": "value1", "param2": "value2" }\n' +
+        '    }\n' +
+        '  ],\n' +
+        `  "content": "Clear explanation of what you're doing and why",\n` +
+        '  "needsMoreWork": true\n' +
+        '}\n' +
+        '\n' +
+        'For final responses (no more tools needed):\n' +
+        '{\n' +
+        '  "content": "Your comprehensive final response with results",\n' +
+        '  "needsMoreWork": false\n' +
+        '}\n' +
+        '\n' +
+        'AGENT MODE - AUTONOMOUS OPERATION:\n' +
+        'You can see tool results and make follow-up calls. Work iteratively and thoroughly:\n' +
+        '\n' +
+        'WORKFLOW:\n' +
+        "1. Analyze the user's request comprehensively\n" +
+        '2. Gather necessary information using available tools\n' +
+        '3. Execute appropriate tools in logical sequence\n' +
+        '4. Review results and determine next steps\n' +
+        '5. Continue iterating until the goal is fully achieved\n' +
+        '6. Only set needsMoreWork: false when the task is completely resolved\n' +
+        '\n' +
+        '\n' +
+        '\n' +
+        'AVAILABLE TOOLS:\n' +
+        '- github:create_or_update_file: Create or update a single file in a GitHub repository\n' +
+        '  Parameters: {owner: string (required), repo: string (required), path: string (required), content: string (required), message: string (required), branch: string (required), sha: string}\n' +
+        '- github:search_repositories: Search for GitHub repositories\n' +
+        '  Parameters: {query: string (required), page: number, perPage: number}\n' +
+        '- github:create_repository: Create a new GitHub repository in your account\n' +
+        '  Parameters: {name: string (required), description: string, private: boolean, autoInit: boolean}\n' +
+        '- github:get_file_contents: Get the contents of a file or directory from a GitHub repository\n' +
+        '  Parameters: {owner: string (required), repo: string (required), path: string (required), branch: string}\n' +
+        '- github:push_files: Push multiple files to a GitHub repository in a single commit\n' +
+        '  Parameters: {owner: string (required), repo: string (required), branch: string (required), files: array (required), message: string (required)}\n' +
+        '- github:create_issue: Create a new issue in a GitHub repository\n' +
+        '  Parameters: {owner: string (required), repo: string (required), title: string (required), body: string, assignees: array, milestone: number, labels: array}\n' +
+        '- github:create_pull_request: Create a new pull request in a GitHub repository\n' +
+        '  Parameters: {owner: string (required), repo: string (required), title: string (required), body: string, head: string (required), base: string (required), draft: boolean, maintainer_can_modify: boolean}\n' +
+        '- github:fork_repository: Fork a GitHub repository to your account or specified organization\n' +
+        '  Parameters: {owner: string (required), repo: string (required), organization: string}\n' +
+        '- github:create_branch: Create a new branch in a GitHub repository\n' +
+        '  Parameters: {owner: string (required), repo: string (required), branch: string (required), from_branch: string}\n' +
+        '- github:list_commits: Get list of commits of a branch in a GitHub repository\n' +
+        '  Parameters: {owner: string (required), repo: string (required), sha: string, page: number, perPage: number}\n' +
+        '- github:list_issues: List issues in a GitHub repository with filtering options\n' +
+        '  Parameters: {owner: string (required), repo: string (required), direction: string, labels: array, page: number, per_page: number, since: string, sort: string, state: string}\n' +
+        '- github:update_issue: Update an existing issue in a GitHub repository\n' +
+        '  Parameters: {owner: string (required), repo: string (required), issue_number: number (required), title: string, body: string, assignees: array, milestone: number, labels: array, state: string}\n' +
+        '- github:add_issue_comment: Add a comment to an existing issue\n' +
+        '  Parameters: {owner: string (required), repo: string (required), issue_number: number (required), body: string (required)}\n' +
+        '- github:search_code: Search for code across GitHub repositories\n' +
+        '  Parameters: {q: string (required), order: string, page: number, per_page: number}\n' +
+        '- github:search_issues: Search for issues and pull requests across GitHub repositories\n' +
+        '  Parameters: {q: string (required), order: string, page: number, per_page: number, sort: string}\n' +
+        '- github:search_users: Search for users on GitHub\n' +
+        '  Parameters: {q: string (required), order: string, page: number, per_page: number, sort: string}\n' +
+        '- github:get_issue: Get details of a specific issue in a GitHub repository.\n' +
+        '  Parameters: {owner: string (required), repo: string (required), issue_number: number (required)}\n' +
+        '- github:get_pull_request: Get details of a specific pull request\n' +
+        '  Parameters: {owner: string (required), repo: string (required), pull_number: number (required)}\n' +
+        '- github:list_pull_requests: List and filter repository pull requests\n' +
+        '  Parameters: {owner: string (required), repo: string (required), state: string, head: string, base: string, sort: string, direction: string, per_page: number, page: number}\n' +
+        '- github:create_pull_request_review: Create a review on a pull request\n' +
+        '  Parameters: {owner: string (required), repo: string (required), pull_number: number (required), commit_id: string, body: string (required), event: string (required), comments: array}\n' +
+        '- github:merge_pull_request: Merge a pull request\n' +
+        '  Parameters: {owner: string (required), repo: string (required), pull_number: number (required), commit_title: string, commit_message: string, merge_method: string}\n' +
+        '- github:get_pull_request_files: Get the list of files changed in a pull request\n' +
+        '  Parameters: {owner: string (required), repo: string (required), pull_number: number (required)}\n' +
+        '- github:get_pull_request_status: Get the combined status of all status checks for a pull request\n' +
+        '  Parameters: {owner: string (required), repo: string (required), pull_number: number (required)}\n' +
+        '- github:update_pull_request_branch: Update a pull request branch with the latest changes from the base branch\n' +
+        '  Parameters: {owner: string (required), repo: string (required), pull_number: number (required), expected_head_sha: string}\n' +
+        '- github:get_pull_request_comments: Get the review comments on a pull request\n' +
+        '  Parameters: {owner: string (required), repo: string (required), pull_number: number (required)}\n' +
+        '- github:get_pull_request_reviews: Get the reviews on a pull request\n' +
+        '  Parameters: {owner: string (required), repo: string (required), pull_number: number (required)}\n' +
+        '- filesystem:read_file: Read the complete contents of a file as text. DEPRECATED: Use read_text_file instead.\n' +
+        '  Parameters: {path: string (required), tail: number, head: number}\n' +
+        "- filesystem:read_text_file: Read the complete contents of a file from the file system as text. Handles various text encodings and provides detailed error messages if the file cannot be read. Use this tool when you need to examine the contents of a single file. Use the 'head' parameter to read only the first N lines of a file, or the 'tail' parameter to read only the last N lines of a file. Operates on the file as text regardless of extension. Only works within allowed directories.\n" +
+        '  Parameters'... 4614 more characters
+    },
+    { role: 'user', content: 'how many open github issues' },
+    {
+      role: 'assistant',
+      content: 'Checking open issues in aj47/SpeakMCP repository'
+    },
+    {
+      role: 'user',
+      content: 'Tool execution results:\n' +
+        '[\n' +
+        '  {\n' +
+        '    "url": "https://api.github.com/repos/aj47/SpeakMCP/issues/100",\n' +
+        '    "repository_url": "https://api.github.com/repos/aj47/SpeakMCP",\n' +
+        '    "labels_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/100/labels{/name}",\n' +
+        '    "comments_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/100/comments",\n' +
+        '    "events_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/100/events",\n' +
+        '    "html_url": "https://github.com/aj47/SpeakMCP/pull/100",\n' +
+        '    "id": 3349678368,\n' +
+        '    "node_id": "PR_kwDOO5IaBs6lGnTH",\n' +
+        '    "number": 100,\n' +
+        '    "title": "Fix agent mode infinite loop issues",\n' +
+        '    "user": {\n' +
+        '      "login": "aj47",\n' +
+        '      "id": 8023513,\n' +
+        '      "node_id": "MDQ6VXNlcjgwMjM1MTM=",\n' +
+        '      "avatar_url": "https://avatars.githubusercontent.com/u/8023513?v=4",\n' +
+        '      "gravatar_id": "",\n' +
+        '      "url": "https://api.github.com/users/aj47",\n' +
+        '      "html_url": "https://github.com/aj47",\n' +
+        '      "followers_url": "https://api.github.com/users/aj47/followers",\n' +
+        '      "following_url": "https://api.github.com/users/aj47/following{/other_user}",\n' +
+        '      "gists_url": "https://api.github.com/users/aj47/gists{/gist_id}",\n' +
+        '      "starred_url": "https://api.github.com/users/aj47/starred{/owner}{/repo}",\n' +
+        '      "subscriptions_url": "https://api.github.com/users/aj47/subscriptions",\n' +
+        '      "organizations_url": "https://api.github.com/users/aj47/orgs",\n' +
+        '      "repos_url": "https://api.github.com/users/aj47/repos",\n' +
+        '      "events_url": "https://api.github.com/users/aj47/events{/privacy}",\n' +
+        '      "received_events_url": "https://api.github.com/users/aj47/received_events",\n' +
+        '      "type": "User",\n' +
+        '      "user_view_type": "public",\n' +
+        '      "site_admin": false\n' +
+        '    },\n' +
+        '    "labels": [],\n' +
+        '    "state": "open",\n' +
+        '    "locked": false,\n' +
+        '    "assignee": null,\n' +
+        '    "assignees": [],\n' +
+        '    "milestone": null,\n' +
+        '    "comments": 0,\n' +
+        '    "created_at": "2025-08-24T16:26:10Z",\n' +
+        '    "updated_at": "2025-08-24T16:26:10Z",\n' +
+        '    "closed_at": null,\n' +
+        '    "author_association": "OWNER",\n' +
+        '    "active_lock_reason": null,\n' +
+        '    "draft": false,\n' +
+        '    "pull_request": {\n' +
+        '      "url": "https://api.github.com/repos/aj47/SpeakMCP/pulls/100",\n' +
+        '      "html_url": "https://github.com/aj47/SpeakMCP/pull/100",\n' +
+        '      "diff_url": "https://github.com/aj47/SpeakMCP/pull/100.diff",\n' +
+        '      "patch_url": "https://github.com/aj47/SpeakMCP/pull/100.patch",\n' +
+        '      "merged_at": null\n' +
+        '    },\n' +
+        '    "body": "## Problem\\n\\nThe agent mode was getting stuck in infinite loops when handling simple queries like \\"how many github issues open\\". The agent would:\\n\\n1. Successfully execute tools (e.g., list GitHub issues)\\n2. Get the results\\n3. Set `needsMoreWork: false` to indicate completion\\n4. But then the system would continue asking for more work or summaries\\n5. This created an infinite loop that never terminated\\n\\n## Root Cause Analysis\\n\\nThe issue was caused by multiple problems in the agent mode conversation management:\\n\\n1. **Overly aggressive summary enforcement** - The system forced lengthy summaries even for simple queries that only needed short answers\\n2. **Nudging logic override** - The no-op counter continued nudging even when `needsMoreWork=false` was explicitly set\\n3. **Large tool results** - Tool results could be very large (thousands of lines of JSON), causing context window issues\\n4. **Lack of request type awareness** - The system didn\'t differentiate between simple queries and complex requests\\n\\n## Solution\\n\\nImplemented comprehensive fixes:\\n\\n### 1. Request Type Analysis\\n- Added `analyzeRequestType()` function to categorize requests as simple queries vs actionable requests\\n- Detects patterns like \\"how many\\", \\"what is\\", math expressions, etc. as simple queries\\n- Sets appropriate minimum response length requirements based on request type\\n\\n### 2. Intelligent Summary Enforcement\\n- Modified summary enforcement to respect `needsMoreWork=false` for appropriate request types\\n- Simple queries (like \\"how many github issues open\\") now accept short answers like \\"3\\"\\n- Complex requests still require detailed summaries when tools are executed\\n\\n### 3. Fixed Nudging Logic\\n- Updated the no-op counter to respect explicit `needsMoreWork=false` responses\\n- Prevents the system from continuing to ask for more work when the agent has explicitly indicated completion\\n\\n### 4. Tool Results Processing\\n- Added intelligent truncation of large tool results to prevent context window issues\\n- For simple queries, extracts key information (e.g., issue count and titles) instead of including full JSON\\n- Limits tool results to 5000 characters with smart summarization\\n\\n### 5. Response Validation\\n- Added `isResponseAppropriate()` function to validate responses based on request type\\n- Added `shouldForceCompletion()` function to prevent infinite loops near max iterations\\n- Integrated force completion logic into the main conversation loop\\n\\n### 6. Enhanced Debugging\\n- Added better logging and diagnostic information for troubleshooting\\n- Improved error messages and debugging output\\n\\n## Testing\\n\\nTested with the original problematic query \\"how many github issues open\\":\\n- ✅ Successfully executes GitHub API call\\n- ✅ Processes tool results efficiently\\n- ✅ Provides appropriate short answer without infinite loop\\n- ✅ Respects `needsMoreWork=false` completion signals\\n\\n## Benefits\\n\\n1. **Eliminates infinite loops** - Simple queries now properly terminate with appropriate answers\\n2. **Maintains quality for complex requests** - Actionable requests still get proper summaries when needed\\n3. **Better performance** - Reduced context window usage through intelligent tool result processing\\n4. **Improved user experience** - Faster responses for simple queries, appropriate detail for complex requests\\n5. **Better debugging** - Enhanced logging and error reporting for troubleshooting\\n\\n## Files Changed\\n\\n- `src/main/llm.ts` - Main agent mode logic improvements\\n- `src/main/llm-fetch.ts` - Enhanced error handling and debugging\\n- `src/shared/types.ts` - Added missing `ttsAutoPlay` config option\\n\\n## Breaking Changes\\n\\nNone - all changes are backward compatible and improve existing functionality.\\n\\n## Related Issues\\n\\nFixes the infinite loop issue reported where agent mode would continue indefinitely for simple informational queries.\\n\\n---\\nPull Request opened by [Augment Code](https://www.augmentcode.com/) with guidance from the PR author",\n' +
+        '    "closed_by": null,\n' +
+        '    "reactions": {\n' +
+        '      "url": "https://api.github.com/repos/aj47/SpeakMCP/issues/100/reactions",\n' +
+        '      "total_count": 0,\n' +
+        '      "+1": 0,\n' +
+        '      "-1": 0,\n' +
+        '      "laugh": 0,\n' +
+        '      "hooray": 0,\n' +
+        '      "confused": 0,\n' +
+        '      "heart": 0,\n' +
+        '      "rocket": 0,\n' +
+        '      "eyes": 0\n' +
+        '    },\n' +
+        '    "timeline_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/100/timeline",\n' +
+        '    "performed_via_github_app": null,\n' +
+        '    "state_reason": null\n' +
+        '  },\n' +
+        '  {\n' +
+        '    "url": "https://api.github.com/repos/aj47/SpeakMCP/issues/99",\n' +
+        '    "repository_url": "https://api.github.com/repos/aj47/SpeakMCP",\n' +
+        '    "labels_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/99/labels{/name}",\n' +
+        '    "comments_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/99/comments",\n' +
+        '    "events_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/99/events",\n' +
+        '    "html_url": "https://github.com/aj47/SpeakMCP/issues/99",\n' +
+        '    "id": 3348395680,\n' +
+        '    "node_id": "I_kwDOO5IaBs7HlHag",\n' +
+        '    "number": 99,\n' +
+        '    "title": "Work with Claude Code? thx",\n' +
+        '    "user": {\n' +
+        '      "login": "unmasSk",\n' +
+        '      "id": 106980456,\n' +
+        '      "node_id": "U_kgDOBmBkaA",\n' +
+        '      "avatar_url": "https://avatars.githubusercontent.com/u/106980456?v=4",\n' +
+        '      "gravatar_id": "",\n' +
+        '      "url": "https://api.github.com/users/unmasSk",\n' +
+        '      "html_url": "https://github.com/unmasSk",\n' +
+        '      "followers_url": "https://api.github.com/users/unmasSk/followers",\n' +
+        '      "following_url": "https://api.github.com/users/unmasSk/following{/other_user}",\n' +
+        '      "gists_url": "https://api.github.com/users/unmasSk/gists{/gist_id}",\n' +
+        '      "starred_url": "https://api.github.com/users/unmasSk/starred{/owner}{/repo}",\n' +
+        '      "subscriptions_url": "https://api.github.com/users/unmasSk/subscriptions",\n' +
+        '      "organizations_url": "https://api.github.com/users/unmasSk/orgs",\n' +
+        '      "repos_url": "https://api.github.com/users/unmasSk/repos",\n' +
+        '      "events_url": "https://api.github.com/users/unmasSk/events{/privacy}",\n' +
+        '      "received_events_url": "https://api.github.com/users/unmasSk/received_events",\n' +
+        '      "type": "User",\n' +
+        '      "user_view_type": "public",\n' +
+        '      "site_admin": false\n' +
+        '    },\n' +
+        '    "labels": [],\n' +
+        '    "state": "open",\n' +
+        '    "locked": false,\n' +
+        '    "assignee": null,\n' +
+        '    "assignees": [],\n' +
+        '    "milestone": null,\n' +
+        '    "comments": 0,\n' +
+        '    "created_at": "2025-08-23T15:39:37Z",\n' +
+        '    "updated_at": "2025-08-23T15:39:37Z",\n' +
+        '    "closed_at": null,\n' +
+        '    "author_association": "NONE",\n' +
+        '    "active_lock_reason": null,\n' +
+        '    "sub_issues_summary": {\n' +
+        '      "total": 0,\n' +
+        '      "completed": 0,\n' +
+        '      "percent_completed": 0\n' +
+        '    },\n' +
+        '    "issue_dependencies_summary": {\n' +
+        '      "blocked_by": 0,\n' +
+        '      "total_blocked_by": 0,\n' +
+        '      "blocking": 0,\n' +
+        '      "total_blocking": 0\n' +
+        '    },\n' +
+        '    "body": null,\n' +
+        '    "closed_by": null,\n' +
+        '    "reactions": {\n' +
+        '      "url": "https://api.github.com/repos/aj47/SpeakMCP/issues/99/reactions",\n' +
+        '      "total_count": 0,\n' +
+        '      "+1": 0,\n' +
+        '      "-1": 0,\n' +
+        '      "laugh": 0,\n' +
+        '      "hooray": 0,\n' +
+        '      "confused": 0,\n' +
+        '      "heart": 0,\n' +
+        '      "rocket": 0,\n' +
+        '      "eyes": 0\n' +
+        '    },\n' +
+        '    "timeline_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/99/timeline",\n' +
+        '    "performed_via_github_app": null,\n' +
+        '    "state_reason": null\n' +
+        '  },\n' +
+        '  {\n' +
+        '    "url": "https://api.github.com/repos/aj47/SpeakMCP/issues/97",\n' +
+        '    "repository_url": "https://api.github.com/repos/aj47/SpeakMCP",\n' +
+        '    "labels_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/97/labels{/name}",\n' +
+        '    "comments_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/97/comments",\n' +
+        '    "events_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/97/events",\n' +
+        '    "html_url": "https://github.com/aj47/SpeakMCP/issues/97",\n' +
+        '    "id": 3346693474,\n' +
+        '    "node_id": "I'... 56871 more characters
+    },
+    { role: 'assistant', content: '3' },
+    { role: 'user', content: 'Tool execution results:\n' }
+  ]
+}
+[2025-08-24T20:04:27.236Z] [DEBUG][LLM] === OPENAI API REQUEST ===
+[2025-08-24T20:04:27.236Z] [DEBUG][LLM] HTTP Request {
+  url: 'https://api.groq.com/openai/v1/chat/completions',
+  model: 'moonshotai/kimi-k2-instruct',
+  messagesCount: 6,
+  useStructuredOutput: true,
+  estimatedTokens: 20397,
+  totalPromptLength: 81585,
+  contextWarning: 'WARNING: High token count, may exceed context limit'
+}
+[2025-08-24T20:04:27.236Z] [DEBUG][LLM] Request Body (truncated) {
+  model: 'moonshotai/kimi-k2-instruct',
+  messages: [
+    {
+      role: 'system',
+      content: 'You are an intelligent AI assistant capable of executing tools to help users accomplish complex tasks. You operate autonomously and work iteratively until goals are fully achieved.\n' +
+        '\n' +
+        'CORE PRINCIPLES:\n' +
+        '-... [14614 chars]'
+    },
+    { role: 'user', content: 'how many open github issues' },
+    {
+      role: 'assistant',
+      content: 'Checking open issues in aj47/SpeakMCP repository'
+    },
+    {
+      role: 'user',
+      content: 'Tool execution results:\n' +
+        '[\n' +
+        '  {\n' +
+        '    "url": "https://api.github.com/repos/aj47/SpeakMCP/issues/100",\n' +
+        '    "repository_url": "https://api.github.com/repos/aj47/SpeakMCP",\n' +
+        '    "labels_url": "https://api.git... [66871 chars]'
+    },
+    { role: 'assistant', content: '3' },
+    { role: 'user', content: 'Tool execution results:\n' }
+  ],
+  temperature: 0,
+  frequency_penalty: 0.5,
+  seed: 1
+}
+[2025-08-24T20:04:27.422Z] [DEBUG][LLM] HTTP Response {
+  id: 'chatcmpl-75cee3a2-9a3e-4bf7-ae9b-3b01e892b15d',
+  object: 'chat.completion',
+  created: 1756065867,
+  model: 'moonshotai/kimi-k2-instruct',
+  choices: [
+    {
+      index: 0,
+      message: [Object],
+      logprobs: null,
+      finish_reason: 'stop'
+    }
+  ],
+  usage: {
+    prompt_tokens: 21656,
+    prompt_time: 0.019723564,
+    completion_tokens: 1,
+    completion_time: 0.004875362,
+    total_tokens: 21657,
+    total_time: 0.024598926,
+    prompt_tokens_details: { cached_tokens: 21504 }
+  },
+  usage_breakdown: null,
+  system_fingerprint: 'fp_b8565bb333',
+  x_groq: { id: 'req_01k3etx9gyf3gbvkjtp3w2fn2v' },
+  service_tier: 'on_demand'
+}
+[2025-08-24T20:04:27.422Z] [DEBUG][LLM] Raw API response structure: {
+  hasChoices: true,
+  choicesLength: 1,
+  firstChoiceExists: true,
+  hasMessage: true,
+  hasContent: false
+}
+[2025-08-24T20:04:27.422Z] [DEBUG][LLM] Empty response details: {
+  response: {
+    id: 'chatcmpl-75cee3a2-9a3e-4bf7-ae9b-3b01e892b15d',
+    object: 'chat.completion',
+    created: 1756065867,
+    model: 'moonshotai/kimi-k2-instruct',
+    choices: [ [Object] ],
+    usage: {
+      prompt_tokens: 21656,
+      prompt_time: 0.019723564,
+      completion_tokens: 1,
+      completion_time: 0.004875362,
+      total_tokens: 21657,
+      total_time: 0.024598926,
+      prompt_tokens_details: [Object]
+    },
+    usage_breakdown: null,
+    system_fingerprint: 'fp_b8565bb333',
+    x_groq: { id: 'req_01k3etx9gyf3gbvkjtp3w2fn2v' },
+    service_tier: 'on_demand'
+  },
+  choices: [
+    {
+      index: 0,
+      message: [Object],
+      logprobs: null,
+      finish_reason: 'stop'
+    }
+  ],
+  firstChoice: {
+    index: 0,
+    message: { role: 'assistant', content: '' },
+    logprobs: null,
+    finish_reason: 'stop'
+  },
+  message: { role: 'assistant', content: '' },
+  content: ''
+}
+[2025-08-24T20:04:27.422Z] [DEBUG][LLM] Response ← { content: '', needsMoreWork: false }
+[2025-08-24T20:04:27.422Z] [DEBUG][LLM] === LLM CALL END ===
+[2025-08-24T20:04:27.422Z] [DEBUG][TOOLS] Planned tool calls from LLM []
+[2025-08-24T20:04:33.111Z] [DEBUG][TTS] === TTS GENERATION START ===
+[2025-08-24T20:04:33.111Z] [DEBUG][TTS] Input → {
+  textLength: 0,
+  providerId: 'groq',
+  voice: undefined,
+  model: undefined,
+  speed: undefined,
+  ttsEnabled: true,
+  preprocessingEnabled: true
+}
+[2025-08-24T20:04:33.112Z] [DEBUG][TTS] Text preprocessing → {
+  originalLength: 0,
+  processedLength: 0,
+  preprocessingEnabled: true,
+  options: { removeCodeBlocks: true, removeUrls: true, convertMarkdown: true },
+  originalText: '',
+  processedText: ''
+}
+[2025-08-24T20:04:33.112Z] [DEBUG][TTS] TTS VALIDATION FAILED → { isValid: false, issues: [ 'Text is empty' ], processedLength: 0 }
+[2025-08-24T20:04:33.113Z] [DEBUG][TTS] === TTS GENERATION START ===
+[2025-08-24T20:04:33.113Z] [DEBUG][TTS] Input → {
+  textLength: 0,
+  providerId: 'groq',
+  voice: undefined,
+  model: undefined,
+  speed: undefined,
+  ttsEnabled: true,
+  preprocessingEnabled: true
+}
+[2025-08-24T20:04:33.113Z] [DEBUG][TTS] Text preprocessing → {
+  originalLength: 0,
+  processedLength: 0,
+  preprocessingEnabled: true,
+  options: { removeCodeBlocks: true, removeUrls: true, convertMarkdown: true },
+  originalText: '',
+  processedText: ''
+}
+[2025-08-24T20:04:33.113Z] [DEBUG][TTS] TTS VALIDATION FAILED → { isValid: false, issues: [ 'Text is empty' ], processedLength: 0 }
+Skip checkForUpdates because application is not packed and dev update config is not forced
+
+build started...
+✓ 1 modules transformed.
+out/main/oauth-callback-server-fzqzUOMc.js    6.84 kB
+out/main/models-service-D5ybgteb.js          10.13 kB
+out/main/index.js                           222.03 kB
+out/main/updater-HHDJRCo3.js                472.95 kB
+built in 580ms.
+
+rebuild the electron main process successfully
+
+  waiting for electron to exit...
+
+restart electron app...
+[DEBUG] Enabled: LLM, TOOLS, KEYBINDS, TTS (argv: d)
+[2025-08-24T20:05:28.694Z] [DEBUG][KEYBINDS] Starting keyboard event listener with rdev path: /Users/ajjoobandi/Development/SpeakMCP/resources/bin/speakmcp-rs
+[2025-08-24T20:05:28.703Z] [DEBUG][TOOLS] MCP Service initialization starting
+[2025-08-24T20:05:28.703Z] [DEBUG][TOOLS] Found 2 servers to initialize [ 'github', 'filesystem' ]
+[2025-08-24T20:05:28.704Z] [DEBUG][TOOLS] Starting initialization of server: github
+[2025-08-24T20:05:28.704Z] [DEBUG][TOOLS] Initializing server: github {
+  transport: 'stdio',
+  command: 'npx',
+  args: [ '-y', '@modelcontextprotocol/server-github' ],
+  env: [ 'GITHUB_PERSONAL_ACCESS_TOKEN' ]
+}
+Skip checkForUpdates because application is not packed and dev update config is not forced
+Skip checkForUpdates because application is not packed and dev update config is not forced
+[2025-08-24T20:05:31.390Z] [DEBUG][TOOLS] Server github connected successfully {
+  toolCount: 26,
+  tools: [
+    {
+      name: 'create_or_update_file',
+      description: 'Create or update a single file in a GitHub repository'
+    },
+    {
+      name: 'search_repositories',
+      description: 'Search for GitHub repositories'
+    },
+    {
+      name: 'create_repository',
+      description: 'Create a new GitHub repository in your account'
+    },
+    {
+      name: 'get_file_contents',
+      description: 'Get the contents of a file or directory from a GitHub repository'
+    },
+    {
+      name: 'push_files',
+      description: 'Push multiple files to a GitHub repository in a single commit'
+    },
+    {
+      name: 'create_issue',
+      description: 'Create a new issue in a GitHub repository'
+    },
+    {
+      name: 'create_pull_request',
+      description: 'Create a new pull request in a GitHub repository'
+    },
+    {
+      name: 'fork_repository',
+      description: 'Fork a GitHub repository to your account or specified organization'
+    },
+    {
+      name: 'create_branch',
+      description: 'Create a new branch in a GitHub repository'
+    },
+    {
+      name: 'list_commits',
+      description: 'Get list of commits of a branch in a GitHub repository'
+    },
+    {
+      name: 'list_issues',
+      description: 'List issues in a GitHub repository with filtering options'
+    },
+    {
+      name: 'update_issue',
+      description: 'Update an existing issue in a GitHub repository'
+    },
+    {
+      name: 'add_issue_comment',
+      description: 'Add a comment to an existing issue'
+    },
+    {
+      name: 'search_code',
+      description: 'Search for code across GitHub repositories'
+    },
+    {
+      name: 'search_issues',
+      description: 'Search for issues and pull requests across GitHub repositories'
+    },
+    { name: 'search_users', description: 'Search for users on GitHub' },
+    {
+      name: 'get_issue',
+      description: 'Get details of a specific issue in a GitHub repository.'
+    },
+    {
+      name: 'get_pull_request',
+      description: 'Get details of a specific pull request'
+    },
+    {
+      name: 'list_pull_requests',
+      description: 'List and filter repository pull requests'
+    },
+    {
+      name: 'create_pull_request_review',
+      description: 'Create a review on a pull request'
+    },
+    { name: 'merge_pull_request', description: 'Merge a pull request' },
+    {
+      name: 'get_pull_request_files',
+      description: 'Get the list of files changed in a pull request'
+    },
+    {
+      name: 'get_pull_request_status',
+      description: 'Get the combined status of all status checks for a pull request'
+    },
+    {
+      name: 'update_pull_request_branch',
+      description: 'Update a pull request branch with the latest changes from the base branch'
+    },
+    {
+      name: 'get_pull_request_comments',
+      description: 'Get the review comments on a pull request'
+    },
+    {
+      name: 'get_pull_request_reviews',
+      description: 'Get the reviews on a pull request'
+    }
+  ]
+}
+[2025-08-24T20:05:31.391Z] [DEBUG][TOOLS] Successfully initialized server: github
+[2025-08-24T20:05:31.391Z] [DEBUG][TOOLS] Starting initialization of server: filesystem
+[2025-08-24T20:05:31.391Z] [DEBUG][TOOLS] Initializing server: filesystem {
+  transport: 'stdio',
+  command: 'npx',
+  args: [ '-y', '@modelcontextprotocol/server-filesystem' ],
+  env: []
+}
+[2025-08-24T20:05:33.783Z] [DEBUG][TOOLS] Server filesystem connected successfully {
+  toolCount: 14,
+  tools: [
+    {
+      name: 'read_file',
+      description: 'Read the complete contents of a file as text. DEPRECATED: Use read_text_file instead.'
+    },
+    {
+      name: 'read_text_file',
+      description: "Read the complete contents of a file from the file system as text. Handles various text encodings and provides detailed error messages if the file cannot be read. Use this tool when you need to examine the contents of a single file. Use the 'head' parameter to read only the first N lines of a file, or the 'tail' parameter to read only the last N lines of a file. Operates on the file as text regardless of extension. Only works within allowed directories."
+    },
+    {
+      name: 'read_media_file',
+      description: 'Read an image or audio file. Returns the base64 encoded data and MIME type. Only works within allowed directories.'
+    },
+    {
+      name: 'read_multiple_files',
+      description: "Read the contents of multiple files simultaneously. This is more efficient than reading files one by one when you need to analyze or compare multiple files. Each file's content is returned with its path as a reference. Failed reads for individual files won't stop the entire operation. Only works within allowed directories."
+    },
+    {
+      name: 'write_file',
+      description: 'Create a new file or completely overwrite an existing file with new content. Use with caution as it will overwrite existing files without warning. Handles text content with proper encoding. Only works within allowed directories.'
+    },
+    {
+      name: 'edit_file',
+      description: 'Make line-based edits to a text file. Each edit replaces exact line sequences with new content. Returns a git-style diff showing the changes made. Only works within allowed directories.'
+    },
+    {
+      name: 'create_directory',
+      description: 'Create a new directory or ensure a directory exists. Can create multiple nested directories in one operation. If the directory already exists, this operation will succeed silently. Perfect for setting up directory structures for projects or ensuring required paths exist. Only works within allowed directories.'
+    },
+    {
+      name: 'list_directory',
+      description: 'Get a detailed listing of all files and directories in a specified path. Results clearly distinguish between files and directories with [FILE] and [DIR] prefixes. This tool is essential for understanding directory structure and finding specific files within a directory. Only works within allowed directories.'
+    },
+    {
+      name: 'list_directory_with_sizes',
+      description: 'Get a detailed listing of all files and directories in a specified path, including sizes. Results clearly distinguish between files and directories with [FILE] and [DIR] prefixes. This tool is useful for understanding directory structure and finding specific files within a directory. Only works within allowed directories.'
+    },
+    {
+      name: 'directory_tree',
+      description: "Get a recursive tree view of files and directories as a JSON structure. Each entry includes 'name', 'type' (file/directory), and 'children' for directories. Files have no children array, while directories always have a children array (which may be empty). The output is formatted with 2-space indentation for readability. Only works within allowed directories."
+    },
+    {
+      name: 'move_file',
+      description: 'Move or rename files and directories. Can move files between directories and rename them in a single operation. If the destination exists, the operation will fail. Works across different directories and can be used for simple renaming within the same directory. Both source and destination must be within allowed directories.'
+    },
+    {
+      name: 'search_files',
+      description: "Recursively search for files and directories matching a pattern. Searches through all subdirectories from the starting path. The search is case-insensitive and matches partial names. Returns full paths to all matching items. Great for finding files when you don't know their exact location. Only searches within allowed directories."
+    },
+    {
+      name: 'get_file_info',
+      description: 'Retrieve detailed metadata about a file or directory. Returns comprehensive information including size, creation time, last modified time, permissions, and type. This tool is perfect for understanding file characteristics without reading the actual content. Only works within allowed directories.'
+    },
+    {
+      name: 'list_allowed_directories',
+      description: 'Returns the list of directories that this server is allowed to access. Subdirectories within these allowed directories are also accessible. Use this to understand which directories and their nested paths are available before trying to access files.'
+    }
+  ]
+}
+[2025-08-24T20:05:33.783Z] [DEBUG][TOOLS] Successfully initialized server: filesystem
+[2025-08-24T20:05:33.783Z] [DEBUG][TOOLS] MCP Service initialization complete. Total tools available: 40
+[2025-08-24T20:05:46.128Z] [DEBUG][KEYBINDS] Config change #1: {
+  agentKillSwitchEnabled: true,
+  agentKillSwitchHotkey: 'ctrl-shift-q',
+  textInputEnabled: true,
+  textInputShortcut: 'ctrl-t',
+  mcpToolsEnabled: true,
+  mcpToolsShortcut: 'hold-ctrl-alt',
+  shortcut: undefined
+}
+
+build started...
+✓ 1 modules transformed.
+out/main/oauth-callback-server-fzqzUOMc.js    6.84 kB
+out/main/models-service-D5ybgteb.js          10.13 kB
+out/main/index.js                           223.13 kB
+out/main/updater-HHDJRCo3.js                472.95 kB
+built in 554ms.
+
+rebuild the electron main process successfully
+
+  waiting for electron to exit...
+
+restart electron app...
+[DEBUG] Enabled: LLM, TOOLS, KEYBINDS, TTS (argv: d)
+[2025-08-24T20:06:05.171Z] [DEBUG][KEYBINDS] Starting keyboard event listener with rdev path: /Users/ajjoobandi/Development/SpeakMCP/resources/bin/speakmcp-rs
+[2025-08-24T20:06:05.190Z] [DEBUG][TOOLS] MCP Service initialization starting
+[2025-08-24T20:06:05.190Z] [DEBUG][TOOLS] Found 2 servers to initialize [ 'github', 'filesystem' ]
+[2025-08-24T20:06:05.191Z] [DEBUG][TOOLS] Starting initialization of server: github
+[2025-08-24T20:06:05.191Z] [DEBUG][TOOLS] Initializing server: github {
+  transport: 'stdio',
+  command: 'npx',
+  args: [ '-y', '@modelcontextprotocol/server-github' ],
+  env: [ 'GITHUB_PERSONAL_ACCESS_TOKEN' ]
+}
+Skip checkForUpdates because application is not packed and dev update config is not forced
+Skip checkForUpdates because application is not packed and dev update config is not forced
+[2025-08-24T20:06:07.720Z] [DEBUG][KEYBINDS] Config change #1: {
+  agentKillSwitchEnabled: true,
+  agentKillSwitchHotkey: 'ctrl-shift-q',
+  textInputEnabled: true,
+  textInputShortcut: 'ctrl-t',
+  mcpToolsEnabled: true,
+  mcpToolsShortcut: 'hold-ctrl-alt',
+  shortcut: undefined
+}
+[2025-08-24T20:06:08.418Z] [DEBUG][TOOLS] Server github connected successfully {
+  toolCount: 26,
+  tools: [
+    {
+      name: 'create_or_update_file',
+      description: 'Create or update a single file in a GitHub repository'
+    },
+    {
+      name: 'search_repositories',
+      description: 'Search for GitHub repositories'
+    },
+    {
+      name: 'create_repository',
+      description: 'Create a new GitHub repository in your account'
+    },
+    {
+      name: 'get_file_contents',
+      description: 'Get the contents of a file or directory from a GitHub repository'
+    },
+    {
+      name: 'push_files',
+      description: 'Push multiple files to a GitHub repository in a single commit'
+    },
+    {
+      name: 'create_issue',
+      description: 'Create a new issue in a GitHub repository'
+    },
+    {
+      name: 'create_pull_request',
+      description: 'Create a new pull request in a GitHub repository'
+    },
+    {
+      name: 'fork_repository',
+      description: 'Fork a GitHub repository to your account or specified organization'
+    },
+    {
+      name: 'create_branch',
+      description: 'Create a new branch in a GitHub repository'
+    },
+    {
+      name: 'list_commits',
+      description: 'Get list of commits of a branch in a GitHub repository'
+    },
+    {
+      name: 'list_issues',
+      description: 'List issues in a GitHub repository with filtering options'
+    },
+    {
+      name: 'update_issue',
+      description: 'Update an existing issue in a GitHub repository'
+    },
+    {
+      name: 'add_issue_comment',
+      description: 'Add a comment to an existing issue'
+    },
+    {
+      name: 'search_code',
+      description: 'Search for code across GitHub repositories'
+    },
+    {
+      name: 'search_issues',
+      description: 'Search for issues and pull requests across GitHub repositories'
+    },
+    { name: 'search_users', description: 'Search for users on GitHub' },
+    {
+      name: 'get_issue',
+      description: 'Get details of a specific issue in a GitHub repository.'
+    },
+    {
+      name: 'get_pull_request',
+      description: 'Get details of a specific pull request'
+    },
+    {
+      name: 'list_pull_requests',
+      description: 'List and filter repository pull requests'
+    },
+    {
+      name: 'create_pull_request_review',
+      description: 'Create a review on a pull request'
+    },
+    { name: 'merge_pull_request', description: 'Merge a pull request' },
+    {
+      name: 'get_pull_request_files',
+      description: 'Get the list of files changed in a pull request'
+    },
+    {
+      name: 'get_pull_request_status',
+      description: 'Get the combined status of all status checks for a pull request'
+    },
+    {
+      name: 'update_pull_request_branch',
+      description: 'Update a pull request branch with the latest changes from the base branch'
+    },
+    {
+      name: 'get_pull_request_comments',
+      description: 'Get the review comments on a pull request'
+    },
+    {
+      name: 'get_pull_request_reviews',
+      description: 'Get the reviews on a pull request'
+    }
+  ]
+}
+[2025-08-24T20:06:08.419Z] [DEBUG][TOOLS] Successfully initialized server: github
+[2025-08-24T20:06:08.419Z] [DEBUG][TOOLS] Starting initialization of server: filesystem
+[2025-08-24T20:06:08.419Z] [DEBUG][TOOLS] Initializing server: filesystem {
+  transport: 'stdio',
+  command: 'npx',
+  args: [ '-y', '@modelcontextprotocol/server-filesystem' ],
+  env: []
+}
+[2025-08-24T20:06:10.803Z] [DEBUG][TOOLS] Server filesystem connected successfully {
+  toolCount: 14,
+  tools: [
+    {
+      name: 'read_file',
+      description: 'Read the complete contents of a file as text. DEPRECATED: Use read_text_file instead.'
+    },
+    {
+      name: 'read_text_file',
+      description: "Read the complete contents of a file from the file system as text. Handles various text encodings and provides detailed error messages if the file cannot be read. Use this tool when you need to examine the contents of a single file. Use the 'head' parameter to read only the first N lines of a file, or the 'tail' parameter to read only the last N lines of a file. Operates on the file as text regardless of extension. Only works within allowed directories."
+    },
+    {
+      name: 'read_media_file',
+      description: 'Read an image or audio file. Returns the base64 encoded data and MIME type. Only works within allowed directories.'
+    },
+    {
+      name: 'read_multiple_files',
+      description: "Read the contents of multiple files simultaneously. This is more efficient than reading files one by one when you need to analyze or compare multiple files. Each file's content is returned with its path as a reference. Failed reads for individual files won't stop the entire operation. Only works within allowed directories."
+    },
+    {
+      name: 'write_file',
+      description: 'Create a new file or completely overwrite an existing file with new content. Use with caution as it will overwrite existing files without warning. Handles text content with proper encoding. Only works within allowed directories.'
+    },
+    {
+      name: 'edit_file',
+      description: 'Make line-based edits to a text file. Each edit replaces exact line sequences with new content. Returns a git-style diff showing the changes made. Only works within allowed directories.'
+    },
+    {
+      name: 'create_directory',
+      description: 'Create a new directory or ensure a directory exists. Can create multiple nested directories in one operation. If the directory already exists, this operation will succeed silently. Perfect for setting up directory structures for projects or ensuring required paths exist. Only works within allowed directories.'
+    },
+    {
+      name: 'list_directory',
+      description: 'Get a detailed listing of all files and directories in a specified path. Results clearly distinguish between files and directories with [FILE] and [DIR] prefixes. This tool is essential for understanding directory structure and finding specific files within a directory. Only works within allowed directories.'
+    },
+    {
+      name: 'list_directory_with_sizes',
+      description: 'Get a detailed listing of all files and directories in a specified path, including sizes. Results clearly distinguish between files and directories with [FILE] and [DIR] prefixes. This tool is useful for understanding directory structure and finding specific files within a directory. Only works within allowed directories.'
+    },
+    {
+      name: 'directory_tree',
+      description: "Get a recursive tree view of files and directories as a JSON structure. Each entry includes 'name', 'type' (file/directory), and 'children' for directories. Files have no children array, while directories always have a children array (which may be empty). The output is formatted with 2-space indentation for readability. Only works within allowed directories."
+    },
+    {
+      name: 'move_file',
+      description: 'Move or rename files and directories. Can move files between directories and rename them in a single operation. If the destination exists, the operation will fail. Works across different directories and can be used for simple renaming within the same directory. Both source and destination must be within allowed directories.'
+    },
+    {
+      name: 'search_files',
+      description: "Recursively search for files and directories matching a pattern. Searches through all subdirectories from the starting path. The search is case-insensitive and matches partial names. Returns full paths to all matching items. Great for finding files when you don't know their exact location. Only searches within allowed directories."
+    },
+    {
+      name: 'get_file_info',
+      description: 'Retrieve detailed metadata about a file or directory. Returns comprehensive information including size, creation time, last modified time, permissions, and type. This tool is perfect for understanding file characteristics without reading the actual content. Only works within allowed directories.'
+    },
+    {
+      name: 'list_allowed_directories',
+      description: 'Returns the list of directories that this server is allowed to access. Subdirectories within these allowed directories are also accessible. Use this to understand which directories and their nested paths are available before trying to access files.'
+    }
+  ]
+}
+[2025-08-24T20:06:10.803Z] [DEBUG][TOOLS] Successfully initialized server: filesystem
+[2025-08-24T20:06:10.803Z] [DEBUG][TOOLS] MCP Service initialization complete. Total tools available: 40
+[2025-08-24T20:07:37.950Z] [DEBUG][KEYBINDS] Alt key pressed, isPressedAltKey = true isPressedCtrlAltKey = false
+[2025-08-24T20:07:39.253Z] [DEBUG][KEYBINDS] Alt key released, isPressedAltKey = false isPressedCtrlAltKey = false
+Skip checkForUpdates because application is not packed and dev update config is not forced
+
+build started...
+✓ 1 modules transformed.
+out/main/oauth-callback-server-fzqzUOMc.js    6.84 kB
+out/main/models-service-D5ybgteb.js          10.13 kB
+out/main/index.js                           223.65 kB
+out/main/updater-HHDJRCo3.js                472.95 kB
+built in 538ms.
+
+rebuild the electron main process successfully
+
+  waiting for electron to exit...
+
+restart electron app...
+[DEBUG] Enabled: LLM, TOOLS, KEYBINDS, TTS (argv: d)
+[2025-08-24T20:08:13.885Z] [DEBUG][KEYBINDS] Starting keyboard event listener with rdev path: /Users/ajjoobandi/Development/SpeakMCP/resources/bin/speakmcp-rs
+[2025-08-24T20:08:13.904Z] [DEBUG][TOOLS] MCP Service initialization starting
+[2025-08-24T20:08:13.904Z] [DEBUG][TOOLS] Found 2 servers to initialize [ 'github', 'filesystem' ]
+[2025-08-24T20:08:13.905Z] [DEBUG][TOOLS] Starting initialization of server: github
+[2025-08-24T20:08:13.905Z] [DEBUG][TOOLS] Initializing server: github {
+  transport: 'stdio',
+  command: 'npx',
+  args: [ '-y', '@modelcontextprotocol/server-github' ],
+  env: [ 'GITHUB_PERSONAL_ACCESS_TOKEN' ]
+}
+Skip checkForUpdates because application is not packed and dev update config is not forced
+Skip checkForUpdates because application is not packed and dev update config is not forced
+[2025-08-24T20:08:15.683Z] [DEBUG][KEYBINDS] Config change #1: {
+  agentKillSwitchEnabled: true,
+  agentKillSwitchHotkey: 'ctrl-shift-q',
+  textInputEnabled: true,
+  textInputShortcut: 'ctrl-t',
+  mcpToolsEnabled: true,
+  mcpToolsShortcut: 'hold-ctrl-alt',
+  shortcut: undefined
+}
+[2025-08-24T20:08:16.547Z] [DEBUG][TOOLS] Server github connected successfully {
+  toolCount: 26,
+  tools: [
+    {
+      name: 'create_or_update_file',
+      description: 'Create or update a single file in a GitHub repository'
+    },
+    {
+      name: 'search_repositories',
+      description: 'Search for GitHub repositories'
+    },
+    {
+      name: 'create_repository',
+      description: 'Create a new GitHub repository in your account'
+    },
+    {
+      name: 'get_file_contents',
+      description: 'Get the contents of a file or directory from a GitHub repository'
+    },
+    {
+      name: 'push_files',
+      description: 'Push multiple files to a GitHub repository in a single commit'
+    },
+    {
+      name: 'create_issue',
+      description: 'Create a new issue in a GitHub repository'
+    },
+    {
+      name: 'create_pull_request',
+      description: 'Create a new pull request in a GitHub repository'
+    },
+    {
+      name: 'fork_repository',
+      description: 'Fork a GitHub repository to your account or specified organization'
+    },
+    {
+      name: 'create_branch',
+      description: 'Create a new branch in a GitHub repository'
+    },
+    {
+      name: 'list_commits',
+      description: 'Get list of commits of a branch in a GitHub repository'
+    },
+    {
+      name: 'list_issues',
+      description: 'List issues in a GitHub repository with filtering options'
+    },
+    {
+      name: 'update_issue',
+      description: 'Update an existing issue in a GitHub repository'
+    },
+    {
+      name: 'add_issue_comment',
+      description: 'Add a comment to an existing issue'
+    },
+    {
+      name: 'search_code',
+      description: 'Search for code across GitHub repositories'
+    },
+    {
+      name: 'search_issues',
+      description: 'Search for issues and pull requests across GitHub repositories'
+    },
+    { name: 'search_users', description: 'Search for users on GitHub' },
+    {
+      name: 'get_issue',
+      description: 'Get details of a specific issue in a GitHub repository.'
+    },
+    {
+      name: 'get_pull_request',
+      description: 'Get details of a specific pull request'
+    },
+    {
+      name: 'list_pull_requests',
+      description: 'List and filter repository pull requests'
+    },
+    {
+      name: 'create_pull_request_review',
+      description: 'Create a review on a pull request'
+    },
+    { name: 'merge_pull_request', description: 'Merge a pull request' },
+    {
+      name: 'get_pull_request_files',
+      description: 'Get the list of files changed in a pull request'
+    },
+    {
+      name: 'get_pull_request_status',
+      description: 'Get the combined status of all status checks for a pull request'
+    },
+    {
+      name: 'update_pull_request_branch',
+      description: 'Update a pull request branch with the latest changes from the base branch'
+    },
+    {
+      name: 'get_pull_request_comments',
+      description: 'Get the review comments on a pull request'
+    },
+    {
+      name: 'get_pull_request_reviews',
+      description: 'Get the reviews on a pull request'
+    }
+  ]
+}
+[2025-08-24T20:08:16.548Z] [DEBUG][TOOLS] Successfully initialized server: github
+[2025-08-24T20:08:16.548Z] [DEBUG][TOOLS] Starting initialization of server: filesystem
+[2025-08-24T20:08:16.548Z] [DEBUG][TOOLS] Initializing server: filesystem {
+  transport: 'stdio',
+  command: 'npx',
+  args: [ '-y', '@modelcontextprotocol/server-filesystem' ],
+  env: []
+}
+[2025-08-24T20:08:19.182Z] [DEBUG][TOOLS] Server filesystem connected successfully {
+  toolCount: 14,
+  tools: [
+    {
+      name: 'read_file',
+      description: 'Read the complete contents of a file as text. DEPRECATED: Use read_text_file instead.'
+    },
+    {
+      name: 'read_text_file',
+      description: "Read the complete contents of a file from the file system as text. Handles various text encodings and provides detailed error messages if the file cannot be read. Use this tool when you need to examine the contents of a single file. Use the 'head' parameter to read only the first N lines of a file, or the 'tail' parameter to read only the last N lines of a file. Operates on the file as text regardless of extension. Only works within allowed directories."
+    },
+    {
+      name: 'read_media_file',
+      description: 'Read an image or audio file. Returns the base64 encoded data and MIME type. Only works within allowed directories.'
+    },
+    {
+      name: 'read_multiple_files',
+      description: "Read the contents of multiple files simultaneously. This is more efficient than reading files one by one when you need to analyze or compare multiple files. Each file's content is returned with its path as a reference. Failed reads for individual files won't stop the entire operation. Only works within allowed directories."
+    },
+    {
+      name: 'write_file',
+      description: 'Create a new file or completely overwrite an existing file with new content. Use with caution as it will overwrite existing files without warning. Handles text content with proper encoding. Only works within allowed directories.'
+    },
+    {
+      name: 'edit_file',
+      description: 'Make line-based edits to a text file. Each edit replaces exact line sequences with new content. Returns a git-style diff showing the changes made. Only works within allowed directories.'
+    },
+    {
+      name: 'create_directory',
+      description: 'Create a new directory or ensure a directory exists. Can create multiple nested directories in one operation. If the directory already exists, this operation will succeed silently. Perfect for setting up directory structures for projects or ensuring required paths exist. Only works within allowed directories.'
+    },
+    {
+      name: 'list_directory',
+      description: 'Get a detailed listing of all files and directories in a specified path. Results clearly distinguish between files and directories with [FILE] and [DIR] prefixes. This tool is essential for understanding directory structure and finding specific files within a directory. Only works within allowed directories.'
+    },
+    {
+      name: 'list_directory_with_sizes',
+      description: 'Get a detailed listing of all files and directories in a specified path, including sizes. Results clearly distinguish between files and directories with [FILE] and [DIR] prefixes. This tool is useful for understanding directory structure and finding specific files within a directory. Only works within allowed directories.'
+    },
+    {
+      name: 'directory_tree',
+      description: "Get a recursive tree view of files and directories as a JSON structure. Each entry includes 'name', 'type' (file/directory), and 'children' for directories. Files have no children array, while directories always have a children array (which may be empty). The output is formatted with 2-space indentation for readability. Only works within allowed directories."
+    },
+    {
+      name: 'move_file',
+      description: 'Move or rename files and directories. Can move files between directories and rename them in a single operation. If the destination exists, the operation will fail. Works across different directories and can be used for simple renaming within the same directory. Both source and destination must be within allowed directories.'
+    },
+    {
+      name: 'search_files',
+      description: "Recursively search for files and directories matching a pattern. Searches through all subdirectories from the starting path. The search is case-insensitive and matches partial names. Returns full paths to all matching items. Great for finding files when you don't know their exact location. Only searches within allowed directories."
+    },
+    {
+      name: 'get_file_info',
+      description: 'Retrieve detailed metadata about a file or directory. Returns comprehensive information including size, creation time, last modified time, permissions, and type. This tool is perfect for understanding file characteristics without reading the actual content. Only works within allowed directories.'
+    },
+    {
+      name: 'list_allowed_directories',
+      description: 'Returns the list of directories that this server is allowed to access. Subdirectories within these allowed directories are also accessible. Use this to understand which directories and their nested paths are available before trying to access files.'
+    }
+  ]
+}
+[2025-08-24T20:08:19.183Z] [DEBUG][TOOLS] Successfully initialized server: filesystem
+[2025-08-24T20:08:19.183Z] [DEBUG][TOOLS] MCP Service initialization complete. Total tools available: 40
+[2025-08-24T20:08:30.360Z] [DEBUG][KEYBINDS] Shift key pressed, isPressedShiftKey = true
+[2025-08-24T20:08:30.655Z] [DEBUG][KEYBINDS] Shift key released, isPressedShiftKey = false
+[2025-08-24T20:08:32.030Z] [DEBUG][KEYBINDS] Ctrl key pressed, isPressedCtrlKey = true
+[2025-08-24T20:08:32.127Z] [DEBUG][KEYBINDS] Keyboard listener process exited: { code: null, signal: 'SIGINT' }

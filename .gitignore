@@ -23,14 +23,3 @@ backend/.wrangler
 *.DS_Store*
 .augment
 augment.mjs
-
-# Temporary development files
-CHANGES_SUMMARY.md
-*-SUMMARY.md
-
-# Windows installer files
-rustup-init.exe
-*.exe
-
-# Development config files
-dev-app-update.yml

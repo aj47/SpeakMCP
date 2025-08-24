@@ -41,31 +41,190 @@ function extractJsonObject(str: string): any | null {
 }
 
 /**
- * Makes an API call with retry logic.
+ * Enhanced error class for HTTP errors with status code and retry information
+ */
+class HttpError extends Error {
+  constructor(
+    public status: number,
+    public statusText: string,
+    public responseText: string,
+    public retryAfter?: number,
+  ) {
+    super(HttpError.createUserFriendlyMessage(status, statusText, responseText, retryAfter))
+    this.name = 'HttpError'
+  }
+
+  /**
+   * Create user-friendly error messages for different HTTP status codes
+   */
+  private static createUserFriendlyMessage(
+    status: number,
+    statusText: string,
+    responseText: string,
+    retryAfter?: number
+  ): string {
+    switch (status) {
+      case 429:
+        const waitTime = retryAfter ? `${retryAfter} seconds` : 'a moment'
+        return `Rate limit exceeded. The API is temporarily unavailable due to too many requests. Please wait ${waitTime} before trying again.`
+
+      case 401:
+        return 'Authentication failed. Please check your API key configuration.'
+
+      case 403:
+        return 'Access forbidden. Your API key may not have permission to access this resource.'
+
+      case 404:
+        return 'API endpoint not found. Please check your base URL configuration.'
+
+      case 408:
+        return 'Request timeout. The API took too long to respond.'
+
+      case 500:
+        return 'Internal server error. The API service is experiencing issues.'
+
+      case 502:
+        return 'Bad gateway. There may be a temporary issue with the API service.'
+
+      case 503:
+        return 'Service unavailable. The API service is temporarily down for maintenance.'
+
+      case 504:
+        return 'Gateway timeout. The API service is not responding.'
+
+      default:
+        // For other errors, try to extract meaningful information from the response
+        try {
+          const errorJson = JSON.parse(responseText)
+          if (errorJson.error?.message) {
+            return `API Error: ${errorJson.error.message}`
+          }
+        } catch (e) {
+          // If response is not JSON, use the raw response
+        }
+
+        return `HTTP ${status}: ${responseText || statusText}`
+    }
+  }
+}
+
+/**
+ * Check if an error is retryable based on status code and error type
+ */
+function isRetryableError(error: unknown): boolean {
+  if (error instanceof HttpError) {
+    // Retry on rate limits (429), server errors (5xx), and some client errors
+    return error.status === 429 ||
+           (error.status >= 500 && error.status < 600) ||
+           error.status === 408 || // Request Timeout
+           error.status === 502 || // Bad Gateway
+           error.status === 503 || // Service Unavailable
+           error.status === 504    // Gateway Timeout
+  }
+
+  // Retry on network errors
+  if (error instanceof Error) {
+    const message = error.message.toLowerCase()
+    return message.includes('network') ||
+           message.includes('timeout') ||
+           message.includes('connection') ||
+           message.includes('fetch')
+  }
+
+  return false
+}
+
+/**
+ * Calculate delay for exponential backoff with jitter
+ */
+function calculateBackoffDelay(attempt: number, baseDelay: number = 1000, maxDelay: number = 30000): number {
+  // Exponential backoff: baseDelay * 2^attempt
+  const exponentialDelay = baseDelay * Math.pow(2, attempt)
+
+  // Cap at maxDelay
+  const cappedDelay = Math.min(exponentialDelay, maxDelay)
+
+  // Add jitter (±25% randomization) to avoid thundering herd
+  const jitter = cappedDelay * 0.25 * (Math.random() * 2 - 1)
+
+  return Math.max(0, cappedDelay + jitter)
+}
+
+/**
+ * Makes an API call with enhanced retry logic including exponential backoff for rate limits.
  * @param call - The API call function to execute.
  * @param retryCount - The number of times to retry the API call if it fails.
+ * @param baseDelay - Base delay in milliseconds for exponential backoff.
+ * @param maxDelay - Maximum delay in milliseconds between retries.
  * @returns A promise that resolves with the response from the successful API call.
  */
 async function apiCallWithRetry<T>(
   call: () => Promise<T>,
   retryCount: number = 3,
+  baseDelay: number = 1000,
+  maxDelay: number = 30000,
 ): Promise<T> {
-  for (let i = 0; i < retryCount; i++) {
+  let lastError: unknown
+
+  for (let attempt = 0; attempt <= retryCount; attempt++) {
     try {
       const response = await call()
       return response
     } catch (error) {
-      if (i === retryCount - 1) {
+      lastError = error
+
+      // Don't retry on the last attempt
+      if (attempt === retryCount) {
+        break
+      }
+
+      // Check if error is retryable
+      if (!isRetryableError(error)) {
         diagnosticsService.logError(
           "llm-fetch",
-          "API call failed after retries",
+          "Non-retryable API error",
           error,
         )
         throw error
       }
+
+      // Calculate delay for this attempt
+      let delay = calculateBackoffDelay(attempt, baseDelay, maxDelay)
+
+      // Handle rate limit specific logic
+      if (error instanceof HttpError && error.status === 429) {
+        // Use Retry-After header if provided
+        if (error.retryAfter) {
+          delay = error.retryAfter * 1000 // Convert seconds to milliseconds
+          // Cap the retry-after delay to prevent extremely long waits
+          delay = Math.min(delay, maxDelay)
+        }
+
+        diagnosticsService.logError(
+          "llm-fetch",
+          `Rate limit hit (429), retrying in ${Math.round(delay / 1000)}s (attempt ${attempt + 1}/${retryCount + 1})`,
+          { status: error.status, retryAfter: error.retryAfter, delay }
+        )
+      } else {
+        diagnosticsService.logError(
+          "llm-fetch",
+          `API call failed, retrying in ${Math.round(delay / 1000)}s (attempt ${attempt + 1}/${retryCount + 1})`,
+          { error: error instanceof Error ? error.message : String(error), delay }
+        )
+      }
+
+      // Wait before retrying
+      await new Promise(resolve => setTimeout(resolve, delay))
     }
   }
-  throw new Error("Unexpected error in retry logic")
+
+  // All retries exhausted
+  diagnosticsService.logError(
+    "llm-fetch",
+    "API call failed after all retries",
+    lastError,
+  )
+  throw lastError
 }
 
 /**
@@ -184,12 +343,24 @@ async function makeOpenAICompatibleCall(
 
     if (!response.ok) {
       const errorText = await response.text()
+
+      // Extract Retry-After header for rate limiting
+      let retryAfter: number | undefined
+      const retryAfterHeader = response.headers.get('retry-after')
+      if (retryAfterHeader) {
+        const parsed = parseInt(retryAfterHeader, 10)
+        if (!isNaN(parsed)) {
+          retryAfter = parsed
+        }
+      }
+
       if (isDebugLLM()) {
         logLLM("=== HTTP ERROR ===")
         logLLM("HTTP Error Details:", {
           status: response.status,
           statusText: response.statusText,
           errorText,
+          retryAfter,
           estimatedTokens,
           model: requestBody.model
         })
@@ -211,7 +382,8 @@ async function makeOpenAICompatibleCall(
           // Keep original error if not JSON
         }
       }
-      throw new Error(`HTTP ${response.status}: ${errorText}`)
+
+      throw new HttpError(response.status, response.statusText, errorText, retryAfter)
     }
 
     const data = await response.json()
@@ -228,7 +400,7 @@ async function makeOpenAICompatibleCall(
     }
 
     return data
-  })
+  }, config.apiRetryCount, config.apiRetryBaseDelay, config.apiRetryMaxDelay)
 }
 
 /**
@@ -280,10 +452,27 @@ async function makeGeminiCall(
 
     if (!response.ok) {
       const errorText = await response.text()
-      if (isDebugLLM()) {
-        logLLM("Gemini HTTP Error", response.status, errorText)
+
+      // Extract Retry-After header for rate limiting
+      let retryAfter: number | undefined
+      const retryAfterHeader = response.headers.get('retry-after')
+      if (retryAfterHeader) {
+        const parsed = parseInt(retryAfterHeader, 10)
+        if (!isNaN(parsed)) {
+          retryAfter = parsed
+        }
       }
-      throw new Error(`HTTP ${response.status}: ${errorText}`)
+
+      if (isDebugLLM()) {
+        logLLM("Gemini HTTP Error", {
+          status: response.status,
+          statusText: response.statusText,
+          errorText,
+          retryAfter
+        })
+      }
+
+      throw new HttpError(response.status, response.statusText, errorText, retryAfter)
     }
 
     const data = await response.json()
@@ -315,7 +504,7 @@ async function makeGeminiCall(
         },
       ],
     }
-  })
+  }, config.apiRetryCount, config.apiRetryBaseDelay, config.apiRetryMaxDelay)
 }
 
 /**
@@ -380,8 +569,9 @@ export async function makeLLMCallWithFetch(
       return response
     }
 
-    // If no valid JSON found, return as content with needsMoreWork=true to continue
-    return { content, needsMoreWork: true }
+    // If no valid JSON found, treat as a final response
+    // Plain text responses are typically final answers
+    return { content, needsMoreWork: false }
   } catch (error) {
     diagnosticsService.logError("llm-fetch", "LLM call failed", error)
     throw error

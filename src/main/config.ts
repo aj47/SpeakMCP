@@ -46,6 +46,25 @@ const getConfig = () => {
     panelCustomSize: { width: 300, height: 200 },
     // Theme preference defaults
     themePreference: "system",
+    // TTS defaults
+    ttsEnabled: true,
+    ttsAutoPlay: true,
+    ttsProviderId: "openai",
+    ttsPreprocessingEnabled: true,
+    ttsRemoveCodeBlocks: true,
+    ttsRemoveUrls: true,
+    ttsConvertMarkdown: true,
+    // OpenAI TTS defaults
+    openaiTtsModel: "tts-1",
+    openaiTtsVoice: "alloy",
+    openaiTtsSpeed: 1.0,
+    openaiTtsResponseFormat: "mp3",
+    // Groq TTS defaults
+    groqTtsModel: "playai-tts",
+    groqTtsVoice: "Fritz-PlayAI",
+    // Gemini TTS defaults
+    geminiTtsModel: "gemini-2.5-flash-preview-tts",
+    geminiTtsVoice: "Kore",
   }
 
   try {

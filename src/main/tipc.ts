@@ -158,6 +158,8 @@ import { diagnosticsService } from "./diagnostics"
 import { updateTrayIcon } from "./tray"
 import { isAccessibilityGranted } from "./utils"
 import { writeText, writeTextWithFocusRestore } from "./keyboard"
+import { preprocessTextForTTS, validateTTSText } from "./tts-preprocessing"
+import { isDebugTTS, logTTS } from "./debug"
 
 const t = tipc.create()
 
@@ -1106,6 +1108,124 @@ export const router = {
       return mcpService.stopServer(input.serverName)
     }),
 
+  // Text-to-Speech
+  generateSpeech: t.procedure
+    .input<{
+      text: string
+      providerId?: string
+      voice?: string
+      model?: string
+      speed?: number
+    }>()
+    .action(async ({ input }) => {
+      const config = configStore.get()
+
+      if (isDebugTTS()) {
+        logTTS("=== TTS GENERATION START ===")
+        logTTS("Input →", {
+          textLength: input.text.length,
+          providerId: input.providerId || config.ttsProviderId || "openai",
+          voice: input.voice,
+          model: input.model,
+          speed: input.speed,
+          ttsEnabled: config.ttsEnabled,
+          preprocessingEnabled: config.ttsPreprocessingEnabled
+        })
+      }
+
+      if (!config.ttsEnabled) {
+        if (isDebugTTS()) {
+          logTTS("TTS DISABLED - throwing error")
+        }
+        throw new Error("Text-to-Speech is not enabled")
+      }
+
+      const providerId = input.providerId || config.ttsProviderId || "openai"
+
+      // Preprocess text for TTS
+      const preprocessingOptions = {
+        removeCodeBlocks: config.ttsRemoveCodeBlocks ?? true,
+        removeUrls: config.ttsRemoveUrls ?? true,
+        convertMarkdown: config.ttsConvertMarkdown ?? true,
+      }
+
+      const processedText = config.ttsPreprocessingEnabled !== false
+        ? preprocessTextForTTS(input.text, preprocessingOptions)
+        : input.text
+
+      if (isDebugTTS()) {
+        logTTS("Text preprocessing →", {
+          originalLength: input.text.length,
+          processedLength: processedText.length,
+          preprocessingEnabled: config.ttsPreprocessingEnabled !== false,
+          options: preprocessingOptions,
+          originalText: input.text.substring(0, 200) + (input.text.length > 200 ? "..." : ""),
+          processedText: processedText.substring(0, 200) + (processedText.length > 200 ? "..." : "")
+        })
+      }
+
+      // Validate processed text
+      const validation = validateTTSText(processedText)
+      if (!validation.isValid) {
+        if (isDebugTTS()) {
+          logTTS("TTS VALIDATION FAILED →", validation)
+        }
+        throw new Error(`TTS validation failed: ${validation.issues.join(", ")}`)
+      }
+
+      if (isDebugTTS()) {
+        logTTS("TTS validation passed →", validation)
+      }
+
+      try {
+        let audioBuffer: ArrayBuffer
+
+        if (isDebugTTS()) {
+          logTTS(`Calling ${providerId} TTS API →`, {
+            provider: providerId,
+            textLength: processedText.length,
+            voice: input.voice || config[`${providerId}TtsVoice`],
+            model: input.model || config[`${providerId}TtsModel`]
+          })
+        }
+
+        if (providerId === "openai") {
+          audioBuffer = await generateOpenAITTS(processedText, input, config)
+        } else if (providerId === "groq") {
+          audioBuffer = await generateGroqTTS(processedText, input, config)
+        } else if (providerId === "gemini") {
+          audioBuffer = await generateGeminiTTS(processedText, input, config)
+        } else {
+          throw new Error(`Unsupported TTS provider: ${providerId}`)
+        }
+
+        if (isDebugTTS()) {
+          logTTS("TTS generation successful →", {
+            provider: providerId,
+            audioBufferSize: audioBuffer.byteLength,
+            audioSizeKB: Math.round(audioBuffer.byteLength / 1024)
+          })
+          logTTS("=== TTS GENERATION END ===")
+        }
+
+        return {
+          audio: audioBuffer,
+          processedText,
+          provider: providerId,
+        }
+      } catch (error) {
+        if (isDebugTTS()) {
+          logTTS("TTS GENERATION ERROR →", {
+            provider: providerId,
+            error: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined
+          })
+        }
+        diagnosticsService.logError("tts", "TTS generation failed", error)
+        throw error
+      }
+    }),
+
   // Models Management
   fetchAvailableModels: t.procedure
     .input<{ providerId: string }>()
@@ -1239,6 +1359,313 @@ export const router = {
     const [width, height] = win.getSize()
     return { width, height }
   }),
+}
+
+// TTS Provider Implementation Functions
+
+async function generateOpenAITTS(
+  text: string,
+  input: { voice?: string; model?: string; speed?: number },
+  config: Config
+): Promise<ArrayBuffer> {
+  const model = input.model || config.openaiTtsModel || "tts-1"
+  const voice = input.voice || config.openaiTtsVoice || "alloy"
+  const speed = input.speed || config.openaiTtsSpeed || 1.0
+  const responseFormat = config.openaiTtsResponseFormat || "mp3"
+
+  const baseUrl = config.openaiBaseUrl || "https://api.openai.com/v1"
+  const apiKey = config.openaiApiKey
+
+  if (isDebugTTS()) {
+    logTTS("OpenAI TTS API call →", {
+      baseUrl,
+      model,
+      voice,
+      speed,
+      responseFormat,
+      textLength: text.length,
+      hasApiKey: !!apiKey
+    })
+  }
+
+  if (!apiKey) {
+    if (isDebugTTS()) {
+      logTTS("OpenAI TTS ERROR: Missing API key")
+    }
+    throw new Error("OpenAI API key is required for TTS")
+  }
+
+  const requestBody = {
+    model,
+    input: text,
+    voice,
+    speed,
+    response_format: responseFormat,
+  }
+
+  if (isDebugTTS()) {
+    logTTS("OpenAI TTS request body →", requestBody)
+  }
+
+  const response = await fetch(`${baseUrl}/audio/speech`, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(requestBody),
+  })
+
+  if (isDebugTTS()) {
+    logTTS("OpenAI TTS response →", {
+      status: response.status,
+      statusText: response.statusText,
+      ok: response.ok,
+      headers: Object.fromEntries(response.headers.entries())
+    })
+  }
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    if (isDebugTTS()) {
+      logTTS("OpenAI TTS API ERROR →", {
+        status: response.status,
+        statusText: response.statusText,
+        errorText
+      })
+    }
+    throw new Error(`OpenAI TTS API error: ${response.statusText} - ${errorText}`)
+  }
+
+  const audioBuffer = await response.arrayBuffer()
+
+  if (isDebugTTS()) {
+    logTTS("OpenAI TTS success →", {
+      audioBufferSize: audioBuffer.byteLength,
+      audioSizeKB: Math.round(audioBuffer.byteLength / 1024)
+    })
+  }
+
+  return audioBuffer
+}
+
+async function generateGroqTTS(
+  text: string,
+  input: { voice?: string; model?: string },
+  config: Config
+): Promise<ArrayBuffer> {
+  const model = input.model || config.groqTtsModel || "playai-tts"
+  const voice = input.voice || config.groqTtsVoice || "Fritz-PlayAI"
+
+  const baseUrl = config.groqBaseUrl || "https://api.groq.com/openai/v1"
+  const apiKey = config.groqApiKey
+
+  if (isDebugTTS()) {
+    logTTS("Groq TTS API call →", {
+      baseUrl,
+      model,
+      voice,
+      textLength: text.length,
+      hasApiKey: !!apiKey
+    })
+  }
+
+  if (!apiKey) {
+    if (isDebugTTS()) {
+      logTTS("Groq TTS ERROR: Missing API key")
+    }
+    throw new Error("Groq API key is required for TTS")
+  }
+
+  const requestBody = {
+    model,
+    input: text,
+    voice,
+    response_format: "wav",
+  }
+
+  if (isDebugTTS()) {
+    logTTS("Groq TTS request body →", requestBody)
+  }
+
+  const response = await fetch(`${baseUrl}/audio/speech`, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(requestBody),
+  })
+
+  if (isDebugTTS()) {
+    logTTS("Groq TTS response →", {
+      status: response.status,
+      statusText: response.statusText,
+      ok: response.ok,
+      headers: Object.fromEntries(response.headers.entries())
+    })
+  }
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    if (isDebugTTS()) {
+      logTTS("Groq TTS API ERROR →", {
+        status: response.status,
+        statusText: response.statusText,
+        errorText
+      })
+    }
+
+    // Check for specific error cases and provide helpful messages
+    if (errorText.includes("requires terms acceptance")) {
+      throw new Error("Groq TTS model requires terms acceptance. Please visit https://console.groq.com/playground?model=playai-tts to accept the terms for the PlayAI TTS model.")
+    }
+
+    throw new Error(`Groq TTS API error: ${response.statusText} - ${errorText}`)
+  }
+
+  const audioBuffer = await response.arrayBuffer()
+
+  if (isDebugTTS()) {
+    logTTS("Groq TTS success →", {
+      audioBufferSize: audioBuffer.byteLength,
+      audioSizeKB: Math.round(audioBuffer.byteLength / 1024)
+    })
+  }
+
+  return audioBuffer
+}
+
+async function generateGeminiTTS(
+  text: string,
+  input: { voice?: string; model?: string },
+  config: Config
+): Promise<ArrayBuffer> {
+  const model = input.model || config.geminiTtsModel || "gemini-2.5-flash-preview-tts"
+  const voice = input.voice || config.geminiTtsVoice || "Kore"
+
+  const baseUrl = config.geminiBaseUrl || "https://generativelanguage.googleapis.com"
+  const apiKey = config.geminiApiKey
+
+  if (isDebugTTS()) {
+    logTTS("Gemini TTS API call →", {
+      baseUrl,
+      model,
+      voice,
+      textLength: text.length,
+      hasApiKey: !!apiKey
+    })
+  }
+
+  if (!apiKey) {
+    if (isDebugTTS()) {
+      logTTS("Gemini TTS ERROR: Missing API key")
+    }
+    throw new Error("Gemini API key is required for TTS")
+  }
+
+  const requestBody = {
+    contents: [{
+      parts: [{ text }]
+    }],
+    generationConfig: {
+      responseModalities: ["AUDIO"],
+      speechConfig: {
+        voiceConfig: {
+          prebuiltVoiceConfig: {
+            voiceName: voice
+          }
+        }
+      }
+    }
+  }
+
+  const url = `${baseUrl}/v1beta/models/${model}:generateContent?key=${apiKey}`
+
+  if (isDebugTTS()) {
+    logTTS("Gemini TTS request →", {
+      url,
+      requestBody
+    })
+  }
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(requestBody),
+  })
+
+  if (isDebugTTS()) {
+    logTTS("Gemini TTS response →", {
+      status: response.status,
+      statusText: response.statusText,
+      ok: response.ok,
+      headers: Object.fromEntries(response.headers.entries())
+    })
+  }
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    if (isDebugTTS()) {
+      logTTS("Gemini TTS API ERROR →", {
+        status: response.status,
+        statusText: response.statusText,
+        errorText
+      })
+    }
+    throw new Error(`Gemini TTS API error: ${response.statusText} - ${errorText}`)
+  }
+
+  const result = await response.json()
+
+  if (isDebugTTS()) {
+    logTTS("Gemini TTS JSON response →", {
+      hasCandidates: !!result.candidates,
+      candidatesLength: result.candidates?.length,
+      firstCandidate: result.candidates?.[0] ? {
+        hasContent: !!result.candidates[0].content,
+        hasParts: !!result.candidates[0].content?.parts,
+        partsLength: result.candidates[0].content?.parts?.length,
+        hasInlineData: !!result.candidates[0].content?.parts?.[0]?.inlineData
+      } : null
+    })
+  }
+
+  const audioData = result.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data
+
+  if (!audioData) {
+    if (isDebugTTS()) {
+      logTTS("Gemini TTS ERROR: No audio data in response →", {
+        fullResponse: result
+      })
+    }
+    throw new Error("No audio data received from Gemini TTS API")
+  }
+
+  if (isDebugTTS()) {
+    logTTS("Gemini TTS audio data received →", {
+      audioDataLength: audioData.length,
+      audioDataPreview: audioData.substring(0, 50) + "..."
+    })
+  }
+
+  // Convert base64 to ArrayBuffer
+  const binaryString = atob(audioData)
+  const bytes = new Uint8Array(binaryString.length)
+  for (let i = 0; i < binaryString.length; i++) {
+    bytes[i] = binaryString.charCodeAt(i)
+  }
+
+  if (isDebugTTS()) {
+    logTTS("Gemini TTS success →", {
+      audioBufferSize: bytes.buffer.byteLength,
+      audioSizeKB: Math.round(bytes.buffer.byteLength / 1024)
+    })
+  }
+
+  return bytes.buffer
 }
 
 export type Router = typeof router

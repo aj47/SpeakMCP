@@ -403,6 +403,84 @@ export function Component() {
           )}
         </ControlGroup>
 
+        <ControlGroup title="Text to Speech">
+          <Control label="Enabled" className="px-3">
+            <Switch
+              defaultChecked={configQuery.data.ttsEnabled ?? false}
+              onCheckedChange={(value) => {
+                saveConfig({
+                  ttsEnabled: value,
+                })
+              }}
+            />
+          </Control>
+
+          {configQuery.data.ttsEnabled && (
+            <Control label={<ControlLabel label="Auto-play" tooltip="Automatically play TTS audio when assistant responses complete" />} className="px-3">
+              <Switch
+                defaultChecked={configQuery.data.ttsAutoPlay ?? true}
+                onCheckedChange={(value) => {
+                  saveConfig({
+                    ttsAutoPlay: value,
+                  })
+                }}
+              />
+            </Control>
+          )}
+
+          {configQuery.data.ttsEnabled && (
+            <>
+              <Control label={<ControlLabel label="Text Preprocessing" tooltip="Enable preprocessing to make text more speech-friendly by removing code blocks, URLs, and converting markdown" />} className="px-3">
+                <Switch
+                  defaultChecked={configQuery.data.ttsPreprocessingEnabled ?? true}
+                  onCheckedChange={(value) => {
+                    saveConfig({
+                      ttsPreprocessingEnabled: value,
+                    })
+                  }}
+                />
+              </Control>
+
+              {configQuery.data.ttsPreprocessingEnabled !== false && (
+                <>
+                  <Control label={<ControlLabel label="Remove Code Blocks" tooltip="Remove code blocks and replace with descriptive text" />} className="px-3">
+                    <Switch
+                      defaultChecked={configQuery.data.ttsRemoveCodeBlocks ?? true}
+                      onCheckedChange={(value) => {
+                        saveConfig({
+                          ttsRemoveCodeBlocks: value,
+                        })
+                      }}
+                    />
+                  </Control>
+
+                  <Control label={<ControlLabel label="Remove URLs" tooltip="Remove URLs and replace with descriptive text" />} className="px-3">
+                    <Switch
+                      defaultChecked={configQuery.data.ttsRemoveUrls ?? true}
+                      onCheckedChange={(value) => {
+                        saveConfig({
+                          ttsRemoveUrls: value,
+                        })
+                      }}
+                    />
+                  </Control>
+
+                  <Control label={<ControlLabel label="Convert Markdown" tooltip="Convert markdown formatting to speech-friendly text" />} className="px-3">
+                    <Switch
+                      defaultChecked={configQuery.data.ttsConvertMarkdown ?? true}
+                      onCheckedChange={(value) => {
+                        saveConfig({
+                          ttsConvertMarkdown: value,
+                        })
+                      }}
+                    />
+                  </Control>
+                </>
+              )}
+            </>
+          )}
+        </ControlGroup>
+
         <ControlGroup title="Transcript Post-Processing">
           <Control label="Enabled" className="px-3">
             <Switch

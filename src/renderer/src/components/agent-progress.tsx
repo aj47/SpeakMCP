@@ -6,6 +6,8 @@ import { MarkdownRenderer } from "@renderer/components/markdown-renderer"
 import { Button } from "./ui/button"
 import { tipcClient } from "@renderer/lib/tipc-client"
 import { useConversation } from "@renderer/contexts/conversation-context"
+import { AudioPlayer } from "@renderer/components/audio-player"
+import { useConfigQuery } from "@renderer/lib/queries"
 
 interface AgentProgressProps {
   progress: AgentProgressUpdate | null
@@ -32,9 +34,91 @@ const CompactMessage: React.FC<{
   hasErrors: boolean
 }> = ({ message, isLast, isComplete, hasErrors }) => {
   const [isExpanded, setIsExpanded] = useState(false)
+  const [audioData, setAudioData] = useState<ArrayBuffer | null>(null)
+  const [isGeneratingAudio, setIsGeneratingAudio] = useState(false)
+  const [ttsError, setTtsError] = useState<string | null>(null)
+  const configQuery = useConfigQuery()
 
   const hasExtras = message.toolCalls || message.toolResults
   const shouldCollapse = message.content.length > 100 || hasExtras
+
+  // TTS functionality
+  const generateAudio = async (): Promise<ArrayBuffer> => {
+    console.log("[TTS UI] generateAudio called in CompactMessage", {
+      messageRole: message.role,
+      messageLength: message.content.length,
+      isComplete,
+      isLast
+    })
+
+    if (!configQuery.data?.ttsEnabled) {
+      console.log("[TTS UI] TTS not enabled in config")
+      throw new Error("TTS is not enabled")
+    }
+
+    setIsGeneratingAudio(true)
+    setTtsError(null)
+
+    try {
+      console.log("[TTS UI] Calling tipcClient.generateSpeech...")
+      const result = await tipcClient.generateSpeech({
+        text: message.content,
+      })
+      console.log("[TTS UI] TTS generation successful", {
+        audioSize: result.audio.byteLength,
+        provider: result.provider
+      })
+      setAudioData(result.audio)
+      return result.audio
+    } catch (error) {
+      console.error("[TTS UI] Failed to generate TTS audio:", error)
+
+      // Set user-friendly error message
+      let errorMessage = "Failed to generate audio"
+      if (error instanceof Error) {
+        if (error.message.includes("API key")) {
+          errorMessage = "TTS API key not configured"
+        } else if (error.message.includes("terms acceptance")) {
+          errorMessage = "Groq TTS model requires terms acceptance. Please visit the Groq console to accept terms for the PlayAI TTS model."
+        } else if (error.message.includes("rate limit")) {
+          errorMessage = "Rate limit exceeded. Please try again later"
+        } else if (error.message.includes("network") || error.message.includes("fetch")) {
+          errorMessage = "Network error. Please check your connection"
+        } else if (error.message.includes("validation")) {
+          errorMessage = "Text content is not suitable for TTS"
+        } else {
+          errorMessage = `TTS error: ${error.message}`
+        }
+      }
+
+      setTtsError(errorMessage)
+      throw error
+    } finally {
+      setIsGeneratingAudio(false)
+    }
+  }
+
+  // Check if TTS should be shown for this message
+  const shouldShowTTS = message.role === "assistant" && isComplete && isLast && configQuery.data?.ttsEnabled
+  console.log("[TTS UI] CompactMessage TTS visibility check", {
+    messageRole: message.role,
+    isComplete,
+    isLast,
+    ttsEnabled: configQuery.data?.ttsEnabled,
+    shouldShow: shouldShowTTS,
+    messagePreview: message.content.substring(0, 50) + "..."
+  })
+
+  // Auto-play TTS when assistant message completes
+  useEffect(() => {
+    if (shouldShowTTS && configQuery.data?.ttsAutoPlay && !audioData && !isGeneratingAudio && !ttsError) {
+      console.log("[TTS UI] Auto-playing TTS for completed assistant message")
+      generateAudio().catch((error) => {
+        console.log("[TTS UI] Auto-play TTS failed:", error)
+        // Error is already handled in generateAudio function
+      })
+    }
+  }, [shouldShowTTS, configQuery.data?.ttsAutoPlay, audioData, isGeneratingAudio, ttsError])
 
   const getRoleStyle = () => {
     switch (message.role) {
@@ -97,6 +181,42 @@ const CompactMessage: React.FC<{
               {message.toolResults && (
                 <div className="text-xs opacity-70">
                   Results: {message.toolResults.length}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* TTS Audio Player - only show for completed assistant messages */}
+          {shouldShowTTS && (
+            <div className="mt-2">
+              <AudioPlayer
+                audioData={audioData || undefined}
+                text={message.content}
+                onGenerateAudio={generateAudio}
+                isGenerating={isGeneratingAudio}
+                error={ttsError}
+                compact={true}
+                autoPlay={configQuery.data?.ttsAutoPlay ?? true}
+              />
+              {ttsError && (
+                <div className="mt-1 rounded-md bg-red-50 p-2 text-xs text-red-700 dark:bg-red-900/20 dark:text-red-300">
+                  <span className="font-medium">Audio generation failed:</span>{" "}
+                  {ttsError.includes("terms acceptance") ? (
+                    <>
+                      Groq TTS model requires terms acceptance.{" "}
+                      <a
+                        href="https://console.groq.com/playground?model=playai-tts"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="underline hover:no-underline"
+                      >
+                        Click here to accept terms
+                      </a>{" "}
+                      for the PlayAI TTS model.
+                    </>
+                  ) : (
+                    ttsError
+                  )}
                 </div>
               )}
             </div>

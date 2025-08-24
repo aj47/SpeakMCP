@@ -694,10 +694,7 @@ Always use actual resource IDs from the conversation history or create new ones 
     // Make LLM call
     const llmResponse = await makeLLMCall(messages, config)
 
-    // Display LLM response content to user
-    if (llmResponse.content) {
-      console.log(llmResponse.content)
-    }
+
 
     // Update thinking step with actual LLM content and mark as completed
     thinkingStep.status = "completed"

@@ -337,9 +337,31 @@ export async function makeLLMCallWithFetch(
       response = await makeOpenAICompatibleCall(messages, chatProviderId, true)
     }
 
+    if (isDebugLLM()) {
+      logLLM("Raw API response structure:", {
+        hasChoices: !!response.choices,
+        choicesLength: response.choices?.length,
+        firstChoiceExists: !!response.choices?.[0],
+        hasMessage: !!response.choices?.[0]?.message,
+        hasContent: !!response.choices?.[0]?.message?.content
+      })
+    }
+
     const content = response.choices[0]?.message.content?.trim()
     if (!content) {
-      throw new Error("No response content received")
+      if (isDebugLLM()) {
+        logLLM("Empty response details:", {
+          response: response,
+          choices: response.choices,
+          firstChoice: response.choices?.[0],
+          message: response.choices?.[0]?.message,
+          content: response.choices?.[0]?.message?.content
+        })
+      }
+
+      // Instead of throwing an error, return a response that indicates completion
+      // This handles cases where the LLM returns empty content but the call was successful
+      return { content: "", needsMoreWork: false }
     }
 
     // Try to extract JSON object from response

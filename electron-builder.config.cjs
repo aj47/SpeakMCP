@@ -55,7 +55,7 @@ module.exports = {
   },
   mac: {
     binaries: [
-      `resources/bin/speakmcp-rs${process.platform === "darwin" ? "" : ".exe"}`,
+      "resources/bin/speakmcp-rs",
     ],
     artifactName: "${productName}-${version}-${arch}.${ext}",
     entitlementsInherit: "build/entitlements.mac.plist",

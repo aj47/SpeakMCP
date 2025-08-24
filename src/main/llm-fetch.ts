@@ -66,7 +66,7 @@ class HttpError extends Error {
     switch (status) {
       case 429:
         const waitTime = retryAfter ? `${retryAfter} seconds` : 'a moment'
-        return `Rate limit exceeded. The API is temporarily unavailable due to too many requests. Please wait ${waitTime} before trying again.`
+        return `Rate limit exceeded. The API is temporarily unavailable due to too many requests. We'll automatically retry after waiting ${waitTime}. You don't need to do anything - just wait for the request to complete.`
 
       case 401:
         return 'Authentication failed. Please check your API key configuration.'
@@ -152,8 +152,10 @@ function calculateBackoffDelay(attempt: number, baseDelay: number = 1000, maxDel
 
 /**
  * Makes an API call with enhanced retry logic including exponential backoff for rate limits.
+ * Rate limit errors (429) will retry indefinitely until successful.
+ * Other errors respect the retry count limit.
  * @param call - The API call function to execute.
- * @param retryCount - The number of times to retry the API call if it fails.
+ * @param retryCount - The number of times to retry the API call if it fails (does not apply to rate limits).
  * @param baseDelay - Base delay in milliseconds for exponential backoff.
  * @param maxDelay - Maximum delay in milliseconds between retries.
  * @returns A promise that resolves with the response from the successful API call.
@@ -165,18 +167,14 @@ async function apiCallWithRetry<T>(
   maxDelay: number = 30000,
 ): Promise<T> {
   let lastError: unknown
+  let attempt = 0
 
-  for (let attempt = 0; attempt <= retryCount; attempt++) {
+  while (true) {
     try {
       const response = await call()
       return response
     } catch (error) {
       lastError = error
-
-      // Don't retry on the last attempt
-      if (attempt === retryCount) {
-        break
-      }
 
       // Check if error is retryable
       if (!isRetryableError(error)) {
@@ -188,11 +186,10 @@ async function apiCallWithRetry<T>(
         throw error
       }
 
-      // Calculate delay for this attempt
-      let delay = calculateBackoffDelay(attempt, baseDelay, maxDelay)
-
-      // Handle rate limit specific logic
+      // Handle rate limit errors (429) - no retry limit, keep trying indefinitely
       if (error instanceof HttpError && error.status === 429) {
+        let delay = calculateBackoffDelay(attempt, baseDelay, maxDelay)
+
         // Use Retry-After header if provided
         if (error.retryAfter) {
           delay = error.retryAfter * 1000 // Convert seconds to milliseconds
@@ -200,31 +197,53 @@ async function apiCallWithRetry<T>(
           delay = Math.min(delay, maxDelay)
         }
 
+        const waitTimeSeconds = Math.round(delay / 1000)
+
+        // Log for debugging
         diagnosticsService.logError(
           "llm-fetch",
-          `Rate limit hit (429), retrying in ${Math.round(delay / 1000)}s (attempt ${attempt + 1}/${retryCount + 1})`,
-          { status: error.status, retryAfter: error.retryAfter, delay }
+          `Rate limit encountered (429). Waiting ${waitTimeSeconds}s before retry (attempt ${attempt + 1})`,
+          {
+            status: error.status,
+            retryAfter: error.retryAfter,
+            delay,
+            message: "Rate limits are temporary - will keep retrying until successful"
+          }
         )
-      } else {
-        diagnosticsService.logError(
-          "llm-fetch",
-          `API call failed, retrying in ${Math.round(delay / 1000)}s (attempt ${attempt + 1}/${retryCount + 1})`,
-          { error: error instanceof Error ? error.message : String(error), delay }
-        )
+
+        // User-friendly console output so users can see progress
+        console.log(`⏳ Rate limit hit - waiting ${waitTimeSeconds} seconds before retrying... (attempt ${attempt + 1})`)
+
+        // Wait before retrying
+        await new Promise(resolve => setTimeout(resolve, delay))
+        attempt++
+        continue
       }
+
+      // For other retryable errors, respect the retry limit
+      if (attempt >= retryCount) {
+        diagnosticsService.logError(
+          "llm-fetch",
+          "API call failed after all retries",
+          lastError,
+        )
+        throw lastError
+      }
+
+      // Calculate delay for this attempt
+      const delay = calculateBackoffDelay(attempt, baseDelay, maxDelay)
+
+      diagnosticsService.logError(
+        "llm-fetch",
+        `API call failed, retrying in ${Math.round(delay / 1000)}s (attempt ${attempt + 1}/${retryCount + 1})`,
+        { error: error instanceof Error ? error.message : String(error), delay }
+      )
 
       // Wait before retrying
       await new Promise(resolve => setTimeout(resolve, delay))
+      attempt++
     }
   }
-
-  // All retries exhausted
-  diagnosticsService.logError(
-    "llm-fetch",
-    "API call failed after all retries",
-    lastError,
-  )
-  throw lastError
 }
 
 /**

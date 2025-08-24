@@ -805,8 +805,7 @@ Always use actual resource IDs from the conversation history or create new ones 
     const toolResults: MCPToolResult[] = []
     const failedTools: string[] = []
 
-    // Check if this is a simple query that needs concise tool results
-    const isSimpleQuery = /^(how many|what is|count|list|show me)/i.test(transcript.trim())
+    // Apply intelligent tool result processing to all queries to prevent context overflow
 
     for (const toolCall of toolCallsArray) {
       if (isDebugTools()) {
@@ -932,9 +931,9 @@ Always use actual resource IDs from the conversation history or create new ones 
       toolCalls: llmResponse.toolCalls!,
     })
 
-    // Process tool results for simple queries to avoid context overflow
+    // Process tool results to avoid context overflow for all queries
     const processedToolResults = toolResults.map(result => {
-      if (isSimpleQuery && !result.isError) {
+      if (!result.isError) {
         const content = result.content.map(c => c.text).join('\n')
 
         // For large JSON responses, try to extract key information

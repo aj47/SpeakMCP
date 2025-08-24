@@ -65,6 +65,10 @@ const getConfig = () => {
     // Gemini TTS defaults
     geminiTtsModel: "gemini-2.5-flash-preview-tts",
     geminiTtsVoice: "Kore",
+    // API Retry defaults
+    apiRetryCount: 3,
+    apiRetryBaseDelay: 1000, // 1 second
+    apiRetryMaxDelay: 30000, // 30 seconds
   }
 
   try {

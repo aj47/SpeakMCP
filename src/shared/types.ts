@@ -294,4 +294,9 @@ export type Config = {
   panelCustomPosition?: { x: number; y: number }
   panelDragEnabled?: boolean
   panelCustomSize?: { width: number; height: number }
+
+  // API Retry Configuration
+  apiRetryCount?: number // Number of retry attempts (default: 3)
+  apiRetryBaseDelay?: number // Base delay in milliseconds (default: 1000)
+  apiRetryMaxDelay?: number // Maximum delay in milliseconds (default: 30000)
 }

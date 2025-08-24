@@ -742,20 +742,6 @@ Always use actual resource IDs from the conversation history or create new ones 
       // Agent explicitly indicated completion
       const assistantContent = llmResponse.content || ""
 
-      // Ensure the agent provides a meaningful summary
-      if (!assistantContent.trim() || assistantContent.length < 20) {
-        // Force the agent to provide a summary by continuing the conversation
-        const summaryPrompt = `Please provide a brief summary of your response and what you determined regarding the user's request.`
-
-        conversationHistory.push({
-          role: "user",
-          content: summaryPrompt,
-        })
-
-        // Continue to next iteration to get the summary
-        continue
-      }
-
       finalContent = assistantContent
       conversationHistory.push({
         role: "assistant",
@@ -785,7 +771,7 @@ Always use actual resource IDs from the conversation history or create new ones 
     }
 
     // Handle no-op iterations (no tool calls and no explicit completion)
-    if (!hasToolCalls) {
+    if (!hasToolCalls && !explicitlyComplete) {
       noOpCount++
 
       // Check if this is an actionable request that should have executed tools
@@ -818,6 +804,9 @@ Always use actual resource IDs from the conversation history or create new ones 
     // Execute tool calls with enhanced error handling
     const toolResults: MCPToolResult[] = []
     const failedTools: string[] = []
+
+    // Check if this is a simple query that needs concise tool results
+    const isSimpleQuery = /^(how many|what is|count|list|show me)/i.test(transcript.trim())
 
     for (const toolCall of toolCallsArray) {
       if (isDebugTools()) {
@@ -943,14 +932,56 @@ Always use actual resource IDs from the conversation history or create new ones 
       toolCalls: llmResponse.toolCalls!,
     })
 
-    const toolResultsText = toolResults
+    // Process tool results for simple queries to avoid context overflow
+    const processedToolResults = toolResults.map(result => {
+      if (isSimpleQuery && !result.isError) {
+        const content = result.content.map(c => c.text).join('\n')
+
+        // For large JSON responses, try to extract key information
+        if (content.length > 5000 && content.trim().startsWith('[') || content.trim().startsWith('{')) {
+          try {
+            const parsed = JSON.parse(content)
+            if (Array.isArray(parsed)) {
+              // For arrays, show count and first few items
+              const summary = `Found ${parsed.length} items. First few:\n${JSON.stringify(parsed.slice(0, 3), null, 2)}${parsed.length > 3 ? `\n... and ${parsed.length - 3} more items` : ''}`
+              return {
+                ...result,
+                content: [{ type: 'text', text: summary }]
+              }
+            } else if (typeof parsed === 'object') {
+              // For objects, show structure with truncated values
+              const keys = Object.keys(parsed).slice(0, 10)
+              const summary = `Object with ${Object.keys(parsed).length} properties:\n${keys.map(key => `${key}: ${JSON.stringify(parsed[key]).substring(0, 100)}...`).join('\n')}${Object.keys(parsed).length > 10 ? `\n... and ${Object.keys(parsed).length - 10} more properties` : ''}`
+              return {
+                ...result,
+                content: [{ type: 'text', text: summary }]
+              }
+            }
+          } catch (e) {
+            // If parsing fails, fall through to general truncation
+          }
+        }
+
+        // For other large results, truncate to reasonable size
+        if (content.length > 2000) {
+          const truncated = content.substring(0, 2000) + '\n... [truncated for brevity]'
+          return {
+            ...result,
+            content: [{ type: 'text', text: truncated }]
+          }
+        }
+      }
+      return result
+    })
+
+    const toolResultsText = processedToolResults
       .map((result) => result.content.map((c) => c.text).join("\n"))
       .join("\n\n")
 
     conversationHistory.push({
       role: "tool",
       content: toolResultsText,
-      toolResults,
+      toolResults: processedToolResults,
     })
 
     // Enhanced completion detection with better error handling
@@ -1009,27 +1040,8 @@ Please try alternative approaches, break down the task into smaller steps, or pr
     const agentIndicatedDone = llmResponse.needsMoreWork === false
 
     if (agentIndicatedDone && allToolsSuccessful) {
-      // Agent indicated completion, but we need to ensure it provides a summary
-      // Check if the last assistant message provides a meaningful summary
+      // Agent indicated completion
       const lastAssistantContent = llmResponse.content || ""
-
-      // If the agent only made tool calls without providing a summary, request one
-      if (!lastAssistantContent.trim() || lastAssistantContent.length < 20) {
-        // Force the agent to provide a summary by continuing the conversation
-        const summaryPrompt = `Please provide a brief summary of what you accomplished and the results of your actions. Include what worked well and any issues encountered.`
-
-        conversationHistory.push({
-          role: "user",
-          content: summaryPrompt,
-        })
-
-        // Continue to next iteration to get the summary
-        // Set final content to the latest assistant response (fallback)
-        if (!finalContent) {
-          finalContent = llmResponse.content || ""
-        }
-        continue
-      }
 
       // Create final content that includes the agent's summary
       finalContent = lastAssistantContent
@@ -1060,22 +1072,8 @@ Please try alternative approaches, break down the task into smaller steps, or pr
     // Only stop if needsMoreWork is explicitly false or we hit max iterations
     const shouldContinue = llmResponse.needsMoreWork !== false
     if (!shouldContinue) {
-      // Agent explicitly indicated no more work needed, but ensure it provides a summary
+      // Agent explicitly indicated no more work needed
       const assistantContent = llmResponse.content || ""
-
-      // Ensure the agent provides a meaningful summary
-      if (!assistantContent.trim() || assistantContent.length < 20) {
-        // Force the agent to provide a summary by continuing the conversation
-        const summaryPrompt = `Please provide a brief summary of what you accomplished and the current status of the task.`
-
-        conversationHistory.push({
-          role: "user",
-          content: summaryPrompt,
-        })
-
-        // Continue to next iteration to get the summary
-        continue
-      }
 
       finalContent = assistantContent
       conversationHistory.push({
@@ -1115,17 +1113,14 @@ Please try alternative approaches, break down the task into smaller steps, or pr
       .slice(-5)
       .some((step) => step.status === "error")
 
-    // If we don't have meaningful final content, get the last assistant response or provide fallback
-    if (!finalContent || finalContent.trim().length < 20) {
+    // If we don't have final content, get the last assistant response or provide fallback
+    if (!finalContent) {
       const lastAssistantMessage = conversationHistory
         .slice()
         .reverse()
         .find((msg) => msg.role === "assistant")
 
-      if (
-        lastAssistantMessage &&
-        lastAssistantMessage.content.trim().length >= 20
-      ) {
+      if (lastAssistantMessage) {
         finalContent = lastAssistantMessage.content
       } else {
         // Provide a fallback summary

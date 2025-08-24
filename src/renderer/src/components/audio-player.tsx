@@ -88,11 +88,16 @@ export function AudioPlayer({
       setIsPlaying(false)
     }
 
+    const handleError = (event: Event) => {
+      console.error("[AudioPlayer] Audio error:", audio.error)
+    }
+
     audio.addEventListener("loadedmetadata", handleLoadedMetadata)
     audio.addEventListener("timeupdate", handleTimeUpdate)
     audio.addEventListener("ended", handleEnded)
     audio.addEventListener("play", handlePlay)
     audio.addEventListener("pause", handlePause)
+    audio.addEventListener("error", handleError)
 
     return () => {
       audio.removeEventListener("loadedmetadata", handleLoadedMetadata)
@@ -100,6 +105,7 @@ export function AudioPlayer({
       audio.removeEventListener("ended", handleEnded)
       audio.removeEventListener("play", handlePlay)
       audio.removeEventListener("pause", handlePause)
+      audio.removeEventListener("error", handleError)
     }
   }, [hasAudio])
 

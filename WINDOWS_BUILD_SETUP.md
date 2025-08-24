@@ -113,6 +113,7 @@ This will create:
 2. **"link.exe not found" or C++ compiler errors**
    - Install Visual Studio Build Tools with C++ workload
    - Ensure Windows SDK is installed
+   - Verify MSVC toolchain is selected during installation
 
 3. **"Cannot create symbolic link" errors during electron-builder**
    - **SOLUTION**: Run PowerShell/Command Prompt as Administrator
@@ -130,6 +131,20 @@ This will create:
 6. **TypeScript compilation errors**
    - Use `npx electron-vite build` instead of `npm run build` to bypass type checking
    - Or fix TypeScript errors before building
+
+7. **Rust dependency compilation errors (rdev/enigo)**
+   - Updated to newer versions with better Windows support
+   - Ensure Visual Studio Build Tools 2022 is installed
+   - Try running `cargo clean` and rebuilding
+
+8. **"error[E0463]: can't find crate for `core`" when cross-compiling**
+   - Install Windows target: `rustup target add x86_64-pc-windows-msvc`
+   - This error occurs when trying to build for Windows from non-Windows systems
+
+9. **Build succeeds but binary crashes on Windows**
+   - Check Windows Defender/antivirus isn't blocking the binary
+   - Ensure all required DLLs are available (usually bundled with the installer)
+   - Run from Command Prompt to see error messages
 
 ### Build Verification
 

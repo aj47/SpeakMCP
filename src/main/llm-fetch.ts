@@ -328,6 +328,16 @@ export async function makeLLMCallWithFetch(
   const config = configStore.get()
   const chatProviderId = providerId || config.mcpToolsProviderId || "openai"
 
+  if (isDebugLLM()) {
+    logLLM("=== LLM CALL START ===")
+    logLLM("Provider:", chatProviderId)
+    logLLM("Messages →", {
+      count: messages.length,
+      totalChars: messages.reduce((sum, msg) => sum + msg.content.length, 0),
+      messages: messages.slice(0, 2), // Only log first 2 messages to avoid spam
+    })
+  }
+
   try {
     let response: any
 
@@ -337,9 +347,35 @@ export async function makeLLMCallWithFetch(
       response = await makeOpenAICompatibleCall(messages, chatProviderId, true)
     }
 
+    if (isDebugLLM()) {
+      logLLM("Raw API Response:", {
+        hasChoices: !!response.choices,
+        choicesLength: response.choices?.length || 0,
+        firstChoiceMessage: response.choices?.[0]?.message || null,
+        finishReason: response.choices?.[0]?.finish_reason,
+        usage: response.usage
+      })
+    }
+
     const content = response.choices[0]?.message.content?.trim()
     if (!content) {
-      throw new Error("No response content received")
+      // Provide more diagnostic information
+      const diagnosticInfo = {
+        hasChoices: !!response.choices,
+        choicesLength: response.choices?.length || 0,
+        firstChoice: response.choices?.[0] || null,
+        hasMessage: !!response.choices?.[0]?.message,
+        messageContent: response.choices?.[0]?.message?.content,
+        finishReason: response.choices?.[0]?.finish_reason,
+        fullResponse: response
+      }
+
+      diagnosticsService.logError("llm-fetch", "No response content received", {
+        diagnosticInfo,
+        chatProviderId
+      })
+
+      throw new Error(`No response content received. Diagnostic info: ${JSON.stringify(diagnosticInfo, null, 2)}`)
     }
 
     // Try to extract JSON object from response

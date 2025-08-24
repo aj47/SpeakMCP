@@ -17,6 +17,137 @@ import { state } from "./state"
 import { isDebugLLM, logLLM, isDebugTools, logTools } from "./debug"
 
 /**
+ * Categorize request types to determine appropriate response handling
+ */
+interface RequestAnalysis {
+  isSimpleQuery: boolean
+  isActionableRequest: boolean
+  expectedResponseType: 'short' | 'detailed' | 'summary'
+  minimumResponseLength: number
+}
+
+function analyzeRequestType(
+  userInput: string,
+  availableTools: MCPTool[],
+  toolCapabilities: { relevantTools: MCPTool[]; hasActionableTools: boolean }
+): RequestAnalysis {
+  const input = userInput.toLowerCase().trim()
+
+  // Simple informational queries that expect short answers
+  const simpleQueryPatterns = [
+    /^how many\s+/,
+    /^what is\s+/,
+    /^what's\s+/,
+    /^count\s+/,
+    /^list\s+/,
+    /^show\s+/,
+    /^get\s+/,
+    /^find\s+/,
+    /^\d+\s*[\+\-\*\/]\s*\d+/, // math expressions
+    /^is\s+\w+\s+/, // "is X a Y" questions
+    /^does\s+/,
+    /^can\s+/,
+    /^when\s+/,
+    /^where\s+/,
+    /^who\s+/,
+    /^which\s+/
+  ]
+
+  // Action-oriented requests that typically need detailed responses
+  const actionPatterns = [
+    /create\s+/,
+    /build\s+/,
+    /implement\s+/,
+    /fix\s+/,
+    /update\s+/,
+    /modify\s+/,
+    /change\s+/,
+    /add\s+/,
+    /remove\s+/,
+    /delete\s+/,
+    /install\s+/,
+    /configure\s+/,
+    /setup\s+/,
+    /deploy\s+/
+  ]
+
+  const isSimpleQuery = simpleQueryPatterns.some(pattern => pattern.test(input))
+  const isActionRequest = actionPatterns.some(pattern => pattern.test(input))
+  const hasRelevantTools = toolCapabilities.relevantTools.length > 0
+
+  // Determine response expectations
+  let expectedResponseType: 'short' | 'detailed' | 'summary' = 'detailed'
+  let minimumResponseLength = 20
+
+  if (isSimpleQuery && !isActionRequest) {
+    expectedResponseType = 'short'
+    minimumResponseLength = 1 // Allow very short answers like "14", "Yes", "No"
+  } else if (isActionRequest && hasRelevantTools) {
+    expectedResponseType = 'summary'
+    minimumResponseLength = 50 // Require more detailed summary for actions
+  }
+
+  return {
+    isSimpleQuery,
+    isActionableRequest: isActionRequest && hasRelevantTools,
+    expectedResponseType,
+    minimumResponseLength
+  }
+}
+
+/**
+ * Check if a response is appropriate for the given request type
+ */
+function isResponseAppropriate(
+  response: string,
+  requestAnalysis: RequestAnalysis,
+  hasExecutedTools: boolean
+): boolean {
+  const trimmedResponse = response.trim()
+
+  // For simple queries, very short answers are acceptable
+  if (requestAnalysis.isSimpleQuery && !hasExecutedTools) {
+    return trimmedResponse.length >= requestAnalysis.minimumResponseLength
+  }
+
+  // For actionable requests that executed tools, require more substantial summary
+  if (requestAnalysis.isActionableRequest && hasExecutedTools) {
+    return trimmedResponse.length >= requestAnalysis.minimumResponseLength
+  }
+
+  // Default case - use the minimum length requirement
+  return trimmedResponse.length >= requestAnalysis.minimumResponseLength
+}
+
+/**
+ * Additional validation to prevent infinite loops
+ */
+function shouldForceCompletion(
+  llmResponse: LLMToolCallResponse,
+  requestAnalysis: RequestAnalysis,
+  iteration: number,
+  maxIterations: number
+): boolean {
+  // Force completion if we're near max iterations
+  if (iteration >= maxIterations - 1) {
+    return true
+  }
+
+  // Force completion for simple queries that have been answered
+  if (requestAnalysis.isSimpleQuery &&
+      llmResponse.needsMoreWork === false &&
+      llmResponse.content &&
+      llmResponse.content.trim().length > 0) {
+    return true
+  }
+
+  // Force completion if agent has explicitly said no more work multiple times
+  // This would require tracking previous responses, but for now we'll rely on other mechanisms
+
+  return false
+}
+
+/**
  * Use LLM to extract useful context from conversation history
  */
 async function extractContextFromHistory(
@@ -296,7 +427,7 @@ function createProgressStep(
 function analyzeToolCapabilities(
   availableTools: MCPTool[],
   transcript: string,
-): { summary: string; relevantTools: MCPTool[] } {
+): { summary: string; relevantTools: MCPTool[]; hasActionableTools: boolean } {
   const transcriptLower = transcript.toLowerCase()
   const relevantTools: MCPTool[] = []
 
@@ -430,7 +561,11 @@ function analyzeToolCapabilities(
       index === self.findIndex((t) => t.name === tool.name),
   )
 
-  return { summary, relevantTools: uniqueRelevantTools }
+  return {
+    summary,
+    relevantTools: uniqueRelevantTools,
+    hasActionableTools: uniqueRelevantTools.length > 0
+  }
 }
 
 export async function processTranscriptWithAgentMode(
@@ -476,6 +611,9 @@ export async function processTranscriptWithAgentMode(
 
   // Analyze available tool capabilities
   const toolCapabilities = analyzeToolCapabilities(availableTools, transcript)
+
+  // Analyze request type for appropriate response handling
+  const requestAnalysis = analyzeRequestType(transcript, availableTools, toolCapabilities)
 
   // Update initial step with tool analysis
   initialStep.status = "completed"
@@ -692,6 +830,11 @@ Always use actual resource IDs from the conversation history or create new ones 
     ]
 
     // Make LLM call
+    if (isDebugLLM()) {
+      logLLM(`=== AGENT ITERATION ${iteration} LLM CALL ===`)
+      logLLM("Conversation history length:", conversationHistory.length)
+      logLLM("Total message length:", messages.reduce((sum, msg) => sum + msg.content.length, 0))
+    }
     const llmResponse = await makeLLMCall(messages, config)
 
 
@@ -786,29 +929,35 @@ Always use actual resource IDs from the conversation history or create new ones 
 
     // Handle no-op iterations (no tool calls and no explicit completion)
     if (!hasToolCalls) {
-      noOpCount++
+      // If agent explicitly said needsMoreWork=false, respect that decision
+      if (explicitlyComplete) {
+        // Don't nudge when agent has explicitly indicated completion
+        noOpCount = 0
+      } else {
+        noOpCount++
 
-      // Check if this is an actionable request that should have executed tools
-      const isActionableRequest = toolCapabilities.relevantTools.length > 0
+        // Check if this is an actionable request that should have executed tools
+        const isActionableRequest = toolCapabilities.relevantTools.length > 0
 
-      if (noOpCount >= 2 || (isActionableRequest && noOpCount >= 1)) {
-        // Add nudge to push the agent forward
-        conversationHistory.push({
-          role: "assistant",
-          content: llmResponse.content || "",
-        })
+        if (noOpCount >= 2 || (isActionableRequest && noOpCount >= 1)) {
+          // Add nudge to push the agent forward
+          conversationHistory.push({
+            role: "assistant",
+            content: llmResponse.content || "",
+          })
 
-        const nudgeMessage = isActionableRequest
-          ? "You have relevant tools available for this request. Please choose and call at least one tool to make progress, or if you truly cannot proceed, explicitly set needsMoreWork=false and provide a detailed explanation of why no action can be taken."
-          : "Please either take action using available tools or explicitly set needsMoreWork=false if the task is complete."
+          const nudgeMessage = isActionableRequest
+            ? "You have relevant tools available for this request. Please choose and call at least one tool to make progress, or if you truly cannot proceed, explicitly set needsMoreWork=false and provide a detailed explanation of why no action can be taken."
+            : "Please either take action using available tools or explicitly set needsMoreWork=false if the task is complete."
 
-        conversationHistory.push({
-          role: "user",
-          content: nudgeMessage,
-        })
+          conversationHistory.push({
+            role: "user",
+            content: nudgeMessage,
+          })
 
-        noOpCount = 0 // Reset counter after nudge
-        continue
+          noOpCount = 0 // Reset counter after nudge
+          continue
+        }
       }
     } else {
       // Reset no-op counter when tools are called
@@ -936,22 +1085,55 @@ Always use actual resource IDs from the conversation history or create new ones 
       })
     }
 
-    // Add assistant response and tool results to conversation
+    // Add assistant response to conversation
     conversationHistory.push({
       role: "assistant",
       content: llmResponse.content || "",
       toolCalls: llmResponse.toolCalls!,
     })
 
-    const toolResultsText = toolResults
-      .map((result) => result.content.map((c) => c.text).join("\n"))
-      .join("\n\n")
+    // Only add tool results to conversation if there are actual results
+    if (toolResults.length > 0) {
+      const toolResultsText = toolResults
+        .map((result) => result.content.map((c) => c.text).join("\n"))
+        .join("\n\n")
 
-    conversationHistory.push({
-      role: "tool",
-      content: toolResultsText,
-      toolResults,
-    })
+      // Truncate very large tool results to prevent context window issues
+      const maxToolResultLength = 5000 // Reasonable limit for tool results
+      let processedToolResults = toolResultsText
+
+      if (toolResultsText.length > maxToolResultLength) {
+        // For simple queries, extract key information instead of including everything
+        if (requestAnalysis.isSimpleQuery) {
+          // Try to extract just the count or key information
+          if (toolResultsText.includes('"number":')) {
+            // For GitHub issues, extract just the issue numbers and titles
+            const issueMatches = toolResultsText.match(/"number":\s*(\d+).*?"title":\s*"([^"]+)"/g)
+            if (issueMatches) {
+              const issueList = issueMatches.map(match => {
+                const numberMatch = match.match(/"number":\s*(\d+)/)
+                const titleMatch = match.match(/"title":\s*"([^"]+)"/)
+                return `#${numberMatch?.[1]}: ${titleMatch?.[1]}`
+              }).join('\n')
+              processedToolResults = `Found ${issueMatches.length} open issues:\n${issueList}`
+            } else {
+              processedToolResults = toolResultsText.substring(0, maxToolResultLength) + "\n\n[Results truncated due to length]"
+            }
+          } else {
+            processedToolResults = toolResultsText.substring(0, maxToolResultLength) + "\n\n[Results truncated due to length]"
+          }
+        } else {
+          // For complex requests, truncate but preserve structure
+          processedToolResults = toolResultsText.substring(0, maxToolResultLength) + "\n\n[Results truncated due to length]"
+        }
+      }
+
+      conversationHistory.push({
+        role: "tool",
+        content: processedToolResults,
+        toolResults,
+      })
+    }
 
     // Enhanced completion detection with better error handling
     const hasErrors = toolResults.some((result) => result.isError)
@@ -1009,30 +1191,43 @@ Please try alternative approaches, break down the task into smaller steps, or pr
     const agentIndicatedDone = llmResponse.needsMoreWork === false
 
     if (agentIndicatedDone && allToolsSuccessful) {
-      // Agent indicated completion, but we need to ensure it provides a summary
-      // Check if the last assistant message provides a meaningful summary
+      // Agent indicated completion, check if response is appropriate
       const lastAssistantContent = llmResponse.content || ""
+      const hasExecutedTools = toolResults.length > 0
 
-      // If the agent only made tool calls without providing a summary, request one
-      if (!lastAssistantContent.trim() || lastAssistantContent.length < 20) {
-        // Force the agent to provide a summary by continuing the conversation
-        const summaryPrompt = `Please provide a brief summary of what you accomplished and the results of your actions. Include what worked well and any issues encountered.`
+      // Check if response is appropriate for the request type
+      const responseAppropriate = isResponseAppropriate(
+        lastAssistantContent,
+        requestAnalysis,
+        hasExecutedTools
+      )
 
-        conversationHistory.push({
-          role: "user",
-          content: summaryPrompt,
-        })
+      // Only request a summary if the response is inadequate for the request type
+      if (!responseAppropriate) {
+        // For simple queries that executed tools, a brief response may be sufficient
+        if (requestAnalysis.isSimpleQuery && hasExecutedTools && lastAssistantContent.trim()) {
+          // Accept the response as-is for simple queries, even if brief
+          finalContent = lastAssistantContent
+        } else {
+          // For complex requests or when no response provided, request a proper summary
+          const summaryPrompt = `Please provide a brief summary of what you accomplished and the results of your actions. Include what worked well and any issues encountered.`
 
-        // Continue to next iteration to get the summary
-        // Set final content to the latest assistant response (fallback)
-        if (!finalContent) {
-          finalContent = llmResponse.content || ""
+          conversationHistory.push({
+            role: "user",
+            content: summaryPrompt,
+          })
+
+          // Continue to next iteration to get the summary
+          // Set final content to the latest assistant response (fallback)
+          if (!finalContent) {
+            finalContent = llmResponse.content || ""
+          }
+          continue
         }
-        continue
+      } else {
+        // Create final content that includes the agent's summary
+        finalContent = lastAssistantContent
       }
-
-      // Create final content that includes the agent's summary
-      finalContent = lastAssistantContent
 
       // Add completion step
       const completionStep = createProgressStep(
@@ -1056,28 +1251,47 @@ Please try alternative approaches, break down the task into smaller steps, or pr
       break
     }
 
+    // Check if we should force completion to prevent infinite loops
+    const forceCompletion = shouldForceCompletion(llmResponse, requestAnalysis, iteration, maxIterations)
+
     // Continue iterating if needsMoreWork is true (explicitly set) or undefined (default behavior)
-    // Only stop if needsMoreWork is explicitly false or we hit max iterations
-    const shouldContinue = llmResponse.needsMoreWork !== false
+    // Only stop if needsMoreWork is explicitly false or we hit max iterations or force completion
+    const shouldContinue = llmResponse.needsMoreWork !== false && !forceCompletion
     if (!shouldContinue) {
-      // Agent explicitly indicated no more work needed, but ensure it provides a summary
+      // Agent explicitly indicated no more work needed
       const assistantContent = llmResponse.content || ""
+      const hasExecutedTools = toolResults.length > 0
 
-      // Ensure the agent provides a meaningful summary
-      if (!assistantContent.trim() || assistantContent.length < 20) {
-        // Force the agent to provide a summary by continuing the conversation
-        const summaryPrompt = `Please provide a brief summary of what you accomplished and the current status of the task.`
+      // Check if response is appropriate for the request type
+      const responseAppropriate = isResponseAppropriate(
+        assistantContent,
+        requestAnalysis,
+        hasExecutedTools
+      )
 
-        conversationHistory.push({
-          role: "user",
-          content: summaryPrompt,
-        })
+      // Only force a summary if the response is truly inadequate for the request type
+      if (!responseAppropriate) {
+        // For simple queries, don't force lengthy summaries
+        if (requestAnalysis.isSimpleQuery && !hasExecutedTools) {
+          // Accept the response as-is for simple queries
+          finalContent = assistantContent || "Task completed"
+        } else {
+          // For complex requests or when tools were executed, request a proper summary
+          const summaryPrompt = requestAnalysis.isActionableRequest
+            ? `Please provide a brief summary of what you accomplished and the results of your actions.`
+            : `Please provide a brief summary of what you found and the current status.`
 
-        // Continue to next iteration to get the summary
-        continue
+          conversationHistory.push({
+            role: "user",
+            content: summaryPrompt,
+          })
+
+          // Continue to next iteration to get the summary
+          continue
+        }
+      } else {
+        finalContent = assistantContent
       }
-
-      finalContent = assistantContent
       conversationHistory.push({
         role: "assistant",
         content: finalContent,

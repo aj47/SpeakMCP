@@ -15,7 +15,7 @@ https://github.com/user-attachments/assets/0c181c70-d1f1-4c5d-a6f5-a73147e75182
 
 ### Download
 
-Currently building for **macOS (Apple Silicon)**
+**Cross-Platform Support**: macOS (Apple Silicon & Intel), Windows (x64), Linux (x64)
 
 **[📥 Download Latest Release](https://github.com/aj47/SpeakMCP/releases/latest)**
 
@@ -42,21 +42,42 @@ Currently building for **macOS (Apple Silicon)**
 
 ## ✨ Features
 
+### 🎤 Voice & Speech
 - **Voice-to-Text**: Hold `Ctrl` to record, release to transcribe
-- **MCP Agent Mode**: Hold `Ctrl+Alt` for intelligent tool execution
-- **Text Input**: Press `Ctrl+T` for direct text input
-- **Universal Integration**: Works with any text-input application
-- **AI Processing**: OpenAI/Groq for speech recognition, multiple LLM providers
+- **Toggle Voice Dictation**: Press `Fn` key to start/stop recording (configurable)
+- **Multi-Language Support**: 30+ languages including Spanish, French, German, Chinese, Japanese, Arabic, Hindi
+- **Text-to-Speech (TTS)**: AI-generated speech with 50+ voices across OpenAI, Groq, and Gemini
+- **Auto-Play TTS**: Automatic speech playback for seamless conversations
+
+### 🤖 AI Agent & MCP
+- **MCP Agent Mode**: Hold `Ctrl+Alt` for intelligent tool execution with real-time progress
 - **MCP Integration**: Connect to any MCP-compatible tools and services
-- **Real-time Feedback**: Visual progress tracking during agent execution
+- **OAuth 2.1 Support**: Secure authentication for MCP servers with deep link integration
+- **Tool Management**: Per-server tool toggles and approval prompts
+- **Conversation Continuity**: Context preservation across agent interactions
+
+### 🛠️ Platform & Performance
+- **Cross-Platform**: macOS, Windows, and Linux support with native builds
+- **Rate Limit Handling**: Exponential backoff retry for API rate limits (429 errors)
+- **Model Selection**: Choose specific models for OpenAI, Groq, and Gemini providers
+- **Debug Modes**: Comprehensive logging for LLM calls, tool execution, and TTS
+- **Universal Integration**: Works with any text-input application
+
+### 🎨 User Experience
+- **Text Input**: Press `Ctrl+T` for direct text input mode
+- **Dark/Light Themes**: Toggle between dark and light modes
+- **Resizable Panels**: Drag-to-resize interface components
+- **Kill Switch**: Emergency stop for agent operations (`Escape` key)
+- **Conversation Management**: Full conversation history with tool call visualization
 
 ## 🏗️ Architecture
 
-Built with Electron + Rust for cross-platform compatibility:
-- **Electron**: Main process for system integration and MCP orchestration
-- **React**: UI for real-time progress and conversation management
-- **Rust**: Low-level keyboard monitoring and text injection
-- **MCP Client**: Connects to any MCP-compatible tools and services
+Built with modern technologies for cross-platform performance:
+- **Electron**: Main process for system integration, MCP orchestration, and TTS processing
+- **React + TypeScript**: Modern UI with real-time progress tracking and conversation management
+- **Rust**: High-performance keyboard monitoring and text injection across platforms
+- **MCP Client**: Full Model Context Protocol implementation with OAuth 2.1 support
+- **Multi-Provider AI**: OpenAI, Groq, and Gemini integration for speech, text, and TTS
 
 ## 🛠️ Development
 
@@ -67,26 +88,27 @@ Built with Electron + Rust for cross-platform compatibility:
 git clone https://github.com/aj47/SpeakMCP.git
 cd SpeakMCP
 pnpm install
-pnpm build-rs  # Build Rust binary
+pnpm build-rs  # Build Rust binary for your platform
 pnpm dev       # Start development server
 
-# Build commands
-pnpm build        # Production build
-pnpm build:mac    # macOS build
-pnpm build:win    # Windows build
-pnpm build:linux  # Linux build
+# Platform-specific builds
+pnpm build        # Production build for current platform
+pnpm build:mac    # macOS build (Apple Silicon + Intel)
+pnpm build:win    # Windows build (x64)
+pnpm build:linux  # Linux build (x64)
 
-# Debug (optional) - Multiple convenient options!
-pnpm dev d               # Enable all debug logs (shortest!)
-pnpm dev debug-llm       # Enable LLM debug only
-pnpm dev dl              # Enable LLM debug (short)
-pnpm dev dt              # Enable tools debug (short)
-pnpm dev -- --debug-all  # Traditional format
+# Testing
+pnpm test         # Run test suite
+pnpm test:tts     # Test TTS functionality
 ```
 
 ## ⚙️ Configuration
 
-**Providers**: OpenAI, Groq, Google Gemini (configure API keys in settings)
+**AI Providers**: OpenAI, Groq, Google Gemini
+- Configure API keys and custom base URLs in settings
+- Select specific models for each provider
+- Multi-language speech recognition support
+- TTS with 50+ voices across providers
 
 **MCP Servers**: Configure tools in `mcpServers` JSON format:
 ```json
@@ -95,153 +117,82 @@ pnpm dev -- --debug-all  # Traditional format
     "filesystem": {
       "command": "npx",
       "args": ["@modelcontextprotocol/server-filesystem", "/path"]
+    },
+    "web-search": {
+      "command": "npx",
+      "args": ["@modelcontextprotocol/server-web-search"],
+      "env": {"BRAVE_API_KEY": "your-key"}
     }
   }
 }
 ```
 
 **Keyboard Shortcuts**:
-- **Hold Ctrl**: Voice recording
+- **Hold Ctrl**: Voice recording (traditional mode)
+- **Fn Key**: Toggle voice dictation (press once to start/stop)
 - **Hold Ctrl+Alt**: MCP agent mode
 - **Ctrl+T**: Text input mode
-- **Escape**: Cancel current action
+- **Escape**: Cancel/kill switch for operations
 
 ## 🤖 MCP Agent Mode
 
-**MCP (Model Context Protocol)** enables AI assistants to connect to external tools. SpeakMCP implements a full MCP client for intelligent tool execution.
+**MCP (Model Context Protocol)** enables AI assistants to connect to external tools. SpeakMCP implements a full MCP client with advanced capabilities.
 
-**Features**:
+**Enhanced Features**:
 - **Intelligent Tool Selection**: Automatically determines which tools to use
-- **Real-time Progress**: Visual feedback during tool execution
-- **Conversation Continuity**: Maintains context across interactions
+- **Real-time Progress**: Visual feedback with TTS narration during execution
+- **Conversation Continuity**: Context preservation across multi-turn interactions
+- **OAuth 2.1 Integration**: Secure authentication for MCP servers
+- **Rate Limit Handling**: Automatic retry with exponential backoff
+- **Kill Switch**: Emergency stop functionality with `Escape` key
+- **Tool Management**: Per-server tool toggles and approval prompts
 
 **Example commands**:
 - "Create a new project folder and add a README"
-- "Search for latest AI news"
-- "Send a message to the team"
+- "Search for latest AI news and summarize the top 3 articles"
+- "Send a message to the team about today's progress"
+- "Analyze this codebase and suggest improvements"
+
+## 🆕 What's New
+
+**Recent Major Features**:
+
+### 🎵 Text-to-Speech (TTS) Integration
+- **50+ AI Voices**: OpenAI (6 voices), Groq (23 voices), Gemini (30+ voices)
+- **Auto-Play**: Seamless conversation flow with automatic speech playback
+- **Smart Preprocessing**: Converts code blocks, URLs, and markdown to natural speech
+- **Multi-Language**: Support for 30+ languages with native pronunciation
+
+### 🖥️ Cross-Platform Support
+- **Windows Build**: Full Windows compatibility with native builds
+- **Enhanced macOS**: Apple Silicon and Intel support
+- **Linux Ready**: Complete Linux build pipeline
+
+### 🎛️ Enhanced Voice Controls
+- **Toggle Voice Dictation**: Press `Fn` key to start/stop recording
+- **Multi-Language Recognition**: 30+ languages with automatic detection
+- **Configurable Hotkeys**: Customize keyboard shortcuts for all functions
+
+### 🔧 Reliability & Performance
+- **Rate Limit Handling**: Automatic retry with exponential backoff for API limits
+- **OAuth 2.1**: Secure authentication for MCP servers with deep link integration
+- **Kill Switch**: Emergency stop functionality for all operations
+- **Model Selection**: Choose specific AI models for each provider
 
 ## 🐛 Debug Mode
 
-SpeakMCP includes comprehensive debug logging to help troubleshoot issues and understand system behavior.
+For development and troubleshooting, SpeakMCP includes comprehensive debug logging:
 
-### Quick Debug Commands
-
-**Enable all debug modes (recommended):**
 ```bash
-pnpm dev d               # Shortest - just one letter!
+# Enable all debug modes
+pnpm dev d               # Shortest option
 pnpm dev debug-all       # Readable format
-```
 
-**Enable specific debug modes:**
-```bash
+# Enable specific modes
 pnpm dev debug-llm       # LLM calls and responses
 pnpm dev debug-tools     # MCP tool execution
-pnpm dev debug-keybinds  # Keyboard event handling
-pnpm dev dl              # LLM debug (short)
-pnpm dev dt              # Tools debug (short)
-pnpm dev dk              # Keybinds debug (short)
+pnpm dev debug-tts       # Text-to-speech debugging
 ```
-
-**Traditional format (with dashes):**
-```bash
-pnpm dev -- --debug-all
-pnpm dev -- --debug-llm
-pnpm dev -- -d           # Short with dashes
-```
-
-**Environment variables:**
-```bash
-DEBUG=* pnpm dev         # Enable all
-DEBUG_LLM=true pnpm dev  # LLM only
-DEBUG=llm,tools pnpm dev # Multiple modes
-```
-
-### Debug Output
-
-When debug modes are enabled, you'll see detailed logs:
-
-**LLM Debug (`debug-llm` or `dl`):**
-- Request messages sent to LLM providers
-- Response content and structured output
-- Token usage and timing information
-- Error details for failed calls
-
-**Tools Debug (`debug-tools` or `dt`):**
-- MCP server connection status
-- Tool discovery and registration
-- Tool execution requests and responses
-- Error handling and retry logic
-
-**Keybinds Debug (`debug-keybinds` or `dk`):**
-- Keyboard event capture and processing
-- Hotkey activation and release
-- Focus management and text insertion
-
-## 🚨 Troubleshooting
-
-### Common Issues
-
-**🎤 Microphone not working**
-
-- Grant microphone permissions in system settings
-- Check microphone access in SpeakMCP settings
-- Restart application after granting permissions
-
-**⌨️ Text not inserting**
-
-- Enable accessibility permissions (macOS)
-- Run as administrator (Windows)
-- Check target application supports text input
-- Verify focus restoration is working correctly
-
-**🔧 MCP tools not working**
-
-- Check MCP server configuration and paths
-- Verify environment variables are set correctly
-- Test server connection in settings
-- Check logs for `spawn npx ENOENT` errors (PATH issues)
-
-**🤖 Agent mode issues**
-
-- Ensure MCP tools are enabled in settings
-- Check that at least one MCP server is configured and connected
-- Verify LLM provider supports structured output (OpenAI/Groq recommended)
-- Check conversation history if context seems lost
-
-**🌐 Multi-language Support**
-- **Speech Recognition**: Support for 30+ languages including Spanish, French, German, Chinese, Japanese, Arabic, Hindi, and more
-- **Language Detection**: Automatic language detection or manual language selection
-- **Provider-specific**: Language parameters work with OpenAI Whisper and Groq Whisper
-- **ISO 639-1 Compliant**: Standard language codes for consistent API integration
-- **Configurable**: Set global language preference or provider-specific overrides
-
-**🌍 API errors**
-
-- Verify API keys are correct
-- Check internet connection for cloud providers
-- Validate custom base URLs if configured
-- Monitor rate limits and usage quotas
-- Validate language codes (ISO 639-1 format)
-
-### Performance Optimization
-
-**For Cloud APIs:**
-
-- Use Groq for fastest cloud transcription and tool calling
-- Configure custom prompts for better accuracy
-- Enable post-processing for grammar correction
-
-**For MCP Integration:**
-
-- Use local MCP servers when possible for faster response times
-- Configure appropriate timeouts for external services
-- Enable agent mode for complex multi-step tasks
-
-**For Conversations:**
-
-- Set reasonable conversation history limits
-- Use conversation management to organize different topics
-- Clear old conversations periodically to maintain performance
 
 ## 🤝 Contributing
 

@@ -496,34 +496,34 @@ export function Component() {
                 />
               )}
 
-              {/* Waveform visualization - right-aligned, dimmed when agent progress is showing */}
+              {/* Waveform visualization - full width with centered content, dimmed when agent progress is showing */}
               <div
                 className={cn(
-                  "absolute right-0 flex h-6 items-center gap-0.5 transition-opacity duration-300",
+                  "absolute inset-x-0 flex h-6 items-center justify-center transition-opacity duration-300 px-4",
                   agentProgress && !mcpTranscribeMutation.isPending
                     ? "opacity-30"
                     : "opacity-100",
                 )}
-                dir="rtl"
               >
-                {visualizerData
-                  .slice()
-                  .reverse()
-                  .map((rms, index) => {
-                    return (
-                      <div
-                        key={index}
-                        className={cn(
-                          "h-full w-0.5 shrink-0 rounded-lg",
-                          "bg-red-500 dark:bg-white",
-                          rms === -1000 && "bg-neutral-400 dark:bg-neutral-500",
-                        )}
-                        style={{
-                          height: `${Math.min(100, Math.max(16, rms * 100))}%`,
-                        }}
-                      />
-                    )
-                  })}
+                <div className="flex h-6 items-center gap-0.5">
+                  {visualizerData
+                    .slice()
+                    .map((rms, index) => {
+                      return (
+                        <div
+                          key={index}
+                          className={cn(
+                            "h-full w-0.5 shrink-0 rounded-lg",
+                            "bg-red-500 dark:bg-white",
+                            rms === -1000 && "bg-neutral-400 dark:bg-neutral-500",
+                          )}
+                          style={{
+                            height: `${Math.min(100, Math.max(16, rms * 100))}%`,
+                          }}
+                        />
+                      )
+                    })}
+                </div>
               </div>
             </div>
           </div>

@@ -211,6 +211,7 @@ export type Config = {
 
   // Text-to-Speech Configuration
   ttsEnabled?: boolean
+  ttsAutoPlay?: boolean
   ttsProviderId?: TTS_PROVIDER_ID
 
   // OpenAI TTS Configuration

@@ -945,7 +945,7 @@ Always use actual resource IDs from the conversation history or create new ones 
               const summary = `Found ${parsed.length} items. First few:\n${JSON.stringify(parsed.slice(0, 3), null, 2)}${parsed.length > 3 ? `\n... and ${parsed.length - 3} more items` : ''}`
               return {
                 ...result,
-                content: [{ type: 'text', text: summary }]
+                content: [{ type: 'text' as const, text: summary }]
               }
             } else if (typeof parsed === 'object') {
               // For objects, show structure with truncated values
@@ -953,7 +953,7 @@ Always use actual resource IDs from the conversation history or create new ones 
               const summary = `Object with ${Object.keys(parsed).length} properties:\n${keys.map(key => `${key}: ${JSON.stringify(parsed[key]).substring(0, 100)}...`).join('\n')}${Object.keys(parsed).length > 10 ? `\n... and ${Object.keys(parsed).length - 10} more properties` : ''}`
               return {
                 ...result,
-                content: [{ type: 'text', text: summary }]
+                content: [{ type: 'text' as const, text: summary }]
               }
             }
           } catch (e) {
@@ -966,7 +966,7 @@ Always use actual resource IDs from the conversation history or create new ones 
           const truncated = content.substring(0, 2000) + '\n... [truncated for brevity]'
           return {
             ...result,
-            content: [{ type: 'text', text: truncated }]
+            content: [{ type: 'text' as const, text: truncated }]
           }
         }
       }

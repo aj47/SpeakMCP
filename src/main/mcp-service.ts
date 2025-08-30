@@ -604,6 +604,36 @@ export class MCPService {
   }
 
   /**
+   * Clean up tools from servers that no longer exist in configuration
+   * This prevents accumulation of orphaned tools from deleted servers
+   */
+  private cleanupOrphanedTools(): void {
+    const config = configStore.get()
+    const mcpConfig = config.mcpConfig
+    const configuredServers = mcpConfig?.mcpServers || {}
+
+    // Remove tools from servers that no longer exist in config
+    this.availableTools = this.availableTools.filter((tool) => {
+      const serverName = tool.name.includes(":")
+        ? tool.name.split(":")[0]
+        : "unknown"
+      return configuredServers[serverName] !== undefined
+    })
+
+    // Also clean up disabled tools for non-existent servers
+    const orphanedDisabledTools = Array.from(this.disabledTools).filter((toolName) => {
+      const serverName = toolName.includes(":")
+        ? toolName.split(":")[0]
+        : "unknown"
+      return configuredServers[serverName] === undefined
+    })
+
+    for (const toolName of orphanedDisabledTools) {
+      this.disabledTools.delete(toolName)
+    }
+  }
+
+  /**
    * Check if a server should be available (not config-disabled and not runtime-disabled)
    */
   isServerAvailable(serverName: string): boolean {
@@ -812,18 +842,34 @@ export class MCPService {
     enabled: boolean
     inputSchema: any
   }> {
-    return this.availableTools.map((tool) => {
-      const serverName = tool.name.includes(":")
-        ? tool.name.split(":")[0]
-        : "unknown"
-      return {
-        name: tool.name,
-        description: tool.description,
-        serverName,
-        enabled: !this.disabledTools.has(tool.name),
-        inputSchema: tool.inputSchema,
-      }
-    })
+    // Clean up orphaned tools from deleted servers
+    this.cleanupOrphanedTools()
+
+    const config = configStore.get()
+    const mcpConfig = config.mcpConfig
+    const configuredServers = mcpConfig?.mcpServers || {}
+
+    // Filter out tools from servers that no longer exist in configuration
+    return this.availableTools
+      .filter((tool) => {
+        const serverName = tool.name.includes(":")
+          ? tool.name.split(":")[0]
+          : "unknown"
+        // Only include tools from servers that still exist in config
+        return configuredServers[serverName] !== undefined
+      })
+      .map((tool) => {
+        const serverName = tool.name.includes(":")
+          ? tool.name.split(":")[0]
+          : "unknown"
+        return {
+          name: tool.name,
+          description: tool.description,
+          serverName,
+          enabled: !this.disabledTools.has(tool.name),
+          inputSchema: tool.inputSchema,
+        }
+      })
   }
 
   getServerStatus(): Record<

@@ -13,6 +13,7 @@ import {
   makeWindow,
 } from "@egoist/electron-panel-window"
 import { RendererHandlers } from "./renderer-handlers"
+import { logApp } from "./debug"
 import { configStore } from "./config"
 import { getFocusedAppInfo } from "./keyboard"
 import { state, agentProcessManager } from "./state"
@@ -142,6 +143,7 @@ function createBaseWindow({
 }
 
 export function createMainWindow({ url }: { url?: string } = {}) {
+  logApp("Creating main window...")
   const win = createBaseWindow({
     id: "main",
     url,
@@ -225,6 +227,7 @@ const getPanelWindowPosition = (
 }
 
 export function createPanelWindow() {
+  logApp("Creating panel window...")
   const position = getPanelWindowPosition()
 
   const win = createBaseWindow({

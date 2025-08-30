@@ -60,6 +60,8 @@ const getConfig = () => {
     openaiTtsVoice: "alloy",
     openaiTtsSpeed: 1.0,
     openaiTtsResponseFormat: "mp3",
+    // OpenAI-compatible provider preset defaults
+    openaiCompatiblePreset: "openai",
     // Groq TTS defaults
     groqTtsModel: "playai-tts",
     groqTtsVoice: "Fritz-PlayAI",

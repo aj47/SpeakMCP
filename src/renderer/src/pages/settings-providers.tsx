@@ -28,6 +28,8 @@ import {
   GROQ_TTS_MODELS,
   GEMINI_TTS_VOICES,
   GEMINI_TTS_MODELS,
+  OPENAI_COMPATIBLE_PRESETS,
+  OPENAI_COMPATIBLE_PRESET_ID,
 } from "@shared/index"
 
 export function Component() {
@@ -146,7 +148,7 @@ export function Component() {
             </Select>
           </Control>
         </ControlGroup>
-        <ControlGroup title="OpenAI">
+        <ControlGroup title="OpenAI Compatible">
           <Control label="API Key" className="px-3">
             <Input
               type="password"
@@ -159,11 +161,42 @@ export function Component() {
             />
           </Control>
 
+          <Control label={<ControlLabel label="Provider Preset" tooltip="Choose a popular OpenAI-compatible provider or select Custom to enter your own base URL" />} className="px-3">
+            <Select
+              value={configQuery.data.openaiCompatiblePreset || "openai"}
+              onValueChange={(value) => {
+                const preset = OPENAI_COMPATIBLE_PRESETS.find(p => p.value === value)
+                saveConfig({
+                  openaiCompatiblePreset: value as OPENAI_COMPATIBLE_PRESET_ID,
+                  // Auto-fill base URL when selecting a preset (except custom)
+                  ...(preset && preset.value !== "custom" && {
+                    openaiBaseUrl: preset.baseUrl,
+                  }),
+                })
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {OPENAI_COMPATIBLE_PRESETS.map((preset) => (
+                  <SelectItem key={preset.value} value={preset.value}>
+                    <div className="flex flex-col">
+                      <span>{preset.label}</span>
+                      <span className="text-xs text-muted-foreground">{preset.description}</span>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Control>
+
           <Control label="API Base URL" className="px-3">
             <Input
               type="url"
               placeholder="https://api.openai.com/v1"
               defaultValue={configQuery.data.openaiBaseUrl}
+              disabled={configQuery.data.openaiCompatiblePreset !== "custom"}
               onChange={(e) => {
                 saveConfig({
                   openaiBaseUrl: e.currentTarget.value,

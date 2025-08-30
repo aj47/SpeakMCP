@@ -196,6 +196,7 @@ export type Config = {
 
   openaiApiKey?: string
   openaiBaseUrl?: string
+  openaiCompatiblePreset?: string // Preset ID for OpenAI-compatible providers
 
   groqApiKey?: string
   groqBaseUrl?: string

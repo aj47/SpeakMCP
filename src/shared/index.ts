@@ -134,3 +134,57 @@ export const GEMINI_TTS_MODELS = [
   { label: "Gemini 2.5 Flash TTS", value: "gemini-2.5-flash-preview-tts" },
   { label: "Gemini 2.5 Pro TTS", value: "gemini-2.5-pro-preview-tts" },
 ] as const
+
+// OpenAI-Compatible Provider Presets
+export const OPENAI_COMPATIBLE_PRESETS = [
+  {
+    label: "Custom",
+    value: "custom",
+    baseUrl: "",
+    description: "Enter your own base URL",
+  },
+  {
+    label: "OpenAI",
+    value: "openai",
+    baseUrl: "https://api.openai.com/v1",
+    description: "Official OpenAI API",
+  },
+  {
+    label: "OpenRouter",
+    value: "openrouter",
+    baseUrl: "https://api.openrouter.ai/api/v1",
+    description: "Access to multiple models via OpenRouter",
+  },
+  {
+    label: "Cerebras",
+    value: "cerebras",
+    baseUrl: "https://api.cerebras.ai/v1",
+    description: "Fast inference with Cerebras hardware",
+  },
+  {
+    label: "Together AI",
+    value: "together",
+    baseUrl: "https://api.together.xyz/v1",
+    description: "Open-source models via Together AI",
+  },
+  {
+    label: "Perplexity",
+    value: "perplexity",
+    baseUrl: "https://api.perplexity.ai",
+    description: "Search-augmented AI models",
+  },
+  {
+    label: "DeepSeek",
+    value: "deepseek",
+    baseUrl: "https://api.deepseek.com",
+    description: "Advanced reasoning models",
+  },
+  {
+    label: "Groq",
+    value: "groq",
+    baseUrl: "https://api.groq.com/openai/v1",
+    description: "Ultra-fast inference with Groq chips",
+  },
+] as const
+
+export type OPENAI_COMPATIBLE_PRESET_ID = (typeof OPENAI_COMPATIBLE_PRESETS)[number]["value"]

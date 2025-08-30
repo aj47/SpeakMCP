@@ -126,6 +126,8 @@ export function Component() {
                 saveConfig({
                   themePreference: value,
                 })
+                // Update localStorage immediately to sync with ThemeProvider
+                localStorage.setItem("theme-preference", value)
                 // Apply theme immediately
                 window.dispatchEvent(
                   new CustomEvent("theme-preference-changed", {

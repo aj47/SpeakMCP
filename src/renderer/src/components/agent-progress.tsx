@@ -156,7 +156,7 @@ const CompactMessage: React.FC<{
     <div className={cn(
       "rounded text-xs transition-all duration-200",
       getRoleStyle(),
-      !isExpanded && shouldCollapse && "hover:bg-white/10",
+      !isExpanded && shouldCollapse && "hover:bg-muted/20",
       shouldCollapse && "cursor-pointer"
     )}>
       <div
@@ -225,7 +225,7 @@ const CompactMessage: React.FC<{
         {shouldCollapse && (
           <button
             onClick={handleChevronClick}
-            className="p-1 rounded hover:bg-white/20 transition-colors flex-shrink-0"
+            className="p-1 rounded hover:bg-muted/30 transition-colors flex-shrink-0"
           >
             {isExpanded ? (
               <ChevronUp className="h-3 w-3" />
@@ -435,8 +435,8 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
 
   const containerClasses =
     variant === "overlay"
-      ? "flex flex-col w-full h-full bg-black/80 backdrop-blur-sm rounded-xl overflow-hidden border border-white/10"
-      : "flex flex-col w-full h-full bg-white/10 backdrop-blur-sm rounded-xl overflow-hidden border border-white/20"
+      ? "flex flex-col w-full h-full bg-background/80 backdrop-blur-sm rounded-xl overflow-hidden border border-border/50"
+      : "flex flex-col w-full h-full bg-muted/20 backdrop-blur-sm rounded-xl overflow-hidden border border-border/40"
 
   return (
     <div
@@ -445,7 +445,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
       style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
     >
       {/* Unified Header */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-white/10 bg-white/5 backdrop-blur-sm">
+      <div className="flex items-center justify-between px-3 py-2 border-b border-border/30 bg-muted/10 backdrop-blur-sm">
         <div className="flex items-center gap-2">
           <span className="text-xs font-medium">
             {isComplete ? (hasErrors ? "Failed" : "Complete") : "Processing"}

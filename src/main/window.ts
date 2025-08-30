@@ -103,6 +103,10 @@ function createBaseWindow({
     height: 670,
     show: false,
     autoHideMenuBar: true,
+    // Set window icon for Windows to ensure proper taskbar display
+    ...(process.platform === "win32" && {
+      icon: path.join(__dirname, "../../build/icon.ico"),
+    }),
     ...windowOptions,
     webPreferences: {
       preload: path.join(__dirname, "../preload/index.mjs"),

@@ -1,7 +1,7 @@
 import { cn } from "@renderer/lib/utils"
-import { useEffect, useState } from "react"
 import loadingSpinnerGif from "@renderer/assets/loading-spinner.gif"
 import lightSpinnerGif from "@renderer/assets/light-spinner.gif"
+import { useTheme } from "@renderer/contexts/theme-context"
 
 interface LoadingSpinnerProps {
   className?: string
@@ -16,34 +16,7 @@ const sizeClasses = {
   lg: "w-12 h-12",
 }
 
-// Hook to detect theme changes
-function useTheme() {
-  const [isDark, setIsDark] = useState(() => {
-    return document.documentElement.classList.contains("dark")
-  })
 
-  useEffect(() => {
-    const observer = new MutationObserver((mutations) => {
-      mutations.forEach((mutation) => {
-        if (
-          mutation.type === "attributes" &&
-          mutation.attributeName === "class"
-        ) {
-          setIsDark(document.documentElement.classList.contains("dark"))
-        }
-      })
-    })
-
-    observer.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ["class"],
-    })
-
-    return () => observer.disconnect()
-  }, [])
-
-  return { isDark }
-}
 
 export function LoadingSpinner({
   className,

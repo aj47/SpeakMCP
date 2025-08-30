@@ -3,6 +3,7 @@ import { Textarea } from "@renderer/components/ui/textarea"
 import { cn } from "@renderer/lib/utils"
 import { AgentProcessingView } from "./agent-processing-view"
 import { AgentProgressUpdate } from "../../../shared/types"
+import { useTheme } from "@renderer/contexts/theme-context"
 
 interface TextInputPanelProps {
   onSubmit: (text: string) => void
@@ -19,6 +20,7 @@ export function TextInputPanel({
 }: TextInputPanelProps) {
   const [text, setText] = useState("")
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const { isDark } = useTheme()
 
   // Auto-focus when component mounts
   useEffect(() => {
@@ -68,7 +70,10 @@ export function TextInputPanel({
 
   if (isProcessing) {
     return (
-      <div className="modern-panel-strong modern-text-strong flex h-full w-full items-center justify-center rounded-xl">
+      <div className={cn(
+        "text-input-panel modern-text-strong flex h-full w-full items-center justify-center rounded-xl",
+        isDark ? "dark" : ""
+      )}>
         {agentProgress ? (
           <AgentProcessingView
             agentProgress={agentProgress}
@@ -88,7 +93,10 @@ export function TextInputPanel({
   }
 
   return (
-    <div className="modern-panel-strong modern-text-strong flex h-full w-full flex-col gap-3 rounded-xl p-3">
+    <div className={cn(
+      "text-input-panel modern-text-strong flex h-full w-full flex-col gap-3 rounded-xl p-3",
+      isDark ? "dark" : ""
+    )}>
       {/* Show agent progress if available */}
       {isProcessing && agentProgress ? (
         <AgentProcessingView

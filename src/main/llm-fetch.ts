@@ -263,6 +263,10 @@ function getModel(providerId: string, type: "mcp" | "transcript"): string {
         : config.transcriptPostProcessingGroqModel || "llama-3.1-70b-versatile"
     case "gemini":
       return config.mcpToolsGeminiModel || "gemini-1.5-flash-002"
+    case "cerebras":
+      return type === "mcp"
+        ? config.mcpToolsCerebrasModel || "llama3.1-8b"
+        : config.transcriptPostProcessingCerebrasModel || "llama3.1-8b"
     default:
       return "gpt-4o-mini"
   }
@@ -286,6 +290,11 @@ function supportsJsonMode(model: string, providerId: string): boolean {
     )
   }
 
+  // Cerebras models that support JSON mode (most Llama models do)
+  if (providerId === "cerebras") {
+    return model.includes("llama")
+  }
+
   // Conservative default - assume no JSON mode support
   return false
 }
@@ -300,12 +309,24 @@ async function makeOpenAICompatibleCall(
 ): Promise<any> {
   const config = configStore.get()
 
-  const baseURL =
-    providerId === "groq"
-      ? config.groqBaseUrl || "https://api.groq.com/openai/v1"
-      : config.openaiBaseUrl || "https://api.openai.com/v1"
+  let baseURL: string
+  let apiKey: string | undefined
 
-  const apiKey = providerId === "groq" ? config.groqApiKey : config.openaiApiKey
+  switch (providerId) {
+    case "groq":
+      baseURL = config.groqBaseUrl || "https://api.groq.com/openai/v1"
+      apiKey = config.groqApiKey
+      break
+    case "cerebras":
+      baseURL = config.cerebrasBaseUrl || "https://api.cerebras.ai/v1"
+      apiKey = config.cerebrasApiKey
+      break
+    case "openai":
+    default:
+      baseURL = config.openaiBaseUrl || "https://api.openai.com/v1"
+      apiKey = config.openaiApiKey
+      break
+  }
 
   if (!apiKey) {
     throw new Error(`API key is required for ${providerId}`)
@@ -542,6 +563,7 @@ export async function makeLLMCallWithFetch(
     if (chatProviderId === "gemini") {
       response = await makeGeminiCall(messages)
     } else {
+      // OpenAI, Groq, and Cerebras all use OpenAI-compatible APIs
       response = await makeOpenAICompatibleCall(messages, chatProviderId, true)
     }
 
@@ -621,6 +643,7 @@ export async function makeTextCompletionWithFetch(
     if (chatProviderId === "gemini") {
       response = await makeGeminiCall(messages)
     } else {
+      // OpenAI, Groq, and Cerebras all use OpenAI-compatible APIs
       response = await makeOpenAICompatibleCall(messages, chatProviderId, false)
     }
 

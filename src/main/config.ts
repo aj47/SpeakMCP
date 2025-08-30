@@ -69,6 +69,11 @@ const getConfig = () => {
     apiRetryCount: 3,
     apiRetryBaseDelay: 1000, // 1 second
     apiRetryMaxDelay: 30000, // 30 seconds
+    // Base URL History defaults
+    openaiBaseUrlHistory: [],
+    groqBaseUrlHistory: [],
+    geminiBaseUrlHistory: [],
+    cerebrasBaseUrlHistory: [],
   }
 
   try {

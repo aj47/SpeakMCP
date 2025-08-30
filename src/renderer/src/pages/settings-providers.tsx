@@ -13,6 +13,7 @@ import {
   useSaveConfigMutation,
 } from "@renderer/lib/query-client"
 import { Config } from "@shared/types"
+import { BaseUrlSelector } from "@renderer/components/base-url-selector"
 
 import {
   STT_PROVIDERS,
@@ -160,15 +161,24 @@ export function Component() {
           </Control>
 
           <Control label="API Base URL" className="px-3">
-            <Input
-              type="url"
-              placeholder="https://api.openai.com/v1"
-              defaultValue={configQuery.data.openaiBaseUrl}
-              onChange={(e) => {
+            <BaseUrlSelector
+              value={configQuery.data.openaiBaseUrl}
+              onChange={(value) => {
                 saveConfig({
-                  openaiBaseUrl: e.currentTarget.value,
+                  openaiBaseUrl: value,
                 })
               }}
+              placeholder="https://api.openai.com/v1"
+              history={configQuery.data.openaiBaseUrlHistory || []}
+              onHistoryUpdate={(history) => {
+                saveConfig({
+                  openaiBaseUrlHistory: history,
+                })
+              }}
+              defaultUrls={[
+                { label: "OpenAI (Default)", value: "https://api.openai.com/v1" },
+                { label: "OpenRouter", value: "https://openrouter.ai/api/v1" },
+              ]}
             />
           </Control>
 
@@ -251,15 +261,23 @@ export function Component() {
           </Control>
 
           <Control label="API Base URL" className="px-3">
-            <Input
-              type="url"
-              placeholder="https://api.groq.com/openai/v1"
-              defaultValue={configQuery.data.groqBaseUrl}
-              onChange={(e) => {
+            <BaseUrlSelector
+              value={configQuery.data.groqBaseUrl}
+              onChange={(value) => {
                 saveConfig({
-                  groqBaseUrl: e.currentTarget.value,
+                  groqBaseUrl: value,
                 })
               }}
+              placeholder="https://api.groq.com/openai/v1"
+              history={configQuery.data.groqBaseUrlHistory || []}
+              onHistoryUpdate={(history) => {
+                saveConfig({
+                  groqBaseUrlHistory: history,
+                })
+              }}
+              defaultUrls={[
+                { label: "Groq (Default)", value: "https://api.groq.com/openai/v1" },
+              ]}
             />
           </Control>
 
@@ -326,15 +344,23 @@ export function Component() {
           </Control>
 
           <Control label="API Base URL" className="px-3">
-            <Input
-              type="url"
-              placeholder="https://generativelanguage.googleapis.com"
-              defaultValue={configQuery.data.geminiBaseUrl}
-              onChange={(e) => {
+            <BaseUrlSelector
+              value={configQuery.data.geminiBaseUrl}
+              onChange={(value) => {
                 saveConfig({
-                  geminiBaseUrl: e.currentTarget.value,
+                  geminiBaseUrl: value,
                 })
               }}
+              placeholder="https://generativelanguage.googleapis.com"
+              history={configQuery.data.geminiBaseUrlHistory || []}
+              onHistoryUpdate={(history) => {
+                saveConfig({
+                  geminiBaseUrlHistory: history,
+                })
+              }}
+              defaultUrls={[
+                { label: "Google AI (Default)", value: "https://generativelanguage.googleapis.com" },
+              ]}
             />
           </Control>
 
@@ -382,6 +408,41 @@ export function Component() {
             </Select>
           </Control>
 
+        </ControlGroup>
+
+        <ControlGroup title="Cerebras">
+          <Control label="API Key" className="px-3">
+            <Input
+              type="password"
+              defaultValue={configQuery.data.cerebrasApiKey}
+              onChange={(e) => {
+                saveConfig({
+                  cerebrasApiKey: e.currentTarget.value,
+                })
+              }}
+            />
+          </Control>
+
+          <Control label="API Base URL" className="px-3">
+            <BaseUrlSelector
+              value={configQuery.data.cerebrasBaseUrl}
+              onChange={(value) => {
+                saveConfig({
+                  cerebrasBaseUrl: value,
+                })
+              }}
+              placeholder="https://api.cerebras.ai/v1"
+              history={configQuery.data.cerebrasBaseUrlHistory || []}
+              onHistoryUpdate={(history) => {
+                saveConfig({
+                  cerebrasBaseUrlHistory: history,
+                })
+              }}
+              defaultUrls={[
+                { label: "Cerebras (Default)", value: "https://api.cerebras.ai/v1" },
+              ]}
+            />
+          </Control>
         </ControlGroup>
       </div>
     </div>

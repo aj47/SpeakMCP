@@ -146,6 +146,17 @@ This will create:
    - Ensure all required DLLs are available (usually bundled with the installer)
    - Run from Command Prompt to see error messages
 
+10. **Windows Defender flags the application**
+    - **SOLUTION**: Set up Windows Defender exclusions
+    - Run: `npm run setup:windows-defender:dev` (as Administrator)
+    - Or see: [WINDOWS_DEFENDER_SETUP.md](WINDOWS_DEFENDER_SETUP.md)
+    - For production: Use code signing certificates
+
+11. **"This app can't run on your PC" or SmartScreen warnings**
+    - Application is not code-signed (development builds)
+    - Click "More info" → "Run anyway" for development
+    - For production: Obtain and configure code signing certificate
+
 ### Build Verification
 
 After successful build, verify the installer:

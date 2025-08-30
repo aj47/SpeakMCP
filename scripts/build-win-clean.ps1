@@ -7,6 +7,41 @@ param(
 
 Write-Host "[BUILD] Starting Windows build with cleanup..." -ForegroundColor Green
 
+# Check for Windows Defender exclusions
+function Test-WindowsDefenderExclusions {
+    Write-Host "[CHECK] Checking Windows Defender exclusions..." -ForegroundColor Yellow
+
+    try {
+        $preferences = Get-MpPreference -ErrorAction SilentlyContinue
+        $currentPath = (Get-Location).Path
+
+        $hasExclusions = $false
+        if ($preferences -and $preferences.ExclusionPath) {
+            foreach ($exclusion in $preferences.ExclusionPath) {
+                if ($currentPath -like "$exclusion*") {
+                    $hasExclusions = $true
+                    break
+                }
+            }
+        }
+
+        if (-not $hasExclusions) {
+            Write-Host "[WARNING] No Windows Defender exclusions found for this project" -ForegroundColor Yellow
+            Write-Host "[INFO] For faster builds and to prevent false positives:" -ForegroundColor Cyan
+            Write-Host "  1. Run: scripts/setup-windows-defender.ps1 -Development" -ForegroundColor Cyan
+            Write-Host "  2. Or see: WINDOWS_DEFENDER_SETUP.md" -ForegroundColor Cyan
+            Write-Host "" -ForegroundColor White
+        } else {
+            Write-Host "[OK] Windows Defender exclusions found" -ForegroundColor Green
+        }
+    } catch {
+        Write-Host "[INFO] Could not check Windows Defender exclusions" -ForegroundColor Yellow
+    }
+}
+
+# Check exclusions before build
+Test-WindowsDefenderExclusions
+
 # Function to kill processes safely
 function Stop-SpeakMCPProcesses {
     Write-Host "[CLEANUP] Stopping SpeakMCP processes..." -ForegroundColor Yellow

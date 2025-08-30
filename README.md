@@ -116,7 +116,7 @@ pnpm test:tts     # Test TTS functionality
   "mcpServers": {
     "filesystem": {
       "command": "npx",
-      "args": ["@modelcontextprotocol/server-filesystem", "/path"]
+      "args": ["@modelcontextprotocol/server-filesystem", "/"]
     },
     "web-search": {
       "command": "npx",

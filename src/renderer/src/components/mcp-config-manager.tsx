@@ -572,7 +572,7 @@ function ServerDialog({ server, onSave, onCancel }: ServerDialogProps) {
                 placeholder={`{
   "transport": "stdio",
   "command": "npx",
-  "args": ["-y", "@modelcontextprotocol/server-filesystem", "/path/to/directory"],
+  "args": ["-y", "@modelcontextprotocol/server-filesystem", "/"],
   "env": {
     "API_KEY": "your-key-here"
   }
@@ -690,7 +690,7 @@ const MCP_EXAMPLES = {
       args: [
         "-y",
         "@modelcontextprotocol/server-filesystem",
-        "/path/to/allowed/directory",
+        "/",
       ],
       env: {},
     },

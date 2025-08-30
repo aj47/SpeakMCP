@@ -1,0 +1,22 @@
+{
+  "mcpServers": {
+    "filesystem-example": {
+      "command": "node",
+      "args": ["examples/filesystem/index.js"],
+      "env": {},
+      "disabled": false
+    },
+    "calculator-example": {
+      "command": "node", 
+      "args": ["examples/calculator/index.js"],
+      "env": {},
+      "disabled": false
+    },
+    "database-example": {
+      "command": "node",
+      "args": ["examples/database/index.js"],
+      "env": {},
+      "disabled": false
+    }
+  }
+}

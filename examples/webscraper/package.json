@@ -1,0 +1,22 @@
+{
+  "name": "speakmcp-webscraper-example",
+  "version": "1.0.0",
+  "description": "Example MCP server for web scraping and content extraction",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js"
+  },
+  "keywords": ["mcp", "webscraper", "scraping", "example"],
+  "author": "SpeakMCP",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^0.6.0",
+    "cheerio": "^1.0.0-rc.12",
+    "node-html-parser": "^6.1.12"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

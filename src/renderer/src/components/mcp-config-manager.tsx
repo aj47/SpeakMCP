@@ -659,6 +659,55 @@ function ServerDialog({ server, onSave, onCancel }: ServerDialogProps) {
 
 // Example MCP server configurations
 const MCP_EXAMPLES = {
+  // Local Example Servers (no external dependencies)
+  "filesystem-example": {
+    name: "filesystem-example",
+    config: {
+      transport: "stdio" as MCPTransportType,
+      command: "node",
+      args: ["examples/filesystem/index.js"],
+      env: {},
+    },
+  },
+  "calculator-example": {
+    name: "calculator-example",
+    config: {
+      transport: "stdio" as MCPTransportType,
+      command: "node",
+      args: ["examples/calculator/index.js"],
+      env: {},
+    },
+  },
+  "database-example": {
+    name: "database-example",
+    config: {
+      transport: "stdio" as MCPTransportType,
+      command: "node",
+      args: ["examples/database/index.js"],
+      env: {},
+    },
+  },
+  "weather-example": {
+    name: "weather-example",
+    config: {
+      transport: "stdio" as MCPTransportType,
+      command: "node",
+      args: ["examples/weather/index.js"],
+      env: {
+        OPENWEATHER_API_KEY: "your-api-key-here",
+      },
+    },
+  },
+  "webscraper-example": {
+    name: "webscraper-example",
+    config: {
+      transport: "stdio" as MCPTransportType,
+      command: "node",
+      args: ["examples/webscraper/index.js"],
+      env: {},
+    },
+  },
+  // Official MCP Servers (require external dependencies)
   "google-maps": {
     name: "google-maps",
     config: {

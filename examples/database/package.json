@@ -1,0 +1,21 @@
+{
+  "name": "speakmcp-database-example",
+  "version": "1.0.0",
+  "description": "Example MCP server for SQLite database operations",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js"
+  },
+  "keywords": ["mcp", "database", "sqlite", "example"],
+  "author": "SpeakMCP",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^0.6.0",
+    "sqlite3": "^5.1.6"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

@@ -14,11 +14,13 @@ pnpm dev d
 **Individual debug modes:**
 ```bash
 pnpm dev debug-llm    # Enable LLM debug
-pnpm dev debug-tools  # Enable tools debug  
+pnpm dev debug-tools  # Enable tools debug
+pnpm dev debug-app    # Enable app debug
 pnpm dev debug-all    # Enable all debug modes
 pnpm dev dl           # Enable LLM debug (short)
 pnpm dev dt           # Enable tools debug (short)
 pnpm dev dk           # Enable keybinds debug (short)
+pnpm dev dapp         # Enable app debug (short)
 ```
 
 ### Traditional Formats
@@ -26,9 +28,12 @@ pnpm dev dk           # Enable keybinds debug (short)
 **With dashes:**
 ```bash
 pnpm dev -- -d              # Debug all (short)
+pnpm dev -- -da             # Debug all (short)
 pnpm dev -- --debug-llm     # LLM debug (long)
 pnpm dev -- --debug-tools   # Tools debug (long)
+pnpm dev -- --debug-app     # App debug (long)
 pnpm dev -- --debug-all     # All debug modes (long)
+pnpm dev -- -dapp           # App debug (short)
 ```
 
 **Environment variables:**
@@ -36,7 +41,9 @@ pnpm dev -- --debug-all     # All debug modes (long)
 DEBUG=* pnpm dev             # Enable all debug modes
 DEBUG_LLM=true pnpm dev      # LLM debug only
 DEBUG_TOOLS=true pnpm dev    # Tools debug only
+DEBUG_APP=true pnpm dev      # App debug only
 DEBUG=llm,tools pnpm dev     # Multiple specific modes
+DEBUG=llm,tools,app pnpm dev # Multiple specific modes including app
 ```
 
 ## 🔍 Debug Output Details
@@ -116,6 +123,25 @@ When keybinds debug is enabled, you'll see:
 - Recording state changes
 - Text insertion and focus management
 
+### App Debug (`debug-app` or `dapp`)
+
+When app debug is enabled, you'll see:
+
+```
+[DEBUG][APP] Application startup sequence initiated
+[DEBUG][APP] Window creation: main window
+[DEBUG][APP] Configuration loaded: { theme: "dark", shortcuts: {...} }
+[DEBUG][APP] Panel window state change: visible -> hidden
+[DEBUG][APP] Menu action triggered: show_settings
+```
+
+**What it shows:**
+- Application lifecycle events
+- Window management operations
+- Configuration changes and loading
+- UI state transitions
+- Menu and user interaction events
+
 ## 🛠️ Advanced Debugging
 
 ### Custom Debug Combinations
@@ -126,8 +152,11 @@ You can combine multiple debug modes:
 # LLM + Tools (most common combination)
 pnpm dev dl dt
 
+# LLM + App debugging
+pnpm dev dl dapp
+
 # All modes explicitly
-pnpm dev debug-llm debug-tools debug-keybinds
+pnpm dev debug-llm debug-tools debug-keybinds debug-app
 ```
 
 ### Environment Variable Debugging
@@ -138,6 +167,7 @@ For persistent debugging across sessions:
 # Add to your shell profile (.bashrc, .zshrc, etc.)
 export DEBUG_LLM=true
 export DEBUG_TOOLS=true
+export DEBUG_APP=true
 
 # Then just run
 pnpm dev

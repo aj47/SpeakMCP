@@ -195,7 +195,7 @@ export function Component() {
             <Input
               type="url"
               placeholder="https://api.openai.com/v1"
-              defaultValue={configQuery.data.openaiBaseUrl}
+              value={configQuery.data.openaiBaseUrl || ""}
               disabled={configQuery.data.openaiCompatiblePreset !== "custom"}
               onChange={(e) => {
                 saveConfig({

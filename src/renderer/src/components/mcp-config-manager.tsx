@@ -677,6 +677,24 @@ const MCP_EXAMPLES = {
       env: {},
     },
   },
+  "desktop-commander": {
+    name: "desktop-commander",
+    config: {
+      transport: "stdio" as MCPTransportType,
+      command: "npx",
+      args: ["@wonderwhy-er/desktop-commander@latest"],
+      env: {},
+    },
+  },
+  "mem0": {
+    name: "mem0",
+    config: {
+      transport: "stdio" as MCPTransportType,
+      command: "npx",
+      args: ["-y", "@pinkpixel/mem0-mcp"],
+      env: {},
+    },
+  },
   filesystem: {
     name: "filesystem",
     config: {

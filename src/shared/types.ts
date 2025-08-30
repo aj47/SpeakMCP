@@ -278,6 +278,9 @@ export type Config = {
   // Persisted MCP runtime state: servers the user explicitly stopped (do not auto-start)
   mcpRuntimeDisabledServers?: string[]
 
+  // Persisted MCP tool state: tools the user explicitly disabled
+  mcpDisabledTools?: string[]
+
   // Conversation Configuration
   conversationsEnabled?: boolean
   maxConversationsToKeep?: number

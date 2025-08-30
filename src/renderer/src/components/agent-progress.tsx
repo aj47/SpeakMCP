@@ -8,6 +8,7 @@ import { tipcClient } from "@renderer/lib/tipc-client"
 import { useConversation } from "@renderer/contexts/conversation-context"
 import { AudioPlayer } from "@renderer/components/audio-player"
 import { useConfigQuery } from "@renderer/lib/queries"
+import { useTheme } from "@renderer/contexts/theme-context"
 
 interface AgentProgressProps {
   progress: AgentProgressUpdate | null
@@ -156,7 +157,7 @@ const CompactMessage: React.FC<{
     <div className={cn(
       "rounded text-xs transition-all duration-200",
       getRoleStyle(),
-      !isExpanded && shouldCollapse && "hover:bg-white/10",
+      !isExpanded && shouldCollapse && "hover:bg-muted/20",
       shouldCollapse && "cursor-pointer"
     )}>
       <div
@@ -225,7 +226,7 @@ const CompactMessage: React.FC<{
         {shouldCollapse && (
           <button
             onClick={handleChevronClick}
-            className="p-1 rounded hover:bg-white/20 transition-colors flex-shrink-0"
+            className="p-1 rounded hover:bg-muted/30 transition-colors flex-shrink-0"
           >
             {isExpanded ? (
               <ChevronUp className="h-3 w-3" />
@@ -249,6 +250,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true)
   const lastMessageCountRef = useRef(0)
   const lastContentLengthRef = useRef(0)
+  const { isDark } = useTheme()
 
   // Get current conversation ID for deep-linking
   const { currentConversationId } = useConversation()
@@ -433,10 +435,13 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
     (step) => step.status === "error" || step.toolResult?.error,
   )
 
-  const containerClasses =
+  const containerClasses = cn(
+    "progress-panel flex flex-col w-full h-full rounded-xl overflow-hidden",
     variant === "overlay"
-      ? "flex flex-col w-full h-full bg-black/80 backdrop-blur-sm rounded-xl overflow-hidden border border-white/10"
-      : "flex flex-col w-full h-full bg-white/10 backdrop-blur-sm rounded-xl overflow-hidden border border-white/20"
+      ? "bg-background/80 backdrop-blur-sm border border-border/50"
+      : "bg-muted/20 backdrop-blur-sm border border-border/40",
+    isDark ? "dark" : ""
+  )
 
   return (
     <div
@@ -445,7 +450,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
       style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
     >
       {/* Unified Header */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-white/10 bg-white/5 backdrop-blur-sm">
+      <div className="flex items-center justify-between px-3 py-2 border-b border-border/30 bg-muted/10 backdrop-blur-sm">
         <div className="flex items-center gap-2">
           <span className="text-xs font-medium">
             {isComplete ? (hasErrors ? "Failed" : "Complete") : "Processing"}

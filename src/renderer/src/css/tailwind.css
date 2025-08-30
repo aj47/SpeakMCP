@@ -248,6 +248,85 @@
     color: hsl(var(--muted-foreground));
   }
 
+  /* Floating Panel Utilities - Enhanced for proper theme support */
+  .floating-panel {
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
+    box-shadow:
+      0 10px 38px -10px rgba(22, 23, 24, 0.35),
+      0 10px 20px -15px rgba(22, 23, 24, 0.2);
+    backdrop-filter: blur(8px);
+    transition: all 0.2s ease-in-out;
+  }
+
+  .dark .floating-panel {
+    box-shadow:
+      0 10px 38px -10px rgba(0, 0, 0, 0.5),
+      0 10px 20px -15px rgba(0, 0, 0, 0.3);
+  }
+
+  /* Floating Panel Variants */
+  .floating-panel-glass {
+    background: hsl(var(--card) / 0.95);
+    border: 1px solid hsl(var(--border) / 0.8);
+    box-shadow:
+      0 10px 38px -10px rgba(22, 23, 24, 0.35),
+      0 10px 20px -15px rgba(22, 23, 24, 0.2);
+    backdrop-filter: blur(12px);
+  }
+
+  .dark .floating-panel-glass {
+    background: hsl(var(--card) / 0.9);
+    box-shadow:
+      0 10px 38px -10px rgba(0, 0, 0, 0.5),
+      0 10px 20px -15px rgba(0, 0, 0, 0.3);
+  }
+
+  /* Voice Input Panel Specific */
+  .voice-input-panel {
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
+    box-shadow:
+      0 20px 25px -5px rgba(0, 0, 0, 0.1),
+      0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  }
+
+  .dark .voice-input-panel {
+    box-shadow:
+      0 20px 25px -5px rgba(0, 0, 0, 0.4),
+      0 10px 10px -5px rgba(0, 0, 0, 0.2);
+  }
+
+  /* Text Input Panel Specific */
+  .text-input-panel {
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
+    box-shadow:
+      0 4px 6px -1px rgba(0, 0, 0, 0.1),
+      0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  }
+
+  .dark .text-input-panel {
+    box-shadow:
+      0 4px 6px -1px rgba(0, 0, 0, 0.3),
+      0 2px 4px -1px rgba(0, 0, 0, 0.2);
+  }
+
+  /* Progress Panel Specific */
+  .progress-panel {
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
+    box-shadow:
+      0 10px 15px -3px rgba(0, 0, 0, 0.1),
+      0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  }
+
+  .dark .progress-panel {
+    box-shadow:
+      0 10px 15px -3px rgba(0, 0, 0, 0.4),
+      0 4px 6px -2px rgba(0, 0, 0, 0.2);
+  }
+
   /* Border Utilities */
   .modern-border {
     border: 1px solid hsl(var(--border));

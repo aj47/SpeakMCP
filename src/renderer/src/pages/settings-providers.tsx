@@ -166,13 +166,23 @@ export function Component() {
               value={configQuery.data.openaiCompatiblePreset || "openai"}
               onValueChange={(value) => {
                 const preset = OPENAI_COMPATIBLE_PRESETS.find(p => p.value === value)
-                saveConfig({
+                const configUpdate: any = {
                   openaiCompatiblePreset: value as OPENAI_COMPATIBLE_PRESET_ID,
-                  // Auto-fill base URL when selecting a preset (except custom)
-                  ...(preset && preset.value !== "custom" && {
-                    openaiBaseUrl: preset.baseUrl,
-                  }),
-                })
+                }
+
+                // Auto-fill base URL when selecting a preset
+                if (preset) {
+                  if (preset.value === "custom") {
+                    // For custom, don't change the existing base URL
+                    // User can edit it manually
+                  } else {
+                    // For presets, set the base URL
+                    configUpdate.openaiBaseUrl = preset.baseUrl
+                  }
+                }
+
+                console.log("Preset change:", value, "Base URL:", preset?.baseUrl, "Config update:", configUpdate)
+                saveConfig(configUpdate)
               }}
             >
               <SelectTrigger>

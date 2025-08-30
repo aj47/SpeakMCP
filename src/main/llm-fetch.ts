@@ -306,6 +306,7 @@ async function makeOpenAICompatibleCall(
   messages: Array<{ role: string; content: string }>,
   providerId: string,
   useStructuredOutput: boolean = true,
+  modelType: "mcp" | "transcript" = "mcp",
 ): Promise<any> {
   const config = configStore.get()
 
@@ -332,7 +333,7 @@ async function makeOpenAICompatibleCall(
     throw new Error(`API key is required for ${providerId}`)
   }
 
-  const model = getModel(providerId, "mcp")
+  const model = getModel(providerId, modelType)
 
   const requestBody: any = {
     model,
@@ -564,7 +565,7 @@ export async function makeLLMCallWithFetch(
       response = await makeGeminiCall(messages)
     } else {
       // OpenAI, Groq, and Cerebras all use OpenAI-compatible APIs
-      response = await makeOpenAICompatibleCall(messages, chatProviderId, true)
+      response = await makeOpenAICompatibleCall(messages, chatProviderId, true, "mcp")
     }
 
     if (isDebugLLM()) {
@@ -644,7 +645,7 @@ export async function makeTextCompletionWithFetch(
       response = await makeGeminiCall(messages)
     } else {
       // OpenAI, Groq, and Cerebras all use OpenAI-compatible APIs
-      response = await makeOpenAICompatibleCall(messages, chatProviderId, false)
+      response = await makeOpenAICompatibleCall(messages, chatProviderId, false, "transcript")
     }
 
     return response.choices[0]?.message.content?.trim() || ""

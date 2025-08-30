@@ -313,7 +313,8 @@ async function fetchCerebrasModels(
     throw new Error("Cerebras API key is required")
   }
 
-  const url = `${baseUrl || "https://api.cerebras.ai/v1"}/models`
+  const base = (baseUrl || "https://api.cerebras.ai/v1").replace(/\/+$/, "")
+  const url = `${base}/models`
 
   const response = await fetch(url, {
     headers: {

@@ -17,22 +17,26 @@ export interface OAuthMCPExample {
 }
 
 export const OAUTH_MCP_EXAMPLES: Record<string, OAuthMCPExample> = {
-  "oauth-server": {
-    name: "OAuth MCP Server",
-    description: "Example OAuth-protected MCP server configuration",
+  notion: {
+    name: "Notion",
+    description: "Connect to Notion workspace with OAuth authentication",
     config: {
       transport: "streamableHttp",
-      url: "https://your-mcp-server.com",
+      url: "https://api.notion.com/mcp",
       oauth: {
-        scope: "user",
+        scope: "read write",
         useDiscovery: true,
         useDynamicRegistration: true,
       },
     },
     setupInstructions: [
-      "Replace with your actual MCP server URL",
-      "Configure OAuth settings as needed by your server",
+      "Go to https://www.notion.so/my-integrations to create a new integration",
+      "Copy the OAuth client ID and secret to your OAuth configuration",
+      "Add your redirect URI to the integration settings",
+      "Grant the integration access to your Notion workspace",
     ],
+    requiredScopes: ["read", "write"],
+    documentationUrl: "https://developers.notion.com/docs/authorization",
   },
 }
 

@@ -293,7 +293,11 @@ class DatabaseServer {
       throw new Error("Invalid table name. Use only letters, numbers, and underscores.");
     }
 
-    const sql = `CREATE TABLE ${tableName} (${columns})`;
+    const sanitized = columns;
+    if (sanitized.includes(';')) {
+      throw new Error("Column definitions must not contain semicolons");
+    }
+    const sql = `CREATE TABLE ${tableName} (${sanitized})`;
 
     return new Promise((resolve, reject) => {
       this.db.run(sql, [], (err) => {

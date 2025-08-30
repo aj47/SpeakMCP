@@ -157,8 +157,10 @@ class FileSystemServer {
   // Validate and resolve path within sandbox
   resolveSafePath(relativePath) {
     const fullPath = path.resolve(SANDBOX_DIR, relativePath);
-    if (!fullPath.startsWith(SANDBOX_DIR)) {
-      throw new Error("Path outside sandbox directory not allowed");
+    const rel = path.relative(SANDBOX_DIR, fullPath);
+    // reject if it escapes (".." or absolute outside)
+    if (rel.startsWith('..') || path.isAbsolute(rel)) {
+      throw new Error('Path outside sandbox directory not allowed');
     }
     return fullPath;
   }
@@ -178,6 +180,7 @@ class FileSystemServer {
 
   async writeFile(filename, content) {
     const filePath = this.resolveSafePath(filename);
+    await fs.mkdir(path.dirname(filePath), { recursive: true });
     await fs.writeFile(filePath, content, "utf-8");
     return {
       content: [

@@ -204,14 +204,10 @@ export type Config = {
   geminiApiKey?: string
   geminiBaseUrl?: string
 
-  cerebrasApiKey?: string
-  cerebrasBaseUrl?: string
-
   // Base URL History for improved management
   openaiBaseUrlHistory?: string[]
   groqBaseUrlHistory?: string[]
   geminiBaseUrlHistory?: string[]
-  cerebrasBaseUrlHistory?: string[]
 
   // Speech-to-Text Language Configuration
   sttLanguage?: string
@@ -250,7 +246,6 @@ export type Config = {
   transcriptPostProcessingOpenaiModel?: string
   transcriptPostProcessingGroqModel?: string
   transcriptPostProcessingGeminiModel?: string
-  transcriptPostProcessingCerebrasModel?: string
 
   // Text Input Configuration
   textInputEnabled?: boolean
@@ -274,7 +269,6 @@ export type Config = {
   mcpToolsOpenaiModel?: string
   mcpToolsGroqModel?: string
   mcpToolsGeminiModel?: string
-  mcpToolsCerebrasModel?: string
   mcpToolsSystemPrompt?: string
   mcpAgentModeEnabled?: boolean
   // When enabled, require manual user approval before each tool call executes

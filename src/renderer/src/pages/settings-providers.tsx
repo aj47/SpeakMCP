@@ -178,6 +178,7 @@ export function Component() {
               defaultUrls={[
                 { label: "OpenAI (Default)", value: "https://api.openai.com/v1" },
                 { label: "OpenRouter", value: "https://openrouter.ai/api/v1" },
+                { label: "Cerebras", value: "https://api.cerebras.ai/v1" },
               ]}
             />
           </Control>
@@ -408,41 +409,6 @@ export function Component() {
             </Select>
           </Control>
 
-        </ControlGroup>
-
-        <ControlGroup title="Cerebras">
-          <Control label="API Key" className="px-3">
-            <Input
-              type="password"
-              defaultValue={configQuery.data.cerebrasApiKey}
-              onChange={(e) => {
-                saveConfig({
-                  cerebrasApiKey: e.currentTarget.value,
-                })
-              }}
-            />
-          </Control>
-
-          <Control label="API Base URL" className="px-3">
-            <BaseUrlSelector
-              value={configQuery.data.cerebrasBaseUrl}
-              onChange={(value) => {
-                saveConfig({
-                  cerebrasBaseUrl: value,
-                })
-              }}
-              placeholder="https://api.cerebras.ai/v1"
-              history={configQuery.data.cerebrasBaseUrlHistory || []}
-              onHistoryUpdate={(history) => {
-                saveConfig({
-                  cerebrasBaseUrlHistory: history,
-                })
-              }}
-              defaultUrls={[
-                { label: "Cerebras (Default)", value: "https://api.cerebras.ai/v1" },
-              ]}
-            />
-          </Control>
         </ControlGroup>
       </div>
     </div>

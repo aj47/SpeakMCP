@@ -24,10 +24,6 @@ export const CHAT_PROVIDERS = [
     label: "Gemini",
     value: "gemini",
   },
-  {
-    label: "Cerebras",
-    value: "cerebras",
-  },
 ] as const
 
 export type CHAT_PROVIDER_ID = (typeof CHAT_PROVIDERS)[number]["value"]
@@ -44,10 +40,6 @@ export const TTS_PROVIDERS = [
   {
     label: "Gemini",
     value: "gemini",
-  },
-  {
-    label: "Cerebras",
-    value: "cerebras",
   },
 ] as const
 

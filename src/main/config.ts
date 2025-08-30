@@ -73,7 +73,6 @@ const getConfig = () => {
     openaiBaseUrlHistory: [],
     groqBaseUrlHistory: [],
     geminiBaseUrlHistory: [],
-    cerebrasBaseUrlHistory: [],
   }
 
   try {

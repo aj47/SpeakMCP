@@ -263,10 +263,6 @@ function getModel(providerId: string, type: "mcp" | "transcript"): string {
         : config.transcriptPostProcessingGroqModel || "llama-3.1-70b-versatile"
     case "gemini":
       return config.mcpToolsGeminiModel || "gemini-1.5-flash-002"
-    case "cerebras":
-      return type === "mcp"
-        ? config.mcpToolsCerebrasModel || "llama3.1-8b"
-        : config.transcriptPostProcessingCerebrasModel || "llama3.1-8b"
     default:
       return "gpt-4o-mini"
   }
@@ -290,10 +286,7 @@ function supportsJsonMode(model: string, providerId: string): boolean {
     )
   }
 
-  // Cerebras models that support JSON mode (most Llama models do)
-  if (providerId === "cerebras") {
-    return model.includes("llama")
-  }
+
 
   // Conservative default - assume no JSON mode support
   return false
@@ -317,10 +310,6 @@ async function makeOpenAICompatibleCall(
     case "groq":
       baseURL = config.groqBaseUrl || "https://api.groq.com/openai/v1"
       apiKey = config.groqApiKey
-      break
-    case "cerebras":
-      baseURL = config.cerebrasBaseUrl || "https://api.cerebras.ai/v1"
-      apiKey = config.cerebrasApiKey
       break
     case "openai":
     default:
@@ -644,7 +633,7 @@ export async function makeTextCompletionWithFetch(
     if (chatProviderId === "gemini") {
       response = await makeGeminiCall(messages)
     } else {
-      // OpenAI, Groq, and Cerebras all use OpenAI-compatible APIs
+      // OpenAI and Groq use OpenAI-compatible APIs
       response = await makeOpenAICompatibleCall(messages, chatProviderId, false, "transcript")
     }
 

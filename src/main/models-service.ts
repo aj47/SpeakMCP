@@ -303,46 +303,6 @@ function formatModelName(modelId: string): string {
 }
 
 /**
- * Fetch available models from Cerebras API
- */
-async function fetchCerebrasModels(
-  baseUrl?: string,
-  apiKey?: string,
-): Promise<ModelInfo[]> {
-  if (!apiKey) {
-    throw new Error("Cerebras API key is required")
-  }
-
-  const base = (baseUrl || "https://api.cerebras.ai/v1").replace(/\/+$/, "")
-  const url = `${base}/models`
-
-  const response = await fetch(url, {
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-  })
-
-  if (!response.ok) {
-    throw new Error(`Cerebras API error: ${response.statusText}`)
-  }
-
-  const data = await response.json()
-
-  if (!data.data || !Array.isArray(data.data)) {
-    throw new Error("Invalid response format from Cerebras API")
-  }
-
-  return data.data
-    .filter((model: any) => model.id && typeof model.id === "string")
-    .map((model: any) => ({
-      id: model.id,
-      name: formatModelName(model.id),
-    }))
-    .sort((a, b) => a.name.localeCompare(b.name))
-}
-
-/**
  * Main function to fetch available models for a provider
  */
 export async function fetchAvailableModels(
@@ -374,12 +334,6 @@ export async function fetchAvailableModels(
         models = await fetchGeminiModels(
           config.geminiBaseUrl,
           config.geminiApiKey,
-        )
-        break
-      case "cerebras":
-        models = await fetchCerebrasModels(
-          config.cerebrasBaseUrl,
-          config.cerebrasApiKey,
         )
         break
       default:
@@ -455,11 +409,6 @@ function getFallbackModels(providerId: string): ModelInfo[] {
       { id: "gemini-1.5-flash-002", name: "Gemini 1.5 Flash" },
       { id: "gemini-1.5-pro", name: "Gemini 1.5 Pro" },
       { id: "gemini-1.0-pro", name: "Gemini 1.0 Pro" },
-    ],
-    cerebras: [
-      { id: "llama3.1-8b", name: "Llama 3.1 8B" },
-      { id: "llama3.1-70b", name: "Llama 3.1 70B" },
-      { id: "llama-3.3-70b", name: "Llama 3.3 70B" },
     ],
   }
 

@@ -15,7 +15,7 @@ import { createAppMenu } from "./menu"
 import { initTray } from "./tray"
 import { isAccessibilityGranted } from "./utils"
 import { mcpService } from "./mcp-service"
-import { initDebugFlags } from "./debug"
+import { initDebugFlags, logApp } from "./debug"
 import { initializeDeepLinkHandling } from "./oauth-deeplink-handler"
 
 registerServeSchema()
@@ -26,36 +26,50 @@ registerServeSchema()
 app.whenReady().then(() => {
   // Initialize debug flags from CLI/env early
   initDebugFlags(process.argv)
+  logApp("SpeakMCP starting up...")
 
   // Initialize deep link handling after app is ready
   initializeDeepLinkHandling()
+  logApp("Deep link handling initialized")
 
   // Set app user model id for windows
   electronApp.setAppUserModelId(process.env.APP_ID)
 
   const accessibilityGranted = isAccessibilityGranted()
+  logApp(`Accessibility granted: ${accessibilityGranted}`)
 
   Menu.setApplicationMenu(createAppMenu())
+  logApp("Application menu created")
 
   registerIpcMain(router)
+  logApp("IPC main registered")
 
   registerServeProtocol()
+  logApp("Serve protocol registered")
 
   if (accessibilityGranted) {
     createMainWindow()
+    logApp("Main window created")
   } else {
     createSetupWindow()
+    logApp("Setup window created (accessibility not granted)")
   }
 
   createPanelWindow()
+  logApp("Panel window created")
 
   listenToKeyboardEvents()
+  logApp("Keyboard event listener started")
 
   initTray()
+  logApp("System tray initialized")
 
   // Initialize MCP service on app startup
   mcpService.initialize().catch((error) => {
     console.error("Failed to initialize MCP service on startup:", error)
+    logApp(`MCP service initialization failed: ${error}`)
+  }).then(() => {
+    logApp("MCP service initialized successfully")
   })
 
   import("./updater").then((res) => res.init()).catch(console.error)

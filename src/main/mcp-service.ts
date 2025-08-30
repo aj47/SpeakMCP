@@ -97,10 +97,19 @@ export class MCPService {
 
     // Seed runtime disabled servers from persisted config so we respect user choices across sessions
     try {
-      const persisted = configStore.get()?.mcpRuntimeDisabledServers
-      if (Array.isArray(persisted)) {
-        for (const serverName of persisted) {
+      const config = configStore.get()
+      const persistedServers = config?.mcpRuntimeDisabledServers
+      if (Array.isArray(persistedServers)) {
+        for (const serverName of persistedServers) {
           this.runtimeDisabledServers.add(serverName)
+        }
+      }
+
+      // Seed disabled tools from persisted config
+      const persistedTools = config?.mcpDisabledTools
+      if (Array.isArray(persistedTools)) {
+        for (const toolName of persistedTools) {
+          this.disabledTools.add(toolName)
         }
       }
     } catch (e) {
@@ -628,8 +637,22 @@ export class MCPService {
       return configuredServers[serverName] === undefined
     })
 
-    for (const toolName of orphanedDisabledTools) {
-      this.disabledTools.delete(toolName)
+    if (orphanedDisabledTools.length > 0) {
+      for (const toolName of orphanedDisabledTools) {
+        this.disabledTools.delete(toolName)
+      }
+
+      // Persist the cleanup to config
+      try {
+        const config = configStore.get()
+        const cfg: Config = {
+          ...config,
+          mcpDisabledTools: Array.from(this.disabledTools),
+        }
+        configStore.save(cfg)
+      } catch (e) {
+        // Ignore persistence errors
+      }
     }
   }
 
@@ -957,6 +980,18 @@ export class MCPService {
       this.disabledTools.delete(toolName)
     } else {
       this.disabledTools.add(toolName)
+    }
+
+    // Persist disabled tools list to config so it survives app restarts
+    try {
+      const config = configStore.get()
+      const cfg: Config = {
+        ...config,
+        mcpDisabledTools: Array.from(this.disabledTools),
+      }
+      configStore.save(cfg)
+    } catch (e) {
+      // Ignore persistence errors; runtime state will still be respected in-session
     }
 
     return true

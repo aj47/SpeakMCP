@@ -34,6 +34,20 @@ async function fetchOpenAIModels(
 
   const url = `${baseUrl || "https://api.openai.com/v1"}/models`
   const isOpenRouter = baseUrl?.includes("openrouter.ai")
+  const isCerebras = baseUrl?.includes("cerebras.ai")
+
+  // Log the request details for debugging
+  diagnosticsService.logInfo(
+    "models-service",
+    `Fetching models from: ${url}`,
+    {
+      baseUrl,
+      isOpenRouter,
+      isCerebras,
+      hasApiKey: !!apiKey,
+      apiKeyPrefix: apiKey ? `${apiKey.substring(0, 8)}...` : "none",
+    },
+  )
 
   const response = await fetch(url, {
     headers: {
@@ -42,14 +56,48 @@ async function fetchOpenAIModels(
     },
   })
 
+  // Log response details
+  diagnosticsService.logInfo(
+    "models-service",
+    `Models API response: ${response.status} ${response.statusText}`,
+    {
+      url,
+      status: response.status,
+      statusText: response.statusText,
+      headers: Object.fromEntries(response.headers.entries()),
+    },
+  )
+
   if (!response.ok) {
     const errorText = await response.text()
+    diagnosticsService.logError(
+      "models-service",
+      `Models API request failed`,
+      {
+        url,
+        status: response.status,
+        statusText: response.statusText,
+        errorText,
+      },
+    )
     throw new Error(`HTTP ${response.status}: ${errorText}`)
   }
 
   const data: ModelsResponse = await response.json()
 
-  // Different filtering logic for OpenRouter vs native OpenAI
+  // Log the raw response data
+  diagnosticsService.logInfo(
+    "models-service",
+    `Models API response data`,
+    {
+      url,
+      dataKeys: Object.keys(data),
+      modelsCount: data.data?.length || 0,
+      firstFewModels: data.data?.slice(0, 3).map(m => ({ id: m.id, object: m.object })) || [],
+    },
+  )
+
+  // Different filtering logic for OpenRouter vs native OpenAI vs Cerebras
   let filteredModels = data.data
 
   if (isOpenRouter) {
@@ -63,6 +111,23 @@ async function fetchOpenAIModels(
         // Keep most models but filter out some edge cases
         model.id.length > 0,
     )
+  } else if (isCerebras) {
+    // For Cerebras, show all available models (they're all valid)
+    filteredModels = data.data.filter(
+      (model) =>
+        // Basic validation - just ensure the model has an ID
+        model.id && model.id.length > 0,
+    )
+
+    diagnosticsService.logInfo(
+      "models-service",
+      `Cerebras models after filtering`,
+      {
+        totalModels: data.data.length,
+        filteredCount: filteredModels.length,
+        modelIds: filteredModels.map(m => m.id),
+      },
+    )
   } else {
     // For native OpenAI, use the original restrictive filtering
     filteredModels = data.data.filter(
@@ -74,7 +139,7 @@ async function fetchOpenAIModels(
     )
   }
 
-  return filteredModels
+  const finalModels = filteredModels
     .map((model) => ({
       id: model.id,
       name: formatModelName(model.id),
@@ -103,6 +168,9 @@ async function fetchOpenAIModels(
           getOpenRouterPriority(a.id) - getOpenRouterPriority(b.id)
         if (priorityDiff !== 0) return priorityDiff
         return a.name.localeCompare(b.name)
+      } else if (isCerebras) {
+        // For Cerebras, sort alphabetically
+        return a.name.localeCompare(b.name)
       } else {
         // For native OpenAI, use original sorting
         const getModelPriority = (id: string) => {
@@ -114,6 +182,20 @@ async function fetchOpenAIModels(
         return getModelPriority(a.id) - getModelPriority(b.id)
       }
     })
+
+  // Log final results
+  diagnosticsService.logInfo(
+    "models-service",
+    `Final models list for ${isCerebras ? 'Cerebras' : isOpenRouter ? 'OpenRouter' : 'OpenAI'}`,
+    {
+      url,
+      totalCount: finalModels.length,
+      modelIds: finalModels.map(m => m.id),
+      modelNames: finalModels.map(m => m.name),
+    },
+  )
+
+  return finalModels
 }
 
 /**
@@ -311,14 +393,44 @@ export async function fetchAvailableModels(
   const cacheKey = providerId
   const cached = modelsCache.get(cacheKey)
 
+  // Log the request
+  diagnosticsService.logInfo(
+    "models-service",
+    `Fetching models for provider: ${providerId}`,
+    {
+      providerId,
+      hasCached: !!cached,
+      cacheAge: cached ? Date.now() - cached.timestamp : null,
+      cacheValid: cached ? Date.now() - cached.timestamp < CACHE_DURATION : false,
+    },
+  )
+
   // Return cached result if still valid
   if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+    diagnosticsService.logInfo(
+      "models-service",
+      `Returning cached models for ${providerId}`,
+      { count: cached.models.length },
+    )
     return cached.models
   }
 
   try {
     const config = configStore.get()
     let models: ModelInfo[] = []
+
+    // Log config details for debugging
+    diagnosticsService.logInfo(
+      "models-service",
+      `Config for ${providerId}`,
+      {
+        providerId,
+        openaiBaseUrl: config.openaiBaseUrl,
+        hasOpenaiApiKey: !!config.openaiApiKey,
+        hasGroqApiKey: !!config.groqApiKey,
+        hasGeminiApiKey: !!config.geminiApiKey,
+      },
+    )
 
     switch (providerId) {
       case "openai":
@@ -340,6 +452,17 @@ export async function fetchAvailableModels(
         throw new Error(`Unsupported provider: ${providerId}`)
     }
 
+    // Log successful fetch
+    diagnosticsService.logInfo(
+      "models-service",
+      `Successfully fetched ${models.length} models for ${providerId}`,
+      {
+        providerId,
+        count: models.length,
+        modelIds: models.map(m => m.id),
+      },
+    )
+
     // Cache the result
     modelsCache.set(cacheKey, {
       models,
@@ -351,11 +474,25 @@ export async function fetchAvailableModels(
     diagnosticsService.logError(
       "models-service",
       `Failed to fetch models for ${providerId}`,
-      error,
+      {
+        providerId,
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      },
     )
 
     // Return fallback models if API call fails
-    return getFallbackModels(providerId)
+    const fallbackModels = getFallbackModels(providerId)
+    diagnosticsService.logInfo(
+      "models-service",
+      `Returning ${fallbackModels.length} fallback models for ${providerId}`,
+      {
+        providerId,
+        fallbackCount: fallbackModels.length,
+        fallbackIds: fallbackModels.map(m => m.id),
+      },
+    )
+    return fallbackModels
   }
 }
 

@@ -659,27 +659,40 @@ function ServerDialog({ server, onSave, onCancel }: ServerDialogProps) {
 
 // Example MCP server configurations
 const MCP_EXAMPLES = {
-  "google-maps": {
-    name: "google-maps",
+  memory: {
+    name: "memory",
     config: {
       transport: "stdio" as MCPTransportType,
       command: "npx",
-      args: ["-y", "@modelcontextprotocol/server-google-maps"],
-      env: {
-        GOOGLE_MAPS_API_KEY: "your-api-key-here",
-      },
+      args: ["-y", "@modelcontextprotocol/server-memory"],
+      env: {},
     },
   },
-  slack: {
-    name: "slack",
+  "sequential-thinking": {
+    name: "sequential-thinking",
     config: {
       transport: "stdio" as MCPTransportType,
       command: "npx",
-      args: ["-y", "@modelcontextprotocol/server-slack"],
-      env: {
-        SLACK_BOT_TOKEN: "xoxb-your-bot-token",
-        SLACK_TEAM_ID: "T1234567890",
-      },
+      args: ["-y", "@modelcontextprotocol/server-sequential-thinking"],
+      env: {},
+    },
+  },
+  "desktop-commander": {
+    name: "desktop-commander",
+    config: {
+      transport: "stdio" as MCPTransportType,
+      command: "npx",
+      args: ["@wonderwhy-er/desktop-commander@latest"],
+      env: {},
+    },
+  },
+  "mem0": {
+    name: "mem0",
+    config: {
+      transport: "stdio" as MCPTransportType,
+      command: "npx",
+      args: ["-y", "@pinkpixel/mem0-mcp"],
+      env: {},
     },
   },
   filesystem: {
@@ -693,45 +706,6 @@ const MCP_EXAMPLES = {
         "/path/to/allowed/directory",
       ],
       env: {},
-    },
-  },
-  github: {
-    name: "github",
-    config: {
-      transport: "stdio" as MCPTransportType,
-      command: "npx",
-      args: ["-y", "@modelcontextprotocol/server-github"],
-      env: {
-        GITHUB_PERSONAL_ACCESS_TOKEN: "ghp_your_token_here",
-      },
-    },
-  },
-  postgres: {
-    name: "postgres",
-    config: {
-      transport: "stdio" as MCPTransportType,
-      command: "npx",
-      args: ["-y", "@modelcontextprotocol/server-postgres"],
-      env: {
-        POSTGRES_CONNECTION_STRING:
-          "postgresql://user:password@localhost:5432/database",
-      },
-    },
-  },
-  "remote-websocket": {
-    name: "remote-websocket",
-    config: {
-      transport: "websocket" as MCPTransportType,
-      url: "ws://localhost:8080",
-      timeout: 10000,
-    },
-  },
-  "remote-http": {
-    name: "remote-http",
-    config: {
-      transport: "streamableHttp" as MCPTransportType,
-      url: "http://localhost:8080/mcp",
-      timeout: 10000,
     },
   },
 }

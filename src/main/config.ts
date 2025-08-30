@@ -40,6 +40,7 @@ const getConfig = () => {
     customToggleVoiceDictationHotkey: "",
     // Persisted MCP runtime state
     mcpRuntimeDisabledServers: [],
+    mcpDisabledTools: [],
     // Panel position defaults
     panelPosition: "top-right",
     panelDragEnabled: true,

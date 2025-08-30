@@ -34,6 +34,7 @@ async function fetchOpenAIModels(
 
   const url = `${baseUrl || "https://api.openai.com/v1"}/models`
   const isOpenRouter = baseUrl?.includes("openrouter.ai")
+  const isCerebras = baseUrl?.includes("cerebras.ai")
 
   const response = await fetch(url, {
     headers: {
@@ -49,7 +50,7 @@ async function fetchOpenAIModels(
 
   const data: ModelsResponse = await response.json()
 
-  // Different filtering logic for OpenRouter vs native OpenAI
+  // Different filtering logic for OpenRouter, Cerebras, vs native OpenAI
   let filteredModels = data.data
 
   if (isOpenRouter) {
@@ -61,6 +62,15 @@ async function fetchOpenAIModels(
         !model.id.includes("instruct-beta") &&
         !model.id.includes("preview") &&
         // Keep most models but filter out some edge cases
+        model.id.length > 0,
+    )
+  } else if (isCerebras) {
+    // For Cerebras, show all models but filter out fine-tuned ones
+    filteredModels = data.data.filter(
+      (model) =>
+        // Filter out fine-tuned models
+        !model.id.includes(":ft-") &&
+        // Keep all Cerebras models
         model.id.length > 0,
     )
   } else {
@@ -101,6 +111,23 @@ async function fetchOpenAIModels(
         }
         const priorityDiff =
           getOpenRouterPriority(a.id) - getOpenRouterPriority(b.id)
+        if (priorityDiff !== 0) return priorityDiff
+        return a.name.localeCompare(b.name)
+      } else if (isCerebras) {
+        // For Cerebras, sort by model capability and recency
+        const getCerebrasPriority = (id: string) => {
+          // Prioritize newer and more capable models
+          if (id.includes("qwen-3-235b")) return 0 // Largest Qwen model
+          if (id.includes("gpt-oss-120b")) return 1 // GPT OSS model
+          if (id.includes("llama-4")) return 2 // Llama 4 models
+          if (id.includes("llama-3.3-70b")) return 3 // Llama 3.3 70B
+          if (id.includes("qwen-3-480b")) return 4 // Qwen 3 Coder
+          if (id.includes("qwen-3-32b")) return 5 // Qwen 3 32B
+          if (id.includes("llama3.1-8b")) return 6 // Llama 3.1 8B
+          return 7
+        }
+        const priorityDiff =
+          getCerebrasPriority(a.id) - getCerebrasPriority(b.id)
         if (priorityDiff !== 0) return priorityDiff
         return a.name.localeCompare(b.name)
       } else {
@@ -250,6 +277,17 @@ function formatModelName(modelId: string): string {
     "mistralai/mistral-7b-instruct": "Mistral 7B Instruct",
     "mistralai/mixtral-8x7b-instruct": "Mixtral 8x7B Instruct",
     "mistralai/mixtral-8x22b-instruct": "Mixtral 8x22B Instruct",
+
+    // Cerebras models
+    "llama3.1-8b": "Llama 3.1 8B",
+    "llama-3.3-70b": "Llama 3.3 70B",
+    "llama-4-scout-17b-16e-instruct": "Llama 4 Scout 17B 16E Instruct",
+    "llama-4-maverick-17b-128e-instruct": "Llama 4 Maverick 17B 128E Instruct",
+    "qwen-3-32b": "Qwen 3 32B",
+    "qwen-3-235b-a22b-instruct-2507": "Qwen 3 235B A22B Instruct 2507",
+    "qwen-3-235b-a22b-thinking-2507": "Qwen 3 235B A22B Thinking 2507",
+    "qwen-3-coder-480b": "Qwen 3 Coder 480B",
+    "gpt-oss-120b": "GPT OSS 120B",
   }
 
   // Check for exact match first
@@ -366,6 +404,8 @@ function getFallbackModels(providerId: string): ModelInfo[] {
   const config = configStore.get()
   const isOpenRouter =
     providerId === "openai" && config.openaiBaseUrl?.includes("openrouter.ai")
+  const isCerebras =
+    providerId === "openai" && config.openaiBaseUrl?.includes("cerebras.ai")
 
   const fallbackModels: Record<string, ModelInfo[]> = {
     openai: isOpenRouter
@@ -391,6 +431,15 @@ function getFallbackModels(providerId: string): ModelInfo[] {
             id: "mistralai/mixtral-8x22b-instruct",
             name: "Mixtral 8x22B Instruct (Mistral)",
           },
+        ]
+      : isCerebras
+      ? [
+          // Cerebras popular models
+          { id: "llama3.1-8b", name: "Llama 3.1 8B" },
+          { id: "llama-3.3-70b", name: "Llama 3.3 70B" },
+          { id: "qwen-3-32b", name: "Qwen 3 32B" },
+          { id: "gpt-oss-120b", name: "GPT OSS 120B" },
+          { id: "llama-4-scout-17b-16e-instruct", name: "Llama 4 Scout 17B 16E Instruct" },
         ]
       : [
           // Native OpenAI models

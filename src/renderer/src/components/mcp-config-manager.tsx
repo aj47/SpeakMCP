@@ -843,7 +843,7 @@ export function MCPConfigManager({
     setEditingServer(null)
   }
 
-  const handleDeleteServer = (name: string) => {
+  const handleDeleteServer = async (name: string) => {
     const newServers = { ...servers }
     delete newServers[name]
 
@@ -852,6 +852,20 @@ export function MCPConfigManager({
       mcpServers: newServers,
     }
     onConfigChange(newConfig)
+
+    // Force immediate UI refresh after deletion
+    setTimeout(async () => {
+      try {
+        const [status, initStatus] = await Promise.all([
+          tipcClient.getMcpServerStatus({}),
+          tipcClient.getMcpInitializationStatus({}),
+        ])
+        setServerStatus(status as any)
+        setInitializationStatus(initStatus as any)
+      } catch (error) {
+        // Ignore refresh errors
+      }
+    }, 100) // Small delay to allow backend cleanup to complete
   }
 
   const handleImportConfigFromFile = async () => {
@@ -981,6 +995,20 @@ export function MCPConfigManager({
       const result = await tipcClient.stopMcpServer({ serverName })
       if ((result as any).success) {
         toast.success(`Server ${serverName} stopped successfully`)
+
+        // Force immediate UI refresh after stopping
+        setTimeout(async () => {
+          try {
+            const [status, initStatus] = await Promise.all([
+              tipcClient.getMcpServerStatus({}),
+              tipcClient.getMcpInitializationStatus({}),
+            ])
+            setServerStatus(status as any)
+            setInitializationStatus(initStatus as any)
+          } catch (error) {
+            // Ignore refresh errors
+          }
+        }, 100)
       } else {
         toast.error(`Failed to stop server: ${(result as any).error}`)
       }
@@ -1005,6 +1033,20 @@ export function MCPConfigManager({
       const result = await tipcClient.restartMcpServer({ serverName })
       if ((result as any).success) {
         toast.success(`Server ${serverName} started successfully`)
+
+        // Force immediate UI refresh after starting
+        setTimeout(async () => {
+          try {
+            const [status, initStatus] = await Promise.all([
+              tipcClient.getMcpServerStatus({}),
+              tipcClient.getMcpInitializationStatus({}),
+            ])
+            setServerStatus(status as any)
+            setInitializationStatus(initStatus as any)
+          } catch (error) {
+            // Ignore refresh errors
+          }
+        }, 500) // Slightly longer delay for server startup
       } else {
         toast.error(`Failed to start server: ${(result as any).error}`)
       }
@@ -1427,12 +1469,11 @@ export function MCPConfigManager({
             {importTab === 'examples' && (
               <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
                 <div className="grid gap-4">
-                  {mcpExamples.map((example, index) => (
-                    <Card key={index} className="p-4">
+                  {Object.entries(MCP_EXAMPLES).map(([key, example], index) => (
+                    <Card key={key} className="p-4">
                       <div className="flex items-start justify-between">
                         <div>
                           <h4 className="font-medium mb-2">{example.name}</h4>
-                          <p className="text-sm text-muted-foreground mb-2">{example.description}</p>
                           <pre className="bg-muted p-3 rounded-md text-sm overflow-x-auto">
                             <code>{JSON.stringify(example.config, null, 2)}</code>
                           </pre>
@@ -1445,7 +1486,7 @@ export function MCPConfigManager({
                               ...config,
                               mcpServers: {
                                 ...config.mcpServers,
-                                ...example.config.mcpServers,
+                                [example.name]: example.config,
                               },
                             }
                             onConfigChange(newConfig)

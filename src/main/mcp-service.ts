@@ -1777,6 +1777,49 @@ export class MCPService {
     }
     this.serverProcesses.clear()
   }
+
+  /**
+   * Handle configuration changes and clean up servers that were removed
+   * This should be called whenever the MCP configuration is updated
+   */
+  handleConfigChange(newConfig: Config): void {
+    const currentConfig = configStore.get()
+    const oldServers = currentConfig.mcpConfig?.mcpServers || {}
+    const newServers = newConfig.mcpConfig?.mcpServers || {}
+
+    // Find servers that were removed from the configuration
+    const removedServers = Object.keys(oldServers).filter(
+      serverName => !newServers[serverName]
+    )
+
+    // Clean up removed servers
+    for (const serverName of removedServers) {
+      if (isDebugTools()) {
+        logTools(`Cleaning up removed server: ${serverName}`)
+      }
+
+      // Stop and clean up the server
+      this.stopServer(serverName).catch(() => {
+        // Ignore cleanup errors, but still clean up state
+      })
+
+      // Also remove from runtime disabled list if it was there
+      this.runtimeDisabledServers.delete(serverName)
+    }
+
+    // Update the persisted runtime disabled servers list to remove deleted servers
+    if (removedServers.length > 0) {
+      try {
+        const updatedConfig = {
+          ...newConfig,
+          mcpRuntimeDisabledServers: Array.from(this.runtimeDisabledServers),
+        }
+        configStore.save(updatedConfig)
+      } catch (e) {
+        // Ignore persistence errors
+      }
+    }
+  }
 }
 
 export const mcpService = new MCPService()

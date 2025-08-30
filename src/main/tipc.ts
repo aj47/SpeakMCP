@@ -808,6 +808,8 @@ export const router = {
   saveConfig: t.procedure
     .input<{ config: Config }>()
     .action(async ({ input }) => {
+      // Handle MCP server configuration changes before saving
+      mcpService.handleConfigChange(input.config)
       configStore.save(input.config)
     }),
 

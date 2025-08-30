@@ -1,4 +1,4 @@
-import { useEffect } from "react"
+import { useEffect, useRef } from "react"
 import { useNavigate } from "react-router-dom"
 import { Button } from "@renderer/components/ui/button"
 import { Label } from "@renderer/components/ui/label"
@@ -14,6 +14,7 @@ export function Component() {
   const queryClient = useQueryClient()
   const configQuery = useConfigQuery()
   const config = configQuery.data || {}
+  const toolManagerRefreshRef = useRef<(() => void) | null>(null)
 
   const saveConfigMutation = useMutation({
     mutationFn: async (config: Config) => {
@@ -21,6 +22,10 @@ export function Component() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["config"] })
+      // Trigger tool manager refresh when config changes
+      if (toolManagerRefreshRef.current) {
+        toolManagerRefreshRef.current()
+      }
     },
   })
 
@@ -65,7 +70,11 @@ export function Component() {
             />
 
             <div className="border-t pt-6">
-              <MCPToolManager />
+              <MCPToolManager
+                onRefreshReady={(refreshFn) => {
+                  toolManagerRefreshRef.current = refreshFn
+                }}
+              />
             </div>
           </div>
         </div>

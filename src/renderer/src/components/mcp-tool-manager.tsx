@@ -43,16 +43,18 @@ interface DetailedTool {
 
 interface MCPToolManagerProps {
   onToolToggle?: (toolName: string, enabled: boolean) => void
+  onRefreshReady?: (refreshFn: () => void) => void
 }
 
-export function MCPToolManager({ onToolToggle }: MCPToolManagerProps) {
+export function MCPToolManager({ onToolToggle, onRefreshReady }: MCPToolManagerProps) {
   const [tools, setTools] = useState<DetailedTool[]>([])
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedServer, setSelectedServer] = useState<string>("all")
   const [expandedServers, setExpandedServers] = useState<Set<string>>(new Set())
   const [showDisabledTools, setShowDisabledTools] = useState(true)
+  const [refreshInterval, setRefreshInterval] = useState(5000)
 
-  // Fetch tools periodically
+  // Fetch tools periodically with dynamic interval
   useEffect(() => {
     const fetchTools = async () => {
       try {
@@ -62,10 +64,31 @@ export function MCPToolManager({ onToolToggle }: MCPToolManagerProps) {
     }
 
     fetchTools()
-    const interval = setInterval(fetchTools, 5000) // Update every 5 seconds
+    const interval = setInterval(fetchTools, refreshInterval)
 
     return () => clearInterval(interval)
-  }, [])
+  }, [refreshInterval])
+
+  // Function to trigger immediate refresh and temporarily increase polling frequency
+  const triggerImmediateRefresh = () => {
+    // Immediately fetch tools
+    tipcClient.getMcpDetailedToolList({}).then((toolList) => {
+      setTools(toolList as any)
+    }).catch(() => {})
+
+    // Temporarily increase polling frequency for 10 seconds
+    setRefreshInterval(1000)
+    setTimeout(() => {
+      setRefreshInterval(5000)
+    }, 10000)
+  }
+
+  // Expose refresh function to parent component
+  useEffect(() => {
+    if (onRefreshReady) {
+      onRefreshReady(triggerImmediateRefresh)
+    }
+  }, [onRefreshReady])
 
   // Group tools by server
   const toolsByServer = tools.reduce(

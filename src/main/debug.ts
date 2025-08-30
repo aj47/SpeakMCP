@@ -65,7 +65,7 @@ export function initDebugFlags(argv: string[] = process.argv): DebugFlags {
   flags.tools = all || hasAny("--debug-tools", "-dt", "debug-tools", "dt") || envTools
   flags.keybinds = all || hasAny("--debug-keybinds", "-dk", "debug-keybinds", "dk") || envKeybinds
   flags.tts = all || hasAny("--debug-tts", "-dts", "debug-tts", "dts") || envTTS
-  flags.app = all || hasAny("--debug-app", "-da", "debug-app", "da") || envApp
+  flags.app = all || hasAny("--debug-app", "-dapp", "debug-app", "dapp") || envApp
   flags.all = all
 
 
@@ -80,7 +80,7 @@ export function initDebugFlags(argv: string[] = process.argv): DebugFlags {
     if (flags.app) enabled.push("APP")
     // eslint-disable-next-line no-console
     console.log(
-      `[DEBUG] Enabled: ${enabled.join(", ")} (argv: ${argv.filter((a) => a.startsWith("--debug") || a.startsWith("-d") || a.startsWith("debug") || ["d", "dt", "dl", "dk", "dts", "da"].includes(a)).join(" ") || "none"})`,
+      `[DEBUG] Enabled: ${enabled.join(", ")} (argv: ${argv.filter((a) => a.startsWith("--debug") || a.startsWith("-d") || a.startsWith("debug") || ["d", "dt", "dl", "dk", "dts", "da", "dapp"].includes(a)).join(" ") || "none"})`,
     )
   }
 

@@ -1,0 +1,60 @@
+#include <windows.h>
+
+// Version Information Resource for SpeakMCP
+// This provides detailed metadata for Windows to establish trust
+
+#define VER_FILEVERSION             0,1,3,0
+#define VER_FILEVERSION_STR         "0.1.3.0\0"
+#define VER_PRODUCTVERSION          0,1,3,0
+#define VER_PRODUCTVERSION_STR      "0.1.3\0"
+
+#define VER_COMPANYNAME_STR         "SpeakMCP\0"
+#define VER_FILEDESCRIPTION_STR     "AI-powered dictation tool with MCP integration\0"
+#define VER_INTERNALNAME_STR        "speakmcp\0"
+#define VER_LEGALCOPYRIGHT_STR      "Copyright © 2024 SpeakMCP\0"
+#define VER_LEGALTRADEMARKS1_STR    "SpeakMCP\0"
+#define VER_LEGALTRADEMARKS2_STR    VER_LEGALTRADEMARKS1_STR
+#define VER_ORIGINALFILENAME_STR    "speakmcp.exe\0"
+#define VER_PRODUCTNAME_STR         "SpeakMCP\0"
+
+#define VER_COMPANYDOMAIN_STR       "github.com/aj47/SpeakMCP\0"
+
+VS_VERSION_INFO VERSIONINFO
+FILEVERSION     VER_FILEVERSION
+PRODUCTVERSION  VER_PRODUCTVERSION
+FILEFLAGSMASK   VS_FFI_FILEFLAGSMASK
+FILEFLAGS       0x0L
+FILEOS          VOS__WINDOWS32
+FILETYPE        VFT_APP
+FILESUBTYPE     VFT2_UNKNOWN
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904B0"  // English (US), Unicode
+        BEGIN
+            VALUE "CompanyName",      VER_COMPANYNAME_STR
+            VALUE "FileDescription",  VER_FILEDESCRIPTION_STR
+            VALUE "FileVersion",      VER_FILEVERSION_STR
+            VALUE "InternalName",     VER_INTERNALNAME_STR
+            VALUE "LegalCopyright",   VER_LEGALCOPYRIGHT_STR
+            VALUE "LegalTrademarks",  VER_LEGALTRADEMARKS1_STR
+            VALUE "OriginalFilename", VER_ORIGINALFILENAME_STR
+            VALUE "ProductName",      VER_PRODUCTNAME_STR
+            VALUE "ProductVersion",   VER_PRODUCTVERSION_STR
+            VALUE "CompanyDomain",    VER_COMPANYDOMAIN_STR
+            VALUE "Comments",         "AI-powered dictation and voice control application"
+            VALUE "PrivateBuild",     ""
+            VALUE "SpecialBuild",     ""
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1200  // English (US), Unicode
+    END
+END
+
+// Application Icon
+IDI_ICON1 ICON "icon.ico"
+
+// Application Manifest for Windows compatibility and trust
+1 RT_MANIFEST "app.manifest"

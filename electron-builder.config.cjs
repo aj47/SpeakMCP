@@ -37,9 +37,29 @@ module.exports = {
     ],
     artifactName: "${productName}-${version}-${arch}.${ext}",
     requestedExecutionLevel: "asInvoker",
-    sign: null,
-    signAndEditExecutable: false,
-    signDlls: false,
+    // Enable code signing when certificate is available
+    sign: process.env.CSC_LINK || process.env.WIN_CSC_LINK ? undefined : null,
+    signAndEditExecutable: !!(process.env.CSC_LINK || process.env.WIN_CSC_LINK),
+    signDlls: !!(process.env.CSC_LINK || process.env.WIN_CSC_LINK),
+    // Publisher information for Windows
+    publisherName: process.env.WIN_PUBLISHER_NAME || "SpeakMCP",
+    // Version info for better Windows integration
+    verifyUpdateCodeSignature: false, // Allow unsigned updates for development
+    // Enhanced file version info for Windows trust
+    fileAssociations: [
+      {
+        ext: "speakmcp",
+        name: "SpeakMCP Configuration",
+        description: "SpeakMCP Configuration File",
+        icon: "build/icon.ico"
+      }
+    ],
+    // Windows-specific metadata for trust and identification
+    legalTrademarks: "SpeakMCP",
+    companyName: process.env.WIN_PUBLISHER_NAME || "SpeakMCP",
+    productName: "SpeakMCP",
+    internalName: "speakmcp.exe",
+    originalFilename: "speakmcp.exe",
     extraResources: [
       {
         from: "resources/bin/speakmcp-rs.exe",
@@ -53,6 +73,20 @@ module.exports = {
     shortcutName: "${productName}",
     uninstallDisplayName: "${productName}",
     createDesktopShortcut: "always",
+    // Enhanced installer metadata for Windows Defender trust
+    displayLanguageSelector: false,
+    installerLanguages: ["en_US"],
+    language: "1033", // English
+    // Publisher and version information
+    companyName: process.env.WIN_PUBLISHER_NAME || "SpeakMCP",
+    // Security and trust improvements
+    oneClick: false,
+    allowToChangeInstallationDirectory: true,
+    allowElevation: true,
+    runAfterFinish: false, // Don't auto-run to avoid suspicious behavior
+    // Additional metadata for Windows trust
+    include: "build/installer.nsh", // Custom NSIS script if needed
+    warningsAsErrors: false,
   },
   portable: {
     artifactName: "${productName}-${version}-${arch}-portable.${ext}",

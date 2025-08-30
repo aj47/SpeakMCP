@@ -45,7 +45,7 @@ https://github.com/user-attachments/assets/0c181c70-d1f1-4c5d-a6f5-a73147e75182
 ### 🎤 Voice & Speech
 - **Voice-to-Text**: Hold `Ctrl` to record, release to transcribe
 - **Toggle Voice Dictation**: Press `Fn` key to start/stop recording (configurable)
-- **Multi-Language Support**: 30+ languages including Spanish, French, German, Chinese, Japanese, Arabic, Hindi
+- **Multi-Language Support**: 39 languages with auto-detection (see [Supported Languages](#-supported-languages) below)
 - **Text-to-Speech (TTS)**: AI-generated speech with 50+ voices across OpenAI, Groq, and Gemini
 - **Auto-Play TTS**: Automatic speech playback for seamless conversations
 
@@ -107,8 +107,9 @@ pnpm test:tts     # Test TTS functionality
 **AI Providers**: OpenAI, Groq, Google Gemini
 - Configure API keys and custom base URLs in settings
 - Select specific models for each provider
-- Multi-language speech recognition support
+- Multi-language speech recognition support (39 languages)
 - TTS with 50+ voices across providers
+- Language auto-detection or manual selection per provider
 
 **MCP Servers**: Configure tools in `mcpServers` JSON format:
 ```json
@@ -133,6 +134,61 @@ pnpm test:tts     # Test TTS functionality
 - **Hold Ctrl+Alt**: MCP agent mode
 - **Ctrl+T**: Text input mode
 - **Escape**: Cancel/kill switch for operations
+
+## 🌍 Supported Languages
+
+SpeakMCP supports **39 languages** for speech recognition with automatic language detection. All languages are supported by both OpenAI Whisper and Groq Whisper providers.
+
+### Available Languages
+
+| Language | Native Name | Code |
+|----------|-------------|------|
+| **Auto-detect** | Auto-detect | `auto` |
+| Arabic | العربية | `ar` |
+| Bulgarian | Български | `bg` |
+| Chinese | 中文 | `zh` |
+| Croatian | Hrvatski | `hr` |
+| Czech | Čeština | `cs` |
+| Danish | Dansk | `da` |
+| Dutch | Nederlands | `nl` |
+| English | English | `en` |
+| Estonian | Eesti | `et` |
+| Finnish | Suomi | `fi` |
+| French | Français | `fr` |
+| German | Deutsch | `de` |
+| Greek | Ελληνικά | `el` |
+| Hebrew | עברית | `he` |
+| Hindi | हिन्दी | `hi` |
+| Hungarian | Magyar | `hu` |
+| Indonesian | Bahasa Indonesia | `id` |
+| Italian | Italiano | `it` |
+| Japanese | 日本語 | `ja` |
+| Korean | 한국어 | `ko` |
+| Latvian | Latviešu | `lv` |
+| Lithuanian | Lietuvių | `lt` |
+| Malay | Bahasa Melayu | `ms` |
+| Maltese | Malti | `mt` |
+| Norwegian | Norsk | `no` |
+| Polish | Polski | `pl` |
+| Portuguese | Português | `pt` |
+| Romanian | Română | `ro` |
+| Russian | Русский | `ru` |
+| Serbian | Српски | `sr` |
+| Slovak | Slovenčina | `sk` |
+| Slovenian | Slovenščina | `sl` |
+| Spanish | Español | `es` |
+| Swedish | Svenska | `sv` |
+| Thai | ไทย | `th` |
+| Turkish | Türkçe | `tr` |
+| Ukrainian | Українська | `uk` |
+| Vietnamese | Tiếng Việt | `vi` |
+
+### Language Configuration
+
+- **Auto-detection**: Set to "Auto-detect" to let the AI determine the language automatically
+- **Provider-specific**: Configure different languages for OpenAI and Groq providers
+- **Global setting**: Set a default language that applies to all speech recognition
+- **Per-provider override**: Override the global language setting for specific providers
 
 ## 🤖 MCP Agent Mode
 
@@ -161,7 +217,7 @@ pnpm test:tts     # Test TTS functionality
 - **50+ AI Voices**: OpenAI (6 voices), Groq (23 voices), Gemini (30+ voices)
 - **Auto-Play**: Seamless conversation flow with automatic speech playback
 - **Smart Preprocessing**: Converts code blocks, URLs, and markdown to natural speech
-- **Multi-Language**: Support for 30+ languages with native pronunciation
+- **Multi-Language**: Support for 39 languages with native pronunciation
 
 ### 🖥️ Cross-Platform Support
 - **Windows Build**: Full Windows compatibility with native builds
@@ -170,7 +226,7 @@ pnpm test:tts     # Test TTS functionality
 
 ### 🎛️ Enhanced Voice Controls
 - **Toggle Voice Dictation**: Press `Fn` key to start/stop recording
-- **Multi-Language Recognition**: 30+ languages with automatic detection
+- **Multi-Language Recognition**: 39 languages with automatic detection
 - **Configurable Hotkeys**: Customize keyboard shortcuts for all functions
 
 ### 🔧 Reliability & Performance

@@ -1,0 +1,79 @@
+# Augment Workspace Guidelines
+
+## Project: SpeakMCP
+A voice-enabled interface for Model Context Protocol (MCP) servers built with Electron, React, and Rust.
+
+## Development Environment
+- Node.js/npm for frontend dependencies
+- Rust/Cargo for backend components
+- Electron for desktop application framework
+- TypeScript for type safety
+
+## Code Organization
+```
+src/
+├── main/          # Electron main process (Node.js)
+├── renderer/      # React frontend (TypeScript)
+├── preload/       # Electron preload scripts
+└── shared/        # Shared utilities
+
+speakmcp-rs/       # Rust backend components
+resources/         # Application assets
+build/            # Build configuration
+scripts/          # Build and deployment scripts
+```
+
+## Key Technologies & Patterns
+- **Frontend**: React functional components, TypeScript, Tailwind CSS
+- **Backend**: Rust for performance, Node.js for system integration
+- **Voice**: Web Speech API, LiveKit for real-time processing
+- **IPC**: Electron's inter-process communication
+- **Build**: Vite for bundling, electron-builder for packaging
+
+## Development Commands
+```bash
+npm run dev        # Start development server
+npm run build      # Build for production
+npm run dist       # Create distribution packages
+npm test           # Run tests
+npm run lint       # Run linting
+```
+
+## Code Quality Standards
+- Use TypeScript for all new code
+- Follow React best practices (hooks, functional components)
+- Implement proper error handling, especially for voice operations
+- Write tests for new features
+- Follow Electron security guidelines
+- Use Rust for CPU-intensive operations
+
+## Security Considerations
+- Validate all IPC messages between processes
+- Sanitize voice input before processing
+- Implement proper error boundaries in React
+- Follow principle of least privilege
+- Keep dependencies updated
+
+## Voice Processing Guidelines
+- Handle speech recognition errors gracefully
+- Provide visual feedback for voice states
+- Implement proper audio device management
+- Consider accessibility for voice interfaces
+
+## MCP Integration
+- Follow MCP protocol specifications
+- Handle server connection failures
+- Implement proper message validation
+- Support multiple MCP server connections
+
+## Testing Strategy
+- Unit tests for utility functions
+- Integration tests for voice processing
+- E2E tests for critical user flows
+- Test cross-platform compatibility
+
+## Documentation
+- Update README.md for user-facing changes
+- Document API changes in relevant files
+- Keep this guidelines file updated
+- Comment complex voice processing logic

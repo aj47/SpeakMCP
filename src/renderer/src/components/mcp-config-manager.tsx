@@ -843,7 +843,7 @@ export function MCPConfigManager({
     setEditingServer(null)
   }
 
-  const handleDeleteServer = (name: string) => {
+  const handleDeleteServer = async (name: string) => {
     const newServers = { ...servers }
     delete newServers[name]
 
@@ -852,6 +852,14 @@ export function MCPConfigManager({
       mcpServers: newServers,
     }
     onConfigChange(newConfig)
+
+    // Sync MCP service with the updated config to clean up tools from deleted server
+    try {
+      await tipcClient.syncMcpWithConfig({})
+    } catch (error) {
+      // Log error but don't block the deletion
+      console.error('Failed to sync MCP service after server deletion:', error)
+    }
   }
 
   const handleImportConfigFromFile = async () => {
@@ -1271,7 +1279,7 @@ export function MCPConfigManager({
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => handleDeleteServer(name)}
+                      onClick={() => handleDeleteServer(name).catch(console.error)}
                       title="Delete server"
                     >
                       <Trash2 className="h-4 w-4" />

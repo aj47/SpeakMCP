@@ -618,6 +618,65 @@ export class MCPService {
     return !this.runtimeDisabledServers.has(serverName)
   }
 
+  /**
+   * Sync the service state with the current configuration
+   * This cleans up tools and connections for servers that are no longer in the config
+   */
+  syncWithConfig(): void {
+    const config = configStore.get()
+    const mcpConfig = config.mcpConfig
+    const configuredServers = new Set(Object.keys(mcpConfig?.mcpServers || {}))
+
+    // Find servers that are currently tracked but no longer in config (deleted servers)
+    const serversToCleanup: string[] = []
+
+    // Check initialized servers
+    for (const serverName of this.initializedServers) {
+      if (!configuredServers.has(serverName)) {
+        serversToCleanup.push(serverName)
+      }
+    }
+
+    // Check connected clients
+    for (const serverName of this.clients.keys()) {
+      if (!configuredServers.has(serverName)) {
+        serversToCleanup.push(serverName)
+      }
+    }
+
+    // Clean up servers that are no longer configured (deleted from config)
+    for (const serverName of serversToCleanup) {
+      if (isDebugTools()) {
+        logTools(`Cleaning up server ${serverName} - no longer in configuration`)
+      }
+      this.cleanupServer(serverName)
+    }
+
+    // Clean up any orphaned tools from servers no longer in config
+    const toolsBeforeCleanup = this.availableTools.length
+    this.availableTools = this.availableTools.filter(tool => {
+      const serverName = tool.name.includes(":") ? tool.name.split(":")[0] : "unknown"
+      return configuredServers.has(serverName)
+    })
+
+    if (this.availableTools.length < toolsBeforeCleanup) {
+      const removedCount = toolsBeforeCleanup - this.availableTools.length
+      if (isDebugTools()) {
+        logTools(`Removed ${removedCount} orphaned tools from deleted servers`)
+      }
+    }
+
+    // Clean up runtime disabled servers that are no longer in config
+    for (const serverName of Array.from(this.runtimeDisabledServers)) {
+      if (!configuredServers.has(serverName)) {
+        this.runtimeDisabledServers.delete(serverName)
+        if (isDebugTools()) {
+          logTools(`Removed runtime disabled state for deleted server: ${serverName}`)
+        }
+      }
+    }
+  }
+
   private async executeServerTool(
     serverName: string,
     toolName: string,

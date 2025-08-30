@@ -47,28 +47,48 @@ interface MCPToolManagerProps {
 
 export function MCPToolManager({ onToolToggle }: MCPToolManagerProps) {
   const [tools, setTools] = useState<DetailedTool[]>([])
+  const [serverStatus, setServerStatus] = useState<Record<string, {
+    connected: boolean
+    toolCount: number
+    error?: string
+    runtimeEnabled?: boolean
+    configDisabled?: boolean
+  }>>({})
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedServer, setSelectedServer] = useState<string>("all")
   const [expandedServers, setExpandedServers] = useState<Set<string>>(new Set())
   const [showDisabledTools, setShowDisabledTools] = useState(true)
 
-  // Fetch tools periodically
+  // Fetch tools and server status periodically
   useEffect(() => {
-    const fetchTools = async () => {
+    const fetchData = async () => {
       try {
-        const toolList = await tipcClient.getMcpDetailedToolList({})
+        const [toolList, status] = await Promise.all([
+          tipcClient.getMcpDetailedToolList({}),
+          tipcClient.getMcpServerStatus({})
+        ])
         setTools(toolList as any)
+        setServerStatus(status as any)
       } catch (error) {}
     }
 
-    fetchTools()
-    const interval = setInterval(fetchTools, 5000) // Update every 5 seconds
+    fetchData()
+    const interval = setInterval(fetchData, 5000) // Update every 5 seconds
 
     return () => clearInterval(interval)
   }, [])
 
-  // Group tools by server
-  const toolsByServer = tools.reduce(
+  // Filter tools to only include those from available servers
+  const availableTools = tools.filter(tool => {
+    const status = serverStatus[tool.serverName]
+    // Only show tools from servers that are:
+    // 1. Not config-disabled AND
+    // 2. Runtime-enabled (not turned off by user)
+    return status && !status.configDisabled && status.runtimeEnabled !== false
+  })
+
+  // Group available tools by server
+  const toolsByServer = availableTools.reduce(
     (acc, tool) => {
       if (!acc[tool.serverName]) {
         acc[tool.serverName] = []
@@ -156,7 +176,7 @@ export function MCPToolManager({ onToolToggle }: MCPToolManagerProps) {
   }
 
   const handleToggleAllTools = async (serverName: string, enable: boolean) => {
-    const serverTools = tools.filter((tool) => tool.serverName === serverName)
+    const serverTools = availableTools.filter((tool) => tool.serverName === serverName)
     if (serverTools.length === 0) return
 
     // Update local state immediately for better UX
@@ -213,8 +233,8 @@ export function MCPToolManager({ onToolToggle }: MCPToolManagerProps) {
   }
 
   const serverNames = Object.keys(toolsByServer)
-  const totalTools = tools.length
-  const enabledTools = tools.filter((tool) => tool.enabled).length
+  const totalTools = availableTools.length
+  const enabledTools = availableTools.filter((tool) => tool.enabled).length
 
   return (
     <div className="space-y-6">
@@ -274,8 +294,8 @@ export function MCPToolManager({ onToolToggle }: MCPToolManagerProps) {
             <CardContent className="flex flex-col items-center justify-center py-8">
               <Settings className="mb-4 h-12 w-12 text-muted-foreground" />
               <p className="text-center text-muted-foreground">
-                {tools.length === 0
-                  ? "No tools available. Configure MCP servers to see tools."
+                {availableTools.length === 0
+                  ? "No tools available. Configure and start MCP servers to see tools."
                   : "No tools match your search criteria."}
               </p>
             </CardContent>

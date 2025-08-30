@@ -998,6 +998,18 @@ export const router = {
     return mcpService.getDetailedToolList()
   }),
 
+  syncMcpWithConfig: t.procedure.action(async () => {
+    try {
+      mcpService.syncWithConfig()
+      return { success: true }
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      }
+    }
+  }),
+
   setMcpToolEnabled: t.procedure
     .input<{ toolName: string; enabled: boolean }>()
     .action(async ({ input }) => {

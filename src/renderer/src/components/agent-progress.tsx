@@ -8,6 +8,7 @@ import { tipcClient } from "@renderer/lib/tipc-client"
 import { useConversation } from "@renderer/contexts/conversation-context"
 import { AudioPlayer } from "@renderer/components/audio-player"
 import { useConfigQuery } from "@renderer/lib/queries"
+import { useTheme } from "@renderer/contexts/theme-context"
 
 interface AgentProgressProps {
   progress: AgentProgressUpdate | null
@@ -249,6 +250,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true)
   const lastMessageCountRef = useRef(0)
   const lastContentLengthRef = useRef(0)
+  const { isDark } = useTheme()
 
   // Get current conversation ID for deep-linking
   const { currentConversationId } = useConversation()
@@ -433,10 +435,13 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
     (step) => step.status === "error" || step.toolResult?.error,
   )
 
-  const containerClasses =
+  const containerClasses = cn(
+    "progress-panel flex flex-col w-full h-full rounded-xl overflow-hidden",
     variant === "overlay"
-      ? "flex flex-col w-full h-full bg-background/80 backdrop-blur-sm rounded-xl overflow-hidden border border-border/50"
-      : "flex flex-col w-full h-full bg-muted/20 backdrop-blur-sm rounded-xl overflow-hidden border border-border/40"
+      ? "bg-background/80 backdrop-blur-sm border border-border/50"
+      : "bg-muted/20 backdrop-blur-sm border border-border/40",
+    isDark ? "dark" : ""
+  )
 
   return (
     <div

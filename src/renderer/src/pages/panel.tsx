@@ -16,6 +16,7 @@ import {
 } from "@renderer/contexts/conversation-context"
 import { PanelDragBar } from "@renderer/components/panel-drag-bar"
 import { useConfigQuery } from "@renderer/lib/query-client"
+import { useTheme } from "@renderer/contexts/theme-context"
 
 const VISUALIZER_BUFFER_LENGTH = 70
 
@@ -33,6 +34,7 @@ export function Component() {
   const [showTextInput, setShowTextInput] = useState(false)
   const isConfirmedRef = useRef(false)
   const mcpModeRef = useRef(false)
+  const { isDark } = useTheme()
 
   // Conversation state
   const {
@@ -422,7 +424,10 @@ export function Component() {
       enableResize={true}
       minWidth={200}
       minHeight={100}
-      className="modern-panel modern-text-strong flex h-screen flex-col text-foreground"
+      className={cn(
+        "floating-panel modern-text-strong flex h-screen flex-col text-foreground",
+        isDark ? "dark" : ""
+      )}
     >
       {/* Drag bar - show whenever dragging is enabled (all states of floating GUI) */}
       {isDragEnabled && (
@@ -455,7 +460,10 @@ export function Component() {
             showBackgroundSpinner={true}
           />
         ) : (
-          <div className="modern-panel modern-text-strong flex h-full w-full rounded-xl transition-all duration-300">
+          <div className={cn(
+            "voice-input-panel modern-text-strong flex h-full w-full rounded-xl transition-all duration-300",
+            isDark ? "dark" : ""
+          )}>
             <div className="flex shrink-0">
               {showTextInput && !mcpMode && (
                 <div className="modern-panel-subtle flex h-full w-8 items-center justify-center rounded-l-xl">

@@ -3,6 +3,7 @@ import { cn } from "@renderer/lib/utils"
 import { Spinner } from "@renderer/components/ui/spinner"
 import { AgentProgress } from "@renderer/components/agent-progress"
 import { AgentProgressUpdate } from "../../../shared/types"
+import { useTheme } from "@renderer/contexts/theme-context"
 
 interface AgentProcessingViewProps {
   agentProgress: AgentProgressUpdate | null
@@ -23,12 +24,18 @@ export function AgentProcessingView({
   variant = "overlay",
   showBackgroundSpinner = true,
 }: AgentProcessingViewProps) {
+  const { isDark } = useTheme()
+
   if (!isProcessing && !agentProgress) {
     return null
   }
 
   return (
-    <div className={cn("relative flex h-full w-full", className)}>
+    <div className={cn(
+      "relative flex h-full w-full",
+      isDark ? "dark" : "",
+      className
+    )}>
       {agentProgress ? (
         <div className="absolute inset-0">
           <AgentProgress

@@ -145,19 +145,34 @@ export const useSaveConfigMutation = () =>
       queryClient.invalidateQueries({
         queryKey: ["config"],
       })
+      // Invalidate available models queries when config changes
+      // This ensures model lists refresh when base URLs or API keys change
+      queryClient.invalidateQueries({
+        queryKey: ["available-models"],
+      })
     },
   })
 
 export const useAvailableModelsQuery = (
   providerId: string,
   enabled: boolean = true,
-) =>
-  useQuery({
-    queryKey: ["available-models", providerId],
+) => {
+  const configQuery = useConfigQuery()
+
+  // Include base URL in cache key to ensure different URLs have separate cache entries
+  const baseUrl = providerId === "openai"
+    ? configQuery.data?.openaiBaseUrl
+    : providerId === "groq"
+    ? configQuery.data?.groqBaseUrl
+    : configQuery.data?.geminiBaseUrl
+
+  return useQuery({
+    queryKey: ["available-models", providerId, baseUrl],
     queryFn: async () => {
       return tipcClient.fetchAvailableModels({ providerId })
     },
-    enabled: enabled && !!providerId,
+    enabled: enabled && !!providerId && !!configQuery.data,
     staleTime: 5 * 60 * 1000, // 5 minutes
     retry: 1,
   })
+}

@@ -121,7 +121,7 @@ export function constructSystemPrompt(
     prompt += AGENT_MODE_ADDITIONS
   }
 
-  // Helper function to format tool information
+  // Helper function to format tool information (simplified to reduce token usage)
   const formatToolInfo = (
     tools: Array<{ name: string; description: string; inputSchema?: any }>,
   ) => {
@@ -135,6 +135,7 @@ export function constructSystemPrompt(
               const required = tool.inputSchema.required?.includes(key)
                 ? " (required)"
                 : ""
+              // Use the actual schema type without hardcoded fixes
               return `${key}: ${type}${required}`
             })
             .join(", ")

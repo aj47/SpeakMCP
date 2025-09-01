@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react'
 import { io, Socket } from 'socket.io-client'
 import { WebDebugSession, WebDebugMessage, WebDebugToolCall, WebDebugToolResult } from '../server'
-import { MockMCPService } from '../mock-mcp-service'
-import type { AgentProgressUpdate, Conversation, ConversationMessage, Config } from '../../shared/types'
+import type { AgentProgressUpdate, Conversation, ConversationMessage, Config, MCPConfig } from '../../shared/types'
+import type { MCPTool, MCPToolCall, MCPToolResult } from '../web-mcp-service'
 
 // Import existing components from the main app
 import { AgentProgress } from '../../renderer/src/components/agent-progress'
@@ -41,7 +41,8 @@ export const WebDebugApp: React.FC<WebDebugAppProps> = ({
   const [currentConversation, setCurrentConversation] = useState<Conversation | null>(null)
   const [isConnected, setIsConnected] = useState(false)
   const [agentProgress, setAgentProgress] = useState<AgentProgressUpdate | null>(null)
-  const [mockMCPService] = useState(() => new MockMCPService())
+  const [mcpTools, setMcpTools] = useState<MCPTool[]>([])
+  const [mcpConfig, setMcpConfig] = useState<MCPConfig>({ mcpServers: {} })
   const [activeView, setActiveView] = useState<'conversations' | 'agent' | 'settings'>('conversations')
   const [newSessionName, setNewSessionName] = useState('')
   const [showCreateSession, setShowCreateSession] = useState(false)
@@ -116,11 +117,9 @@ export const WebDebugApp: React.FC<WebDebugAppProps> = ({
   }, [serverUrl])
 
   useEffect(() => {
-    // Set up mock MCP service progress callback
-    mockMCPService.setProgressCallback((update: AgentProgressUpdate) => {
-      setAgentProgress(update)
-    })
-  }, [mockMCPService])
+    // Load MCP tools and configuration
+    loadMCPData()
+  }, [])
 
   useEffect(() => {
     // Update current conversation when session changes
@@ -179,6 +178,28 @@ export const WebDebugApp: React.FC<WebDebugAppProps> = ({
     }
   }
 
+  const loadMCPData = async () => {
+    try {
+      // Load MCP tools
+      const toolsResponse = await fetch(`${serverUrl}/api/mcp/tools`)
+      if (toolsResponse.ok) {
+        const tools = await toolsResponse.json()
+        setMcpTools(tools)
+        console.log('[WebDebugApp] Loaded MCP tools:', tools.length)
+      }
+
+      // Load MCP configuration
+      const configResponse = await fetch(`${serverUrl}/api/mcp/config`)
+      if (configResponse.ok) {
+        const config = await configResponse.json()
+        setMcpConfig(config.mcpConfig || { mcpServers: {} })
+        console.log('[WebDebugApp] Loaded MCP config:', config)
+      }
+    } catch (error) {
+      console.error('[WebDebugApp] Failed to load MCP data:', error)
+    }
+  }
+
   const sendMessage = async (content: string, role: 'user' | 'assistant' | 'tool' = 'user') => {
     if (!currentSession) return
 
@@ -208,12 +229,33 @@ export const WebDebugApp: React.FC<WebDebugAppProps> = ({
     setAgentProgress(null)
     setActiveView('agent')
 
-    // Start the mock agent simulation and get the final result
-    const finalResult = await mockMCPService.simulateAgentMode(transcript, mockConfig.mcpMaxIterations || 10)
+    try {
+      // Start the real MCP agent simulation
+      const response = await fetch(`${serverUrl}/api/mcp/simulate-agent`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          transcript,
+          maxIterations: mockConfig.mcpMaxIterations || 10
+        })
+      })
 
-    // After agent simulation completes, add the agent's response to the conversation
-    if (finalResult) {
-      await sendMessage(finalResult, 'assistant')
+      if (response.ok) {
+        const { result } = await response.json()
+        console.log('[WebDebugApp] Agent simulation result:', result)
+
+        // Add the agent's response to the conversation
+        if (result) {
+          await sendMessage(result, 'assistant')
+        }
+      } else {
+        const error = await response.json()
+        console.error('[WebDebugApp] Agent simulation failed:', error)
+        await sendMessage(`Agent simulation failed: ${error.message || 'Unknown error'}`, 'assistant')
+      }
+    } catch (error) {
+      console.error('[WebDebugApp] Agent simulation error:', error)
+      await sendMessage(`Agent simulation error: ${error instanceof Error ? error.message : String(error)}`, 'assistant')
     }
   }
 
@@ -562,7 +604,7 @@ export const WebDebugApp: React.FC<WebDebugAppProps> = ({
                         </div>
 
                         <div className="space-y-4">
-                          <h3 className="text-lg font-medium modern-text-strong">Mock MCP Configuration</h3>
+                          <h3 className="text-lg font-medium modern-text-strong">Real MCP Configuration</h3>
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div className="space-y-2">
                               <label className="text-sm font-medium">Max Iterations</label>
@@ -580,12 +622,44 @@ export const WebDebugApp: React.FC<WebDebugAppProps> = ({
                               />
                             </div>
                             <div className="space-y-2">
-                              <label className="text-sm font-medium">Tools Enabled</label>
+                              <label className="text-sm font-medium">Available Tools</label>
                               <Badge variant="outline">
-                                {mockMCPService.getConfig().enabledTools.length} tools
+                                {mcpTools.length} tools
                               </Badge>
                             </div>
+                            <div className="space-y-2">
+                              <label className="text-sm font-medium">MCP Servers</label>
+                              <Badge variant="outline">
+                                {Object.keys(mcpConfig.mcpServers || {}).length} servers
+                              </Badge>
+                            </div>
+                            <div className="space-y-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={loadMCPData}
+                              >
+                                Refresh MCP Data
+                              </Button>
+                            </div>
                           </div>
+
+                          {mcpTools.length > 0 && (
+                            <div className="space-y-2">
+                              <label className="text-sm font-medium">Available MCP Tools</label>
+                              <div className="max-h-32 overflow-y-auto modern-panel-subtle p-3 rounded-lg">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                                  {mcpTools.map((tool, index) => (
+                                    <div key={index} className="text-xs">
+                                      <Badge variant="secondary" className="text-xs">
+                                        {tool.name}
+                                      </Badge>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                          )}
                         </div>
 
                         <div className="space-y-4">
@@ -593,10 +667,22 @@ export const WebDebugApp: React.FC<WebDebugAppProps> = ({
                           <div className="modern-panel-subtle p-4 rounded-lg">
                             <p className="text-sm modern-text-muted">
                               SpeakMCP Web Debugging Mode provides a browser-based environment for debugging
-                              agent tool calls and conversations without requiring the Rust binary. This mode
-                              reuses the same UI components and styling as the main Electron app while providing
-                              mock implementations for testing and development.
+                              agent tool calls and conversations using the real MCP (Model Context Protocol)
+                              implementation. This mode connects to actual MCP servers and executes real tool
+                              calls, making it much closer to the production app experience while still being
+                              accessible through a web browser for easier debugging and development.
                             </p>
+                            <div className="mt-3 space-y-1">
+                              <p className="text-xs modern-text-muted">
+                                <strong>Real MCP Integration:</strong> Connects to actual MCP servers and tools
+                              </p>
+                              <p className="text-xs modern-text-muted">
+                                <strong>Live Tool Execution:</strong> Executes real tool calls with actual results
+                              </p>
+                              <p className="text-xs modern-text-muted">
+                                <strong>Agent Mode:</strong> Full agent simulation with real MCP tool calling
+                              </p>
+                            </div>
                           </div>
                         </div>
                       </CardContent>

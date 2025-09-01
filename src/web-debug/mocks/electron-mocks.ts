@@ -13,6 +13,8 @@ const mockConfig: Config = {
   sttProviderId: 'openai',
   llmProviderId: 'openai',
   ttsProviderId: 'openai',
+  ttsEnabled: true,
+  ttsAutoPlay: true,
   openaiApiKey: '',
   groqApiKey: '',
   anthropicApiKey: '',
@@ -51,7 +53,7 @@ let mockConversationHistory: ConversationHistoryItem[] = []
 const mockIpcRenderer = {
   invoke: async (channel: string, ...args: any[]): Promise<any> => {
     console.log(`[MOCK IPC] invoke: ${channel}`, args)
-    
+
     // Return mock data based on the channel
     switch (channel) {
       case 'getConfig':
@@ -125,14 +127,14 @@ const mockIpcRenderer = {
           }
           targetConversation.messages.push(newMessage)
           targetConversation.updatedAt = Date.now()
-          
+
           // Update history
           const historyItem = mockConversationHistory.find(h => h.id === msgConvId)
           if (historyItem) {
             historyItem.updatedAt = Date.now()
             historyItem.messageCount = targetConversation.messages.length
           }
-          
+
           return newMessage
         }
         return null
@@ -155,7 +157,7 @@ const mockIpcRenderer = {
         return null
     }
   },
-  
+
   on: (channel: string, listener: (...args: any[]) => void) => {
     console.log(`[MOCK IPC] on: ${channel}`)
     // Mock event listener registration
@@ -163,12 +165,12 @@ const mockIpcRenderer = {
       console.log(`[MOCK IPC] removeListener: ${channel}`)
     }
   },
-  
+
   send: (channel: string, ...args: any[]) => {
     console.log(`[MOCK IPC] send: ${channel}`, args)
     // Mock send (fire-and-forget)
   },
-  
+
   removeAllListeners: (channel: string) => {
     console.log(`[MOCK IPC] removeAllListeners: ${channel}`)
   }
@@ -187,7 +189,7 @@ export const createMockTipcClient = () => {
     getConversationHistory: () => mockIpcRenderer.invoke('getConversationHistory'),
     loadConversation: (args: { conversationId: string }) => mockIpcRenderer.invoke('loadConversation', args),
     saveConversation: (args: { conversation: Conversation }) => mockIpcRenderer.invoke('saveConversation', args),
-    createConversation: (args: { firstMessage: string; role?: 'user' | 'assistant' }) => 
+    createConversation: (args: { firstMessage: string; role?: 'user' | 'assistant' }) =>
       mockIpcRenderer.invoke('createConversation', args),
     addMessageToConversation: (args: {
       conversationId: string
@@ -218,6 +220,17 @@ export const createMockTipcClient = () => {
     processTranscriptWithAgentMode: () => Promise.resolve({ processedTranscript: 'Mock agent mode result' }),
     startRecording: () => Promise.resolve(),
     stopRecording: () => Promise.resolve(),
+    generateSpeech: (args: { text: string; providerId?: string; voice?: string; model?: string; speed?: number }) => {
+      console.log('[MOCK TTS] generateSpeech called with:', args)
+      // Create a mock audio buffer (empty ArrayBuffer for demo)
+      const mockAudioBuffer = new ArrayBuffer(1024)
+      return Promise.resolve({
+        audio: mockAudioBuffer,
+        provider: args.providerId || 'openai',
+        voice: args.voice || 'alloy',
+        model: args.model || 'tts-1'
+      })
+    },
     playTTS: () => Promise.resolve(),
     stopTTS: () => Promise.resolve(),
   }

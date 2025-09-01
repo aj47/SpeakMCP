@@ -5,6 +5,7 @@ import path from 'path'
 import cors from 'cors'
 import { fileURLToPath } from 'url'
 import { dirname } from 'path'
+import { WebMCPService } from './web-mcp-service'
 
 // Types for web debugging
 export interface WebDebugSession {
@@ -60,6 +61,7 @@ export class WebDebugServer {
   private io: SocketIOServer
   private sessions: Map<string, WebDebugSession> = new Map()
   private config: WebDebugConfig
+  private webMCPService: WebMCPService
 
   constructor(config: Partial<WebDebugConfig> = {}) {
     this.config = {
@@ -78,6 +80,12 @@ export class WebDebugServer {
         origin: "*",
         methods: ["GET", "POST"]
       }
+    })
+
+    // Initialize WebMCPService
+    this.webMCPService = new WebMCPService({
+      enableProgressUpdates: true,
+      maxIterations: 10
     })
 
     this.setupMiddleware()
@@ -154,6 +162,76 @@ export class WebDebugServer {
       this.io.emit('sessionDeleted', { sessionId })
 
       res.json({ success: true })
+    })
+
+    // MCP API Routes
+    this.app.get('/api/mcp/tools', async (req, res) => {
+      try {
+        const tools = await this.webMCPService.getAvailableTools()
+        res.json(tools)
+      } catch (error) {
+        res.status(500).json({
+          error: 'Failed to get MCP tools',
+          message: error instanceof Error ? error.message : String(error)
+        })
+      }
+    })
+
+    this.app.post('/api/mcp/execute', async (req, res) => {
+      try {
+        const { toolCall } = req.body
+        if (!toolCall || !toolCall.name) {
+          return res.status(400).json({ error: 'Invalid tool call' })
+        }
+
+        const result = await this.webMCPService.executeToolCall(toolCall)
+        res.json(result)
+      } catch (error) {
+        res.status(500).json({
+          error: 'Failed to execute MCP tool',
+          message: error instanceof Error ? error.message : String(error)
+        })
+      }
+    })
+
+    this.app.post('/api/mcp/simulate-agent', async (req, res) => {
+      try {
+        const { transcript, maxIterations = 10 } = req.body
+        if (!transcript) {
+          return res.status(400).json({ error: 'Transcript is required' })
+        }
+
+        // Set up progress callback to emit via WebSocket
+        this.webMCPService.setProgressCallback((update) => {
+          this.io.emit('agentProgress', update)
+        })
+
+        const result = await this.webMCPService.simulateAgentMode(transcript, maxIterations)
+        res.json({ result })
+      } catch (error) {
+        res.status(500).json({
+          error: 'Failed to simulate agent mode',
+          message: error instanceof Error ? error.message : String(error)
+        })
+      }
+    })
+
+    this.app.get('/api/mcp/config', (req, res) => {
+      const config = this.webMCPService.getConfig()
+      res.json(config)
+    })
+
+    this.app.post('/api/mcp/config', async (req, res) => {
+      try {
+        const { config } = req.body
+        await this.webMCPService.updateConfig(config)
+        res.json({ success: true })
+      } catch (error) {
+        res.status(500).json({
+          error: 'Failed to update MCP config',
+          message: error instanceof Error ? error.message : String(error)
+        })
+      }
     })
 
     // Serve the web debugging interface
@@ -313,7 +391,16 @@ export class WebDebugServer {
     }
   }
 
-  public start(): Promise<void> {
+  public async start(): Promise<void> {
+    // Initialize WebMCPService first
+    try {
+      await this.webMCPService.initialize()
+      this.log('info', 'WebMCPService initialized successfully')
+    } catch (error) {
+      this.log('warn', `WebMCPService initialization failed: ${error instanceof Error ? error.message : String(error)}`)
+      this.log('info', 'Continuing with mock MCP service fallback')
+    }
+
     return new Promise((resolve) => {
       this.server.listen(this.config.port, this.config.host, () => {
         this.log('info', `Web debugging server started on http://${this.config.host}:${this.config.port}`)
@@ -322,7 +409,15 @@ export class WebDebugServer {
     })
   }
 
-  public stop(): Promise<void> {
+  public async stop(): Promise<void> {
+    // Shutdown WebMCPService first
+    try {
+      await this.webMCPService.shutdown()
+      this.log('info', 'WebMCPService shutdown complete')
+    } catch (error) {
+      this.log('warn', `WebMCPService shutdown error: ${error instanceof Error ? error.message : String(error)}`)
+    }
+
     return new Promise((resolve) => {
       this.server.close(() => {
         this.log('info', 'Web debugging server stopped')

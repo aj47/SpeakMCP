@@ -22,6 +22,8 @@ export default defineConfig({
       '~': path.resolve(__dirname, '../renderer/src'),
       '@renderer': path.resolve(__dirname, '../renderer/src'),
       '@shared': path.resolve(__dirname, '../shared'),
+      // Mock TIPC client for web debugging
+      '@renderer/lib/tipc-client': path.resolve(__dirname, './mocks/tipc-client-mock'),
     },
   },
   server: {

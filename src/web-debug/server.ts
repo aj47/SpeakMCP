@@ -193,15 +193,15 @@ export class WebDebugServer {
       status: 'active'
     }
 
+    this.sessions.set(id, session)
+
     if (initialMessage) {
       this.addMessage(id, initialMessage, 'user')
     }
 
-    this.sessions.set(id, session)
-    
     // Emit to WebSocket clients
     this.io.emit('sessionCreated', session)
-    
+
     this.log('info', `Created session: ${id} (${name})`)
     return session
   }
@@ -222,7 +222,7 @@ export class WebDebugServer {
 
     session.messages.push(message)
     this.log('debug', `Added message to session ${sessionId}: ${role} - ${content.substring(0, 50)}...`)
-    
+
     return message
   }
 
@@ -243,10 +243,10 @@ export class WebDebugServer {
     }
 
     session.toolCalls.push(toolCall)
-    
+
     // Emit to WebSocket clients
     this.io.to(sessionId).emit('toolCall', toolCall)
-    
+
     // Simulate tool execution if mock tools are enabled
     if (this.config.enableMockTools) {
       this.simulateToolExecution(toolCall)

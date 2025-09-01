@@ -33,7 +33,7 @@ const mockConfig: Partial<Config> = {
 }
 
 export const WebDebugApp: React.FC<WebDebugAppProps> = ({
-  serverUrl = 'http://localhost:3001'
+  serverUrl = `${window.location.protocol}//${window.location.host}`
 }) => {
   const [socket, setSocket] = useState<Socket | null>(null)
   const [sessions, setSessions] = useState<WebDebugSession[]>([])

@@ -20,6 +20,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@renderer/components/ui/dialog"
+import { ScrollArea } from "@renderer/components/ui/scroll-area"
 import {
   Select,
   SelectContent,
@@ -175,7 +176,7 @@ function ServerDialog({ server, onSave, onCancel }: ServerDialogProps) {
   }
 
   return (
-    <DialogContent className="max-w-4xl">
+    <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
       <DialogHeader>
         <DialogTitle>{server ? "Edit Server" : "Add Server"}</DialogTitle>
         <DialogDescription>
@@ -183,7 +184,8 @@ function ServerDialog({ server, onSave, onCancel }: ServerDialogProps) {
         </DialogDescription>
       </DialogHeader>
 
-      <div className="w-full">
+      <ScrollArea className="flex-1 w-full">
+        <div className="w-full pr-4">
         <div className="flex space-x-1 mb-4">
           <Button
             variant={activeTab === 'manual' ? 'default' : 'outline'}
@@ -645,7 +647,8 @@ function ServerDialog({ server, onSave, onCancel }: ServerDialogProps) {
             </Button>
           </div>
         )}
-      </div>
+        </div>
+      </ScrollArea>
 
       <DialogFooter>
         <Button variant="outline" onClick={onCancel}>

@@ -99,7 +99,8 @@ export class WebDebugServer {
     })
 
     this.app.get('/api/sessions/:sessionId', (req, res) => {
-      const session = this.sessions.get(req.params.sessionId)
+      const sessionId = req.params.sessionId
+      const session = this.sessions.get(sessionId)
       if (!session) {
         return res.status(404).json({ error: 'Session not found' })
       }
@@ -113,8 +114,9 @@ export class WebDebugServer {
     })
 
     this.app.post('/api/sessions/:sessionId/messages', (req, res) => {
+      const sessionId = req.params.sessionId
       const { content, role = 'user' } = req.body
-      const session = this.sessions.get(req.params.sessionId)
+      const session = this.sessions.get(sessionId)
 
       if (!session) {
         return res.status(404).json({ error: 'Session not found' })
@@ -129,8 +131,9 @@ export class WebDebugServer {
     })
 
     this.app.post('/api/sessions/:sessionId/tool-calls', (req, res) => {
+      const sessionId = req.params.sessionId
       const { name, arguments: args } = req.body
-      const session = this.sessions.get(req.params.sessionId)
+      const session = this.sessions.get(sessionId)
 
       if (!session) {
         return res.status(404).json({ error: 'Session not found' })
@@ -141,13 +144,14 @@ export class WebDebugServer {
     })
 
     this.app.delete('/api/sessions/:sessionId', (req, res) => {
-      const deleted = this.sessions.delete(req.params.sessionId)
+      const sessionId = req.params.sessionId
+      const deleted = this.sessions.delete(sessionId)
       if (!deleted) {
         return res.status(404).json({ error: 'Session not found' })
       }
 
       // Emit to WebSocket clients
-      this.io.emit('sessionDeleted', { sessionId: req.params.sessionId })
+      this.io.emit('sessionDeleted', { sessionId })
 
       res.json({ success: true })
     })
@@ -155,16 +159,6 @@ export class WebDebugServer {
     // Serve the web debugging interface
     this.app.get('/', (req, res) => {
       res.sendFile(path.join(process.cwd(), 'dist-web-debug', 'index.html'))
-    })
-
-    // Catch-all route for SPA
-    this.app.get('*', (req, res) => {
-      // Only serve index.html for non-API routes
-      if (!req.path.startsWith('/api')) {
-        res.sendFile(path.join(process.cwd(), 'dist-web-debug', 'index.html'))
-      } else {
-        res.status(404).json({ error: 'API endpoint not found' })
-      }
     })
   }
 

@@ -118,7 +118,7 @@ export class MockMCPService {
     ]
 
     // Filter tools based on enabled tools configuration
-    return allTools.filter(tool => 
+    return allTools.filter(tool =>
       this.config.enabledTools.some(enabled => tool.name.startsWith(enabled))
     )
   }
@@ -155,11 +155,11 @@ export class MockMCPService {
         const mockContent = `# Mock File Content\n\nThis is mock content for file: ${args.path}\n\nGenerated at: ${new Date().toISOString()}\n\n## Sample Data\n\n\`\`\`json\n${JSON.stringify({ example: 'data', timestamp: Date.now() }, null, 2)}\n\`\`\``
         return mockContent
       },
-      
+
       'filesystem_write': () => {
         return `Successfully wrote ${args.content?.length || 0} characters to ${args.path}`
       },
-      
+
       'web_search': () => {
         const mockResults = [
           { title: 'Example Result 1', url: 'https://example.com/1', snippet: 'This is a mock search result for your query.' },
@@ -168,7 +168,7 @@ export class MockMCPService {
         ]
         return `Found ${mockResults.length} results for "${args.query}":\n\n${mockResults.map((r, i) => `${i + 1}. **${r.title}**\n   ${r.url}\n   ${r.snippet}\n`).join('\n')}`
       },
-      
+
       'calculator': () => {
         try {
           // Simple expression evaluation (for demo purposes - replace eval in production)
@@ -179,27 +179,27 @@ export class MockMCPService {
           return `Error: Could not evaluate expression "${args.expression}"`
         }
       },
-      
+
       'weather': () => {
         const conditions = ['sunny', 'cloudy', 'rainy', 'snowy', 'partly cloudy']
         const condition = conditions[Math.floor(Math.random() * conditions.length)]
         const temp = Math.floor(Math.random() * 40) + 50 // 50-90°F
         const humidity = Math.floor(Math.random() * 50) + 30 // 30-80%
-        
+
         return `Weather in ${args.location}:\n- Condition: ${condition}\n- Temperature: ${temp}°${args.units === 'celsius' ? 'C' : 'F'}\n- Humidity: ${humidity}%\n- Wind: ${Math.floor(Math.random() * 20)} mph`
       },
-      
+
       'email_send': () => {
         return `Email sent successfully!\n- To: ${args.to}\n- Subject: ${args.subject}\n- Body length: ${args.body?.length || 0} characters\n- Sent at: ${new Date().toLocaleString()}`
       },
-      
+
       'calendar_create_event': () => {
         return `Calendar event created successfully!\n- Title: ${args.title}\n- Start: ${args.start}\n- End: ${args.end}\n- Description: ${args.description || 'No description'}\n- Event ID: evt_${Date.now()}`
       }
     }
 
     const generator = mockResults[name] || (() => `Mock result for ${name}: ${JSON.stringify(args, null, 2)}`)
-    
+
     return {
       content: [{
         type: 'text',
@@ -212,9 +212,9 @@ export class MockMCPService {
   public async simulateAgentMode(
     transcript: string,
     maxIterations: number = 5
-  ): Promise<void> {
+  ): Promise<string | null> {
     if (!this.config.enableProgressUpdates || !this.progressCallback) {
-      return
+      return null
     }
 
     const steps: AgentProgressStep[] = []
@@ -298,10 +298,12 @@ export class MockMCPService {
     }
 
     steps.push(completionStep)
-    
+
     const finalContent = `I've completed the requested task: "${transcript}"\n\nExecuted ${toolsToCall.length} tool calls across ${currentIteration - 1} iterations.`
-    
+
     this.emitProgress(currentIteration, maxIterations, steps, true, finalContent)
+
+    return finalContent
   }
 
   private determineToolsFromTranscript(transcript: string): MCPToolCall[] {

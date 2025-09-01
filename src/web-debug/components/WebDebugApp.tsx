@@ -136,6 +136,15 @@ export const WebDebugApp: React.FC<WebDebugAppProps> = ({
       const response = await fetch(`${serverUrl}/api/sessions`)
       const sessionsData = await response.json()
       setSessions(sessionsData)
+
+      // If we have a current session, update it with the latest data
+      if (currentSession) {
+        const updatedCurrentSession = sessionsData.find((s: WebDebugSession) => s.id === currentSession.id)
+        if (updatedCurrentSession) {
+          setCurrentSession(updatedCurrentSession)
+          setCurrentConversation(convertSessionToConversation(updatedCurrentSession))
+        }
+      }
     } catch (error) {
       console.error('Failed to load sessions:', error)
     }
@@ -180,6 +189,10 @@ export const WebDebugApp: React.FC<WebDebugAppProps> = ({
         body: JSON.stringify({ content, role })
       })
       const message = await response.json()
+
+      // Refresh sessions to ensure UI is in sync
+      await loadSessions()
+
       return message
     } catch (error) {
       console.error('Failed to send message:', error)
@@ -195,8 +208,13 @@ export const WebDebugApp: React.FC<WebDebugAppProps> = ({
     setAgentProgress(null)
     setActiveView('agent')
 
-    // Start the mock agent simulation
-    await mockMCPService.simulateAgentMode(transcript, mockConfig.mcpMaxIterations || 10)
+    // Start the mock agent simulation and get the final result
+    const finalResult = await mockMCPService.simulateAgentMode(transcript, mockConfig.mcpMaxIterations || 10)
+
+    // After agent simulation completes, add the agent's response to the conversation
+    if (finalResult) {
+      await sendMessage(finalResult, 'assistant')
+    }
   }
 
   const handleCreateSession = async () => {

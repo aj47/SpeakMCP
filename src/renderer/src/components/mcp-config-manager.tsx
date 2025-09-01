@@ -172,8 +172,6 @@ function ServerDialog({ server, onSave, onCancel }: ServerDialogProps) {
     }
 
     onSave(name.trim(), serverConfig)
--    <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
-+    <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
 
   return (
     <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">

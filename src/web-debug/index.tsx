@@ -1,6 +1,9 @@
 import React from 'react'
 import { createRoot } from 'react-dom/client'
 import { WebDebugApp } from './components/WebDebugApp'
+
+// Import the main app's CSS styles
+import '../renderer/src/css/tailwind.css'
 import './styles.css'
 
 const container = document.getElementById('root')

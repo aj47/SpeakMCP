@@ -219,9 +219,32 @@ export async function makeStructuredToolCall(
       const content = response.choices[0]?.message.content
       if (content) {
         try {
-          const parsed = JSON.parse(content)
+          // Clean up malformed responses with various formatting issues
+          let cleanContent = content.trim()
+
+          // Remove common LLM formatting artifacts
+          cleanContent = cleanContent
+            .replace(/<\|[^|]*\|>/g, '') // Remove special tokens like <|tool_calls_section_begin|>
+            .replace(/```json\s*/g, '') // Remove code block markers
+            .replace(/```\s*/g, '')
+            .replace(/^\s*[\w\s]*:\s*/, '') // Remove leading text like "Here's the response:"
+            .trim()
+
+          // Try to extract JSON object if embedded in text
+          const jsonMatch = cleanContent.match(/\{[\s\S]*\}/)
+          if (jsonMatch) {
+            cleanContent = jsonMatch[0]
+          }
+
+          const parsed = JSON.parse(cleanContent)
           return LLMToolCallSchema.parse(parsed)
-        } catch (parseError) {}
+        } catch (parseError) {
+          // If parsing fails completely, try to extract any meaningful content
+          const textContent = content.replace(/<\|[^|]*\|>/g, '').trim()
+          if (textContent) {
+            return { content: textContent, needsMoreWork: true }
+          }
+        }
       }
     }
 
@@ -237,7 +260,24 @@ export async function makeStructuredToolCall(
     const content = response.choices[0]?.message.content?.trim()
     if (content) {
       try {
-        const parsed = JSON.parse(content)
+        // Clean up malformed responses with various formatting issues
+        let cleanContent = content
+
+        // Remove common LLM formatting artifacts
+        cleanContent = cleanContent
+          .replace(/<\|[^|]*\|>/g, '') // Remove special tokens
+          .replace(/```json\s*/g, '') // Remove code block markers
+          .replace(/```\s*/g, '')
+          .replace(/^\s*[\w\s]*:\s*/, '') // Remove leading text
+          .trim()
+
+        // Try to extract JSON object if embedded in text
+        const jsonMatch = cleanContent.match(/\{[\s\S]*\}/)
+        if (jsonMatch) {
+          cleanContent = jsonMatch[0]
+        }
+
+        const parsed = JSON.parse(cleanContent)
         return LLMToolCallSchema.parse(parsed)
       } catch (parseError) {
         return { content, needsMoreWork: true }

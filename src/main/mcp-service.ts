@@ -684,6 +684,29 @@ export class MCPService {
     // Enhanced argument processing with session injection
     let processedArguments = { ...arguments_ }
 
+    // Auto-fix common parameter type mismatches based on tool schema
+    if (client && this.availableTools.length > 0) {
+      const toolSchema = this.availableTools.find(t => t.name === `${serverName}:${toolName}`)?.inputSchema
+      if (toolSchema?.properties) {
+        for (const [paramName, paramValue] of Object.entries(processedArguments)) {
+          const expectedType = toolSchema.properties[paramName]?.type
+          if (expectedType && typeof paramValue !== expectedType) {
+            // Convert common type mismatches
+            if (expectedType === 'string' && Array.isArray(paramValue)) {
+              processedArguments[paramName] = paramValue.length === 0 ? "" : paramValue.join(", ")
+            } else if (expectedType === 'array' && typeof paramValue === 'string') {
+              processedArguments[paramName] = paramValue ? [paramValue] : []
+            } else if (expectedType === 'number' && typeof paramValue === 'string') {
+              const num = parseFloat(paramValue)
+              if (!isNaN(num)) processedArguments[paramName] = num
+            } else if (expectedType === 'boolean' && typeof paramValue === 'string') {
+              processedArguments[paramName] = paramValue.toLowerCase() === 'true'
+            }
+          }
+        }
+      }
+    }
+
     // The LLM-based context extraction handles resource management
     // No need for complex session injection logic here
 

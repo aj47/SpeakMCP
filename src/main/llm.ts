@@ -1019,6 +1019,12 @@ ${failedTools
       errorText.includes("does not exist")
     ) {
       suggestion = " (Suggestion: Verify the resource exists or try alternatives)"
+    } else if (errorText.includes("Expected string, received array")) {
+      suggestion = " (Fix: Parameter type mismatch - check tool schema)"
+    } else if (errorText.includes("Expected array, received string")) {
+      suggestion = " (Fix: Parameter should be an array, not a string)"
+    } else if (errorText.includes("invalid_type")) {
+      suggestion = " (Fix: Check parameter types match tool schema)"
     }
 
     return `- ${toolName}: ${errorText}${suggestion}`

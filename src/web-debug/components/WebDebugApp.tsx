@@ -43,7 +43,7 @@ export const WebDebugApp: React.FC<WebDebugAppProps> = ({
   const [agentProgress, setAgentProgress] = useState<AgentProgressUpdate | null>(null)
   const [mcpTools, setMcpTools] = useState<MCPTool[]>([])
   const [mcpConfig, setMcpConfig] = useState<MCPConfig>({ mcpServers: {} })
-  const [activeView, setActiveView] = useState<'conversations' | 'agent' | 'settings'>('conversations')
+  const [activeView, setActiveView] = useState<'conversations' | 'agent' | 'settings'>('agent')
   const [newSessionName, setNewSessionName] = useState('')
   const [showCreateSession, setShowCreateSession] = useState(false)
 
@@ -108,6 +108,12 @@ export const WebDebugApp: React.FC<WebDebugAppProps> = ({
       }
     })
 
+    // Listen for agent progress updates
+    newSocket.on('agentProgress', (update: AgentProgressUpdate) => {
+      console.log('[WebDebugApp] Received agent progress update:', update)
+      setAgentProgress(update)
+    })
+
     // Load initial sessions
     loadSessions()
 
@@ -159,7 +165,7 @@ export const WebDebugApp: React.FC<WebDebugAppProps> = ({
       const session = await response.json()
       setCurrentSession(session)
       setCurrentConversation(convertSessionToConversation(session))
-      setActiveView('conversations')
+      setActiveView('agent')
       setShowCreateSession(false)
       setNewSessionName('')
       return session
@@ -259,7 +265,7 @@ export const WebDebugApp: React.FC<WebDebugAppProps> = ({
   const selectSession = (session: WebDebugSession) => {
     setCurrentSession(session)
     setCurrentConversation(convertSessionToConversation(session))
-    setActiveView('conversations')
+    setActiveView('agent')
   }
 
   return (
@@ -272,7 +278,7 @@ export const WebDebugApp: React.FC<WebDebugAppProps> = ({
               <div className="flex justify-between items-center py-4">
                 <div className="flex items-center space-x-4">
                   <h1 className="text-2xl font-bold modern-text-strong">
-                    SpeakMCP Web Debugger
+                    SpeakMCP Agent Mode Debugger
                   </h1>
                   <Badge variant={isConnected ? 'default' : 'destructive'}>
                     {isConnected ? 'Connected' : 'Disconnected'}
@@ -281,8 +287,8 @@ export const WebDebugApp: React.FC<WebDebugAppProps> = ({
 
                 <nav className="flex space-x-2">
                   {[
-                    { key: 'conversations', label: 'Conversations' },
-                    { key: 'agent', label: 'Agent Progress' },
+                    { key: 'agent', label: 'Agent Progress', primary: true },
+                    { key: 'conversations', label: 'Debug Info', secondary: true },
                     { key: 'settings', label: 'Settings' }
                   ].map((view) => (
                     <Button
@@ -290,6 +296,7 @@ export const WebDebugApp: React.FC<WebDebugAppProps> = ({
                       variant={activeView === view.key ? 'default' : 'ghost'}
                       size="sm"
                       onClick={() => setActiveView(view.key as any)}
+                      className={view.secondary ? 'opacity-60' : ''}
                     >
                       {view.label}
                     </Button>
@@ -399,95 +406,20 @@ export const WebDebugApp: React.FC<WebDebugAppProps> = ({
                     <>
                       <CardHeader>
                         <CardTitle className="flex items-center justify-between">
-                          <span>
-                            {currentConversation ? currentConversation.title : 'Conversation Debug'}
-                          </span>
-                          {currentConversation && (
-                            <div className="flex items-center space-x-2">
-                              <Badge variant="outline">
-                                {currentConversation.messages.length} messages
-                              </Badge>
-                            </div>
-                          )}
+                          <span>Web Debugging Mode - Agent Focus</span>
                         </CardTitle>
                       </CardHeader>
                       <CardContent className="flex-1 min-h-0">
-                        {currentConversation ? (
-                          <div className="h-full flex flex-col space-y-4">
-                            {/* Conversation Display */}
-                            <div className="flex-1 min-h-0">
-                              <ConversationDisplay
-                                messages={currentConversation.messages}
-                                maxHeight="100%"
-                                className="h-full"
-                              />
-                            </div>
-
-                            {/* Input Area */}
-                            <div className="space-y-3 modern-panel-subtle p-4 rounded-lg">
-                              <div className="flex space-x-2">
-                                <Textarea
-                                  placeholder="Type a message or agent request..."
-                                  className="flex-1"
-                                  rows={3}
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'Enter' && !e.shiftKey) {
-                                      e.preventDefault()
-                                      const content = e.currentTarget.value.trim()
-                                      if (content) {
-                                        sendMessage(content, 'user')
-                                        e.currentTarget.value = ''
-                                      }
-                                    }
-                                  }}
-                                />
-                                <div className="flex flex-col space-y-2">
-                                  <Button
-                                    size="sm"
-                                    onClick={(e) => {
-                                      const textarea = e.currentTarget.parentElement?.parentElement?.querySelector('textarea')
-                                      const content = textarea?.value.trim()
-                                      if (content) {
-                                        sendMessage(content, 'user')
-                                        textarea.value = ''
-                                      }
-                                    }}
-                                  >
-                                    Send
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant="secondary"
-                                    onClick={(e) => {
-                                      const textarea = e.currentTarget.parentElement?.parentElement?.querySelector('textarea')
-                                      const content = textarea?.value.trim()
-                                      if (content) {
-                                        processAgentRequest(content)
-                                        textarea.value = ''
-                                      }
-                                    }}
-                                  >
-                                    Send to Agent
-                                  </Button>
-                                </div>
-                              </div>
-                              <p className="text-xs modern-text-muted">
-                                Press Enter to send, Shift+Enter for new line. Use "Agent" for agent mode simulation.
-                              </p>
-                            </div>
+                        <div className="flex items-center justify-center h-64">
+                          <div className="text-center space-y-4">
+                            <p className="modern-text-muted">
+                              Web Debugging Mode focuses on Agent Progress simulation.
+                            </p>
+                            <Button onClick={() => setActiveView('agent')}>
+                              Go to Agent Progress
+                            </Button>
                           </div>
-                        ) : (
-                          <div className="flex items-center justify-center h-64">
-                            <div className="text-center">
-                              <p className="modern-text-muted mb-4">
-                                Select a session to view conversation history
-                              </p>
-                              <Button onClick={() => setShowCreateSession(true)}>
-                                Create New Session
-                              </Button>
-                            </div>
-                          </div>
-                        )}
+                        </div>
                       </CardContent>
                     </>
                   )}

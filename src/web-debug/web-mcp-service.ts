@@ -435,6 +435,17 @@ export class WebMCPService extends EventEmitter {
     // Initialize progress tracking
     const progressSteps: AgentProgressStep[] = []
 
+    // Initialize conversation history first
+    const conversationHistory: Array<{
+      role: "user" | "assistant" | "tool"
+      content: string
+      toolCalls?: Array<{ name: string; arguments: any }>
+      toolResults?: Array<{ success: boolean; content: string; error?: string }>
+      timestamp?: number
+    }> = [
+      { role: "user", content: transcript, timestamp: Date.now() }
+    ]
+
     // Add initial step
     const initialStep: AgentProgressStep = {
       id: `step_${Date.now()}_initial`,
@@ -447,20 +458,15 @@ export class WebMCPService extends EventEmitter {
     progressSteps.push(initialStep)
 
     // Emit initial progress
-    this.emitProgress(0, maxIterations, progressSteps, false)
+    this.emitProgress(0, maxIterations, progressSteps, false, conversationHistory)
+
+    // Add delay to make progress visible
+    await this.delay(1000)
 
     // For web debugging mode, we'll use a simplified agent processing approach
     // that still follows the same patterns as the production app
     let iteration = 0
     let finalContent = ""
-    const conversationHistory: Array<{
-      role: "user" | "assistant" | "tool"
-      content: string
-      toolCalls?: MCPToolCall[]
-      toolResults?: MCPToolResult[]
-    }> = [
-      { role: "user", content: transcript }
-    ]
 
     // Complete initial step
     initialStep.status = "completed"
@@ -484,7 +490,10 @@ export class WebMCPService extends EventEmitter {
       progressSteps.push(thinkingStep)
 
       // Emit progress update for thinking step
-      this.emitProgress(iteration, maxIterations, progressSteps.slice(-3), false)
+      this.emitProgress(iteration, maxIterations, progressSteps.slice(-3), false, conversationHistory)
+
+      // Add delay to make progress visible
+      await this.delay(1000)
 
       // For web debugging mode, we'll use a simplified approach to determine tool calls
       // In production, this would use LLM to determine what tools to call
@@ -520,7 +529,7 @@ export class WebMCPService extends EventEmitter {
         }
 
         progressSteps.push(toolCallStep)
-        this.emitProgress(iteration, maxIterations, progressSteps.slice(-3), false)
+        this.emitProgress(iteration, maxIterations, progressSteps.slice(-3), false, conversationHistory)
 
         try {
           const result = await executeToolCall(toolCall)
@@ -536,11 +545,16 @@ export class WebMCPService extends EventEmitter {
           conversationHistory.push({
             role: "assistant",
             content: "",
-            toolCalls: [toolCall],
-            toolResults: [result]
+            toolCalls: [{ name: toolCall.name, arguments: toolCall.arguments }],
+            toolResults: [{
+              success: !result.isError,
+              content: result.content.map(c => c.text).join('\n'),
+              error: result.isError ? result.content.map(c => c.text).join('\n') : undefined
+            }],
+            timestamp: Date.now()
           })
 
-          this.emitProgress(iteration, maxIterations, progressSteps.slice(-3), false)
+          this.emitProgress(iteration, maxIterations, progressSteps.slice(-3), false, conversationHistory)
         } catch (error) {
           toolCallStep.status = "error"
           toolCallStep.toolResult = {
@@ -548,7 +562,7 @@ export class WebMCPService extends EventEmitter {
             content: "",
             error: error instanceof Error ? error.message : String(error)
           }
-          this.emitProgress(iteration, maxIterations, progressSteps.slice(-3), false)
+          this.emitProgress(iteration, maxIterations, progressSteps.slice(-3), false, conversationHistory)
         }
 
         // Small delay between tool calls
@@ -571,8 +585,15 @@ export class WebMCPService extends EventEmitter {
     }
     progressSteps.push(completionStep)
 
+    // Add final assistant message to conversation history
+    conversationHistory.push({
+      role: "assistant",
+      content: finalContent,
+      timestamp: Date.now()
+    })
+
     // Emit final progress
-    this.emitProgress(iteration, maxIterations, progressSteps.slice(-3), true)
+    this.emitProgress(iteration, maxIterations, progressSteps.slice(-3), true, conversationHistory, finalContent)
 
     return {
       content: finalContent,
@@ -667,7 +688,20 @@ export class WebMCPService extends EventEmitter {
     return args
   }
 
-  private emitProgress(currentIteration: number, maxIterations: number, steps: AgentProgressStep[], isComplete: boolean) {
+  private emitProgress(
+    currentIteration: number,
+    maxIterations: number,
+    steps: AgentProgressStep[],
+    isComplete: boolean,
+    conversationHistory?: Array<{
+      role: "user" | "assistant" | "tool"
+      content: string
+      toolCalls?: Array<{ name: string; arguments: any }>
+      toolResults?: Array<{ success: boolean; content: string; error?: string }>
+      timestamp?: number
+    }>,
+    finalContent?: string
+  ) {
     if (!this.config.enableProgressUpdates || !this.progressCallback) return
 
     const update: AgentProgressUpdate = {
@@ -675,6 +709,8 @@ export class WebMCPService extends EventEmitter {
       maxIterations,
       steps,
       isComplete,
+      conversationHistory,
+      finalContent,
       timestamp: Date.now()
     }
 

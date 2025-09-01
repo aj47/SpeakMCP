@@ -1,4 +1,4 @@
-import type { CHAT_PROVIDER_ID, STT_PROVIDER_ID, TTS_PROVIDER_ID } from "."
+import type { CHAT_PROVIDER_ID, STT_PROVIDER_ID, TTS_PROVIDER_ID, OPENAI_COMPATIBLE_PRESET_ID } from "."
 
 export type RecordingHistoryItem = {
   id: string
@@ -196,6 +196,7 @@ export type Config = {
 
   openaiApiKey?: string
   openaiBaseUrl?: string
+  openaiCompatiblePreset?: OPENAI_COMPATIBLE_PRESET_ID
 
   groqApiKey?: string
   groqBaseUrl?: string

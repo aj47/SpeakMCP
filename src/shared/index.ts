@@ -134,3 +134,45 @@ export const GEMINI_TTS_MODELS = [
   { label: "Gemini 2.5 Flash TTS", value: "gemini-2.5-flash-preview-tts" },
   { label: "Gemini 2.5 Pro TTS", value: "gemini-2.5-pro-preview-tts" },
 ] as const
+
+// OpenAI Compatible Provider Presets
+export const OPENAI_COMPATIBLE_PRESETS = [
+  {
+    label: "OpenAI",
+    value: "openai",
+    description: "Official OpenAI API",
+    baseUrl: "https://api.openai.com/v1",
+  },
+  {
+    label: "Groq",
+    value: "groq",
+    description: "Groq's fast inference API",
+    baseUrl: "https://api.groq.com/openai/v1",
+  },
+  {
+    label: "OpenRouter",
+    value: "openrouter",
+    description: "Access to multiple AI models via OpenRouter",
+    baseUrl: "https://openrouter.ai/api/v1",
+  },
+  {
+    label: "Together AI",
+    value: "together",
+    description: "Together AI's inference platform",
+    baseUrl: "https://api.together.xyz/v1",
+  },
+  {
+    label: "Perplexity",
+    value: "perplexity",
+    description: "Perplexity's AI models",
+    baseUrl: "https://api.perplexity.ai",
+  },
+  {
+    label: "Custom",
+    value: "custom",
+    description: "Enter your own base URL",
+    baseUrl: "",
+  },
+] as const
+
+export type OPENAI_COMPATIBLE_PRESET_ID = (typeof OPENAI_COMPATIBLE_PRESETS)[number]["value"]

@@ -200,62 +200,54 @@ export const WebDebugApp: React.FC<WebDebugAppProps> = ({
     }
   }
 
-  const sendMessage = async (content: string, role: 'user' | 'assistant' | 'tool' = 'user') => {
+  // Agent request using production-compatible schema: { text: string, conversationId?: string }
+  const sendAgentRequest = async (text: string, maxIterations: number = 10) => {
     if (!currentSession) return
 
     try {
-      const response = await fetch(`${serverUrl}/api/sessions/${currentSession.id}/messages`, {
+      const response = await fetch(`${serverUrl}/api/sessions/${currentSession.id}/agent-request`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content, role })
+        body: JSON.stringify({
+          text,
+          conversationId: currentSession.id, // Include conversationId for production compatibility
+          maxIterations
+        })
       })
-      const message = await response.json()
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.message || 'Agent request failed')
+      }
+
+      const result = await response.json()
 
       // Refresh sessions to ensure UI is in sync
       await loadSessions()
 
-      return message
+      return result
     } catch (error) {
-      console.error('Failed to send message:', error)
+      console.error('Failed to send agent request:', error)
+      throw error
     }
   }
 
-  const simulateAgentMode = async (transcript: string) => {
+  const processAgentRequest = async (text: string) => {
     if (!currentSession) return
-
-    // Add user message first
-    await sendMessage(transcript, 'user')
 
     setAgentProgress(null)
     setActiveView('agent')
 
     try {
-      // Start the real MCP agent simulation
-      const response = await fetch(`${serverUrl}/api/mcp/simulate-agent`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          transcript,
-          maxIterations: mockConfig.mcpMaxIterations || 10
-        })
-      })
-
-      if (response.ok) {
-        const { result } = await response.json()
-        console.log('[WebDebugApp] Agent simulation result:', result)
-
-        // Add the agent's response to the conversation
-        if (result) {
-          await sendMessage(result, 'assistant')
-        }
-      } else {
-        const error = await response.json()
-        console.error('[WebDebugApp] Agent simulation failed:', error)
-        await sendMessage(`Agent simulation failed: ${error.message || 'Unknown error'}`, 'assistant')
-      }
+      // Process through agent pipeline - this handles both user message and agent response
+      const result = await sendAgentRequest(text, mockConfig.mcpMaxIterations || 10)
+      console.log('[WebDebugApp] Agent request result:', result)
     } catch (error) {
-      console.error('[WebDebugApp] Agent simulation error:', error)
-      await sendMessage(`Agent simulation error: ${error instanceof Error ? error.message : String(error)}`, 'assistant')
+      console.error('[WebDebugApp] Agent request error:', error)
+      // Error handling is now done in sendAgentRequest, which adds error messages to the session
+    } finally {
+      // Clear agent progress after completion
+      setTimeout(() => setAgentProgress(null), 2000)
     }
   }
 
@@ -470,12 +462,12 @@ export const WebDebugApp: React.FC<WebDebugAppProps> = ({
                                       const textarea = e.currentTarget.parentElement?.parentElement?.querySelector('textarea')
                                       const content = textarea?.value.trim()
                                       if (content) {
-                                        simulateAgentMode(content)
+                                        processAgentRequest(content)
                                         textarea.value = ''
                                       }
                                     }}
                                   >
-                                    Agent
+                                    Send to Agent
                                   </Button>
                                 </div>
                               </div>
@@ -533,7 +525,7 @@ export const WebDebugApp: React.FC<WebDebugAppProps> = ({
                               </p>
                               <div className="space-y-3">
                                 <Textarea
-                                  placeholder="Enter a request to simulate agent mode..."
+                                  placeholder="Enter a request for the agent..."
                                   rows={3}
                                   id="agent-input"
                                 />
@@ -542,12 +534,12 @@ export const WebDebugApp: React.FC<WebDebugAppProps> = ({
                                     const textarea = document.getElementById('agent-input') as HTMLTextAreaElement
                                     const content = textarea?.value.trim()
                                     if (content) {
-                                      simulateAgentMode(content)
+                                      processAgentRequest(content)
                                       textarea.value = ''
                                     }
                                   }}
                                 >
-                                  Simulate Agent Mode
+                                  Send to Agent
                                 </Button>
                               </div>
                             </div>

@@ -121,21 +121,64 @@ export class WebDebugServer {
       res.json(session)
     })
 
+    // Direct message posting is disabled - all messages must go through agent pipeline
     this.app.post('/api/sessions/:sessionId/messages', (req, res) => {
+      res.status(400).json({
+        error: 'Direct message posting is disabled in agent-only mode',
+        message: 'Use /api/sessions/:sessionId/agent-request endpoint instead'
+      })
+    })
+
+    // Agent-only message processing endpoint - matches production AgentRequest schema
+    this.app.post('/api/sessions/:sessionId/agent-request', async (req, res) => {
       const sessionId = req.params.sessionId
-      const { content, role = 'user' } = req.body
+      const { text, conversationId, maxIterations = 10 } = req.body
       const session = this.sessions.get(sessionId)
 
       if (!session) {
         return res.status(404).json({ error: 'Session not found' })
       }
 
-      const message = this.addMessage(session.id, content, role)
+      if (!text || typeof text !== 'string') {
+        return res.status(400).json({ error: 'Text is required and must be a string' })
+      }
 
-      // Emit to WebSocket clients
-      this.io.emit('message', { sessionId: session.id, message })
+      try {
+        // Add user message to session
+        const userMessage = this.addMessage(session.id, text, 'user')
+        this.io.emit('message', { sessionId: session.id, message: userMessage })
 
-      res.json(message)
+        // Set up progress callback to emit via WebSocket
+        this.webMCPService.setProgressCallback((update) => {
+          this.io.emit('agentProgress', update)
+        })
+
+        // Process through production-compatible agent pipeline
+        const result = await this.webMCPService.simulateAgentMode(text, maxIterations)
+
+        // Add agent response to session
+        const agentMessage = this.addMessage(session.id, result, 'assistant')
+        this.io.emit('message', { sessionId: session.id, message: agentMessage })
+
+        res.json({
+          userMessage,
+          agentMessage,
+          result
+        })
+      } catch (error) {
+        console.error('[WebDebugServer] Agent request failed:', error)
+        const errorMessage = this.addMessage(
+          session.id,
+          `Agent request failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          'assistant'
+        )
+        this.io.emit('message', { sessionId: session.id, message: errorMessage })
+
+        res.status(500).json({
+          error: 'Agent request failed',
+          message: error instanceof Error ? error.message : String(error)
+        })
+      }
     })
 
     this.app.post('/api/sessions/:sessionId/tool-calls', (req, res) => {
@@ -194,26 +237,12 @@ export class WebDebugServer {
       }
     })
 
+    // Legacy simulate-agent endpoint disabled - use session-based agent-request instead
     this.app.post('/api/mcp/simulate-agent', async (req, res) => {
-      try {
-        const { transcript, maxIterations = 10 } = req.body
-        if (!transcript) {
-          return res.status(400).json({ error: 'Transcript is required' })
-        }
-
-        // Set up progress callback to emit via WebSocket
-        this.webMCPService.setProgressCallback((update) => {
-          this.io.emit('agentProgress', update)
-        })
-
-        const result = await this.webMCPService.simulateAgentMode(transcript, maxIterations)
-        res.json({ result })
-      } catch (error) {
-        res.status(500).json({
-          error: 'Failed to simulate agent mode',
-          message: error instanceof Error ? error.message : String(error)
-        })
-      }
+      res.status(400).json({
+        error: 'Legacy simulate-agent endpoint is disabled',
+        message: 'Use /api/sessions/:sessionId/agent-request endpoint instead'
+      })
     })
 
     this.app.get('/api/mcp/config', (req, res) => {

@@ -20,7 +20,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@renderer/components/ui/dialog"
-import { ScrollArea } from "@renderer/components/ui/scroll-area"
 import {
   Select,
   SelectContent,
@@ -176,44 +175,41 @@ function ServerDialog({ server, onSave, onCancel }: ServerDialogProps) {
   }
 
   return (
-    <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
-      <DialogHeader className="flex-shrink-0">
+    <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+      <DialogHeader>
         <DialogTitle>{server ? "Edit Server" : "Add Server"}</DialogTitle>
         <DialogDescription>
           Add or configure an MCP server
         </DialogDescription>
       </DialogHeader>
 
-      {/* Tab Navigation - Fixed outside scroll area */}
-      <div className="flex space-x-1 mb-4 flex-shrink-0">
-        <Button
-          variant={activeTab === 'manual' ? 'default' : 'outline'}
-          onClick={() => setActiveTab('manual')}
-          className="flex-1"
-          size="sm"
-        >
-          Manual
-        </Button>
-        <Button
-          variant={activeTab === 'examples' ? 'default' : 'outline'}
-          onClick={() => setActiveTab('examples')}
-          className="flex-1"
-          size="sm"
-        >
-          Examples
-        </Button>
-        <Button
-          variant={activeTab === 'json' ? 'default' : 'outline'}
-          onClick={() => setActiveTab('json')}
-          className="flex-1"
-          size="sm"
-        >
-          JSON Import
-        </Button>
-      </div>
-
-      <ScrollArea className="flex-1 min-h-0">
-        <div className="space-y-4 pr-4">
+      <div className="w-full">
+        <div className="flex space-x-1 mb-4">
+          <Button
+            variant={activeTab === 'manual' ? 'default' : 'outline'}
+            onClick={() => setActiveTab('manual')}
+            className="flex-1"
+            size="sm"
+          >
+            Manual
+          </Button>
+          <Button
+            variant={activeTab === 'examples' ? 'default' : 'outline'}
+            onClick={() => setActiveTab('examples')}
+            className="flex-1"
+            size="sm"
+          >
+            Examples
+          </Button>
+          <Button
+            variant={activeTab === 'json' ? 'default' : 'outline'}
+            onClick={() => setActiveTab('json')}
+            className="flex-1"
+            size="sm"
+          >
+            JSON Import
+          </Button>
+        </div>
 
         {/* Manual Configuration Tab */}
         {activeTab === 'manual' && (
@@ -649,10 +645,9 @@ function ServerDialog({ server, onSave, onCancel }: ServerDialogProps) {
             </Button>
           </div>
         )}
-        </div>
-      </ScrollArea>
+      </div>
 
-      <DialogFooter className="flex-shrink-0">
+      <DialogFooter>
         <Button variant="outline" onClick={onCancel}>
           Cancel
         </Button>

@@ -93,7 +93,7 @@ async function fetchOpenAIModels(
       url,
       dataKeys: Object.keys(data),
       modelsCount: data.data?.length || 0,
-      firstFewModels: data.data?.slice(0, 3).map(m => ({ id: m.id, object: m.object })) || [],
+      firstFewModels: data.data?.slice(0, 3).map(m => ({ id: m.id, name: m.name || formatModelName(m.id) })) || [],
     },
   )
 
@@ -323,6 +323,9 @@ function formatModelName(modelId: string): string {
     "meta-llama/llama-3-8b-instruct": "Llama 3 8B Instruct",
 
     // Groq models
+    "moonshotai/kimi-k2-instruct": "Kimi K2 Instruct (Moonshot AI)",
+    "openai/gpt-oss-20b": "GPT-OSS 20B (OpenAI)",
+    "openai/gpt-oss-120b": "GPT-OSS 120B (OpenAI)",
     "gemma2-9b-it": "Gemma2 9B IT",
     "llama-3.3-70b-versatile": "Llama 3.3 70B Versatile",
     "llama-3.1-70b-versatile": "Llama 3.1 70B Versatile",
@@ -537,10 +540,13 @@ function getFallbackModels(providerId: string): ModelInfo[] {
           { id: "gpt-3.5-turbo", name: "GPT-3.5 Turbo" },
         ],
     groq: [
+      { id: "moonshotai/kimi-k2-instruct", name: "Kimi K2 Instruct (Moonshot AI)" },
       { id: "gemma2-9b-it", name: "Gemma2 9B IT" },
       { id: "llama-3.3-70b-versatile", name: "Llama 3.3 70B Versatile" },
       { id: "llama-3.1-70b-versatile", name: "Llama 3.1 70B Versatile" },
       { id: "mixtral-8x7b-32768", name: "Mixtral 8x7B" },
+      { id: "openai/gpt-oss-20b", name: "GPT-OSS 20B (OpenAI)" },
+      { id: "openai/gpt-oss-120b", name: "GPT-OSS 120B (OpenAI)" },
     ],
     gemini: [
       { id: "gemini-1.5-flash-002", name: "Gemini 1.5 Flash" },

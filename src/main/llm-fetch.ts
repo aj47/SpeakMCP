@@ -2,6 +2,73 @@ import { configStore } from "./config"
 import { MCPTool, LLMToolCallResponse } from "./mcp-service"
 import { diagnosticsService } from "./diagnostics"
 import { isDebugLLM, logLLM } from "./debug"
+import OpenAI from "openai"
+
+// Define the JSON schema for structured output
+const toolCallResponseSchema: OpenAI.ResponseFormatJSONSchema["json_schema"] = {
+  name: "LLMToolCallResponse",
+  description:
+    "Response format for LLM tool calls with optional tool execution and content",
+  schema: {
+    type: "object",
+    properties: {
+      toolCalls: {
+        type: "array",
+        description: "Array of tool calls to execute",
+        items: {
+          type: "object",
+          properties: {
+            name: {
+              type: "string",
+              description: "Name of the tool to call",
+            },
+            arguments: {
+              type: "object",
+              description: "Arguments to pass to the tool",
+              additionalProperties: true,
+            },
+          },
+          required: ["name", "arguments"],
+          additionalProperties: false,
+        },
+      },
+      content: {
+        type: "string",
+        description: "Text content of the response",
+      },
+      needsMoreWork: {
+        type: "boolean",
+        description: "Whether more work is needed after this response",
+      },
+    },
+    additionalProperties: false,
+  },
+  strict: true,
+}
+
+/**
+ * Check if a model is known to NOT support structured output with JSON schema
+ * We use a blacklist approach - try structured output for all models except known incompatible ones
+ */
+function isKnownIncompatibleWithStructuredOutput(model: string): boolean {
+  // Models that are known to not support JSON schema mode
+  const incompatibleModels: string[] = [
+    // Add specific models here that are known to fail with JSON schema
+    // For now, we'll try structured output with all models
+  ]
+
+  return incompatibleModels.some((incompatible: string) =>
+    model.toLowerCase().includes(incompatible.toLowerCase())
+  )
+}
+
+/**
+ * Check if we should attempt structured output for a model
+ * Returns true for all models except those known to be incompatible
+ */
+function shouldAttemptStructuredOutput(model: string): boolean {
+  return !isKnownIncompatibleWithStructuredOutput(model)
+}
 
 /**
  * Extracts the first JSON object from a given string.
@@ -259,7 +326,7 @@ function getModel(providerId: string, type: "mcp" | "transcript"): string {
         : config.transcriptPostProcessingOpenaiModel || "gpt-4o-mini"
     case "groq":
       return type === "mcp"
-        ? config.mcpToolsGroqModel || "llama-3.1-70b-versatile"
+        ? config.mcpToolsGroqModel || "llama-3.3-70b-versatile"
         : config.transcriptPostProcessingGroqModel || "llama-3.1-70b-versatile"
     case "gemini":
       return config.mcpToolsGeminiModel || "gemini-1.5-flash-002"
@@ -282,7 +349,9 @@ function supportsJsonMode(model: string, providerId: string): boolean {
     return (
       model.includes("llama") ||
       model.includes("mixtral") ||
-      model.includes("gemma")
+      model.includes("gemma") ||
+      model.includes("moonshotai/kimi-k2-instruct") ||
+      model.includes("openai/gpt-oss")
     )
   }
 
@@ -291,7 +360,92 @@ function supportsJsonMode(model: string, providerId: string): boolean {
 }
 
 /**
- * Make a fetch-based LLM call for OpenAI-compatible APIs
+ * Make a single API call attempt with specific response format
+ */
+async function makeAPICallAttempt(
+  baseURL: string,
+  apiKey: string,
+  requestBody: any,
+  estimatedTokens: number,
+): Promise<any> {
+  if (isDebugLLM()) {
+    logLLM("=== OPENAI API REQUEST ===")
+    logLLM("HTTP Request", {
+      url: `${baseURL}/chat/completions`,
+      model: requestBody.model,
+      messagesCount: requestBody.messages.length,
+      responseFormat: requestBody.response_format,
+      estimatedTokens,
+      totalPromptLength: requestBody.messages.reduce((sum, msg) => sum + msg.content.length, 0),
+      contextWarning: estimatedTokens > 8000 ? "WARNING: High token count, may exceed context limit" : null
+    })
+    logLLM("Request Body (truncated)", {
+      ...requestBody,
+      messages: requestBody.messages.map(msg => ({
+        role: msg.role,
+        content: msg.content.length > 200 ?
+          msg.content.substring(0, 200) + "... [" + msg.content.length + " chars]" :
+          msg.content
+      }))
+    })
+  }
+
+  const response = await fetch(`${baseURL}/chat/completions`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(requestBody),
+  })
+
+  if (!response.ok) {
+    const errorText = await response.text()
+
+    // Check if this is a structured output related error
+    const isStructuredOutputError = errorText.includes("json_schema") ||
+                                   errorText.includes("response_format") ||
+                                   errorText.includes("schema") ||
+                                   response.status === 400
+
+    if (isDebugLLM()) {
+      logLLM("=== HTTP ERROR ===")
+      logLLM("HTTP Error Details:", {
+        status: response.status,
+        statusText: response.statusText,
+        errorText,
+        isStructuredOutputError,
+        model: requestBody.model
+      })
+    }
+
+    const error = new Error(errorText)
+    ;(error as any).isStructuredOutputError = isStructuredOutputError
+    ;(error as any).status = response.status
+    throw error
+  }
+
+  const data = await response.json()
+
+  if (data.error) {
+    if (isDebugLLM()) {
+      logLLM("API Error", data.error)
+    }
+    const error = new Error(data.error.message)
+    ;(error as any).isStructuredOutputError = data.error.message?.includes("json_schema") ||
+                                             data.error.message?.includes("response_format")
+    throw error
+  }
+
+  if (isDebugLLM()) {
+    logLLM("HTTP Response", data)
+  }
+
+  return data
+}
+
+/**
+ * Make a fetch-based LLM call for OpenAI-compatible APIs with structured output fallback
  */
 async function makeOpenAICompatibleCall(
   messages: Array<{ role: string; content: string }>,
@@ -312,8 +466,9 @@ async function makeOpenAICompatibleCall(
   }
 
   const model = getModel(providerId, "mcp")
+  const estimatedTokens = Math.ceil(messages.reduce((sum, msg) => sum + msg.content.length, 0) / 4)
 
-  const requestBody: any = {
+  const baseRequestBody = {
     model,
     messages,
     temperature: 0,
@@ -321,105 +476,78 @@ async function makeOpenAICompatibleCall(
     seed: 1,
   }
 
-  // Add structured output for supported models
-  if (useStructuredOutput && supportsJsonMode(model, providerId)) {
-    requestBody.response_format = { type: "json_object" }
+  if (!useStructuredOutput) {
+    // No structured output requested, make simple call
+    return apiCallWithRetry(async () => {
+      return makeAPICallAttempt(baseURL, apiKey, baseRequestBody, estimatedTokens)
+    }, config.apiRetryCount, config.apiRetryBaseDelay, config.apiRetryMaxDelay)
   }
 
-  // Estimate tokens (rough approximation: 4 chars per token)
-    const estimatedTokens = Math.ceil(messages.reduce((sum, msg) => sum + msg.content.length, 0) / 4);
-
-    return apiCallWithRetry(async () => {
-    if (isDebugLLM()) {
-      logLLM("=== OPENAI API REQUEST ===")
-      logLLM("HTTP Request", {
-        url: `${baseURL}/chat/completions`,
-        model,
-        messagesCount: messages.length,
-        useStructuredOutput,
-        estimatedTokens,
-        totalPromptLength: messages.reduce((sum, msg) => sum + msg.content.length, 0),
-        contextWarning: estimatedTokens > 8000 ? "WARNING: High token count, may exceed context limit" : null
-      })
-      logLLM("Request Body (truncated)", {
-        ...requestBody,
-        messages: requestBody.messages.map(msg => ({
-          role: msg.role,
-          content: msg.content.length > 200 ?
-            msg.content.substring(0, 200) + "... [" + msg.content.length + " chars]" :
-            msg.content
-        }))
-      })
-    }
-    const response = await fetch(`${baseURL}/chat/completions`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(requestBody),
-    })
-
-    if (!response.ok) {
-      const errorText = await response.text()
-
-      // Extract Retry-After header for rate limiting
-      let retryAfter: number | undefined
-      const retryAfterHeader = response.headers.get('retry-after')
-      if (retryAfterHeader) {
-        const parsed = parseInt(retryAfterHeader, 10)
-        if (!isNaN(parsed)) {
-          retryAfter = parsed
-        }
-      }
-
-      if (isDebugLLM()) {
-        logLLM("=== HTTP ERROR ===")
-        logLLM("HTTP Error Details:", {
-          status: response.status,
-          statusText: response.statusText,
-          errorText,
-          retryAfter,
-          estimatedTokens,
-          model: requestBody.model
-        })
-
-        // Parse error for context length specifically
-        try {
-          const errorJson = JSON.parse(errorText);
-          if (errorJson.error?.code === "context_length_exceeded") {
-            logLLM("CONTEXT LENGTH ERROR DETECTED", {
-              message: errorJson.error.message,
-              suggestedActions: [
-                "Reduce conversation history",
-                "Use a model with larger context",
-                "Split the request into smaller chunks"
-              ]
-            })
+  // Try structured output with fallback
+  return apiCallWithRetry(async () => {
+    // First attempt: JSON Schema mode (if model should support it)
+    if (shouldAttemptStructuredOutput(model)) {
+      try {
+        const requestBodyWithSchema = {
+          ...baseRequestBody,
+          response_format: {
+            type: "json_schema",
+            json_schema: toolCallResponseSchema,
           }
-        } catch (e) {
-          // Keep original error if not JSON
+        }
+
+        if (isDebugLLM()) {
+          logLLM("Attempting JSON Schema mode for model:", model)
+        }
+
+        return await makeAPICallAttempt(baseURL, apiKey, requestBodyWithSchema, estimatedTokens)
+      } catch (error: any) {
+        if (error.isStructuredOutputError) {
+          if (isDebugLLM()) {
+            logLLM("JSON Schema mode failed for model", model, "- falling back to JSON Object mode:", error.message)
+          }
+          // Fall through to JSON Object mode
+        } else {
+          // Non-structured-output error, re-throw
+          throw error
         }
       }
-
-      throw new HttpError(response.status, response.statusText, errorText, retryAfter)
     }
 
-    const data = await response.json()
+    // Second attempt: JSON Object mode (if model supports it)
+    if (supportsJsonMode(model, providerId)) {
+      try {
+        const requestBodyWithJson = {
+          ...baseRequestBody,
+          response_format: { type: "json_object" }
+        }
 
-    if (data.error) {
-      if (isDebugLLM()) {
-        logLLM("API Error", data.error)
+        if (isDebugLLM()) {
+          logLLM("Attempting JSON Object mode for model:", model)
+        }
+
+        return await makeAPICallAttempt(baseURL, apiKey, requestBodyWithJson, estimatedTokens)
+      } catch (error: any) {
+        if (error.isStructuredOutputError) {
+          if (isDebugLLM()) {
+            logLLM("JSON Object mode failed for model", model, "- falling back to plain text:", error.message)
+          }
+          // Fall through to plain text
+        } else {
+          // Non-structured-output error, re-throw
+          throw error
+        }
       }
-      throw new Error(data.error.message)
     }
 
+    // Final attempt: Plain text mode
     if (isDebugLLM()) {
-      logLLM("HTTP Response", data)
+      logLLM("Using plain text mode for model:", model)
     }
 
-    return data
+    return await makeAPICallAttempt(baseURL, apiKey, baseRequestBody, estimatedTokens)
   }, config.apiRetryCount, config.apiRetryBaseDelay, config.apiRetryMaxDelay)
+
 }
 
 /**

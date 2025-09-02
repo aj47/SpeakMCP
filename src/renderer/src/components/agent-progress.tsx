@@ -4,6 +4,7 @@ import { AgentProgressUpdate } from "../../../shared/types"
 import { ChevronDown, ChevronUp, ChevronRight, ExternalLink } from "lucide-react"
 import { MarkdownRenderer } from "@renderer/components/markdown-renderer"
 import { Button } from "./ui/button"
+import { Badge } from "./ui/badge"
 import { tipcClient } from "@renderer/lib/tipc-client"
 import { useConversation } from "@renderer/contexts/conversation-context"
 import { AudioPlayer } from "@renderer/components/audio-player"
@@ -150,15 +151,82 @@ const CompactMessage: React.FC<{
             <MarkdownRenderer content={message.content.trim()} />
           </div>
           {hasExtras && isExpanded && (
-            <div className="mt-1 space-y-1 text-left">
-              {message.toolCalls && (
-                <div className="text-xs opacity-70">
-                  Tools: {message.toolCalls.map(c => c.name).join(", ")}
+            <div className="mt-2 space-y-2 text-left">
+              {message.toolCalls && message.toolCalls.length > 0 && (
+                <div className="space-y-2">
+                  <div className="text-xs font-semibold opacity-70">Tool Calls ({message.toolCalls.length}):</div>
+                  {message.toolCalls.map((toolCall, index) => (
+                    <div
+                      key={index}
+                      className="rounded-lg border border-border/30 bg-muted/20 p-2 text-xs"
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-mono font-semibold text-primary">
+                          {toolCall.name}
+                        </span>
+                        <Badge variant="outline" className="text-xs">
+                          Tool {index + 1}
+                        </Badge>
+                      </div>
+                      {toolCall.arguments && (
+                        <div>
+                          <div className="mb-1 text-xs font-medium opacity-70">
+                            Parameters:
+                          </div>
+                          <pre className="rounded bg-muted/50 p-2 overflow-x-auto text-xs whitespace-pre-wrap">
+                            {JSON.stringify(toolCall.arguments, null, 2)}
+                          </pre>
+                        </div>
+                      )}
+                    </div>
+                  ))}
                 </div>
               )}
-              {message.toolResults && (
-                <div className="text-xs opacity-70">
-                  Results: {message.toolResults.length}
+              {message.toolResults && message.toolResults.length > 0 && (
+                <div className="space-y-2">
+                  <div className="text-xs font-semibold opacity-70">Tool Results ({message.toolResults.length}):</div>
+                  {message.toolResults.map((result, index) => (
+                    <div
+                      key={index}
+                      className={cn(
+                        "rounded-lg border p-2 text-xs",
+                        result.success
+                          ? "border-green-200/50 bg-green-50/30 text-green-700 dark:border-green-800/50 dark:bg-green-900/20 dark:text-green-300"
+                          : "border-red-200/50 bg-red-50/30 text-red-700 dark:border-red-800/50 dark:bg-red-900/20 dark:text-red-300",
+                      )}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-semibold">
+                          {result.success ? "✅ Success" : "❌ Error"}
+                        </span>
+                        <Badge variant="outline" className="text-xs">
+                          Result {index + 1}
+                        </Badge>
+                      </div>
+
+                      <div className="space-y-2">
+                        <div>
+                          <div className="text-xs font-medium opacity-70 mb-1">
+                            Content:
+                          </div>
+                          <pre className="rounded bg-muted/30 p-2 overflow-x-auto text-xs whitespace-pre-wrap break-all">
+                            {result.content || "No content returned"}
+                          </pre>
+                        </div>
+
+                        {result.error && (
+                          <div>
+                            <div className="text-xs font-medium text-destructive mb-1">
+                              Error Details:
+                            </div>
+                            <pre className="rounded bg-destructive/10 p-2 overflow-x-auto text-xs whitespace-pre-wrap break-all">
+                              {result.error}
+                            </pre>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>

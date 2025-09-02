@@ -162,27 +162,32 @@ function getModel(
   }
 
   return chatProviderId === "groq"
-    ? config.mcpToolsGroqModel || "gemma2-9b-it"
+    ? config.mcpToolsGroqModel || "llama-3.3-70b-versatile"
     : config.mcpToolsOpenaiModel || "gpt-4o-mini"
 }
 
 /**
- * Check if the model supports structured output
+ * Check if a model is known to NOT support structured output with JSON schema
+ * We use a blacklist approach - try structured output for all models except known incompatible ones
  */
-function supportsStructuredOutput(model: string): boolean {
-  // Models that support structured output
-  const supportedModels = [
-    "gpt-4o-mini-2024-07-18",
-    "gpt-4o-2024-08-06",
-    "gpt-4o-mini",
-    "gpt-4o",
-    "o1-2024-12-17",
-    "o3-mini-2025-1-31",
+function isKnownIncompatibleWithStructuredOutput(model: string): boolean {
+  // Models that are known to not support JSON schema mode
+  const incompatibleModels: string[] = [
+    // Add specific models here that are known to fail with JSON schema
+    // For now, we'll try structured output with all models
   ]
 
-  return supportedModels.some((supported) =>
-    model.includes(supported.split("-")[0]),
+  return incompatibleModels.some((incompatible: string) =>
+    model.toLowerCase().includes(incompatible.toLowerCase())
   )
+}
+
+/**
+ * Check if we should attempt structured output for a model
+ * Returns true for all models except those known to be incompatible
+ */
+function shouldAttemptStructuredOutput(model: string): boolean {
+  return !isKnownIncompatibleWithStructuredOutput(model)
 }
 
 /**
@@ -204,17 +209,48 @@ export async function makeStructuredToolCall(
   const client = createOpenAIClient(providerId)
 
   try {
-    if (supportsStructuredOutput(model)) {
-      const response = await client.chat.completions.create({
+    // Try structured output for all models with fallback
+    let response: OpenAI.Chat.Completions.ChatCompletion | null = null
+
+    // First attempt: JSON Schema mode (for all models)
+    if (shouldAttemptStructuredOutput(model)) {
+      try {
+        response = await client.chat.completions.create({
+          model,
+          messages:
+            messages as OpenAI.Chat.Completions.ChatCompletionMessageParam[],
+          temperature: 0,
+          response_format: {
+            type: "json_schema",
+            json_schema: toolCallResponseSchema,
+          },
+        })
+      } catch (error: any) {
+        // Check if this is a structured output related error
+        const isStructuredOutputError = error.message?.includes("json_schema") ||
+                                       error.message?.includes("response_format") ||
+                                       error.message?.includes("schema") ||
+                                       error.status === 400
+
+        if (isStructuredOutputError) {
+          console.log("JSON Schema mode failed, falling back to regular completion:", error.message)
+          // Fall through to regular completion
+        } else {
+          // Non-structured-output error, re-throw
+          throw error
+        }
+      }
+    }
+
+    // If structured output failed or wasn't attempted, try regular completion
+    if (!response) {
+      response = await client.chat.completions.create({
         model,
         messages:
           messages as OpenAI.Chat.Completions.ChatCompletionMessageParam[],
         temperature: 0,
-        response_format: {
-          type: "json_schema",
-          json_schema: toolCallResponseSchema,
-        },
       })
+    }
 
       const content = response.choices[0]?.message.content
       if (content) {
@@ -246,43 +282,6 @@ export async function makeStructuredToolCall(
           }
         }
       }
-    }
-
-    // Fallback to regular completion for unsupported models
-
-    const response = await client.chat.completions.create({
-      model,
-      messages:
-        messages as OpenAI.Chat.Completions.ChatCompletionMessageParam[],
-      temperature: 0,
-    })
-
-    const content = response.choices[0]?.message.content?.trim()
-    if (content) {
-      try {
-        // Clean up malformed responses with various formatting issues
-        let cleanContent = content
-
-        // Remove common LLM formatting artifacts
-        cleanContent = cleanContent
-          .replace(/<\|[^|]*\|>/g, '') // Remove special tokens
-          .replace(/```json\s*/g, '') // Remove code block markers
-          .replace(/```\s*/g, '')
-          .replace(/^\s*[\w\s]*:\s*/, '') // Remove leading text
-          .trim()
-
-        // Try to extract JSON object if embedded in text
-        const jsonMatch = cleanContent.match(/\{[\s\S]*\}/)
-        if (jsonMatch) {
-          cleanContent = jsonMatch[0]
-        }
-
-        const parsed = JSON.parse(cleanContent)
-        return LLMToolCallSchema.parse(parsed)
-      } catch (parseError) {
-        return { content, needsMoreWork: true }
-      }
-    }
 
     throw new Error("No response content received")
   } catch (error) {
@@ -304,14 +303,57 @@ export async function makeStructuredContextExtraction(
   const client = createOpenAIClient(providerId)
 
   try {
-    if (supportsStructuredOutput(model)) {
-      const response = await client.chat.completions.create({
+    // Try structured output for all models with fallback
+    let response: OpenAI.Chat.Completions.ChatCompletion | null = null
+
+    // First attempt: JSON Schema mode (for all models)
+    if (shouldAttemptStructuredOutput(model)) {
+      try {
+        response = await client.chat.completions.create({
+          model,
+          messages: [
+            {
+              role: "system",
+              content:
+                "You are a context extraction assistant. Analyze conversation history and extract useful resource identifiers and context information.",
+            },
+            {
+              role: "user",
+              content: prompt,
+            },
+          ],
+          temperature: 0,
+          response_format: {
+            type: "json_schema",
+            json_schema: contextExtractionSchema,
+          },
+        })
+      } catch (error: any) {
+        // Check if this is a structured output related error
+        const isStructuredOutputError = error.message?.includes("json_schema") ||
+                                       error.message?.includes("response_format") ||
+                                       error.message?.includes("schema") ||
+                                       error.status === 400
+
+        if (isStructuredOutputError) {
+          console.log("JSON Schema mode failed for context extraction, falling back to regular completion:", error.message)
+          // Fall through to regular completion
+        } else {
+          // Non-structured-output error, re-throw
+          throw error
+        }
+      }
+    }
+
+    // If structured output failed or wasn't attempted, try regular completion
+    if (!response) {
+      response = await client.chat.completions.create({
         model,
         messages: [
           {
             role: "system",
             content:
-              "You are a context extraction assistant. Analyze conversation history and extract useful resource identifiers and context information.",
+              "You are a context extraction assistant. Always respond with valid JSON only.",
           },
           {
             role: "user",
@@ -319,47 +361,15 @@ export async function makeStructuredContextExtraction(
           },
         ],
         temperature: 0,
-        response_format: {
-          type: "json_schema",
-          json_schema: contextExtractionSchema,
-        },
       })
-
-      const content = response.choices[0]?.message.content
-      if (content) {
-        try {
-          const parsed = JSON.parse(content)
-          return ContextExtractionSchema.parse(parsed)
-        } catch (parseError) {}
-      }
     }
 
-    // Fallback for unsupported models
-
-    const response = await client.chat.completions.create({
-      model,
-      messages: [
-        {
-          role: "system",
-          content:
-            "You are a context extraction assistant. Always respond with valid JSON only.",
-        },
-        {
-          role: "user",
-          content: prompt,
-        },
-      ],
-      temperature: 0,
-    })
-
-    const content = response.choices[0]?.message.content?.trim()
+    const content = response.choices[0]?.message.content
     if (content) {
       try {
         const parsed = JSON.parse(content)
         return ContextExtractionSchema.parse(parsed)
-      } catch (parseError) {
-        return { contextSummary: "", resources: [] }
-      }
+      } catch (parseError) {}
     }
 
     return { contextSummary: "", resources: [] }

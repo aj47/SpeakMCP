@@ -1124,7 +1124,6 @@ Please try alternative approaches, break down the task into smaller steps, or pr
             content: finalContent,
           })
         } catch (error) {
-        } catch (error) {
           // If summary generation fails, fall back to the original content
           console.warn("Failed to generate summary:", error)
           finalContent = lastAssistantContent || "Task completed successfully."
@@ -1135,11 +1134,6 @@ Please try alternative approaches, break down the task into smaller steps, or pr
             role: "assistant",
             content: finalContent,
           })
-        }
-          console.warn("Failed to generate summary:", error)
-          finalContent = lastAssistantContent || "Task completed successfully."
-          summaryStep.status = "error"
-          summaryStep.description = "Failed to generate summary, using fallback"
         }
       } else {
         // Agent provided sufficient content, use it as final content

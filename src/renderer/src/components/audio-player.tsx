@@ -49,9 +49,12 @@ export function AudioPlayer({
       setHasAudio(true)
       setHasAutoPlayed(false) // Reset auto-play flag for new audio
 
-      // Create audio element
+      // Create audio element and reset playing state
       if (audioRef.current) {
         audioRef.current.src = audioUrlRef.current
+        // Reset playing state when new audio is loaded
+        setIsPlaying(false)
+        setCurrentTime(0)
       }
     }
 
@@ -62,10 +65,10 @@ export function AudioPlayer({
     }
   }, [audioData])
 
-  // Audio event handlers
+  // Audio event handlers - set up whenever audio element or hasAudio changes
   useEffect(() => {
     const audio = audioRef.current
-    if (!audio) return
+    if (!audio || !hasAudio) return
 
     const handleLoadedMetadata = () => {
       setDuration(audio.duration)
@@ -89,15 +92,24 @@ export function AudioPlayer({
     }
 
     const handleError = (event: Event) => {
-      // Audio error occurred
+      console.error("[AudioPlayer] Audio error:", event)
+      setIsPlaying(false)
     }
 
+    // Add event listeners
     audio.addEventListener("loadedmetadata", handleLoadedMetadata)
     audio.addEventListener("timeupdate", handleTimeUpdate)
     audio.addEventListener("ended", handleEnded)
     audio.addEventListener("play", handlePlay)
     audio.addEventListener("pause", handlePause)
     audio.addEventListener("error", handleError)
+
+    // Sync initial state with audio element
+    if (audio.src && !audio.paused) {
+      setIsPlaying(true)
+    } else {
+      setIsPlaying(false)
+    }
 
     return () => {
       audio.removeEventListener("loadedmetadata", handleLoadedMetadata)
@@ -107,7 +119,7 @@ export function AudioPlayer({
       audio.removeEventListener("pause", handlePause)
       audio.removeEventListener("error", handleError)
     }
-  }, [hasAudio])
+  }, [hasAudio, audioData]) // Include audioData to ensure listeners are reset when new audio loads
 
   // Auto-play effect
   useEffect(() => {
@@ -125,6 +137,7 @@ export function AudioPlayer({
       try {
         const generatedAudio = await onGenerateAudio()
         // audioData will be updated via props, which will trigger useEffect
+        return
       } catch (error) {
         // Error handling is done in the parent component
         return
@@ -135,12 +148,15 @@ export function AudioPlayer({
       try {
         if (isPlaying) {
           audioRef.current.pause()
+          // State will be updated by the 'pause' event listener
         } else {
           await audioRef.current.play()
+          // State will be updated by the 'play' event listener
         }
       } catch (playError) {
-        // Audio playback failed, but we don't need to show an error
-        // as the text is still available as fallback
+        console.error("[AudioPlayer] Playback failed:", playError)
+        // Reset state on playback failure
+        setIsPlaying(false)
       }
     }
   }

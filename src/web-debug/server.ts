@@ -6,6 +6,8 @@ import cors from 'cors'
 import { fileURLToPath } from 'url'
 import { dirname } from 'path'
 import { WebMCPService } from './web-mcp-service'
+import { logger } from './utils/logger'
+import { webDebugConfig, WebDebugConfig } from './config'
 
 // Types for web debugging
 export interface WebDebugSession {
@@ -47,13 +49,7 @@ export interface WebDebugToolResult {
   timestamp: number
 }
 
-export interface WebDebugConfig {
-  port: number
-  host: string
-  enableMockTools: boolean
-  mockDelay: number
-  logLevel: 'debug' | 'info' | 'warn' | 'error'
-}
+// WebDebugConfig is now imported from ./config
 
 export class WebDebugServer {
   private app: express.Application
@@ -65,11 +61,7 @@ export class WebDebugServer {
 
   constructor(config: Partial<WebDebugConfig> = {}) {
     this.config = {
-      port: 3001,
-      host: 'localhost',
-      enableMockTools: true,
-      mockDelay: 1000,
-      logLevel: 'info',
+      ...webDebugConfig,
       ...config
     }
 
@@ -166,7 +158,7 @@ export class WebDebugServer {
           result
         })
       } catch (error) {
-        console.error('[WebDebugServer] Agent request failed:', error)
+        logger.error('agent', 'Agent request failed', { sessionId: session.id, error })
         const errorMessage = this.addMessage(
           session.id,
           `Agent request failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
@@ -271,20 +263,26 @@ export class WebDebugServer {
 
   private setupWebSocket() {
     this.io.on('connection', (socket) => {
-      this.log('info', `Client connected: ${socket.id}`)
+      logger.info('network', `Client connected: ${socket.id}`, { data: { socketId: socket.id } })
 
       socket.on('joinSession', (sessionId: string) => {
         socket.join(sessionId)
-        this.log('debug', `Client ${socket.id} joined session ${sessionId}`)
+        logger.debug('network', `Client ${socket.id} joined session ${sessionId}`, {
+          sessionId,
+          data: { socketId: socket.id }
+        })
       })
 
       socket.on('leaveSession', (sessionId: string) => {
         socket.leave(sessionId)
-        this.log('debug', `Client ${socket.id} left session ${sessionId}`)
+        logger.debug('network', `Client ${socket.id} left session ${sessionId}`, {
+          sessionId,
+          data: { socketId: socket.id }
+        })
       })
 
       socket.on('disconnect', () => {
-        this.log('info', `Client disconnected: ${socket.id}`)
+        logger.info('network', `Client disconnected: ${socket.id}`, { data: { socketId: socket.id } })
       })
     })
   }
@@ -309,7 +307,7 @@ export class WebDebugServer {
     // Emit to WebSocket clients
     this.io.emit('sessionCreated', session)
 
-    this.log('info', `Created session: ${id} (${name})`)
+    logger.info('session', `Created session: ${id} (${name})`, { sessionId: id, data: { name } })
     return session
   }
 
@@ -328,7 +326,11 @@ export class WebDebugServer {
     }
 
     session.messages.push(message)
-    this.log('debug', `Added message to session ${sessionId}: ${role} - ${content.substring(0, 50)}...`)
+    logger.debug('session', `Added message to session ${sessionId}: ${role}`, {
+      sessionId,
+      messageId: message.id,
+      data: { role, contentPreview: content.substring(0, 50) + '...' }
+    })
 
     return message
   }
@@ -359,7 +361,11 @@ export class WebDebugServer {
       this.simulateToolExecution(toolCall)
     }
 
-    this.log('info', `Executing tool call: ${name} in session ${sessionId}`)
+    logger.info('tool-call', `Executing tool call: ${name} in session ${sessionId}`, {
+      sessionId,
+      toolCallId: toolCall.id,
+      data: { toolName: name, args }
+    })
     return toolCall
   }
 
@@ -392,7 +398,11 @@ export class WebDebugServer {
     this.io.to(toolCall.sessionId).emit('toolCallUpdate', toolCall)
     this.io.to(toolCall.sessionId).emit('toolResult', result)
 
-    this.log('debug', `Tool call ${toolCall.id} completed with status: ${toolCall.status}`)
+    logger.debug('tool-call', `Tool call ${toolCall.id} completed with status: ${toolCall.status}`, {
+      sessionId: toolCall.sessionId,
+      toolCallId: toolCall.id,
+      data: { status: toolCall.status }
+    })
   }
 
   private generateMockToolResult(toolName: string, args: any): string {
@@ -409,30 +419,23 @@ export class WebDebugServer {
     return generator()
   }
 
-  private log(level: string, message: string) {
-    const levels = ['debug', 'info', 'warn', 'error']
-    const currentLevelIndex = levels.indexOf(this.config.logLevel)
-    const messageLevelIndex = levels.indexOf(level)
-
-    if (messageLevelIndex >= currentLevelIndex) {
-      const timestamp = new Date().toISOString()
-      console.log(`[${timestamp}] [WEB-DEBUG] [${level.toUpperCase()}] ${message}`)
-    }
-  }
+  // Removed custom log method - now using centralized logger
 
   public async start(): Promise<void> {
     // Initialize WebMCPService first
     try {
       await this.webMCPService.initialize()
-      this.log('info', 'WebMCPService initialized successfully')
+      logger.info('mcp-client', 'WebMCPService initialized successfully')
     } catch (error) {
-      this.log('warn', `WebMCPService initialization failed: ${error instanceof Error ? error.message : String(error)}`)
-      this.log('info', 'Continuing with mock MCP service fallback')
+      logger.warn('mcp-client', `WebMCPService initialization failed: ${error instanceof Error ? error.message : String(error)}`, { error })
+      logger.info('mcp-client', 'Continuing with mock MCP service fallback')
     }
 
     return new Promise((resolve) => {
       this.server.listen(this.config.port, this.config.host, () => {
-        this.log('info', `Web debugging server started on http://${this.config.host}:${this.config.port}`)
+        logger.info('network', `Web debugging server started on http://${this.config.host}:${this.config.port}`, {
+          data: { host: this.config.host, port: this.config.port }
+        })
         resolve()
       })
     })
@@ -442,14 +445,14 @@ export class WebDebugServer {
     // Shutdown WebMCPService first
     try {
       await this.webMCPService.shutdown()
-      this.log('info', 'WebMCPService shutdown complete')
+      logger.info('mcp-client', 'WebMCPService shutdown complete')
     } catch (error) {
-      this.log('warn', `WebMCPService shutdown error: ${error instanceof Error ? error.message : String(error)}`)
+      logger.warn('mcp-client', `WebMCPService shutdown error: ${error instanceof Error ? error.message : String(error)}`, { error })
     }
 
     return new Promise((resolve) => {
       this.server.close(() => {
-        this.log('info', 'Web debugging server stopped')
+        logger.info('network', 'Web debugging server stopped')
         resolve()
       })
     })

@@ -16,6 +16,7 @@ import { promisify } from "util"
 import { access, constants } from "fs"
 import path from "path"
 import os from "os"
+import { logger } from './utils/logger'
 
 const accessAsync = promisify(access)
 
@@ -78,14 +79,14 @@ export class WebMCPService extends EventEmitter {
 
     const mcpConfig = this.config.mcpConfig
 
-    console.log('[WebMCPService] MCP Service initialization starting')
+    logger.info('mcp-client', 'MCP Service initialization starting')
 
     if (
       !mcpConfig ||
       !mcpConfig.mcpServers ||
       Object.keys(mcpConfig.mcpServers).length === 0
     ) {
-      console.log('[WebMCPService] MCP Service initialization complete - no servers configured')
+      logger.info('mcp-client', 'MCP Service initialization complete - no servers configured')
       this.availableTools = []
       this.isInitializing = false
       this.hasBeenInitialized = true
@@ -101,18 +102,25 @@ export class WebMCPService extends EventEmitter {
       ([, serverConfig]) => !serverConfig.disabled
     )
 
-    console.log(`[WebMCPService] Initializing ${serversToInitialize.length} servers`)
+    logger.info('mcp-client', `Initializing ${serversToInitialize.length} servers`)
 
     // Initialize servers
     for (const [serverName, serverConfig] of serversToInitialize) {
-      console.log(`[WebMCPService] Starting initialization of server: ${serverName}`)
+      logger.info('mcp-client', `Starting initialization of server: ${serverName}`, {
+        data: { serverName }
+      })
 
       try {
         await this.initializeServer(serverName, serverConfig as MCPServerConfig)
         this.initializedServers.add(serverName)
-        console.log(`[WebMCPService] Successfully initialized server: ${serverName}`)
+        logger.info('mcp-client', `Successfully initialized server: ${serverName}`, {
+          data: { serverName }
+        })
       } catch (error) {
-        console.warn(`[WebMCPService] Failed to initialize server: ${serverName}`, error)
+        logger.warn('mcp-client', `Failed to initialize server: ${serverName}`, {
+          data: { serverName },
+          error
+        })
         // Continue with other servers
       }
     }
@@ -120,14 +128,19 @@ export class WebMCPService extends EventEmitter {
     this.isInitializing = false
     this.hasBeenInitialized = true
 
-    console.log(`[WebMCPService] MCP Service initialization complete. Total tools available: ${this.availableTools.length}`)
+    logger.info('mcp-client', `MCP Service initialization complete. Total tools available: ${this.availableTools.length}`, {
+      data: { toolCount: this.availableTools.length }
+    })
   }
 
   private async initializeServer(
     serverName: string,
     serverConfig: MCPServerConfig,
   ): Promise<void> {
-    console.log(`[WebMCPService] Initializing server: ${serverName}`)
+    const logMCPOp = logger.logMCPOperation(`initialize-server-${serverName}`, serverName)
+    logger.debug('mcp-client', `Initializing server: ${serverName}`, {
+      data: { serverName, serverConfig }
+    })
 
     try {
       // Create transport based on configuration
@@ -171,7 +184,9 @@ export class WebMCPService extends EventEmitter {
 
       // List available tools
       const toolsResult = await client.listTools()
-      console.log(`[WebMCPService] Server ${serverName} provides ${toolsResult.tools.length} tools`)
+      logger.info('mcp-client', `Server ${serverName} provides ${toolsResult.tools.length} tools`, {
+        data: { serverName, toolCount: toolsResult.tools.length }
+      })
 
       // Add tools to our registry with server prefix
       for (const tool of toolsResult.tools) {
@@ -180,13 +195,21 @@ export class WebMCPService extends EventEmitter {
           description: tool.description || `Tool from ${serverName} server`,
           inputSchema: tool.inputSchema,
         })
+        logger.debug('mcp-client', `Registered tool: ${serverName}:${tool.name}`, {
+          data: { serverName, toolName: tool.name }
+        })
       }
 
       // Store references
       this.transports.set(serverName, transport)
       this.clients.set(serverName, client)
+      logMCPOp() // Complete the operation timing
     } catch (error) {
-      console.error(`[WebMCPService] Failed to initialize server ${serverName}:`, error)
+      logMCPOp() // Complete the operation timing even on error
+      logger.error('mcp-client', `Failed to initialize server ${serverName}`, {
+        data: { serverName },
+        error
+      })
       throw error
     }
   }
@@ -279,9 +302,12 @@ export class WebMCPService extends EventEmitter {
   }
 
   public async executeToolCall(toolCall: MCPToolCall): Promise<MCPToolResult> {
-    console.log('[WebMCPService] Executing tool call:', {
-      name: toolCall.name,
-      arguments: toolCall.arguments,
+    const toolCallId = `tool_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    const logToolCall = logger.logToolCall(toolCall.name, toolCall.arguments, undefined, toolCallId)
+
+    logger.info('tool-call', `Executing tool call: ${toolCall.name}`, {
+      toolCallId,
+      data: { name: toolCall.name, arguments: toolCall.arguments }
     })
 
     // Check if this is a server-prefixed tool
@@ -349,10 +375,9 @@ export class WebMCPService extends EventEmitter {
     }
 
     try {
-      console.log('[WebMCPService] Executing server tool:', {
-        serverName,
-        toolName,
-        arguments: toolArguments,
+      logger.debug('tool-call', `Executing server tool: ${serverName}:${toolName}`, {
+        toolCallId,
+        data: { serverName, toolName, arguments: toolArguments }
       })
 
       const result = await client.callTool({
@@ -360,14 +385,24 @@ export class WebMCPService extends EventEmitter {
         arguments: toolArguments,
       })
 
-      console.log('[WebMCPService] Tool result:', { serverName, toolName, result })
+      logger.debug('tool-call', `Tool result received: ${serverName}:${toolName}`, {
+        toolCallId,
+        data: { serverName, toolName, resultType: result.content?.[0]?.type }
+      })
+
+      logToolCall() // Complete the tool call timing
 
       return {
         content: result.content || [{ type: "text", text: "No content returned" }],
         isError: result.isError || false,
       }
     } catch (error) {
-      console.error(`[WebMCPService] Tool execution failed:`, error)
+      logToolCall() // Complete the tool call timing even on error
+      logger.error('tool-call', `Tool execution failed: ${serverName}:${toolName}`, {
+        toolCallId,
+        data: { serverName, toolName },
+        error
+      })
       return {
         content: [
           {
@@ -385,7 +420,7 @@ export class WebMCPService extends EventEmitter {
     try {
       return await this.executeToolCall(toolCall)
     } catch (error) {
-      console.error('[WebMCPService] Tool call failed:', error)
+      logger.error('tool-call', 'Legacy tool call failed', { error })
       return {
         content: [{
           type: 'text',
@@ -397,17 +432,25 @@ export class WebMCPService extends EventEmitter {
   }
 
   public async simulateAgentMode(transcript: string, maxIterations: number = 10): Promise<string> {
-    console.log('[WebMCPService] Starting agent mode processing:', { transcript, maxIterations })
+    const sessionId = `session_${Date.now()}`
+    logger.info('agent', 'Starting agent mode processing', {
+      sessionId,
+      data: { transcript: transcript.substring(0, 100) + '...', maxIterations }
+    })
 
     try {
       // Initialize MCP service if not already done
       if (!this.hasBeenInitialized) {
+        logger.debug('agent', 'Initializing MCP service for agent mode', { sessionId })
         await this.initialize()
       }
 
       // Get available tools
       const availableTools = await this.getAvailableTools()
-      console.log('[WebMCPService] Available tools:', availableTools.map(t => t.name))
+      logger.info('agent', `Available tools loaded: ${availableTools.length}`, {
+        sessionId,
+        data: { toolNames: availableTools.map(t => t.name) }
+      })
 
       // Use production-compatible agent processing
       const agentResult = await this.processTranscriptWithAgentMode(
@@ -417,10 +460,13 @@ export class WebMCPService extends EventEmitter {
         maxIterations
       )
 
-      console.log('[WebMCPService] Agent processing complete:', agentResult.content)
+      logger.info('agent', 'Agent processing complete', {
+        sessionId,
+        data: { resultLength: agentResult.content?.length || 0 }
+      })
       return agentResult.content || "Agent processing completed successfully."
     } catch (error) {
-      console.error('[WebMCPService] Agent mode processing failed:', error)
+      logger.error('agent', 'Agent mode processing failed', { sessionId, error })
       throw error
     }
   }

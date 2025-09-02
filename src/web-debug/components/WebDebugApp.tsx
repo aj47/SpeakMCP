@@ -3,6 +3,9 @@ import { io, Socket } from 'socket.io-client'
 import { WebDebugSession, WebDebugMessage, WebDebugToolCall, WebDebugToolResult } from '../server'
 import type { AgentProgressUpdate, Conversation, ConversationMessage, Config, MCPConfig } from '../../shared/types'
 import type { MCPTool, MCPToolCall, MCPToolResult } from '../web-mcp-service'
+import { logger } from '../utils/logger'
+import { DebugLogsPanel } from './DebugLogsPanel'
+import { webDebugConfig } from '../config'
 
 // Import existing components from the main app
 import { AgentProgress } from '../../renderer/src/components/agent-progress'
@@ -46,6 +49,8 @@ export const WebDebugApp: React.FC<WebDebugAppProps> = ({
   const [activeView, setActiveView] = useState<'conversations' | 'agent' | 'settings'>('agent')
   const [newSessionName, setNewSessionName] = useState('')
   const [showCreateSession, setShowCreateSession] = useState(false)
+  const [isCreatingSession, setIsCreatingSession] = useState(false)
+  const [autoSessionEnabled, setAutoSessionEnabled] = useState(webDebugConfig.autoSessionEnabled)
 
   // Convert WebDebugSession to Conversation format
   const convertSessionToConversation = (session: WebDebugSession): Conversation => {
@@ -71,12 +76,12 @@ export const WebDebugApp: React.FC<WebDebugAppProps> = ({
 
     newSocket.on('connect', () => {
       setIsConnected(true)
-      console.log('Connected to web debug server')
+      logger.info('network', 'Connected to web debug server')
     })
 
     newSocket.on('disconnect', () => {
       setIsConnected(false)
-      console.log('Disconnected from web debug server')
+      logger.warn('network', 'Disconnected from web debug server')
     })
 
     newSocket.on('sessionCreated', (session: WebDebugSession) => {
@@ -110,7 +115,10 @@ export const WebDebugApp: React.FC<WebDebugAppProps> = ({
 
     // Listen for agent progress updates
     newSocket.on('agentProgress', (update: AgentProgressUpdate) => {
-      console.log('[WebDebugApp] Received agent progress update:', update)
+      logger.debug('agent', 'Received agent progress update', {
+        sessionId: currentSession?.id,
+        data: update
+      })
       setAgentProgress(update)
     })
 
@@ -151,12 +159,13 @@ export const WebDebugApp: React.FC<WebDebugAppProps> = ({
         }
       }
     } catch (error) {
-      console.error('Failed to load sessions:', error)
+      logger.error('network', 'Failed to load sessions', { error })
     }
   }
 
   const createSession = async (name: string, initialMessage?: string) => {
     try {
+      logger.info('session', `Creating new session: ${name}`)
       const response = await fetch(`${serverUrl}/api/sessions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -168,19 +177,63 @@ export const WebDebugApp: React.FC<WebDebugAppProps> = ({
       setActiveView('agent')
       setShowCreateSession(false)
       setNewSessionName('')
+      logger.info('session', `Session created successfully: ${session.id}`, { sessionId: session.id })
       return session
     } catch (error) {
-      console.error('Failed to create session:', error)
+      logger.error('session', 'Failed to create session', { error })
+      throw error
+    }
+  }
+
+  // Auto-session creation helper with idempotency guard
+  const ensureSession = async (): Promise<WebDebugSession> => {
+    // If session already exists, return it
+    if (currentSession) {
+      return currentSession
+    }
+
+    // If already creating a session, wait for it
+    if (isCreatingSession) {
+      logger.debug('session', 'Session creation already in progress, waiting...')
+      // Poll until session is created or creation fails
+      return new Promise((resolve, reject) => {
+        const checkSession = () => {
+          if (currentSession) {
+            resolve(currentSession)
+          } else if (!isCreatingSession) {
+            reject(new Error('Session creation failed'))
+          } else {
+            setTimeout(checkSession, 100)
+          }
+        }
+        checkSession()
+      })
+    }
+
+    // Create new session
+    setIsCreatingSession(true)
+    try {
+      logger.info('session', 'Auto-creating session for message')
+      const sessionName = `Auto Session ${new Date().toLocaleTimeString()}`
+      const session = await createSession(sessionName)
+      if (!session) {
+        throw new Error('Failed to create session')
+      }
+      return session
+    } finally {
+      setIsCreatingSession(false)
     }
   }
 
   const deleteSession = async (sessionId: string) => {
     try {
+      logger.info('session', `Deleting session: ${sessionId}`, { sessionId })
       await fetch(`${serverUrl}/api/sessions/${sessionId}`, {
         method: 'DELETE'
       })
+      logger.info('session', `Session deleted successfully: ${sessionId}`, { sessionId })
     } catch (error) {
-      console.error('Failed to delete session:', error)
+      logger.error('session', 'Failed to delete session', { sessionId, error })
     }
   }
 
@@ -191,7 +244,7 @@ export const WebDebugApp: React.FC<WebDebugAppProps> = ({
       if (toolsResponse.ok) {
         const tools = await toolsResponse.json()
         setMcpTools(tools)
-        console.log('[WebDebugApp] Loaded MCP tools:', tools.length)
+        logger.info('mcp-client', `Loaded MCP tools: ${tools.length}`)
       }
 
       // Load MCP configuration
@@ -199,24 +252,32 @@ export const WebDebugApp: React.FC<WebDebugAppProps> = ({
       if (configResponse.ok) {
         const config = await configResponse.json()
         setMcpConfig(config.mcpConfig || { mcpServers: {} })
-        console.log('[WebDebugApp] Loaded MCP config:', config)
+        logger.info('mcp-client', 'Loaded MCP config', { data: config })
       }
     } catch (error) {
-      console.error('[WebDebugApp] Failed to load MCP data:', error)
+      logger.error('mcp-client', 'Failed to load MCP data', { error })
     }
   }
 
   // Agent request using production-compatible schema: { text: string, conversationId?: string }
-  const sendAgentRequest = async (text: string, maxIterations: number = 10) => {
-    if (!currentSession) return
+  const sendAgentRequest = async (text: string, maxIterations: number = 10, sessionId?: string) => {
+    const targetSessionId = sessionId || currentSession?.id
+    if (!targetSessionId) {
+      throw new Error('No session available for agent request')
+    }
 
     try {
-      const response = await fetch(`${serverUrl}/api/sessions/${currentSession.id}/agent-request`, {
+      logger.info('agent', `Sending agent request: ${text.substring(0, 100)}...`, {
+        sessionId: targetSessionId,
+        messageId: `msg_${Date.now()}`
+      })
+
+      const response = await fetch(`${serverUrl}/api/sessions/${targetSessionId}/agent-request`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           text,
-          conversationId: currentSession.id, // Include conversationId for production compatibility
+          conversationId: targetSessionId, // Include conversationId for production compatibility
           maxIterations
         })
       })
@@ -231,25 +292,42 @@ export const WebDebugApp: React.FC<WebDebugAppProps> = ({
       // Refresh sessions to ensure UI is in sync
       await loadSessions()
 
+      logger.info('agent', 'Agent request completed successfully', {
+        sessionId: targetSessionId
+      })
       return result
     } catch (error) {
-      console.error('Failed to send agent request:', error)
+      logger.error('agent', 'Failed to send agent request', {
+        sessionId: targetSessionId,
+        error
+      })
       throw error
     }
   }
 
   const processAgentRequest = async (text: string) => {
-    if (!currentSession) return
-
     setAgentProgress(null)
     setActiveView('agent')
 
     try {
+      // Ensure we have a session (auto-create if needed and enabled)
+      let session = currentSession
+      if (!session && autoSessionEnabled) {
+        logger.info('session', 'Auto-creating session for agent request')
+        session = await ensureSession()
+      } else if (!session) {
+        logger.warn('ui', 'No session available and auto-session disabled')
+        return
+      }
+
       // Process through agent pipeline - this handles both user message and agent response
-      const result = await sendAgentRequest(text, mockConfig.mcpMaxIterations || 10)
-      console.log('[WebDebugApp] Agent request result:', result)
+      const result = await sendAgentRequest(text, mockConfig.mcpMaxIterations || 10, session.id)
+      logger.info('agent', 'Agent request completed', { sessionId: session.id })
     } catch (error) {
-      console.error('[WebDebugApp] Agent request error:', error)
+      logger.error('agent', 'Agent request failed', {
+        sessionId: currentSession?.id,
+        error
+      })
       // Error handling is now done in sendAgentRequest, which adds error messages to the session
     } finally {
       // Clear agent progress after completion
@@ -260,6 +338,14 @@ export const WebDebugApp: React.FC<WebDebugAppProps> = ({
   const handleCreateSession = async () => {
     if (!newSessionName.trim()) return
     await createSession(newSessionName.trim())
+  }
+
+  const handleResetSession = () => {
+    logger.info('session', 'Resetting current session', { sessionId: currentSession?.id })
+    setCurrentSession(null)
+    setCurrentConversation(null)
+    setAgentProgress(null)
+    logger.info('ui', 'Session reset - ready for auto-creation on next message')
   }
 
   const selectSession = (session: WebDebugSession) => {
@@ -363,19 +449,33 @@ export const WebDebugApp: React.FC<WebDebugAppProps> = ({
                             >
                               <div className="flex items-start justify-between">
                                 <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <Badge
+                                      variant={session.status === 'active' ? 'default' :
+                                              session.status === 'error' ? 'destructive' : 'secondary'}
+                                      className="text-xs"
+                                    >
+                                      {session.status}
+                                    </Badge>
+                                    {currentSession?.id === session.id && (
+                                      <Badge variant="outline" className="text-xs">
+                                        CURRENT
+                                      </Badge>
+                                    )}
+                                  </div>
                                   <h3 className="text-sm font-medium modern-text-strong truncate">
                                     {session.name}
                                   </h3>
                                   <div className="flex items-center space-x-2 mt-1">
-                                    <Badge variant="outline" className="text-xs">
-                                      {session.status}
-                                    </Badge>
                                     <span className="text-xs modern-text-muted">
                                       {session.messages.length} msgs
                                     </span>
+                                    <span className="text-xs modern-text-muted">
+                                      ID: {session.id.slice(-8)}
+                                    </span>
                                   </div>
                                   <p className="text-xs modern-text-muted mt-1">
-                                    {new Date(session.createdAt).toLocaleString()}
+                                    Created: {new Date(session.createdAt).toLocaleString()}
                                   </p>
                                 </div>
                                 <Button
@@ -395,8 +495,47 @@ export const WebDebugApp: React.FC<WebDebugAppProps> = ({
                         )}
                       </div>
                     </ScrollArea>
+
+                    {/* Session Controls */}
+                    {currentSession && (
+                      <div className="pt-4 border-t border-border space-y-2">
+                        <div className="text-xs modern-text-muted mb-2">
+                          Current Session: {currentSession.name}
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={handleResetSession}
+                          className="w-full"
+                        >
+                          Reset Session
+                        </Button>
+                      </div>
+                    )}
+
+                    {/* Auto-session toggle */}
+                    <div className="pt-4 border-t border-border">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs modern-text-muted">Auto-create sessions</span>
+                        <Button
+                          size="sm"
+                          variant={autoSessionEnabled ? "default" : "outline"}
+                          onClick={() => {
+                            setAutoSessionEnabled(!autoSessionEnabled)
+                            logger.info('ui', `Auto-session ${!autoSessionEnabled ? 'enabled' : 'disabled'}`)
+                          }}
+                        >
+                          {autoSessionEnabled ? 'ON' : 'OFF'}
+                        </Button>
+                      </div>
+                    </div>
                   </CardContent>
                 </Card>
+
+                {/* Debug Logs Panel */}
+                <div className="mt-6">
+                  <DebugLogsPanel defaultExpanded={false} />
+                </div>
               </div>
 
               {/* Main Content Area */}

@@ -1045,11 +1045,95 @@ Please try alternative approaches, break down the task into smaller steps, or pr
     const agentIndicatedDone = llmResponse.needsMoreWork === false
 
     if (agentIndicatedDone && allToolsSuccessful) {
-      // Agent indicated completion
+      // Agent indicated completion, but we need to ensure we have a proper summary
+      // If the last assistant content was just tool calls, prompt for a summary
       const lastAssistantContent = llmResponse.content || ""
 
-      // Create final content that includes the agent's summary
-      finalContent = lastAssistantContent
+      // Check if the last assistant message was primarily tool calls without much explanation
+      const hasToolCalls = llmResponse.toolCalls && llmResponse.toolCalls.length > 0
+      const hasMinimalContent = lastAssistantContent.trim().length < 50
+
+      if (hasToolCalls && (hasMinimalContent || !lastAssistantContent.trim())) {
+        // The agent just made tool calls without providing a summary
+        // Prompt the agent to provide a concise summary of what was accomplished
+        const summaryPrompt = "Please provide a concise summary of what you just accomplished with the tool calls. Focus on the key results and outcomes for the user."
+
+        conversationHistory.push({
+          role: "user",
+          content: summaryPrompt,
+        })
+
+        // Create a summary request step
+        const summaryStep = createProgressStep(
+          "thinking",
+          "Generating summary",
+          "Requesting final summary of completed actions",
+          "in_progress",
+        )
+        progressSteps.push(summaryStep)
+
+        // Emit progress update for summary request
+        emitAgentProgress({
+          currentIteration: iteration,
+          maxIterations,
+          steps: progressSteps.slice(-3),
+          isComplete: false,
+          conversationHistory: formatConversationForProgress(conversationHistory),
+        })
+
+        // Get the summary from the agent
+        const contextAwarePrompt = constructSystemPrompt(
+          uniqueAvailableTools,
+          config.mcpToolsSystemPrompt,
+          true, // isAgentMode
+        )
+
+        const summaryMessages = [
+          { role: "system", content: contextAwarePrompt },
+          ...conversationHistory.map((entry) => {
+            if (entry.role === "tool") {
+              return {
+                role: "user" as const,
+                content: `Tool execution results:\n${entry.content}`,
+              }
+            }
+            return {
+              role: entry.role as "user" | "assistant",
+              content: entry.content,
+            }
+          }),
+        ]
+
+        try {
+          const summaryResponse = await makeLLMCall(summaryMessages, config)
+
+          // Update summary step with the response
+          summaryStep.status = "completed"
+          summaryStep.llmContent = summaryResponse.content || ""
+          summaryStep.title = "Summary provided"
+          summaryStep.description = summaryResponse.content && summaryResponse.content.length > 100
+            ? summaryResponse.content.substring(0, 100) + "..."
+            : summaryResponse.content || "Summary generated"
+
+          // Use the summary as final content
+          finalContent = summaryResponse.content || lastAssistantContent
+
+          // Add the summary to conversation history
+          conversationHistory.push({
+            role: "assistant",
+            content: finalContent,
+          })
+        } catch (error) {
+          // If summary generation fails, fall back to the original content
+          console.warn("Failed to generate summary:", error)
+          finalContent = lastAssistantContent || "Task completed successfully."
+          summaryStep.status = "error"
+          summaryStep.description = "Failed to generate summary, using fallback"
+        }
+      } else {
+        // Agent provided sufficient content, use it as final content
+        finalContent = lastAssistantContent
+      }
 
       // Add completion step
       const completionStep = createProgressStep(
@@ -1080,11 +1164,100 @@ Please try alternative approaches, break down the task into smaller steps, or pr
       // Agent explicitly indicated no more work needed
       const assistantContent = llmResponse.content || ""
 
-      finalContent = assistantContent
-      conversationHistory.push({
-        role: "assistant",
-        content: finalContent,
-      })
+      // Check if we just executed tools and need a summary
+      const hasToolCalls = llmResponse.toolCalls && llmResponse.toolCalls.length > 0
+      const hasMinimalContent = assistantContent.trim().length < 50
+
+      if (hasToolCalls && (hasMinimalContent || !assistantContent.trim())) {
+        // The agent just made tool calls without providing a summary
+        // Prompt the agent to provide a concise summary of what was accomplished
+        const summaryPrompt = "Please provide a concise summary of what you just accomplished with the tool calls. Focus on the key results and outcomes for the user."
+
+        conversationHistory.push({
+          role: "user",
+          content: summaryPrompt,
+        })
+
+        // Create a summary request step
+        const summaryStep = createProgressStep(
+          "thinking",
+          "Generating summary",
+          "Requesting final summary of completed actions",
+          "in_progress",
+        )
+        progressSteps.push(summaryStep)
+
+        // Emit progress update for summary request
+        emitAgentProgress({
+          currentIteration: iteration,
+          maxIterations,
+          steps: progressSteps.slice(-3),
+          isComplete: false,
+          conversationHistory: formatConversationForProgress(conversationHistory),
+        })
+
+        // Get the summary from the agent
+        const contextAwarePrompt = constructSystemPrompt(
+          uniqueAvailableTools,
+          config.mcpToolsSystemPrompt,
+          true, // isAgentMode
+        )
+
+        const summaryMessages = [
+          { role: "system", content: contextAwarePrompt },
+          ...conversationHistory.map((entry) => {
+            if (entry.role === "tool") {
+              return {
+                role: "user" as const,
+                content: `Tool execution results:\n${entry.content}`,
+              }
+            }
+            return {
+              role: entry.role as "user" | "assistant",
+              content: entry.content,
+            }
+          }),
+        ]
+
+        try {
+          const summaryResponse = await makeLLMCall(summaryMessages, config)
+
+          // Update summary step with the response
+          summaryStep.status = "completed"
+          summaryStep.llmContent = summaryResponse.content || ""
+          summaryStep.title = "Summary provided"
+          summaryStep.description = summaryResponse.content && summaryResponse.content.length > 100
+            ? summaryResponse.content.substring(0, 100) + "..."
+            : summaryResponse.content || "Summary generated"
+
+          // Use the summary as final content
+          finalContent = summaryResponse.content || assistantContent
+
+          // Add the summary to conversation history
+          conversationHistory.push({
+            role: "assistant",
+            content: finalContent,
+          })
+        } catch (error) {
+          // If summary generation fails, fall back to the original content
+          console.warn("Failed to generate summary:", error)
+          finalContent = assistantContent || "Task completed successfully."
+          summaryStep.status = "error"
+          summaryStep.description = "Failed to generate summary, using fallback"
+
+          conversationHistory.push({
+            role: "assistant",
+            content: finalContent,
+          })
+        }
+      } else {
+        // Agent provided sufficient content, use it as final content
+        finalContent = assistantContent
+        conversationHistory.push({
+          role: "assistant",
+          content: finalContent,
+        })
+      }
 
       const completionStep = createProgressStep(
         "completion",

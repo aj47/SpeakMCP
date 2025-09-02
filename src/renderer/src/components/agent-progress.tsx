@@ -45,15 +45,7 @@ const CompactMessage: React.FC<{
 
   // TTS functionality
   const generateAudio = async (): Promise<ArrayBuffer> => {
-    console.log("[TTS UI] generateAudio called in CompactMessage", {
-      messageRole: message.role,
-      messageLength: message.content.length,
-      isComplete,
-      isLast
-    })
-
     if (!configQuery.data?.ttsEnabled) {
-      console.log("[TTS UI] TTS not enabled in config")
       throw new Error("TTS is not enabled")
     }
 
@@ -61,13 +53,8 @@ const CompactMessage: React.FC<{
     setTtsError(null)
 
     try {
-      console.log("[TTS UI] Calling tipcClient.generateSpeech...")
       const result = await tipcClient.generateSpeech({
         text: message.content,
-      })
-      console.log("[TTS UI] TTS generation successful", {
-        audioSize: result.audio.byteLength,
-        provider: result.provider
       })
       setAudioData(result.audio)
       return result.audio
@@ -101,21 +88,11 @@ const CompactMessage: React.FC<{
 
   // Check if TTS should be shown for this message
   const shouldShowTTS = message.role === "assistant" && isComplete && isLast && configQuery.data?.ttsEnabled
-  console.log("[TTS UI] CompactMessage TTS visibility check", {
-    messageRole: message.role,
-    isComplete,
-    isLast,
-    ttsEnabled: configQuery.data?.ttsEnabled,
-    shouldShow: shouldShowTTS,
-    messagePreview: message.content.substring(0, 50) + "..."
-  })
 
   // Auto-play TTS when assistant message completes
   useEffect(() => {
     if (shouldShowTTS && configQuery.data?.ttsAutoPlay && !audioData && !isGeneratingAudio && !ttsError) {
-      console.log("[TTS UI] Auto-playing TTS for completed assistant message")
       generateAudio().catch((error) => {
-        console.log("[TTS UI] Auto-play TTS failed:", error)
         // Error is already handled in generateAudio function
       })
     }

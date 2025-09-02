@@ -16,7 +16,7 @@
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:ui": "vitest --ui",
-    "test:tts": "vitest run src/main/__tests__/tts-*.test.ts",
+
     "start": "electron-vite preview",
     "dev": "electron-vite dev --watch --",
     "build": "npm run typecheck && npm run test:run && electron-vite build && npm run build-rs",

@@ -60,7 +60,7 @@ https://github.com/user-attachments/assets/0c181c70-d1f1-4c5d-a6f5-a73147e75182
 - **Cross-Platform**: macOS, Windows, and Linux support with native builds
 - **Rate Limit Handling**: Exponential backoff retry for API rate limits (429 errors)
 - **Model Selection**: Choose specific models for OpenAI, Groq, and Gemini providers
-- **Debug Modes**: Comprehensive logging for LLM calls, tool execution, and TTS
+- **Debug Modes**: Comprehensive logging for LLM calls and tool execution
 - **Universal Integration**: Works with any text-input application
 
 ### 🎨 User Experience
@@ -99,7 +99,6 @@ pnpm build:linux  # Linux build (x64)
 
 # Testing
 pnpm test         # Run test suite
-pnpm test:tts     # Test TTS functionality
 ```
 
 ## ⚙️ Configuration
@@ -191,7 +190,6 @@ pnpm dev debug-all       # Readable format
 # Enable specific modes
 pnpm dev debug-llm       # LLM calls and responses
 pnpm dev debug-tools     # MCP tool execution
-pnpm dev debug-tts       # Text-to-speech debugging
 ```
 
 ## 🤝 Contributing

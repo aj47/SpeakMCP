@@ -119,15 +119,7 @@ function ConversationMessageItem({
   const [ttsError, setTtsError] = useState<string | null>(null)
 
   const generateAudio = async (): Promise<ArrayBuffer> => {
-    console.log("[TTS UI] generateAudio called", {
-      messageRole: message.role,
-      messageLength: message.content.length,
-      ttsEnabled: configQuery.data?.ttsEnabled,
-      ttsProviderId: configQuery.data?.ttsProviderId
-    })
-
     if (!configQuery.data?.ttsEnabled) {
-      console.log("[TTS UI] TTS not enabled in config")
       throw new Error("TTS is not enabled")
     }
 
@@ -135,18 +127,12 @@ function ConversationMessageItem({
     setTtsError(null)
 
     try {
-      console.log("[TTS UI] Calling tipcClient.generateSpeech...")
       const result = await tipcClient.generateSpeech({
         text: message.content,
-      })
-      console.log("[TTS UI] TTS generation successful", {
-        audioSize: result.audio.byteLength,
-        provider: result.provider
       })
       setAudioData(result.audio)
       return result.audio
     } catch (error) {
-      console.error("[TTS UI] Failed to generate TTS audio:", error)
 
       // Set user-friendly error message
       let errorMessage = "Failed to generate audio"
@@ -175,16 +161,6 @@ function ConversationMessageItem({
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
-
-    console.log("[DEBUG][COPY_MESSAGE] Context menu triggered for message:", {
-      messageId: message.id,
-      role: message.role,
-      contentLength: message.content.length,
-      contentPreview:
-        message.content.substring(0, 50) +
-        (message.content.length > 50 ? "..." : ""),
-      coordinates: { x: e.clientX, y: e.clientY },
-    })
 
     tipcClient.showContextMenu({
       x: e.clientX,
@@ -292,22 +268,7 @@ function ConversationMessageItem({
         </div>
 
         {/* TTS Audio Player - only show for assistant messages */}
-        {(() => {
-          console.log("[TTS UI] COMPONENT RENDERING - Message role:", message.role)
-          console.log("[TTS UI] CONFIG DATA:", configQuery.data)
-          const shouldShowTTS = message.role === "assistant" && configQuery.data?.ttsEnabled
-          console.log("[TTS UI] TTS visibility check", {
-            messageRole: message.role,
-            ttsEnabled: configQuery.data?.ttsEnabled,
-            shouldShow: shouldShowTTS,
-            messageId: message.id,
-            messagePreview: message.content.substring(0, 50) + "..."
-          })
-          if (message.role === "assistant") {
-            console.log("[TTS UI] ASSISTANT MESSAGE DETECTED - TTS enabled:", configQuery.data?.ttsEnabled)
-          }
-          return shouldShowTTS
-        })() && (
+        {message.role === "assistant" && configQuery.data?.ttsEnabled && (
           <div className="mt-3">
             <AudioPlayer
               audioData={audioData || undefined}

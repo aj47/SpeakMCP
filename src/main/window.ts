@@ -392,38 +392,17 @@ export const closeAgentModeAndHidePanelWindow = () => {
 export const emergencyStopAgentMode = async () => {
   console.log("Emergency stop triggered for agent mode")
 
-  // Set stop flag immediately
-  state.shouldStopAgent = true
-
   const win = WINDOWS.get("panel")
   if (win) {
-    // Send emergency stop signal to renderer
-    getRendererHandlers<RendererHandlers>(
-      win.webContents,
-    ).emergencyStopAgent?.send()
-
-    // Clear agent progress immediately
-    getRendererHandlers<RendererHandlers>(
-      win.webContents,
-    ).clearAgentProgress.send()
+    // Notify renderer ASAP
+    getRendererHandlers<RendererHandlers>(win.webContents).emergencyStopAgent?.send()
+    getRendererHandlers<RendererHandlers>(win.webContents).clearAgentProgress.send()
   }
 
   try {
-    const processCountBefore = agentProcessManager.getActiveProcessCount()
-
-    // Kill all agent processes immediately (emergency stop)
-    agentProcessManager.emergencyStop()
-
-    const processCountAfter = agentProcessManager.getActiveProcessCount()
-
-    // Update state - but keep shouldStopAgent = true so the agent loop can see it
-    state.isAgentModeActive = false
-    // DON'T reset shouldStopAgent here - let the agent loop handle it
-    state.agentIterationCount = 0
-
-    console.log(
-      `Emergency stop completed. Killed ${processCountBefore} processes. Remaining: ${processCountAfter}`,
-    )
+    const { emergencyStopAll } = await import("./emergency-stop")
+    const { before, after } = await emergencyStopAll()
+    console.log(`Emergency stop completed. Killed ${before} processes. Remaining: ${after}`)
   } catch (error) {
     console.error("Error during emergency stop:", error)
   }
@@ -435,7 +414,7 @@ export const emergencyStopAgentMode = async () => {
       if (win.isVisible()) {
         win.hide()
       }
-    }, 100) // Shorter delay for emergency stop
+    }, 100)
   }
 }
 

@@ -691,10 +691,30 @@ Always use actual resource IDs from the conversation history or create new ones 
       }),
     ]
 
-    // Make LLM call
-    const llmResponse = await makeLLMCall(messages, config)
-
-
+    // Make LLM call (abort-aware)
+    let llmResponse: any
+    try {
+      llmResponse = await makeLLMCall(messages, config)
+    } catch (error: any) {
+      if (error?.name === "AbortError" || state.shouldStopAgent) {
+        console.log("LLM call aborted due to emergency stop")
+        // Mark thinking step as completed with stop notice
+        thinkingStep.status = "completed"
+        thinkingStep.title = "Agent stopped"
+        thinkingStep.description = "Emergency stop triggered"
+        // Emit final progress and break out
+        emitAgentProgress({
+          currentIteration: iteration,
+          maxIterations,
+          steps: progressSteps.slice(-3),
+          isComplete: true,
+          finalContent: finalContent + "\n\n(Agent mode was stopped by emergency kill switch)",
+          conversationHistory: formatConversationForProgress(conversationHistory),
+        })
+        break
+      }
+      throw error
+    }
 
     // Update thinking step with actual LLM content and mark as completed
     thinkingStep.status = "completed"
@@ -931,47 +951,9 @@ Always use actual resource IDs from the conversation history or create new ones 
       toolCalls: llmResponse.toolCalls!,
     })
 
-    // Process tool results to avoid context overflow for all queries
-    const processedToolResults = toolResults.map(result => {
-      if (!result.isError) {
-        const content = result.content.map(c => c.text).join('\n')
-
-        // For large JSON responses, try to extract key information
-        if (content.length > 5000 && content.trim().startsWith('[') || content.trim().startsWith('{')) {
-          try {
-            const parsed = JSON.parse(content)
-            if (Array.isArray(parsed)) {
-              // For arrays, show count and first few items
-              const summary = `Found ${parsed.length} items. First few:\n${JSON.stringify(parsed.slice(0, 3), null, 2)}${parsed.length > 3 ? `\n... and ${parsed.length - 3} more items` : ''}`
-              return {
-                ...result,
-                content: [{ type: 'text' as const, text: summary }]
-              }
-            } else if (typeof parsed === 'object') {
-              // For objects, show structure with truncated values
-              const keys = Object.keys(parsed).slice(0, 10)
-              const summary = `Object with ${Object.keys(parsed).length} properties:\n${keys.map(key => `${key}: ${JSON.stringify(parsed[key]).substring(0, 100)}...`).join('\n')}${Object.keys(parsed).length > 10 ? `\n... and ${Object.keys(parsed).length - 10} more properties` : ''}`
-              return {
-                ...result,
-                content: [{ type: 'text' as const, text: summary }]
-              }
-            }
-          } catch (e) {
-            // If parsing fails, fall through to general truncation
-          }
-        }
-
-        // For other large results, truncate to reasonable size
-        if (content.length > 2000) {
-          const truncated = content.substring(0, 2000) + '\n... [truncated for brevity]'
-          return {
-            ...result,
-            content: [{ type: 'text' as const, text: truncated }]
-          }
-        }
-      }
-      return result
-    })
+    // Keep tool results intact for full visibility in UI
+    // The UI will handle display and truncation as needed
+    const processedToolResults = toolResults
 
     const toolResultsText = processedToolResults
       .map((result) => result.content.map((c) => c.text).join("\n"))

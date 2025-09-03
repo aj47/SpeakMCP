@@ -115,11 +115,11 @@ pnpm test         # Run test suite
   "mcpServers": {
     "filesystem": {
       "command": "npx",
-      "args": ["@modelcontextprotocol/server-filesystem", "/path"]
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/path"]
     },
     "web-search": {
       "command": "npx",
-      "args": ["@modelcontextprotocol/server-web-search"],
+      "args": ["-y", "@modelcontextprotocol/server-web-search"],
       "env": {"BRAVE_API_KEY": "your-key"}
     }
   }

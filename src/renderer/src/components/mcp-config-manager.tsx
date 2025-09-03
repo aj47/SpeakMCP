@@ -682,7 +682,7 @@ const MCP_EXAMPLES = {
     config: {
       transport: "stdio" as MCPTransportType,
       command: "npx",
-      args: ["@wonderwhy-er/desktop-commander@latest"],
+      args: ["-y", "@wonderwhy-er/desktop-commander@latest"],
       env: {},
     },
   },

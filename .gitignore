@@ -3,6 +3,7 @@ dist
 out
 .DS_Store
 *.log*
+log.txt
 target/
 bin/
 

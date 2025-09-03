@@ -778,9 +778,9 @@ export async function makeLLMCallWithFetch(
         })
       }
 
-      // Instead of throwing an error, return a response that indicates completion
-      // This handles cases where the LLM returns empty content but the call was successful
-      return { content: "", needsMoreWork: false }
+      // Empty responses should be treated as errors requiring retry, not completion
+      // This prevents workflows from terminating prematurely when LLM fails to respond
+      throw new Error("LLM returned empty response - this indicates a model or API issue that should be retried")
     }
 
     // Try to extract JSON object from response

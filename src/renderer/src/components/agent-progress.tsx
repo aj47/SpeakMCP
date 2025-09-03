@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react"
 import { cn } from "@renderer/lib/utils"
 import { AgentProgressUpdate } from "../../../shared/types"
-import { ChevronDown, ChevronUp, ChevronRight, ExternalLink } from "lucide-react"
+import { ChevronDown, ChevronUp, ChevronRight } from "lucide-react"
 import { MarkdownRenderer } from "@renderer/components/markdown-renderer"
 import { Button } from "./ui/button"
 import { Badge } from "./ui/badge"
@@ -503,27 +503,12 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
         </div>
         <div className="flex items-center gap-3">
           <span className="text-xs text-muted-foreground">
-            {isComplete ? "Done" : `${currentIteration}/${maxIterations}`}
+{!isComplete && (
+  <span className="text-xs text-muted-foreground">
+    {`${currentIteration}/${maxIterations}`}
+  </span>
+)}
           </span>
-          {isComplete && finalContent && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                const url = currentConversationId
-                  ? `/conversations/${currentConversationId}`
-                  : "/conversations"
-                tipcClient.showMainWindow({ url })
-              }}
-              className="h-6 px-2 text-xs"
-            >
-              <ExternalLink className="h-3 w-3" />
-              Details
-            </Button>
-          )}
-          {isComplete && (
-            <span className="text-xs text-muted-foreground">ESC</span>
-          )}
         </div>
       </div>
 

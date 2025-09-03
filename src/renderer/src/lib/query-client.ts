@@ -138,6 +138,12 @@ export const useDeleteAllConversationsMutation = () =>
     },
   })
 
+// History-themed aliases for better semantic naming
+export const useHistoryQuery = useConversationHistoryQuery
+export const useHistoryItemQuery = useConversationQuery
+export const useDeleteHistoryItemMutation = useDeleteConversationMutation
+export const useDeleteAllHistoryMutation = useDeleteAllConversationsMutation
+
 export const useSaveConfigMutation = () =>
   useMutation({
     mutationFn: tipcClient.saveConfig,

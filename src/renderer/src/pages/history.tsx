@@ -32,10 +32,10 @@ import {
 } from "lucide-react"
 import { cn } from "@renderer/lib/utils"
 import {
-  useConversationHistoryQuery,
-  useDeleteConversationMutation,
-  useDeleteAllConversationsMutation,
-  useConversationQuery,
+  useHistoryQuery,
+  useDeleteHistoryItemMutation,
+  useDeleteAllHistoryMutation,
+  useHistoryItemQuery,
 } from "@renderer/lib/query-client"
 import { useConversationActions } from "@renderer/contexts/conversation-context"
 import { tipcClient } from "@renderer/lib/tipc-client"
@@ -45,46 +45,46 @@ import dayjs from "dayjs"
 import { toast } from "sonner"
 
 export function Component() {
-  const { id: routeConversationId } = useParams<{ id: string }>()
+  const { id: routeHistoryItemId } = useParams<{ id: string }>()
   const [searchQuery, setSearchQuery] = useState("")
-  const [selectedConversation, setSelectedConversation] = useState<
+  const [selectedHistoryItem, setSelectedHistoryItem] = useState<
     string | null
   >(null)
   const [viewMode, setViewMode] = useState<"list" | "detail">("list")
   const [showDeleteAllDialog, setShowDeleteAllDialog] = useState(false)
 
-  const conversationHistoryQuery = useConversationHistoryQuery()
-  const deleteConversationMutation = useDeleteConversationMutation()
-  const deleteAllConversationsMutation = useDeleteAllConversationsMutation()
-  const selectedConversationQuery = useConversationQuery(selectedConversation)
+  const historyQuery = useHistoryQuery()
+  const deleteHistoryItemMutation = useDeleteHistoryItemMutation()
+  const deleteAllHistoryMutation = useDeleteAllHistoryMutation()
+  const selectedHistoryItemQuery = useHistoryItemQuery(selectedHistoryItem)
 
   const { continueConversation } = useConversationActions()
 
-  // Handle route parameter for deep-linking to specific conversation
+  // Handle route parameter for deep-linking to specific history item
   useEffect(() => {
-    if (routeConversationId) {
-      setSelectedConversation(routeConversationId)
+    if (routeHistoryItemId) {
+      setSelectedHistoryItem(routeHistoryItemId)
       setViewMode("detail")
     }
-  }, [routeConversationId])
+  }, [routeHistoryItemId])
 
-  const filteredConversations = useMemo(() => {
-    if (!conversationHistoryQuery.data) return []
+  const filteredHistory = useMemo(() => {
+    if (!historyQuery.data) return []
 
-    return conversationHistoryQuery.data.filter(
-      (conversation) =>
-        conversation.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        conversation.preview.toLowerCase().includes(searchQuery.toLowerCase()),
+    return historyQuery.data.filter(
+      (historyItem) =>
+        historyItem.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        historyItem.preview.toLowerCase().includes(searchQuery.toLowerCase()),
     )
-  }, [conversationHistoryQuery.data, searchQuery])
+  }, [historyQuery.data, searchQuery])
 
-  const groupedConversations = useMemo(() => {
+  const groupedHistory = useMemo(() => {
     const groups = new Map<string, ConversationHistoryItem[]>()
     const today = dayjs().format("YYYY-MM-DD")
     const yesterday = dayjs().subtract(1, "day").format("YYYY-MM-DD")
 
-    for (const conversation of filteredConversations) {
-      const date = dayjs(conversation.updatedAt).format("YYYY-MM-DD")
+    for (const historyItem of filteredHistory) {
+      const date = dayjs(historyItem.updatedAt).format("YYYY-MM-DD")
       let groupKey: string
 
       if (date === today) {
@@ -92,11 +92,11 @@ export function Component() {
       } else if (date === yesterday) {
         groupKey = "Yesterday"
       } else {
-        groupKey = dayjs(conversation.updatedAt).format("MMM D, YYYY")
+        groupKey = dayjs(historyItem.updatedAt).format("MMM D, YYYY")
       }
 
       const items = groups.get(groupKey) || []
-      items.push(conversation)
+      items.push(historyItem)
       groups.set(groupKey, items)
     }
 
@@ -104,48 +104,48 @@ export function Component() {
       date,
       items: items.sort((a, b) => b.updatedAt - a.updatedAt),
     }))
-  }, [filteredConversations])
+  }, [filteredHistory])
 
-  const handleDeleteConversation = async (conversationId: string) => {
+  const handleDeleteHistoryItem = async (historyItemId: string) => {
     try {
-      await deleteConversationMutation.mutateAsync(conversationId)
-      toast.success("Conversation deleted")
-      if (selectedConversation === conversationId) {
-        setSelectedConversation(null)
+      await deleteHistoryItemMutation.mutateAsync(historyItemId)
+      toast.success("History item deleted")
+      if (selectedHistoryItem === historyItemId) {
+        setSelectedHistoryItem(null)
         setViewMode("list")
       }
     } catch (error) {
-      toast.error("Failed to delete conversation")
+      toast.error("Failed to delete history item")
     }
   }
 
-  const handleDeleteAllConversations = async () => {
+  const handleDeleteAllHistory = async () => {
     if (
       !window.confirm(
-        "Are you sure you want to delete all conversations? This action cannot be undone.",
+        "Are you sure you want to delete all history? This action cannot be undone.",
       )
     ) {
       return
     }
 
     try {
-      await deleteAllConversationsMutation.mutateAsync()
-      toast.success("All conversations deleted")
-      setSelectedConversation(null)
+      await deleteAllHistoryMutation.mutateAsync()
+      toast.success("All history deleted")
+      setSelectedHistoryItem(null)
       setViewMode("list")
     } catch (error) {
-      toast.error("Failed to delete conversations")
+      toast.error("Failed to delete history")
     }
   }
 
-  const handleSelectConversation = (conversationId: string) => {
-    setSelectedConversation(conversationId)
+  const handleSelectHistoryItem = (historyItemId: string) => {
+    setSelectedHistoryItem(historyItemId)
     setViewMode("detail")
   }
 
   const handleBackToList = () => {
     setViewMode("list")
-    setSelectedConversation(null)
+    setSelectedHistoryItem(null)
   }
 
   const handleContinueConversation = (conversationId: string) => {
@@ -154,12 +154,12 @@ export function Component() {
     toast.success("Conversation activated. Use Ctrl+T to continue.")
   }
 
-  const handleOpenConversationsFolder = async () => {
+  const handleOpenHistoryFolder = async () => {
     try {
       await tipcClient.openConversationsFolder()
-      toast.success("Conversations folder opened")
+      toast.success("History folder opened")
     } catch (error) {
-      toast.error("Failed to open conversations folder")
+      toast.error("Failed to open history folder")
     }
   }
 
@@ -169,15 +169,15 @@ export function Component() {
         // List View
         <>
           <header className="app-drag-region flex h-12 shrink-0 items-center justify-between border-b bg-background px-4 text-sm">
-            <span className="font-bold">Conversations</span>
+            <span className="font-bold">History</span>
 
             <div className="flex items-center gap-2">
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={handleOpenConversationsFolder}
+                onClick={handleOpenHistoryFolder}
                 className="h-7 gap-1 px-2 py-0"
-                title="Open conversations folder for debugging"
+                title="Open history folder for debugging"
               >
                 <FolderOpen className="h-4 w-4" />
                 <span className="hidden sm:inline">Open Folder</span>
@@ -186,7 +186,7 @@ export function Component() {
                 variant="ghost"
                 className="h-7 gap-1 px-2 py-0 text-red-500 hover:text-red-500"
                 onClick={() => setShowDeleteAllDialog(true)}
-                disabled={deleteAllConversationsMutation.isPending}
+                disabled={deleteAllHistoryMutation.isPending}
               >
                 <Trash2 className="h-4 w-4" />
                 <span>Delete All</span>
@@ -196,7 +196,7 @@ export function Component() {
                 <Input
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search conversations..."
+                  placeholder="Search history..."
                   className="w-64 pl-8"
                 />
               </div>
@@ -204,13 +204,13 @@ export function Component() {
           </header>
 
           <div className="flex-1 overflow-hidden bg-background">
-            {groupedConversations.length === 0 ? (
+            {groupedHistory.length === 0 ? (
               <div className="flex h-full flex-col items-center justify-center p-8 text-center">
                 <MessageCircle className="mb-4 h-12 w-12 text-muted-foreground" />
                 <h3 className="mb-2 text-lg font-semibold">
                   {searchQuery
-                    ? "No matching conversations"
-                    : "No conversations yet"}
+                    ? "No matching history"
+                    : "No history yet"}
                 </h3>
                 <p className="text-muted-foreground">
                   {searchQuery
@@ -221,28 +221,28 @@ export function Component() {
             ) : (
               <ScrollArea className="h-full">
                 <div className="space-y-6 p-4">
-                  {groupedConversations.map(({ date, items }) => (
+                  {groupedHistory.map(({ date, items }) => (
                     <div key={date}>
                       <h4 className="mb-3 flex items-center gap-2 text-sm font-medium text-muted-foreground">
                         <Calendar className="h-4 w-4" />
                         {date}
                       </h4>
                       <div className="space-y-2">
-                        {items.map((conversation) => (
-                          <ConversationCard
-                            key={conversation.id}
-                            conversation={conversation}
+                        {items.map((historyItem) => (
+                          <HistoryCard
+                            key={historyItem.id}
+                            conversation={historyItem}
                             isSelected={false}
                             onSelect={() =>
-                              handleSelectConversation(conversation.id)
+                              handleSelectHistoryItem(historyItem.id)
                             }
                             onDelete={() =>
-                              handleDeleteConversation(conversation.id)
+                              handleDeleteHistoryItem(historyItem.id)
                             }
                             onContinue={() =>
-                              handleContinueConversation(conversation.id)
+                              handleContinueConversation(historyItem.id)
                             }
-                            isDeleting={deleteConversationMutation.isPending}
+                            isDeleting={deleteHistoryItemMutation.isPending}
                           />
                         ))}
                       </div>
@@ -268,17 +268,17 @@ export function Component() {
                 <span>Back</span>
               </Button>
               <span className="font-bold">
-                {selectedConversationQuery.data?.title || "Conversation"}
+                {selectedHistoryItemQuery.data?.title || "History Item"}
               </span>
             </div>
 
             <Button
               onClick={() =>
-                selectedConversation &&
-                handleContinueConversation(selectedConversation)
+                selectedHistoryItem &&
+                handleContinueConversation(selectedHistoryItem)
               }
               className="h-7 gap-2 px-3 py-0"
-              disabled={!selectedConversation}
+              disabled={!selectedHistoryItem}
             >
               <MessageCircle className="h-4 w-4" />
               Continue
@@ -286,18 +286,18 @@ export function Component() {
           </header>
 
           <div className="flex-1 overflow-hidden bg-muted/30">
-            {selectedConversation && selectedConversationQuery.data ? (
+            {selectedHistoryItem && selectedHistoryItemQuery.data ? (
               <div className="flex h-full flex-col">
                 <div className="border-b bg-background p-4">
                   <div className="flex items-center justify-between">
                     <div>
                       <h2 className="text-lg font-semibold">
-                        {selectedConversationQuery.data.title}
+                        {selectedHistoryItemQuery.data.title}
                       </h2>
                       <p className="text-sm text-muted-foreground">
-                        {selectedConversationQuery.data.messages.length}{" "}
+                        {selectedHistoryItemQuery.data.messages.length}{" "}
                         messages • Last updated{" "}
-                        {dayjs(selectedConversationQuery.data.updatedAt).format(
+                        {dayjs(selectedHistoryItemQuery.data.updatedAt).format(
                           "MMM D, YYYY h:mm A",
                         )}
                       </p>
@@ -306,7 +306,7 @@ export function Component() {
                 </div>
                 <div className="flex-1 overflow-hidden p-4">
                   <ConversationDisplay
-                    messages={selectedConversationQuery.data.messages}
+                    messages={selectedHistoryItemQuery.data.messages}
                     maxHeight="100%"
                     className="h-full"
                   />
@@ -317,10 +317,10 @@ export function Component() {
                 <div>
                   <Eye className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
                   <h3 className="mb-2 text-lg font-semibold">
-                    Loading conversation...
+                    Loading history...
                   </h3>
                   <p className="text-muted-foreground">
-                    Please wait while we load the conversation details
+                    Please wait while we load the history details
                   </p>
                 </div>
               </div>
@@ -332,7 +332,7 @@ export function Component() {
   )
 }
 
-interface ConversationCardProps {
+interface HistoryCardProps {
   conversation: ConversationHistoryItem
   isSelected: boolean
   onSelect: () => void
@@ -341,14 +341,14 @@ interface ConversationCardProps {
   isDeleting: boolean
 }
 
-function ConversationCard({
+function HistoryCard({
   conversation,
   isSelected,
   onSelect,
   onDelete,
   onContinue,
   isDeleting,
-}: ConversationCardProps) {
+}: HistoryCardProps) {
   return (
     <Card
       className={cn(
@@ -390,7 +390,7 @@ function ConversationCard({
               onClick={onDelete}
               disabled={isDeleting}
               className="h-8 w-8 p-0 text-red-500 hover:text-red-600"
-              title="Delete conversation"
+              title="Delete history item"
             >
               <Trash2 className="h-4 w-4" />
             </Button>

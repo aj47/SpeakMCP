@@ -41,7 +41,14 @@ const CompactMessage: React.FC<{
   const [ttsError, setTtsError] = useState<string | null>(null)
   const configQuery = useConfigQuery()
 
-  const hasExtras = message.toolCalls || message.toolResults
+  const displayResults = (message.toolResults || []).filter(
+    (r) =>
+      (r.error && r.error.trim().length > 0) ||
+      (r.content && r.content.trim().length > 0),
+  )
+  const hasExtras =
+    (message.toolCalls?.length ?? 0) > 0 ||
+    displayResults.length > 0
   const shouldCollapse = message.content.length > 100 || hasExtras
 
   // TTS functionality
@@ -182,10 +189,10 @@ const CompactMessage: React.FC<{
                   ))}
                 </div>
               )}
-              {message.toolResults && message.toolResults.length > 0 && (
+              {displayResults.length > 0 && (
                 <div className="space-y-2">
-                  <div className="text-xs font-semibold opacity-70">Tool Results ({message.toolResults.length}):</div>
-                  {message.toolResults.map((result, index) => (
+                  <div className="text-xs font-semibold opacity-70">Tool Results ({displayResults.length}):</div>
+                  {displayResults.map((result, index) => (
                     <div
                       key={index}
                       className={cn(
@@ -325,16 +332,22 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
   }> = []
 
   if (conversationHistory && conversationHistory.length > 0) {
-    // Use the complete conversation history
-    messages = conversationHistory.map((entry) => ({
-      role: entry.role,
-      content: entry.content,
-      isComplete: true,
-      timestamp: entry.timestamp || Date.now(),
-      isThinking: false,
-      toolCalls: entry.toolCalls,
-      toolResults: entry.toolResults,
-    }))
+    // Use the complete conversation history (filter internal nudges)
+    const isNudge = (c: string) =>
+      c.includes("Please either take action using available tools") ||
+      c.includes("You have relevant tools available for this request")
+
+    messages = conversationHistory
+      .filter((entry) => !(entry.role === "user" && isNudge(entry.content)))
+      .map((entry) => ({
+        role: entry.role,
+        content: entry.content,
+        isComplete: true,
+        timestamp: entry.timestamp || Date.now(),
+        isThinking: false,
+        toolCalls: entry.toolCalls,
+        toolResults: entry.toolResults,
+      }))
 
     // Add any in-progress thinking from current steps
     const currentThinkingStep = steps.find(

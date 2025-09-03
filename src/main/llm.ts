@@ -535,22 +535,28 @@ export async function processTranscriptWithAgentMode(
   const formatConversationForProgress = (
     history: typeof conversationHistory,
   ) => {
-    return history.map((entry) => ({
-      role: entry.role,
-      content: entry.content,
-      toolCalls: entry.toolCalls?.map((tc) => ({
-        name: tc.name,
-        arguments: tc.arguments,
-      })),
-      toolResults: entry.toolResults?.map((tr) => ({
-        success: !tr.isError,
-        content: tr.content.map((c) => c.text).join("\n"),
-        error: tr.isError
-          ? tr.content.map((c) => c.text).join("\n")
-          : undefined,
-      })),
-      timestamp: Date.now(),
-    }))
+    const isNudge = (content: string) =>
+      content.includes("Please either take action using available tools") ||
+      content.includes("You have relevant tools available for this request")
+
+    return history
+      .filter((entry) => !(entry.role === "user" && isNudge(entry.content)))
+      .map((entry) => ({
+        role: entry.role,
+        content: entry.content,
+        toolCalls: entry.toolCalls?.map((tc) => ({
+          name: tc.name,
+          arguments: tc.arguments,
+        })),
+        toolResults: entry.toolResults?.map((tr) => ({
+          success: !tr.isError,
+          content: tr.content.map((c) => c.text).join("\n"),
+          error: tr.isError
+            ? tr.content.map((c) => c.text).join("\n")
+            : undefined,
+        })),
+        timestamp: Date.now(),
+      }))
   }
 
   // Emit initial progress
@@ -677,18 +683,22 @@ Always use actual resource IDs from the conversation history or create new ones 
     // Build messages for LLM call
     const messages = [
       { role: "system", content: contextAwarePrompt },
-      ...conversationHistory.map((entry) => {
-        if (entry.role === "tool") {
-          return {
-            role: "user" as const,
-            content: `Tool execution results:\n${entry.content}`,
+      ...conversationHistory
+        .map((entry) => {
+          if (entry.role === "tool") {
+            const text = (entry.content || "").trim()
+            if (!text) return null
+            return {
+              role: "user" as const,
+              content: `Tool execution results:\n${entry.content}`,
+            }
           }
-        }
-        return {
-          role: entry.role as "user" | "assistant",
-          content: entry.content,
-        }
-      }),
+          return {
+            role: entry.role as "user" | "assistant",
+            content: entry.content,
+          }
+        })
+        .filter(Boolean as any),
     ]
 
     // Make LLM call
@@ -973,15 +983,21 @@ Always use actual resource IDs from the conversation history or create new ones 
       return result
     })
 
-    const toolResultsText = processedToolResults
-      .map((result) => result.content.map((c) => c.text).join("\n"))
-      .join("\n\n")
+    const meaningfulResults = processedToolResults.filter((r) =>
+      r.isError || (r.content?.map((c) => c.text).join("").trim().length > 0),
+    )
 
-    conversationHistory.push({
-      role: "tool",
-      content: toolResultsText,
-      toolResults: processedToolResults,
-    })
+    if (meaningfulResults.length > 0) {
+      const toolResultsText = meaningfulResults
+        .map((result) => result.content.map((c) => c.text).join("\n"))
+        .join("\n\n")
+
+      conversationHistory.push({
+        role: "tool",
+        content: toolResultsText,
+        toolResults: meaningfulResults,
+      })
+    }
 
     // Enhanced completion detection with better error handling
     const hasErrors = toolResults.some((result) => result.isError)
@@ -1090,18 +1106,22 @@ Please try alternative approaches, break down the task into smaller steps, or pr
 
         const summaryMessages = [
           { role: "system", content: contextAwarePrompt },
-          ...conversationHistory.map((entry) => {
-            if (entry.role === "tool") {
-              return {
-                role: "user" as const,
-                content: `Tool execution results:\n${entry.content}`,
+          ...conversationHistory
+            .map((entry) => {
+              if (entry.role === "tool") {
+                const text = (entry.content || "").trim()
+                if (!text) return null
+                return {
+                  role: "user" as const,
+                  content: `Tool execution results:\n${entry.content}`,
+                }
               }
-            }
-            return {
-              role: entry.role as "user" | "assistant",
-              content: entry.content,
-            }
-          }),
+              return {
+                role: entry.role as "user" | "assistant",
+                content: entry.content,
+              }
+            })
+            .filter(Boolean as any),
         ]
 
         try {
@@ -1210,18 +1230,22 @@ Please try alternative approaches, break down the task into smaller steps, or pr
 
         const summaryMessages = [
           { role: "system", content: contextAwarePrompt },
-          ...conversationHistory.map((entry) => {
-            if (entry.role === "tool") {
-              return {
-                role: "user" as const,
-                content: `Tool execution results:\n${entry.content}`,
+          ...conversationHistory
+            .map((entry) => {
+              if (entry.role === "tool") {
+                const text = (entry.content || "").trim()
+                if (!text) return null
+                return {
+                  role: "user" as const,
+                  content: `Tool execution results:\n${entry.content}`,
+                }
               }
-            }
-            return {
-              role: entry.role as "user" | "assistant",
-              content: entry.content,
-            }
-          }),
+              return {
+                role: entry.role as "user" | "assistant",
+                content: entry.content,
+              }
+            })
+            .filter(Boolean as any),
         ]
 
         try {

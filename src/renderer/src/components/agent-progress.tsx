@@ -503,7 +503,11 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
         </div>
         <div className="flex items-center gap-3">
           <span className="text-xs text-muted-foreground">
-            {isComplete ? "" : `${currentIteration}/${maxIterations}`}
+{!isComplete && (
+  <span className="text-xs text-muted-foreground">
+    {`${currentIteration}/${maxIterations}`}
+  </span>
+)}
           </span>
         </div>
       </div>

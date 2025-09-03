@@ -2,6 +2,7 @@ import { configStore } from "./config"
 import { MCPTool, LLMToolCallResponse } from "./mcp-service"
 import { diagnosticsService } from "./diagnostics"
 import { isDebugLLM, logLLM } from "./debug"
+import { state, llmRequestAbortManager } from "./state"
 import OpenAI from "openai"
 
 // Define the JSON schema for structured output
@@ -179,6 +180,13 @@ class HttpError extends Error {
  * Check if an error is retryable based on status code and error type
  */
 function isRetryableError(error: unknown): boolean {
+  // Abort should never be retried
+  if (error instanceof Error) {
+    if ((error as any).name === "AbortError" || error.message.toLowerCase().includes("abort")) {
+      return false
+    }
+  }
+
   if (error instanceof HttpError) {
     // Retry on rate limits (429), server errors (5xx), and some client errors
     return error.status === 429 ||
@@ -237,11 +245,21 @@ async function apiCallWithRetry<T>(
   let attempt = 0
 
   while (true) {
+    // If an emergency stop has been requested, abort immediately
+    if (state.shouldStopAgent) {
+      throw lastError instanceof Error ? lastError : new Error("Aborted by emergency stop")
+    }
+
     try {
       const response = await call()
       return response
     } catch (error) {
       lastError = error
+
+      // Do not retry on abort or if we've been asked to stop
+      if ((error as any)?.name === "AbortError" || state.shouldStopAgent) {
+        throw error
+      }
 
       // Check if error is retryable
       if (!isRetryableError(error)) {
@@ -281,7 +299,10 @@ async function apiCallWithRetry<T>(
         // User-friendly console output so users can see progress
         console.log(`⏳ Rate limit hit - waiting ${waitTimeSeconds} seconds before retrying... (attempt ${attempt + 1})`)
 
-        // Wait before retrying
+        // Wait before retrying unless we've been asked to stop
+        if (state.shouldStopAgent) {
+          throw new Error("Aborted by emergency stop")
+        }
         await new Promise(resolve => setTimeout(resolve, delay))
         attempt++
         continue
@@ -306,7 +327,10 @@ async function apiCallWithRetry<T>(
         { error: error instanceof Error ? error.message : String(error), delay }
       )
 
-      // Wait before retrying
+      // Wait before retrying unless we've been asked to stop
+      if (state.shouldStopAgent) {
+        throw new Error("Aborted by emergency stop")
+      }
       await new Promise(resolve => setTimeout(resolve, delay))
       attempt++
     }
@@ -390,14 +414,61 @@ async function makeAPICallAttempt(
     })
   }
 
-  const response = await fetch(`${baseURL}/chat/completions`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(requestBody),
-  })
+  // Create abort controller and register it so emergency stop can cancel
+  const controller = new AbortController()
+  llmRequestAbortManager.register(controller)
+  try {
+    if (state.shouldStopAgent) {
+      controller.abort()
+    }
+
+    const response = await fetch(`${baseURL}/chat/completions`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(requestBody),
+      signal: controller.signal,
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+
+      // Check if this is a structured output related error
+      const isStructuredOutputError = errorText.includes("json_schema") ||
+                                     errorText.includes("response_format") ||
+                                     errorText.includes("schema") ||
+                                     errorText.includes("json")
+      if (isStructuredOutputError) {
+        const error = new Error(errorText)
+        ;(error as any).isStructuredOutputError = true
+        throw error
+      }
+
+      throw new HttpError(response.status, response.statusText, errorText)
+    }
+
+    const data = await response.json()
+
+    if (data.error) {
+      if (isDebugLLM()) {
+        logLLM("API Error", data.error)
+      }
+      const error = new Error(data.error.message)
+      ;(error as any).isStructuredOutputError = data.error.message?.includes("json_schema") ||
+                                               data.error.message?.includes("response_format")
+      throw error
+    }
+
+    if (isDebugLLM()) {
+      logLLM("HTTP Response", data)
+    }
+
+    return data
+  } finally {
+    llmRequestAbortManager.unregister(controller)
+  }
 
   if (!response.ok) {
     const errorText = await response.text()
@@ -577,25 +648,34 @@ async function makeGeminiCall(
       })
       logLLM("Gemini Request Body", { prompt })
     }
-    const response = await fetch(
-      `${baseURL}/v1beta/models/${model}:generateContent?key=${config.geminiApiKey}`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          contents: [
-            {
-              parts: [{ text: prompt }],
-            },
-          ],
-          generationConfig: {
-            temperature: 0,
+
+    const controller = new AbortController()
+    llmRequestAbortManager.register(controller)
+    try {
+      if (state.shouldStopAgent) {
+        controller.abort()
+      }
+
+      const response = await fetch(
+        `${baseURL}/v1beta/models/${model}:generateContent?key=${config.geminiApiKey}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
           },
-        }),
-      },
-    )
+          body: JSON.stringify({
+            contents: [
+              {
+                parts: [{ text: prompt }],
+              },
+            ],
+            generationConfig: {
+              temperature: 0,
+            },
+          }),
+          signal: controller.signal,
+        },
+      )
 
     if (!response.ok) {
       const errorText = await response.text()
@@ -650,6 +730,9 @@ async function makeGeminiCall(
           },
         },
       ],
+    }
+    } finally {
+      llmRequestAbortManager.unregister(controller)
     }
   }, config.apiRetryCount, config.apiRetryBaseDelay, config.apiRetryMaxDelay)
 }

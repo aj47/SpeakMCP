@@ -11,6 +11,8 @@ export const state = {
   agentProcesses: new Set<ChildProcess>(),
   shouldStopAgent: false,
   agentIterationCount: 0,
+  // Track in-flight LLM abort controllers
+  llmAbortControllers: new Set<AbortController>(),
 }
 
 // Process management for agent mode
@@ -82,5 +84,25 @@ export const agentProcessManager = {
   // Get count of active processes
   getActiveProcessCount(): number {
     return state.agentProcesses.size
+  },
+}
+
+// Abort management for LLM HTTP requests
+export const llmRequestAbortManager = {
+  register(controller: AbortController) {
+    state.llmAbortControllers.add(controller)
+  },
+  unregister(controller: AbortController) {
+    state.llmAbortControllers.delete(controller)
+  },
+  abortAll() {
+    for (const controller of state.llmAbortControllers) {
+      try {
+        controller.abort()
+      } catch (_e) {
+        // ignore
+      }
+    }
+    state.llmAbortControllers.clear()
   },
 }

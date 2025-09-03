@@ -19,7 +19,6 @@ interface AgentProgressProps {
 
 // Enhanced conversation message component
 
-
 // Compact message component for space efficiency
 const CompactMessage: React.FC<{
   message: {
@@ -173,7 +172,7 @@ const CompactMessage: React.FC<{
                           <div className="mb-1 text-xs font-medium opacity-70">
                             Parameters:
                           </div>
-                          <pre className="rounded bg-muted/50 p-2 overflow-x-auto text-xs whitespace-pre-wrap">
+                          <pre className="rounded bg-muted/50 p-2 overflow-auto text-xs whitespace-pre-wrap max-h-80 scrollbar-thin">
                             {JSON.stringify(toolCall.arguments, null, 2)}
                           </pre>
                         </div>
@@ -209,7 +208,7 @@ const CompactMessage: React.FC<{
                           <div className="text-xs font-medium opacity-70 mb-1">
                             Content:
                           </div>
-                          <pre className="rounded bg-muted/30 p-2 overflow-x-auto text-xs whitespace-pre-wrap break-all">
+                          <pre className="rounded bg-muted/30 p-2 overflow-auto text-xs whitespace-pre-wrap break-all max-h-80 scrollbar-thin">
                             {result.content || "No content returned"}
                           </pre>
                         </div>
@@ -219,7 +218,7 @@ const CompactMessage: React.FC<{
                             <div className="text-xs font-medium text-destructive mb-1">
                               Error Details:
                             </div>
-                            <pre className="rounded bg-destructive/10 p-2 overflow-x-auto text-xs whitespace-pre-wrap break-all">
+                            <pre className="rounded bg-destructive/10 p-2 overflow-auto text-xs whitespace-pre-wrap break-all max-h-60 scrollbar-thin">
                               {result.error}
                             </pre>
                           </div>

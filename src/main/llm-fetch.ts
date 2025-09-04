@@ -469,50 +469,6 @@ async function makeAPICallAttempt(
   } finally {
     llmRequestAbortManager.unregister(controller)
   }
-
-  if (!response.ok) {
-    const errorText = await response.text()
-
-    // Check if this is a structured output related error
-    const isStructuredOutputError = errorText.includes("json_schema") ||
-                                   errorText.includes("response_format") ||
-                                   errorText.includes("schema") ||
-                                   response.status === 400
-
-    if (isDebugLLM()) {
-      logLLM("=== HTTP ERROR ===")
-      logLLM("HTTP Error Details:", {
-        status: response.status,
-        statusText: response.statusText,
-        errorText,
-        isStructuredOutputError,
-        model: requestBody.model
-      })
-    }
-
-    const error = new Error(errorText)
-    ;(error as any).isStructuredOutputError = isStructuredOutputError
-    ;(error as any).status = response.status
-    throw error
-  }
-
-  const data = await response.json()
-
-  if (data.error) {
-    if (isDebugLLM()) {
-      logLLM("API Error", data.error)
-    }
-    const error = new Error(data.error.message)
-    ;(error as any).isStructuredOutputError = data.error.message?.includes("json_schema") ||
-                                             data.error.message?.includes("response_format")
-    throw error
-  }
-
-  if (isDebugLLM()) {
-    logLLM("HTTP Response", data)
-  }
-
-  return data
 }
 
 /**

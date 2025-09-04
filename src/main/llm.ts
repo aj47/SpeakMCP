@@ -15,6 +15,7 @@ import { makeLLMCallWithFetch, makeTextCompletionWithFetch } from "./llm-fetch"
 import { constructSystemPrompt } from "./system-prompts"
 import { state } from "./state"
 import { isDebugLLM, logLLM, isDebugTools, logTools } from "./debug"
+import { createContextManager, Message } from "./context-manager"
 
 /**
  * Use LLM to extract useful context from conversation history
@@ -681,24 +682,26 @@ Always use actual resource IDs from the conversation history or create new ones 
     }
 
     // Build messages for LLM call
+    const messageEntries = conversationHistory
+      .map((entry) => {
+        if (entry.role === "tool") {
+          const text = (entry.content || "").trim()
+          if (!text) return null
+          return {
+            role: "user" as const,
+            content: `Tool execution results:\n${entry.content}`,
+          }
+        }
+        return {
+          role: entry.role as "user" | "assistant",
+          content: entry.content,
+        }
+      })
+      .filter((msg) => msg !== null) as Array<{ role: string; content: string }>
+
     const messages = [
       { role: "system", content: contextAwarePrompt },
-      ...conversationHistory
-        .map((entry) => {
-          if (entry.role === "tool") {
-            const text = (entry.content || "").trim()
-            if (!text) return null
-            return {
-              role: "user" as const,
-              content: `Tool execution results:\n${entry.content}`,
-            }
-          }
-          return {
-            role: entry.role as "user" | "assistant",
-            content: entry.content,
-          }
-        })
-        .filter(Boolean as any),
+      ...messageEntries,
     ]
 
     // Make LLM call (abort-aware)
@@ -1086,24 +1089,26 @@ Please try alternative approaches, break down the task into smaller steps, or pr
           true, // isAgentMode
         )
 
+        const summaryMessageEntries = conversationHistory
+          .map((entry) => {
+            if (entry.role === "tool") {
+              const text = (entry.content || "").trim()
+              if (!text) return null
+              return {
+                role: "user" as const,
+                content: `Tool execution results:\n${entry.content}`,
+              }
+            }
+            return {
+              role: entry.role as "user" | "assistant",
+              content: entry.content,
+            }
+          })
+          .filter((msg) => msg !== null) as Array<{ role: string; content: string }>
+
         const summaryMessages = [
           { role: "system", content: contextAwarePrompt },
-          ...conversationHistory
-            .map((entry) => {
-              if (entry.role === "tool") {
-                const text = (entry.content || "").trim()
-                if (!text) return null
-                return {
-                  role: "user" as const,
-                  content: `Tool execution results:\n${entry.content}`,
-                }
-              }
-              return {
-                role: entry.role as "user" | "assistant",
-                content: entry.content,
-              }
-            })
-            .filter(Boolean as any),
+          ...summaryMessageEntries,
         ]
 
         try {
@@ -1210,24 +1215,26 @@ Please try alternative approaches, break down the task into smaller steps, or pr
           true, // isAgentMode
         )
 
+        const summaryMessageEntries2 = conversationHistory
+          .map((entry) => {
+            if (entry.role === "tool") {
+              const text = (entry.content || "").trim()
+              if (!text) return null
+              return {
+                role: "user" as const,
+                content: `Tool execution results:\n${entry.content}`,
+              }
+            }
+            return {
+              role: entry.role as "user" | "assistant",
+              content: entry.content,
+            }
+          })
+          .filter((msg) => msg !== null) as Array<{ role: string; content: string }>
+
         const summaryMessages = [
           { role: "system", content: contextAwarePrompt },
-          ...conversationHistory
-            .map((entry) => {
-              if (entry.role === "tool") {
-                const text = (entry.content || "").trim()
-                if (!text) return null
-                return {
-                  role: "user" as const,
-                  content: `Tool execution results:\n${entry.content}`,
-                }
-              }
-              return {
-                role: entry.role as "user" | "assistant",
-                content: entry.content,
-              }
-            })
-            .filter(Boolean as any),
+          ...summaryMessageEntries2,
         ]
 
         try {
@@ -1386,7 +1393,31 @@ async function makeLLMCall(
         messages: messages,
       })
     }
-    const result = await makeLLMCallWithFetch(messages, chatProviderId)
+
+    // Apply context management before making the LLM call
+    const contextManager = createContextManager(chatProviderId)
+    const contextMessages: Message[] = messages.map(msg => ({
+      role: msg.role as "user" | "assistant" | "system" | "tool",
+      content: msg.content,
+      timestamp: Date.now()
+    }))
+
+    const managedMessages = await contextManager.manageContext(contextMessages)
+    const finalMessages = managedMessages.map(msg => ({
+      role: msg.role,
+      content: msg.content
+    }))
+
+    if (isDebugLLM() && finalMessages.length !== messages.length) {
+      logLLM("Context management applied", {
+        originalCount: messages.length,
+        managedCount: finalMessages.length,
+        originalTokens: messages.reduce((sum, msg) => sum + msg.content.length, 0) / 4,
+        managedTokens: finalMessages.reduce((sum, msg) => sum + msg.content.length, 0) / 4
+      })
+    }
+
+    const result = await makeLLMCallWithFetch(finalMessages, chatProviderId)
     if (isDebugLLM()) {
       logLLM("Response ←", result)
       logLLM("=== LLM CALL END ===")

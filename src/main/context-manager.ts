@@ -33,7 +33,7 @@ const MODEL_CONTEXT_LIMITS: Record<string, number> = {
   "mixtral-8x7b-32768": 32768,
   "gemma2-9b-it": 8192,
   "moonshotai/kimi-k2:free": 32768,
-  "z-ai/glm-4.5": 32768,
+  "z-ai/glm-4.5": 131072, // GLM-4.5 actually has 128K context window
 
   // Gemini models
   "gemini-1.5-flash-002": 1000000,
@@ -44,10 +44,48 @@ const MODEL_CONTEXT_LIMITS: Record<string, number> = {
 }
 
 /**
- * Get context limit for a model
+ * Get context limit for a model, with dynamic detection support
  */
-function getModelContextLimit(model: string): number {
+async function getModelContextLimit(model: string, providerId?: string): Promise<number> {
+  // First try to get from models API if available
+  if (providerId) {
+    try {
+      const dynamicLimit = await getDynamicContextLimit(model, providerId)
+      if (dynamicLimit > 0) {
+        if (isDebugLLM()) {
+          logLLM("Context limit detected from API", { model, dynamicLimit })
+        }
+        return dynamicLimit
+      }
+    } catch (error) {
+      if (isDebugLLM()) {
+        logLLM("Failed to get dynamic context limit, using static mapping", { model, error: String(error) })
+      }
+    }
+  }
+
+  // Fallback to static mapping
   return MODEL_CONTEXT_LIMITS[model] || MODEL_CONTEXT_LIMITS["default"]
+}
+
+/**
+ * Attempt to get context limit from models API
+ */
+async function getDynamicContextLimit(model: string, providerId: string): Promise<number> {
+  try {
+    // Import models service to get model info
+    const { modelsService } = await import('./models-service')
+    const models = await modelsService.getModels(providerId)
+
+    const modelInfo = models.find(m => m.id === model)
+    if (modelInfo && modelInfo.context_length && modelInfo.context_length > 0) {
+      return modelInfo.context_length
+    }
+  } catch (error) {
+    // Silently fail and use static mapping
+  }
+
+  return 0 // Indicates no dynamic limit found
 }
 
 /**
@@ -394,7 +432,7 @@ ${resultText.substring(0, 8000)}` // Limit input to prevent overflow
 /**
  * Factory function to create context manager with automatic model detection
  */
-export function createContextManager(providerId?: string, model?: string): SimpleContextManager {
+export async function createContextManager(providerId?: string, model?: string): Promise<SimpleContextManager> {
   const config = configStore.get()
   const chatProviderId = providerId || config.mcpToolsProviderId || "openai"
 
@@ -416,7 +454,7 @@ export function createContextManager(providerId?: string, model?: string): Simpl
     }
   }
 
-  const contextLimit = getModelContextLimit(modelName)
+  const contextLimit = await getModelContextLimit(modelName, chatProviderId)
 
   if (isDebugLLM()) {
     logLLM("Creating context manager", {

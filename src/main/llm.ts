@@ -1395,7 +1395,7 @@ async function makeLLMCall(
     }
 
     // Apply context management before making the LLM call
-    const contextManager = createContextManager(chatProviderId)
+    const contextManager = await createContextManager(chatProviderId)
     const contextMessages: Message[] = messages.map(msg => ({
       role: msg.role as "user" | "assistant" | "system" | "tool",
       content: msg.content,

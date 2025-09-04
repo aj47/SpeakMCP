@@ -182,16 +182,33 @@ export class SimpleContextManager {
     const original = result[sysIndex].content
     let content = original
 
-    // 1) Remove single-line parameter declarations to avoid schema bloat
-    content = content.replace(/^\s*Parameters:\s*\{[^\n]*\}\s*$/gm, '')
+    // 1) Remove single-line parameter declarations only within the AVAILABLE TOOLS block
+    const availMarker = "\n\nAVAILABLE TOOLS:\n"
+    const relMarker = "\n\nMOST RELEVANT TOOLS"
+    const noToolsMarker = "\n\nNo tools are currently available."
+
+    const availIdx = content.indexOf(availMarker)
+    if (availIdx !== -1) {
+      const start = availIdx + availMarker.length
+      let end = content.indexOf(relMarker, start)
+      if (end === -1) end = content.indexOf(noToolsMarker, start)
+      if (end === -1) end = content.length
+
+      const before = content.slice(0, start)
+      const block = content.slice(start, end)
+      const after = content.slice(end)
+
+      const cleanedBlock = block.replace(/^\s*Parameters:\s*\{[^\n]*\}\s*$/gm, '')
+      content = before + cleanedBlock + after
+    }
 
     // 2) Truncate the AVAILABLE TOOLS section to a fixed number of lines
-    const marker = "\n\nAVAILABLE TOOLS:\n"
+    const marker = availMarker
     const markerIdx = content.indexOf(marker)
     if (markerIdx !== -1) {
       const start = markerIdx + marker.length
-      let end = content.indexOf("\n\nMOST RELEVANT TOOLS", start)
-      if (end === -1) end = content.indexOf("\n\nNo tools are currently available.", start)
+      let end = content.indexOf(relMarker, start)
+      if (end === -1) end = content.indexOf(noToolsMarker, start)
       if (end === -1) end = content.length
 
       const toolsBlock = content.slice(start, end)

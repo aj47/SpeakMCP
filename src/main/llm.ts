@@ -288,12 +288,16 @@ export async function processTranscriptWithTools(
       index === self.findIndex((t) => t.name === tool.name),
   )
 
-  // Construct system prompt using the new approach
+  // Analyze available tools to determine most relevant ones for this transcript
+  const { relevantTools } = analyzeToolCapabilities(uniqueAvailableTools, transcript)
+
+  // Construct system prompt using the new approach, surfacing full schemas only for relevant tools
   const userGuidelines = config.mcpToolsSystemPrompt
   const systemPrompt = constructSystemPrompt(
     uniqueAvailableTools,
     userGuidelines,
     false,
+    relevantTools,
   )
 
   const messages = [

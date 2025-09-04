@@ -13,42 +13,46 @@ pnpm dev d
 
 **Individual debug modes:**
 ```bash
-pnpm dev debug-llm       # Enable LLM debug
-pnpm dev debug-context   # Enable context manager/compression debug
-pnpm dev debug-tools     # Enable tools debug
-pnpm dev debug-app       # Enable app debug
-pnpm dev debug-all       # Enable all debug modes
-pnpm dev dl              # Enable LLM debug (short)
-pnpm dev dctx            # Enable context debug (short)
-pnpm dev dt              # Enable tools debug (short)
-pnpm dev dk              # Enable keybinds debug (short)
-pnpm dev dapp            # Enable app debug (short)
+pnpm dev debug-llm           # Enable LLM debug
+pnpm dev debug-llm-verbose   # LLM debug (verbose; no truncation)
+pnpm dev debug-context       # Enable context manager/compression debug
+pnpm dev debug-tools         # Enable tools debug
+pnpm dev debug-app           # Enable app debug
+pnpm dev debug-all           # Enable all debug modes
+pnpm dev dl                  # Enable LLM debug (short)
+pnpm dev dlv                 # LLM debug verbose (short)
+pnpm dev dctx                # Enable context debug (short)
+pnpm dev dt                  # Enable tools debug (short)
+pnpm dev dk                  # Enable keybinds debug (short)
+pnpm dev dapp                # Enable app debug (short)
 ```
 
 ### Traditional Formats
 
 **With dashes:**
 ```bash
-pnpm dev -- -d                # Debug all (short)
-pnpm dev -- -da               # Debug all (short)
-pnpm dev -- --debug-llm       # LLM debug (long)
-pnpm dev -- --debug-context   # Context debug (long)
-pnpm dev -- --debug-tools     # Tools debug (long)
-pnpm dev -- --debug-app       # App debug (long)
-pnpm dev -- --debug-all       # All debug modes (long)
-pnpm dev -- -dctx             # Context debug (short)
-pnpm dev -- -dapp             # App debug (short)
+pnpm dev -- -d                    # Debug all (short)
+pnpm dev -- -da                   # Debug all (short)
+pnpm dev -- --debug-llm           # LLM debug (long)
+pnpm dev -- --debug-llm-verbose   # LLM debug verbose (long)
+pnpm dev -- --debug-context       # Context debug (long)
+pnpm dev -- --debug-tools         # Tools debug (long)
+pnpm dev -- --debug-app           # App debug (long)
+pnpm dev -- --debug-all           # All debug modes (long)
+pnpm dev -- -dctx                 # Context debug (short)
+pnpm dev -- -dapp                 # App debug (short)
 ```
 
 **Environment variables:**
 ```bash
-DEBUG=* pnpm dev                 # Enable all debug modes
-DEBUG_LLM=true pnpm dev          # LLM debug only
-DEBUG_CONTEXT=true pnpm dev      # Context manager/compression debug only
-DEBUG_TOOLS=true pnpm dev        # Tools debug only
-DEBUG_APP=true pnpm dev          # App debug only
-DEBUG=llm,context pnpm dev       # Multiple specific modes
-DEBUG=llm,context,tools,app pnpm dev # Multiple specific modes including context
+DEBUG=* pnpm dev                       # Enable all debug modes
+DEBUG_LLM=true pnpm dev                # LLM debug only
+DEBUG_LLM_VERBOSE=true pnpm dev        # LLM debug verbose (no truncation)
+DEBUG_CONTEXT=true pnpm dev            # Context manager/compression debug only
+DEBUG_TOOLS=true pnpm dev              # Tools debug only
+DEBUG_APP=true pnpm dev                # App debug only
+DEBUG=llm,context pnpm dev             # Multiple specific modes
+DEBUG=llm,context,tools,app pnpm dev   # Multiple specific modes including context
 ```
 
 ## 🔍 Debug Output Details

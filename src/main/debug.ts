@@ -1,5 +1,6 @@
 export interface DebugFlags {
   llm: boolean
+  llmVerbose: boolean
   context: boolean
   tools: boolean
   keybinds: boolean
@@ -9,6 +10,7 @@ export interface DebugFlags {
 
 const flags: DebugFlags = {
   llm: false,
+  llmVerbose: false,
   context: false,
   tools: false,
   keybinds: false,
@@ -57,12 +59,18 @@ export function initDebugFlags(argv: string[] = process.argv): DebugFlags {
     envDebug === "*" ||
     envDebug.includes("all")
 
+  const envLLMVerbose =
+    strToBool(process.env.DEBUG_LLM_VERBOSE) ||
+    envParts.includes("llm-verbose") ||
+    envParts.includes("llmverbose")
+
   const all =
     hasAny("--debug", "--debug-all", "-d", "-da", "debug", "debug-all", "d", "da") ||
     envDebug === "*" ||
     envParts.includes("all")
 
   flags.llm = all || hasAny("--debug-llm", "-dl", "debug-llm", "dl") || envLLM
+  flags.llmVerbose = hasAny("--debug-llm-verbose", "-dlv", "debug-llm-verbose", "dlv") || envLLMVerbose
   flags.context = all || hasAny("--debug-context", "-dctx", "debug-context", "dctx") || envContext
   flags.tools = all || hasAny("--debug-tools", "-dt", "debug-tools", "dt") || envTools
   flags.keybinds = all || hasAny("--debug-keybinds", "-dk", "debug-keybinds", "dk") || envKeybinds
@@ -70,12 +78,15 @@ export function initDebugFlags(argv: string[] = process.argv): DebugFlags {
   flags.app = all || hasAny("--debug-app", "-dapp", "debug-app", "dapp") || envApp
   flags.all = all
 
+  // Verbose implies LLM debug is on
+  if (flags.llmVerbose) flags.llm = true
+
 
 
   if (flags.llm || flags.context || flags.tools || flags.keybinds || flags.app) {
     // Small banner so users can see debugs are enabled
     const enabled: string[] = []
-    if (flags.llm) enabled.push("LLM")
+    if (flags.llm) enabled.push(`LLM${flags.llmVerbose ? " (VERBOSE)" : ""}`)
     if (flags.context) enabled.push("CONTEXT")
     if (flags.tools) enabled.push("TOOLS")
     if (flags.keybinds) enabled.push("KEYBINDS")
@@ -115,10 +126,46 @@ function ts(): string {
   return d.toISOString()
 }
 
+function safeStringify(value: any, indent = 2): string {
+  const seen = new WeakSet<any>()
+  const replacer = (_key: string, val: any) => {
+    if (typeof val === "bigint") return val.toString()
+    if (typeof val === "function") return `[Function ${val.name || "anonymous"}]`
+    if (typeof val === "symbol") return val.toString()
+    if (val && typeof val === "object") {
+      if (seen.has(val)) return "[Circular]"
+      seen.add(val)
+    }
+    return val
+  }
+  try {
+    return JSON.stringify(value, replacer, indent)
+  } catch {
+    try {
+      return String(value)
+    } catch {
+      return "[Unserializable]"
+    }
+  }
+}
+
+function formatForLog(value: any): string {
+  if (typeof value === "string") return value
+  if (value instanceof Error) {
+    return safeStringify({ name: value.name, message: value.message, stack: value.stack })
+  }
+  return safeStringify(value)
+}
+
 export function logLLM(...args: any[]) {
   if (!isDebugLLM()) return
   // eslint-disable-next-line no-console
-  console.log(`[${ts()}] [DEBUG][LLM]`, ...args)
+  if (flags.llmVerbose) {
+    const formatted = args.map((a) => formatForLog(a))
+    console.log(`[${ts()}] [DEBUG][LLM]`, ...formatted)
+  } else {
+    console.log(`[${ts()}] [DEBUG][LLM]`, ...args)
+  }
 }
 
 export function logTools(...args: any[]) {

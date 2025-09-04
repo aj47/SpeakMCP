@@ -70,22 +70,22 @@ export function constructSystemPrompt(
     return first.length < collapsed.length ? `${first}…` : first
   }
 
-  // Helper function to format tool information (simplified to reduce token usage)
+  // Helper function to format tool information with optional parameter inclusion
   const formatToolInfo = (
     tools: Array<{ name: string; description: string; inputSchema?: any }>,
+    includeParameters: boolean,
   ) => {
     return tools
       .map((tool) => {
         const shortDesc = sanitizeDescription(tool.description)
         let info = `- ${tool.name}${shortDesc ? `: ${shortDesc}` : ''}`
-        if (tool.inputSchema?.properties) {
+        if (includeParameters && tool.inputSchema?.properties) {
           const params = Object.entries(tool.inputSchema.properties)
             .map(([key, schema]: [string, any]) => {
               const type = (schema as any).type || "any"
               const required = tool.inputSchema.required?.includes(key)
                 ? " (required)"
                 : ""
-              // Use the actual schema type without hardcoded fixes
               return `${key}: ${type}${required}`
             })
             .join(", ")
@@ -100,15 +100,16 @@ export function constructSystemPrompt(
 
   // Add available tools
   if (availableTools.length > 0) {
-    prompt += `\n\nAVAILABLE TOOLS:\n${formatToolInfo(availableTools)}`
+    // Keep AVAILABLE TOOLS compact (names + short descriptions only)
+    prompt += `\n\nAVAILABLE TOOLS:\n${formatToolInfo(availableTools, false)}`
 
-    // Add relevant tools section if provided and different from all tools
+    // Add relevant tools section with full parameter lines
     if (
       relevantTools &&
       relevantTools.length > 0 &&
       relevantTools.length < availableTools.length
     ) {
-      prompt += `\n\nMOST RELEVANT TOOLS FOR THIS REQUEST:\n${formatToolInfo(relevantTools)}`
+      prompt += `\n\nMOST RELEVANT TOOLS FOR THIS REQUEST:\n${formatToolInfo(relevantTools, true)}`
     }
   } else {
     prompt += `\n\nNo tools are currently available.`

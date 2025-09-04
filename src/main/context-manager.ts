@@ -70,6 +70,7 @@ function estimateMessagesTokens(messages: Message[]): number {
  */
 export class SimpleContextManager {
   private config: ContextManagerConfig
+  private readonly LARGE_TOOL_RESULT_THRESHOLD = 10000 // 10K characters
 
   constructor(modelContextLimit: number) {
     this.config = {
@@ -91,7 +92,10 @@ export class SimpleContextManager {
    * Main context management entry point
    */
   async manageContext(messages: Message[]): Promise<Message[]> {
-    const currentTokens = estimateMessagesTokens(messages)
+    // First, handle any large tool results
+    const messagesWithCompressedTools = await this.compressLargeToolResults(messages)
+
+    const currentTokens = estimateMessagesTokens(messagesWithCompressedTools)
 
     if (currentTokens <= this.config.targetTokens) {
       if (isDebugLLM()) {
@@ -100,7 +104,7 @@ export class SimpleContextManager {
           targetTokens: this.config.targetTokens
         })
       }
-      return messages
+      return messagesWithCompressedTools
     }
 
     if (isDebugLLM()) {
@@ -112,7 +116,7 @@ export class SimpleContextManager {
     }
 
     try {
-      return await this.compressWithLLM(messages)
+      return await this.compressWithLLM(messagesWithCompressedTools)
     } catch (error) {
       if (isDebugLLM()) {
         logLLM("Context management: LLM compression failed, falling back to truncation", error)
@@ -120,8 +124,60 @@ export class SimpleContextManager {
       diagnosticsService.logError("context-manager", "LLM compression failed", error)
 
       // Fallback to simple truncation
-      return this.simpleTruncation(messages)
+      return this.simpleTruncation(messagesWithCompressedTools)
     }
+  }
+
+  /**
+   * Compress large tool results to prevent context overflow
+   */
+  private async compressLargeToolResults(messages: Message[]): Promise<Message[]> {
+    const compressedMessages: Message[] = []
+
+    for (const message of messages) {
+      if (message.role === 'user' && message.content.startsWith('Tool execution results:')) {
+        const contentLength = message.content.length
+
+        if (contentLength > this.LARGE_TOOL_RESULT_THRESHOLD) {
+          if (isDebugLLM()) {
+            logLLM("Context management: Compressing large tool result", {
+              originalLength: contentLength,
+              threshold: this.LARGE_TOOL_RESULT_THRESHOLD
+            })
+          }
+
+          try {
+            // Extract the tool result JSON
+            const jsonMatch = message.content.match(/Tool execution results:\s*(\{[\s\S]*\})/)
+            if (jsonMatch) {
+              const toolResult = JSON.parse(jsonMatch[1])
+              const summary = await this.summarizeToolResult(toolResult)
+
+              compressedMessages.push({
+                ...message,
+                content: `Tool execution results (SUMMARIZED - original ${contentLength} chars):\n${summary}`
+              })
+              continue
+            }
+          } catch (error) {
+            if (isDebugLLM()) {
+              logLLM("Context management: Failed to compress tool result, truncating", { error: String(error) })
+            }
+            // Fallback to truncation
+            compressedMessages.push({
+              ...message,
+              content: message.content.substring(0, this.LARGE_TOOL_RESULT_THRESHOLD) +
+                      `\n\n[TRUNCATED - original ${contentLength} characters]`
+            })
+            continue
+          }
+        }
+      }
+
+      compressedMessages.push(message)
+    }
+
+    return compressedMessages
   }
 
   /**
@@ -241,6 +297,48 @@ Summary:`
         content: `[CONTEXT SUMMARY] ${truncatedText}`,
         timestamp: Date.now()
       }
+    }
+  }
+
+  /**
+   * Summarize a large tool result using LLM
+   */
+  private async summarizeToolResult(toolResult: any): Promise<string> {
+    try {
+      const resultText = JSON.stringify(toolResult, null, 2)
+
+      // Use a simple prompt to summarize the tool result
+      const summaryPrompt = `Summarize this tool execution result, preserving key information:
+1. Success/failure status
+2. Important data points and counts
+3. Key identifiers (IDs, names, etc.)
+4. Any errors or warnings
+5. Next steps or actionable items
+
+Keep the summary concise but informative. Focus on what would be needed to continue the workflow.
+
+Tool Result:
+${resultText.substring(0, 8000)}` // Limit input to prevent overflow
+
+      const { makeLLMCallWithFetch } = await import('./llm-fetch')
+      const response = await makeLLMCallWithFetch([
+        { role: 'user', content: summaryPrompt }
+      ], 'openai') // Use a reliable provider for summarization
+
+      return response.content || '[Failed to summarize tool result]'
+    } catch (error) {
+      if (isDebugLLM()) {
+        logLLM("Context management: Failed to summarize tool result", error)
+      }
+
+      // Fallback to basic truncation with structure preservation
+      const resultStr = JSON.stringify(toolResult, null, 2)
+      if (resultStr.length <= 2000) return resultStr
+
+      // Try to preserve structure by keeping the beginning and end
+      const beginning = resultStr.substring(0, 1000)
+      const ending = resultStr.substring(resultStr.length - 500)
+      return `${beginning}\n\n... [TRUNCATED ${resultStr.length - 1500} characters] ...\n\n${ending}`
     }
   }
 

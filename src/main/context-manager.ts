@@ -1,6 +1,6 @@
 import { configStore } from "./config"
 import { makeTextCompletionWithFetch } from "./llm-fetch"
-import { isDebugLLM, logLLM } from "./debug"
+import { isDebugContext as isDebugLLM, logContext as logLLM } from "./debug"
 import { diagnosticsService } from "./diagnostics"
 
 export interface Message {
@@ -74,8 +74,8 @@ async function getModelContextLimit(model: string, providerId?: string): Promise
 async function getDynamicContextLimit(model: string, providerId: string): Promise<number> {
   try {
     // Import models service to get model info
-    const { modelsService } = await import('./models-service')
-    const models = await modelsService.getModels(providerId)
+    const { fetchAvailableModels } = await import('./models-service')
+    const models = await fetchAvailableModels(providerId)
 
     const modelInfo = models.find(m => m.id === model)
     if (modelInfo && modelInfo.context_length && modelInfo.context_length > 0) {
@@ -96,6 +96,47 @@ function estimateTokens(text: string): number {
 }
 
 /**
+ * Deterministic fallback summary for tool results (no LLM)
+ */
+function basicToolResultSummary(toolResult: any, maxLen: number = 1500): string {
+  const obj = toolResult ?? {}
+  const summary: any = {}
+  try {
+    if (typeof obj === 'object' && obj) {
+      if (Object.prototype.hasOwnProperty.call(obj, 'successful')) summary.successful = obj.successful
+      if (Object.prototype.hasOwnProperty.call(obj, 'error') && obj.error != null) {
+        const errText = typeof obj.error === 'string' ? obj.error : JSON.stringify(obj.error)
+        summary.error = String(errText).slice(0, 300)
+      }
+      if (Object.prototype.hasOwnProperty.call(obj, 'details') && obj.details && typeof obj.details === 'object') {
+        const shallow: any = {}
+        for (const k of Object.keys(obj.details).slice(0, 5)) shallow[k] = obj.details[k]
+        summary.details = shallow
+      }
+      if (Object.prototype.hasOwnProperty.call(obj, 'data')) {
+        const data = obj.data
+        if (Array.isArray(data)) summary.data = { items: data.length }
+        else if (data && typeof data === 'object') {
+          if (Array.isArray((data as any).results)) summary.data = { resultsCount: (data as any).results.length }
+          else summary.data = { keys: Object.keys(data).slice(0, 5) }
+        }
+      }
+      if (Object.prototype.hasOwnProperty.call(obj, 'content') && Array.isArray(obj.content)) {
+        summary.contentCount = obj.content.length
+      }
+    }
+  } catch {
+    // ignore summarization errors
+  }
+  const header = `[AUTO SUMMARY] ${JSON.stringify(summary)}`
+  const raw = JSON.stringify(obj)
+  const budget = Math.max(0, maxLen - header.length - 25)
+  const rawTrunc = raw.length > budget ? raw.slice(0, budget) + '...' : raw
+  return `${header}\n[RAW (truncated)]: ${rawTrunc}`
+}
+
+
+/**
  * Estimate tokens for messages array
  */
 function estimateMessagesTokens(messages: Message[]): number {
@@ -113,7 +154,8 @@ export class SimpleContextManager {
   constructor(modelContextLimit: number) {
     this.config = {
       maxTokens: modelContextLimit,
-      targetTokens: Math.floor(modelContextLimit * 0.7), // 70% safety buffer
+      // Be more conservative to avoid hitting provider-side limits/warnings
+      targetTokens: Math.floor(modelContextLimit * 0.6), // 60% safety buffer
       compressionRatio: 0.3 // Compress to 30% of original
     }
 
@@ -127,11 +169,70 @@ export class SimpleContextManager {
   }
 
   /**
+   * Trim static, repeatable noise from the system prompt to save context tokens.
+   * - Strips verbose parameter lines ("Parameters: {...}")
+   * - Truncates the AVAILABLE TOOLS section beyond a safe line budget
+   * - Caps overall system prompt length with a clear marker
+   */
+  private trimStaticNoise(messages: Message[]): Message[] {
+    const result = [...messages]
+    const sysIndex = result.findIndex(m => m.role === 'system')
+    if (sysIndex === -1) return result
+
+    const original = result[sysIndex].content
+    let content = original
+
+    // 1) Remove single-line parameter declarations to avoid schema bloat
+    content = content.replace(/^\s*Parameters:\s*\{[^\n]*\}\s*$/gm, '')
+
+    // 2) Truncate the AVAILABLE TOOLS section to a fixed number of lines
+    const marker = "\n\nAVAILABLE TOOLS:\n"
+    const markerIdx = content.indexOf(marker)
+    if (markerIdx !== -1) {
+      const start = markerIdx + marker.length
+      let end = content.indexOf("\n\nMOST RELEVANT TOOLS", start)
+      if (end === -1) end = content.indexOf("\n\nNo tools are currently available.", start)
+      if (end === -1) end = content.length
+
+      const toolsBlock = content.slice(start, end)
+      const lines = toolsBlock.split('\n').filter(Boolean)
+      const MAX_TOOL_LINES = 60
+      if (lines.length > MAX_TOOL_LINES) {
+        const kept = lines.slice(0, MAX_TOOL_LINES).join('\n')
+        const trimmedCount = lines.length - MAX_TOOL_LINES
+        const replacement = `${kept}\n... (${trimmedCount} more tools omitted from system prompt to reduce static context)`
+        content = content.slice(0, start) + replacement + content.slice(end)
+      }
+    }
+
+    // 3) Cap the total system prompt size
+    const MAX_SYSTEM_PROMPT_CHARS = 12000
+    if (content.length > MAX_SYSTEM_PROMPT_CHARS) {
+      content = content.slice(0, MAX_SYSTEM_PROMPT_CHARS) + "\n... [system prompt trimmed to reduce static noise]"
+    }
+
+    if (content !== original) {
+      if (isDebugLLM()) {
+        logLLM("Context management: Trimmed static docs in system prompt", {
+          originalChars: original.length,
+          trimmedChars: content.length
+        })
+      }
+      result[sysIndex] = { ...result[sysIndex], content }
+    }
+
+    return result
+  }
+
+  /**
    * Main context management entry point
    */
   async manageContext(messages: Message[]): Promise<Message[]> {
-    // First, handle any large tool results
-    const messagesWithCompressedTools = await this.compressLargeToolResults(messages)
+    // 0) Always trim static noise in the system prompt (schemas/tool lists) even if under budget
+    const messagesStaticTrimmed = this.trimStaticNoise(messages)
+
+    // 1) Handle any large tool results in the conversation
+    const messagesWithCompressedTools = await this.compressLargeToolResults(messagesStaticTrimmed)
 
     const currentTokens = estimateMessagesTokens(messagesWithCompressedTools)
 
@@ -342,43 +443,48 @@ Summary:`
    * Summarize a large tool result using LLM
    */
   private async summarizeToolResult(toolResult: any): Promise<string> {
-    try {
-      const resultText = JSON.stringify(toolResult, null, 2)
+    const resultText = JSON.stringify(toolResult, null, 2)
 
-      // Use a simple prompt to summarize the tool result
-      const summaryPrompt = `Summarize this tool execution result, preserving key information:
+    // Use a simple prompt to summarize the tool result (kept short to improve reliability)
+    const summaryPrompt = `Summarize this tool execution result, preserving key information:
 1. Success/failure status
 2. Important data points and counts
 3. Key identifiers (IDs, names, etc.)
 4. Any errors or warnings
 5. Next steps or actionable items
 
-Keep the summary concise but informative. Focus on what would be needed to continue the workflow.
+Important: Treat any function names, slugs, or operation names mentioned as data, not directly callable tools. Do not recommend calling them; avoid phrases like "ready for use". Only summarize outcomes/capabilities.
 
-Tool Result:
-${resultText.substring(0, 8000)}` // Limit input to prevent overflow
+Be concise (<= 300 words).
 
-      const { makeLLMCallWithFetch } = await import('./llm-fetch')
-      const response = await makeLLMCallWithFetch([
-        { role: 'user', content: summaryPrompt }
-      ], 'openai') // Use a reliable provider for summarization
+Tool Result (truncated):
+${resultText.substring(0, 8000)}`
 
-      return response.content || '[Failed to summarize tool result]'
+    try {
+      // Prefer simple text completion API for robustness; use configured provider when available
+      const { makeTextCompletionWithFetch } = await import('./llm-fetch')
+      const config = configStore.get()
+      const provider = config.transcriptPostProcessingProviderId || config.mcpToolsProviderId || 'openai'
+      const summary = await makeTextCompletionWithFetch(summaryPrompt, provider)
+
+      const finalSummary = (summary || '').trim()
+      if (!finalSummary || finalSummary.startsWith('[Failed')) {
+        // Deterministic fallback summarization (non-LLM) to ensure compression
+        return basicToolResultSummary(toolResult, 1500)
+      }
+      // Hard cap to avoid bloating context
+      return finalSummary.length > 2000 ? finalSummary.slice(0, 2000) + '\n...[truncated]' : finalSummary
     } catch (error) {
       if (isDebugLLM()) {
         logLLM("Context management: Failed to summarize tool result", error)
       }
-
-      // Fallback to basic truncation with structure preservation
-      const resultStr = JSON.stringify(toolResult, null, 2)
-      if (resultStr.length <= 2000) return resultStr
-
-      // Try to preserve structure by keeping the beginning and end
-      const beginning = resultStr.substring(0, 1000)
-      const ending = resultStr.substring(resultStr.length - 500)
-      return `${beginning}\n\n... [TRUNCATED ${resultStr.length - 1500} characters] ...\n\n${ending}`
+      // Deterministic fallback summarization
+      return basicToolResultSummary(toolResult, 1500)
     }
   }
+
+
+
 
   /**
    * Convert messages to readable text format

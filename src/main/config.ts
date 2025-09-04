@@ -21,6 +21,10 @@ const getConfig = () => {
     mcpAutoPasteEnabled: false,
     mcpAutoPasteDelay: 1000, // 1 second delay by default
     mcpMaxIterations: 10, // Default max iterations for agent mode
+    // Completion verification defaults
+    mcpVerifyCompletionEnabled: true,
+    mcpVerifyCompletionMaxContextItems: 10,
+
     textInputEnabled: true,
     textInputShortcut: "ctrl-t",
     conversationsEnabled: true,

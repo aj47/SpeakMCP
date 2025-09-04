@@ -13,37 +13,42 @@ pnpm dev d
 
 **Individual debug modes:**
 ```bash
-pnpm dev debug-llm    # Enable LLM debug
-pnpm dev debug-tools  # Enable tools debug
-pnpm dev debug-app    # Enable app debug
-pnpm dev debug-all    # Enable all debug modes
-pnpm dev dl           # Enable LLM debug (short)
-pnpm dev dt           # Enable tools debug (short)
-pnpm dev dk           # Enable keybinds debug (short)
-pnpm dev dapp         # Enable app debug (short)
+pnpm dev debug-llm       # Enable LLM debug
+pnpm dev debug-context   # Enable context manager/compression debug
+pnpm dev debug-tools     # Enable tools debug
+pnpm dev debug-app       # Enable app debug
+pnpm dev debug-all       # Enable all debug modes
+pnpm dev dl              # Enable LLM debug (short)
+pnpm dev dctx            # Enable context debug (short)
+pnpm dev dt              # Enable tools debug (short)
+pnpm dev dk              # Enable keybinds debug (short)
+pnpm dev dapp            # Enable app debug (short)
 ```
 
 ### Traditional Formats
 
 **With dashes:**
 ```bash
-pnpm dev -- -d              # Debug all (short)
-pnpm dev -- -da             # Debug all (short)
-pnpm dev -- --debug-llm     # LLM debug (long)
-pnpm dev -- --debug-tools   # Tools debug (long)
-pnpm dev -- --debug-app     # App debug (long)
-pnpm dev -- --debug-all     # All debug modes (long)
-pnpm dev -- -dapp           # App debug (short)
+pnpm dev -- -d                # Debug all (short)
+pnpm dev -- -da               # Debug all (short)
+pnpm dev -- --debug-llm       # LLM debug (long)
+pnpm dev -- --debug-context   # Context debug (long)
+pnpm dev -- --debug-tools     # Tools debug (long)
+pnpm dev -- --debug-app       # App debug (long)
+pnpm dev -- --debug-all       # All debug modes (long)
+pnpm dev -- -dctx             # Context debug (short)
+pnpm dev -- -dapp             # App debug (short)
 ```
 
 **Environment variables:**
 ```bash
-DEBUG=* pnpm dev             # Enable all debug modes
-DEBUG_LLM=true pnpm dev      # LLM debug only
-DEBUG_TOOLS=true pnpm dev    # Tools debug only
-DEBUG_APP=true pnpm dev      # App debug only
-DEBUG=llm,tools pnpm dev     # Multiple specific modes
-DEBUG=llm,tools,app pnpm dev # Multiple specific modes including app
+DEBUG=* pnpm dev                 # Enable all debug modes
+DEBUG_LLM=true pnpm dev          # LLM debug only
+DEBUG_CONTEXT=true pnpm dev      # Context manager/compression debug only
+DEBUG_TOOLS=true pnpm dev        # Tools debug only
+DEBUG_APP=true pnpm dev          # App debug only
+DEBUG=llm,context pnpm dev       # Multiple specific modes
+DEBUG=llm,context,tools,app pnpm dev # Multiple specific modes including context
 ```
 
 ## 🔍 Debug Output Details
@@ -77,6 +82,24 @@ When LLM debug is enabled, you'll see:
 - Structured output parsing
 - Tool calls planned by the LLM
 - Error details and stack traces
+
+### Context Debug (`debug-context` or `dctx`)
+
+When context debug is enabled, you'll see detailed context management and compression decisions:
+
+```
+[DEBUG][CONTEXT] Context Manager initialized { maxTokens: 32768, targetTokens: 19660, compressionRatio: 0.3 }
+[DEBUG][CONTEXT] Context management: No action needed { currentTokens: 1200, targetTokens: 19660 }
+[DEBUG][CONTEXT] Context management: Compression needed { currentTokens: 23000, targetTokens: 19660, overageTokens: 3340 }
+[DEBUG][CONTEXT] Context management: LLM compression completed { originalTokens: 23000, compressedTokens: 14000 }
+```
+
+**What it shows:**
+- Model context detection and limits
+- Static prompt trimming and tool docs reductions
+- Large tool-result compression vs truncation
+- Middle-section summarization strategy
+- Fallback truncation decisions and token accounting
 
 ### Tools Debug (`debug-tools` or `dt`)
 
@@ -166,6 +189,7 @@ For persistent debugging across sessions:
 ```bash
 # Add to your shell profile (.bashrc, .zshrc, etc.)
 export DEBUG_LLM=true
+export DEBUG_CONTEXT=true
 export DEBUG_TOOLS=true
 export DEBUG_APP=true
 
@@ -261,9 +285,10 @@ Debug logs are written to:
 Use grep to filter specific debug information:
 
 ```bash
-pnpm dev d 2>&1 | grep "LLM"     # LLM logs only
-pnpm dev d 2>&1 | grep "ERROR"   # Errors only
-pnpm dev d 2>&1 | grep -v "TOOLS" # Exclude tools logs
+pnpm dev d 2>&1 | grep "LLM"       # LLM logs only
+pnpm dev d 2>&1 | grep "CONTEXT"   # Context manager/compression logs only
+pnpm dev d 2>&1 | grep "ERROR"     # Errors only
+pnpm dev d 2>&1 | grep -v "TOOLS"  # Exclude tools logs
 ```
 
 ## 🔍 Troubleshooting Debug Mode
@@ -284,6 +309,7 @@ pnpm dev d 2>&1 | grep -v "TOOLS" # Exclude tools logs
 3. **Check environment variables:**
    ```bash
    echo $DEBUG_LLM
+   echo $DEBUG_CONTEXT
    echo $DEBUG
    ```
 

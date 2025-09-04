@@ -273,6 +273,12 @@ export type Config = {
   mcpAutoPasteDelay?: number
   mcpMaxIterations?: number
 
+  // MCP Completion Verification
+  mcpVerifyCompletionEnabled?: boolean
+  mcpVerifyCompletionMaxContextItems?: number
+  mcpVerifyCompletionRetryCount?: number
+
+
   // MCP Server Configuration
   mcpConfig?: MCPConfig
 

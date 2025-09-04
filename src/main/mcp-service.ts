@@ -681,17 +681,98 @@ export class MCPService {
       throw new Error(`Server ${serverName} not found or not connected`)
     }
 
-    // Enhanced argument processing with session injection
+    // Enhanced argument processing with schema-aware normalization and session injection
     let processedArguments = { ...arguments_ }
 
-    // Auto-fix common parameter type mismatches based on tool schema
+    // Normalize argument keys to match schema expectations (snake/camel/kebab variants)
+    const toSnake = (s: string) => s.replace(/([A-Z])/g, "_$1").replace(/[-\s]/g, "_").toLowerCase()
+    const toCamel = (s: string) => s.replace(/[_-]([a-z])/g, (_, c) => c.toUpperCase())
+
+    const toolSchema = this.availableTools.find(t => t.name === `${serverName}:${toolName}`)?.inputSchema
+    if (toolSchema?.properties && typeof toolSchema.properties === "object") {
+      const normalizedArgs: Record<string, any> = { ...processedArguments }
+      const expectedProps = Object.keys(toolSchema.properties)
+
+      for (const expected of expectedProps) {
+        if (normalizedArgs[expected] !== undefined) continue
+        const variants = new Set<string>([
+          toCamel(expected),
+          toSnake(expected),
+          expected.replace(/[_-]/g, ""),
+          expected.toLowerCase(),
+        ])
+        // Common pluralization/alias variants for arrays like "tools"
+        if (expected.toLowerCase() === "tools") {
+          variants.add("tool_calls")
+          variants.add("toolCalls")
+          variants.add("tool-calls")
+        }
+        for (const v of variants) {
+          if (normalizedArgs[v] !== undefined) {
+            normalizedArgs[expected] = normalizedArgs[v]
+            delete normalizedArgs[v]
+            break
+          }
+        }
+      }
+
+      // Type coercions for common mismatches based on schema
+      for (const [paramName, paramValue] of Object.entries(normalizedArgs)) {
+        const expectedType = toolSchema.properties[paramName]?.type
+        if (expectedType && typeof paramValue !== expectedType) {
+          if (expectedType === "string" && Array.isArray(paramValue)) {
+            normalizedArgs[paramName] = paramValue.length === 0 ? "" : paramValue.join(", ")
+          } else if (expectedType === "array" && typeof paramValue === "string") {
+            try {
+              const parsed = JSON.parse(paramValue)
+              normalizedArgs[paramName] = Array.isArray(parsed) ? parsed : [parsed]
+            } catch {
+              normalizedArgs[paramName] = paramValue ? [paramValue] : []
+            }
+          } else if (expectedType === "number" && typeof paramValue === "string") {
+            const num = parseFloat(paramValue)
+            if (!isNaN(num)) normalizedArgs[paramName] = num
+          } else if (expectedType === "boolean" && typeof paramValue === "string") {
+            normalizedArgs[paramName] = paramValue.toLowerCase() === "true"
+          }
+        }
+      }
+
+      // Special handling: if schema expects an array param but we have an alias
+      if (toolSchema.properties.tools?.type === "array" && !Array.isArray(normalizedArgs.tools)) {
+        const aliased = normalizedArgs.tools ?? normalizedArgs.tool_calls ?? normalizedArgs.toolCalls
+        if (aliased !== undefined) {
+          normalizedArgs.tools = Array.isArray(aliased) ? aliased : [aliased]
+          delete normalizedArgs.tool_calls
+          delete normalizedArgs.toolCalls
+        }
+      }
+
+      processedArguments = normalizedArgs
+
+      // Preflight: verify required parameters are present before calling server
+      const requiredFields: string[] = Array.isArray(toolSchema.required) ? toolSchema.required : []
+      const missing = requiredFields.filter((k) => normalizedArgs[k] === undefined || normalizedArgs[k] === null || (typeof normalizedArgs[k] === "string" && normalizedArgs[k].trim() === ""))
+      if (missing.length > 0) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Missing required parameter(s) for ${serverName}:${toolName}: ${missing.join(", ")}. Use the exact parameter names from AVAILABLE TOOLS.`,
+            },
+          ],
+          isError: true,
+        }
+      }
+    }
+
+    // Auto-fix additional common parameter type mismatches (legacy fallback)
     if (client && this.availableTools.length > 0) {
       const toolSchema = this.availableTools.find(t => t.name === `${serverName}:${toolName}`)?.inputSchema
       if (toolSchema?.properties) {
         for (const [paramName, paramValue] of Object.entries(processedArguments)) {
           const expectedType = toolSchema.properties[paramName]?.type
           if (expectedType && typeof paramValue !== expectedType) {
-            // Convert common type mismatches
             if (expectedType === 'string' && Array.isArray(paramValue)) {
               processedArguments[paramName] = paramValue.length === 0 ? "" : paramValue.join(", ")
             } else if (expectedType === 'array' && typeof paramValue === 'string') {
@@ -1615,6 +1696,26 @@ export class MCPService {
       // Check if this is a server-prefixed tool
       if (toolCall.name.includes(":")) {
         const [serverName, toolName] = toolCall.name.split(":", 2)
+
+        // Preflight: ensure this exact tool exists in the discovered tool list
+        const fullName = `${serverName}:${toolName}`
+        const exists = this.availableTools.some(t => t.name === fullName)
+        if (!exists) {
+          const availableForServer = this.availableTools
+            .filter(t => t.name.startsWith(`${serverName}:`))
+            .map(t => t.name)
+            .join(", ")
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Unknown tool: ${fullName}. Available tools for ${serverName}: ${availableForServer || "none"}. Do not invent tool names from tool outputs; only use names listed in AVAILABLE TOOLS.`,
+              },
+            ],
+            isError: true,
+          }
+        }
+
         const result = await this.executeServerTool(
           serverName,
           toolName,

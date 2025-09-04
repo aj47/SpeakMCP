@@ -189,6 +189,7 @@ pnpm dev debug-all       # Readable format
 
 # Enable specific modes
 pnpm dev debug-llm       # LLM calls and responses
+pnpm dev debug-context   # Context manager and compression
 pnpm dev debug-tools     # MCP tool execution
 ```
 

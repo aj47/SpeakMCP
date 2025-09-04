@@ -197,13 +197,15 @@ function isRetryableError(error: unknown): boolean {
            error.status === 504    // Gateway Timeout
   }
 
-  // Retry on network errors
+  // Retry on network/transient errors (including empty LLM responses)
   if (error instanceof Error) {
     const message = error.message.toLowerCase()
     return message.includes('network') ||
            message.includes('timeout') ||
            message.includes('connection') ||
-           message.includes('fetch')
+           message.includes('fetch') ||
+           message.includes('empty response') ||
+           message.includes('llm returned empty response')
   }
 
   return false
@@ -703,65 +705,67 @@ export async function makeLLMCallWithFetch(
   const config = configStore.get()
   const chatProviderId = providerId || config.mcpToolsProviderId || "openai"
 
-  try {
-    let response: any
+  return apiCallWithRetry(async () => {
+    try {
+      let response: any
 
-    if (chatProviderId === "gemini") {
-      response = await makeGeminiCall(messages)
-    } else {
-      response = await makeOpenAICompatibleCall(messages, chatProviderId, true)
-    }
+      if (chatProviderId === "gemini") {
+        response = await makeGeminiCall(messages)
+      } else {
+        response = await makeOpenAICompatibleCall(messages, chatProviderId, true)
+      }
 
-    if (isDebugLLM()) {
-      logLLM("Raw API response structure:", {
-        hasChoices: !!response.choices,
-        choicesLength: response.choices?.length,
-        firstChoiceExists: !!response.choices?.[0],
-        hasMessage: !!response.choices?.[0]?.message,
-        hasContent: !!response.choices?.[0]?.message?.content
-      })
-    }
-
-    const content = response.choices[0]?.message.content?.trim()
-    if (!content) {
       if (isDebugLLM()) {
-        logLLM("Empty response details:", {
-          response: response,
-          choices: response.choices,
-          firstChoice: response.choices?.[0],
-          message: response.choices?.[0]?.message,
-          content: response.choices?.[0]?.message?.content
+        logLLM("Raw API response structure:", {
+          hasChoices: !!response.choices,
+          choicesLength: response.choices?.length,
+          firstChoiceExists: !!response.choices?.[0],
+          hasMessage: !!response.choices?.[0]?.message,
+          hasContent: !!response.choices?.[0]?.message?.content
         })
       }
 
-      // Empty responses should be treated as errors requiring retry, not completion
-      // This prevents workflows from terminating prematurely when LLM fails to respond
-      throw new Error("LLM returned empty response - this indicates a model or API issue that should be retried")
-    }
+      const content = response.choices[0]?.message.content?.trim()
+      if (!content) {
+        if (isDebugLLM()) {
+          logLLM("Empty response details:", {
+            response: response,
+            choices: response.choices,
+            firstChoice: response.choices?.[0],
+            message: response.choices?.[0]?.message,
+            content: response.choices?.[0]?.message?.content
+          })
+        }
 
-    // Try to extract JSON object from response
-    const jsonObject = extractJsonObject(content)
-    if (isDebugLLM()) {
-      logLLM("Extracted JSON object", jsonObject)
-      logLLM("JSON object has toolCalls:", !!jsonObject?.toolCalls)
-      logLLM("JSON object has content:", !!jsonObject?.content)
-    }
-    if (jsonObject && (jsonObject.toolCalls || jsonObject.content)) {
-      // If JSON lacks both toolCalls and needsMoreWork, default needsMoreWork to true (continue)
-      const response = jsonObject as LLMToolCallResponse
-      if (response.needsMoreWork === undefined && !response.toolCalls) {
-        response.needsMoreWork = true
+        // Empty responses should be treated as errors requiring retry, not completion
+        // This prevents workflows from terminating prematurely when LLM fails to respond
+        throw new Error("LLM returned empty response - this indicates a model or API issue that should be retried")
       }
-      return response
-    }
 
-    // If no valid JSON found, treat as a final response
-    // Plain text responses are typically final answers
-    return { content, needsMoreWork: false }
-  } catch (error) {
-    diagnosticsService.logError("llm-fetch", "LLM call failed", error)
-    throw error
-  }
+      // Try to extract JSON object from response
+      const jsonObject = extractJsonObject(content)
+      if (isDebugLLM()) {
+        logLLM("Extracted JSON object", jsonObject)
+        logLLM("JSON object has toolCalls:", !!jsonObject?.toolCalls)
+        logLLM("JSON object has content:", !!jsonObject?.content)
+      }
+      if (jsonObject && (jsonObject.toolCalls || jsonObject.content)) {
+        // If JSON lacks both toolCalls and needsMoreWork, default needsMoreWork to true (continue)
+        const responseObj = jsonObject as LLMToolCallResponse
+        if (responseObj.needsMoreWork === undefined && !responseObj.toolCalls) {
+          responseObj.needsMoreWork = true
+        }
+        return responseObj
+      }
+
+      // If no valid JSON found, treat as a final response
+      // Plain text responses are typically final answers
+      return { content, needsMoreWork: false }
+    } catch (error) {
+      diagnosticsService.logError("llm-fetch", "LLM call failed", error)
+      throw error
+    }
+  }, config.apiRetryCount, config.apiRetryBaseDelay, config.apiRetryMaxDelay)
 }
 
 /**

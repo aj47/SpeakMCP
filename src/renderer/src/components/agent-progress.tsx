@@ -784,12 +784,6 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
           )}
         </div>
 
-        {/* Auto-scroll indicator */}
-        {isUserScrolling && !isComplete && (
-          <div className="absolute bottom-2 right-2 animate-pulse rounded-full bg-primary/80 px-2 py-1 text-xs text-primary-foreground shadow-lg">
-            Resume auto-scroll
-          </div>
-        )}
       </div>
 
       {/* Slim Progress Bar */}

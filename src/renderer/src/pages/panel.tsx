@@ -269,17 +269,26 @@ export function Component() {
         isConfirmedRef.current = true
         recorderRef.current?.stopRecording()
       } else {
-        // Force normal dictation mode when using the normal hotkey
-        setMcpMode(false)
-        mcpModeRef.current = false
+        // If there's an active conversation, automatically continue in MCP mode
+        const continueConv = showContinueButton && !mcpMode
         setAgentProgress(null)
-        tipcClient.showPanelWindow({})
+        if (continueConv) {
+          setMcpMode(true)
+          mcpModeRef.current = true
+          tipcClient.resizePanelToNormal({})
+          tipcClient.showPanelWindow({})
+        } else {
+          // Force normal dictation mode when not continuing a conversation
+          setMcpMode(false)
+          mcpModeRef.current = false
+          tipcClient.showPanelWindow({})
+        }
         recorderRef.current?.startRecording()
       }
     })
 
     return unlisten
-  }, [recording])
+  }, [recording, showContinueButton, mcpMode])
 
   // Text input handlers
   useEffect(() => {

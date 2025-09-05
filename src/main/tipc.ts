@@ -747,14 +747,6 @@ export const router = {
         conversationId,
       )
 
-      // Add assistant response to conversation
-      if (conversationId) {
-        await conversationService.addMessageToConversation(
-          conversationId,
-          finalResponse,
-          "assistant",
-        )
-      }
 
       // Save to history
       const history = getRecordingHistory()

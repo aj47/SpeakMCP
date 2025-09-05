@@ -321,16 +321,20 @@ const ToolExecutionBubble: React.FC<{
     results: Array<{ success: boolean; content: string; error?: string }>
   }
 }> = ({ execution }) => {
+  const [expanded, setExpanded] = useState(false)
   const [showInputs, setShowInputs] = useState(false)
   const [showOutputs, setShowOutputs] = useState(false)
 
-  // Auto-collapse large payloads by default
+  // Collapsed by default; expand to show details
   useEffect(() => {
-    const bigOutput = execution.results.some((r) => (r.content?.length || 0) > 500)
-    const bigInput = execution.calls.some((c) => JSON.stringify(c.arguments)?.length > 500)
-    setShowInputs(!bigInput)
-    setShowOutputs(!bigOutput)
-  }, [execution])
+    if (expanded) {
+      setShowInputs(true)
+      setShowOutputs(true)
+    } else {
+      setShowInputs(false)
+      setShowOutputs(false)
+    }
+  }, [expanded, execution])
 
   const allSuccess = execution.results.length > 0 && execution.results.every((r) => r.success)
   const headerTitle = execution.calls.map((c) => c.name).join(", ") || "Tool Execution"
@@ -352,93 +356,104 @@ const ToolExecutionBubble: React.FC<{
     >
       <div className="mb-1 flex items-center justify-between">
         <div className="flex items-center gap-2">
+          <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => setExpanded((v) => !v)} aria-label={expanded ? "Collapse" : "Expand"}>
+            {expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+          </Button>
           <span className="font-mono font-semibold">{headerTitle}</span>
-          <Badge variant="outline" className="text-[10px]">
-            {allSuccess ? "Success" : "With errors"}
-          </Badge>
+          {expanded && (
+            <Badge variant="outline" className="text-[10px]">
+              {allSuccess ? "Success" : "With errors"}
+            </Badge>
+          )}
         </div>
-        <span className="opacity-60 text-[10px]">{new Date(execution.timestamp).toLocaleTimeString()}</span>
-      </div>
-
-      {/* Inputs */}
-      <div className="rounded-md bg-blue-50/40 dark:bg-blue-900/10 border border-blue-200/40 dark:border-blue-800/40 p-2 mb-2">
-        <div className="flex items-center justify-between">
-          <div className="text-[11px] font-semibold opacity-80">Call Parameters</div>
-          <div className="flex items-center gap-1">
-            <Button size="sm" variant="ghost" className="h-6 px-2" onClick={() => setShowInputs((v) => !v)}>
-              {showInputs ? "Hide" : "Show"}
-            </Button>
-            <Button size="sm" variant="ghost" className="h-6 px-2" onClick={() => copy(JSON.stringify(execution.calls, null, 2))}>
-              Copy
-            </Button>
-          </div>
-        </div>
-        {showInputs && (
-          <div className="mt-1 space-y-2">
-            {execution.calls.map((c, idx) => (
-              <div key={idx} className="rounded bg-muted/50 p-2 overflow-auto whitespace-pre-wrap max-h-80 scrollbar-thin">
-                <div className="mb-1 text-[11px] font-medium opacity-70">{c.name}</div>
-                <pre>{JSON.stringify(c.arguments ?? {}, null, 2)}</pre>
-              </div>
-            ))}
-          </div>
+        {expanded && (
+          <span className="opacity-60 text-[10px]">{new Date(execution.timestamp).toLocaleTimeString()}</span>
         )}
       </div>
 
-      {/* Outputs */}
-      <div
-        className="rounded-md border p-2"
-        style={{
-          borderColor: allSuccess ? "rgb(187 247 208 / 0.5)" : "rgb(254 202 202 / 0.5)",
-          backgroundColor: allSuccess ? "rgb(240 253 244 / 0.3)" : "rgb(254 242 242 / 0.3)",
-        } as React.CSSProperties}
-      >
-        <div className="flex items-center justify-between">
-          <div className="text-[11px] font-semibold opacity-80">Response</div>
-          <div className="flex items-center gap-1">
-            <Button size="sm" variant="ghost" className="h-6 px-2" onClick={() => setShowOutputs((v) => !v)}>
-              {showOutputs ? "Hide" : "Show"}
-            </Button>
-            <Button size="sm" variant="ghost" className="h-6 px-2" onClick={() => copy(JSON.stringify(execution.results, null, 2))}>
-              Copy
-            </Button>
-          </div>
-        </div>
-        {showOutputs && (
-          <div className="mt-1 space-y-2">
-            {execution.results.map((r, idx) => (
-              <div
-                key={idx}
-                className={cn(
-                  "rounded border p-2 text-xs",
-                  r.success ? "border-green-200/50 bg-green-50/30" : "border-red-200/50 bg-red-50/30",
-                )}
-              >
-                <div className="mb-1 flex items-center justify-between">
-                  <span className="font-semibold">{r.success ? "✅ Success" : "❌ Error"}</span>
-                  <Badge variant="outline" className="text-[10px]">{`Result ${idx + 1}`}</Badge>
-                </div>
-                <div className="space-y-2">
-                  <div>
-                    <div className="text-[11px] font-medium opacity-70 mb-1">Content:</div>
-                    <pre className="rounded bg-muted/30 p-2 overflow-auto whitespace-pre-wrap break-all max-h-80 scrollbar-thin">
-                      {r.content || "No content returned"}
-                    </pre>
+      {expanded && (
+        <>
+          {/* Inputs */}
+          <div className="rounded-md bg-blue-50/40 dark:bg-blue-900/10 border border-blue-200/40 dark:border-blue-800/40 p-2 mb-2">
+            <div className="flex items-center justify-between">
+              <div className="text-[11px] font-semibold opacity-80">Call Parameters</div>
+              <div className="flex items-center gap-1">
+                <Button size="sm" variant="ghost" className="h-6 px-2" onClick={() => setShowInputs((v) => !v)}>
+                  {showInputs ? "Hide" : "Show"}
+                </Button>
+                <Button size="sm" variant="ghost" className="h-6 px-2" onClick={() => copy(JSON.stringify(execution.calls, null, 2))}>
+                  Copy
+                </Button>
+              </div>
+            </div>
+            {showInputs && (
+              <div className="mt-1 space-y-2">
+                {execution.calls.map((c, idx) => (
+                  <div key={idx} className="rounded bg-muted/50 p-2 overflow-auto whitespace-pre-wrap max-h-80 scrollbar-thin">
+                    <div className="mb-1 text-[11px] font-medium opacity-70">{c.name}</div>
+                    <pre>{JSON.stringify(c.arguments ?? {}, null, 2)}</pre>
                   </div>
-                  {r.error && (
-                    <div>
-                      <div className="text-[11px] font-medium text-destructive mb-1">Error Details:</div>
-                      <pre className="rounded bg-destructive/10 p-2 overflow-auto whitespace-pre-wrap break-all max-h-60 scrollbar-thin">
-                        {r.error}
-                      </pre>
-                    </div>
-                  )}
-                </div>
+                ))}
               </div>
-            ))}
+            )}
           </div>
-        )}
-      </div>
+
+          {/* Outputs */}
+          <div
+            className="rounded-md border p-2"
+            style={{
+              borderColor: allSuccess ? "rgb(187 247 208 / 0.5)" : "rgb(254 202 202 / 0.5)",
+              backgroundColor: allSuccess ? "rgb(240 253 244 / 0.3)" : "rgb(254 242 242 / 0.3)",
+            } as React.CSSProperties}
+          >
+            <div className="flex items-center justify-between">
+              <div className="text-[11px] font-semibold opacity-80">Response</div>
+              <div className="flex items-center gap-1">
+                <Button size="sm" variant="ghost" className="h-6 px-2" onClick={() => setShowOutputs((v) => !v)}>
+                  {showOutputs ? "Hide" : "Show"}
+                </Button>
+                <Button size="sm" variant="ghost" className="h-6 px-2" onClick={() => copy(JSON.stringify(execution.results, null, 2))}>
+                  Copy
+                </Button>
+              </div>
+            </div>
+            {showOutputs && (
+              <div className="mt-1 space-y-2">
+                {execution.results.map((r, idx) => (
+                  <div
+                    key={idx}
+                    className={cn(
+                      "rounded border p-2 text-xs",
+                      r.success ? "border-green-200/50 bg-green-50/30" : "border-red-200/50 bg-red-50/30",
+                    )}
+                  >
+                    <div className="mb-1 flex items-center justify-between">
+                      <span className="font-semibold">{r.success ? "✅ Success" : "❌ Error"}</span>
+                      <Badge variant="outline" className="text-[10px]">{`Result ${idx + 1}`}</Badge>
+                    </div>
+                    <div className="space-y-2">
+                      <div>
+                        <div className="text-[11px] font-medium opacity-70 mb-1">Content:</div>
+                        <pre className="rounded bg-muted/30 p-2 overflow-auto whitespace-pre-wrap break-all max-h-80 scrollbar-thin">
+                          {r.content || "No content returned"}
+                        </pre>
+                      </div>
+                      {r.error && (
+                        <div>
+                          <div className="text-[11px] font-medium text-destructive mb-1">Error Details:</div>
+                          <pre className="rounded bg-destructive/10 p-2 overflow-auto whitespace-pre-wrap break-all max-h-60 scrollbar-thin">
+                            {r.error}
+                          </pre>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </>
+      )>
 
 
     </div>

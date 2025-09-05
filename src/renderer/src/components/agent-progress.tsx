@@ -345,6 +345,13 @@ const ToolExecutionBubble: React.FC<{
     } catch {}
   }
 
+  const handleToggleExpand = () => setExpanded((v) => !v)
+  const handleChevronClick = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    setExpanded((v) => !v)
+  }
+
+
   return (
     <div
       className={cn(
@@ -354,11 +361,12 @@ const ToolExecutionBubble: React.FC<{
           : "border-red-200/50 bg-red-50/30 text-red-700 dark:border-red-800/50 dark:bg-red-900/20 dark:text-red-300",
       )}
     >
-      <div className="mb-1 flex items-center justify-between">
+      <div
+        className="mb-1 flex items-center justify-between px-1 py-1 cursor-pointer hover:bg-muted/20 rounded"
+        onClick={handleToggleExpand}
+        aria-expanded={expanded}
+      >
         <div className="flex items-center gap-2">
-          <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => setExpanded((v) => !v)} aria-label={expanded ? "Collapse" : "Expand"}>
-            {expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-          </Button>
           <span className="font-mono font-semibold">{headerTitle}</span>
           {expanded && (
             <Badge variant="outline" className="text-[10px]">
@@ -366,9 +374,18 @@ const ToolExecutionBubble: React.FC<{
             </Badge>
           )}
         </div>
-        {expanded && (
-          <span className="opacity-60 text-[10px]">{new Date(execution.timestamp).toLocaleTimeString()}</span>
-        )}
+        <div className="flex items-center gap-2">
+          {expanded && (
+            <span className="opacity-60 text-[10px]">{new Date(execution.timestamp).toLocaleTimeString()}</span>
+          )}
+          <button
+            onClick={handleChevronClick}
+            className="p-1 rounded hover:bg-muted/30 transition-colors"
+            aria-label={expanded ? "Collapse" : "Expand"}
+          >
+            {expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+          </button>
+        </div>
       </div>
 
       {expanded && (
@@ -453,7 +470,7 @@ const ToolExecutionBubble: React.FC<{
             )}
           </div>
         </>
-      )>
+      )}
 
 
     </div>

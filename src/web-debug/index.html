@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SpeakMCP Web Debugger</title>
+  <script>
+    // Initialize mock Electron environment BEFORE any modules load
+    (function() {
+      if (typeof window !== 'undefined' && !window.electron) {
+        const mockIpcRenderer = {
+          invoke: async function(channel, ...args) {
+            console.log('[MOCK IPC] invoke:', channel, args);
+
+            // Mock responses for common channels
+            switch (channel) {
+              case 'getConfig':
+                return {
+                  themePreference: 'system',
+                  mcpToolsEnabled: true,
+                  mcpAgentModeEnabled: true,
+                  mcpMaxIterations: 10,
+                  conversationsEnabled: true,
+                  autoSaveConversations: false,
+                  sttProviderId: 'openai',
+                  llmProviderId: 'openai',
+                  ttsProviderId: 'openai',
+                  openaiApiKey: '',
+                  groqApiKey: '',
+                  anthropicApiKey: '',
+                  openaiModel: 'gpt-4',
+                  groqModel: 'llama-3.1-70b-versatile',
+                  anthropicModel: 'claude-3-5-sonnet-20241022'
+                };
+              case 'getMicrophoneStatus':
+                return 'granted';
+              case 'getConversationHistory':
+                return [];
+              case 'loadConversation':
+                return null;
+              case 'saveConversation':
+                return true;
+              case 'createConversation':
+                return {
+                  id: 'mock_conv_' + Date.now(),
+                  title: 'Mock Conversation',
+                  createdAt: Date.now(),
+                  updatedAt: Date.now(),
+                  messages: []
+                };
+              case 'isAccessibilityGranted':
+                return true;
+              case 'getMcpServerStatus':
+                return { status: 'disconnected', servers: {} };
+              case 'getMcpInitializationStatus':
+                return { initialized: false, error: null };
+              case 'fetchAvailableModels':
+                return ['gpt-4', 'gpt-4-turbo', 'gpt-3.5-turbo'];
+              default:
+                console.warn('[MOCK IPC] Unhandled invoke:', channel);
+                return null;
+            }
+          },
+
+          on: function(channel, listener) {
+            console.log('[MOCK IPC] on:', channel);
+            return function() {
+              console.log('[MOCK IPC] removeListener:', channel);
+            };
+          },
+
+          send: function(channel, ...args) {
+            console.log('[MOCK IPC] send:', channel, args);
+          },
+
+          removeAllListeners: function(channel) {
+            console.log('[MOCK IPC] removeAllListeners:', channel);
+          }
+        };
+
+        // Set up the mock environment
+        window.electron = { ipcRenderer: mockIpcRenderer };
+        window.api = mockIpcRenderer;
+
+        console.log('[MOCK] Initialized mock Electron environment for web debugging');
+      }
+    })();
+  </script>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="module" src="./index.tsx"></script>
+</body>
+</html>

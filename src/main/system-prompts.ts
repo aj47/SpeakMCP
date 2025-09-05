@@ -240,3 +240,54 @@ export function constructEnhancedSystemPrompt(
 
   return prompt
 }
+
+
+/**
+ * Construct a compact minimal system prompt that preserves tool and parameter names
+ */
+export function constructMinimalSystemPrompt(
+  availableTools: Array<{
+    name: string
+    description?: string
+    inputSchema?: any
+  }>,
+  isAgentMode: boolean = false,
+  relevantTools?: Array<{
+    name: string
+    description?: string
+    inputSchema?: any
+  }>,
+): string {
+  let prompt = "You are an MCP-capable assistant. Use exact tool names and exact parameter keys. Be concise. Do not invent IDs or paths."
+  if (isAgentMode) {
+    prompt += " Always continue iterating with tools until the task is complete; set needsMoreWork=false only when fully done."
+  }
+
+  const list = (tools: Array<{ name: string; inputSchema?: any }>) =>
+    tools
+      .map((t) => {
+        const keys = t.inputSchema?.properties
+          ? Object.keys(t.inputSchema.properties)
+          : []
+        const params = keys.join(", ")
+        return params ? `- ${t.name}(${params})` : `- ${t.name}()`
+      })
+      .join("\n")
+
+  if (availableTools?.length) {
+    prompt += `\n\nAVAILABLE TOOLS (name(params)):\n${list(availableTools)}`
+  } else {
+    prompt += `\n\nNo tools are currently available.`
+  }
+
+  if (
+    relevantTools &&
+    relevantTools.length > 0 &&
+    availableTools &&
+    relevantTools.length < availableTools.length
+  ) {
+    prompt += `\n\nMOST RELEVANT FOR THIS REQUEST:\n${list(relevantTools)}`
+  }
+
+  return prompt
+}

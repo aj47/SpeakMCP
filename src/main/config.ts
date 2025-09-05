@@ -72,6 +72,17 @@ const getConfig = () => {
     apiRetryCount: 3,
     apiRetryBaseDelay: 1000, // 1 second
     apiRetryMaxDelay: 30000, // 30 seconds
+    // Context reduction defaults
+    mcpContextReductionEnabled: true,
+    mcpContextTargetRatio: 0.7,
+    mcpContextLastNMessages: 3,
+    mcpContextSummarizeCharThreshold: 2000,
+
+    // Completion verification defaults
+    mcpVerifyCompletionEnabled: true,
+    mcpVerifyContextMaxItems: 10,
+    mcpVerifyRetryCount: 1,
+
   }
 
   try {

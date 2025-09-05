@@ -70,6 +70,13 @@ export interface Config {
   geminiBaseUrl?: string
   mcpToolsGeminiModel?: string
   transcriptPostProcessingGeminiModel?: string
+  // Context reduction (optional, may not be surfaced in UI yet)
+  mcpContextReductionEnabled?: boolean
+  mcpContextTargetRatio?: number
+  mcpContextLastNMessages?: number
+  mcpContextSummarizeCharThreshold?: number
+  mcpMaxContextTokensOverride?: number
+
 }
 
 // Define the structure for conversation
@@ -91,21 +98,21 @@ export interface ConversationHistoryItem {
 
 // Safe type casting utilities
 export const safeCast = {
-  string: (value: any, fallback = ''): string => 
+  string: (value: any, fallback = ''): string =>
     typeof value === 'string' ? value : fallback,
-  
-  number: (value: any, fallback = 0): number => 
+
+  number: (value: any, fallback = 0): number =>
     typeof value === 'number' ? value : fallback,
-  
-  boolean: (value: any, fallback = false): boolean => 
+
+  boolean: (value: any, fallback = false): boolean =>
     typeof value === 'boolean' ? value : fallback,
-  
-  array: <T>(value: any, fallback: T[] = []): T[] => 
+
+  array: <T>(value: any, fallback: T[] = []): T[] =>
     Array.isArray(value) ? (value as T[]) : fallback,
-  
+
   object: <T extends Record<string, unknown>>(
     value: any,
     defaultValue: T,
-  ): T => 
+  ): T =>
     typeof value === 'object' && value !== null ? (value as T) : defaultValue,
 }

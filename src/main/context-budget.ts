@@ -98,7 +98,9 @@ async function summarizeContent(content: string): Promise<string> {
   const config = configStore.get() as any
   const provider = config.transcriptPostProcessingProviderId // allow different, faster model
   const MAX_TOKENS_HINT = 400 // soft guidance via prompt only
-  const prompt = `You will receive output from tools or chat messages. Summarize concisely while PRESERVING:
+  const CHUNK_SIZE = 16000 // ~4k tokens per chunk (roughly)
+
+  const makePrompt = (src: string) => `You will receive output from tools or chat messages. Summarize concisely while PRESERVING:
 - Exact tool names (including prefixes like server:tool_name)
 - Exact parameter names (keys) used in tool arguments
 - Any IDs, file paths, URLs, and key numeric values
@@ -108,13 +110,41 @@ Rules:
 - Target <= ${MAX_TOKENS_HINT} tokens
 
 SOURCE:
-${content}`
-  try {
-    const summary = await makeTextCompletionWithFetch(prompt, provider)
-    return summary?.trim() || content
-  } catch (e) {
-    return content
+${src}`
+
+  const summarizeOnce = async (src: string): Promise<string> => {
+    try {
+      const summary = await makeTextCompletionWithFetch(makePrompt(src), provider)
+      return summary?.trim() || src
+    } catch (e) {
+      return src
+    }
   }
+
+  // Small enough: single pass
+  if (content.length <= CHUNK_SIZE) {
+    return await summarizeOnce(content)
+  }
+
+  // Large content: chunk then combine
+  const parts: string[] = []
+  for (let i = 0; i < content.length; i += CHUNK_SIZE) {
+    parts.push(content.slice(i, i + CHUNK_SIZE))
+  }
+
+  const partials: string[] = []
+  for (const p of parts) {
+    partials.push(await summarizeOnce(p))
+  }
+
+  let combined = partials.join("\n")
+
+  // If combined is still large, compress once more
+  if (combined.length > CHUNK_SIZE) {
+    combined = await summarizeOnce(combined)
+  }
+
+  return combined
 }
 
 export interface ShrinkOptions {

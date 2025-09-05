@@ -78,6 +78,11 @@ const getConfig = () => {
     mcpContextLastNMessages: 3,
     mcpContextSummarizeCharThreshold: 2000,
 
+    // Completion verification defaults
+    mcpVerifyCompletionEnabled: true,
+    mcpVerifyContextMaxItems: 10,
+    mcpVerifyRetryCount: 1,
+
   }
 
   try {

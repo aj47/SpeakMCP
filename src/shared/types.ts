@@ -312,4 +312,10 @@ export type Config = {
   mcpContextSummarizeCharThreshold?: number
   mcpMaxContextTokensOverride?: number
 
+  // Completion Verification Configuration
+  mcpVerifyCompletionEnabled?: boolean
+  mcpVerifyContextMaxItems?: number
+  mcpVerifyRetryCount?: number
+
+
 }

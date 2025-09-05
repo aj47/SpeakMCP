@@ -11,7 +11,7 @@ import { WINDOWS, showPanelWindow } from "./window"
 import { RendererHandlers } from "./renderer-handlers"
 import { diagnosticsService } from "./diagnostics"
 import { makeStructuredContextExtraction, ContextExtractionResponse } from "./structured-output"
-import { makeLLMCallWithFetch, makeTextCompletionWithFetch } from "./llm-fetch"
+import { makeLLMCallWithFetch, makeTextCompletionWithFetch, verifyCompletionWithFetch } from "./llm-fetch"
 import { constructSystemPrompt } from "./system-prompts"
 import { state } from "./state"
 import { isDebugLLM, logLLM, isDebugTools, logTools } from "./debug"
@@ -567,6 +567,37 @@ export async function processTranscriptWithAgentMode(
       }))
   }
 
+  // Build compact verification messages (schema-first verifier)
+  const buildVerificationMessages = (finalAssistantText: string) => {
+    const maxItems = Math.max(1, config.mcpVerifyContextMaxItems || 10)
+    const recent = conversationHistory.slice(-maxItems)
+    const messages: Array<{ role: "user" | "assistant" | "system"; content: string }> = []
+    messages.push({
+      role: "system",
+      content:
+        "You are a strict completion verifier. Determine if the user's original request has been fully satisfied in the conversation. Be conservative: if uncertain, mark not complete and list what's missing. Return ONLY JSON per schema.",
+    })
+    messages.push({ role: "user", content: `Original request:\n${transcript}` })
+    for (const entry of recent) {
+      if (entry.role === "tool") {
+        const text = (entry.content || "").trim()
+        if (text) messages.push({ role: "user", content: `Tool results:\n${text}` })
+      } else {
+        messages.push({ role: entry.role, content: entry.content })
+      }
+    }
+    if (finalAssistantText?.trim()) {
+      messages.push({ role: "assistant", content: finalAssistantText })
+    }
+    messages.push({
+      role: "user",
+      content:
+        "Return a JSON object with fields: isComplete (boolean), confidence (0..1), missingItems (string[]), reason (string). No extra commentary.",
+    })
+    return messages
+  }
+
+
   // Emit initial progress
   emitAgentProgress({
     currentIteration: 0,
@@ -711,7 +742,7 @@ Always use actual resource IDs from the conversation history or create new ones 
 
     // Apply context budget management before the agent LLM call
     const { messages: shrunkMessages } = await shrinkMessagesForLLM({
-      messages,
+      messages: messages as any,
       availableTools: uniqueAvailableTools,
       relevantTools: toolCapabilities.relevantTools,
       isAgentMode: true,
@@ -790,10 +821,46 @@ Always use actual resource IDs from the conversation history or create new ones 
       const assistantContent = llmResponse.content || ""
 
       finalContent = assistantContent
-      conversationHistory.push({
-        role: "assistant",
-        content: finalContent,
-      })
+      conversationHistory.push({ role: "assistant", content: finalContent })
+
+      // Optional verification before completing
+      if (config.mcpVerifyCompletionEnabled) {
+        const verifyStep = createProgressStep(
+          "thinking",
+          "Verifying completion",
+          "Checking that the user's request has been achieved",
+          "in_progress",
+        )
+        progressSteps.push(verifyStep)
+        emitAgentProgress({
+          currentIteration: iteration,
+          maxIterations,
+          steps: progressSteps.slice(-3),
+          isComplete: false,
+          conversationHistory: formatConversationForProgress(conversationHistory),
+        })
+
+        const retries = Math.max(0, config.mcpVerifyRetryCount ?? 1)
+        let verified = false
+        let verification: any = null
+        for (let i = 0; i <= retries; i++) {
+          verification = await verifyCompletionWithFetch(buildVerificationMessages(finalContent), config.mcpToolsProviderId)
+          if (verification?.isComplete === true) { verified = true; break }
+        }
+
+        if (!verified) {
+          verifyStep.status = "error"
+          verifyStep.description = "Verification failed: continuing to address missing items"
+          const missing = (verification?.missingItems || []).filter((s: string) => s && s.trim()).map((s: string) => `- ${s}`).join("\n")
+          const reason = verification?.reason ? `Reason: ${verification.reason}` : ""
+          const userNudge = `Verifier indicates the task is not complete.\n${reason}\n${missing ? `Missing items:\n${missing}` : ""}\nPlease continue and complete the remaining work.`
+          conversationHistory.push({ role: "user", content: userNudge })
+          noOpCount = 0
+          continue
+        }
+        verifyStep.status = "completed"
+        verifyStep.description = "Verification passed"
+      }
 
       // Add completion step
       const completionStep = createProgressStep(
@@ -1125,7 +1192,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
 
         // Apply context budget management to the summary request as well
         const { messages: shrunkSummaryMessages } = await shrinkMessagesForLLM({
-          messages: summaryMessages,
+          messages: summaryMessages as any,
           availableTools: uniqueAvailableTools,
           relevantTools: toolCapabilities.relevantTools,
           isAgentMode: true,
@@ -1167,6 +1234,46 @@ Please try alternative approaches, break down the task into smaller steps, or pr
         // Agent provided sufficient content, use it as final content
         finalContent = lastAssistantContent
       }
+
+
+	      // Optional verification before completing after tools
+	      if (config.mcpVerifyCompletionEnabled) {
+	        const verifyStep = createProgressStep(
+	          "thinking",
+	          "Verifying completion",
+	          "Checking that the user's request has been achieved",
+	          "in_progress",
+	        )
+	        progressSteps.push(verifyStep)
+	        emitAgentProgress({
+	          currentIteration: iteration,
+	          maxIterations,
+	          steps: progressSteps.slice(-3),
+          isComplete: false,
+	          conversationHistory: formatConversationForProgress(conversationHistory),
+	        })
+
+	        const retries = Math.max(0, config.mcpVerifyRetryCount ?? 1)
+	        let verified = false
+	        let verification: any = null
+	        for (let i = 0; i <= retries; i++) {
+	          verification = await verifyCompletionWithFetch(buildVerificationMessages(finalContent), config.mcpToolsProviderId)
+	          if (verification?.isComplete === true) { verified = true; break }
+	        }
+
+	        if (!verified) {
+	          verifyStep.status = "error"
+	          verifyStep.description = "Verification failed: continuing to address missing items"
+	          const missing = (verification?.missingItems || []).filter((s: string) => s && s.trim()).map((s: string) => `- ${s}`).join("\n")
+	          const reason = verification?.reason ? `Reason: ${verification.reason}` : ""
+	          const userNudge = `Verifier indicates the task is not complete.\n${reason}\n${missing ? `Missing items:\n${missing}` : ""}\nPlease continue and complete the remaining work.`
+	          conversationHistory.push({ role: "user", content: userNudge })
+	          noOpCount = 0
+	          continue
+	        }
+	        verifyStep.status = "completed"
+	        verifyStep.description = "Verification passed"
+	      }
 
       // Add completion step
       const completionStep = createProgressStep(
@@ -1258,7 +1365,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
 
         // Apply context budget management to the summary request as well
         const { messages: shrunkSummaryMessages } = await shrinkMessagesForLLM({
-          messages: summaryMessages,
+          messages: summaryMessages as any,
           availableTools: uniqueAvailableTools,
           relevantTools: toolCapabilities.relevantTools,
           isAgentMode: true,
@@ -1304,6 +1411,46 @@ Please try alternative approaches, break down the task into smaller steps, or pr
           content: finalContent,
         })
       }
+
+
+	      // Optional verification before completing (general stop condition)
+	      if (config.mcpVerifyCompletionEnabled) {
+	        const verifyStep = createProgressStep(
+	          "thinking",
+	          "Verifying completion",
+	          "Checking that the user's request has been achieved",
+	          "in_progress",
+	        )
+	        progressSteps.push(verifyStep)
+	        emitAgentProgress({
+	          currentIteration: iteration,
+          isComplete: false,
+	          maxIterations,
+	          steps: progressSteps.slice(-3),
+	          conversationHistory: formatConversationForProgress(conversationHistory),
+	        })
+
+	        const retries = Math.max(0, config.mcpVerifyRetryCount ?? 1)
+	        let verified = false
+	        let verification: any = null
+	        for (let i = 0; i <= retries; i++) {
+	          verification = await verifyCompletionWithFetch(buildVerificationMessages(finalContent), config.mcpToolsProviderId)
+	          if (verification?.isComplete === true) { verified = true; break }
+	        }
+
+	        if (!verified) {
+	          verifyStep.status = "error"
+	          verifyStep.description = "Verification failed: continuing to address missing items"
+	          const missing = (verification?.missingItems || []).filter((s: string) => s && s.trim()).map((s: string) => `- ${s}`).join("\n")
+	          const reason = verification?.reason ? `Reason: ${verification.reason}` : ""
+	          const userNudge = `Verifier indicates the task is not complete.\n${reason}\n${missing ? `Missing items:\n${missing}` : ""}\nPlease continue and complete the remaining work.`
+	          conversationHistory.push({ role: "user", content: userNudge })
+	          noOpCount = 0
+	          continue
+	        }
+	        verifyStep.status = "completed"
+	        verifyStep.description = "Verification passed"
+	      }
 
       const completionStep = createProgressStep(
         "completion",

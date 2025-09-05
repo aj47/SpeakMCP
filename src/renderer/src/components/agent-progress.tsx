@@ -19,6 +19,24 @@ interface AgentProgressProps {
 
 // Enhanced conversation message component
 
+// Types for unified tool execution display items
+type DisplayItem =
+  | { kind: "message"; data: {
+      role: "user" | "assistant" | "tool"
+      content: string
+      isComplete: boolean
+      timestamp: number
+      isThinking: boolean
+      toolCalls?: Array<{ name: string; arguments: any }>
+      toolResults?: Array<{ success: boolean; content: string; error?: string }>
+    } }
+  | { kind: "tool_execution"; data: {
+      timestamp: number
+      calls: Array<{ name: string; arguments: any }>
+      results: Array<{ success: boolean; content: string; error?: string }>
+    } }
+
+
 // Compact message component for space efficiency
 const CompactMessage: React.FC<{
   message: {
@@ -272,7 +290,11 @@ const CompactMessage: React.FC<{
                 </div>
               )}
             </div>
+
+
           )}
+
+
         </div>
         {shouldCollapse && (
           <button
@@ -290,6 +312,139 @@ const CompactMessage: React.FC<{
     </div>
   )
 }
+
+// Unified Tool Execution bubble combining call + response
+const ToolExecutionBubble: React.FC<{
+  execution: {
+    timestamp: number
+    calls: Array<{ name: string; arguments: any }>
+    results: Array<{ success: boolean; content: string; error?: string }>
+  }
+}> = ({ execution }) => {
+  const [showInputs, setShowInputs] = useState(false)
+  const [showOutputs, setShowOutputs] = useState(false)
+
+  // Auto-collapse large payloads by default
+  useEffect(() => {
+    const bigOutput = execution.results.some((r) => (r.content?.length || 0) > 500)
+    const bigInput = execution.calls.some((c) => JSON.stringify(c.arguments)?.length > 500)
+    setShowInputs(!bigInput)
+    setShowOutputs(!bigOutput)
+  }, [execution])
+
+  const allSuccess = execution.results.length > 0 && execution.results.every((r) => r.success)
+  const headerTitle = execution.calls.map((c) => c.name).join(", ") || "Tool Execution"
+
+  const copy = async (text: string) => {
+    try {
+      await navigator.clipboard?.writeText(text)
+    } catch {}
+  }
+
+  return (
+    <div
+      className={cn(
+        "rounded-lg border p-2 text-xs",
+        allSuccess
+          ? "border-green-200/50 bg-green-50/30 text-green-700 dark:border-green-800/50 dark:bg-green-900/20 dark:text-green-300"
+          : "border-red-200/50 bg-red-50/30 text-red-700 dark:border-red-800/50 dark:bg-red-900/20 dark:text-red-300",
+      )}
+    >
+      <div className="mb-1 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="font-mono font-semibold">{headerTitle}</span>
+          <Badge variant="outline" className="text-[10px]">
+            {allSuccess ? "Success" : "With errors"}
+          </Badge>
+        </div>
+        <span className="opacity-60 text-[10px]">{new Date(execution.timestamp).toLocaleTimeString()}</span>
+      </div>
+
+      {/* Inputs */}
+      <div className="rounded-md bg-blue-50/40 dark:bg-blue-900/10 border border-blue-200/40 dark:border-blue-800/40 p-2 mb-2">
+        <div className="flex items-center justify-between">
+          <div className="text-[11px] font-semibold opacity-80">Call Parameters</div>
+          <div className="flex items-center gap-1">
+            <Button size="sm" variant="ghost" className="h-6 px-2" onClick={() => setShowInputs((v) => !v)}>
+              {showInputs ? "Hide" : "Show"}
+            </Button>
+            <Button size="sm" variant="ghost" className="h-6 px-2" onClick={() => copy(JSON.stringify(execution.calls, null, 2))}>
+              Copy
+            </Button>
+          </div>
+        </div>
+        {showInputs && (
+          <div className="mt-1 space-y-2">
+            {execution.calls.map((c, idx) => (
+              <div key={idx} className="rounded bg-muted/50 p-2 overflow-auto whitespace-pre-wrap max-h-80 scrollbar-thin">
+                <div className="mb-1 text-[11px] font-medium opacity-70">{c.name}</div>
+                <pre>{JSON.stringify(c.arguments ?? {}, null, 2)}</pre>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Outputs */}
+      <div
+        className="rounded-md border p-2"
+        style={{
+          borderColor: allSuccess ? "rgb(187 247 208 / 0.5)" : "rgb(254 202 202 / 0.5)",
+          backgroundColor: allSuccess ? "rgb(240 253 244 / 0.3)" : "rgb(254 242 242 / 0.3)",
+        } as React.CSSProperties}
+      >
+        <div className="flex items-center justify-between">
+          <div className="text-[11px] font-semibold opacity-80">Response</div>
+          <div className="flex items-center gap-1">
+            <Button size="sm" variant="ghost" className="h-6 px-2" onClick={() => setShowOutputs((v) => !v)}>
+              {showOutputs ? "Hide" : "Show"}
+            </Button>
+            <Button size="sm" variant="ghost" className="h-6 px-2" onClick={() => copy(JSON.stringify(execution.results, null, 2))}>
+              Copy
+            </Button>
+          </div>
+        </div>
+        {showOutputs && (
+          <div className="mt-1 space-y-2">
+            {execution.results.map((r, idx) => (
+              <div
+                key={idx}
+                className={cn(
+                  "rounded border p-2 text-xs",
+                  r.success ? "border-green-200/50 bg-green-50/30" : "border-red-200/50 bg-red-50/30",
+                )}
+              >
+                <div className="mb-1 flex items-center justify-between">
+                  <span className="font-semibold">{r.success ? "✅ Success" : "❌ Error"}</span>
+                  <Badge variant="outline" className="text-[10px]">{`Result ${idx + 1}`}</Badge>
+                </div>
+                <div className="space-y-2">
+                  <div>
+                    <div className="text-[11px] font-medium opacity-70 mb-1">Content:</div>
+                    <pre className="rounded bg-muted/30 p-2 overflow-auto whitespace-pre-wrap break-all max-h-80 scrollbar-thin">
+                      {r.content || "No content returned"}
+                    </pre>
+                  </div>
+                  {r.error && (
+                    <div>
+                      <div className="text-[11px] font-medium text-destructive mb-1">Error Details:</div>
+                      <pre className="rounded bg-destructive/10 p-2 overflow-auto whitespace-pre-wrap break-all max-h-60 scrollbar-thin">
+                        {r.error}
+                      </pre>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+
+    </div>
+  )
+}
+
 
 export const AgentProgress: React.FC<AgentProgressProps> = ({
   progress,
@@ -369,6 +524,8 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
           role: "assistant",
           content: currentThinkingStep.description || "Agent is thinking...",
           isComplete: false,
+
+
           timestamp: currentThinkingStep.timestamp,
           isThinking: true,
         })
@@ -415,6 +572,42 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
 
   // Sort by timestamp to ensure chronological order
   messages.sort((a, b) => a.timestamp - b.timestamp)
+
+  // Build unified display items that combine tool calls with subsequent results
+  const displayItems: DisplayItem[] = []
+  for (let i = 0; i < messages.length; i++) {
+    const m = messages[i]
+    if (m.role === "assistant" && m.toolCalls && m.toolCalls.length > 0) {
+      const next = messages[i + 1]
+      const results = next && next.role === "tool" && next.toolResults ? next.toolResults : []
+      // Show assistant message without extras
+      displayItems.push({ kind: "message", data: { ...m, toolCalls: undefined, toolResults: undefined } })
+      // Unified execution bubble
+      displayItems.push({
+        kind: "tool_execution",
+        data: {
+          timestamp: next?.timestamp ?? m.timestamp,
+          calls: m.toolCalls,
+          results,
+        },
+      })
+      if (next && next.role === "tool" && next.toolResults) {
+        i++ // skip the tool result message, already included
+      }
+    } else if (
+      m.role === "tool" &&
+      m.toolResults &&
+      !(i > 0 && messages[i - 1].role === "assistant" && (messages[i - 1].toolCalls?.length ?? 0) > 0)
+    ) {
+      // Standalone tool result without a preceding assistant call in sequence
+      displayItems.push({ kind: "tool_execution", data: { timestamp: m.timestamp, calls: [], results: m.toolResults } })
+    } else {
+      displayItems.push({ kind: "message", data: m })
+    }
+  }
+
+  const lastMessageTimestamp = messages.length > 0 ? messages[messages.length - 1].timestamp : 0
+
 
   // Improved auto-scroll logic
   useEffect(() => {
@@ -485,6 +678,8 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
       setShouldAutoScroll(false)
       setIsUserScrolling(true)
     }
+
+
   }
 
   // Check for errors
@@ -531,16 +726,23 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
           onScroll={handleScroll}
           className="h-full overflow-y-auto"
         >
-          {messages.length > 0 ? (
+          {displayItems.length > 0 ? (
             <div className="space-y-1 p-2">
-              {messages.map((message, index) => (
-                <CompactMessage
-                  key={`${message.timestamp}-${index}`}
-                  message={message}
-                  isLast={index === messages.length - 1}
-                  isComplete={isComplete}
-                  hasErrors={hasErrors}
-                />
+              {displayItems.map((item, index) => (
+                item.kind === "message" ? (
+                  <CompactMessage
+                    key={`msg-${item.data.timestamp}-${index}`}
+                    message={item.data}
+                    isLast={item.data.timestamp === lastMessageTimestamp}
+                    isComplete={isComplete}
+                    hasErrors={hasErrors}
+                  />
+                ) : (
+                  <ToolExecutionBubble
+                    key={`exec-${item.data.timestamp}-${index}`}
+                    execution={item.data}
+                  />
+                )
               ))}
             </div>
           ) : (

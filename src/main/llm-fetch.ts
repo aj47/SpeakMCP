@@ -1,5 +1,5 @@
 import { configStore } from "./config"
-import { MCPTool, LLMToolCallResponse } from "./mcp-service"
+import { LLMToolCallResponse } from "./mcp-service"
 import { diagnosticsService } from "./diagnostics"
 import { isDebugLLM, logLLM } from "./debug"
 import { state, llmRequestAbortManager } from "./state"
@@ -412,6 +412,18 @@ function supportsJsonMode(model: string, providerId: string): boolean {
 }
 
 /**
+ * Helper: detect empty assistant content in an OpenAI-compatible response
+ */
+function isEmptyContentResponse(resp: any): boolean {
+  try {
+    const content = resp?.choices?.[0]?.message?.content
+    return typeof content !== "string" || content.trim() === ""
+  } catch {
+    return true
+  }
+}
+
+/**
  * Make a single API call attempt with specific response format
  */
 async function makeAPICallAttempt(
@@ -428,17 +440,22 @@ async function makeAPICallAttempt(
       messagesCount: requestBody.messages.length,
       responseFormat: requestBody.response_format,
       estimatedTokens,
-      totalPromptLength: requestBody.messages.reduce((sum, msg) => sum + msg.content.length, 0),
+      totalPromptLength: (requestBody.messages as Array<{ role: string; content: string }>).reduce(
+        (sum: number, msg: { role: string; content: string }) => sum + ((msg.content?.length) || 0),
+        0,
+      ),
       contextWarning: estimatedTokens > 8000 ? "WARNING: High token count, may exceed context limit" : null
     })
     logLLM("Request Body (truncated)", {
       ...requestBody,
-      messages: requestBody.messages.map(msg => ({
-        role: msg.role,
-        content: msg.content.length > 200 ?
-          msg.content.substring(0, 200) + "... [" + msg.content.length + " chars]" :
-          msg.content
-      }))
+      messages: (requestBody.messages as Array<{ role: string; content: string }>).map(
+        (msg: { role: string; content: string }) => ({
+          role: msg.role,
+          content: msg.content.length > 200
+            ? msg.content.substring(0, 200) + "... [" + msg.content.length + " chars]"
+            : msg.content,
+        }),
+      )
     })
   }
 
@@ -555,7 +572,18 @@ async function makeOpenAICompatibleCall(
           logLLM("Attempting JSON Schema mode for model:", model)
         }
 
-        return await makeAPICallAttempt(baseURL, apiKey, requestBodyWithSchema, estimatedTokens)
+        {
+          const data = await makeAPICallAttempt(baseURL, apiKey, requestBodyWithSchema, estimatedTokens)
+          if (isEmptyContentResponse(data)) {
+            if (isDebugLLM()) {
+              logLLM("Empty content from JSON Schema response; falling back to JSON/Object or plain text")
+            }
+            const err = new Error("Empty content in structured (json_schema) response") as any
+            ;(err as any).isStructuredOutputError = true
+            throw err
+          }
+          return data
+        }
       } catch (error: any) {
         if (error.isStructuredOutputError) {
           if (isDebugLLM()) {
@@ -581,7 +609,18 @@ async function makeOpenAICompatibleCall(
           logLLM("Attempting JSON Object mode for model:", model)
         }
 
-        return await makeAPICallAttempt(baseURL, apiKey, requestBodyWithJson, estimatedTokens)
+        {
+          const data = await makeAPICallAttempt(baseURL, apiKey, requestBodyWithJson, estimatedTokens)
+          if (isEmptyContentResponse(data)) {
+            if (isDebugLLM()) {
+              logLLM("Empty content from JSON Object response; falling back to plain text")
+            }
+            const err = new Error("Empty content in structured (json_object) response") as any
+            ;(err as any).isStructuredOutputError = true
+            throw err
+          }
+          return data
+        }
       } catch (error: any) {
         if (error.isStructuredOutputError) {
           if (isDebugLLM()) {
@@ -750,21 +789,62 @@ export async function makeLLMCallWithFetch(
       })
     }
 
-    const content = response.choices[0]?.message.content?.trim()
+    const messageObj = response.choices?.[0]?.message || {}
+    let content: string | undefined = (messageObj.content ?? "").trim()
+
     if (!content) {
       if (isDebugLLM()) {
-        logLLM("Empty response details:", {
-          response: response,
-          choices: response.choices,
-          firstChoice: response.choices?.[0],
-          message: response.choices?.[0]?.message,
-          content: response.choices?.[0]?.message?.content
+        logLLM("Empty content in message; checking reasoning fallback", {
+          responseSummary: {
+            hasChoices: !!response.choices,
+            hasMessage: !!messageObj,
+            content: messageObj?.content,
+            hasReasoning: !!(messageObj as any)?.reasoning,
+          }
         })
       }
 
-      // Empty responses should be treated as errors requiring retry, not completion
-      // This prevents workflows from terminating prematurely when LLM fails to respond
-      throw new Error("LLM returned empty response - this indicates a model or API issue that should be retried")
+      // Some providers (e.g., OpenRouter with certain models) return useful output in a non-standard 'reasoning' field
+      const rawReasoning = (messageObj as any)?.reasoning
+      const reasoningText = typeof rawReasoning === "string"
+        ? rawReasoning
+        : (rawReasoning && typeof rawReasoning === "object" && typeof rawReasoning.text === "string")
+          ? rawReasoning.text
+          : ""
+
+      if (reasoningText) {
+        // First, try to extract structured JSON from reasoning
+        const jsonFromReasoning = extractJsonObject(reasoningText)
+        if (jsonFromReasoning && (jsonFromReasoning.toolCalls || jsonFromReasoning.content)) {
+          if (isDebugLLM()) {
+            logLLM("Parsed structured output from reasoning fallback")
+          }
+          const resp = jsonFromReasoning as LLMToolCallResponse
+          if (resp.needsMoreWork === undefined && !resp.toolCalls) resp.needsMoreWork = true
+          return resp
+        }
+
+        // Otherwise, treat reasoning text as plain content
+        if (reasoningText.trim()) {
+          if (isDebugLLM()) logLLM("Using reasoning text as content fallback")
+          content = reasoningText.trim()
+        }
+      }
+
+      if (!content) {
+        if (isDebugLLM()) {
+          logLLM("Empty response details:", {
+            response: response,
+            choices: response.choices,
+            firstChoice: response.choices?.[0],
+            message: response.choices?.[0]?.message,
+            content: response.choices?.[0]?.message?.content
+          })
+        }
+        // Empty responses should be treated as errors requiring retry, not completion
+        // This prevents workflows from terminating prematurely when LLM fails to respond
+        throw new Error("LLM returned empty response - this indicates a model or API issue that should be retried")
+      }
     }
 
     // Try to extract JSON object from response

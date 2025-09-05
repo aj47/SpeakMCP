@@ -95,8 +95,7 @@ function getProviderAndModel(): { providerId: string; model: string } {
 }
 
 async function summarizeContent(content: string): Promise<string> {
-  const config = configStore.get() as any
-  const provider = config.transcriptPostProcessingProviderId // allow different, faster model
+  const { providerId: provider } = getProviderAndModel() // align with agent provider
   const MAX_TOKENS_HINT = 400 // soft guidance via prompt only
   const CHUNK_SIZE = 16000 // ~4k tokens per chunk (roughly)
 

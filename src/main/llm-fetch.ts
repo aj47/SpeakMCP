@@ -47,6 +47,32 @@ const toolCallResponseSchema: OpenAI.ResponseFormatJSONSchema["json_schema"] = {
   strict: true,
 }
 
+// JSON schema for completion verification
+const verificationResponseSchema: OpenAI.ResponseFormatJSONSchema["json_schema"] = {
+  name: "CompletionVerification",
+  description: "Strict verifier to determine if the user's request has been fully satisfied.",
+  schema: {
+    type: "object",
+    properties: {
+      isComplete: { type: "boolean", description: "True only if the user's original request has been fully satisfied." },
+      confidence: { type: "number", minimum: 0, maximum: 1, description: "Confidence in the judgment (0-1)." },
+      missingItems: { type: "array", items: { type: "string" }, description: "List of missing steps, outputs, or requirements, if any." },
+      reason: { type: "string", description: "Brief explanation of the judgment." }
+    },
+    required: ["isComplete"],
+    additionalProperties: false,
+  },
+  strict: true,
+}
+
+export type CompletionVerification = {
+  isComplete: boolean
+  confidence?: number
+  missingItems?: string[]
+  reason?: string
+}
+
+
 /**
  * Check if a model is known to NOT support structured output with JSON schema
  * We use a blacklist approach - try structured output for all models except known incompatible ones
@@ -116,6 +142,7 @@ class HttpError extends Error {
     public status: number,
     public statusText: string,
     public responseText: string,
+
     public retryAfter?: number,
   ) {
     super(HttpError.createUserFriendlyMessage(status, statusText, responseText, retryAfter))
@@ -200,6 +227,7 @@ function isRetryableError(error: unknown): boolean {
   // Retry on network errors
   if (error instanceof Error) {
     const message = error.message.toLowerCase()
+
     return message.includes('network') ||
            message.includes('timeout') ||
            message.includes('connection') ||
@@ -469,50 +497,6 @@ async function makeAPICallAttempt(
   } finally {
     llmRequestAbortManager.unregister(controller)
   }
-
-  if (!response.ok) {
-    const errorText = await response.text()
-
-    // Check if this is a structured output related error
-    const isStructuredOutputError = errorText.includes("json_schema") ||
-                                   errorText.includes("response_format") ||
-                                   errorText.includes("schema") ||
-                                   response.status === 400
-
-    if (isDebugLLM()) {
-      logLLM("=== HTTP ERROR ===")
-      logLLM("HTTP Error Details:", {
-        status: response.status,
-        statusText: response.statusText,
-        errorText,
-        isStructuredOutputError,
-        model: requestBody.model
-      })
-    }
-
-    const error = new Error(errorText)
-    ;(error as any).isStructuredOutputError = isStructuredOutputError
-    ;(error as any).status = response.status
-    throw error
-  }
-
-  const data = await response.json()
-
-  if (data.error) {
-    if (isDebugLLM()) {
-      logLLM("API Error", data.error)
-    }
-    const error = new Error(data.error.message)
-    ;(error as any).isStructuredOutputError = data.error.message?.includes("json_schema") ||
-                                             data.error.message?.includes("response_format")
-    throw error
-  }
-
-  if (isDebugLLM()) {
-    logLLM("HTTP Response", data)
-  }
-
-  return data
 }
 
 /**
@@ -821,7 +805,7 @@ export async function makeTextCompletionWithFetch(
 
   const messages = [
     {
-      role: "system",
+      role: "user",
       content: prompt,
     },
   ]
@@ -839,5 +823,77 @@ export async function makeTextCompletionWithFetch(
   } catch (error) {
     diagnosticsService.logError("llm-fetch", "Text completion failed", error)
     throw error
+  }
+}
+
+
+/**
+ * Verify completion using LLM with schema-first approach and fallbacks
+ */
+export async function verifyCompletionWithFetch(
+  messages: Array<{ role: string; content: string }>,
+  providerId?: string,
+): Promise<CompletionVerification> {
+  const config = configStore.get()
+  const chatProviderId = providerId || config.mcpToolsProviderId || "openai"
+
+  // Helper to parse content into CompletionVerification
+  const parseVerification = (content: string): CompletionVerification => {
+    const json = extractJsonObject(content) || (() => { try { return JSON.parse(content) } catch { return null } })()
+    if (json && typeof json.isComplete === "boolean") return json as CompletionVerification
+    // Conservative default: not complete when uncertain
+    return { isComplete: false, reason: "Unparseable verifier output" }
+  }
+
+  try {
+    if (chatProviderId === "gemini") {
+      // Gemini: call and parse text
+      const response = await makeGeminiCall(messages)
+      const content = response?.candidates?.[0]?.content?.parts?.[0]?.text ||
+                      response?.choices?.[0]?.message?.content || ""
+      return parseVerification(content || "")
+    }
+
+    // OpenAI-compatible: attempt JSON Schema first, then json_object, then plain text
+    const baseURL = chatProviderId === "groq"
+      ? config.groqBaseUrl || "https://api.groq.com/openai/v1"
+      : config.openaiBaseUrl || "https://api.openai.com/v1"
+    const apiKey = chatProviderId === "groq" ? config.groqApiKey : config.openaiApiKey
+    if (!apiKey) throw new Error(`API key is required for ${chatProviderId}`)
+
+    const model = getModel(chatProviderId, "mcp")
+    const estimatedTokens = Math.ceil(messages.reduce((sum, m) => sum + m.content.length, 0) / 4)
+
+    const baseRequestBody = { model, messages, temperature: 0, seed: 1 }
+
+    const response = await apiCallWithRetry(async () => {
+      // Try JSON Schema
+      if (shouldAttemptStructuredOutput(model)) {
+        try {
+          const body = { ...baseRequestBody, response_format: { type: "json_schema", json_schema: verificationResponseSchema } }
+          return await makeAPICallAttempt(baseURL, apiKey!, body, estimatedTokens)
+        } catch (error: any) {
+          if (!(error?.isStructuredOutputError)) throw error
+        }
+      }
+      // Try JSON Object
+      if (supportsJsonMode(model, chatProviderId)) {
+        try {
+          const body = { ...baseRequestBody, response_format: { type: "json_object" } }
+          return await makeAPICallAttempt(baseURL, apiKey!, body, estimatedTokens)
+        } catch (error: any) {
+          if (!(error?.isStructuredOutputError)) throw error
+        }
+      }
+      // Fallback plain text
+      return await makeAPICallAttempt(baseURL, apiKey!, baseRequestBody, estimatedTokens)
+    }, config.apiRetryCount, config.apiRetryBaseDelay, config.apiRetryMaxDelay)
+
+    const content = response.choices?.[0]?.message?.content?.trim() || ""
+    return parseVerification(content)
+  } catch (error) {
+    diagnosticsService.logError("llm-fetch", "Verification call failed", error)
+    // Conservative: not complete when error
+    return { isComplete: false, reason: (error as any)?.message || "Verification failed" }
   }
 }

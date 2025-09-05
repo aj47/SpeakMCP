@@ -304,4 +304,12 @@ export type Config = {
   apiRetryCount?: number // Number of retry attempts (default: 3)
   apiRetryBaseDelay?: number // Base delay in milliseconds (default: 1000)
   apiRetryMaxDelay?: number // Maximum delay in milliseconds (default: 30000)
+
+  // Context Reduction Configuration
+  mcpContextReductionEnabled?: boolean
+  mcpContextTargetRatio?: number
+  mcpContextLastNMessages?: number
+  mcpContextSummarizeCharThreshold?: number
+  mcpMaxContextTokensOverride?: number
+
 }

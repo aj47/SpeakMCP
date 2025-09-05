@@ -15,6 +15,7 @@ import { makeLLMCallWithFetch, makeTextCompletionWithFetch } from "./llm-fetch"
 import { constructSystemPrompt } from "./system-prompts"
 import { state } from "./state"
 import { isDebugLLM, logLLM, isDebugTools, logTools } from "./debug"
+import { shrinkMessagesForLLM } from "./context-budget"
 
 /**
  * Use LLM to extract useful context from conversation history
@@ -214,10 +215,17 @@ export async function processTranscriptWithTools(
     },
   ]
 
+  // Apply context budget management before LLM call
+  const { messages: shrunkMessages } = await shrinkMessagesForLLM({
+    messages,
+    availableTools: uniqueAvailableTools,
+    isAgentMode: false,
+  })
+
   const chatProviderId = config.mcpToolsProviderId
 
   try {
-    const result = await makeLLMCallWithFetch(messages, chatProviderId)
+    const result = await makeLLMCallWithFetch(shrunkMessages, chatProviderId)
     return result
   } catch (error) {
     throw error
@@ -701,10 +709,19 @@ Always use actual resource IDs from the conversation history or create new ones 
         .filter(Boolean as any),
     ]
 
+    // Apply context budget management before the agent LLM call
+    const { messages: shrunkMessages } = await shrinkMessagesForLLM({
+      messages,
+      availableTools: uniqueAvailableTools,
+      relevantTools: toolCapabilities.relevantTools,
+      isAgentMode: true,
+    })
+
+
     // Make LLM call (abort-aware)
     let llmResponse: any
     try {
-      llmResponse = await makeLLMCall(messages, config)
+      llmResponse = await makeLLMCall(shrunkMessages, config)
     } catch (error: any) {
       if (error?.name === "AbortError" || state.shouldStopAgent) {
         console.log("LLM call aborted due to emergency stop")
@@ -1106,8 +1123,17 @@ Please try alternative approaches, break down the task into smaller steps, or pr
             .filter(Boolean as any),
         ]
 
+        // Apply context budget management to the summary request as well
+        const { messages: shrunkSummaryMessages } = await shrinkMessagesForLLM({
+          messages: summaryMessages,
+          availableTools: uniqueAvailableTools,
+          relevantTools: toolCapabilities.relevantTools,
+          isAgentMode: true,
+        })
+
+
         try {
-          const summaryResponse = await makeLLMCall(summaryMessages, config)
+          const summaryResponse = await makeLLMCall(shrunkSummaryMessages, config)
 
           // Update summary step with the response
           summaryStep.status = "completed"
@@ -1230,8 +1256,17 @@ Please try alternative approaches, break down the task into smaller steps, or pr
             .filter(Boolean as any),
         ]
 
+        // Apply context budget management to the summary request as well
+        const { messages: shrunkSummaryMessages } = await shrinkMessagesForLLM({
+          messages: summaryMessages,
+          availableTools: uniqueAvailableTools,
+          relevantTools: toolCapabilities.relevantTools,
+          isAgentMode: true,
+        })
+
+
         try {
-          const summaryResponse = await makeLLMCall(summaryMessages, config)
+          const summaryResponse = await makeLLMCall(shrunkSummaryMessages, config)
 
           // Update summary step with the response
           summaryStep.status = "completed"

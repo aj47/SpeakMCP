@@ -860,12 +860,32 @@ export async function makeLLMCallWithFetch(
       if (response.needsMoreWork === undefined && !response.toolCalls) {
         response.needsMoreWork = true
       }
+      // Safety: If JSON says no more work but there are no toolCalls and the content
+      // looks like intent-only or contains tool-call markers, override to needsMoreWork=true
+      const toolMarkers = /<\|tool_calls_section_begin\|>|<\|tool_call_begin\|>/i
+      const text = (response.content || "").replace(/<\|[^|]*\|>/g, "").trim()
+      const intentOnly = /\b(fetching|get(ting)?|retriev(ing|e)|searching|planning|analyzing|processing|scanning|starting|preparing|i'?ll|i\s+will|let'?s|trying|attempting|checking|reading|writing|applying|connecting|opening|creating|updating|deleting|installing|running)\b/i.test(text)
+      if (response.needsMoreWork === false && (!response.toolCalls || response.toolCalls.length === 0) && (toolMarkers.test(text) || intentOnly)) {
+        response.needsMoreWork = true
+      }
       return response
     }
 
-    // If no valid JSON found, treat as a final response
-    // Plain text responses are typically final answers
-    return { content, needsMoreWork: false }
+    // If no valid JSON found, decide conservatively based on content
+    // If content contains tool-call markers or hints of planned tool usage,
+    // do NOT mark complete: keep needsMoreWork=true so the agent can iterate.
+    const hasToolMarkers = /<\|tool_calls_section_begin\|>|<\|tool_call_begin\|>/i.test(content || "")
+    const cleaned = (content || "").replace(/<\|[^|]*\|>/g, "").trim()
+    if (hasToolMarkers) {
+      return { content: cleaned, needsMoreWork: true }
+    }
+    // If the assistant only states intent (no JSON/toolCalls), treat as needing more work
+    const intentOnly = /\b(fetching|get(ting)?|retriev(ing|e)|searching|planning|analyzing|processing|scanning|starting|preparing|i'?ll|i\s+will|let'?s|trying|attempting|checking|reading|writing|applying|connecting|opening|creating|updating|deleting|installing|running)\b/i.test(cleaned)
+    if (intentOnly) {
+      return { content: cleaned, needsMoreWork: true }
+    }
+    // Otherwise, treat plain text as a final response
+    return { content: cleaned || content, needsMoreWork: false }
   } catch (error) {
     diagnosticsService.logError("llm-fetch", "LLM call failed", error)
     throw error

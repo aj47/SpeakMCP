@@ -704,6 +704,51 @@ export class MCPService {
             }
           }
         }
+
+        // Enum normalization based on tool schema (schema-driven; no tool-specific logic)
+        for (const [paramName, paramValue] of Object.entries(processedArguments)) {
+          const schema = (toolSchema as any)?.properties?.[paramName]
+          const enumVals = schema?.enum
+          if (Array.isArray(enumVals) && !enumVals.includes(paramValue)) {
+            const toStr = (v: any) => (typeof v === "string" ? v : String(v))
+            const pv = toStr(paramValue).trim()
+            // Case-insensitive match first
+            const ci = enumVals.find((ev: any) => toStr(ev).toLowerCase() === pv.toLowerCase())
+            if (ci !== undefined) {
+              processedArguments[paramName] = ci
+              continue
+            }
+            // Generic synonym mapping (kept generic so it works across tools & flows)
+            const synMap: Record<string, string> = {
+              complex: "hard",
+              complicated: "hard",
+              difficult: "hard",
+              hard: "hard",
+              moderate: "medium",
+              avg: "medium",
+              average: "medium",
+              medium: "medium",
+              simple: "easy",
+              basic: "easy",
+              straightforward: "easy",
+              easy: "easy",
+              high: "high",
+              low: "low",
+              maximum: "high",
+              minimum: "low",
+              max: "high",
+              min: "low",
+            }
+            const syn = synMap[pv.toLowerCase()]
+            if (syn) {
+              const target = enumVals.find((ev: any) => toStr(ev).toLowerCase() === syn)
+              if (target !== undefined) {
+                processedArguments[paramName] = target
+              }
+            }
+          }
+        }
+
       }
     }
 

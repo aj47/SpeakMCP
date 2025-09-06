@@ -614,6 +614,10 @@ export async function processTranscriptWithAgentMode(
   let finalContent = ""
   let noOpCount = 0 // Track iterations without meaningful progress
 
+  let executedToolsThisIteration = false // Whether any tools were executed in the current iteration
+
+  let verificationFailCount = 0 // Count consecutive verification failures to avoid loops
+
   while (iteration < maxIterations) {
     iteration++
 
@@ -810,6 +814,9 @@ Always use actual resource IDs from the conversation history or create new ones 
           receivedType: typeof (llmResponse as any).toolCalls,
           value: (llmResponse as any).toolCalls,
         })
+    // Track whether tools are planned this iteration
+    executedToolsThisIteration = toolCallsArray.length > 0
+
       }
       logTools("Planned tool calls from LLM", toolCallsArray)
     }
@@ -817,11 +824,43 @@ Always use actual resource IDs from the conversation history or create new ones 
     const explicitlyComplete = llmResponse.needsMoreWork === false
 
     if (explicitlyComplete && !hasToolCalls) {
+      // Agent claims completion but provided no toolCalls.
+      // If the content still contains tool-call markers, treat as not complete and nudge for structured toolCalls.
+      const contentText = (llmResponse.content || "")
+      const hasToolMarkers = /<\|tool_calls_section_begin\|>|<\|tool_call_begin\|>/i.test(contentText)
+      if (hasToolMarkers) {
+        conversationHistory.push({ role: "assistant", content: contentText.replace(/<\|[^|]*\|>/g, "").trim() })
+        conversationHistory.push({ role: "user", content: "Please return a valid JSON object with toolCalls per the schema so we can proceed." })
+        continue
+      }
+
+      // If actionable tools exist and the assistant only states intent (no toolCalls), do not finalize.
+      const intentOnly = /\b(fetching|get(ting)?|retriev(ing|e)|searching|planning|analyzing|processing|scanning|starting|preparing|i'?ll|i\s+will|let'?s|trying|attempting|checking|reading|writing|applying|connecting|opening|creating|updating|deleting|installing|running)\b/i.test(contentText)
+      if (intentOnly) {
+        conversationHistory.push({ role: "assistant", content: contentText.trim() })
+        conversationHistory.push({ role: "user", content: "Important: Use the available tools to actually perform the steps. Reply with a valid JSON object per the tool-calling schema, including a toolCalls array with concrete parameters. Do not only state intent." })
+        continue
+      }
+
       // Agent explicitly indicated completion
       const assistantContent = llmResponse.content || ""
 
       finalContent = assistantContent
       conversationHistory.push({ role: "assistant", content: finalContent })
+
+      // If there are actionable tools and no tool results yet, do not verify or finalize.
+      // Nudge the model to produce structured toolCalls to actually perform the work.
+      const hasToolResultsSoFar = conversationHistory.some((e) => e.role === "tool")
+      const hasActionableTools = toolCapabilities.relevantTools.length > 0
+      if (hasActionableTools && !hasToolResultsSoFar) {
+        conversationHistory.push({
+          role: "user",
+          content:
+            "Before marking complete: use the available tools to actually perform the steps. Reply with a valid JSON object per the tool-calling schema, including a toolCalls array with concrete parameters.",
+        })
+        noOpCount = 0
+        continue
+      }
 
       // Optional verification before completing
       if (config.mcpVerifyCompletionEnabled) {
@@ -855,6 +894,14 @@ Always use actual resource IDs from the conversation history or create new ones 
           const reason = verification?.reason ? `Reason: ${verification.reason}` : ""
           const userNudge = `Verifier indicates the task is not complete.\n${reason}\n${missing ? `Missing items:\n${missing}` : ""}\nPlease continue and complete the remaining work.`
           conversationHistory.push({ role: "user", content: userNudge })
+          verificationFailCount++
+          // If we haven't executed any tools and we keep failing verification, demand structured tool calls
+          const hasToolResultsSoFar = conversationHistory.some((e) => e.role === "tool")
+          if (!hasToolResultsSoFar && verificationFailCount >= 2) {
+            conversationHistory.push({ role: "user", content: "Important: Do not just state intent. Use available tools and reply with a valid JSON object that includes a toolCalls array with concrete parameters to fetch IDs and apply labels." })
+          verificationFailCount = 0 // reset on success
+
+          }
           noOpCount = 0
           continue
         }
@@ -1578,6 +1625,20 @@ Please try alternative approaches, break down the task into smaller steps, or pr
           conversationHistory.push({ role: "assistant", content: finalContent })
         } catch (e) {
           // If summary generation fails, proceed with existing finalContent
+        }
+
+        // If there are actionable tools and we haven't executed any tools yet,
+        // skip verification and force the model to produce structured toolCalls instead of intent-only text.
+        const hasAnyToolResultsSoFar = conversationHistory.some((e) => e.role === "tool")
+        const hasActionableTools = toolCapabilities.relevantTools.length > 0
+        if (hasActionableTools && !hasAnyToolResultsSoFar) {
+          conversationHistory.push({
+            role: "user",
+            content:
+              "Before verifying or completing: use the available tools to actually perform the steps. Reply with a valid JSON object per the tool-calling schema, including a toolCalls array with concrete parameters.",
+          })
+          noOpCount = 0
+          continue
         }
 
           conversationHistory.push({

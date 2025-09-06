@@ -13,7 +13,10 @@ export const state = {
   agentIterationCount: 0,
   // Track in-flight LLM abort controllers
   llmAbortControllers: new Set<AbortController>(),
+  // Conversation switcher UI state
+  isConversationSwitcherActive: false,
 }
+
 
 // Process management for agent mode
 export const agentProcessManager = {

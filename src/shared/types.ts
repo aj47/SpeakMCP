@@ -287,6 +287,11 @@ export type Config = {
   maxConversationsToKeep?: number
   autoSaveConversations?: boolean
 
+  // Conversation Switcher Configuration
+  conversationSwitcherEnabled?: boolean
+  conversationSwitcherShortcut?: "ctrl-alt-c" | "ctrl-shift-space" | "custom"
+  customConversationSwitcherShortcut?: string
+
   // Panel Position Configuration
   panelPosition?:
     | "top-left"

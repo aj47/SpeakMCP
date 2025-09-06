@@ -6,6 +6,7 @@ import {
   WINDOWS,
   resizePanelForAgentMode,
   resizePanelToNormal,
+  stopConversationSwitcherAndHidePanelWindow,
 } from "./window"
 import {
   app,
@@ -409,6 +410,10 @@ export const router = {
     .action(async ({ input }) => {
       showMainWindow(input.url)
     }),
+
+  stopConversationSwitcher: t.procedure.action(async () => {
+    stopConversationSwitcherAndHidePanelWindow()
+  }),
 
   displayError: t.procedure
     .input<{ title?: string; message: string }>()

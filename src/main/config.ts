@@ -26,6 +26,10 @@ const getConfig = () => {
     conversationsEnabled: true,
     maxConversationsToKeep: 100,
     autoSaveConversations: true,
+    // Conversation switcher defaults
+    conversationSwitcherEnabled: true,
+    conversationSwitcherShortcut: "ctrl-alt-c",
+    customConversationSwitcherShortcut: "",
     // Agent kill switch defaults
     agentKillSwitchEnabled: true,
     agentKillSwitchHotkey: "ctrl-shift-escape",

@@ -17,6 +17,10 @@ export type RendererHandlers = {
   showTextInput: () => void
   hideTextInput: () => void
 
+  // Conversation Switcher handlers
+  showConversationSwitcher: () => void
+  hideConversationSwitcher: () => void
+
   // Agent Mode Progress handlers
   agentProgressUpdate: (update: AgentProgressUpdate) => void
   clearAgentProgress: () => void

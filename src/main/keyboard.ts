@@ -456,6 +456,29 @@ export function listenToKeyboardEvents() {
             emergencyStopAgentMode()
             return
           }
+      // Handle conversation switcher shortcut
+      if (config.conversationSwitcherEnabled) {
+        const effectiveSwitcherShortcut = getEffectiveShortcut(
+          (config as any).conversationSwitcherShortcut,
+          (config as any).customConversationSwitcherShortcut,
+        )
+        if (effectiveSwitcherShortcut) {
+          const matches = matchesKeyCombo(
+            e.data,
+            { ctrl: isPressedCtrlKey, shift: isPressedShiftKey, alt: isPressedAltKey },
+            effectiveSwitcherShortcut,
+          )
+          if (isDebugKeybinds() && matches) {
+            logKeybinds("Conversation switcher triggered", effectiveSwitcherShortcut)
+          }
+          if (matches) {
+            const { showPanelWindowAndShowConversationSwitcher } = require("./window")
+            showPanelWindowAndShowConversationSwitcher()
+            return
+          }
+        }
+      }
+
         }
       }
 

@@ -213,14 +213,21 @@ const textInputPanelWindowSize = {
   height: 180,
 }
 
+const conversationSwitcherPanelWindowSize = {
+  width: 480,
+  height: 320,
+}
+
 const getPanelWindowPosition = (
-  mode: "normal" | "agent" | "textInput" = "normal",
+  mode: "normal" | "agent" | "textInput" | "switcher" = "normal",
 ) => {
   let size = panelWindowSize
   if (mode === "agent") {
     size = agentPanelWindowSize
   } else if (mode === "textInput") {
     size = textInputPanelWindowSize
+  } else if (mode === "switcher") {
+    size = conversationSwitcherPanelWindowSize
   }
 
   return calculatePanelPosition(size, mode)
@@ -272,9 +279,11 @@ export function showPanelWindow() {
   const win = WINDOWS.get("panel")
   if (win) {
     // Determine the correct mode based on current state
-    let mode: "normal" | "agent" | "textInput" = "normal"
+    let mode: "normal" | "agent" | "textInput" | "switcher" = "normal"
     if (state.isTextInputActive) {
       mode = "textInput"
+    } else if (state.isConversationSwitcherActive) {
+      mode = "switcher"
     }
     // Note: Agent mode positioning is handled separately in resizePanelForAgentMode
 
@@ -328,6 +337,34 @@ export async function showPanelWindowAndShowTextInput() {
   getWindowRendererHandlers("panel")?.showTextInput.send()
 }
 
+export async function showPanelWindowAndShowConversationSwitcher() {
+  // Capture focus before showing panel
+  try {
+    const focusedApp = await getFocusedAppInfo()
+    state.focusedAppBeforeRecording = focusedApp
+  } catch (error) {
+    state.focusedAppBeforeRecording = null
+  }
+
+  state.isConversationSwitcherActive = true
+  resizePanelForConversationSwitcher()
+  showPanelWindow()
+  getWindowRendererHandlers("panel")?.showConversationSwitcher.send()
+}
+
+export function resizePanelForConversationSwitcher() {
+  const win = WINDOWS.get("panel")
+  if (!win) return
+  const position = getPanelWindowPosition("switcher")
+  win.setMinimumSize(200, 100)
+  win.setSize(
+    conversationSwitcherPanelWindowSize.width,
+    conversationSwitcherPanelWindowSize.height,
+    true,
+  )
+  win.setPosition(position.x, position.y, true)
+}
+
 export function makePanelWindowClosable() {
   const panel = WINDOWS.get("panel")
   if (panel && !panel.isClosable()) {
@@ -358,6 +395,19 @@ export const stopTextInputAndHidePanelWindow = () => {
   if (win) {
     state.isTextInputActive = false
     getRendererHandlers<RendererHandlers>(win.webContents).hideTextInput.send()
+    resizePanelToNormal()
+
+    if (win.isVisible()) {
+      win.hide()
+    }
+  }
+}
+
+export const stopConversationSwitcherAndHidePanelWindow = () => {
+  const win = WINDOWS.get("panel")
+  if (win) {
+    state.isConversationSwitcherActive = false
+    getRendererHandlers<RendererHandlers>(win.webContents).hideConversationSwitcher.send()
     resizePanelToNormal()
 
     if (win.isVisible()) {

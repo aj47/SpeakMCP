@@ -18,6 +18,8 @@ import { PanelDragBar } from "@renderer/components/panel-drag-bar"
 import { useConfigQuery } from "@renderer/lib/query-client"
 import { useTheme } from "@renderer/contexts/theme-context"
 
+import { ConversationSwitcherPanel } from "@renderer/components/conversation-switcher-panel"
+
 const VISUALIZER_BUFFER_LENGTH = 70
 
 const getInitialVisualizerData = () =>
@@ -290,6 +292,26 @@ export function Component() {
     return unlisten
   }, [recording, showContinueButton, mcpMode])
 
+  // Conversation switcher handlers
+  const [showSwitcher, setShowSwitcher] = useState(false)
+  useEffect(() => {
+    const unlisten = rendererHandlers.showConversationSwitcher.listen(() => {
+      setShowSwitcher(true)
+    })
+    return unlisten
+  }, [])
+  useEffect(() => {
+    const unlisten = rendererHandlers.hideConversationSwitcher.listen(() => {
+      setShowSwitcher(false)
+    })
+    return unlisten
+  }, [])
+
+  const stopSwitcher = () => {
+    setShowSwitcher(false)
+    tipcClient.stopConversationSwitcher({})
+  }
+
   // Text input handlers
   useEffect(() => {
     const unlisten = rendererHandlers.showTextInput.listen(() => {
@@ -444,7 +466,12 @@ export function Component() {
       )}
 
       <div className="flex min-h-0 flex-1">
-        {showTextInput ? (
+        {showSwitcher ? (
+          <ConversationSwitcherPanel
+            onSelect={stopSwitcher}
+            onCancel={stopSwitcher}
+          />
+        ) : showTextInput ? (
           <TextInputPanel
             onSubmit={handleTextSubmit}
             onCancel={() => {

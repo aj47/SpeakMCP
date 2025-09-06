@@ -316,6 +316,52 @@ export function Component() {
                 )}
             </div>
           </Control>
+          <Control label="Conversation Switcher" className="px-3">
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <Switch
+                  checked={configQuery.data?.conversationSwitcherEnabled ?? true}
+                  onCheckedChange={(checked) => {
+                    saveConfig({
+                      conversationSwitcherEnabled: checked,
+                    })
+                  }}
+                />
+                <Select
+                  value={(configQuery.data as any)?.conversationSwitcherShortcut || "ctrl-alt-c"}
+                  onValueChange={(value) => {
+                    saveConfig({
+                      conversationSwitcherShortcut: value as any,
+                    })
+                  }}
+                  disabled={!configQuery.data?.conversationSwitcherEnabled}
+                >
+                  <SelectTrigger className="w-48">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ctrl-alt-c">Ctrl+Alt+C</SelectItem>
+                    <SelectItem value="ctrl-shift-space">Ctrl+Shift+Space</SelectItem>
+                    <SelectItem value="custom">Custom</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {(configQuery.data as any)?.conversationSwitcherShortcut === "custom" &&
+                configQuery.data?.conversationSwitcherEnabled && (
+                  <KeyRecorder
+                    value={(configQuery.data as any)?.customConversationSwitcherShortcut || ""}
+                    onChange={(keyCombo) => {
+                      saveConfig({
+                        customConversationSwitcherShortcut: keyCombo,
+                      })
+                    }}
+                    placeholder="Click to record custom switcher shortcut"
+                  />
+                )}
+            </div>
+          </Control>
+
         </ControlGroup>
 
         <ControlGroup title="Speech to Text">

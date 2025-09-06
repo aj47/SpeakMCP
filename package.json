@@ -1,6 +1,6 @@
 {
   "name": "speakmcp",
-  "version": "0.1.3",
+  "version": "0.2.0",
   "type": "module",
   "description": "AI-powered dictation tool with MCP integration",
   "main": "./out/main/index.js",

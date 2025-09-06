@@ -638,7 +638,14 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
     }
   }
 
-  const lastMessageTimestamp = messages.length > 0 ? messages[messages.length - 1].timestamp : 0
+  // Determine the last assistant message among display items (by position, not timestamp)
+  const lastAssistantDisplayIndex = (() => {
+    for (let i = displayItems.length - 1; i >= 0; i--) {
+      const it = displayItems[i]
+      if (it.kind === "message" && it.data.role === "assistant") return i
+    }
+    return -1
+  })()
 
 
   // Improved auto-scroll logic
@@ -765,7 +772,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
                   <CompactMessage
                     key={`msg-${item.data.timestamp}-${index}`}
                     message={item.data}
-                    isLast={item.data.timestamp === lastMessageTimestamp}
+                    isLast={index === lastAssistantDisplayIndex}
                     isComplete={isComplete}
                     hasErrors={hasErrors}
                   />

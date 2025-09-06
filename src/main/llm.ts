@@ -862,6 +862,71 @@ Always use actual resource IDs from the conversation history or create new ones 
         verifyStep.description = "Verification passed"
       }
 
+        // Post-verify: produce a concise final summary for the user
+        try {
+          const postVerifySummaryStep = createProgressStep(
+            "thinking",
+            "Summarizing results",
+            "Creating a concise final summary of what was achieved",
+            "in_progress",
+          )
+          progressSteps.push(postVerifySummaryStep)
+          emitAgentProgress({
+            currentIteration: iteration,
+            maxIterations,
+            steps: progressSteps.slice(-3),
+            isComplete: false,
+            conversationHistory: formatConversationForProgress(conversationHistory),
+          })
+
+          // Build a fresh system prompt and messages for the summary
+          const postVerifySystemPrompt = constructSystemPrompt(
+            uniqueAvailableTools,
+            config.mcpToolsSystemPrompt,
+            true, // isAgentMode
+            toolCapabilities.relevantTools,
+          )
+
+          const postVerifySummaryMessages = [
+            { role: "system", content: postVerifySystemPrompt },
+            ...conversationHistory
+              .map((entry) => {
+                if (entry.role === "tool") {
+                  const text = (entry.content || "").trim()
+                  if (!text) return null
+                  return { role: "user" as const, content: `Tool execution results:\n${entry.content}` }
+                }
+                return { role: entry.role as "user" | "assistant", content: entry.content }
+              })
+              .filter(Boolean as any),
+          ]
+
+          const { messages: shrunkPostVerifySummaryMessages } = await shrinkMessagesForLLM({
+            messages: postVerifySummaryMessages as any,
+            availableTools: uniqueAvailableTools,
+            relevantTools: toolCapabilities.relevantTools,
+            isAgentMode: true,
+          })
+
+          const postVerifySummaryResponse = await makeLLMCall(shrunkPostVerifySummaryMessages, config)
+
+          // Update summary step with the response and use it as final content
+          postVerifySummaryStep.status = "completed"
+          postVerifySummaryStep.llmContent = postVerifySummaryResponse.content || ""
+          postVerifySummaryStep.title = "Summary provided"
+          postVerifySummaryStep.description = postVerifySummaryResponse.content && postVerifySummaryResponse.content.length > 100
+            ? postVerifySummaryResponse.content.substring(0, 100) + "..."
+            : postVerifySummaryResponse.content || "Summary generated"
+
+          finalContent = postVerifySummaryResponse.content || finalContent
+
+          // Append as the final assistant message
+          conversationHistory.push({ role: "assistant", content: finalContent })
+        } catch (e) {
+          // If summary generation fails, proceed with existing finalContent
+        }
+
+
       // Add completion step
       const completionStep = createProgressStep(
         "completion",
@@ -1275,6 +1340,70 @@ Please try alternative approaches, break down the task into smaller steps, or pr
 	        verifyStep.description = "Verification passed"
 	      }
 
+        // Post-verify: produce a concise final summary for the user
+        try {
+          const postVerifySummaryStep = createProgressStep(
+            "thinking",
+            "Summarizing results",
+            "Creating a concise final summary of what was achieved",
+            "in_progress",
+          )
+          progressSteps.push(postVerifySummaryStep)
+          emitAgentProgress({
+            currentIteration: iteration,
+            maxIterations,
+            steps: progressSteps.slice(-3),
+            isComplete: false,
+            conversationHistory: formatConversationForProgress(conversationHistory),
+          })
+
+          const postVerifySystemPrompt = constructSystemPrompt(
+            uniqueAvailableTools,
+            config.mcpToolsSystemPrompt,
+            true,
+            toolCapabilities.relevantTools,
+          )
+
+          const postVerifySummaryMessages = [
+            { role: "system", content: postVerifySystemPrompt },
+            ...conversationHistory
+              .map((entry) => {
+                if (entry.role === "tool") {
+                  const text = (entry.content || "").trim()
+                  if (!text) return null
+                  return { role: "user" as const, content: `Tool execution results:\n${entry.content}` }
+                }
+                return { role: entry.role as "user" | "assistant", content: entry.content }
+              })
+              .filter(Boolean as any),
+          ]
+
+          const { messages: shrunkPostVerifySummaryMessages } = await shrinkMessagesForLLM({
+            messages: postVerifySummaryMessages as any,
+            availableTools: uniqueAvailableTools,
+            relevantTools: toolCapabilities.relevantTools,
+            isAgentMode: true,
+          })
+
+          const postVerifySummaryResponse = await makeLLMCall(
+            shrunkPostVerifySummaryMessages,
+            config,
+          )
+
+          postVerifySummaryStep.status = "completed"
+          postVerifySummaryStep.llmContent = postVerifySummaryResponse.content || ""
+          postVerifySummaryStep.title = "Summary provided"
+          postVerifySummaryStep.description = postVerifySummaryResponse.content && postVerifySummaryResponse.content.length > 100
+            ? postVerifySummaryResponse.content.substring(0, 100) + "..."
+            : postVerifySummaryResponse.content || "Summary generated"
+
+          finalContent = postVerifySummaryResponse.content || finalContent
+          conversationHistory.push({ role: "assistant", content: finalContent })
+        } catch (e) {
+          // If summary generation fails, proceed with existing finalContent
+        }
+
+
       // Add completion step
       const completionStep = createProgressStep(
         "completion",
@@ -1387,6 +1516,70 @@ Please try alternative approaches, break down the task into smaller steps, or pr
           finalContent = summaryResponse.content || assistantContent
 
           // Add the summary to conversation history
+
+        // Post-verify: produce a concise final summary for the user
+        try {
+          const postVerifySummaryStep = createProgressStep(
+            "thinking",
+            "Summarizing results",
+            "Creating a concise final summary of what was achieved",
+            "in_progress",
+          )
+          progressSteps.push(postVerifySummaryStep)
+          emitAgentProgress({
+            currentIteration: iteration,
+            maxIterations,
+            steps: progressSteps.slice(-3),
+            isComplete: false,
+            conversationHistory: formatConversationForProgress(conversationHistory),
+          })
+
+          const postVerifySystemPrompt = constructSystemPrompt(
+            uniqueAvailableTools,
+            config.mcpToolsSystemPrompt,
+            true,
+            toolCapabilities.relevantTools,
+          )
+
+          const postVerifySummaryMessages = [
+            { role: "system", content: postVerifySystemPrompt },
+            ...conversationHistory
+              .map((entry) => {
+                if (entry.role === "tool") {
+                  const text = (entry.content || "").trim()
+                  if (!text) return null
+                  return { role: "user" as const, content: `Tool execution results:\n${entry.content}` }
+                }
+                return { role: entry.role as "user" | "assistant", content: entry.content }
+              })
+              .filter(Boolean as any),
+          ]
+
+          const { messages: shrunkPostVerifySummaryMessages } = await shrinkMessagesForLLM({
+            messages: postVerifySummaryMessages as any,
+            availableTools: uniqueAvailableTools,
+            relevantTools: toolCapabilities.relevantTools,
+            isAgentMode: true,
+          })
+
+          const postVerifySummaryResponse = await makeLLMCall(
+            shrunkPostVerifySummaryMessages,
+            config,
+          )
+
+          postVerifySummaryStep.status = "completed"
+          postVerifySummaryStep.llmContent = postVerifySummaryResponse.content || ""
+          postVerifySummaryStep.title = "Summary provided"
+          postVerifySummaryStep.description = postVerifySummaryResponse.content && postVerifySummaryResponse.content.length > 100
+            ? postVerifySummaryResponse.content.substring(0, 100) + "..."
+            : postVerifySummaryResponse.content || "Summary generated"
+
+          finalContent = postVerifySummaryResponse.content || finalContent
+          conversationHistory.push({ role: "assistant", content: finalContent })
+        } catch (e) {
+          // If summary generation fails, proceed with existing finalContent
+        }
+
           conversationHistory.push({
             role: "assistant",
             content: finalContent,

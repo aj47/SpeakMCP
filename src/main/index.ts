@@ -18,6 +18,8 @@ import { mcpService } from "./mcp-service"
 import { initDebugFlags, logApp } from "./debug"
 import { initializeDeepLinkHandling } from "./oauth-deeplink-handler"
 
+import { configStore } from "./config"
+
 registerServeSchema()
 
 // This method will be called when Electron has finished
@@ -45,6 +47,20 @@ app.whenReady().then(() => {
   logApp("IPC main registered")
 
   registerServeProtocol()
+
+	  // Apply login item setting based on user config (production only; dev would launch bare Electron)
+	  try {
+	    if ((process.env.NODE_ENV === "production" || !process.env.ELECTRON_RENDERER_URL) && process.platform !== "linux") {
+	      const cfg = configStore.get() as any
+	      app.setLoginItemSettings({
+	        openAtLogin: !!cfg.launchAtLogin,
+	        openAsHidden: true,
+	      })
+	    }
+	  } catch (_) {
+	    // Ignore errors; login item settings are best-effort
+	  }
+
   logApp("Serve protocol registered")
 
   if (accessibilityGranted) {

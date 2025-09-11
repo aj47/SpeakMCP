@@ -183,6 +183,8 @@ export type Config = {
   shortcut?: "hold-ctrl" | "ctrl-slash" | "custom"
   customShortcut?: string
   hideDockIcon?: boolean
+  launchAtLogin?: boolean
+
 
   // Toggle Voice Dictation Configuration
   toggleVoiceDictationEnabled?: boolean

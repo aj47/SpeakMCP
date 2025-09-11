@@ -801,6 +801,17 @@ export const router = {
     .input<{ config: Config }>()
     .action(async ({ input }) => {
       configStore.save(input.config)
+      // Apply login item setting when configuration changes (production only; dev would launch bare Electron)
+      try {
+        if ((process.env.NODE_ENV === "production" || !process.env.ELECTRON_RENDERER_URL) && process.platform !== "linux") {
+          app.setLoginItemSettings({
+            openAtLogin: !!input.config.launchAtLogin,
+            openAsHidden: true,
+          })
+        }
+      } catch (_e) {
+        // best-effort only
+      }
     }),
 
   recordEvent: t.procedure

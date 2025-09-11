@@ -103,8 +103,8 @@ export function Component() {
     <div className="modern-panel h-full overflow-auto px-6 py-4">
 
       <div className="grid gap-4">
-        {process.env.IS_MAC && (
-          <ControlGroup title="App">
+        <ControlGroup title="App">
+          {process.env.IS_MAC && (
             <Control label="Hide Dock Icon" className="px-3">
               <Switch
                 defaultChecked={configQuery.data.hideDockIcon}
@@ -115,8 +115,18 @@ export function Component() {
                 }}
               />
             </Control>
-          </ControlGroup>
-        )}
+          )}
+          <Control label="Launch at Login" className="px-3">
+            <Switch
+              defaultChecked={configQuery.data.launchAtLogin ?? false}
+              onCheckedChange={(value) => {
+                saveConfig({
+                  launchAtLogin: value,
+                })
+              }}
+            />
+          </Control>
+        </ControlGroup>
 
         <ControlGroup title="Appearance">
           <Control label="Theme" className="px-3">

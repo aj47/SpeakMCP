@@ -47,6 +47,10 @@ const getConfig = () => {
     panelCustomSize: { width: 300, height: 200 },
     // Theme preference defaults
     themePreference: "system",
+
+	    // App behavior
+	    launchAtLogin: false,
+
     // TTS defaults
     ttsEnabled: true,
     ttsAutoPlay: true,

@@ -24,11 +24,11 @@ export const router: ReturnType<typeof createBrowserRouter> =
         },
         {
           path: "settings/providers",
-          lazy: () => import("./pages/settings-providers"),
+          lazy: () => import("./pages/settings-providers-and-models"),
         },
         {
           path: "settings/models",
-          lazy: () => import("./pages/settings-models"),
+          lazy: () => import("./pages/settings-providers-and-models"),
         },
         {
           path: "settings/tools",

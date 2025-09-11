@@ -26,15 +26,11 @@ export const Component = () => {
       icon: "i-mingcute-message-3-line",
     },
     {
-      text: "Providers",
-      href: "/settings/providers",
-      icon: "i-mingcute-cloud-line",
-    },
-    {
       text: "Models",
       href: "/settings/models",
       icon: "i-mingcute-brain-line",
     },
+
     {
       text: "Agents",
       href: "/settings/tools",

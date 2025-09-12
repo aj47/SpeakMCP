@@ -7,6 +7,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@renderer/components/ui/select"
+import { Input } from "@renderer/components/ui/input"
 import {
   useConfigQuery,
   useSaveConfigMutation,
@@ -168,6 +169,25 @@ export function Component() {
                   ))}
                 </SelectContent>
               </Select>
+            </Control>
+
+            <Control label={<ControlLabel label="TTS Speed" tooltip="Speech speed (0.25 to 4.0)" />} className="px-3">
+              <Input
+                type="number"
+                min="0.25"
+                max="4.0"
+                step="0.25"
+                placeholder="1.0"
+                defaultValue={configQuery.data.openaiTtsSpeed?.toString()}
+                onChange={(e) => {
+                  const speed = parseFloat(e.currentTarget.value)
+                  if (!isNaN(speed) && speed >= 0.25 && speed <= 4.0) {
+                    saveConfig({
+                      openaiTtsSpeed: speed,
+                    })
+                  }
+                }}
+              />
             </Control>
           </div>
         </ControlGroup>

@@ -23,69 +23,6 @@ type WINDOW_ID = "main" | "panel" | "setup"
 
 export const WINDOWS = new Map<WINDOW_ID, BrowserWindow>()
 
-// Helper function to add zoom functionality to any window
-function addZoomHandling(win: BrowserWindow) {
-  const { globalShortcut } = require('electron');
-
-  // Zoom implementation using setZoomFactor for reliable results
-  const zoomIn = () => {
-    const currentFactor = win.webContents.getZoomFactor();
-    const newFactor = Math.min(currentFactor * 1.2, 5.0); // Max 5x zoom
-    win.webContents.setZoomFactor(newFactor);
-  };
-
-  const zoomOut = () => {
-    const currentFactor = win.webContents.getZoomFactor();
-    const newFactor = Math.max(currentFactor / 1.2, 0.25); // Min 0.25x zoom
-    win.webContents.setZoomFactor(newFactor);
-  };
-
-  const zoomReset = () => {
-    win.webContents.setZoomFactor(1.0);
-  };
-
-  // Register global shortcuts when window gains focus
-  win.on('focus', () => {
-    try {
-      // Unregister first to avoid conflicts
-      globalShortcut.unregister('CommandOrControl+=');
-      globalShortcut.unregister('CommandOrControl+-');
-      globalShortcut.unregister('CommandOrControl+0');
-
-      // Register zoom shortcuts
-      globalShortcut.register('CommandOrControl+=', () => {
-        if (win.isFocused()) {
-          zoomIn();
-        }
-      });
-
-      globalShortcut.register('CommandOrControl+-', () => {
-        if (win.isFocused()) {
-          zoomOut();
-        }
-      });
-
-      globalShortcut.register('CommandOrControl+0', () => {
-        if (win.isFocused()) {
-          zoomReset();
-        }
-      });
-    } catch (error) {
-      console.error('Error registering zoom shortcuts:', error);
-    }
-  });
-
-  // Unregister shortcuts when window loses focus
-  win.on('blur', () => {
-    try {
-      globalShortcut.unregister('CommandOrControl+=');
-      globalShortcut.unregister('CommandOrControl+-');
-      globalShortcut.unregister('CommandOrControl+0');
-    } catch (error) {
-      console.error('Error unregistering zoom shortcuts:', error);
-    }
-  });
-}
 
 function createBaseWindow({
   id,
@@ -114,8 +51,6 @@ function createBaseWindow({
 
   WINDOWS.set(id, win)
 
-  // Add zoom handling to all windows
-  addZoomHandling(win)
 
   if (showWhenReady) {
     win.on("ready-to-show", () => {
@@ -260,8 +195,6 @@ export function createPanelWindow() {
     getRendererHandlers<RendererHandlers>(win.webContents).stopRecording.send()
   })
 
-  // Note: Zoom handling is now handled by addZoomHandling() function above
-  // Removed duplicate zoom handler to prevent conflicts
 
   makePanel(win)
 

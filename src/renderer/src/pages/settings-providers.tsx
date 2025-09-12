@@ -205,49 +205,6 @@ export function Component() {
             />
           </Control>
 
-          <Control label={<ControlLabel label="TTS Model" tooltip="Choose the OpenAI TTS model to use" />} className="px-3">
-            <Select
-              value={configQuery.data.openaiTtsModel || "tts-1"}
-              onValueChange={(value) => {
-                saveConfig({
-                  openaiTtsModel: value as "tts-1" | "tts-1-hd",
-                })
-              }}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {OPENAI_TTS_MODELS.map((model) => (
-                  <SelectItem key={model.value} value={model.value}>
-                    {model.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Control>
-
-          <Control label={<ControlLabel label="TTS Voice" tooltip="Choose the voice for OpenAI TTS" />} className="px-3">
-            <Select
-              value={configQuery.data.openaiTtsVoice || "alloy"}
-              onValueChange={(value) => {
-                saveConfig({
-                  openaiTtsVoice: value as "alloy" | "echo" | "fable" | "onyx" | "nova" | "shimmer",
-                })
-              }}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {OPENAI_TTS_VOICES.map((voice) => (
-                  <SelectItem key={voice.value} value={voice.value}>
-                    {voice.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Control>
 
           <Control label={<ControlLabel label="TTS Speed" tooltip="Speech speed (0.25 to 4.0)" />} className="px-3">
             <Input
@@ -296,52 +253,6 @@ export function Component() {
             />
           </Control>
 
-          <Control label={<ControlLabel label="TTS Model" tooltip="Choose the Groq TTS model to use" />} className="px-3">
-            <Select
-              value={configQuery.data.groqTtsModel || "playai-tts"}
-              onValueChange={(value) => {
-                saveConfig({
-                  groqTtsModel: value as "playai-tts" | "playai-tts-arabic",
-                })
-              }}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {GROQ_TTS_MODELS.map((model) => (
-                  <SelectItem key={model.value} value={model.value}>
-                    {model.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Control>
-
-          <Control label={<ControlLabel label="TTS Voice" tooltip="Choose the voice for Groq TTS" />} className="px-3">
-            <Select
-              value={configQuery.data.groqTtsVoice || "Fritz-PlayAI"}
-              onValueChange={(value) => {
-                saveConfig({
-                  groqTtsVoice: value,
-                })
-              }}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {(configQuery.data.groqTtsModel === "playai-tts-arabic"
-                  ? GROQ_TTS_VOICES_ARABIC
-                  : GROQ_TTS_VOICES_ENGLISH
-                ).map((voice) => (
-                  <SelectItem key={voice.value} value={voice.value}>
-                    {voice.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Control>
 
         </ControlGroup>
 
@@ -371,49 +282,6 @@ export function Component() {
             />
           </Control>
 
-          <Control label={<ControlLabel label="TTS Model" tooltip="Choose the Gemini TTS model to use" />} className="px-3">
-            <Select
-              value={configQuery.data.geminiTtsModel || "gemini-2.5-flash-preview-tts"}
-              onValueChange={(value) => {
-                saveConfig({
-                  geminiTtsModel: value as "gemini-2.5-flash-preview-tts" | "gemini-2.5-pro-preview-tts",
-                })
-              }}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {GEMINI_TTS_MODELS.map((model) => (
-                  <SelectItem key={model.value} value={model.value}>
-                    {model.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Control>
-
-          <Control label={<ControlLabel label="TTS Voice" tooltip="Choose the voice for Gemini TTS" />} className="px-3">
-            <Select
-              value={configQuery.data.geminiTtsVoice || "Kore"}
-              onValueChange={(value) => {
-                saveConfig({
-                  geminiTtsVoice: value,
-                })
-              }}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {GEMINI_TTS_VOICES.map((voice) => (
-                  <SelectItem key={voice.value} value={voice.value}>
-                    {voice.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Control>
 
         </ControlGroup>
       </div>

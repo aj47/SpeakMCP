@@ -13,9 +13,7 @@ import {
 } from "@renderer/lib/query-client"
 import { Config } from "@shared/types"
 import { ProviderModelSelector } from "@renderer/components/model-selector"
-import {
-  CHAT_PROVIDER_ID,
-} from "@shared/index"
+import { OPENAI_TTS_MODELS, GROQ_TTS_MODELS, GEMINI_TTS_MODELS, OPENAI_TTS_VOICES, GROQ_TTS_VOICES_ENGLISH, GROQ_TTS_VOICES_ARABIC, GEMINI_TTS_VOICES } from "@shared/index"
 
 export function Component() {
   const configQuery = useConfigQuery()
@@ -48,6 +46,20 @@ export function Component() {
     [saveConfig],
   )
 
+  const handleOpenAITtsModelChange = useCallback(
+    (value: string) => {
+      saveConfig({ openaiTtsModel: value as "tts-1" | "tts-1-hd" })
+    },
+    [saveConfig],
+  )
+
+  const handleOpenAITtsVoiceChange = useCallback(
+    (value: string) => {
+      saveConfig({ openaiTtsVoice: value as "alloy" | "echo" | "fable" | "onyx" | "nova" | "shimmer" })
+    },
+    [saveConfig],
+  )
+
   const handleGroqMcpModelChange = useCallback(
     (value: string) => {
       saveConfig({ mcpToolsGroqModel: value })
@@ -62,6 +74,20 @@ export function Component() {
     [saveConfig],
   )
 
+  const handleGroqTtsModelChange = useCallback(
+    (value: string) => {
+      saveConfig({ groqTtsModel: value as "playai-tts" | "playai-tts-arabic" })
+    },
+    [saveConfig],
+  )
+
+  const handleGroqTtsVoiceChange = useCallback(
+    (value: string) => {
+      saveConfig({ groqTtsVoice: value })
+    },
+    [saveConfig],
+  )
+
   const handleGeminiMcpModelChange = useCallback(
     (value: string) => {
       saveConfig({ mcpToolsGeminiModel: value })
@@ -72,6 +98,20 @@ export function Component() {
   const handleGeminiTranscriptModelChange = useCallback(
     (value: string) => {
       saveConfig({ transcriptPostProcessingGeminiModel: value })
+    },
+    [saveConfig],
+  )
+
+  const handleGeminiTtsModelChange = useCallback(
+    (value: string) => {
+      saveConfig({ geminiTtsModel: value as "gemini-2.5-flash-preview-tts" | "gemini-2.5-pro-preview-tts" })
+    },
+    [saveConfig],
+  )
+
+  const handleGeminiTtsVoiceChange = useCallback(
+    (value: string) => {
+      saveConfig({ geminiTtsVoice: value })
     },
     [saveConfig],
   )
@@ -93,6 +133,42 @@ export function Component() {
               showMcpModel={true}
               showTranscriptModel={true}
             />
+
+            <Control label={<ControlLabel label="TTS Model" tooltip="Choose the OpenAI TTS model to use" />} className="px-3">
+              <Select
+                value={configQuery.data.openaiTtsModel || "tts-1"}
+                onValueChange={handleOpenAITtsModelChange}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {OPENAI_TTS_MODELS.map((model) => (
+                    <SelectItem key={model.value} value={model.value}>
+                      {model.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Control>
+
+            <Control label={<ControlLabel label="TTS Voice" tooltip="Choose the voice for OpenAI TTS" />} className="px-3">
+              <Select
+                value={configQuery.data.openaiTtsVoice || "alloy"}
+                onValueChange={handleOpenAITtsVoiceChange}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {OPENAI_TTS_VOICES.map((voice) => (
+                    <SelectItem key={voice.value} value={voice.value}>
+                      {voice.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Control>
           </div>
         </ControlGroup>
 
@@ -107,6 +183,42 @@ export function Component() {
               showMcpModel={true}
               showTranscriptModel={true}
             />
+
+            <Control label={<ControlLabel label="TTS Model" tooltip="Choose the Groq TTS model to use" />} className="px-3">
+              <Select
+                value={configQuery.data.groqTtsModel || "playai-tts"}
+                onValueChange={handleGroqTtsModelChange}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {GROQ_TTS_MODELS.map((model) => (
+                    <SelectItem key={model.value} value={model.value}>
+                      {model.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Control>
+
+            <Control label={<ControlLabel label="TTS Voice" tooltip="Choose the voice for Groq TTS" />} className="px-3">
+              <Select
+                value={configQuery.data.groqTtsVoice || "Fritz-PlayAI"}
+                onValueChange={handleGroqTtsVoiceChange}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {(configQuery.data.groqTtsModel === "playai-tts-arabic" ? GROQ_TTS_VOICES_ARABIC : GROQ_TTS_VOICES_ENGLISH).map((voice) => (
+                    <SelectItem key={voice.value} value={voice.value}>
+                      {voice.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Control>
           </div>
         </ControlGroup>
 
@@ -121,6 +233,42 @@ export function Component() {
               showMcpModel={true}
               showTranscriptModel={true}
             />
+
+            <Control label={<ControlLabel label="TTS Model" tooltip="Choose the Gemini TTS model to use" />} className="px-3">
+              <Select
+                value={configQuery.data.geminiTtsModel || "gemini-2.5-flash-preview-tts"}
+                onValueChange={handleGeminiTtsModelChange}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {GEMINI_TTS_MODELS.map((model) => (
+                    <SelectItem key={model.value} value={model.value}>
+                      {model.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Control>
+
+            <Control label={<ControlLabel label="TTS Voice" tooltip="Choose the voice for Gemini TTS" />} className="px-3">
+              <Select
+                value={configQuery.data.geminiTtsVoice || "Kore"}
+                onValueChange={handleGeminiTtsVoiceChange}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {GEMINI_TTS_VOICES.map((voice) => (
+                    <SelectItem key={voice.value} value={voice.value}>
+                      {voice.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Control>
           </div>
         </ControlGroup>
       </div>

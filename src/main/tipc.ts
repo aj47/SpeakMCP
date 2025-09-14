@@ -41,6 +41,9 @@ import {
 } from "./panel-position"
 import { state, agentProcessManager } from "./state"
 
+
+import { startRemoteServer, stopRemoteServer, restartRemoteServer } from "./remote-server"
+
 // Unified agent mode processing function
 async function processWithAgentMode(
   text: string,
@@ -800,17 +803,49 @@ export const router = {
   saveConfig: t.procedure
     .input<{ config: Config }>()
     .action(async ({ input }) => {
-      configStore.save(input.config)
+      const prev = configStore.get()
+      const next = input.config
+      const merged = { ...(prev as any), ...(next as any) } as Config
+
+      // Persist config
+      configStore.save(next)
+
       // Apply login item setting when configuration changes (production only; dev would launch bare Electron)
       try {
         if ((process.env.NODE_ENV === "production" || !process.env.ELECTRON_RENDERER_URL) && process.platform !== "linux") {
           app.setLoginItemSettings({
-            openAtLogin: !!input.config.launchAtLogin,
+            openAtLogin: !!merged.launchAtLogin,
             openAsHidden: true,
           })
         }
       } catch (_e) {
         // best-effort only
+      }
+
+      // Manage Remote Server lifecycle on config changes
+      try {
+        const prevEnabled = !!(prev as any)?.remoteServerEnabled
+        const nextEnabled = !!(merged as any)?.remoteServerEnabled
+
+        if (prevEnabled !== nextEnabled) {
+          if (nextEnabled) {
+            await startRemoteServer()
+          } else {
+            await stopRemoteServer()
+          }
+        } else if (nextEnabled) {
+          const changed =
+            (prev as any)?.remoteServerPort !== (merged as any)?.remoteServerPort ||
+            (prev as any)?.remoteServerBindAddress !== (merged as any)?.remoteServerBindAddress ||
+            (prev as any)?.remoteServerApiKey !== (merged as any)?.remoteServerApiKey ||
+            (prev as any)?.remoteServerLogLevel !== (merged as any)?.remoteServerLogLevel
+
+          if (changed) {
+            await restartRemoteServer()
+          }
+        }
+      } catch (_e) {
+        // lifecycle is best-effort
       }
     }),
 
@@ -1053,6 +1088,7 @@ export const router = {
           input.filePath,
         )
         return { success: true, filePath: savedPath }
+
       } catch (error) {
         diagnosticsService.logError(
           "tipc",
@@ -1081,6 +1117,7 @@ export const router = {
 
   getRecentErrors: t.procedure
     .input<{ count?: number }>()
+
     .action(async ({ input }) => {
       return diagnosticsService.getRecentErrors(input.count || 10)
     }),
@@ -1101,6 +1138,7 @@ export const router = {
 
   restartMcpServer: t.procedure
     .input<{ serverName: string }>()
+
     .action(async ({ input }) => {
       return mcpService.restartServer(input.serverName)
     }),
@@ -1121,6 +1159,15 @@ export const router = {
       speed?: number
     }>()
     .action(async ({ input }) => {
+
+
+
+
+
+
+
+
+
       const config = configStore.get()
 
 

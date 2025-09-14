@@ -93,7 +93,7 @@ export function Component() {
                   "Are you absolutely sure to remove all recordings forever?",
                 )
               ) {
-                deleteRecordingHistoryMutation.mutate()
+                deleteRecordingHistoryMutation.mutate(undefined as any)
               }
             }}
           >
@@ -132,7 +132,7 @@ export function Component() {
               return (
                 <ControlGroup
                   key={group.date}
-                  variant="glass"
+
                   title={
                     group.date === today
                       ? "Today"

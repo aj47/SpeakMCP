@@ -16,7 +16,6 @@
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:ui": "vitest --ui",
-
     "start": "electron-vite preview",
     "dev": "electron-vite dev --watch --",
     "build": "npm run typecheck && npm run test:run && electron-vite build && npm run build-rs",
@@ -40,6 +39,7 @@
     "@egoist/electron-panel-window": "^8.0.3",
     "@modelcontextprotocol/sdk": "^1.13.3",
     "@radix-ui/react-scroll-area": "^1.2.9",
+    "fastify": "^5.6.0",
     "highlight.js": "^11.11.1",
     "openai": "^5.10.2",
     "react-markdown": "^10.1.0",
@@ -66,6 +66,8 @@
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.1",
+    "@vitest/coverage-v8": "^1.6.0",
+    "@vitest/ui": "^1.6.0",
     "autoprefixer": "^10.4.20",
     "bumpp": "^9.7.1",
     "class-variance-authority": "^0.7.0",
@@ -89,9 +91,7 @@
     "typescript": "^5.6.3",
     "vite": "^5.4.8",
     "vite-tsconfig-paths": "^5.0.1",
-    "vitest": "^1.6.0",
-    "@vitest/coverage-v8": "^1.6.0",
-    "@vitest/ui": "^1.6.0"
+    "vitest": "^1.6.0"
   },
   "packageManager": "pnpm@9.12.1+sha512.e5a7e52a4183a02d5931057f7a0dbff9d5e9ce3161e33fa68ae392125b79282a8a8a470a51dfc8a0ed86221442eb2fb57019b0990ed24fab519bf0e1bc5ccfc4"
 }

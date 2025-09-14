@@ -1,12 +1,5 @@
 // Global type fixes for TypeScript compilation
 
-// Ensure global types are available
-declare global {
-  interface Window {
-    electronAPI?: any
-  }
-}
-
 // Type-safe query result handler
 export const safeQueryResult = <T>(data: any): T => {
   return (data || {}) as T
@@ -42,7 +35,7 @@ export const safeSpread = <T>(
   source: any,
   target: T
 ): T => {
-  return typeof source === 'object' && source !== null 
-    ? { ...target, ...source } 
+  return typeof source === 'object' && source !== null
+    ? { ...target, ...source }
     : target
 }

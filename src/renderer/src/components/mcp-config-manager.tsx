@@ -398,20 +398,29 @@ function ServerDialog({ server, onSave, onCancel }: ServerDialogProps) {
                       })
                     }
 
-                    const testServerConfig: MCPServerConfig = {
-                      transport,
-                      ...(transport === "stdio" && {
-                        command: command.trim(),
-                        args: args.trim() ? args.trim().split(/\s+/) : [],
-                      }),
-                      ...(transport !== "stdio" && {
-                        url: url.trim(),
-                      }),
-                      ...(Object.keys(envObject).length > 0 && { env: envObject }),
-                      ...(transport === "streamableHttp" && Object.keys(headersObject).length > 0 && { headers: headersObject }),
-                      ...(timeout && { timeout: parseInt(timeout) }),
-                      ...(disabled && { disabled }),
-                      ...(transport === "streamableHttp" && Object.keys(oauthConfig).length > 0 && { oauth: oauthConfig }),
+                    const testServerConfig: MCPServerConfig = { transport }
+
+                    if ((transport as string) === "stdio") {
+                      testServerConfig.command = command.trim()
+                      testServerConfig.args = args.trim() ? args.trim().split(/\s+/) : []
+                    } else {
+                      testServerConfig.url = url.trim()
+                    }
+
+                    if (Object.keys(envObject).length > 0) {
+                      testServerConfig.env = envObject
+                    }
+                    if (transport === "streamableHttp" && Object.keys(headersObject).length > 0) {
+                      testServerConfig.headers = headersObject
+                    }
+                    if (timeout) {
+                      testServerConfig.timeout = parseInt(timeout)
+                    }
+                    if (disabled) {
+                      testServerConfig.disabled = disabled
+                    }
+                    if (transport === "streamableHttp" && Object.keys(oauthConfig).length > 0) {
+                      testServerConfig.oauth = oauthConfig
                     }
 
                     const result = await window.electronAPI.testMCPServer(name, testServerConfig)
@@ -658,7 +667,7 @@ function ServerDialog({ server, onSave, onCancel }: ServerDialogProps) {
 }
 
 // Example MCP server configurations
-const MCP_EXAMPLES = {
+const MCP_EXAMPLES: Record<string, { name: string; config: MCPServerConfig }> = {
   memory: {
     name: "memory",
     config: {
@@ -1401,12 +1410,11 @@ export function MCPConfigManager({
             {importTab === 'examples' && (
               <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
                 <div className="grid gap-4">
-                  {mcpExamples.map((example, index) => (
+                  {Object.values(MCP_EXAMPLES).map((example, index) => (
                     <Card key={index} className="p-4">
                       <div className="flex items-start justify-between">
                         <div>
                           <h4 className="font-medium mb-2">{example.name}</h4>
-                          <p className="text-sm text-muted-foreground mb-2">{example.description}</p>
                           <pre className="bg-muted p-3 rounded-md text-sm overflow-x-auto">
                             <code>{JSON.stringify(example.config, null, 2)}</code>
                           </pre>
@@ -1419,7 +1427,7 @@ export function MCPConfigManager({
                               ...config,
                               mcpServers: {
                                 ...config.mcpServers,
-                                ...example.config.mcpServers,
+                                [example.name]: example.config,
                               },
                             }
                             onConfigChange(newConfig)

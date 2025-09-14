@@ -87,6 +87,13 @@ const getConfig = () => {
     mcpVerifyContextMaxItems: 10,
     mcpVerifyRetryCount: 1,
 
+	    // Remote Server defaults
+	    remoteServerEnabled: false,
+	    remoteServerPort: 3210,
+	    remoteServerBindAddress: "127.0.0.1",
+	    remoteServerLogLevel: "info",
+
+
   }
 
   try {
@@ -106,8 +113,8 @@ class ConfigStore {
     this.config = getConfig()
   }
 
-  get() {
-    return this.config || {}
+  get(): Config {
+    return (this.config as Config) || ({} as Config)
   }
 
   save(config: Config) {

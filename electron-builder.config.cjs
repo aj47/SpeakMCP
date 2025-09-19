@@ -183,6 +183,13 @@ module.exports = {
     target: ["AppImage", "snap", "deb"],
     maintainer: "electronjs.org",
     category: "Utility",
+    extraResources: [
+      {
+        from: "resources/bin/speakmcp-rs",
+        to: "bin/speakmcp-rs",
+        filter: ["**/*"]
+      }
+    ]
   },
   appImage: {
     artifactName: "${name}-${version}.${ext}",

@@ -68,7 +68,7 @@ export function AudioPlayer({
   // Audio event handlers - set up whenever audio element or hasAudio changes
   useEffect(() => {
     const audio = audioRef.current
-    if (!audio || !hasAudio) return
+    if (!audio || !hasAudio) return undefined
 
     const handleLoadedMetadata = () => {
       setDuration(audio.duration)

@@ -41,6 +41,12 @@ export const Component = () => {
       href: "/settings/mcp-tools",
       icon: "i-mingcute-tool-line",
     },
+    {
+      text: "Remote Server",
+      href: "/settings/remote-server",
+      icon: "i-mingcute-server-line",
+    },
+
   ]
 
   useEffect(() => {

@@ -38,6 +38,11 @@ export const router: ReturnType<typeof createBrowserRouter> =
           path: "settings/mcp-tools",
           lazy: () => import("./pages/settings-mcp-tools"),
         },
+        {
+          path: "settings/remote-server",
+          lazy: () => import("./pages/settings-remote-server"),
+        },
+
       ],
     },
     {

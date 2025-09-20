@@ -19,6 +19,7 @@ import { initDebugFlags, logApp } from "./debug"
 import { initializeDeepLinkHandling } from "./oauth-deeplink-handler"
 
 import { configStore } from "./config"
+import { startRemoteServer } from "./remote-server"
 
 registerServeSchema()
 
@@ -87,6 +88,23 @@ app.whenReady().then(() => {
   }).then(() => {
     logApp("MCP service initialized successfully")
   })
+
+	  // Start Remote Server if enabled
+	  try {
+	    const cfg = configStore.get()
+	    if (cfg.remoteServerEnabled) {
+	      startRemoteServer()
+	        .then(() => logApp("Remote server started"))
+	        .catch((err) =>
+	          logApp(
+	            `Remote server failed to start: ${err instanceof Error ? err.message : String(err)}`,
+	          ),
+	        )
+	    }
+	  } catch (_e) {
+	    // best-effort only
+	  }
+
 
   import("./updater").then((res) => res.init()).catch(console.error)
 

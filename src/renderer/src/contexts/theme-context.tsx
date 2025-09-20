@@ -41,7 +41,7 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
     // Initialize resolved theme
     if (themeMode === "light") return "light"
     if (themeMode === "dark") return "dark"
-    
+
     // System preference
     return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"
   })
@@ -50,7 +50,7 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
   const resolveTheme = (mode: ThemeMode): "light" | "dark" => {
     if (mode === "light") return "light"
     if (mode === "dark") return "dark"
-    
+
     // System preference
     return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"
   }
@@ -59,7 +59,7 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
   useEffect(() => {
     const newTheme = resolveTheme(themeMode)
     setTheme(newTheme)
-    
+
     // Update DOM class
     const root = document.documentElement
     if (newTheme === "dark") {
@@ -67,14 +67,14 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
     } else {
       root.classList.remove("dark")
     }
-    
+
     // Store preference
     try {
       localStorage.setItem("theme-preference", themeMode)
     } catch (e) {
       // Ignore localStorage errors
     }
-    
+
     // Dispatch event for compatibility with existing system
     window.dispatchEvent(
       new CustomEvent("theme-preference-changed", {
@@ -85,14 +85,14 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
 
   // Listen for system theme changes when in system mode
   useEffect(() => {
-    if (themeMode !== "system") return
+    if (themeMode !== "system") return undefined
 
     const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)")
-    
+
     const handleChange = (e: MediaQueryListEvent) => {
       const newTheme = e.matches ? "dark" : "light"
       setTheme(newTheme)
-      
+
       // Update DOM class
       const root = document.documentElement
       if (newTheme === "dark") {
@@ -129,7 +129,7 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
         ) {
           const isDarkClass = document.documentElement.classList.contains("dark")
           const expectedTheme = resolveTheme(themeMode)
-          
+
           // Only update if there's a mismatch (external change)
           if ((isDarkClass && expectedTheme === "light") || (!isDarkClass && expectedTheme === "dark")) {
             setTheme(isDarkClass ? "dark" : "light")

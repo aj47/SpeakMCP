@@ -107,9 +107,9 @@ export function PanelDragBar({
       )}
       onMouseDown={handleMouseDown}
       style={{
-        WebkitAppRegion: disabled ? "no-drag" : ("drag" as any),
+        WebkitAppRegion: disabled ? "no-drag" : "drag",
         userSelect: "none",
-      }}
+      } as any}
     >
       {/* Drag handle visual indicator */}
       <div

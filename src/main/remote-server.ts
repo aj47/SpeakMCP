@@ -189,8 +189,54 @@ export async function startRemoteServer() {
 
   const fastify = Fastify({ logger: { level: logLevel } })
 
-  // Auth hook
+  // --- CORS helpers & hooks ---
+  const applyCors = (reply: any, originHeader?: string) => {
+    try {
+      const current = configStore.get() as any
+      const allowed: string[] | undefined = current.remoteServerCorsOrigins
+      if (Array.isArray(allowed) && allowed.length > 0) {
+        if (originHeader && allowed.includes(originHeader)) {
+          reply.header("Access-Control-Allow-Origin", originHeader)
+          reply.header("Vary", "Origin")
+        }
+      } else {
+        // Default: allow any origin; protected by API key auth
+        reply.header("Access-Control-Allow-Origin", "*")
+      }
+      reply.header("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
+      reply.header(
+        "Access-Control-Allow-Headers",
+        "Authorization, Content-Type"
+      )
+      reply.header("Access-Control-Max-Age", "600")
+    } catch {
+      // no-op
+    }
+  }
+
+  // Add CORS headers to all responses (including errors)
+  fastify.addHook("onSend", async (req, reply, payload) => {
+    const origin = (req.headers["origin"] as string | undefined)
+    applyCors(reply, origin)
+    return payload
+  })
+
+  // Handle CORS preflight requests without hitting auth
+  fastify.options("*", async (req, reply) => {
+    const origin = (req.headers["origin"] as string | undefined)
+    // If client asked specific headers, echo them back
+    const acrh = (req.headers["access-control-request-headers"] || "") as string
+    applyCors(reply, origin)
+    if (acrh) reply.header("Access-Control-Allow-Headers", acrh)
+    reply.code(204).send()
+  })
+
+  // Auth hook (skip for preflight)
   fastify.addHook("onRequest", async (req, reply) => {
+    if (req.method === "OPTIONS") {
+      // Let preflight pass to the OPTIONS handler above
+      return
+    }
     const auth = (req.headers["authorization"] || "").toString()
     const token = auth.startsWith("Bearer ") ? auth.slice(7) : ""
     const current = configStore.get()

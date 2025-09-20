@@ -45,9 +45,24 @@ export function Component() {
     : undefined
 
   return (
-    <div className="modern-panel h-full overflow-auto px-6 py-4">
+    <div className="modern-panel h-full overflow-y-auto overflow-x-hidden px-6 py-4">
       <div className="grid gap-4">
-        <ControlGroup title="Remote Server">
+        <ControlGroup
+          title="Remote Server"
+          endDescription={(
+            <div className="break-words whitespace-normal">
+              Exposes your SpeakMCP agent over an OpenAI BaseURL-compatible /v1 HTTP endpoint so other clients (e.g., mobile or other apps) can connect to this desktop app and use the agent remotely. Recommended: use with the{" "}
+              <a
+                href="https://github.com/aj47/SpeakMCPMobile"
+                target="_blank"
+                rel="noreferrer noopener"
+                className="underline"
+              >
+                SpeakMCP Mobile app
+              </a>.
+            </div>
+          )}
+        >
           <Control label="Enable Remote Server" className="px-3">
             <Switch
               checked={enabled}
@@ -98,8 +113,8 @@ export function Component() {
               </Control>
 
               <Control label={<ControlLabel label="API Key" tooltip="Bearer token required in Authorization header" />} className="px-3">
-                <div className="flex items-center gap-2">
-                  <Input type="password" value={cfg.remoteServerApiKey || ""} readOnly className="w-[360px]" />
+                <div className="flex flex-wrap items-center gap-2">
+                  <Input type="password" value={cfg.remoteServerApiKey || ""} readOnly className="w-full sm:w-[360px] max-w-full min-w-0" />
                   <Button
                     variant="outline"
                     size="sm"
@@ -142,7 +157,7 @@ export function Component() {
 
               {baseUrl && (
                 <Control label="Base URL" className="px-3">
-                  <div className="text-sm text-muted-foreground select-text">{baseUrl}</div>
+                  <div className="text-sm text-muted-foreground select-text break-all">{baseUrl}</div>
                 </Control>
               )}
             </>

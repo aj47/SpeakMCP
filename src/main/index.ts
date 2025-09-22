@@ -21,6 +21,23 @@ import { initializeDeepLinkHandling } from "./oauth-deeplink-handler"
 import { configStore } from "./config"
 import { startRemoteServer } from "./remote-server"
 
+
+// On Linux, disable hardware acceleration by default to avoid VA-API driver issues
+// Users can override by setting SPEAKMCP_ENABLE_GPU=1
+const enableGpu = process.env.SPEAKMCP_ENABLE_GPU === "1"
+if (process.platform === "linux" && !enableGpu) {
+  try {
+    app.disableHardwareAcceleration()
+    app.commandLine.appendSwitch("disable-gpu")
+    app.commandLine.appendSwitch(
+      "disable-features",
+      "VaapiVideoDecoder,VaapiVideoEncoder,AcceleratedVideoDecode,AcceleratedVideoEncoder,CanvasOopRasterization",
+    )
+  } catch (_) {
+    // best-effort only
+  }
+}
+
 registerServeSchema()
 
 // This method will be called when Electron has finished

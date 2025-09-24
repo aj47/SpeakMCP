@@ -105,28 +105,64 @@ function ts(): string {
 
 export function logLLM(...args: any[]) {
   if (!isDebugLLM()) return
+  const message = args.map(arg => typeof arg === 'string' ? arg : JSON.stringify(arg)).join(' ')
   // eslint-disable-next-line no-console
   console.log(`[${ts()}] [DEBUG][LLM]`, ...args)
+
+  // Also log to debug logging service
+  try {
+    const { debugLoggingService } = require('./debug-logging-service')
+    debugLoggingService.debug('LLM', message, args.length > 1 ? args.slice(1) : undefined)
+  } catch {
+    // Ignore if debug logging service is not available
+  }
 }
 
 export function logTools(...args: any[]) {
   if (!isDebugTools()) return
+  const message = args.map(arg => typeof arg === 'string' ? arg : JSON.stringify(arg)).join(' ')
   // eslint-disable-next-line no-console
   console.log(`[${ts()}] [DEBUG][TOOLS]`, ...args)
+
+  // Also log to debug logging service
+  try {
+    const { debugLoggingService } = require('./debug-logging-service')
+    debugLoggingService.debug('TOOLS', message, args.length > 1 ? args.slice(1) : undefined)
+  } catch {
+    // Ignore if debug logging service is not available
+  }
 }
 
 export function logKeybinds(...args: any[]) {
   if (!isDebugKeybinds()) return
+  const message = args.map(arg => typeof arg === 'string' ? arg : JSON.stringify(arg)).join(' ')
   // eslint-disable-next-line no-console
   console.log(`[${ts()}] [DEBUG][KEYBINDS]`, ...args)
+
+  // Also log to debug logging service
+  try {
+    const { debugLoggingService } = require('./debug-logging-service')
+    debugLoggingService.debug('KEYBINDS', message, args.length > 1 ? args.slice(1) : undefined)
+  } catch {
+    // Ignore if debug logging service is not available
+  }
 }
 
 
 
 export function logApp(...args: any[]) {
   if (!isDebugApp()) return
+  const message = args.map(arg => typeof arg === 'string' ? arg : JSON.stringify(arg)).join(' ')
   // eslint-disable-next-line no-console
   console.log(`[${ts()}] [DEBUG][APP]`, ...args)
+
+  // Also log to debug logging service
+  try {
+    const { debugLoggingService } = require('./debug-logging-service')
+    debugLoggingService.debug('APP', message, args.length > 1 ? args.slice(1) : undefined)
+  } catch {
+    // Ignore if debug logging service is not available
+  }
 }
 
 export function getDebugFlags(): DebugFlags {

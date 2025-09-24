@@ -93,6 +93,12 @@ const getConfig = () => {
 	    remoteServerBindAddress: "127.0.0.1",
 	    remoteServerLogLevel: "info",
 
+	    // Debug Logging defaults
+	    debugLoggingEnabled: false,
+	    debugLoggingLevel: "info",
+	    debugLoggingMaxFileSize: 10, // 10MB
+	    debugLoggingMaxFiles: 5,
+
 
   }
 

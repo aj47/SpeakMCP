@@ -15,6 +15,7 @@ import {
 import { RendererHandlers } from "./renderer-handlers"
 import { logApp } from "./debug"
 import { configStore } from "./config"
+import { debugLoggingService } from "./debug-logging-service"
 import { getFocusedAppInfo } from "./keyboard"
 import { state, agentProcessManager } from "./state"
 import { calculatePanelPosition } from "./panel-position"
@@ -79,6 +80,7 @@ function createBaseWindow({
 
 export function createMainWindow({ url }: { url?: string } = {}) {
   logApp("Creating main window...")
+  debugLoggingService.info("window", "Creating main window", { url })
   const win = createBaseWindow({
     id: "main",
     url,

@@ -20,6 +20,7 @@ import { OAuthClient } from "./oauth-client"
 import { oauthStorage } from "./oauth-storage"
 import { isDebugTools, logTools } from "./debug"
 import { dialog } from "electron"
+import { debugLoggingService } from "./debug-logging-service"
 
 const accessAsync = promisify(access)
 
@@ -213,6 +214,7 @@ export class MCPService {
   async initialize(): Promise<void> {
     this.isInitializing = true
     this.initializationProgress = { current: 0, total: 0 }
+    debugLoggingService.info("mcp", "Starting MCP service initialization")
 
     const config = configStore.get()
     const mcpConfig = config.mcpConfig

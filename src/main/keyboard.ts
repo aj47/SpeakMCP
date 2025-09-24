@@ -16,6 +16,7 @@ import { spawn, ChildProcess } from "child_process"
 import path from "path"
 import { matchesKeyCombo, getEffectiveShortcut } from "../shared/key-utils"
 import { isDebugKeybinds, logKeybinds } from "./debug"
+import { debugLoggingService } from "./debug-logging-service"
 
 const rdevPath = path
   .join(
@@ -42,6 +43,7 @@ type RdevEvent = {
 }
 
 export const writeText = (text: string) => {
+  debugLoggingService.info("keyboard", "Writing text to system", { textLength: text.length })
   return new Promise<void>((resolve, reject) => {
     const child: ChildProcess = spawn(rdevPath, ["write", text])
 

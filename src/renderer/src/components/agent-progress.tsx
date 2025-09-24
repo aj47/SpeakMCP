@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react"
 import { cn } from "@renderer/lib/utils"
 import { AgentProgressUpdate } from "../../../shared/types"
-import { ChevronDown, ChevronUp, ChevronRight } from "lucide-react"
+import { ChevronDown, ChevronUp, ChevronRight, X, AlertTriangle } from "lucide-react"
 import { MarkdownRenderer } from "@renderer/components/markdown-renderer"
 import { Button } from "./ui/button"
 import { Badge } from "./ui/badge"
@@ -488,10 +488,36 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true)
   const lastMessageCountRef = useRef(0)
   const lastContentLengthRef = useRef(0)
+  const [showKillConfirmation, setShowKillConfirmation] = useState(false)
+  const [isKilling, setIsKilling] = useState(false)
   const { isDark } = useTheme()
 
   // Get current conversation ID for deep-linking
   const { currentConversationId } = useConversation()
+
+  // Kill switch handler
+  const handleKillSwitch = async () => {
+    if (isKilling) return // Prevent double-clicks
+
+    setIsKilling(true)
+    try {
+      await tipcClient.emergencyStopAgent()
+      setShowKillConfirmation(false)
+    } catch (error) {
+      console.error("Failed to stop agent:", error)
+    } finally {
+      setIsKilling(false)
+    }
+  }
+
+  // Handle confirmation dialog
+  const handleKillConfirmation = () => {
+    setShowKillConfirmation(true)
+  }
+
+  const handleCancelKill = () => {
+    setShowKillConfirmation(false)
+  }
 
   if (!progress) {
     return null
@@ -505,6 +531,11 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
     finalContent,
     conversationHistory,
   } = progress
+
+  // Detect if agent was stopped by kill switch
+  const wasStopped = finalContent?.includes("emergency kill switch") ||
+                    steps?.some(step => step.title === "Agent stopped" ||
+                               step.description?.includes("emergency kill switch"))
 
   // Use conversation history if available, otherwise fall back to extracting from steps
   let messages: Array<{
@@ -743,18 +774,39 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
       {/* Unified Header */}
       <div className="flex items-center justify-between px-3 py-2 border-b border-border/30 bg-muted/10 backdrop-blur-sm">
         <div className="flex items-center gap-2">
-          <span className="text-xs font-medium">
-            {isComplete ? (hasErrors ? "Failed" : "Complete") : "Processing"}
+          <span className={cn(
+            "text-xs font-medium",
+            wasStopped && "text-red-600 dark:text-red-400"
+          )}>
+            {isComplete ?
+              (wasStopped ? "Stopped" : hasErrors ? "Failed" : "Complete") :
+              "Processing"
+            }
           </span>
+          {wasStopped && (
+            <Badge variant="destructive" className="text-xs px-1.5 py-0.5">
+              Terminated
+            </Badge>
+          )}
         </div>
         <div className="flex items-center gap-3">
-          <span className="text-xs text-muted-foreground">
-{!isComplete && (
-  <span className="text-xs text-muted-foreground">
-    {`${currentIteration}/${maxIterations}`}
-  </span>
-)}
-          </span>
+          {!isComplete && (
+            <span className="text-xs text-muted-foreground">
+              {`${currentIteration}/${maxIterations}`}
+            </span>
+          )}
+          {!isComplete && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 w-6 p-0 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20"
+              onClick={handleKillConfirmation}
+              disabled={isKilling}
+              title="Stop agent execution"
+            >
+              <X className="h-3 w-3" />
+            </Button>
+          )}
         </div>
       </div>
 
@@ -802,6 +854,39 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
               width: `${Math.min(100, (currentIteration / maxIterations) * 100)}%`,
             }}
           />
+        </div>
+      )}
+
+      {/* Kill Switch Confirmation Dialog */}
+      {showKillConfirmation && (
+        <div className="absolute inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-background border border-border rounded-lg p-4 max-w-sm mx-4 shadow-lg">
+            <div className="flex items-center gap-2 mb-3">
+              <AlertTriangle className="h-4 w-4 text-red-500" />
+              <h3 className="text-sm font-medium">Stop Agent Execution</h3>
+            </div>
+            <p className="text-xs text-muted-foreground mb-4">
+              Are you sure you want to stop the agent? This will immediately terminate all running processes and cannot be undone.
+            </p>
+            <div className="flex gap-2 justify-end">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleCancelKill}
+                disabled={isKilling}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={handleKillSwitch}
+                disabled={isKilling}
+              >
+                {isKilling ? "Stopping..." : "Stop Agent"}
+              </Button>
+            </div>
+          </div>
         </div>
       )}
     </div>

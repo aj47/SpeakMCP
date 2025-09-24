@@ -7,7 +7,7 @@ import {
 } from "./mcp-service"
 import { AgentProgressStep, AgentProgressUpdate } from "../shared/types"
 import { getRendererHandlers } from "@egoist/tipc/main"
-import { WINDOWS, showPanelWindow } from "./window"
+import { WINDOWS, showPanelWindow, getAgentWindow } from "./window"
 import { RendererHandlers } from "./renderer-handlers"
 import { diagnosticsService } from "./diagnostics"
 import { makeStructuredContextExtraction, ContextExtractionResponse } from "./structured-output"
@@ -244,7 +244,32 @@ export interface AgentModeResponse {
 }
 
 // Helper function to emit progress updates to the renderer with better error handling
-function emitAgentProgress(update: AgentProgressUpdate) {
+function emitAgentProgress(update: AgentProgressUpdate, conversationId?: string) {
+  const config = configStore.get()
+
+  // If multi-window mode is enabled and we have a conversation ID, send to agent window
+  if (config.multiWindowAgentMode && conversationId) {
+    const agentWindow = getAgentWindow(conversationId)
+    if (agentWindow) {
+      try {
+        const handlers = getRendererHandlers<RendererHandlers>(agentWindow.webContents)
+        if (handlers.agentProgressUpdate) {
+          setTimeout(() => {
+            try {
+              handlers.agentProgressUpdate.send(update)
+            } catch (error) {
+              console.warn("Failed to send progress update to agent window:", error)
+            }
+          }, 10)
+        }
+      } catch (error) {
+        console.warn("Failed to get agent window renderer handlers:", error)
+      }
+    }
+    return // Don't send to panel if we sent to agent window
+  }
+
+  // Traditional panel mode
   const panel = WINDOWS.get("panel")
   if (!panel) {
     console.warn("Panel window not available for progress update")
@@ -452,6 +477,7 @@ export async function processTranscriptWithAgentMode(
     toolCalls?: MCPToolCall[]
     toolResults?: MCPToolResult[]
   }>,
+  conversationId?: string,
 ): Promise<AgentModeResponse> {
   const config = configStore.get()
 
@@ -605,7 +631,7 @@ export async function processTranscriptWithAgentMode(
     steps: progressSteps.slice(-3), // Show max 3 steps
     isComplete: false,
     conversationHistory: formatConversationForProgress(conversationHistory),
-  })
+  }, conversationId)
 
   // Get recent context for the LLM - no specific extraction needed
   const recentContext = extractRecentContext(conversationHistory)
@@ -644,7 +670,7 @@ export async function processTranscriptWithAgentMode(
           finalContent +
           "\n\n(Agent mode was stopped by emergency kill switch)",
         conversationHistory: formatConversationForProgress(conversationHistory),
-      })
+      }, conversationId)
 
       break
     }
@@ -672,7 +698,7 @@ export async function processTranscriptWithAgentMode(
       steps: progressSteps.slice(-3),
       isComplete: false,
       conversationHistory: formatConversationForProgress(conversationHistory),
-    })
+    }, conversationId)
 
     // Use the base system prompt - let the LLM understand context from conversation history
     let contextAwarePrompt = systemPrompt
@@ -772,7 +798,7 @@ Always use actual resource IDs from the conversation history or create new ones 
           isComplete: true,
           finalContent: finalContent + "\n\n(Agent mode was stopped by emergency kill switch)",
           conversationHistory: formatConversationForProgress(conversationHistory),
-        })
+        }, conversationId)
         break
       }
       throw error
@@ -797,7 +823,7 @@ Always use actual resource IDs from the conversation history or create new ones 
       steps: progressSteps.slice(-3),
       isComplete: false,
       conversationHistory: formatConversationForProgress(conversationHistory),
-    })
+    }, conversationId)
 
     // Check for explicit completion signal
     const toolCallsArray: MCPToolCall[] = Array.isArray(
@@ -877,7 +903,7 @@ Always use actual resource IDs from the conversation history or create new ones 
           steps: progressSteps.slice(-3),
           isComplete: false,
           conversationHistory: formatConversationForProgress(conversationHistory),
-        })
+        }, conversationId)
 
         const retries = Math.max(0, config.mcpVerifyRetryCount ?? 1)
         let verified = false
@@ -924,7 +950,7 @@ Always use actual resource IDs from the conversation history or create new ones 
             steps: progressSteps.slice(-3),
             isComplete: false,
             conversationHistory: formatConversationForProgress(conversationHistory),
-          })
+          }, conversationId)
 
           // Build a fresh system prompt and messages for the summary
           const postVerifySystemPrompt = constructSystemPrompt(
@@ -991,7 +1017,7 @@ Always use actual resource IDs from the conversation history or create new ones 
         isComplete: true,
         finalContent,
         conversationHistory: formatConversationForProgress(conversationHistory),
-      })
+      }, conversationId)
 
       break
     }
@@ -1063,7 +1089,7 @@ Always use actual resource IDs from the conversation history or create new ones 
         steps: progressSteps.slice(-3),
         isComplete: false,
         conversationHistory: formatConversationForProgress(conversationHistory),
-      })
+      }, conversationId)
 
       // Execute tool with retry logic for transient failures
       let result = await executeToolCall(toolCall)
@@ -1147,7 +1173,7 @@ Always use actual resource IDs from the conversation history or create new ones 
         steps: progressSteps.slice(-3),
         isComplete: false,
         conversationHistory: formatConversationForProgress(conversationHistory),
-      })
+      }, conversationId)
     }
 
     // Add assistant response and tool results to conversation
@@ -1273,7 +1299,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
           steps: progressSteps.slice(-3),
           isComplete: false,
           conversationHistory: formatConversationForProgress(conversationHistory),
-        })
+        }, conversationId)
 
         // Get the summary from the agent
         const contextAwarePrompt = constructSystemPrompt(
@@ -1363,7 +1389,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
 	          steps: progressSteps.slice(-3),
           isComplete: false,
 	          conversationHistory: formatConversationForProgress(conversationHistory),
-	        })
+	        }, conversationId)
 
 	        const retries = Math.max(0, config.mcpVerifyRetryCount ?? 1)
 	        let verified = false
@@ -1402,7 +1428,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
             steps: progressSteps.slice(-3),
             isComplete: false,
             conversationHistory: formatConversationForProgress(conversationHistory),
-          })
+          }, conversationId)
 
           const postVerifySystemPrompt = constructSystemPrompt(
             uniqueAvailableTools,
@@ -1468,7 +1494,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
         isComplete: true,
         finalContent,
         conversationHistory: formatConversationForProgress(conversationHistory),
-      })
+      }, conversationId)
 
       break
     }
@@ -1510,7 +1536,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
           steps: progressSteps.slice(-3),
           isComplete: false,
           conversationHistory: formatConversationForProgress(conversationHistory),
-        })
+        }, conversationId)
 
         // Get the summary from the agent
         const contextAwarePrompt = constructSystemPrompt(
@@ -1579,7 +1605,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
             steps: progressSteps.slice(-3),
             isComplete: false,
             conversationHistory: formatConversationForProgress(conversationHistory),
-          })
+          }, conversationId)
 
           const postVerifySystemPrompt = constructSystemPrompt(
             uniqueAvailableTools,
@@ -1682,7 +1708,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
 	          maxIterations,
 	          steps: progressSteps.slice(-3),
 	          conversationHistory: formatConversationForProgress(conversationHistory),
-	        })
+	        }, conversationId)
 
 	        const retries = Math.max(0, config.mcpVerifyRetryCount ?? 1)
 	        let verified = false
@@ -1721,7 +1747,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
         isComplete: true,
         finalContent,
         conversationHistory: formatConversationForProgress(conversationHistory),
-      })
+      }, conversationId)
 
       break
     }
@@ -1794,7 +1820,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
       isComplete: true,
       finalContent,
       conversationHistory: formatConversationForProgress(conversationHistory),
-    })
+    }, conversationId)
   }
 
   // Reset the stop flag at the end of agent processing

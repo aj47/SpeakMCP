@@ -1,4 +1,4 @@
-import { app, Menu } from "electron"
+import { app, Menu, ipcMain, BrowserWindow } from "electron"
 import { electronApp, optimizer } from "@electron-toolkit/utils"
 import {
   createMainWindow,
@@ -46,6 +46,14 @@ app.whenReady().then(() => {
 
   registerIpcMain(router)
   logApp("IPC main registered")
+
+  // Register additional IPC handlers
+  ipcMain.handle('minimizeWindow', (event) => {
+    const window = BrowserWindow.fromWebContents(event.sender)
+    if (window) {
+      window.minimize()
+    }
+  })
 
   registerServeProtocol()
 

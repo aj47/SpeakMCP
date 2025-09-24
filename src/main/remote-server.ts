@@ -119,6 +119,8 @@ async function runAgent(prompt: string): Promise<string> {
       availableTools,
       executeToolCall,
       cfg.mcpMaxIterations ?? 10,
+      undefined, // No previous conversation history for remote server
+      undefined, // No conversation ID for remote server
     )
 
     return agentResult.content

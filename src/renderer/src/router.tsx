@@ -53,4 +53,8 @@ export const router: ReturnType<typeof createBrowserRouter> =
       path: "/panel",
       lazy: () => import("./pages/panel"),
     },
+    {
+      path: "/agent",
+      lazy: () => import("./pages/agent"),
+    },
   ])

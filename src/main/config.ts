@@ -26,6 +26,8 @@ const getConfig = () => {
     conversationsEnabled: true,
     maxConversationsToKeep: 100,
     autoSaveConversations: true,
+    // Multi-window agent mode defaults
+    multiWindowAgentMode: false,
     // Agent kill switch defaults
     agentKillSwitchEnabled: true,
     agentKillSwitchHotkey: "ctrl-shift-escape",

@@ -9,6 +9,7 @@ declare global {
       getOAuthStatus: (serverName: string) => Promise<{ configured: boolean; authenticated: boolean; tokenExpiry?: number; error?: string }>
       revokeOAuthTokens: (serverName: string) => Promise<{ success: boolean; error?: string }>
       testMCPServer: (serverName: string, config: any) => Promise<{ success: boolean; error?: string }>
+      minimizeWindow: () => Promise<void>
     }
   }
 }

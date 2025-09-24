@@ -27,6 +27,7 @@ import {
 } from "../shared/types"
 import { conversationService } from "./conversation-service"
 import { RendererHandlers } from "./renderer-handlers"
+import { debugLoggingService } from "./debug-logging-service"
 import {
   postProcessTranscript,
   processTranscriptWithTools,
@@ -1357,6 +1358,45 @@ export const router = {
     // Return current size if no custom size saved
     const [width, height] = win.getSize()
     return { width, height }
+  }),
+
+  // Debug Logging endpoints
+  getDebugLogs: t.procedure
+    .input<{ count?: number }>()
+    .action(async ({ input }) => {
+      const count = input.count || 100
+      return await debugLoggingService.getRecentLogs(count)
+    }),
+
+  getDebugLogStats: t.procedure.action(async () => {
+    const logFiles = debugLoggingService.getLogFiles()
+    const totalSize = logFiles.reduce((sum, file) => sum + file.size, 0)
+    const formatSize = (bytes: number) => {
+      if (bytes === 0) return "0 B"
+      const k = 1024
+      const sizes = ["B", "KB", "MB", "GB"]
+      const i = Math.floor(Math.log(bytes) / Math.log(k))
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i]
+    }
+
+    return {
+      totalSize: formatSize(totalSize),
+      fileCount: logFiles.length,
+      oldestLog: logFiles.length > 0 ? new Date(Math.min(...logFiles.map(f => f.createdAt))).toLocaleDateString() : "N/A",
+      newestLog: logFiles.length > 0 ? new Date(Math.max(...logFiles.map(f => f.modifiedAt))).toLocaleDateString() : "N/A"
+    }
+  }),
+
+  clearDebugLogs: t.procedure.action(async () => {
+    debugLoggingService.clearLogs()
+    return { success: true }
+  }),
+
+  exportDebugLogs: t.procedure.action(async () => {
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-")
+    const exportPath = path.join(process.cwd(), `debug-logs-export-${timestamp}.json`)
+    const finalPath = debugLoggingService.exportLogs(exportPath)
+    return { path: finalPath }
   }),
 }
 

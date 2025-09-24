@@ -16,6 +16,7 @@ import { constructSystemPrompt } from "./system-prompts"
 import { state } from "./state"
 import { isDebugLLM, logLLM, isDebugTools, logTools } from "./debug"
 import { shrinkMessagesForLLM } from "./context-budget"
+import { debugLoggingService } from "./debug-logging-service"
 
 /**
  * Use LLM to extract useful context from conversation history
@@ -454,6 +455,11 @@ export async function processTranscriptWithAgentMode(
   }>,
 ): Promise<AgentModeResponse> {
   const config = configStore.get()
+  debugLoggingService.info("llm", "Starting agent mode processing", {
+    transcript: transcript.substring(0, 100) + "...",
+    availableToolsCount: availableTools.length,
+    maxIterations
+  })
 
   if (!config.mcpToolsEnabled || !config.mcpAgentModeEnabled) {
     const fallbackResponse = await processTranscriptWithTools(

@@ -20,6 +20,7 @@ import { initializeDeepLinkHandling } from "./oauth-deeplink-handler"
 
 import { configStore } from "./config"
 import { startRemoteServer } from "./remote-server"
+import { debugLoggingService } from "./debug-logging-service"
 
 registerServeSchema()
 
@@ -30,22 +31,31 @@ app.whenReady().then(() => {
   // Initialize debug flags from CLI/env early
   initDebugFlags(process.argv)
   logApp("SpeakMCP starting up...")
+  debugLoggingService.info("app", "SpeakMCP application starting up", {
+    platform: process.platform,
+    nodeVersion: process.version,
+    electronVersion: process.versions.electron
+  })
 
   // Initialize deep link handling after app is ready
   initializeDeepLinkHandling()
   logApp("Deep link handling initialized")
+  debugLoggingService.info("app", "Deep link handling initialized")
 
   // Set app user model id for windows
   electronApp.setAppUserModelId(process.env.APP_ID)
 
   const accessibilityGranted = isAccessibilityGranted()
   logApp(`Accessibility granted: ${accessibilityGranted}`)
+  debugLoggingService.info("app", "Accessibility permission check completed", { granted: accessibilityGranted })
 
   Menu.setApplicationMenu(createAppMenu())
   logApp("Application menu created")
+  debugLoggingService.info("app", "Application menu created")
 
   registerIpcMain(router)
   logApp("IPC main registered")
+  debugLoggingService.info("app", "IPC main handlers registered")
 
   registerServeProtocol()
 
@@ -85,8 +95,10 @@ app.whenReady().then(() => {
   mcpService.initialize().catch((error) => {
     console.error("Failed to initialize MCP service on startup:", error)
     logApp(`MCP service initialization failed: ${error}`)
+    debugLoggingService.error("mcp", "MCP service initialization failed", error)
   }).then(() => {
     logApp("MCP service initialized successfully")
+    debugLoggingService.info("mcp", "MCP service initialized successfully")
   })
 
 	  // Start Remote Server if enabled

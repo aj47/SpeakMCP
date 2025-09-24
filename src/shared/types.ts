@@ -179,6 +179,23 @@ export interface ConversationHistoryItem {
   preview: string
 }
 
+// Debug Logging Types
+export interface DebugLogEntry {
+  timestamp: number
+  level: "debug" | "info" | "warning" | "error"
+  component: string
+  message: string
+  details?: any
+  stack?: string
+}
+
+export interface DebugLogFile {
+  path: string
+  size: number
+  createdAt: number
+  modifiedAt: number
+}
+
 export type Config = {
   shortcut?: "hold-ctrl" | "ctrl-slash" | "custom"
   customShortcut?: string
@@ -327,6 +344,12 @@ export type Config = {
 	  remoteServerBindAddress?: "127.0.0.1" | "0.0.0.0"
 	  remoteServerApiKey?: string
 	  remoteServerLogLevel?: "error" | "info" | "debug"
+
+	  // Debug Logging Configuration
+	  debugLoggingEnabled?: boolean
+	  debugLoggingLevel?: "debug" | "info" | "warning" | "error"
+	  debugLoggingMaxFileSize?: number // in MB, default 10
+	  debugLoggingMaxFiles?: number // number of rotated files to keep, default 5
 	  remoteServerCorsOrigins?: string[]
 
 }

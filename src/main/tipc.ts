@@ -6,6 +6,10 @@ import {
   WINDOWS,
   resizePanelForAgentMode,
   resizePanelToNormal,
+  showAgentWindow,
+  closeAgentWindow,
+  closeAllAgentWindows,
+  getAgentWindow,
 } from "./window"
 import {
   app,
@@ -55,6 +59,11 @@ async function processWithAgentMode(
   state.isAgentModeActive = true
   state.shouldStopAgent = false
   state.agentIterationCount = 0
+
+  // If multi-window mode is enabled and we have a conversation ID, create/show agent window
+  if (config.multiWindowAgentMode && conversationId) {
+    showAgentWindow(conversationId)
+  }
 
   try {
     if (!config.mcpToolsEnabled) {
@@ -110,6 +119,7 @@ async function processWithAgentMode(
         executeToolCall,
         config.mcpMaxIterations ?? 10, // Use configured max iterations or default to 10
         previousConversationHistory,
+        conversationId,
       )
 
       return agentResult.content
@@ -1358,6 +1368,33 @@ export const router = {
     const [width, height] = win.getSize()
     return { width, height }
   }),
+
+  // Agent Window Management
+  showAgentWindow: t.procedure
+    .input<{ conversationId: string }>()
+    .action(async ({ input }) => {
+      const win = showAgentWindow(input.conversationId)
+      return { success: true, windowId: `agent-${input.conversationId}` }
+    }),
+
+  closeAgentWindow: t.procedure
+    .input<{ conversationId: string }>()
+    .action(async ({ input }) => {
+      closeAgentWindow(input.conversationId)
+      return { success: true }
+    }),
+
+  closeAllAgentWindows: t.procedure.action(async () => {
+    closeAllAgentWindows()
+    return { success: true }
+  }),
+
+  getAgentWindowExists: t.procedure
+    .input<{ conversationId: string }>()
+    .action(async ({ input }) => {
+      const win = getAgentWindow(input.conversationId)
+      return { exists: !!win }
+    }),
 }
 
 // TTS Provider Implementation Functions

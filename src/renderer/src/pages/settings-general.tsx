@@ -552,6 +552,20 @@ export function Component() {
             )}
         </ControlGroup>
 
+        {/* Agent Mode Settings */}
+        <ControlGroup title="Agent Mode">
+          <Control label={<ControlLabel label="Multi-Window Mode" tooltip="When enabled, each agent session opens in its own separate window instead of using the floating panel. This allows you to manage multiple agents simultaneously and compare their outputs side-by-side." />} className="px-3">
+            <Switch
+              defaultChecked={configQuery.data?.multiWindowAgentMode ?? false}
+              onCheckedChange={(value) => {
+                saveConfig({
+                  multiWindowAgentMode: value,
+                })
+              }}
+            />
+          </Control>
+        </ControlGroup>
+
         {/* Panel Position Settings */}
         <ControlGroup title="Panel Position">
           <Control label={<ControlLabel label="Default Position" tooltip="Choose where the floating panel appears on your screen. Custom position: Panel can be dragged to any location and will remember its position." />} className="px-3">

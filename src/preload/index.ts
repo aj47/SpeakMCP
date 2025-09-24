@@ -10,6 +10,9 @@ const api = {
   getOAuthStatus: (serverName: string) => ipcRenderer.invoke('getOAuthStatus', serverName),
   revokeOAuthTokens: (serverName: string) => ipcRenderer.invoke('revokeOAuthTokens', serverName),
   testMCPServer: (serverName: string, config: any) => ipcRenderer.invoke('testMCPServer', { serverName, config }),
+
+  // Window management APIs
+  minimizeWindow: () => ipcRenderer.invoke('minimizeWindow'),
 }
 
 // Use `contextBridge` APIs to expose Electron APIs to

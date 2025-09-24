@@ -20,8 +20,10 @@ import { state, agentProcessManager } from "./state"
 import { calculatePanelPosition } from "./panel-position"
 
 type WINDOW_ID = "main" | "panel" | "setup"
+type AGENT_WINDOW_ID = `agent-${string}` // For agent windows with conversation IDs
 
 export const WINDOWS = new Map<WINDOW_ID, BrowserWindow>()
+export const AGENT_WINDOWS = new Map<AGENT_WINDOW_ID, BrowserWindow>()
 
 
 function createBaseWindow({
@@ -120,6 +122,62 @@ export function createSetupWindow() {
   return win
 }
 
+export function createAgentWindow(conversationId: string) {
+  logApp(`Creating agent window for conversation ${conversationId}...`)
+  const agentWindowId: AGENT_WINDOW_ID = `agent-${conversationId}`
+
+  // Calculate position with slight offset for multiple windows
+  const existingAgentWindows = Array.from(AGENT_WINDOWS.keys())
+  const offset = existingAgentWindows.length * 30 // 30px offset for each new window
+
+  const win = new BrowserWindow({
+    width: agentWindowSize.width,
+    height: agentWindowSize.height,
+    show: false,
+    autoHideMenuBar: true,
+    titleBarStyle: "hiddenInset",
+    x: 100 + offset,
+    y: 100 + offset,
+    webPreferences: {
+      preload: path.join(__dirname, "../preload/index.mjs"),
+      sandbox: false,
+    },
+  })
+
+  AGENT_WINDOWS.set(agentWindowId, win)
+
+  win.on("ready-to-show", () => {
+    win.show()
+  })
+
+  win.on("close", () => {
+    AGENT_WINDOWS.delete(agentWindowId)
+    // Clean up any agent state for this conversation
+    if (state.isAgentModeActive) {
+      // Only clean up global state if this was the last agent window
+      if (AGENT_WINDOWS.size === 0) {
+        state.isAgentModeActive = false
+        state.shouldStopAgent = false
+        state.agentIterationCount = 0
+      }
+    }
+  })
+
+  win.webContents.setWindowOpenHandler((details) => {
+    shell.openExternal(details.url)
+    return { action: "deny" }
+  })
+
+  const baseUrl = import.meta.env.PROD
+    ? "assets://app"
+    : process.env["ELECTRON_RENDERER_URL"]
+
+  const fullUrl = `${baseUrl}/agent?conversationId=${conversationId}`
+  win.loadURL(fullUrl)
+
+  return win
+}
+
 export function showMainWindow(url?: string) {
   const win = WINDOWS.get("main")
 
@@ -141,6 +199,11 @@ const panelWindowSize = {
 const agentPanelWindowSize = {
   width: 600,
   height: 400,
+}
+
+const agentWindowSize = {
+  width: 800,
+  height: 600,
 }
 
 const textInputPanelWindowSize = {
@@ -320,6 +383,38 @@ export const closeAgentModeAndHidePanelWindow = () => {
       }
     }, 200)
   }
+}
+
+export function showAgentWindow(conversationId: string) {
+  const agentWindowId: AGENT_WINDOW_ID = `agent-${conversationId}`
+  const existingWin = AGENT_WINDOWS.get(agentWindowId)
+
+  if (existingWin) {
+    existingWin.show()
+    existingWin.focus()
+    return existingWin
+  } else {
+    return createAgentWindow(conversationId)
+  }
+}
+
+export function closeAgentWindow(conversationId: string) {
+  const agentWindowId: AGENT_WINDOW_ID = `agent-${conversationId}`
+  const win = AGENT_WINDOWS.get(agentWindowId)
+
+  if (win) {
+    win.close()
+  }
+}
+
+export function closeAllAgentWindows() {
+  const agentWindows = Array.from(AGENT_WINDOWS.values())
+  agentWindows.forEach(win => win.close())
+}
+
+export function getAgentWindow(conversationId: string): BrowserWindow | undefined {
+  const agentWindowId: AGENT_WINDOW_ID = `agent-${conversationId}`
+  return AGENT_WINDOWS.get(agentWindowId)
 }
 
 export const emergencyStopAgentMode = async () => {

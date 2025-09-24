@@ -289,6 +289,9 @@ export type Config = {
   maxConversationsToKeep?: number
   autoSaveConversations?: boolean
 
+  // Multi-Window Agent Configuration
+  multiWindowAgentMode?: boolean
+
   // Panel Position Configuration
   panelPosition?:
     | "top-left"

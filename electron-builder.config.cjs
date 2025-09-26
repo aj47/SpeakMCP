@@ -64,9 +64,9 @@ module.exports = {
     artifactName: "${productName}-${version}-${arch}.${ext}",
     entitlementsInherit: "build/entitlements.mac.plist",
     identity: process.env.CSC_NAME || "Apple Development",
-    // Disable timestamp for development builds to avoid timestamp service errors
-    // For production builds, set ENABLE_TIMESTAMP=true environment variable
-    timestamp: process.env.ENABLE_TIMESTAMP === 'true' ? undefined : false,
+    // Disable hardened runtime and timestamp for development builds to avoid timestamp service errors
+    // For production builds, set ENABLE_HARDENED_RUNTIME=true environment variable
+    hardenedRuntime: process.env.ENABLE_HARDENED_RUNTIME === 'true',
     target: [
       {
         target: "dmg",

@@ -21,7 +21,7 @@ module.exports = {
     "!.prettierrc",
     "!speakmcp-rs/*",
   ],
-  asarUnpack: ["resources/**", "node_modules/**"],
+  asar: false,
   win: {
     icon: "build/icon.ico",
     executableName: "speakmcp",

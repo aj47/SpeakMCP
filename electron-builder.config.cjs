@@ -67,6 +67,10 @@ module.exports = {
     // Disable hardened runtime and timestamp for development builds to avoid timestamp service errors
     // For production builds, set ENABLE_HARDENED_RUNTIME=true environment variable
     hardenedRuntime: process.env.ENABLE_HARDENED_RUNTIME === 'true',
+    // Skip signing native extensions that cause timestamp issues
+    signIgnore: [
+      "node_modules/@egoist/electron-panel-window/build/Release/NativeExtension.node"
+    ],
     target: [
       {
         target: "dmg",

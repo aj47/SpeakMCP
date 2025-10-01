@@ -1,0 +1,275 @@
+name: VNC GUI Testing
+
+on:
+  workflow_dispatch:
+    inputs:
+      enable_vnc:
+        description: 'Enable VNC access for interactive testing'
+        required: false
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+      vnc_timeout:
+        description: 'VNC session timeout in minutes (max 360 for 6 hours)'
+        required: false
+        default: '60'
+        type: string
+      run_tests:
+        description: 'Run automated tests'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+
+env:
+  DISPLAY: ':99'
+  VNC_DISPLAY: ':1'
+  VNC_PORT: '5901'
+  SCREEN_WIDTH: '1920'
+  SCREEN_HEIGHT: '1080'
+  SCREEN_DEPTH: '24'
+
+jobs:
+  vnc-gui-test:
+    name: VNC GUI Testing on Linux
+    runs-on: ubuntu-latest
+    timeout-minutes: 360  # 6 hours max
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Setup Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+          profile: minimal
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            xvfb \
+            x11vnc \
+            xfce4 \
+            xfce4-goodies \
+            dbus-x11 \
+            libgtk-3-0 \
+            libnotify4 \
+            libnss3 \
+            libxss1 \
+            libxtst6 \
+            xdg-utils \
+            libatspi2.0-0 \
+            libdrm2 \
+            libgbm1 \
+            libxcb-dri3-0 \
+            libasound2 \
+            fluxbox \
+            net-tools \
+            novnc \
+            websockify
+
+      - name: Install Node dependencies
+        run: npm install
+
+      - name: Build Rust binary
+        run: npm run build-rs
+
+      - name: Build Electron app
+        run: |
+          npm run typecheck
+          npx electron-vite build
+
+      - name: Start Xvfb
+        run: |
+          echo "Starting Xvfb on display $DISPLAY"
+          Xvfb $DISPLAY -screen 0 ${SCREEN_WIDTH}x${SCREEN_HEIGHT}x${SCREEN_DEPTH} -ac +extension GLX +render -noreset &
+          sleep 3
+          echo "Xvfb started successfully"
+
+      - name: Start window manager
+        run: |
+          echo "Starting Fluxbox window manager"
+          DISPLAY=$DISPLAY fluxbox &
+          sleep 2
+          echo "Window manager started"
+
+      - name: Setup VNC Server
+        if: inputs.enable_vnc == 'true'
+        run: |
+          echo "Setting up VNC server on display $VNC_DISPLAY"
+          # Create VNC password
+          mkdir -p ~/.vnc
+          echo "${{ secrets.VNC_PASSWORD || 'github123' }}" | x11vnc -storepasswd /tmp/vncpass
+          
+          # Start VNC server
+          x11vnc -display $DISPLAY -rfbport $VNC_PORT -rfbauth /tmp/vncpass -forever -shared -bg -o /tmp/x11vnc.log
+          
+          echo "VNC server started on port $VNC_PORT"
+          echo "VNC password: ${{ secrets.VNC_PASSWORD || 'github123' }}"
+
+      - name: Setup noVNC (Web VNC Client)
+        if: inputs.enable_vnc == 'true'
+        run: |
+          echo "Starting noVNC web client"
+          websockify -D --web=/usr/share/novnc/ 6080 localhost:$VNC_PORT
+          echo "noVNC started on port 6080"
+
+      - name: Setup ngrok tunnel
+        if: inputs.enable_vnc == 'true'
+        run: |
+          # Download and install ngrok
+          curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc | sudo tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null
+          echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | sudo tee /etc/apt/sources.list.d/ngrok.list
+          sudo apt-get update
+          sudo apt-get install -y ngrok
+          
+          # Configure ngrok with auth token
+          if [ -n "${{ secrets.NGROK_AUTH_TOKEN }}" ]; then
+            ngrok config add-authtoken ${{ secrets.NGROK_AUTH_TOKEN }}
+            
+            # Start ngrok tunnel for VNC
+            ngrok tcp $VNC_PORT --log=stdout > /tmp/ngrok.log &
+            sleep 5
+            
+            # Get the public URL
+            NGROK_URL=$(curl -s http://localhost:4040/api/tunnels | grep -o '"public_url":"[^"]*' | grep -o 'tcp://[^"]*' | head -1)
+            
+            if [ -n "$NGROK_URL" ]; then
+              echo "============================================"
+              echo "VNC Connection Details:"
+              echo "============================================"
+              echo "VNC URL: $NGROK_URL"
+              echo "VNC Password: ${{ secrets.VNC_PASSWORD || 'github123' }}"
+              echo ""
+              echo "Connect using any VNC client (e.g., RealVNC, TigerVNC, TightVNC)"
+              echo "============================================"
+              
+              # Also start ngrok for noVNC web interface
+              ngrok http 6080 --log=stdout > /tmp/ngrok-web.log &
+              sleep 5
+              
+              WEB_URL=$(curl -s http://localhost:4040/api/tunnels | grep -o '"public_url":"https://[^"]*' | grep -o 'https://[^"]*' | head -1)
+              
+              if [ -n "$WEB_URL" ]; then
+                echo ""
+                echo "Web VNC (noVNC) URL: $WEB_URL/vnc.html"
+                echo "Click 'Connect' and enter password: ${{ secrets.VNC_PASSWORD || 'github123' }}"
+                echo "============================================"
+              fi
+            else
+              echo "Failed to get ngrok URL. Check ngrok logs:"
+              cat /tmp/ngrok.log
+            fi
+          else
+            echo "⚠️  NGROK_AUTH_TOKEN secret not set!"
+            echo "To enable remote VNC access, add NGROK_AUTH_TOKEN to repository secrets"
+            echo "Get your token from: https://dashboard.ngrok.com/auth"
+          fi
+
+      - name: Display connection info
+        if: inputs.enable_vnc == 'true'
+        run: |
+          echo ""
+          echo "============================================"
+          echo "Environment Information:"
+          echo "============================================"
+          echo "Display: $DISPLAY"
+          echo "Screen Resolution: ${SCREEN_WIDTH}x${SCREEN_HEIGHT}x${SCREEN_DEPTH}"
+          echo "VNC Port: $VNC_PORT"
+          echo "noVNC Web Port: 6080"
+          echo ""
+          echo "Processes:"
+          ps aux | grep -E "Xvfb|x11vnc|fluxbox|ngrok" | grep -v grep
+          echo "============================================"
+
+      - name: Run Electron app
+        run: |
+          echo "Starting Electron app..."
+          DISPLAY=$DISPLAY npm start &
+          APP_PID=$!
+          echo "Electron app started with PID: $APP_PID"
+          
+          # Wait a bit for the app to start
+          sleep 10
+          
+          # Check if app is running
+          if ps -p $APP_PID > /dev/null; then
+            echo "✅ Electron app is running"
+          else
+            echo "❌ Electron app failed to start"
+            exit 1
+          fi
+          
+          # Keep the app running if VNC is enabled
+          if [ "${{ inputs.enable_vnc }}" == "true" ]; then
+            echo "App is running. VNC session will remain active for ${{ inputs.vnc_timeout }} minutes"
+            echo "You can now connect via VNC to interact with the application"
+          fi
+
+      - name: Run automated tests
+        if: inputs.run_tests == 'true'
+        run: |
+          echo "Running automated tests..."
+          DISPLAY=$DISPLAY xvfb-run -a npm run test:run
+        continue-on-error: true
+
+      - name: Keep VNC session alive
+        if: inputs.enable_vnc == 'true'
+        run: |
+          echo "VNC session active. Waiting for ${{ inputs.vnc_timeout }} minutes..."
+          echo "Connect to the VNC server to interact with the application"
+          echo ""
+          echo "To stop the session early, cancel the workflow run"
+          
+          # Keep session alive for specified timeout
+          sleep $((${{ inputs.vnc_timeout }} * 60))
+
+      - name: Capture screenshots on failure
+        if: failure()
+        run: |
+          sudo apt-get install -y scrot
+          DISPLAY=$DISPLAY scrot /tmp/screenshot.png || true
+          
+      - name: Upload screenshots
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: /tmp/screenshot.png
+          if-no-files-found: ignore
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logs
+          path: |
+            /tmp/x11vnc.log
+            /tmp/ngrok.log
+            /tmp/ngrok-web.log
+          if-no-files-found: ignore
+
+      - name: Cleanup
+        if: always()
+        run: |
+          echo "Cleaning up..."
+          pkill -f x11vnc || true
+          pkill -f Xvfb || true
+          pkill -f ngrok || true
+          pkill -f electron || true
+          pkill -f fluxbox || true
+          echo "Cleanup complete"
+

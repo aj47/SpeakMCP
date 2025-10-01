@@ -1,0 +1,167 @@
+name: Test
+
+on:
+  push:
+    branches: [ main, develop, sonnetv1 ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+env:
+  DISPLAY: ':99'
+
+jobs:
+  test:
+    name: Test on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Setup Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+          profile: minimal
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            xvfb \
+            libgtk-3-0 \
+            libnotify4 \
+            libnss3 \
+            libxss1 \
+            libxtst6 \
+            xdg-utils \
+            libatspi2.0-0 \
+            libdrm2 \
+            libgbm1 \
+            libxcb-dri3-0 \
+            libasound2
+
+      - name: Install Node dependencies
+        run: npm install
+
+      - name: Run type checking
+        run: npm run typecheck
+
+      - name: Run linting
+        run: npm run lint
+        continue-on-error: true
+
+      - name: Build Rust binary
+        run: npm run build-rs
+        shell: bash
+
+      - name: Build Electron app
+        run: npx electron-vite build
+
+      - name: Run tests (Linux)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a npm run test:run
+
+      - name: Run tests (macOS/Windows)
+        if: runner.os != 'Linux'
+        run: npm run test:run
+
+      - name: Upload test coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ matrix.os }}
+          path: coverage/
+          if-no-files-found: ignore
+
+  build:
+    name: Build on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Setup Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+          profile: minimal
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgtk-3-0 \
+            libnotify4 \
+            libnss3 \
+            libxss1 \
+            libxtst6 \
+            xdg-utils \
+            libatspi2.0-0 \
+            libdrm2 \
+            libgbm1 \
+            libxcb-dri3-0 \
+            libasound2
+
+      - name: Install Node dependencies
+        run: npm install
+
+      - name: Build Rust binary
+        run: npm run build-rs
+        shell: bash
+
+      - name: Build Electron app (Linux)
+        if: runner.os == 'Linux'
+        run: npm run build:linux
+
+      - name: Build Electron app (macOS)
+        if: runner.os == 'macOS'
+        run: npm run build:mac
+
+      - name: Build Electron app (Windows)
+        if: runner.os == 'Windows'
+        run: npm run build:win:skip-types
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-${{ matrix.os }}
+          path: |
+            dist/*.AppImage
+            dist/*.deb
+            dist/*.snap
+            dist/*.dmg
+            dist/*.pkg
+            dist/*.exe
+            dist/*-setup.exe
+            dist/*-portable.exe
+          if-no-files-found: ignore
+          retention-days: 7
+

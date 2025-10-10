@@ -45,6 +45,10 @@ module.exports = {
         from: "resources/bin/speakmcp-rs.exe",
         to: "bin/speakmcp-rs.exe",
         filter: ["**/*"]
+      },
+      {
+        from: "build/icon.ico",
+        to: "icon.ico"
       }
     ]
   },

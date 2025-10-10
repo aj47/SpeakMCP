@@ -41,6 +41,9 @@ function createBaseWindow({
     height: 670,
     show: false,
     autoHideMenuBar: true,
+    ...(process.platform === 'win32' && {
+      icon: path.join(process.resourcesPath, 'icon.ico')
+    }),
     ...windowOptions,
     webPreferences: {
       preload: path.join(__dirname, "../preload/index.mjs"),

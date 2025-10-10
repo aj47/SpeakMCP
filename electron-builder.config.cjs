@@ -202,6 +202,42 @@ module.exports = {
     artifactName: "${name}-${version}.${ext}",
   },
   npmRebuild: false,
+  // After packing, reinstall dependencies with npm to fix pnpm symlink issues
+  afterPack: async (context) => {
+    const { execSync } = require('child_process');
+    const path = require('path');
+    const fs = require('fs');
+
+    // Find the app directory
+    const appDir = path.join(context.appOutDir, 'resources', 'app');
+
+    if (fs.existsSync(appDir)) {
+      console.log('\n[AFTERPACK] Reinstalling dependencies with npm for proper resolution...');
+      console.log('[AFTERPACK] App directory:', appDir);
+
+      try {
+        // Remove existing node_modules to start fresh
+        const nodeModulesPath = path.join(appDir, 'node_modules');
+        if (fs.existsSync(nodeModulesPath)) {
+          console.log('[AFTERPACK] Removing pnpm node_modules...');
+          fs.rmSync(nodeModulesPath, { recursive: true, force: true });
+        }
+
+        // Install with npm for flat structure
+        console.log('[AFTERPACK] Installing with npm...');
+        execSync('npm install --production --legacy-peer-deps --no-package-lock', {
+          cwd: appDir,
+          stdio: 'inherit',
+          env: { ...process.env, NODE_ENV: 'production' }
+        });
+
+        console.log('[AFTERPACK] Dependencies installed successfully!\n');
+      } catch (error) {
+        console.error('[AFTERPACK] Failed to install dependencies:', error);
+        throw error;
+      }
+    }
+  },
   publish: {
     provider: "github",
     owner: "aj47",

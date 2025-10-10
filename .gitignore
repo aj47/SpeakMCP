@@ -1,9 +1,10 @@
 node_modules
 dist
+dist-win
+manual-build-win
 out
 .DS_Store
 *.log*
-log.txt
 target/
 bin/
 

@@ -114,6 +114,7 @@ export interface AgentProgressStep {
 }
 
 export interface AgentProgressUpdate {
+  conversationId?: string
   currentIteration: number
   maxIterations: number
   steps: AgentProgressStep[]
@@ -288,6 +289,12 @@ export type Config = {
   conversationsEnabled?: boolean
   maxConversationsToKeep?: number
   autoSaveConversations?: boolean
+
+  // Agent UI Mode Configuration
+  agentUIMode?: 'panel' | 'tabbed' | 'multi-window'
+  tabbedAgentMode?: boolean
+  maxAgentTabs?: number
+  autoCloseCompletedTabs?: boolean
 
   // Panel Position Configuration
   panelPosition?:

@@ -603,6 +603,51 @@ export function Component() {
 
         </ControlGroup>
 
+        {/* Agent UI Mode Settings */}
+        <ControlGroup title="Agent Interface">
+          <Control label={<ControlLabel label="Tabbed Mode" tooltip="Enable tabbed interface for managing multiple agents simultaneously. When enabled, each agent runs in its own tab instead of the floating panel. This allows you to start multiple agents and switch between them easily." />} className="px-3">
+            <Switch
+              defaultChecked={configQuery.data?.tabbedAgentMode ?? false}
+              onCheckedChange={(value) => {
+                saveConfig({
+                  tabbedAgentMode: value,
+                })
+              }}
+            />
+          </Control>
+          {configQuery.data?.tabbedAgentMode && (
+            <>
+              <Control label={<ControlLabel label="Max Tabs" tooltip="Maximum number of agent tabs allowed. Default is 10." />} className="px-3">
+                <Input
+                  type="number"
+                  min={1}
+                  max={20}
+                  value={configQuery.data?.maxAgentTabs ?? 10}
+                  onChange={(e) => {
+                    const value = parseInt(e.target.value)
+                    if (!isNaN(value) && value >= 1 && value <= 20) {
+                      saveConfig({
+                        maxAgentTabs: value,
+                      })
+                    }
+                  }}
+                  className="w-24"
+                />
+              </Control>
+              <Control label={<ControlLabel label="Auto-close Completed" tooltip="Automatically close tabs when agents complete successfully." />} className="px-3">
+                <Switch
+                  defaultChecked={configQuery.data?.autoCloseCompletedTabs ?? false}
+                  onCheckedChange={(value) => {
+                    saveConfig({
+                      autoCloseCompletedTabs: value,
+                    })
+                  }}
+                />
+              </Control>
+            </>
+          )}
+        </ControlGroup>
+
         {/* About Section */}
         <ControlGroup title="About">
           <Control label="Version" className="px-3">

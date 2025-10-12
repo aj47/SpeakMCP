@@ -26,6 +26,11 @@ const getConfig = () => {
     conversationsEnabled: true,
     maxConversationsToKeep: 100,
     autoSaveConversations: true,
+    // Agent UI mode defaults
+    agentUIMode: 'panel', // Default to traditional panel mode
+    tabbedAgentMode: true, // TEMPORARILY ENABLED FOR TESTING - Change to false for production
+    maxAgentTabs: 10,
+    autoCloseCompletedTabs: false,
     // Agent kill switch defaults
     agentKillSwitchEnabled: true,
     agentKillSwitchHotkey: "ctrl-shift-escape",

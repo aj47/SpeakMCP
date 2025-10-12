@@ -386,6 +386,19 @@ export function listenToKeyboardEvents() {
 
         const win = WINDOWS.get("panel")
         if (win && win.isVisible()) {
+          const config = configStore.get()
+
+          // In tabbed mode, allow panel to stay visible for multiple agents
+          if (config.tabbedAgentMode) {
+            // Just stop current recording if active, but keep panel visible
+            if (state.isRecording) {
+              stopRecordingAndHidePanelWindow() // This won't hide in tabbed mode
+            }
+            // Don't close panel - allow new recordings in other tabs
+            return
+          }
+
+          // Traditional mode: close panel
           // Check if we're currently recording
           if (state.isRecording) {
             stopRecordingAndHidePanelWindow()

@@ -218,6 +218,20 @@ export const router = {
   hidePanelWindow: t.procedure.action(async () => {
     const panel = WINDOWS.get("panel")
 
+    // In tabbed mode, don't auto-hide the panel after operations
+    // This keeps it visible for multiple agents
+    // User can still explicitly minimize via minimizePanelWindow
+    const config = configStore.get()
+    if (config.tabbedAgentMode) {
+      return // Don't auto-hide panel in tabbed mode
+    }
+
+    panel?.hide()
+  }),
+
+  minimizePanelWindow: t.procedure.action(async () => {
+    const panel = WINDOWS.get("panel")
+    // Always hide when user explicitly minimizes, even in tabbed mode
     panel?.hide()
   }),
 

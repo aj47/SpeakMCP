@@ -283,6 +283,12 @@ export const stopRecordingAndHidePanelWindow = () => {
   if (win) {
     getRendererHandlers<RendererHandlers>(win.webContents).stopRecording.send()
 
+    // In tabbed mode, keep panel visible to allow multiple agents
+    const config = configStore.get()
+    if (config.tabbedAgentMode) {
+      return // Don't hide panel in tabbed mode
+    }
+
     if (win.isVisible()) {
       win.hide()
     }
@@ -315,6 +321,12 @@ export const closeAgentModeAndHidePanelWindow = () => {
       win.webContents,
     ).clearAgentProgress.send()
     resizePanelToNormal()
+
+    // In tabbed mode, keep panel visible
+    const config = configStore.get()
+    if (config.tabbedAgentMode) {
+      return // Don't hide panel in tabbed mode
+    }
 
     // Hide the panel after a small delay to ensure resize completes
     setTimeout(() => {

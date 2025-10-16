@@ -211,6 +211,28 @@ export function Component() {
         return
       }
 
+      // Check if blob is empty
+      if (blob.size === 0) {
+        console.error("[Panel] Recording blob is empty, cannot transcribe")
+        tipcClient.hidePanelWindow({})
+        tipcClient.displayError({
+          title: "Recording Error",
+          message: "Recording is empty. Please try recording again and speak for at least 1 second.",
+        })
+        return
+      }
+
+      // Check minimum duration (at least 100ms)
+      if (duration < 100) {
+        console.warn("[Panel] Recording duration too short:", duration, "ms")
+        tipcClient.hidePanelWindow({})
+        tipcClient.displayError({
+          title: "Recording Too Short",
+          message: "Recording is too short. Please speak for at least 1 second.",
+        })
+        return
+      }
+
       playSound("end_record")
 
       // Use appropriate mutation based on mode

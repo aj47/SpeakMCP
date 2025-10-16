@@ -33,6 +33,8 @@ type RdevEvent = {
       | "ShiftLeft"
       | "ShiftRight"
       | "Alt"
+      | "AltLeft"
+      | "AltRight"
       | "BackSlash"
       | string
   }
@@ -230,6 +232,12 @@ export function listenToKeyboardEvents() {
   let startMcpRecordingTimer: NodeJS.Timeout | undefined
   let isPressedCtrlAltKey = false
 
+  // Custom hold mode state
+  let isHoldingCustomRecordingKey = false
+  let startCustomRecordingTimer: NodeJS.Timeout | undefined
+  let isHoldingCustomMcpKey = false
+  let startCustomMcpTimer: NodeJS.Timeout | undefined
+
   // Debug state tracking
   let lastLoggedConfig: any = null
   let configChangeCount = 0
@@ -253,6 +261,21 @@ export function listenToKeyboardEvents() {
       startMcpRecordingTimer = undefined
     }
   }
+
+  const cancelCustomRecordingTimer = () => {
+    if (startCustomRecordingTimer) {
+      clearTimeout(startCustomRecordingTimer)
+      startCustomRecordingTimer = undefined
+    }
+  }
+
+  const cancelCustomMcpTimer = () => {
+    if (startCustomMcpTimer) {
+      clearTimeout(startCustomMcpTimer)
+      startCustomMcpTimer = undefined
+    }
+  }
+
   const tryStartMcpHoldIfEligible = () => {
     const config = configStore.get()
     if (
@@ -303,7 +326,7 @@ export function listenToKeyboardEvents() {
         }
       }
 
-      if (e.data.key === "Alt") {
+      if (e.data.key === "Alt" || e.data.key === "AltLeft" || e.data.key === "AltRight") {
         isPressedAltKey = true
         isPressedCtrlAltKey = isPressedCtrlKey && isPressedAltKey
         tryStartMcpHoldIfEligible()
@@ -561,15 +584,58 @@ export function listenToKeyboardEvents() {
             },
             effectiveMcpToolsShortcut,
           )
-          if (isDebugKeybinds() && matches) {
-            logKeybinds(
-              "MCP tools triggered: Custom hotkey",
-              effectiveMcpToolsShortcut,
-            )
-          }
           if (matches) {
-            getWindowRendererHandlers("panel")?.startOrFinishMcpRecording.send()
-            return
+            const customMode = config.customMcpToolsShortcutMode || "hold"
+
+            if (customMode === "toggle") {
+              // Toggle mode: press once to start, press again to stop
+              if (isDebugKeybinds()) {
+                logKeybinds(
+                  "MCP tools triggered: Custom hotkey (toggle mode)",
+                  effectiveMcpToolsShortcut,
+                )
+              }
+              getWindowRendererHandlers("panel")?.startOrFinishMcpRecording.send()
+              return
+            } else {
+              // Hold mode: start timer on key press, start recording after 800ms
+              if (isDebugKeybinds()) {
+                logKeybinds(
+                  "MCP tools triggered: Custom hotkey (hold mode)",
+                  effectiveMcpToolsShortcut,
+                )
+              }
+
+              if (hasRecentKeyPress()) {
+                return
+              }
+
+              if (startCustomMcpTimer) {
+                return
+              }
+
+              // Cancel regular recording timer since MCP is prioritized
+              cancelRecordingTimer()
+              cancelCustomRecordingTimer()
+
+              startCustomMcpTimer = setTimeout(() => {
+                // Re-check if keys are still pressed
+                const stillMatches = matchesKeyCombo(
+                  e.data,
+                  {
+                    ctrl: isPressedCtrlKey,
+                    shift: isPressedShiftKey,
+                    alt: isPressedAltKey,
+                  },
+                  effectiveMcpToolsShortcut,
+                )
+                if (!stillMatches) return
+
+                isHoldingCustomMcpKey = true
+                showPanelWindowAndStartMcpRecording()
+              }, 800)
+              return
+            }
           }
         }
       }
@@ -677,15 +743,54 @@ export function listenToKeyboardEvents() {
           },
           effectiveRecordingShortcut,
         )
-        if (isDebugKeybinds() && matches) {
-          logKeybinds(
-            "Recording triggered: Custom hotkey",
-            effectiveRecordingShortcut,
-          )
-        }
         if (matches) {
-          getWindowRendererHandlers("panel")?.startOrFinishRecording.send()
-          return
+          const customMode = config.customShortcutMode || "hold"
+
+          if (customMode === "toggle") {
+            // Toggle mode: press once to start, press again to stop
+            if (isDebugKeybinds()) {
+              logKeybinds(
+                "Recording triggered: Custom hotkey (toggle mode)",
+                effectiveRecordingShortcut,
+              )
+            }
+            getWindowRendererHandlers("panel")?.startOrFinishRecording.send()
+            return
+          } else {
+            // Hold mode: start timer on key press, start recording after 800ms
+            if (isDebugKeybinds()) {
+              logKeybinds(
+                "Recording triggered: Custom hotkey (hold mode)",
+                effectiveRecordingShortcut,
+              )
+            }
+
+            if (hasRecentKeyPress()) {
+              return
+            }
+
+            if (startCustomRecordingTimer) {
+              return
+            }
+
+            startCustomRecordingTimer = setTimeout(() => {
+              // Re-check if keys are still pressed
+              const stillMatches = matchesKeyCombo(
+                e.data,
+                {
+                  ctrl: isPressedCtrlKey,
+                  shift: isPressedShiftKey,
+                  alt: isPressedAltKey,
+                },
+                effectiveRecordingShortcut,
+              )
+              if (!stillMatches) return
+
+              isHoldingCustomRecordingKey = true
+              showPanelWindowAndStartRecording()
+            }, 800)
+            return
+          }
         }
       }
 
@@ -709,7 +814,7 @@ export function listenToKeyboardEvents() {
             showPanelWindowAndStartRecording()
           }, 800)
         } else if (
-          e.data.key === "Alt" &&
+          (e.data.key === "Alt" || e.data.key === "AltLeft" || e.data.key === "AltRight") &&
           isPressedCtrlKey &&
           config.mcpToolsEnabled &&
           config.mcpToolsShortcut === "hold-ctrl-alt"
@@ -739,6 +844,8 @@ export function listenToKeyboardEvents() {
           keysPressed.set(e.data.key, e.time.secs_since_epoch)
           cancelRecordingTimer()
           cancelMcpRecordingTimer()
+          cancelCustomRecordingTimer()
+          cancelCustomMcpTimer()
 
           // when holding ctrl key, pressing any other key will stop recording
           if (isHoldingCtrlKey) {
@@ -750,8 +857,20 @@ export function listenToKeyboardEvents() {
             stopRecordingAndHidePanelWindow()
           }
 
+          // when holding custom recording key, pressing any other key will stop recording
+          if (isHoldingCustomRecordingKey) {
+            stopRecordingAndHidePanelWindow()
+          }
+
+          // when holding custom MCP key, pressing any other key will stop recording
+          if (isHoldingCustomMcpKey) {
+            stopRecordingAndHidePanelWindow()
+          }
+
           isHoldingCtrlKey = false
           isHoldingCtrlAltKey = false
+          isHoldingCustomRecordingKey = false
+          isHoldingCustomMcpKey = false
         }
       }
     } else if (e.event_type === "KeyRelease") {
@@ -774,7 +893,7 @@ export function listenToKeyboardEvents() {
         }
       }
 
-      if (e.data.key === "Alt") {
+      if (e.data.key === "Alt" || e.data.key === "AltLeft" || e.data.key === "AltRight") {
         isPressedAltKey = false
         isPressedCtrlAltKey = false
         if (isDebugKeybinds()) {
@@ -788,9 +907,74 @@ export function listenToKeyboardEvents() {
       }
 
       const currentConfig = configStore.get()
+
+      // Handle custom shortcut key releases for hold mode
+      if (currentConfig.shortcut === "custom") {
+        const customMode = currentConfig.customShortcutMode || "hold"
+        if (customMode === "toggle") {
+          // Toggle mode doesn't need key release handling
+          return
+        }
+        // Hold mode: check if we should finish recording
+        if (isHoldingCustomRecordingKey) {
+          const effectiveRecordingShortcut = getEffectiveShortcut(
+            currentConfig.shortcut,
+            currentConfig.customShortcut,
+          )
+          if (effectiveRecordingShortcut) {
+            // Check if the released key is part of the custom shortcut
+            const stillMatches = matchesKeyCombo(
+              e.data,
+              {
+                ctrl: isPressedCtrlKey,
+                shift: isPressedShiftKey,
+                alt: isPressedAltKey,
+              },
+              effectiveRecordingShortcut,
+            )
+            if (!stillMatches) {
+              // Key combo no longer matches, finish recording
+              getWindowRendererHandlers("panel")?.finishRecording.send()
+              isHoldingCustomRecordingKey = false
+            }
+          }
+        }
+        cancelCustomRecordingTimer()
+      }
+
+      // Handle custom MCP shortcut key releases for hold mode
+      if (currentConfig.mcpToolsShortcut === "custom") {
+        const customMode = currentConfig.customMcpToolsShortcutMode || "hold"
+        if (customMode === "hold" && isHoldingCustomMcpKey) {
+          const effectiveMcpToolsShortcut = getEffectiveShortcut(
+            currentConfig.mcpToolsShortcut,
+            currentConfig.customMcpToolsShortcut,
+          )
+          if (effectiveMcpToolsShortcut) {
+            // Check if the released key is part of the custom shortcut
+            const stillMatches = matchesKeyCombo(
+              e.data,
+              {
+                ctrl: isPressedCtrlKey,
+                shift: isPressedShiftKey,
+                alt: isPressedAltKey,
+              },
+              effectiveMcpToolsShortcut,
+            )
+            if (!stillMatches) {
+              // Key combo no longer matches, finish recording
+              getWindowRendererHandlers("panel")?.finishMcpRecording.send()
+              isHoldingCustomMcpKey = false
+            }
+          }
+        }
+        cancelCustomMcpTimer()
+      }
+
+      // Skip built-in hold mode handling for toggle mode shortcuts
       if (
-        currentConfig.shortcut === "ctrl-slash" ||
-        currentConfig.shortcut === "custom"
+        (currentConfig.shortcut === "ctrl-slash") ||
+        (currentConfig.shortcut === "custom" && currentConfig.customShortcutMode === "toggle")
       )
         return
 
@@ -815,7 +999,7 @@ export function listenToKeyboardEvents() {
         }
       }
 
-      if (e.data.key === "Alt") {
+      if (e.data.key === "Alt" || e.data.key === "AltLeft" || e.data.key === "AltRight") {
         if (isHoldingCtrlAltKey) {
           const panelHandlers = getWindowRendererHandlers("panel")
           panelHandlers?.finishMcpRecording.send()

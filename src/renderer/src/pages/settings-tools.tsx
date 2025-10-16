@@ -170,13 +170,32 @@ DOMAIN-SPECIFIC RULES:
                   </Select>
 
                   {config.mcpToolsShortcut === "custom" && (
-                    <KeyRecorder
-                      value={config.customMcpToolsShortcut || ""}
-                      onChange={(keyCombo) => {
-                        updateConfig({ customMcpToolsShortcut: keyCombo })
-                      }}
-                      placeholder="Click to record custom MCP tools shortcut"
-                    />
+                    <>
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium">Mode</label>
+                        <Select
+                          value={config.customMcpToolsShortcutMode || "hold"}
+                          onValueChange={(value: "hold" | "toggle") => {
+                            updateConfig({ customMcpToolsShortcutMode: value })
+                          }}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="hold">Hold (Press and hold to record)</SelectItem>
+                            <SelectItem value="toggle">Toggle (Press once to start, again to stop)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <KeyRecorder
+                        value={config.customMcpToolsShortcut || ""}
+                        onChange={(keyCombo) => {
+                          updateConfig({ customMcpToolsShortcut: keyCombo })
+                        }}
+                        placeholder="Click to record custom MCP tools shortcut"
+                      />
+                    </>
                   )}
 
 
@@ -273,7 +292,7 @@ DOMAIN-SPECIFIC RULES:
                   </>
                 )}
 
-                
+
 
 
 

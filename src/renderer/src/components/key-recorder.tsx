@@ -127,6 +127,7 @@ export function KeyRecorder({
   disabled,
 }: KeyRecorderProps) {
   const [isRecording, setIsRecording] = useState(false)
+  const [showSaved, setShowSaved] = useState(false)
   const [recordedKeys, setRecordedKeys] = useState<KeyState>({
     ctrl: false,
     shift: false,
@@ -150,13 +151,17 @@ export function KeyRecorder({
       e.preventDefault()
       e.stopPropagation()
 
+      // Fix for Windows: On some keyboards, Alt key also sets metaKey
+      // If both alt and meta are pressed, it's likely just Alt
+      const isMetaKey = e.metaKey && !e.altKey
+
       // Don't record if only modifier keys are pressed
       if (["Control", "Shift", "Alt", "Meta"].includes(e.key)) {
         setRecordedKeys({
           ctrl: e.ctrlKey,
           shift: e.shiftKey,
           alt: e.altKey,
-          meta: e.metaKey,
+          meta: isMetaKey,
           key: "",
         })
         return
@@ -167,20 +172,13 @@ export function KeyRecorder({
         ctrl: e.ctrlKey,
         shift: e.shiftKey,
         alt: e.altKey,
-        meta: e.metaKey,
+        meta: isMetaKey,
         key: e.key,
       }
 
       setRecordedKeys(keyState)
-
-      // Auto-finish recording after capturing a key
-      setTimeout(() => {
-        const internalFormat = keyComboToInternal(keyState)
-        onChange(internalFormat)
-        setIsRecording(false)
-      }, 100)
     },
-    [isRecording, onChange],
+    [isRecording],
   )
 
   const handleKeyUp = useCallback(
@@ -230,6 +228,15 @@ export function KeyRecorder({
     setIsRecording(false)
   }
 
+  const saveRecording = () => {
+    const internalFormat = keyComboToInternal(recordedKeys)
+    onChange(internalFormat)
+    setIsRecording(false)
+    // Show "Saved" indicator
+    setShowSaved(true)
+    setTimeout(() => setShowSaved(false), 2000)
+  }
+
   const clearValue = () => {
     onChange("")
     setRecordedKeys({
@@ -243,6 +250,7 @@ export function KeyRecorder({
 
   const displayValue = value ? internalToDisplay(value) : ""
   const currentRecording = formatKeyCombo(recordedKeys)
+  const hasRecordedKeys = recordedKeys.ctrl || recordedKeys.shift || recordedKeys.alt || recordedKeys.meta || recordedKeys.key
 
   return (
     <div className={cn("flex items-center gap-2", className)}>
@@ -254,8 +262,9 @@ export function KeyRecorder({
             "w-full justify-start text-left font-normal",
             !displayValue && !isRecording && "text-muted-foreground",
             isRecording && "border-blue-500 bg-blue-50 dark:bg-blue-950",
+            showSaved && "border-green-500 bg-green-50 dark:bg-green-950",
           )}
-          onClick={isRecording ? stopRecording : startRecording}
+          onClick={isRecording ? undefined : startRecording}
           disabled={disabled}
         >
           {isRecording
@@ -264,16 +273,46 @@ export function KeyRecorder({
         </Button>
       </div>
 
-      {(displayValue || isRecording) && (
+      {showSaved && (
+        <span className="text-sm text-green-600 dark:text-green-400 font-medium">
+          ✓ Saved
+        </span>
+      )}
+
+      {isRecording && !showSaved && (
+        <>
+          <Button
+            type="button"
+            variant="default"
+            size="sm"
+            onClick={saveRecording}
+            disabled={!hasRecordedKeys}
+            className="px-3"
+          >
+            Save
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={stopRecording}
+            className="px-2"
+          >
+            Cancel
+          </Button>
+        </>
+      )}
+
+      {displayValue && !isRecording && !showSaved && (
         <Button
           type="button"
           variant="ghost"
           size="sm"
-          onClick={isRecording ? stopRecording : clearValue}
+          onClick={clearValue}
           disabled={disabled}
           className="px-2"
         >
-          {isRecording ? "Cancel" : "Clear"}
+          Clear
         </Button>
       )}
     </div>

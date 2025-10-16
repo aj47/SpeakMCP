@@ -203,15 +203,36 @@ export function Component() {
               </Select>
 
               {shortcut === "custom" && (
-                <KeyRecorder
-                  value={configQuery.data?.customShortcut || ""}
-                  onChange={(keyCombo) => {
-                    saveConfig({
-                      customShortcut: keyCombo,
-                    })
-                  }}
-                  placeholder="Click to record custom shortcut"
-                />
+                <>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Mode</label>
+                    <Select
+                      value={configQuery.data?.customShortcutMode || "hold"}
+                      onValueChange={(value: "hold" | "toggle") => {
+                        saveConfig({
+                          customShortcutMode: value,
+                        })
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="hold">Hold (Press and hold to record)</SelectItem>
+                        <SelectItem value="toggle">Toggle (Press once to start, again to stop)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <KeyRecorder
+                    value={configQuery.data?.customShortcut || ""}
+                    onChange={(keyCombo) => {
+                      saveConfig({
+                        customShortcut: keyCombo,
+                      })
+                    }}
+                    placeholder="Click to record custom shortcut"
+                  />
+                </>
               )}
             </div>
           </Control>

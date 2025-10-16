@@ -105,18 +105,27 @@ export class Recorder extends EventEmitter<{
     }
 
     mediaRecorder.ondataavailable = (event) => {
-      audioChunks.push(event.data)
+      if (event.data && event.data.size > 0) {
+        audioChunks.push(event.data)
+      }
     }
     mediaRecorder.onstop = async () => {
       const duration = Date.now() - startTime
       const blob = new Blob(audioChunks, { type: mediaRecorder.mimeType })
+
+      // Check if blob has actual data
+      if (blob.size === 0) {
+        console.warn("[Recorder] Recording blob is empty, duration:", duration)
+      }
 
       this.emit("record-end", blob, duration)
 
       audioChunks = []
     }
 
-    mediaRecorder.start()
+    // Start recording with timeslice to ensure data is collected periodically
+    // This helps prevent empty blobs on short recordings
+    mediaRecorder.start(100) // Collect data every 100ms
   }
 
   stopRecording() {

@@ -206,9 +206,8 @@ module.exports = {
     artifactName: "${name}-${version}.${ext}",
   },
   npmRebuild: false,
-  // After packing, reinstall dependencies with npm to fix pnpm symlink issues
+  // After packing, clean up unnecessary files
   afterPack: async (context) => {
-    const { execSync } = require('child_process');
     const path = require('path');
     const fs = require('fs');
 
@@ -216,29 +215,24 @@ module.exports = {
     const appDir = path.join(context.appOutDir, 'resources', 'app');
 
     if (fs.existsSync(appDir)) {
-      console.log('\n[AFTERPACK] Reinstalling dependencies with npm for proper resolution...');
+      console.log('\n[AFTERPACK] Cleaning up unnecessary files...');
       console.log('[AFTERPACK] App directory:', appDir);
 
       try {
-        // Remove existing node_modules to start fresh
-        const nodeModulesPath = path.join(appDir, 'node_modules');
-        if (fs.existsSync(nodeModulesPath)) {
-          console.log('[AFTERPACK] Removing pnpm node_modules...');
-          fs.rmSync(nodeModulesPath, { recursive: true, force: true });
+        // Remove lock files to reduce size
+        const filesToRemove = ['bun.lock', 'pnpm-lock.yaml', 'package-lock.json'];
+        for (const file of filesToRemove) {
+          const filePath = path.join(appDir, file);
+          if (fs.existsSync(filePath)) {
+            console.log(`[AFTERPACK] Removing ${file}...`);
+            fs.rmSync(filePath, { force: true });
+          }
         }
 
-        // Install with npm for flat structure
-        console.log('[AFTERPACK] Installing with npm...');
-        execSync('npm install --production --legacy-peer-deps --no-package-lock', {
-          cwd: appDir,
-          stdio: 'inherit',
-          env: { ...process.env, NODE_ENV: 'production' }
-        });
-
-        console.log('[AFTERPACK] Dependencies installed successfully!\n');
+        console.log('[AFTERPACK] Cleanup completed!\n');
       } catch (error) {
-        console.error('[AFTERPACK] Failed to install dependencies:', error);
-        throw error;
+        console.error('[AFTERPACK] Cleanup failed:', error);
+        // Don't throw - cleanup failures shouldn't block the build
       }
     }
   },

@@ -20,7 +20,7 @@ import { isDebugKeybinds, logKeybinds } from "./debug"
 const rdevPath = path
   .join(
     __dirname,
-    `../../resources/bin/speakmcp-rs${process.env.IS_MAC ? "" : ".exe"}`,
+    `../../resources/bin/speakmcp-rs${process.platform === "win32" ? ".exe" : ""}`,
   )
   .replace("app.asar", "app.asar.unpacked")
 

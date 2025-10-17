@@ -192,8 +192,22 @@ module.exports = {
   },
   linux: {
     target: ["AppImage", "snap", "deb"],
-    maintainer: "electronjs.org",
+    maintainer: "SpeakMCP <hi@techfren.net>",
+    vendor: "SpeakMCP",
     category: "Utility",
+    synopsis: "AI-powered voice assistant with MCP integration",
+    description: "SpeakMCP is an AI-powered dictation and voice assistant tool with Model Context Protocol (MCP) integration for enhanced productivity.",
+    desktop: {
+      Name: "SpeakMCP",
+      Comment: "AI-powered voice assistant with MCP integration",
+      GenericName: "Voice Assistant",
+      Keywords: "voice;dictation;ai;assistant;mcp;transcription;",
+      Categories: "Utility;Audio;Development;",
+      StartupWMClass: "speakmcp",
+      Terminal: false,
+      Type: "Application",
+    },
+    executableName: "speakmcp",
     extraResources: [
       {
         from: "resources/bin/speakmcp-rs",
@@ -201,6 +215,26 @@ module.exports = {
         filter: ["**/*"]
       }
     ]
+  },
+  deb: {
+    artifactName: "${name}_${version}_${arch}.${ext}",
+    depends: [
+      "libgtk-3-0",
+      "libnotify4",
+      "libnss3",
+      "libxss1",
+      "libxtst6",
+      "xdg-utils",
+      "libatspi2.0-0",
+      "libuuid1",
+      "libsecret-1-0"
+    ],
+    recommends: [
+      "libappindicator3-1",
+      "pulseaudio"
+    ],
+    afterInstall: "build/linux/postinst.sh",
+    afterRemove: "build/linux/postrm.sh",
   },
   appImage: {
     artifactName: "${name}-${version}.${ext}",

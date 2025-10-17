@@ -204,6 +204,7 @@ module.exports = {
       Keywords: "voice;dictation;ai;assistant;mcp;transcription;",
       Categories: "Utility;Audio;Development;",
       StartupWMClass: "speakmcp",
+      StartupNotify: false,
       Terminal: false,
       Type: "Application",
     },

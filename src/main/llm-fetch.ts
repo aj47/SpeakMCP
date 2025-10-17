@@ -224,14 +224,16 @@ function isRetryableError(error: unknown): boolean {
            error.status === 504    // Gateway Timeout
   }
 
-  // Retry on network errors
+  // Retry on network errors and empty response errors
   if (error instanceof Error) {
     const message = error.message.toLowerCase()
 
     return message.includes('network') ||
            message.includes('timeout') ||
            message.includes('connection') ||
-           message.includes('fetch')
+           message.includes('fetch') ||
+           message.includes('empty response') || // Empty LLM responses
+           message.includes('empty content')     // Empty content in structured responses
   }
 
   return false
@@ -761,7 +763,132 @@ async function makeGeminiCall(
 }
 
 /**
- * Main function to make LLM calls using fetch
+ * Helper function that performs the actual LLM call logic
+ * This is wrapped by makeLLMCallWithFetch with retry logic
+ */
+async function makeLLMCallAttempt(
+  messages: Array<{ role: string; content: string }>,
+  chatProviderId: string,
+): Promise<LLMToolCallResponse> {
+  let response: any
+
+  if (chatProviderId === "gemini") {
+    response = await makeGeminiCall(messages)
+  } else {
+    response = await makeOpenAICompatibleCall(messages, chatProviderId, true)
+  }
+
+  if (isDebugLLM()) {
+    logLLM("Raw API response structure:", {
+      hasChoices: !!response.choices,
+      choicesLength: response.choices?.length,
+      firstChoiceExists: !!response.choices?.[0],
+      hasMessage: !!response.choices?.[0]?.message,
+      hasContent: !!response.choices?.[0]?.message?.content
+    })
+  }
+
+  const messageObj = response.choices?.[0]?.message || {}
+  let content: string | undefined = (messageObj.content ?? "").trim()
+
+  if (!content) {
+    if (isDebugLLM()) {
+      logLLM("Empty content in message; checking reasoning fallback", {
+        responseSummary: {
+          hasChoices: !!response.choices,
+          hasMessage: !!messageObj,
+          content: messageObj?.content,
+          hasReasoning: !!(messageObj as any)?.reasoning,
+        }
+      })
+    }
+
+    // Some providers (e.g., OpenRouter with certain models) return useful output in a non-standard 'reasoning' field
+    const rawReasoning = (messageObj as any)?.reasoning
+    const reasoningText = typeof rawReasoning === "string"
+      ? rawReasoning
+      : (rawReasoning && typeof rawReasoning === "object" && typeof rawReasoning.text === "string")
+        ? rawReasoning.text
+        : ""
+
+    if (reasoningText) {
+      // First, try to extract structured JSON from reasoning
+      const jsonFromReasoning = extractJsonObject(reasoningText)
+      if (jsonFromReasoning && (jsonFromReasoning.toolCalls || jsonFromReasoning.content)) {
+        if (isDebugLLM()) {
+          logLLM("Parsed structured output from reasoning fallback")
+        }
+        const resp = jsonFromReasoning as LLMToolCallResponse
+        if (resp.needsMoreWork === undefined && !resp.toolCalls) resp.needsMoreWork = true
+        return resp
+      }
+
+      // Otherwise, treat reasoning text as plain content
+      if (reasoningText.trim()) {
+        if (isDebugLLM()) logLLM("Using reasoning text as content fallback")
+        content = reasoningText.trim()
+      }
+    }
+
+    if (!content) {
+      if (isDebugLLM()) {
+        logLLM("Empty response details:", {
+          response: response,
+          choices: response.choices,
+          firstChoice: response.choices?.[0],
+          message: response.choices?.[0]?.message,
+          content: response.choices?.[0]?.message?.content
+        })
+      }
+      // Empty responses should be treated as errors requiring retry, not completion
+      // This prevents workflows from terminating prematurely when LLM fails to respond
+      throw new Error("LLM returned empty response - this indicates a model or API issue that should be retried")
+    }
+  }
+
+  // Try to extract JSON object from response
+  const jsonObject = extractJsonObject(content)
+  if (isDebugLLM()) {
+    logLLM("Extracted JSON object", jsonObject)
+    logLLM("JSON object has toolCalls:", !!jsonObject?.toolCalls)
+    logLLM("JSON object has content:", !!jsonObject?.content)
+  }
+  if (jsonObject && (jsonObject.toolCalls || jsonObject.content)) {
+    // If JSON lacks both toolCalls and needsMoreWork, default needsMoreWork to true (continue)
+    const response = jsonObject as LLMToolCallResponse
+    if (response.needsMoreWork === undefined && !response.toolCalls) {
+      response.needsMoreWork = true
+    }
+    // Safety: If JSON says no more work but there are no toolCalls and the content
+    // looks like intent-only or contains tool-call markers, override to needsMoreWork=true
+    const toolMarkers = /<\|tool_calls_section_begin\|>|<\|tool_call_begin\|>/i
+    const text = (response.content || "").replace(/<\|[^|]*\|>/g, "").trim()
+    const intentOnly = /\b(fetching|get(ting)?|retriev(ing|e)|searching|planning|analyzing|processing|scanning|starting|preparing|i'?ll|i\s+will|let'?s|trying|attempting|checking|reading|writing|applying|connecting|opening|creating|updating|deleting|installing|running)\b/i.test(text)
+    if (response.needsMoreWork === false && (!response.toolCalls || response.toolCalls.length === 0) && (toolMarkers.test(text) || intentOnly)) {
+      response.needsMoreWork = true
+    }
+    return response
+  }
+
+  // If no valid JSON found, decide conservatively based on content
+  // If content contains tool-call markers or hints of planned tool usage,
+  // do NOT mark complete: keep needsMoreWork=true so the agent can iterate.
+  const hasToolMarkers = /<\|tool_calls_section_begin\|>|<\|tool_call_begin\|>/i.test(content || "")
+  const cleaned = (content || "").replace(/<\|[^|]*\|>/g, "").trim()
+  if (hasToolMarkers) {
+    return { content: cleaned, needsMoreWork: true }
+  }
+  // If the assistant only states intent (no JSON/toolCalls), treat as needing more work
+  const intentOnly = /\b(fetching|get(ting)?|retriev(ing|e)|searching|planning|analyzing|processing|scanning|starting|preparing|i'?ll|i\s+will|let'?s|trying|attempting|checking|reading|writing|applying|connecting|opening|creating|updating|deleting|installing|running)\b/i.test(cleaned)
+  if (intentOnly) {
+    return { content: cleaned, needsMoreWork: true }
+  }
+  // Otherwise, treat plain text as a final response
+  return { content: cleaned || content, needsMoreWork: false }
+}
+
+/**
+ * Main function to make LLM calls using fetch with automatic retry on empty responses
  */
 export async function makeLLMCallWithFetch(
   messages: Array<{ role: string; content: string }>,
@@ -771,123 +898,15 @@ export async function makeLLMCallWithFetch(
   const chatProviderId = providerId || config.mcpToolsProviderId || "openai"
 
   try {
-    let response: any
-
-    if (chatProviderId === "gemini") {
-      response = await makeGeminiCall(messages)
-    } else {
-      response = await makeOpenAICompatibleCall(messages, chatProviderId, true)
-    }
-
-    if (isDebugLLM()) {
-      logLLM("Raw API response structure:", {
-        hasChoices: !!response.choices,
-        choicesLength: response.choices?.length,
-        firstChoiceExists: !!response.choices?.[0],
-        hasMessage: !!response.choices?.[0]?.message,
-        hasContent: !!response.choices?.[0]?.message?.content
-      })
-    }
-
-    const messageObj = response.choices?.[0]?.message || {}
-    let content: string | undefined = (messageObj.content ?? "").trim()
-
-    if (!content) {
-      if (isDebugLLM()) {
-        logLLM("Empty content in message; checking reasoning fallback", {
-          responseSummary: {
-            hasChoices: !!response.choices,
-            hasMessage: !!messageObj,
-            content: messageObj?.content,
-            hasReasoning: !!(messageObj as any)?.reasoning,
-          }
-        })
-      }
-
-      // Some providers (e.g., OpenRouter with certain models) return useful output in a non-standard 'reasoning' field
-      const rawReasoning = (messageObj as any)?.reasoning
-      const reasoningText = typeof rawReasoning === "string"
-        ? rawReasoning
-        : (rawReasoning && typeof rawReasoning === "object" && typeof rawReasoning.text === "string")
-          ? rawReasoning.text
-          : ""
-
-      if (reasoningText) {
-        // First, try to extract structured JSON from reasoning
-        const jsonFromReasoning = extractJsonObject(reasoningText)
-        if (jsonFromReasoning && (jsonFromReasoning.toolCalls || jsonFromReasoning.content)) {
-          if (isDebugLLM()) {
-            logLLM("Parsed structured output from reasoning fallback")
-          }
-          const resp = jsonFromReasoning as LLMToolCallResponse
-          if (resp.needsMoreWork === undefined && !resp.toolCalls) resp.needsMoreWork = true
-          return resp
-        }
-
-        // Otherwise, treat reasoning text as plain content
-        if (reasoningText.trim()) {
-          if (isDebugLLM()) logLLM("Using reasoning text as content fallback")
-          content = reasoningText.trim()
-        }
-      }
-
-      if (!content) {
-        if (isDebugLLM()) {
-          logLLM("Empty response details:", {
-            response: response,
-            choices: response.choices,
-            firstChoice: response.choices?.[0],
-            message: response.choices?.[0]?.message,
-            content: response.choices?.[0]?.message?.content
-          })
-        }
-        // Empty responses should be treated as errors requiring retry, not completion
-        // This prevents workflows from terminating prematurely when LLM fails to respond
-        throw new Error("LLM returned empty response - this indicates a model or API issue that should be retried")
-      }
-    }
-
-    // Try to extract JSON object from response
-    const jsonObject = extractJsonObject(content)
-    if (isDebugLLM()) {
-      logLLM("Extracted JSON object", jsonObject)
-      logLLM("JSON object has toolCalls:", !!jsonObject?.toolCalls)
-      logLLM("JSON object has content:", !!jsonObject?.content)
-    }
-    if (jsonObject && (jsonObject.toolCalls || jsonObject.content)) {
-      // If JSON lacks both toolCalls and needsMoreWork, default needsMoreWork to true (continue)
-      const response = jsonObject as LLMToolCallResponse
-      if (response.needsMoreWork === undefined && !response.toolCalls) {
-        response.needsMoreWork = true
-      }
-      // Safety: If JSON says no more work but there are no toolCalls and the content
-      // looks like intent-only or contains tool-call markers, override to needsMoreWork=true
-      const toolMarkers = /<\|tool_calls_section_begin\|>|<\|tool_call_begin\|>/i
-      const text = (response.content || "").replace(/<\|[^|]*\|>/g, "").trim()
-      const intentOnly = /\b(fetching|get(ting)?|retriev(ing|e)|searching|planning|analyzing|processing|scanning|starting|preparing|i'?ll|i\s+will|let'?s|trying|attempting|checking|reading|writing|applying|connecting|opening|creating|updating|deleting|installing|running)\b/i.test(text)
-      if (response.needsMoreWork === false && (!response.toolCalls || response.toolCalls.length === 0) && (toolMarkers.test(text) || intentOnly)) {
-        response.needsMoreWork = true
-      }
-      return response
-    }
-
-    // If no valid JSON found, decide conservatively based on content
-    // If content contains tool-call markers or hints of planned tool usage,
-    // do NOT mark complete: keep needsMoreWork=true so the agent can iterate.
-    const hasToolMarkers = /<\|tool_calls_section_begin\|>|<\|tool_call_begin\|>/i.test(content || "")
-    const cleaned = (content || "").replace(/<\|[^|]*\|>/g, "").trim()
-    if (hasToolMarkers) {
-      return { content: cleaned, needsMoreWork: true }
-    }
-    // If the assistant only states intent (no JSON/toolCalls), treat as needing more work
-    const intentOnly = /\b(fetching|get(ting)?|retriev(ing|e)|searching|planning|analyzing|processing|scanning|starting|preparing|i'?ll|i\s+will|let'?s|trying|attempting|checking|reading|writing|applying|connecting|opening|creating|updating|deleting|installing|running)\b/i.test(cleaned)
-    if (intentOnly) {
-      return { content: cleaned, needsMoreWork: true }
-    }
-    // Otherwise, treat plain text as a final response
-    return { content: cleaned || content, needsMoreWork: false }
+    // Wrap the LLM call with retry logic to handle empty responses
+    return await apiCallWithRetry(
+      async () => makeLLMCallAttempt(messages, chatProviderId),
+      config.apiRetryCount,
+      config.apiRetryBaseDelay,
+      config.apiRetryMaxDelay
+    )
   } catch (error) {
-    diagnosticsService.logError("llm-fetch", "LLM call failed", error)
+    diagnosticsService.logError("llm-fetch", "LLM call failed after all retries", error)
     throw error
   }
 }

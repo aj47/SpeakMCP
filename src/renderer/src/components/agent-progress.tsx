@@ -519,6 +519,15 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
     setShowKillConfirmation(false)
   }
 
+  // Close button handler for completed agent view
+  const handleClose = async () => {
+    try {
+      await tipcClient.closeAgentModeAndHidePanelWindow()
+    } catch (error) {
+      console.error("Failed to close agent mode:", error)
+    }
+  }
+
   if (!progress) {
     return null
   }
@@ -795,7 +804,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
               {`${currentIteration}/${maxIterations}`}
             </span>
           )}
-          {!isComplete && (
+          {!isComplete ? (
             <Button
               variant="ghost"
               size="sm"
@@ -803,6 +812,16 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
               onClick={handleKillConfirmation}
               disabled={isKilling}
               title="Stop agent execution"
+            >
+              <X className="h-3 w-3" />
+            </Button>
+          ) : (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground hover:bg-muted"
+              onClick={handleClose}
+              title="Close"
             >
               <X className="h-3 w-3" />
             </Button>

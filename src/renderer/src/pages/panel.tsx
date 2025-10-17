@@ -7,7 +7,7 @@ import { useMutation } from "@tanstack/react-query"
 import { useEffect, useRef, useState } from "react"
 import { rendererHandlers, tipcClient } from "~/lib/tipc-client"
 import { AgentProgressUpdate } from "../../../shared/types"
-import { TextInputPanel } from "@renderer/components/text-input-panel"
+import { TextInputPanel, TextInputPanelRef } from "@renderer/components/text-input-panel"
 import { PanelResizeWrapper } from "@renderer/components/panel-resize-wrapper"
 import {
   useConversationActions,
@@ -34,6 +34,7 @@ export function Component() {
   const [showTextInput, setShowTextInput] = useState(false)
   const isConfirmedRef = useRef(false)
   const mcpModeRef = useRef(false)
+  const textInputPanelRef = useRef<TextInputPanelRef>(null)
   const { isDark } = useTheme()
 
   // Conversation state
@@ -317,6 +318,10 @@ export function Component() {
     const unlisten = rendererHandlers.showTextInput.listen(() => {
       setShowTextInput(true)
       // Panel window is already shown by the keyboard handler
+      // Focus the text input after a short delay to ensure it's rendered
+      setTimeout(() => {
+        textInputPanelRef.current?.focus()
+      }, 100)
     })
 
     return unlisten
@@ -468,6 +473,7 @@ export function Component() {
       <div className="flex min-h-0 flex-1">
         {showTextInput ? (
           <TextInputPanel
+            ref={textInputPanelRef}
             onSubmit={handleTextSubmit}
             onCancel={() => {
               setShowTextInput(false)

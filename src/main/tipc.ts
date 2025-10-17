@@ -6,6 +6,7 @@ import {
   WINDOWS,
   resizePanelForAgentMode,
   resizePanelToNormal,
+  closeAgentModeAndHidePanelWindow,
 } from "./window"
 import {
   app,
@@ -305,6 +306,20 @@ export const router = {
     mcpService.emergencyStopAllProcesses()
 
     return { success: true, message: "Agent mode emergency stopped" }
+  }),
+
+  clearAgentProgress: t.procedure.action(async () => {
+    const win = WINDOWS.get("panel")
+    if (win) {
+      getRendererHandlers<RendererHandlers>(win.webContents).clearAgentProgress.send()
+    }
+
+    return { success: true }
+  }),
+
+  closeAgentModeAndHidePanelWindow: t.procedure.action(async () => {
+    closeAgentModeAndHidePanelWindow()
+    return { success: true }
   }),
 
   getAgentStatus: t.procedure.action(async () => {

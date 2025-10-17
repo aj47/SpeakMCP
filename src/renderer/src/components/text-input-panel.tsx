@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react"
+import React, { useState, useRef, useEffect, useImperativeHandle, forwardRef } from "react"
 import { Textarea } from "@renderer/components/ui/textarea"
 import { cn } from "@renderer/lib/utils"
 import { AgentProcessingView } from "./agent-processing-view"
@@ -12,25 +12,49 @@ interface TextInputPanelProps {
   agentProgress?: AgentProgressUpdate | null
 }
 
-export function TextInputPanel({
+export interface TextInputPanelRef {
+  focus: () => void
+}
+
+export const TextInputPanel = forwardRef<TextInputPanelRef, TextInputPanelProps>(({
   onSubmit,
   onCancel,
   isProcessing = false,
   agentProgress,
-}: TextInputPanelProps) {
+}, ref) => {
   const [text, setText] = useState("")
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const { isDark } = useTheme()
 
-  // Auto-focus when component mounts
-  useEffect(() => {
-    if (textareaRef.current) {
-      // Small delay to ensure component is fully rendered
-      setTimeout(() => {
-        textareaRef.current?.focus()
-      }, 100)
+  // Expose focus method to parent
+  useImperativeHandle(ref, () => ({
+    focus: () => {
+      textareaRef.current?.focus()
     }
-  }, [])
+  }))
+
+  // Auto-focus when component mounts - with retry for Windows
+  useEffect(() => {
+    if (textareaRef.current && !isProcessing) {
+      // Try to focus immediately
+      textareaRef.current.focus()
+
+      // Retry after a short delay to ensure window is ready (especially on Windows)
+      const timer1 = setTimeout(() => {
+        textareaRef.current?.focus()
+      }, 50)
+
+      // Additional retry for Windows where focus can be delayed
+      const timer2 = setTimeout(() => {
+        textareaRef.current?.focus()
+      }, 150)
+
+      return () => {
+        clearTimeout(timer1)
+        clearTimeout(timer2)
+      }
+    }
+  }, [isProcessing])
 
   const handleSubmit = () => {
     if (text.trim() && !isProcessing) {
@@ -161,4 +185,6 @@ export function TextInputPanel({
       </div>
     </div>
   )
-}
+})
+
+TextInputPanel.displayName = "TextInputPanel"

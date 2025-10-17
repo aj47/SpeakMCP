@@ -219,6 +219,11 @@ export function showPanelWindow() {
     win.setPosition(position.x, position.y)
     win.showInactive()
     makeKeyWindow(win)
+
+    // On Windows, we need to explicitly focus the window
+    if (process.platform === "win32") {
+      win.focus()
+    }
   }
 }
 

@@ -44,9 +44,13 @@ import {
   Play,
   ExternalLink,
   FileText,
+  ChevronDown,
+  ChevronUp,
+  Terminal,
+  Trash,
 } from "lucide-react"
 import { Spinner } from "@renderer/components/ui/spinner"
-import { MCPConfig, MCPServerConfig, MCPTransportType, OAuthConfig } from "@shared/types"
+import { MCPConfig, MCPServerConfig, MCPTransportType, OAuthConfig, ServerLogEntry } from "@shared/types"
 import { tipcClient } from "@renderer/lib/tipc-client"
 import { toast } from "sonner"
 import { OAuthServerConfig } from "./OAuthServerConfig"
@@ -796,6 +800,8 @@ export function MCPConfigManager({
     progress: { current: number; total: number; currentServer?: string }
   }>({ isInitializing: false, progress: { current: 0, total: 0 } })
   const [oauthStatus, setOAuthStatus] = useState<Record<string, { configured: boolean; authenticated: boolean; tokenExpiry?: number; error?: string }>>({})
+  const [serverLogs, setServerLogs] = useState<Record<string, ServerLogEntry[]>>({})
+  const [expandedLogs, setExpandedLogs] = useState<Set<string>>(new Set())
 
   // Load OAuth status for all servers
   const refreshOAuthStatus = async (serverName?: string) => {
@@ -821,6 +827,16 @@ export function MCPConfigManager({
 
   const servers = config.mcpServers || {}
 
+  // Fetch logs for expanded servers
+  const fetchLogsForServer = async (serverName: string) => {
+    try {
+      const logs = await tipcClient.getMcpServerLogs({ serverName })
+      setServerLogs(prev => ({ ...prev, [serverName]: logs as ServerLogEntry[] }))
+    } catch (error) {
+      console.error(`Failed to fetch logs for ${serverName}:`, error)
+    }
+  }
+
   // Fetch server status and initialization status periodically
   useEffect(() => {
     const fetchStatus = async () => {
@@ -832,6 +848,11 @@ export function MCPConfigManager({
         setServerStatus(status as any)
         setInitializationStatus(initStatus as any)
         await refreshOAuthStatus()
+
+        // Fetch logs for expanded servers
+        for (const serverName of expandedLogs) {
+          await fetchLogsForServer(serverName)
+        }
       } catch (error) {}
     }
 
@@ -839,7 +860,7 @@ export function MCPConfigManager({
     const interval = setInterval(fetchStatus, 1000) // Update every second during initialization
 
     return () => clearInterval(interval)
-  }, [servers])
+  }, [servers, expandedLogs])
 
   const handleAddServer = async (name: string, serverConfig: MCPServerConfig) => {
     const newConfig = {
@@ -1067,6 +1088,30 @@ export function MCPConfigManager({
       }
     } catch (error) {
       toast.error(`Failed to start server: ${error.message}`)
+    }
+  }
+
+  const toggleLogs = (serverName: string) => {
+    setExpandedLogs(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(serverName)) {
+        newSet.delete(serverName)
+      } else {
+        newSet.add(serverName)
+        // Fetch logs immediately when expanding
+        fetchLogsForServer(serverName)
+      }
+      return newSet
+    })
+  }
+
+  const handleClearLogs = async (serverName: string) => {
+    try {
+      await tipcClient.clearMcpServerLogs({ serverName })
+      setServerLogs(prev => ({ ...prev, [serverName]: [] }))
+      toast.success(`Logs cleared for ${serverName}`)
+    } catch (error) {
+      toast.error(`Failed to clear logs: ${error instanceof Error ? error.message : String(error)}`)
     }
   }
 
@@ -1360,6 +1405,61 @@ export function MCPConfigManager({
                     {serverStatus[name]?.error && (
                       <div className="text-red-500">
                         <strong>Error:</strong> {serverStatus[name].error}
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              )}
+
+              {/* Server Logs Section - only show for stdio servers */}
+              {(serverConfig.transport === "stdio" || !serverConfig.transport) && (
+                <CardContent className="pt-0 border-t">
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => toggleLogs(name)}
+                        className="flex items-center gap-2"
+                      >
+                        <Terminal className="h-4 w-4" />
+                        <span>Server Logs</span>
+                        {expandedLogs.has(name) ? (
+                          <ChevronUp className="h-4 w-4" />
+                        ) : (
+                          <ChevronDown className="h-4 w-4" />
+                        )}
+                      </Button>
+                      {expandedLogs.has(name) && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleClearLogs(name)}
+                          title="Clear logs"
+                        >
+                          <Trash className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+
+                    {expandedLogs.has(name) && (
+                      <div className="bg-black/90 rounded-md p-3 max-h-64 overflow-y-auto font-mono text-xs">
+                        {serverLogs[name]?.length > 0 ? (
+                          <div className="space-y-1">
+                            {serverLogs[name].map((log, idx) => (
+                              <div key={idx} className="text-green-400">
+                                <span className="text-gray-500">
+                                  [{new Date(log.timestamp).toLocaleTimeString()}]
+                                </span>{' '}
+                                {log.message}
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="text-gray-500 text-center py-4">
+                            No logs available
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

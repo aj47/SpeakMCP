@@ -93,6 +93,12 @@ export interface MCPConfig {
   mcpServers: Record<string, MCPServerConfig>
 }
 
+// Server log entry interface
+export interface ServerLogEntry {
+  timestamp: number
+  message: string
+}
+
 // Agent Mode Progress Tracking Types
 export interface AgentProgressStep {
   id: string

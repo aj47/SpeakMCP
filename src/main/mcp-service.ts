@@ -8,8 +8,9 @@ import {
   MCPServerConfig,
   MCPTransportType,
   Config,
+  ServerLogEntry,
 } from "../shared/types"
-import { spawn, ChildProcess } from "child_process"
+import { spawn } from "child_process"
 import { promisify } from "util"
 import { access, constants } from "fs"
 import path from "path"
@@ -50,7 +51,6 @@ export interface LLMToolCallResponse {
 
 export class MCPService {
   private clients: Map<string, Client> = new Map()
-  private serverProcesses: Map<string, ChildProcess> = new Map()
   private transports: Map<
     string,
     | StdioClientTransport
@@ -66,6 +66,10 @@ export class MCPService {
     total: number
     currentServer?: string
   } = { current: 0, total: 0 }
+
+  // Server logs storage with circular buffer (max 1000 entries per server)
+  private serverLogs: Map<string, ServerLogEntry[]> = new Map()
+  private readonly MAX_LOG_ENTRIES = 1000
 
   // Track runtime server states - separate from config disabled flag
   private runtimeDisabledServers: Set<string> = new Set()
@@ -329,11 +333,16 @@ export class MCPService {
           serverConfig.command,
         )
         const environment = await this.prepareEnvironment(serverConfig.env)
-        return new StdioClientTransport({
+
+        // Create transport with stderr piped so we can capture logs
+        const transport = new StdioClientTransport({
           command: resolvedCommand,
           args: serverConfig.args || [],
           env: environment,
+          stderr: "pipe", // Pipe stderr so we can capture it
         })
+
+        return transport
 
       case "websocket":
         if (!serverConfig.url) {
@@ -376,31 +385,26 @@ export class MCPService {
     try {
       const transportType = serverConfig.transport || "stdio"
 
-      // Handle stdio transport (local command-based servers)
-      if (transportType === "stdio") {
-        // Resolve command path and prepare environment
-        const resolvedCommand = await this.resolveCommandPath(
-          serverConfig.command!,
-        )
-        const environment = await this.prepareEnvironment(serverConfig.env)
-
-        // Spawn the process manually so we can track it
-        const childProcess = spawn(resolvedCommand, serverConfig.args || [], {
-          env: { ...process.env, ...environment },
-          stdio: ["pipe", "pipe", "pipe"],
-        })
-
-        // Register process with agent process manager if agent mode is active
-        if (state.isAgentModeActive) {
-          agentProcessManager.registerProcess(childProcess)
-        }
-
-        // Store the process reference
-        this.serverProcesses.set(serverName, childProcess)
-      }
+      // Initialize log storage for this server
+      this.serverLogs.set(serverName, [])
 
       // Create appropriate transport based on configuration
       let transport = await this.createTransport(serverName, serverConfig)
+
+      // For stdio transport, capture logs from the transport's stderr
+      if (transportType === "stdio" && transport instanceof StdioClientTransport) {
+        const stderrStream = transport.stderr
+
+        if (stderrStream) {
+          stderrStream.on('data', (data) => {
+            const message = data.toString()
+            this.addLogEntry(serverName, message)
+            if (isDebugTools()) {
+              logTools(`[${serverName}] ${message}`)
+            }
+          })
+        }
+      }
       let client: Client | null = null
       let retryWithOAuth = false
 
@@ -522,6 +526,19 @@ export class MCPService {
       // Store references
       this.transports.set(serverName, transport)
       this.clients.set(serverName, client)
+
+      // For stdio transport, track the process for agent mode
+      if (transportType === "stdio" && transport instanceof StdioClientTransport) {
+        const pid = transport.pid
+        if (pid) {
+          // We need to get the actual ChildProcess object to track it
+          // Unfortunately, the SDK doesn't expose the process directly
+          // So we'll store the PID for now and handle cleanup via the transport
+          if (isDebugTools()) {
+            logTools(`[${serverName}] Process started with PID: ${pid}`)
+          }
+        }
+      }
     } catch (error) {
       diagnosticsService.logError(
         "mcp-service",
@@ -545,20 +562,24 @@ export class MCPService {
   }
 
   private cleanupServer(serverName: string) {
+    // Get transport before deleting
+    const transport = this.transports.get(serverName)
+
     this.transports.delete(serverName)
     this.clients.delete(serverName)
     this.initializedServers.delete(serverName)
 
-    // Clean up server process if it exists
-    const serverProcess = this.serverProcesses.get(serverName)
-    if (serverProcess) {
+    // Close the transport (which will terminate the process for stdio)
+    if (transport) {
       try {
-        serverProcess.kill("SIGTERM")
+        transport.close()
       } catch (error) {
         // Ignore cleanup errors
       }
-      this.serverProcesses.delete(serverName)
     }
+
+    // Clear server logs
+    this.serverLogs.delete(serverName)
 
     // Remove tools from this server
     this.availableTools = this.availableTools.filter(
@@ -1599,15 +1620,7 @@ export class MCPService {
         }
       }
 
-      if (transport) {
-        try {
-          await transport.close()
-        } catch (error) {
-          // Ignore cleanup errors
-        }
-      }
-
-      // Clean up references
+      // Clean up references (will close transport if present)
       this.cleanupServer(serverName)
 
       return { success: true }
@@ -1853,13 +1866,12 @@ export class MCPService {
       }
     }
 
-    // Gracefully terminate server processes
+    // Gracefully terminate server processes via transports
     await this.terminateAllServerProcesses()
 
     // Clear all maps
     this.clients.clear()
     this.transports.clear()
-    this.serverProcesses.clear()
     this.availableTools = []
   }
 
@@ -1869,30 +1881,15 @@ export class MCPService {
   async terminateAllServerProcesses(): Promise<void> {
     const terminationPromises: Promise<void>[] = []
 
-    for (const [serverName, process] of this.serverProcesses) {
+    for (const [serverName, transport] of this.transports) {
       terminationPromises.push(
-        new Promise<void>((resolve) => {
-          if (process.killed || process.exitCode !== null) {
-            resolve()
-            return
+        (async () => {
+          try {
+            await transport.close()
+          } catch (error) {
+            // Ignore errors during shutdown
           }
-
-          // Try graceful shutdown first
-          process.kill("SIGTERM")
-
-          // Force kill after timeout
-          const forceKillTimeout = setTimeout(() => {
-            if (!process.killed && process.exitCode === null) {
-              process.kill("SIGKILL")
-            }
-            resolve()
-          }, 3000) // 3 second timeout
-
-          process.on("exit", () => {
-            clearTimeout(forceKillTimeout)
-            resolve()
-          })
-        }),
+        })()
       )
     }
 
@@ -1902,29 +1899,70 @@ export class MCPService {
   /**
    * Register all existing MCP server processes with the agent process manager
    * This is called when agent mode is activated to ensure all processes are tracked
+   *
+   * Note: With the SDK managing processes internally, we can't directly register them.
+   * The processes will be cleaned up when the transports are closed.
    */
   registerExistingProcessesWithAgentManager(): void {
-    for (const [serverName, process] of this.serverProcesses) {
-      if (!process.killed && process.exitCode === null) {
-        agentProcessManager.registerProcess(process)
-      }
-    }
+    // No-op: SDK manages processes internally
+    // Processes will be terminated via transport.close() when needed
   }
 
   /**
    * Emergency stop - immediately kill all MCP server processes
    */
   emergencyStopAllProcesses(): void {
-    for (const [serverName, process] of this.serverProcesses) {
+    for (const [serverName, transport] of this.transports) {
       try {
-        if (!process.killed && process.exitCode === null) {
-          process.kill("SIGKILL")
-        }
+        // Force close the transport (which will kill the process)
+        transport.close()
       } catch (error) {
         // Ignore errors during emergency stop
       }
     }
-    this.serverProcesses.clear()
+    this.transports.clear()
+  }
+
+  /**
+   * Add a log entry for a server with circular buffer
+   */
+  private addLogEntry(serverName: string, message: string): void {
+    let logs = this.serverLogs.get(serverName)
+    if (!logs) {
+      logs = []
+      this.serverLogs.set(serverName, logs)
+    }
+
+    logs.push({
+      timestamp: Date.now(),
+      message: message.trim()
+    })
+
+    // Implement circular buffer - keep only last MAX_LOG_ENTRIES
+    if (logs.length > this.MAX_LOG_ENTRIES) {
+      logs.shift()
+    }
+  }
+
+  /**
+   * Get logs for a specific server
+   */
+  getServerLogs(serverName: string): ServerLogEntry[] {
+    return this.serverLogs.get(serverName) || []
+  }
+
+  /**
+   * Clear logs for a specific server
+   */
+  clearServerLogs(serverName: string): void {
+    this.serverLogs.set(serverName, [])
+  }
+
+  /**
+   * Clear all server logs
+   */
+  clearAllServerLogs(): void {
+    this.serverLogs.clear()
   }
 }
 

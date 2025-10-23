@@ -54,6 +54,7 @@ export const TextInputPanel = forwardRef<TextInputPanelRef, TextInputPanelProps>
         clearTimeout(timer2)
       }
     }
+    return undefined
   }, [isProcessing])
 
   const handleSubmit = () => {

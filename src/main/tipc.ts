@@ -1164,6 +1164,19 @@ export const router = {
       return mcpService.stopServer(input.serverName)
     }),
 
+  getMcpServerLogs: t.procedure
+    .input<{ serverName: string }>()
+    .action(async ({ input }) => {
+      return mcpService.getServerLogs(input.serverName)
+    }),
+
+  clearMcpServerLogs: t.procedure
+    .input<{ serverName: string }>()
+    .action(async ({ input }) => {
+      mcpService.clearServerLogs(input.serverName)
+      return { success: true }
+    }),
+
   // Text-to-Speech
   generateSpeech: t.procedure
     .input<{

@@ -3,6 +3,7 @@ import { Button } from "@renderer/components/ui/button"
 import { Slider } from "@renderer/components/ui/slider"
 import { Play, Pause, Volume2, VolumeX, Loader2 } from "lucide-react"
 import { cn } from "@renderer/lib/utils"
+import { ttsManager } from "@renderer/lib/tts-manager"
 
 interface AudioPlayerProps {
   audioData?: ArrayBuffer
@@ -120,6 +121,29 @@ export function AudioPlayer({
       audio.removeEventListener("error", handleError)
     }
   }, [hasAudio, audioData]) // Include audioData to ensure listeners are reset when new audio loads
+
+  // Register audio element with TTS manager for emergency stop
+  useEffect(() => {
+    const audio = audioRef.current
+    if (!audio) return undefined
+
+    // Register audio element
+    const unregisterAudio = ttsManager.registerAudio(audio)
+
+    // Register stop callback
+    const unregisterCallback = ttsManager.registerStopCallback(() => {
+      if (audio) {
+        audio.pause()
+        audio.currentTime = 0
+        setIsPlaying(false)
+      }
+    })
+
+    return () => {
+      unregisterAudio()
+      unregisterCallback()
+    }
+  }, [audioRef.current])
 
   // Auto-play effect
   useEffect(() => {

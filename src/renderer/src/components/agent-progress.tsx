@@ -51,7 +51,8 @@ const CompactMessage: React.FC<{
   isLast: boolean
   isComplete: boolean
   hasErrors: boolean
-}> = ({ message, isLast, isComplete, hasErrors }) => {
+  wasStopped?: boolean
+}> = ({ message, isLast, isComplete, hasErrors, wasStopped = false }) => {
   const [isExpanded, setIsExpanded] = useState(false)
   const [audioData, setAudioData] = useState<ArrayBuffer | null>(null)
   const [isGeneratingAudio, setIsGeneratingAudio] = useState(false)
@@ -114,14 +115,14 @@ const CompactMessage: React.FC<{
   // Check if TTS should be shown for this message
   const shouldShowTTS = message.role === "assistant" && isComplete && isLast && configQuery.data?.ttsEnabled
 
-  // Auto-play TTS when assistant message completes
+  // Auto-play TTS when assistant message completes (but NOT if agent was stopped by kill switch)
   useEffect(() => {
-    if (shouldShowTTS && configQuery.data?.ttsAutoPlay && !audioData && !isGeneratingAudio && !ttsError) {
+    if (shouldShowTTS && configQuery.data?.ttsAutoPlay && !audioData && !isGeneratingAudio && !ttsError && !wasStopped) {
       generateAudio().catch((error) => {
         // Error is already handled in generateAudio function
       })
     }
-  }, [shouldShowTTS, configQuery.data?.ttsAutoPlay, audioData, isGeneratingAudio, ttsError])
+  }, [shouldShowTTS, configQuery.data?.ttsAutoPlay, audioData, isGeneratingAudio, ttsError, wasStopped])
 
   const getRoleStyle = () => {
     switch (message.role) {
@@ -846,6 +847,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
                     isLast={index === lastAssistantDisplayIndex}
                     isComplete={isComplete}
                     hasErrors={hasErrors}
+                    wasStopped={wasStopped}
                   />
                 ) : (
                   <ToolExecutionBubble

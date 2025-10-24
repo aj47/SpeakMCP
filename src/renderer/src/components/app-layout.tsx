@@ -17,6 +17,7 @@ export const Component = () => {
   const navigate = useNavigate()
   const location = useLocation()
   const [isStoppingTTS, setIsStoppingTTS] = useState(false)
+  const [isTTSPlaying, setIsTTSPlaying] = useState(false)
 
   const navLinks: NavLink[] = [
     {
@@ -56,6 +57,13 @@ export const Component = () => {
   useEffect(() => {
     return rendererHandlers.navigate.listen((url) => {
       navigate(url)
+    })
+  }, [])
+
+  // Subscribe to TTS playing state changes
+  useEffect(() => {
+    return ttsManager.onPlayingStateChange((isPlaying) => {
+      setIsTTSPlaying(isPlaying)
     })
   }, [])
 
@@ -104,20 +112,22 @@ export const Component = () => {
 
         {/* Stop TTS button and loading spinner at the bottom of the sidebar */}
         <div className="flex flex-1 flex-col justify-end">
-          <div className="px-2 pb-3">
-            <Button
-              variant="outline"
-              size="sm"
-              className="w-full justify-start gap-2"
-              onClick={handleStopTTS}
-              disabled={isStoppingTTS}
-            >
-              <VolumeX className="h-4 w-4" />
-              <span className="text-xs font-medium">
-                {isStoppingTTS ? "Stopped" : "Stop TTS"}
-              </span>
-            </Button>
-          </div>
+          {isTTSPlaying && (
+            <div className="px-2 pb-3">
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full justify-start gap-2"
+                onClick={handleStopTTS}
+                disabled={isStoppingTTS}
+              >
+                <VolumeX className="h-4 w-4" />
+                <span className="text-xs font-medium">
+                  {isStoppingTTS ? "Stopped" : "Stop TTS"}
+                </span>
+              </Button>
+            </div>
+          )}
           <div className="flex flex-col items-center space-y-2 pb-4">
             <LoadingSpinner size="lg" />
             <div>SpeakMCP</div>

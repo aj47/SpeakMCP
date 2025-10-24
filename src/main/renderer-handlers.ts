@@ -22,6 +22,9 @@ export type RendererHandlers = {
   clearAgentProgress: () => void
   emergencyStopAgent: () => void
 
+  // TTS Kill Switch handler
+  stopAllTTS: () => void
+
   updateAvailable: (e: UpdateDownloadedEvent) => void
   navigate: (url: string) => void
 }

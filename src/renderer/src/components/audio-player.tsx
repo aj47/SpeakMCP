@@ -1,8 +1,9 @@
-import React, { useState, useRef, useEffect } from "react"
+import React, { useState, useRef, useEffect, useId } from "react"
 import { Button } from "@renderer/components/ui/button"
 import { Slider } from "@renderer/components/ui/slider"
 import { Play, Pause, Volume2, VolumeX, Loader2 } from "lucide-react"
 import { cn } from "@renderer/lib/utils"
+import { useTTSAudio } from "@renderer/contexts/tts-audio-context"
 
 interface AudioPlayerProps {
   audioData?: ArrayBuffer
@@ -34,6 +35,8 @@ export function AudioPlayer({
   const [hasAutoPlayed, setHasAutoPlayed] = useState(false)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const audioUrlRef = useRef<string | null>(null)
+  const audioId = useId()
+  const { registerAudioElement, unregisterAudioElement } = useTTSAudio()
 
   // Create audio URL when audioData changes
   useEffect(() => {
@@ -64,6 +67,18 @@ export function AudioPlayer({
       }
     }
   }, [audioData])
+
+  // Register/unregister audio element with TTS manager
+  useEffect(() => {
+    const audio = audioRef.current
+    if (audio && hasAudio) {
+      registerAudioElement(audioId, audio)
+      return () => {
+        unregisterAudioElement(audioId)
+      }
+    }
+    return undefined
+  }, [audioId, hasAudio, registerAudioElement, unregisterAudioElement])
 
   // Audio event handlers - set up whenever audio element or hasAudio changes
   useEffect(() => {

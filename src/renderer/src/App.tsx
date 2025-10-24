@@ -4,21 +4,24 @@ import { lazy, Suspense } from "react"
 import { Toaster } from "sonner"
 import { ConversationProvider } from "./contexts/conversation-context"
 import { ThemeProvider } from "./contexts/theme-context"
+import { TTSAudioProvider } from "./contexts/tts-audio-context"
 
 const Updater = lazy(() => import("./components/updater"))
 
 function App(): JSX.Element {
   return (
     <ThemeProvider>
-      <ConversationProvider>
-        <RouterProvider router={router}></RouterProvider>
+      <TTSAudioProvider>
+        <ConversationProvider>
+          <RouterProvider router={router}></RouterProvider>
 
-        <Suspense>
-          <Updater />
-        </Suspense>
+          <Suspense>
+            <Updater />
+          </Suspense>
 
-        <Toaster />
-      </ConversationProvider>
+          <Toaster />
+        </ConversationProvider>
+      </TTSAudioProvider>
     </ThemeProvider>
   )
 }

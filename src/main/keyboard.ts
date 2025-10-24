@@ -407,6 +407,28 @@ export function listenToKeyboardEvents() {
           return
         }
 
+        // TTS Kill Switch: Stop all TTS audio on ESC key (without modifiers)
+        if (!isPressedCtrlKey && !isPressedShiftKey && !isPressedAltKey) {
+          if (isDebugKeybinds()) {
+            logKeybinds("ESC key pressed - stopping all TTS audio")
+          }
+
+          // Send stop TTS event to all windows
+          const mainWin = WINDOWS.get("main")
+          if (mainWin) {
+            getWindowRendererHandlers("main")?.stopAllTTS.send()
+          }
+          const panelWin = WINDOWS.get("panel")
+          if (panelWin) {
+            getWindowRendererHandlers("panel")?.stopAllTTS.send()
+          }
+
+          // Also stop agent execution if active
+          if (state.isAgentModeActive) {
+            emergencyStopAgentMode()
+          }
+        }
+
         const win = WINDOWS.get("panel")
         if (win && win.isVisible()) {
           // Check if we're currently recording

@@ -1,8 +1,10 @@
-import { rendererHandlers } from "@renderer/lib/tipc-client"
+import { rendererHandlers, tipcClient } from "@renderer/lib/tipc-client"
 import { cn } from "@renderer/lib/utils"
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { NavLink, Outlet, useNavigate, useLocation } from "react-router-dom"
 import { LoadingSpinner } from "@renderer/components/ui/loading-spinner"
+import { Button } from "@renderer/components/ui/button"
+import { useTTSAudio } from "@renderer/contexts/tts-audio-context"
 
 type NavLink = {
   text: string
@@ -13,6 +15,8 @@ type NavLink = {
 export const Component = () => {
   const navigate = useNavigate()
   const location = useLocation()
+  const { stopAllAudio } = useTTSAudio()
+  const [isStoppingTTS, setIsStoppingTTS] = useState(false)
 
   const navLinks: NavLink[] = [
     {
@@ -55,6 +59,34 @@ export const Component = () => {
     })
   }, [])
 
+  // Listen for TTS kill switch from main process (ESC key)
+  useEffect(() => {
+    return rendererHandlers.stopAllTTS.listen(() => {
+      console.log("[TTS Kill Switch] ESC key pressed - stopping all TTS audio")
+      stopAllAudio()
+    })
+  }, [stopAllAudio])
+
+  const handleStopTTS = async () => {
+    if (isStoppingTTS) return
+
+    setIsStoppingTTS(true)
+    try {
+      // Stop all TTS audio
+      stopAllAudio()
+
+      // Also trigger emergency stop for agent if active
+      await tipcClient.emergencyStopAgent()
+
+      console.log("[TTS Kill Switch] Stopped all TTS audio and agent execution")
+    } catch (error) {
+      console.error("[TTS Kill Switch] Error stopping TTS:", error)
+    } finally {
+      // Reset button state after a short delay for visual feedback
+      setTimeout(() => setIsStoppingTTS(false), 500)
+    }
+  }
+
   return (
     <div className="flex h-dvh">
       <div className="app-drag-region flex w-44 shrink-0 flex-col border-r bg-background">
@@ -87,12 +119,30 @@ export const Component = () => {
           ))}
         </div>
 
-        {/* Loading spinner at the bottom of the sidebar */}
+        {/* Stop TTS button and loading spinner at the bottom of the sidebar */}
         <div className="flex flex-1 flex-col justify-end">
-          <div className="flex flex-col items-center space-y-2 pb-4">
-            <LoadingSpinner size="lg" />
-            <div>SpeakMCP</div>
-            <div className="text-xs">{process.env.APP_VERSION}</div>
+          <div className="flex flex-col space-y-3 px-2 pb-4">
+            {/* Stop TTS Button */}
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={handleStopTTS}
+              disabled={isStoppingTTS}
+              className="w-full transition-all duration-200"
+            >
+              <span className={cn(
+                "mr-2",
+                isStoppingTTS ? "i-mingcute-loading-line animate-spin" : "i-mingcute-stop-circle-line"
+              )}></span>
+              {isStoppingTTS ? "Stopping..." : "Stop TTS"}
+            </Button>
+
+            {/* App Info */}
+            <div className="flex flex-col items-center space-y-2">
+              <LoadingSpinner size="lg" />
+              <div>SpeakMCP</div>
+              <div className="text-xs">{process.env.APP_VERSION}</div>
+            </div>
           </div>
         </div>
       </div>

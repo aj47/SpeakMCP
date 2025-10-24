@@ -17,6 +17,7 @@ import {
 import { PanelDragBar } from "@renderer/components/panel-drag-bar"
 import { useConfigQuery } from "@renderer/lib/query-client"
 import { useTheme } from "@renderer/contexts/theme-context"
+import { useTTSAudio } from "@renderer/contexts/tts-audio-context"
 
 const VISUALIZER_BUFFER_LENGTH = 70
 
@@ -36,6 +37,7 @@ export function Component() {
   const mcpModeRef = useRef(false)
   const textInputPanelRef = useRef<TextInputPanelRef>(null)
   const { isDark } = useTheme()
+  const { stopAllAudio } = useTTSAudio()
 
   // Conversation state
   const {
@@ -439,6 +441,16 @@ export function Component() {
 
     return unlisten
   }, [agentProgress])
+
+  // TTS Kill Switch handler - listen for ESC key from main process
+  useEffect(() => {
+    const unlisten = rendererHandlers.stopAllTTS.listen(() => {
+      console.log("[Panel TTS Kill Switch] ESC key pressed - stopping all TTS audio")
+      stopAllAudio()
+    })
+
+    return unlisten
+  }, [stopAllAudio])
 
   // Clear agent progress handler
   useEffect(() => {

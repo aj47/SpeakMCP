@@ -1,11 +1,8 @@
 import { rendererHandlers } from "@renderer/lib/tipc-client"
 import { cn } from "@renderer/lib/utils"
-import { useEffect, useState } from "react"
+import { useEffect } from "react"
 import { NavLink, Outlet, useNavigate, useLocation } from "react-router-dom"
 import { LoadingSpinner } from "@renderer/components/ui/loading-spinner"
-import { Button } from "@renderer/components/ui/button"
-import { VolumeX } from "lucide-react"
-import { ttsManager } from "@renderer/lib/tts-manager"
 
 type NavLink = {
   text: string
@@ -16,8 +13,6 @@ type NavLink = {
 export const Component = () => {
   const navigate = useNavigate()
   const location = useLocation()
-  const [isStoppingTTS, setIsStoppingTTS] = useState(false)
-  const [isTTSPlaying, setIsTTSPlaying] = useState(false)
 
   const navLinks: NavLink[] = [
     {
@@ -60,24 +55,6 @@ export const Component = () => {
     })
   }, [])
 
-  // Subscribe to TTS playing state changes
-  useEffect(() => {
-    return ttsManager.onPlayingStateChange((isPlaying) => {
-      setIsTTSPlaying(isPlaying)
-    })
-  }, [])
-
-  const handleStopTTS = () => {
-    console.log('[App Layout] Stop TTS button clicked')
-    setIsStoppingTTS(true)
-    ttsManager.stopAll()
-
-    // Reset button state after a short delay
-    setTimeout(() => {
-      setIsStoppingTTS(false)
-    }, 500)
-  }
-
   return (
     <div className="flex h-dvh">
       <div className="app-drag-region flex w-44 shrink-0 flex-col border-r bg-background">
@@ -110,24 +87,8 @@ export const Component = () => {
           ))}
         </div>
 
-        {/* Stop TTS button and loading spinner at the bottom of the sidebar */}
+        {/* Loading spinner at the bottom of the sidebar */}
         <div className="flex flex-1 flex-col justify-end">
-          {isTTSPlaying && (
-            <div className="px-2 pb-3">
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full justify-start gap-2"
-                onClick={handleStopTTS}
-                disabled={isStoppingTTS}
-              >
-                <VolumeX className="h-4 w-4" />
-                <span className="text-xs font-medium">
-                  {isStoppingTTS ? "Stopped" : "Stop TTS"}
-                </span>
-              </Button>
-            </div>
-          )}
           <div className="flex flex-col items-center space-y-2 pb-4">
             <LoadingSpinner size="lg" />
             <div>SpeakMCP</div>

@@ -523,10 +523,6 @@ export class MCPService {
         })
       }
 
-      // Store references
-      this.transports.set(serverName, transport)
-      this.clients.set(serverName, client)
-
       // For stdio transport, track the process for agent mode
       if (transportType === "stdio" && transport instanceof StdioClientTransport) {
         const pid = transport.pid

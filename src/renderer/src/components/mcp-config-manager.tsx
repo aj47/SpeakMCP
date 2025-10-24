@@ -55,6 +55,7 @@ import { tipcClient } from "@renderer/lib/tipc-client"
 import { toast } from "sonner"
 import { OAuthServerConfig } from "./OAuthServerConfig"
 import { OAUTH_MCP_EXAMPLES, getOAuthExample } from "@shared/oauth-examples"
+import { parseShellCommand } from "@shared/shell-parse"
 
 interface MCPConfigManagerProps {
   config: MCPConfig
@@ -205,9 +206,9 @@ function ServerDialog({ server, onSave, onCancel }: ServerDialogProps) {
     let parsedCommand = ""
     let parsedArgs: string[] = []
     if (transport === "stdio" && fullCommand.trim()) {
-      const parts = fullCommand.trim().split(/\s+/)
-      parsedCommand = parts[0]
-      parsedArgs = parts.slice(1)
+      const parsed = parseShellCommand(fullCommand.trim())
+      parsedCommand = parsed.command
+      parsedArgs = parsed.args
     }
 
     const serverConfig: MCPServerConfig = {
@@ -444,9 +445,9 @@ function ServerDialog({ server, onSave, onCancel }: ServerDialogProps) {
                     const testServerConfig: MCPServerConfig = { transport }
 
                     if ((transport as string) === "stdio") {
-                      const parts = fullCommand.trim().split(/\s+/)
-                      testServerConfig.command = parts[0]
-                      testServerConfig.args = parts.slice(1)
+                      const parsed = parseShellCommand(fullCommand.trim())
+                      testServerConfig.command = parsed.command
+                      testServerConfig.args = parsed.args
                     } else {
                       testServerConfig.url = url.trim()
                     }

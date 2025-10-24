@@ -3,6 +3,7 @@ import { Button } from "@renderer/components/ui/button"
 import { Slider } from "@renderer/components/ui/slider"
 import { Play, Pause, Volume2, VolumeX, Loader2 } from "lucide-react"
 import { cn } from "@renderer/lib/utils"
+import { ttsManager } from "@renderer/lib/tts-manager"
 
 interface AudioPlayerProps {
   audioData?: ArrayBuffer
@@ -32,6 +33,7 @@ export function AudioPlayer({
   const [isMuted, setIsMuted] = useState(false)
   const [hasAudio, setHasAudio] = useState(!!audioData)
   const [hasAutoPlayed, setHasAutoPlayed] = useState(false)
+  const [wasStopped, setWasStopped] = useState(false)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const audioUrlRef = useRef<string | null>(null)
 
@@ -48,6 +50,7 @@ export function AudioPlayer({
       audioUrlRef.current = URL.createObjectURL(blob)
       setHasAudio(true)
       setHasAutoPlayed(false) // Reset auto-play flag for new audio
+      setWasStopped(false) // Reset stopped flag for new audio
 
       // Create audio element and reset playing state
       if (audioRef.current) {
@@ -121,16 +124,40 @@ export function AudioPlayer({
     }
   }, [hasAudio, audioData]) // Include audioData to ensure listeners are reset when new audio loads
 
-  // Auto-play effect
+  // Register audio element with TTS manager for emergency stop
   useEffect(() => {
-    if (autoPlay && hasAudio && audioRef.current && !isPlaying && !hasAutoPlayed) {
+    const audio = audioRef.current
+    if (!audio) return undefined
+
+    // Register audio element
+    const unregisterAudio = ttsManager.registerAudio(audio)
+
+    // Register stop callback - prevents auto-play after emergency stop
+    const unregisterCallback = ttsManager.registerStopCallback(() => {
+      if (audio) {
+        audio.pause()
+        audio.currentTime = 0
+        setIsPlaying(false)
+        setWasStopped(true) // Prevent auto-play from triggering after stop
+      }
+    })
+
+    return () => {
+      unregisterAudio()
+      unregisterCallback()
+    }
+  }, [audioRef.current])
+
+  // Auto-play effect - blocked if emergency stop was triggered
+  useEffect(() => {
+    if (autoPlay && hasAudio && audioRef.current && !isPlaying && !hasAutoPlayed && !wasStopped) {
       console.log("[AudioPlayer] Auto-playing audio")
       setHasAutoPlayed(true)
       audioRef.current.play().catch((error) => {
         console.error("[AudioPlayer] Auto-play failed:", error)
       })
     }
-  }, [autoPlay, hasAudio, isPlaying, hasAutoPlayed])
+  }, [autoPlay, hasAudio, isPlaying, hasAutoPlayed, wasStopped])
 
   const handlePlayPause = async () => {
     if (!hasAudio && onGenerateAudio && !isGenerating && !error) {

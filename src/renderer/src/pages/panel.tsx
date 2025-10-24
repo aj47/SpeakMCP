@@ -17,6 +17,7 @@ import {
 import { PanelDragBar } from "@renderer/components/panel-drag-bar"
 import { useConfigQuery } from "@renderer/lib/query-client"
 import { useTheme } from "@renderer/contexts/theme-context"
+import { ttsManager } from "@renderer/lib/tts-manager"
 
 const VISUALIZER_BUFFER_LENGTH = 70
 
@@ -443,6 +444,10 @@ export function Component() {
   // Clear agent progress handler
   useEffect(() => {
     const unlisten = rendererHandlers.clearAgentProgress.listen(() => {
+      console.log('[Panel] Clearing agent progress - stopping all TTS audio')
+      // Stop all TTS audio when clearing progress (ESC key pressed)
+      ttsManager.stopAll()
+
       setAgentProgress(null)
       setMcpMode(false)
       mcpModeRef.current = false
@@ -454,6 +459,16 @@ export function Component() {
 
     return unlisten
   }, [isConversationActive, endConversation])
+
+  // Emergency stop handler - stop all TTS audio
+  useEffect(() => {
+    const unlisten = rendererHandlers.emergencyStopAgent.listen(() => {
+      console.log('[Panel] Emergency stop triggered - stopping all TTS audio')
+      ttsManager.stopAll()
+    })
+
+    return unlisten
+  }, [])
 
   return (
     <PanelResizeWrapper

@@ -16,11 +16,13 @@ pnpm dev d
 pnpm dev debug-llm    # Enable LLM debug
 pnpm dev debug-tools  # Enable tools debug
 pnpm dev debug-app    # Enable app debug
+pnpm dev debug-ui     # Enable UI debug
 pnpm dev debug-all    # Enable all debug modes
 pnpm dev dl           # Enable LLM debug (short)
 pnpm dev dt           # Enable tools debug (short)
 pnpm dev dk           # Enable keybinds debug (short)
 pnpm dev dapp         # Enable app debug (short)
+pnpm dev dui          # Enable UI debug (short)
 ```
 
 ### Traditional Formats
@@ -142,6 +144,25 @@ When app debug is enabled, you'll see:
 - UI state transitions
 - Menu and user interaction events
 
+### UI Debug (`debug-ui` or `dui`)
+
+When UI debug is enabled, you'll see detailed logging in the browser console (DevTools):
+
+```
+[DEBUG][UI] [ModelSelector] mount/update { providerId: 'openai', value: 'gpt-4', ... }
+[DEBUG][UI] [FOCUS] ModelSelector.searchInput focus { activeElement: 'INPUT' }
+[DEBUG][UI] [STATE] ModelSelector.searchQuery: { from: '', to: 'gpt' }
+[DEBUG][UI] [Input] onChange: { placeholder: 'Search models...', value: 'gpt', isFocused: true }
+[DEBUG][UI] [FOCUS] Input blur { relatedTarget: 'DIV', activeElement: 'BODY' }
+```
+
+**What it shows:**
+- Component lifecycle and re-renders
+- Focus and blur events on inputs and interactive elements
+- State changes in components
+- User interactions with UI elements
+- Active element tracking to debug focus issues
+
 ## 🛠️ Advanced Debugging
 
 ### Custom Debug Combinations
@@ -155,8 +176,11 @@ pnpm dev dl dt
 # LLM + App debugging
 pnpm dev dl dapp
 
+# UI debugging for focus/render issues
+pnpm dev dui
+
 # All modes explicitly
-pnpm dev debug-llm debug-tools debug-keybinds debug-app
+pnpm dev debug-llm debug-tools debug-keybinds debug-app debug-ui
 ```
 
 ### Environment Variable Debugging
@@ -168,6 +192,7 @@ For persistent debugging across sessions:
 export DEBUG_LLM=true
 export DEBUG_TOOLS=true
 export DEBUG_APP=true
+export DEBUG_UI=true
 
 # Then just run
 pnpm dev
@@ -183,6 +208,29 @@ DEBUG=* ./dist/SpeakMCP.app/Contents/MacOS/SpeakMCP
 ```
 
 ## 🔧 Common Debug Scenarios
+
+### Debugging UI Focus Issues (e.g., Model Selector Input)
+
+For issues like input fields losing focus after typing a few characters:
+
+```bash
+pnpm dev dui  # Enable UI debug mode
+```
+
+Then:
+1. Open the app
+2. Open DevTools (View > Toggle Developer Tools)
+3. Go to the Console tab
+4. Navigate to Settings > Models
+5. Click on a model selector dropdown
+6. Start typing in the search field
+7. Watch the console for focus/blur events and re-renders
+
+Look for:
+- `[FOCUS] Input blur` events that shouldn't happen
+- `[RENDER] ModelSelector` events that might cause re-mounting
+- `[STATE]` changes that trigger unexpected updates
+- Active element changes that indicate focus is being stolen
 
 ### Debugging LLM Issues
 

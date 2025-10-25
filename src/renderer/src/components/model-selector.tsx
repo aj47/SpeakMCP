@@ -11,6 +11,7 @@ import { Input } from "@renderer/components/ui/input"
 import { useAvailableModelsQuery } from "@renderer/lib/query-client"
 import { AlertCircle, RefreshCw, Search } from "lucide-react"
 import { Button } from "@renderer/components/ui/button"
+import { logUI, logFocus, logStateChange, logRender } from "@renderer/lib/debug"
 
 interface ModelSelectorProps {
   providerId: string
@@ -38,6 +39,17 @@ export function ModelSelector({
 
   const modelsQuery = useAvailableModelsQuery(providerId, !!providerId)
 
+  // Log component renders
+  useEffect(() => {
+    logRender('ModelSelector', 'mount/update', {
+      providerId,
+      value,
+      isOpen,
+      searchQuery,
+      modelsCount: modelsQuery.data?.length
+    })
+  })
+
   const handleRefresh = async () => {
     setIsRefreshing(true)
     await modelsQuery.refetch()
@@ -47,6 +59,7 @@ export function ModelSelector({
   // Auto-select first model if no value is set and models are available
   useEffect(() => {
     if (!value && modelsQuery.data && modelsQuery.data.length > 0) {
+      logUI('[ModelSelector] Auto-selecting first model:', modelsQuery.data[0].id)
       onValueChange(modelsQuery.data[0].id)
     }
   }, [value, modelsQuery.data]) // Remove onValueChange from dependencies to prevent infinite loops
@@ -54,14 +67,36 @@ export function ModelSelector({
   // Clear search when dropdown closes and manage focus
   useEffect(() => {
     if (!isOpen) {
+      logStateChange('ModelSelector', 'isOpen', true, false)
+      logUI('[ModelSelector] Dropdown closed, clearing search query')
       setSearchQuery("")
     } else {
+      logStateChange('ModelSelector', 'isOpen', false, true)
+      logUI('[ModelSelector] Dropdown opened, focusing search input')
       // Focus the search input when dropdown opens
-      setTimeout(() => {
-        searchInputRef.current?.focus()
-      }, 100)
+      requestAnimationFrame(() => {
+        if (searchInputRef.current) {
+          searchInputRef.current.focus()
+          logFocus('ModelSelector.searchInput', 'focus', { delayed: true })
+        }
+      })
     }
   }, [isOpen])
+
+  // Ensure the search input retains focus while typing (some Radix focus management can steal it)
+  useEffect(() => {
+    if (isOpen) {
+      requestAnimationFrame(() => {
+        if (
+          searchInputRef.current &&
+          document.activeElement !== searchInputRef.current
+        ) {
+          logUI('[ModelSelector] Refocusing search input after query change')
+          searchInputRef.current.focus()
+        }
+      })
+    }
+  }, [searchQuery, isOpen])
 
   const isLoading = modelsQuery.isLoading || isRefreshing
   const hasError = modelsQuery.isError && !modelsQuery.data
@@ -99,10 +134,16 @@ export function ModelSelector({
 
       <Select
         value={value}
-        onValueChange={onValueChange}
+        onValueChange={(newValue) => {
+          logUI('[ModelSelector] Select onValueChange:', newValue)
+          onValueChange(newValue)
+        }}
         disabled={disabled || isLoading || allModels.length === 0}
         open={isOpen}
-        onOpenChange={setIsOpen}
+        onOpenChange={(open) => {
+          logUI('[ModelSelector] Select onOpenChange:', open)
+          setIsOpen(open)
+        }}
       >
         <SelectTrigger className="w-full">
           <SelectValue
@@ -115,7 +156,13 @@ export function ModelSelector({
             }
           />
         </SelectTrigger>
-        <SelectContent className="max-h-[400px] w-[300px]">
+        <SelectContent
+          className="max-h-[400px] w-[300px]"
+          onCloseAutoFocus={(e) => {
+            // Prevent Radix from moving focus back to the trigger; we'll manage it
+            e.preventDefault()
+          }}
+        >
           {/* Search input */}
           <div
             className="mb-2 flex items-center border-b px-3 pb-2"
@@ -127,20 +174,39 @@ export function ModelSelector({
               placeholder="Search models..."
               value={searchQuery}
               onChange={(e) => {
+                const newValue = e.target.value
+                logStateChange('ModelSelector', 'searchQuery', searchQuery, newValue)
+                logUI('[ModelSelector] Search input onChange, activeElement:', document.activeElement?.tagName)
                 e.stopPropagation()
-                setSearchQuery(e.target.value)
+                setSearchQuery(newValue)
               }}
               onKeyDown={(e) => {
+                logUI('[ModelSelector] Search input onKeyDown:', e.key, 'activeElement:', document.activeElement?.tagName)
                 e.stopPropagation()
                 if (e.key === "Escape") {
+                  logUI('[ModelSelector] Escape pressed, closing dropdown')
                   setIsOpen(false)
                 } else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+                  logUI('[ModelSelector] Arrow key pressed:', e.key)
                   // Allow arrow keys to navigate through the list
                   e.preventDefault()
                 }
               }}
+              onFocus={(e) => {
+                e.stopPropagation()
+                logFocus('ModelSelector.searchInput', 'focus', {
+                  relatedTarget: e.relatedTarget?.tagName,
+                  activeElement: document.activeElement?.tagName
+                })
+              }}
+              onBlur={(e) => {
+                e.stopPropagation()
+                logFocus('ModelSelector.searchInput', 'blur', {
+                  relatedTarget: e.relatedTarget?.tagName,
+                  activeElement: document.activeElement?.tagName
+                })
+              }}
               onMouseDown={(e) => e.stopPropagation()}
-              onFocus={(e) => e.stopPropagation()}
               className="h-auto border-0 p-0 focus-visible:ring-0 focus-visible:ring-offset-0"
             />
           </div>

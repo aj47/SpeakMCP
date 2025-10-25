@@ -218,7 +218,10 @@ pnpm dev debug-all       # Readable format
 # Enable specific modes
 pnpm dev debug-llm       # LLM calls and responses
 pnpm dev debug-tools     # MCP tool execution
+pnpm dev debug-ui        # UI focus, renders, and state changes
 ```
+
+See [DEBUGGING.md](DEBUGGING.md) for detailed debugging instructions.
 
 ## 🤝 Contributing
 

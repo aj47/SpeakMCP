@@ -3,6 +3,7 @@ export interface DebugFlags {
   tools: boolean
   keybinds: boolean
   app: boolean
+  ui: boolean
   all: boolean
 }
 
@@ -11,6 +12,7 @@ const flags: DebugFlags = {
   tools: false,
   keybinds: false,
   app: false,
+  ui: false,
   all: false,
 }
 
@@ -50,6 +52,12 @@ export function initDebugFlags(argv: string[] = process.argv): DebugFlags {
     envDebug === "*" ||
     envDebug.includes("all")
 
+  const envUI =
+    strToBool(process.env.DEBUG_UI) ||
+    envParts.includes("ui") ||
+    envDebug === "*" ||
+    envDebug.includes("all")
+
   const all =
     hasAny("--debug", "--debug-all", "-d", "-da", "debug", "debug-all", "d", "da") ||
     envDebug === "*" ||
@@ -58,22 +66,23 @@ export function initDebugFlags(argv: string[] = process.argv): DebugFlags {
   flags.llm = all || hasAny("--debug-llm", "-dl", "debug-llm", "dl") || envLLM
   flags.tools = all || hasAny("--debug-tools", "-dt", "debug-tools", "dt") || envTools
   flags.keybinds = all || hasAny("--debug-keybinds", "-dk", "debug-keybinds", "dk") || envKeybinds
-
   flags.app = all || hasAny("--debug-app", "-dapp", "debug-app", "dapp") || envApp
+  flags.ui = all || hasAny("--debug-ui", "-dui", "debug-ui", "dui") || envUI
   flags.all = all
 
 
 
-  if (flags.llm || flags.tools || flags.keybinds || flags.app) {
+  if (flags.llm || flags.tools || flags.keybinds || flags.app || flags.ui) {
     // Small banner so users can see debugs are enabled
     const enabled: string[] = []
     if (flags.llm) enabled.push("LLM")
     if (flags.tools) enabled.push("TOOLS")
     if (flags.keybinds) enabled.push("KEYBINDS")
     if (flags.app) enabled.push("APP")
+    if (flags.ui) enabled.push("UI")
     // eslint-disable-next-line no-console
     console.log(
-      `[DEBUG] Enabled: ${enabled.join(", ")} (argv: ${argv.filter((a) => a.startsWith("--debug") || a.startsWith("-d") || a.startsWith("debug") || ["d", "dt", "dl", "dk", "da", "dapp"].includes(a)).join(" ") || "none"})`,
+      `[DEBUG] Enabled: ${enabled.join(", ")} (argv: ${argv.filter((a) => a.startsWith("--debug") || a.startsWith("-d") || a.startsWith("debug") || ["d", "dt", "dl", "dk", "da", "dapp", "dui"].includes(a)).join(" ") || "none"})`,
     )
   }
 
@@ -96,6 +105,10 @@ export function isDebugKeybinds(): boolean {
 
 export function isDebugApp(): boolean {
   return flags.app || flags.all
+}
+
+export function isDebugUI(): boolean {
+  return flags.ui || flags.all
 }
 
 function ts(): string {
@@ -121,12 +134,16 @@ export function logKeybinds(...args: any[]) {
   console.log(`[${ts()}] [DEBUG][KEYBINDS]`, ...args)
 }
 
-
-
 export function logApp(...args: any[]) {
   if (!isDebugApp()) return
   // eslint-disable-next-line no-console
   console.log(`[${ts()}] [DEBUG][APP]`, ...args)
+}
+
+export function logUI(...args: any[]) {
+  if (!isDebugUI()) return
+  // eslint-disable-next-line no-console
+  console.log(`[${ts()}] [DEBUG][UI]`, ...args)
 }
 
 export function getDebugFlags(): DebugFlags {

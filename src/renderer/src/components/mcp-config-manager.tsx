@@ -44,13 +44,18 @@ import {
   Play,
   ExternalLink,
   FileText,
+  ChevronDown,
+  ChevronUp,
+  Terminal,
+  Trash,
 } from "lucide-react"
 import { Spinner } from "@renderer/components/ui/spinner"
-import { MCPConfig, MCPServerConfig, MCPTransportType, OAuthConfig } from "@shared/types"
+import { MCPConfig, MCPServerConfig, MCPTransportType, OAuthConfig, ServerLogEntry } from "@shared/types"
 import { tipcClient } from "@renderer/lib/tipc-client"
 import { toast } from "sonner"
 import { OAuthServerConfig } from "./OAuthServerConfig"
 import { OAUTH_MCP_EXAMPLES, getOAuthExample } from "@shared/oauth-examples"
+import { parseShellCommand } from "@shared/shell-parse"
 
 interface MCPConfigManagerProps {
   config: MCPConfig
@@ -69,10 +74,15 @@ function ServerDialog({ server, onSave, onCancel }: ServerDialogProps) {
   const [transport, setTransport] = useState<MCPTransportType>(
     server?.config.transport || "stdio",
   )
-  const [command, setCommand] = useState(server?.config.command || "")
-  const [args, setArgs] = useState(
-    server?.config.args ? server.config.args.join(" ") : "",
-  )
+  // Combine command and args into a single field
+  const [fullCommand, setFullCommand] = useState(() => {
+    if (server?.config.command) {
+      const cmd = server.config.command
+      const args = server.config.args ? server.config.args.join(" ") : ""
+      return args ? `${cmd} ${args}` : cmd
+    }
+    return ""
+  })
   const [url, setUrl] = useState(server?.config.url || "")
   const [env, setEnv] = useState(
     server?.config.env
@@ -99,6 +109,43 @@ function ServerDialog({ server, onSave, onCancel }: ServerDialogProps) {
   )
   // OAuth configuration is automatically shown for streamableHttp transport
 
+  // Reset all fields when server prop changes (e.g., when switching from edit to add)
+  useEffect(() => {
+    setName(server?.name || "")
+    setActiveTab('manual')
+    setTransport(server?.config.transport || "stdio")
+
+    // Combine command and args for editing, or reset to empty
+    if (server?.config.command) {
+      const cmd = server.config.command
+      const args = server.config.args ? server.config.args.join(" ") : ""
+      setFullCommand(args ? `${cmd} ${args}` : cmd)
+    } else {
+      setFullCommand("")
+    }
+
+    setUrl(server?.config.url || "")
+    setEnv(
+      server?.config.env
+        ? Object.entries(server.config.env)
+            .map(([k, v]) => `${k}=${v}`)
+            .join("\n")
+        : ""
+    )
+    setTimeout(server?.config.timeout?.toString() || "")
+    setJsonInputText("")
+    setSelectedExample("")
+    setDisabled(server?.config.disabled || false)
+    setHeaders(
+      server?.config.headers
+        ? Object.entries(server.config.headers)
+            .map(([k, v]) => `${k}=${v}`)
+            .join("\n")
+        : ""
+    )
+    setOAuthConfig(server?.config.oauth || {})
+  }, [server])
+
   const handleSave = () => {
     if (!name.trim()) {
       toast.error("Server name is required")
@@ -107,7 +154,7 @@ function ServerDialog({ server, onSave, onCancel }: ServerDialogProps) {
 
     // Validate based on transport type
     if (transport === "stdio") {
-      if (!command.trim()) {
+      if (!fullCommand.trim()) {
         toast.error("Command is required for stdio transport")
         return
       }
@@ -155,11 +202,20 @@ function ServerDialog({ server, onSave, onCancel }: ServerDialogProps) {
       }
     }
 
+    // Parse the full command into command and args
+    let parsedCommand = ""
+    let parsedArgs: string[] = []
+    if (transport === "stdio" && fullCommand.trim()) {
+      const parsed = parseShellCommand(fullCommand.trim())
+      parsedCommand = parsed.command
+      parsedArgs = parsed.args
+    }
+
     const serverConfig: MCPServerConfig = {
       transport,
       ...(transport === "stdio" && {
-        command: command.trim(),
-        args: args.trim() ? args.trim().split(/\s+/) : [],
+        command: parsedCommand,
+        args: parsedArgs,
       }),
       ...(transport !== "stdio" && {
         url: url.trim(),
@@ -245,30 +301,18 @@ function ServerDialog({ server, onSave, onCancel }: ServerDialogProps) {
             </div>
 
             {transport === "stdio" ? (
-              <>
-                <div className="space-y-2">
-                  <Label htmlFor="command">Command</Label>
-                  <Input
-                    id="command"
-                    value={command}
-                    onChange={(e) => setCommand(e.target.value)}
-                    placeholder="e.g., npx"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="args">Arguments</Label>
-                  <Input
-                    id="args"
-                    value={args}
-                    onChange={(e) => setArgs(e.target.value)}
-                    placeholder="e.g., -y @modelcontextprotocol/server-google-maps"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Space-separated command arguments
-                  </p>
-                </div>
-              </>
+              <div className="space-y-2">
+                <Label htmlFor="fullCommand">Command</Label>
+                <Input
+                  id="fullCommand"
+                  value={fullCommand}
+                  onChange={(e) => setFullCommand(e.target.value)}
+                  placeholder="e.g., npx -y @modelcontextprotocol/server-google-maps"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Full command with arguments (space-separated)
+                </p>
+              </div>
             ) : (
               <div className="space-y-2">
                 <Label htmlFor="url">Server URL</Label>
@@ -401,8 +445,9 @@ function ServerDialog({ server, onSave, onCancel }: ServerDialogProps) {
                     const testServerConfig: MCPServerConfig = { transport }
 
                     if ((transport as string) === "stdio") {
-                      testServerConfig.command = command.trim()
-                      testServerConfig.args = args.trim() ? args.trim().split(/\s+/) : []
+                      const parsed = parseShellCommand(fullCommand.trim())
+                      testServerConfig.command = parsed.command
+                      testServerConfig.args = parsed.args
                     } else {
                       testServerConfig.url = url.trim()
                     }
@@ -472,8 +517,10 @@ function ServerDialog({ server, onSave, onCancel }: ServerDialogProps) {
                         onClick={() => {
                           setName(example.name)
                           setTransport(example.config.transport)
-                          setCommand(example.config.command || "")
-                          setArgs(example.config.args?.join(" ") || "")
+                          // Combine command and args into fullCommand
+                          const cmd = example.config.command || ""
+                          const args = example.config.args?.join(" ") || ""
+                          setFullCommand(args ? `${cmd} ${args}` : cmd)
                           setUrl(example.config.url || "")
                           setEnv(
                             example.config.env
@@ -521,8 +568,10 @@ function ServerDialog({ server, onSave, onCancel }: ServerDialogProps) {
                           onClick={() => {
                             setName(example.name)
                             setTransport(example.config.transport)
-                            setCommand(example.config.command || "")
-                            setArgs(example.config.args?.join(" ") || "")
+                            // Combine command and args into fullCommand
+                            const cmd = example.config.command || ""
+                            const args = example.config.args?.join(" ") || ""
+                            setFullCommand(args ? `${cmd} ${args}` : cmd)
                             setUrl(example.config.url || "")
                             setEnv(
                               example.config.env
@@ -627,8 +676,10 @@ function ServerDialog({ server, onSave, onCancel }: ServerDialogProps) {
 
                   // Apply the configuration
                   setTransport(config.transport)
-                  setCommand(config.command || "")
-                  setArgs(config.args?.join(" ") || "")
+                  // Combine command and args into fullCommand
+                  const cmd = config.command || ""
+                  const args = config.args?.join(" ") || ""
+                  setFullCommand(args ? `${cmd} ${args}` : cmd)
                   setUrl(config.url || "")
                   setEnv(
                     config.env
@@ -750,6 +801,8 @@ export function MCPConfigManager({
     progress: { current: number; total: number; currentServer?: string }
   }>({ isInitializing: false, progress: { current: 0, total: 0 } })
   const [oauthStatus, setOAuthStatus] = useState<Record<string, { configured: boolean; authenticated: boolean; tokenExpiry?: number; error?: string }>>({})
+  const [serverLogs, setServerLogs] = useState<Record<string, ServerLogEntry[]>>({})
+  const [expandedLogs, setExpandedLogs] = useState<Set<string>>(new Set())
 
   // Load OAuth status for all servers
   const refreshOAuthStatus = async (serverName?: string) => {
@@ -775,6 +828,16 @@ export function MCPConfigManager({
 
   const servers = config.mcpServers || {}
 
+  // Fetch logs for expanded servers
+  const fetchLogsForServer = async (serverName: string) => {
+    try {
+      const logs = await tipcClient.getMcpServerLogs({ serverName })
+      setServerLogs(prev => ({ ...prev, [serverName]: logs as ServerLogEntry[] }))
+    } catch (error) {
+      console.error(`Failed to fetch logs for ${serverName}:`, error)
+    }
+  }
+
   // Fetch server status and initialization status periodically
   useEffect(() => {
     const fetchStatus = async () => {
@@ -786,6 +849,11 @@ export function MCPConfigManager({
         setServerStatus(status as any)
         setInitializationStatus(initStatus as any)
         await refreshOAuthStatus()
+
+        // Fetch logs for expanded servers
+        for (const serverName of expandedLogs) {
+          await fetchLogsForServer(serverName)
+        }
       } catch (error) {}
     }
 
@@ -793,9 +861,9 @@ export function MCPConfigManager({
     const interval = setInterval(fetchStatus, 1000) // Update every second during initialization
 
     return () => clearInterval(interval)
-  }, [servers])
+  }, [servers, expandedLogs])
 
-  const handleAddServer = (name: string, serverConfig: MCPServerConfig) => {
+  const handleAddServer = async (name: string, serverConfig: MCPServerConfig) => {
     const newConfig = {
       ...config,
       mcpServers: {
@@ -805,6 +873,34 @@ export function MCPConfigManager({
     }
     onConfigChange(newConfig)
     setShowAddDialog(false)
+
+    // Auto-start the server after adding it (unless it's disabled)
+    if (!serverConfig.disabled) {
+      // Wait a bit for the config to be saved
+      setTimeout(async () => {
+        try {
+          // Mark the server as runtime-enabled
+          const runtimeResult = await tipcClient.setMcpServerRuntimeEnabled({
+            serverName: name,
+            enabled: true,
+          })
+          if (!(runtimeResult as any).success) {
+            toast.error(`Failed to enable server: Server not found`)
+            return
+          }
+
+          // Start the server
+          const result = await tipcClient.restartMcpServer({ serverName: name })
+          if ((result as any).success) {
+            toast.success(`Server ${name} connected successfully`)
+          } else {
+            toast.error(`Failed to connect server: ${(result as any).error}`)
+          }
+        } catch (error) {
+          toast.error(`Failed to connect server: ${error instanceof Error ? error.message : String(error)}`)
+        }
+      }, 500)
+    }
   }
 
   const handleEditServer = (
@@ -993,6 +1089,30 @@ export function MCPConfigManager({
       }
     } catch (error) {
       toast.error(`Failed to start server: ${error.message}`)
+    }
+  }
+
+  const toggleLogs = (serverName: string) => {
+    setExpandedLogs(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(serverName)) {
+        newSet.delete(serverName)
+      } else {
+        newSet.add(serverName)
+        // Fetch logs immediately when expanding
+        fetchLogsForServer(serverName)
+      }
+      return newSet
+    })
+  }
+
+  const handleClearLogs = async (serverName: string) => {
+    try {
+      await tipcClient.clearMcpServerLogs({ serverName })
+      setServerLogs(prev => ({ ...prev, [serverName]: [] }))
+      toast.success(`Logs cleared for ${serverName}`)
+    } catch (error) {
+      toast.error(`Failed to clear logs: ${error instanceof Error ? error.message : String(error)}`)
     }
   }
 
@@ -1286,6 +1406,61 @@ export function MCPConfigManager({
                     {serverStatus[name]?.error && (
                       <div className="text-red-500">
                         <strong>Error:</strong> {serverStatus[name].error}
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              )}
+
+              {/* Server Logs Section - only show for stdio servers */}
+              {(serverConfig.transport === "stdio" || !serverConfig.transport) && (
+                <CardContent className="pt-0 border-t">
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => toggleLogs(name)}
+                        className="flex items-center gap-2"
+                      >
+                        <Terminal className="h-4 w-4" />
+                        <span>Server Logs</span>
+                        {expandedLogs.has(name) ? (
+                          <ChevronUp className="h-4 w-4" />
+                        ) : (
+                          <ChevronDown className="h-4 w-4" />
+                        )}
+                      </Button>
+                      {expandedLogs.has(name) && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleClearLogs(name)}
+                          title="Clear logs"
+                        >
+                          <Trash className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+
+                    {expandedLogs.has(name) && (
+                      <div className="bg-black/90 rounded-md p-3 max-h-64 overflow-y-auto font-mono text-xs">
+                        {serverLogs[name]?.length > 0 ? (
+                          <div className="space-y-1">
+                            {serverLogs[name].map((log, idx) => (
+                              <div key={idx} className="text-green-400">
+                                <span className="text-gray-500">
+                                  [{new Date(log.timestamp).toLocaleTimeString()}]
+                                </span>{' '}
+                                {log.message}
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="text-gray-500 text-center py-4">
+                            No logs available
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

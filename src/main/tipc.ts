@@ -302,9 +302,6 @@ export const router = {
     const { emergencyStopAgentMode } = await import("./window")
     await emergencyStopAgentMode()
 
-    // Also stop MCP processes
-    mcpService.emergencyStopAllProcesses()
-
     return { success: true, message: "Agent mode emergency stopped" }
   }),
 
@@ -1162,6 +1159,19 @@ export const router = {
     .input<{ serverName: string }>()
     .action(async ({ input }) => {
       return mcpService.stopServer(input.serverName)
+    }),
+
+  getMcpServerLogs: t.procedure
+    .input<{ serverName: string }>()
+    .action(async ({ input }) => {
+      return mcpService.getServerLogs(input.serverName)
+    }),
+
+  clearMcpServerLogs: t.procedure
+    .input<{ serverName: string }>()
+    .action(async ({ input }) => {
+      mcpService.clearServerLogs(input.serverName)
+      return { success: true }
     }),
 
   // Text-to-Speech

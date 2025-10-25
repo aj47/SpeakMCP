@@ -1906,6 +1906,12 @@ export class MCPService {
 
   /**
    * Emergency stop - immediately kill all MCP server processes
+   *
+   * WARNING: This should ONLY be used for actual app shutdown scenarios.
+   * DO NOT use this for agent mode emergency stop - MCP servers are persistent
+   * infrastructure that should remain running across agent sessions.
+   *
+   * Currently not called anywhere - kept for potential future app shutdown cleanup.
    */
   emergencyStopAllProcesses(): void {
     for (const [serverName, transport] of this.transports) {

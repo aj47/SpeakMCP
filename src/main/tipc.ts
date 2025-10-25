@@ -302,9 +302,6 @@ export const router = {
     const { emergencyStopAgentMode } = await import("./window")
     await emergencyStopAgentMode()
 
-    // Also stop MCP processes
-    mcpService.emergencyStopAllProcesses()
-
     return { success: true, message: "Agent mode emergency stopped" }
   }),
 

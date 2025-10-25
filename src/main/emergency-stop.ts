@@ -1,9 +1,12 @@
 import { agentProcessManager, llmRequestAbortManager, state } from "./state"
-import { mcpService } from "./mcp-service"
 
 /**
- * Centralized emergency stop: abort LLM requests, stop MCP servers,
- * kill tracked child processes, and reset agent state.
+ * Centralized emergency stop: abort LLM requests, kill tracked child processes,
+ * and reset agent state.
+ *
+ * NOTE: This does NOT stop MCP servers - they are persistent infrastructure
+ * that should remain running across agent mode sessions.
+ *
  * Returns before/after counts for logging.
  */
 export async function emergencyStopAll(): Promise<{ before: number; after: number }> {
@@ -17,12 +20,8 @@ export async function emergencyStopAll(): Promise<{ before: number; after: numbe
     // ignore
   }
 
-  // Stop all MCP server processes (stdio/ws/http transports)
-  try {
-    mcpService.emergencyStopAllProcesses()
-  } catch {
-    // ignore
-  }
+  // NOTE: We do NOT stop MCP servers here - they are persistent infrastructure
+  // that should remain running. Only agent-spawned child processes are killed.
 
   const before = agentProcessManager.getActiveProcessCount()
 

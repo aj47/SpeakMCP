@@ -43,16 +43,6 @@ const buildMenu = (tray: Tray) =>
       type: "separator",
     },
     {
-      label: "Settings",
-      accelerator: "CmdOrCtrl+,",
-      click() {
-        showMainWindow("/settings")
-      },
-    },
-    {
-      type: "separator",
-    },
-    {
       role: "quit",
     },
   ])

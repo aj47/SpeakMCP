@@ -111,6 +111,7 @@ async function processWithAgentMode(
         executeToolCall,
         config.mcpMaxIterations ?? 10, // Use configured max iterations or default to 10
         previousConversationHistory,
+        conversationId, // Pass conversation ID for progress updates
       )
 
       return agentResult.content
@@ -625,10 +626,27 @@ export const router = {
         return router.createTextInput({ text: input.text })
       }
 
+      // Create or get conversation ID
+      let conversationId = input.conversationId
+      if (!conversationId) {
+        const conversation = await conversationService.createConversation(
+          input.text,
+          "user",
+        )
+        conversationId = conversation.id
+      } else {
+        // Add user message to existing conversation
+        await conversationService.addMessageToConversation(
+          conversationId,
+          input.text,
+          "user",
+        )
+      }
+
       // Use unified agent mode processing
       const finalResponse = await processWithAgentMode(
         input.text,
-        input.conversationId,
+        conversationId,
       )
 
       // Save to history
@@ -659,6 +677,9 @@ export const router = {
           }
         }, config.mcpAutoPasteDelay || 1000)
       }
+
+      // Return the conversation ID so frontend can use it
+      return { conversationId }
     }),
 
   createMcpRecording: t.procedure

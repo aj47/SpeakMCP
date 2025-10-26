@@ -244,7 +244,10 @@ export interface AgentModeResponse {
 }
 
 // Helper function to emit progress updates to the renderer with better error handling
-function emitAgentProgress(update: AgentProgressUpdate) {
+function emitAgentProgress(update: AgentProgressUpdate, conversationId?: string) {
+  // Add conversation ID to the update if provided
+  const updateWithConversationId = conversationId ? { ...update, conversationId } : update
+
   const panel = WINDOWS.get("panel")
   if (!panel) {
     console.warn("Panel window not available for progress update")
@@ -260,7 +263,7 @@ function emitAgentProgress(update: AgentProgressUpdate) {
   const main = WINDOWS.get("main")
   if (main && main.isVisible()) {
     const mainHandlers = getRendererHandlers<RendererHandlers>(main.webContents)
-    setTimeout(() => mainHandlers.agentProgressUpdate.send(update), 10)
+    setTimeout(() => mainHandlers.agentProgressUpdate.send(updateWithConversationId), 10)
   }
 
   try {
@@ -273,7 +276,7 @@ function emitAgentProgress(update: AgentProgressUpdate) {
     // Add a small delay to ensure UI updates are processed
     setTimeout(() => {
       try {
-        handlers.agentProgressUpdate.send(update)
+        handlers.agentProgressUpdate.send(updateWithConversationId)
       } catch (error) {
         console.warn("Failed to send progress update:", error)
       }
@@ -452,6 +455,7 @@ export async function processTranscriptWithAgentMode(
     toolCalls?: MCPToolCall[]
     toolResults?: MCPToolResult[]
   }>,
+  conversationId?: string, // Add conversation ID parameter
 ): Promise<AgentModeResponse> {
   const config = configStore.get()
 
@@ -469,6 +473,9 @@ export async function processTranscriptWithAgentMode(
       totalIterations: 1,
     }
   }
+
+  // Store conversation ID for use in progress updates
+  const currentConversationId = conversationId
 
   // Initialize progress tracking
   const progressSteps: AgentProgressStep[] = []
@@ -644,7 +651,7 @@ export async function processTranscriptWithAgentMode(
           finalContent +
           "\n\n(Agent mode was stopped by emergency kill switch)",
         conversationHistory: formatConversationForProgress(conversationHistory),
-      })
+      }, currentConversationId)
 
       break
     }
@@ -772,7 +779,7 @@ Always use actual resource IDs from the conversation history or create new ones 
           isComplete: true,
           finalContent: finalContent + "\n\n(Agent mode was stopped by emergency kill switch)",
           conversationHistory: formatConversationForProgress(conversationHistory),
-        })
+        }, currentConversationId)
         break
       }
       throw error
@@ -991,7 +998,7 @@ Always use actual resource IDs from the conversation history or create new ones 
         isComplete: true,
         finalContent,
         conversationHistory: formatConversationForProgress(conversationHistory),
-      })
+      }, currentConversationId)
 
       break
     }
@@ -1481,7 +1488,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
         isComplete: true,
         finalContent,
         conversationHistory: formatConversationForProgress(conversationHistory),
-      })
+      }, currentConversationId)
 
       break
     }
@@ -1734,7 +1741,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
         isComplete: true,
         finalContent,
         conversationHistory: formatConversationForProgress(conversationHistory),
-      })
+      }, currentConversationId)
 
       break
     }
@@ -1807,7 +1814,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
       isComplete: true,
       finalContent,
       conversationHistory: formatConversationForProgress(conversationHistory),
-    })
+    }, currentConversationId)
   }
 
   // Reset the stop flag at the end of agent processing

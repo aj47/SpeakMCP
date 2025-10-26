@@ -17,7 +17,7 @@ import {
   useSaveConversationMutation,
   useConversationQuery,
 } from "@renderer/lib/query-client"
-import { rendererHandlers } from "@renderer/lib/tipc-client"
+import { rendererHandlers, tipcClient } from "@renderer/lib/tipc-client"
 
 interface ConversationContextType {
   // Current conversation state
@@ -78,6 +78,57 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
   const isConversationActive = !!currentConversation
   const isAgentProcessing = !!agentProgress && !agentProgress.isComplete
 
+  // Define saveCompleteConversationHistory before useEffect that uses it
+  const saveCompleteConversationHistory = useCallback(
+    async (
+      conversationId: string,
+      conversationHistory: Array<{
+        role: "user" | "assistant" | "tool"
+        content: string
+        toolCalls?: Array<{ name: string; arguments: any }>
+        toolResults?: Array<{ success: boolean; content: string; error?: string }>
+        timestamp?: number
+      }>,
+    ) => {
+      try {
+        // Load the conversation directly using the conversation ID
+        // Don't use conversationQuery.refetch() because it's tied to currentConversationId which might be null
+        const currentConv = await tipcClient.loadConversation({ conversationId })
+
+        if (!currentConv) {
+          return
+        }
+
+        // Convert conversation history to conversation messages
+        const messages: ConversationMessage[] = conversationHistory.map(
+          (entry, index) => ({
+            id: `msg_${Date.now()}_${index}`,
+            role: entry.role,
+            content: entry.content,
+            timestamp: entry.timestamp || Date.now(),
+            toolCalls: entry.toolCalls,
+            toolResults: entry.toolResults,
+          }),
+        )
+
+        // Create updated conversation with all messages
+        const updatedConversation: Conversation = {
+          ...currentConv,
+          messages,
+          updatedAt: Date.now(),
+        }
+
+        // Save the complete conversation
+        await saveConversationMutation.mutateAsync({
+          conversation: updatedConversation,
+        })
+      } catch (error) {
+        // Silently handle error
+      }
+    },
+    [saveConversationMutation],
+  )
+
   // Listen for agent progress updates
   useEffect(() => {
     const unlisten = rendererHandlers.agentProgressUpdate.listen(
@@ -99,12 +150,13 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
         })
 
         // Save complete conversation history when agent completes
-        // Only save from panel window to prevent duplicates when main window also receives updates
-        if (update.isComplete && currentConversationId &&
-            window.location.pathname === "/panel" &&
+        // Use conversation ID from the update (sent by backend) instead of local state
+        // This ensures we save even if the frontend context doesn't have the ID set
+        if (update.isComplete &&
+            update.conversationId &&
             update.conversationHistory &&
             update.conversationHistory.length > 0) {
-          saveCompleteConversationHistory(currentConversationId, update.conversationHistory).catch(() => {
+          saveCompleteConversationHistory(update.conversationId, update.conversationHistory).catch(() => {
             // Silently handle error
           })
         }
@@ -112,7 +164,7 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
     )
 
     return unlisten
-  }, [currentConversationId])
+  }, [saveCompleteConversationHistory])
 
   // Listen for agent progress clear
   useEffect(() => {
@@ -149,54 +201,6 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
     setShowContinueButton(false)
     setIsWaitingForResponse(false)
   }, [])
-
-  const saveCompleteConversationHistory = useCallback(
-    async (
-      conversationId: string,
-      conversationHistory: Array<{
-        role: "user" | "assistant" | "tool"
-        content: string
-        toolCalls?: Array<{ name: string; arguments: any }>
-        toolResults?: Array<{ success: boolean; content: string; error?: string }>
-        timestamp?: number
-      }>,
-    ) => {
-      try {
-        // Load the current conversation to get metadata
-        const currentConv = await conversationQuery.refetch()
-        if (!currentConv.data) {
-          return
-        }
-
-        // Convert conversation history to conversation messages
-        const messages: ConversationMessage[] = conversationHistory.map(
-          (entry, index) => ({
-            id: `msg_${Date.now()}_${index}`,
-            role: entry.role,
-            content: entry.content,
-            timestamp: entry.timestamp || Date.now(),
-            toolCalls: entry.toolCalls,
-            toolResults: entry.toolResults,
-          }),
-        )
-
-        // Create updated conversation with all messages
-        const updatedConversation: Conversation = {
-          ...currentConv.data,
-          messages,
-          updatedAt: Date.now(),
-        }
-
-        // Save the complete conversation
-        await saveConversationMutation.mutateAsync({
-          conversation: updatedConversation,
-        })
-      } catch (error) {
-        // Silently handle error
-      }
-    },
-    [conversationQuery, saveConversationMutation],
-  )
 
   const addMessage = useCallback(
     async (

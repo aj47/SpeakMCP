@@ -534,9 +534,10 @@ export async function processTranscriptWithAgentMode(
     content: string
     toolCalls?: MCPToolCall[]
     toolResults?: MCPToolResult[]
+    timestamp?: number
   }> = [
     ...(previousConversationHistory || []),
-    { role: "user", content: transcript },
+    { role: "user", content: transcript, timestamp: Date.now() },
   ]
 
   // Helper function to convert conversation history to the format expected by AgentProgressUpdate
@@ -563,7 +564,7 @@ export async function processTranscriptWithAgentMode(
             ? tr.content.map((c) => c.text).join("\n")
             : undefined,
         })),
-        timestamp: Date.now(),
+        timestamp: entry.timestamp || Date.now(),
       }))
   }
 

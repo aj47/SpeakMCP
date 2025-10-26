@@ -1031,6 +1031,23 @@ Always use actual resource IDs from the conversation history or create new ones 
     const toolResults: MCPToolResult[] = []
     const failedTools: string[] = []
 
+    // Add assistant response with tool calls to conversation history BEFORE executing tools
+    // This ensures the tool call request is visible immediately in the UI
+    conversationHistory.push({
+      role: "assistant",
+      content: llmResponse.content || "",
+      toolCalls: llmResponse.toolCalls || [],
+    })
+
+    // Emit progress update to show tool calls immediately
+    emitAgentProgress({
+      currentIteration: iteration,
+      maxIterations,
+      steps: progressSteps.slice(-3),
+      isComplete: false,
+      conversationHistory: formatConversationForProgress(conversationHistory),
+    })
+
     // Apply intelligent tool result processing to all queries to prevent context overflow
 
     for (const toolCall of toolCallsArray) {
@@ -1150,12 +1167,8 @@ Always use actual resource IDs from the conversation history or create new ones 
       })
     }
 
-    // Add assistant response and tool results to conversation
-    conversationHistory.push({
-      role: "assistant",
-      content: llmResponse.content || "",
-      toolCalls: llmResponse.toolCalls!,
-    })
+    // Note: Assistant response with tool calls was already added before tool execution
+    // This ensures the tool call request is visible immediately in the UI
 
     // Keep tool results intact for full visibility in UI
     // The UI will handle display and truncation as needed

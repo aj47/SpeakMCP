@@ -337,7 +337,9 @@ const ToolExecutionBubble: React.FC<{
     }
   }, [expanded, execution])
 
+  const isPending = execution.results.length === 0
   const allSuccess = execution.results.length > 0 && execution.results.every((r) => r.success)
+  const hasErrors = execution.results.length > 0 && execution.results.some((r) => !r.success)
   const headerTitle = execution.calls.map((c) => c.name).join(", ") || "Tool Execution"
 
   const copy = async (text: string) => {
@@ -357,9 +359,11 @@ const ToolExecutionBubble: React.FC<{
     <div
       className={cn(
         "rounded-lg border p-2 text-xs",
-        allSuccess
-          ? "border-green-200/50 bg-green-50/30 text-green-700 dark:border-green-800/50 dark:bg-green-900/20 dark:text-green-300"
-          : "border-red-200/50 bg-red-50/30 text-red-700 dark:border-red-800/50 dark:bg-red-900/20 dark:text-red-300",
+        isPending
+          ? "border-blue-200/50 bg-blue-50/30 text-blue-700 dark:border-blue-800/50 dark:bg-blue-900/20 dark:text-blue-300"
+          : allSuccess
+            ? "border-green-200/50 bg-green-50/30 text-green-700 dark:border-green-800/50 dark:bg-green-900/20 dark:text-green-300"
+            : "border-red-200/50 bg-red-50/30 text-red-700 dark:border-red-800/50 dark:bg-red-900/20 dark:text-red-300",
       )}
     >
       <div
@@ -371,7 +375,7 @@ const ToolExecutionBubble: React.FC<{
           <span className="font-mono font-semibold">{headerTitle}</span>
           {expanded && (
             <Badge variant="outline" className="text-[10px]">
-              {allSuccess ? "Success" : "With errors"}
+              {isPending ? "Pending..." : allSuccess ? "Success" : "With errors"}
             </Badge>
           )}
         </div>
@@ -420,22 +424,28 @@ const ToolExecutionBubble: React.FC<{
           <div
             className="rounded-md border p-2"
             style={{
-              borderColor: allSuccess ? "rgb(187 247 208 / 0.5)" : "rgb(254 202 202 / 0.5)",
-              backgroundColor: allSuccess ? "rgb(240 253 244 / 0.3)" : "rgb(254 242 242 / 0.3)",
+              borderColor: isPending ? "rgb(191 219 254 / 0.5)" : allSuccess ? "rgb(187 247 208 / 0.5)" : "rgb(254 202 202 / 0.5)",
+              backgroundColor: isPending ? "rgb(239 246 255 / 0.3)" : allSuccess ? "rgb(240 253 244 / 0.3)" : "rgb(254 242 242 / 0.3)",
             } as React.CSSProperties}
           >
             <div className="flex items-center justify-between">
               <div className="text-[11px] font-semibold opacity-80">Response</div>
-              <div className="flex items-center gap-1">
-                <Button size="sm" variant="ghost" className="h-6 px-2" onClick={() => setShowOutputs((v) => !v)}>
-                  {showOutputs ? "Hide" : "Show"}
-                </Button>
-                <Button size="sm" variant="ghost" className="h-6 px-2" onClick={() => copy(JSON.stringify(execution.results, null, 2))}>
-                  Copy
-                </Button>
-              </div>
+              {!isPending && (
+                <div className="flex items-center gap-1">
+                  <Button size="sm" variant="ghost" className="h-6 px-2" onClick={() => setShowOutputs((v) => !v)}>
+                    {showOutputs ? "Hide" : "Show"}
+                  </Button>
+                  <Button size="sm" variant="ghost" className="h-6 px-2" onClick={() => copy(JSON.stringify(execution.results, null, 2))}>
+                    Copy
+                  </Button>
+                </div>
+              )}
             </div>
-            {showOutputs && (
+            {isPending ? (
+              <div className="mt-2 text-center py-2 text-[11px] opacity-60 italic">
+                Waiting for response...
+              </div>
+            ) : showOutputs && (
               <div className="mt-1 space-y-2">
                 {execution.results.map((r, idx) => (
                   <div

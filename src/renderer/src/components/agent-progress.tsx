@@ -52,8 +52,9 @@ const CompactMessage: React.FC<{
   isComplete: boolean
   hasErrors: boolean
   wasStopped?: boolean
-}> = ({ message, isLast, isComplete, hasErrors, wasStopped = false }) => {
-  const [isExpanded, setIsExpanded] = useState(false)
+  isExpanded: boolean
+  onToggleExpand: () => void
+}> = ({ message, isLast, isComplete, hasErrors, wasStopped = false, isExpanded, onToggleExpand }) => {
   const [audioData, setAudioData] = useState<ArrayBuffer | null>(null)
   const [isGeneratingAudio, setIsGeneratingAudio] = useState(false)
   const [ttsError, setTtsError] = useState<string | null>(null)
@@ -147,13 +148,13 @@ const CompactMessage: React.FC<{
 
   const handleToggleExpand = () => {
     if (shouldCollapse) {
-      setIsExpanded(!isExpanded)
+      onToggleExpand()
     }
   }
 
   const handleChevronClick = (e: React.MouseEvent) => {
     e.stopPropagation() // Prevent triggering the message click
-    setIsExpanded(!isExpanded)
+    onToggleExpand()
   }
 
   return (
@@ -321,21 +322,22 @@ const ToolExecutionBubble: React.FC<{
     calls: Array<{ name: string; arguments: any }>
     results: Array<{ success: boolean; content: string; error?: string }>
   }
-}> = ({ execution }) => {
-  const [expanded, setExpanded] = useState(false)
+  isExpanded: boolean
+  onToggleExpand: () => void
+}> = ({ execution, isExpanded, onToggleExpand }) => {
   const [showInputs, setShowInputs] = useState(false)
   const [showOutputs, setShowOutputs] = useState(false)
 
   // Collapsed by default; expand to show details
   useEffect(() => {
-    if (expanded) {
+    if (isExpanded) {
       setShowInputs(true)
       setShowOutputs(true)
     } else {
       setShowInputs(false)
       setShowOutputs(false)
     }
-  }, [expanded, execution])
+  }, [isExpanded, execution])
 
   const isPending = execution.results.length === 0
   const allSuccess = execution.results.length > 0 && execution.results.every((r) => r.success)
@@ -348,10 +350,10 @@ const ToolExecutionBubble: React.FC<{
     } catch {}
   }
 
-  const handleToggleExpand = () => setExpanded((v) => !v)
+  const handleToggleExpand = () => onToggleExpand()
   const handleChevronClick = (e: React.MouseEvent) => {
     e.stopPropagation()
-    setExpanded((v) => !v)
+    onToggleExpand()
   }
 
 
@@ -369,31 +371,31 @@ const ToolExecutionBubble: React.FC<{
       <div
         className="mb-1 flex items-center justify-between px-1 py-1 cursor-pointer hover:bg-muted/20 rounded"
         onClick={handleToggleExpand}
-        aria-expanded={expanded}
+        aria-expanded={isExpanded}
       >
         <div className="flex items-center gap-2">
           <span className="font-mono font-semibold">{headerTitle}</span>
-          {expanded && (
+          {isExpanded && (
             <Badge variant="outline" className="text-[10px]">
               {isPending ? "Pending..." : allSuccess ? "Success" : "With errors"}
             </Badge>
           )}
         </div>
         <div className="flex items-center gap-2">
-          {expanded && (
+          {isExpanded && (
             <span className="opacity-60 text-[10px]">{new Date(execution.timestamp).toLocaleTimeString()}</span>
           )}
           <button
             onClick={handleChevronClick}
             className="p-1 rounded hover:bg-muted/30 transition-colors"
-            aria-label={expanded ? "Collapse" : "Expand"}
+            aria-label={isExpanded ? "Collapse" : "Expand"}
           >
-            {expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+            {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
           </button>
         </div>
       </div>
 
-      {expanded && (
+      {isExpanded && (
         <>
           {/* Inputs */}
           <div className="rounded-md bg-blue-50/40 dark:bg-blue-900/10 border border-blue-200/40 dark:border-blue-800/40 p-2 mb-2">
@@ -503,8 +505,19 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
   const [isKilling, setIsKilling] = useState(false)
   const { isDark } = useTheme()
 
+  // Expansion state management - preserve across re-renders
+  const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({})
+
   // Get current conversation ID for deep-linking
   const { currentConversationId } = useConversation()
+
+  // Helper to toggle expansion state for a specific item
+  const toggleItemExpansion = (itemKey: string) => {
+    setExpandedItems(prev => ({
+      ...prev,
+      [itemKey]: !prev[itemKey]
+    }))
+  }
 
   // Kill switch handler
   const handleKillSwitch = async () => {
@@ -849,23 +862,31 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
         >
           {displayItems.length > 0 ? (
             <div className="space-y-1 p-2">
-              {displayItems.map((item, index) => (
-                item.kind === "message" ? (
+              {displayItems.map((item, index) => {
+                const itemKey = item.kind === "message"
+                  ? `msg-${item.data.timestamp}-${index}`
+                  : `exec-${item.data.timestamp}-${index}`
+
+                return item.kind === "message" ? (
                   <CompactMessage
-                    key={`msg-${item.data.timestamp}-${index}`}
+                    key={itemKey}
                     message={item.data}
                     isLast={index === lastAssistantDisplayIndex}
                     isComplete={isComplete}
                     hasErrors={hasErrors}
                     wasStopped={wasStopped}
+                    isExpanded={!!expandedItems[itemKey]}
+                    onToggleExpand={() => toggleItemExpansion(itemKey)}
                   />
                 ) : (
                   <ToolExecutionBubble
-                    key={`exec-${item.data.timestamp}-${index}`}
+                    key={itemKey}
                     execution={item.data}
+                    isExpanded={!!expandedItems[itemKey]}
+                    onToggleExpand={() => toggleItemExpansion(itemKey)}
                   />
                 )
-              ))}
+              })}
             </div>
           ) : (
             <div className="flex h-full items-center justify-center text-sm text-muted-foreground">

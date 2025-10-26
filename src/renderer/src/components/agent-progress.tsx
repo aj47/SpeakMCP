@@ -673,7 +673,10 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
   // Helper function to generate a stable ID for tool executions based on content
   const generateToolExecutionId = (calls: Array<{ name: string; arguments: any }>) => {
     // Create a stable hash from tool call names and a subset of arguments
-    const signature = calls.map(c => `${c.name}:${JSON.stringify(c.arguments).substring(0, 50)}`).join('|')
+    const signature = calls.map(c => {
+      const argsStr = c.arguments ? JSON.stringify(c.arguments) : ''
+      return `${c.name}:${argsStr.substring(0, 50)}`
+    }).join('|')
     // Simple hash function
     let hash = 0
     for (let i = 0; i < signature.length; i++) {

@@ -55,6 +55,10 @@ const getConfig = () => {
     panelPosition: "top-right",
     panelDragEnabled: true,
     panelCustomSize: { width: 300, height: 200 },
+    // Mode-specific panel sizes (will be set on first resize in each mode)
+    panelNormalModeSize: undefined,
+    panelAgentModeSize: undefined,
+    panelTextInputModeSize: undefined,
     // Theme preference defaults
     themePreference: "system",
 

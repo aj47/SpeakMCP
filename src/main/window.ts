@@ -136,8 +136,21 @@ export function showMainWindow(url?: string) {
   }
 }
 
+// Waveform visualization constants (from panel.tsx)
+const VISUALIZER_BUFFER_LENGTH = 70
+const WAVEFORM_BAR_WIDTH = 2 // 0.5 (w-0.5) = 2px in Tailwind
+const WAVEFORM_GAP = 2 // gap-0.5 = 2px in Tailwind
+const WAVEFORM_PADDING = 32 // px-4 = 16px on each side
+
+// Calculate minimum width needed for waveform
+const calculateMinWaveformWidth = () => {
+  return (VISUALIZER_BUFFER_LENGTH * (WAVEFORM_BAR_WIDTH + WAVEFORM_GAP)) + WAVEFORM_PADDING
+}
+
+const MIN_WAVEFORM_WIDTH = calculateMinWaveformWidth() // ~172px
+
 const panelWindowSize = {
-  width: 260,
+  width: Math.max(260, MIN_WAVEFORM_WIDTH),
   height: 50,
 }
 
@@ -151,22 +164,38 @@ const textInputPanelWindowSize = {
   height: 180,
 }
 
+// Get the saved size for a specific mode, or default size
+const getSavedSizeForMode = (mode: "normal" | "agent" | "textInput") => {
+  const config = configStore.get()
+
+  if (mode === "normal" && config.panelNormalModeSize) {
+    return config.panelNormalModeSize
+  } else if (mode === "agent" && config.panelAgentModeSize) {
+    return config.panelAgentModeSize
+  } else if (mode === "textInput" && config.panelTextInputModeSize) {
+    return config.panelTextInputModeSize
+  }
+
+  // Return default sizes if no saved size
+  if (mode === "agent") {
+    return agentPanelWindowSize
+  } else if (mode === "textInput") {
+    return textInputPanelWindowSize
+  }
+  return panelWindowSize
+}
+
 const getPanelWindowPosition = (
   mode: "normal" | "agent" | "textInput" = "normal",
 ) => {
-  let size = panelWindowSize
-  if (mode === "agent") {
-    size = agentPanelWindowSize
-  } else if (mode === "textInput") {
-    size = textInputPanelWindowSize
-  }
-
+  const size = getSavedSizeForMode(mode)
   return calculatePanelPosition(size, mode)
 }
 
 export function createPanelWindow() {
   logApp("Creating panel window...")
   const position = getPanelWindowPosition()
+  const savedSize = getSavedSizeForMode("normal")
 
   const win = createBaseWindow({
     id: "panel",
@@ -181,9 +210,9 @@ export function createPanelWindow() {
       // transparent: true,
       paintWhenInitiallyHidden: true,
       // hasShadow: false,
-      width: panelWindowSize.width,
-      height: panelWindowSize.height,
-      minWidth: 200, // Allow resizing down to minimum
+      width: savedSize.width,
+      height: savedSize.height,
+      minWidth: Math.max(200, MIN_WAVEFORM_WIDTH), // Ensure minimum waveform width
       minHeight: 100, // Allow resizing down to minimum
       resizable: true, // Enable resizing
       visualEffectState: "active",
@@ -365,14 +394,15 @@ export function resizePanelForAgentMode() {
     return
   }
 
+  const savedSize = getSavedSizeForMode("agent")
   const position = getPanelWindowPosition("agent")
 
   // Update size constraints for agent mode (allow resizing)
-  win.setMinimumSize(200, 100) // Keep minimum constraints
+  win.setMinimumSize(Math.max(200, MIN_WAVEFORM_WIDTH), 100) // Ensure minimum waveform width
   // Don't set maximum size to allow user resizing
 
-  // Set size and position
-  win.setSize(agentPanelWindowSize.width, agentPanelWindowSize.height, true) // animate = true
+  // Set size and position (use saved size if available)
+  win.setSize(savedSize.width, savedSize.height, true) // animate = true
   win.setPosition(position.x, position.y, true) // animate = true
 }
 
@@ -382,18 +412,15 @@ export function resizePanelForTextInput() {
     return
   }
 
+  const savedSize = getSavedSizeForMode("textInput")
   const position = getPanelWindowPosition("textInput")
 
   // Update size constraints for text input mode (allow resizing)
-  win.setMinimumSize(200, 100) // Keep minimum constraints
+  win.setMinimumSize(Math.max(200, MIN_WAVEFORM_WIDTH), 100) // Ensure minimum waveform width
   // Don't set maximum size to allow user resizing
 
-  // Set size and position
-  win.setSize(
-    textInputPanelWindowSize.width,
-    textInputPanelWindowSize.height,
-    true,
-  ) // animate = true
+  // Set size and position (use saved size if available)
+  win.setSize(savedSize.width, savedSize.height, true) // animate = true
   win.setPosition(position.x, position.y, true) // animate = true
 }
 
@@ -403,13 +430,14 @@ export function resizePanelToNormal() {
     return
   }
 
+  const savedSize = getSavedSizeForMode("normal")
   const position = getPanelWindowPosition("normal")
 
   // Update size constraints back to normal (allow resizing)
-  win.setMinimumSize(200, 100) // Keep minimum constraints
+  win.setMinimumSize(Math.max(200, MIN_WAVEFORM_WIDTH), 100) // Ensure minimum waveform width
   // Don't set maximum size to allow user resizing
 
-  // Set size and position
-  win.setSize(panelWindowSize.width, panelWindowSize.height, true) // animate = true
+  // Set size and position (use saved size if available)
+  win.setSize(savedSize.width, savedSize.height, true) // animate = true
   win.setPosition(position.x, position.y, true) // animate = true
 }

@@ -1361,6 +1361,35 @@ export const router = {
       return updatedConfig.panelCustomSize
     }),
 
+  // Save size for specific panel mode
+  savePanelModeSize: t.procedure
+    .input<{ mode: "normal" | "agent" | "textInput"; width: number; height: number }>()
+    .action(async ({ input }) => {
+      const config = configStore.get()
+      const updatedConfig = { ...config }
+
+      if (input.mode === "normal") {
+        updatedConfig.panelNormalModeSize = { width: input.width, height: input.height }
+      } else if (input.mode === "agent") {
+        updatedConfig.panelAgentModeSize = { width: input.width, height: input.height }
+      } else if (input.mode === "textInput") {
+        updatedConfig.panelTextInputModeSize = { width: input.width, height: input.height }
+      }
+
+      configStore.save(updatedConfig)
+      return { mode: input.mode, size: { width: input.width, height: input.height } }
+    }),
+
+  // Get current panel mode
+  getPanelMode: t.procedure.action(async () => {
+    if (state.isTextInputActive) {
+      return "textInput"
+    } else if (state.isAgentModeActive) {
+      return "agent"
+    }
+    return "normal"
+  }),
+
   initializePanelSize: t.procedure.action(async () => {
     const win = WINDOWS.get("panel")
     if (!win) {

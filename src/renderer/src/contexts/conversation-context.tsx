@@ -100,11 +100,13 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
         }
 
         // Convert conversation history to conversation messages
+        // Preserve original timestamps from backend to maintain accurate message ordering
         const messages: ConversationMessage[] = conversationHistory.map(
           (entry, index) => ({
-            id: `msg_${Date.now()}_${index}`,
+            id: `msg_${entry.timestamp || Date.now()}_${index}`,
             role: entry.role,
             content: entry.content,
+            // Use timestamp from backend if available, otherwise fall back to current time
             timestamp: entry.timestamp || Date.now(),
             toolCalls: entry.toolCalls,
             toolResults: entry.toolResults,

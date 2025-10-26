@@ -541,9 +541,10 @@ export async function processTranscriptWithAgentMode(
     content: string
     toolCalls?: MCPToolCall[]
     toolResults?: MCPToolResult[]
+    timestamp?: number
   }> = [
     ...(previousConversationHistory || []),
-    { role: "user", content: transcript },
+    { role: "user", content: transcript, timestamp: Date.now() },
   ]
 
   // Helper function to convert conversation history to the format expected by AgentProgressUpdate
@@ -570,7 +571,8 @@ export async function processTranscriptWithAgentMode(
             ? tr.content.map((c) => c.text).join("\n")
             : undefined,
         })),
-        timestamp: Date.now(),
+        // Preserve original timestamp if available, otherwise use current time
+        timestamp: entry.timestamp || Date.now(),
       }))
   }
 
@@ -1044,6 +1046,7 @@ Always use actual resource IDs from the conversation history or create new ones 
       role: "assistant",
       content: llmResponse.content || "",
       toolCalls: llmResponse.toolCalls || [],
+      timestamp: Date.now(),
     })
 
     // Emit progress update to show tool calls immediately
@@ -1194,6 +1197,7 @@ Always use actual resource IDs from the conversation history or create new ones 
         role: "tool",
         content: toolResultsText,
         toolResults: meaningfulResults,
+        timestamp: Date.now(),
       })
     }
 

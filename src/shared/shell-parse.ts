@@ -27,13 +27,26 @@ export function parseShellCommand(commandString: string): { command: string; arg
 
     // Handle escape sequences
     if (escaped) {
-      current += char
+      // In double quotes, backslash escapes quotes and backslashes
+      if (inDoubleQuote && (char === '"' || char === '\\')) {
+        current += char
+      } else {
+        // Outside quotes or in single quotes, preserve the backslash
+        current += "\\" + char
+      }
       escaped = false
       continue
     }
 
     if (char === "\\") {
-      escaped = true
+      // In single quotes, backslashes are literal
+      if (inSingleQuote) {
+        current += char
+      }
+      // In double quotes or outside quotes, treat as escape character
+      else {
+        escaped = true
+      }
       continue
     }
 

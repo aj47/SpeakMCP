@@ -17,6 +17,7 @@
     "strict": false,
     "noImplicitAny": false,
     "skipLibCheck": true,
+    "types": ["vitest/globals"],
     "baseUrl": ".",
     "paths": {
       "@renderer/*": [

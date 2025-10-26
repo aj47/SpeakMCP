@@ -760,11 +760,9 @@ Always use actual resource IDs from the conversation history or create new ones 
     } catch (error: any) {
       if (error?.name === "AbortError" || state.shouldStopAgent) {
         console.log("LLM call aborted due to emergency stop")
-        // Mark thinking step as completed with stop notice
         thinkingStep.status = "completed"
         thinkingStep.title = "Agent stopped"
         thinkingStep.description = "Emergency stop triggered"
-        // Emit final progress and break out
         emitAgentProgress({
           currentIteration: iteration,
           maxIterations,
@@ -775,7 +773,43 @@ Always use actual resource IDs from the conversation history or create new ones 
         })
         break
       }
+
+      // Handle empty/null response errors gracefully
+      const errorMessage = (error?.message || String(error)).toLowerCase()
+      if (errorMessage.includes("empty") || errorMessage.includes("no text") || errorMessage.includes("no content")) {
+        console.error(`LLM empty response on iteration ${iteration}:`, error?.message || error)
+        diagnosticsService.logError("llm", "Empty LLM response in agent mode", error)
+        thinkingStep.status = "error"
+        thinkingStep.description = "Empty response. Retrying..."
+        emitAgentProgress({
+          currentIteration: iteration,
+          maxIterations,
+          steps: progressSteps.slice(-3),
+          isComplete: false,
+          conversationHistory: formatConversationForProgress(conversationHistory),
+        })
+        conversationHistory.push({ role: "user", content: "Previous request had empty response. Please retry or summarize progress." })
+        continue
+      }
+
       throw error
+    }
+
+    // Validate response is not null/empty
+    if (!llmResponse || !llmResponse.content) {
+      console.error(`LLM null/empty response on iteration ${iteration}`)
+      diagnosticsService.logError("llm", "Null/empty LLM response in agent mode", new Error("LLM response is null or has no content"))
+      thinkingStep.status = "error"
+      thinkingStep.description = "Invalid response. Retrying..."
+      emitAgentProgress({
+        currentIteration: iteration,
+        maxIterations,
+        steps: progressSteps.slice(-3),
+        isComplete: false,
+        conversationHistory: formatConversationForProgress(conversationHistory),
+      })
+      conversationHistory.push({ role: "user", content: "Previous request had invalid response. Please retry or summarize progress." })
+      continue
     }
 
     // Update thinking step with actual LLM content and mark as completed

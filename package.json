@@ -33,7 +33,8 @@
     "build:linux": "electron-vite build && electron-builder --linux --config electron-builder.config.cjs",
     "build-rs": "sh scripts/build-rs.sh",
     "build-rs:win": "powershell -ExecutionPolicy Bypass -File scripts/build-rs.ps1",
-    "release": "node scripts/release.js"
+    "release": "node scripts/release.js",
+    "setup:worktree": "pnpm install --ignore-scripts --frozen-lockfile && npx electron-rebuild"
   },
   "dependencies": {
     "@egoist/electron-panel-window": "^8.0.3",

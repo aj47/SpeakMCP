@@ -34,6 +34,7 @@ type DisplayItem =
       timestamp: number
       calls: Array<{ name: string; arguments: any }>
       results: Array<{ success: boolean; content: string; error?: string }>
+      id?: string // Stable ID for tracking expansion state
     } }
 
 
@@ -669,6 +670,20 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
   // Sort by timestamp to ensure chronological order
   messages.sort((a, b) => a.timestamp - b.timestamp)
 
+  // Helper function to generate a stable ID for tool executions based on content
+  const generateToolExecutionId = (calls: Array<{ name: string; arguments: any }>) => {
+    // Create a stable hash from tool call names and a subset of arguments
+    const signature = calls.map(c => `${c.name}:${JSON.stringify(c.arguments).substring(0, 50)}`).join('|')
+    // Simple hash function
+    let hash = 0
+    for (let i = 0; i < signature.length; i++) {
+      const char = signature.charCodeAt(i)
+      hash = ((hash << 5) - hash) + char
+      hash = hash & hash // Convert to 32bit integer
+    }
+    return Math.abs(hash).toString(36)
+  }
+
   // Build unified display items that combine tool calls with subsequent results
   const displayItems: DisplayItem[] = []
   for (let i = 0; i < messages.length; i++) {
@@ -678,13 +693,15 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
       const results = next && next.role === "tool" && next.toolResults ? next.toolResults : []
       // Show assistant message without extras
       displayItems.push({ kind: "message", data: { ...m, toolCalls: undefined, toolResults: undefined } })
-      // Unified execution bubble
+      // Unified execution bubble with stable ID
+      const toolExecId = generateToolExecutionId(m.toolCalls)
       displayItems.push({
         kind: "tool_execution",
         data: {
           timestamp: next?.timestamp ?? m.timestamp,
           calls: m.toolCalls,
           results,
+          id: toolExecId, // Add stable ID
         },
       })
       if (next && next.role === "tool" && next.toolResults) {
@@ -696,7 +713,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
       !(i > 0 && messages[i - 1].role === "assistant" && (messages[i - 1].toolCalls?.length ?? 0) > 0)
     ) {
       // Standalone tool result without a preceding assistant call in sequence
-      displayItems.push({ kind: "tool_execution", data: { timestamp: m.timestamp, calls: [], results: m.toolResults } })
+      displayItems.push({ kind: "tool_execution", data: { timestamp: m.timestamp, calls: [], results: m.toolResults, id: `standalone-${i}` } })
     } else {
       displayItems.push({ kind: "message", data: m })
     }
@@ -865,7 +882,9 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
               {displayItems.map((item, index) => {
                 const itemKey = item.kind === "message"
                   ? `msg-${item.data.timestamp}-${index}`
-                  : `exec-${item.data.timestamp}-${index}`
+                  : `exec-${item.data.id || item.data.timestamp}-${index}`
+
+                const isExpanded = !!expandedItems[itemKey]
 
                 return item.kind === "message" ? (
                   <CompactMessage
@@ -875,14 +894,14 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
                     isComplete={isComplete}
                     hasErrors={hasErrors}
                     wasStopped={wasStopped}
-                    isExpanded={!!expandedItems[itemKey]}
+                    isExpanded={isExpanded}
                     onToggleExpand={() => toggleItemExpansion(itemKey)}
                   />
                 ) : (
                   <ToolExecutionBubble
                     key={itemKey}
                     execution={item.data}
-                    isExpanded={!!expandedItems[itemKey]}
+                    isExpanded={isExpanded}
                     onToggleExpand={() => toggleItemExpansion(itemKey)}
                   />
                 )

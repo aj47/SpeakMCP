@@ -1036,7 +1036,7 @@ Always use actual resource IDs from the conversation history or create new ones 
     conversationHistory.push({
       role: "assistant",
       content: llmResponse.content || "",
-      toolCalls: llmResponse.toolCalls!,
+      toolCalls: llmResponse.toolCalls || [],
     })
 
     // Emit progress update to show tool calls immediately

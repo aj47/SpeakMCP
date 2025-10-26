@@ -98,11 +98,13 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
           return hasChanged ? update : prevProgress
         })
 
-        // Add assistant response to conversation if we have final content and agent is complete
-        // Only add message from panel window to prevent duplicates when main window also receives updates
-        if (update.isComplete && update.finalContent && currentConversationId &&
-            window.location.pathname === "/panel") {
-          addMessage(update.finalContent, "assistant").catch(() => {
+        // Save complete conversation history when agent completes
+        // Only save from panel window to prevent duplicates when main window also receives updates
+        if (update.isComplete && currentConversationId &&
+            window.location.pathname === "/panel" &&
+            update.conversationHistory &&
+            update.conversationHistory.length > 0) {
+          saveCompleteConversationHistory(currentConversationId, update.conversationHistory).catch(() => {
             // Silently handle error
           })
         }
@@ -147,6 +149,54 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
     setShowContinueButton(false)
     setIsWaitingForResponse(false)
   }, [])
+
+  const saveCompleteConversationHistory = useCallback(
+    async (
+      conversationId: string,
+      conversationHistory: Array<{
+        role: "user" | "assistant" | "tool"
+        content: string
+        toolCalls?: Array<{ name: string; arguments: any }>
+        toolResults?: Array<{ success: boolean; content: string; error?: string }>
+        timestamp?: number
+      }>,
+    ) => {
+      try {
+        // Load the current conversation to get metadata
+        const currentConv = await conversationQuery.refetch()
+        if (!currentConv.data) {
+          return
+        }
+
+        // Convert conversation history to conversation messages
+        const messages: ConversationMessage[] = conversationHistory.map(
+          (entry, index) => ({
+            id: `msg_${Date.now()}_${index}`,
+            role: entry.role,
+            content: entry.content,
+            timestamp: entry.timestamp || Date.now(),
+            toolCalls: entry.toolCalls,
+            toolResults: entry.toolResults,
+          }),
+        )
+
+        // Create updated conversation with all messages
+        const updatedConversation: Conversation = {
+          ...currentConv.data,
+          messages,
+          updatedAt: Date.now(),
+        }
+
+        // Save the complete conversation
+        await saveConversationMutation.mutateAsync({
+          conversation: updatedConversation,
+        })
+      } catch (error) {
+        // Silently handle error
+      }
+    },
+    [conversationQuery, saveConversationMutation],
+  )
 
   const addMessage = useCallback(
     async (

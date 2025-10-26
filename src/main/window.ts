@@ -7,11 +7,7 @@ import {
 } from "electron"
 import path from "path"
 import { getRendererHandlers } from "@egoist/tipc/main"
-import {
-  makeKeyWindow,
-  makePanel,
-  makeWindow,
-} from "@egoist/electron-panel-window"
+// Removed dependency on @egoist/electron-panel-window
 import { RendererHandlers } from "./renderer-handlers"
 import { logApp } from "./debug"
 import { configStore } from "./config"
@@ -168,20 +164,28 @@ const textInputPanelWindowSize = {
 const getSavedSizeForMode = (mode: "normal" | "agent" | "textInput") => {
   const config = configStore.get()
 
+  console.log(`[window.ts] getSavedSizeForMode(${mode}) - checking config...`)
+
   if (mode === "normal" && config.panelNormalModeSize) {
+    console.log(`[window.ts] Found saved normal mode size:`, config.panelNormalModeSize)
     return config.panelNormalModeSize
   } else if (mode === "agent" && config.panelAgentModeSize) {
+    console.log(`[window.ts] Found saved agent mode size:`, config.panelAgentModeSize)
     return config.panelAgentModeSize
   } else if (mode === "textInput" && config.panelTextInputModeSize) {
+    console.log(`[window.ts] Found saved textInput mode size:`, config.panelTextInputModeSize)
     return config.panelTextInputModeSize
   }
 
   // Return default sizes if no saved size
   if (mode === "agent") {
+    console.log(`[window.ts] No saved agent mode size, using default:`, agentPanelWindowSize)
     return agentPanelWindowSize
   } else if (mode === "textInput") {
+    console.log(`[window.ts] No saved textInput mode size, using default:`, textInputPanelWindowSize)
     return textInputPanelWindowSize
   }
+  console.log(`[window.ts] No saved normal mode size, using default:`, panelWindowSize)
   return panelWindowSize
 }
 
@@ -192,10 +196,73 @@ const getPanelWindowPosition = (
   return calculatePanelPosition(size, mode)
 }
 
+// Ensure the panel stays above all windows and visible on all workspaces (esp. macOS)
+function ensurePanelZOrder(win: BrowserWindow) {
+  try {
+    if (process.platform === "darwin") {
+      // Show on all Spaces and above fullscreen apps
+      try {
+        // @ts-ignore - macOS-only options not in cross-platform typings
+        win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
+      } catch (e) {
+        console.warn("[window.ts] setVisibleOnAllWorkspaces not supported:", e)
+      }
+      try {
+        // Prefer NSModalPanel-like level for WM compatibility (Aerospace)
+        // @ts-ignore - level arg is macOS-specific
+        win.setAlwaysOnTop(true, "modal-panel", 1)
+      } catch (e) {
+        console.warn("[window.ts] setAlwaysOnTop('modal-panel') failed, trying 'screen-saver':", e)
+        try {
+          // @ts-ignore - level arg is macOS-specific
+          win.setAlwaysOnTop(true, "screen-saver")
+        } catch (e2) {
+          console.warn("[window.ts] setAlwaysOnTop('screen-saver') failed, falling back to default:", e2)
+          win.setAlwaysOnTop(true)
+        }
+      }
+    } else {
+      // Windows/Linux
+      win.setAlwaysOnTop(true)
+      try {
+        win.setVisibleOnAllWorkspaces(true)
+
+      } catch {}
+    }
+  } catch (error) {
+    console.error("[window.ts] ensurePanelZOrder error:", error)
+  }
+}
+
+
+// Adjust focusability based on panel mode to play nice with tiling WMs (e.g., Aerospace)
+function setPanelFocusableForMode(win: BrowserWindow, mode: "normal"|"agent"|"textInput") {
+  try {
+    if (mode === "textInput") {
+      win.setFocusable(true)
+    } else {
+      // Avoid stealing focus so tiling WMs treat it like a floating overlay
+      win.setFocusable(false)
+    }
+  } catch (e) {
+    console.warn("[window.ts] setPanelFocusableForMode failed:", e)
+  }
+}
+
+
 export function createPanelWindow() {
   logApp("Creating panel window...")
+  console.log("[window.ts] createPanelWindow - MIN_WAVEFORM_WIDTH:", MIN_WAVEFORM_WIDTH)
+
   const position = getPanelWindowPosition()
+  console.log("[window.ts] createPanelWindow - position:", position)
+
   const savedSize = getSavedSizeForMode("normal")
+  console.log("[window.ts] createPanelWindow - savedSize:", savedSize)
+
+  const minWidth = Math.max(200, MIN_WAVEFORM_WIDTH)
+  console.log("[window.ts] createPanelWindow - minWidth:", minWidth)
+
 
   const win = createBaseWindow({
     id: "panel",
@@ -206,15 +273,20 @@ export function createPanelWindow() {
       skipTaskbar: true,
       closable: false,
       maximizable: false,
+      minimizable: false,
+      fullscreenable: false,
+
       frame: false,
       // transparent: true,
       paintWhenInitiallyHidden: true,
       // hasShadow: false,
       width: savedSize.width,
       height: savedSize.height,
-      minWidth: Math.max(200, MIN_WAVEFORM_WIDTH), // Ensure minimum waveform width
+      minWidth: minWidth, // Ensure minimum waveform width
       minHeight: 100, // Allow resizing down to minimum
       resizable: true, // Enable resizing
+      focusable: false,
+
       visualEffectState: "active",
       vibrancy: "under-window",
       alwaysOnTop: true,
@@ -223,12 +295,22 @@ export function createPanelWindow() {
     },
   })
 
+  console.log("[window.ts] createPanelWindow - window created with size:", { width: savedSize.width, height: savedSize.height })
+
   win.on("hide", () => {
     getRendererHandlers<RendererHandlers>(win.webContents).stopRecording.send()
   })
 
+  // Reassert z-order on lifecycle changes
+  win.on("show", () => ensurePanelZOrder(win))
+  win.on("blur", () => ensurePanelZOrder(win))
+  win.on("focus", () => ensurePanelZOrder(win))
+  win.on("move", () => ensurePanelZOrder(win))
+  win.on("resize", () => ensurePanelZOrder(win))
 
-  makePanel(win)
+
+  // Ensure correct z-order for our panel-like window
+  ensurePanelZOrder(win)
 
   return win
 }
@@ -246,8 +328,13 @@ export function showPanelWindow() {
     const position = getPanelWindowPosition(mode)
 
     win.setPosition(position.x, position.y)
+
+    // Set focusability appropriate for the current mode before showing
+    setPanelFocusableForMode(win, mode)
+
     win.showInactive()
-    makeKeyWindow(win)
+    // Keep it floating above everything
+    ensurePanelZOrder(win)
 
     // On Windows, we need to explicitly focus the window
     if (process.platform === "win32") {
@@ -301,7 +388,6 @@ export async function showPanelWindowAndShowTextInput() {
 export function makePanelWindowClosable() {
   const panel = WINDOWS.get("panel")
   if (panel && !panel.isClosable()) {
-    makeWindow(panel)
     panel.setClosable(true)
   }
 }
@@ -391,53 +477,108 @@ export const emergencyStopAgentMode = async () => {
 export function resizePanelForAgentMode() {
   const win = WINDOWS.get("panel")
   if (!win) {
+    console.log("[window.ts] resizePanelForAgentMode - panel window not found")
     return
   }
 
+  console.log("[window.ts] resizePanelForAgentMode - starting...")
   const savedSize = getSavedSizeForMode("agent")
+  console.log("[window.ts] resizePanelForAgentMode - savedSize:", savedSize)
+
   const position = getPanelWindowPosition("agent")
+  console.log("[window.ts] resizePanelForAgentMode - position:", position)
+
+  const minWidth = Math.max(200, MIN_WAVEFORM_WIDTH)
+  console.log("[window.ts] resizePanelForAgentMode - setting minWidth:", minWidth)
 
   // Update size constraints for agent mode (allow resizing)
-  win.setMinimumSize(Math.max(200, MIN_WAVEFORM_WIDTH), 100) // Ensure minimum waveform width
+  win.setMinimumSize(minWidth, 100) // Ensure minimum waveform width
   // Don't set maximum size to allow user resizing
 
   // Set size and position (use saved size if available)
+  console.log("[window.ts] resizePanelForAgentMode - setting size to:", savedSize)
   win.setSize(savedSize.width, savedSize.height, true) // animate = true
+
+  console.log("[window.ts] resizePanelForAgentMode - setting position to:", position)
   win.setPosition(position.x, position.y, true) // animate = true
+
+  // Maintain floating behavior after resize
+  ensurePanelZOrder(win)
+
+  // Set focus behavior for agent mode
+  setPanelFocusableForMode(win, "agent")
+
 }
 
 export function resizePanelForTextInput() {
   const win = WINDOWS.get("panel")
   if (!win) {
+    console.log("[window.ts] resizePanelForTextInput - panel window not found")
     return
   }
 
+  console.log("[window.ts] resizePanelForTextInput - starting...")
   const savedSize = getSavedSizeForMode("textInput")
+  console.log("[window.ts] resizePanelForTextInput - savedSize:", savedSize)
+
   const position = getPanelWindowPosition("textInput")
+  console.log("[window.ts] resizePanelForTextInput - position:", position)
+
+  const minWidth = Math.max(200, MIN_WAVEFORM_WIDTH)
+  console.log("[window.ts] resizePanelForTextInput - setting minWidth:", minWidth)
 
   // Update size constraints for text input mode (allow resizing)
-  win.setMinimumSize(Math.max(200, MIN_WAVEFORM_WIDTH), 100) // Ensure minimum waveform width
+  win.setMinimumSize(minWidth, 100) // Ensure minimum waveform width
   // Don't set maximum size to allow user resizing
 
   // Set size and position (use saved size if available)
+  console.log("[window.ts] resizePanelForTextInput - setting size to:", savedSize)
   win.setSize(savedSize.width, savedSize.height, true) // animate = true
+
+  console.log("[window.ts] resizePanelForTextInput - setting position to:", position)
   win.setPosition(position.x, position.y, true) // animate = true
+
+  // Focus and allow keyboard input for text input mode
+  setPanelFocusableForMode(win, "textInput")
+  try { win.focus() } catch {}
+
+  // Maintain floating behavior after resize
+  ensurePanelZOrder(win)
+
 }
 
 export function resizePanelToNormal() {
   const win = WINDOWS.get("panel")
   if (!win) {
+    console.log("[window.ts] resizePanelToNormal - panel window not found")
     return
   }
 
+  console.log("[window.ts] resizePanelToNormal - starting...")
   const savedSize = getSavedSizeForMode("normal")
+  console.log("[window.ts] resizePanelToNormal - savedSize:", savedSize)
+
   const position = getPanelWindowPosition("normal")
+  console.log("[window.ts] resizePanelToNormal - position:", position)
+
+  const minWidth = Math.max(200, MIN_WAVEFORM_WIDTH)
+  console.log("[window.ts] resizePanelToNormal - setting minWidth:", minWidth)
 
   // Update size constraints back to normal (allow resizing)
-  win.setMinimumSize(Math.max(200, MIN_WAVEFORM_WIDTH), 100) // Ensure minimum waveform width
+  win.setMinimumSize(minWidth, 100) // Ensure minimum waveform width
   // Don't set maximum size to allow user resizing
 
   // Set size and position (use saved size if available)
+  console.log("[window.ts] resizePanelToNormal - setting size to:", savedSize)
+  // Set focus behavior for normal mode
+  setPanelFocusableForMode(win, "normal")
+
   win.setSize(savedSize.width, savedSize.height, true) // animate = true
+
+  console.log("[window.ts] resizePanelToNormal - setting position to:", position)
   win.setPosition(position.x, position.y, true) // animate = true
+
+  // Maintain floating behavior after resize
+  ensurePanelZOrder(win)
+
 }

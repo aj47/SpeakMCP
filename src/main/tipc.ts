@@ -1383,6 +1383,134 @@ export const router = {
     const [width, height] = win.getSize()
     return { width, height }
   }),
+
+  // Profile Management
+  getProfiles: t.procedure.action(async () => {
+    const { profileService } = await import("./profile-service")
+    return profileService.getProfiles()
+  }),
+
+  getProfile: t.procedure
+    .input<{ id: string }>()
+    .action(async ({ input }) => {
+      const { profileService } = await import("./profile-service")
+      return profileService.getProfile(input.id)
+    }),
+
+  getCurrentProfile: t.procedure.action(async () => {
+    const { profileService } = await import("./profile-service")
+    return profileService.getCurrentProfile()
+  }),
+
+  createProfile: t.procedure
+    .input<{ name: string; guidelines: string }>()
+    .action(async ({ input }) => {
+      const { profileService } = await import("./profile-service")
+      return profileService.createProfile(input.name, input.guidelines)
+    }),
+
+  updateProfile: t.procedure
+    .input<{ id: string; name?: string; guidelines?: string }>()
+    .action(async ({ input }) => {
+      const { profileService } = await import("./profile-service")
+      const updates: any = {}
+      if (input.name !== undefined) updates.name = input.name
+      if (input.guidelines !== undefined) updates.guidelines = input.guidelines
+      return profileService.updateProfile(input.id, updates)
+    }),
+
+  deleteProfile: t.procedure
+    .input<{ id: string }>()
+    .action(async ({ input }) => {
+      const { profileService } = await import("./profile-service")
+      return profileService.deleteProfile(input.id)
+    }),
+
+  setCurrentProfile: t.procedure
+    .input<{ id: string }>()
+    .action(async ({ input }) => {
+      const { profileService } = await import("./profile-service")
+      const profile = profileService.setCurrentProfile(input.id)
+
+      // Update the config with the profile's guidelines
+      const config = configStore.get()
+      const updatedConfig = {
+        ...config,
+        mcpToolsSystemPrompt: profile.guidelines,
+        mcpCurrentProfileId: profile.id,
+      }
+      configStore.save(updatedConfig)
+
+      return profile
+    }),
+
+  exportProfile: t.procedure
+    .input<{ id: string }>()
+    .action(async ({ input }) => {
+      const { profileService } = await import("./profile-service")
+      return profileService.exportProfile(input.id)
+    }),
+
+  importProfile: t.procedure
+    .input<{ profileJson: string }>()
+    .action(async ({ input }) => {
+      const { profileService } = await import("./profile-service")
+      return profileService.importProfile(input.profileJson)
+    }),
+
+  saveProfileFile: t.procedure
+    .input<{ id: string }>()
+    .action(async ({ input }) => {
+      const { profileService } = await import("./profile-service")
+      const profileJson = profileService.exportProfile(input.id)
+
+      const result = await dialog.showSaveDialog({
+        title: "Export Profile",
+        defaultPath: "profile.json",
+        filters: [
+          { name: "JSON Files", extensions: ["json"] },
+          { name: "All Files", extensions: ["*"] },
+        ],
+      })
+
+      if (result.canceled || !result.filePath) {
+        return false
+      }
+
+      try {
+        fs.writeFileSync(result.filePath, profileJson)
+        return true
+      } catch (error) {
+        throw new Error(
+          `Failed to save profile: ${error instanceof Error ? error.message : String(error)}`,
+        )
+      }
+    }),
+
+  loadProfileFile: t.procedure.action(async () => {
+    const result = await dialog.showOpenDialog({
+      title: "Import Profile",
+      filters: [
+        { name: "JSON Files", extensions: ["json"] },
+        { name: "All Files", extensions: ["*"] },
+      ],
+      properties: ["openFile"],
+    })
+
+    if (result.canceled || !result.filePaths.length) {
+      return null
+    }
+
+    try {
+      const profileJson = fs.readFileSync(result.filePaths[0], "utf8")
+      const { profileService } = await import("./profile-service")
+      return profileService.importProfile(profileJson)
+    } catch (error) {
+      throw new Error(
+        `Failed to import profile: ${error instanceof Error ? error.message : String(error)}`,
+      )
+    }
+  }),
 }
 
 // TTS Provider Implementation Functions

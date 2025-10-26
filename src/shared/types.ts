@@ -125,6 +125,7 @@ export interface AgentProgressUpdate {
   steps: AgentProgressStep[]
   isComplete: boolean
   finalContent?: string
+  conversationId?: string // Add conversation ID to the progress update
   conversationHistory?: Array<{
     role: "user" | "assistant" | "tool"
     content: string

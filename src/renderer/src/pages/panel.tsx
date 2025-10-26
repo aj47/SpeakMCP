@@ -50,6 +50,7 @@ export function Component() {
     setIsWaitingForResponse,
     startNewConversation,
     endConversation,
+    continueConversation,
   } = useConversationActions()
   const { currentConversationId } = useConversation()
 
@@ -109,7 +110,10 @@ export function Component() {
         conversationId: currentConversationId || undefined,
       })
 
-      // Note: Conversation continuation is handled automatically by the conversation context
+      // Update conversation ID if backend created/returned one
+      if (result?.conversationId && result.conversationId !== currentConversationId) {
+        continueConversation(result.conversationId)
+      }
 
       return result
     },
@@ -159,7 +163,14 @@ export function Component() {
       text: string
       conversationId?: string
     }) => {
-      await tipcClient.createMcpTextInput({ text, conversationId })
+      const result = await tipcClient.createMcpTextInput({ text, conversationId })
+
+      // Update conversation ID if backend created/returned one
+      if (result?.conversationId && result.conversationId !== currentConversationId) {
+        continueConversation(result.conversationId)
+      }
+
+      return result
     },
     onError(error) {
       setShowTextInput(false)

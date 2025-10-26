@@ -34,6 +34,7 @@ type DisplayItem =
       timestamp: number
       calls: Array<{ name: string; arguments: any }>
       results: Array<{ success: boolean; content: string; error?: string }>
+      id?: string // Stable ID for tracking expansion state
     } }
 
 
@@ -52,8 +53,9 @@ const CompactMessage: React.FC<{
   isComplete: boolean
   hasErrors: boolean
   wasStopped?: boolean
-}> = ({ message, isLast, isComplete, hasErrors, wasStopped = false }) => {
-  const [isExpanded, setIsExpanded] = useState(false)
+  isExpanded: boolean
+  onToggleExpand: () => void
+}> = ({ message, isLast, isComplete, hasErrors, wasStopped = false, isExpanded, onToggleExpand }) => {
   const [audioData, setAudioData] = useState<ArrayBuffer | null>(null)
   const [isGeneratingAudio, setIsGeneratingAudio] = useState(false)
   const [ttsError, setTtsError] = useState<string | null>(null)
@@ -147,13 +149,13 @@ const CompactMessage: React.FC<{
 
   const handleToggleExpand = () => {
     if (shouldCollapse) {
-      setIsExpanded(!isExpanded)
+      onToggleExpand()
     }
   }
 
   const handleChevronClick = (e: React.MouseEvent) => {
     e.stopPropagation() // Prevent triggering the message click
-    setIsExpanded(!isExpanded)
+    onToggleExpand()
   }
 
   return (
@@ -321,21 +323,22 @@ const ToolExecutionBubble: React.FC<{
     calls: Array<{ name: string; arguments: any }>
     results: Array<{ success: boolean; content: string; error?: string }>
   }
-}> = ({ execution }) => {
-  const [expanded, setExpanded] = useState(false)
+  isExpanded: boolean
+  onToggleExpand: () => void
+}> = ({ execution, isExpanded, onToggleExpand }) => {
   const [showInputs, setShowInputs] = useState(false)
   const [showOutputs, setShowOutputs] = useState(false)
 
   // Collapsed by default; expand to show details
   useEffect(() => {
-    if (expanded) {
+    if (isExpanded) {
       setShowInputs(true)
       setShowOutputs(true)
     } else {
       setShowInputs(false)
       setShowOutputs(false)
     }
-  }, [expanded, execution])
+  }, [isExpanded, execution])
 
   const isPending = execution.results.length === 0
   const allSuccess = execution.results.length > 0 && execution.results.every((r) => r.success)
@@ -348,10 +351,10 @@ const ToolExecutionBubble: React.FC<{
     } catch {}
   }
 
-  const handleToggleExpand = () => setExpanded((v) => !v)
+  const handleToggleExpand = () => onToggleExpand()
   const handleChevronClick = (e: React.MouseEvent) => {
     e.stopPropagation()
-    setExpanded((v) => !v)
+    onToggleExpand()
   }
 
 
@@ -369,31 +372,31 @@ const ToolExecutionBubble: React.FC<{
       <div
         className="mb-1 flex items-center justify-between px-1 py-1 cursor-pointer hover:bg-muted/20 rounded"
         onClick={handleToggleExpand}
-        aria-expanded={expanded}
+        aria-expanded={isExpanded}
       >
         <div className="flex items-center gap-2">
           <span className="font-mono font-semibold">{headerTitle}</span>
-          {expanded && (
+          {isExpanded && (
             <Badge variant="outline" className="text-[10px]">
               {isPending ? "Pending..." : allSuccess ? "Success" : "With errors"}
             </Badge>
           )}
         </div>
         <div className="flex items-center gap-2">
-          {expanded && (
+          {isExpanded && (
             <span className="opacity-60 text-[10px]">{new Date(execution.timestamp).toLocaleTimeString()}</span>
           )}
           <button
             onClick={handleChevronClick}
             className="p-1 rounded hover:bg-muted/30 transition-colors"
-            aria-label={expanded ? "Collapse" : "Expand"}
+            aria-label={isExpanded ? "Collapse" : "Expand"}
           >
-            {expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+            {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
           </button>
         </div>
       </div>
 
-      {expanded && (
+      {isExpanded && (
         <>
           {/* Inputs */}
           <div className="rounded-md bg-blue-50/40 dark:bg-blue-900/10 border border-blue-200/40 dark:border-blue-800/40 p-2 mb-2">
@@ -503,8 +506,19 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
   const [isKilling, setIsKilling] = useState(false)
   const { isDark } = useTheme()
 
+  // Expansion state management - preserve across re-renders
+  const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({})
+
   // Get current conversation ID for deep-linking
   const { currentConversationId } = useConversation()
+
+  // Helper to toggle expansion state for a specific item
+  const toggleItemExpansion = (itemKey: string) => {
+    setExpandedItems(prev => ({
+      ...prev,
+      [itemKey]: !prev[itemKey]
+    }))
+  }
 
   // Kill switch handler
   const handleKillSwitch = async () => {
@@ -656,6 +670,23 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
   // Sort by timestamp to ensure chronological order
   messages.sort((a, b) => a.timestamp - b.timestamp)
 
+  // Helper function to generate a stable ID for tool executions based on content
+  const generateToolExecutionId = (calls: Array<{ name: string; arguments: any }>) => {
+    // Create a stable hash from tool call names and a subset of arguments
+    const signature = calls.map(c => {
+      const argsStr = c.arguments ? JSON.stringify(c.arguments) : ''
+      return `${c.name}:${argsStr.substring(0, 50)}`
+    }).join('|')
+    // Simple hash function
+    let hash = 0
+    for (let i = 0; i < signature.length; i++) {
+      const char = signature.charCodeAt(i)
+      hash = ((hash << 5) - hash) + char
+      hash = hash & hash // Convert to 32bit integer
+    }
+    return Math.abs(hash).toString(36)
+  }
+
   // Build unified display items that combine tool calls with subsequent results
   const displayItems: DisplayItem[] = []
   for (let i = 0; i < messages.length; i++) {
@@ -665,13 +696,15 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
       const results = next && next.role === "tool" && next.toolResults ? next.toolResults : []
       // Show assistant message without extras
       displayItems.push({ kind: "message", data: { ...m, toolCalls: undefined, toolResults: undefined } })
-      // Unified execution bubble
+      // Unified execution bubble with stable ID
+      const toolExecId = generateToolExecutionId(m.toolCalls)
       displayItems.push({
         kind: "tool_execution",
         data: {
           timestamp: next?.timestamp ?? m.timestamp,
           calls: m.toolCalls,
           results,
+          id: toolExecId, // Add stable ID
         },
       })
       if (next && next.role === "tool" && next.toolResults) {
@@ -683,7 +716,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
       !(i > 0 && messages[i - 1].role === "assistant" && (messages[i - 1].toolCalls?.length ?? 0) > 0)
     ) {
       // Standalone tool result without a preceding assistant call in sequence
-      displayItems.push({ kind: "tool_execution", data: { timestamp: m.timestamp, calls: [], results: m.toolResults } })
+      displayItems.push({ kind: "tool_execution", data: { timestamp: m.timestamp, calls: [], results: m.toolResults, id: `standalone-${i}` } })
     } else {
       displayItems.push({ kind: "message", data: m })
     }
@@ -849,23 +882,33 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
         >
           {displayItems.length > 0 ? (
             <div className="space-y-1 p-2">
-              {displayItems.map((item, index) => (
-                item.kind === "message" ? (
+              {displayItems.map((item, index) => {
+                const itemKey = item.kind === "message"
+                  ? `msg-${item.data.timestamp}-${index}`
+                  : `exec-${item.data.id || item.data.timestamp}-${index}`
+
+                const isExpanded = !!expandedItems[itemKey]
+
+                return item.kind === "message" ? (
                   <CompactMessage
-                    key={`msg-${item.data.timestamp}-${index}`}
+                    key={itemKey}
                     message={item.data}
                     isLast={index === lastAssistantDisplayIndex}
                     isComplete={isComplete}
                     hasErrors={hasErrors}
                     wasStopped={wasStopped}
+                    isExpanded={isExpanded}
+                    onToggleExpand={() => toggleItemExpansion(itemKey)}
                   />
                 ) : (
                   <ToolExecutionBubble
-                    key={`exec-${item.data.timestamp}-${index}`}
+                    key={itemKey}
                     execution={item.data}
+                    isExpanded={isExpanded}
+                    onToggleExpand={() => toggleItemExpansion(itemKey)}
                   />
                 )
-              ))}
+              })}
             </div>
           ) : (
             <div className="flex h-full items-center justify-center text-sm text-muted-foreground">

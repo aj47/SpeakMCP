@@ -54,9 +54,7 @@ export function Component() {
   if (!configQuery.data) return null
 
   return (
-    <div className="modern-panel h-full overflow-auto px-6 py-4">
-
-      <div className="grid gap-4">
+    <div className="grid gap-4">
         <ControlGroup title="Provider Selection">
           <Control label={<ControlLabel label="Voice Transcription Provider" tooltip="Choose which provider to use for speech-to-text transcription" />} className="px-3">
             <Select
@@ -264,7 +262,6 @@ export function Component() {
 
 
         </ControlGroup>
-      </div>
     </div>
   )
 }

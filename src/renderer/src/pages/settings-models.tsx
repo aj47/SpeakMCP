@@ -120,9 +120,7 @@ export function Component() {
   if (!configQuery.data) return null
 
   return (
-    <div className="modern-panel h-full overflow-auto px-6 py-4">
-
-      <div className="grid gap-4">
+    <div className="grid gap-4">
         <ControlGroup title="OpenAI Models">
           <div className="space-y-4 p-3 sm:p-4">
             <ProviderModelSelector
@@ -291,7 +289,6 @@ export function Component() {
             </Control>
           </div>
         </ControlGroup>
-      </div>
     </div>
   )
 }

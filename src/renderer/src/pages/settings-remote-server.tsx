@@ -45,8 +45,12 @@ export function Component() {
     : undefined
 
   return (
-    <div className="modern-panel h-full overflow-y-auto overflow-x-hidden px-6 py-4">
-      <div className="grid gap-4">
+    <>
+      <header className="app-drag-region flex h-12 shrink-0 items-center border-b bg-background px-6">
+        <span className="font-bold">Remote Server</span>
+      </header>
+      <div className="modern-panel h-full overflow-y-auto overflow-x-hidden px-6 py-4">
+        <div className="grid gap-4">
         <ControlGroup
           title="Remote Server"
           endDescription={(
@@ -163,8 +167,9 @@ export function Component() {
             </>
           )}
         </ControlGroup>
+        </div>
       </div>
-    </div>
+    </>
   )
 }
 

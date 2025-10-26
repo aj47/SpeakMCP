@@ -38,9 +38,12 @@ export function Component() {
   }, [config.mcpToolsEnabled])
 
   return (
-    <div className="modern-panel h-full overflow-auto px-6 py-4">
-
-      {!config.mcpToolsEnabled ? (
+    <>
+      <header className="app-drag-region flex h-12 shrink-0 items-center border-b bg-background px-6">
+        <span className="font-bold">MCP Tools</span>
+      </header>
+      <div className="modern-panel h-full overflow-auto px-6 py-4">
+        {!config.mcpToolsEnabled ? (
         <div className="space-y-4">
           <div className="rounded-lg border p-4">
             <h3 className="text-lg font-semibold">MCP Tool Calling is disabled</h3>
@@ -69,8 +72,9 @@ export function Component() {
             </div>
           </div>
         </div>
-      )}
-    </div>
+        )}
+      </div>
+    </>
   )
 }
 

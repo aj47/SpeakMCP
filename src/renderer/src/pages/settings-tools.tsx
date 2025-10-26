@@ -127,9 +127,12 @@ DOMAIN-SPECIFIC RULES:
 - For API calls: Respect rate limits and handle errors gracefully`
 
   return (
-    <div className="modern-panel h-full overflow-auto px-6 py-4">
-
-      <div className="space-y-6">
+    <>
+      <header className="app-drag-region flex h-12 shrink-0 items-center border-b bg-background px-6">
+        <span className="font-bold">Agent Settings</span>
+      </header>
+      <div className="modern-panel h-full overflow-auto px-6 py-4">
+        <div className="space-y-6">
         <div className="space-y-4">
           <div className="space-y-2">
             <h3 className="text-lg font-semibold">MCP Tool Calling</h3>
@@ -432,7 +435,8 @@ DOMAIN-SPECIFIC RULES:
           </div>
         )}
 
+        </div>
       </div>
-    </div>
+    </>
   )
 }

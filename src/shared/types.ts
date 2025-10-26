@@ -93,6 +93,12 @@ export interface MCPConfig {
   mcpServers: Record<string, MCPServerConfig>
 }
 
+// Server log entry interface
+export interface ServerLogEntry {
+  timestamp: number
+  message: string
+}
+
 // Agent Mode Progress Tracking Types
 export interface AgentProgressStep {
   id: string
@@ -182,6 +188,7 @@ export interface ConversationHistoryItem {
 export type Config = {
   shortcut?: "hold-ctrl" | "ctrl-slash" | "custom"
   customShortcut?: string
+  customShortcutMode?: "hold" | "toggle" // Mode for custom recording shortcut
   hideDockIcon?: boolean
   launchAtLogin?: boolean
 
@@ -263,6 +270,7 @@ export type Config = {
   mcpToolsEnabled?: boolean
   mcpToolsShortcut?: "hold-ctrl-alt" | "ctrl-alt-slash" | "custom"
   customMcpToolsShortcut?: string
+  customMcpToolsShortcutMode?: "hold" | "toggle" // Mode for custom MCP tools shortcut
   mcpToolsProviderId?: CHAT_PROVIDER_ID
   mcpToolsOpenaiModel?: string
   mcpToolsGroqModel?: string
@@ -328,5 +336,9 @@ export type Config = {
 	  remoteServerApiKey?: string
 	  remoteServerLogLevel?: "error" | "info" | "debug"
 	  remoteServerCorsOrigins?: string[]
+
+  // Stream Status Watcher Configuration
+  streamStatusWatcherEnabled?: boolean
+  streamStatusFilePath?: string
 
 }

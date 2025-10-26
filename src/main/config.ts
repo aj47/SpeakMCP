@@ -12,7 +12,14 @@ export const conversationsFolder = path.join(dataFolder, "conversations")
 export const configPath = path.join(dataFolder, "config.json")
 
 const getConfig = () => {
+  // Platform-specific defaults
+  const isWindows = process.platform === 'win32'
+
   const defaultConfig: Partial<Config> = {
+    // Recording shortcut: On Windows, use Ctrl+/ to avoid conflicts with common shortcuts
+    // On macOS, Hold Ctrl is fine since Cmd is used for most shortcuts
+    shortcut: isWindows ? "ctrl-slash" : "hold-ctrl",
+
     mcpToolsShortcut: "hold-ctrl-alt",
     mcpToolsEnabled: true,
     mcpAgentModeEnabled: true,
@@ -22,7 +29,8 @@ const getConfig = () => {
     mcpAutoPasteDelay: 1000, // 1 second delay by default
     mcpMaxIterations: 10, // Default max iterations for agent mode
     textInputEnabled: true,
-    textInputShortcut: "ctrl-t",
+    // Text input: On Windows, use Ctrl+Shift+T to avoid browser new tab conflict
+    textInputShortcut: isWindows ? "ctrl-shift-t" : "ctrl-t",
     conversationsEnabled: true,
     maxConversationsToKeep: 100,
     autoSaveConversations: true,
@@ -34,9 +42,11 @@ const getConfig = () => {
     toggleVoiceDictationHotkey: "fn",
     // Custom shortcut defaults
     customShortcut: "",
+    customShortcutMode: "hold", // Default to hold mode for custom recording shortcut
     customTextInputShortcut: "",
     customAgentKillSwitchHotkey: "",
     customMcpToolsShortcut: "",
+    customMcpToolsShortcutMode: "hold", // Default to hold mode for custom MCP tools shortcut
     customToggleVoiceDictationHotkey: "",
     // Persisted MCP runtime state
     mcpRuntimeDisabledServers: [],

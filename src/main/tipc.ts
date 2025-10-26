@@ -6,6 +6,7 @@ import {
   WINDOWS,
   resizePanelForAgentMode,
   resizePanelToNormal,
+  closeAgentModeAndHidePanelWindow,
 } from "./window"
 import {
   app,
@@ -301,10 +302,21 @@ export const router = {
     const { emergencyStopAgentMode } = await import("./window")
     await emergencyStopAgentMode()
 
-    // Also stop MCP processes
-    mcpService.emergencyStopAllProcesses()
-
     return { success: true, message: "Agent mode emergency stopped" }
+  }),
+
+  clearAgentProgress: t.procedure.action(async () => {
+    const win = WINDOWS.get("panel")
+    if (win) {
+      getRendererHandlers<RendererHandlers>(win.webContents).clearAgentProgress.send()
+    }
+
+    return { success: true }
+  }),
+
+  closeAgentModeAndHidePanelWindow: t.procedure.action(async () => {
+    closeAgentModeAndHidePanelWindow()
+    return { success: true }
   }),
 
   getAgentStatus: t.procedure.action(async () => {
@@ -1147,6 +1159,19 @@ export const router = {
     .input<{ serverName: string }>()
     .action(async ({ input }) => {
       return mcpService.stopServer(input.serverName)
+    }),
+
+  getMcpServerLogs: t.procedure
+    .input<{ serverName: string }>()
+    .action(async ({ input }) => {
+      return mcpService.getServerLogs(input.serverName)
+    }),
+
+  clearMcpServerLogs: t.procedure
+    .input<{ serverName: string }>()
+    .action(async ({ input }) => {
+      mcpService.clearServerLogs(input.serverName)
+      return { success: true }
     }),
 
   // Text-to-Speech

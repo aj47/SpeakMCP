@@ -68,11 +68,20 @@ export function PanelResizeWrapper({
 
     setIsResizing(false)
 
-    // Save the final size
+    // Save the final size for the current mode
     try {
       const finalWidth = Math.max(minWidth, size.width)
       const finalHeight = Math.max(minHeight, size.height)
-      
+
+      // Get current panel mode and save size for that mode
+      const mode = await tipcClient.getPanelMode()
+      await tipcClient.savePanelModeSize({
+        mode: mode as "normal" | "agent" | "textInput",
+        width: finalWidth,
+        height: finalHeight
+      })
+
+      // Also save to legacy panelCustomSize for backward compatibility
       await tipcClient.savePanelCustomSize({ width: finalWidth, height: finalHeight })
       setCurrentSize({ width: finalWidth, height: finalHeight })
     } catch (error) {

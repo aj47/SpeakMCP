@@ -326,6 +326,10 @@ export type Config = {
   panelCustomPosition?: { x: number; y: number }
   panelDragEnabled?: boolean
   panelCustomSize?: { width: number; height: number }
+  // Mode-specific panel sizes for persistence
+  panelNormalModeSize?: { width: number; height: number }
+  panelAgentModeSize?: { width: number; height: number }
+  panelTextInputModeSize?: { width: number; height: number }
 
   // API Retry Configuration
   apiRetryCount?: number // Number of retry attempts (default: 3)

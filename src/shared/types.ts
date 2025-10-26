@@ -185,6 +185,21 @@ export interface ConversationHistoryItem {
   preview: string
 }
 
+// Profile Management Types
+export type Profile = {
+  id: string
+  name: string
+  guidelines: string
+  createdAt: number
+  updatedAt: number
+  isDefault?: boolean
+}
+
+export type ProfilesData = {
+  profiles: Profile[]
+  currentProfileId?: string
+}
+
 export type Config = {
   shortcut?: "hold-ctrl" | "ctrl-slash" | "custom"
   customShortcut?: string
@@ -276,6 +291,7 @@ export type Config = {
   mcpToolsGroqModel?: string
   mcpToolsGeminiModel?: string
   mcpToolsSystemPrompt?: string
+  mcpCurrentProfileId?: string // Current active profile ID
   mcpAgentModeEnabled?: boolean
   // When enabled, require manual user approval before each tool call executes
   mcpRequireApprovalBeforeToolCall?: boolean
@@ -336,5 +352,9 @@ export type Config = {
 	  remoteServerApiKey?: string
 	  remoteServerLogLevel?: "error" | "info" | "debug"
 	  remoteServerCorsOrigins?: string[]
+
+  // Stream Status Watcher Configuration
+  streamStatusWatcherEnabled?: boolean
+  streamStatusFilePath?: string
 
 }

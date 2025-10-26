@@ -21,7 +21,7 @@ import {
 } from "@renderer/components/ui/tooltip"
 import { Save, Info } from "lucide-react"
 import { useState, useEffect } from "react"
-
+import { ProfileManager } from "@renderer/components/profile-manager"
 
 import { Config } from "@shared/types"
 
@@ -170,32 +170,13 @@ DOMAIN-SPECIFIC RULES:
                   </Select>
 
                   {config.mcpToolsShortcut === "custom" && (
-                    <>
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium">Mode</label>
-                        <Select
-                          value={config.customMcpToolsShortcutMode || "hold"}
-                          onValueChange={(value: "hold" | "toggle") => {
-                            updateConfig({ customMcpToolsShortcutMode: value })
-                          }}
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="hold">Hold (Press and hold to record)</SelectItem>
-                            <SelectItem value="toggle">Toggle (Press once to start, again to stop)</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <KeyRecorder
-                        value={config.customMcpToolsShortcut || ""}
-                        onChange={(keyCombo) => {
-                          updateConfig({ customMcpToolsShortcut: keyCombo })
-                        }}
-                        placeholder="Click to record custom MCP tools shortcut"
-                      />
-                    </>
+                    <KeyRecorder
+                      value={config.customMcpToolsShortcut || ""}
+                      onChange={(keyCombo) => {
+                        updateConfig({ customMcpToolsShortcut: keyCombo })
+                      }}
+                      placeholder="Click to record custom MCP tools shortcut"
+                    />
                   )}
 
 
@@ -296,7 +277,23 @@ DOMAIN-SPECIFIC RULES:
 
 
 
-                <div className="space-y-2">
+                <div className="space-y-4">
+                  <div className="rounded-lg border p-4 space-y-4">
+                    <div>
+                      <h3 className="text-sm font-semibold mb-1">Profile Management</h3>
+                      <p className="text-xs text-muted-foreground mb-3">
+                        Save and load different guideline configurations for different workflows.
+                      </p>
+                    </div>
+                    <ProfileManager
+                      currentGuidelines={additionalGuidelines}
+                      onGuidelinesChange={(guidelines) => {
+                        setAdditionalGuidelines(guidelines)
+                        setHasUnsavedChanges(guidelines !== (config.mcpToolsSystemPrompt || ""))
+                      }}
+                    />
+                  </div>
+
                   <LabelWithTooltip htmlFor="mcp-additional-guidelines" tooltip="Optional additional rules and guidelines for the AI agent. The base system prompt with tool usage instructions is automatically included.">
                     Additional Guidelines
                   </LabelWithTooltip>

@@ -25,14 +25,20 @@ export function parseShellCommand(commandString: string): { command: string; arg
   for (let i = 0; i < trimmed.length; i++) {
     const char = trimmed[i]
 
-    // Handle escape sequences
+    // Handle escape sequences (only in double quotes for specific characters)
     if (escaped) {
-      current += char
+      // In double quotes, only " and \ are escape characters
+      if (char === '"' || char === "\\") {
+        current += char
+      } else {
+        // Not an escape sequence, keep the backslash
+        current += "\\" + char
+      }
       escaped = false
       continue
     }
 
-    if (char === "\\") {
+    if (char === "\\" && inDoubleQuote) {
       escaped = true
       continue
     }

@@ -233,7 +233,9 @@ function isRetryableError(error: unknown): boolean {
            message.includes('connection') ||
            message.includes('fetch') ||
            message.includes('empty response') || // Empty LLM responses
-           message.includes('empty content')     // Empty content in structured responses
+           message.includes('empty content') ||  // Empty content in structured responses
+           message.includes('cloudflare') ||     // Cloudflare errors (524, etc.)
+           message.includes('gateway')           // Gateway errors
   }
 
   return false
@@ -296,7 +298,12 @@ async function apiCallWithRetry<T>(
         diagnosticsService.logError(
           "llm-fetch",
           "Non-retryable API error",
-          error,
+          {
+            error: error instanceof Error ? error.message : String(error),
+            errorType: error instanceof HttpError ? 'HttpError' : error instanceof Error ? 'Error' : typeof error,
+            status: error instanceof HttpError ? error.status : undefined,
+            stack: error instanceof Error ? error.stack : undefined,
+          },
         )
         throw error
       }
@@ -343,7 +350,13 @@ async function apiCallWithRetry<T>(
         diagnosticsService.logError(
           "llm-fetch",
           "API call failed after all retries",
-          lastError,
+          {
+            error: error instanceof Error ? error.message : String(error),
+            errorType: error instanceof HttpError ? 'HttpError' : error instanceof Error ? 'Error' : typeof error,
+            status: error instanceof HttpError ? error.status : undefined,
+            attempts: attempt + 1,
+            maxRetries: retryCount + 1,
+          },
         )
         throw lastError
       }
@@ -351,11 +364,25 @@ async function apiCallWithRetry<T>(
       // Calculate delay for this attempt
       const delay = calculateBackoffDelay(attempt, baseDelay, maxDelay)
 
-      diagnosticsService.logError(
+      diagnosticsService.logWarning(
         "llm-fetch",
         `API call failed, retrying in ${Math.round(delay / 1000)}s (attempt ${attempt + 1}/${retryCount + 1})`,
-        { error: error instanceof Error ? error.message : String(error), delay }
+        {
+          error: error instanceof Error ? error.message : String(error),
+          errorType: error instanceof HttpError ? 'HttpError' : error instanceof Error ? 'Error' : typeof error,
+          status: error instanceof HttpError ? error.status : undefined,
+          delay,
+          attempt: attempt + 1,
+          maxRetries: retryCount + 1,
+        }
       )
+
+      // User-friendly console output so users can see retry progress
+      if (error instanceof HttpError) {
+        console.log(`⏳ HTTP ${error.status} error - retrying in ${Math.round(delay / 1000)} seconds... (attempt ${attempt + 1}/${retryCount + 1})`)
+      } else {
+        console.log(`⏳ Network error - retrying in ${Math.round(delay / 1000)} seconds... (attempt ${attempt + 1}/${retryCount + 1})`)
+      }
 
       // Wait before retrying unless we've been asked to stop
       if (state.shouldStopAgent) {
@@ -483,10 +510,13 @@ async function makeAPICallAttempt(
       const errorText = await response.text()
 
       // Check if this is a structured output related error
-      const isStructuredOutputError = errorText.includes("json_schema") ||
-                                     errorText.includes("response_format") ||
-                                     errorText.includes("schema") ||
-                                     errorText.includes("json")
+      // Only treat 4xx client errors as potential structured output errors
+      // Server errors (5xx) should always be treated as retryable HTTP errors
+      const isStructuredOutputError = response.status >= 400 && response.status < 500 &&
+                                     (errorText.includes("json_schema") ||
+                                      errorText.includes("response_format") ||
+                                      errorText.includes("schema") ||
+                                      errorText.includes("json"))
       if (isStructuredOutputError) {
         const error = new Error(errorText)
         ;(error as any).isStructuredOutputError = true

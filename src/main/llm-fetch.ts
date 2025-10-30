@@ -512,11 +512,11 @@ async function makeAPICallAttempt(
       // Check if this is a structured output related error
       // Only treat 4xx client errors as potential structured output errors
       // Server errors (5xx) should always be treated as retryable HTTP errors
+      // Be more specific: only treat as structured output error if it mentions the specific features
       const isStructuredOutputError = response.status >= 400 && response.status < 500 &&
                                      (errorText.includes("json_schema") ||
                                       errorText.includes("response_format") ||
-                                      errorText.includes("schema") ||
-                                      errorText.includes("json"))
+                                      (errorText.includes("schema") && errorText.includes("not supported")))
       if (isStructuredOutputError) {
         const error = new Error(errorText)
         ;(error as any).isStructuredOutputError = true
@@ -861,15 +861,27 @@ async function makeLLMCallAttempt(
     }
 
     if (!content) {
-      if (isDebugLLM()) {
-        logLLM("Empty response details:", {
-          response: response,
-          choices: response.choices,
-          firstChoice: response.choices?.[0],
-          message: response.choices?.[0]?.message,
-          content: response.choices?.[0]?.message?.content
-        })
+      const emptyResponseDetails = {
+        hasResponse: !!response,
+        hasChoices: !!response?.choices,
+        choicesLength: response?.choices?.length,
+        firstChoice: response?.choices?.[0],
+        hasMessage: !!response?.choices?.[0]?.message,
+        messageContent: response?.choices?.[0]?.message?.content,
+        messageContentType: typeof response?.choices?.[0]?.message?.content,
+        hasReasoning: !!(response?.choices?.[0]?.message as any)?.reasoning,
       }
+
+      if (isDebugLLM()) {
+        logLLM("Empty response details:", emptyResponseDetails)
+      }
+
+      diagnosticsService.logError(
+        "llm-fetch",
+        "LLM returned empty response",
+        emptyResponseDetails
+      )
+
       // Empty responses should be treated as errors requiring retry, not completion
       // This prevents workflows from terminating prematurely when LLM fails to respond
       throw new Error("LLM returned empty response - this indicates a model or API issue that should be retried")

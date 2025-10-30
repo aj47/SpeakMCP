@@ -988,9 +988,29 @@ export async function verifyCompletionWithFetch(
 
   // Helper to parse content into CompletionVerification
   const parseVerification = (content: string): CompletionVerification => {
-    const json = extractJsonObject(content) || (() => { try { return JSON.parse(content) } catch { return null } })()
-    if (json && typeof json.isComplete === "boolean") return json as CompletionVerification
+    const json = extractJsonObject(content) || (() => {
+      try {
+        return JSON.parse(content)
+      } catch {
+        return null
+      }
+    })()
+
+    if (json && typeof json.isComplete === "boolean") {
+      return json as CompletionVerification
+    }
+
     // Conservative default: not complete when uncertain
+    diagnosticsService.logError(
+      "llm-fetch",
+      "Failed to parse verifier output",
+      {
+        contentLength: content?.length || 0,
+        contentPreview: content?.substring(0, 200) || "(empty)",
+        extractedJson: json,
+      }
+    )
+
     return { isComplete: false, reason: "Unparseable verifier output" }
   }
 

@@ -106,6 +106,7 @@ const getConfig = () => {
 	    remoteServerPort: 3210,
 	    remoteServerBindAddress: "127.0.0.1",
 	    remoteServerLogLevel: "info",
+	    remoteServerCorsOrigins: ["*"],
 
 
   }

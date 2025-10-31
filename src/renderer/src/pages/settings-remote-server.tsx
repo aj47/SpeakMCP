@@ -155,6 +155,25 @@ export function Component() {
                 </Select>
               </Control>
 
+              <Control label={<ControlLabel label="CORS Origins" tooltip="Allowed origins for CORS requests. Use * for all origins (development), or specify comma-separated URLs like http://localhost:8081" />} className="px-3">
+                <Input
+                  type="text"
+                  value={(cfg.remoteServerCorsOrigins || ["*"]).join(", ")}
+                  onChange={(e) => {
+                    const origins = e.currentTarget.value
+                      .split(",")
+                      .map(s => s.trim())
+                      .filter(Boolean)
+                    saveConfig({ remoteServerCorsOrigins: origins.length > 0 ? origins : ["*"] })
+                  }}
+                  placeholder="* or http://localhost:8081, http://example.com"
+                  className="w-full"
+                />
+                <div className="mt-1 text-xs text-muted-foreground">
+                  Use * for development or specify allowed origins separated by commas
+                </div>
+              </Control>
+
               {baseUrl && (
                 <Control label="Base URL" className="px-3">
                   <div className="text-sm text-muted-foreground select-text break-all">{baseUrl}</div>

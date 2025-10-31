@@ -1,4 +1,5 @@
 import Fastify, { FastifyInstance } from "fastify"
+import cors from "@fastify/cors"
 import crypto from "crypto"
 import fs from "fs"
 import path from "path"
@@ -189,8 +190,23 @@ export async function startRemoteServer() {
 
   const fastify = Fastify({ logger: { level: logLevel } })
 
-  // Auth hook
+  // Configure CORS
+  const corsOrigins = cfg.remoteServerCorsOrigins || ["*"]
+  await fastify.register(cors, {
+    origin: corsOrigins,
+    methods: ["GET", "POST", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: true,
+    maxAge: 86400, // Cache preflight for 24 hours
+  })
+
+  // Auth hook (skip for OPTIONS preflight requests)
   fastify.addHook("onRequest", async (req, reply) => {
+    // Skip auth for OPTIONS requests (CORS preflight)
+    if (req.method === "OPTIONS") {
+      return
+    }
+
     const auth = (req.headers["authorization"] || "").toString()
     const token = auth.startsWith("Bearer ") ? auth.slice(7) : ""
     const current = configStore.get()

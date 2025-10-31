@@ -38,6 +38,7 @@
   },
   "dependencies": {
     "@egoist/electron-panel-window": "^8.0.3",
+    "@fastify/cors": "^11.1.0",
     "@modelcontextprotocol/sdk": "^1.13.3",
     "@radix-ui/react-scroll-area": "^1.2.9",
     "ajv": "^8.17.1",

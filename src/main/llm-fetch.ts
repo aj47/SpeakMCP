@@ -552,7 +552,7 @@ async function makeAPICallAttempt(
  * Make a fetch-based LLM call for OpenAI-compatible APIs with structured output fallback
  */
 async function makeOpenAICompatibleCall(
-  messages: Array<{ role: string; content: string }>,
+  messages: Array<{ role: string; content: string | any[] }>,
   providerId: string,
   useStructuredOutput: boolean = true,
 ): Promise<any> {
@@ -570,7 +570,10 @@ async function makeOpenAICompatibleCall(
   }
 
   const model = getModel(providerId, "mcp")
-  const estimatedTokens = Math.ceil(messages.reduce((sum, msg) => sum + msg.content.length, 0) / 4)
+  const estimatedTokens = Math.ceil(messages.reduce((sum, msg) => {
+    const contentLength = typeof msg.content === 'string' ? msg.content.length : JSON.stringify(msg.content).length
+    return sum + contentLength
+  }, 0) / 4)
 
   const baseRequestBody = {
     model,
@@ -680,7 +683,7 @@ async function makeOpenAICompatibleCall(
  * Make a fetch-based LLM call for Gemini API
  */
 async function makeGeminiCall(
-  messages: Array<{ role: string; content: string }>,
+  messages: Array<{ role: string; content: string | any[] }>,
 ): Promise<any> {
   const config = configStore.get()
 
@@ -693,7 +696,10 @@ async function makeGeminiCall(
     config.geminiBaseUrl || "https://generativelanguage.googleapis.com"
 
   // Convert messages to Gemini format
-  const prompt = messages.map((m) => `${m.role}: ${m.content}`).join("\n\n")
+  const prompt = messages.map((m) => {
+    const content = typeof m.content === 'string' ? m.content : JSON.stringify(m.content)
+    return `${m.role}: ${content}`
+  }).join("\n\n")
 
   return apiCallWithRetry(async () => {
     if (isDebugLLM()) {
@@ -797,7 +803,7 @@ async function makeGeminiCall(
  * This is wrapped by makeLLMCallWithFetch with retry logic
  */
 async function makeLLMCallAttempt(
-  messages: Array<{ role: string; content: string }>,
+  messages: Array<{ role: string; content: string | any[] }>,
   chatProviderId: string,
 ): Promise<LLMToolCallResponse> {
   let response: any
@@ -933,7 +939,7 @@ async function makeLLMCallAttempt(
  * Main function to make LLM calls using fetch with automatic retry on empty responses
  */
 export async function makeLLMCallWithFetch(
-  messages: Array<{ role: string; content: string }>,
+  messages: Array<{ role: string; content: string | any[] }>,
   providerId?: string,
 ): Promise<LLMToolCallResponse> {
   const config = configStore.get()

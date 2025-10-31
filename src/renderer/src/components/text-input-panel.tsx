@@ -4,9 +4,10 @@ import { cn } from "@renderer/lib/utils"
 import { AgentProcessingView } from "./agent-processing-view"
 import { AgentProgressUpdate } from "../../../shared/types"
 import { useTheme } from "@renderer/contexts/theme-context"
+import { Camera } from "lucide-react"
 
 interface TextInputPanelProps {
-  onSubmit: (text: string) => void
+  onSubmit: (text: string, screenshot?: string) => void
   onCancel: () => void
   isProcessing?: boolean
   agentProgress?: AgentProgressUpdate | null
@@ -23,6 +24,9 @@ export const TextInputPanel = forwardRef<TextInputPanelRef, TextInputPanelProps>
   agentProgress,
 }, ref) => {
   const [text, setText] = useState("")
+  const [includeScreenshot, setIncludeScreenshot] = useState(false)
+  const [screenshot, setScreenshot] = useState<string | null>(null)
+  const [isCapturingScreenshot, setIsCapturingScreenshot] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const { isDark } = useTheme()
 
@@ -57,12 +61,42 @@ export const TextInputPanel = forwardRef<TextInputPanelRef, TextInputPanelProps>
     return undefined
   }, [isProcessing])
 
-  const handleSubmit = () => {
-    if (text.trim() && !isProcessing) {
-      onSubmit(text.trim())
-      setText("")
+  const captureScreenshot = async () => {
+    setIsCapturingScreenshot(true)
+    try {
+      // Use Electron's desktopCapturer API to capture screenshot
+      const sources = await (window as any).electron.desktopCapturer.getSources({
+        types: ['screen'],
+        thumbnailSize: { width: 1920, height: 1080 }
+      })
+
+      if (sources && sources.length > 0) {
+        // Get the first screen (primary display)
+        const screenshot = sources[0].thumbnail.toDataURL()
+        setScreenshot(screenshot)
+      }
+    } catch (error) {
+      console.error('Failed to capture screenshot:', error)
+    } finally {
+      setIsCapturingScreenshot(false)
     }
   }
+
+  const handleSubmit = () => {
+    if (text.trim() && !isProcessing) {
+      onSubmit(text.trim(), screenshot || undefined)
+      setText("")
+      setScreenshot(null)
+      setIncludeScreenshot(false)
+    }
+  }
+
+  // Capture screenshot when checkbox is toggled on
+  useEffect(() => {
+    if (includeScreenshot && !screenshot) {
+      captureScreenshot()
+    }
+  }, [includeScreenshot])
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     // Allow zoom shortcuts to pass through (Cmd/Ctrl + Plus/Minus/0)
@@ -151,6 +185,27 @@ export const TextInputPanel = forwardRef<TextInputPanelRef, TextInputPanelProps>
             disabled={isProcessing}
             aria-label="Message input"
           />
+
+          {/* Screenshot option */}
+          <div className="flex items-center gap-2">
+            <label className="flex items-center gap-2 cursor-pointer text-xs modern-text-muted hover:modern-text-strong transition-colors">
+              <input
+                type="checkbox"
+                checked={includeScreenshot}
+                onChange={(e) => setIncludeScreenshot(e.target.checked)}
+                disabled={isProcessing || isCapturingScreenshot}
+                className="h-3 w-3 rounded border-gray-300"
+              />
+              <Camera className="h-3 w-3" />
+              <span>Include screenshot</span>
+            </label>
+            {isCapturingScreenshot && (
+              <span className="text-xs modern-text-muted">Capturing...</span>
+            )}
+            {screenshot && !isCapturingScreenshot && (
+              <span className="text-xs text-green-500">✓ Screenshot captured</span>
+            )}
+          </div>
         </div>
       )}
 

@@ -133,8 +133,8 @@ export function Component() {
   })
 
   const textInputMutation = useMutation({
-    mutationFn: async ({ text }: { text: string }) => {
-      await tipcClient.createTextInput({ text })
+    mutationFn: async ({ text, screenshot }: { text: string; screenshot?: string }) => {
+      await tipcClient.createTextInput({ text, screenshot })
     },
     onError(error) {
       setShowTextInput(false)
@@ -159,11 +159,13 @@ export function Component() {
     mutationFn: async ({
       text,
       conversationId,
+      screenshot,
     }: {
       text: string
       conversationId?: string
+      screenshot?: string
     }) => {
-      const result = await tipcClient.createMcpTextInput({ text, conversationId })
+      const result = await tipcClient.createMcpTextInput({ text, conversationId, screenshot })
 
       // Update conversation ID if backend created/returned one
       if (result?.conversationId && result.conversationId !== currentConversationId) {
@@ -347,7 +349,7 @@ export function Component() {
     return unlisten
   }, [])
 
-  const handleTextSubmit = async (text: string) => {
+  const handleTextSubmit = async (text: string, screenshot?: string) => {
     // Start new conversation or add to existing one
     if (!isConversationActive) {
       await startNewConversation(text, "user")
@@ -362,12 +364,13 @@ export function Component() {
         mcpTextInputMutation.mutate({
           text,
           conversationId: currentConversation?.id,
+          screenshot,
         })
       } else {
-        textInputMutation.mutate({ text })
+        textInputMutation.mutate({ text, screenshot })
       }
     } catch (error) {
-      textInputMutation.mutate({ text })
+      textInputMutation.mutate({ text, screenshot })
     }
   }
 

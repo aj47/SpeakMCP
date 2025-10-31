@@ -456,6 +456,7 @@ export async function processTranscriptWithAgentMode(
     toolResults?: MCPToolResult[]
   }>,
   conversationId?: string, // Add conversation ID parameter
+  screenshot?: string, // Add screenshot parameter
 ): Promise<AgentModeResponse> {
   const config = configStore.get()
 
@@ -542,9 +543,15 @@ export async function processTranscriptWithAgentMode(
     toolCalls?: MCPToolCall[]
     toolResults?: MCPToolResult[]
     timestamp?: number
+    screenshot?: string
   }> = [
     ...(previousConversationHistory || []),
-    { role: "user", content: transcript, timestamp: Date.now() },
+    {
+      role: "user",
+      content: transcript,
+      timestamp: Date.now(),
+      screenshot: screenshot
+    },
   ]
 
   // Helper function to convert conversation history to the format expected by AgentProgressUpdate
@@ -745,6 +752,18 @@ Always use actual resource IDs from the conversation history or create new ones 
               content: `Tool execution results:\n${entry.content}`,
             }
           }
+
+          // Handle multimodal content (text + screenshot)
+          if (entry.screenshot) {
+            return {
+              role: entry.role as "user" | "assistant",
+              content: [
+                { type: "text", text: entry.content },
+                { type: "image_url", image_url: { url: entry.screenshot } }
+              ]
+            }
+          }
+
           return {
             role: entry.role as "user" | "assistant",
             content: entry.content,
@@ -1352,6 +1371,18 @@ Please try alternative approaches, break down the task into smaller steps, or pr
                   content: `Tool execution results:\n${entry.content}`,
                 }
               }
+
+              // Handle multimodal content (text + screenshot)
+              if (entry.screenshot) {
+                return {
+                  role: entry.role as "user" | "assistant",
+                  content: [
+                    { type: "text", text: entry.content },
+                    { type: "image_url", image_url: { url: entry.screenshot } }
+                  ]
+                }
+              }
+
               return {
                 role: entry.role as "user" | "assistant",
                 content: entry.content,
@@ -1589,6 +1620,18 @@ Please try alternative approaches, break down the task into smaller steps, or pr
                   content: `Tool execution results:\n${entry.content}`,
                 }
               }
+
+              // Handle multimodal content (text + screenshot)
+              if (entry.screenshot) {
+                return {
+                  role: entry.role as "user" | "assistant",
+                  content: [
+                    { type: "text", text: entry.content },
+                    { type: "image_url", image_url: { url: entry.screenshot } }
+                  ]
+                }
+              }
+
               return {
                 role: entry.role as "user" | "assistant",
                 content: entry.content,

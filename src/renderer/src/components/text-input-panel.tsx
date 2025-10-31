@@ -84,17 +84,21 @@ export const TextInputPanel = forwardRef<TextInputPanelRef, TextInputPanelProps>
 
   const handleSubmit = () => {
     if (text.trim() && !isProcessing) {
-      onSubmit(text.trim(), screenshot || undefined)
+      // Only include screenshot if the checkbox is still checked
+      onSubmit(text.trim(), includeScreenshot && screenshot ? screenshot : undefined)
       setText("")
       setScreenshot(null)
       setIncludeScreenshot(false)
     }
   }
 
-  // Capture screenshot when checkbox is toggled on
+  // Capture screenshot when checkbox is toggled on, clear when toggled off
   useEffect(() => {
     if (includeScreenshot && !screenshot) {
       captureScreenshot()
+    } else if (!includeScreenshot && screenshot) {
+      // Clear screenshot when user unchecks the box
+      setScreenshot(null)
     }
   }, [includeScreenshot])
 

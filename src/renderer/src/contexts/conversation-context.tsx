@@ -84,7 +84,7 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
       conversationId: string,
       conversationHistory: Array<{
         role: "user" | "assistant" | "tool"
-        content: string
+        content: any // Accept MessageContent (string | MessageContentPart[])
         toolCalls?: Array<{ name: string; arguments: any }>
         toolResults?: Array<{ success: boolean; content: string; error?: string }>
         timestamp?: number

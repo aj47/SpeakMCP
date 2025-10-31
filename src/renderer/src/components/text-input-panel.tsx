@@ -4,9 +4,11 @@ import { cn } from "@renderer/lib/utils"
 import { AgentProcessingView } from "./agent-processing-view"
 import { AgentProgressUpdate } from "../../../shared/types"
 import { useTheme } from "@renderer/contexts/theme-context"
+import { tipcClient } from "@renderer/lib/tipc-client"
+import { useQuery } from "@tanstack/react-query"
 
 interface TextInputPanelProps {
-  onSubmit: (text: string) => void
+  onSubmit: (text: string, screenshotData?: string) => void
   onCancel: () => void
   isProcessing?: boolean
   agentProgress?: AgentProgressUpdate | null
@@ -23,8 +25,17 @@ export const TextInputPanel = forwardRef<TextInputPanelRef, TextInputPanelProps>
   agentProgress,
 }, ref) => {
   const [text, setText] = useState("")
+  const [includeScreenshot, setIncludeScreenshot] = useState(false)
+  const [screenshotData, setScreenshotData] = useState<string | null>(null)
+  const [isCapturingScreenshot, setIsCapturingScreenshot] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const { isDark } = useTheme()
+
+  // Get config to check if screenshot is enabled
+  const configQuery = useQuery({
+    queryKey: ["config"],
+    queryFn: async () => tipcClient.getConfig({}),
+  })
 
   // Expose focus method to parent
   useImperativeHandle(ref, () => ({
@@ -57,10 +68,44 @@ export const TextInputPanel = forwardRef<TextInputPanelRef, TextInputPanelProps>
     return undefined
   }, [isProcessing])
 
-  const handleSubmit = () => {
+  const handleCaptureScreenshot = async () => {
+    setIsCapturingScreenshot(true)
+    try {
+      const result = await tipcClient.captureScreenshot({})
+      if (result && result.data) {
+        const dataUrl = `data:image/${result.format};base64,${result.data}`
+        setScreenshotData(dataUrl)
+      }
+    } catch (error) {
+      console.error("Failed to capture screenshot:", error)
+    } finally {
+      setIsCapturingScreenshot(false)
+    }
+  }
+
+  const handleSubmit = async () => {
     if (text.trim() && !isProcessing) {
-      onSubmit(text.trim())
+      let screenshot = screenshotData
+
+      // If screenshot checkbox is checked but no screenshot captured yet, capture it now
+      if (includeScreenshot && !screenshot && !isCapturingScreenshot) {
+        setIsCapturingScreenshot(true)
+        try {
+          const result = await tipcClient.captureScreenshot({})
+          if (result && result.data) {
+            screenshot = `data:image/${result.format};base64,${result.data}`
+          }
+        } catch (error) {
+          console.error("Failed to capture screenshot:", error)
+        } finally {
+          setIsCapturingScreenshot(false)
+        }
+      }
+
+      onSubmit(text.trim(), screenshot || undefined)
       setText("")
+      setIncludeScreenshot(false)
+      setScreenshotData(null)
     }
   }
 
@@ -154,12 +199,53 @@ export const TextInputPanel = forwardRef<TextInputPanelRef, TextInputPanelProps>
         </div>
       )}
 
+      {/* Screenshot preview */}
+      {screenshotData && (
+        <div className="relative rounded-lg border border-white/10 p-2">
+          <img
+            src={screenshotData}
+            alt="Screenshot preview"
+            className="max-h-32 w-full rounded object-contain"
+          />
+          <button
+            onClick={() => {
+              setScreenshotData(null)
+              setIncludeScreenshot(false)
+            }}
+            className="absolute right-1 top-1 rounded bg-red-500/80 px-2 py-1 text-xs text-white hover:bg-red-600"
+          >
+            Remove
+          </button>
+        </div>
+      )}
+
       <div className="modern-text-muted flex items-center justify-between text-xs">
-        <div>
+        <div className="flex items-center gap-3">
           {text.length > 0 && (
             <span>
               {text.length} character{text.length !== 1 ? "s" : ""}
             </span>
+          )}
+          {configQuery.data?.screenshotEnabled && (
+            <label className="flex items-center gap-1.5 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={includeScreenshot}
+                onChange={(e) => {
+                  setIncludeScreenshot(e.target.checked)
+                  if (e.target.checked && !screenshotData) {
+                    handleCaptureScreenshot()
+                  } else if (!e.target.checked) {
+                    setScreenshotData(null)
+                  }
+                }}
+                disabled={isProcessing || isCapturingScreenshot}
+                className="h-3 w-3 rounded border-gray-300"
+              />
+              <span className="text-xs">
+                {isCapturingScreenshot ? "Capturing..." : "Include screenshot"}
+              </span>
+            </label>
           )}
         </div>
         <div className="flex gap-2">
@@ -172,10 +258,10 @@ export const TextInputPanel = forwardRef<TextInputPanelRef, TextInputPanelProps>
           </button>
           <button
             onClick={handleSubmit}
-            disabled={!text.trim() || isProcessing}
+            disabled={!text.trim() || isProcessing || isCapturingScreenshot}
             className={cn(
               "rounded px-2 py-1 transition-colors",
-              text.trim() && !isProcessing
+              text.trim() && !isProcessing && !isCapturingScreenshot
                 ? "bg-blue-500/20 text-blue-300 hover:bg-blue-500/30"
                 : "cursor-not-allowed opacity-50",
             )}

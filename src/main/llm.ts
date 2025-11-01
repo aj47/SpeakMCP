@@ -23,7 +23,7 @@ import { shrinkMessagesForLLM } from "./context-budget"
 async function extractContextFromHistory(
   conversationHistory: Array<{
     role: "user" | "assistant" | "tool"
-    content: string
+    content: any // MessageContent - can be string or array
     toolCalls?: MCPToolCall[]
     toolResults?: MCPToolResult[]
   }>,
@@ -36,10 +36,22 @@ async function extractContextFromHistory(
     return { contextSummary: "", resources: [] }
   }
 
+  // Helper to extract text from MessageContent
+  const getTextContent = (content: any): string => {
+    if (typeof content === 'string') return content
+    if (Array.isArray(content)) {
+      return content
+        .filter((p) => p.type === 'text')
+        .map((p) => p.text)
+        .join(' ')
+    }
+    return String(content)
+  }
+
   // Create a condensed version of the conversation for analysis
   const conversationText = conversationHistory
     .map((entry) => {
-      let text = `${entry.role.toUpperCase()}: ${entry.content}`
+      let text = `${entry.role.toUpperCase()}: ${getTextContent(entry.content)}`
 
       if (entry.toolCalls) {
         text += `\nTOOL_CALLS: ${entry.toolCalls.map((tc) => `${tc.name}(${JSON.stringify(tc.arguments)})`).join(", ")}`
@@ -101,7 +113,16 @@ function analyzeToolErrors(toolResults: MCPToolResult[]): {
   const errorTypes: string[] = []
   const errorMessages = toolResults
     .filter((r) => r.isError)
-    .map((r) => r.content.map((c) => c.text).join(" "))
+    .map((r) => {
+      // Safely extract content - handle both array and non-array cases
+      if (Array.isArray(r.content)) {
+        return r.content.map((c) => c.text).join(" ")
+      } else if (typeof r.content === 'string') {
+        return r.content
+      } else {
+        return JSON.stringify(r.content)
+      }
+    })
     .join(" ")
 
   // Categorize error types generically
@@ -303,12 +324,27 @@ function createProgressStep(
   }
 }
 
+// Helper function to extract text from MessageContent (string or multimodal array)
+function extractTextFromContent(content: any): string {
+  if (typeof content === 'string') {
+    return content
+  }
+  if (Array.isArray(content)) {
+    return content
+      .filter((part) => part.type === 'text')
+      .map((part) => part.text)
+      .join(' ')
+  }
+  return ''
+}
+
 // Helper function to analyze tool capabilities and match them to user requests
 function analyzeToolCapabilities(
   availableTools: MCPTool[],
-  transcript: string,
+  transcript: any, // MessageContent - can be string or array with text/image parts
 ): { summary: string; relevantTools: MCPTool[] } {
-  const transcriptLower = transcript.toLowerCase()
+  const transcriptText = extractTextFromContent(transcript)
+  const transcriptLower = transcriptText.toLowerCase()
   const relevantTools: MCPTool[] = []
 
   // Define capability patterns based on common keywords and tool descriptions
@@ -445,13 +481,13 @@ function analyzeToolCapabilities(
 }
 
 export async function processTranscriptWithAgentMode(
-  transcript: string,
+  transcript: any, // MessageContent - can be string or array with text/image parts
   availableTools: MCPTool[],
   executeToolCall: (toolCall: MCPToolCall) => Promise<MCPToolResult>,
   maxIterations: number = 10,
   previousConversationHistory?: Array<{
     role: "user" | "assistant" | "tool"
-    content: string
+    content: any // MessageContent - preserve multimodal content
     toolCalls?: MCPToolCall[]
     toolResults?: MCPToolResult[]
   }>,
@@ -459,9 +495,18 @@ export async function processTranscriptWithAgentMode(
 ): Promise<AgentModeResponse> {
   const config = configStore.get()
 
+  // Debug: Log transcript type
+  console.log('[DEBUG] processTranscriptWithAgentMode - transcript type:',
+    Array.isArray(transcript) ? `array with ${transcript.length} parts` : typeof transcript)
+  if (Array.isArray(transcript)) {
+    console.log('[DEBUG] Transcript parts:', transcript.map(p => p.type))
+  }
+
   if (!config.mcpToolsEnabled || !config.mcpAgentModeEnabled) {
+    // Extract text for fallback (processTranscriptWithTools expects string)
+    const transcriptText = extractTextFromContent(transcript)
     const fallbackResponse = await processTranscriptWithTools(
-      transcript,
+      transcriptText,
       availableTools,
     )
     return {
@@ -538,7 +583,7 @@ export async function processTranscriptWithAgentMode(
 
   const conversationHistory: Array<{
     role: "user" | "assistant" | "tool"
-    content: string
+    content: any // MessageContent - preserve multimodal content (string or array)
     toolCalls?: MCPToolCall[]
     toolResults?: MCPToolResult[]
     timestamp?: number
@@ -551,29 +596,62 @@ export async function processTranscriptWithAgentMode(
   const formatConversationForProgress = (
     history: typeof conversationHistory,
   ) => {
-    const isNudge = (content: string) =>
-      content.includes("Please either take action using available tools") ||
-      content.includes("You have relevant tools available for this request")
+    // Helper to extract text from MessageContent (string or array)
+    const getTextContent = (content: any): string => {
+      if (typeof content === 'string') return content
+      if (Array.isArray(content)) {
+        return content
+          .filter((p) => p.type === 'text')
+          .map((p) => p.text)
+          .join(' ')
+      }
+      return String(content)
+    }
+
+    const isNudge = (content: any) => {
+      const text = getTextContent(content)
+      return text.includes("Please either take action using available tools") ||
+        text.includes("You have relevant tools available for this request")
+    }
 
     return history
       .filter((entry) => !(entry.role === "user" && isNudge(entry.content)))
       .map((entry) => ({
         role: entry.role,
-        content: entry.content,
+        content: entry.content, // Preserve multimodal content as-is
         toolCalls: entry.toolCalls?.map((tc) => ({
           name: tc.name,
           arguments: tc.arguments,
         })),
-        toolResults: entry.toolResults?.map((tr) => ({
-          success: !tr.isError,
-          content: tr.content.map((c) => c.text).join("\n"),
-          error: tr.isError
+        toolResults: entry.toolResults?.map((tr) => {
+          // Safely extract content - handle both array and non-array cases
+          const contentText = Array.isArray(tr.content)
             ? tr.content.map((c) => c.text).join("\n")
-            : undefined,
-        })),
+            : typeof tr.content === 'string'
+            ? tr.content
+            : JSON.stringify(tr.content)
+
+          return {
+            success: !tr.isError,
+            content: contentText,
+            error: tr.isError ? contentText : undefined,
+          }
+        }),
         // Preserve original timestamp if available, otherwise use current time
         timestamp: entry.timestamp || Date.now(),
       }))
+  }
+
+  // Helper to extract text from MessageContent (string or array)
+  const getTextContent = (content: any): string => {
+    if (typeof content === 'string') return content
+    if (Array.isArray(content)) {
+      return content
+        .filter((p) => p.type === 'text')
+        .map((p) => p.text)
+        .join(' ')
+    }
+    return String(content)
   }
 
   // Build compact verification messages (schema-first verifier)
@@ -586,13 +664,13 @@ export async function processTranscriptWithAgentMode(
       content:
         "You are a strict completion verifier. Determine if the user's original request has been fully satisfied in the conversation. Be conservative: if uncertain, mark not complete and list what's missing. Return ONLY JSON per schema.",
     })
-    messages.push({ role: "user", content: `Original request:\n${transcript}` })
+    messages.push({ role: "user", content: `Original request:\n${getTextContent(transcript)}` })
     for (const entry of recent) {
       if (entry.role === "tool") {
-        const text = (entry.content || "").trim()
+        const text = getTextContent(entry.content).trim()
         if (text) messages.push({ role: "user", content: `Tool results:\n${text}` })
       } else {
-        messages.push({ role: entry.role, content: entry.content })
+        messages.push({ role: entry.role, content: getTextContent(entry.content) })
       }
     }
     if (finalAssistantText?.trim()) {
@@ -752,6 +830,18 @@ Always use actual resource IDs from the conversation history or create new ones 
         })
         .filter(Boolean as any),
     ]
+
+    // Debug: Log if any messages have multimodal content
+    const multimodalMessages = messages.filter(m => Array.isArray(m.content))
+    if (multimodalMessages.length > 0) {
+      console.log('[DEBUG] Found', multimodalMessages.length, 'multimodal messages before context shrinking')
+      multimodalMessages.forEach((m, i) => {
+        console.log(`[DEBUG] Multimodal message ${i}:`, {
+          role: m.role,
+          parts: Array.isArray(m.content) ? m.content.map((p: any) => p.type) : 'not array'
+        })
+      })
+    }
 
     // Apply context budget management before the agent LLM call
     const { messages: shrunkMessages } = await shrinkMessagesForLLM({
@@ -1181,12 +1271,18 @@ Always use actual resource IDs from the conversation history or create new ones 
 
       // Update tool call step with result
       toolCallStep.status = result.isError ? "error" : "completed"
+
+      // Safely extract content - handle both array and non-array cases
+      const resultContentText = Array.isArray(result.content)
+        ? result.content.map((c) => c.text).join("\n")
+        : typeof result.content === 'string'
+        ? result.content
+        : JSON.stringify(result.content)
+
       toolCallStep.toolResult = {
         success: !result.isError,
-        content: result.content.map((c) => c.text).join("\n"),
-        error: result.isError
-          ? result.content.map((c) => c.text).join("\n")
-          : undefined,
+        content: resultContentText,
+        error: result.isError ? resultContentText : undefined,
       }
 
       // Add tool result step with enhanced error information
@@ -1218,13 +1314,30 @@ Always use actual resource IDs from the conversation history or create new ones 
     // The UI will handle display and truncation as needed
     const processedToolResults = toolResults
 
-    const meaningfulResults = processedToolResults.filter((r) =>
-      r.isError || (r.content?.map((c) => c.text).join("").trim().length > 0),
-    )
+    const meaningfulResults = processedToolResults.filter((r) => {
+      if (r.isError) return true
+
+      // Safely check content length
+      if (Array.isArray(r.content)) {
+        return r.content.map((c) => c.text).join("").trim().length > 0
+      } else if (typeof r.content === 'string') {
+        return r.content.trim().length > 0
+      }
+      return false
+    })
 
     if (meaningfulResults.length > 0) {
       const toolResultsText = meaningfulResults
-        .map((result) => result.content.map((c) => c.text).join("\n"))
+        .map((result) => {
+          // Safely extract content - handle both array and non-array cases
+          if (Array.isArray(result.content)) {
+            return result.content.map((c) => c.text).join("\n")
+          } else if (typeof result.content === 'string') {
+            return result.content
+          } else {
+            return JSON.stringify(result.content)
+          }
+        })
         .join("\n\n")
 
       conversationHistory.push({
@@ -1248,8 +1361,18 @@ Always use actual resource IDs from the conversation history or create new ones 
 ${failedTools
   .map((toolName) => {
     const failedResult = toolResults.find((r) => r.isError)
-    const errorText =
-      failedResult?.content.map((c) => c.text).join(" ") || "Unknown error"
+
+    // Safely extract error text - handle both array and non-array cases
+    let errorText = "Unknown error"
+    if (failedResult) {
+      if (Array.isArray(failedResult.content)) {
+        errorText = failedResult.content.map((c) => c.text).join(" ")
+      } else if (typeof failedResult.content === 'string') {
+        errorText = failedResult.content
+      } else {
+        errorText = JSON.stringify(failedResult.content)
+      }
+    }
 
     // Check for error patterns and provide generic suggestions
     let suggestion = ""

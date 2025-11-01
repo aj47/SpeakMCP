@@ -38,11 +38,20 @@ import {
   getEffectiveShortcut,
   formatKeyComboForDisplay,
 } from "@shared/key-utils"
+import { useQuery } from "@tanstack/react-query"
+import { AlertCircle, CheckCircle2 } from "lucide-react"
 
 export function Component() {
   const configQuery = useConfigQuery()
 
   const saveConfigMutation = useSaveConfigMutation()
+
+  // Check screen recording permission status
+  const screenCaptureStatusQuery = useQuery({
+    queryKey: ["screenCaptureStatus"],
+    queryFn: () => tipcClient.getScreenCaptureStatus(),
+    refetchInterval: 2000, // Check every 2 seconds to detect when user grants permission
+  })
 
   const saveConfig = useCallback(
     (config: Partial<Config>) => {
@@ -571,6 +580,189 @@ export function Component() {
                 </div>
               </Control>
             )}
+        </ControlGroup>
+
+        {/* Screenshot Settings */}
+        <ControlGroup
+          title="Screenshot / Multimodal"
+          endDescription="Capture and send screenshots along with text input to multimodal AI models (e.g., GPT-4V, Claude with vision)"
+        >
+          <Control label="Enable Screenshot" className="px-3">
+            <Switch
+              defaultChecked={configQuery.data.screenshotEnabled ?? true}
+              onCheckedChange={(value) => {
+                saveConfig({
+                  screenshotEnabled: value,
+                })
+              }}
+            />
+          </Control>
+
+          {configQuery.data.screenshotEnabled && (
+            <>
+              {/* Screen Recording Permission Status (macOS only) */}
+              {process.env.IS_MAC && (
+                <div className="px-3 py-2 mx-3 mb-2 rounded-md bg-muted/50">
+                  <div className="flex items-start gap-3">
+                    {screenCaptureStatusQuery.data === "granted" ? (
+                      <>
+                        <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-500 mt-0.5 flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-green-700 dark:text-green-400">
+                            Screen Recording Permission Granted
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Screenshots can be captured successfully.
+                          </p>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-500 mt-0.5 flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-amber-700 dark:text-amber-400">
+                            Screen Recording Permission Required
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            macOS requires Screen Recording permission to capture screenshots.
+                          </p>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="mt-2 h-7 text-xs"
+                            onClick={() => {
+                              tipcClient.openScreenCaptureInSystemPreferences()
+                            }}
+                          >
+                            Open System Settings
+                          </Button>
+                          <p className="text-xs text-muted-foreground mt-2">
+                            After granting permission, you may need to restart the app.
+                          </p>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              <Control
+                label={
+                  <ControlLabel
+                    label="Image Format"
+                    tooltip="JPEG is smaller and faster, PNG is lossless but larger"
+                  />
+                }
+                className="px-3"
+              >
+                <Select
+                  value={configQuery.data?.screenshotFormat || "jpeg"}
+                  onValueChange={(value: "jpeg" | "png") => {
+                    saveConfig({
+                      screenshotFormat: value,
+                    })
+                  }}
+                >
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="jpeg">JPEG (Recommended)</SelectItem>
+                    <SelectItem value="png">PNG</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Control>
+
+              {configQuery.data?.screenshotFormat === "jpeg" && (
+                <Control
+                  label={
+                    <ControlLabel
+                      label="JPEG Quality"
+                      tooltip="Higher quality = larger file size. 0.8 is recommended for good balance."
+                    />
+                  }
+                  className="px-3"
+                >
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="range"
+                      min="0.1"
+                      max="1.0"
+                      step="0.1"
+                      value={configQuery.data?.screenshotQuality ?? 0.8}
+                      onChange={(e) => {
+                        saveConfig({
+                          screenshotQuality: parseFloat(e.target.value),
+                        })
+                      }}
+                      className="flex-1"
+                    />
+                    <span className="text-sm font-medium w-12 text-right">
+                      {((configQuery.data?.screenshotQuality ?? 0.8) * 100).toFixed(0)}%
+                    </span>
+                  </div>
+                </Control>
+              )}
+
+              <Control
+                label={
+                  <ControlLabel
+                    label="Max Width"
+                    tooltip="Screenshots wider than this will be resized. Smaller = faster upload."
+                  />
+                }
+                className="px-3"
+              >
+                <Select
+                  value={String(configQuery.data?.screenshotMaxWidth || 1920)}
+                  onValueChange={(value) => {
+                    saveConfig({
+                      screenshotMaxWidth: parseInt(value),
+                    })
+                  }}
+                >
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1280">1280px (HD)</SelectItem>
+                    <SelectItem value="1920">1920px (Full HD)</SelectItem>
+                    <SelectItem value="2560">2560px (2K)</SelectItem>
+                    <SelectItem value="3840">3840px (4K)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Control>
+
+              <Control
+                label={
+                  <ControlLabel
+                    label="Max Height"
+                    tooltip="Screenshots taller than this will be resized. Smaller = faster upload."
+                  />
+                }
+                className="px-3"
+              >
+                <Select
+                  value={String(configQuery.data?.screenshotMaxHeight || 1080)}
+                  onValueChange={(value) => {
+                    saveConfig({
+                      screenshotMaxHeight: parseInt(value),
+                    })
+                  }}
+                >
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="720">720px (HD)</SelectItem>
+                    <SelectItem value="1080">1080px (Full HD)</SelectItem>
+                    <SelectItem value="1440">1440px (2K)</SelectItem>
+                    <SelectItem value="2160">2160px (4K)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Control>
+            </>
+          )}
         </ControlGroup>
 
         {/* Panel Position Settings */}

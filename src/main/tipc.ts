@@ -51,6 +51,7 @@ import { startRemoteServer, stopRemoteServer, restartRemoteServer } from "./remo
 async function processWithAgentMode(
   text: string,
   conversationId?: string,
+  currentMessageContent?: any, // MessageContent - can be string or array with text/image parts
 ): Promise<string> {
   const config = configStore.get()
 
@@ -84,7 +85,7 @@ async function processWithAgentMode(
       let previousConversationHistory:
         | Array<{
             role: "user" | "assistant" | "tool"
-            content: string
+            content: any // MessageContent - preserve multimodal content (string or array)
             toolCalls?: any[]
             toolResults?: any[]
           }>
@@ -100,9 +101,7 @@ async function processWithAgentMode(
           const messagesToConvert = conversation.messages.slice(0, -1)
           previousConversationHistory = messagesToConvert.map((msg) => ({
             role: msg.role,
-            content: typeof msg.content === 'string'
-              ? msg.content
-              : msg.content.filter(p => p.type === 'text').map(p => p.text).join(' '),
+            content: msg.content, // Preserve multimodal content (string or array with text/image parts)
             toolCalls: msg.toolCalls,
             toolResults: msg.toolResults,
           }))
@@ -110,7 +109,7 @@ async function processWithAgentMode(
       }
 
       const agentResult = await processTranscriptWithAgentMode(
-        text,
+        currentMessageContent || text, // Pass full multimodal content if available
         availableTools,
         executeToolCall,
         config.mcpMaxIterations ?? 10, // Use configured max iterations or default to 10
@@ -420,6 +419,30 @@ export const router = {
     return systemPreferences.askForMediaAccess("microphone")
   }),
 
+  getScreenCaptureStatus: t.procedure.action(async () => {
+    if (process.platform !== "darwin") {
+      // Screen capture permission is only required on macOS
+      return "granted"
+    }
+    return systemPreferences.getMediaAccessStatus("screen")
+  }),
+
+  requestScreenCaptureAccess: t.procedure.action(async () => {
+    if (process.platform !== "darwin") {
+      return true
+    }
+    // On macOS, we can't programmatically request screen recording permission
+    // We need to guide the user to System Settings
+    // Attempting to capture will trigger the system prompt on first try
+    return false
+  }),
+
+  openScreenCaptureInSystemPreferences: t.procedure.action(async () => {
+    if (process.platform === "darwin") {
+      shell.openExternal("x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")
+    }
+  }),
+
   showPanelWindow: t.procedure.action(async () => {
     showPanelWindow()
   }),
@@ -631,6 +654,13 @@ export const router = {
         return router.createTextInput({ text: input.text })
       }
 
+      // Debug: Log screenshot data presence
+      console.log('[DEBUG] createMcpTextInput - screenshotData present:', !!input.screenshotData)
+      if (input.screenshotData) {
+        console.log('[DEBUG] Screenshot data length:', input.screenshotData.length)
+        console.log('[DEBUG] Screenshot data prefix:', input.screenshotData.substring(0, 50))
+      }
+
       // Create message content (multimodal if screenshot is provided)
       let messageContent: any = input.text
       if (input.screenshotData) {
@@ -638,6 +668,7 @@ export const router = {
           { type: "text", text: input.text },
           { type: "image_url", image_url: { url: input.screenshotData } }
         ]
+        console.log('[DEBUG] Created multimodal messageContent with', messageContent.length, 'parts')
       }
 
       // Create or get conversation ID
@@ -658,9 +689,12 @@ export const router = {
       }
 
       // Use unified agent mode processing
+      console.log('[DEBUG] Calling processWithAgentMode with messageContent:',
+        Array.isArray(messageContent) ? `array with ${messageContent.length} parts` : 'string')
       const finalResponse = await processWithAgentMode(
         input.text,
         conversationId,
+        messageContent, // Pass multimodal content (text or array with image)
       )
 
       // Save to history
@@ -795,6 +829,7 @@ export const router = {
       const finalResponse = await processWithAgentMode(
         transcript,
         conversationId,
+        transcript, // For voice input, content is just the transcript text
       )
 
 

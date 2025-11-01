@@ -6,6 +6,7 @@ import { AgentProgressUpdate } from "../../../shared/types"
 import { useTheme } from "@renderer/contexts/theme-context"
 import { tipcClient } from "@renderer/lib/tipc-client"
 import { useQuery } from "@tanstack/react-query"
+import { toast } from "sonner"
 
 interface TextInputPanelProps {
   onSubmit: (text: string, screenshotData?: string) => void
@@ -78,6 +79,26 @@ export const TextInputPanel = forwardRef<TextInputPanelRef, TextInputPanelProps>
       }
     } catch (error) {
       console.error("Failed to capture screenshot:", error)
+      const errorMessage = error instanceof Error ? error.message : String(error)
+
+      if (errorMessage.includes("Failed to get sources") || errorMessage.includes("No screen sources")) {
+        if (process.env.IS_MAC) {
+          toast.error("Screen Recording Permission Required", {
+            description: "Please grant Screen Recording permission in System Settings → Privacy & Security → Screen Recording",
+            duration: 5000,
+          })
+        } else {
+          toast.error("Screenshot Capture Failed", {
+            description: "Unable to capture screenshot. Please check your system permissions.",
+            duration: 5000,
+          })
+        }
+      } else {
+        toast.error("Screenshot Capture Failed", {
+          description: errorMessage,
+          duration: 5000,
+        })
+      }
     } finally {
       setIsCapturingScreenshot(false)
     }
@@ -97,6 +118,26 @@ export const TextInputPanel = forwardRef<TextInputPanelRef, TextInputPanelProps>
           }
         } catch (error) {
           console.error("Failed to capture screenshot:", error)
+          const errorMessage = error instanceof Error ? error.message : String(error)
+
+          if (errorMessage.includes("Failed to get sources") || errorMessage.includes("No screen sources")) {
+            if (process.env.IS_MAC) {
+              toast.error("Screen Recording Permission Required", {
+                description: "Please grant Screen Recording permission in System Settings → Privacy & Security → Screen Recording",
+                duration: 5000,
+              })
+            } else {
+              toast.error("Screenshot Capture Failed", {
+                description: "Unable to capture screenshot. Please check your system permissions.",
+                duration: 5000,
+              })
+            }
+          } else {
+            toast.error("Screenshot Capture Failed", {
+              description: errorMessage,
+              duration: 5000,
+            })
+          }
         } finally {
           setIsCapturingScreenshot(false)
         }

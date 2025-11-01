@@ -463,28 +463,68 @@ async function makeAPICallAttempt(
 ): Promise<any> {
   if (isDebugLLM()) {
     logLLM("=== OPENAI API REQUEST ===")
+
+    // Calculate total prompt length handling multimodal content
+    const totalPromptLength = requestBody.messages.reduce((sum: number, msg: any) => {
+      if (typeof msg.content === 'string') {
+        return sum + msg.content.length
+      } else if (Array.isArray(msg.content)) {
+        return sum + msg.content.reduce((s: number, part: any) => {
+          if (part.type === 'text') return s + part.text.length
+          return s + 50 // Placeholder for image_url
+        }, 0)
+      }
+      return sum
+    }, 0)
+
     logLLM("HTTP Request", {
       url: `${baseURL}/chat/completions`,
       model: requestBody.model,
       messagesCount: requestBody.messages.length,
       responseFormat: requestBody.response_format,
       estimatedTokens,
-      totalPromptLength: (requestBody.messages as Array<{ role: string; content: string }>).reduce(
-        (sum: number, msg: { role: string; content: string }) => sum + ((msg.content?.length) || 0),
-        0,
-      ),
+      totalPromptLength,
       contextWarning: estimatedTokens > 8000 ? "WARNING: High token count, may exceed context limit" : null
     })
+
+    // Log messages with multimodal support
     logLLM("Request Body (truncated)", {
       ...requestBody,
-      messages: (requestBody.messages as Array<{ role: string; content: string }>).map(
-        (msg: { role: string; content: string }) => ({
-          role: msg.role,
-          content: msg.content.length > 200
-            ? msg.content.substring(0, 200) + "... [" + msg.content.length + " chars]"
-            : msg.content,
-        }),
-      )
+      messages: requestBody.messages.map((msg: any) => {
+        if (typeof msg.content === 'string') {
+          return {
+            role: msg.role,
+            content: msg.content.length > 200
+              ? msg.content.substring(0, 200) + "... [" + msg.content.length + " chars]"
+              : msg.content,
+          }
+        } else if (Array.isArray(msg.content)) {
+          // Multimodal content
+          return {
+            role: msg.role,
+            content: msg.content.map((part: any) => {
+              if (part.type === 'text') {
+                return {
+                  type: 'text',
+                  text: part.text.length > 200
+                    ? part.text.substring(0, 200) + "... [" + part.text.length + " chars]"
+                    : part.text
+                }
+              } else if (part.type === 'image_url') {
+                return {
+                  type: 'image_url',
+                  image_url: {
+                    url: part.image_url.url.substring(0, 50) + "... [IMAGE DATA]",
+                    detail: part.image_url.detail
+                  }
+                }
+              }
+              return part
+            })
+          }
+        }
+        return msg
+      })
     })
   }
 

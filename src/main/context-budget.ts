@@ -75,8 +75,24 @@ async function getMaxContextTokens(providerId: string, model: string): Promise<n
 }
 
 function estimateTokensFromMessages(messages: LLMMessage[]): number {
-  // Rough estimate: 4 chars ≈ 1 token
-  const totalChars = messages.reduce((sum, m) => sum + (m.content?.length || 0), 0)
+  // Rough estimate: 4 chars ≈ 1 token for text, ~85 tokens per image
+  const totalChars = messages.reduce((sum, m) => {
+    if (typeof m.content === 'string') {
+      return sum + m.content.length
+    } else if (Array.isArray(m.content)) {
+      // Handle multimodal content (text + images)
+      return sum + m.content.reduce((partSum, part) => {
+        if (part.type === 'text') {
+          return partSum + part.text.length
+        } else if (part.type === 'image_url') {
+          // Rough estimate: images are ~85 tokens on average (OpenAI's low detail mode)
+          return partSum + 340 // 85 tokens * 4 chars/token
+        }
+        return partSum
+      }, 0)
+    }
+    return sum
+  }, 0)
   return Math.ceil(totalChars / 4)
 }
 
@@ -185,13 +201,18 @@ export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<{ messa
   }
 
   // Tier 1: Summarize large messages (prefer tool outputs or very long entries)
+  // Skip multimodal content (arrays) - only summarize plain text
   const indicesByLength = messages
-    .map((m, i) => ({ i, len: m.content?.length || 0, role: m.role, content: m.content }))
-    .filter((x) => x.len > summarizeThreshold && x.role !== "system")
+    .map((m, i) => {
+      const isMultimodal = Array.isArray(m.content)
+      const len = typeof m.content === 'string' ? m.content.length : 0
+      return { i, len, role: m.role, content: m.content, isMultimodal }
+    })
+    .filter((x) => !x.isMultimodal && x.len > summarizeThreshold && x.role !== "system")
     .sort((a, b) => b.len - a.len)
 
   for (const item of indicesByLength) {
-    const summarized = await summarizeContent(item.content!)
+    const summarized = await summarizeContent(item.content as string)
     messages[item.i] = { ...messages[item.i], content: summarized }
     applied.push("summarize")
     tokens = estimateTokensFromMessages(messages)

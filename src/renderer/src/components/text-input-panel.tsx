@@ -99,20 +99,13 @@ export const TextInputPanel = forwardRef<TextInputPanelRef, TextInputPanelProps>
         "text-input-panel modern-text-strong flex h-full w-full items-center justify-center rounded-xl",
         isDark ? "dark" : ""
       )}>
-        {agentProgress ? (
-          <AgentProcessingView
-            agentProgress={agentProgress}
-            isProcessing={isProcessing}
-            variant="overlay"
-            showBackgroundSpinner={true}
-            className="mx-4 w-full"
-          />
-        ) : (
-          <div className="flex items-center gap-2">
-            <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"></div>
-            <span className="text-sm">Processing...</span>
-          </div>
-        )}
+        <AgentProcessingView
+          agentProgress={agentProgress}
+          isProcessing={isProcessing}
+          variant="overlay"
+          showBackgroundSpinner={true}
+          className="mx-4 w-full"
+        />
       </div>
     )
   }

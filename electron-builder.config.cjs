@@ -5,6 +5,10 @@ module.exports = {
   appId: "app.speakmcp",
   productName: "SpeakMCP",
   icon: "build/icon.png",
+  protocols: {
+    name: "SpeakMCP Protocol",
+    schemes: ["speakmcp"],
+  },
   directories: {
     buildResources: "build",
   },

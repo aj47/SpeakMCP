@@ -48,10 +48,12 @@ export function useInputProcessing(options: UseInputProcessingOptions = {}) {
       blob,
       duration,
       transcript,
+      screenshotData,
     }: {
       blob: Blob
       duration: number
       transcript?: string
+      screenshotData?: string
     }) => {
       const arrayBuffer = await blob.arrayBuffer()
 
@@ -64,6 +66,7 @@ export function useInputProcessing(options: UseInputProcessingOptions = {}) {
         recording: arrayBuffer,
         duration,
         conversationId: currentConversation?.id || undefined,
+        screenshotData,
       })
 
       return result
@@ -98,11 +101,12 @@ export function useInputProcessing(options: UseInputProcessingOptions = {}) {
   }
 
   // Unified voice processing function
-  const processVoice = (blob: Blob, duration: number, transcript?: string) => {
+  const processVoice = (blob: Blob, duration: number, transcript?: string, screenshotData?: string) => {
     mcpTranscribeMutation.mutate({
       blob,
       duration,
       transcript,
+      screenshotData,
     })
   }
 

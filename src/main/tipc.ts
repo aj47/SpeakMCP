@@ -735,6 +735,7 @@ export const router = {
       recording: ArrayBuffer
       duration: number
       conversationId?: string
+      screenshotData?: string
     }>()
     .action(async ({ input }) => {
       fs.mkdirSync(recordingsFolder, { recursive: true })
@@ -744,6 +745,13 @@ export const router = {
 
       // Initialize MCP service if not already done
       await mcpService.initialize()
+
+      // Debug: Log screenshot data presence
+      console.log('[DEBUG] createMcpRecording - screenshotData present:', !!input.screenshotData)
+      if (input.screenshotData) {
+        console.log('[DEBUG] Screenshot data length:', input.screenshotData.length)
+        console.log('[DEBUG] Screenshot data prefix:', input.screenshotData.substring(0, 50))
+      }
 
       // First, transcribe the audio using the same logic as regular recording
       // Use OpenAI or Groq for transcription
@@ -795,14 +803,24 @@ export const router = {
       const json: { text: string } = await transcriptResponse.json()
       transcript = json.text
 
+      // Create message content (multimodal if screenshot is provided)
+      let messageContent: any = transcript
+      if (input.screenshotData) {
+        messageContent = [
+          { type: "text", text: transcript },
+          { type: "image_url", image_url: { url: input.screenshotData } }
+        ]
+        console.log('[DEBUG] Created multimodal messageContent with', messageContent.length, 'parts')
+      }
+
       // Create or continue conversation
       let conversationId = input.conversationId
       let conversation: Conversation | null = null
 
       if (!conversationId) {
-        // Create new conversation with the transcript
+        // Create new conversation with the transcript (and optional screenshot)
         conversation = await conversationService.createConversation(
-          transcript,
+          messageContent,
           "user",
         )
         conversationId = conversation.id
@@ -813,12 +831,12 @@ export const router = {
         if (conversation) {
           await conversationService.addMessageToConversation(
             conversationId,
-            transcript,
+            messageContent,
             "user",
           )
         } else {
           conversation = await conversationService.createConversation(
-            transcript,
+            messageContent,
             "user",
           )
           conversationId = conversation.id
@@ -826,10 +844,12 @@ export const router = {
       }
 
       // Use unified agent mode processing
+      console.log('[DEBUG] Calling processWithAgentMode with messageContent:',
+        Array.isArray(messageContent) ? `array with ${messageContent.length} parts` : 'string')
       const finalResponse = await processWithAgentMode(
         transcript,
         conversationId,
-        transcript, // For voice input, content is just the transcript text
+        messageContent, // Pass multimodal content (text or array with image)
       )
 
 

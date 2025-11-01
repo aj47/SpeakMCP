@@ -77,6 +77,13 @@ export interface Config {
   mcpContextSummarizeCharThreshold?: number
   mcpMaxContextTokensOverride?: number
 
+  // Screenshot Configuration
+  screenshotEnabled?: boolean
+  screenshotQuality?: number // 0.0 to 1.0 for JPEG quality
+  screenshotFormat?: "png" | "jpeg"
+  screenshotMaxWidth?: number // Max width for resizing
+  screenshotMaxHeight?: number // Max height for resizing
+
 }
 
 // Define the structure for conversation

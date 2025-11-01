@@ -92,10 +92,12 @@ export function Component() {
       blob,
       duration,
       transcript,
+      screenshotData,
     }: {
       blob: Blob
       duration: number
       transcript?: string
+      screenshotData?: string
     }) => {
       const arrayBuffer = await blob.arrayBuffer()
 
@@ -108,6 +110,7 @@ export function Component() {
         recording: arrayBuffer,
         duration,
         conversationId: currentConversationId || undefined,
+        screenshotData,
       })
 
       // Update conversation ID if backend created/returned one
@@ -216,7 +219,7 @@ export function Component() {
       })
     })
 
-    recorder.on("record-end", (blob, duration) => {
+    recorder.on("record-end", async (blob, duration) => {
       const currentMcpMode = mcpModeRef.current
       setRecording(false)
       setVisualizerData(() => getInitialVisualizerData())
@@ -250,11 +253,31 @@ export function Component() {
 
       playSound("end_record")
 
+      // Capture screenshot if enabled and in MCP mode
+      let screenshotData: string | undefined = undefined
+      if (currentMcpMode) {
+        try {
+          const config = await tipcClient.getConfig()
+          if (config.screenshotEnabled) {
+            console.log('[DEBUG] Capturing screenshot for voice input...')
+            const result = await tipcClient.captureScreenshot({})
+            if (result && result.data) {
+              screenshotData = `data:image/${result.format};base64,${result.data}`
+              console.log('[DEBUG] Screenshot captured successfully for voice input')
+            }
+          }
+        } catch (error) {
+          console.error("Failed to capture screenshot for voice input:", error)
+          // Don't fail the entire operation if screenshot capture fails
+        }
+      }
+
       // Use appropriate mutation based on mode
       if (currentMcpMode) {
         mcpTranscribeMutation.mutate({
           blob,
           duration,
+          screenshotData,
         })
       } else {
         transcribeMutation.mutate({

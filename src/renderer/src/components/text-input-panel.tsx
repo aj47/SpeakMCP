@@ -45,6 +45,39 @@ export const TextInputPanel = forwardRef<TextInputPanelRef, TextInputPanelProps>
     }
   }))
 
+  // Dynamically resize window when screenshot preview is shown/hidden
+  useEffect(() => {
+    const resizeWindow = async () => {
+      try {
+        const currentSize = await tipcClient.getPanelSize()
+        if (!currentSize || typeof currentSize !== 'object' || !('width' in currentSize) || !('height' in currentSize)) {
+          return
+        }
+
+        // Base height for text input mode (without screenshot)
+        const baseHeight = 180
+        // Additional height needed for screenshot preview (image + padding + border)
+        const screenshotPreviewHeight = 160 // max-h-32 (128px) + padding + border + margin
+
+        const newHeight = screenshotData
+          ? Math.max(baseHeight + screenshotPreviewHeight, currentSize.height)
+          : baseHeight
+
+        // Only resize if there's a significant change
+        if (Math.abs(currentSize.height - newHeight) > 10) {
+          await tipcClient.updatePanelSize({
+            width: currentSize.width,
+            height: newHeight
+          })
+        }
+      } catch (error) {
+        console.error("Failed to resize window for screenshot preview:", error)
+      }
+    }
+
+    resizeWindow()
+  }, [screenshotData])
+
   // Auto-focus when component mounts - with retry for Windows
   useEffect(() => {
     if (textareaRef.current && !isProcessing) {

@@ -105,7 +105,8 @@ async function processWithAgentMode(
               content: [
                 {
                   type: "text" as const,
-                  text: tr.error || tr.content,
+                  // Use content for successful results, error message for failures
+                  text: tr.success ? tr.content : (tr.error || tr.content),
                 },
               ],
               isError: !tr.success,

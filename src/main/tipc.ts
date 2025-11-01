@@ -25,6 +25,7 @@ import {
   MCPServerConfig,
   Conversation,
   ConversationHistoryItem,
+  AgentProgressUpdate,
 } from "../shared/types"
 import { conversationService } from "./conversation-service"
 import { RendererHandlers } from "./renderer-handlers"
@@ -45,6 +46,39 @@ import { state, agentProcessManager } from "./state"
 
 import { startRemoteServer, stopRemoteServer, restartRemoteServer } from "./remote-server"
 
+// Helper function to emit agent progress updates to the renderer
+function emitAgentProgress(update: AgentProgressUpdate) {
+  const panel = WINDOWS.get("panel")
+  if (!panel) {
+    console.warn("Panel window not available for progress update")
+    return
+  }
+
+  // Show the panel window if it's not visible
+  if (!panel.isVisible()) {
+    showPanelWindow()
+  }
+
+  try {
+    const handlers = getRendererHandlers<RendererHandlers>(panel.webContents)
+    if (!handlers.agentProgressUpdate) {
+      console.warn("Agent progress handler not available")
+      return
+    }
+
+    // Add a small delay to ensure UI updates are processed
+    setTimeout(() => {
+      try {
+        handlers.agentProgressUpdate.send(update)
+      } catch (error) {
+        console.warn("Failed to send progress update:", error)
+      }
+    }, 10)
+  } catch (error) {
+    console.warn("Failed to get renderer handlers:", error)
+  }
+}
+
 // Unified agent mode processing function
 async function processWithAgentMode(
   text: string,
@@ -62,8 +96,81 @@ async function processWithAgentMode(
       throw new Error("MCP tools are not enabled")
     }
 
-    // Initialize MCP service if not already done
-    await mcpService.initialize()
+    // Check if MCP is initializing and emit progress updates
+    const initStatus = mcpService.getInitializationStatus()
+    if (initStatus.isInitializing) {
+      // Emit initial progress showing MCP initialization
+      emitAgentProgress({
+        currentIteration: 0,
+        maxIterations: config.mcpMaxIterations ?? 10,
+        steps: [
+          {
+            id: `mcp_init_${Date.now()}`,
+            type: "thinking",
+            title: "Initializing MCP tools",
+            description: initStatus.progress.currentServer
+              ? `Initializing ${initStatus.progress.currentServer} (${initStatus.progress.current}/${initStatus.progress.total})`
+              : `Initializing MCP servers (${initStatus.progress.current}/${initStatus.progress.total})`,
+            status: "in_progress",
+            timestamp: Date.now(),
+          },
+        ],
+        isComplete: false,
+      })
+
+      // Poll for initialization progress updates
+      const progressInterval = setInterval(() => {
+        const currentStatus = mcpService.getInitializationStatus()
+        if (currentStatus.isInitializing) {
+          emitAgentProgress({
+            currentIteration: 0,
+            maxIterations: config.mcpMaxIterations ?? 10,
+            steps: [
+              {
+                id: `mcp_init_${Date.now()}`,
+                type: "thinking",
+                title: "Initializing MCP tools",
+                description: currentStatus.progress.currentServer
+                  ? `Initializing ${currentStatus.progress.currentServer} (${currentStatus.progress.current}/${currentStatus.progress.total})`
+                  : `Initializing MCP servers (${currentStatus.progress.current}/${currentStatus.progress.total})`,
+                status: "in_progress",
+                timestamp: Date.now(),
+              },
+            ],
+            isComplete: false,
+          })
+        } else {
+          clearInterval(progressInterval)
+        }
+      }, 500) // Update every 500ms
+
+      // Initialize MCP service if not already done
+      // This will wait for initialization to complete if it's in progress
+      await mcpService.initialize()
+
+      // Clear the interval when initialization completes
+      clearInterval(progressInterval)
+
+      // Emit completion of MCP initialization
+      emitAgentProgress({
+        currentIteration: 0,
+        maxIterations: config.mcpMaxIterations ?? 10,
+        steps: [
+          {
+            id: `mcp_init_complete_${Date.now()}`,
+            type: "thinking",
+            title: "MCP tools initialized",
+            description: `Successfully initialized ${mcpService.getAvailableTools().length} tools`,
+            status: "completed",
+            timestamp: Date.now(),
+          },
+        ],
+        isComplete: false,
+      })
+    } else {
+      // Initialize MCP service if not already done
+      await mcpService.initialize()
+    }
 
     // Register any existing MCP server processes with the agent process manager
     // This handles the case where servers were already initialized before agent mode was activated

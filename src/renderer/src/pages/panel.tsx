@@ -455,9 +455,15 @@ export function Component() {
   // Clear agent progress handler
   useEffect(() => {
     const unlisten = rendererHandlers.clearAgentProgress.listen(() => {
-      console.log('[Panel] Clearing agent progress - stopping all TTS audio')
+      console.log('[Panel] Clearing agent progress - stopping all TTS audio and resetting mutations')
       // Stop all TTS audio when clearing progress (ESC key pressed)
       ttsManager.stopAll()
+
+      // Reset all mutations to clear isPending state
+      transcribeMutation.reset()
+      mcpTranscribeMutation.reset()
+      textInputMutation.reset()
+      mcpTextInputMutation.reset()
 
       setAgentProgress(null)
       setMcpMode(false)
@@ -469,17 +475,30 @@ export function Component() {
     })
 
     return unlisten
-  }, [isConversationActive, endConversation])
+  }, [isConversationActive, endConversation, transcribeMutation, mcpTranscribeMutation, textInputMutation, mcpTextInputMutation])
 
-  // Emergency stop handler - stop all TTS audio
+  // Emergency stop handler - stop all TTS audio and reset mutations
   useEffect(() => {
     const unlisten = rendererHandlers.emergencyStopAgent.listen(() => {
-      console.log('[Panel] Emergency stop triggered - stopping all TTS audio')
+      console.log('[Panel] Emergency stop triggered - stopping all TTS audio and resetting mutations')
       ttsManager.stopAll()
+
+      // Reset all mutations to clear isPending state
+      // This ensures the UI doesn't stay stuck in loading state
+      transcribeMutation.reset()
+      mcpTranscribeMutation.reset()
+      textInputMutation.reset()
+      mcpTextInputMutation.reset()
+
+      // Clear agent progress
+      setAgentProgress(null)
+
+      // Clear text input state
+      setShowTextInput(false)
     })
 
     return unlisten
-  }, [])
+  }, [transcribeMutation, mcpTranscribeMutation, textInputMutation, mcpTextInputMutation])
 
   return (
     <PanelResizeWrapper

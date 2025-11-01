@@ -400,8 +400,9 @@ export function listenToKeyboardEvents() {
           if (isDebugKeybinds()) {
             logKeybinds("Kill switch triggered: Ctrl+Shift+Escape")
           }
-          // Emergency stop agent mode
-          if (state.isAgentModeActive) {
+          // Emergency stop agent mode (works even if agent has finished but UI is stuck)
+          const win = WINDOWS.get("panel")
+          if (state.isAgentModeActive || (win && win.isVisible())) {
             emergencyStopAgentMode()
           }
           return
@@ -423,7 +424,12 @@ export function listenToKeyboardEvents() {
       }
 
       // Handle other kill switch hotkeys
-      if (config.agentKillSwitchEnabled && state.isAgentModeActive) {
+      // Check if agent mode is active OR if panel is visible (to handle stuck states)
+      const win = WINDOWS.get("panel")
+      const shouldHandleKillSwitch = config.agentKillSwitchEnabled &&
+        (state.isAgentModeActive || (win && win.isVisible()))
+
+      if (shouldHandleKillSwitch) {
         const effectiveKillSwitchHotkey = getEffectiveShortcut(
           config.agentKillSwitchHotkey,
           config.customAgentKillSwitchHotkey,

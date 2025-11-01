@@ -74,14 +74,89 @@ export type CompletionVerification = {
 
 
 /**
+ * Cache of model capabilities learned at runtime
+ * Format: { "model-name": { supportsJsonSchema: boolean, supportsJsonObject: boolean } }
+ */
+const modelCapabilityCache = new Map<string, {
+  supportsJsonSchema: boolean
+  supportsJsonObject: boolean
+  lastTested: number
+}>()
+
+/**
+ * How long to cache model capability information (24 hours)
+ */
+const CAPABILITY_CACHE_TTL = 24 * 60 * 60 * 1000
+
+/**
+ * Record that a model failed with a specific structured output mode
+ */
+function recordStructuredOutputFailure(model: string, mode: 'json_schema' | 'json_object'): void {
+  const cached = modelCapabilityCache.get(model) || {
+    supportsJsonSchema: true,
+    supportsJsonObject: true,
+    lastTested: Date.now()
+  }
+
+  if (mode === 'json_schema') {
+    cached.supportsJsonSchema = false
+  } else if (mode === 'json_object') {
+    cached.supportsJsonObject = false
+  }
+
+  cached.lastTested = Date.now()
+  modelCapabilityCache.set(model, cached)
+
+  if (isDebugLLM()) {
+    logLLM(`📝 Recorded capability for ${model}:`, cached)
+  }
+}
+
+/**
+ * Record that a model succeeded with a specific structured output mode
+ */
+function recordStructuredOutputSuccess(model: string, mode: 'json_schema' | 'json_object'): void {
+  const cached = modelCapabilityCache.get(model) || {
+    supportsJsonSchema: mode === 'json_schema',
+    supportsJsonObject: mode === 'json_object',
+    lastTested: Date.now()
+  }
+
+  if (mode === 'json_schema') {
+    cached.supportsJsonSchema = true
+  } else if (mode === 'json_object') {
+    cached.supportsJsonObject = true
+  }
+
+  cached.lastTested = Date.now()
+  modelCapabilityCache.set(model, cached)
+
+  if (isDebugLLM()) {
+    logLLM(`✅ Confirmed capability for ${model}:`, cached)
+  }
+}
+
+/**
  * Check if a model is known to NOT support structured output with JSON schema
- * We use a blacklist approach - try structured output for all models except known incompatible ones
+ * We use a hybrid approach:
+ * 1. Check runtime cache first (learned from actual usage)
+ * 2. Fall back to hardcoded list for known incompatible models
  */
 function isKnownIncompatibleWithStructuredOutput(model: string): boolean {
-  // Models that are known to not support JSON schema mode
+  // Check runtime cache first
+  const cached = modelCapabilityCache.get(model)
+  if (cached && (Date.now() - cached.lastTested) < CAPABILITY_CACHE_TTL) {
+    // Cache is fresh, use it
+    return !cached.supportsJsonSchema
+  }
+
+  // Hardcoded list of models known to be incompatible
+  // This serves as a fallback and initial seed
   const incompatibleModels: string[] = [
-    // Add specific models here that are known to fail with JSON schema
-    // For now, we'll try structured output with all models
+    // Google Gemini models through OpenRouter don't support JSON schema
+    // They return empty or invalid responses when json_schema is requested
+    "google/gemini",
+    // Add other specific models here that are known to fail with JSON schema
   ]
 
   return incompatibleModels.some((incompatible: string) =>
@@ -95,6 +170,18 @@ function isKnownIncompatibleWithStructuredOutput(model: string): boolean {
  */
 function shouldAttemptStructuredOutput(model: string): boolean {
   return !isKnownIncompatibleWithStructuredOutput(model)
+}
+
+/**
+ * Check if we should attempt JSON Object mode for a model
+ */
+function shouldAttemptJsonObject(model: string): boolean {
+  const cached = modelCapabilityCache.get(model)
+  if (cached && (Date.now() - cached.lastTested) < CAPABILITY_CACHE_TTL) {
+    return cached.supportsJsonObject
+  }
+  // Default to true - try it unless we know it doesn't work
+  return true
 }
 
 /**
@@ -509,6 +596,15 @@ async function makeAPICallAttempt(
     if (!response.ok) {
       const errorText = await response.text()
 
+      if (isDebugLLM()) {
+        logLLM("❌ HTTP Error Response", {
+          status: response.status,
+          statusText: response.statusText,
+          errorText: errorText.substring(0, 1000),
+          headers: Object.fromEntries(response.headers.entries())
+        })
+      }
+
       // Check if this is a structured output related error
       // Only treat 4xx client errors as potential structured output errors
       // Server errors (5xx) should always be treated as retryable HTTP errors
@@ -524,6 +620,9 @@ async function makeAPICallAttempt(
                                       (errorTextLower.includes("model inference") && errorTextLower.includes("error")) ||
                                       errorTextLower.includes("unknown error in the model"))
       if (isStructuredOutputError) {
+        if (isDebugLLM()) {
+          logLLM("🔴 Detected as structured output error")
+        }
         const error = new Error(errorText)
         ;(error as any).isStructuredOutputError = true
         throw error
@@ -533,6 +632,20 @@ async function makeAPICallAttempt(
     }
 
     const data = await response.json()
+
+    if (isDebugLLM()) {
+      logLLM("✅ HTTP 200 Response received", {
+        hasError: !!data.error,
+        hasChoices: !!data.choices,
+        choicesCount: data.choices?.length,
+        firstChoicePreview: data.choices?.[0] ? {
+          hasMessage: !!data.choices[0].message,
+          hasContent: !!data.choices[0].message?.content,
+          contentType: typeof data.choices[0].message?.content,
+          contentLength: data.choices[0].message?.content?.length || 0
+        } : null
+      })
+    }
 
     if (data.error) {
       if (isDebugLLM()) {
@@ -546,11 +659,25 @@ async function makeAPICallAttempt(
                                                // Novita and other providers may return generic errors
                                                errorMessageLower.includes("model inference") ||
                                                errorMessageLower.includes("unknown error in the model")
+
+      // Enhanced debugging for structured output errors
+      if ((error as any).isStructuredOutputError) {
+        logLLM("⚠️ STRUCTURED OUTPUT ERROR DETECTED", {
+          model: requestBody.model,
+          errorMessage,
+          responseFormat: requestBody.response_format,
+          fullError: data.error
+        })
+      }
+
       throw error
     }
 
     if (isDebugLLM()) {
-      logLLM("HTTP Response", data)
+      logLLM("HTTP Response (full)", {
+        dataKeys: Object.keys(data),
+        data: JSON.stringify(data).substring(0, 2000) + "..."
+      })
     }
 
     return data
@@ -623,25 +750,38 @@ async function makeOpenAICompatibleCall(
             }
             const err = new Error("Empty content in structured (json_schema) response") as any
             ;(err as any).isStructuredOutputError = true
+            // Record that this model doesn't support JSON Schema
+            recordStructuredOutputFailure(model, 'json_schema')
             throw err
           }
+          // Success! Record that this model supports JSON Schema
+          recordStructuredOutputSuccess(model, 'json_schema')
           return data
         }
       } catch (error: any) {
         if (error.isStructuredOutputError) {
           if (isDebugLLM()) {
-            logLLM("JSON Schema mode failed for model", model, "- falling back to JSON Object mode:", error.message)
+            logLLM("⚠️ JSON Schema mode FAILED for model", model, "- falling back to JSON Object mode")
+            logLLM("Error details:", {
+              message: error.message,
+              stack: error.stack?.split('\n').slice(0, 3).join('\n')
+            })
           }
+          // Record that this model doesn't support JSON Schema
+          recordStructuredOutputFailure(model, 'json_schema')
           // Fall through to JSON Object mode
         } else {
           // Non-structured-output error, re-throw
+          if (isDebugLLM()) {
+            logLLM("❌ Non-structured-output error, re-throwing:", error.message)
+          }
           throw error
         }
       }
     }
 
     // Second attempt: JSON Object mode (if model supports it)
-    if (supportsJsonMode(model, providerId)) {
+    if (supportsJsonMode(model, providerId) && shouldAttemptJsonObject(model)) {
       try {
         const requestBodyWithJson = {
           ...baseRequestBody,
@@ -660,18 +800,31 @@ async function makeOpenAICompatibleCall(
             }
             const err = new Error("Empty content in structured (json_object) response") as any
             ;(err as any).isStructuredOutputError = true
+            // Record that this model doesn't support JSON Object mode
+            recordStructuredOutputFailure(model, 'json_object')
             throw err
           }
+          // Success! Record that this model supports JSON Object mode
+          recordStructuredOutputSuccess(model, 'json_object')
           return data
         }
       } catch (error: any) {
         if (error.isStructuredOutputError) {
           if (isDebugLLM()) {
-            logLLM("JSON Object mode failed for model", model, "- falling back to plain text:", error.message)
+            logLLM("⚠️ JSON Object mode FAILED for model", model, "- falling back to plain text")
+            logLLM("Error details:", {
+              message: error.message,
+              stack: error.stack?.split('\n').slice(0, 3).join('\n')
+            })
           }
+          // Record that this model doesn't support JSON Object mode
+          recordStructuredOutputFailure(model, 'json_object')
           // Fall through to plain text
         } else {
           // Non-structured-output error, re-throw
+          if (isDebugLLM()) {
+            logLLM("❌ Non-structured-output error, re-throwing:", error.message)
+          }
           throw error
         }
       }
@@ -811,6 +964,14 @@ async function makeLLMCallAttempt(
   messages: Array<{ role: string; content: string }>,
   chatProviderId: string,
 ): Promise<LLMToolCallResponse> {
+  if (isDebugLLM()) {
+    logLLM("🚀 Starting LLM call attempt", {
+      provider: chatProviderId,
+      messagesCount: messages.length,
+      lastMessagePreview: messages[messages.length - 1]?.content?.substring(0, 100) + "..."
+    })
+  }
+
   let response: any
 
   if (chatProviderId === "gemini") {
@@ -825,20 +986,31 @@ async function makeLLMCallAttempt(
       choicesLength: response.choices?.length,
       firstChoiceExists: !!response.choices?.[0],
       hasMessage: !!response.choices?.[0]?.message,
-      hasContent: !!response.choices?.[0]?.message?.content
+      hasContent: !!response.choices?.[0]?.message?.content,
+      fullResponse: JSON.stringify(response, null, 2).substring(0, 1000) + "..." // First 1000 chars
     })
   }
 
   const messageObj = response.choices?.[0]?.message || {}
   let content: string | undefined = (messageObj.content ?? "").trim()
 
+  if (isDebugLLM()) {
+    logLLM("📝 Message content extracted:", {
+      contentLength: content?.length || 0,
+      contentPreview: content?.substring(0, 200) || "(empty)",
+      messageObjKeys: Object.keys(messageObj),
+      messageObj: messageObj
+    })
+  }
+
   if (!content) {
     if (isDebugLLM()) {
-      logLLM("Empty content in message; checking reasoning fallback", {
+      logLLM("⚠️ EMPTY CONTENT - checking reasoning fallback", {
         responseSummary: {
           hasChoices: !!response.choices,
           hasMessage: !!messageObj,
           content: messageObj?.content,
+          contentType: typeof messageObj?.content,
           hasReasoning: !!(messageObj as any)?.reasoning,
         }
       })
@@ -902,9 +1074,14 @@ async function makeLLMCallAttempt(
   // Try to extract JSON object from response
   const jsonObject = extractJsonObject(content)
   if (isDebugLLM()) {
-    logLLM("Extracted JSON object", jsonObject)
-    logLLM("JSON object has toolCalls:", !!jsonObject?.toolCalls)
-    logLLM("JSON object has content:", !!jsonObject?.content)
+    logLLM("🔍 JSON Extraction Result:", {
+      hasJsonObject: !!jsonObject,
+      jsonObjectKeys: jsonObject ? Object.keys(jsonObject) : [],
+      hasToolCalls: !!jsonObject?.toolCalls,
+      hasContent: !!jsonObject?.content,
+      toolCallsCount: jsonObject?.toolCalls?.length || 0,
+      extractedObject: jsonObject
+    })
   }
   if (jsonObject && (jsonObject.toolCalls || jsonObject.content)) {
     // If JSON lacks both toolCalls and needsMoreWork, default needsMoreWork to true (continue)
@@ -920,6 +1097,16 @@ async function makeLLMCallAttempt(
     if (response.needsMoreWork === false && (!response.toolCalls || response.toolCalls.length === 0) && (toolMarkers.test(text) || intentOnly)) {
       response.needsMoreWork = true
     }
+
+    if (isDebugLLM()) {
+      logLLM("✅ Returning structured JSON response", {
+        hasContent: !!response.content,
+        hasToolCalls: !!response.toolCalls,
+        toolCallsCount: response.toolCalls?.length || 0,
+        needsMoreWork: response.needsMoreWork
+      })
+    }
+
     return response
   }
 
@@ -929,14 +1116,25 @@ async function makeLLMCallAttempt(
   const hasToolMarkers = /<\|tool_calls_section_begin\|>|<\|tool_call_begin\|>/i.test(content || "")
   const cleaned = (content || "").replace(/<\|[^|]*\|>/g, "").trim()
   if (hasToolMarkers) {
+    if (isDebugLLM()) {
+      logLLM("✅ Returning plain text with tool markers (needsMoreWork=true)")
+    }
     return { content: cleaned, needsMoreWork: true }
   }
   // If the assistant only states intent (no JSON/toolCalls), treat as needing more work
   const intentOnly = /\b(fetching|get(ting)?|retriev(ing|e)|searching|planning|analyzing|processing|scanning|starting|preparing|i'?ll|i\s+will|let'?s|trying|attempting|checking|reading|writing|applying|connecting|opening|creating|updating|deleting|installing|running)\b/i.test(cleaned)
   if (intentOnly) {
+    if (isDebugLLM()) {
+      logLLM("✅ Returning intent-only response (needsMoreWork=true)")
+    }
     return { content: cleaned, needsMoreWork: true }
   }
   // Otherwise, treat plain text as a final response
+  if (isDebugLLM()) {
+    logLLM("✅ Returning final plain text response (needsMoreWork=false)", {
+      contentLength: (cleaned || content)?.length || 0
+    })
+  }
   return { content: cleaned || content, needsMoreWork: false }
 }
 

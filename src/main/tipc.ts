@@ -100,7 +100,17 @@ async function processWithAgentMode(
             role: msg.role,
             content: msg.content,
             toolCalls: msg.toolCalls,
-            toolResults: msg.toolResults,
+            // Convert toolResults from stored format (content as string) to MCPToolResult format (content as array)
+            toolResults: msg.toolResults?.map((tr) => ({
+              content: [
+                {
+                  type: "text" as const,
+                  // Use content for successful results, error message for failures
+                  text: tr.success ? tr.content : (tr.error || tr.content),
+                },
+              ],
+              isError: !tr.success,
+            })),
           }))
         }
       }

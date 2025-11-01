@@ -564,13 +564,18 @@ export async function processTranscriptWithAgentMode(
           name: tc.name,
           arguments: tc.arguments,
         })),
-        toolResults: entry.toolResults?.map((tr) => ({
-          success: !tr.isError,
-          content: tr.content.map((c) => c.text).join("\n"),
-          error: tr.isError
+        toolResults: entry.toolResults?.map((tr) => {
+          // Safely handle content - it should be an array, but add defensive check
+          const contentText = Array.isArray(tr.content)
             ? tr.content.map((c) => c.text).join("\n")
-            : undefined,
-        })),
+            : String(tr.content || "")
+
+          return {
+            success: !tr.isError,
+            content: contentText,
+            error: tr.isError ? contentText : undefined,
+          }
+        }),
         // Preserve original timestamp if available, otherwise use current time
         timestamp: entry.timestamp || Date.now(),
       }))

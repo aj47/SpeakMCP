@@ -513,10 +513,16 @@ async function makeAPICallAttempt(
       // Only treat 4xx client errors as potential structured output errors
       // Server errors (5xx) should always be treated as retryable HTTP errors
       // Be more specific: only treat as structured output error if it mentions the specific features
+      // Normalize to lowercase to handle provider capitalization differences
+      const errorTextLower = errorText.toLowerCase()
       const isStructuredOutputError = response.status >= 400 && response.status < 500 &&
-                                     (errorText.includes("json_schema") ||
-                                      errorText.includes("response_format") ||
-                                      (errorText.includes("schema") && errorText.includes("not supported")))
+                                     (errorTextLower.includes("json_schema") ||
+                                      errorTextLower.includes("response_format") ||
+                                      (errorTextLower.includes("schema") && errorTextLower.includes("not supported")) ||
+                                      // Novita and other providers may return generic "model inference" errors
+                                      // when they don't support structured output features
+                                      (errorTextLower.includes("model inference") && errorTextLower.includes("error")) ||
+                                      errorTextLower.includes("unknown error in the model"))
       if (isStructuredOutputError) {
         const error = new Error(errorText)
         ;(error as any).isStructuredOutputError = true
@@ -532,9 +538,14 @@ async function makeAPICallAttempt(
       if (isDebugLLM()) {
         logLLM("API Error", data.error)
       }
-      const error = new Error(data.error.message)
-      ;(error as any).isStructuredOutputError = data.error.message?.includes("json_schema") ||
-                                               data.error.message?.includes("response_format")
+      const errorMessage = data.error.message || String(data.error)
+      const errorMessageLower = errorMessage.toLowerCase()
+      const error = new Error(errorMessage)
+      ;(error as any).isStructuredOutputError = errorMessageLower.includes("json_schema") ||
+                                               errorMessageLower.includes("response_format") ||
+                                               // Novita and other providers may return generic errors
+                                               errorMessageLower.includes("model inference") ||
+                                               errorMessageLower.includes("unknown error in the model")
       throw error
     }
 

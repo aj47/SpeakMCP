@@ -128,18 +128,25 @@ export interface AgentProgressUpdate {
   conversationId?: string // Add conversation ID to the progress update
   conversationHistory?: Array<{
     role: "user" | "assistant" | "tool"
-    content: string
+    content: MessageContent
     toolCalls?: Array<{ name: string; arguments: any }>
     toolResults?: Array<{ success: boolean; content: string; error?: string }>
     timestamp?: number
   }>
 }
 
+// Multimodal Content Types
+export type MessageContentPart =
+  | { type: "text"; text: string }
+  | { type: "image_url"; image_url: { url: string; detail?: "auto" | "low" | "high" } }
+
+export type MessageContent = string | MessageContentPart[]
+
 // Conversation Types
 export interface ConversationMessage {
   id: string
   role: "user" | "assistant" | "tool"
-  content: string
+  content: MessageContent
   timestamp: number
   toolCalls?: Array<{
     name: string
@@ -361,5 +368,12 @@ export type Config = {
   // Stream Status Watcher Configuration
   streamStatusWatcherEnabled?: boolean
   streamStatusFilePath?: string
+
+  // Screenshot Configuration
+  screenshotEnabled?: boolean
+  screenshotQuality?: number // 0.0 to 1.0 for JPEG quality
+  screenshotFormat?: "png" | "jpeg"
+  screenshotMaxWidth?: number // Max width for resizing
+  screenshotMaxHeight?: number // Max height for resizing
 
 }

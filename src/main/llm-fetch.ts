@@ -563,7 +563,7 @@ async function makeAPICallAttempt(
  * Make a fetch-based LLM call for OpenAI-compatible APIs with structured output fallback
  */
 async function makeOpenAICompatibleCall(
-  messages: Array<{ role: string; content: string }>,
+  messages: Array<{ role: string; content: any }>,
   providerId: string,
   useStructuredOutput: boolean = true,
 ): Promise<any> {
@@ -581,7 +581,18 @@ async function makeOpenAICompatibleCall(
   }
 
   const model = getModel(providerId, "mcp")
-  const estimatedTokens = Math.ceil(messages.reduce((sum, msg) => sum + msg.content.length, 0) / 4)
+  // Calculate tokens - handle both string and array content
+  const estimatedTokens = Math.ceil(messages.reduce((sum, msg) => {
+    if (typeof msg.content === 'string') {
+      return sum + msg.content.length
+    } else if (Array.isArray(msg.content)) {
+      return sum + msg.content.reduce((s, part) => {
+        if (part.type === 'text') return s + part.text.length
+        return s + 100 // Rough estimate for image tokens
+      }, 0)
+    }
+    return sum
+  }, 0) / 4)
 
   const baseRequestBody = {
     model,
@@ -691,7 +702,7 @@ async function makeOpenAICompatibleCall(
  * Make a fetch-based LLM call for Gemini API
  */
 async function makeGeminiCall(
-  messages: Array<{ role: string; content: string }>,
+  messages: Array<{ role: string; content: any }>,
 ): Promise<any> {
   const config = configStore.get()
 
@@ -704,7 +715,14 @@ async function makeGeminiCall(
     config.geminiBaseUrl || "https://generativelanguage.googleapis.com"
 
   // Convert messages to Gemini format
-  const prompt = messages.map((m) => `${m.role}: ${m.content}`).join("\n\n")
+  // For multimodal content, extract text parts only for now
+  const prompt = messages.map((m) => {
+    let content = m.content
+    if (Array.isArray(content)) {
+      content = content.filter(p => p.type === 'text').map(p => p.text).join(' ')
+    }
+    return `${m.role}: ${content}`
+  }).join("\n\n")
 
   return apiCallWithRetry(async () => {
     if (isDebugLLM()) {
@@ -808,7 +826,7 @@ async function makeGeminiCall(
  * This is wrapped by makeLLMCallWithFetch with retry logic
  */
 async function makeLLMCallAttempt(
-  messages: Array<{ role: string; content: string }>,
+  messages: Array<{ role: string; content: any }>,
   chatProviderId: string,
 ): Promise<LLMToolCallResponse> {
   let response: any
@@ -944,7 +962,7 @@ async function makeLLMCallAttempt(
  * Main function to make LLM calls using fetch with automatic retry on empty responses
  */
 export async function makeLLMCallWithFetch(
-  messages: Array<{ role: string; content: string }>,
+  messages: Array<{ role: string; content: any }>,
   providerId?: string,
 ): Promise<LLMToolCallResponse> {
   const config = configStore.get()

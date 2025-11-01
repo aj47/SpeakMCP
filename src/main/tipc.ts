@@ -15,6 +15,8 @@ import {
   shell,
   systemPreferences,
   dialog,
+  desktopCapturer,
+  screen,
 } from "electron"
 import path from "path"
 import { configStore, recordingsFolder, conversationsFolder } from "./config"
@@ -98,7 +100,9 @@ async function processWithAgentMode(
           const messagesToConvert = conversation.messages.slice(0, -1)
           previousConversationHistory = messagesToConvert.map((msg) => ({
             role: msg.role,
-            content: msg.content,
+            content: typeof msg.content === 'string'
+              ? msg.content
+              : msg.content.filter(p => p.type === 'text').map(p => p.text).join(' '),
             toolCalls: msg.toolCalls,
             // Convert toolResults from stored format (content as string) to MCPToolResult format (content as array)
             toolResults: msg.toolResults?.map((tr) => ({
@@ -627,6 +631,7 @@ export const router = {
     .input<{
       text: string
       conversationId?: string
+      screenshotData?: string
     }>()
     .action(async ({ input }) => {
       const config = configStore.get()
@@ -636,11 +641,20 @@ export const router = {
         return router.createTextInput({ text: input.text })
       }
 
+      // Create message content (multimodal if screenshot is provided)
+      let messageContent: any = input.text
+      if (input.screenshotData) {
+        messageContent = [
+          { type: "text", text: input.text },
+          { type: "image_url", image_url: { url: input.screenshotData } }
+        ]
+      }
+
       // Create or get conversation ID
       let conversationId = input.conversationId
       if (!conversationId) {
         const conversation = await conversationService.createConversation(
-          input.text,
+          messageContent,
           "user",
         )
         conversationId = conversation.id
@@ -648,7 +662,7 @@ export const router = {
         // Add user message to existing conversation
         await conversationService.addMessageToConversation(
           conversationId,
-          input.text,
+          messageContent,
           "user",
         )
       }
@@ -905,6 +919,66 @@ export const router = {
 
   clearTextInputState: t.procedure.action(async () => {
     state.isTextInputActive = false
+  }),
+
+  captureScreenshot: t.procedure.action(async () => {
+    try {
+      const config = configStore.get()
+
+      // Get all displays
+      const displays = screen.getAllDisplays()
+      const primaryDisplay = screen.getPrimaryDisplay()
+
+      // Capture screenshot from primary display
+      const sources = await desktopCapturer.getSources({
+        types: ['screen'],
+        thumbnailSize: {
+          width: primaryDisplay.size.width * primaryDisplay.scaleFactor,
+          height: primaryDisplay.size.height * primaryDisplay.scaleFactor
+        }
+      })
+
+      if (sources.length === 0) {
+        throw new Error('No screen sources available')
+      }
+
+      // Get the primary screen source
+      const primarySource = sources[0]
+      const thumbnail = primarySource.thumbnail
+
+      // Get image format and quality from config
+      const format = config.screenshotFormat || 'jpeg'
+      const quality = config.screenshotQuality || 0.8
+      const maxWidth = config.screenshotMaxWidth || 1920
+      const maxHeight = config.screenshotMaxHeight || 1080
+
+      // Resize if needed
+      let finalImage = thumbnail
+      const size = thumbnail.getSize()
+      if (size.width > maxWidth || size.height > maxHeight) {
+        const scale = Math.min(maxWidth / size.width, maxHeight / size.height)
+        const newWidth = Math.floor(size.width * scale)
+        const newHeight = Math.floor(size.height * scale)
+        finalImage = thumbnail.resize({ width: newWidth, height: newHeight })
+      }
+
+      // Convert to base64
+      let base64Data: string
+      if (format === 'png') {
+        base64Data = finalImage.toPNG().toString('base64')
+      } else {
+        base64Data = finalImage.toJPEG(Math.floor(quality * 100)).toString('base64')
+      }
+
+      return {
+        data: base64Data,
+        format,
+        width: finalImage.getSize().width,
+        height: finalImage.getSize().height
+      }
+    } catch (error) {
+      throw new Error(`Failed to capture screenshot: ${error instanceof Error ? error.message : String(error)}`)
+    }
   }),
 
   // MCP Config File Operations

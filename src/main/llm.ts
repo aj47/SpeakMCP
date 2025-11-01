@@ -1871,7 +1871,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
 }
 
 async function makeLLMCall(
-  messages: Array<{ role: string; content: string }>,
+  messages: Array<{ role: string; content: any }>,
   config: any,
 ): Promise<LLMToolCallResponse> {
   const chatProviderId = config.mcpToolsProviderId
@@ -1881,7 +1881,13 @@ async function makeLLMCall(
       logLLM("=== LLM CALL START ===")
       logLLM("Messages →", {
         count: messages.length,
-        totalChars: messages.reduce((sum, msg) => sum + msg.content.length, 0),
+        totalChars: messages.reduce((sum, msg) => {
+          if (typeof msg.content === 'string') return sum + msg.content.length
+          if (Array.isArray(msg.content)) {
+            return sum + msg.content.reduce((s, p) => s + (p.type === 'text' ? p.text.length : 0), 0)
+          }
+          return sum
+        }, 0),
         messages: messages,
       })
     }

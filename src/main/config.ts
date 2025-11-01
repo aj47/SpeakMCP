@@ -108,6 +108,12 @@ const getConfig = () => {
 	    remoteServerLogLevel: "info",
 	    remoteServerCorsOrigins: ["*"],
 
+    // Screenshot defaults
+    screenshotEnabled: true,
+    screenshotQuality: 0.8,
+    screenshotFormat: "jpeg",
+    screenshotMaxWidth: 1920,
+    screenshotMaxHeight: 1080,
 
   }
 

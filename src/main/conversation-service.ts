@@ -5,6 +5,7 @@ import {
   Conversation,
   ConversationMessage,
   ConversationHistoryItem,
+  MessageContent,
 } from "../shared/types"
 
 export class ConversationService {
@@ -71,7 +72,11 @@ export class ConversationService {
         createdAt: conversation.createdAt,
         updatedAt: conversation.updatedAt,
         messageCount: conversation.messages.length,
-        lastMessage: lastMessage?.content || "",
+        lastMessage: typeof lastMessage?.content === 'string'
+          ? lastMessage.content
+          : (Array.isArray(lastMessage?.content)
+              ? lastMessage.content.find(p => p.type === 'text')?.text || ""
+              : ""),
         preview: this.generatePreview(conversation.messages),
       }
 
@@ -168,7 +173,7 @@ export class ConversationService {
   }
 
   async createConversation(
-    firstMessage: string,
+    firstMessage: MessageContent,
     role: "user" | "assistant" = "user",
   ): Promise<Conversation> {
     const conversationId = this.generateConversationId()
@@ -184,7 +189,11 @@ export class ConversationService {
 
     const conversation: Conversation = {
       id: conversationId,
-      title: this.generateConversationTitle(firstMessage),
+      title: this.generateConversationTitle(
+        typeof firstMessage === 'string'
+          ? firstMessage
+          : firstMessage.find(p => p.type === 'text')?.text || 'New conversation'
+      ),
       createdAt: now,
       updatedAt: now,
       messages: [message],
@@ -196,7 +205,7 @@ export class ConversationService {
 
   async addMessageToConversation(
     conversationId: string,
-    content: string,
+    content: MessageContent,
     role: "user" | "assistant" | "tool",
     toolCalls?: Array<{ name: string; arguments: any }>,
     toolResults?: Array<{ success: boolean; content: string; error?: string }>,

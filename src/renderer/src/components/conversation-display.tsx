@@ -4,7 +4,7 @@ import { Badge } from "@renderer/components/ui/badge"
 import { ScrollArea } from "@renderer/components/ui/scroll-area"
 import { User, Bot, Wrench } from "lucide-react"
 import { cn } from "@renderer/lib/utils"
-import { ConversationMessage } from "@shared/types"
+import { ConversationMessage, MessageContent } from "@shared/types"
 import { useConversationState } from "@renderer/contexts/conversation-context"
 import { AgentProgress } from "@renderer/components/agent-progress"
 import { MarkdownRenderer } from "@renderer/components/markdown-renderer"
@@ -12,6 +12,14 @@ import { AudioPlayer } from "@renderer/components/audio-player"
 import { tipcClient } from "@renderer/lib/tipc-client"
 import { useConfigQuery } from "@renderer/lib/queries"
 import dayjs from "dayjs"
+
+// Helper function to extract text from MessageContent
+function extractTextFromContent(content: MessageContent): string {
+  if (typeof content === 'string') {
+    return content
+  }
+  return content.filter(p => p.type === 'text').map(p => p.text).join(' ')
+}
 
 interface ConversationDisplayProps {
   messages: ConversationMessage[]
@@ -264,7 +272,7 @@ function ConversationMessageItem({
         </div>
 
         <div className="modern-text-strong">
-          <MarkdownRenderer content={message.content} />
+          <MarkdownRenderer content={extractTextFromContent(message.content)} />
         </div>
 
         {/* TTS Audio Player - only show for assistant messages */}
@@ -272,7 +280,7 @@ function ConversationMessageItem({
           <div className="mt-3">
             <AudioPlayer
               audioData={audioData || undefined}
-              text={message.content}
+              text={extractTextFromContent(message.content)}
               onGenerateAudio={generateAudio}
               isGenerating={isGeneratingAudio}
               error={ttsError}
@@ -427,7 +435,7 @@ export function ConversationDisplayCompact({
               </div>
               <div className="min-w-0 flex-1">
                 <div className="modern-text-strong truncate">
-                  {message.content}
+                  {extractTextFromContent(message.content)}
                 </div>
               </div>
             </div>

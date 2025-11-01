@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react"
 import { cn } from "@renderer/lib/utils"
-import { AgentProgressUpdate } from "../../../shared/types"
+import { AgentProgressUpdate, MessageContent } from "../../../shared/types"
 import { ChevronDown, ChevronUp, ChevronRight, X, AlertTriangle } from "lucide-react"
 import { MarkdownRenderer } from "@renderer/components/markdown-renderer"
 import { Button } from "./ui/button"
@@ -10,6 +10,14 @@ import { useConversation } from "@renderer/contexts/conversation-context"
 import { AudioPlayer } from "@renderer/components/audio-player"
 import { useConfigQuery } from "@renderer/lib/queries"
 import { useTheme } from "@renderer/contexts/theme-context"
+
+// Helper function to extract text from MessageContent
+function extractTextFromContent(content: MessageContent): string {
+  if (typeof content === 'string') {
+    return content
+  }
+  return content.filter(p => p.type === 'text').map(p => p.text).join(' ')
+}
 
 interface AgentProgressProps {
   progress: AgentProgressUpdate | null
@@ -589,10 +597,10 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
       c.includes("You have relevant tools available for this request")
 
     messages = conversationHistory
-      .filter((entry) => !(entry.role === "user" && isNudge(entry.content)))
+      .filter((entry) => !(entry.role === "user" && isNudge(extractTextFromContent(entry.content))))
       .map((entry) => ({
         role: entry.role,
-        content: entry.content,
+        content: extractTextFromContent(entry.content),
         isComplete: true,
         timestamp: entry.timestamp || Date.now(),
         isThinking: false,

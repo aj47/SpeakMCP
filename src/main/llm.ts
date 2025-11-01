@@ -811,8 +811,23 @@ Always use actual resource IDs from the conversation history or create new ones 
 
     // Validate response is not null/empty
     if (!llmResponse || !llmResponse.content) {
-      console.error(`LLM null/empty response on iteration ${iteration}`)
-      diagnosticsService.logError("llm", "Null/empty LLM response in agent mode", new Error("LLM response is null or has no content"))
+      console.error(`❌ LLM null/empty response on iteration ${iteration}`)
+      console.error("Response details:", {
+        hasResponse: !!llmResponse,
+        responseType: typeof llmResponse,
+        responseKeys: llmResponse ? Object.keys(llmResponse) : [],
+        content: llmResponse?.content,
+        contentType: typeof llmResponse?.content,
+        hasToolCalls: !!llmResponse?.toolCalls,
+        toolCallsCount: llmResponse?.toolCalls?.length || 0,
+        needsMoreWork: llmResponse?.needsMoreWork,
+        fullResponse: JSON.stringify(llmResponse, null, 2)
+      })
+      diagnosticsService.logError("llm", "Null/empty LLM response in agent mode", {
+        iteration,
+        response: llmResponse,
+        message: "LLM response is null or has no content"
+      })
       thinkingStep.status = "error"
       thinkingStep.description = "Invalid response. Retrying..."
       emitAgentProgress({

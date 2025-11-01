@@ -91,6 +91,11 @@ export function AgentProcessingView({
           {/* Spinner and loading text */}
           <Spinner />
           <span className="text-sm text-muted-foreground">Processing...</span>
+
+          {/* Help text showing keyboard shortcut */}
+          <div className="text-xs text-muted-foreground">
+            Press Ctrl+Shift+Escape or click the X button to stop
+          </div>
         </div>
       )}
 

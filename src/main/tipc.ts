@@ -811,8 +811,97 @@ export const router = {
       const config = configStore.get()
       let transcript: string
 
-      // Initialize MCP service if not already done
+      // If MCP is still initializing, emit progress updates to the renderer immediately
+      const initStatus = mcpService.getInitializationStatus()
+      let mcpInitProgressInterval: ReturnType<typeof setInterval> | null = null
+      if (initStatus.isInitializing) {
+        // Emit initial progress showing MCP initialization
+        emitAgentProgress({
+          currentIteration: 0,
+          maxIterations: config.mcpMaxIterations ?? 10,
+          steps: [
+            {
+              id: `mcp_init_${Date.now()}`,
+              type: "thinking",
+              title: "Initializing MCP tools",
+              description: initStatus.progress.currentServer
+                ? `Initializing ${initStatus.progress.currentServer} (${initStatus.progress.current}/${initStatus.progress.total})`
+                : `Initializing MCP servers (${initStatus.progress.current}/${initStatus.progress.total})`,
+              status: "in_progress",
+              timestamp: Date.now(),
+            },
+          ],
+          isComplete: false,
+        })
+
+        // Poll for initialization progress updates so the UI isn't blank while we wait
+        mcpInitProgressInterval = setInterval(() => {
+          const currentStatus = mcpService.getInitializationStatus()
+          if (currentStatus.isInitializing) {
+            emitAgentProgress({
+              currentIteration: 0,
+              maxIterations: config.mcpMaxIterations ?? 10,
+              steps: [
+                {
+                  id: `mcp_init_${Date.now()}`,
+                  type: "thinking",
+                  title: "Initializing MCP tools",
+                  description: currentStatus.progress.currentServer
+                    ? `Initializing ${currentStatus.progress.currentServer} (${currentStatus.progress.current}/${currentStatus.progress.total})`
+                    : `Initializing MCP servers (${currentStatus.progress.current}/${currentStatus.progress.total})`,
+                  status: "in_progress",
+                  timestamp: Date.now(),
+                },
+              ],
+              isComplete: false,
+            })
+          } else {
+            if (mcpInitProgressInterval) {
+              clearInterval(mcpInitProgressInterval)
+              mcpInitProgressInterval = null
+            }
+            emitAgentProgress({
+              currentIteration: 0,
+              maxIterations: config.mcpMaxIterations ?? 10,
+              steps: [
+                {
+                  id: `mcp_init_complete_${Date.now()}`,
+                  type: "thinking",
+                  title: "MCP tools initialized",
+                  description: `Successfully initialized ${mcpService.getAvailableTools().length} tools`,
+                  status: "completed",
+                  timestamp: Date.now(),
+                },
+              ],
+              isComplete: false,
+            })
+          }
+        }, 500)
+      }
+
+      // Initialize MCP service if not already done (this will wait for initialization to complete)
       await mcpService.initialize()
+
+      // Clear interval and emit completion in case we didn't already
+      if (mcpInitProgressInterval) {
+        clearInterval(mcpInitProgressInterval)
+        mcpInitProgressInterval = null
+        emitAgentProgress({
+          currentIteration: 0,
+          maxIterations: config.mcpMaxIterations ?? 10,
+          steps: [
+            {
+              id: `mcp_init_complete_${Date.now()}`,
+              type: "thinking",
+              title: "MCP tools initialized",
+              description: `Successfully initialized ${mcpService.getAvailableTools().length} tools`,
+              status: "completed",
+              timestamp: Date.now(),
+            },
+          ],
+          isComplete: false,
+        })
+      }
 
       // First, transcribe the audio using the same logic as regular recording
       // Use OpenAI or Groq for transcription

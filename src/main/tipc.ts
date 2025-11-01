@@ -79,6 +79,83 @@ function emitAgentProgress(update: AgentProgressUpdate) {
   }
 }
 
+// Helper function to initialize MCP with progress feedback
+async function initializeMcpWithProgress(config: Config): Promise<void> {
+  // Check if MCP is initializing and emit progress updates
+  const initStatus = mcpService.getInitializationStatus()
+
+  // Emit initial progress showing MCP initialization
+  emitAgentProgress({
+    currentIteration: 0,
+    maxIterations: config.mcpMaxIterations ?? 10,
+    steps: [
+      {
+        id: `mcp_init_${Date.now()}`,
+        type: "thinking",
+        title: "Initializing MCP tools",
+        description: initStatus.progress.currentServer
+          ? `Initializing ${initStatus.progress.currentServer} (${initStatus.progress.current}/${initStatus.progress.total})`
+          : `Initializing MCP servers (${initStatus.progress.current}/${initStatus.progress.total})`,
+        status: "in_progress",
+        timestamp: Date.now(),
+      },
+    ],
+    isComplete: false,
+  })
+
+  // Poll for initialization progress updates
+  const progressInterval = setInterval(() => {
+    const currentStatus = mcpService.getInitializationStatus()
+    if (currentStatus.isInitializing) {
+      emitAgentProgress({
+        currentIteration: 0,
+        maxIterations: config.mcpMaxIterations ?? 10,
+        steps: [
+          {
+            id: `mcp_init_${Date.now()}`,
+            type: "thinking",
+            title: "Initializing MCP tools",
+            description: currentStatus.progress.currentServer
+              ? `Initializing ${currentStatus.progress.currentServer} (${currentStatus.progress.current}/${currentStatus.progress.total})`
+              : `Initializing MCP servers (${currentStatus.progress.current}/${currentStatus.progress.total})`,
+            status: "in_progress",
+            timestamp: Date.now(),
+          },
+        ],
+        isComplete: false,
+      })
+    } else {
+      clearInterval(progressInterval)
+    }
+  }, 500) // Update every 500ms
+
+  try {
+    // Initialize MCP service if not already done
+    // This will wait for initialization to complete if it's in progress
+    await mcpService.initialize()
+  } finally {
+    // Clear the interval when initialization completes or fails
+    clearInterval(progressInterval)
+  }
+
+  // Emit completion of MCP initialization
+  emitAgentProgress({
+    currentIteration: 0,
+    maxIterations: config.mcpMaxIterations ?? 10,
+    steps: [
+      {
+        id: `mcp_init_complete_${Date.now()}`,
+        type: "thinking",
+        title: "MCP tools initialized",
+        description: `Successfully initialized ${mcpService.getAvailableTools().length} tools`,
+        status: "completed",
+        timestamp: Date.now(),
+      },
+    ],
+    isComplete: false,
+  })
+}
+
 // Unified agent mode processing function
 async function processWithAgentMode(
   text: string,
@@ -96,81 +173,8 @@ async function processWithAgentMode(
       throw new Error("MCP tools are not enabled")
     }
 
-    // Check if MCP is initializing and emit progress updates
-    const initStatus = mcpService.getInitializationStatus()
-    if (initStatus.isInitializing) {
-      // Emit initial progress showing MCP initialization
-      emitAgentProgress({
-        currentIteration: 0,
-        maxIterations: config.mcpMaxIterations ?? 10,
-        steps: [
-          {
-            id: `mcp_init_${Date.now()}`,
-            type: "thinking",
-            title: "Initializing MCP tools",
-            description: initStatus.progress.currentServer
-              ? `Initializing ${initStatus.progress.currentServer} (${initStatus.progress.current}/${initStatus.progress.total})`
-              : `Initializing MCP servers (${initStatus.progress.current}/${initStatus.progress.total})`,
-            status: "in_progress",
-            timestamp: Date.now(),
-          },
-        ],
-        isComplete: false,
-      })
-
-      // Poll for initialization progress updates
-      const progressInterval = setInterval(() => {
-        const currentStatus = mcpService.getInitializationStatus()
-        if (currentStatus.isInitializing) {
-          emitAgentProgress({
-            currentIteration: 0,
-            maxIterations: config.mcpMaxIterations ?? 10,
-            steps: [
-              {
-                id: `mcp_init_${Date.now()}`,
-                type: "thinking",
-                title: "Initializing MCP tools",
-                description: currentStatus.progress.currentServer
-                  ? `Initializing ${currentStatus.progress.currentServer} (${currentStatus.progress.current}/${currentStatus.progress.total})`
-                  : `Initializing MCP servers (${currentStatus.progress.current}/${currentStatus.progress.total})`,
-                status: "in_progress",
-                timestamp: Date.now(),
-              },
-            ],
-            isComplete: false,
-          })
-        } else {
-          clearInterval(progressInterval)
-        }
-      }, 500) // Update every 500ms
-
-      // Initialize MCP service if not already done
-      // This will wait for initialization to complete if it's in progress
-      await mcpService.initialize()
-
-      // Clear the interval when initialization completes
-      clearInterval(progressInterval)
-
-      // Emit completion of MCP initialization
-      emitAgentProgress({
-        currentIteration: 0,
-        maxIterations: config.mcpMaxIterations ?? 10,
-        steps: [
-          {
-            id: `mcp_init_complete_${Date.now()}`,
-            type: "thinking",
-            title: "MCP tools initialized",
-            description: `Successfully initialized ${mcpService.getAvailableTools().length} tools`,
-            status: "completed",
-            timestamp: Date.now(),
-          },
-        ],
-        isComplete: false,
-      })
-    } else {
-      // Initialize MCP service if not already done
-      await mcpService.initialize()
-    }
+    // Initialize MCP with progress feedback
+    await initializeMcpWithProgress(config)
 
     // Register any existing MCP server processes with the agent process manager
     // This handles the case where servers were already initialized before agent mode was activated
@@ -811,97 +815,8 @@ export const router = {
       const config = configStore.get()
       let transcript: string
 
-      // If MCP is still initializing, emit progress updates to the renderer immediately
-      const initStatus = mcpService.getInitializationStatus()
-      let mcpInitProgressInterval: ReturnType<typeof setInterval> | null = null
-      if (initStatus.isInitializing) {
-        // Emit initial progress showing MCP initialization
-        emitAgentProgress({
-          currentIteration: 0,
-          maxIterations: config.mcpMaxIterations ?? 10,
-          steps: [
-            {
-              id: `mcp_init_${Date.now()}`,
-              type: "thinking",
-              title: "Initializing MCP tools",
-              description: initStatus.progress.currentServer
-                ? `Initializing ${initStatus.progress.currentServer} (${initStatus.progress.current}/${initStatus.progress.total})`
-                : `Initializing MCP servers (${initStatus.progress.current}/${initStatus.progress.total})`,
-              status: "in_progress",
-              timestamp: Date.now(),
-            },
-          ],
-          isComplete: false,
-        })
-
-        // Poll for initialization progress updates so the UI isn't blank while we wait
-        mcpInitProgressInterval = setInterval(() => {
-          const currentStatus = mcpService.getInitializationStatus()
-          if (currentStatus.isInitializing) {
-            emitAgentProgress({
-              currentIteration: 0,
-              maxIterations: config.mcpMaxIterations ?? 10,
-              steps: [
-                {
-                  id: `mcp_init_${Date.now()}`,
-                  type: "thinking",
-                  title: "Initializing MCP tools",
-                  description: currentStatus.progress.currentServer
-                    ? `Initializing ${currentStatus.progress.currentServer} (${currentStatus.progress.current}/${currentStatus.progress.total})`
-                    : `Initializing MCP servers (${currentStatus.progress.current}/${currentStatus.progress.total})`,
-                  status: "in_progress",
-                  timestamp: Date.now(),
-                },
-              ],
-              isComplete: false,
-            })
-          } else {
-            if (mcpInitProgressInterval) {
-              clearInterval(mcpInitProgressInterval)
-              mcpInitProgressInterval = null
-            }
-            emitAgentProgress({
-              currentIteration: 0,
-              maxIterations: config.mcpMaxIterations ?? 10,
-              steps: [
-                {
-                  id: `mcp_init_complete_${Date.now()}`,
-                  type: "thinking",
-                  title: "MCP tools initialized",
-                  description: `Successfully initialized ${mcpService.getAvailableTools().length} tools`,
-                  status: "completed",
-                  timestamp: Date.now(),
-                },
-              ],
-              isComplete: false,
-            })
-          }
-        }, 500)
-      }
-
-      // Initialize MCP service if not already done (this will wait for initialization to complete)
-      await mcpService.initialize()
-
-      // Clear interval and emit completion in case we didn't already
-      if (mcpInitProgressInterval) {
-        clearInterval(mcpInitProgressInterval)
-        mcpInitProgressInterval = null
-        emitAgentProgress({
-          currentIteration: 0,
-          maxIterations: config.mcpMaxIterations ?? 10,
-          steps: [
-            {
-              id: `mcp_init_complete_${Date.now()}`,
-              type: "thinking",
-              title: "MCP tools initialized",
-              description: `Successfully initialized ${mcpService.getAvailableTools().length} tools`,
-              status: "completed",
-              timestamp: Date.now(),
-            },
-          ],
-          isComplete: false,
-        })
-      }
+      // Initialize MCP with progress feedback
+      await initializeMcpWithProgress(config)
 
       // First, transcribe the audio using the same logic as regular recording
       // Use OpenAI or Groq for transcription

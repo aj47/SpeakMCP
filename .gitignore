@@ -3,6 +3,7 @@ dist
 dist-win
 manual-build-win
 out
+out-test
 .DS_Store
 *.log*
 target/

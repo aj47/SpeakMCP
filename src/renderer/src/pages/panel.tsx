@@ -471,15 +471,32 @@ export function Component() {
     return unlisten
   }, [isConversationActive, endConversation])
 
-  // Emergency stop handler - stop all TTS audio
+  // Emergency stop handler - stop all TTS audio and reset processing state
   useEffect(() => {
     const unlisten = rendererHandlers.emergencyStopAgent.listen(() => {
-      console.log('[Panel] Emergency stop triggered - stopping all TTS audio')
+      console.log('[Panel] Emergency stop triggered - stopping all TTS audio and resetting state')
       ttsManager.stopAll()
+
+      // Reset all processing states
+      setAgentProgress(null)
+      setMcpMode(false)
+      mcpModeRef.current = false
+      setShowTextInput(false)
+
+      // Reset mutations to idle state
+      transcribeMutation.reset()
+      mcpTranscribeMutation.reset()
+      textInputMutation.reset()
+      mcpTextInputMutation.reset()
+
+      // End conversation if active
+      if (isConversationActive) {
+        endConversation()
+      }
     })
 
     return unlisten
-  }, [])
+  }, [isConversationActive, endConversation, transcribeMutation, mcpTranscribeMutation, textInputMutation, mcpTextInputMutation])
 
   return (
     <PanelResizeWrapper

@@ -4,6 +4,9 @@ import { cn } from "@renderer/lib/utils"
 import { AgentProcessingView } from "./agent-processing-view"
 import { AgentProgressUpdate } from "../../../shared/types"
 import { useTheme } from "@renderer/contexts/theme-context"
+import { Button } from "@renderer/components/ui/button"
+import { X } from "lucide-react"
+import { tipcClient } from "~/lib/tipc-client"
 
 interface TextInputPanelProps {
   onSubmit: (text: string) => void
@@ -93,6 +96,14 @@ export const TextInputPanel = forwardRef<TextInputPanelRef, TextInputPanelProps>
     // Shift+Enter allows new lines (default textarea behavior)
   }
 
+  const handleKillSwitch = async () => {
+    try {
+      await tipcClient.emergencyStopAgent()
+    } catch (error) {
+      console.error("Failed to stop agent:", error)
+    }
+  }
+
   if (isProcessing) {
     return (
       <div className={cn(
@@ -108,9 +119,30 @@ export const TextInputPanel = forwardRef<TextInputPanelRef, TextInputPanelProps>
             className="mx-4 w-full"
           />
         ) : (
-          <div className="flex items-center gap-2">
-            <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"></div>
-            <span className="text-sm">Processing...</span>
+          <div className="relative flex h-full w-full flex-col items-center justify-center gap-4">
+            {/* Killswitch button for stuck loading state */}
+            <div className="absolute top-2 right-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 p-0 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20"
+                onClick={handleKillSwitch}
+                title="Emergency stop (Ctrl+Shift+Escape)"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+
+            {/* Loading spinner */}
+            <div className="flex items-center gap-2">
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"></div>
+              <span className="text-sm">Processing...</span>
+            </div>
+
+            {/* Help text */}
+            <div className="text-xs text-muted-foreground">
+              Press Ctrl+Shift+Escape or click the X button to stop
+            </div>
           </div>
         )}
       </div>

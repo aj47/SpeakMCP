@@ -516,7 +516,11 @@ async function makeAPICallAttempt(
       const isStructuredOutputError = response.status >= 400 && response.status < 500 &&
                                      (errorText.includes("json_schema") ||
                                       errorText.includes("response_format") ||
-                                      (errorText.includes("schema") && errorText.includes("not supported")))
+                                      (errorText.includes("schema") && errorText.includes("not supported")) ||
+                                      // Novita and other providers may return generic "model inference" errors
+                                      // when they don't support structured output features
+                                      (errorText.includes("model inference") && errorText.includes("error")) ||
+                                      errorText.includes("unknown error in the model"))
       if (isStructuredOutputError) {
         const error = new Error(errorText)
         ;(error as any).isStructuredOutputError = true
@@ -532,9 +536,13 @@ async function makeAPICallAttempt(
       if (isDebugLLM()) {
         logLLM("API Error", data.error)
       }
-      const error = new Error(data.error.message)
-      ;(error as any).isStructuredOutputError = data.error.message?.includes("json_schema") ||
-                                               data.error.message?.includes("response_format")
+      const errorMessage = data.error.message || String(data.error)
+      const error = new Error(errorMessage)
+      ;(error as any).isStructuredOutputError = errorMessage?.includes("json_schema") ||
+                                               errorMessage?.includes("response_format") ||
+                                               // Novita and other providers may return generic errors
+                                               errorMessage?.includes("model inference") ||
+                                               errorMessage?.includes("unknown error in the model")
       throw error
     }
 

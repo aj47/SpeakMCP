@@ -61,6 +61,7 @@ export class MCPService {
   private availableTools: MCPTool[] = []
   private disabledTools: Set<string> = new Set()
   private isInitializing = false
+  private initializationPromise: Promise<void> | null = null
   private initializationProgress: {
     current: number
     total: number
@@ -215,29 +216,37 @@ export class MCPService {
   }
 
   async initialize(): Promise<void> {
-    this.isInitializing = true
-    this.initializationProgress = { current: 0, total: 0 }
-
-    const config = configStore.get()
-    const mcpConfig = config.mcpConfig
-
-    if (isDebugTools()) {
-      logTools("MCP Service initialization starting")
+    // If initialization is already in progress, return the existing promise
+    if (this.initializationPromise) {
+      return this.initializationPromise
     }
 
-    if (
-      !mcpConfig ||
-      !mcpConfig.mcpServers ||
-      Object.keys(mcpConfig.mcpServers).length === 0
-    ) {
-      if (isDebugTools()) {
-        logTools("MCP Service initialization complete - no servers configured")
-      }
-      this.availableTools = []
-      this.isInitializing = false
-      this.hasBeenInitialized = true
-      return
-    }
+    // Create and store the initialization promise
+    this.initializationPromise = (async () => {
+      try {
+        this.isInitializing = true
+        this.initializationProgress = { current: 0, total: 0 }
+
+        const config = configStore.get()
+        const mcpConfig = config.mcpConfig
+
+        if (isDebugTools()) {
+          logTools("MCP Service initialization starting")
+        }
+
+        if (
+          !mcpConfig ||
+          !mcpConfig.mcpServers ||
+          Object.keys(mcpConfig.mcpServers).length === 0
+        ) {
+          if (isDebugTools()) {
+            logTools("MCP Service initialization complete - no servers configured")
+          }
+          this.availableTools = []
+          this.isInitializing = false
+          this.hasBeenInitialized = true
+          return
+        }
 
     // Get servers that should be initialized:
     // 1. Not disabled in config AND
@@ -312,6 +321,13 @@ export class MCPService {
     if (isDebugTools()) {
       logTools(`MCP Service initialization complete. Total tools available: ${this.availableTools.length}`)
     }
+      } finally {
+        // Always clear the initialization promise so subsequent calls can re-run if needed
+        this.initializationPromise = null
+      }
+    })()
+
+    return this.initializationPromise
   }
 
   private async createTransport(

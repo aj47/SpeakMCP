@@ -117,8 +117,8 @@ function recordStructuredOutputFailure(model: string, mode: 'json_schema' | 'jso
  */
 function recordStructuredOutputSuccess(model: string, mode: 'json_schema' | 'json_object'): void {
   const cached = modelCapabilityCache.get(model) || {
-    supportsJsonSchema: mode === 'json_schema',
-    supportsJsonObject: mode === 'json_object',
+    supportsJsonSchema: true,
+    supportsJsonObject: true,
     lastTested: Date.now()
   }
 

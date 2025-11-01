@@ -400,10 +400,9 @@ export function listenToKeyboardEvents() {
           if (isDebugKeybinds()) {
             logKeybinds("Kill switch triggered: Ctrl+Shift+Escape")
           }
-          // Emergency stop agent mode
-          if (state.isAgentModeActive) {
-            emergencyStopAgentMode()
-          }
+          // Emergency stop agent mode - always trigger to handle stuck states
+          // even if isAgentModeActive flag is not set correctly
+          emergencyStopAgentMode()
           return
         }
 
@@ -423,7 +422,8 @@ export function listenToKeyboardEvents() {
       }
 
       // Handle other kill switch hotkeys
-      if (config.agentKillSwitchEnabled && state.isAgentModeActive) {
+      // Always check killswitch hotkeys to handle stuck states, even if isAgentModeActive is not set
+      if (config.agentKillSwitchEnabled) {
         const effectiveKillSwitchHotkey = getEffectiveShortcut(
           config.agentKillSwitchHotkey,
           config.customAgentKillSwitchHotkey,

@@ -455,9 +455,15 @@ export function Component() {
   // Clear agent progress handler
   useEffect(() => {
     const unlisten = rendererHandlers.clearAgentProgress.listen(() => {
-      console.log('[Panel] Clearing agent progress - stopping all TTS audio')
+      console.log('[Panel] Clearing agent progress - stopping all TTS audio and resetting mutations')
       // Stop all TTS audio when clearing progress (ESC key pressed)
       ttsManager.stopAll()
+
+      // Reset all mutations to clear isPending state
+      transcribeMutation.reset()
+      mcpTranscribeMutation.reset()
+      textInputMutation.reset()
+      mcpTextInputMutation.reset()
 
       setAgentProgress(null)
       setMcpMode(false)
@@ -469,17 +475,34 @@ export function Component() {
     })
 
     return unlisten
-  }, [isConversationActive, endConversation])
+  }, [isConversationActive, endConversation, transcribeMutation, mcpTranscribeMutation, textInputMutation, mcpTextInputMutation])
 
-  // Emergency stop handler - stop all TTS audio
+  // Emergency stop handler - stop all TTS audio and reset processing state
   useEffect(() => {
     const unlisten = rendererHandlers.emergencyStopAgent.listen(() => {
-      console.log('[Panel] Emergency stop triggered - stopping all TTS audio')
+      console.log('[Panel] Emergency stop triggered - stopping all TTS audio and resetting state')
       ttsManager.stopAll()
+
+      // Reset all processing states
+      setAgentProgress(null)
+      setMcpMode(false)
+      mcpModeRef.current = false
+      setShowTextInput(false)
+
+      // Reset mutations to idle state
+      transcribeMutation.reset()
+      mcpTranscribeMutation.reset()
+      textInputMutation.reset()
+      mcpTextInputMutation.reset()
+
+      // End conversation if active
+      if (isConversationActive) {
+        endConversation()
+      }
     })
 
     return unlisten
-  }, [])
+  }, [isConversationActive, endConversation, transcribeMutation, mcpTranscribeMutation, textInputMutation, mcpTextInputMutation])
 
   return (
     <PanelResizeWrapper

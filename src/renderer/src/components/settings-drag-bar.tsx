@@ -20,7 +20,7 @@ export function SettingsDragBar({ className }: SettingsDragBarProps) {
       style={{
         WebkitAppRegion: "drag",
         userSelect: "none",
-      } as any}
+      } as React.CSSProperties & { WebkitAppRegion?: string }}
     >
       {/* Empty drag bar - just provides the draggable area */}
     </div>

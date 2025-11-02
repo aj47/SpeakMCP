@@ -3,6 +3,7 @@ import { cn } from "@renderer/lib/utils"
 import { useEffect } from "react"
 import { NavLink, Outlet, useNavigate, useLocation } from "react-router-dom"
 import { LoadingSpinner } from "@renderer/components/ui/loading-spinner"
+import { SettingsDragBar } from "@renderer/components/settings-drag-bar"
 
 type NavLink = {
   text: string
@@ -57,7 +58,7 @@ export const Component = () => {
 
   return (
     <div className="flex h-dvh">
-      <div className="app-drag-region flex w-44 shrink-0 flex-col border-r bg-background">
+      <div className="flex w-44 shrink-0 flex-col border-r bg-background">
         <header
           className={process.env.IS_MAC ? "h-10" : "h-2"}
           aria-hidden
@@ -96,8 +97,14 @@ export const Component = () => {
           </div>
         </div>
       </div>
-      <div className="flex grow flex-col overflow-auto bg-background">
-        <Outlet />
+      <div className="flex grow flex-col bg-background">
+        {/* Draggable top bar for Mac - allows window dragging while content scrolls */}
+        {process.env.IS_MAC && <SettingsDragBar />}
+
+        {/* Scrollable content area */}
+        <div className="flex-1 overflow-auto">
+          <Outlet />
+        </div>
       </div>
     </div>
   )

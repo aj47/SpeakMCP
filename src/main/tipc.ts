@@ -163,7 +163,13 @@ async function processWithAgentMode(
 ): Promise<string> {
   const config = configStore.get()
 
-  // Set agent mode state
+  // Clear any previous agent progress before starting new session
+  const win = WINDOWS.get("panel")
+  if (win) {
+    getRendererHandlers<RendererHandlers>(win.webContents).clearAgentProgress.send()
+  }
+
+  // Set agent mode state - ensure clean state for new session
   state.isAgentModeActive = true
   state.shouldStopAgent = false
   state.agentIterationCount = 0

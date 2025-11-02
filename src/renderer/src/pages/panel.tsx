@@ -79,6 +79,7 @@ export function Component() {
           if (isConversationActive) {
             endConversation()
           }
+          // Start new conversation and wait for it to be created
           await startNewConversation(transcript, "user")
         } else {
           // Legacy behavior: only create if no active conversation
@@ -118,6 +119,9 @@ export function Component() {
       const config = await tipcClient.getConfig()
       const shouldCreateNewSession = config.alwaysCreateNewSessionForVoice ?? true
 
+      // Determine which conversation ID to use
+      let conversationIdToUse = currentConversationId
+
       // If we have a transcript, handle conversation creation
       if (transcript) {
         if (shouldCreateNewSession) {
@@ -125,11 +129,14 @@ export function Component() {
           if (isConversationActive) {
             endConversation()
           }
-          await startNewConversation(transcript, "user")
+          // Start new conversation and get its ID
+          const newConversation = await startNewConversation(transcript, "user")
+          conversationIdToUse = newConversation?.id || null
         } else {
           // Legacy behavior: only create if no active conversation
           if (!isConversationActive) {
-            await startNewConversation(transcript, "user")
+            const newConversation = await startNewConversation(transcript, "user")
+            conversationIdToUse = newConversation?.id || null
           }
         }
       }
@@ -137,11 +144,11 @@ export function Component() {
       const result = await tipcClient.createMcpRecording({
         recording: arrayBuffer,
         duration,
-        conversationId: currentConversationId || undefined,
+        conversationId: conversationIdToUse || undefined,
       })
 
       // Update conversation ID if backend created/returned one
-      if (result?.conversationId && result.conversationId !== currentConversationId) {
+      if (result?.conversationId && result.conversationId !== conversationIdToUse) {
         continueConversation(result.conversationId)
       }
 

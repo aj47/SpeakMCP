@@ -59,6 +59,9 @@ export function useInputProcessing(options: UseInputProcessingOptions = {}) {
       const config = await tipcClient.getConfig()
       const shouldCreateNewSession = config.alwaysCreateNewSessionForVoice ?? true
 
+      // Determine which conversation ID to use
+      let conversationIdToUse = currentConversation?.id
+
       // If we have a transcript, handle conversation creation
       if (transcript) {
         if (shouldCreateNewSession) {
@@ -66,11 +69,14 @@ export function useInputProcessing(options: UseInputProcessingOptions = {}) {
           if (isConversationActive) {
             endConversation()
           }
-          await startNewConversation(transcript, "user")
+          // Start new conversation and get its ID
+          const newConversation = await startNewConversation(transcript, "user")
+          conversationIdToUse = newConversation?.id
         } else {
           // Legacy behavior: only create if no active conversation
           if (!isConversationActive) {
-            await startNewConversation(transcript, "user")
+            const newConversation = await startNewConversation(transcript, "user")
+            conversationIdToUse = newConversation?.id
           }
         }
       }
@@ -78,7 +84,7 @@ export function useInputProcessing(options: UseInputProcessingOptions = {}) {
       const result = await tipcClient.createMcpRecording({
         recording: arrayBuffer,
         duration,
-        conversationId: currentConversation?.id || undefined,
+        conversationId: conversationIdToUse || undefined,
       })
 
       return result

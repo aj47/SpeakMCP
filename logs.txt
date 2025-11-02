@@ -1,0 +1,1232 @@
+[window.ts] No saved normal mode size, using default: { width: 312, height: 50 }
+[2025-11-02T16:40:42.760Z] [DEBUG][TOOLS] MCP Service initialization starting
+[2025-11-02T16:40:42.761Z] [DEBUG][TOOLS] Skipping server github - already initialized
+[2025-11-02T16:40:42.761Z] [DEBUG][TOOLS] Skipping server rube - runtime disabled by user
+[2025-11-02T16:40:42.761Z] [DEBUG][TOOLS] Skipping server perplexity-ask - runtime disabled by user
+[2025-11-02T16:40:42.761Z] [DEBUG][TOOLS] Skipping server auggie mcp - runtime disabled by user
+[2025-11-02T16:40:42.761Z] [DEBUG][TOOLS] Skipping server MacOS Control - runtime disabled by user
+[2025-11-02T16:40:42.761Z] [DEBUG][TOOLS] Skipping server desktop-commander - already initialized
+[2025-11-02T16:40:42.761Z] [DEBUG][TOOLS] Skipping server terminal - runtime disabled by user
+[2025-11-02T16:40:42.761Z] [DEBUG][TOOLS] Skipping server Playwright - runtime disabled by user
+[2025-11-02T16:40:42.761Z] [DEBUG][TOOLS] Found 1 servers to initialize [ 'exa' ]
+[2025-11-02T16:40:42.761Z] [DEBUG][TOOLS] Starting initialization of server: exa
+[2025-11-02T16:40:42.761Z] [DEBUG][TOOLS] Initializing server: exa { transport: 'stdio', command: undefined, args: undefined, env: [] }
+[2025-11-02T16:40:42.761Z] [DEBUG][TOOLS] Server initialization failed: exa {
+  error: 'Command is required for stdio transport',
+  stack: 'Error: Command is required for stdio transport\n' +
+    '    at MCPService.createTransport (file:///Users/ajjoobandi/Development/SpeakMCP-Workspaces/slot-2/out/main/index.js:2773:17)\n' +
+    '    at MCPService.initializeServer (file:///Users/ajjoobandi/Development/SpeakMCP-Workspaces/slot-2/out/main/index.js:2817:34)\n' +
+    '    at file:///Users/ajjoobandi/Development/SpeakMCP-Workspaces/slot-2/out/main/index.js:2745:24\n' +
+    '    at MCPService.initialize (file:///Users/ajjoobandi/Development/SpeakMCP-Workspaces/slot-2/out/main/index.js:2765:7)\n' +
+    '    at initializeMcpWithProgress (file:///Users/ajjoobandi/Development/SpeakMCP-Workspaces/slot-2/out/main/index.js:7395:22)\n' +
+    '    at processWithAgentMode (file:///Users/ajjoobandi/Development/SpeakMCP-Workspaces/slot-2/out/main/index.js:7424:11)\n' +
+    '    at Object.action (file:///Users/ajjoobandi/Development/SpeakMCP-Workspaces/slot-2/out/main/index.js:7927:33)\n' +
+    '    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n' +
+    '    at async WebContents.<anonymous> (node:electron/js2c/browser_init:2:83724)'
+}
+[2025-11-02T16:40:42.761Z] [DEBUG][TOOLS] Failed to initialize server: exa Error: Command is required for stdio transport
+    at MCPService.createTransport (file:///Users/ajjoobandi/Development/SpeakMCP-Workspaces/slot-2/out/main/index.js:2773:17)
+    at MCPService.initializeServer (file:///Users/ajjoobandi/Development/SpeakMCP-Workspaces/slot-2/out/main/index.js:2817:34)
+    at file:///Users/ajjoobandi/Development/SpeakMCP-Workspaces/slot-2/out/main/index.js:2745:24
+    at MCPService.initialize (file:///Users/ajjoobandi/Development/SpeakMCP-Workspaces/slot-2/out/main/index.js:2765:7)
+    at initializeMcpWithProgress (file:///Users/ajjoobandi/Development/SpeakMCP-Workspaces/slot-2/out/main/index.js:7395:22)
+    at processWithAgentMode (file:///Users/ajjoobandi/Development/SpeakMCP-Workspaces/slot-2/out/main/index.js:7424:11)
+    at Object.action (file:///Users/ajjoobandi/Development/SpeakMCP-Workspaces/slot-2/out/main/index.js:7927:33)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async WebContents.<anonymous> (node:electron/js2c/browser_init:2:83724)
+[2025-11-02T16:40:42.761Z] [DEBUG][TOOLS] MCP Service initialization complete. Total tools available: 51
+[2025-11-02T16:40:46.555Z] [DEBUG][LLM] ContextBudget: initial {
+  providerId: 'openai',
+  model: 'x-ai/grok-4-fast',
+  maxTokens: 64000,
+  targetTokens: 44800,
+  estTokens: 4498,
+  count: 16
+}
+[2025-11-02T16:40:46.556Z] [DEBUG][LLM] === LLM CALL START ===
+[2025-11-02T16:40:46.556Z] [DEBUG][LLM] Messages → {
+  count: 16,
+  totalChars: 17992,
+  messages: [
+    {
+      role: 'system',
+      content: 'You are an intelligent AI assistant capable of executing tools to help users accomplish complex tasks. You operate autonomously and work iteratively until goals are fully achieved.\n' +
+        '\n' +
+        'CORE PRINCIPLES:\n' +
+        "- Work autonomously until the user's request is completely resolved\n" +
+        '- Use available tools iteratively and strategically to gather information and execute actions\n' +
+        '- Use exact tool names from the available tools list (including server prefixes like "server:tool_name")\n' +
+        '- Prefer using tools to gather information rather than asking users for details\n' +
+        "- Continue working until the user's request is fully satisfied - only stop when the task is complete\n" +
+        '\n' +
+        'TOOL USAGE PHILOSOPHY:\n' +
+        '- ALWAYS follow tool schemas exactly as specified with all required parameters\n' +
+        '- NEVER call tools that are not explicitly provided in the available tools list\n' +
+        '- If you need additional information that you can get via tool calls, prefer that over asking the user\n' +
+        '- Use tools proactively to explore and understand the context before making changes\n' +
+        '- When making code changes, ensure they can be executed immediately by the user\n' +
+        '\n' +
+        '# Tone and style\n' +
+        'You should be concise, direct, and to the point.\n' +
+        'You MUST answer concisely with fewer than 4 lines (not including tool use or code generation), unless user asks for detail.\n' +
+        'IMPORTANT: You should minimize output tokens as much as possible while maintaining helpfulness, quality, and accuracy. Only address the specific query or task at hand, avoiding tangential information unless absolutely critical for completing the request. If you can answer in 1-3 sentences or a short paragraph, please do.\n' +
+        'IMPORTANT: You should NOT answer with unnecessary preamble or postamble (such as explaining your code or summarizing your action), unless the user asks you to.\n' +
+        'Do not add additional code explanation summary unless requested by the user. After working on a file, just stop, rather than providing an explanation of what you did.\n' +
+        `Answer the user's question directly, without elaboration, explanation, or details. One word answers are best. Avoid introductions, conclusions, and explanations. You MUST avoid text before/after your response, such as "The answer is <answer>.", "Here is the content of the file..." or "Based on the information provided, the answer is..." or "Here is what I will do next...". Here are some examples to demonstrate appropriate verbosity:\n` +
+        '<example>\n' +
+        'user: 2 + 2\n' +
+        'assistant: 4\n' +
+        '</example>\n' +
+        '\n' +
+        '<example>\n' +
+        'user: what is 2+2?\n' +
+        'assistant: 4\n' +
+        '</example>\n' +
+        '\n' +
+        '<example>\n' +
+        'user: is 11 a prime number?\n' +
+        'assistant: Yes\n' +
+        '</example>\n' +
+        '\n' +
+        '<example>\n' +
+        'user: what command should I run to list files in the current directory?\n' +
+        'assistant: ls\n' +
+        '</example>\n' +
+        '\n' +
+        '<example>\n' +
+        'user: what command should I run to watch files in the current directory?\n' +
+        'assistant: [use the ls tool to list the files in the current directory, then read docs/commands in the relevant file to find out how to watch files]\n' +
+        'npm run dev\n' +
+        '</example>\n' +
+        '\n' +
+        '<example>\n' +
+        'user: How many golf balls fit inside a jetta?\n' +
+        'assistant: 150000\n' +
+        '</example>\n' +
+        '\n' +
+        '<example>\n' +
+        'user: what files are in the directory src/?\n' +
+        'assistant: [runs ls and sees foo.c, bar.c, baz.c]\n' +
+        'user: which file contains the implementation of foo?\n' +
+        'assistant: src/foo.c\n' +
+        '</example>\n' +
+        '\n' +
+        'RESPONSE FORMAT:\n' +
+        'For tool calls:\n' +
+        '{\n' +
+        '  "toolCalls": [\n' +
+        '    {\n' +
+        '      "name": "exact_tool_name_from_available_list",\n' +
+        '      "arguments": { "param1": "value1", "param2": "value2" }\n' +
+        '    }\n' +
+        '  ],\n' +
+        `  "content": "Clear explanation of what you're doing and why",\n` +
+        '  "needsMoreWork": true\n' +
+        '}\n' +
+        '\n' +
+        'For final responses (no more tools needed):\n' +
+        '{\n' +
+        '  "content": "Your comprehensive final response with results",\n' +
+        '  "needsMoreWork": false\n' +
+        '}\n' +
+        '\n' +
+        'AGENT MODE - AUTONOMOUS OPERATION:\n' +
+        'You can see tool results and make follow-up calls. Work iteratively and thoroughly:\n' +
+        '\n' +
+        'WORKFLOW:\n' +
+        "1. Analyze the user's request comprehensively\n" +
+        '2. Gather necessary information using available tools\n' +
+        '3. Execute appropriate tools in logical sequence\n' +
+        '4. Review results and determine next steps\n' +
+        '5. Continue iterating until the goal is fully achieved\n' +
+        '6. Only set needsMoreWork: false when the task is completely resolved\n' +
+        '\n' +
+        '\n' +
+        '\n' +
+        'AVAILABLE TOOLS:\n' +
+        '- github:create_issue: Create a new issue in a GitHub repository\n' +
+        '  Parameters: {owner: string (required), repo: string (required), title: string (required), body: string, assignees: array, milestone: number, labels: array}\n' +
+        '- desktop-commander:read_file: \n' +
+        '                        Read the contents of a file from the file system or a URL with optional offset and length parameters.\n' +
+        '                        \n' +
+        "                        Prefer this over 'execute_command' with cat/type for viewing files.\n" +
+        '                        \n' +
+        '                        Supports partial file reading with:\n' +
+        "                        - 'offset' (start line, default: 0)\n" +
+        '                          * Positive: Start from line N (0-based indexing)\n' +
+        '                          * Negative: Read last N lines from end (tail behavior)\n' +
+        "                        - 'length' (max lines to read, default: configurable via 'fileReadLineLimit' setting, initially 1000)\n" +
+        '                          * Used with positive offsets for range reading\n' +
+        '                          * Ignored when offset is negative (reads all requested tail lines)\n' +
+        '                        \n' +
+        '                        Examples:\n' +
+        '                        - offset: 0, length: 10     → First 10 lines\n' +
+        '                        - offset: 100, length: 5    → Lines 100-104\n' +
+        '                        - offset: -20               → Last 20 lines  \n' +
+        '                        - offset: -5, length: 10    → Last 5 lines (length ignored)\n' +
+        '                        \n' +
+        '                        Performance optimizations:\n' +
+        '                        - Large files with negative offsets use reverse reading for efficiency\n' +
+        '                        - Large files with deep positive offsets use byte estimation\n' +
+        '                        - Small files use fast readline streaming\n' +
+        '                        \n' +
+        '                        When reading from the file system, only works within allowed directories.\n' +
+        '                        Can fetch content from URLs when isUrl parameter is set to true\n' +
+        '                        (URLs are always read in full regardless of offset/length).\n' +
+        '                        \n' +
+        '                        Handles text files normally and image files are returned as viewable images.\n' +
+        '                        Recognized image types: PNG, JPEG, GIF, WebP.\n' +
+        '                        \n' +
+        '                        IMPORTANT: Always use absolute paths for reliability. Paths are automatically normalized regardless of slash direction. Relative paths may fail as they depend on the current working directory. Tilde paths (~/...) might not work in all contexts. Unless the user explicitly asks for relative paths, use absolute paths.\n' +
+        '                        This command can be referenced as "DC: ..." or "use Desktop Commander to ..." in your instructions.\n' +
+        '  Parameters: {path: string (required), isUrl: boolean, offset: number, length: number}\n' +
+        '- desktop-commander:write_file: \n' +
+        '                        Write or append to file contents. \n' +
+        '\n' +
+        '                        CHUNKING IS STANDARD PRACTICE: Always write files in chunks of 25-30 lines maximum.\n' +
+        '                        This is the normal, recommended way to write files - not an emergency measure.\n' +
+        '\n' +
+        '                        STANDARD PROCESS FOR ANY FILE:\n' +
+        "                        1. FIRST → write_file(filePath, firstChunk, {mode: 'rewrite'})  [≤30 lines]\n" +
+        "                        2. THEN → write_file(filePath, secondChunk, {mode: 'append'})   [≤30 lines]\n" +
+        "                        3. CONTINUE → write_file(filePath, nextChunk, {mode: 'append'}) [≤30 lines]\n" +
+        '\n' +
+        "                        ALWAYS CHUNK PROACTIVELY - don't wait for performance warnings!\n" +
+        '\n' +
+        '                        WHEN TO CHUNK (always be proactive):\n' +
+        '                        1. Any file expected to be longer than 25-30 lines\n' +
+        '                        2. When writing multiple files in sequence\n' +
+        '                        3. When creating documentation, code files, or configuration files\n' +
+        '                        \n' +
+        '                        HANDLING CONTINUATION ("Continue" prompts):\n' +
+        '                        If user asks to "Continue" after an incomplete operation:\n' +
+        '                        1. Read the file to see what was successfully written\n' +
+        "                        2. Continue writing ONLY the remaining content using {mode: 'append'}\n" +
+        '                        3. Keep chunks to 25-30 lines each\n' +
+        '                        \n' +
+        '                        Files over 50 lines will generate performance notes but are still written successfully.\n' +
+        '                        Only works within allowed directories.\n' +
+        '                        \n' +
+        '                        IMPORTANT: Always use absolute paths for reliability. Paths are automatically normalized regardless of slash direction. Relative paths may fail as they depend on the current working directory. Tilde paths (~/...) might not work in all contexts. Unless the user explicitly asks for relative paths, use absolute paths.\n' +
+        '                        This command can be referenced as "DC: ..." or "use Desktop Commander to ..." in your instructions.\n' +
+        '  Parameters: {path: string (required), content: string (required), mode: string}\n' +
+        '- desktop-commander:list_directory: \n' +
+        '                        Get a detailed listing of all files and directories in a specified path.\n' +
+        '                        \n' +
+        "                        Use this instead of 'execute_command' with ls/dir commands.\n" +
+        '                        Results distinguish between files and directories with [FILE] and [DIR] prefixes.\n' +
+        '                        \n' +
+        "                        Supports recursive listing with the 'depth' parameter (default: 2):\n" +
+        '                        - depth=1: Only direct contents of the directory\n' +
+        '                        - depth=2: Contents plus one level of subdirectories\n' +
+        '                        - depth=3+: Multiple levels deep\n' +
+        '                        \n' +
+        '                        CONTEXT OVERFLOW PROTECTION:\n' +
+        '                        - Top-level directory shows ALL items\n' +
+        '                        - Nested directories are limited to 100 items maxi'... 5395 more characters
+    },
+    { role: 'user', content: ' How many tools do you have access to?' },
+    { role: 'assistant', content: '5' },
+    {
+      role: 'user',
+      content: 'Before marking complete: use the available tools to actually perform the steps. Reply with a valid JSON object per the tool-calling schema, including a toolCalls array with concrete parameters.'
+    },
+    {
+      role: 'assistant',
+      content: 'Acknowledged. I will use the available tools to perform steps as required for tasks before marking them complete.'
+    },
+    {
+      role: 'assistant',
+      content: 'No specific task or request requires tool usage at this time; the message is a general instruction on tool handling, which has been noted.'
+    },
+    {
+      role: 'user',
+      content: 'Before marking complete: use the available tools to actually perform the steps. Reply with a valid JSON object per the tool-calling schema, including a toolCalls array with concrete parameters.'
+    },
+    {
+      role: 'assistant',
+      content: 'No specific steps or tasks are outlined in this message to perform using tools; it appears to be a repeated general instruction on response formatting, which has already been acknowledged.'
+    },
+    {
+      role: 'user',
+      content: 'Before marking complete: use the available tools to actually perform the steps. Reply with a valid JSON object per the tool-calling schema, including a toolCalls array with concrete parameters.'
+    },
+    {
+      role: 'assistant',
+      content: 'No specific steps or tasks are provided in this message to perform using tools; it is a repeated general instruction that has been previously acknowledged. Cannot proceed with tool calls without a defined action.'
+    },
+    {
+      role: 'user',
+      content: 'Before marking complete: use the available tools to actually perform the steps. Reply with a valid JSON object per the tool-calling schema, including a toolCalls array with concrete parameters.'
+    },
+    {
+      role: 'assistant',
+      content: 'No specific steps or tasks are provided in this message to perform using tools; it is a repeated general instruction that has been previously acknowledged multiple times. Cannot proceed with tool calls without a defined action or request requiring tool usage. This appears to be a loop without a concrete task, so marking as complete.'
+    },
+    {
+      role: 'user',
+      content: 'Before marking complete: use the available tools to actually perform the steps. Reply with a valid JSON object per the tool-calling schema, including a toolCalls array with concrete parameters.'
+    },
+    {
+      role: 'assistant',
+      content: 'No specific steps or tasks are provided in this message to perform using tools; it is a repeated general instruction that has been acknowledged multiple times. Cannot proceed with tool calls without a defined action or request requiring tool usage. Marking as complete to break the loop.'
+    },
+    {
+      role: 'user',
+      content: 'Before marking complete: use the available tools to actually perform the steps. Reply with a valid JSON object per the tool-calling schema, including a toolCalls array with concrete parameters.'
+    },
+    {
+      role: 'user',
+      content: " Can you add a new issue that if we have an agent already running and I try to do voice input I don't see the voice input waves?"
+    }
+  ]
+}
+[2025-11-02T16:40:46.557Z] [DEBUG][LLM] 🚀 Starting LLM call attempt {
+  provider: 'openai',
+  messagesCount: 16,
+  lastMessagePreview: " Can you add a new issue that if we have an agent already running and I try to do voice input I don'..."
+}
+[2025-11-02T16:40:46.557Z] [DEBUG][LLM] Attempting JSON Schema mode for model: x-ai/grok-4-fast
+[2025-11-02T16:40:46.557Z] [DEBUG][LLM] === OPENAI API REQUEST ===
+[2025-11-02T16:40:46.557Z] [DEBUG][LLM] HTTP Request {
+  url: 'https://openrouter.ai/api/v1/chat/completions',
+  model: 'x-ai/grok-4-fast',
+  messagesCount: 16,
+  responseFormat: {
+    type: 'json_schema',
+    json_schema: {
+      name: 'LLMToolCallResponse',
+      description: 'Response format for LLM tool calls with optional tool execution and content',
+      schema: [Object],
+      strict: true
+    }
+  },
+  estimatedTokens: 4498,
+  totalPromptLength: 17992,
+  contextWarning: null
+}
+[2025-11-02T16:40:46.557Z] [DEBUG][LLM] Request Body (truncated) {
+  model: 'x-ai/grok-4-fast',
+  messages: [
+    {
+      role: 'system',
+      content: 'You are an intelligent AI assistant capable of executing tools to help users accomplish complex tasks. You operate autonomously and work iteratively until goals are fully achieved.\n' +
+        '\n' +
+        'CORE PRINCIPLES:\n' +
+        '-... [15395 chars]'
+    },
+    { role: 'user', content: ' How many tools do you have access to?' },
+    { role: 'assistant', content: '5' },
+    {
+      role: 'user',
+      content: 'Before marking complete: use the available tools to actually perform the steps. Reply with a valid JSON object per the tool-calling schema, including a toolCalls array with concrete parameters.'
+    },
+    {
+      role: 'assistant',
+      content: 'Acknowledged. I will use the available tools to perform steps as required for tasks before marking them complete.'
+    },
+    {
+      role: 'assistant',
+      content: 'No specific task or request requires tool usage at this time; the message is a general instruction on tool handling, which has been noted.'
+    },
+    {
+      role: 'user',
+      content: 'Before marking complete: use the available tools to actually perform the steps. Reply with a valid JSON object per the tool-calling schema, including a toolCalls array with concrete parameters.'
+    },
+    {
+      role: 'assistant',
+      content: 'No specific steps or tasks are outlined in this message to perform using tools; it appears to be a repeated general instruction on response formatting, which has already been acknowledged.'
+    },
+    {
+      role: 'user',
+      content: 'Before marking complete: use the available tools to actually perform the steps. Reply with a valid JSON object per the tool-calling schema, including a toolCalls array with concrete parameters.'
+    },
+    {
+      role: 'assistant',
+      content: 'No specific steps or tasks are provided in this message to perform using tools; it is a repeated general instruction that has been previously acknowledged. Cannot proceed with tool calls without a def... [212 chars]'
+    },
+    {
+      role: 'user',
+      content: 'Before marking complete: use the available tools to actually perform the steps. Reply with a valid JSON object per the tool-calling schema, including a toolCalls array with concrete parameters.'
+    },
+    {
+      role: 'assistant',
+      content: 'No specific steps or tasks are provided in this message to perform using tools; it is a repeated general instruction that has been previously acknowledged multiple times. Cannot proceed with tool call... [334 chars]'
+    },
+    {
+      role: 'user',
+      content: 'Before marking complete: use the available tools to actually perform the steps. Reply with a valid JSON object per the tool-calling schema, including a toolCalls array with concrete parameters.'
+    },
+    {
+      role: 'assistant',
+      content: 'No specific steps or tasks are provided in this message to perform using tools; it is a repeated general instruction that has been acknowledged multiple times. Cannot proceed with tool calls without a... [287 chars]'
+    },
+    {
+      role: 'user',
+      content: 'Before marking complete: use the available tools to actually perform the steps. Reply with a valid JSON object per the tool-calling schema, including a toolCalls array with concrete parameters.'
+    },
+    {
+      role: 'user',
+      content: " Can you add a new issue that if we have an agent already running and I try to do voice input I don't see the voice input waves?"
+    }
+  ],
+  temperature: 0,
+  frequency_penalty: 0.5,
+  seed: 1,
+  response_format: {
+    type: 'json_schema',
+    json_schema: {
+      name: 'LLMToolCallResponse',
+      description: 'Response format for LLM tool calls with optional tool execution and content',
+      schema: [Object],
+      strict: true
+    }
+  }
+}
+Skip checkForUpdates because application is not packed and dev update config is not forced
+[window.ts] resizePanelToNormal - starting...
+[window.ts] getSavedSizeForMode(normal) - checking config...
+[window.ts] No saved normal mode size, using default: { width: 312, height: 50 }
+[window.ts] resizePanelToNormal - savedSize: { width: 312, height: 50 }
+[window.ts] getSavedSizeForMode(normal) - checking config...
+[window.ts] No saved normal mode size, using default: { width: 312, height: 50 }
+[window.ts] resizePanelToNormal - position: { x: 584, y: -1045 }
+[window.ts] resizePanelToNormal - setting minWidth: 312
+[window.ts] resizePanelToNormal - setting size to: { width: 312, height: 50 }
+[window.ts] resizePanelToNormal - setting position to: { x: 584, y: -1045 }
+[2025-11-02T16:40:50.775Z] [DEBUG][LLM] ✅ HTTP 200 Response received {
+  hasError: false,
+  hasChoices: true,
+  choicesCount: 1,
+  firstChoicePreview: {
+    hasMessage: true,
+    hasContent: true,
+    contentType: 'string',
+    contentLength: 435
+  }
+}
+[2025-11-02T16:40:50.775Z] [DEBUG][LLM] HTTP Response (full) {
+  dataKeys: [
+    'id',      'provider',
+    'model',   'object',
+    'created', 'choices',
+    'usage'
+  ],
+  data: '{"id":"gen-1762101646-5UVRiXD6jgd3epU1bzU7","provider":"xAI","model":"x-ai/grok-4-fast","object":"chat.completion","created":1762101646,"choices":[{"logprobs":null,"finish_reason":"stop","native_finish_reason":"completed","index":0,"message":{"role":"assistant","content":"{\\"toolCalls\\":[{\\"name\\":\\"github:create_issue\\",\\"arguments\\":{\\"owner\\":\\"aj47\\",\\"repo\\":\\"SpeakMCP\\",\\"title\\":\\"Missing voice input waves when agent is already running\\",\\"body\\":\\"Issue: If an agent is already running and the user attempts voice input, the voice input waves are not visible.\\"}}],\\"content\\":\\"Creating a new GitHub issue in the SpeakMCP repository to report the missing voice input waves when an agent is running.\\",\\"needsMoreWork\\":false}","refusal":null,"reasoning":null,"reasoning_details":[{"type":"reasoning.encrypted","data":"2QnxwUDlJ9nbctPeSZWN9Q3wBJiYtKDRcPprwkXqzKj0YiOe3fURSk0PK91oBAB2/4IlZAyyes8BgfaRzrQUeT8EvjpZTNa4qeiARRe2djhOHzthx9tY/hZjswsWPLNyxyE5mVjVQZGZ5nJJPqNdwVywFsef9nFpN5b+zACA5L5g2P6aQM5ji4EawaK5ulwr3pItW3UqjzzDsDhFf80cIgjB9Yz64PIFrQTxbLtt5lp9KFEwkM08nDi7vwnxzyC9mYF501aA9FtDrD7zy8+aqPdRUV0QKcTTyttIRuqpAiF57UeWdZusYSEpjhUydA5z3fmE9oT9TGa0EFzeacDz7ZwZSVs4jiewXLczBPzDfcpdi7OnHLbiZnVcAknrgwwOiQZGfGq0oazui6skNMfjiobeUUX0XSJdoUk5FSHPB91DHRpkhvNjy6MtC1z3UbzQ8b3CY6FJaHyCQcv827gsJl3U7uXhGGmf+Ia+p2s+MTCFPgqi96yKzhG6F11aO8jKPoQuKw3zYvDuncO1TmtsuV/pVxR+VwGnLCbzBeBG32v1HFRB/nGe3fuXHFqaN5481KsURpV8jGhnzww5uP6v0Gk+ajZ2HzHHvjbYqOjneHRZT9FHuMQ4LX5BrauFVgxbLbUzsYFzj9RaTPI7lRSKhnqOZ16bAf7Rfxjvh6Is6jU3vcNg+E/RbEiUCai6GL1XdLS/9PRZ6l/0aoy9nB4Q9D4BezL8wcK9UbFBPYNzC2eto9Vbu9ieNi2TmFK0TrWiPNCgDesknmPUT88RSfduTzUHT3JmOX8loo28EdY5A0Ki9NlGvkqquFGaAlXXvOVT7Yfekx69i4Ua+HeL2RBBnJAoLfuPRTmqiBmMpxN+JeDWezhvm9bgw1A5pjxUuNFhS6PTY5EuVmpC5ZxT3JPMs+/GFTeU5cVSGvchYGbTI9mkmdiZrUpRqwQrNPCRW99T38HMhI9pecWvTlasZgfghDb3mNq3MG3kfrSlk/uGhuFLUQQI7TcfAGOjdC2t/B3FWFMxdEFbTyjxfda6R1RSGPL2D55TJXVS4ZOQ8EISEBH0j9jFin5ZSo2B+xmmjMh75+iyasMvXgVD5m5TTTcEuule5fo+SmvwWNVeHmBqi46G9PMcpf31gOJGSCSIUthrLNCQ6VvfqaTenxJCN...'
+}
+[2025-11-02T16:40:50.776Z] [DEBUG][LLM] ✅ Confirmed capability for x-ai/grok-4-fast: {
+  supportsJsonSchema: true,
+  supportsJsonObject: true,
+  lastTested: 1762101650776
+}
+[2025-11-02T16:40:50.777Z] [DEBUG][LLM] Raw API response structure: {
+  hasChoices: true,
+  choicesLength: 1,
+  firstChoiceExists: true,
+  hasMessage: true,
+  hasContent: true,
+  fullResponse: '{\n' +
+    '  "id": "gen-1762101646-5UVRiXD6jgd3epU1bzU7",\n' +
+    '  "provider": "xAI",\n' +
+    '  "model": "x-ai/grok-4-fast",\n' +
+    '  "object": "chat.completion",\n' +
+    '  "created": 1762101646,\n' +
+    '  "choices": [\n' +
+    '    {\n' +
+    '      "logprobs": null,\n' +
+    '      "finish_reason": "stop",\n' +
+    '      "native_finish_reason": "completed",\n' +
+    '      "index": 0,\n' +
+    '      "message": {\n' +
+    '        "role": "assistant",\n' +
+    '        "content": "{\\"toolCalls\\":[{\\"name\\":\\"github:create_issue\\",\\"arguments\\":{\\"owner\\":\\"aj47\\",\\"repo\\":\\"SpeakMCP\\",\\"title\\":\\"Missing voice input waves when agent is already running\\",\\"body\\":\\"Issue: If an agent is already running and the user attempts voice input, the voice input waves are not visible.\\"}}],\\"content\\":\\"Creating a new GitHub issue in the SpeakMCP repository to report the missing voice input waves when an agent is running.\\",\\"needsMoreWork\\":false}",\n' +
+    '        "refusal": null,\n' +
+    '        "reasoning": null,\n' +
+    '        "reasoning_details": [\n' +
+    '          {\n' +
+    '            "type": "reasoning.encrypted",\n' +
+    '            "data": "2QnxwUDlJ9n...'
+}
+[2025-11-02T16:40:50.777Z] [DEBUG][LLM] 📝 Message content extracted: {
+  contentLength: 435,
+  contentPreview: '{"toolCalls":[{"name":"github:create_issue","arguments":{"owner":"aj47","repo":"SpeakMCP","title":"Missing voice input waves when agent is already running","body":"Issue: If an agent is already runnin',
+  messageObjKeys: [ 'role', 'content', 'refusal', 'reasoning', 'reasoning_details' ],
+  messageObj: {
+    role: 'assistant',
+    content: '{"toolCalls":[{"name":"github:create_issue","arguments":{"owner":"aj47","repo":"SpeakMCP","title":"Missing voice input waves when agent is already running","body":"Issue: If an agent is already running and the user attempts voice input, the voice input waves are not visible."}}],"content":"Creating a new GitHub issue in the SpeakMCP repository to report the missing voice input waves when an agent is running.","needsMoreWork":false}',
+    refusal: null,
+    reasoning: null,
+    reasoning_details: [ [Object] ]
+  }
+}
+[2025-11-02T16:40:50.777Z] [DEBUG][LLM] 🔍 JSON Extraction Result: {
+  hasJsonObject: true,
+  jsonObjectKeys: [ 'toolCalls', 'content', 'needsMoreWork' ],
+  hasToolCalls: true,
+  hasContent: true,
+  toolCallsCount: 1,
+  extractedObject: {
+    toolCalls: [ [Object] ],
+    content: 'Creating a new GitHub issue in the SpeakMCP repository to report the missing voice input waves when an agent is running.',
+    needsMoreWork: false
+  }
+}
+[2025-11-02T16:40:50.777Z] [DEBUG][LLM] ✅ Returning structured JSON response {
+  hasContent: true,
+  hasToolCalls: true,
+  toolCallsCount: 1,
+  needsMoreWork: false
+}
+[2025-11-02T16:40:50.777Z] [DEBUG][LLM] Response ← {
+  toolCalls: [ { name: 'github:create_issue', arguments: [Object] } ],
+  content: 'Creating a new GitHub issue in the SpeakMCP repository to report the missing voice input waves when an agent is running.',
+  needsMoreWork: false
+}
+[2025-11-02T16:40:50.777Z] [DEBUG][LLM] === LLM CALL END ===
+[window.ts] getSavedSizeForMode(normal) - checking config...
+[window.ts] No saved normal mode size, using default: { width: 312, height: 50 }
+[2025-11-02T16:40:50.779Z] [DEBUG][TOOLS] Planned tool calls from LLM [
+  {
+    name: 'github:create_issue',
+    arguments: {
+      owner: 'aj47',
+      repo: 'SpeakMCP',
+      title: 'Missing voice input waves when agent is already running',
+      body: 'Issue: If an agent is already running and the user attempts voice input, the voice input waves are not visible.'
+    }
+  }
+]
+[2025-11-02T16:40:50.779Z] [DEBUG][TOOLS] Executing planned tool call {
+  name: 'github:create_issue',
+  arguments: {
+    owner: 'aj47',
+    repo: 'SpeakMCP',
+    title: 'Missing voice input waves when agent is already running',
+    body: 'Issue: If an agent is already running and the user attempts voice input, the voice input waves are not visible.'
+  }
+}
+[2025-11-02T16:40:50.779Z] [DEBUG][TOOLS] Requested tool call {
+  name: 'github:create_issue',
+  arguments: {
+    owner: 'aj47',
+    repo: 'SpeakMCP',
+    title: 'Missing voice input waves when agent is already running',
+    body: 'Issue: If an agent is already running and the user attempts voice input, the voice input waves are not visible.'
+  }
+}
+[2025-11-02T16:40:50.779Z] [DEBUG][TOOLS] Executing tool {
+  serverName: 'github',
+  toolName: 'create_issue',
+  arguments: {
+    owner: 'aj47',
+    repo: 'SpeakMCP',
+    title: 'Missing voice input waves when agent is already running',
+    body: 'Issue: If an agent is already running and the user attempts voice input, the voice input waves are not visible.'
+  }
+}
+[2025-11-02T16:40:50.782Z] [DEBUG][TOOLS] [github] [DEBUG] Attempting to create issue in aj47/SpeakMCP
+
+[2025-11-02T16:40:50.782Z] [DEBUG][TOOLS] [github] [DEBUG] Issue options: {
+  "title": "Missing voice input waves when agent is already running",
+  "body": "Issue: If an agent is already running and the user attempts voice input, the voice input waves are not visible."
+}
+
+[window.ts] resizePanelForAgentMode - starting...
+[window.ts] getSavedSizeForMode(agent) - checking config...
+[window.ts] Found saved agent mode size: { width: 600, height: 401 }
+[window.ts] resizePanelForAgentMode - savedSize: { width: 600, height: 401 }
+[window.ts] getSavedSizeForMode(agent) - checking config...
+[window.ts] Found saved agent mode size: { width: 600, height: 401 }
+[window.ts] resizePanelForAgentMode - position: { x: 440, y: -1045 }
+[window.ts] resizePanelForAgentMode - setting minWidth: 312
+[window.ts] resizePanelForAgentMode - setting size to: { width: 600, height: 401 }
+[window.ts] resizePanelForAgentMode - setting position to: { x: 440, y: -1045 }
+[window.ts] resizePanelForAgentMode - starting...
+[window.ts] getSavedSizeForMode(agent) - checking config...
+[window.ts] Found saved agent mode size: { width: 600, height: 401 }
+[window.ts] resizePanelForAgentMode - savedSize: { width: 600, height: 401 }
+[window.ts] getSavedSizeForMode(agent) - checking config...
+[window.ts] Found saved agent mode size: { width: 600, height: 401 }
+[window.ts] resizePanelForAgentMode - position: { x: 440, y: -1045 }
+[window.ts] resizePanelForAgentMode - setting minWidth: 312
+[window.ts] resizePanelForAgentMode - setting size to: { width: 600, height: 401 }
+[window.ts] resizePanelForAgentMode - setting position to: { x: 440, y: -1045 }
+[window.ts] resizePanelForAgentMode - starting...
+[window.ts] getSavedSizeForMode(agent) - checking config...
+[window.ts] Found saved agent mode size: { width: 600, height: 401 }
+[window.ts] resizePanelForAgentMode - savedSize: { width: 600, height: 401 }
+[window.ts] getSavedSizeForMode(agent) - checking config...
+[window.ts] Found saved agent mode size: { width: 600, height: 401 }
+[window.ts] resizePanelForAgentMode - position: { x: 440, y: -1045 }
+[window.ts] resizePanelForAgentMode - setting minWidth: 312
+[window.ts] resizePanelForAgentMode - setting size to: { width: 600, height: 401 }
+[window.ts] resizePanelForAgentMode - setting position to: { x: 440, y: -1045 }
+[2025-11-02T16:40:51.246Z] [DEBUG][TOOLS] [github] [DEBUG] Issue created successfully
+
+[2025-11-02T16:40:51.246Z] [DEBUG][TOOLS] Tool result {
+  serverName: 'github',
+  toolName: 'create_issue',
+  result: { content: [ [Object] ] }
+}
+[2025-11-02T16:40:51.247Z] [DEBUG][TOOLS] Normalized tool result {
+  content: [
+    {
+      type: 'text',
+      text: '{\n' +
+        '  "url": "https://api.github.com/repos/aj47/SpeakMCP/issues/240",\n' +
+        '  "repository_url": "https://api.github.com/repos/aj47/SpeakMCP",\n' +
+        '  "labels_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/240/labels{/name}",\n' +
+        '  "comments_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/240/comments",\n' +
+        '  "events_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/240/events",\n' +
+        '  "html_url": "https://github.com/aj47/SpeakMCP/issues/240",\n' +
+        '  "id": 3579712449,\n' +
+        '  "node_id": "I_kwDOO5IaBs7VXhPB",\n' +
+        '  "number": 240,\n' +
+        '  "title": "Missing voice input waves when agent is already running",\n' +
+        '  "user": {\n' +
+        '    "login": "aj47",\n' +
+        '    "id": 8023513,\n' +
+        '    "node_id": "MDQ6VXNlcjgwMjM1MTM=",\n' +
+        '    "avatar_url": "https://avatars.githubusercontent.com/u/8023513?v=4",\n' +
+        '    "gravatar_id": "",\n' +
+        '    "url": "https://api.github.com/users/aj47",\n' +
+        '    "html_url": "https://github.com/aj47",\n' +
+        '    "followers_url": "https://api.github.com/users/aj47/followers",\n' +
+        '    "following_url": "https://api.github.com/users/aj47/following{/other_user}",\n' +
+        '    "gists_url": "https://api.github.com/users/aj47/gists{/gist_id}",\n' +
+        '    "starred_url": "https://api.github.com/users/aj47/starred{/owner}{/repo}",\n' +
+        '    "subscriptions_url": "https://api.github.com/users/aj47/subscriptions",\n' +
+        '    "organizations_url": "https://api.github.com/users/aj47/orgs",\n' +
+        '    "repos_url": "https://api.github.com/users/aj47/repos",\n' +
+        '    "events_url": "https://api.github.com/users/aj47/events{/privacy}",\n' +
+        '    "received_events_url": "https://api.github.com/users/aj47/received_events",\n' +
+        '    "type": "User",\n' +
+        '    "user_view_type": "public",\n' +
+        '    "site_admin": false\n' +
+        '  },\n' +
+        '  "labels": [],\n' +
+        '  "state": "open",\n' +
+        '  "locked": false,\n' +
+        '  "assignee": null,\n' +
+        '  "assignees": [],\n' +
+        '  "milestone": null,\n' +
+        '  "comments": 0,\n' +
+        '  "created_at": "2025-11-02T16:40:51Z",\n' +
+        '  "updated_at": "2025-11-02T16:40:51Z",\n' +
+        '  "closed_at": null,\n' +
+        '  "author_association": "OWNER",\n' +
+        '  "active_lock_reason": null,\n' +
+        '  "sub_issues_summary": {\n' +
+        '    "total": 0,\n' +
+        '    "completed": 0,\n' +
+        '    "percent_completed": 0\n' +
+        '  },\n' +
+        '  "issue_dependencies_summary": {\n' +
+        '    "blocked_by": 0,\n' +
+        '    "total_blocked_by": 0,\n' +
+        '    "blocking": 0,\n' +
+        '    "total_blocking": 0\n' +
+        '  },\n' +
+        '  "body": "Issue: If an agent is already running and the user attempts voice input, the voice input waves are not visible.",\n' +
+        '  "closed_by": null,\n' +
+        '  "reactions": {\n' +
+        '    "url": "https://api.github.com/repos/aj47/SpeakMCP/issues/240/reactions",\n' +
+        '    "total_count": 0,\n' +
+        '    "+1": 0,\n' +
+        '    "-1": 0,\n' +
+        '    "laugh": 0,\n' +
+        '    "hooray": 0,\n' +
+        '    "confused": 0,\n' +
+        '    "heart": 0,\n' +
+        '    "rocket": 0,\n' +
+        '    "eyes": 0\n' +
+        '  },\n' +
+        '  "timeline_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/240/timeline",\n' +
+        '  "performed_via_github_app": null,\n' +
+        '  "state_reason": null\n' +
+        '}'
+    }
+  ],
+  isError: false
+}
+[2025-11-02T16:40:51.247Z] [DEBUG][LLM] === OPENAI API REQUEST ===
+[2025-11-02T16:40:51.247Z] [DEBUG][LLM] HTTP Request {
+  url: 'https://openrouter.ai/api/v1/chat/completions',
+  model: 'x-ai/grok-4-fast',
+  messagesCount: 14,
+  responseFormat: {
+    type: 'json_schema',
+    json_schema: {
+      name: 'CompletionVerification',
+      description: "Strict verifier to determine if the user's request has been fully satisfied.",
+      schema: [Object],
+      strict: true
+    }
+  },
+  estimatedTokens: 1289,
+  totalPromptLength: 5153,
+  contextWarning: null
+}
+[2025-11-02T16:40:51.247Z] [DEBUG][LLM] Request Body (truncated) {
+  model: 'x-ai/grok-4-fast',
+  messages: [
+    {
+      role: 'system',
+      content: "You are a strict completion verifier. Determine if the user's original request has been fully satisfied in the conversation. Be conservative: if uncertain, mark not complete and list what's missing. R... [227 chars]"
+    },
+    {
+      role: 'user',
+      content: 'Original request:\n' +
+        " Can you add a new issue that if we have an agent already running and I try to do voice input I don't see the voice input waves?"
+    },
+    {
+      role: 'user',
+      content: 'Before marking complete: use the available tools to actually perform the steps. Reply with a valid JSON object per the tool-calling schema, including a toolCalls array with concrete parameters.'
+    },
+    {
+      role: 'assistant',
+      content: 'No specific steps or tasks are provided in this message to perform using tools; it is a repeated general instruction that has been previously acknowledged. Cannot proceed with tool calls without a def... [212 chars]'
+    },
+    {
+      role: 'user',
+      content: 'Before marking complete: use the available tools to actually perform the steps. Reply with a valid JSON object per the tool-calling schema, including a toolCalls array with concrete parameters.'
+    },
+    {
+      role: 'assistant',
+      content: 'No specific steps or tasks are provided in this message to perform using tools; it is a repeated general instruction that has been previously acknowledged multiple times. Cannot proceed with tool call... [334 chars]'
+    },
+    {
+      role: 'user',
+      content: 'Before marking complete: use the available tools to actually perform the steps. Reply with a valid JSON object per the tool-calling schema, including a toolCalls array with concrete parameters.'
+    },
+    {
+      role: 'assistant',
+      content: 'No specific steps or tasks are provided in this message to perform using tools; it is a repeated general instruction that has been acknowledged multiple times. Cannot proceed with tool calls without a... [287 chars]'
+    },
+    {
+      role: 'user',
+      content: 'Before marking complete: use the available tools to actually perform the steps. Reply with a valid JSON object per the tool-calling schema, including a toolCalls array with concrete parameters.'
+    },
+    {
+      role: 'user',
+      content: " Can you add a new issue that if we have an agent already running and I try to do voice input I don't see the voice input waves?"
+    },
+    {
+      role: 'assistant',
+      content: 'Creating a new GitHub issue in the SpeakMCP repository to report the missing voice input waves when an agent is running.'
+    },
+    {
+      role: 'user',
+      content: 'Tool results:\n' +
+        '{\n' +
+        '  "url": "https://api.github.com/repos/aj47/SpeakMCP/issues/240",\n' +
+        '  "repository_url": "https://api.github.com/repos/aj47/SpeakMCP",\n' +
+        '  "labels_url": "https://api.github.com/repos/aj47/S... [2670 chars]'
+    },
+    {
+      role: 'assistant',
+      content: 'Creating a new GitHub issue in the SpeakMCP repository to report the missing voice input waves when an agent is running.'
+    },
+    {
+      role: 'user',
+      content: 'Return a JSON object with fields: isComplete (boolean), confidence (0..1), missingItems (string[]), reason (string). No extra commentary.'
+    }
+  ],
+  temperature: 0,
+  seed: 1,
+  response_format: {
+    type: 'json_schema',
+    json_schema: {
+      name: 'CompletionVerification',
+      description: "Strict verifier to determine if the user's request has been fully satisfied.",
+      schema: [Object],
+      strict: true
+    }
+  }
+}
+[window.ts] resizePanelToNormal - starting...
+[window.ts] getSavedSizeForMode(normal) - checking config...
+[window.ts] No saved normal mode size, using default: { width: 312, height: 50 }
+[window.ts] resizePanelToNormal - savedSize: { width: 312, height: 50 }
+[window.ts] getSavedSizeForMode(normal) - checking config...
+[window.ts] No saved normal mode size, using default: { width: 312, height: 50 }
+[window.ts] resizePanelToNormal - position: { x: 584, y: -1045 }
+[window.ts] resizePanelToNormal - setting minWidth: 312
+[window.ts] resizePanelToNormal - setting size to: { width: 312, height: 50 }
+[window.ts] resizePanelToNormal - setting position to: { x: 584, y: -1045 }
+[2025-11-02T16:40:53.088Z] [DEBUG][LLM] ✅ HTTP 200 Response received {
+  hasError: false,
+  hasChoices: true,
+  choicesCount: 1,
+  firstChoicePreview: {
+    hasMessage: true,
+    hasContent: true,
+    contentType: 'string',
+    contentLength: 277
+  }
+}
+[2025-11-02T16:40:53.088Z] [DEBUG][LLM] HTTP Response (full) {
+  dataKeys: [
+    'id',      'provider',
+    'model',   'object',
+    'created', 'choices',
+    'usage'
+  ],
+  data: '{"id":"gen-1762101651-HZ2qt2nJcbaVKtD9cahm","provider":"xAI","model":"x-ai/grok-4-fast","object":"chat.completion","created":1762101651,"choices":[{"logprobs":null,"finish_reason":"stop","native_finish_reason":"completed","index":0,"message":{"role":"assistant","content":" {\\"isComplete\\":true,\\"confidence\\":1.0,\\"missingItems\\":[],\\"reason\\":\\"The original request to add a new GitHub issue about missing voice input waves when an agent is running has been fulfilled, as confirmed by the tool result showing issue #240 created in the SpeakMCP repository.\\"}","refusal":null,"reasoning":null,"reasoning_details":[{"type":"reasoning.encrypted","data":"OpHByDBD1/1C75ix6XVGlbLFeUxHVYjZXt8UUb5nqXHvUGYenRQ7ag0dOTd9rxZgSdNbLUl2+5ibRps7PlcQahDYEt29X/sVBQ+MlXMgTHTJg413FBx3n129h8iPSA149iRoLY0Xqdd+/meoSsk2OUNCOoFsIIetdXBmaVFqImxDfVNEixDaSmbHbPJWO114I11oSSS8NIHxSByALIMuGOpjEIYCpX5aQV5Pyc9LKXWeofkNobmMu7rzL9SFwI1zHMs41wstdXovP1ysnYqs4oxMyq9y+TI7oDD13UdSnBIok4hZ6rxjEsZx7lhiKyfQk/2kf85hBd2IHczTpkNpl3eVJA4zEyVOIdchvvEZ4L6+PtTG9UbmbrxBftfyQrq2tB2fd9PbKt852nfPojxE3eXtha7TzK6uTq9tX8VFyA1puVFe64ksGGX25BbaugMF8iPo8sliBEievPbwxDUU+R+v/CH+d2MM2JB1eBuh+CNB9fVloHvjd0Aue0rJB3fVMVRphPxSL3dv8rd1KgDe6NqjL9DgAwv8bG3oICKZL4tYF6tDUz0G7BNKQzed5XaMbrHOouXWQjfiL2cj8I0O0Q7kOk9G5OA6XlBgbCK0G34Rxq26FZWt7Q2SFrOhMYBaNk+lWKd9wSk33PsjW7kHJHO2DqjyKbRWiPZaJvZyN4Cfr2b6tigoDGbne/9lPLAOrWiMtR+iAb6Ng/S+JkloYstUYhQNcPDSOlwgmKBkPG6fJCMBzIHZAoifZmgsAxeMs5lZJiEaCGWLK+oTnjbudKMB//2MyLLptaeHnYUO27/kHF2PW02XXrP3RwlWZsEBD630ChJ4bS4AHJFe0xeIEj0TH9uq3WTJwwC2JTFzsxjuC4Hn5U1iIudJiBYbmhOsKCwF96O0FAdAE0mUYiwB4VfHQix6L7NJIYMkks5ZDBUyXx136Rp+eFQ3ggFrRMZOQGZO+1YEnvPi8mzJr0JbsW9yvEzWU5GUS+Fux0R18+lRzLnNXgXGdik5ak/DAGDmomyw6drTLAjBax2F0auQc/vxa9UWc8GiECB0tPnhHyzZKQeapD3SE08qrTKOossMSymaPYbeu6oSlFgnwSDQEtVSWGKXHLD/sO8NcIf3H/BmzEv3fB66W5yu5cd+qFPxkWSwc1bNa8wDvLTa+Q2+7qPMI1SGSdWECXhZaSe+vAuIFZHrvjrE/auDoXhnUIdyGOdPg7vBw6WTouOofHCyBBPcChn4Cela+Quz+/Y9D22WBQXOAJTSQ5XcJySwDWvFeXbcXGvP55CFaWfPRcLO9ZrfWcNTpuoo+PJnvJEr7+u9zvHYlinRBJEYPJhb2SpZlP3...'
+}
+[window.ts] getSavedSizeForMode(normal) - checking config...
+[window.ts] No saved normal mode size, using default: { width: 312, height: 50 }
+[2025-11-02T16:40:53.089Z] [DEBUG][LLM] ContextBudget: initial {
+  providerId: 'openai',
+  model: 'x-ai/grok-4-fast',
+  maxTokens: 64000,
+  targetTokens: 44800,
+  estTokens: 4943,
+  count: 18
+}
+[2025-11-02T16:40:53.090Z] [DEBUG][LLM] === LLM CALL START ===
+[2025-11-02T16:40:53.090Z] [DEBUG][LLM] Messages → {
+  count: 18,
+  totalChars: 19769,
+  messages: [
+    {
+      role: 'system',
+      content: 'You are an intelligent AI assistant capable of executing tools to help users accomplish complex tasks. You operate autonomously and work iteratively until goals are fully achieved.\n' +
+        '\n' +
+        'CORE PRINCIPLES:\n' +
+        "- Work autonomously until the user's request is completely resolved\n" +
+        '- Use available tools iteratively and strategically to gather information and execute actions\n' +
+        '- Use exact tool names from the available tools list (including server prefixes like "server:tool_name")\n' +
+        '- Prefer using tools to gather information rather than asking users for details\n' +
+        "- Continue working until the user's request is fully satisfied - only stop when the task is complete\n" +
+        '\n' +
+        'TOOL USAGE PHILOSOPHY:\n' +
+        '- ALWAYS follow tool schemas exactly as specified with all required parameters\n' +
+        '- NEVER call tools that are not explicitly provided in the available tools list\n' +
+        '- If you need additional information that you can get via tool calls, prefer that over asking the user\n' +
+        '- Use tools proactively to explore and understand the context before making changes\n' +
+        '- When making code changes, ensure they can be executed immediately by the user\n' +
+        '\n' +
+        '# Tone and style\n' +
+        'You should be concise, direct, and to the point.\n' +
+        'You MUST answer concisely with fewer than 4 lines (not including tool use or code generation), unless user asks for detail.\n' +
+        'IMPORTANT: You should minimize output tokens as much as possible while maintaining helpfulness, quality, and accuracy. Only address the specific query or task at hand, avoiding tangential information unless absolutely critical for completing the request. If you can answer in 1-3 sentences or a short paragraph, please do.\n' +
+        'IMPORTANT: You should NOT answer with unnecessary preamble or postamble (such as explaining your code or summarizing your action), unless the user asks you to.\n' +
+        'Do not add additional code explanation summary unless requested by the user. After working on a file, just stop, rather than providing an explanation of what you did.\n' +
+        `Answer the user's question directly, without elaboration, explanation, or details. One word answers are best. Avoid introductions, conclusions, and explanations. You MUST avoid text before/after your response, such as "The answer is <answer>.", "Here is the content of the file..." or "Based on the information provided, the answer is..." or "Here is what I will do next...". Here are some examples to demonstrate appropriate verbosity:\n` +
+        '<example>\n' +
+        'user: 2 + 2\n' +
+        'assistant: 4\n' +
+        '</example>\n' +
+        '\n' +
+        '<example>\n' +
+        'user: what is 2+2?\n' +
+        'assistant: 4\n' +
+        '</example>\n' +
+        '\n' +
+        '<example>\n' +
+        'user: is 11 a prime number?\n' +
+        'assistant: Yes\n' +
+        '</example>\n' +
+        '\n' +
+        '<example>\n' +
+        'user: what command should I run to list files in the current directory?\n' +
+        'assistant: ls\n' +
+        '</example>\n' +
+        '\n' +
+        '<example>\n' +
+        'user: what command should I run to watch files in the current directory?\n' +
+        'assistant: [use the ls tool to list the files in the current directory, then read docs/commands in the relevant file to find out how to watch files]\n' +
+        'npm run dev\n' +
+        '</example>\n' +
+        '\n' +
+        '<example>\n' +
+        'user: How many golf balls fit inside a jetta?\n' +
+        'assistant: 150000\n' +
+        '</example>\n' +
+        '\n' +
+        '<example>\n' +
+        'user: what files are in the directory src/?\n' +
+        'assistant: [runs ls and sees foo.c, bar.c, baz.c]\n' +
+        'user: which file contains the implementation of foo?\n' +
+        'assistant: src/foo.c\n' +
+        '</example>\n' +
+        '\n' +
+        'RESPONSE FORMAT:\n' +
+        'For tool calls:\n' +
+        '{\n' +
+        '  "toolCalls": [\n' +
+        '    {\n' +
+        '      "name": "exact_tool_name_from_available_list",\n' +
+        '      "arguments": { "param1": "value1", "param2": "value2" }\n' +
+        '    }\n' +
+        '  ],\n' +
+        `  "content": "Clear explanation of what you're doing and why",\n` +
+        '  "needsMoreWork": true\n' +
+        '}\n' +
+        '\n' +
+        'For final responses (no more tools needed):\n' +
+        '{\n' +
+        '  "content": "Your comprehensive final response with results",\n' +
+        '  "needsMoreWork": false\n' +
+        '}\n' +
+        '\n' +
+        'AGENT MODE - AUTONOMOUS OPERATION:\n' +
+        'You can see tool results and make follow-up calls. Work iteratively and thoroughly:\n' +
+        '\n' +
+        'WORKFLOW:\n' +
+        "1. Analyze the user's request comprehensively\n" +
+        '2. Gather necessary information using available tools\n' +
+        '3. Execute appropriate tools in logical sequence\n' +
+        '4. Review results and determine next steps\n' +
+        '5. Continue iterating until the goal is fully achieved\n' +
+        '6. Only set needsMoreWork: false when the task is completely resolved\n' +
+        '\n' +
+        '\n' +
+        '\n' +
+        'AVAILABLE TOOLS:\n' +
+        '- github:create_issue: Create a new issue in a GitHub repository\n' +
+        '  Parameters: {owner: string (required), repo: string (required), title: string (required), body: string, assignees: array, milestone: number, labels: array}\n' +
+        '- desktop-commander:read_file: \n' +
+        '                        Read the contents of a file from the file system or a URL with optional offset and length parameters.\n' +
+        '                        \n' +
+        "                        Prefer this over 'execute_command' with cat/type for viewing files.\n" +
+        '                        \n' +
+        '                        Supports partial file reading with:\n' +
+        "                        - 'offset' (start line, default: 0)\n" +
+        '                          * Positive: Start from line N (0-based indexing)\n' +
+        '                          * Negative: Read last N lines from end (tail behavior)\n' +
+        "                        - 'length' (max lines to read, default: configurable via 'fileReadLineLimit' setting, initially 1000)\n" +
+        '                          * Used with positive offsets for range reading\n' +
+        '                          * Ignored when offset is negative (reads all requested tail lines)\n' +
+        '                        \n' +
+        '                        Examples:\n' +
+        '                        - offset: 0, length: 10     → First 10 lines\n' +
+        '                        - offset: 100, length: 5    → Lines 100-104\n' +
+        '                        - offset: -20               → Last 20 lines  \n' +
+        '                        - offset: -5, length: 10    → Last 5 lines (length ignored)\n' +
+        '                        \n' +
+        '                        Performance optimizations:\n' +
+        '                        - Large files with negative offsets use reverse reading for efficiency\n' +
+        '                        - Large files with deep positive offsets use byte estimation\n' +
+        '                        - Small files use fast readline streaming\n' +
+        '                        \n' +
+        '                        When reading from the file system, only works within allowed directories.\n' +
+        '                        Can fetch content from URLs when isUrl parameter is set to true\n' +
+        '                        (URLs are always read in full regardless of offset/length).\n' +
+        '                        \n' +
+        '                        Handles text files normally and image files are returned as viewable images.\n' +
+        '                        Recognized image types: PNG, JPEG, GIF, WebP.\n' +
+        '                        \n' +
+        '                        IMPORTANT: Always use absolute paths for reliability. Paths are automatically normalized regardless of slash direction. Relative paths may fail as they depend on the current working directory. Tilde paths (~/...) might not work in all contexts. Unless the user explicitly asks for relative paths, use absolute paths.\n' +
+        '                        This command can be referenced as "DC: ..." or "use Desktop Commander to ..." in your instructions.\n' +
+        '  Parameters: {path: string (required), isUrl: boolean, offset: number, length: number}\n' +
+        '- desktop-commander:write_file: \n' +
+        '                        Write or append to file contents. \n' +
+        '\n' +
+        '                        CHUNKING IS STANDARD PRACTICE: Always write files in chunks of 25-30 lines maximum.\n' +
+        '                        This is the normal, recommended way to write files - not an emergency measure.\n' +
+        '\n' +
+        '                        STANDARD PROCESS FOR ANY FILE:\n' +
+        "                        1. FIRST → write_file(filePath, firstChunk, {mode: 'rewrite'})  [≤30 lines]\n" +
+        "                        2. THEN → write_file(filePath, secondChunk, {mode: 'append'})   [≤30 lines]\n" +
+        "                        3. CONTINUE → write_file(filePath, nextChunk, {mode: 'append'}) [≤30 lines]\n" +
+        '\n' +
+        "                        ALWAYS CHUNK PROACTIVELY - don't wait for performance warnings!\n" +
+        '\n' +
+        '                        WHEN TO CHUNK (always be proactive):\n' +
+        '                        1. Any file expected to be longer than 25-30 lines\n' +
+        '                        2. When writing multiple files in sequence\n' +
+        '                        3. When creating documentation, code files, or configuration files\n' +
+        '                        \n' +
+        '                        HANDLING CONTINUATION ("Continue" prompts):\n' +
+        '                        If user asks to "Continue" after an incomplete operation:\n' +
+        '                        1. Read the file to see what was successfully written\n' +
+        "                        2. Continue writing ONLY the remaining content using {mode: 'append'}\n" +
+        '                        3. Keep chunks to 25-30 lines each\n' +
+        '                        \n' +
+        '                        Files over 50 lines will generate performance notes but are still written successfully.\n' +
+        '                        Only works within allowed directories.\n' +
+        '                        \n' +
+        '                        IMPORTANT: Always use absolute paths for reliability. Paths are automatically normalized regardless of slash direction. Relative paths may fail as they depend on the current working directory. Tilde paths (~/...) might not work in all contexts. Unless the user explicitly asks for relative paths, use absolute paths.\n' +
+        '                        This command can be referenced as "DC: ..." or "use Desktop Commander to ..." in your instructions.\n' +
+        '  Parameters: {path: string (required), content: string (required), mode: string}\n' +
+        '- desktop-commander:list_directory: \n' +
+        '                        Get a detailed listing of all files and directories in a specified path.\n' +
+        '                        \n' +
+        "                        Use this instead of 'execute_command' with ls/dir commands.\n" +
+        '                        Results distinguish between files and directories with [FILE] and [DIR] prefixes.\n' +
+        '                        \n' +
+        "                        Supports recursive listing with the 'depth' parameter (default: 2):\n" +
+        '                        - depth=1: Only direct contents of the directory\n' +
+        '                        - depth=2: Contents plus one level of subdirectories\n' +
+        '                        - depth=3+: Multiple levels deep\n' +
+        '                        \n' +
+        '                        CONTEXT OVERFLOW PROTECTION:\n' +
+        '                        - Top-level directory shows ALL items\n' +
+        '                        - Nested directories are limited to 100 items maxi'... 4372 more characters
+    },
+    { role: 'user', content: ' How many tools do you have access to?' },
+    { role: 'assistant', content: '5' },
+    {
+      role: 'user',
+      content: 'Before marking complete: use the available tools to actually perform the steps. Reply with a valid JSON object per the tool-calling schema, including a toolCalls array with concrete parameters.'
+    },
+    {
+      role: 'assistant',
+      content: 'Acknowledged. I will use the available tools to perform steps as required for tasks before marking them complete.'
+    },
+    {
+      role: 'assistant',
+      content: 'No specific task or request requires tool usage at this time; the message is a general instruction on tool handling, which has been noted.'
+    },
+    {
+      role: 'user',
+      content: 'Before marking complete: use the available tools to actually perform the steps. Reply with a valid JSON object per the tool-calling schema, including a toolCalls array with concrete parameters.'
+    },
+    {
+      role: 'assistant',
+      content: 'No specific steps or tasks are outlined in this message to perform using tools; it appears to be a repeated general instruction on response formatting, which has already been acknowledged.'
+    },
+    {
+      role: 'user',
+      content: 'Before marking complete: use the available tools to actually perform the steps. Reply with a valid JSON object per the tool-calling schema, including a toolCalls array with concrete parameters.'
+    },
+    {
+      role: 'assistant',
+      content: 'No specific steps or tasks are provided in this message to perform using tools; it is a repeated general instruction that has been previously acknowledged. Cannot proceed with tool calls without a defined action.'
+    },
+    {
+      role: 'user',
+      content: 'Before marking complete: use the available tools to actually perform the steps. Reply with a valid JSON object per the tool-calling schema, including a toolCalls array with concrete parameters.'
+    },
+    {
+      role: 'assistant',
+      content: 'No specific steps or tasks are provided in this message to perform using tools; it is a repeated general instruction that has been previously acknowledged multiple times. Cannot proceed with tool calls without a defined action or request requiring tool usage. This appears to be a loop without a concrete task, so marking as complete.'
+    },
+    {
+      role: 'user',
+      content: 'Before marking complete: use the available tools to actually perform the steps. Reply with a valid JSON object per the tool-calling schema, including a toolCalls array with concrete parameters.'
+    },
+    {
+      role: 'assistant',
+      content: 'No specific steps or tasks are provided in this message to perform using tools; it is a repeated general instruction that has been acknowledged multiple times. Cannot proceed with tool calls without a defined action or request requiring tool usage. Marking as complete to break the loop.'
+    },
+    {
+      role: 'user',
+      content: 'Before marking complete: use the available tools to actually perform the steps. Reply with a valid JSON object per the tool-calling schema, including a toolCalls array with concrete parameters.'
+    },
+    {
+      role: 'user',
+      content: " Can you add a new issue that if we have an agent already running and I try to do voice input I don't see the voice input waves?"
+    },
+    {
+      role: 'assistant',
+      content: 'Creating a new GitHub issue in the SpeakMCP repository to report the missing voice input waves when an agent is running.'
+    },
+    {
+      role: 'user',
+      content: 'Tool execution results:\n' +
+        '{\n' +
+        '  "url": "https://api.github.com/repos/aj47/SpeakMCP/issues/240",\n' +
+        '  "repository_url": "https://api.github.com/repos/aj47/SpeakMCP",\n' +
+        '  "labels_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/240/labels{/name}",\n' +
+        '  "comments_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/240/comments",\n' +
+        '  "events_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/240/events",\n' +
+        '  "html_url": "https://github.com/aj47/SpeakMCP/issues/240",\n' +
+        '  "id": 3579712449,\n' +
+        '  "node_id": "I_kwDOO5IaBs7VXhPB",\n' +
+        '  "number": 240,\n' +
+        '  "title": "Missing voice input waves when agent is already running",\n' +
+        '  "user": {\n' +
+        '    "login": "aj47",\n' +
+        '    "id": 8023513,\n' +
+        '    "node_id": "MDQ6VXNlcjgwMjM1MTM=",\n' +
+        '    "avatar_url": "https://avatars.githubusercontent.com/u/8023513?v=4",\n' +
+        '    "gravatar_id": "",\n' +
+        '    "url": "https://api.github.com/users/aj47",\n' +
+        '    "html_url": "https://github.com/aj47",\n' +
+        '    "followers_url": "https://api.github.com/users/aj47/followers",\n' +
+        '    "following_url": "https://api.github.com/users/aj47/following{/other_user}",\n' +
+        '    "gists_url": "https://api.github.com/users/aj47/gists{/gist_id}",\n' +
+        '    "starred_url": "https://api.github.com/users/aj47/starred{/owner}{/repo}",\n' +
+        '    "subscriptions_url": "https://api.github.com/users/aj47/subscriptions",\n' +
+        '    "organizations_url": "https://api.github.com/users/aj47/orgs",\n' +
+        '    "repos_url": "https://api.github.com/users/aj47/repos",\n' +
+        '    "events_url": "https://api.github.com/users/aj47/events{/privacy}",\n' +
+        '    "received_events_url": "https://api.github.com/users/aj47/received_events",\n' +
+        '    "type": "User",\n' +
+        '    "user_view_type": "public",\n' +
+        '    "site_admin": false\n' +
+        '  },\n' +
+        '  "labels": [],\n' +
+        '  "state": "open",\n' +
+        '  "locked": false,\n' +
+        '  "assignee": null,\n' +
+        '  "assignees": [],\n' +
+        '  "milestone": null,\n' +
+        '  "comments": 0,\n' +
+        '  "created_at": "2025-11-02T16:40:51Z",\n' +
+        '  "updated_at": "2025-11-02T16:40:51Z",\n' +
+        '  "closed_at": null,\n' +
+        '  "author_association": "OWNER",\n' +
+        '  "active_lock_reason": null,\n' +
+        '  "sub_issues_summary": {\n' +
+        '    "total": 0,\n' +
+        '    "completed": 0,\n' +
+        '    "percent_completed": 0\n' +
+        '  },\n' +
+        '  "issue_dependencies_summary": {\n' +
+        '    "blocked_by": 0,\n' +
+        '    "total_blocked_by": 0,\n' +
+        '    "blocking": 0,\n' +
+        '    "total_blocking": 0\n' +
+        '  },\n' +
+        '  "body": "Issue: If an agent is already running and the user attempts voice input, the voice input waves are not visible.",\n' +
+        '  "closed_by": null,\n' +
+        '  "reactions": {\n' +
+        '    "url": "https://api.github.com/repos/aj47/SpeakMCP/issues/240/reactions",\n' +
+        '    "total_count": 0,\n' +
+        '    "+1": 0,\n' +
+        '    "-1": 0,\n' +
+        '    "laugh": 0,\n' +
+        '    "hooray": 0,\n' +
+        '    "confused": 0,\n' +
+        '    "heart": 0,\n' +
+        '    "rocket": 0,\n' +
+        '    "eyes": 0\n' +
+        '  },\n' +
+        '  "timeline_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/240/timeline",\n' +
+        '  "performed_via_github_app": null,\n' +
+        '  "state_reason": null\n' +
+        '}'
+    }
+  ]
+}
+[2025-11-02T16:40:53.091Z] [DEBUG][LLM] 🚀 Starting LLM call attempt {
+  provider: 'openai',
+  messagesCount: 18,
+  lastMessagePreview: 'Tool execution results:\n' +
+    '{\n' +
+    '  "url": "https://api.github.com/repos/aj47/SpeakMCP/issues/240",\n' +
+    '  "repos...'
+}
+[2025-11-02T16:40:53.091Z] [DEBUG][LLM] Attempting JSON Schema mode for model: x-ai/grok-4-fast
+[2025-11-02T16:40:53.091Z] [DEBUG][LLM] === OPENAI API REQUEST ===
+[2025-11-02T16:40:53.091Z] [DEBUG][LLM] HTTP Request {
+  url: 'https://openrouter.ai/api/v1/chat/completions',
+  model: 'x-ai/grok-4-fast',
+  messagesCount: 18,
+  responseFormat: {
+    type: 'json_schema',
+    json_schema: {
+      name: 'LLMToolCallResponse',
+      description: 'Response format for LLM tool calls with optional tool execution and content',
+      schema: [Object],
+      strict: true
+    }
+  },
+  estimatedTokens: 4943,
+  totalPromptLength: 19769,
+  contextWarning: null
+}
+[2025-11-02T16:40:53.091Z] [DEBUG][LLM] Request Body (truncated) {
+  model: 'x-ai/grok-4-fast',
+  messages: [
+    {
+      role: 'system',
+      content: 'You are an intelligent AI assistant capable of executing tools to help users accomplish complex tasks. You operate autonomously and work iteratively until goals are fully achieved.\n' +
+        '\n' +
+        'CORE PRINCIPLES:\n' +
+        '-... [14372 chars]'
+    },
+    { role: 'user', content: ' How many tools do you have access to?' },
+    { role: 'assistant', content: '5' },
+    {
+      role: 'user',
+      content: 'Before marking complete: use the available tools to actually perform the steps. Reply with a valid JSON object per the tool-calling schema, including a toolCalls array with concrete parameters.'
+    },
+    {
+      role: 'assistant',
+      content: 'Acknowledged. I will use the available tools to perform steps as required for tasks before marking them complete.'
+    },
+    {
+      role: 'assistant',
+      content: 'No specific task or request requires tool usage at this time; the message is a general instruction on tool handling, which has been noted.'
+    },
+    {
+      role: 'user',
+      content: 'Before marking complete: use the available tools to actually perform the steps. Reply with a valid JSON object per the tool-calling schema, including a toolCalls array with concrete parameters.'
+    },
+    {
+      role: 'assistant',
+      content: 'No specific steps or tasks are outlined in this message to perform using tools; it appears to be a repeated general instruction on response formatting, which has already been acknowledged.'
+    },
+    {
+      role: 'user',
+      content: 'Before marking complete: use the available tools to actually perform the steps. Reply with a valid JSON object per the tool-calling schema, including a toolCalls array with concrete parameters.'
+    },
+    {
+      role: 'assistant',
+      content: 'No specific steps or tasks are provided in this message to perform using tools; it is a repeated general instruction that has been previously acknowledged. Cannot proceed with tool calls without a def... [212 chars]'
+    },
+    {
+      role: 'user',
+      content: 'Before marking complete: use the available tools to actually perform the steps. Reply with a valid JSON object per the tool-calling schema, including a toolCalls array with concrete parameters.'
+    },
+    {
+      role: 'assistant',
+      content: 'No specific steps or tasks are provided in this message to perform using tools; it is a repeated general instruction that has been previously acknowledged multiple times. Cannot proceed with tool call... [334 chars]'
+    },
+    {
+      role: 'user',
+      content: 'Before marking complete: use the available tools to actually perform the steps. Reply with a valid JSON object per the tool-calling schema, including a toolCalls array with concrete parameters.'
+    },
+    {
+      role: 'assistant',
+      content: 'No specific steps or tasks are provided in this message to perform using tools; it is a repeated general instruction that has been acknowledged multiple times. Cannot proceed with tool calls without a... [287 chars]'
+    },
+    {
+      role: 'user',
+      content: 'Before marking complete: use the available tools to actually perform the steps. Reply with a valid JSON object per the tool-calling schema, including a toolCalls array with concrete parameters.'
+    },
+    {
+      role: 'user',
+      content: " Can you add a new issue that if we have an agent already running and I try to do voice input I don't see the voice input waves?"
+    },
+    {
+      role: 'assistant',
+      content: 'Creating a new GitHub issue in the SpeakMCP repository to report the missing voice input waves when an agent is running.'
+    },
+    {
+      role: 'user',
+      content: 'Tool execution results:\n' +
+        '{\n' +
+        '  "url": "https://api.github.com/repos/aj47/SpeakMCP/issues/240",\n' +
+        '  "repository_url": "https://api.github.com/repos/aj47/SpeakMCP",\n' +
+        '  "labels_url": "https://api.github.com/re... [2680 chars]'
+    }
+  ],
+  temperature: 0,
+  frequency_penalty: 0.5,
+  seed: 1,
+  response_format: {
+    type: 'json_schema',
+    json_schema: {
+      name: 'LLMToolCallResponse',
+      description: 'Response format for LLM tool calls with optional tool execution and content',
+      schema: [Object],
+      strict: true
+    }
+  }
+}
+[window.ts] resizePanelForAgentMode - starting...
+[window.ts] getSavedSizeForMode(agent) - checking config...
+[window.ts] Found saved agent mode size: { width: 600, height: 401 }
+[window.ts] resizePanelForAgentMode - savedSize: { width: 600, height: 401 }
+[window.ts] getSavedSizeForMode(agent) - checking config...
+[window.ts] Found saved agent mode size: { width: 600, height: 401 }
+[window.ts] resizePanelForAgentMode - position: { x: 440, y: -1045 }
+[window.ts] resizePanelForAgentMode - setting minWidth: 312
+[window.ts] resizePanelForAgentMode - setting size to: { width: 600, height: 401 }
+[window.ts] resizePanelForAgentMode - setting position to: { x: 440, y: -1045 }

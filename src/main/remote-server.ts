@@ -97,7 +97,7 @@ function extractUserPrompt(body: any): string | null {
 async function runAgent(prompt: string): Promise<string> {
   const cfg = configStore.get()
 
-  // Set agent mode state for process management
+  // Set agent mode state for process management - ensure clean state
   state.isAgentModeActive = true
   state.shouldStopAgent = false
   state.agentIterationCount = 0
@@ -124,7 +124,7 @@ async function runAgent(prompt: string): Promise<string> {
 
     return agentResult.content
   } finally {
-    // Clean up agent state
+    // Clean up agent state to ensure next session starts fresh
     state.isAgentModeActive = false
     state.shouldStopAgent = false
     state.agentIterationCount = 0

@@ -34,9 +34,11 @@ export async function emergencyStopAll(): Promise<{ before: number; after: numbe
 
   const after = agentProcessManager.getActiveProcessCount()
 
-  // Reset core agent state flags (keep shouldStopAgent=true for agent loop visibility)
+  // Reset core agent state flags to ensure clean state for next agent session
   state.isAgentModeActive = false
   state.agentIterationCount = 0
+  // Reset shouldStopAgent to false so the next agent session can run
+  state.shouldStopAgent = false
 
   return { before, after }
 }

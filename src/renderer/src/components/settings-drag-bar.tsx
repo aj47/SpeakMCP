@@ -14,7 +14,7 @@ export function SettingsDragBar({ className }: SettingsDragBarProps) {
   return (
     <div
       className={cn(
-        "app-drag-region flex h-10 w-full shrink-0 items-center justify-center",
+        "app-drag-region flex h-6 w-full shrink-0 items-center justify-center",
         className,
       )}
       style={{

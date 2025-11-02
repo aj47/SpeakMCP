@@ -70,7 +70,7 @@ interface ServerDialogProps {
 
 function ServerDialog({ server, onSave, onCancel }: ServerDialogProps) {
   const [name, setName] = useState(server?.name || "")
-  const [activeTab, setActiveTab] = useState<'manual' | 'examples' | 'json'>('manual')
+  const [activeTab, setActiveTab] = useState<'manual' | 'examples'>('manual')
   const [transport, setTransport] = useState<MCPTransportType>(
     server?.config.transport || "stdio",
   )
@@ -94,7 +94,6 @@ function ServerDialog({ server, onSave, onCancel }: ServerDialogProps) {
   const [timeout, setTimeout] = useState(
     server?.config.timeout?.toString() || "",
   )
-  const [jsonInputText, setJsonInputText] = useState("")
   const [selectedExample, setSelectedExample] = useState<string>("")
   const [disabled, setDisabled] = useState(server?.config.disabled || false)
   const [headers, setHeaders] = useState(
@@ -133,7 +132,6 @@ function ServerDialog({ server, onSave, onCancel }: ServerDialogProps) {
         : ""
     )
     setTimeout(server?.config.timeout?.toString() || "")
-    setJsonInputText("")
     setSelectedExample("")
     setDisabled(server?.config.disabled || false)
     setHeaders(
@@ -256,14 +254,6 @@ function ServerDialog({ server, onSave, onCancel }: ServerDialogProps) {
             size="sm"
           >
             Examples
-          </Button>
-          <Button
-            variant={activeTab === 'json' ? 'default' : 'outline'}
-            onClick={() => setActiveTab('json')}
-            className="flex-1"
-            size="sm"
-          >
-            JSON Import
           </Button>
         </div>
 
@@ -594,129 +584,6 @@ function ServerDialog({ server, onSave, onCancel }: ServerDialogProps) {
                 </div>
               )}
             </div>
-          </div>
-        )}
-
-        {/* JSON Import Tab */}
-        {activeTab === 'json' && (
-          <div className="space-y-4">
-            <div className="text-sm text-muted-foreground">
-              Paste a JSON configuration for a single MCP server.
-            </div>
-
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="json-input">JSON Configuration</Label>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    try {
-                      const formatted = JSON.stringify(JSON.parse(jsonInputText), null, 2)
-                      setJsonInputText(formatted)
-                    } catch {
-                      // Ignore formatting errors
-                    }
-                  }}
-                  disabled={!jsonInputText.trim()}
-                >
-                  Format
-                </Button>
-              </div>
-              <Textarea
-                id="json-input"
-                value={jsonInputText}
-                onChange={(e) => setJsonInputText(e.target.value)}
-                placeholder={`HTTP Server (transport auto-detected):
-{
-  "url": "https://mcp.exa.ai/mcp"
-}
-
-Or stdio server:
-{
-  "command": "npx",
-  "args": ["-y", "@modelcontextprotocol/server-filesystem"]
-}`}
-                rows={12}
-                className="font-mono text-sm"
-              />
-              <p className="text-xs text-muted-foreground">
-                Paste JSON configuration. Transport type is auto-detected: if 'url' is present, uses HTTP; otherwise uses stdio.
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="json-server-name">Server Name</Label>
-              <Input
-                id="json-server-name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="e.g., my-server"
-              />
-            </div>
-
-            <Button
-              onClick={() => {
-                try {
-                  const config = JSON.parse(jsonInputText) as MCPServerConfig
-
-                  // Infer transport type if not specified (same logic as backend)
-                  let transportType = config.transport
-                  if (!transportType) {
-                    // If url is present, assume it's an HTTP transport
-                    if (config.url) {
-                      transportType = "streamableHttp"
-                    } else {
-                      // Default to stdio for backward compatibility
-                      transportType = "stdio"
-                    }
-                  }
-
-                  // Validate based on transport type
-                  if (transportType === "stdio") {
-                    if (!config.command) {
-                      toast.error("stdio transport requires 'command' field. For HTTP servers, provide 'url' field.")
-                      return
-                    }
-                  } else if (transportType === "websocket" || transportType === "streamableHttp") {
-                    if (!config.url) {
-                      toast.error(`${transportType} transport requires 'url' field`)
-                      return
-                    }
-                  } else {
-                    toast.error(`Unsupported transport type: ${transportType}`)
-                    return
-                  }
-
-                  // Apply the configuration
-                  setTransport(transportType)
-                  // Combine command and args into fullCommand
-                  const cmd = config.command || ""
-                  const args = config.args?.join(" ") || ""
-                  setFullCommand(args ? `${cmd} ${args}` : cmd)
-                  setUrl(config.url || "")
-                  setEnv(
-                    config.env
-                      ? Object.entries(config.env)
-                          .map(([k, v]) => `${k}=${v}`)
-                          .join("\n")
-                      : ""
-                  )
-                  setTimeout(config.timeout?.toString() || "")
-                  setDisabled(config.disabled || false)
-                  setOAuthConfig(config.oauth || {})
-
-                  setActiveTab('manual')
-                  toast.success("JSON configuration loaded successfully")
-                } catch (error) {
-                  toast.error(`Invalid JSON: ${error instanceof Error ? error.message : String(error)}`)
-                }
-              }}
-              disabled={!jsonInputText.trim() || !name.trim()}
-              className="w-full"
-            >
-              Load Configuration
-            </Button>
           </div>
         )}
       </div>

@@ -2,7 +2,11 @@ import { ElectronAPI } from "@electron-toolkit/preload"
 
 declare global {
   interface Window {
-    electron: ElectronAPI
+    electron: ElectronAPI & {
+      desktopCapturer: {
+        getSources: (options: any) => Promise<any[]>
+      }
+    }
     electronAPI: {
       initiateOAuthFlow: (serverName: string) => Promise<{ authorizationUrl: string; state: string }>
       completeOAuthFlow: (serverName: string, code: string, state: string) => Promise<{ success: boolean; error?: string }>

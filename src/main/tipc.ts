@@ -160,6 +160,7 @@ async function initializeMcpWithProgress(config: Config): Promise<void> {
 async function processWithAgentMode(
   text: string,
   conversationId?: string,
+  screenshot?: string,
 ): Promise<string> {
   const config = configStore.get()
 
@@ -239,6 +240,7 @@ async function processWithAgentMode(
         config.mcpMaxIterations ?? 10, // Use configured max iterations or default to 10
         previousConversationHistory,
         conversationId, // Pass conversation ID for progress updates
+        screenshot, // Pass screenshot data
       )
 
       return agentResult.content
@@ -691,6 +693,7 @@ export const router = {
   createTextInput: t.procedure
     .input<{
       text: string
+      screenshot?: string
     }>()
     .action(async ({ input }) => {
       const config = configStore.get()
@@ -744,13 +747,14 @@ export const router = {
     .input<{
       text: string
       conversationId?: string
+      screenshot?: string
     }>()
     .action(async ({ input }) => {
       const config = configStore.get()
 
       if (!config.mcpToolsEnabled) {
         // Fall back to regular text input processing
-        return router.createTextInput({ text: input.text })
+        return router.createTextInput({ text: input.text, screenshot: input.screenshot })
       }
 
       // Create or get conversation ID
@@ -770,10 +774,11 @@ export const router = {
         )
       }
 
-      // Use unified agent mode processing
+      // Use unified agent mode processing with screenshot
       const finalResponse = await processWithAgentMode(
         input.text,
         conversationId,
+        input.screenshot,
       )
 
       // Save to history

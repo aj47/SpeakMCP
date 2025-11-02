@@ -83,6 +83,11 @@ Built with modern technologies for cross-platform performance:
 
 **Prerequisites**: Node.js 18+, pnpm, Rust toolchain
 
+> ⚠️ **Important**: This project uses **pnpm** as its package manager. Using npm or yarn may cause installation issues, especially with Electron binaries. If you don't have pnpm installed:
+> ```bash
+> npm install -g pnpm
+> ```
+
 ```bash
 # Setup
 git clone https://github.com/aj47/SpeakMCP.git
@@ -127,6 +132,41 @@ Test SpeakMCP in a full Linux desktop environment via GitHub Actions with remote
 
 See [VNC Testing Guide](.github/VNC_TESTING_GUIDE.md) for complete documentation.
 
+### 🔧 Troubleshooting Development Setup
+
+**"Electron uninstall" error when running `pnpm dev`:**
+
+This usually means Electron binaries weren't installed correctly. Fix it by:
+
+```bash
+# Clean install with pnpm
+rm -rf node_modules
+pnpm install
+```
+
+**Multiple lock files (package-lock.json, pnpm-lock.yaml, bun.lock):**
+
+If you have multiple lock files, you've mixed package managers. Clean up:
+
+```bash
+# Remove all lock files except pnpm's
+rm -f package-lock.json bun.lock
+rm -rf node_modules
+pnpm install
+```
+
+**Node version mismatch:**
+
+This project works best with Node.js 18-20. Check your version:
+
+```bash
+node --version  # Should be v18.x, v19.x, or v20.x
+```
+
+If using nvm, switch to the recommended version:
+
+```bash
+nvm use 20
 ```
 
 ## ⚙️ Configuration

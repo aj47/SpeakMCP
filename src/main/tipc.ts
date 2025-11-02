@@ -1046,25 +1046,35 @@ export const router = {
       for (const [serverName, serverConfig] of Object.entries(
         mcpConfig.mcpServers,
       )) {
-        const transportType = serverConfig.transport || "stdio" // default to stdio for backward compatibility
+        // Infer transport type if not specified
+        let transportType = serverConfig.transport
+        if (!transportType) {
+          // If url is present, assume it's an HTTP transport
+          if (serverConfig.url) {
+            transportType = "streamableHttp"
+          } else {
+            // Default to stdio for backward compatibility
+            transportType = "stdio"
+          }
+        }
 
         if (transportType === "stdio") {
           // stdio transport requires command and args
           if (!serverConfig.command || !Array.isArray(serverConfig.args)) {
             throw new Error(
-              `Invalid server config for "${serverName}": stdio transport requires command and args`,
+              `Invalid server config for "${serverName}": stdio transport requires "command" and "args" fields. For HTTP servers, use "transport": "streamableHttp" with "url" field.`,
             )
           }
         } else if (transportType === "websocket" || transportType === "streamableHttp") {
           // Remote transports require url
           if (!serverConfig.url) {
             throw new Error(
-              `Invalid server config for "${serverName}": ${transportType} transport requires url`,
+              `Invalid server config for "${serverName}": ${transportType} transport requires "url" field`,
             )
           }
         } else {
           throw new Error(
-            `Invalid server config for "${serverName}": unsupported transport type "${transportType}"`,
+            `Invalid server config for "${serverName}": unsupported transport type "${transportType}". Valid types: "stdio", "websocket", "streamableHttp"`,
           )
         }
       }
@@ -1092,25 +1102,35 @@ export const router = {
         for (const [serverName, serverConfig] of Object.entries(
           mcpConfig.mcpServers,
         )) {
-          const transportType = serverConfig.transport || "stdio" // default to stdio for backward compatibility
+          // Infer transport type if not specified
+          let transportType = serverConfig.transport
+          if (!transportType) {
+            // If url is present, assume it's an HTTP transport
+            if (serverConfig.url) {
+              transportType = "streamableHttp"
+            } else {
+              // Default to stdio for backward compatibility
+              transportType = "stdio"
+            }
+          }
 
           if (transportType === "stdio") {
             // stdio transport requires command and args
             if (!serverConfig.command || !Array.isArray(serverConfig.args)) {
               throw new Error(
-                `Invalid server config for "${serverName}": stdio transport requires command and args`,
+                `Invalid server config for "${serverName}": stdio transport requires "command" and "args" fields. For HTTP servers, use "transport": "streamableHttp" with "url" field.`,
               )
             }
           } else if (transportType === "websocket" || transportType === "streamableHttp") {
             // Remote transports require url
             if (!serverConfig.url) {
               throw new Error(
-                `Invalid server config for "${serverName}": ${transportType} transport requires url`,
+                `Invalid server config for "${serverName}": ${transportType} transport requires "url" field`,
               )
             }
           } else {
             throw new Error(
-              `Invalid server config for "${serverName}": unsupported transport type "${transportType}"`,
+              `Invalid server config for "${serverName}": unsupported transport type "${transportType}". Valid types: "stdio", "websocket", "streamableHttp"`,
             )
           }
         }
@@ -1163,7 +1183,17 @@ export const router = {
         for (const [serverName, serverConfig] of Object.entries(
           input.config.mcpServers,
         )) {
-          const transportType = serverConfig.transport || "stdio" // default to stdio for backward compatibility
+          // Infer transport type if not specified
+          let transportType = serverConfig.transport
+          if (!transportType) {
+            // If url is present, assume it's an HTTP transport
+            if (serverConfig.url) {
+              transportType = "streamableHttp"
+            } else {
+              // Default to stdio for backward compatibility
+              transportType = "stdio"
+            }
+          }
 
           // Validate based on transport type
           if (transportType === "stdio") {
@@ -1171,13 +1201,13 @@ export const router = {
             if (!serverConfig.command) {
               return {
                 valid: false,
-                error: `Server "${serverName}": stdio transport requires command`,
+                error: `Server "${serverName}": stdio transport requires "command" field. For HTTP servers, use "transport": "streamableHttp" with "url" field.`,
               }
             }
             if (!Array.isArray(serverConfig.args)) {
               return {
                 valid: false,
-                error: `Server "${serverName}": stdio transport requires args as an array`,
+                error: `Server "${serverName}": stdio transport requires "args" as an array`,
               }
             }
           } else if (transportType === "websocket" || transportType === "streamableHttp") {
@@ -1185,13 +1215,13 @@ export const router = {
             if (!serverConfig.url) {
               return {
                 valid: false,
-                error: `Server "${serverName}": ${transportType} transport requires url`,
+                error: `Server "${serverName}": ${transportType} transport requires "url" field`,
               }
             }
           } else {
             return {
               valid: false,
-              error: `Server "${serverName}": unsupported transport type "${transportType}"`,
+              error: `Server "${serverName}": unsupported transport type "${transportType}". Valid types: "stdio", "websocket", "streamableHttp"`,
             }
           }
 

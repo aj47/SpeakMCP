@@ -627,19 +627,21 @@ function ServerDialog({ server, onSave, onCancel }: ServerDialogProps) {
                 id="json-input"
                 value={jsonInputText}
                 onChange={(e) => setJsonInputText(e.target.value)}
-                placeholder={`{
-  "transport": "stdio",
+                placeholder={`HTTP Server (transport auto-detected):
+{
+  "url": "https://mcp.exa.ai/mcp"
+}
+
+Or stdio server:
+{
   "command": "npx",
-  "args": ["-y", "@modelcontextprotocol/server-filesystem", "/path/to/directory"],
-  "env": {
-    "API_KEY": "your-key-here"
-  }
+  "args": ["-y", "@modelcontextprotocol/server-filesystem"]
 }`}
                 rows={12}
                 className="font-mono text-sm"
               />
               <p className="text-xs text-muted-foreground">
-                Paste the JSON configuration for an MCP server. The server name will be taken from the "Server Name" field above.
+                Paste JSON configuration. Transport type is auto-detected: if 'url' is present, uses HTTP; otherwise uses stdio.
               </p>
             </div>
 
@@ -658,24 +660,36 @@ function ServerDialog({ server, onSave, onCancel }: ServerDialogProps) {
                 try {
                   const config = JSON.parse(jsonInputText) as MCPServerConfig
 
-                  // Validate required fields
-                  if (!config.transport) {
-                    toast.error("JSON must include 'transport' field")
-                    return
+                  // Infer transport type if not specified (same logic as backend)
+                  let transportType = config.transport
+                  if (!transportType) {
+                    // If url is present, assume it's an HTTP transport
+                    if (config.url) {
+                      transportType = "streamableHttp"
+                    } else {
+                      // Default to stdio for backward compatibility
+                      transportType = "stdio"
+                    }
                   }
 
-                  if (config.transport === "stdio" && !config.command) {
-                    toast.error("stdio transport requires 'command' field")
-                    return
-                  }
-
-                  if (config.transport !== "stdio" && !config.url) {
-                    toast.error(`${config.transport} transport requires 'url' field`)
+                  // Validate based on transport type
+                  if (transportType === "stdio") {
+                    if (!config.command) {
+                      toast.error("stdio transport requires 'command' field. For HTTP servers, provide 'url' field.")
+                      return
+                    }
+                  } else if (transportType === "websocket" || transportType === "streamableHttp") {
+                    if (!config.url) {
+                      toast.error(`${transportType} transport requires 'url' field`)
+                      return
+                    }
+                  } else {
+                    toast.error(`Unsupported transport type: ${transportType}`)
                     return
                   }
 
                   // Apply the configuration
-                  setTransport(config.transport)
+                  setTransport(transportType)
                   // Combine command and args into fullCommand
                   const cmd = config.command || ""
                   const args = config.args?.join(" ") || ""

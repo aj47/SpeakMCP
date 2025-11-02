@@ -68,9 +68,24 @@ export function Component() {
       duration: number
       transcript?: string
     }) => {
-      // If we have a transcript, start a conversation with it
-      if (transcript && !isConversationActive) {
-        await startNewConversation(transcript, "user")
+      // Check config to see if we should always create new sessions for voice
+      const config = await tipcClient.getConfig()
+      const shouldCreateNewSession = config.alwaysCreateNewSessionForVoice ?? true
+
+      // If we have a transcript, handle conversation creation
+      if (transcript) {
+        if (shouldCreateNewSession) {
+          // Always create a new conversation for voice input
+          if (isConversationActive) {
+            endConversation()
+          }
+          await startNewConversation(transcript, "user")
+        } else {
+          // Legacy behavior: only create if no active conversation
+          if (!isConversationActive) {
+            await startNewConversation(transcript, "user")
+          }
+        }
       }
 
       await tipcClient.createRecording({
@@ -99,9 +114,24 @@ export function Component() {
     }) => {
       const arrayBuffer = await blob.arrayBuffer()
 
-      // If we have a transcript, start a conversation with it
-      if (transcript && !isConversationActive) {
-        await startNewConversation(transcript, "user")
+      // Check config to see if we should always create new sessions for voice
+      const config = await tipcClient.getConfig()
+      const shouldCreateNewSession = config.alwaysCreateNewSessionForVoice ?? true
+
+      // If we have a transcript, handle conversation creation
+      if (transcript) {
+        if (shouldCreateNewSession) {
+          // Always create a new conversation for voice input
+          if (isConversationActive) {
+            endConversation()
+          }
+          await startNewConversation(transcript, "user")
+        } else {
+          // Legacy behavior: only create if no active conversation
+          if (!isConversationActive) {
+            await startNewConversation(transcript, "user")
+          }
+        }
       }
 
       const result = await tipcClient.createMcpRecording({

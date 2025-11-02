@@ -313,6 +313,7 @@ export type Config = {
   conversationsEnabled?: boolean
   maxConversationsToKeep?: number
   autoSaveConversations?: boolean
+  alwaysCreateNewSessionForVoice?: boolean // When true, voice input always creates a new conversation
 
   // Panel Position Configuration
   panelPosition?:

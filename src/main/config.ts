@@ -34,6 +34,7 @@ const getConfig = () => {
     conversationsEnabled: true,
     maxConversationsToKeep: 100,
     autoSaveConversations: true,
+    alwaysCreateNewSessionForVoice: true, // Default to always creating new sessions for voice input
     // Agent kill switch defaults
     agentKillSwitchEnabled: true,
     agentKillSwitchHotkey: "ctrl-shift-escape",

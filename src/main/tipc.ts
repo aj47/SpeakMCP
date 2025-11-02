@@ -1042,13 +1042,39 @@ export const router = {
         throw new Error("Invalid MCP config: missing or invalid mcpServers")
       }
 
-      // Validate each server config
+      // Validate each server config based on transport type
       for (const [serverName, serverConfig] of Object.entries(
         mcpConfig.mcpServers,
       )) {
-        if (!serverConfig.command || !Array.isArray(serverConfig.args)) {
+        // Infer transport type if not specified
+        let transportType = serverConfig.transport
+        if (!transportType) {
+          // If url is present, assume it's an HTTP transport
+          if (serverConfig.url) {
+            transportType = "streamableHttp"
+          } else {
+            // Default to stdio for backward compatibility
+            transportType = "stdio"
+          }
+        }
+
+        if (transportType === "stdio") {
+          // stdio transport requires command and args
+          if (!serverConfig.command || !Array.isArray(serverConfig.args)) {
+            throw new Error(
+              `Invalid server config for "${serverName}": stdio transport requires "command" and "args" fields. For HTTP servers, use "transport": "streamableHttp" with "url" field.`,
+            )
+          }
+        } else if (transportType === "websocket" || transportType === "streamableHttp") {
+          // Remote transports require url
+          if (!serverConfig.url) {
+            throw new Error(
+              `Invalid server config for "${serverName}": ${transportType} transport requires "url" field`,
+            )
+          }
+        } else {
           throw new Error(
-            `Invalid server config for "${serverName}": missing command or args`,
+            `Invalid server config for "${serverName}": unsupported transport type "${transportType}". Valid types: "stdio", "websocket", "streamableHttp"`,
           )
         }
       }
@@ -1072,13 +1098,39 @@ export const router = {
           throw new Error("Invalid MCP config: missing or invalid mcpServers")
         }
 
-        // Validate each server config
+        // Validate each server config based on transport type
         for (const [serverName, serverConfig] of Object.entries(
           mcpConfig.mcpServers,
         )) {
-          if (!serverConfig.command || !Array.isArray(serverConfig.args)) {
+          // Infer transport type if not specified
+          let transportType = serverConfig.transport
+          if (!transportType) {
+            // If url is present, assume it's an HTTP transport
+            if (serverConfig.url) {
+              transportType = "streamableHttp"
+            } else {
+              // Default to stdio for backward compatibility
+              transportType = "stdio"
+            }
+          }
+
+          if (transportType === "stdio") {
+            // stdio transport requires command and args
+            if (!serverConfig.command || !Array.isArray(serverConfig.args)) {
+              throw new Error(
+                `Invalid server config for "${serverName}": stdio transport requires "command" and "args" fields. For HTTP servers, use "transport": "streamableHttp" with "url" field.`,
+              )
+            }
+          } else if (transportType === "websocket" || transportType === "streamableHttp") {
+            // Remote transports require url
+            if (!serverConfig.url) {
+              throw new Error(
+                `Invalid server config for "${serverName}": ${transportType} transport requires "url" field`,
+              )
+            }
+          } else {
             throw new Error(
-              `Invalid server config for "${serverName}": missing command or args`,
+              `Invalid server config for "${serverName}": unsupported transport type "${transportType}". Valid types: "stdio", "websocket", "streamableHttp"`,
             )
           }
         }
@@ -1131,18 +1183,49 @@ export const router = {
         for (const [serverName, serverConfig] of Object.entries(
           input.config.mcpServers,
         )) {
-          if (!serverConfig.command) {
-            return {
-              valid: false,
-              error: `Server "${serverName}": missing command`,
+          // Infer transport type if not specified
+          let transportType = serverConfig.transport
+          if (!transportType) {
+            // If url is present, assume it's an HTTP transport
+            if (serverConfig.url) {
+              transportType = "streamableHttp"
+            } else {
+              // Default to stdio for backward compatibility
+              transportType = "stdio"
             }
           }
-          if (!Array.isArray(serverConfig.args)) {
+
+          // Validate based on transport type
+          if (transportType === "stdio") {
+            // stdio transport requires command and args
+            if (!serverConfig.command) {
+              return {
+                valid: false,
+                error: `Server "${serverName}": stdio transport requires "command" field. For HTTP servers, use "transport": "streamableHttp" with "url" field.`,
+              }
+            }
+            if (!Array.isArray(serverConfig.args)) {
+              return {
+                valid: false,
+                error: `Server "${serverName}": stdio transport requires "args" as an array`,
+              }
+            }
+          } else if (transportType === "websocket" || transportType === "streamableHttp") {
+            // Remote transports require url
+            if (!serverConfig.url) {
+              return {
+                valid: false,
+                error: `Server "${serverName}": ${transportType} transport requires "url" field`,
+              }
+            }
+          } else {
             return {
               valid: false,
-              error: `Server "${serverName}": args must be an array`,
+              error: `Server "${serverName}": unsupported transport type "${transportType}". Valid types: "stdio", "websocket", "streamableHttp"`,
             }
           }
+
+          // Common validations for all transport types
           if (serverConfig.env && typeof serverConfig.env !== "object") {
             return {
               valid: false,

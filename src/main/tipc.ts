@@ -44,7 +44,7 @@ import {
 import { state, agentProcessManager } from "./state"
 
 
-import { startRemoteServer, stopRemoteServer, restartRemoteServer } from "./remote-server"
+import { startRemoteServer, stopRemoteServer, restartRemoteServer, getRemoteServerStatus } from "./remote-server"
 
 // Helper function to emit agent progress updates to the renderer
 function emitAgentProgress(update: AgentProgressUpdate) {
@@ -1770,6 +1770,25 @@ export const router = {
         `Failed to import profile: ${error instanceof Error ? error.message : String(error)}`,
       )
     }
+  }),
+
+  // Remote Server procedures
+  getRemoteServerStatus: t.procedure.action(async () => {
+    return getRemoteServerStatus()
+  }),
+
+  regenerateRemoteServerApiKey: t.procedure.action(async () => {
+    const currentConfig = configStore.get()
+    const newApiKey = crypto.randomBytes(32).toString("hex")
+    const updatedConfig = { ...currentConfig, remoteServerApiKey: newApiKey }
+    configStore.save(updatedConfig)
+    
+    // Restart server if it's currently enabled
+    if (currentConfig.remoteServerEnabled) {
+      await restartRemoteServer()
+    }
+    
+    return { apiKey: newApiKey }
   }),
 }
 

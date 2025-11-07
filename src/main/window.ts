@@ -332,14 +332,20 @@ export function showPanelWindow() {
     // Set focusability appropriate for the current mode before showing
     setPanelFocusableForMode(win, mode)
 
-    win.showInactive()
+    // For text input mode, use show() to properly activate and focus the window
+    // For other modes, use showInactive() to avoid stealing focus
+    if (mode === "textInput") {
+      win.show()
+    } else {
+      win.showInactive()
+      // On Windows, we need to explicitly focus the window for other modes too
+      if (process.platform === "win32") {
+        win.focus()
+      }
+    }
+
     // Keep it floating above everything
     ensurePanelZOrder(win)
-
-    // On Windows, we need to explicitly focus the window
-    if (process.platform === "win32") {
-      win.focus()
-    }
   }
 }
 

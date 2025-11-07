@@ -196,11 +196,31 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
             prevProgress.steps.length !== update.steps.length ||
             JSON.stringify(prevProgress.steps) !==
               JSON.stringify(update.steps) ||
-            prevProgress.finalContent !== update.finalContent
+            prevProgress.finalContent !== update.finalContent ||
+            prevProgress.isSnoozed !== update.isSnoozed
 
           if (hasChanged) {
             logUI('[ConversationContext] Progress changed for session:', sessionId)
             newMap.set(sessionId, update)
+
+            // If session was unsnoozed (snoozed -> not snoozed) and is complete,
+            // schedule cleanup since it's now visible and user can see it's done
+            if (prevProgress.isSnoozed && !update.isSnoozed && update.isComplete) {
+              logUI('[ConversationContext] Unsnoozed completed session, will cleanup in 5s:', sessionId)
+              setTimeout(() => {
+                logUI('[ConversationContext] Cleaning up unsnoozed completed session:', sessionId)
+                setAgentProgressById((prevMap) => {
+                  const newMap = new Map(prevMap)
+                  const current = newMap.get(sessionId)
+                  // Only delete if still not snoozed and complete
+                  if (current && !current.isSnoozed && current.isComplete) {
+                    newMap.delete(sessionId)
+                  }
+                  return newMap
+                })
+              }, 5000)
+            }
+
             return newMap
           }
 
@@ -220,13 +240,18 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
         }
 
         // Clean up completed sessions from the map after a delay
-        if (update.isComplete) {
-          logUI('[ConversationContext] Session completed, will cleanup in 5s:', sessionId)
+        // BUT: Don't delete snoozed sessions - they need to be restorable from the sidebar
+        if (update.isComplete && !update.isSnoozed) {
+          logUI('[ConversationContext] Session completed (not snoozed), will cleanup in 5s:', sessionId)
           setTimeout(() => {
             logUI('[ConversationContext] Cleaning up completed session:', sessionId)
             setAgentProgressById((prevMap) => {
               const newMap = new Map(prevMap)
-              newMap.delete(sessionId)
+              // Double-check it's still not snoozed before deleting
+              const current = newMap.get(sessionId)
+              if (current && !current.isSnoozed) {
+                newMap.delete(sessionId)
+              }
               return newMap
             })
             // Clear focus if this was the focused session

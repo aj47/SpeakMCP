@@ -328,15 +328,12 @@ export function Component() {
   // Text input handlers
   useEffect(() => {
     const unlisten = rendererHandlers.showTextInput.listen(() => {
-      console.log("[panel.tsx] showTextInput handler - received")
       // Clear any previous agent progress when starting new text input
       setAgentProgress(null)
       setShowTextInput(true)
-      console.log("[panel.tsx] showTextInput handler - set showTextInput to true")
       // Panel window is already shown by the keyboard handler
       // Focus the text input after a short delay to ensure it's rendered
       setTimeout(() => {
-        console.log("[panel.tsx] showTextInput handler - calling textInputPanelRef.focus()")
         textInputPanelRef.current?.focus()
       }, 100)
     })

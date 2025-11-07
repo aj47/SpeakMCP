@@ -81,13 +81,11 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
     setFocusedSessionIdInternal(sessionId)
   }, [focusedSessionId])
 
-  // Computed: get the progress for the focused session (or the most recent one)
+  // Computed: get the progress for the focused session ONLY
+  // Don't show any progress if no session is focused (e.g., when snoozed)
   const agentProgress = focusedSessionId
     ? agentProgressById.get(focusedSessionId) ?? null
-    : Array.from(agentProgressById.values()).sort((a, b) => {
-        // Sort by most recent (assuming sessionId contains timestamp)
-        return b.sessionId.localeCompare(a.sessionId)
-      })[0] ?? null
+    : null
 
   // Log when agentProgress changes
   useEffect(() => {

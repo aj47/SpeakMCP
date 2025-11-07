@@ -546,10 +546,11 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
   }
 
   // Handle snooze/minimize
-  const handleSnooze = async () => {
+  const handleSnooze = async (e?: React.MouseEvent) => {
+    e?.stopPropagation() // Prevent event bubbling
     if (!progress?.sessionId) return
 
-    logUI('[AgentProgress] Minimize button clicked:', {
+    logUI('🔴 [AgentProgress OVERLAY] Minimize button clicked in OVERLAY (not sidebar):', {
       sessionId: progress.sessionId,
       currentlySnoozed: progress.isSnoozed
     })
@@ -558,7 +559,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
       await tipcClient.snoozeAgentSession({ sessionId: progress.sessionId })
       // Unfocus this session so the overlay hides
       setFocusedSessionId(null)
-      logUI('[AgentProgress] Session snoozed and unfocused')
+      logUI('🔴 [AgentProgress OVERLAY] Session snoozed and unfocused')
       // Don't close the panel - just let the session run in background
       // The overlay will hide automatically because the session is no longer focused
     } catch (error) {

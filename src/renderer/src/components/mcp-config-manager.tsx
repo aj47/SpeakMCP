@@ -271,14 +271,12 @@ function ServerDialog({ server, onSave, onCancel }: ServerDialogProps) {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="transport" className="font-semibold text-foreground">
-                Transport Type
-              </Label>
+              <Label htmlFor="transport">Transport Type</Label>
               <Select
                 value={transport}
                 onValueChange={(value: MCPTransportType) => setTransport(value)}
               >
-                <SelectTrigger className="border-2 border-primary/30 bg-primary/5 hover:bg-primary/10 hover:border-primary/50 focus:border-primary focus:ring-2 focus:ring-primary/20 dark:bg-primary/10 dark:hover:bg-primary/15">
+                <SelectTrigger id="transport" className="border border-primary/40">
                   <SelectValue placeholder="Select transport type" />
                 </SelectTrigger>
                 <SelectContent>

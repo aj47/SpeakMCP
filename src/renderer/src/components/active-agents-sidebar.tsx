@@ -1,9 +1,10 @@
-import React, { useState } from "react"
+import React, { useState, useEffect } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { tipcClient } from "@renderer/lib/tipc-client"
 import { Activity, ChevronDown, ChevronRight, X, Minimize2, Maximize2 } from "lucide-react"
 import { cn } from "@renderer/lib/utils"
 import { useConversation } from "@renderer/contexts/conversation-context"
+import { logUI, logStateChange } from "@renderer/lib/debug"
 
 interface AgentSession {
   id: string
@@ -24,8 +25,17 @@ interface AgentSessionsResponse {
   recentSessions: AgentSession[]
 }
 
+const STORAGE_KEY = 'active-agents-sidebar-expanded'
+
 export function ActiveAgentsSidebar() {
-  const [isExpanded, setIsExpanded] = useState(true)
+  // Load initial expand state from localStorage, default to true
+  const [isExpanded, setIsExpanded] = useState(() => {
+    const stored = localStorage.getItem(STORAGE_KEY)
+    const initial = stored !== null ? stored === 'true' : true
+    logUI('[ActiveAgentsSidebar] Initial expand state:', initial, 'from localStorage:', stored)
+    return initial
+  })
+
   const { focusedSessionId, setFocusedSessionId } = useConversation()
 
   const { data } = useQuery<AgentSessionsResponse>({
@@ -39,17 +49,34 @@ export function ActiveAgentsSidebar() {
   const activeSessions = data?.activeSessions || []
   const hasActiveSessions = activeSessions.length > 0
 
+  // Persist expand state to localStorage whenever it changes
+  useEffect(() => {
+    logStateChange('ActiveAgentsSidebar', 'isExpanded', !isExpanded, isExpanded)
+    localStorage.setItem(STORAGE_KEY, String(isExpanded))
+  }, [isExpanded])
+
+  // Log when sessions change
+  useEffect(() => {
+    logUI('[ActiveAgentsSidebar] Sessions updated:', {
+      count: activeSessions.length,
+      sessions: activeSessions.map(s => ({ id: s.id, title: s.conversationTitle, snoozed: s.isSnoozed }))
+    })
+  }, [activeSessions.length])
+
   // Don't render anything if there are no active sessions
   if (!hasActiveSessions) {
+    logUI('[ActiveAgentsSidebar] No active sessions, hiding sidebar')
     return null
   }
 
   const handleSessionClick = (sessionId: string) => {
+    logUI('[ActiveAgentsSidebar] Session clicked:', sessionId)
     setFocusedSessionId(sessionId)
   }
 
   const handleStopSession = async (sessionId: string, e: React.MouseEvent) => {
     e.stopPropagation() // Prevent session focus when clicking stop
+    logUI('[ActiveAgentsSidebar] Stopping session:', sessionId)
     try {
       await tipcClient.stopAgentSession({ sessionId })
     } catch (error) {
@@ -59,6 +86,7 @@ export function ActiveAgentsSidebar() {
 
   const handleToggleSnooze = async (sessionId: string, isSnoozed: boolean, e: React.MouseEvent) => {
     e.stopPropagation() // Prevent session focus when clicking snooze
+    logUI('[ActiveAgentsSidebar] Toggling snooze:', { sessionId, isSnoozed, action: isSnoozed ? 'unsnooze' : 'snooze' })
     try {
       if (isSnoozed) {
         await tipcClient.unsnoozeAgentSession({ sessionId })
@@ -76,10 +104,16 @@ export function ActiveAgentsSidebar() {
     }
   }
 
+  const handleToggleExpand = () => {
+    const newState = !isExpanded
+    logUI('[ActiveAgentsSidebar] Toggling expand:', { from: isExpanded, to: newState })
+    setIsExpanded(newState)
+  }
+
   return (
     <div className="px-2 pb-2">
       <button
-        onClick={() => setIsExpanded(!isExpanded)}
+        onClick={handleToggleExpand}
         className={cn(
           "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium transition-all duration-200",
           "text-muted-foreground hover:bg-accent/50 hover:text-foreground"

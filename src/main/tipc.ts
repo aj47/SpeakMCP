@@ -174,6 +174,11 @@ async function processWithAgentMode(
   state.shouldStopAgent = false
   state.agentIterationCount = 0
 
+  // Start tracking this agent session
+  const { agentSessionTracker } = await import("./agent-session-tracker")
+  let conversationTitle = text.length > 50 ? text.substring(0, 50) + "..." : text
+  const sessionId = agentSessionTracker.startSession(conversationId, conversationTitle)
+
   try {
     if (!config.mcpToolsEnabled) {
       throw new Error("MCP tools are not enabled")
@@ -241,6 +246,9 @@ async function processWithAgentMode(
         conversationId, // Pass conversation ID for progress updates
       )
 
+      // Mark session as completed
+      agentSessionTracker.completeSession(sessionId, "Agent completed successfully")
+
       return agentResult.content
     } else {
       // Use single-shot tool calling
@@ -276,9 +284,16 @@ async function processWithAgentMode(
           ? `${result.content}\n\n${toolResultTexts}`
           : toolResultTexts
       } else {
+        // Mark session as completed for non-agent mode
+        agentSessionTracker.completeSession(sessionId, "Completed with tools")
         return result.content || text
       }
     }
+  } catch (error) {
+    // Mark session as errored
+    const errorMessage = error instanceof Error ? error.message : "Unknown error"
+    agentSessionTracker.errorSession(sessionId, errorMessage)
+    throw error
   } finally {
     // Clean up agent state
     state.isAgentModeActive = false
@@ -453,6 +468,14 @@ export const router = {
       shouldStopAgent: state.shouldStopAgent,
       agentIterationCount: state.agentIterationCount,
       activeProcessCount: agentProcessManager.getActiveProcessCount(),
+    }
+  }),
+
+  getAgentSessions: t.procedure.action(async () => {
+    const { agentSessionTracker } = await import("./agent-session-tracker")
+    return {
+      activeSessions: agentSessionTracker.getActiveSessions(),
+      recentSessions: agentSessionTracker.getRecentSessions(4),
     }
   }),
 

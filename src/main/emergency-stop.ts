@@ -13,6 +13,17 @@ export async function emergencyStopAll(): Promise<{ before: number; after: numbe
   // Signal all consumers to stop ASAP
   state.shouldStopAgent = true
 
+  // Mark all active agent sessions as stopped
+  try {
+    const { agentSessionTracker } = await import("./agent-session-tracker")
+    const activeSessions = agentSessionTracker.getActiveSessions()
+    for (const session of activeSessions) {
+      agentSessionTracker.stopSession(session.id)
+    }
+  } catch {
+    // ignore
+  }
+
   // Abort any in-flight LLM HTTP requests
   try {
     llmRequestAbortManager.abortAll()

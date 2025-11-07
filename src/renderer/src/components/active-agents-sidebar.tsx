@@ -86,10 +86,17 @@ export function ActiveAgentsSidebar() {
 
   const handleToggleSnooze = async (sessionId: string, isSnoozed: boolean, e: React.MouseEvent) => {
     e.stopPropagation() // Prevent session focus when clicking snooze
-    logUI('[ActiveAgentsSidebar] Toggling snooze:', { sessionId, isSnoozed, action: isSnoozed ? 'unsnooze' : 'snooze' })
+    logUI('[ActiveAgentsSidebar] Toggling snooze:', {
+      sessionId,
+      sidebarSaysIsSnoozed: isSnoozed,
+      action: isSnoozed ? 'unsnooze' : 'snooze',
+      focusedSessionId,
+      allSessions: activeSessions.map(s => ({ id: s.id, snoozed: s.isSnoozed }))
+    })
     try {
       if (isSnoozed) {
         // Unsnoozing: restore the session to foreground
+        logUI('[ActiveAgentsSidebar] Unsnoozing session')
         await tipcClient.unsnoozeAgentSession({ sessionId })
         // Focus the session when unsnoozing
         setFocusedSessionId(sessionId)
@@ -101,6 +108,7 @@ export function ActiveAgentsSidebar() {
         }, 100)
       } else {
         // Snoozing: move session to background
+        logUI('[ActiveAgentsSidebar] Snoozing session')
         await tipcClient.snoozeAgentSession({ sessionId })
         // Unfocus if this was the focused session
         if (focusedSessionId === sessionId) {

@@ -344,6 +344,32 @@ function calculateBackoffDelay(attempt: number, baseDelay: number = 1000, maxDel
   return Math.max(0, cappedDelay + jitter)
 }
 
+
+/**
+ * Sleep for the specified delay while allowing the kill switch to interrupt.
+ * Checks state.shouldStopAgent immediately and roughly every 100ms during the wait.
+ * Throws an error if the emergency stop is triggered.
+ */
+async function interruptibleDelay(delay: number): Promise<void> {
+  // Immediate check (also covers delay === 0 case semantics)
+  if (state.shouldStopAgent) {
+    throw new Error("Aborted by emergency stop")
+  }
+
+  if (delay <= 0) {
+    return
+  }
+
+  const startTime = Date.now()
+  while (Date.now() - startTime < delay) {
+    if (state.shouldStopAgent) {
+      throw new Error("Aborted by emergency stop")
+    }
+    const remaining = delay - (Date.now() - startTime)
+    await new Promise(resolve => setTimeout(resolve, Math.min(100, Math.max(0, remaining))))
+  }
+}
+
 /**
  * Makes an API call with enhanced retry logic including exponential backoff for rate limits.
  * Rate limit errors (429) will retry indefinitely until successful.
@@ -424,14 +450,7 @@ async function apiCallWithRetry<T>(
         console.log(`⏳ Rate limit hit - waiting ${waitTimeSeconds} seconds before retrying... (attempt ${attempt + 1})`)
 
         // Wait before retrying with interruptible delay
-        // Check shouldStopAgent every 100ms to allow kill switch to interrupt the delay
-        const startTime = Date.now()
-        while (Date.now() - startTime < delay) {
-          if (state.shouldStopAgent) {
-            throw new Error("Aborted by emergency stop")
-          }
-          await new Promise(resolve => setTimeout(resolve, Math.min(100, delay - (Date.now() - startTime))))
-        }
+        await interruptibleDelay(delay)
         attempt++
         continue
       }
@@ -476,14 +495,7 @@ async function apiCallWithRetry<T>(
       }
 
       // Wait before retrying with interruptible delay
-      // Check shouldStopAgent every 100ms to allow kill switch to interrupt the delay
-      const startTime = Date.now()
-      while (Date.now() - startTime < delay) {
-        if (state.shouldStopAgent) {
-          throw new Error("Aborted by emergency stop")
-        }
-        await new Promise(resolve => setTimeout(resolve, Math.min(100, delay - (Date.now() - startTime))))
-      }
+      await interruptibleDelay(delay)
       attempt++
     }
   }

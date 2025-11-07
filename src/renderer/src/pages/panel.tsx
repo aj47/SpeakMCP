@@ -30,8 +30,6 @@ export function Component() {
   )
   const [recording, setRecording] = useState(false)
   const [mcpMode, setMcpMode] = useState(false)
-  const [agentProgress, setAgentProgress] =
-    useState<AgentProgressUpdate | null>(null)
   const [showTextInput, setShowTextInput] = useState(false)
   const isConfirmedRef = useRef(false)
   const mcpModeRef = useRef(false)
@@ -44,6 +42,7 @@ export function Component() {
     isWaitingForResponse,
     isConversationActive,
     currentConversation,
+    agentProgress, // Get agent progress from conversation context (session-aware)
   } = useConversationState()
   const {
     addMessage,
@@ -52,7 +51,7 @@ export function Component() {
     endConversation,
     continueConversation,
   } = useConversationActions()
-  const { currentConversationId } = useConversation()
+  const { currentConversationId, focusedSessionId, agentProgressById } = useConversation()
 
   // Config for drag functionality
   const configQuery = useConfigQuery()
@@ -118,7 +117,6 @@ export function Component() {
       return result
     },
     onError(error) {
-      setAgentProgress(null) // Clear progress on error
       tipcClient.resizePanelToNormal({}) // Resize back to normal on error
       tipcClient.hidePanelWindow({})
       tipcClient.displayError({
@@ -175,7 +173,6 @@ export function Component() {
     onError(error) {
       setShowTextInput(false)
       tipcClient.clearTextInputState({})
-      setAgentProgress(null) // Clear progress on error
       tipcClient.resizePanelToNormal({}) // Resize back to normal on error
       tipcClient.hidePanelWindow({})
       tipcClient.displayError({
@@ -272,7 +269,6 @@ export function Component() {
       // Ensure we are in normal dictation mode (not MCP/agent)
       setMcpMode(false)
       mcpModeRef.current = false
-      setAgentProgress(null)
       setVisualizerData(() => getInitialVisualizerData())
       recorderRef.current?.startRecording()
     })
@@ -306,7 +302,6 @@ export function Component() {
       } else {
         // If there's an active conversation, automatically continue in MCP mode
         const continueConv = showContinueButton && !mcpMode
-        setAgentProgress(null)
         if (continueConv) {
           setMcpMode(true)
           mcpModeRef.current = true
@@ -329,7 +324,6 @@ export function Component() {
   useEffect(() => {
     const unlisten = rendererHandlers.showTextInput.listen(() => {
       // Clear any previous agent progress when starting new text input
-      setAgentProgress(null)
       setShowTextInput(true)
       // Panel window is already shown by the keyboard handler
       // Focus the text input after a short delay to ensure it's rendered
@@ -380,7 +374,6 @@ export function Component() {
     const unlisten = rendererHandlers.startMcpRecording.listen(() => {
       setMcpMode(true)
       mcpModeRef.current = true
-      setAgentProgress(null) // Clear any previous progress
       tipcClient.resizePanelToNormal({}) // Ensure panel is normal size for recording
       setVisualizerData(() => getInitialVisualizerData())
       recorderRef.current?.startRecording()
@@ -405,7 +398,6 @@ export function Component() {
         recorderRef.current?.stopRecording()
       } else {
         setMcpMode(true)
-        setAgentProgress(null) // Clear any previous progress
         tipcClient.resizePanelToNormal({}) // Ensure panel is normal size for recording
         tipcClient.showPanelWindow({})
         recorderRef.current?.startRecording()
@@ -415,43 +407,16 @@ export function Component() {
     return unlisten
   }, [recording])
 
-  // Agent progress handler
+  // Agent progress handler - resize panel when agent mode starts
+  // Note: Progress updates are now handled in ConversationContext for session isolation
   useEffect(() => {
-    const unlisten = rendererHandlers.agentProgressUpdate.listen(
-      (update: AgentProgressUpdate) => {
-        // Only update if the progress has actually changed to prevent flashing
-        setAgentProgress((prevProgress) => {
-          if (!prevProgress) return update
-
-          // Compare key properties to determine if update is needed
-          const hasChanged =
-            prevProgress.isComplete !== update.isComplete ||
-            prevProgress.currentIteration !== update.currentIteration ||
-            prevProgress.steps.length !== update.steps.length ||
-            JSON.stringify(prevProgress.steps) !==
-              JSON.stringify(update.steps) ||
-            prevProgress.finalContent !== update.finalContent
-
-          return hasChanged ? update : prevProgress
-        })
-
-        // Resize panel for agent mode on first progress update or when transitioning from no progress
-        if (!agentProgress && update && !update.isComplete) {
-          // Small delay to ensure the panel is ready
-          setTimeout(() => {
-            tipcClient.resizePanelForAgentMode({})
-          }, 100)
-        }
-
-        // Keep the panel open when agent completes - user will press ESC to close
-        if (update.isComplete) {
-          // Note: Final message insertion is handled by ConversationProvider to prevent duplicates
-          // No auto-hide behavior - user controls when to close with ESC
-        }
-      },
-    )
-
-    return unlisten
+    // Resize panel for agent mode when progress appears
+    if (agentProgress && !agentProgress.isComplete) {
+      // Small delay to ensure the panel is ready
+      setTimeout(() => {
+        tipcClient.resizePanelForAgentMode({})
+      }, 100)
+    }
   }, [agentProgress])
 
   // Clear agent progress handler
@@ -467,7 +432,6 @@ export function Component() {
       textInputMutation.reset()
       mcpTextInputMutation.reset()
 
-      setAgentProgress(null)
       setMcpMode(false)
       mcpModeRef.current = false
       // End conversation when clearing progress (user pressed ESC)
@@ -486,7 +450,6 @@ export function Component() {
       ttsManager.stopAll()
 
       // Reset all processing states
-      setAgentProgress(null)
       setMcpMode(false)
       mcpModeRef.current = false
       setShowTextInput(false)

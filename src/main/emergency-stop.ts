@@ -1,4 +1,4 @@
-import { agentProcessManager, llmRequestAbortManager, state } from "./state"
+import { agentProcessManager, llmRequestAbortManager, state, agentSessionStateManager } from "./state"
 
 /**
  * Centralized emergency stop: abort LLM requests, kill tracked child processes,
@@ -10,10 +10,10 @@ import { agentProcessManager, llmRequestAbortManager, state } from "./state"
  * Returns before/after counts for logging.
  */
 export async function emergencyStopAll(): Promise<{ before: number; after: number }> {
-  // Signal all consumers to stop ASAP
-  state.shouldStopAgent = true
+  // Signal all sessions to stop ASAP (both new session-based and legacy global)
+  agentSessionStateManager.stopAllSessions()
 
-  // Mark all active agent sessions as stopped
+  // Mark all active agent sessions as stopped in the tracker
   try {
     const { agentSessionTracker } = await import("./agent-session-tracker")
     const activeSessions = agentSessionTracker.getActiveSessions()
@@ -24,7 +24,8 @@ export async function emergencyStopAll(): Promise<{ before: number; after: numbe
     // ignore
   }
 
-  // Abort any in-flight LLM HTTP requests
+  // Abort any in-flight LLM HTTP requests (handled by session state manager)
+  // This is already done in stopAllSessions(), but we keep the legacy call for safety
   try {
     llmRequestAbortManager.abortAll()
   } catch {
@@ -45,10 +46,14 @@ export async function emergencyStopAll(): Promise<{ before: number; after: numbe
 
   const after = agentProcessManager.getActiveProcessCount()
 
+  // Clean up all session states
+  for (const [sessionId] of state.agentSessions) {
+    agentSessionStateManager.cleanupSession(sessionId)
+  }
+
   // Reset core agent state flags to ensure clean state for next agent session
   state.isAgentModeActive = false
   state.agentIterationCount = 0
-  // Reset shouldStopAgent to false so the next agent session can run
   state.shouldStopAgent = false
 
   return { before, after }

@@ -363,6 +363,9 @@ export function Component() {
       await addMessage(text, "user")
     }
 
+    // Hide the text input immediately and show processing/overlay
+    setShowTextInput(false)
+
     // Always try to use MCP processing first if available
     try {
       const config = await tipcClient.getConfig({})
@@ -436,12 +439,22 @@ export function Component() {
     }
   }, [agentProgress])
 
+  // If agent progress arrives while text input is visible, hide text input
+  useEffect(() => {
+    if (agentProgress && showTextInput) {
+      logUI('[Panel] Hiding text input because agent progress is available', {
+        sessionId: agentProgress.sessionId,
+      })
+      setShowTextInput(false)
+    }
+  }, [agentProgress, showTextInput])
+
   // Debug: Log overlay visibility conditions
   useEffect(() => {
     logUI('[Panel] Overlay visibility check:', {
       hasAgentProgress: !!agentProgress,
       mcpTranscribePending: mcpTranscribeMutation.isPending,
-      shouldShowOverlay: !!(agentProgress && !mcpTranscribeMutation.isPending),
+      shouldShowOverlay: !!agentProgress,
       agentProgressSessionId: agentProgress?.sessionId,
       agentProgressComplete: agentProgress?.isComplete,
       agentProgressSnoozed: agentProgress?.isSnoozed
@@ -576,7 +589,7 @@ export function Component() {
               )}
 
               {/* Agent progress overlay - left-aligned and full coverage */}
-              {agentProgress && !mcpTranscribeMutation.isPending && (
+              {agentProgress && (
                 <AgentProgress
                   progress={agentProgress}
                   variant="overlay"

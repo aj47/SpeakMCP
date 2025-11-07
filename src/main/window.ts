@@ -340,21 +340,24 @@ export function showPanelWindow() {
     setPanelFocusableForMode(win, mode)
     console.log(`[window.ts] showPanelWindow - window.isFocusable(): ${win.isFocusable()}`)
 
-    console.log(`[window.ts] showPanelWindow - calling showInactive()`)
-    win.showInactive()
+    // For text input mode, use show() to properly activate and focus the window
+    // For other modes, use showInactive() to avoid stealing focus
+    if (mode === "textInput") {
+      console.log(`[window.ts] showPanelWindow - text input mode, calling win.show() to activate window`)
+      win.show()
+      console.log(`[window.ts] showPanelWindow - after show(), isFocused: ${win.isFocused()}`)
+    } else {
+      console.log(`[window.ts] showPanelWindow - calling showInactive()`)
+      win.showInactive()
+      // On Windows, we need to explicitly focus the window for other modes too
+      if (process.platform === "win32") {
+        console.log(`[window.ts] showPanelWindow - Windows platform, calling win.focus()`)
+        win.focus()
+      }
+    }
+
     // Keep it floating above everything
     ensurePanelZOrder(win)
-
-    // Focus the window for text input mode to enable immediate typing
-    if (mode === "textInput") {
-      console.log(`[window.ts] showPanelWindow - text input mode, calling win.focus()`)
-      win.focus()
-      console.log(`[window.ts] showPanelWindow - after focus(), isFocused: ${win.isFocused()}`)
-    } else if (process.platform === "win32") {
-      // On Windows, we need to explicitly focus the window for other modes too
-      console.log(`[window.ts] showPanelWindow - Windows platform, calling win.focus()`)
-      win.focus()
-    }
   }
 }
 

@@ -4,6 +4,7 @@ import { useEffect } from "react"
 import { NavLink, Outlet, useNavigate, useLocation } from "react-router-dom"
 import { LoadingSpinner } from "@renderer/components/ui/loading-spinner"
 import { SettingsDragBar } from "@renderer/components/settings-drag-bar"
+import { ActiveAgentsSidebar } from "@renderer/components/active-agents-sidebar"
 
 type NavLink = {
   text: string
@@ -86,6 +87,11 @@ export const Component = () => {
               <span className="font-medium">{link.text}</span>
             </NavLink>
           ))}
+        </div>
+
+        {/* Active Agents Section */}
+        <div className="mt-4">
+          <ActiveAgentsSidebar />
         </div>
 
         {/* Loading spinner at the bottom of the sidebar */}

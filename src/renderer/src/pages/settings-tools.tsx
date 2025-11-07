@@ -66,7 +66,6 @@ const LabelWithTooltip = ({
 }
 
 import { KeyRecorder } from "@renderer/components/key-recorder"
-import { ActiveAgentsPanel } from "@renderer/components/active-agents-panel"
 
 export function Component() {
   const configQuery = useConfigQuery()
@@ -427,13 +426,6 @@ DOMAIN-SPECIFIC RULES:
 
               </div>
             )}
-          </div>
-        )}
-
-        {/* Active Agents Section */}
-        {config.mcpAgentModeEnabled && (
-          <div className="space-y-4">
-            <ActiveAgentsPanel />
           </div>
         )}
 

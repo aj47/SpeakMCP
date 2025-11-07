@@ -10,6 +10,7 @@ import { useConversation } from "@renderer/contexts/conversation-context"
 import { AudioPlayer } from "@renderer/components/audio-player"
 import { useConfigQuery } from "@renderer/lib/queries"
 import { useTheme } from "@renderer/contexts/theme-context"
+import { logUI } from "@renderer/lib/debug"
 
 interface AgentProgressProps {
   progress: AgentProgressUpdate | null
@@ -548,10 +549,16 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
   const handleSnooze = async () => {
     if (!progress?.sessionId) return
 
+    logUI('[AgentProgress] Minimize button clicked:', {
+      sessionId: progress.sessionId,
+      currentlySnoozed: progress.isSnoozed
+    })
+
     try {
       await tipcClient.snoozeAgentSession({ sessionId: progress.sessionId })
       // Unfocus this session so the overlay hides
       setFocusedSessionId(null)
+      logUI('[AgentProgress] Session snoozed and unfocused')
       // Don't close the panel - just let the session run in background
       // The overlay will hide automatically because the session is no longer focused
     } catch (error) {

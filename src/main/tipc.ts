@@ -183,6 +183,32 @@ async function processWithAgentMode(
   let conversationTitle = text.length > 50 ? text.substring(0, 50) + "..." : text
   const sessionId = agentSessionTracker.startSession(conversationId, conversationTitle)
 
+  // Emit initial progress immediately so the session is restorable from sidebar
+  emitAgentProgress({
+    sessionId,
+    conversationId,
+    currentIteration: 0,
+    maxIterations: config.mcpMaxIterations ?? 10,
+    steps: [
+      {
+        id: `init_${Date.now()}`,
+        type: "thinking",
+        title: "Starting agent session",
+        description: text.length > 100 ? text.substring(0, 100) + "..." : text,
+        status: "in_progress",
+        timestamp: Date.now(),
+      },
+    ],
+    isComplete: false,
+    conversationHistory: [
+      {
+        role: "user",
+        content: text,
+        timestamp: Date.now(),
+      },
+    ],
+  })
+
   try {
     if (!config.mcpToolsEnabled) {
       throw new Error("MCP tools are not enabled")

@@ -18,6 +18,7 @@ import {
   useConversationQuery,
 } from "@renderer/lib/query-client"
 import { rendererHandlers, tipcClient } from "@renderer/lib/tipc-client"
+import { logUI, logStateChange } from "@renderer/lib/debug"
 
 interface ConversationContextType {
   // Current conversation state
@@ -72,7 +73,13 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
   const [agentProgressById, setAgentProgressById] = useState<Map<string, AgentProgressUpdate>>(new Map())
 
   // Track the focused session ID (for UI display)
-  const [focusedSessionId, setFocusedSessionId] = useState<string | null>(null)
+  const [focusedSessionId, setFocusedSessionIdInternal] = useState<string | null>(null)
+
+  // Wrap setFocusedSessionId with logging
+  const setFocusedSessionId = useCallback((sessionId: string | null) => {
+    logStateChange('ConversationContext', 'focusedSessionId', focusedSessionId, sessionId)
+    setFocusedSessionIdInternal(sessionId)
+  }, [focusedSessionId])
 
   // Computed: get the progress for the focused session (or the most recent one)
   const agentProgress = focusedSessionId
@@ -81,6 +88,19 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
         // Sort by most recent (assuming sessionId contains timestamp)
         return b.sessionId.localeCompare(a.sessionId)
       })[0] ?? null
+
+  // Log when agentProgress changes
+  useEffect(() => {
+    logUI('[ConversationContext] agentProgress changed:', {
+      focusedSessionId,
+      hasProgress: !!agentProgress,
+      sessionId: agentProgress?.sessionId,
+      isComplete: agentProgress?.isComplete,
+      isSnoozed: agentProgress?.isSnoozed,
+      totalSessions: agentProgressById.size,
+      allSessionIds: Array.from(agentProgressById.keys())
+    })
+  }, [agentProgress, focusedSessionId, agentProgressById.size])
 
   // Queries and mutations
   const conversationQuery = useConversationQuery(currentConversationId)
@@ -151,6 +171,14 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
       (update: AgentProgressUpdate) => {
         const sessionId = update.sessionId
 
+        logUI('[ConversationContext] Received progress update:', {
+          sessionId,
+          iteration: `${update.currentIteration}/${update.maxIterations}`,
+          isComplete: update.isComplete,
+          isSnoozed: update.isSnoozed,
+          stepsCount: update.steps.length
+        })
+
         // Update the progress map for this specific session
         setAgentProgressById((prevMap) => {
           const newMap = new Map(prevMap)
@@ -158,6 +186,7 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
 
           // Only update if the progress has actually changed to prevent flashing
           if (!prevProgress) {
+            logUI('[ConversationContext] New session progress:', sessionId)
             newMap.set(sessionId, update)
             return newMap
           }
@@ -172,6 +201,7 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
             prevProgress.finalContent !== update.finalContent
 
           if (hasChanged) {
+            logUI('[ConversationContext] Progress changed for session:', sessionId)
             newMap.set(sessionId, update)
             return newMap
           }
@@ -182,19 +212,33 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
         // Auto-focus this session if no session is currently focused AND it's not snoozed
         // Snoozed sessions run in background without stealing focus
         if (!update.isSnoozed) {
-          setFocusedSessionId((prev) => prev ?? sessionId)
+          setFocusedSessionIdInternal((prev) => {
+            const newFocus = prev ?? sessionId
+            if (prev !== newFocus) {
+              logUI('[ConversationContext] Auto-focusing session:', newFocus)
+            }
+            return newFocus
+          })
         }
 
         // Clean up completed sessions from the map after a delay
         if (update.isComplete) {
+          logUI('[ConversationContext] Session completed, will cleanup in 5s:', sessionId)
           setTimeout(() => {
+            logUI('[ConversationContext] Cleaning up completed session:', sessionId)
             setAgentProgressById((prevMap) => {
               const newMap = new Map(prevMap)
               newMap.delete(sessionId)
               return newMap
             })
             // Clear focus if this was the focused session
-            setFocusedSessionId((prev) => prev === sessionId ? null : prev)
+            setFocusedSessionIdInternal((prev) => {
+              if (prev === sessionId) {
+                logUI('[ConversationContext] Clearing focus for completed session:', sessionId)
+                return null
+              }
+              return prev
+            })
           }, 5000) // Keep completed sessions visible for 5 seconds
         }
 
@@ -218,9 +262,10 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
   // Listen for agent progress clear
   useEffect(() => {
     const unlisten = rendererHandlers.clearAgentProgress.listen(() => {
+      logUI('[ConversationContext] Clearing all agent progress')
       // Clear all agent progress
       setAgentProgressById(new Map())
-      setFocusedSessionId(null)
+      setFocusedSessionIdInternal(null)
     })
 
     return unlisten

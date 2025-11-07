@@ -423,11 +423,15 @@ async function apiCallWithRetry<T>(
         // User-friendly console output so users can see progress
         console.log(`⏳ Rate limit hit - waiting ${waitTimeSeconds} seconds before retrying... (attempt ${attempt + 1})`)
 
-        // Wait before retrying unless we've been asked to stop
-        if (state.shouldStopAgent) {
-          throw new Error("Aborted by emergency stop")
+        // Wait before retrying with interruptible delay
+        // Check shouldStopAgent every 100ms to allow kill switch to interrupt the delay
+        const startTime = Date.now()
+        while (Date.now() - startTime < delay) {
+          if (state.shouldStopAgent) {
+            throw new Error("Aborted by emergency stop")
+          }
+          await new Promise(resolve => setTimeout(resolve, Math.min(100, delay - (Date.now() - startTime))))
         }
-        await new Promise(resolve => setTimeout(resolve, delay))
         attempt++
         continue
       }
@@ -471,11 +475,15 @@ async function apiCallWithRetry<T>(
         console.log(`⏳ Network error - retrying in ${Math.round(delay / 1000)} seconds... (attempt ${attempt + 1}/${retryCount + 1})`)
       }
 
-      // Wait before retrying unless we've been asked to stop
-      if (state.shouldStopAgent) {
-        throw new Error("Aborted by emergency stop")
+      // Wait before retrying with interruptible delay
+      // Check shouldStopAgent every 100ms to allow kill switch to interrupt the delay
+      const startTime = Date.now()
+      while (Date.now() - startTime < delay) {
+        if (state.shouldStopAgent) {
+          throw new Error("Aborted by emergency stop")
+        }
+        await new Promise(resolve => setTimeout(resolve, Math.min(100, delay - (Date.now() - startTime))))
       }
-      await new Promise(resolve => setTimeout(resolve, delay))
       attempt++
     }
   }

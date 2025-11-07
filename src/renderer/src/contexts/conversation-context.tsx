@@ -269,6 +269,15 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
     return unlisten
   }, [])
 
+  // Cross-window: focus a specific agent session when requested by main or other windows
+  useEffect(() => {
+    const unlisten = (rendererHandlers as any).focusAgentSession?.listen?.((sessionId: string) => {
+      logUI('[ConversationContext] External focusAgentSession received:', sessionId)
+      setFocusedSessionId(sessionId)
+    })
+    return unlisten
+  }, [setFocusedSessionId])
+
   const startNewConversation = useCallback(
     async (
       firstMessage: string,

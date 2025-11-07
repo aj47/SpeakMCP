@@ -120,12 +120,13 @@ export interface AgentProgressStep {
 }
 
 export interface AgentProgressUpdate {
+  sessionId: string // Unique session identifier for progress routing
+  conversationId?: string // Optional conversation ID for linking to conversation history
   currentIteration: number
   maxIterations: number
   steps: AgentProgressStep[]
   isComplete: boolean
   finalContent?: string
-  conversationId?: string // Add conversation ID to the progress update
   conversationHistory?: Array<{
     role: "user" | "assistant" | "tool"
     content: string

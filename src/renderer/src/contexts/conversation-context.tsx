@@ -45,9 +45,11 @@ interface ConversationContextType {
   isWaitingForResponse: boolean
   setIsWaitingForResponse: (waiting: boolean) => void
 
-  // Agent progress state
+  // Agent progress state (session-aware)
   agentProgress: AgentProgressUpdate | null
-  setAgentProgress: (progress: AgentProgressUpdate | null) => void
+  agentProgressById: Map<string, AgentProgressUpdate>
+  focusedSessionId: string | null
+  setFocusedSessionId: (sessionId: string | null) => void
   isAgentProcessing: boolean
 }
 
@@ -65,8 +67,20 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
   >(null)
   const [showContinueButton, setShowContinueButton] = useState(false)
   const [isWaitingForResponse, setIsWaitingForResponse] = useState(false)
-  const [agentProgress, setAgentProgress] =
-    useState<AgentProgressUpdate | null>(null)
+
+  // Store progress per session (Map<sessionId, AgentProgressUpdate>)
+  const [agentProgressById, setAgentProgressById] = useState<Map<string, AgentProgressUpdate>>(new Map())
+
+  // Track the focused session ID (for UI display)
+  const [focusedSessionId, setFocusedSessionId] = useState<string | null>(null)
+
+  // Computed: get the progress for the focused session (or the most recent one)
+  const agentProgress = focusedSessionId
+    ? agentProgressById.get(focusedSessionId) ?? null
+    : Array.from(agentProgressById.values()).sort((a, b) => {
+        // Sort by most recent (assuming sessionId contains timestamp)
+        return b.sessionId.localeCompare(a.sessionId)
+      })[0] ?? null
 
   // Queries and mutations
   const conversationQuery = useConversationQuery(currentConversationId)
@@ -135,9 +149,18 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
   useEffect(() => {
     const unlisten = rendererHandlers.agentProgressUpdate.listen(
       (update: AgentProgressUpdate) => {
-        // Only update if the progress has actually changed to prevent flashing
-        setAgentProgress((prevProgress) => {
-          if (!prevProgress) return update
+        const sessionId = update.sessionId
+
+        // Update the progress map for this specific session
+        setAgentProgressById((prevMap) => {
+          const newMap = new Map(prevMap)
+          const prevProgress = newMap.get(sessionId)
+
+          // Only update if the progress has actually changed to prevent flashing
+          if (!prevProgress) {
+            newMap.set(sessionId, update)
+            return newMap
+          }
 
           // Compare key properties to determine if update is needed
           const hasChanged =
@@ -148,8 +171,29 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
               JSON.stringify(update.steps) ||
             prevProgress.finalContent !== update.finalContent
 
-          return hasChanged ? update : prevProgress
+          if (hasChanged) {
+            newMap.set(sessionId, update)
+            return newMap
+          }
+
+          return prevMap
         })
+
+        // Auto-focus this session if no session is currently focused
+        setFocusedSessionId((prev) => prev ?? sessionId)
+
+        // Clean up completed sessions from the map after a delay
+        if (update.isComplete) {
+          setTimeout(() => {
+            setAgentProgressById((prevMap) => {
+              const newMap = new Map(prevMap)
+              newMap.delete(sessionId)
+              return newMap
+            })
+            // Clear focus if this was the focused session
+            setFocusedSessionId((prev) => prev === sessionId ? null : prev)
+          }, 5000) // Keep completed sessions visible for 5 seconds
+        }
 
         // Save complete conversation history when agent completes
         // Use conversation ID from the update (sent by backend) instead of local state
@@ -171,7 +215,9 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
   // Listen for agent progress clear
   useEffect(() => {
     const unlisten = rendererHandlers.clearAgentProgress.listen(() => {
-      setAgentProgress(null)
+      // Clear all agent progress
+      setAgentProgressById(new Map())
+      setFocusedSessionId(null)
     })
 
     return unlisten
@@ -259,7 +305,9 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
     isWaitingForResponse,
     setIsWaitingForResponse,
     agentProgress,
-    setAgentProgress,
+    agentProgressById,
+    focusedSessionId,
+    setFocusedSessionId,
     isAgentProcessing,
   }
 
@@ -314,7 +362,6 @@ export function useConversationActions() {
     endConversation,
     setShowContinueButton,
     setIsWaitingForResponse,
-    setAgentProgress,
   } = useConversation()
 
   return {
@@ -324,6 +371,5 @@ export function useConversationActions() {
     endConversation,
     setShowContinueButton,
     setIsWaitingForResponse,
-    setAgentProgress,
   }
 }

@@ -13,7 +13,7 @@ import { diagnosticsService } from "./diagnostics"
 import { makeStructuredContextExtraction, ContextExtractionResponse } from "./structured-output"
 import { makeLLMCallWithFetch, makeTextCompletionWithFetch, verifyCompletionWithFetch } from "./llm-fetch"
 import { constructSystemPrompt } from "./system-prompts"
-import { state } from "./state"
+import { state, agentSessionStateManager } from "./state"
 import { isDebugLLM, logLLM, isDebugTools, logTools } from "./debug"
 import { shrinkMessagesForLLM } from "./context-budget"
 
@@ -244,10 +244,8 @@ export interface AgentModeResponse {
 }
 
 // Helper function to emit progress updates to the renderer with better error handling
-function emitAgentProgress(update: AgentProgressUpdate, conversationId?: string) {
-  // Add conversation ID to the update if provided
-  const updateWithConversationId = conversationId ? { ...update, conversationId } : update
-
+// Note: This function now expects sessionId to be included in the update object
+function emitAgentProgress(update: AgentProgressUpdate) {
   const panel = WINDOWS.get("panel")
   if (!panel) {
     console.warn("Panel window not available for progress update")
@@ -263,7 +261,7 @@ function emitAgentProgress(update: AgentProgressUpdate, conversationId?: string)
   const main = WINDOWS.get("main")
   if (main && main.isVisible()) {
     const mainHandlers = getRendererHandlers<RendererHandlers>(main.webContents)
-    setTimeout(() => mainHandlers.agentProgressUpdate.send(updateWithConversationId), 10)
+    setTimeout(() => mainHandlers.agentProgressUpdate.send(update), 10)
   }
 
   try {
@@ -276,7 +274,7 @@ function emitAgentProgress(update: AgentProgressUpdate, conversationId?: string)
     // Add a small delay to ensure UI updates are processed
     setTimeout(() => {
       try {
-        handlers.agentProgressUpdate.send(updateWithConversationId)
+        handlers.agentProgressUpdate.send(update)
       } catch (error) {
         console.warn("Failed to send progress update:", error)
       }
@@ -455,7 +453,8 @@ export async function processTranscriptWithAgentMode(
     toolCalls?: MCPToolCall[]
     toolResults?: MCPToolResult[]
   }>,
-  conversationId?: string, // Add conversation ID parameter
+  conversationId?: string, // Conversation ID for linking to conversation history
+  sessionId?: string, // Session ID for progress routing and isolation
 ): Promise<AgentModeResponse> {
   const config = configStore.get()
 
@@ -474,8 +473,21 @@ export async function processTranscriptWithAgentMode(
     }
   }
 
-  // Store conversation ID for use in progress updates
+  // Store IDs for use in progress updates
   const currentConversationId = conversationId
+  const currentSessionId = sessionId || `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+
+  // Create session state for this agent run
+  agentSessionStateManager.createSession(currentSessionId)
+
+  // Create bound emitter that always includes sessionId and conversationId
+  const emit = (update: Omit<AgentProgressUpdate, 'sessionId' | 'conversationId'>) => {
+    emitAgentProgress({
+      ...update,
+      sessionId: currentSessionId,
+      conversationId: currentConversationId,
+    })
+  }
 
   // Initialize progress tracking
   const progressSteps: AgentProgressStep[] = []
@@ -613,7 +625,7 @@ export async function processTranscriptWithAgentMode(
 
 
   // Emit initial progress
-  emitAgentProgress({
+  emit({
     currentIteration: 0,
     maxIterations,
     steps: progressSteps.slice(-3), // Show max 3 steps
@@ -635,9 +647,9 @@ export async function processTranscriptWithAgentMode(
   while (iteration < maxIterations) {
     iteration++
 
-    // Check for stop signal
-    if (state.shouldStopAgent) {
-      console.log("Agent mode stopped by kill switch")
+    // Check for stop signal (session-specific or global)
+    if (agentSessionStateManager.shouldStopSession(currentSessionId)) {
+      console.log(`Agent session ${currentSessionId} stopped by kill switch`)
 
       // Add emergency stop step
       const stopStep = createProgressStep(
@@ -649,7 +661,7 @@ export async function processTranscriptWithAgentMode(
       progressSteps.push(stopStep)
 
       // Emit final progress
-      emitAgentProgress({
+      emit({
         currentIteration: iteration,
         maxIterations,
         steps: progressSteps.slice(-3),
@@ -658,13 +670,13 @@ export async function processTranscriptWithAgentMode(
           finalContent +
           "\n\n(Agent mode was stopped by emergency kill switch)",
         conversationHistory: formatConversationForProgress(conversationHistory),
-      }, currentConversationId)
+      })
 
       break
     }
 
-    // Update iteration count in state
-    state.agentIterationCount = iteration
+    // Update iteration count in session state
+    agentSessionStateManager.updateIterationCount(currentSessionId, iteration)
 
     // Update initial step to completed and add thinking step for this iteration
     if (iteration === 1) {
@@ -680,7 +692,7 @@ export async function processTranscriptWithAgentMode(
     progressSteps.push(thinkingStep)
 
     // Emit progress update for thinking step
-    emitAgentProgress({
+    emit({
       currentIteration: iteration,
       maxIterations,
       steps: progressSteps.slice(-3),
@@ -772,19 +784,19 @@ Always use actual resource IDs from the conversation history or create new ones 
     try {
       llmResponse = await makeLLMCall(shrunkMessages, config)
     } catch (error: any) {
-      if (error?.name === "AbortError" || state.shouldStopAgent) {
-        console.log("LLM call aborted due to emergency stop")
+      if (error?.name === "AbortError" || agentSessionStateManager.shouldStopSession(currentSessionId)) {
+        console.log(`LLM call aborted for session ${currentSessionId} due to emergency stop`)
         thinkingStep.status = "completed"
         thinkingStep.title = "Agent stopped"
         thinkingStep.description = "Emergency stop triggered"
-        emitAgentProgress({
+        emit({
           currentIteration: iteration,
           maxIterations,
           steps: progressSteps.slice(-3),
           isComplete: true,
           finalContent: finalContent + "\n\n(Agent mode was stopped by emergency kill switch)",
           conversationHistory: formatConversationForProgress(conversationHistory),
-        }, currentConversationId)
+        })
         break
       }
 
@@ -795,7 +807,7 @@ Always use actual resource IDs from the conversation history or create new ones 
         diagnosticsService.logError("llm", "Empty LLM response in agent mode", error)
         thinkingStep.status = "error"
         thinkingStep.description = "Empty response. Retrying..."
-        emitAgentProgress({
+        emit({
           currentIteration: iteration,
           maxIterations,
           steps: progressSteps.slice(-3),
@@ -830,7 +842,7 @@ Always use actual resource IDs from the conversation history or create new ones 
       })
       thinkingStep.status = "error"
       thinkingStep.description = "Invalid response. Retrying..."
-      emitAgentProgress({
+      emit({
         currentIteration: iteration,
         maxIterations,
         steps: progressSteps.slice(-3),
@@ -854,7 +866,7 @@ Always use actual resource IDs from the conversation history or create new ones 
     }
 
     // Emit progress update with the LLM content immediately after setting it
-    emitAgentProgress({
+    emit({
       currentIteration: iteration,
       maxIterations,
       steps: progressSteps.slice(-3),
@@ -934,7 +946,7 @@ Always use actual resource IDs from the conversation history or create new ones 
           "in_progress",
         )
         progressSteps.push(verifyStep)
-        emitAgentProgress({
+        emit({
           currentIteration: iteration,
           maxIterations,
           steps: progressSteps.slice(-3),
@@ -981,7 +993,7 @@ Always use actual resource IDs from the conversation history or create new ones 
             "in_progress",
           )
           progressSteps.push(postVerifySummaryStep)
-          emitAgentProgress({
+          emit({
             currentIteration: iteration,
             maxIterations,
             steps: progressSteps.slice(-3),
@@ -1047,14 +1059,14 @@ Always use actual resource IDs from the conversation history or create new ones 
       progressSteps.push(completionStep)
 
       // Emit final progress
-      emitAgentProgress({
+      emit({
         currentIteration: iteration,
         maxIterations,
         steps: progressSteps.slice(-3),
         isComplete: true,
         finalContent,
         conversationHistory: formatConversationForProgress(conversationHistory),
-      }, currentConversationId)
+      })
 
       break
     }
@@ -1104,7 +1116,7 @@ Always use actual resource IDs from the conversation history or create new ones 
     })
 
     // Emit progress update to show tool calls immediately
-    emitAgentProgress({
+    emit({
       currentIteration: iteration,
       maxIterations,
       steps: progressSteps.slice(-3),
@@ -1119,8 +1131,8 @@ Always use actual resource IDs from the conversation history or create new ones 
         logTools("Executing planned tool call", toolCall)
       }
       // Check for stop signal before executing each tool
-      if (state.shouldStopAgent) {
-        console.log("Agent mode stopped during tool execution")
+      if (agentSessionStateManager.shouldStopSession(currentSessionId)) {
+        console.log(`Agent session ${currentSessionId} stopped during tool execution`)
         break
       }
 
@@ -1138,7 +1150,7 @@ Always use actual resource IDs from the conversation history or create new ones 
       progressSteps.push(toolCallStep)
 
       // Emit progress update
-      emitAgentProgress({
+      emit({
         currentIteration: iteration,
         maxIterations,
         steps: progressSteps.slice(-3),
@@ -1222,7 +1234,7 @@ Always use actual resource IDs from the conversation history or create new ones 
       progressSteps.push(toolResultStep)
 
       // Emit progress update
-      emitAgentProgress({
+      emit({
         currentIteration: iteration,
         maxIterations,
         steps: progressSteps.slice(-3),
@@ -1345,7 +1357,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
         progressSteps.push(summaryStep)
 
         // Emit progress update for summary request
-        emitAgentProgress({
+        emit({
           currentIteration: iteration,
           maxIterations,
           steps: progressSteps.slice(-3),
@@ -1435,7 +1447,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
 	          "in_progress",
 	        )
 	        progressSteps.push(verifyStep)
-	        emitAgentProgress({
+	        emit({
 	          currentIteration: iteration,
 	          maxIterations,
 	          steps: progressSteps.slice(-3),
@@ -1474,7 +1486,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
             "in_progress",
           )
           progressSteps.push(postVerifySummaryStep)
-          emitAgentProgress({
+          emit({
             currentIteration: iteration,
             maxIterations,
             steps: progressSteps.slice(-3),
@@ -1539,14 +1551,14 @@ Please try alternative approaches, break down the task into smaller steps, or pr
       progressSteps.push(completionStep)
 
       // Emit final progress
-      emitAgentProgress({
+      emit({
         currentIteration: iteration,
         maxIterations,
         steps: progressSteps.slice(-3),
         isComplete: true,
         finalContent,
         conversationHistory: formatConversationForProgress(conversationHistory),
-      }, currentConversationId)
+      })
 
       break
     }
@@ -1582,7 +1594,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
         progressSteps.push(summaryStep)
 
         // Emit progress update for summary request
-        emitAgentProgress({
+        emit({
           currentIteration: iteration,
           maxIterations,
           steps: progressSteps.slice(-3),
@@ -1651,7 +1663,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
             "in_progress",
           )
           progressSteps.push(postVerifySummaryStep)
-          emitAgentProgress({
+          emit({
             currentIteration: iteration,
             maxIterations,
             steps: progressSteps.slice(-3),
@@ -1754,7 +1766,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
 	          "in_progress",
 	        )
 	        progressSteps.push(verifyStep)
-	        emitAgentProgress({
+	        emit({
 	          currentIteration: iteration,
           isComplete: false,
 	          maxIterations,
@@ -1792,14 +1804,14 @@ Please try alternative approaches, break down the task into smaller steps, or pr
       )
       progressSteps.push(completionStep)
 
-      emitAgentProgress({
+      emit({
         currentIteration: iteration,
         maxIterations,
         steps: progressSteps.slice(-3),
         isComplete: true,
         finalContent,
         conversationHistory: formatConversationForProgress(conversationHistory),
-      }, currentConversationId)
+      })
 
       break
     }
@@ -1865,18 +1877,18 @@ Please try alternative approaches, break down the task into smaller steps, or pr
     progressSteps.push(timeoutStep)
 
     // Emit final progress
-    emitAgentProgress({
+    emit({
       currentIteration: iteration,
       maxIterations,
       steps: progressSteps.slice(-3),
       isComplete: true,
       finalContent,
       conversationHistory: formatConversationForProgress(conversationHistory),
-    }, currentConversationId)
+    })
   }
 
-  // Reset the stop flag at the end of agent processing
-  state.shouldStopAgent = false
+  // Clean up session state at the end of agent processing
+  agentSessionStateManager.cleanupSession(currentSessionId)
 
   return {
     content: finalContent,

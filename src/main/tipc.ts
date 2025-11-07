@@ -80,12 +80,13 @@ function emitAgentProgress(update: AgentProgressUpdate) {
 }
 
 // Helper function to initialize MCP with progress feedback
-async function initializeMcpWithProgress(config: Config): Promise<void> {
+async function initializeMcpWithProgress(config: Config, sessionId: string): Promise<void> {
   // Check if MCP is initializing and emit progress updates
   const initStatus = mcpService.getInitializationStatus()
 
   // Emit initial progress showing MCP initialization
   emitAgentProgress({
+    sessionId,
     currentIteration: 0,
     maxIterations: config.mcpMaxIterations ?? 10,
     steps: [
@@ -108,6 +109,7 @@ async function initializeMcpWithProgress(config: Config): Promise<void> {
     const currentStatus = mcpService.getInitializationStatus()
     if (currentStatus.isInitializing) {
       emitAgentProgress({
+        sessionId,
         currentIteration: 0,
         maxIterations: config.mcpMaxIterations ?? 10,
         steps: [
@@ -140,6 +142,7 @@ async function initializeMcpWithProgress(config: Config): Promise<void> {
 
   // Emit completion of MCP initialization
   emitAgentProgress({
+    sessionId,
     currentIteration: 0,
     maxIterations: config.mcpMaxIterations ?? 10,
     steps: [
@@ -185,7 +188,7 @@ async function processWithAgentMode(
     }
 
     // Initialize MCP with progress feedback
-    await initializeMcpWithProgress(config)
+    await initializeMcpWithProgress(config, sessionId)
 
     // Register any existing MCP server processes with the agent process manager
     // This handles the case where servers were already initialized before agent mode was activated
@@ -243,7 +246,8 @@ async function processWithAgentMode(
         executeToolCall,
         config.mcpMaxIterations ?? 10, // Use configured max iterations or default to 10
         previousConversationHistory,
-        conversationId, // Pass conversation ID for progress updates
+        conversationId, // Pass conversation ID for linking to conversation history
+        sessionId, // Pass session ID for progress routing and isolation
       )
 
       // Mark session as completed
@@ -478,6 +482,21 @@ export const router = {
       recentSessions: agentSessionTracker.getRecentSessions(4),
     }
   }),
+
+  stopAgentSession: t.procedure
+    .input<{ sessionId: string }>()
+    .action(async ({ input }) => {
+      const { agentSessionTracker } = await import("./agent-session-tracker")
+      const { agentSessionStateManager } = await import("./state")
+
+      // Stop the session in the state manager (aborts LLM requests, kills processes)
+      agentSessionStateManager.stopSession(input.sessionId)
+
+      // Mark the session as stopped in the tracker
+      agentSessionTracker.stopSession(input.sessionId)
+
+      return { success: true }
+    }),
 
   showContextMenu: t.procedure
     .input<{
@@ -844,8 +863,11 @@ export const router = {
       const config = configStore.get()
       let transcript: string
 
+      // Create a temporary session ID for MCP initialization progress
+      const tempSessionId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+
       // Initialize MCP with progress feedback
-      await initializeMcpWithProgress(config)
+      await initializeMcpWithProgress(config, tempSessionId)
 
       // First, transcribe the audio using the same logic as regular recording
       // Use OpenAI or Groq for transcription

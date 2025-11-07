@@ -29,24 +29,34 @@ export const TextInputPanel = forwardRef<TextInputPanelRef, TextInputPanelProps>
   // Expose focus method to parent
   useImperativeHandle(ref, () => ({
     focus: () => {
+      console.log("[TextInputPanel] focus() called via ref")
+      console.log("[TextInputPanel] textareaRef.current exists:", !!textareaRef.current)
       textareaRef.current?.focus()
+      console.log("[TextInputPanel] after focus(), document.activeElement:", document.activeElement?.tagName)
     }
   }))
 
   // Auto-focus when component mounts - with retry for Windows
   useEffect(() => {
+    console.log("[TextInputPanel] useEffect - textareaRef.current exists:", !!textareaRef.current, "isProcessing:", isProcessing)
     if (textareaRef.current && !isProcessing) {
       // Try to focus immediately
+      console.log("[TextInputPanel] useEffect - attempting immediate focus")
       textareaRef.current.focus()
+      console.log("[TextInputPanel] useEffect - after immediate focus, activeElement:", document.activeElement?.tagName)
 
       // Retry after a short delay to ensure window is ready (especially on Windows)
       const timer1 = setTimeout(() => {
+        console.log("[TextInputPanel] useEffect - retry 1 (50ms)")
         textareaRef.current?.focus()
+        console.log("[TextInputPanel] useEffect - after retry 1, activeElement:", document.activeElement?.tagName)
       }, 50)
 
       // Additional retry for Windows where focus can be delayed
       const timer2 = setTimeout(() => {
+        console.log("[TextInputPanel] useEffect - retry 2 (150ms)")
         textareaRef.current?.focus()
+        console.log("[TextInputPanel] useEffect - after retry 2, activeElement:", document.activeElement?.tagName)
       }, 150)
 
       return () => {

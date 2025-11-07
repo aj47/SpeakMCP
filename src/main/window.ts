@@ -238,12 +238,16 @@ function ensurePanelZOrder(win: BrowserWindow) {
 // Adjust focusability based on panel mode to play nice with tiling WMs (e.g., Aerospace)
 function setPanelFocusableForMode(win: BrowserWindow, mode: "normal"|"agent"|"textInput") {
   try {
+    console.log(`[window.ts] setPanelFocusableForMode - mode: ${mode}`)
     if (mode === "textInput") {
+      console.log("[window.ts] setPanelFocusableForMode - setting focusable to true")
       win.setFocusable(true)
     } else {
       // Avoid stealing focus so tiling WMs treat it like a floating overlay
+      console.log("[window.ts] setPanelFocusableForMode - setting focusable to false")
       win.setFocusable(false)
     }
+    console.log(`[window.ts] setPanelFocusableForMode - after setting, isFocusable: ${win.isFocusable()}`)
   } catch (e) {
     console.warn("[window.ts] setPanelFocusableForMode failed:", e)
   }
@@ -325,22 +329,30 @@ export function showPanelWindow() {
     }
     // Note: Agent mode positioning is handled separately in resizePanelForAgentMode
 
+    console.log(`[window.ts] showPanelWindow - mode: ${mode}, platform: ${process.platform}`)
+
     const position = getPanelWindowPosition(mode)
 
     win.setPosition(position.x, position.y)
 
     // Set focusability appropriate for the current mode before showing
+    console.log(`[window.ts] showPanelWindow - setting focusable for mode: ${mode}`)
     setPanelFocusableForMode(win, mode)
+    console.log(`[window.ts] showPanelWindow - window.isFocusable(): ${win.isFocusable()}`)
 
+    console.log(`[window.ts] showPanelWindow - calling showInactive()`)
     win.showInactive()
     // Keep it floating above everything
     ensurePanelZOrder(win)
 
     // Focus the window for text input mode to enable immediate typing
     if (mode === "textInput") {
+      console.log(`[window.ts] showPanelWindow - text input mode, calling win.focus()`)
       win.focus()
+      console.log(`[window.ts] showPanelWindow - after focus(), isFocused: ${win.isFocused()}`)
     } else if (process.platform === "win32") {
       // On Windows, we need to explicitly focus the window for other modes too
+      console.log(`[window.ts] showPanelWindow - Windows platform, calling win.focus()`)
       win.focus()
     }
   }
@@ -373,19 +385,32 @@ export async function showPanelWindowAndStartMcpRecording() {
 }
 
 export async function showPanelWindowAndShowTextInput() {
+  console.log("[window.ts] showPanelWindowAndShowTextInput - starting")
+
   // Capture focus before showing panel
   try {
     const focusedApp = await getFocusedAppInfo()
     state.focusedAppBeforeRecording = focusedApp
+    console.log("[window.ts] showPanelWindowAndShowTextInput - captured focused app:", focusedApp)
   } catch (error) {
     state.focusedAppBeforeRecording = null
+    console.log("[window.ts] showPanelWindowAndShowTextInput - failed to capture focused app:", error)
   }
 
   // Set text input state first, then show panel (which will use correct positioning)
+  console.log("[window.ts] showPanelWindowAndShowTextInput - setting isTextInputActive = true")
   state.isTextInputActive = true
+
+  console.log("[window.ts] showPanelWindowAndShowTextInput - calling resizePanelForTextInput()")
   resizePanelForTextInput()
+
+  console.log("[window.ts] showPanelWindowAndShowTextInput - calling showPanelWindow()")
   showPanelWindow() // This will now use textInput mode positioning
+
+  console.log("[window.ts] showPanelWindowAndShowTextInput - sending showTextInput to renderer")
   getWindowRendererHandlers("panel")?.showTextInput.send()
+
+  console.log("[window.ts] showPanelWindowAndShowTextInput - complete")
 }
 
 export function makePanelWindowClosable() {

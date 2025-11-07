@@ -559,9 +559,9 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
       await tipcClient.snoozeAgentSession({ sessionId: progress.sessionId })
       // Unfocus this session so the overlay hides
       setFocusedSessionId(null)
-      logUI('🔴 [AgentProgress OVERLAY] Session snoozed and unfocused')
-      // Don't close the panel - just let the session run in background
-      // The overlay will hide automatically because the session is no longer focused
+      // Hide the panel window completely
+      await tipcClient.hidePanelWindow({})
+      logUI('🔴 [AgentProgress OVERLAY] Session snoozed, unfocused, and panel hidden')
     } catch (error) {
       console.error("Failed to snooze session:", error)
     }

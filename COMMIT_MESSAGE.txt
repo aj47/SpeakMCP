@@ -1,0 +1,55 @@
+fix: resolve OAuth state mismatch issue preventing authentication (#215)
+
+## Problem
+MCP OAuth functionality was broken in build 0.2.2 due to a critical state
+mismatch issue. The OAuth flow had two conflicting code paths:
+
+1. Manual OAuth initiation returned immediately without waiting for callbacks
+2. Automatic OAuth retry started a new flow, invalidating pending flows
+3. State validation failed due to mismatched state parameters
+
+## Solution
+Fixed OAuth flow orchestration to properly handle callbacks:
+
+### Changes to src/main/mcp-service.ts
+- `initiateOAuthFlow()`: Now starts callback handler and waits for callback
+  in background, automatically completing the flow when callback is received
+- `completeOAuthFlow()`: Added comprehensive logging for debugging
+- Both methods now have detailed console logging with emoji indicators
+
+### Changes to src/main/oauth-client.ts
+- `discoverServerMetadata()`: Added logging for metadata discovery
+- `registerClient()`: Added logging and better error messages
+- `exchangeCodeForToken()`: Added detailed logging for token exchange
+
+### Documentation
+- Created docs/oauth-fix-issue-215.md with detailed explanation
+- Created ISSUE_215_SUMMARY.md with testing recommendations
+
+## Testing
+- ✅ TypeScript compilation passes
+- ⏳ Needs testing with real OAuth MCP server
+- ⏳ Needs testing in production build
+
+## Expected Behavior
+1. User clicks "Authenticate" button
+2. Browser opens with OAuth authorization URL
+3. User completes authorization
+4. SpeakMCP automatically receives callback
+5. Tokens are exchanged and saved
+6. Server restarts with new tokens
+7. User sees success message
+
+## Debugging
+Console logs now include:
+- 🔐 Flow initiation
+- 🔍 Metadata discovery
+- 🔄 Client registration
+- 🌐 Browser opening
+- ⏳ Callback waiting
+- ✓ State validation
+- ✅ Success confirmation
+- ❌ Error details
+
+Fixes #215
+

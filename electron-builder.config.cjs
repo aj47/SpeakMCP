@@ -40,6 +40,12 @@ module.exports = {
     sign: null,
     signAndEditExecutable: false,
     signDlls: false,
+    protocols: [
+      {
+        name: "SpeakMCP Protocol",
+        schemes: ["speakmcp"]
+      }
+    ],
     extraResources: [
       {
         from: "resources/bin/speakmcp-rs.exe",
@@ -207,8 +213,15 @@ module.exports = {
       StartupNotify: false,
       Terminal: false,
       Type: "Application",
+      MimeType: "x-scheme-handler/speakmcp;",
     },
     executableName: "speakmcp",
+    protocols: [
+      {
+        name: "SpeakMCP Protocol",
+        schemes: ["speakmcp"]
+      }
+    ],
     extraResources: [
       {
         from: "resources/bin/speakmcp-rs",

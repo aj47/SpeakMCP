@@ -498,6 +498,28 @@ export const router = {
       return { success: true }
     }),
 
+  snoozeAgentSession: t.procedure
+    .input<{ sessionId: string }>()
+    .action(async ({ input }) => {
+      const { agentSessionTracker } = await import("./agent-session-tracker")
+
+      // Snooze the session (runs in background without stealing focus)
+      agentSessionTracker.snoozeSession(input.sessionId)
+
+      return { success: true }
+    }),
+
+  unsnoozeAgentSession: t.procedure
+    .input<{ sessionId: string }>()
+    .action(async ({ input }) => {
+      const { agentSessionTracker } = await import("./agent-session-tracker")
+
+      // Unsnooze the session (allow it to show progress UI again)
+      agentSessionTracker.unsnoozeSession(input.sessionId)
+
+      return { success: true }
+    }),
+
   showContextMenu: t.procedure
     .input<{
       x: number

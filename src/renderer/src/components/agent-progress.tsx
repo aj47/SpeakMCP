@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react"
 import { cn } from "@renderer/lib/utils"
 import { AgentProgressUpdate } from "../../../shared/types"
-import { ChevronDown, ChevronUp, ChevronRight, X, AlertTriangle } from "lucide-react"
+import { ChevronDown, ChevronUp, ChevronRight, X, AlertTriangle, Minimize2 } from "lucide-react"
 import { MarkdownRenderer } from "@renderer/components/markdown-renderer"
 import { Button } from "./ui/button"
 import { Badge } from "./ui/badge"
@@ -544,6 +544,19 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
     setShowKillConfirmation(false)
   }
 
+  // Handle snooze/minimize
+  const handleSnooze = async () => {
+    if (!progress?.sessionId) return
+
+    try {
+      await tipcClient.snoozeAgentSession({ sessionId: progress.sessionId })
+      // Close the overlay after snoozing
+      handleClose()
+    } catch (error) {
+      console.error("Failed to snooze session:", error)
+    }
+  }
+
   // Close button handler for completed agent view
   const handleClose = async () => {
     try {
@@ -847,6 +860,17 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
             <span className="text-xs text-muted-foreground">
               {`${currentIteration}/${maxIterations}`}
             </span>
+          )}
+          {!isComplete && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground hover:bg-muted"
+              onClick={handleSnooze}
+              title="Minimize - run in background without showing progress"
+            >
+              <Minimize2 className="h-3 w-3" />
+            </Button>
           )}
           {!isComplete ? (
             <Button

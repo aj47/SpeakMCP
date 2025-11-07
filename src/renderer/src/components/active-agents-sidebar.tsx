@@ -1,7 +1,7 @@
 import React, { useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { tipcClient } from "@renderer/lib/tipc-client"
-import { Activity, ChevronDown, ChevronRight, X } from "lucide-react"
+import { Activity, ChevronDown, ChevronRight, X, Minimize2, Maximize2 } from "lucide-react"
 import { cn } from "@renderer/lib/utils"
 import { useConversation } from "@renderer/contexts/conversation-context"
 
@@ -16,6 +16,7 @@ interface AgentSession {
   maxIterations?: number
   lastActivity?: string
   errorMessage?: string
+  isSnoozed?: boolean
 }
 
 interface AgentSessionsResponse {
@@ -56,6 +57,25 @@ export function ActiveAgentsSidebar() {
     }
   }
 
+  const handleToggleSnooze = async (sessionId: string, isSnoozed: boolean, e: React.MouseEvent) => {
+    e.stopPropagation() // Prevent session focus when clicking snooze
+    try {
+      if (isSnoozed) {
+        await tipcClient.unsnoozeAgentSession({ sessionId })
+        // Focus the session when unsnoozing
+        setFocusedSessionId(sessionId)
+      } else {
+        await tipcClient.snoozeAgentSession({ sessionId })
+        // Unfocus if this was the focused session
+        if (focusedSessionId === sessionId) {
+          setFocusedSessionId(null)
+        }
+      }
+    } catch (error) {
+      console.error("Failed to toggle snooze:", error)
+    }
+  }
+
   return (
     <div className="px-2 pb-2">
       <button
@@ -93,10 +113,30 @@ export function ActiveAgentsSidebar() {
                 )}
               >
                 <div className="flex items-center gap-1.5">
-                  <Activity className="h-3 w-3 animate-pulse text-blue-500 shrink-0" />
-                  <p className="flex-1 truncate font-medium text-foreground">
+                  <Activity className={cn(
+                    "h-3 w-3 shrink-0",
+                    session.isSnoozed ? "text-muted-foreground" : "animate-pulse text-blue-500"
+                  )} />
+                  <p className={cn(
+                    "flex-1 truncate font-medium",
+                    session.isSnoozed ? "text-muted-foreground" : "text-foreground"
+                  )}>
                     {session.conversationTitle}
                   </p>
+                  <button
+                    onClick={(e) => handleToggleSnooze(session.id, session.isSnoozed ?? false, e)}
+                    className={cn(
+                      "shrink-0 rounded p-0.5 opacity-0 transition-all hover:bg-accent hover:text-foreground group-hover:opacity-100",
+                      isFocused && "opacity-100"
+                    )}
+                    title={session.isSnoozed ? "Restore - show progress UI" : "Minimize - run in background"}
+                  >
+                    {session.isSnoozed ? (
+                      <Maximize2 className="h-3 w-3" />
+                    ) : (
+                      <Minimize2 className="h-3 w-3" />
+                    )}
+                  </button>
                   <button
                     onClick={(e) => handleStopSession(session.id, e)}
                     className={cn(

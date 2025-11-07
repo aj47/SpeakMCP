@@ -118,8 +118,12 @@ class AgentSessionTracker {
   snoozeSession(sessionId: string): void {
     const session = this.sessions.get(sessionId)
     if (session) {
+      console.log(`[AgentSessionTracker] Snoozing session: ${sessionId}, was snoozed: ${session.isSnoozed}`)
       session.isSnoozed = true
       this.sessions.set(sessionId, session)
+      console.log(`[AgentSessionTracker] Session ${sessionId} is now snoozed: ${session.isSnoozed}`)
+    } else {
+      console.log(`[AgentSessionTracker] Cannot snooze - session not found: ${sessionId}`)
     }
   }
 
@@ -129,8 +133,12 @@ class AgentSessionTracker {
   unsnoozeSession(sessionId: string): void {
     const session = this.sessions.get(sessionId)
     if (session) {
+      console.log(`[AgentSessionTracker] Unsnoozing session: ${sessionId}, was snoozed: ${session.isSnoozed}`)
       session.isSnoozed = false
       this.sessions.set(sessionId, session)
+      console.log(`[AgentSessionTracker] Session ${sessionId} is now snoozed: ${session.isSnoozed}`)
+    } else {
+      console.log(`[AgentSessionTracker] Cannot unsnooze - session not found: ${sessionId}`)
     }
   }
 

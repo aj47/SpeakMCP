@@ -9,6 +9,7 @@ import { rendererHandlers, tipcClient } from "~/lib/tipc-client"
 import { AgentProgressUpdate } from "../../../shared/types"
 import { TextInputPanel, TextInputPanelRef } from "@renderer/components/text-input-panel"
 import { PanelResizeWrapper } from "@renderer/components/panel-resize-wrapper"
+import { logUI } from "@renderer/lib/debug"
 import {
   useConversationActions,
   useConversationState,
@@ -418,6 +419,18 @@ export function Component() {
       }, 100)
     }
   }, [agentProgress])
+
+  // Debug: Log overlay visibility conditions
+  useEffect(() => {
+    logUI('[Panel] Overlay visibility check:', {
+      hasAgentProgress: !!agentProgress,
+      mcpTranscribePending: mcpTranscribeMutation.isPending,
+      shouldShowOverlay: !!(agentProgress && !mcpTranscribeMutation.isPending),
+      agentProgressSessionId: agentProgress?.sessionId,
+      agentProgressComplete: agentProgress?.isComplete,
+      agentProgressSnoozed: agentProgress?.isSnoozed
+    })
+  }, [agentProgress, mcpTranscribeMutation.isPending])
 
   // Clear agent progress handler
   useEffect(() => {

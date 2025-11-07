@@ -38,6 +38,9 @@ export function ActiveAgentsSidebar() {
 
   const { focusedSessionId, setFocusedSessionId } = useConversation()
 
+  // Track optimistic snooze state updates (sessionId -> isSnoozed)
+  const [optimisticSnoozeState, setOptimisticSnoozeState] = useState<Map<string, boolean>>(new Map())
+
   const { data } = useQuery<AgentSessionsResponse>({
     queryKey: ["agentSessions"],
     queryFn: async () => {
@@ -86,7 +89,7 @@ export function ActiveAgentsSidebar() {
 
   const handleToggleSnooze = async (sessionId: string, isSnoozed: boolean, e: React.MouseEvent) => {
     e.stopPropagation() // Prevent session focus when clicking snooze
-    logUI('[ActiveAgentsSidebar] Toggling snooze:', {
+    logUI('🟢 [ActiveAgentsSidebar SIDEBAR] Minimize button clicked in SIDEBAR (not overlay):', {
       sessionId,
       sidebarSaysIsSnoozed: isSnoozed,
       action: isSnoozed ? 'unsnooze' : 'snooze',

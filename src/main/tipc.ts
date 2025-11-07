@@ -520,6 +520,16 @@ export const router = {
     }
   }),
 
+  // Snapshot of AgentSessionsStore (only when feature flag is enabled)
+  getAgentSessionsSnapshot: t.procedure.action(async () => {
+    const cfg = configStore.get()
+    if (!cfg.agentSessionsStoreEnabled) {
+      return { sessions: {}, seqBySession: {}, capturedAt: Date.now() }
+    }
+    return agentSessionsStore.getSnapshot()
+  }),
+
+
   stopAgentSession: t.procedure
     .input<{ sessionId: string }>()
     .action(async ({ input }) => {

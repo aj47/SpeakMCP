@@ -100,15 +100,23 @@ export function ActiveAgentsSidebar() {
       if (isSnoozed) {
         // Unsnoozing: restore the session to foreground
         logUI('[ActiveAgentsSidebar] Unsnoozing session')
-        await tipcClient.unsnoozeAgentSession({ sessionId })
-        // Focus the session when unsnoozing
+
+        // IMPORTANT: Focus the session FIRST before showing panel
+        // This ensures agentProgress is computed before the panel renders
         setFocusedSessionId(sessionId)
+
+        // Unsnooze the session in backend
+        await tipcClient.unsnoozeAgentSession({ sessionId })
+
         // Show the panel and resize to agent mode
         await tipcClient.showPanelWindow({})
+
         // Small delay to ensure panel is ready before resizing
         setTimeout(async () => {
           await tipcClient.resizePanelForAgentMode({})
         }, 100)
+
+        logUI('[ActiveAgentsSidebar] Session unsnoozed, focused, panel shown and resized')
       } else {
         // Snoozing: move session to background
         logUI('[ActiveAgentsSidebar] Snoozing session')
@@ -117,6 +125,9 @@ export function ActiveAgentsSidebar() {
         if (focusedSessionId === sessionId) {
           setFocusedSessionId(null)
         }
+        // Hide the panel window
+        await tipcClient.hidePanelWindow({})
+        logUI('[ActiveAgentsSidebar] Session snoozed, unfocused, and panel hidden')
       }
     } catch (error) {
       console.error("Failed to toggle snooze:", error)

@@ -179,8 +179,11 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
           return prevMap
         })
 
-        // Auto-focus this session if no session is currently focused
-        setFocusedSessionId((prev) => prev ?? sessionId)
+        // Auto-focus this session if no session is currently focused AND it's not snoozed
+        // Snoozed sessions run in background without stealing focus
+        if (!update.isSnoozed) {
+          setFocusedSessionId((prev) => prev ?? sessionId)
+        }
 
         // Clean up completed sessions from the map after a delay
         if (update.isComplete) {

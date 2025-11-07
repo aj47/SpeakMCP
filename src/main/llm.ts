@@ -480,12 +480,16 @@ export async function processTranscriptWithAgentMode(
   // Create session state for this agent run
   agentSessionStateManager.createSession(currentSessionId)
 
-  // Create bound emitter that always includes sessionId and conversationId
-  const emit = (update: Omit<AgentProgressUpdate, 'sessionId' | 'conversationId'>) => {
+  // Create bound emitter that always includes sessionId, conversationId, and snooze state
+  const emit = (update: Omit<AgentProgressUpdate, 'sessionId' | 'conversationId' | 'isSnoozed'>) => {
+    const { agentSessionTracker } = require("./agent-session-tracker")
+    const isSnoozed = agentSessionTracker.isSessionSnoozed(currentSessionId)
+
     emitAgentProgress({
       ...update,
       sessionId: currentSessionId,
       conversationId: currentConversationId,
+      isSnoozed,
     })
   }
 

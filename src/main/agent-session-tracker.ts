@@ -14,6 +14,7 @@ export interface AgentSession {
   maxIterations?: number
   lastActivity?: string
   errorMessage?: string
+  isSnoozed?: boolean // When true, session runs in background without stealing focus
 }
 
 class AgentSessionTracker {
@@ -103,6 +104,36 @@ class AgentSessionTracker {
    */
   getRecentSessions(limit: number = 4): AgentSession[] {
     return []
+  }
+
+  /**
+   * Snooze a session (runs in background without stealing focus)
+   */
+  snoozeSession(sessionId: string): void {
+    const session = this.sessions.get(sessionId)
+    if (session) {
+      session.isSnoozed = true
+      this.sessions.set(sessionId, session)
+    }
+  }
+
+  /**
+   * Unsnooze a session (allow it to show progress UI again)
+   */
+  unsnoozeSession(sessionId: string): void {
+    const session = this.sessions.get(sessionId)
+    if (session) {
+      session.isSnoozed = false
+      this.sessions.set(sessionId, session)
+    }
+  }
+
+  /**
+   * Check if a session is snoozed
+   */
+  isSessionSnoozed(sessionId: string): boolean {
+    const session = this.sessions.get(sessionId)
+    return session?.isSnoozed ?? false
   }
 
   /**

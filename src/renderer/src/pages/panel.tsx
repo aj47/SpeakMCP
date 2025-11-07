@@ -410,8 +410,8 @@ export function Component() {
   // Agent progress handler - resize panel when agent mode starts
   // Note: Progress updates are now handled in ConversationContext for session isolation
   useEffect(() => {
-    // Resize panel for agent mode when progress appears
-    if (agentProgress && !agentProgress.isComplete) {
+    // Resize panel for agent mode when progress appears (but not for snoozed sessions)
+    if (agentProgress && !agentProgress.isComplete && !agentProgress.isSnoozed) {
       // Small delay to ensure the panel is ready
       setTimeout(() => {
         tipcClient.resizePanelForAgentMode({})

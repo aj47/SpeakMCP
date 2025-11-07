@@ -14,15 +14,27 @@ function ts(): string {
  */
 export function logUI(...args: any[]) {
   // Always log in development, can be controlled by localStorage in production
-  const shouldLog = 
-    import.meta.env.DEV || 
+  const shouldLog =
+    import.meta.env.DEV ||
     localStorage.getItem('DEBUG_UI') === 'true' ||
     localStorage.getItem('DEBUG') === '*'
-  
+
   if (!shouldLog) return
-  
+
+  // Deep clone objects to avoid "[Object]" in console
+  const clonedArgs = args.map(arg => {
+    if (typeof arg === 'object' && arg !== null) {
+      try {
+        return JSON.parse(JSON.stringify(arg))
+      } catch {
+        return arg
+      }
+    }
+    return arg
+  })
+
   // eslint-disable-next-line no-console
-  console.log(`[${ts()}] [DEBUG][UI]`, ...args)
+  console.log(`[${ts()}] [DEBUG][UI]`, ...clonedArgs)
 }
 
 /**

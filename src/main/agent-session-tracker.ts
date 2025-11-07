@@ -50,6 +50,7 @@ class AgentSessionTracker {
     }
 
     this.sessions.set(sessionId, session)
+    console.log(`[AgentSessionTracker] Started session: ${sessionId}, total sessions: ${this.sessions.size}`)
 
     return sessionId
   }
@@ -72,6 +73,7 @@ class AgentSessionTracker {
    */
   completeSession(sessionId: string, finalActivity?: string): void {
     // Remove completed sessions immediately
+    console.log(`[AgentSessionTracker] Completing session: ${sessionId}, remaining sessions: ${this.sessions.size - 1}`)
     this.sessions.delete(sessionId)
   }
 
@@ -80,6 +82,7 @@ class AgentSessionTracker {
    */
   stopSession(sessionId: string): void {
     // Remove stopped sessions immediately
+    console.log(`[AgentSessionTracker] Stopping session: ${sessionId}, remaining sessions: ${this.sessions.size - 1}`)
     this.sessions.delete(sessionId)
   }
 
@@ -88,6 +91,7 @@ class AgentSessionTracker {
    */
   errorSession(sessionId: string, errorMessage: string): void {
     // Remove errored sessions immediately
+    console.log(`[AgentSessionTracker] Error in session: ${sessionId}, remaining sessions: ${this.sessions.size - 1}`)
     this.sessions.delete(sessionId)
   }
 
@@ -95,8 +99,10 @@ class AgentSessionTracker {
    * Get all active sessions (only active sessions are stored now)
    */
   getActiveSessions(): AgentSession[] {
-    return Array.from(this.sessions.values())
+    const sessions = Array.from(this.sessions.values())
       .sort((a, b) => b.startTime - a.startTime)
+    console.log(`[AgentSessionTracker] getActiveSessions called, returning ${sessions.length} sessions:`, sessions.map(s => ({ id: s.id, title: s.conversationTitle, snoozed: s.isSnoozed })))
+    return sessions
   }
 
   /**

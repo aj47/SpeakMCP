@@ -16,6 +16,7 @@ import { constructSystemPrompt } from "./system-prompts"
 import { state, agentSessionStateManager } from "./state"
 import { isDebugLLM, logLLM, isDebugTools, logTools } from "./debug"
 import { shrinkMessagesForLLM } from "./context-budget"
+import { agentSessionTracker } from "./agent-session-tracker"
 
 /**
  * Use LLM to extract useful context from conversation history
@@ -482,7 +483,6 @@ export async function processTranscriptWithAgentMode(
 
   // Create bound emitter that always includes sessionId, conversationId, and snooze state
   const emit = (update: Omit<AgentProgressUpdate, 'sessionId' | 'conversationId' | 'isSnoozed'>) => {
-    const { agentSessionTracker } = require("./agent-session-tracker")
     const isSnoozed = agentSessionTracker.isSessionSnoozed(currentSessionId)
 
     emitAgentProgress({

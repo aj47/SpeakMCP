@@ -54,6 +54,17 @@ export function Component() {
   } = useConversationActions()
   const { currentConversationId, focusedSessionId, agentProgressById } = useConversation()
 
+  // Debug: Log when agentProgress changes in Panel
+  useEffect(() => {
+    logUI('[Panel] agentProgress changed:', {
+      hasProgress: !!agentProgress,
+      sessionId: agentProgress?.sessionId,
+      focusedSessionId,
+      totalSessions: agentProgressById.size,
+      allSessionIds: Array.from(agentProgressById.keys())
+    })
+  }, [agentProgress, focusedSessionId, agentProgressById.size])
+
   // Config for drag functionality
   const configQuery = useConfigQuery()
   const isDragEnabled = (configQuery.data as any)?.panelDragEnabled ?? true

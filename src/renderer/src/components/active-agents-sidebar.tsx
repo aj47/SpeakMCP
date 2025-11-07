@@ -89,10 +89,18 @@ export function ActiveAgentsSidebar() {
     logUI('[ActiveAgentsSidebar] Toggling snooze:', { sessionId, isSnoozed, action: isSnoozed ? 'unsnooze' : 'snooze' })
     try {
       if (isSnoozed) {
+        // Unsnoozing: restore the session to foreground
         await tipcClient.unsnoozeAgentSession({ sessionId })
         // Focus the session when unsnoozing
         setFocusedSessionId(sessionId)
+        // Show the panel and resize to agent mode
+        await tipcClient.showPanelWindow({})
+        // Small delay to ensure panel is ready before resizing
+        setTimeout(async () => {
+          await tipcClient.resizePanelForAgentMode({})
+        }, 100)
       } else {
+        // Snoozing: move session to background
         await tipcClient.snoozeAgentSession({ sessionId })
         // Unfocus if this was the focused session
         if (focusedSessionId === sessionId) {

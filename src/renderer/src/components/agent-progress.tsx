@@ -509,8 +509,8 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
   // Expansion state management - preserve across re-renders
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({})
 
-  // Get current conversation ID for deep-linking
-  const { currentConversationId } = useConversation()
+  // Get current conversation ID for deep-linking and session focus control
+  const { currentConversationId, setFocusedSessionId } = useConversation()
 
   // Helper to toggle expansion state for a specific item
   const toggleItemExpansion = (itemKey: string) => {
@@ -550,8 +550,10 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
 
     try {
       await tipcClient.snoozeAgentSession({ sessionId: progress.sessionId })
-      // Close the overlay after snoozing
-      handleClose()
+      // Unfocus this session so the overlay hides
+      setFocusedSessionId(null)
+      // Don't close the panel - just let the session run in background
+      // The overlay will hide automatically because the session is no longer focused
     } catch (error) {
       console.error("Failed to snooze session:", error)
     }

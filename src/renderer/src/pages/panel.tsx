@@ -537,10 +537,10 @@ export function Component() {
             }
             agentProgress={agentProgress}
           />
-        ) : transcribeMutation.isPending ||
+        ) : (transcribeMutation.isPending ||
           mcpTranscribeMutation.isPending ||
           textInputMutation.isPending ||
-          mcpTextInputMutation.isPending ? (
+          mcpTextInputMutation.isPending) && !recording ? (
           <AgentProcessingView
             agentProgress={agentProgress}
             isProcessing={true}
@@ -595,7 +595,7 @@ export function Component() {
               {/* Waveform visualization - full width with centered content, dimmed when agent progress is showing */}
               <div
                 className={cn(
-                  "absolute inset-x-0 flex h-6 items-center justify-center transition-opacity duration-300 px-4",
+                  "absolute inset-x-0 flex h-6 items-center justify-center transition-opacity duration-300 px-4 z-30 pointer-events-none",
                   agentProgress && !mcpTranscribeMutation.isPending
                     ? "opacity-30"
                     : "opacity-100",

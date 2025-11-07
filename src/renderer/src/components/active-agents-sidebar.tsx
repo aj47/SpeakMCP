@@ -108,6 +108,9 @@ export function ActiveAgentsSidebar() {
         // Unsnooze the session in backend
         await tipcClient.unsnoozeAgentSession({ sessionId })
 
+        // Ensure the panel's own ConversationContext focuses the same session
+        await tipcClient.focusAgentSession({ sessionId })
+
         // Show the panel and resize to agent mode
         await tipcClient.showPanelWindow({})
 

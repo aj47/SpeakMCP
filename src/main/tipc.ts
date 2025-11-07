@@ -7,6 +7,7 @@ import {
   resizePanelForAgentMode,
   resizePanelToNormal,
   closeAgentModeAndHidePanelWindow,
+  getWindowRendererHandlers,
 } from "./window"
 import {
   app,
@@ -517,6 +518,18 @@ export const router = {
       // Unsnooze the session (allow it to show progress UI again)
       agentSessionTracker.unsnoozeSession(input.sessionId)
 
+      return { success: true }
+    }),
+
+  // Request the Panel window to focus a specific agent session
+  focusAgentSession: t.procedure
+    .input<{ sessionId: string }>()
+    .action(async ({ input }) => {
+      try {
+        getWindowRendererHandlers("panel")?.focusAgentSession.send(input.sessionId)
+      } catch (e) {
+        console.warn("[tipc] focusAgentSession send failed:", e)
+      }
       return { success: true }
     }),
 

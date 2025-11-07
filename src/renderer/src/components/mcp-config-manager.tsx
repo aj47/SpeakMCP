@@ -276,7 +276,7 @@ function ServerDialog({ server, onSave, onCancel }: ServerDialogProps) {
                 value={transport}
                 onValueChange={(value: MCPTransportType) => setTransport(value)}
               >
-                <SelectTrigger>
+                <SelectTrigger id="transport" className="border border-primary/40">
                   <SelectValue placeholder="Select transport type" />
                 </SelectTrigger>
                 <SelectContent>

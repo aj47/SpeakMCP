@@ -336,8 +336,11 @@ export function showPanelWindow() {
     // Keep it floating above everything
     ensurePanelZOrder(win)
 
-    // On Windows, we need to explicitly focus the window
-    if (process.platform === "win32") {
+    // Focus the window for text input mode to enable immediate typing
+    if (mode === "textInput") {
+      win.focus()
+    } else if (process.platform === "win32") {
+      // On Windows, we need to explicitly focus the window for other modes too
       win.focus()
     }
   }

@@ -419,7 +419,7 @@ export function Component() {
     return unlisten
   }, [recording])
 
-  // Agent progress handler - resize panel when agent mode starts
+  // Agent progress handler - resize panel when agent mode starts/stops
   // Note: Progress updates are now handled in ConversationContext for session isolation
   useEffect(() => {
     // Resize panel for agent mode when progress appears (but not for snoozed sessions)
@@ -427,6 +427,11 @@ export function Component() {
       // Small delay to ensure the panel is ready
       setTimeout(() => {
         tipcClient.resizePanelForAgentMode({})
+      }, 100)
+    } else if (!agentProgress || agentProgress.isSnoozed) {
+      // Resize back to normal when no progress or session is snoozed
+      setTimeout(() => {
+        tipcClient.resizePanelToNormal({})
       }, 100)
     }
   }, [agentProgress])

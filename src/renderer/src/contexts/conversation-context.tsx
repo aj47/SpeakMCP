@@ -5,11 +5,13 @@ import React, {
   useCallback,
   ReactNode,
   useEffect,
+  useRef,
 } from "react"
 import {
   Conversation,
   ConversationMessage,
   AgentProgressUpdate,
+  AgentSessionsDelta,
 } from "@shared/types"
 import {
   useCreateConversationMutation,
@@ -78,8 +80,16 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
   // Wrap setFocusedSessionId with logging
   const setFocusedSessionId = useCallback((sessionId: string | null) => {
     logStateChange('ConversationContext', 'focusedSessionId', focusedSessionId, sessionId)
+    // When store is enabled, propagate focus to main so other windows stay in sync
+    if (storeEnabledRef.current && sessionId) {
+      tipcClient.focusAgentSession({ sessionId }).catch(() => {})
+    }
     setFocusedSessionIdInternal(sessionId)
   }, [focusedSessionId])
+
+  // Store-driven subscribe helpers (behind feature flag)
+  const storeEnabledRef = useRef(false)
+  const seqBySessionRef = useRef<Map<string, number>>(new Map())
 
 
 	  // On mount: seed progress map from main store snapshot (when feature flag is enabled)
@@ -88,8 +98,13 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
 	    ;(async () => {
 	      try {
 	        const cfg = await tipcClient.getConfig()
+        storeEnabledRef.current = !!cfg?.agentSessionsStoreEnabled
+
 	        if (!cfg?.agentSessionsStoreEnabled) return
 	        const snapshot = await tipcClient.getAgentSessionsSnapshot()
+        const seqBy = (snapshot as any)?.seqBySession || {}
+        seqBySessionRef.current = new Map(Object.entries(seqBy).map(([k, v]) => [k, Number(v as any)]))
+
 	        const sessions = snapshot?.sessions || {}
 	        const entries = Object.entries(sessions) as [string, AgentProgressUpdate][]
 	        if (cancelled || entries.length === 0) return
@@ -101,6 +116,13 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
 	          return next
 	        })
 
+	        // Seed focus from store snapshot if provided
+	        const focusFromStore = (snapshot as any)?.focusedSessionId ?? null
+	        if (focusFromStore) {
+	          setFocusedSessionIdInternal((prev) => (prev ?? focusFromStore))
+	        }
+
+
 	        // If no focus yet, pick a sensible default
 	        setFocusedSessionIdInternal((prev) => {
 	          if (prev) return prev
@@ -111,8 +133,9 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
 	          }
 	          if (!toFocus) toFocus = entries[entries.length - 1]?.[0] || null
 	          if (toFocus) {
-	            logUI('[ConversationContext] Seed focus from snapshot:', toFocus)
-	          }
+            logUI('[ConversationContext] Seed focus from snapshot:', toFocus)
+          }
+
 	          return toFocus
 	        })
 	      } catch (e) {
@@ -122,34 +145,7 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
 	    return () => { cancelled = true }
 	  }, [])
 
-  // Computed: get the progress for the focused session ONLY
-  // Don't show any progress if no session is focused (e.g., when snoozed)
-  const agentProgress = focusedSessionId
-    ? agentProgressById.get(focusedSessionId) ?? null
-    : null
-
-  // Log when agentProgress changes
-  useEffect(() => {
-    logUI('[ConversationContext] agentProgress changed:', {
-      focusedSessionId,
-      hasProgress: !!agentProgress,
-      sessionId: agentProgress?.sessionId,
-      isComplete: agentProgress?.isComplete,
-      isSnoozed: agentProgress?.isSnoozed,
-      totalSessions: agentProgressById.size,
-      allSessionIds: Array.from(agentProgressById.keys())
-    })
-  }, [agentProgress, focusedSessionId, agentProgressById.size])
-
-  // Queries and mutations
-  const conversationQuery = useConversationQuery(currentConversationId)
-  const createConversationMutation = useCreateConversationMutation()
-  const addMessageMutation = useAddMessageToConversationMutation()
   const saveConversationMutation = useSaveConversationMutation()
-
-  const currentConversation = conversationQuery.data || null
-  const isConversationActive = !!currentConversation
-  const isAgentProcessing = !!agentProgress && !agentProgress.isComplete
 
   // Define saveCompleteConversationHistory before useEffect that uses it
   const saveCompleteConversationHistory = useCallback(
@@ -204,11 +200,111 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
     [saveConversationMutation],
   )
 
+  // Computed: get the progress for the focused session ONLY
+  // Subscribe to store-driven deltas when enabled
+  useEffect(() => {
+    let unlisten: any
+    ;(async () => {
+      try {
+        const cfg = await tipcClient.getConfig()
+        if (!cfg?.agentSessionsStoreEnabled) return
+        unlisten = (rendererHandlers as any).agentSessionsUpdate?.listen?.((delta: AgentSessionsDelta) => {
+          if (!delta) return
+          const { sessionId, seq, progress: update } = delta
+          const lastSeq = seqBySessionRef.current.get(sessionId) ?? 0
+          if (seq <= lastSeq) return
+          seqBySessionRef.current.set(sessionId, seq)
+
+          // Update the progress map for this specific session
+          setAgentProgressById((prevMap) => {
+            const newMap = new Map(prevMap)
+            const prevProgress = newMap.get(sessionId)
+            if (!prevProgress) {
+              logUI('[ConversationContext] [store] New session progress:', sessionId)
+              newMap.set(sessionId, update)
+              return newMap
+            }
+            // Shallow check and replace
+            const hasChanged =
+              prevProgress.isComplete !== update.isComplete ||
+              prevProgress.currentIteration !== update.currentIteration ||
+              prevProgress.steps.length !== update.steps.length ||
+              prevProgress.finalContent !== update.finalContent ||
+              prevProgress.isSnoozed !== update.isSnoozed
+            if (hasChanged) {
+              logUI('[ConversationContext] [store] Progress changed for session:', sessionId)
+              newMap.set(sessionId, update)
+            }
+            return newMap
+          })
+
+          // Auto-focus this session if not snoozed and no focus yet
+          if (!update.isSnoozed) {
+            setFocusedSessionIdInternal((prev) => (prev ?? sessionId))
+          }
+
+          // Renderer-side cleanup (until removal events are added)
+          if (update.isComplete && !update.isSnoozed) {
+            logUI('[ConversationContext] [store] Session completed (not snoozed), will cleanup in 5s:', sessionId)
+            setTimeout(() => {
+              setAgentProgressById((prevMap) => {
+                const newMap = new Map(prevMap)
+                const current = newMap.get(sessionId)
+                if (current && !current.isSnoozed) newMap.delete(sessionId)
+                return newMap
+              })
+              setFocusedSessionIdInternal((prev) => (prev === sessionId ? null : prev))
+            }, 5000)
+          }
+
+          // Save conversation on completion
+          if (update.isComplete && update.conversationId && update.conversationHistory && update.conversationHistory.length > 0) {
+            saveCompleteConversationHistory(update.conversationId, update.conversationHistory).catch(() => {})
+          }
+        })
+      } catch (e) {
+        // ignore
+      }
+    })()
+    return () => { try { unlisten?.() } catch {}
+    }
+  }, [saveCompleteConversationHistory])
+
+  // Don't show any progress if no session is focused (e.g., when snoozed)
+  const agentProgress = focusedSessionId
+    ? agentProgressById.get(focusedSessionId) ?? null
+    : null
+
+  // Log when agentProgress changes
+  useEffect(() => {
+    logUI('[ConversationContext] agentProgress changed:', {
+      focusedSessionId,
+      hasProgress: !!agentProgress,
+      sessionId: agentProgress?.sessionId,
+      isComplete: agentProgress?.isComplete,
+      isSnoozed: agentProgress?.isSnoozed,
+      totalSessions: agentProgressById.size,
+      allSessionIds: Array.from(agentProgressById.keys())
+    })
+  }, [agentProgress, focusedSessionId, agentProgressById.size])
+
+  // Queries and mutations
+  const conversationQuery = useConversationQuery(currentConversationId)
+  const createConversationMutation = useCreateConversationMutation()
+  const addMessageMutation = useAddMessageToConversationMutation()
+
+  const currentConversation = conversationQuery.data || null
+  const isConversationActive = !!currentConversation
+  const isAgentProcessing = !!agentProgress && !agentProgress.isComplete
+
+
   // Listen for agent progress updates
   useEffect(() => {
     const unlisten = rendererHandlers.agentProgressUpdate.listen(
       (update: AgentProgressUpdate) => {
         const sessionId = update.sessionId
+
+        if (storeEnabledRef.current) return
 
         logUI('[ConversationContext] Received progress update:', {
           sessionId,
@@ -339,10 +435,10 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
   useEffect(() => {
     const unlisten = (rendererHandlers as any).focusAgentSession?.listen?.((sessionId: string) => {
       logUI('[ConversationContext] External focusAgentSession received:', sessionId)
-      setFocusedSessionId(sessionId)
+      setFocusedSessionIdInternal(sessionId)
     })
     return unlisten
-  }, [setFocusedSessionId])
+  }, [setFocusedSessionIdInternal])
 
   const startNewConversation = useCallback(
     async (

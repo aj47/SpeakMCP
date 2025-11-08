@@ -28,6 +28,8 @@ import {
   ConversationHistoryItem,
   AgentProgressUpdate,
 } from "../shared/types"
+import { logApp } from "./debug"
+
 import { conversationService } from "./conversation-service"
 import { RendererHandlers } from "./renderer-handlers"
 import {
@@ -52,10 +54,13 @@ import { agentSessionsStore } from "./agent-sessions-store"
 // Helper function to emit agent progress updates to the renderer
 function emitAgentProgress(update: AgentProgressUpdate) {
   // Write-through to AgentSessionsStore when feature flag is enabled
+  let cfg: Config | null = null
+  let seqForUpdate: number | null = null
   try {
-    const cfg = configStore.get()
+    cfg = configStore.get()
     if (cfg.agentSessionsStoreEnabled) {
-      agentSessionsStore.addOrUpdate(update)
+      const { seq } = agentSessionsStore.addOrUpdate(update)
+      seqForUpdate = seq
     }
   } catch (e) {
     console.warn("AgentSessionsStore write-through failed:", e)
@@ -83,7 +88,16 @@ function emitAgentProgress(update: AgentProgressUpdate) {
     // Add a small delay to ensure UI updates are processed
     setTimeout(() => {
       try {
+        // Legacy event (kept for fallback)
         handlers.agentProgressUpdate.send(update)
+        // Store-driven delta event when flag is enabled
+        if (cfg?.agentSessionsStoreEnabled && handlers.agentSessionsUpdate && seqForUpdate != null) {
+          handlers.agentSessionsUpdate.send({
+            sessionId: update.sessionId,
+            seq: seqForUpdate,
+            progress: update,
+          } as any)
+        }
       } catch (error) {
         console.warn("Failed to send progress update:", error)
       }
@@ -524,7 +538,7 @@ export const router = {
   getAgentSessionsSnapshot: t.procedure.action(async () => {
     const cfg = configStore.get()
     if (!cfg.agentSessionsStoreEnabled) {
-      return { sessions: {}, seqBySession: {}, capturedAt: Date.now() }
+      return { sessions: {}, seqBySession: {}, focusedSessionId: null, capturedAt: Date.now() }
     }
     return agentSessionsStore.getSnapshot()
   }),
@@ -553,6 +567,32 @@ export const router = {
       // Snooze the session (runs in background without stealing focus)
       agentSessionTracker.snoozeSession(input.sessionId)
 
+      // Update main store and broadcast delta when feature flag is on
+      try {
+        const cfg = configStore.get()
+        if (cfg.agentSessionsStoreEnabled) {
+          const existing = agentSessionsStore.getSession(input.sessionId)
+          if (existing) {
+            const updated = { ...existing, isSnoozed: true }
+            const { seq } = agentSessionsStore.addOrUpdate(updated)
+            const handlers = getWindowRendererHandlers("panel")
+            if (handlers?.agentSessionsUpdate) {
+              handlers.agentSessionsUpdate.send({
+                sessionId: input.sessionId,
+                seq,
+                progress: updated,
+              } as any)
+            }
+            // Clear focus in store if this session was focused
+            if (agentSessionsStore.getFocusedSessionId() === input.sessionId) {
+              agentSessionsStore.setFocusedSessionId(null)
+            }
+          }
+        }
+      } catch (e) {
+        console.warn("[tipc] snoozeAgentSession store update failed:", e)
+      }
+
       return { success: true }
     }),
 
@@ -564,6 +604,28 @@ export const router = {
       // Unsnooze the session (allow it to show progress UI again)
       agentSessionTracker.unsnoozeSession(input.sessionId)
 
+      // Update main store and broadcast delta when feature flag is on
+      try {
+        const cfg = configStore.get()
+        if (cfg.agentSessionsStoreEnabled) {
+          const existing = agentSessionsStore.getSession(input.sessionId)
+          if (existing) {
+            const updated = { ...existing, isSnoozed: false }
+            const { seq } = agentSessionsStore.addOrUpdate(updated)
+            const handlers = getWindowRendererHandlers("panel")
+            if (handlers?.agentSessionsUpdate) {
+              handlers.agentSessionsUpdate.send({
+                sessionId: input.sessionId,
+                seq,
+                progress: updated,
+              } as any)
+            }
+          }
+        }
+      } catch (e) {
+        console.warn("[tipc] unsnoozeAgentSession store update failed:", e)
+      }
+
       return { success: true }
     }),
 
@@ -572,6 +634,11 @@ export const router = {
     .input<{ sessionId: string }>()
     .action(async ({ input }) => {
       try {
+        const cfg = configStore.get()
+        if (cfg.agentSessionsStoreEnabled) {
+          agentSessionsStore.setFocusedSessionId(input.sessionId)
+          logApp('[sessions] Focus set in store:', input.sessionId)
+        }
         getWindowRendererHandlers("panel")?.focusAgentSession.send(input.sessionId)
       } catch (e) {
         console.warn("[tipc] focusAgentSession send failed:", e)

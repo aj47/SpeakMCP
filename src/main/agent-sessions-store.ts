@@ -5,6 +5,7 @@ export type AgentSeqMap = Record<string, number>
 export type AgentSnapshot = {
   sessions: Record<string, AgentProgressUpdate>
   seqBySession: AgentSeqMap
+  focusedSessionId: string | null
   capturedAt: number
 }
 
@@ -19,6 +20,8 @@ export class AgentSessionsStore {
   private sessions = new Map<string, AgentProgressUpdate>()
   private seqBySession = new Map<string, number>()
   private cleanupTimers = new Map<string, NodeJS.Timeout>()
+  private focusedSessionId: string | null = null
+
 
   private static readonly TTL_MS = 5_000
 
@@ -44,6 +47,15 @@ export class AgentSessionsStore {
   }
 
   /** Get current seq for a session (0 if none) */
+  /** Focused session helpers */
+  getFocusedSessionId(): string | null {
+    return this.focusedSessionId
+  }
+
+  setFocusedSessionId(id: string | null): void {
+    this.focusedSessionId = id
+  }
+
   getSeq(sessionId: string): number {
     return this.seqBySession.get(sessionId) ?? 0
   }
@@ -54,13 +66,22 @@ export class AgentSessionsStore {
     const seqObj: AgentSeqMap = {}
     for (const [id, progress] of this.sessions) sessionsObj[id] = progress
     for (const [id, seq] of this.seqBySession) seqObj[id] = seq
-    return { sessions: sessionsObj, seqBySession: seqObj, capturedAt: Date.now() }
+    return {
+      sessions: sessionsObj,
+      seqBySession: seqObj,
+      focusedSessionId: this.focusedSessionId,
+      capturedAt: Date.now(),
+    }
   }
 
   /** Remove a session (e.g., TTL cleanup) */
   removeSession(sessionId: string): void {
     this.sessions.delete(sessionId)
     this.seqBySession.delete(sessionId)
+    // Clear focus if the removed session was focused
+    if (this.focusedSessionId === sessionId) {
+      this.focusedSessionId = null
+    }
     const timer = this.cleanupTimers.get(sessionId)
     if (timer) {
       clearTimeout(timer)

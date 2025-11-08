@@ -137,6 +137,14 @@ export interface AgentProgressUpdate {
   }>
 }
 
+// Delta message for store-driven subscribe updates
+export type AgentSessionsDelta = {
+  sessionId: string
+  seq: number
+  progress: AgentProgressUpdate
+}
+
+
 // Conversation Types
 export interface ConversationMessage {
   id: string

@@ -70,5 +70,23 @@ describe("AgentSessionsStore retention", () => {
     expect(snap.seqBySession["b"]).toBe(r2.seq)
     expect(typeof snap.capturedAt).toBe("number")
   })
+
+  it("tracks focused session id in snapshot and clears when removed", () => {
+    const store = new AgentSessionsStore()
+    // Initially null
+    expect(store.getSnapshot().focusedSessionId).toBeNull()
+
+    // Set focus and verify snapshot
+    store.setFocusedSessionId("sess_focus")
+    expect(store.getFocusedSessionId()).toBe("sess_focus")
+    expect(store.getSnapshot().focusedSessionId).toBe("sess_focus")
+
+    // Add the focused session, then remove it and ensure focus clears
+    store.addOrUpdate(baseUpdate({ sessionId: "sess_focus" }))
+    store.removeSession("sess_focus")
+    expect(store.getFocusedSessionId()).toBeNull()
+    expect(store.getSnapshot().focusedSessionId).toBeNull()
+  })
+
 })
 

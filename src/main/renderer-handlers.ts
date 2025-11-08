@@ -1,5 +1,5 @@
 import { UpdateDownloadedEvent } from "electron-updater"
-import { AgentProgressUpdate } from "../shared/types"
+import { AgentProgressUpdate, AgentSessionsDelta } from "../shared/types"
 
 export type RendererHandlers = {
   startRecording: () => void
@@ -19,6 +19,8 @@ export type RendererHandlers = {
 
   // Agent Mode Progress handlers
   agentProgressUpdate: (update: AgentProgressUpdate) => void
+  // Store-driven subscribe delta (behind feature flag)
+  agentSessionsUpdate?: (delta: AgentSessionsDelta) => void
   clearAgentProgress: () => void
   emergencyStopAgent: () => void
 

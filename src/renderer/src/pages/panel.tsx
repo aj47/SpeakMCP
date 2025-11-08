@@ -52,7 +52,7 @@ export function Component() {
     endConversation,
     continueConversation,
   } = useConversationActions()
-  const { currentConversationId, focusedSessionId, agentProgressById } = useConversation()
+  const { currentConversationId, focusedSessionId, setFocusedSessionId, agentProgressById } = useConversation()
 
   // Debug: Log when agentProgress changes in Panel
   useEffect(() => {
@@ -281,6 +281,8 @@ export function Component() {
       // Ensure we are in normal dictation mode (not MCP/agent)
       setMcpMode(false)
       mcpModeRef.current = false
+      // Clear any focused agent session so we show waveform, not agent progress
+      setFocusedSessionId(null)
       setVisualizerData(() => getInitialVisualizerData())
       recorderRef.current?.startRecording()
     })
@@ -389,6 +391,8 @@ export function Component() {
     const unlisten = rendererHandlers.startMcpRecording.listen(() => {
       setMcpMode(true)
       mcpModeRef.current = true
+      // Clear any focused agent session so we show waveform, not agent progress
+      setFocusedSessionId(null)
       tipcClient.resizePanelToNormal({}) // Ensure panel is normal size for recording
       setVisualizerData(() => getInitialVisualizerData())
       recorderRef.current?.startRecording()
@@ -431,15 +435,12 @@ export function Component() {
       setTimeout(() => {
         tipcClient.resizePanelForAgentMode({})
       }, 100)
-    } else if (!agentProgress) {
-      // Only resize back to normal when there's NO progress at all
-      // Don't resize when session is just snoozed - let the snooze handler manage sizing
+    } else if (!agentProgress || agentProgress.isSnoozed) {
+      // Resize back to normal when no progress or session is snoozed
       setTimeout(() => {
         tipcClient.resizePanelToNormal({})
       }, 100)
     }
-    // Note: When agentProgress.isSnoozed is true, we don't resize here
-    // The snooze/unsnooze handlers in active-agents-sidebar manage panel sizing
   }, [agentProgress])
 
   // If agent progress arrives while text input is visible, hide text input

@@ -219,6 +219,13 @@ async function processWithAgentMode(
     ],
   })
 
+  // Focus this session in the panel window so it's immediately visible
+  try {
+    getWindowRendererHandlers("panel")?.focusAgentSession.send(sessionId)
+  } catch (e) {
+    console.warn("[tipc] Failed to focus new agent session:", e)
+  }
+
   try {
     if (!config.mcpToolsEnabled) {
       throw new Error("MCP tools are not enabled")

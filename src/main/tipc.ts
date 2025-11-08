@@ -47,20 +47,8 @@ import { state, agentProcessManager } from "./state"
 
 import { startRemoteServer, stopRemoteServer, restartRemoteServer } from "./remote-server"
 
-import { agentSessionsStore } from "./agent-sessions-store"
-
 // Helper function to emit agent progress updates to the renderer
 function emitAgentProgress(update: AgentProgressUpdate) {
-  // Write-through to AgentSessionsStore when feature flag is enabled
-  try {
-    const cfg = configStore.get()
-    if (cfg.agentSessionsStoreEnabled) {
-      agentSessionsStore.addOrUpdate(update)
-    }
-  } catch (e) {
-    console.warn("AgentSessionsStore write-through failed:", e)
-  }
-
   const panel = WINDOWS.get("panel")
   if (!panel) {
     console.warn("Panel window not available for progress update")
@@ -520,16 +508,6 @@ export const router = {
       recentSessions: agentSessionTracker.getRecentSessions(4),
     }
   }),
-
-  // Snapshot of AgentSessionsStore (only when feature flag is enabled)
-  getAgentSessionsSnapshot: t.procedure.action(async () => {
-    const cfg = configStore.get()
-    if (!cfg.agentSessionsStoreEnabled) {
-      return { sessions: {}, seqBySession: {}, capturedAt: Date.now() }
-    }
-    return agentSessionsStore.getSnapshot()
-  }),
-
 
   stopAgentSession: t.procedure
     .input<{ sessionId: string }>()

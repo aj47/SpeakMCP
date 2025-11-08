@@ -360,10 +360,6 @@ export type Config = {
 	  remoteServerLogLevel?: "error" | "info" | "debug"
 	  remoteServerCorsOrigins?: string[]
 
-
-	  // Feature flags
-	  agentSessionsStoreEnabled?: boolean
-
   // Stream Status Watcher Configuration
   streamStatusWatcherEnabled?: boolean
   streamStatusFilePath?: string

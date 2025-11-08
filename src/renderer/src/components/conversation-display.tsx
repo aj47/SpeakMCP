@@ -2,7 +2,7 @@ import React, { useState } from "react"
 import { Card, CardContent } from "@renderer/components/ui/card"
 import { Badge } from "@renderer/components/ui/badge"
 import { ScrollArea } from "@renderer/components/ui/scroll-area"
-import { User, Bot, Wrench } from "lucide-react"
+import { User, Bot, Wrench, ChevronDown, ChevronUp } from "lucide-react"
 import { cn } from "@renderer/lib/utils"
 import { ConversationMessage } from "@shared/types"
 import { useConversationState } from "@renderer/contexts/conversation-context"
@@ -26,6 +26,17 @@ export function ConversationDisplay({
 }: ConversationDisplayProps) {
   const isFullHeight = maxHeight === "100%"
   const { agentProgress, isAgentProcessing } = useConversationState()
+
+  // Expansion state management - preserve across re-renders (similar to agent-progress.tsx)
+  const [expandedMessages, setExpandedMessages] = useState<Record<string, boolean>>({})
+
+  // Helper to toggle expansion state for a specific message
+  const toggleMessageExpansion = (messageId: string) => {
+    setExpandedMessages(prev => ({
+      ...prev,
+      [messageId]: !prev[messageId]
+    }))
+  }
 
   if (messages.length === 0) {
     return (
@@ -57,6 +68,8 @@ export function ConversationDisplay({
               key={message.id}
               message={message}
               isLast={index === messages.length - 1}
+              isExpanded={!!expandedMessages[message.id]}
+              onToggleExpand={() => toggleMessageExpansion(message.id)}
             />
           ))}
 
@@ -85,6 +98,8 @@ export function ConversationDisplay({
               key={message.id}
               message={message}
               isLast={index === messages.length - 1}
+              isExpanded={!!expandedMessages[message.id]}
+              onToggleExpand={() => toggleMessageExpansion(message.id)}
             />
           ))}
 
@@ -107,11 +122,15 @@ export function ConversationDisplay({
 interface ConversationMessageItemProps {
   message: ConversationMessage
   isLast?: boolean
+  isExpanded: boolean
+  onToggleExpand: () => void
 }
 
 function ConversationMessageItem({
   message,
   isLast,
+  isExpanded,
+  onToggleExpand,
 }: ConversationMessageItemProps) {
   const configQuery = useConfigQuery()
   const [audioData, setAudioData] = useState<ArrayBuffer | null>(null)
@@ -217,13 +236,33 @@ function ConversationMessageItem({
     }
   }
 
+  // Determine if message should be collapsible
+  const hasToolCalls = (message.toolCalls && message.toolCalls.length > 0)
+  const hasToolResults = (message.toolResults && message.toolResults.length > 0)
+  const hasExtras = hasToolCalls || hasToolResults
+  const isLongContent = message.content.length > 200
+  const shouldCollapse = hasExtras || isLongContent
+
+  const handleToggleExpand = () => {
+    if (shouldCollapse) {
+      onToggleExpand()
+    }
+  }
+
+  const handleChevronClick = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    onToggleExpand()
+  }
+
   return (
     <div
       className={cn(
-        "flex cursor-pointer gap-3 rounded-lg p-3 transition-colors",
+        "flex gap-3 rounded-lg p-3 transition-colors",
         isLast ? "modern-interactive" : "hover:modern-panel-subtle",
+        shouldCollapse && "cursor-pointer",
       )}
       onContextMenu={handleContextMenu}
+      onClick={handleToggleExpand}
     >
       <div className="flex-shrink-0">
         <div
@@ -263,12 +302,15 @@ function ConversationMessageItem({
           )}
         </div>
 
-        <div className="modern-text-strong">
+        <div className={cn(
+          "modern-text-strong",
+          !isExpanded && shouldCollapse && "line-clamp-3"
+        )}>
           <MarkdownRenderer content={message.content} />
         </div>
 
-        {/* TTS Audio Player - only show for assistant messages */}
-        {message.role === "assistant" && configQuery.data?.ttsEnabled && (
+        {/* TTS Audio Player - only show for assistant messages when expanded */}
+        {isExpanded && message.role === "assistant" && configQuery.data?.ttsEnabled && (
           <div className="mt-3">
             <AudioPlayer
               audioData={audioData || undefined}
@@ -302,7 +344,7 @@ function ConversationMessageItem({
           </div>
         )}
 
-        {message.toolCalls && message.toolCalls.length > 0 && (
+        {isExpanded && message.toolCalls && message.toolCalls.length > 0 && (
           <div className="mt-3 space-y-2">
             <div className="modern-text-muted text-xs font-semibold">Tool Calls ({message.toolCalls.length}):</div>
             {message.toolCalls.map((toolCall, index) => (
@@ -333,7 +375,7 @@ function ConversationMessageItem({
           </div>
         )}
 
-        {message.toolResults && message.toolResults.length > 0 && (
+        {isExpanded && message.toolResults && message.toolResults.length > 0 && (
           <div className="mt-3 space-y-2">
             <div className="modern-text-muted text-xs font-semibold">Tool Results ({message.toolResults.length}):</div>
             {message.toolResults.map((result, index) => (
@@ -389,6 +431,23 @@ function ConversationMessageItem({
           </div>
         )}
       </div>
+
+      {/* Chevron button for expandable messages */}
+      {shouldCollapse && (
+        <div className="flex-shrink-0">
+          <button
+            onClick={handleChevronClick}
+            className="p-1 rounded hover:bg-muted/30 transition-colors"
+            aria-label={isExpanded ? "Collapse" : "Expand"}
+          >
+            {isExpanded ? (
+              <ChevronUp className="h-4 w-4 text-muted-foreground" />
+            ) : (
+              <ChevronDown className="h-4 w-4 text-muted-foreground" />
+            )}
+          </button>
+        </div>
+      )}
     </div>
   )
 }

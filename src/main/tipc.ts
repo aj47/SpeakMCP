@@ -7,6 +7,7 @@ import {
   resizePanelForAgentMode,
   resizePanelToNormal,
   closeAgentModeAndHidePanelWindow,
+  getWindowRendererHandlers,
 } from "./window"
 import {
   app,
@@ -51,6 +52,7 @@ function emitAgentProgress(update: AgentProgressUpdate) {
   const panel = WINDOWS.get("panel")
   if (!panel) {
     console.warn("Panel window not available for progress update")
+
     return
   }
 
@@ -80,12 +82,13 @@ function emitAgentProgress(update: AgentProgressUpdate) {
 }
 
 // Helper function to initialize MCP with progress feedback
-async function initializeMcpWithProgress(config: Config): Promise<void> {
+async function initializeMcpWithProgress(config: Config, sessionId: string): Promise<void> {
   // Check if MCP is initializing and emit progress updates
   const initStatus = mcpService.getInitializationStatus()
 
   // Emit initial progress showing MCP initialization
   emitAgentProgress({
+    sessionId,
     currentIteration: 0,
     maxIterations: config.mcpMaxIterations ?? 10,
     steps: [
@@ -108,6 +111,7 @@ async function initializeMcpWithProgress(config: Config): Promise<void> {
     const currentStatus = mcpService.getInitializationStatus()
     if (currentStatus.isInitializing) {
       emitAgentProgress({
+        sessionId,
         currentIteration: 0,
         maxIterations: config.mcpMaxIterations ?? 10,
         steps: [
@@ -140,6 +144,7 @@ async function initializeMcpWithProgress(config: Config): Promise<void> {
 
   // Emit completion of MCP initialization
   emitAgentProgress({
+    sessionId,
     currentIteration: 0,
     maxIterations: config.mcpMaxIterations ?? 10,
     steps: [
@@ -163,16 +168,48 @@ async function processWithAgentMode(
 ): Promise<string> {
   const config = configStore.get()
 
-  // Clear any previous agent progress before starting new session
-  const win = WINDOWS.get("panel")
-  if (win) {
-    getRendererHandlers<RendererHandlers>(win.webContents).clearAgentProgress.send()
-  }
+  // NOTE: Don't clear all agent progress here - we support multiple concurrent sessions
+  // Each session manages its own progress lifecycle independently
 
-  // Set agent mode state - ensure clean state for new session
-  state.isAgentModeActive = true
-  state.shouldStopAgent = false
-  state.agentIterationCount = 0
+  // Agent mode state is managed per-session via agentSessionStateManager
+
+  // Start tracking this agent session
+  const { agentSessionTracker } = await import("./agent-session-tracker")
+  let conversationTitle = text.length > 50 ? text.substring(0, 50) + "..." : text
+  const sessionId = agentSessionTracker.startSession(conversationId, conversationTitle)
+
+  // Emit initial progress immediately so the session is restorable from sidebar
+  emitAgentProgress({
+    sessionId,
+    conversationId,
+    currentIteration: 0,
+    maxIterations: config.mcpMaxIterations ?? 10,
+    steps: [
+      {
+        id: `init_${Date.now()}`,
+        type: "thinking",
+        title: "Starting agent session",
+        description: text.length > 100 ? text.substring(0, 100) + "..." : text,
+        status: "in_progress",
+        timestamp: Date.now(),
+      },
+    ],
+    isComplete: false,
+    conversationHistory: [
+      {
+        role: "user",
+        content: text,
+        timestamp: Date.now(),
+      },
+    ],
+  })
+
+  // Focus this session in the panel window so it's immediately visible
+  try {
+    getWindowRendererHandlers("panel")?.focusAgentSession.send(sessionId)
+  } catch (e) {
+    console.warn("[tipc] Failed to focus new agent session:", e)
+  }
 
   try {
     if (!config.mcpToolsEnabled) {
@@ -180,7 +217,7 @@ async function processWithAgentMode(
     }
 
     // Initialize MCP with progress feedback
-    await initializeMcpWithProgress(config)
+    await initializeMcpWithProgress(config, sessionId)
 
     // Register any existing MCP server processes with the agent process manager
     // This handles the case where servers were already initialized before agent mode was activated
@@ -238,8 +275,12 @@ async function processWithAgentMode(
         executeToolCall,
         config.mcpMaxIterations ?? 10, // Use configured max iterations or default to 10
         previousConversationHistory,
-        conversationId, // Pass conversation ID for progress updates
+        conversationId, // Pass conversation ID for linking to conversation history
+        sessionId, // Pass session ID for progress routing and isolation
       )
+
+      // Mark session as completed
+      agentSessionTracker.completeSession(sessionId, "Agent completed successfully")
 
       return agentResult.content
     } else {
@@ -276,14 +317,18 @@ async function processWithAgentMode(
           ? `${result.content}\n\n${toolResultTexts}`
           : toolResultTexts
       } else {
+        // Mark session as completed for non-agent mode
+        agentSessionTracker.completeSession(sessionId, "Completed with tools")
         return result.content || text
       }
     }
+  } catch (error) {
+    // Mark session as errored
+    const errorMessage = error instanceof Error ? error.message : "Unknown error"
+    agentSessionTracker.errorSession(sessionId, errorMessage)
+    throw error
   } finally {
-    // Clean up agent state
-    state.isAgentModeActive = false
-    state.shouldStopAgent = false
-    state.agentIterationCount = 0
+
   }
 }
 import { diagnosticsService } from "./diagnostics"
@@ -455,6 +500,66 @@ export const router = {
       activeProcessCount: agentProcessManager.getActiveProcessCount(),
     }
   }),
+
+  getAgentSessions: t.procedure.action(async () => {
+    const { agentSessionTracker } = await import("./agent-session-tracker")
+    return {
+      activeSessions: agentSessionTracker.getActiveSessions(),
+      recentSessions: agentSessionTracker.getRecentSessions(4),
+    }
+  }),
+
+  stopAgentSession: t.procedure
+    .input<{ sessionId: string }>()
+    .action(async ({ input }) => {
+      const { agentSessionTracker } = await import("./agent-session-tracker")
+      const { agentSessionStateManager } = await import("./state")
+
+      // Stop the session in the state manager (aborts LLM requests, kills processes)
+      agentSessionStateManager.stopSession(input.sessionId)
+
+      // Clean up the session state (removes from state.agentSessions)
+      agentSessionStateManager.cleanupSession(input.sessionId)
+
+      // Mark the session as stopped in the tracker
+      agentSessionTracker.stopSession(input.sessionId)
+
+      return { success: true }
+    }),
+
+  snoozeAgentSession: t.procedure
+    .input<{ sessionId: string }>()
+    .action(async ({ input }) => {
+      const { agentSessionTracker } = await import("./agent-session-tracker")
+
+      // Snooze the session (runs in background without stealing focus)
+      agentSessionTracker.snoozeSession(input.sessionId)
+
+      return { success: true }
+    }),
+
+  unsnoozeAgentSession: t.procedure
+    .input<{ sessionId: string }>()
+    .action(async ({ input }) => {
+      const { agentSessionTracker } = await import("./agent-session-tracker")
+
+      // Unsnooze the session (allow it to show progress UI again)
+      agentSessionTracker.unsnoozeSession(input.sessionId)
+
+      return { success: true }
+    }),
+
+  // Request the Panel window to focus a specific agent session
+  focusAgentSession: t.procedure
+    .input<{ sessionId: string }>()
+    .action(async ({ input }) => {
+      try {
+        getWindowRendererHandlers("panel")?.focusAgentSession.send(input.sessionId)
+      } catch (e) {
+        console.warn("[tipc] focusAgentSession send failed:", e)
+      }
+      return { success: true }
+    }),
 
   showContextMenu: t.procedure
     .input<{
@@ -821,8 +926,6 @@ export const router = {
       const config = configStore.get()
       let transcript: string
 
-      // Initialize MCP with progress feedback
-      await initializeMcpWithProgress(config)
 
       // First, transcribe the audio using the same logic as regular recording
       // Use OpenAI or Groq for transcription

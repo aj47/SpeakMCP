@@ -9,6 +9,7 @@ import { rendererHandlers, tipcClient } from "~/lib/tipc-client"
 import { AgentProgressUpdate } from "../../../shared/types"
 import { TextInputPanel, TextInputPanelRef } from "@renderer/components/text-input-panel"
 import { PanelResizeWrapper } from "@renderer/components/panel-resize-wrapper"
+import { logUI } from "@renderer/lib/debug"
 import {
   useConversationActions,
   useConversationState,
@@ -30,8 +31,6 @@ export function Component() {
   )
   const [recording, setRecording] = useState(false)
   const [mcpMode, setMcpMode] = useState(false)
-  const [agentProgress, setAgentProgress] =
-    useState<AgentProgressUpdate | null>(null)
   const [showTextInput, setShowTextInput] = useState(false)
   const isConfirmedRef = useRef(false)
   const mcpModeRef = useRef(false)
@@ -44,6 +43,7 @@ export function Component() {
     isWaitingForResponse,
     isConversationActive,
     currentConversation,
+    agentProgress, // Get agent progress from conversation context (session-aware)
   } = useConversationState()
   const {
     addMessage,
@@ -52,7 +52,18 @@ export function Component() {
     endConversation,
     continueConversation,
   } = useConversationActions()
-  const { currentConversationId } = useConversation()
+  const { currentConversationId, focusedSessionId, agentProgressById } = useConversation()
+
+  // Debug: Log when agentProgress changes in Panel
+  useEffect(() => {
+    logUI('[Panel] agentProgress changed:', {
+      hasProgress: !!agentProgress,
+      sessionId: agentProgress?.sessionId,
+      focusedSessionId,
+      totalSessions: agentProgressById.size,
+      allSessionIds: Array.from(agentProgressById.keys())
+    })
+  }, [agentProgress, focusedSessionId, agentProgressById.size])
 
   // Config for drag functionality
   const configQuery = useConfigQuery()
@@ -118,7 +129,6 @@ export function Component() {
       return result
     },
     onError(error) {
-      setAgentProgress(null) // Clear progress on error
       tipcClient.resizePanelToNormal({}) // Resize back to normal on error
       tipcClient.hidePanelWindow({})
       tipcClient.displayError({
@@ -175,7 +185,6 @@ export function Component() {
     onError(error) {
       setShowTextInput(false)
       tipcClient.clearTextInputState({})
-      setAgentProgress(null) // Clear progress on error
       tipcClient.resizePanelToNormal({}) // Resize back to normal on error
       tipcClient.hidePanelWindow({})
       tipcClient.displayError({
@@ -272,7 +281,6 @@ export function Component() {
       // Ensure we are in normal dictation mode (not MCP/agent)
       setMcpMode(false)
       mcpModeRef.current = false
-      setAgentProgress(null)
       setVisualizerData(() => getInitialVisualizerData())
       recorderRef.current?.startRecording()
     })
@@ -306,7 +314,6 @@ export function Component() {
       } else {
         // If there's an active conversation, automatically continue in MCP mode
         const continueConv = showContinueButton && !mcpMode
-        setAgentProgress(null)
         if (continueConv) {
           setMcpMode(true)
           mcpModeRef.current = true
@@ -329,7 +336,6 @@ export function Component() {
   useEffect(() => {
     const unlisten = rendererHandlers.showTextInput.listen(() => {
       // Clear any previous agent progress when starting new text input
-      setAgentProgress(null)
       setShowTextInput(true)
       // Panel window is already shown by the keyboard handler
       // Focus the text input after a short delay to ensure it's rendered
@@ -357,6 +363,9 @@ export function Component() {
       await addMessage(text, "user")
     }
 
+    // Hide the text input immediately and show processing/overlay
+    setShowTextInput(false)
+
     // Always try to use MCP processing first if available
     try {
       const config = await tipcClient.getConfig({})
@@ -380,7 +389,6 @@ export function Component() {
     const unlisten = rendererHandlers.startMcpRecording.listen(() => {
       setMcpMode(true)
       mcpModeRef.current = true
-      setAgentProgress(null) // Clear any previous progress
       tipcClient.resizePanelToNormal({}) // Ensure panel is normal size for recording
       setVisualizerData(() => getInitialVisualizerData())
       recorderRef.current?.startRecording()
@@ -405,7 +413,6 @@ export function Component() {
         recorderRef.current?.stopRecording()
       } else {
         setMcpMode(true)
-        setAgentProgress(null) // Clear any previous progress
         tipcClient.resizePanelToNormal({}) // Ensure panel is normal size for recording
         tipcClient.showPanelWindow({})
         recorderRef.current?.startRecording()
@@ -415,44 +422,44 @@ export function Component() {
     return unlisten
   }, [recording])
 
-  // Agent progress handler
+  // Agent progress handler - resize panel when agent mode starts/stops
+  // Note: Progress updates are now handled in ConversationContext for session isolation
   useEffect(() => {
-    const unlisten = rendererHandlers.agentProgressUpdate.listen(
-      (update: AgentProgressUpdate) => {
-        // Only update if the progress has actually changed to prevent flashing
-        setAgentProgress((prevProgress) => {
-          if (!prevProgress) return update
-
-          // Compare key properties to determine if update is needed
-          const hasChanged =
-            prevProgress.isComplete !== update.isComplete ||
-            prevProgress.currentIteration !== update.currentIteration ||
-            prevProgress.steps.length !== update.steps.length ||
-            JSON.stringify(prevProgress.steps) !==
-              JSON.stringify(update.steps) ||
-            prevProgress.finalContent !== update.finalContent
-
-          return hasChanged ? update : prevProgress
-        })
-
-        // Resize panel for agent mode on first progress update or when transitioning from no progress
-        if (!agentProgress && update && !update.isComplete) {
-          // Small delay to ensure the panel is ready
-          setTimeout(() => {
-            tipcClient.resizePanelForAgentMode({})
-          }, 100)
-        }
-
-        // Keep the panel open when agent completes - user will press ESC to close
-        if (update.isComplete) {
-          // Note: Final message insertion is handled by ConversationProvider to prevent duplicates
-          // No auto-hide behavior - user controls when to close with ESC
-        }
-      },
-    )
-
-    return unlisten
+    // Resize panel for agent mode when progress appears (but not for snoozed sessions)
+    if (agentProgress && !agentProgress.isComplete && !agentProgress.isSnoozed) {
+      // Small delay to ensure the panel is ready
+      setTimeout(() => {
+        tipcClient.resizePanelForAgentMode({})
+      }, 100)
+    } else if (!agentProgress || agentProgress.isSnoozed) {
+      // Resize back to normal when no progress or session is snoozed
+      setTimeout(() => {
+        tipcClient.resizePanelToNormal({})
+      }, 100)
+    }
   }, [agentProgress])
+
+  // If agent progress arrives while text input is visible, hide text input
+  useEffect(() => {
+    if (agentProgress && showTextInput) {
+      logUI('[Panel] Hiding text input because agent progress is available', {
+        sessionId: agentProgress.sessionId,
+      })
+      setShowTextInput(false)
+    }
+  }, [agentProgress, showTextInput])
+
+  // Debug: Log overlay visibility conditions
+  useEffect(() => {
+    logUI('[Panel] Overlay visibility check:', {
+      hasAgentProgress: !!agentProgress,
+      mcpTranscribePending: mcpTranscribeMutation.isPending,
+      shouldShowOverlay: !!agentProgress,
+      agentProgressSessionId: agentProgress?.sessionId,
+      agentProgressComplete: agentProgress?.isComplete,
+      agentProgressSnoozed: agentProgress?.isSnoozed
+    })
+  }, [agentProgress, mcpTranscribeMutation.isPending])
 
   // Clear agent progress handler
   useEffect(() => {
@@ -467,7 +474,6 @@ export function Component() {
       textInputMutation.reset()
       mcpTextInputMutation.reset()
 
-      setAgentProgress(null)
       setMcpMode(false)
       mcpModeRef.current = false
       // End conversation when clearing progress (user pressed ESC)
@@ -486,7 +492,6 @@ export function Component() {
       ttsManager.stopAll()
 
       // Reset all processing states
-      setAgentProgress(null)
       setMcpMode(false)
       mcpModeRef.current = false
       setShowTextInput(false)
@@ -537,10 +542,7 @@ export function Component() {
             }
             agentProgress={agentProgress}
           />
-        ) : (transcribeMutation.isPending ||
-          mcpTranscribeMutation.isPending ||
-          textInputMutation.isPending ||
-          mcpTextInputMutation.isPending) && !recording ? (
+        ) : agentProgress ? (
           <AgentProcessingView
             agentProgress={agentProgress}
             isProcessing={true}
@@ -584,7 +586,7 @@ export function Component() {
               )}
 
               {/* Agent progress overlay - left-aligned and full coverage */}
-              {agentProgress && !mcpTranscribeMutation.isPending && (
+              {agentProgress && (
                 <AgentProgress
                   progress={agentProgress}
                   variant="overlay"
@@ -596,7 +598,7 @@ export function Component() {
               <div
                 className={cn(
                   "absolute inset-x-0 flex h-6 items-center justify-center transition-opacity duration-300 px-4 z-30 pointer-events-none",
-                  agentProgress && !mcpTranscribeMutation.isPending
+                  agentProgress && !agentProgress.isSnoozed && !mcpTranscribeMutation.isPending
                     ? "opacity-30"
                     : "opacity-100",
                 )}

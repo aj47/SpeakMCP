@@ -1,4 +1,4 @@
-import React, { useState } from "react"
+import React, { useState, useEffect } from "react"
 import { Card, CardContent } from "@renderer/components/ui/card"
 import { Badge } from "@renderer/components/ui/badge"
 import { ScrollArea } from "@renderer/components/ui/scroll-area"
@@ -30,11 +30,22 @@ export function ConversationDisplay({
   // Expansion state management - preserve across re-renders (similar to agent-progress.tsx)
   const [expandedMessages, setExpandedMessages] = useState<Record<string, boolean>>({})
 
+  // Clean up expansion state for messages that no longer exist (prevent memory leak)
+  useEffect(() => {
+    const currentMessageIds = new Set(messages.map(m => m.id))
+    setExpandedMessages(prev => {
+      const cleaned = Object.fromEntries(
+        Object.entries(prev).filter(([id]) => currentMessageIds.has(id))
+      )
+      return Object.keys(cleaned).length !== Object.keys(prev).length ? cleaned : prev
+    })
+  }, [messages])
+
   // Helper to toggle expansion state for a specific message
   const toggleMessageExpansion = (messageId: string) => {
     setExpandedMessages(prev => ({
       ...prev,
-      [messageId]: !prev[messageId]
+      [messageId]: prev[messageId] === undefined ? false : !prev[messageId]
     }))
   }
 
@@ -68,7 +79,7 @@ export function ConversationDisplay({
               key={message.id}
               message={message}
               isLast={index === messages.length - 1}
-              isExpanded={!!expandedMessages[message.id]}
+              isExpanded={expandedMessages[message.id] ?? true}
               onToggleExpand={() => toggleMessageExpansion(message.id)}
             />
           ))}
@@ -98,7 +109,7 @@ export function ConversationDisplay({
               key={message.id}
               message={message}
               isLast={index === messages.length - 1}
-              isExpanded={!!expandedMessages[message.id]}
+              isExpanded={expandedMessages[message.id] ?? true}
               onToggleExpand={() => toggleMessageExpansion(message.id)}
             />
           ))}
@@ -259,10 +270,8 @@ function ConversationMessageItem({
       className={cn(
         "flex gap-3 rounded-lg p-3 transition-colors",
         isLast ? "modern-interactive" : "hover:modern-panel-subtle",
-        shouldCollapse && "cursor-pointer",
       )}
       onContextMenu={handleContextMenu}
-      onClick={handleToggleExpand}
     >
       <div className="flex-shrink-0">
         <div
@@ -309,8 +318,8 @@ function ConversationMessageItem({
           <MarkdownRenderer content={message.content} />
         </div>
 
-        {/* TTS Audio Player - only show for assistant messages when expanded */}
-        {isExpanded && message.role === "assistant" && configQuery.data?.ttsEnabled && (
+        {/* TTS Audio Player - show for assistant messages when expanded or not collapsible */}
+        {(!shouldCollapse || isExpanded) && message.role === "assistant" && configQuery.data?.ttsEnabled && (
           <div className="mt-3">
             <AudioPlayer
               audioData={audioData || undefined}

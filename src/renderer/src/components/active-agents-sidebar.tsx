@@ -111,13 +111,11 @@ export function ActiveAgentsSidebar() {
         // Ensure the panel's own ConversationContext focuses the same session
         await tipcClient.focusAgentSession({ sessionId })
 
-        // Show the panel and resize to agent mode
-        await tipcClient.showPanelWindow({})
+        // Resize to agent mode BEFORE showing the panel to avoid flashing to small size
+        await tipcClient.resizePanelForAgentMode({})
 
-        // Small delay to ensure panel is ready before resizing
-        setTimeout(async () => {
-          await tipcClient.resizePanelForAgentMode({})
-        }, 100)
+        // Show the panel (it's already sized correctly)
+        await tipcClient.showPanelWindow({})
 
         logUI('[ActiveAgentsSidebar] Session unsnoozed, focused, panel shown and resized')
       } else {

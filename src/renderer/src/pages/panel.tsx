@@ -431,12 +431,15 @@ export function Component() {
       setTimeout(() => {
         tipcClient.resizePanelForAgentMode({})
       }, 100)
-    } else if (!agentProgress || agentProgress.isSnoozed) {
-      // Resize back to normal when no progress or session is snoozed
+    } else if (!agentProgress) {
+      // Only resize back to normal when there's NO progress at all
+      // Don't resize when session is just snoozed - let the snooze handler manage sizing
       setTimeout(() => {
         tipcClient.resizePanelToNormal({})
       }, 100)
     }
+    // Note: When agentProgress.isSnoozed is true, we don't resize here
+    // The snooze/unsnooze handlers in active-agents-sidebar manage panel sizing
   }, [agentProgress])
 
   // If agent progress arrives while text input is visible, hide text input

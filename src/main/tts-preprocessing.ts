@@ -10,6 +10,7 @@ export interface TTSPreprocessingOptions {
   removeSymbols?: boolean
   convertNumbers?: boolean
   maxLength?: number
+  removeThinkingBlocks?: boolean
 }
 
 const DEFAULT_OPTIONS: TTSPreprocessingOptions = {
@@ -19,6 +20,7 @@ const DEFAULT_OPTIONS: TTSPreprocessingOptions = {
   removeSymbols: true,
   convertNumbers: true,
   maxLength: 4000, // Reasonable limit for TTS
+  removeThinkingBlocks: true,
 }
 
 /**
@@ -30,6 +32,12 @@ export function preprocessTextForTTS(
 ): string {
   const opts = { ...DEFAULT_OPTIONS, ...options }
   let processedText = text
+
+  // Remove thinking blocks first (before other processing)
+  // This ensures <think>...</think> content is not read aloud
+  if (opts.removeThinkingBlocks) {
+    processedText = removeThinkingBlocks(processedText)
+  }
 
   // Remove or replace code blocks
   if (opts.removeCodeBlocks) {
@@ -65,6 +73,18 @@ export function preprocessTextForTTS(
   }
 
   return processedText
+}
+
+/**
+ * Removes thinking blocks (<think>...</think>) from text
+ * These blocks contain the AI's reasoning process and should not be read aloud
+ */
+function removeThinkingBlocks(text: string): string {
+  // Remove <think>...</think> blocks (including multiline)
+  // This regex matches the opening tag, any content (including newlines), and the closing tag
+  text = text.replace(/<think>[\s\S]*?<\/think>/gi, "")
+
+  return text
 }
 
 /**

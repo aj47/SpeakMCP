@@ -184,9 +184,10 @@ export function Component() {
       })
     },
     onSuccess() {
-      setShowTextInput(false)
-      // Don't clear progress or hide panel on success - agent mode will handle this
-      // The panel needs to stay visible for agent mode progress updates
+      // Don't hide text input immediately - keep it visible to show agent progress
+      // The text input panel will display agent progress updates as they arrive
+      // Once agent progress starts, the UI will automatically transition
+      // setShowTextInput(false) will be called when agent completes or user presses ESC
     },
   })
 
@@ -468,6 +469,7 @@ export function Component() {
       mcpTextInputMutation.reset()
 
       setAgentProgress(null)
+      setShowTextInput(false) // Hide text input when clearing progress
       setMcpMode(false)
       mcpModeRef.current = false
       // End conversation when clearing progress (user pressed ESC)

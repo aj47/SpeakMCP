@@ -52,7 +52,7 @@ export function Component() {
     endConversation,
     continueConversation,
   } = useConversationActions()
-  const { currentConversationId, focusedSessionId, setFocusedSessionId, agentProgressById } = useConversation()
+  const { currentConversationId, focusedSessionId, agentProgressById } = useConversation()
 
   // Debug: Log when agentProgress changes in Panel
   useEffect(() => {
@@ -281,8 +281,6 @@ export function Component() {
       // Ensure we are in normal dictation mode (not MCP/agent)
       setMcpMode(false)
       mcpModeRef.current = false
-      // Clear any focused agent session so we show waveform, not agent progress
-      setFocusedSessionId(null)
       setVisualizerData(() => getInitialVisualizerData())
       recorderRef.current?.startRecording()
     })
@@ -391,8 +389,6 @@ export function Component() {
     const unlisten = rendererHandlers.startMcpRecording.listen(() => {
       setMcpMode(true)
       mcpModeRef.current = true
-      // Clear any focused agent session so we show waveform, not agent progress
-      setFocusedSessionId(null)
       tipcClient.resizePanelToNormal({}) // Ensure panel is normal size for recording
       setVisualizerData(() => getInitialVisualizerData())
       recorderRef.current?.startRecording()
@@ -546,10 +542,10 @@ export function Component() {
             }
             agentProgress={agentProgress}
           />
-        ) : (transcribeMutation.isPending ||
+        ) : transcribeMutation.isPending ||
           mcpTranscribeMutation.isPending ||
           textInputMutation.isPending ||
-          mcpTextInputMutation.isPending) && !recording ? (
+          mcpTextInputMutation.isPending ? (
           <AgentProcessingView
             agentProgress={agentProgress}
             isProcessing={true}
@@ -605,7 +601,7 @@ export function Component() {
               <div
                 className={cn(
                   "absolute inset-x-0 flex h-6 items-center justify-center transition-opacity duration-300 px-4 z-30 pointer-events-none",
-                  agentProgress && !mcpTranscribeMutation.isPending
+                  agentProgress && !agentProgress.isSnoozed && !mcpTranscribeMutation.isPending
                     ? "opacity-30"
                     : "opacity-100",
                 )}

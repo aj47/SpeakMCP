@@ -30,7 +30,7 @@ const getConfig = () => {
     mcpMaxIterations: 10, // Default max iterations for agent mode
     textInputEnabled: true,
     // Feature flags
-    agentSessionsStoreEnabled: false,
+    agentSessionsStoreEnabled: true,
 
     // Text input: On Windows, use Ctrl+Shift+T to avoid browser new tab conflict
     textInputShortcut: isWindows ? "ctrl-shift-t" : "ctrl-t",

@@ -93,7 +93,7 @@ export const TextInputPanel = forwardRef<TextInputPanelRef, TextInputPanelProps>
     // Shift+Enter allows new lines (default textarea behavior)
   }
 
-  if (isProcessing) {
+  if (isProcessing && agentProgress) {
     return (
       <div className={cn(
         "text-input-panel modern-text-strong flex h-full w-full items-center justify-center rounded-xl",

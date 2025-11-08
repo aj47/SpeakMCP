@@ -183,10 +183,7 @@ async function processWithAgentMode(
   // NOTE: Don't clear all agent progress here - we support multiple concurrent sessions
   // Each session manages its own progress lifecycle independently
 
-  // Set agent mode state - ensure clean state for new session
-  state.isAgentModeActive = true
-  state.shouldStopAgent = false
-  state.agentIterationCount = 0
+  // Agent mode state is managed per-session via agentSessionStateManager
 
   // Start tracking this agent session
   const { agentSessionTracker } = await import("./agent-session-tracker")
@@ -343,10 +340,7 @@ async function processWithAgentMode(
     agentSessionTracker.errorSession(sessionId, errorMessage)
     throw error
   } finally {
-    // Clean up agent state
-    state.isAgentModeActive = false
-    state.shouldStopAgent = false
-    state.agentIterationCount = 0
+
   }
 }
 import { diagnosticsService } from "./diagnostics"
@@ -545,6 +539,9 @@ export const router = {
 
       // Stop the session in the state manager (aborts LLM requests, kills processes)
       agentSessionStateManager.stopSession(input.sessionId)
+
+      // Clean up the session state (removes from state.agentSessions)
+      agentSessionStateManager.cleanupSession(input.sessionId)
 
       // Mark the session as stopped in the tracker
       agentSessionTracker.stopSession(input.sessionId)
@@ -951,11 +948,6 @@ export const router = {
       const config = configStore.get()
       let transcript: string
 
-      // Create a temporary session ID for MCP initialization progress
-      const tempSessionId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-
-      // Initialize MCP with progress feedback
-      await initializeMcpWithProgress(config, tempSessionId)
 
       // First, transcribe the audio using the same logic as regular recording
       // Use OpenAI or Groq for transcription

@@ -542,10 +542,7 @@ export function Component() {
             }
             agentProgress={agentProgress}
           />
-        ) : transcribeMutation.isPending ||
-          mcpTranscribeMutation.isPending ||
-          textInputMutation.isPending ||
-          mcpTextInputMutation.isPending ? (
+        ) : agentProgress ? (
           <AgentProcessingView
             agentProgress={agentProgress}
             isProcessing={true}

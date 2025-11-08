@@ -146,11 +146,12 @@ export const agentSessionStateManager = {
     return session?.shouldStop ?? state.shouldStopAgent // Fallback to global flag
   },
 
-  // Mark session for stop
+  // Mark session for stop and kill its processes
   stopSession(sessionId: string): void {
     const session = state.agentSessions.get(sessionId)
     if (session) {
       session.shouldStop = true
+
       // Abort all controllers for this session
       for (const controller of session.abortControllers) {
         try {
@@ -159,6 +160,19 @@ export const agentSessionStateManager = {
           // ignore
         }
       }
+      session.abortControllers.clear()
+
+      // Kill all processes for this session
+      for (const process of session.processes) {
+        try {
+          if (!process.killed && process.exitCode === null) {
+            process.kill("SIGKILL")
+          }
+        } catch (_e) {
+          // ignore
+        }
+      }
+      session.processes.clear()
     }
   },
 

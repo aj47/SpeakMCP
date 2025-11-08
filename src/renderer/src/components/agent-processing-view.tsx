@@ -41,7 +41,14 @@ export function AgentProcessingView({
 
     setIsKilling(true)
     try {
-      await tipcClient.emergencyStopAgent()
+      if (agentProgress?.sessionId) {
+        // Stop only the focused session
+        await tipcClient.stopAgentSession({ sessionId: agentProgress.sessionId })
+      } else {
+        // No session progress yet (e.g., submitting input). Do not kill all sessions.
+        // Just clear the overlay/state in the panel.
+        await tipcClient.clearAgentProgress({})
+      }
       setShowKillConfirmation(false)
     } catch (error) {
       console.error("Failed to stop agent:", error)
@@ -115,7 +122,7 @@ export function AgentProcessingView({
               <h3 className="text-sm font-medium">Stop Agent Execution</h3>
             </div>
             <p className="text-xs text-muted-foreground mb-4">
-              Are you sure you want to stop the agent? This will immediately terminate all running processes and cannot be undone.
+              Are you sure you want to stop this session? Other sessions will continue running.
             </p>
             <div className="flex gap-2 justify-end">
               <Button

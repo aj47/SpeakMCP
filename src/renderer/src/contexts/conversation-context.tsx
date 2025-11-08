@@ -81,6 +81,47 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
     setFocusedSessionIdInternal(sessionId)
   }, [focusedSessionId])
 
+
+	  // On mount: seed progress map from main store snapshot (when feature flag is enabled)
+	  useEffect(() => {
+	    let cancelled = false
+	    ;(async () => {
+	      try {
+	        const cfg = await tipcClient.getConfig()
+	        if (!cfg?.agentSessionsStoreEnabled) return
+	        const snapshot = await tipcClient.getAgentSessionsSnapshot()
+	        const sessions = snapshot?.sessions || {}
+	        const entries = Object.entries(sessions) as [string, AgentProgressUpdate][]
+	        if (cancelled || entries.length === 0) return
+
+	        // Seed local map with snapshot
+	        setAgentProgressById((prev) => {
+	          const next = new Map(prev)
+	          for (const [id, progress] of entries) next.set(id, progress)
+	          return next
+	        })
+
+	        // If no focus yet, pick a sensible default
+	        setFocusedSessionIdInternal((prev) => {
+	          if (prev) return prev
+	          // Prefer an active, non-snoozed session; otherwise last one
+	          let toFocus: string | null = null
+	          for (const [id, p] of entries) {
+	            if (!p.isSnoozed && !p.isComplete) { toFocus = id; break }
+	          }
+	          if (!toFocus) toFocus = entries[entries.length - 1]?.[0] || null
+	          if (toFocus) {
+	            logUI('[ConversationContext] Seed focus from snapshot:', toFocus)
+	          }
+	          return toFocus
+	        })
+	      } catch (e) {
+	        // ignore
+	      }
+	    })()
+	    return () => { cancelled = true }
+	  }, [])
+
   // Computed: get the progress for the focused session ONLY
   // Don't show any progress if no session is focused (e.g., when snoozed)
   const agentProgress = focusedSessionId

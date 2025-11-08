@@ -1,5 +1,6 @@
 import { AgentProgress } from "@renderer/components/agent-progress"
 import { AgentProcessingView } from "@renderer/components/agent-processing-view"
+import { MultiAgentProgressView } from "@renderer/components/multi-agent-progress-view"
 import { Recorder } from "@renderer/lib/recorder"
 import { playSound } from "@renderer/lib/sound"
 import { cn } from "@renderer/lib/utils"
@@ -54,6 +55,11 @@ export function Component() {
   } = useConversationActions()
   const { currentConversationId, focusedSessionId, agentProgressById } = useConversation()
 
+  // Check if we have multiple active (non-snoozed) sessions
+  const activeSessionCount = Array.from(agentProgressById.values())
+    .filter(progress => !progress.isSnoozed).length
+  const hasMultipleSessions = activeSessionCount > 1
+
   // Debug: Log when agentProgress changes in Panel
   useEffect(() => {
     logUI('[Panel] agentProgress changed:', {
@@ -61,9 +67,11 @@ export function Component() {
       sessionId: agentProgress?.sessionId,
       focusedSessionId,
       totalSessions: agentProgressById.size,
+      activeSessionCount,
+      hasMultipleSessions,
       allSessionIds: Array.from(agentProgressById.keys())
     })
-  }, [agentProgress, focusedSessionId, agentProgressById.size])
+  }, [agentProgress, focusedSessionId, agentProgressById.size, activeSessionCount, hasMultipleSessions])
 
   // Config for drag functionality
   const configQuery = useConfigQuery()
@@ -543,12 +551,19 @@ export function Component() {
             agentProgress={agentProgress}
           />
         ) : agentProgress ? (
-          <AgentProcessingView
-            agentProgress={agentProgress}
-            isProcessing={true}
-            variant="overlay"
-            showBackgroundSpinner={true}
-          />
+          hasMultipleSessions ? (
+            <MultiAgentProgressView
+              variant="overlay"
+              showBackgroundSpinner={true}
+            />
+          ) : (
+            <AgentProcessingView
+              agentProgress={agentProgress}
+              isProcessing={true}
+              variant="overlay"
+              showBackgroundSpinner={true}
+            />
+          )
         ) : (
           <div className={cn(
             "voice-input-panel modern-text-strong flex h-full w-full rounded-xl transition-all duration-300",
@@ -587,11 +602,18 @@ export function Component() {
 
               {/* Agent progress overlay - left-aligned and full coverage */}
               {agentProgress && (
-                <AgentProgress
-                  progress={agentProgress}
-                  variant="overlay"
-                  className="absolute inset-0 z-20"
-                />
+                hasMultipleSessions ? (
+                  <MultiAgentProgressView
+                    variant="overlay"
+                    className="absolute inset-0 z-20"
+                  />
+                ) : (
+                  <AgentProgress
+                    progress={agentProgress}
+                    variant="overlay"
+                    className="absolute inset-0 z-20"
+                  />
+                )
               )}
 
               {/* Waveform visualization - full width with centered content, dimmed when agent progress is showing */}

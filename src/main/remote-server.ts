@@ -102,6 +102,11 @@ async function runAgent(prompt: string): Promise<string> {
   state.shouldStopAgent = false
   state.agentIterationCount = 0
 
+  // Start tracking this agent session
+  const { agentSessionTracker } = await import("./agent-session-tracker")
+  const conversationTitle = prompt.length > 50 ? prompt.substring(0, 50) + "..." : prompt
+  const sessionId = agentSessionTracker.startSession(undefined, conversationTitle)
+
   try {
     if (!cfg.mcpToolsEnabled) {
       throw new Error("MCP tools are not enabled")
@@ -120,9 +125,20 @@ async function runAgent(prompt: string): Promise<string> {
       availableTools,
       executeToolCall,
       cfg.mcpMaxIterations ?? 10,
+      undefined, // No previous conversation history for remote server
+      undefined, // No conversation ID for remote server
+      sessionId, // Pass session ID for progress routing
     )
 
+    // Mark session as completed
+    agentSessionTracker.completeSession(sessionId, "Agent completed successfully")
+
     return agentResult.content
+  } catch (error) {
+    // Mark session as errored
+    const errorMessage = error instanceof Error ? error.message : "Unknown error"
+    agentSessionTracker.errorSession(sessionId, errorMessage)
+    throw error
   } finally {
     // Clean up agent state to ensure next session starts fresh
     state.isAgentModeActive = false

@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react"
 import { cn } from "@renderer/lib/utils"
 import { AgentProgressUpdate } from "../../../shared/types"
-import { ChevronDown, ChevronUp, ChevronRight, X, AlertTriangle } from "lucide-react"
+import { ChevronDown, ChevronUp, ChevronRight, X, AlertTriangle, Minimize2 } from "lucide-react"
 import { MarkdownRenderer } from "@renderer/components/markdown-renderer"
 import { Button } from "./ui/button"
 import { Badge } from "./ui/badge"
@@ -10,6 +10,7 @@ import { useConversation } from "@renderer/contexts/conversation-context"
 import { AudioPlayer } from "@renderer/components/audio-player"
 import { useConfigQuery } from "@renderer/lib/queries"
 import { useTheme } from "@renderer/contexts/theme-context"
+import { logUI } from "@renderer/lib/debug"
 
 interface AgentProgressProps {
   progress: AgentProgressUpdate | null
@@ -509,8 +510,8 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
   // Expansion state management - preserve across re-renders
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({})
 
-  // Get current conversation ID for deep-linking
-  const { currentConversationId } = useConversation()
+  // Get current conversation ID for deep-linking and session focus control
+  const { currentConversationId, setFocusedSessionId } = useConversation()
 
   // Helper to toggle expansion state for a specific item
   const toggleItemExpansion = (itemKey: string) => {
@@ -542,6 +543,28 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
 
   const handleCancelKill = () => {
     setShowKillConfirmation(false)
+  }
+
+  // Handle snooze/minimize
+  const handleSnooze = async (e?: React.MouseEvent) => {
+    e?.stopPropagation() // Prevent event bubbling
+    if (!progress?.sessionId) return
+
+    logUI('🔴 [AgentProgress OVERLAY] Minimize button clicked in OVERLAY (not sidebar):', {
+      sessionId: progress.sessionId,
+      currentlySnoozed: progress.isSnoozed
+    })
+
+    try {
+      await tipcClient.snoozeAgentSession({ sessionId: progress.sessionId })
+      // Unfocus this session so the overlay hides
+      setFocusedSessionId(null)
+      // Hide the panel window completely
+      await tipcClient.hidePanelWindow({})
+      logUI('🔴 [AgentProgress OVERLAY] Session snoozed, unfocused, and panel hidden')
+    } catch (error) {
+      console.error("Failed to snooze session:", error)
+    }
   }
 
   // Close button handler for completed agent view
@@ -847,6 +870,17 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
             <span className="text-xs text-muted-foreground">
               {`${currentIteration}/${maxIterations}`}
             </span>
+          )}
+          {!isComplete && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground hover:bg-muted"
+              onClick={handleSnooze}
+              title="Minimize - run in background without showing progress"
+            >
+              <Minimize2 className="h-3 w-3" />
+            </Button>
           )}
           {!isComplete ? (
             <Button

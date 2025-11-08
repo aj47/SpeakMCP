@@ -38,9 +38,6 @@ export function ActiveAgentsSidebar() {
 
   const { focusedSessionId, setFocusedSessionId } = useConversation()
 
-  // Track optimistic snooze state updates (sessionId -> isSnoozed)
-  const [optimisticSnoozeState, setOptimisticSnoozeState] = useState<Map<string, boolean>>(new Map())
-
   const { data } = useQuery<AgentSessionsResponse>({
     queryKey: ["agentSessions"],
     queryFn: async () => {

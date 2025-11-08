@@ -18,6 +18,9 @@ export type AgentSnapshot = {
 export class AgentSessionsStore {
   private sessions = new Map<string, AgentProgressUpdate>()
   private seqBySession = new Map<string, number>()
+  private cleanupTimers = new Map<string, NodeJS.Timeout>()
+
+  private static readonly TTL_MS = 5_000
 
   /** Upsert progress and return assigned seq for this session */
   addOrUpdate(update: AgentProgressUpdate): { seq: number; progress: AgentProgressUpdate } {
@@ -29,8 +32,8 @@ export class AgentSessionsStore {
     this.sessions.set(sessionId, update)
     this.seqBySession.set(sessionId, nextSeq)
 
-    // Placeholder: hook for retention scheduling (e.g., schedule cleanup)
-    // this.maybeScheduleCleanup(update)
+    // Retention scheduling (TTL cleanup for completed & not snoozed)
+    this.maybeScheduleCleanup(update)
 
     return { seq: nextSeq, progress: update }
   }
@@ -58,15 +61,48 @@ export class AgentSessionsStore {
   removeSession(sessionId: string): void {
     this.sessions.delete(sessionId)
     this.seqBySession.delete(sessionId)
+    const timer = this.cleanupTimers.get(sessionId)
+    if (timer) {
+      clearTimeout(timer)
+      this.cleanupTimers.delete(sessionId)
+    }
+  }
+
+  /** Cancel any scheduled cleanup for a session */
+  private cancelCleanup(sessionId: string) {
+    const timer = this.cleanupTimers.get(sessionId)
+    if (timer) {
+      clearTimeout(timer)
+      this.cleanupTimers.delete(sessionId)
+    }
+  }
+
+  /** Schedule TTL cleanup for a session */
+  private scheduleCleanup(sessionId: string) {
+    this.cancelCleanup(sessionId)
+    const timer = setTimeout(() => {
+      // Only remove if still eligible at the time of firing
+      const current = this.sessions.get(sessionId)
+      if (current && current.isComplete && !current.isSnoozed) {
+        this.removeSession(sessionId)
+      }
+    }, AgentSessionsStore.TTL_MS)
+    this.cleanupTimers.set(sessionId, timer)
   }
 
   /**
-   * Placeholder for retention logic (implemented in a later task):
+   * Retention logic:
    * - If update.isComplete && !update.isSnoozed: schedule TTL cleanup
-   * - If snoozed: preserve; on unsnooze+complete: schedule TTL
+   * - Else (snoozed or not complete): cancel any scheduled cleanup
    */
-  // private maybeScheduleCleanup(update: AgentProgressUpdate) {}
+  private maybeScheduleCleanup(update: AgentProgressUpdate) {
+    const { sessionId, isComplete, isSnoozed } = update
+    if (isComplete && !isSnoozed) {
+      this.scheduleCleanup(sessionId)
+    } else {
+      this.cancelCleanup(sessionId)
+    }
+  }
 }
 
 export const agentSessionsStore = new AgentSessionsStore()
-

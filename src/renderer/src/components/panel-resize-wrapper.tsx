@@ -21,27 +21,18 @@ export function PanelResizeWrapper({
   const [currentSize, setCurrentSize] = useState({ width: 300, height: 200 })
 
   useEffect(() => {
-    // Initialize panel size when component mounts
-    const initializePanelSize = async () => {
+    // Initialize local size state from current window bounds; do not change size on mount
+    const init = async () => {
       try {
-        const size = await tipcClient.initializePanelSize()
-        if (size && typeof size === 'object' && 'width' in size && 'height' in size) {
+        const size = await tipcClient.getPanelSize()
+        if (size && typeof size === "object" && "width" in size && "height" in size) {
           setCurrentSize(size as { width: number; height: number })
         }
       } catch (error) {
-        console.error("Failed to initialize panel size:", error)
-        // Fallback to getting current size
-        try {
-          const size = await tipcClient.getPanelSize()
-          if (size && typeof size === 'object' && 'width' in size && 'height' in size) {
-            setCurrentSize(size as { width: number; height: number })
-          }
-        } catch (fallbackError) {
-          console.error("Failed to get panel size:", fallbackError)
-        }
+        console.error("Failed to get panel size on mount:", error)
       }
     }
-    initializePanelSize()
+    init()
   }, [])
 
   const handleResizeStart = useCallback(() => {
@@ -98,7 +89,7 @@ export function PanelResizeWrapper({
       }}
     >
       {children}
-      
+
       {enableResize && (
         <>
           {/* Corner resize handles */}

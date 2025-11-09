@@ -37,6 +37,13 @@ export function Component() {
   const mcpModeRef = useRef(false)
   const textInputPanelRef = useRef<TextInputPanelRef>(null)
   const { isDark } = useTheme()
+  const lastRequestedModeRef = useRef<"normal" | "agent" | "textInput">("normal")
+  const requestPanelMode = (mode: "normal" | "agent" | "textInput") => {
+    if (lastRequestedModeRef.current === mode) return
+    lastRequestedModeRef.current = mode
+    tipcClient.setPanelMode({ mode })
+  }
+
 
   // Conversation state
   const {
@@ -137,7 +144,7 @@ export function Component() {
       return result
     },
     onError(error) {
-      tipcClient.resizePanelToNormal({}) // Resize back to normal on error
+
       tipcClient.hidePanelWindow({})
       tipcClient.displayError({
         title: error.name,
@@ -157,7 +164,7 @@ export function Component() {
     onError(error) {
       setShowTextInput(false)
       tipcClient.clearTextInputState({})
-      tipcClient.resizePanelToNormal({})
+
       tipcClient.hidePanelWindow({})
       tipcClient.displayError({
         title: error.name,
@@ -168,7 +175,7 @@ export function Component() {
       setShowTextInput(false)
       // Clear text input state
       tipcClient.clearTextInputState({})
-      tipcClient.resizePanelToNormal({})
+
       tipcClient.hidePanelWindow({})
     },
   })
@@ -193,7 +200,7 @@ export function Component() {
     onError(error) {
       setShowTextInput(false)
       tipcClient.clearTextInputState({})
-      tipcClient.resizePanelToNormal({}) // Resize back to normal on error
+
       tipcClient.hidePanelWindow({})
       tipcClient.displayError({
         title: error.name,
@@ -327,7 +334,7 @@ export function Component() {
         if (continueConv) {
           setMcpMode(true)
           mcpModeRef.current = true
-          tipcClient.resizePanelToNormal({})
+          requestPanelMode("normal")
           tipcClient.showPanelWindow({})
         } else {
           // Force normal dictation mode when not continuing a conversation
@@ -406,7 +413,7 @@ export function Component() {
     const unlisten = rendererHandlers.startMcpRecording.listen(() => {
       setMcpMode(true)
       mcpModeRef.current = true
-      tipcClient.resizePanelToNormal({}) // Ensure panel is normal size for recording
+      // Mode sizing is now applied in main before show; avoid duplicate calls here
       setVisualizerData(() => getInitialVisualizerData())
       recorderRef.current?.startRecording()
     })
@@ -430,7 +437,7 @@ export function Component() {
         recorderRef.current?.stopRecording()
       } else {
         setMcpMode(true)
-        tipcClient.resizePanelToNormal({}) // Ensure panel is normal size for recording
+        requestPanelMode("normal") // Ensure panel is normal size for recording
         tipcClient.showPanelWindow({})
         recorderRef.current?.startRecording()
       }
@@ -439,25 +446,29 @@ export function Component() {
     return unlisten
   }, [recording])
 
-  // Agent progress handler - resize panel when agent mode starts/stops
-  // Note: Progress updates are now handled in ConversationContext for session isolation
+  // Agent progress handler - request mode changes only when target changes
+  // Note: Progress updates are session-aware in ConversationContext; avoid redundant mode requests here
   useEffect(() => {
-    // Keep text input size if we just submitted and are waiting for first progress to avoid flicker
     const isTextSubmissionPending = textInputMutation.isPending || mcpTextInputMutation.isPending
 
+    let targetMode: "agent" | "normal" | null = null
     if (agentProgress && !agentProgress.isComplete && !agentProgress.isSnoozed) {
-      // Small delay to ensure the panel is ready
-      setTimeout(() => {
-        tipcClient.resizePanelForAgentMode({})
-      }, 100)
+      targetMode = "agent"
     } else if (isTextSubmissionPending) {
-      // Avoid bouncing to tall normal size between submit and first progress
-      // Intentionally do nothing; keep current (text input) size briefly
-    } else if (!agentProgress || agentProgress.isSnoozed || agentProgress.isComplete) {
-      // Resize back to normal when no progress, session is snoozed, or session is complete
-      setTimeout(() => {
-        tipcClient.resizePanelToNormal({})
-      }, 100)
+      targetMode = null // keep current size briefly to avoid flicker
+    } else {
+      targetMode = "normal"
+    }
+
+    let tid: ReturnType<typeof setTimeout> | null = null
+    if (targetMode && lastRequestedModeRef.current !== targetMode) {
+      const delay = targetMode === "agent" ? 100 : 0
+      tid = setTimeout(() => {
+        requestPanelMode(targetMode!)
+      }, delay)
+    }
+    return () => {
+      if (tid) clearTimeout(tid)
     }
   }, [agentProgress, textInputMutation.isPending, mcpTextInputMutation.isPending])
 
@@ -545,7 +556,7 @@ export function Component() {
 	    if (shouldAutoClose) {
 	      const t = setTimeout(() => {
 	        // Ensure normal size before hide, then hide the window
-	        tipcClient.resizePanelToNormal({})
+
 	        tipcClient.hidePanelWindow({})
 	      }, 200)
 	      return () => clearTimeout(t)
@@ -578,7 +589,6 @@ export function Component() {
             onCancel={() => {
               setShowTextInput(false)
               tipcClient.clearTextInputState({})
-              tipcClient.resizePanelToNormal({})
               tipcClient.hidePanelWindow({})
             }}
             isProcessing={

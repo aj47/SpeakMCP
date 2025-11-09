@@ -117,7 +117,7 @@ export function ActiveAgentsSidebar() {
         await tipcClient.focusAgentSession({ sessionId })
 
         // Resize to agent mode BEFORE showing the panel to avoid flashing to small size
-        await tipcClient.resizePanelForAgentMode({})
+        await tipcClient.setPanelMode({ mode: "agent" })
 
         // Show the panel (it's already sized correctly)
         await tipcClient.showPanelWindow({})

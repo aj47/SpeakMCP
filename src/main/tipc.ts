@@ -8,6 +8,9 @@ import {
   resizePanelToNormal,
   closeAgentModeAndHidePanelWindow,
   getWindowRendererHandlers,
+  setPanelMode,
+  getCurrentPanelMode,
+  markManualResize,
 } from "./window"
 import {
   app,
@@ -426,6 +429,13 @@ export const router = {
   resizePanelToNormal: t.procedure.action(async () => {
     resizePanelToNormal()
   }),
+
+  setPanelMode: t.procedure
+    .input<{ mode: "normal" | "agent" | "textInput" }>()
+    .action(async ({ input }) => {
+      setPanelMode(input.mode)
+      return { success: true }
+    }),
 
   debugPanelState: t.procedure.action(async () => {
     const panel = WINDOWS.get("panel")
@@ -1703,6 +1713,8 @@ export const router = {
       win.setMaximumSize(finalWidth + 1000, finalHeight + 1000) // Allow growth
 
       // Set the actual size
+      // Mark manual resize to avoid immediate mode re-apply fighting user
+      markManualResize()
       win.setSize(finalWidth, finalHeight, true) // animate = true
       return { width: finalWidth, height: finalHeight }
     }),
@@ -1738,14 +1750,9 @@ export const router = {
       return { mode: input.mode, size: { width: input.width, height: input.height } }
     }),
 
-  // Get current panel mode
+  // Get current panel mode (from centralized window state)
   getPanelMode: t.procedure.action(async () => {
-    if (state.isTextInputActive) {
-      return "textInput"
-    } else if (state.isAgentModeActive) {
-      return "agent"
-    }
-    return "normal"
+    return getCurrentPanelMode()
   }),
 
   initializePanelSize: t.procedure.action(async () => {

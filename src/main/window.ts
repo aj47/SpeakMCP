@@ -287,6 +287,98 @@ function setPanelFocusableForMode(win: BrowserWindow, mode: "normal"|"agent"|"te
 }
 
 
+// Centralized panel mode management and deduped resize/apply
+let _currentPanelMode: "normal" | "agent" | "textInput" = "normal"
+
+type PanelBounds = { width: number; height: number; x: number; y: number }
+let _lastApplied: { mode: "normal" | "agent" | "textInput"; ts: number; bounds?: PanelBounds } = {
+  mode: "normal",
+  ts: 0,
+  bounds: undefined,
+}
+
+let _lastManualResizeTs = 0
+export function markManualResize() {
+  _lastManualResizeTs = Date.now()
+}
+
+function applyPanelMode(mode: "normal" | "agent" | "textInput") {
+  const win = WINDOWS.get("panel")
+  if (!win) return
+
+  const savedSize = getSavedSizeForMode(mode)
+  const position = getPanelWindowPosition(mode)
+
+  // Deduplicate: if same target applied very recently, skip
+  const now = Date.now()
+
+  // If user just manually resized, don't fight them; only adjust focusability/z-order
+  if (now - _lastManualResizeTs < 1000) {
+    try {
+      setPanelFocusableForMode(win, mode)
+      ensurePanelZOrder(win)
+    } catch {}
+    return
+  }
+
+  const sameTarget =
+    _lastApplied.mode === mode &&
+    _lastApplied.bounds &&
+    _lastApplied.bounds.width === savedSize.width &&
+    _lastApplied.bounds.height === savedSize.height &&
+    _lastApplied.bounds.x === position.x &&
+    _lastApplied.bounds.y === position.y
+
+  if (sameTarget && now - _lastApplied.ts < 300) {
+    return
+  }
+
+  // If current bounds already match target exactly, also skip
+  try {
+    const b = win.getBounds()
+    if (
+      b.width === savedSize.width &&
+      b.height === savedSize.height &&
+      b.x === position.x &&
+      b.y === position.y
+    ) {
+      // Still ensure focus behavior is correct for mode
+      setPanelFocusableForMode(win, mode)
+      ensurePanelZOrder(win)
+      _lastApplied = { mode, ts: now, bounds: { width: b.width, height: b.height, x: b.x, y: b.y } }
+      return
+    }
+  } catch {}
+
+  const minWidth = Math.max(200, MIN_WAVEFORM_WIDTH)
+  win.setMinimumSize(minWidth, 100)
+
+  // Set focus behavior for mode before resizing
+  setPanelFocusableForMode(win, mode)
+
+  // Apply size and position; animate only if visible to avoid flicker
+  const animate = win.isVisible()
+  win.setSize(savedSize.width, savedSize.height, animate)
+  win.setPosition(position.x, position.y, animate)
+
+  ensurePanelZOrder(win)
+  _lastApplied = {
+    mode,
+    ts: now,
+    bounds: { width: savedSize.width, height: savedSize.height, x: position.x, y: position.y },
+  }
+}
+
+export function setPanelMode(mode: "normal" | "agent" | "textInput") {
+  _currentPanelMode = mode
+  applyPanelMode(mode)
+}
+
+export function getCurrentPanelMode(): "normal" | "agent" | "textInput" {
+  return _currentPanelMode
+}
+
+
 export function createPanelWindow() {
   logApp("Creating panel window...")
   console.log("[window.ts] createPanelWindow - MIN_WAVEFORM_WIDTH:", MIN_WAVEFORM_WIDTH)
@@ -357,35 +449,21 @@ export function showPanelWindow() {
   if (win) {
     console.log(`[showPanelWindow] Called. Current visibility: ${win.isVisible()}`)
 
-    // Determine the correct mode based on current state
-    let mode: "normal" | "agent" | "textInput" = "normal"
-    if (state.isTextInputActive) {
-      mode = "textInput"
-    }
-    // Note: Agent mode positioning is handled separately in resizePanelForAgentMode
+    const mode = getCurrentPanelMode()
+    // Apply mode sizing/positioning just before showing
+    try { applyPanelMode(mode) } catch {}
 
-    const position = getPanelWindowPosition(mode)
-
-    win.setPosition(position.x, position.y)
-
-    // Set focusability appropriate for the current mode before showing
-    setPanelFocusableForMode(win, mode)
-
-    // For text input mode, use show() to properly activate and focus the window
-    // For other modes, use showInactive() to avoid stealing focus
     if (mode === "textInput") {
-      console.log(`[showPanelWindow] Showing panel with show() for textInput mode`)
+      console.log(`[showPanelWindow] Showing panel with show() for ${mode} mode`)
       win.show()
     } else {
       console.log(`[showPanelWindow] Showing panel with showInactive() for ${mode} mode`)
       win.showInactive()
-      // On Windows, we need to explicitly focus the window for other modes too
       if (process.platform === "win32") {
         win.focus()
       }
     }
 
-    // Keep it floating above everything
     ensurePanelZOrder(win)
   }
 }
@@ -412,6 +490,8 @@ export async function showPanelWindowAndStartMcpRecording() {
     state.focusedAppBeforeRecording = null
   }
 
+  // Ensure consistent sizing by setting mode in main before showing
+  setPanelMode("normal")
   showPanelWindow()
   getWindowRendererHandlers("panel")?.startMcpRecording.send()
 }
@@ -427,7 +507,7 @@ export async function showPanelWindowAndShowTextInput() {
 
   // Set text input state first, then show panel (which will use correct positioning)
   state.isTextInputActive = true
-  resizePanelForTextInput()
+  setPanelMode("textInput")
   showPanelWindow() // This will now use textInput mode positioning
   getWindowRendererHandlers("panel")?.showTextInput.send()
 }
@@ -461,7 +541,6 @@ export const stopTextInputAndHidePanelWindow = () => {
   if (win) {
     state.isTextInputActive = false
     getRendererHandlers<RendererHandlers>(win.webContents).hideTextInput.send()
-    resizePanelToNormal()
 
     if (win.isVisible()) {
       win.hide()
@@ -477,15 +556,12 @@ export const closeAgentModeAndHidePanelWindow = () => {
     state.shouldStopAgent = false
     state.agentIterationCount = 0
 
-    // Clear agent progress and resize back to normal
-    getRendererHandlers<RendererHandlers>(
-      win.webContents,
-    ).clearAgentProgress.send()
+    // Clear agent progress
+    getRendererHandlers<RendererHandlers>(win.webContents).clearAgentProgress.send()
     // Suppress auto-show briefly to avoid immediate reopen from any trailing progress
     suppressPanelAutoShow(1000)
-    resizePanelToNormal()
 
-    // Hide the panel after a small delay to ensure resize completes
+    // Hide the panel after a small delay
     setTimeout(() => {
       if (win.isVisible()) {
         win.hide()
@@ -513,11 +589,10 @@ export const emergencyStopAgentMode = async () => {
     console.error("Error during emergency stop:", error)
   }
 
-  // Close panel and resize
+  // Close panel without resizing; next show will apply correct mode
   if (win) {
     // Suppress auto-show for a short cooldown so background progress doesn't re-open the panel
     suppressPanelAutoShow(1000)
-    resizePanelToNormal()
     setTimeout(() => {
       if (win.isVisible()) {
         win.hide()
@@ -527,110 +602,13 @@ export const emergencyStopAgentMode = async () => {
 }
 
 export function resizePanelForAgentMode() {
-  const win = WINDOWS.get("panel")
-  if (!win) {
-    console.log("[window.ts] resizePanelForAgentMode - panel window not found")
-    return
-  }
-
-  console.log("[window.ts] resizePanelForAgentMode - starting...")
-  const savedSize = getSavedSizeForMode("agent")
-  console.log("[window.ts] resizePanelForAgentMode - savedSize:", savedSize)
-
-  const position = getPanelWindowPosition("agent")
-  console.log("[window.ts] resizePanelForAgentMode - position:", position)
-
-  const minWidth = Math.max(200, MIN_WAVEFORM_WIDTH)
-  console.log("[window.ts] resizePanelForAgentMode - setting minWidth:", minWidth)
-
-  // Update size constraints for agent mode (allow resizing)
-  win.setMinimumSize(minWidth, 100) // Ensure minimum waveform width
-  // Don't set maximum size to allow user resizing
-
-  // Set size and position (use saved size if available)
-  console.log("[window.ts] resizePanelForAgentMode - setting size to:", savedSize)
-  win.setSize(savedSize.width, savedSize.height, true) // animate = true
-
-  console.log("[window.ts] resizePanelForAgentMode - setting position to:", position)
-  win.setPosition(position.x, position.y, true) // animate = true
-
-  // Maintain floating behavior after resize
-  ensurePanelZOrder(win)
-
-  // Set focus behavior for agent mode
-  setPanelFocusableForMode(win, "agent")
-
+  setPanelMode("agent")
 }
 
 export function resizePanelForTextInput() {
-  const win = WINDOWS.get("panel")
-  if (!win) {
-    console.log("[window.ts] resizePanelForTextInput - panel window not found")
-    return
-  }
-
-  console.log("[window.ts] resizePanelForTextInput - starting...")
-  const savedSize = getSavedSizeForMode("textInput")
-  console.log("[window.ts] resizePanelForTextInput - savedSize:", savedSize)
-
-  const position = getPanelWindowPosition("textInput")
-  console.log("[window.ts] resizePanelForTextInput - position:", position)
-
-  const minWidth = Math.max(200, MIN_WAVEFORM_WIDTH)
-  console.log("[window.ts] resizePanelForTextInput - setting minWidth:", minWidth)
-
-  // Update size constraints for text input mode (allow resizing)
-  win.setMinimumSize(minWidth, 100) // Ensure minimum waveform width
-  // Don't set maximum size to allow user resizing
-
-  // Set size and position (use saved size if available)
-  console.log("[window.ts] resizePanelForTextInput - setting size to:", savedSize)
-  win.setSize(savedSize.width, savedSize.height, true) // animate = true
-
-  console.log("[window.ts] resizePanelForTextInput - setting position to:", position)
-  win.setPosition(position.x, position.y, true) // animate = true
-
-  // Focus and allow keyboard input for text input mode
-  setPanelFocusableForMode(win, "textInput")
-  try { win.focus() } catch {}
-
-  // Maintain floating behavior after resize
-  ensurePanelZOrder(win)
-
+  setPanelMode("textInput")
 }
 
 export function resizePanelToNormal() {
-  const win = WINDOWS.get("panel")
-  if (!win) {
-    console.log("[window.ts] resizePanelToNormal - panel window not found")
-    return
-  }
-
-  console.log("[window.ts] resizePanelToNormal - starting...")
-  const savedSize = getSavedSizeForMode("normal")
-  console.log("[window.ts] resizePanelToNormal - savedSize:", savedSize)
-
-  const position = getPanelWindowPosition("normal")
-  console.log("[window.ts] resizePanelToNormal - position:", position)
-
-  const minWidth = Math.max(200, MIN_WAVEFORM_WIDTH)
-  console.log("[window.ts] resizePanelToNormal - setting minWidth:", minWidth)
-
-  // Update size constraints back to normal (allow resizing)
-  win.setMinimumSize(minWidth, 100) // Ensure minimum waveform width
-  // Don't set maximum size to allow user resizing
-
-  // Set size and position (use saved size if available)
-  console.log("[window.ts] resizePanelToNormal - setting size to:", savedSize)
-  // Set focus behavior for normal mode
-  setPanelFocusableForMode(win, "normal")
-
-  win.setSize(savedSize.width, savedSize.height, true) // animate = true
-
-  console.log("[window.ts] resizePanelToNormal - setting position to:", position)
-  win.setPosition(position.x, position.y, true) // animate = true
-
-  // Maintain floating behavior after resize
-  ensurePanelZOrder(win)
-
+  setPanelMode("normal")
 }

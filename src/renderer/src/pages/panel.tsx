@@ -550,20 +550,6 @@ export function Component() {
             }
             agentProgress={agentProgress}
           />
-        ) : agentProgress ? (
-          hasMultipleSessions ? (
-            <MultiAgentProgressView
-              variant="overlay"
-              showBackgroundSpinner={true}
-            />
-          ) : (
-            <AgentProcessingView
-              agentProgress={agentProgress}
-              isProcessing={true}
-              variant="overlay"
-              showBackgroundSpinner={true}
-            />
-          )
         ) : (
           <div className={cn(
             "voice-input-panel modern-text-strong flex h-full w-full rounded-xl transition-all duration-300",

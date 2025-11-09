@@ -14,6 +14,7 @@ import { configStore } from "./config"
 import { getFocusedAppInfo } from "./keyboard"
 import { state, agentProcessManager } from "./state"
 import { calculatePanelPosition } from "./panel-position"
+import { setupConsoleLogger } from "./console-logger"
 
 type WINDOW_ID = "main" | "panel" | "setup"
 
@@ -50,6 +51,8 @@ function createBaseWindow({
 
   WINDOWS.set(id, win)
 
+  // Setup console logger to capture renderer console messages
+  setupConsoleLogger(win, id)
 
   if (showWhenReady) {
     win.on("ready-to-show", () => {

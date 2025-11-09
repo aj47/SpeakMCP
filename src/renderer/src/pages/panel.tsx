@@ -591,24 +591,7 @@ export function Component() {
             "voice-input-panel modern-text-strong flex h-full w-full rounded-xl transition-all duration-300",
             isDark ? "dark" : ""
           )}>
-            <div className="flex shrink-0">
-              {showTextInput && !mcpMode && (
-                <div className="modern-panel-subtle flex h-full w-8 items-center justify-center rounded-l-xl">
-                  <div
-                    className="h-2 w-2 rounded-full bg-blue-500 shadow-lg"
-                    title="Text Input Mode"
-                  />
-                </div>
-              )}
-              {isConversationActive && !mcpMode && !showTextInput && (
-                <div className="modern-panel-subtle flex h-full w-8 items-center justify-center rounded-l-xl">
-                  <div
-                    className="h-2 w-2 rounded-full bg-green-500 shadow-lg"
-                    title="Conversation Active"
-                  />
-                </div>
-              )}
-            </div>
+
             <div className="relative flex grow items-center overflow-hidden">
               {/* Conversation continuation indicator - subtle overlay that doesn't block waveform */}
               {showContinueButton && !agentProgress && (

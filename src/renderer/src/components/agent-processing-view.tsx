@@ -44,6 +44,8 @@ export function AgentProcessingView({
       if (agentProgress?.sessionId) {
         // Stop only the focused session
         await tipcClient.stopAgentSession({ sessionId: agentProgress.sessionId })
+        // Also clear renderer progress/focus immediately to avoid stale overlay state
+        await tipcClient.clearAgentProgress({})
       } else {
         // No session progress yet (e.g., submitting input). Do not kill all sessions.
         // Just clear the overlay/state in the panel.

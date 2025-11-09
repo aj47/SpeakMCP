@@ -602,35 +602,35 @@ export function Component() {
                 )
               )}
 
-              {/* Waveform visualization - full width with centered content, dimmed when agent progress is showing */}
-              <div
-                className={cn(
-                  "absolute inset-x-0 flex h-6 items-center justify-center transition-opacity duration-300 px-4 z-30 pointer-events-none",
-                  agentProgress && !agentProgress.isSnoozed && !mcpTranscribeMutation.isPending
-                    ? "opacity-30"
-                    : "opacity-100",
-                )}
-              >
-                <div className="flex h-6 items-center gap-0.5">
-                  {visualizerData
-                    .slice()
-                    .map((rms, index) => {
-                      return (
-                        <div
-                          key={index}
-                          className={cn(
-                            "h-full w-0.5 shrink-0 rounded-lg",
-                            "bg-red-500 dark:bg-white",
-                            rms === -1000 && "bg-neutral-400 dark:bg-neutral-500",
-                          )}
-                          style={{
-                            height: `${Math.min(100, Math.max(16, rms * 100))}%`,
-                          }}
-                        />
-                      )
-                    })}
+              {/* Waveform visualization - only show when recording is active */}
+              {recording && (
+                <div
+                  className={cn(
+                    "absolute inset-x-0 flex h-6 items-center justify-center transition-opacity duration-300 px-4 z-30 pointer-events-none",
+                    "opacity-100",
+                  )}
+                >
+                  <div className="flex h-6 items-center gap-0.5">
+                    {visualizerData
+                      .slice()
+                      .map((rms, index) => {
+                        return (
+                          <div
+                            key={index}
+                            className={cn(
+                              "h-full w-0.5 shrink-0 rounded-lg",
+                              "bg-red-500 dark:bg-white",
+                              rms === -1000 && "bg-neutral-400 dark:bg-neutral-500",
+                            )}
+                            style={{
+                              height: `${Math.min(100, Math.max(16, rms * 100))}%`,
+                            }}
+                          />
+                        )
+                      })}
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           </div>
         )}

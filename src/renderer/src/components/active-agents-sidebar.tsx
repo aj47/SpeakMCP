@@ -82,6 +82,11 @@ export function ActiveAgentsSidebar() {
     logUI('[ActiveAgentsSidebar] Stopping session:', sessionId)
     try {
       await tipcClient.stopAgentSession({ sessionId })
+      // If we just stopped the focused session, unfocus and clear renderer progress
+      if (focusedSessionId === sessionId) {
+        setFocusedSessionId(null)
+        await tipcClient.clearAgentProgress({})
+      }
     } catch (error) {
       console.error("Failed to stop session:", error)
     }

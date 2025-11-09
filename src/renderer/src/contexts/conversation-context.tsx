@@ -229,13 +229,12 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
 
         // Auto-focus this session if no session is currently focused AND it's not snoozed
         // Snoozed sessions run in background without stealing focus
-        if (!update.isSnoozed) {
+        // Only auto-focus active, non-snoozed sessions. Do not re-focus completed sessions.
+        if (!update.isSnoozed && !update.isComplete) {
           setFocusedSessionIdInternal((prev) => {
-            const newFocus = prev ?? sessionId
-            if (prev !== newFocus) {
-              logUI('[ConversationContext] Auto-focusing session:', newFocus)
-            }
-            return newFocus
+            if (prev) return prev
+            logUI('[ConversationContext] Auto-focusing session:', sessionId)
+            return sessionId
           })
         }
 

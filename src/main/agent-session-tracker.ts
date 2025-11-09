@@ -72,27 +72,39 @@ class AgentSessionTracker {
    * Mark a session as completed and remove it
    */
   completeSession(sessionId: string, finalActivity?: string): void {
-    // Remove completed sessions immediately
-    console.log(`[AgentSessionTracker] Completing session: ${sessionId}, remaining sessions: ${this.sessions.size - 1}`)
+    // Idempotent complete - only remove if present, log accurate remaining count
+    if (!this.sessions.has(sessionId)) {
+      console.log(`[AgentSessionTracker] Complete requested for non-existent session: ${sessionId}`)
+      return
+    }
     this.sessions.delete(sessionId)
+    console.log(`[AgentSessionTracker] Completing session: ${sessionId}, remaining sessions: ${this.sessions.size}`)
   }
 
   /**
    * Mark a session as stopped (via kill switch) and remove it
    */
   stopSession(sessionId: string): void {
-    // Remove stopped sessions immediately
-    console.log(`[AgentSessionTracker] Stopping session: ${sessionId}, remaining sessions: ${this.sessions.size - 1}`)
+    // Idempotent stop - only remove if present, log accurate remaining count
+    if (!this.sessions.has(sessionId)) {
+      console.log(`[AgentSessionTracker] Stop requested for non-existent session: ${sessionId}`)
+      return
+    }
     this.sessions.delete(sessionId)
+    console.log(`[AgentSessionTracker] Stopping session: ${sessionId}, remaining sessions: ${this.sessions.size}`)
   }
 
   /**
    * Mark a session as errored and remove it
    */
   errorSession(sessionId: string, errorMessage: string): void {
-    // Remove errored sessions immediately
-    console.log(`[AgentSessionTracker] Error in session: ${sessionId}, remaining sessions: ${this.sessions.size - 1}`)
+    // Idempotent error - only remove if present, log accurate remaining count
+    if (!this.sessions.has(sessionId)) {
+      console.log(`[AgentSessionTracker] Error reported for non-existent session: ${sessionId}`)
+      return
+    }
     this.sessions.delete(sessionId)
+    console.log(`[AgentSessionTracker] Error in session: ${sessionId}, remaining sessions: ${this.sessions.size}`)
   }
 
   /**

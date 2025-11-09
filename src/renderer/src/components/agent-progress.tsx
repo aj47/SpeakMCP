@@ -521,16 +521,16 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
     }))
   }
 
-  // Kill switch handler
+  // Kill switch handler - stop only this session
   const handleKillSwitch = async () => {
-    if (isKilling) return // Prevent double-clicks
+    if (isKilling || !progress?.sessionId) return // Prevent double-clicks
 
     setIsKilling(true)
     try {
-      await tipcClient.emergencyStopAgent()
+      await tipcClient.stopAgentSession({ sessionId: progress.sessionId })
       setShowKillConfirmation(false)
     } catch (error) {
-      console.error("Failed to stop agent:", error)
+      console.error("Failed to stop agent session:", error)
     } finally {
       setIsKilling(false)
     }
@@ -974,7 +974,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
               <h3 className="text-sm font-medium">Stop Agent Execution</h3>
             </div>
             <p className="text-xs text-muted-foreground mb-4">
-              Are you sure you want to stop the agent? This will immediately terminate all running processes and cannot be undone.
+              Are you sure you want to stop this session? Other sessions will continue running.
             </p>
             <div className="flex gap-2 justify-end">
               <Button

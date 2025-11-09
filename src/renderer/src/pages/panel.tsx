@@ -202,7 +202,9 @@ export function Component() {
     },
     onSuccess() {
       setShowTextInput(false)
-      // Don't clear progress or hide panel on success - agent mode will handle this
+      // Ensure main process knows text input is no longer active (prevents textInput positioning)
+      tipcClient.clearTextInputState({})
+      // Don't hide panel on success - agent mode will handle this and keep panel visible
       // The panel needs to stay visible for agent mode progress updates
     },
   })
@@ -343,7 +345,12 @@ export function Component() {
   // Text input handlers
   useEffect(() => {
     const unlisten = rendererHandlers.showTextInput.listen(() => {
-      // Clear any previous agent progress when starting new text input
+      // Reset any previous pending state to ensure textarea is enabled
+      logUI('[Panel] showTextInput received: resetting text input mutations and enabling textarea')
+      textInputMutation.reset()
+      mcpTextInputMutation.reset()
+
+      // Show text input and focus
       setShowTextInput(true)
       // Panel window is already shown by the keyboard handler
       // Focus the text input after a short delay to ensure it's rendered
@@ -373,6 +380,8 @@ export function Component() {
 
     // Hide the text input immediately and show processing/overlay
     setShowTextInput(false)
+    // Ensure main process no longer treats panel as textInput mode
+    tipcClient.clearTextInputState({})
 
     // Always try to use MCP processing first if available
     try {
@@ -433,29 +442,30 @@ export function Component() {
   // Agent progress handler - resize panel when agent mode starts/stops
   // Note: Progress updates are now handled in ConversationContext for session isolation
   useEffect(() => {
-    // Resize panel for agent mode when progress appears (but not for snoozed sessions)
+    // Keep text input size if we just submitted and are waiting for first progress to avoid flicker
+    const isTextSubmissionPending = textInputMutation.isPending || mcpTextInputMutation.isPending
+
     if (agentProgress && !agentProgress.isComplete && !agentProgress.isSnoozed) {
       // Small delay to ensure the panel is ready
       setTimeout(() => {
         tipcClient.resizePanelForAgentMode({})
       }, 100)
-    } else if (!agentProgress || agentProgress.isSnoozed) {
-      // Resize back to normal when no progress or session is snoozed
+    } else if (isTextSubmissionPending) {
+      // Avoid bouncing to tall normal size between submit and first progress
+      // Intentionally do nothing; keep current (text input) size briefly
+    } else if (!agentProgress || agentProgress.isSnoozed || agentProgress.isComplete) {
+      // Resize back to normal when no progress, session is snoozed, or session is complete
       setTimeout(() => {
         tipcClient.resizePanelToNormal({})
       }, 100)
     }
-  }, [agentProgress])
+  }, [agentProgress, textInputMutation.isPending, mcpTextInputMutation.isPending])
 
-  // If agent progress arrives while text input is visible, hide text input
-  useEffect(() => {
-    if (agentProgress && showTextInput) {
-      logUI('[Panel] Hiding text input because agent progress is available', {
-        sessionId: agentProgress.sessionId,
-      })
-      setShowTextInput(false)
-    }
-  }, [agentProgress, showTextInput])
+  // Note: We don't need to hide text input when agentProgress changes because:
+  // 1. handleTextSubmit already hides it immediately on submit (line 375)
+  // 2. mcpTextInputMutation.onSuccess/onError also hide it (lines 194, 204)
+  // 3. Hiding on ANY agentProgress change would close text input when background
+  //    sessions get updates, which breaks the UX when user is typing
 
   // Debug: Log overlay visibility conditions
   useEffect(() => {
@@ -587,7 +597,8 @@ export function Component() {
               )}
 
               {/* Agent progress overlay - left-aligned and full coverage */}
-              {agentProgress && (
+              {/* Only show agent progress if session is not snoozed */}
+              {agentProgress && !agentProgress.isSnoozed && (
                 hasMultipleSessions ? (
                   <MultiAgentProgressView
                     variant="overlay"

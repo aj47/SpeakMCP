@@ -246,16 +246,32 @@ export interface AgentModeResponse {
 
 // Helper function to emit progress updates to the renderer with better error handling
 // Note: This function now expects sessionId to be included in the update object
-function emitAgentProgress(update: AgentProgressUpdate) {
+async function emitAgentProgress(update: AgentProgressUpdate) {
   const panel = WINDOWS.get("panel")
   if (!panel) {
     console.warn("Panel window not available for progress update")
     return
   }
 
-  // Show the panel window if it's not visible
-  if (!panel.isVisible()) {
-    showPanelWindow()
+  console.log(`[llm.ts emitAgentProgress] Called for session ${update.sessionId}, panel visible: ${panel.isVisible()}, isSnoozed: ${update.isSnoozed}`)
+
+  // Only show the panel window if it's not visible AND the session is not snoozed
+  if (!panel.isVisible() && update.sessionId) {
+    // Check if this session is snoozed before showing the panel
+    const { agentSessionTracker } = await import("./agent-session-tracker")
+    const isSnoozed = agentSessionTracker.isSessionSnoozed(update.sessionId)
+
+    console.log(`[llm.ts emitAgentProgress] Panel not visible. Session ${update.sessionId} snoozed check: ${isSnoozed}`)
+
+    if (!isSnoozed) {
+      // Only show panel for non-snoozed sessions
+      console.log(`[llm.ts emitAgentProgress] Showing panel for non-snoozed session ${update.sessionId}`)
+      showPanelWindow()
+    } else {
+      console.log(`[llm.ts emitAgentProgress] Session ${update.sessionId} is snoozed, NOT showing panel`)
+    }
+  } else {
+    console.log(`[llm.ts emitAgentProgress] Skipping show check - panel visible: ${panel.isVisible()}, has sessionId: ${!!update.sessionId}`)
   }
 
   // Also send updates to main window if it's open for live progress visualization
@@ -485,11 +501,14 @@ export async function processTranscriptWithAgentMode(
   const emit = (update: Omit<AgentProgressUpdate, 'sessionId' | 'conversationId' | 'isSnoozed'>) => {
     const isSnoozed = agentSessionTracker.isSessionSnoozed(currentSessionId)
 
+    // Fire and forget - don't await, but catch errors
     emitAgentProgress({
       ...update,
       sessionId: currentSessionId,
       conversationId: currentConversationId,
       isSnoozed,
+    }).catch(err => {
+      console.warn("[emit] Failed to emit agent progress:", err)
     })
   }
 

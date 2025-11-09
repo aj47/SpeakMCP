@@ -48,7 +48,7 @@ import { state, agentProcessManager } from "./state"
 import { startRemoteServer, stopRemoteServer, restartRemoteServer } from "./remote-server"
 
 // Helper function to emit agent progress updates to the renderer
-function emitAgentProgress(update: AgentProgressUpdate) {
+async function emitAgentProgress(update: AgentProgressUpdate) {
   const panel = WINDOWS.get("panel")
   if (!panel) {
     console.warn("Panel window not available for progress update")
@@ -56,9 +56,25 @@ function emitAgentProgress(update: AgentProgressUpdate) {
     return
   }
 
-  // Show the panel window if it's not visible
-  if (!panel.isVisible()) {
-    showPanelWindow()
+  console.log(`[emitAgentProgress] Called for session ${update.sessionId}, panel visible: ${panel.isVisible()}, isSnoozed: ${update.isSnoozed}`)
+
+  // Only show the panel window if it's not visible AND the session is not snoozed
+  if (!panel.isVisible() && update.sessionId) {
+    // Check if this session is snoozed before showing the panel
+    const { agentSessionTracker } = await import("./agent-session-tracker")
+    const isSnoozed = agentSessionTracker.isSessionSnoozed(update.sessionId)
+
+    console.log(`[emitAgentProgress] Panel not visible. Session ${update.sessionId} snoozed check: ${isSnoozed}`)
+
+    if (!isSnoozed) {
+      // Only show panel for non-snoozed sessions
+      console.log(`[emitAgentProgress] Showing panel for non-snoozed session ${update.sessionId}`)
+      showPanelWindow()
+    } else {
+      console.log(`[emitAgentProgress] Session ${update.sessionId} is snoozed, NOT showing panel`)
+    }
+  } else {
+    console.log(`[emitAgentProgress] Skipping show check - panel visible: ${panel.isVisible()}, has sessionId: ${!!update.sessionId}`)
   }
 
   try {
@@ -87,7 +103,7 @@ async function initializeMcpWithProgress(config: Config, sessionId: string): Pro
   const initStatus = mcpService.getInitializationStatus()
 
   // Emit initial progress showing MCP initialization
-  emitAgentProgress({
+  await emitAgentProgress({
     sessionId,
     currentIteration: 0,
     maxIterations: config.mcpMaxIterations ?? 10,
@@ -107,10 +123,10 @@ async function initializeMcpWithProgress(config: Config, sessionId: string): Pro
   })
 
   // Poll for initialization progress updates
-  const progressInterval = setInterval(() => {
+  const progressInterval = setInterval(async () => {
     const currentStatus = mcpService.getInitializationStatus()
     if (currentStatus.isInitializing) {
-      emitAgentProgress({
+      await emitAgentProgress({
         sessionId,
         currentIteration: 0,
         maxIterations: config.mcpMaxIterations ?? 10,
@@ -143,7 +159,7 @@ async function initializeMcpWithProgress(config: Config, sessionId: string): Pro
   }
 
   // Emit completion of MCP initialization
-  emitAgentProgress({
+  await emitAgentProgress({
     sessionId,
     currentIteration: 0,
     maxIterations: config.mcpMaxIterations ?? 10,
@@ -179,7 +195,7 @@ async function processWithAgentMode(
   const sessionId = agentSessionTracker.startSession(conversationId, conversationTitle)
 
   // Emit initial progress immediately so the session is restorable from sidebar
-  emitAgentProgress({
+  await emitAgentProgress({
     sessionId,
     conversationId,
     currentIteration: 0,
@@ -392,7 +408,12 @@ export const router = {
   hidePanelWindow: t.procedure.action(async () => {
     const panel = WINDOWS.get("panel")
 
-    panel?.hide()
+    console.log(`[hidePanelWindow] Called. Panel exists: ${!!panel}, visible: ${panel?.isVisible()}`)
+
+    if (panel) {
+      panel.hide()
+      console.log(`[hidePanelWindow] Panel hidden`)
+    }
   }),
 
   resizePanelForAgentMode: t.procedure.action(async () => {
@@ -518,10 +539,10 @@ export const router = {
       // Stop the session in the state manager (aborts LLM requests, kills processes)
       agentSessionStateManager.stopSession(input.sessionId)
 
-      // Clean up the session state (removes from state.agentSessions)
-      agentSessionStateManager.cleanupSession(input.sessionId)
+      // Do NOT cleanup here; allow the session loop to finish and clean up itself
+      // This ensures a final "stopped" progress update is emitted to the UI
 
-      // Mark the session as stopped in the tracker
+      // Mark the session as stopped in the tracker (removes from active sessions UI)
       agentSessionTracker.stopSession(input.sessionId)
 
       return { success: true }

@@ -54,6 +54,15 @@ function createBaseWindow({
   // Setup console logger to capture renderer console messages
   setupConsoleLogger(win, id)
 
+  // Lightweight window lifecycle logging to diagnose unexpected hides/closes
+  const _label = id.toUpperCase()
+  win.on("show", () => console.log(`[WINDOW ${_label}] show`))
+  win.on("hide", () => console.log(`[WINDOW ${_label}] hide`))
+  win.on("minimize", () => console.log(`[WINDOW ${_label}] minimize`))
+  win.on("restore", () => console.log(`[WINDOW ${_label}] restore`))
+  win.on("focus", () => console.log(`[WINDOW ${_label}] focus`))
+  win.on("blur", () => console.log(`[WINDOW ${_label}] blur`))
+
   if (showWhenReady) {
     win.on("ready-to-show", () => {
       win.show()
@@ -61,6 +70,7 @@ function createBaseWindow({
   }
 
   win.on("close", () => {
+    console.log(`[WINDOW ${_label}] close`)
     WINDOWS.delete(id)
   })
 
@@ -169,15 +179,39 @@ const getSavedSizeForMode = (mode: "normal" | "agent" | "textInput") => {
 
   console.log(`[window.ts] getSavedSizeForMode(${mode}) - checking config...`)
 
+  // Helper to validate and cap saved sizes to reasonable maximums
+  const validateSize = (savedSize: { width: number; height: number }, defaultSize: { width: number; height: number }) => {
+    const maxWidth = 3000 // Maximum reasonable width
+    const maxHeight = 2000 // Maximum reasonable height
+
+    // For textInput mode, enforce stricter limits to prevent huge panels
+    const maxTextInputWidth = 1200
+    const maxTextInputHeight = 800
+
+    if (mode === "textInput") {
+      if (savedSize.width > maxTextInputWidth || savedSize.height > maxTextInputHeight) {
+        console.log(`[window.ts] Saved textInput size too large (${savedSize.width}x${savedSize.height}), using default:`, defaultSize)
+        return defaultSize
+      }
+    } else {
+      if (savedSize.width > maxWidth || savedSize.height > maxHeight) {
+        console.log(`[window.ts] Saved ${mode} size too large (${savedSize.width}x${savedSize.height}), using default:`, defaultSize)
+        return defaultSize
+      }
+    }
+
+    return savedSize
+  }
+
   if (mode === "normal" && config.panelNormalModeSize) {
     console.log(`[window.ts] Found saved normal mode size:`, config.panelNormalModeSize)
-    return config.panelNormalModeSize
+    return validateSize(config.panelNormalModeSize, panelWindowSize)
   } else if (mode === "agent" && config.panelAgentModeSize) {
     console.log(`[window.ts] Found saved agent mode size:`, config.panelAgentModeSize)
-    return config.panelAgentModeSize
+    return validateSize(config.panelAgentModeSize, agentPanelWindowSize)
   } else if (mode === "textInput" && config.panelTextInputModeSize) {
     console.log(`[window.ts] Found saved textInput mode size:`, config.panelTextInputModeSize)
-    return config.panelTextInputModeSize
+    return validateSize(config.panelTextInputModeSize, textInputPanelWindowSize)
   }
 
   // Return default sizes if no saved size
@@ -321,6 +355,8 @@ export function createPanelWindow() {
 export function showPanelWindow() {
   const win = WINDOWS.get("panel")
   if (win) {
+    console.log(`[showPanelWindow] Called. Current visibility: ${win.isVisible()}`)
+
     // Determine the correct mode based on current state
     let mode: "normal" | "agent" | "textInput" = "normal"
     if (state.isTextInputActive) {
@@ -338,8 +374,10 @@ export function showPanelWindow() {
     // For text input mode, use show() to properly activate and focus the window
     // For other modes, use showInactive() to avoid stealing focus
     if (mode === "textInput") {
+      console.log(`[showPanelWindow] Showing panel with show() for textInput mode`)
       win.show()
     } else {
+      console.log(`[showPanelWindow] Showing panel with showInactive() for ${mode} mode`)
       win.showInactive()
       // On Windows, we need to explicitly focus the window for other modes too
       if (process.platform === "win32") {

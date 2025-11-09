@@ -12,7 +12,7 @@ import { RendererHandlers } from "./renderer-handlers"
 import { logApp } from "./debug"
 import { configStore } from "./config"
 import { getFocusedAppInfo } from "./keyboard"
-import { state, agentProcessManager } from "./state"
+import { state, agentProcessManager, suppressPanelAutoShow } from "./state"
 import { calculatePanelPosition } from "./panel-position"
 import { setupConsoleLogger } from "./console-logger"
 
@@ -481,6 +481,8 @@ export const closeAgentModeAndHidePanelWindow = () => {
     getRendererHandlers<RendererHandlers>(
       win.webContents,
     ).clearAgentProgress.send()
+    // Suppress auto-show briefly to avoid immediate reopen from any trailing progress
+    suppressPanelAutoShow(1000)
     resizePanelToNormal()
 
     // Hide the panel after a small delay to ensure resize completes
@@ -499,7 +501,8 @@ export const emergencyStopAgentMode = async () => {
   if (win) {
     // Notify renderer ASAP
     getRendererHandlers<RendererHandlers>(win.webContents).emergencyStopAgent?.send()
-    getRendererHandlers<RendererHandlers>(win.webContents).clearAgentProgress.send()
+    // Do NOT clear agent progress here; let the session emit its final 'stopped' update
+    // to avoid stale/empty completion panels racing with progress clear.
   }
 
   try {
@@ -512,6 +515,8 @@ export const emergencyStopAgentMode = async () => {
 
   // Close panel and resize
   if (win) {
+    // Suppress auto-show for a short cooldown so background progress doesn't re-open the panel
+    suppressPanelAutoShow(1000)
     resizePanelToNormal()
     setTimeout(() => {
       if (win.isVisible()) {

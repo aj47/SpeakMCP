@@ -42,7 +42,7 @@ import {
   constrainPositionToScreen,
   PanelPosition,
 } from "./panel-position"
-import { state, agentProcessManager } from "./state"
+import { state, agentProcessManager, suppressPanelAutoShow, isPanelAutoShowSuppressed } from "./state"
 
 
 import { startRemoteServer, stopRemoteServer, restartRemoteServer } from "./remote-server"
@@ -66,7 +66,9 @@ async function emitAgentProgress(update: AgentProgressUpdate) {
 
     console.log(`[emitAgentProgress] Panel not visible. Session ${update.sessionId} snoozed check: ${isSnoozed}`)
 
-    if (!isSnoozed) {
+    if (isPanelAutoShowSuppressed()) {
+      console.log(`[emitAgentProgress] Panel auto-show suppressed; NOT showing panel for session ${update.sessionId}`)
+    } else if (!isSnoozed) {
       // Only show panel for non-snoozed sessions
       console.log(`[emitAgentProgress] Showing panel for non-snoozed session ${update.sessionId}`)
       showPanelWindow()
@@ -411,6 +413,7 @@ export const router = {
     console.log(`[hidePanelWindow] Called. Panel exists: ${!!panel}, visible: ${panel?.isVisible()}`)
 
     if (panel) {
+      suppressPanelAutoShow(1000)
       panel.hide()
       console.log(`[hidePanelWindow] Panel hidden`)
     }

@@ -529,6 +529,32 @@ export function Component() {
     return unlisten
   }, [isConversationActive, endConversation, transcribeMutation, mcpTranscribeMutation, textInputMutation, mcpTextInputMutation])
 
+
+	  // Auto-close the panel when there's nothing to show
+	  useEffect(() => {
+	    // Keep panel open if a text submission is still pending (to avoid flicker)
+	    const isTextSubmissionPending = textInputMutation.isPending || mcpTextInputMutation.isPending
+	    const showsAgentOverlay = !!agentProgress && !agentProgress.isSnoozed
+
+	    const shouldAutoClose =
+	      !showsAgentOverlay &&
+	      !showTextInput &&
+	      !recording &&
+	      !isTextSubmissionPending
+
+	    if (shouldAutoClose) {
+	      const t = setTimeout(() => {
+	        // Ensure normal size before hide, then hide the window
+	        tipcClient.resizePanelToNormal({})
+	        tipcClient.hidePanelWindow({})
+	      }, 200)
+	      return () => clearTimeout(t)
+	    }
+
+      return undefined as void
+
+	  }, [agentProgress, showTextInput, recording, textInputMutation.isPending, mcpTextInputMutation.isPending])
+
   return (
     <PanelResizeWrapper
       enableResize={true}

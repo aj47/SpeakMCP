@@ -13,7 +13,7 @@ import { diagnosticsService } from "./diagnostics"
 import { makeStructuredContextExtraction, ContextExtractionResponse } from "./structured-output"
 import { makeLLMCallWithFetch, makeTextCompletionWithFetch, verifyCompletionWithFetch } from "./llm-fetch"
 import { constructSystemPrompt } from "./system-prompts"
-import { state, agentSessionStateManager } from "./state"
+import { state, agentSessionStateManager, isPanelAutoShowSuppressed } from "./state"
 import { isDebugLLM, logLLM, isDebugTools, logTools } from "./debug"
 import { shrinkMessagesForLLM } from "./context-budget"
 import { agentSessionTracker } from "./agent-session-tracker"
@@ -263,7 +263,9 @@ async function emitAgentProgress(update: AgentProgressUpdate) {
 
     console.log(`[llm.ts emitAgentProgress] Panel not visible. Session ${update.sessionId} snoozed check: ${isSnoozed}`)
 
-    if (!isSnoozed) {
+    if (isPanelAutoShowSuppressed()) {
+      console.log(`[llm.ts emitAgentProgress] Panel auto-show suppressed; NOT showing panel for session ${update.sessionId}`)
+    } else if (!isSnoozed) {
       // Only show panel for non-snoozed sessions
       console.log(`[llm.ts emitAgentProgress] Showing panel for non-snoozed session ${update.sessionId}`)
       showPanelWindow()
@@ -1181,8 +1183,64 @@ Always use actual resource IDs from the conversation history or create new ones 
         conversationHistory: formatConversationForProgress(conversationHistory),
       })
 
-      // Execute tool with retry logic for transient failures
-      let result = await executeToolCall(toolCall)
+      // Execute tool with cancel-aware race so kill switch can stop mid-tool
+      let cancelledByKill = false
+      let cancelInterval: NodeJS.Timeout | null = null
+      const stopPromise: Promise<MCPToolResult> = new Promise((resolve) => {
+        cancelInterval = setInterval(() => {
+          if (agentSessionStateManager.shouldStopSession(currentSessionId)) {
+            cancelledByKill = true
+            if (cancelInterval) clearInterval(cancelInterval)
+            resolve({
+              content: [{ type: "text", text: "Tool execution cancelled by emergency kill switch" }],
+              isError: true,
+            })
+          }
+        }, 100)
+      })
+      const execPromise = executeToolCall(toolCall)
+      let result = (await Promise.race([
+        execPromise,
+        stopPromise,
+      ])) as MCPToolResult
+      // Avoid unhandled rejection if the tool promise rejects after we already stopped
+      if (cancelledByKill) {
+        execPromise.catch(() => { /* swallow after kill switch */ })
+      }
+      if (cancelInterval) clearInterval(cancelInterval)
+
+      if (cancelledByKill) {
+        // Mark step and emit final progress, then break out of tool loop
+        toolCallStep.status = "error"
+        toolCallStep.toolResult = {
+          success: false,
+          content: "Tool execution cancelled by emergency kill switch",
+          error: "Cancelled by emergency kill switch",
+        }
+        const toolResultStep = createProgressStep(
+          "tool_result",
+          `${toolCall.name} cancelled`,
+          "Tool execution cancelled by emergency kill switch",
+          "error",
+        )
+        toolResultStep.toolResult = toolCallStep.toolResult
+        progressSteps.push(toolResultStep)
+        emit({
+          currentIteration: iteration,
+          maxIterations,
+          steps: progressSteps.slice(-3),
+          isComplete: true,
+          finalContent: (finalContent || "") + "\n\n(Agent mode was stopped by emergency kill switch)",
+          conversationHistory: formatConversationForProgress(conversationHistory),
+        })
+        break
+      }
+
+      // If kill switch was pressed during retries, stop retrying
+      if (agentSessionStateManager.shouldStopSession(currentSessionId)) {
+        break
+      }
+
       let retryCount = 0
       const maxRetries = 2
 
@@ -1265,6 +1323,12 @@ Always use actual resource IDs from the conversation history or create new ones 
         conversationHistory: formatConversationForProgress(conversationHistory),
       })
     }
+
+    // If stop was requested during tool execution, exit the agent loop now
+    if (agentSessionStateManager.shouldStopSession(currentSessionId)) {
+      break
+    }
+
 
     // Note: Assistant response with tool calls was already added before tool execution
     // This ensures the tool call request is visible immediately in the UI

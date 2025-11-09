@@ -24,6 +24,9 @@ export const state = {
   llmAbortControllers: new Set<AbortController>(),
   // Per-session agent state (new approach for multi-session support)
   agentSessions: new Map<string, AgentSessionState>(),
+  // Prevent auto-showing panel for a short cooldown after hide
+  panelAutoShowSuppressedUntil: 0,
+
 }
 
 // Process management for agent mode
@@ -97,6 +100,15 @@ export const agentProcessManager = {
     return state.agentProcesses.size
   },
 }
+
+export function suppressPanelAutoShow(ms: number = 750): void {
+  state.panelAutoShowSuppressedUntil = Date.now() + ms
+}
+
+export function isPanelAutoShowSuppressed(): boolean {
+  return Date.now() < state.panelAutoShowSuppressedUntil
+}
+
 
 // Abort management for LLM HTTP requests
 export const llmRequestAbortManager = {

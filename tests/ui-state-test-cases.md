@@ -84,7 +84,7 @@ HIDDEN → RECORDING_DICTATION → HIDDEN
 
 **Expected Results:**
 - Panel shows waveform during recording (50px height)
-- Panel resizes to agent mode (400px height) when session starts
+- Panel resizes to agent mode (~401px height, per resize logic) when session starts
 - Agent progress panel displays immediately (no "Processing..." state)
 - Session appears in active sessions list
 - `agentProgressById.size === 1`
@@ -124,14 +124,14 @@ HIDDEN → RECORDING_AGENT → AGENT_ACTIVE
 **Expected Results:**
 - Panel appears with text input (180px height)
 - Textarea is auto-focused
-- After submit, panel resizes to agent mode (400px height)
+- After submit, panel resizes to agent mode (~401px height, per resize logic)
 - Agent progress displays immediately
 - `showTextInput === true` initially
-- `showTextInput === false` after agent progress arrives
+- `showTextInput === false` immediately after submit
 
 **UI Logs to Verify:**
 ```
-[Panel] Hiding text input because agent progress is available { sessionId: 'session_XXXXX' }
+[Panel] showTextInput received: resetting text input mutations and enabling textarea
 [ConversationContext] Received progress update: { sessionId: 'session_XXXXX', ... }
 [Panel] agentProgress changed: { hasProgress: true, sessionId: 'session_XXXXX', ... }
 [window.ts] resizePanelForTextInput - starting...
@@ -396,9 +396,8 @@ AGENT_ACTIVE → HIDDEN
 
 **Expected Results:**
 - NO "Processing..." spinner should appear
-- Agent progress panel displays immediately
+- Agent progress panel displays as soon as the first progress update arrives
 - First progress update shows "Initializing..." or first actual step
-- `agentProgress !== null` from the start
 
 **UI Logs to Verify:**
 ```

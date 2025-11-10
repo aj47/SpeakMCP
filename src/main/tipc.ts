@@ -521,6 +521,21 @@ export const router = {
     return { success: true }
   }),
 
+
+  clearAgentSessionProgress: t.procedure
+    .input<{ sessionId: string }>()
+    .action(async ({ input }) => {
+      const win = WINDOWS.get("panel")
+      if (win) {
+        try {
+          getRendererHandlers<RendererHandlers>(win.webContents).clearAgentSessionProgress?.send(input.sessionId)
+        } catch (e) {
+          console.warn("[tipc] clearAgentSessionProgress send failed:", e)
+        }
+      }
+      return { success: true }
+    }),
+
   closeAgentModeAndHidePanelWindow: t.procedure.action(async () => {
     closeAgentModeAndHidePanelWindow()
     return { success: true }

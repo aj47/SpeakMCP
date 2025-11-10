@@ -511,7 +511,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({})
 
   // Get current conversation ID for deep-linking and session focus control
-  const { currentConversationId, setFocusedSessionId } = useConversation()
+  const { currentConversationId, setFocusedSessionId, agentProgressById } = useConversation()
 
   // Helper to toggle expansion state for a specific item
   const toggleItemExpansion = (itemKey: string) => {
@@ -570,9 +570,20 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
   // Close button handler for completed agent view
   const handleClose = async () => {
     try {
-      await tipcClient.closeAgentModeAndHidePanelWindow()
+      const thisId = progress?.sessionId
+      const hasOtherVisible = thisId
+        ? Array.from(agentProgressById.values()).some(p => p.sessionId !== thisId && !p.isSnoozed)
+        : false
+
+      if (thisId && hasOtherVisible) {
+        // Session-scoped dismiss: remove only this session's progress and keep panel open
+        await tipcClient.clearAgentSessionProgress({ sessionId: thisId })
+      } else {
+        // Last visible session: exit agent mode and hide panel
+        await tipcClient.closeAgentModeAndHidePanelWindow()
+      }
     } catch (error) {
-      console.error("Failed to close agent mode:", error)
+      console.error("Failed to close agent session/panel:", error)
     }
   }
 

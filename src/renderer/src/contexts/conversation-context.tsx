@@ -293,6 +293,38 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
     return unlisten
   }, [])
 
+  // Listen for session-scoped progress clear (dismiss a single session)
+  useEffect(() => {
+    const unlisten = (rendererHandlers as any).clearAgentSessionProgress?.listen?.((sessionId: string) => {
+      logUI('[ConversationContext] Clearing agent progress for session:', sessionId)
+      // Remove the session and adjust focus to the next available active (non-snoozed) session
+      setAgentProgressById((prevMap) => {
+        const newMap = new Map(prevMap)
+        newMap.delete(sessionId)
+
+        // Determine next focus if current focus was removed
+        setFocusedSessionIdInternal((prev) => {
+          if (prev !== sessionId) return prev
+          const candidates = Array.from(newMap.entries())
+            .filter(([_, p]) => !p.isSnoozed)
+            .sort((a, b) => {
+              const ta = a[1].conversationHistory?.[0]?.timestamp || 0
+              const tb = b[1].conversationHistory?.[0]?.timestamp || 0
+              return tb - ta
+            })
+          const nextId = candidates[0]?.[0] || null
+          logUI('[ConversationContext] Focus moved to next session after dismiss:', nextId)
+          return nextId
+        })
+
+        return newMap
+      })
+    })
+
+    return unlisten
+  }, [])
+
+
   // Cross-window: focus a specific agent session when requested by main or other windows
   useEffect(() => {
     const unlisten = (rendererHandlers as any).focusAgentSession?.listen?.((sessionId: string) => {

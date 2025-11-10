@@ -133,14 +133,14 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
       {parts.map((part, index) => {
         if (part.type === "think") {
           const keyBase = getThinkKey ? getThinkKey(part.content, index) : `think-${index}`
-          const expanded = isThinkExpanded ? !!isThinkExpanded(keyBase) : false
+          const isControlled = !!(isThinkExpanded && onToggleThink)
+          const expanded = isControlled ? !!isThinkExpanded!(keyBase) : undefined
           return (
             <ThinkSection
               key={keyBase}
               content={part.content}
               defaultCollapsed={true}
-              isCollapsed={!expanded}
-              onToggle={onToggleThink ? () => onToggleThink(keyBase) : undefined}
+              {...(isControlled ? { isCollapsed: !expanded, onToggle: () => onToggleThink!(keyBase) } : {})}
             />
           )
         } else {

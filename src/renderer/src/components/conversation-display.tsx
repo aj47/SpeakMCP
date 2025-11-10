@@ -1,4 +1,4 @@
-import React, { useState } from "react"
+import React, { useState, useCallback } from "react"
 import { Card, CardContent } from "@renderer/components/ui/card"
 import { Badge } from "@renderer/components/ui/badge"
 import { ScrollArea } from "@renderer/components/ui/scroll-area"
@@ -12,6 +12,8 @@ import { AudioPlayer } from "@renderer/components/audio-player"
 import { tipcClient } from "@renderer/lib/tipc-client"
 import { useConfigQuery } from "@renderer/lib/queries"
 import dayjs from "dayjs"
+
+const COLLAPSE_THRESHOLD = 200
 
 interface ConversationDisplayProps {
   messages: ConversationMessage[]
@@ -27,18 +29,26 @@ export function ConversationDisplay({
   const isFullHeight = maxHeight === "100%"
   const { agentProgress, isAgentProcessing } = useConversationState()
 
+
+
   // Persistent expansion state for messages and <think> sections
   const [expandedMessages, setExpandedMessages] = useState<Record<string, boolean>>({})
   const [expandedThinks, setExpandedThinks] = useState<Record<string, boolean>>({})
 
-  const toggleMessageExpansion = (id: string) =>
-    setExpandedMessages((prev) => ({ ...prev, [id]: !prev[id] }))
+  const toggleMessageExpansion = useCallback(
+    (id: string) =>
+      setExpandedMessages((prev) => ({ ...prev, [id]: !prev[id] })),
+    [],
+  )
 
-  const toggleThinkExpansion = (key: string) =>
-    setExpandedThinks((prev) => ({ ...prev, [key]: !prev[key] }))
+  const toggleThinkExpansion = useCallback(
+    (key: string) =>
+      setExpandedThinks((prev) => ({ ...prev, [key]: !prev[key] })),
+    [],
+  )
 
-  const makeThinkKeyForMessage = (messageId: string) => (content: string, index: number) =>
-    `${messageId}|think|${content.length}|${content.slice(0, 20)}`
+  const makeThinkKeyForMessage = (messageId: string) => (_content: string, index: number) =>
+    `${messageId}|think|${index}`
 
   if (messages.length === 0) {
     return (
@@ -75,6 +85,8 @@ export function ConversationDisplay({
               getThinkKey={makeThinkKeyForMessage(message.id)}
               isThinkExpanded={(key) => !!expandedThinks[key]}
               onToggleThink={toggleThinkExpansion}
+              hasExpandedThink={Object.keys(expandedThinks).some((k) => k.startsWith(`${message.id}|think|`) && expandedThinks[k])}
+
             />
           ))}
 
@@ -108,6 +120,8 @@ export function ConversationDisplay({
               getThinkKey={makeThinkKeyForMessage(message.id)}
               isThinkExpanded={(key) => !!expandedThinks[key]}
               onToggleThink={toggleThinkExpansion}
+              hasExpandedThink={Object.keys(expandedThinks).some((k) => k.startsWith(`${message.id}|think|`) && expandedThinks[k])}
+
             />
           ))}
 
@@ -135,6 +149,7 @@ interface ConversationMessageItemProps {
   getThinkKey?: (content: string, index: number) => string
   isThinkExpanded?: (key: string) => boolean
   onToggleThink?: (key: string) => void
+  hasExpandedThink?: boolean
 }
 
 function ConversationMessageItem({
@@ -145,6 +160,7 @@ function ConversationMessageItem({
   getThinkKey,
   isThinkExpanded,
   onToggleThink,
+  hasExpandedThink = false,
 }: ConversationMessageItemProps) {
   const configQuery = useConfigQuery()
   const [audioData, setAudioData] = useState<ArrayBuffer | null>(null)
@@ -252,7 +268,7 @@ function ConversationMessageItem({
   }
 
   const hasExtras = (message.toolCalls?.length ?? 0) > 0 || (message.toolResults?.length ?? 0) > 0
-  const shouldCollapse = message.content.length > 200 || hasExtras
+  const shouldCollapse = message.content.length > COLLAPSE_THRESHOLD || hasExtras
 
   return (
     <div
@@ -315,10 +331,10 @@ function ConversationMessageItem({
           )}
         </div>
 
-        <div className={cn("leading-relaxed text-left", !isExpanded && shouldCollapse && "line-clamp-3")}>
+        <div className={cn("leading-relaxed text-left", !isExpanded && !hasExpandedThink && shouldCollapse && "line-clamp-3")}>
           <MarkdownRenderer
             content={message.content}
-            getThinkKey={getThinkKey ? (c, i) => getThinkKey(c, i) : undefined}
+            getThinkKey={getThinkKey}
             isThinkExpanded={isThinkExpanded}
             onToggleThink={onToggleThink}
           />

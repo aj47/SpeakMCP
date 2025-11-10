@@ -567,8 +567,27 @@ export const router = {
       // Stop the session in the state manager (aborts LLM requests, kills processes)
       agentSessionStateManager.stopSession(input.sessionId)
 
-      // Do NOT cleanup here; allow the session loop to finish and clean up itself
-      // This ensures a final "stopped" progress update is emitted to the UI
+      // Immediately emit a final progress update with isComplete: true
+      // This ensures the UI updates immediately without waiting for the agent loop
+      // to detect the stop signal and emit its own final update
+      await emitAgentProgress({
+        sessionId: input.sessionId,
+        currentIteration: 0,
+        maxIterations: 0,
+        steps: [
+          {
+            id: `stop_${Date.now()}`,
+            type: "completion",
+            title: "Agent stopped",
+            description: "Agent mode was stopped by emergency kill switch",
+            status: "error",
+            timestamp: Date.now(),
+          },
+        ],
+        isComplete: true,
+        finalContent: "(Agent mode was stopped by emergency kill switch)",
+        conversationHistory: [],
+      })
 
       // Mark the session as stopped in the tracker (removes from active sessions UI)
       agentSessionTracker.stopSession(input.sessionId)

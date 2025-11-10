@@ -38,8 +38,8 @@ export function ActiveAgentsSidebar() {
 
   const { focusedSessionId, setFocusedSessionId } = useConversation()
 
-  // Track optimistic snooze state updates (sessionId -> isSnoozed)
-  const [optimisticSnoozeState, setOptimisticSnoozeState] = useState<Map<string, boolean>>(new Map())
+  // (removed) optimistic snooze state - not used; backend is source of truth
+  // const [optimisticSnoozeState, setOptimisticSnoozeState] = useState<Map<string, boolean>>(new Map())
 
   const { data } = useQuery<AgentSessionsResponse>({
     queryKey: ["agentSessions"],
@@ -82,10 +82,9 @@ export function ActiveAgentsSidebar() {
     logUI('[ActiveAgentsSidebar] Stopping session:', sessionId)
     try {
       await tipcClient.stopAgentSession({ sessionId })
-      // If we just stopped the focused session, unfocus and clear renderer progress
+      // If we just stopped the focused session, just unfocus; do not clear all progress
       if (focusedSessionId === sessionId) {
         setFocusedSessionId(null)
-        await tipcClient.clearAgentProgress({})
       }
     } catch (error) {
       console.error("Failed to stop session:", error)

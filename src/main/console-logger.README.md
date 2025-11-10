@@ -31,7 +31,7 @@ pnpm dev d
 
 When you run the app with `--debug-ui`, you'll see logs like:
 
-```
+```text
 [2025-11-09T10:30:45.123Z] [DEBUG][UI] [MAIN] Component mounted (App.tsx:42)
 [2025-11-09T10:30:45.234Z] [DEBUG][UI] [PANEL] [FOCUS] Input focus { activeElement: 'INPUT' } (panel.tsx:156)
 [2025-11-09T10:30:45.345Z] [DEBUG][UI] [MAIN] [STATE] ModelSelector.searchQuery: { from: '', to: 'gpt' } (ModelSelector.tsx:89)
@@ -66,7 +66,7 @@ logUI('[STATE] ModelSelector.searchQuery:', { from: '', to: 'gpt' })
 
 ## Architecture
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                    Main Process                              │
 │                                                              │
@@ -154,7 +154,7 @@ To test the console logger:
    ```
 
 3. Run the app and check the terminal output for:
-   ```
+   ```text
    [DEBUG][UI] [MAIN] App mounted (App.tsx:XX)
    [DEBUG][UI] [MAIN] [WARN] This is a warning (App.tsx:XX)
    [DEBUG][UI] [MAIN] [ERROR] This is an error (App.tsx:XX)
@@ -170,7 +170,7 @@ To test the console logger:
    ```
 
 2. Check that the debug flag is recognized:
-   ```
+   ```text
    [DEBUG] Enabled: UI (argv: debug-ui)
    ```
 

@@ -18,52 +18,16 @@
  *    - Currently not used, but available for future enhancements
  */
 
-import { BrowserWindow } from "electron"
+import type { BrowserWindow } from "electron"
 import { isDebugUI, logUI } from "./debug"
 
 type ConsoleLevel = "log" | "warn" | "error" | "info" | "debug"
 
-interface ConsoleMessage {
-  level: ConsoleLevel
-  message: string
-  source: string
-  line?: number
-  column?: number
-}
 
-/**
- * Format console arguments into a readable string
- */
-function formatConsoleArgs(args: any[]): string {
-  return args
-    .map((arg) => {
-      if (typeof arg === "string") {
-        return arg
-      }
-      if (typeof arg === "object" && arg !== null) {
-        try {
-          return JSON.stringify(arg, null, 2)
-        } catch {
-          return String(arg)
-        }
-      }
-      return String(arg)
-    })
-    .join(" ")
-}
 
-/**
- * Get a short window identifier from the window title or URL
- */
-function getWindowIdentifier(win: BrowserWindow): string {
-  const title = win.getTitle()
-  const url = win.webContents.getURL()
 
-  // Extract route from URL (e.g., /panel, /setup, or main)
-  if (url.includes("/panel")) return "PANEL"
-  if (url.includes("/setup")) return "SETUP"
-  return "MAIN"
-}
+
+
 
 /**
  * Setup console message listener for a specific window

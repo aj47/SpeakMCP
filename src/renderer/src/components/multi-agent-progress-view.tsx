@@ -1,4 +1,4 @@
-import React from "react"
+import React, { useMemo, useEffect } from "react"
 import { cn } from "@renderer/lib/utils"
 import { AgentProgress } from "@renderer/components/agent-progress"
 import { AgentProgressUpdate } from "../../../shared/types"
@@ -25,24 +25,28 @@ export function MultiAgentProgressView({
   const { agentProgressById, focusedSessionId, setFocusedSessionId } = useConversation()
 
   // Get all active sessions (non-snoozed)
-  const activeSessions = Array.from(agentProgressById.entries())
-    .filter(([_, progress]) => !progress.isSnoozed)
-    .sort((a, b) => {
-      // Sort by start time (newer first)
-      const timeA = a[1].conversationHistory?.[0]?.timestamp || 0
-      const timeB = b[1].conversationHistory?.[0]?.timestamp || 0
-      return timeB - timeA
-    })
+  const activeSessions = useMemo(() => {
+    return Array.from(agentProgressById.entries())
+      .filter(([_, progress]) => !progress.isSnoozed)
+      .sort((a, b) => {
+        // Sort by start time (newer first)
+        const timeA = a[1].conversationHistory?.[0]?.timestamp || 0
+        const timeB = b[1].conversationHistory?.[0]?.timestamp || 0
+        return timeB - timeA
+      })
+  }, [agentProgressById])
 
   // If no active sessions, return null
   if (activeSessions.length === 0) {
     return null
   }
 
-  // Get the focused session's progress
-  const focusedProgress = focusedSessionId
-    ? agentProgressById.get(focusedSessionId)
-    : activeSessions[0]?.[1]
+  // Determine which session to display: prefer focused if active; otherwise first active
+  const displaySessionId = (
+    focusedSessionId && agentProgressById.get(focusedSessionId) && !agentProgressById.get(focusedSessionId)!.isSnoozed
+  ) ? focusedSessionId : (activeSessions[0]?.[0] || null)
+
+  const focusedProgress = displaySessionId ? agentProgressById.get(displaySessionId) : undefined
 
   // Helper to get session title
   const getSessionTitle = (progress: AgentProgressUpdate): string => {
@@ -67,8 +71,7 @@ export function MultiAgentProgressView({
       {activeSessions.length > 1 && (
         <div className="flex shrink-0 gap-1 border-b border-border bg-background/95 px-2 py-1.5 backdrop-blur-sm">
           {activeSessions.map(([sessionId, progress]) => {
-            const isActive = sessionId === focusedSessionId ||
-                           (!focusedSessionId && sessionId === activeSessions[0][0])
+            const isActive = sessionId === (displaySessionId || focusedSessionId)
 
             return (
               <button

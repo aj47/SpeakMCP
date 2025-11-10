@@ -5,7 +5,7 @@ import { Recorder } from "@renderer/lib/recorder"
 import { playSound } from "@renderer/lib/sound"
 import { cn } from "@renderer/lib/utils"
 import { useMutation } from "@tanstack/react-query"
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { rendererHandlers, tipcClient } from "~/lib/tipc-client"
 import { AgentProgressUpdate } from "../../../shared/types"
 import { TextInputPanel, TextInputPanelRef } from "@renderer/components/text-input-panel"
@@ -66,6 +66,15 @@ export function Component() {
   const activeSessionCount = Array.from(agentProgressById.values())
     .filter(progress => !progress.isSnoozed).length
   const hasMultipleSessions = activeSessionCount > 1
+
+  // Aggregate session state helpers
+  const anyActiveNonSnoozed = activeSessionCount > 0
+  const displayProgress = useMemo(() => {
+    if (agentProgress && !agentProgress.isSnoozed) return agentProgress
+    // pick first non-snoozed session if focused one is missing/snoozed
+    const entry = Array.from(agentProgressById.values()).find(p => !p.isSnoozed)
+    return entry || null
+  }, [agentProgress, agentProgressById])
 
   // Debug: Log when agentProgress changes in Panel
   useEffect(() => {
@@ -452,7 +461,7 @@ export function Component() {
     const isTextSubmissionPending = textInputMutation.isPending || mcpTextInputMutation.isPending
 
     let targetMode: "agent" | "normal" | null = null
-    if (agentProgress && !agentProgress.isComplete && !agentProgress.isSnoozed) {
+    if (anyActiveNonSnoozed) {
       targetMode = "agent"
     } else if (isTextSubmissionPending) {
       targetMode = null // keep current size briefly to avoid flicker
@@ -470,7 +479,7 @@ export function Component() {
     return () => {
       if (tid) clearTimeout(tid)
     }
-  }, [agentProgress, textInputMutation.isPending, mcpTextInputMutation.isPending])
+  }, [anyActiveNonSnoozed, textInputMutation.isPending, mcpTextInputMutation.isPending])
 
   // Note: We don't need to hide text input when agentProgress changes because:
   // 1. handleTextSubmit already hides it immediately on submit (line 375)
@@ -483,12 +492,12 @@ export function Component() {
     logUI('[Panel] Overlay visibility check:', {
       hasAgentProgress: !!agentProgress,
       mcpTranscribePending: mcpTranscribeMutation.isPending,
-      shouldShowOverlay: !!agentProgress,
+      shouldShowOverlay: anyActiveNonSnoozed,
       agentProgressSessionId: agentProgress?.sessionId,
       agentProgressComplete: agentProgress?.isComplete,
       agentProgressSnoozed: agentProgress?.isSnoozed
     })
-  }, [agentProgress, mcpTranscribeMutation.isPending])
+  }, [agentProgress, anyActiveNonSnoozed, mcpTranscribeMutation.isPending])
 
   // Clear agent progress handler
   useEffect(() => {
@@ -545,7 +554,7 @@ export function Component() {
 	  useEffect(() => {
 	    // Keep panel open if a text submission is still pending (to avoid flicker)
 	    const isTextSubmissionPending = textInputMutation.isPending || mcpTextInputMutation.isPending
-	    const showsAgentOverlay = !!agentProgress && !agentProgress.isSnoozed
+	    const showsAgentOverlay = anyActiveNonSnoozed
 
 	    const shouldAutoClose =
 	      !showsAgentOverlay &&
@@ -564,7 +573,7 @@ export function Component() {
 
       return undefined as void
 
-	  }, [agentProgress, showTextInput, recording, textInputMutation.isPending, mcpTextInputMutation.isPending])
+	  }, [anyActiveNonSnoozed, showTextInput, recording, textInputMutation.isPending, mcpTextInputMutation.isPending])
 
   return (
     <PanelResizeWrapper
@@ -616,19 +625,20 @@ export function Component() {
               )}
 
               {/* Agent progress overlay - left-aligned and full coverage */}
-              {/* Only show agent progress if session is not snoozed */}
-              {agentProgress && !agentProgress.isSnoozed && (
+              {anyActiveNonSnoozed && (
                 hasMultipleSessions ? (
                   <MultiAgentProgressView
                     variant="overlay"
                     className="absolute inset-0 z-20"
                   />
                 ) : (
-                  <AgentProgress
-                    progress={agentProgress}
-                    variant="overlay"
-                    className="absolute inset-0 z-20"
-                  />
+                  displayProgress && (
+                    <AgentProgress
+                      progress={displayProgress}
+                      variant="overlay"
+                      className="absolute inset-0 z-20"
+                    />
+                  )
                 )
               )}
 

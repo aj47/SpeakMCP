@@ -685,15 +685,16 @@ export async function processTranscriptWithAgentMode(
       )
       progressSteps.push(stopStep)
 
-      // Emit final progress
+      // Emit final progress (ensure final output is saved in history)
+      const killNote = "\n\n(Agent mode was stopped by emergency kill switch)"
+      const finalOutput = (finalContent || "") + killNote
+      conversationHistory.push({ role: "assistant", content: finalOutput })
       emit({
         currentIteration: iteration,
         maxIterations,
         steps: progressSteps.slice(-3),
         isComplete: true,
-        finalContent:
-          finalContent +
-          "\n\n(Agent mode was stopped by emergency kill switch)",
+        finalContent: finalOutput,
         conversationHistory: formatConversationForProgress(conversationHistory),
       })
 
@@ -814,12 +815,16 @@ Always use actual resource IDs from the conversation history or create new ones 
         thinkingStep.status = "completed"
         thinkingStep.title = "Agent stopped"
         thinkingStep.description = "Emergency stop triggered"
+        // Ensure final output appears in saved conversation on abort
+        const killNote = "\n\n(Agent mode was stopped by emergency kill switch)"
+        const finalOutput = (finalContent || "") + killNote
+        conversationHistory.push({ role: "assistant", content: finalOutput })
         emit({
           currentIteration: iteration,
           maxIterations,
           steps: progressSteps.slice(-3),
           isComplete: true,
-          finalContent: finalContent + "\n\n(Agent mode was stopped by emergency kill switch)",
+          finalContent: finalOutput,
           conversationHistory: formatConversationForProgress(conversationHistory),
         })
         break
@@ -1225,12 +1230,16 @@ Always use actual resource IDs from the conversation history or create new ones 
         )
         toolResultStep.toolResult = toolCallStep.toolResult
         progressSteps.push(toolResultStep)
+        // Ensure final output appears and is saved when tool execution is cancelled
+        const killNote = "\n\n(Agent mode was stopped by emergency kill switch)"
+        const finalOutput = (finalContent || "") + killNote
+        conversationHistory.push({ role: "assistant", content: finalOutput })
         emit({
           currentIteration: iteration,
           maxIterations,
           steps: progressSteps.slice(-3),
           isComplete: true,
-          finalContent: (finalContent || "") + "\n\n(Agent mode was stopped by emergency kill switch)",
+          finalContent: finalOutput,
           conversationHistory: formatConversationForProgress(conversationHistory),
         })
         break

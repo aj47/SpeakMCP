@@ -14,9 +14,9 @@ out/main/emergency-stop-SPSmu1DX.js           1.01 kB
 out/main/profile-service-DvBidhdA.js          6.10 kB
 out/main/oauth-callback-server-fzqzUOMc.js    6.84 kB
 out/main/models-service-f1-vHHIr.js          14.01 kB
-out/main/index.js                           344.93 kB
+out/main/index.js                           345.46 kB
 out/main/updater-BDiG8kM8.js                475.46 kB
-built in 815ms.
+built in 841ms.
 
 build the electron main process successfully
 
@@ -31,7 +31,7 @@ transforming...
 ✓ 2 modules transformed.
 rendering chunks...
 out/preload/index.mjs  2.93 kB
-built in 10ms.
+built in 9ms.
 
 build the electron preload files successfully
 
@@ -45,15 +45,15 @@ dev server running for the electron renderer process at:
 start electron app...
 
 [DEBUG] Enabled: LLM, TOOLS, KEYBINDS, APP, UI (argv: d)
-[2025-11-10T22:43:39.234Z] [DEBUG][APP] SpeakMCP starting up...
-[2025-11-10T22:43:39.235Z] [DEBUG][APP] Deep link handling initialized
-[2025-11-10T22:43:39.243Z] [DEBUG][APP] Accessibility granted: true
-[2025-11-10T22:43:39.245Z] [DEBUG][APP] Application menu created
-[2025-11-10T22:43:39.245Z] [DEBUG][APP] IPC main registered
-[2025-11-10T22:43:39.258Z] [DEBUG][APP] Serve protocol registered
-[2025-11-10T22:43:39.258Z] [DEBUG][APP] Creating main window...
-[2025-11-10T22:43:39.294Z] [DEBUG][APP] Main window created
-[2025-11-10T22:43:39.295Z] [DEBUG][APP] Creating panel window...
+[2025-11-10T22:49:24.915Z] [DEBUG][APP] SpeakMCP starting up...
+[2025-11-10T22:49:24.918Z] [DEBUG][APP] Deep link handling initialized
+[2025-11-10T22:49:24.924Z] [DEBUG][APP] Accessibility granted: true
+[2025-11-10T22:49:24.927Z] [DEBUG][APP] Application menu created
+[2025-11-10T22:49:24.928Z] [DEBUG][APP] IPC main registered
+[2025-11-10T22:49:24.961Z] [DEBUG][APP] Serve protocol registered
+[2025-11-10T22:49:24.961Z] [DEBUG][APP] Creating main window...
+[2025-11-10T22:49:25.026Z] [DEBUG][APP] Main window created
+[2025-11-10T22:49:25.026Z] [DEBUG][APP] Creating panel window...
 [window.ts] createPanelWindow - MIN_WAVEFORM_WIDTH: 312
 [window.ts] getSavedSizeForMode(normal) - checking config...
 [window.ts] Found saved normal mode size: { width: 600, height: 443 }
@@ -63,65 +63,65 @@ start electron app...
 [window.ts] createPanelWindow - savedSize: { width: 600, height: 443 }
 [window.ts] createPanelWindow - minWidth: 312
 [window.ts] createPanelWindow - window created with size: { width: 600, height: 443 }
-[2025-11-10T22:43:39.313Z] [DEBUG][APP] Panel window created
-[2025-11-10T22:43:39.315Z] [DEBUG][KEYBINDS] Starting keyboard event listener with rdev path: /Users/ajjoobandi/Development/SpeakMCP/resources/bin/speakmcp-rs
-[2025-11-10T22:43:39.315Z] [DEBUG][APP] Keyboard event listener started
-[2025-11-10T22:43:39.321Z] [DEBUG][APP] System tray initialized
-[2025-11-10T22:43:39.322Z] [DEBUG][TOOLS] MCP Service initialization starting
-[2025-11-10T22:43:39.322Z] [DEBUG][TOOLS] Skipping server rube - runtime disabled by user
-[2025-11-10T22:43:39.322Z] [DEBUG][TOOLS] Skipping server perplexity-ask - runtime disabled by user
-[2025-11-10T22:43:39.322Z] [DEBUG][TOOLS] Skipping server auggie mcp - runtime disabled by user
-[2025-11-10T22:43:39.322Z] [DEBUG][TOOLS] Skipping server MacOS Control - runtime disabled by user
-[2025-11-10T22:43:39.322Z] [DEBUG][TOOLS] Skipping server terminal - runtime disabled by user
-[2025-11-10T22:43:39.322Z] [DEBUG][TOOLS] Skipping server Playwright - runtime disabled by user
-[2025-11-10T22:43:39.322Z] [DEBUG][TOOLS] Skipping server cloudflare - runtime disabled by user
-[2025-11-10T22:43:39.322Z] [DEBUG][TOOLS] Found 3 servers to initialize [ 'github', 'desktop-commander', 'exa' ]
-[2025-11-10T22:43:39.322Z] [DEBUG][TOOLS] Starting initialization of server: github
-[2025-11-10T22:43:39.323Z] [DEBUG][TOOLS] Initializing server: github {
+[2025-11-10T22:49:25.040Z] [DEBUG][APP] Panel window created
+[2025-11-10T22:49:25.042Z] [DEBUG][KEYBINDS] Starting keyboard event listener with rdev path: /Users/ajjoobandi/Development/SpeakMCP/resources/bin/speakmcp-rs
+[2025-11-10T22:49:25.042Z] [DEBUG][APP] Keyboard event listener started
+[2025-11-10T22:49:25.050Z] [DEBUG][APP] System tray initialized
+[2025-11-10T22:49:25.050Z] [DEBUG][TOOLS] MCP Service initialization starting
+[2025-11-10T22:49:25.050Z] [DEBUG][TOOLS] Skipping server rube - runtime disabled by user
+[2025-11-10T22:49:25.050Z] [DEBUG][TOOLS] Skipping server perplexity-ask - runtime disabled by user
+[2025-11-10T22:49:25.050Z] [DEBUG][TOOLS] Skipping server auggie mcp - runtime disabled by user
+[2025-11-10T22:49:25.050Z] [DEBUG][TOOLS] Skipping server MacOS Control - runtime disabled by user
+[2025-11-10T22:49:25.050Z] [DEBUG][TOOLS] Skipping server terminal - runtime disabled by user
+[2025-11-10T22:49:25.050Z] [DEBUG][TOOLS] Skipping server Playwright - runtime disabled by user
+[2025-11-10T22:49:25.050Z] [DEBUG][TOOLS] Skipping server cloudflare - runtime disabled by user
+[2025-11-10T22:49:25.050Z] [DEBUG][TOOLS] Found 3 servers to initialize [ 'github', 'desktop-commander', 'exa' ]
+[2025-11-10T22:49:25.051Z] [DEBUG][TOOLS] Starting initialization of server: github
+[2025-11-10T22:49:25.051Z] [DEBUG][TOOLS] Initializing server: github {
   transport: 'stdio',
   command: 'npx',
   args: [ '-y', '@modelcontextprotocol/server-github' ],
   env: [ 'GITHUB_PERSONAL_ACCESS_TOKEN' ]
 }
-[2025-11-10T22:43:39.448Z] [DEBUG][UI] [MAIN] [vite] connecting... (client:495)
-[2025-11-10T22:43:39.449Z] [DEBUG][UI] [PANEL] [vite] connecting... (client:495)
-[2025-11-10T22:43:39.519Z] [DEBUG][TOOLS] [github] npm warn Unknown env config "shamefully-hoist". This will stop working in the next major version of npm.
+[2025-11-10T22:49:25.240Z] [DEBUG][UI] [MAIN] [vite] connecting... (client:495)
+[2025-11-10T22:49:25.256Z] [DEBUG][TOOLS] [github] npm warn Unknown env config "shamefully-hoist". This will stop working in the next major version of npm.
 
-[2025-11-10T22:43:39.519Z] [DEBUG][TOOLS] [github] npm warn Unknown project config "shamefully-hoist". This will stop working in the next major version of npm.
+[2025-11-10T22:49:25.257Z] [DEBUG][TOOLS] [github] npm warn Unknown project config "shamefully-hoist". This will stop working in the next major version of npm.
 
-[2025-11-10T22:43:39.522Z] [DEBUG][UI] [MAIN] [vite] connected. (client:618)
-[2025-11-10T22:43:39.691Z] [DEBUG][UI] [PANEL] [vite] connected. (client:618)
-[2025-11-10T22:43:40.020Z] [DEBUG][UI] [MAIN] [WARN] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold (chunk-RPCDYKBN.js?v=a4add9b9:21551)
-[2025-11-10T22:43:40.021Z] [DEBUG][UI] [PANEL] [WARN] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold (chunk-RPCDYKBN.js?v=a4add9b9:21551)
+[2025-11-10T22:49:25.430Z] [DEBUG][UI] [PANEL] [vite] connecting... (client:495)
+[2025-11-10T22:49:25.434Z] [DEBUG][UI] [MAIN] [vite] connected. (client:618)
+[2025-11-10T22:49:25.600Z] [DEBUG][UI] [PANEL] [vite] connected. (client:618)
+[2025-11-10T22:49:25.608Z] [DEBUG][UI] [PANEL] [WARN] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold (chunk-RPCDYKBN.js?v=a4add9b9:21551)
+[2025-11-10T22:49:25.608Z] [DEBUG][UI] [MAIN] [WARN] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold (chunk-RPCDYKBN.js?v=a4add9b9:21551)
 [WINDOW MAIN] show
-[2025-11-10T22:43:40.075Z] [DEBUG][UI] [MAIN] [ERROR] ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition. (react-router-dom.js?v=a4add9b9:4393)
-[2025-11-10T22:43:40.075Z] [DEBUG][UI] [PANEL] [ERROR] ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition. (react-router-dom.js?v=a4add9b9:4393)
-[2025-11-10T22:43:40.075Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:40.028Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
-[2025-11-10T22:43:40.075Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:43:40.028Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
-[2025-11-10T22:43:40.075Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:43:40.029Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
-[2025-11-10T22:43:40.075Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:40.029Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
+[2025-11-10T22:49:25.654Z] [DEBUG][UI] [PANEL] [ERROR] ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition. (react-router-dom.js?v=a4add9b9:4393)
+[2025-11-10T22:49:25.654Z] [DEBUG][UI] [MAIN] [ERROR] ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition. (react-router-dom.js?v=a4add9b9:4393)
+[2025-11-10T22:49:25.654Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:25.618Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
+[2025-11-10T22:49:25.654Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:49:25.618Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
+[2025-11-10T22:49:25.654Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:49:25.619Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
+[2025-11-10T22:49:25.655Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:25.620Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
 [WINDOW MAIN] focus
 Skip checkForUpdates because application is not packed and dev update config is not forced
 Skip checkForUpdates because application is not packed and dev update config is not forced
-[2025-11-10T22:43:40.232Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:43:40.232Z] [DEBUG][UI] [ActiveAgentsSidebar] Initial expand state: true from localStorage: true (debug.ts:18)
-[2025-11-10T22:43:40.233Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:43:40.233Z] [DEBUG][UI] [ActiveAgentsSidebar] No sessions (active or recent), hiding sidebar (debug.ts:18)
-[2025-11-10T22:43:40.233Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:43:40.233Z] [DEBUG][UI] [ActiveAgentsSidebar] Initial expand state: true from localStorage: true (debug.ts:18)
-[2025-11-10T22:43:40.233Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:43:40.233Z] [DEBUG][UI] [ActiveAgentsSidebar] No sessions (active or recent), hiding sidebar (debug.ts:18)
+[2025-11-10T22:49:25.814Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:49:25.814Z] [DEBUG][UI] [ActiveAgentsSidebar] Initial expand state: true from localStorage: true (debug.ts:18)
+[2025-11-10T22:49:25.814Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:49:25.814Z] [DEBUG][UI] [ActiveAgentsSidebar] No sessions (active or recent), hiding sidebar (debug.ts:18)
+[2025-11-10T22:49:25.814Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:49:25.814Z] [DEBUG][UI] [ActiveAgentsSidebar] Initial expand state: true from localStorage: true (debug.ts:18)
+[2025-11-10T22:49:25.814Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:49:25.814Z] [DEBUG][UI] [ActiveAgentsSidebar] No sessions (active or recent), hiding sidebar (debug.ts:18)
 [AgentSessionTracker] getActiveSessions called, returning 0 sessions: []
-[2025-11-10T22:43:40.251Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:43:40.251Z] [DEBUG][UI] [STATE] ActiveAgentsSidebar.isExpanded: [object Object] (debug.ts:18)
-[2025-11-10T22:43:40.251Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:43:40.251Z] [DEBUG][UI] [ActiveAgentsSidebar] Sessions updated: [object Object] (debug.ts:18)
-[2025-11-10T22:43:40.251Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:43:40.251Z] [DEBUG][UI] [STATE] ActiveAgentsSidebar.isExpanded: [object Object] (debug.ts:18)
-[2025-11-10T22:43:40.251Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:43:40.251Z] [DEBUG][UI] [ActiveAgentsSidebar] Sessions updated: [object Object] (debug.ts:18)
-[2025-11-10T22:43:40.253Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:43:40.253Z] [DEBUG][UI] [ActiveAgentsSidebar] No sessions (active or recent), hiding sidebar (debug.ts:18)
-[2025-11-10T22:43:40.253Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:43:40.253Z] [DEBUG][UI] [ActiveAgentsSidebar] No sessions (active or recent), hiding sidebar (debug.ts:18)
-[2025-11-10T22:43:40.294Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:40.294Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
-[2025-11-10T22:43:40.294Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:40.294Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
-[2025-11-10T22:43:40.294Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:40.294Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
-[2025-11-10T22:43:40.294Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:40.294Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
+[2025-11-10T22:49:25.844Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:49:25.844Z] [DEBUG][UI] [STATE] ActiveAgentsSidebar.isExpanded: [object Object] (debug.ts:18)
+[2025-11-10T22:49:25.844Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:49:25.844Z] [DEBUG][UI] [ActiveAgentsSidebar] Sessions updated: [object Object] (debug.ts:18)
+[2025-11-10T22:49:25.844Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:49:25.844Z] [DEBUG][UI] [STATE] ActiveAgentsSidebar.isExpanded: [object Object] (debug.ts:18)
+[2025-11-10T22:49:25.844Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:49:25.844Z] [DEBUG][UI] [ActiveAgentsSidebar] Sessions updated: [object Object] (debug.ts:18)
+[2025-11-10T22:49:25.846Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:49:25.846Z] [DEBUG][UI] [ActiveAgentsSidebar] No sessions (active or recent), hiding sidebar (debug.ts:18)
+[2025-11-10T22:49:25.846Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:49:25.846Z] [DEBUG][UI] [ActiveAgentsSidebar] No sessions (active or recent), hiding sidebar (debug.ts:18)
+[2025-11-10T22:49:25.887Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:25.887Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
+[2025-11-10T22:49:25.888Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:25.888Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
+[2025-11-10T22:49:25.888Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:25.888Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
+[2025-11-10T22:49:25.888Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:25.888Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
 [hidePanelWindow] Called. Panel exists: true, visible: false
 [hidePanelWindow] Panel hidden
-[2025-11-10T22:43:40.818Z] [DEBUG][KEYBINDS] Ctrl key pressed, isPressedCtrlKey = true
-[2025-11-10T22:43:40.819Z] [DEBUG][KEYBINDS] Config change #1: {
+[2025-11-10T22:49:26.483Z] [DEBUG][KEYBINDS] Ctrl key pressed, isPressedCtrlKey = true
+[2025-11-10T22:49:26.483Z] [DEBUG][KEYBINDS] Config change #1: {
   agentKillSwitchEnabled: true,
   agentKillSwitchHotkey: 'ctrl-shift-q',
   textInputEnabled: true,
@@ -130,7 +130,7 @@ Skip checkForUpdates because application is not packed and dev update config is 
   mcpToolsShortcut: 'hold-ctrl-alt',
   shortcut: 'hold-ctrl'
 }
-[2025-11-10T22:43:40.867Z] [DEBUG][KEYBINDS] Text input triggered: Ctrl+T
+[2025-11-10T22:49:26.774Z] [DEBUG][KEYBINDS] Text input triggered: Ctrl+T
 [window.ts] getSavedSizeForMode(textInput) - checking config...
 [window.ts] Found saved textInput mode size: { width: 2709, height: 751 }
 [window.ts] Saved textInput size too large (2709x751), using default: { width: 380, height: 180 }
@@ -148,74 +148,29 @@ Skip checkForUpdates because application is not packed and dev update config is 
 [WINDOW MAIN] blur
 [WINDOW PANEL] focus
 Skip checkForUpdates because application is not packed and dev update config is not forced
-[2025-11-10T22:43:40.903Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:40.891Z] [DEBUG][UI] [Panel] showTextInput received: resetting text input mutations and enabling textarea (debug.ts:18)
+[2025-11-10T22:49:26.839Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:26.827Z] [DEBUG][UI] [Panel] showTextInput received: resetting text input mutations and enabling textarea (debug.ts:18)
 [WINDOW PANEL] show
-[2025-11-10T22:43:40.945Z] [DEBUG][KEYBINDS] Ctrl key released, isPressedCtrlKey = false
-[AgentSessionTracker] Started session: session_1762814621825_79525who7, total sessions: 1
-[emitAgentProgress] Called for session session_1762814621825_79525who7, panel visible: true, isSnoozed: undefined
+[2025-11-10T22:49:27.000Z] [DEBUG][KEYBINDS] Ctrl key released, isPressedCtrlKey = false
+[AgentSessionTracker] getActiveSessions called, returning 0 sessions: []
+[AgentSessionTracker] Started session: session_1762814968359_hmyqen8mc, total sessions: 1
+[emitAgentProgress] Called for session session_1762814968359_hmyqen8mc, panel visible: true, isSnoozed: undefined
 [emitAgentProgress] Skipping show check - panel visible: true, has sessionId: true
-[emitAgentProgress] Called for session session_1762814621825_79525who7, panel visible: true, isSnoozed: undefined
+[emitAgentProgress] Called for session session_1762814968359_hmyqen8mc, panel visible: true, isSnoozed: undefined
 [emitAgentProgress] Skipping show check - panel visible: true, has sessionId: true
-[2025-11-10T22:43:41.826Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:41.826Z] [DEBUG][UI] [ConversationContext] External focusAgentSession received: session_1762814621825_79525who7 (debug.ts:18)
-[2025-11-10T22:43:41.827Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:41.826Z] [DEBUG][UI] [STATE] ConversationContext.focusedSessionId: [object Object] (debug.ts:18)
-[2025-11-10T22:43:41.827Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:41.827Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
-[2025-11-10T22:43:41.827Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:41.827Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
-[2025-11-10T22:43:41.839Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:41.839Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
-[2025-11-10T22:43:41.839Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:41.839Z] [DEBUG][UI] [ConversationContext] New session progress: session_1762814621825_79525who7 (debug.ts:18)
-[2025-11-10T22:43:41.839Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:41.839Z] [DEBUG][UI] [ConversationContext] New session progress: session_1762814621825_79525who7 (debug.ts:18)
-[2025-11-10T22:43:41.866Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:41.866Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
-[2025-11-10T22:43:41.872Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:41.872Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
-[2025-11-10T22:43:41.872Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:41.872Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
-[2025-11-10T22:43:41.872Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:41.872Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
-[2025-11-10T22:43:41.882Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:41.882Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814621825_79525who7 (debug.ts:18)
-[2025-11-10T22:43:41.882Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:41.882Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814621825_79525who7 (debug.ts:18)
-[2025-11-10T22:43:41.886Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:41.886Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
-[2025-11-10T22:43:41.886Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:41.886Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
-[2025-11-10T22:43:41.886Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:41.886Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
-[window.ts] getSavedSizeForMode(agent) - checking config...
-[window.ts] Found saved agent mode size: { width: 200, height: 120 }
-[window.ts] getSavedSizeForMode(agent) - checking config...
-[window.ts] Found saved agent mode size: { width: 200, height: 120 }
-[AgentSessionTracker] getActiveSessions called, returning 1 sessions: [
-  {
-    id: 'session_1762814621825_79525who7',
-    title: 'what are the open issues and pull requests for spe...',
-    snoozed: undefined
-  }
-]
-[2025-11-10T22:43:42.257Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:43:42.256Z] [DEBUG][UI] [ActiveAgentsSidebar] Sessions updated: [object Object] (debug.ts:18)
-[emitAgentProgress] Called for session session_1762814621825_79525who7, panel visible: true, isSnoozed: undefined
-[emitAgentProgress] Skipping show check - panel visible: true, has sessionId: true
-[2025-11-10T22:43:42.342Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:42.342Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
-[2025-11-10T22:43:42.342Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:42.342Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814621825_79525who7 (debug.ts:18)
-[2025-11-10T22:43:42.342Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:42.342Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814621825_79525who7 (debug.ts:18)
-[2025-11-10T22:43:42.346Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:42.346Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
-[2025-11-10T22:43:42.346Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:42.346Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
-[2025-11-10T22:43:42.346Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:42.346Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
-[emitAgentProgress] Called for session session_1762814621825_79525who7, panel visible: true, isSnoozed: undefined
-[emitAgentProgress] Skipping show check - panel visible: true, has sessionId: true
-[2025-11-10T22:43:42.850Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:42.847Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
-[2025-11-10T22:43:42.850Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:42.847Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814621825_79525who7 (debug.ts:18)
-[2025-11-10T22:43:42.857Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:42.857Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
-[2025-11-10T22:43:42.858Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:42.857Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
-[2025-11-10T22:43:42.858Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:42.857Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
-[emitAgentProgress] Called for session session_1762814621825_79525who7, panel visible: true, isSnoozed: undefined
-[emitAgentProgress] Skipping show check - panel visible: true, has sessionId: true
-[2025-11-10T22:43:43.350Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:43.350Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
-[2025-11-10T22:43:43.350Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:43.350Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814621825_79525who7 (debug.ts:18)
-[2025-11-10T22:43:43.360Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:43.360Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
-[2025-11-10T22:43:43.360Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:43.360Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
-[2025-11-10T22:43:43.361Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:43.360Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
-[emitAgentProgress] Called for session session_1762814621825_79525who7, panel visible: true, isSnoozed: undefined
-[emitAgentProgress] Skipping show check - panel visible: true, has sessionId: true
-[2025-11-10T22:43:43.847Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:43.847Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
-[2025-11-10T22:43:43.848Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:43.847Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814621825_79525who7 (debug.ts:18)
-[2025-11-10T22:43:43.850Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:43.850Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
-[2025-11-10T22:43:43.850Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:43.850Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
-[2025-11-10T22:43:43.850Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:43.850Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
-[2025-11-10T22:43:44.158Z] [DEBUG][TOOLS] [github] GitHub MCP Server running on stdio
+[2025-11-10T22:49:28.360Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:28.359Z] [DEBUG][UI] [ConversationContext] External focusAgentSession received: session_1762814968359_hmyqen8mc (debug.ts:18)
+[2025-11-10T22:49:28.360Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:28.359Z] [DEBUG][UI] [STATE] ConversationContext.focusedSessionId: [object Object] (debug.ts:18)
+[2025-11-10T22:49:28.360Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:28.360Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
+[2025-11-10T22:49:28.360Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:28.360Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
+[2025-11-10T22:49:28.372Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:28.372Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
+[2025-11-10T22:49:28.372Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:28.372Z] [DEBUG][UI] [ConversationContext] New session progress: session_1762814968359_hmyqen8mc (debug.ts:18)
+[2025-11-10T22:49:28.372Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:28.372Z] [DEBUG][UI] [ConversationContext] New session progress: session_1762814968359_hmyqen8mc (debug.ts:18)
+[2025-11-10T22:49:28.394Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:28.394Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
+[2025-11-10T22:49:28.395Z] [DEBUG][TOOLS] [github] GitHub MCP Server running on stdio
 
-[2025-11-10T22:43:44.164Z] [DEBUG][TOOLS] Server github connected successfully {
+[2025-11-10T22:49:28.400Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:28.400Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
+[2025-11-10T22:49:28.400Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:28.400Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
+[2025-11-10T22:49:28.400Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:28.400Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
+[2025-11-10T22:49:28.401Z] [DEBUG][TOOLS] Server github connected successfully {
   toolCount: 26,
   tools: [
     {
@@ -318,83 +273,79 @@ Skip checkForUpdates because application is not packed and dev update config is 
     }
   ]
 }
-[2025-11-10T22:43:44.164Z] [DEBUG][TOOLS] [github] Process started with PID: 92482
-[2025-11-10T22:43:44.164Z] [DEBUG][TOOLS] Successfully initialized server: github
-[2025-11-10T22:43:44.164Z] [DEBUG][TOOLS] Starting initialization of server: desktop-commander
-[2025-11-10T22:43:44.164Z] [DEBUG][TOOLS] Initializing server: desktop-commander {
+[2025-11-10T22:49:28.402Z] [DEBUG][TOOLS] [github] Process started with PID: 94659
+[2025-11-10T22:49:28.402Z] [DEBUG][TOOLS] Successfully initialized server: github
+[2025-11-10T22:49:28.402Z] [DEBUG][TOOLS] Starting initialization of server: desktop-commander
+[2025-11-10T22:49:28.402Z] [DEBUG][TOOLS] Initializing server: desktop-commander {
   transport: 'stdio',
   command: 'npx',
   args: [ '-y', '@wonderwhy-er/desktop-commander@latest' ],
   env: []
 }
+[2025-11-10T22:49:28.409Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:28.409Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814968359_hmyqen8mc (debug.ts:18)
+[2025-11-10T22:49:28.409Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:28.409Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814968359_hmyqen8mc (debug.ts:18)
+[2025-11-10T22:49:28.414Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:28.413Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
+[2025-11-10T22:49:28.414Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:28.414Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
+[2025-11-10T22:49:28.414Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:28.414Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
+[window.ts] getSavedSizeForMode(agent) - checking config...
+[window.ts] Found saved agent mode size: { width: 200, height: 120 }
+[window.ts] getSavedSizeForMode(agent) - checking config...
+[window.ts] Found saved agent mode size: { width: 200, height: 120 }
+[2025-11-10T22:49:28.506Z] [DEBUG][TOOLS] [desktop-commander] npm warn Unknown env config "shamefully-hoist". This will stop working in the next major version of npm.
+npm warn Unknown project config "shamefully-hoist". This will stop working in the next major version of npm.
+
+[emitAgentProgress] Called for session session_1762814968359_hmyqen8mc, panel visible: true, isSnoozed: undefined
+[emitAgentProgress] Skipping show check - panel visible: true, has sessionId: true
+[2025-11-10T22:49:28.878Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:28.878Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
+[2025-11-10T22:49:28.878Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:28.878Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814968359_hmyqen8mc (debug.ts:18)
+[2025-11-10T22:49:28.878Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:28.878Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814968359_hmyqen8mc (debug.ts:18)
+[2025-11-10T22:49:28.882Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:28.881Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
+[2025-11-10T22:49:28.882Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:28.882Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
+[2025-11-10T22:49:28.882Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:28.882Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
+[emitAgentProgress] Called for session session_1762814968359_hmyqen8mc, panel visible: true, isSnoozed: undefined
+[emitAgentProgress] Skipping show check - panel visible: true, has sessionId: true
+[2025-11-10T22:49:29.383Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:29.382Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
+[2025-11-10T22:49:29.383Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:29.383Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814968359_hmyqen8mc (debug.ts:18)
+[2025-11-10T22:49:29.405Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:29.405Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
+[2025-11-10T22:49:29.405Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:29.405Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
+[2025-11-10T22:49:29.405Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:29.405Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
 [AgentSessionTracker] getActiveSessions called, returning 1 sessions: [
   {
-    id: 'session_1762814621825_79525who7',
+    id: 'session_1762814968359_hmyqen8mc',
     title: 'what are the open issues and pull requests for spe...',
     snoozed: undefined
   }
 ]
-[2025-11-10T22:43:44.265Z] [DEBUG][TOOLS] [desktop-commander] npm warn Unknown env config "shamefully-hoist". This will stop working in the next major version of npm.
-
-[2025-11-10T22:43:44.266Z] [DEBUG][TOOLS] [desktop-commander] npm warn Unknown project config "shamefully-hoist". This will stop working in the next major version of npm.
-
-[emitAgentProgress] Called for session session_1762814621825_79525who7, panel visible: true, isSnoozed: undefined
+[2025-11-10T22:49:29.859Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:49:29.859Z] [DEBUG][UI] [ActiveAgentsSidebar] Sessions updated: [object Object] (debug.ts:18)
+[emitAgentProgress] Called for session session_1762814968359_hmyqen8mc, panel visible: true, isSnoozed: undefined
 [emitAgentProgress] Skipping show check - panel visible: true, has sessionId: true
-[2025-11-10T22:43:44.355Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:44.355Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
-[2025-11-10T22:43:44.355Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:44.355Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814621825_79525who7 (debug.ts:18)
-[2025-11-10T22:43:44.358Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:44.358Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
-[2025-11-10T22:43:44.358Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:44.358Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
-[2025-11-10T22:43:44.358Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:44.358Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
-[emitAgentProgress] Called for session session_1762814621825_79525who7, panel visible: true, isSnoozed: undefined
+[2025-11-10T22:49:29.886Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:29.885Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
+[2025-11-10T22:49:29.886Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:29.886Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814968359_hmyqen8mc (debug.ts:18)
+[2025-11-10T22:49:29.893Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:29.893Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
+[2025-11-10T22:49:29.893Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:29.893Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
+[2025-11-10T22:49:29.893Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:29.893Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
+[emitAgentProgress] Called for session session_1762814968359_hmyqen8mc, panel visible: true, isSnoozed: undefined
 [emitAgentProgress] Skipping show check - panel visible: true, has sessionId: true
-[2025-11-10T22:43:44.863Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:44.863Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
-[2025-11-10T22:43:44.863Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:44.863Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814621825_79525who7 (debug.ts:18)
-[2025-11-10T22:43:44.867Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:44.867Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
-[2025-11-10T22:43:44.867Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:44.867Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
-[2025-11-10T22:43:44.867Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:44.867Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
-[emitAgentProgress] Called for session session_1762814621825_79525who7, panel visible: true, isSnoozed: undefined
+[2025-11-10T22:49:30.392Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:30.392Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
+[2025-11-10T22:49:30.392Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:30.392Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814968359_hmyqen8mc (debug.ts:18)
+[2025-11-10T22:49:30.399Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:30.399Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
+[2025-11-10T22:49:30.400Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:30.399Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
+[2025-11-10T22:49:30.400Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:30.399Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
+[emitAgentProgress] Called for session session_1762814968359_hmyqen8mc, panel visible: true, isSnoozed: undefined
 [emitAgentProgress] Skipping show check - panel visible: true, has sessionId: true
-[2025-11-10T22:43:45.370Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:45.370Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
-[2025-11-10T22:43:45.370Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:45.370Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814621825_79525who7 (debug.ts:18)
-[2025-11-10T22:43:45.374Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:45.374Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
-[2025-11-10T22:43:45.375Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:45.374Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
-[2025-11-10T22:43:45.375Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:45.374Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
-[emitAgentProgress] Called for session session_1762814621825_79525who7, panel visible: true, isSnoozed: undefined
+[2025-11-10T22:49:30.901Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:30.899Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
+[2025-11-10T22:49:30.902Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:30.900Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814968359_hmyqen8mc (debug.ts:18)
+[2025-11-10T22:49:30.907Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:30.907Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
+[2025-11-10T22:49:30.908Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:30.907Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
+[2025-11-10T22:49:30.908Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:30.907Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
+[emitAgentProgress] Called for session session_1762814968359_hmyqen8mc, panel visible: true, isSnoozed: undefined
 [emitAgentProgress] Skipping show check - panel visible: true, has sessionId: true
-[2025-11-10T22:43:45.872Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:45.872Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
-[2025-11-10T22:43:45.872Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:45.872Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814621825_79525who7 (debug.ts:18)
-[2025-11-10T22:43:45.877Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:45.877Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
-[2025-11-10T22:43:45.878Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:45.877Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
-[2025-11-10T22:43:45.878Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:45.877Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
-[AgentSessionTracker] getActiveSessions called, returning 1 sessions: [
-  {
-    id: 'session_1762814621825_79525who7',
-    title: 'what are the open issues and pull requests for spe...',
-    snoozed: undefined
-  }
-]
-[emitAgentProgress] Called for session session_1762814621825_79525who7, panel visible: true, isSnoozed: undefined
-[emitAgentProgress] Skipping show check - panel visible: true, has sessionId: true
-[2025-11-10T22:43:46.375Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:46.375Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
-[2025-11-10T22:43:46.376Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:46.375Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814621825_79525who7 (debug.ts:18)
-[2025-11-10T22:43:46.378Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:46.378Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
-[2025-11-10T22:43:46.378Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:46.378Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
-[2025-11-10T22:43:46.378Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:46.378Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
-[emitAgentProgress] Called for session session_1762814621825_79525who7, panel visible: true, isSnoozed: undefined
-[emitAgentProgress] Skipping show check - panel visible: true, has sessionId: true
-[2025-11-10T22:43:46.882Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:46.881Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
-[2025-11-10T22:43:46.882Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:46.882Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814621825_79525who7 (debug.ts:18)
-[2025-11-10T22:43:46.894Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:46.893Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
-[2025-11-10T22:43:46.894Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:46.893Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
-[2025-11-10T22:43:46.894Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:46.893Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
-[emitAgentProgress] Called for session session_1762814621825_79525who7, panel visible: true, isSnoozed: undefined
-[emitAgentProgress] Skipping show check - panel visible: true, has sessionId: true
-[2025-11-10T22:43:47.384Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:47.384Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
-[2025-11-10T22:43:47.384Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:47.384Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814621825_79525who7 (debug.ts:18)
-[2025-11-10T22:43:47.387Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:47.386Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
-[2025-11-10T22:43:47.387Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:47.387Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
-[2025-11-10T22:43:47.387Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:47.387Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
-[2025-11-10T22:43:47.469Z] [DEBUG][TOOLS] Server desktop-commander connected successfully {
+[2025-11-10T22:49:31.400Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:31.399Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
+[2025-11-10T22:49:31.401Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:31.400Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814968359_hmyqen8mc (debug.ts:18)
+[2025-11-10T22:49:31.405Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:31.405Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
+[2025-11-10T22:49:31.405Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:31.405Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
+[2025-11-10T22:49:31.405Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:31.405Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
+[2025-11-10T22:49:31.846Z] [DEBUG][TOOLS] Server desktop-commander connected successfully {
   toolCount: 25,
   tools: [
     {
@@ -1060,189 +1011,221 @@ Skip checkForUpdates because application is not packed and dev update config is 
     }
   ]
 }
-[2025-11-10T22:43:47.471Z] [DEBUG][TOOLS] [desktop-commander] Process started with PID: 92527
-[2025-11-10T22:43:47.471Z] [DEBUG][TOOLS] Successfully initialized server: desktop-commander
-[2025-11-10T22:43:47.471Z] [DEBUG][TOOLS] Starting initialization of server: exa
-[2025-11-10T22:43:47.471Z] [DEBUG][TOOLS] Initializing server: exa {
+[2025-11-10T22:49:31.848Z] [DEBUG][TOOLS] [desktop-commander] Process started with PID: 94714
+[2025-11-10T22:49:31.848Z] [DEBUG][TOOLS] Successfully initialized server: desktop-commander
+[2025-11-10T22:49:31.848Z] [DEBUG][TOOLS] Starting initialization of server: exa
+[2025-11-10T22:49:31.849Z] [DEBUG][TOOLS] Initializing server: exa {
   transport: 'streamableHttp',
   command: undefined,
   args: undefined,
   env: []
 }
-[emitAgentProgress] Called for session session_1762814621825_79525who7, panel visible: true, isSnoozed: undefined
-[emitAgentProgress] Skipping show check - panel visible: true, has sessionId: true
-[2025-11-10T22:43:47.891Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:47.891Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
-[2025-11-10T22:43:47.891Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:47.891Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814621825_79525who7 (debug.ts:18)
-[2025-11-10T22:43:47.896Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:47.895Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
-[2025-11-10T22:43:47.896Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:47.895Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
-[2025-11-10T22:43:47.896Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:47.896Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
 [AgentSessionTracker] getActiveSessions called, returning 1 sessions: [
   {
-    id: 'session_1762814621825_79525who7',
+    id: 'session_1762814968359_hmyqen8mc',
     title: 'what are the open issues and pull requests for spe...',
     snoozed: undefined
   }
 ]
-[emitAgentProgress] Called for session session_1762814621825_79525who7, panel visible: true, isSnoozed: undefined
+[emitAgentProgress] Called for session session_1762814968359_hmyqen8mc, panel visible: true, isSnoozed: undefined
 [emitAgentProgress] Skipping show check - panel visible: true, has sessionId: true
-[2025-11-10T22:43:48.400Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:48.395Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
-[2025-11-10T22:43:48.400Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:48.396Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814621825_79525who7 (debug.ts:18)
-[2025-11-10T22:43:48.403Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:48.402Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
-[2025-11-10T22:43:48.403Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:48.402Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
-[2025-11-10T22:43:48.403Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:48.402Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
-[emitAgentProgress] Called for session session_1762814621825_79525who7, panel visible: true, isSnoozed: undefined
+[2025-11-10T22:49:31.902Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:31.902Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
+[2025-11-10T22:49:31.902Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:31.902Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814968359_hmyqen8mc (debug.ts:18)
+[2025-11-10T22:49:31.905Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:31.904Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
+[2025-11-10T22:49:31.905Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:31.905Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
+[2025-11-10T22:49:31.905Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:31.905Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
+[emitAgentProgress] Called for session session_1762814968359_hmyqen8mc, panel visible: true, isSnoozed: undefined
 [emitAgentProgress] Skipping show check - panel visible: true, has sessionId: true
-[2025-11-10T22:43:48.900Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:48.900Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
-[2025-11-10T22:43:48.901Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:48.900Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814621825_79525who7 (debug.ts:18)
-[2025-11-10T22:43:48.905Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:48.905Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
-[2025-11-10T22:43:48.905Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:48.905Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
-[2025-11-10T22:43:48.905Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:48.905Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
-[emitAgentProgress] Called for session session_1762814621825_79525who7, panel visible: true, isSnoozed: undefined
+[2025-11-10T22:49:32.405Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:32.405Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
+[2025-11-10T22:49:32.405Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:32.405Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814968359_hmyqen8mc (debug.ts:18)
+[2025-11-10T22:49:32.409Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:32.409Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
+[2025-11-10T22:49:32.409Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:32.409Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
+[2025-11-10T22:49:32.409Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:32.409Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
+[emitAgentProgress] Called for session session_1762814968359_hmyqen8mc, panel visible: true, isSnoozed: undefined
 [emitAgentProgress] Skipping show check - panel visible: true, has sessionId: true
-[2025-11-10T22:43:49.402Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:49.402Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
-[2025-11-10T22:43:49.403Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:49.402Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814621825_79525who7 (debug.ts:18)
-[2025-11-10T22:43:49.409Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:49.408Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
-[2025-11-10T22:43:49.409Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:49.409Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
-[2025-11-10T22:43:49.409Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:49.409Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
-[emitAgentProgress] Called for session session_1762814621825_79525who7, panel visible: true, isSnoozed: undefined
+[2025-11-10T22:49:32.910Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:32.910Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
+[2025-11-10T22:49:32.911Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:32.910Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814968359_hmyqen8mc (debug.ts:18)
+[2025-11-10T22:49:32.919Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:32.918Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
+[2025-11-10T22:49:32.919Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:32.919Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
+[2025-11-10T22:49:32.919Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:32.919Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
+[emitAgentProgress] Called for session session_1762814968359_hmyqen8mc, panel visible: true, isSnoozed: undefined
 [emitAgentProgress] Skipping show check - panel visible: true, has sessionId: true
-[2025-11-10T22:43:49.903Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:49.903Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
-[2025-11-10T22:43:49.903Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:49.903Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814621825_79525who7 (debug.ts:18)
-[2025-11-10T22:43:49.908Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:49.907Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
-[2025-11-10T22:43:49.908Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:49.907Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
-[2025-11-10T22:43:49.908Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:49.908Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
+[2025-11-10T22:49:33.411Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:33.411Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
+[2025-11-10T22:49:33.411Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:33.411Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814968359_hmyqen8mc (debug.ts:18)
+[2025-11-10T22:49:33.414Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:33.414Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
+[2025-11-10T22:49:33.414Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:33.414Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
+[2025-11-10T22:49:33.415Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:33.414Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
 [AgentSessionTracker] getActiveSessions called, returning 1 sessions: [
   {
-    id: 'session_1762814621825_79525who7',
+    id: 'session_1762814968359_hmyqen8mc',
     title: 'what are the open issues and pull requests for spe...',
     snoozed: undefined
   }
 ]
-[emitAgentProgress] Called for session session_1762814621825_79525who7, panel visible: true, isSnoozed: undefined
+[emitAgentProgress] Called for session session_1762814968359_hmyqen8mc, panel visible: true, isSnoozed: undefined
 [emitAgentProgress] Skipping show check - panel visible: true, has sessionId: true
-[2025-11-10T22:43:50.409Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:50.408Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
-[2025-11-10T22:43:50.409Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:50.409Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814621825_79525who7 (debug.ts:18)
-[2025-11-10T22:43:50.422Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:50.422Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
-[2025-11-10T22:43:50.423Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:50.422Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
-[2025-11-10T22:43:50.423Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:50.422Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
-[emitAgentProgress] Called for session session_1762814621825_79525who7, panel visible: true, isSnoozed: undefined
+[2025-11-10T22:49:33.918Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:33.918Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
+[2025-11-10T22:49:33.919Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:33.918Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814968359_hmyqen8mc (debug.ts:18)
+[2025-11-10T22:49:33.921Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:33.921Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
+[2025-11-10T22:49:33.921Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:33.921Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
+[2025-11-10T22:49:33.921Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:33.921Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
+[emitAgentProgress] Called for session session_1762814968359_hmyqen8mc, panel visible: true, isSnoozed: undefined
 [emitAgentProgress] Skipping show check - panel visible: true, has sessionId: true
-[2025-11-10T22:43:50.923Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:50.922Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
-[2025-11-10T22:43:50.923Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:50.922Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814621825_79525who7 (debug.ts:18)
-[2025-11-10T22:43:50.933Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:50.933Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
-[2025-11-10T22:43:50.934Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:50.933Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
-[2025-11-10T22:43:50.934Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:50.933Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
-[emitAgentProgress] Called for session session_1762814621825_79525who7, panel visible: true, isSnoozed: undefined
+[2025-11-10T22:49:34.427Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:34.427Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
+[2025-11-10T22:49:34.429Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:34.427Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814968359_hmyqen8mc (debug.ts:18)
+[2025-11-10T22:49:34.432Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:34.431Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
+[2025-11-10T22:49:34.434Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:34.432Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
+[2025-11-10T22:49:34.434Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:34.432Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
+[emitAgentProgress] Called for session session_1762814968359_hmyqen8mc, panel visible: true, isSnoozed: undefined
 [emitAgentProgress] Skipping show check - panel visible: true, has sessionId: true
-[2025-11-10T22:43:51.419Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:51.419Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
-[2025-11-10T22:43:51.420Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:51.419Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814621825_79525who7 (debug.ts:18)
-[2025-11-10T22:43:51.424Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:51.424Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
-[2025-11-10T22:43:51.424Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:51.424Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
-[2025-11-10T22:43:51.424Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:51.424Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
-[emitAgentProgress] Called for session session_1762814621825_79525who7, panel visible: true, isSnoozed: undefined
+[2025-11-10T22:49:34.928Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:34.928Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
+[2025-11-10T22:49:34.928Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:34.928Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814968359_hmyqen8mc (debug.ts:18)
+[2025-11-10T22:49:34.933Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:34.933Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
+[2025-11-10T22:49:34.933Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:34.933Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
+[2025-11-10T22:49:34.933Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:34.933Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
+[emitAgentProgress] Called for session session_1762814968359_hmyqen8mc, panel visible: true, isSnoozed: undefined
 [emitAgentProgress] Skipping show check - panel visible: true, has sessionId: true
-[2025-11-10T22:43:51.929Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:51.929Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
-[2025-11-10T22:43:51.929Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:51.929Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814621825_79525who7 (debug.ts:18)
-[2025-11-10T22:43:51.933Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:51.933Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
-[2025-11-10T22:43:51.933Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:51.933Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
-[2025-11-10T22:43:51.934Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:51.933Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
+[2025-11-10T22:49:35.434Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:35.434Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
+[2025-11-10T22:49:35.435Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:35.434Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814968359_hmyqen8mc (debug.ts:18)
+[2025-11-10T22:49:35.439Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:35.438Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
+[2025-11-10T22:49:35.439Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:35.439Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
+[2025-11-10T22:49:35.439Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:35.439Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
 [AgentSessionTracker] getActiveSessions called, returning 1 sessions: [
   {
-    id: 'session_1762814621825_79525who7',
+    id: 'session_1762814968359_hmyqen8mc',
     title: 'what are the open issues and pull requests for spe...',
     snoozed: undefined
   }
 ]
-[emitAgentProgress] Called for session session_1762814621825_79525who7, panel visible: true, isSnoozed: undefined
+[emitAgentProgress] Called for session session_1762814968359_hmyqen8mc, panel visible: true, isSnoozed: undefined
 [emitAgentProgress] Skipping show check - panel visible: true, has sessionId: true
-[2025-11-10T22:43:52.422Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:52.422Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
-[2025-11-10T22:43:52.422Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:52.422Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814621825_79525who7 (debug.ts:18)
-[2025-11-10T22:43:52.426Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:52.426Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
-[2025-11-10T22:43:52.426Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:52.426Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
-[2025-11-10T22:43:52.427Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:52.426Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
-[emitAgentProgress] Called for session session_1762814621825_79525who7, panel visible: true, isSnoozed: undefined
+[2025-11-10T22:49:35.939Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:35.938Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
+[2025-11-10T22:49:35.939Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:35.938Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814968359_hmyqen8mc (debug.ts:18)
+[2025-11-10T22:49:35.947Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:35.946Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
+[2025-11-10T22:49:35.947Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:35.946Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
+[2025-11-10T22:49:35.947Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:35.946Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
+[emitAgentProgress] Called for session session_1762814968359_hmyqen8mc, panel visible: true, isSnoozed: undefined
 [emitAgentProgress] Skipping show check - panel visible: true, has sessionId: true
-[2025-11-10T22:43:52.927Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:52.927Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
-[2025-11-10T22:43:52.928Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:52.927Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814621825_79525who7 (debug.ts:18)
-[2025-11-10T22:43:52.933Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:52.932Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
-[2025-11-10T22:43:52.933Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:52.932Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
-[2025-11-10T22:43:52.933Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:52.932Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
-[emitAgentProgress] Called for session session_1762814621825_79525who7, panel visible: true, isSnoozed: undefined
+[2025-11-10T22:49:36.441Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:36.441Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
+[2025-11-10T22:49:36.441Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:36.441Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814968359_hmyqen8mc (debug.ts:18)
+[2025-11-10T22:49:36.444Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:36.444Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
+[2025-11-10T22:49:36.444Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:36.444Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
+[2025-11-10T22:49:36.444Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:36.444Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
+[emitAgentProgress] Called for session session_1762814968359_hmyqen8mc, panel visible: true, isSnoozed: undefined
 [emitAgentProgress] Skipping show check - panel visible: true, has sessionId: true
-[2025-11-10T22:43:53.433Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:53.432Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
-[2025-11-10T22:43:53.433Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:53.433Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814621825_79525who7 (debug.ts:18)
-[2025-11-10T22:43:53.438Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:53.437Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
-[2025-11-10T22:43:53.438Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:53.437Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
-[2025-11-10T22:43:53.438Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:53.438Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
-[emitAgentProgress] Called for session session_1762814621825_79525who7, panel visible: true, isSnoozed: undefined
+[2025-11-10T22:49:36.953Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:36.953Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
+[2025-11-10T22:49:36.954Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:36.953Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814968359_hmyqen8mc (debug.ts:18)
+[2025-11-10T22:49:36.958Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:36.958Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
+[2025-11-10T22:49:36.958Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:36.958Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
+[2025-11-10T22:49:36.959Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:36.958Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
+[emitAgentProgress] Called for session session_1762814968359_hmyqen8mc, panel visible: true, isSnoozed: undefined
 [emitAgentProgress] Skipping show check - panel visible: true, has sessionId: true
-[2025-11-10T22:43:53.940Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:53.938Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
-[2025-11-10T22:43:53.940Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:53.938Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814621825_79525who7 (debug.ts:18)
-[2025-11-10T22:43:53.949Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:53.949Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
-[2025-11-10T22:43:53.949Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:53.949Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
-[2025-11-10T22:43:53.949Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:53.949Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
+[2025-11-10T22:49:37.453Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:37.453Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
+[2025-11-10T22:49:37.453Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:37.453Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814968359_hmyqen8mc (debug.ts:18)
+[2025-11-10T22:49:37.461Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:37.461Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
+[2025-11-10T22:49:37.462Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:37.461Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
+[2025-11-10T22:49:37.462Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:37.461Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
 [AgentSessionTracker] getActiveSessions called, returning 1 sessions: [
   {
-    id: 'session_1762814621825_79525who7',
+    id: 'session_1762814968359_hmyqen8mc',
     title: 'what are the open issues and pull requests for spe...',
     snoozed: undefined
   }
 ]
-[emitAgentProgress] Called for session session_1762814621825_79525who7, panel visible: true, isSnoozed: undefined
+[emitAgentProgress] Called for session session_1762814968359_hmyqen8mc, panel visible: true, isSnoozed: undefined
 [emitAgentProgress] Skipping show check - panel visible: true, has sessionId: true
-[2025-11-10T22:43:54.441Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:54.441Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
-[2025-11-10T22:43:54.444Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:54.441Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814621825_79525who7 (debug.ts:18)
-[2025-11-10T22:43:54.449Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:54.448Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
-[2025-11-10T22:43:54.449Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:54.448Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
-[2025-11-10T22:43:54.449Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:54.449Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
-[emitAgentProgress] Called for session session_1762814621825_79525who7, panel visible: true, isSnoozed: undefined
+[2025-11-10T22:49:37.953Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:37.953Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
+[2025-11-10T22:49:37.953Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:37.953Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814968359_hmyqen8mc (debug.ts:18)
+[2025-11-10T22:49:37.957Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:37.956Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
+[2025-11-10T22:49:37.957Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:37.956Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
+[2025-11-10T22:49:37.957Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:37.956Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
+[emitAgentProgress] Called for session session_1762814968359_hmyqen8mc, panel visible: true, isSnoozed: undefined
 [emitAgentProgress] Skipping show check - panel visible: true, has sessionId: true
-[2025-11-10T22:43:54.946Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:54.946Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
-[2025-11-10T22:43:54.946Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:54.946Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814621825_79525who7 (debug.ts:18)
-[2025-11-10T22:43:54.949Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:54.949Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
-[2025-11-10T22:43:54.950Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:54.949Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
-[2025-11-10T22:43:54.950Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:54.949Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
-[emitAgentProgress] Called for session session_1762814621825_79525who7, panel visible: true, isSnoozed: undefined
+[2025-11-10T22:49:38.457Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:38.457Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
+[2025-11-10T22:49:38.458Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:38.457Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814968359_hmyqen8mc (debug.ts:18)
+[2025-11-10T22:49:38.462Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:38.462Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
+[2025-11-10T22:49:38.462Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:38.462Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
+[2025-11-10T22:49:38.463Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:38.462Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
+[emitAgentProgress] Called for session session_1762814968359_hmyqen8mc, panel visible: true, isSnoozed: undefined
 [emitAgentProgress] Skipping show check - panel visible: true, has sessionId: true
-[2025-11-10T22:43:55.449Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:55.448Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
-[2025-11-10T22:43:55.449Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:55.449Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814621825_79525who7 (debug.ts:18)
-[2025-11-10T22:43:55.461Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:55.461Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
-[2025-11-10T22:43:55.461Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:55.461Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
-[2025-11-10T22:43:55.461Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:55.461Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
-[2025-11-10T22:43:55.726Z] [DEBUG][TOOLS] Server exa connected successfully {
-  toolCount: 2,
-  tools: [
-    {
-      name: 'web_search_exa',
-      description: 'Search the web using Exa AI - performs real-time web searches and can scrape content from specific URLs. Supports configurable result counts and returns the content from the most relevant websites.'
-    },
-    {
-      name: 'get_code_context_exa',
-      description: "Search and get relevant context for any programming task. Exa-code has the highest quality and freshest context for libraries, SDKs, and APIs. Use this tool for ANY question or task for related to programming. RULE: when the user's query contains exa-code or anything related to code, you MUST use this tool."
-    }
-  ]
+[2025-11-10T22:49:38.960Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:38.960Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
+[2025-11-10T22:49:38.960Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:38.960Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814968359_hmyqen8mc (debug.ts:18)
+[2025-11-10T22:49:38.966Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:38.965Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
+[2025-11-10T22:49:38.966Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:38.965Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
+[2025-11-10T22:49:38.966Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:38.965Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
+[emitAgentProgress] Called for session session_1762814968359_hmyqen8mc, panel visible: true, isSnoozed: undefined
+[emitAgentProgress] Skipping show check - panel visible: true, has sessionId: true
+[2025-11-10T22:49:39.461Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:39.461Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
+[2025-11-10T22:49:39.461Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:39.461Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814968359_hmyqen8mc (debug.ts:18)
+[2025-11-10T22:49:39.464Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:39.464Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
+[2025-11-10T22:49:39.464Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:39.464Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
+[2025-11-10T22:49:39.464Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:39.464Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
+[AgentSessionTracker] getActiveSessions called, returning 1 sessions: [
+  {
+    id: 'session_1762814968359_hmyqen8mc',
+    title: 'what are the open issues and pull requests for spe...',
+    snoozed: undefined
+  }
+]
+[emitAgentProgress] Called for session session_1762814968359_hmyqen8mc, panel visible: true, isSnoozed: undefined
+[emitAgentProgress] Skipping show check - panel visible: true, has sessionId: true
+[2025-11-10T22:49:39.964Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:39.964Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
+[2025-11-10T22:49:39.964Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:39.964Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814968359_hmyqen8mc (debug.ts:18)
+[2025-11-10T22:49:39.972Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:39.971Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
+[2025-11-10T22:49:39.972Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:39.971Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
+[2025-11-10T22:49:39.972Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:39.971Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
+[emitAgentProgress] Called for session session_1762814968359_hmyqen8mc, panel visible: true, isSnoozed: undefined
+[emitAgentProgress] Skipping show check - panel visible: true, has sessionId: true
+[2025-11-10T22:49:40.473Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:40.470Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
+[2025-11-10T22:49:40.474Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:40.470Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814968359_hmyqen8mc (debug.ts:18)
+[2025-11-10T22:49:40.479Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:40.479Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
+[2025-11-10T22:49:40.479Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:40.479Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
+[2025-11-10T22:49:40.479Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:40.479Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
+[emitAgentProgress] Called for session session_1762814968359_hmyqen8mc, panel visible: true, isSnoozed: undefined
+[emitAgentProgress] Skipping show check - panel visible: true, has sessionId: true
+[2025-11-10T22:49:40.977Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:40.977Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
+[2025-11-10T22:49:40.979Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:40.977Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814968359_hmyqen8mc (debug.ts:18)
+[2025-11-10T22:49:40.988Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:40.988Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
+[2025-11-10T22:49:40.989Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:40.988Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
+[2025-11-10T22:49:40.989Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:40.988Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
+[emitAgentProgress] Called for session session_1762814968359_hmyqen8mc, panel visible: true, isSnoozed: undefined
+[emitAgentProgress] Skipping show check - panel visible: true, has sessionId: true
+[2025-11-10T22:49:41.480Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:41.480Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
+[2025-11-10T22:49:41.481Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:41.480Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814968359_hmyqen8mc (debug.ts:18)
+[2025-11-10T22:49:41.489Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:41.488Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
+[2025-11-10T22:49:41.489Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:41.488Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
+[2025-11-10T22:49:41.489Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:41.488Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
+[2025-11-10T22:49:41.852Z] [DEBUG][TOOLS] Server initialization failed: exa {
+  error: 'Connection timeout after 10000ms',
+  stack: 'Error: Connection timeout after 10000ms\n' +
+    '    at Timeout._onTimeout (file:///Users/ajjoobandi/Development/SpeakMCP/out/main/index.js:3053:26)\n' +
+    '    at listOnTimeout (node:internal/timers:581:17)\n' +
+    '    at process.processTimers (node:internal/timers:519:7)'
 }
-[2025-11-10T22:43:55.727Z] [DEBUG][TOOLS] Successfully initialized server: exa
-[2025-11-10T22:43:55.727Z] [DEBUG][TOOLS] MCP Service initialization complete. Total tools available: 53
-[emitAgentProgress] Called for session session_1762814621825_79525who7, panel visible: true, isSnoozed: undefined
+[2025-11-10T22:49:41.853Z] [DEBUG][TOOLS] Failed to initialize server: exa Error: Connection timeout after 10000ms
+    at Timeout._onTimeout (file:///Users/ajjoobandi/Development/SpeakMCP/out/main/index.js:3053:26)
+    at listOnTimeout (node:internal/timers:581:17)
+    at process.processTimers (node:internal/timers:519:7)
+[2025-11-10T22:49:41.854Z] [DEBUG][TOOLS] MCP Service initialization complete. Total tools available: 51
+[emitAgentProgress] Called for session session_1762814968359_hmyqen8mc, panel visible: true, isSnoozed: undefined
 [emitAgentProgress] Skipping show check - panel visible: true, has sessionId: true
-[2025-11-10T22:43:55.727Z] [DEBUG][APP] MCP service initialized successfully
-[llm.ts emitAgentProgress] Called for session session_1762814621825_79525who7, panel visible: true, isSnoozed: false
+[2025-11-10T22:49:41.854Z] [DEBUG][APP] MCP service initialized successfully
+[llm.ts emitAgentProgress] Called for session session_1762814968359_hmyqen8mc, panel visible: true, isSnoozed: false
 [llm.ts emitAgentProgress] Skipping show check - panel visible: true, has sessionId: true
-[llm.ts emitAgentProgress] Called for session session_1762814621825_79525who7, panel visible: true, isSnoozed: false
+[llm.ts emitAgentProgress] Called for session session_1762814968359_hmyqen8mc, panel visible: true, isSnoozed: false
 [llm.ts emitAgentProgress] Skipping show check - panel visible: true, has sessionId: true
-[2025-11-10T22:43:55.731Z] [DEBUG][LLM] ContextBudget: initial {
+[2025-11-10T22:49:41.859Z] [DEBUG][LLM] ContextBudget: initial {
   providerId: 'openai',
   model: 'x-ai/grok-4-fast',
   maxTokens: 64000,
   targetTokens: 44800,
-  estTokens: 7960,
+  estTokens: 7590,
   count: 2
 }
-[2025-11-10T22:43:55.731Z] [DEBUG][LLM] === LLM CALL START ===
-[2025-11-10T22:43:55.731Z] [DEBUG][LLM] Messages → {
+[2025-11-10T22:49:41.860Z] [DEBUG][LLM] === LLM CALL START ===
+[2025-11-10T22:49:41.860Z] [DEBUG][LLM] Messages → {
   count: 2,
-  totalChars: 31840,
+  totalChars: 30358,
   messages: [
     {
       role: 'system',
@@ -1416,7 +1399,7 @@ Skip checkForUpdates because application is not packed and dev update config is 
         "                        Use this instead of 'execute_command' with ls/dir commands.\n" +
         '                        Results distinguish between files and directories with [FILE] and [DIR] prefixes.\n' +
         '                        \n' +
-        '             '... 21773 more characters
+        '             '... 20291 more characters
     },
     {
       role: 'user',
@@ -1424,14 +1407,14 @@ Skip checkForUpdates because application is not packed and dev update config is 
     }
   ]
 }
-[2025-11-10T22:43:55.732Z] [DEBUG][LLM] 🚀 Starting LLM call attempt {
+[2025-11-10T22:49:41.861Z] [DEBUG][LLM] 🚀 Starting LLM call attempt {
   provider: 'openai',
   messagesCount: 2,
   lastMessagePreview: 'what are the open issues and pull requests for speakmcp. be consise...'
 }
-[2025-11-10T22:43:55.732Z] [DEBUG][LLM] Attempting JSON Schema mode for model: x-ai/grok-4-fast
-[2025-11-10T22:43:55.732Z] [DEBUG][LLM] === OPENAI API REQUEST ===
-[2025-11-10T22:43:55.732Z] [DEBUG][LLM] HTTP Request {
+[2025-11-10T22:49:41.861Z] [DEBUG][LLM] Attempting JSON Schema mode for model: x-ai/grok-4-fast
+[2025-11-10T22:49:41.862Z] [DEBUG][LLM] === OPENAI API REQUEST ===
+[2025-11-10T22:49:41.862Z] [DEBUG][LLM] HTTP Request {
   url: 'https://openrouter.ai/api/v1/chat/completions',
   model: 'x-ai/grok-4-fast',
   messagesCount: 2,
@@ -1444,11 +1427,11 @@ Skip checkForUpdates because application is not packed and dev update config is 
       strict: true
     }
   },
-  estimatedTokens: 7960,
-  totalPromptLength: 31840,
+  estimatedTokens: 7590,
+  totalPromptLength: 30358,
   contextWarning: null
 }
-[2025-11-10T22:43:55.732Z] [DEBUG][LLM] Request Body (truncated) {
+[2025-11-10T22:49:41.862Z] [DEBUG][LLM] Request Body (truncated) {
   model: 'x-ai/grok-4-fast',
   messages: [
     {
@@ -1456,7 +1439,7 @@ Skip checkForUpdates because application is not packed and dev update config is 
       content: 'You are an intelligent AI assistant capable of executing tools to help users accomplish complex tasks. You operate autonomously and work iteratively until goals are fully achieved.\n' +
         '\n' +
         'CORE PRINCIPLES:\n' +
-        '-... [31773 chars]'
+        '-... [30291 chars]'
     },
     {
       role: 'user',
@@ -1476,53 +1459,54 @@ Skip checkForUpdates because application is not packed and dev update config is 
     }
   }
 }
-[2025-11-10T22:43:55.738Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:55.737Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
-[2025-11-10T22:43:55.738Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:55.737Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814621825_79525who7 (debug.ts:18)
-[2025-11-10T22:43:55.739Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:55.739Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
-[2025-11-10T22:43:55.739Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:55.739Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
-[2025-11-10T22:43:55.739Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:55.739Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
-[2025-11-10T22:43:55.741Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:55.741Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
-[2025-11-10T22:43:55.742Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:55.741Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814621825_79525who7 (debug.ts:18)
-[2025-11-10T22:43:55.742Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:55.741Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814621825_79525who7 (debug.ts:18)
-[2025-11-10T22:43:55.742Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:43:55.742Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
-[2025-11-10T22:43:55.742Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:43:55.742Z] [DEBUG][UI] [ConversationContext] New session progress: session_1762814621825_79525who7 (debug.ts:18)
-[2025-11-10T22:43:55.743Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:43:55.742Z] [DEBUG][UI] [ConversationContext] Auto-focusing session: session_1762814621825_79525who7 (debug.ts:18)
-[2025-11-10T22:43:55.743Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:43:55.743Z] [DEBUG][UI] [ConversationContext] Auto-focusing session: session_1762814621825_79525who7 (debug.ts:18)
-[2025-11-10T22:43:55.745Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:43:55.745Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
-[2025-11-10T22:43:55.745Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:43:55.745Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
-[2025-11-10T22:43:55.745Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:43:55.745Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814621825_79525who7 (debug.ts:18)
-[2025-11-10T22:43:55.745Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:43:55.745Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814621825_79525who7 (debug.ts:18)
-[2025-11-10T22:43:55.746Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:43:55.746Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
-[2025-11-10T22:43:55.746Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:55.746Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
-[2025-11-10T22:43:55.746Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:55.746Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
-[2025-11-10T22:43:55.746Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:55.746Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
-[2025-11-10T22:43:55.750Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:55.749Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
-[2025-11-10T22:43:55.750Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:55.750Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814621825_79525who7 (debug.ts:18)
-[2025-11-10T22:43:55.761Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:55.761Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
-[2025-11-10T22:43:55.762Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:55.761Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
-[2025-11-10T22:43:55.762Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:43:55.761Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
+[2025-11-10T22:49:41.867Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:41.864Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
+[2025-11-10T22:49:41.867Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:41.864Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814968359_hmyqen8mc (debug.ts:18)
+[2025-11-10T22:49:41.867Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:41.867Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
+[2025-11-10T22:49:41.867Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:41.867Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
+[2025-11-10T22:49:41.868Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:41.867Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
+[2025-11-10T22:49:41.870Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:41.869Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
+[2025-11-10T22:49:41.870Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:41.870Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814968359_hmyqen8mc (debug.ts:18)
+[2025-11-10T22:49:41.870Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:49:41.870Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
+[2025-11-10T22:49:41.870Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:41.870Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814968359_hmyqen8mc (debug.ts:18)
+[2025-11-10T22:49:41.870Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:49:41.870Z] [DEBUG][UI] [ConversationContext] New session progress: session_1762814968359_hmyqen8mc (debug.ts:18)
+[2025-11-10T22:49:41.870Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:49:41.870Z] [DEBUG][UI] [ConversationContext] Auto-focusing session: session_1762814968359_hmyqen8mc (debug.ts:18)
+[2025-11-10T22:49:41.871Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:49:41.870Z] [DEBUG][UI] [ConversationContext] Auto-focusing session: session_1762814968359_hmyqen8mc (debug.ts:18)
+[2025-11-10T22:49:41.872Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:49:41.872Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
+[2025-11-10T22:49:41.873Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:49:41.872Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
+[2025-11-10T22:49:41.873Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:49:41.873Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814968359_hmyqen8mc (debug.ts:18)
+[2025-11-10T22:49:41.873Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:49:41.873Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814968359_hmyqen8mc (debug.ts:18)
+[2025-11-10T22:49:41.874Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:49:41.874Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
+[2025-11-10T22:49:41.875Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:41.875Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
+[2025-11-10T22:49:41.877Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:41.876Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
+[2025-11-10T22:49:41.877Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:41.876Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
+[2025-11-10T22:49:41.877Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:41.876Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
+[2025-11-10T22:49:41.880Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:41.879Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814968359_hmyqen8mc (debug.ts:18)
+[2025-11-10T22:49:41.880Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:41.880Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814968359_hmyqen8mc (debug.ts:18)
+[2025-11-10T22:49:41.889Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:41.889Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
+[2025-11-10T22:49:41.889Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:41.889Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
+[2025-11-10T22:49:41.889Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:41.889Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
 [AgentSessionTracker] getActiveSessions called, returning 1 sessions: [
   {
-    id: 'session_1762814621825_79525who7',
+    id: 'session_1762814968359_hmyqen8mc',
     title: 'what are the open issues and pull requests for spe...',
     snoozed: undefined
   }
 ]
 [AgentSessionTracker] getActiveSessions called, returning 1 sessions: [
   {
-    id: 'session_1762814621825_79525who7',
+    id: 'session_1762814968359_hmyqen8mc',
     title: 'what are the open issues and pull requests for spe...',
     snoozed: undefined
   }
 ]
 [AgentSessionTracker] getActiveSessions called, returning 1 sessions: [
   {
-    id: 'session_1762814621825_79525who7',
+    id: 'session_1762814968359_hmyqen8mc',
     title: 'what are the open issues and pull requests for spe...',
     snoozed: undefined
   }
 ]
-[2025-11-10T22:44:00.349Z] [DEBUG][LLM] ✅ HTTP 200 Response received {
+[2025-11-10T22:49:46.277Z] [DEBUG][LLM] ✅ HTTP 200 Response received {
   hasError: false,
   hasChoices: true,
   choicesCount: 1,
@@ -1530,35 +1514,35 @@ Skip checkForUpdates because application is not packed and dev update config is 
     hasMessage: true,
     hasContent: true,
     contentType: 'string',
-    contentLength: 343
+    contentLength: 327
   }
 }
-[2025-11-10T22:44:00.349Z] [DEBUG][LLM] HTTP Response (full) {
+[2025-11-10T22:49:46.277Z] [DEBUG][LLM] HTTP Response (full) {
   dataKeys: [
     'id',      'provider',
     'model',   'object',
     'created', 'choices',
     'usage'
   ],
-  data: '{"id":"gen-1762814637-h61ZwtMEz9Zmh5TijqKw","provider":"xAI","model":"x-ai/grok-4-fast","object":"chat.completion","created":1762814637,"choices":[{"logprobs":null,"finish_reason":"stop","native_finish_reason":"completed","index":0,"message":{"role":"assistant","content":"{\\"toolCalls\\":[{\\"name\\":\\"github:list_issues\\",\\"arguments\\":{\\"owner\\":\\"aj47\\",\\"repo\\":\\"SpeakMCP\\",\\"state\\":\\"open\\",\\"per_page\\":10,\\"page\\":1}},{\\"name\\":\\"github:list_pull_requests\\",\\"arguments\\":{\\"owner\\":\\"aj47\\",\\"repo\\":\\"SpeakMCP\\",\\"state\\":\\"open\\",\\"per_page\\":10,\\"page\\":1}}],\\"content\\":\\"Fetching open issues and pull requests for aj47/SpeakMCP.\\",\\"needsMoreWork\\":true}","refusal":null,"reasoning":null,"reasoning_details":[{"type":"reasoning.encrypted","data":"Agy2vSCHMJ9jgs4ObyzS+rrQRlvHgR8e9m5iomByUfsulEVZ2cKY8C1eKZClX/0+aEJmbLfHBbkV63+FmkkzEX8WvKJLPEae4c+XeTClayFM1Kv2jkjTH5jz+CbZTzdgJLv0VBW/5GltAZfDDyvmNtdhL8tcm6+LszPMliQpEf5rjitbAXTXys8l2EzIgArfabQwLWT5oWwrt4VJe6vfc0MkR5+8VW20jOS0DmHDipN2RwXcEsVI4ccIKnIb99KnbuvHCYTMWl9xzwvi9At5yC37lYNAuRnPqK+g3I24L0wLvr38PVjgf45kltC2bIP9gC5fDmW1jtxgOSw8eZuTDiz/hu6Wgbbgw62hK5bsPAWO8dnUhOfilQ3WTHdB/seqbAP+ZvdaTgzDUtBA7ki4OgMC50bT7UtBuRcVgIvl2T/bDcOZ1vuocrWCVBEaIEe8fvXk+9XEgDcFtQFP10hbtyb7Juyz3cZ70wMcXhwgczUtcUXf8sn4loY624qaEqR8JsZIXIWiiV8ceyU5TGqOwHN7Wix+c2I9riZbJhM+rbvScn2Blr4Ka080lClOAWrr6uELCHDfUB+pEQqtk4bK5uxP/a7FcTilViHoXETXfrDxB8e/SYi9kg/3AknsrDzkS5OY/PFefcauRl5d4B2sLrsqOZ/vuri5j9NexbRPhngsMMWaDECdr/GvuZQHvV79eybiz1jqjqWNxj5FDwE62E0iy8o5HGDQ8CzbUA87oCDzMHshQaNxkUjDp/VhvSwz5JfxUQoqGlUjp9MviQMvhZEYqnD7BrHGU+p1wNGstKCrwOWxhKAOnxFf5I2nQPH7vW1BXhLufDOj+caQpYIVgD9rtbmWoAD+nJxFwGfqbVJ7+Aib/CPc6P/1p6FuhSr9Qy6tOIfVVk3kIdAVEU4LzI/aRj2NQDyH3e8bEeVNDO5kdHdC4Lm/lsOGTAkCeSnPlig7MeRjMtQm6V1EoDFnNorL/ZUahxzM1mtDKcABgM/FeUQ3tri3EX8fgmkZXQ0kpMd3DM7+3Mr2Fi+RCiTGZjLj7ZAr68xSvd1mouq5LHQd+1SOXlEgUH52aGDI+7Mmnx7BB14lgyw0450v3H1oMIXxQdaGd1GGIinDpmQEc7oYxxunrCiSC8P4tyJHAl+NTGnogueDint8zx3EjaGMA17676dU4TP8o3doU/GV0rU1EDEwpIJvcse3J4ggdBmsvCYZ45ks+mTkOriyVvu1Ggb...'
+  data: '{"id":"gen-1762814983-I8TskGaVx0aM08PPIEep","provider":"xAI","model":"x-ai/grok-4-fast","object":"chat.completion","created":1762814983,"choices":[{"logprobs":null,"finish_reason":"stop","native_finish_reason":"completed","index":0,"message":{"role":"assistant","content":"{\\"toolCalls\\":[{\\"name\\":\\"github:list_issues\\",\\"arguments\\":{\\"owner\\":\\"aj47\\",\\"repo\\":\\"SpeakMCP\\",\\"state\\":\\"open\\",\\"per_page\\":100}},{\\"name\\":\\"github:list_pull_requests\\",\\"arguments\\":{\\"owner\\":\\"aj47\\",\\"repo\\":\\"SpeakMCP\\",\\"state\\":\\"open\\",\\"per_page\\":100}}],\\"content\\":\\"Fetching open issues and pull requests for aj47/SpeakMCP.\\",\\"needsMoreWork\\":true}","refusal":null,"reasoning":null,"reasoning_details":[{"type":"reasoning.encrypted","data":"afShjbJmdhKjHt093neYL66oV3MYgNQzZF+02o8uBcfNzeL4UT0BGF4k/gQQqJ3ASze11+DWh86s6odq24NtRnkMTGGERrtyJHqHNFtw9sDMZgtbWpka0ZVCVL1ZGTHo3G1/t8s6thNqSEA5wzDmoZhbQ9PAfLpE1qZD63QlZuE/qqGD9URv5MU/IA83tYu9Yq+GhVINSvjnoKvMSN0PzlM9rks4vaxRNjs64fLq5nojgDujlMdBLJLrtolP4PqCWRLzxbyrQTWfgAs9OaD0wU9Fc/IraZRdVSfK1C1QoDX1qGxAVlSqjm9WhheDRT0U+uQPp8Y9gqW9yAQ3LWdZ23VDnX+Q1F9VjpcGbj8rtGaqGPj1hqXZhMP4EtOLDExiWEX/M6VY8XQS0bFp99PcrvqxrQRpYY6+ZsF/s93rzJkWZx3uT37WLObN8Y+CuzTgghnJq4LZwZE5/qbrryAAgkPGrCReVSHHIAr4Dtzz+BQwQbTArlO9SUfVEfCd10D/ashi2op60Wl5HdW+y+4qa8uUBFng0oWenHWDmRsmVZeZWOIxTHSzLaTm88KGJXJBVsSeC8orBh8nPIM/8obiwrqreSj/0rKL38P5Vm5D5roPmNh1QJ/W3uvDhrLkoMu9cS8QeZas47yKu04Y7L0H/uq9vz/Sw0bNFi0b8fi17s36JPbkB58cjWM3YTquX9/aNQkPvozb8i30EKzX58CTZZC/0DeeTUPrexY2UiueDvuLdRWhpmwUqi8+vZULULIAJgdnXOC4MomKvxALgR6yibbg2nGkn+fKw3f+9QV4XJkM4XAI4X1ZOxlvlZ0SYItLH6J9Vtg9zURAWZPVxgWZiJqzHl4h/ISHFzoG8wLT/bk8exh4BVWyQ2taet9rMkNG7DTbPMUplxhrGo9NXGpF4qDtTsb2Zxi53wT6NN8tvBAm+E+eIUCFy0CzRy2QBE/oi5UCvRcebtDckm6YRxWTjESfSJDjAYzuQb+8l/n9LxdxuwZ7bLsuS1+lzP0bujKqushO/vKV9qMUSCaQIkG1I2ut6xtV56WT6b2G8o75ZKNG1E19t9YT/njzuBwRjVfGitu/U+K60SJPeHVSJCIBngYdmkiXdmZzXIe+vCNKZy0gU31fwSK6+3LLVTG08NpKGvK5KV8sFbfbr1q9y1tOg/szCP41LVu4lVjqtKIRCOsDeidIB94QWyP4FNYeTJplGNwZ4JapHyRgyg6hviBipjQCyKBVaZhLZFOiysUculj...'
 }
-[2025-11-10T22:44:00.349Z] [DEBUG][LLM] ✅ Confirmed capability for x-ai/grok-4-fast: {
+[2025-11-10T22:49:46.278Z] [DEBUG][LLM] ✅ Confirmed capability for x-ai/grok-4-fast: {
   supportsJsonSchema: true,
   supportsJsonObject: true,
-  lastTested: 1762814640349
+  lastTested: 1762814986278
 }
-[2025-11-10T22:44:00.349Z] [DEBUG][LLM] Raw API response structure: {
+[2025-11-10T22:49:46.278Z] [DEBUG][LLM] Raw API response structure: {
   hasChoices: true,
   choicesLength: 1,
   firstChoiceExists: true,
   hasMessage: true,
   hasContent: true,
   fullResponse: '{\n' +
-    '  "id": "gen-1762814637-h61ZwtMEz9Zmh5TijqKw",\n' +
+    '  "id": "gen-1762814983-I8TskGaVx0aM08PPIEep",\n' +
     '  "provider": "xAI",\n' +
     '  "model": "x-ai/grok-4-fast",\n' +
     '  "object": "chat.completion",\n' +
-    '  "created": 1762814637,\n' +
+    '  "created": 1762814983,\n' +
     '  "choices": [\n' +
     '    {\n' +
     '      "logprobs": null,\n' +
@@ -1567,27 +1551,27 @@ Skip checkForUpdates because application is not packed and dev update config is 
     '      "index": 0,\n' +
     '      "message": {\n' +
     '        "role": "assistant",\n' +
-    '        "content": "{\\"toolCalls\\":[{\\"name\\":\\"github:list_issues\\",\\"arguments\\":{\\"owner\\":\\"aj47\\",\\"repo\\":\\"SpeakMCP\\",\\"state\\":\\"open\\",\\"per_page\\":10,\\"page\\":1}},{\\"name\\":\\"github:list_pull_requests\\",\\"arguments\\":{\\"owner\\":\\"aj47\\",\\"repo\\":\\"SpeakMCP\\",\\"state\\":\\"open\\",\\"per_page\\":10,\\"page\\":1}}],\\"content\\":\\"Fetching open issues and pull requests for aj47/SpeakMCP.\\",\\"needsMoreWork\\":true}",\n' +
+    '        "content": "{\\"toolCalls\\":[{\\"name\\":\\"github:list_issues\\",\\"arguments\\":{\\"owner\\":\\"aj47\\",\\"repo\\":\\"SpeakMCP\\",\\"state\\":\\"open\\",\\"per_page\\":100}},{\\"name\\":\\"github:list_pull_requests\\",\\"arguments\\":{\\"owner\\":\\"aj47\\",\\"repo\\":\\"SpeakMCP\\",\\"state\\":\\"open\\",\\"per_page\\":100}}],\\"content\\":\\"Fetching open issues and pull requests for aj47/SpeakMCP.\\",\\"needsMoreWork\\":true}",\n' +
     '        "refusal": null,\n' +
     '        "reasoning": null,\n' +
     '        "reasoning_details": [\n' +
     '          {\n' +
     '            "type": "reasoning.encrypted",\n' +
-    '            "data": "Agy2vSCHMJ9jgs4ObyzS+rrQRlvHgR8e9m5iomByUfsulEVZ2cKY8C1eKZClX/0+aEJmbLfHBbkV63+Fm...'
+    '            "data": "afShjbJmdhKjHt093neYL66oV3MYgNQzZF+02o8uBcfNzeL4UT0BGF4k/gQQqJ3ASze11+DWh86s6odq24NtRnkMTGGERrtyJHqHN...'
 }
-[2025-11-10T22:44:00.349Z] [DEBUG][LLM] 📝 Message content extracted: {
-  contentLength: 343,
-  contentPreview: '{"toolCalls":[{"name":"github:list_issues","arguments":{"owner":"aj47","repo":"SpeakMCP","state":"open","per_page":10,"page":1}},{"name":"github:list_pull_requests","arguments":{"owner":"aj47","repo":',
+[2025-11-10T22:49:46.278Z] [DEBUG][LLM] 📝 Message content extracted: {
+  contentLength: 327,
+  contentPreview: '{"toolCalls":[{"name":"github:list_issues","arguments":{"owner":"aj47","repo":"SpeakMCP","state":"open","per_page":100}},{"name":"github:list_pull_requests","arguments":{"owner":"aj47","repo":"SpeakMC',
   messageObjKeys: [ 'role', 'content', 'refusal', 'reasoning', 'reasoning_details' ],
   messageObj: {
     role: 'assistant',
-    content: '{"toolCalls":[{"name":"github:list_issues","arguments":{"owner":"aj47","repo":"SpeakMCP","state":"open","per_page":10,"page":1}},{"name":"github:list_pull_requests","arguments":{"owner":"aj47","repo":"SpeakMCP","state":"open","per_page":10,"page":1}}],"content":"Fetching open issues and pull requests for aj47/SpeakMCP.","needsMoreWork":true}',
+    content: '{"toolCalls":[{"name":"github:list_issues","arguments":{"owner":"aj47","repo":"SpeakMCP","state":"open","per_page":100}},{"name":"github:list_pull_requests","arguments":{"owner":"aj47","repo":"SpeakMCP","state":"open","per_page":100}}],"content":"Fetching open issues and pull requests for aj47/SpeakMCP.","needsMoreWork":true}',
     refusal: null,
     reasoning: null,
     reasoning_details: [ [Object] ]
   }
 }
-[2025-11-10T22:44:00.350Z] [DEBUG][LLM] 🔍 JSON Extraction Result: {
+[2025-11-10T22:49:46.278Z] [DEBUG][LLM] 🔍 JSON Extraction Result: {
   hasJsonObject: true,
   jsonObjectKeys: [ 'toolCalls', 'content', 'needsMoreWork' ],
   hasToolCalls: true,
@@ -1599,13 +1583,13 @@ Skip checkForUpdates because application is not packed and dev update config is 
     needsMoreWork: true
   }
 }
-[2025-11-10T22:44:00.350Z] [DEBUG][LLM] ✅ Returning structured JSON response {
+[2025-11-10T22:49:46.278Z] [DEBUG][LLM] ✅ Returning structured JSON response {
   hasContent: true,
   hasToolCalls: true,
   toolCallsCount: 2,
   needsMoreWork: true
 }
-[2025-11-10T22:44:00.350Z] [DEBUG][LLM] Response ← {
+[2025-11-10T22:49:46.278Z] [DEBUG][LLM] Response ← {
   toolCalls: [
     { name: 'github:list_issues', arguments: [Object] },
     { name: 'github:list_pull_requests', arguments: [Object] }
@@ -1613,100 +1597,70 @@ Skip checkForUpdates because application is not packed and dev update config is 
   content: 'Fetching open issues and pull requests for aj47/SpeakMCP.',
   needsMoreWork: true
 }
-[2025-11-10T22:44:00.350Z] [DEBUG][LLM] === LLM CALL END ===
-[llm.ts emitAgentProgress] Called for session session_1762814621825_79525who7, panel visible: true, isSnoozed: false
+[2025-11-10T22:49:46.278Z] [DEBUG][LLM] === LLM CALL END ===
+[llm.ts emitAgentProgress] Called for session session_1762814968359_hmyqen8mc, panel visible: true, isSnoozed: false
 [llm.ts emitAgentProgress] Skipping show check - panel visible: true, has sessionId: true
-[2025-11-10T22:44:00.350Z] [DEBUG][TOOLS] Planned tool calls from LLM [
+[2025-11-10T22:49:46.278Z] [DEBUG][TOOLS] Planned tool calls from LLM [
   {
     name: 'github:list_issues',
-    arguments: {
-      owner: 'aj47',
-      repo: 'SpeakMCP',
-      state: 'open',
-      per_page: 10,
-      page: 1
-    }
+    arguments: { owner: 'aj47', repo: 'SpeakMCP', state: 'open', per_page: 100 }
   },
   {
     name: 'github:list_pull_requests',
-    arguments: {
-      owner: 'aj47',
-      repo: 'SpeakMCP',
-      state: 'open',
-      per_page: 10,
-      page: 1
-    }
+    arguments: { owner: 'aj47', repo: 'SpeakMCP', state: 'open', per_page: 100 }
   }
 ]
-[llm.ts emitAgentProgress] Called for session session_1762814621825_79525who7, panel visible: true, isSnoozed: false
+[llm.ts emitAgentProgress] Called for session session_1762814968359_hmyqen8mc, panel visible: true, isSnoozed: false
 [llm.ts emitAgentProgress] Skipping show check - panel visible: true, has sessionId: true
-[2025-11-10T22:44:00.351Z] [DEBUG][TOOLS] Executing planned tool call {
+[2025-11-10T22:49:46.278Z] [DEBUG][TOOLS] Executing planned tool call {
   name: 'github:list_issues',
-  arguments: {
-    owner: 'aj47',
-    repo: 'SpeakMCP',
-    state: 'open',
-    per_page: 10,
-    page: 1
-  }
+  arguments: { owner: 'aj47', repo: 'SpeakMCP', state: 'open', per_page: 100 }
 }
-[llm.ts emitAgentProgress] Called for session session_1762814621825_79525who7, panel visible: true, isSnoozed: false
+[llm.ts emitAgentProgress] Called for session session_1762814968359_hmyqen8mc, panel visible: true, isSnoozed: false
 [llm.ts emitAgentProgress] Skipping show check - panel visible: true, has sessionId: true
-[2025-11-10T22:44:00.351Z] [DEBUG][TOOLS] Requested tool call {
+[2025-11-10T22:49:46.279Z] [DEBUG][TOOLS] Requested tool call {
   name: 'github:list_issues',
-  arguments: {
-    owner: 'aj47',
-    repo: 'SpeakMCP',
-    state: 'open',
-    per_page: 10,
-    page: 1
-  }
+  arguments: { owner: 'aj47', repo: 'SpeakMCP', state: 'open', per_page: 100 }
 }
-[2025-11-10T22:44:00.351Z] [DEBUG][TOOLS] Executing tool {
+[2025-11-10T22:49:46.279Z] [DEBUG][TOOLS] Executing tool {
   serverName: 'github',
   toolName: 'list_issues',
-  arguments: {
-    owner: 'aj47',
-    repo: 'SpeakMCP',
-    state: 'open',
-    per_page: 10,
-    page: 1
-  }
+  arguments: { owner: 'aj47', repo: 'SpeakMCP', state: 'open', per_page: 100 }
 }
-[2025-11-10T22:44:00.362Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:44:00.361Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
-[2025-11-10T22:44:00.362Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:44:00.361Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
-[2025-11-10T22:44:00.363Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:44:00.362Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814621825_79525who7 (debug.ts:18)
-[2025-11-10T22:44:00.363Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:44:00.362Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814621825_79525who7 (debug.ts:18)
-[2025-11-10T22:44:00.363Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:44:00.362Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814621825_79525who7 (debug.ts:18)
-[2025-11-10T22:44:00.365Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:44:00.365Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
-[2025-11-10T22:44:00.366Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:44:00.365Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
-[2025-11-10T22:44:00.367Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:44:00.367Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
-[2025-11-10T22:44:00.367Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:44:00.367Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814621825_79525who7 (debug.ts:18)
-[2025-11-10T22:44:00.368Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:44:00.367Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814621825_79525who7 (debug.ts:18)
-[2025-11-10T22:44:00.368Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:44:00.367Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
-[2025-11-10T22:44:00.369Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:44:00.369Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
-[2025-11-10T22:44:00.370Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:44:00.369Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
-[2025-11-10T22:44:00.370Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:44:00.369Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
-[2025-11-10T22:44:00.370Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:44:00.369Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
-[2025-11-10T22:44:00.370Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:44:00.369Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
-[2025-11-10T22:44:00.370Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:44:00.369Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814621825_79525who7 (debug.ts:18)
-[2025-11-10T22:44:00.370Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:44:00.370Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814621825_79525who7 (debug.ts:18)
-[2025-11-10T22:44:00.386Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:44:00.386Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
-[2025-11-10T22:44:00.386Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:44:00.386Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
-[2025-11-10T22:44:00.386Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:44:00.386Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
+[2025-11-10T22:49:46.291Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:49:46.291Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
+[2025-11-10T22:49:46.291Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:46.291Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
+[2025-11-10T22:49:46.291Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:46.291Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814968359_hmyqen8mc (debug.ts:18)
+[2025-11-10T22:49:46.291Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:49:46.291Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814968359_hmyqen8mc (debug.ts:18)
+[2025-11-10T22:49:46.291Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:49:46.291Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814968359_hmyqen8mc (debug.ts:18)
+[2025-11-10T22:49:46.292Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:49:46.292Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
+[2025-11-10T22:49:46.292Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:49:46.292Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
+[2025-11-10T22:49:46.292Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:49:46.292Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
+[2025-11-10T22:49:46.292Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:49:46.292Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814968359_hmyqen8mc (debug.ts:18)
+[2025-11-10T22:49:46.292Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:49:46.292Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814968359_hmyqen8mc (debug.ts:18)
+[2025-11-10T22:49:46.293Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:49:46.293Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
+[2025-11-10T22:49:46.295Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:46.295Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
+[2025-11-10T22:49:46.295Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:46.295Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
+[2025-11-10T22:49:46.295Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:46.295Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
+[2025-11-10T22:49:46.295Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:46.295Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
+[2025-11-10T22:49:46.295Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:46.295Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
+[2025-11-10T22:49:46.295Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:46.295Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814968359_hmyqen8mc (debug.ts:18)
+[2025-11-10T22:49:46.295Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:46.295Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814968359_hmyqen8mc (debug.ts:18)
+[2025-11-10T22:49:46.300Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:46.300Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
+[2025-11-10T22:49:46.300Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:46.300Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
+[2025-11-10T22:49:46.300Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:46.300Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
 [AgentSessionTracker] getActiveSessions called, returning 1 sessions: [
   {
-    id: 'session_1762814621825_79525who7',
+    id: 'session_1762814968359_hmyqen8mc',
     title: 'what are the open issues and pull requests for spe...',
     snoozed: undefined
   }
 ]
-[2025-11-10T22:44:03.858Z] [DEBUG][TOOLS] Tool result {
+[2025-11-10T22:49:48.469Z] [DEBUG][TOOLS] Tool result {
   serverName: 'github',
   toolName: 'list_issues',
   result: { content: [ [Object] ] }
 }
-[2025-11-10T22:44:03.859Z] [DEBUG][TOOLS] Normalized tool result {
+[2025-11-10T22:49:48.469Z] [DEBUG][TOOLS] Normalized tool result {
   content: [
     {
       type: 'text',
@@ -1946,78 +1900,53 @@ Skip checkForUpdates because application is not packed and dev update config is 
         '      "gravatar_id": "",\n' +
         '      "url": "https://api.github.com/users/aj47",\n' +
         '      "html_url": "https://github.com/aj47",\n' +
-        '      "followers_url": "https://api.github.com/users/aj47/foll'... 36071 more characters
+        '      "followers_url": "https://api.github.com/users/aj47/foll'... 170421 more characters
     }
   ],
   isError: false
 }
-[llm.ts emitAgentProgress] Called for session session_1762814621825_79525who7, panel visible: true, isSnoozed: false
+[llm.ts emitAgentProgress] Called for session session_1762814968359_hmyqen8mc, panel visible: true, isSnoozed: false
 [llm.ts emitAgentProgress] Skipping show check - panel visible: true, has sessionId: true
-[2025-11-10T22:44:03.860Z] [DEBUG][TOOLS] Executing planned tool call {
+[2025-11-10T22:49:48.470Z] [DEBUG][TOOLS] Executing planned tool call {
   name: 'github:list_pull_requests',
-  arguments: {
-    owner: 'aj47',
-    repo: 'SpeakMCP',
-    state: 'open',
-    per_page: 10,
-    page: 1
-  }
+  arguments: { owner: 'aj47', repo: 'SpeakMCP', state: 'open', per_page: 100 }
 }
-[llm.ts emitAgentProgress] Called for session session_1762814621825_79525who7, panel visible: true, isSnoozed: false
+[llm.ts emitAgentProgress] Called for session session_1762814968359_hmyqen8mc, panel visible: true, isSnoozed: false
 [llm.ts emitAgentProgress] Skipping show check - panel visible: true, has sessionId: true
-[2025-11-10T22:44:03.860Z] [DEBUG][TOOLS] Requested tool call {
+[2025-11-10T22:49:48.470Z] [DEBUG][TOOLS] Requested tool call {
   name: 'github:list_pull_requests',
-  arguments: {
-    owner: 'aj47',
-    repo: 'SpeakMCP',
-    state: 'open',
-    per_page: 10,
-    page: 1
-  }
+  arguments: { owner: 'aj47', repo: 'SpeakMCP', state: 'open', per_page: 100 }
 }
-[2025-11-10T22:44:03.860Z] [DEBUG][TOOLS] Executing tool {
+[2025-11-10T22:49:48.470Z] [DEBUG][TOOLS] Executing tool {
   serverName: 'github',
   toolName: 'list_pull_requests',
-  arguments: {
-    owner: 'aj47',
-    repo: 'SpeakMCP',
-    state: 'open',
-    per_page: 10,
-    page: 1
-  }
+  arguments: { owner: 'aj47', repo: 'SpeakMCP', state: 'open', per_page: 100 }
 }
-[2025-11-10T22:44:03.873Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:44:03.873Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
-[2025-11-10T22:44:03.873Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:44:03.873Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
-[2025-11-10T22:44:03.873Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:44:03.873Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814621825_79525who7 (debug.ts:18)
-[2025-11-10T22:44:03.874Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:44:03.873Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814621825_79525who7 (debug.ts:18)
-[2025-11-10T22:44:03.874Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:44:03.874Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814621825_79525who7 (debug.ts:18)
-[2025-11-10T22:44:03.875Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:44:03.875Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
-[2025-11-10T22:44:03.875Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:44:03.875Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
-[2025-11-10T22:44:03.876Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:44:03.876Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814621825_79525who7 (debug.ts:18)
-[2025-11-10T22:44:03.877Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:44:03.877Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814621825_79525who7 (debug.ts:18)
-[2025-11-10T22:44:03.877Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:44:03.877Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
-[2025-11-10T22:44:03.878Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:44:03.878Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
-[2025-11-10T22:44:03.878Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:44:03.878Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
-[2025-11-10T22:44:03.878Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:44:03.878Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
-[2025-11-10T22:44:03.878Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:44:03.878Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
-[2025-11-10T22:44:03.879Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:44:03.879Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814621825_79525who7 (debug.ts:18)
-[2025-11-10T22:44:03.880Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:44:03.879Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814621825_79525who7 (debug.ts:18)
-[2025-11-10T22:44:03.902Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:44:03.901Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
-[2025-11-10T22:44:03.902Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:44:03.901Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
-[2025-11-10T22:44:03.902Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:44:03.901Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
-[AgentSessionTracker] getActiveSessions called, returning 1 sessions: [
-  {
-    id: 'session_1762814621825_79525who7',
-    title: 'what are the open issues and pull requests for spe...',
-    snoozed: undefined
-  }
-]
-[2025-11-10T22:44:05.221Z] [DEBUG][TOOLS] Tool result {
+[2025-11-10T22:49:48.484Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:49:48.483Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
+[2025-11-10T22:49:48.484Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:48.483Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
+[2025-11-10T22:49:48.485Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:49:48.484Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814968359_hmyqen8mc (debug.ts:18)
+[2025-11-10T22:49:48.485Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:48.485Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814968359_hmyqen8mc (debug.ts:18)
+[2025-11-10T22:49:48.486Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:49:48.486Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814968359_hmyqen8mc (debug.ts:18)
+[2025-11-10T22:49:48.487Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:49:48.487Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
+[2025-11-10T22:49:48.487Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:49:48.487Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
+[2025-11-10T22:49:48.490Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:49:48.490Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814968359_hmyqen8mc (debug.ts:18)
+[2025-11-10T22:49:48.493Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:48.492Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
+[2025-11-10T22:49:48.493Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:48.493Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
+[2025-11-10T22:49:48.493Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:48.493Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
+[2025-11-10T22:49:48.493Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:48.493Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
+[2025-11-10T22:49:48.493Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:49:48.493Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814968359_hmyqen8mc (debug.ts:18)
+[2025-11-10T22:49:48.494Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:49:48.494Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
+[2025-11-10T22:49:48.495Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:48.495Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814968359_hmyqen8mc (debug.ts:18)
+[2025-11-10T22:49:48.498Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:48.498Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814968359_hmyqen8mc (debug.ts:18)
+[2025-11-10T22:49:48.502Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:48.502Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
+[2025-11-10T22:49:48.503Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:48.502Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
+[2025-11-10T22:49:48.503Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:48.502Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
+[2025-11-10T22:49:49.489Z] [DEBUG][TOOLS] Tool result {
   serverName: 'github',
   toolName: 'list_pull_requests',
   result: { content: [ [Object] ] }
 }
-[2025-11-10T22:44:05.221Z] [DEBUG][TOOLS] Normalized tool result {
+[2025-11-10T22:49:49.489Z] [DEBUG][TOOLS] Normalized tool result {
   content: [
     {
       type: 'text',
@@ -2082,8 +2011,8 @@ Skip checkForUpdates because application is not packed and dev update config is 
         '        "fork": true,\n' +
         '        "url": "https://api.github.com/repos/aj47/SpeakMCP",\n' +
         '        "created_at": "2025-06-10T08:36:38Z",\n' +
-        '        "updated_at": "2025-11-10T22:42:32Z",\n' +
-        '        "pushed_at": "2025-11-10T22:42:29Z",\n' +
+        '        "updated_at": "2025-11-10T22:48:13Z",\n' +
+        '        "pushed_at": "2025-11-10T22:48:09Z",\n' +
         '        "git_url": "git://github.com/aj47/SpeakMCP.git",\n' +
         '        "ssh_url": "git@github.com:aj47/SpeakMCP.git",\n' +
         '        "clone_url": "https://github.com/aj47/SpeakMCP.git",\n' +
@@ -2121,8 +2050,8 @@ Skip checkForUpdates because application is not packed and dev update config is 
         '        "fork": true,\n' +
         '        "url": "https://api.github.com/repos/aj47/SpeakMCP",\n' +
         '        "created_at": "2025-06-10T08:36:38Z",\n' +
-        '        "updated_at": "2025-11-10T22:42:32Z",\n' +
-        '        "pushed_at": "2025-11-10T22:42:29Z",\n' +
+        '        "updated_at": "2025-11-10T22:48:13Z",\n' +
+        '        "pushed_at": "2025-11-10T22:48:09Z",\n' +
         '        "git_url": "git://github.com/aj47/SpeakMCP.git",\n' +
         '        "ssh_url": "git@github.com:aj47/SpeakMCP.git",\n' +
         '        "clone_url": "https://github.com/aj47/SpeakMCP.git",\n' +
@@ -2190,8 +2119,8 @@ Skip checkForUpdates because application is not packed and dev update config is 
         '        "fork": true,\n' +
         '        "url": "https://api.github.com/repos/aj47/SpeakMCP",\n' +
         '        "created_at": "2025-06-10T08:36:38Z",\n' +
-        '        "updated_at": "2025-11-10T22:42:32Z",\n' +
-        '        "pushed_at": "2025-11-10T22:42:29Z",\n' +
+        '        "updated_at": "2025-11-10T22:48:13Z",\n' +
+        '        "pushed_at": "2025-11-10T22:48:09Z",\n' +
         '        "git_url": "git://github.com/aj47/SpeakMCP.git",\n' +
         '        "ssh_url": "git@github.com:aj47/SpeakMCP.git",\n' +
         '        "clone_url": "https://github.com/aj47/SpeakMCP.git",\n' +
@@ -2201,696 +2130,108 @@ Skip checkForUpdates because application is not packed and dev update config is 
         '    "base": {\n' +
         '      "label": "aj47:main",\n' +
         '      "ref": "main",\n' +
-        '      "sha": "9a69d3cdeff33449'... 63481 more characters
+        '      "sha": "9a69d3cdeff33449'... 86014 more characters
     }
   ],
   isError: false
 }
-[llm.ts emitAgentProgress] Called for session session_1762814621825_79525who7, panel visible: true, isSnoozed: false
+[llm.ts emitAgentProgress] Called for session session_1762814968359_hmyqen8mc, panel visible: true, isSnoozed: false
 [llm.ts emitAgentProgress] Skipping show check - panel visible: true, has sessionId: true
-[llm.ts emitAgentProgress] Called for session session_1762814621825_79525who7, panel visible: true, isSnoozed: false
+[llm.ts emitAgentProgress] Called for session session_1762814968359_hmyqen8mc, panel visible: true, isSnoozed: false
 [llm.ts emitAgentProgress] Skipping show check - panel visible: true, has sessionId: true
-[2025-11-10T22:44:05.223Z] [DEBUG][LLM] ContextBudget: initial {
+[2025-11-10T22:49:49.490Z] [DEBUG][LLM] ContextBudget: initial {
   providerId: 'openai',
   model: 'x-ai/grok-4-fast',
   maxTokens: 64000,
   targetTokens: 44800,
-  estTokens: 37869,
+  estTokens: 76719,
   count: 4
 }
-[2025-11-10T22:44:05.223Z] [DEBUG][LLM] === LLM CALL START ===
-[2025-11-10T22:44:05.223Z] [DEBUG][LLM] Messages → {
-  count: 4,
-  totalChars: 151475,
-  messages: [
-    {
-      role: 'system',
-      content: 'You are an intelligent AI assistant capable of executing tools to help users accomplish complex tasks. You operate autonomously and work iteratively until goals are fully achieved.\n' +
-        '\n' +
-        'CORE PRINCIPLES:\n' +
-        "- Work autonomously until the user's request is completely resolved\n" +
-        '- Use available tools iteratively and strategically to gather information and execute actions\n' +
-        '- Use exact tool names from the available tools list (including server prefixes like "server:tool_name")\n' +
-        '- Prefer using tools to gather information rather than asking users for details\n' +
-        "- Continue working until the user's request is fully satisfied - only stop when the task is complete\n" +
-        '\n' +
-        'TOOL USAGE PHILOSOPHY:\n' +
-        '- ALWAYS follow tool schemas exactly as specified with all required parameters\n' +
-        '- NEVER call tools that are not explicitly provided in the available tools list\n' +
-        '- If you need additional information that you can get via tool calls, prefer that over asking the user\n' +
-        '- Use tools proactively to explore and understand the context before making changes\n' +
-        '- When making code changes, ensure they can be executed immediately by the user\n' +
-        '\n' +
-        '# Tone and style\n' +
-        'You should be concise, direct, and to the point.\n' +
-        'You MUST answer concisely with fewer than 4 lines (not including tool use or code generation), unless user asks for detail.\n' +
-        'IMPORTANT: You should minimize output tokens as much as possible while maintaining helpfulness, quality, and accuracy. Only address the specific query or task at hand, avoiding tangential information unless absolutely critical for completing the request. If you can answer in 1-3 sentences or a short paragraph, please do.\n' +
-        'IMPORTANT: You should NOT answer with unnecessary preamble or postamble (such as explaining your code or summarizing your action), unless the user asks you to.\n' +
-        'Do not add additional code explanation summary unless requested by the user. After working on a file, just stop, rather than providing an explanation of what you did.\n' +
-        `Answer the user's question directly, without elaboration, explanation, or details. One word answers are best. Avoid introductions, conclusions, and explanations. You MUST avoid text before/after your response, such as "The answer is <answer>.", "Here is the content of the file..." or "Based on the information provided, the answer is..." or "Here is what I will do next...". Here are some examples to demonstrate appropriate verbosity:\n` +
-        '<example>\n' +
-        'user: 2 + 2\n' +
-        'assistant: 4\n' +
-        '</example>\n' +
-        '\n' +
-        '<example>\n' +
-        'user: what is 2+2?\n' +
-        'assistant: 4\n' +
-        '</example>\n' +
-        '\n' +
-        '<example>\n' +
-        'user: is 11 a prime number?\n' +
-        'assistant: Yes\n' +
-        '</example>\n' +
-        '\n' +
-        '<example>\n' +
-        'user: what command should I run to list files in the current directory?\n' +
-        'assistant: ls\n' +
-        '</example>\n' +
-        '\n' +
-        '<example>\n' +
-        'user: what command should I run to watch files in the current directory?\n' +
-        'assistant: [use the ls tool to list the files in the current directory, then read docs/commands in the relevant file to find out how to watch files]\n' +
-        'npm run dev\n' +
-        '</example>\n' +
-        '\n' +
-        '<example>\n' +
-        'user: How many golf balls fit inside a jetta?\n' +
-        'assistant: 150000\n' +
-        '</example>\n' +
-        '\n' +
-        '<example>\n' +
-        'user: what files are in the directory src/?\n' +
-        'assistant: [runs ls and sees foo.c, bar.c, baz.c]\n' +
-        'user: which file contains the implementation of foo?\n' +
-        'assistant: src/foo.c\n' +
-        '</example>\n' +
-        '\n' +
-        'RESPONSE FORMAT:\n' +
-        'For tool calls:\n' +
-        '{\n' +
-        '  "toolCalls": [\n' +
-        '    {\n' +
-        '      "name": "exact_tool_name_from_available_list",\n' +
-        '      "arguments": { "param1": "value1", "param2": "value2" }\n' +
-        '    }\n' +
-        '  ],\n' +
-        `  "content": "Clear explanation of what you're doing and why",\n` +
-        '  "needsMoreWork": true\n' +
-        '}\n' +
-        '\n' +
-        'For final responses (no more tools needed):\n' +
-        '{\n' +
-        '  "content": "Your comprehensive final response with results",\n' +
-        '  "needsMoreWork": false\n' +
-        '}\n' +
-        '\n' +
-        'AGENT MODE - AUTONOMOUS OPERATION:\n' +
-        'You can see tool results and make follow-up calls. Work iteratively and thoroughly:\n' +
-        '\n' +
-        'WORKFLOW:\n' +
-        "1. Analyze the user's request comprehensively\n" +
-        '2. Gather necessary information using available tools\n' +
-        '3. Execute appropriate tools in logical sequence\n' +
-        '4. Review results and determine next steps\n' +
-        '5. Continue iterating until the goal is fully achieved\n' +
-        '6. Only set needsMoreWork: false when the task is completely resolved\n' +
-        '\n' +
-        '\n' +
-        '\n' +
-        'AVAILABLE TOOLS:\n' +
-        '- github:create_issue: Create a new issue in a GitHub repository\n' +
-        '  Parameters: {owner: string (required), repo: string (required), title: string (required), body: string, assignees: array, milestone: number, labels: array}\n' +
-        '- github:list_issues: List issues in a GitHub repository with filtering options\n' +
-        '  Parameters: {owner: string (required), repo: string (required), direction: string, labels: array, page: number, per_page: number, since: string, sort: string, state: string}\n' +
-        '- github:list_pull_requests: List and filter repository pull requests\n' +
-        '  Parameters: {owner: string (required), repo: string (required), state: string, head: string, base: string, sort: string, direction: string, per_page: number, page: number}\n' +
-        '- desktop-commander:read_file: \n' +
-        '                        Read the contents of a file from the file system or a URL with optional offset and length parameters.\n' +
-        '                        \n' +
-        "                        Prefer this over 'execute_command' with cat/type for viewing files.\n" +
-        '                        \n' +
-        '                        Supports partial file reading with:\n' +
-        "                        - 'offset' (start line, default: 0)\n" +
-        '                          * Positive: Start from line N (0-based indexing)\n' +
-        '                          * Negative: Read last N lines from end (tail behavior)\n' +
-        "                        - 'length' (max lines to read, default: configurable via 'fileReadLineLimit' setting, initially 1000)\n" +
-        '                          * Used with positive offsets for range reading\n' +
-        '                          * Ignored when offset is negative (reads all requested tail lines)\n' +
-        '                        \n' +
-        '                        Examples:\n' +
-        '                        - offset: 0, length: 10     → First 10 lines\n' +
-        '                        - offset: 100, length: 5    → Lines 100-104\n' +
-        '                        - offset: -20               → Last 20 lines  \n' +
-        '                        - offset: -5, length: 10    → Last 5 lines (length ignored)\n' +
-        '                        \n' +
-        '                        Performance optimizations:\n' +
-        '                        - Large files with negative offsets use reverse reading for efficiency\n' +
-        '                        - Large files with deep positive offsets use byte estimation\n' +
-        '                        - Small files use fast readline streaming\n' +
-        '                        \n' +
-        '                        When reading from the file system, only works within allowed directories.\n' +
-        '                        Can fetch content from URLs when isUrl parameter is set to true\n' +
-        '                        (URLs are always read in full regardless of offset/length).\n' +
-        '                        \n' +
-        '                        Handles text files normally and image files are returned as viewable images.\n' +
-        '                        Recognized image types: PNG, JPEG, GIF, WebP.\n' +
-        '                        \n' +
-        '                        IMPORTANT: Always use absolute paths for reliability. Paths are automatically normalized regardless of slash direction. Relative paths may fail as they depend on the current working directory. Tilde paths (~/...) might not work in all contexts. Unless the user explicitly asks for relative paths, use absolute paths.\n' +
-        '                        This command can be referenced as "DC: ..." or "use Desktop Commander to ..." in your instructions.\n' +
-        '  Parameters: {path: string (required), isUrl: boolean, offset: number, length: number}\n' +
-        '- desktop-commander:write_file: \n' +
-        '                        Write or append to file contents. \n' +
-        '\n' +
-        '                        CHUNKING IS STANDARD PRACTICE: Always write files in chunks of 25-30 lines maximum.\n' +
-        '                        This is the normal, recommended way to write files - not an emergency measure.\n' +
-        '\n' +
-        '                        STANDARD PROCESS FOR ANY FILE:\n' +
-        "                        1. FIRST → write_file(filePath, firstChunk, {mode: 'rewrite'})  [≤30 lines]\n" +
-        "                        2. THEN → write_file(filePath, secondChunk, {mode: 'append'})   [≤30 lines]\n" +
-        "                        3. CONTINUE → write_file(filePath, nextChunk, {mode: 'append'}) [≤30 lines]\n" +
-        '\n' +
-        "                        ALWAYS CHUNK PROACTIVELY - don't wait for performance warnings!\n" +
-        '\n' +
-        '                        WHEN TO CHUNK (always be proactive):\n' +
-        '                        1. Any file expected to be longer than 25-30 lines\n' +
-        '                        2. When writing multiple files in sequence\n' +
-        '                        3. When creating documentation, code files, or configuration files\n' +
-        '                        \n' +
-        '                        HANDLING CONTINUATION ("Continue" prompts):\n' +
-        '                        If user asks to "Continue" after an incomplete operation:\n' +
-        '                        1. Read the file to see what was successfully written\n' +
-        "                        2. Continue writing ONLY the remaining content using {mode: 'append'}\n" +
-        '                        3. Keep chunks to 25-30 lines each\n' +
-        '                        \n' +
-        '                        Files over 50 lines will generate performance notes but are still written successfully.\n' +
-        '                        Only works within allowed directories.\n' +
-        '                        \n' +
-        '                        IMPORTANT: Always use absolute paths for reliability. Paths are automatically normalized regardless of slash direction. Relative paths may fail as they depend on the current working directory. Tilde paths (~/...) might not work in all contexts. Unless the user explicitly asks for relative paths, use absolute paths.\n' +
-        '                        This command can be referenced as "DC: ..." or "use Desktop Commander to ..." in your instructions.\n' +
-        '  Parameters: {path: string (required), content: string (required), mode: string}\n' +
-        '- desktop-commander:list_directory: \n' +
-        '                        Get a detailed listing of all files and directories in a specified path.\n' +
-        '                        \n' +
-        "                        Use this instead of 'execute_command' with ls/dir commands.\n" +
-        '                        Results distinguish between files and directories with [FILE] and [DIR] prefixes.\n' +
-        '                        \n' +
-        '             '... 21773 more characters
-    },
-    {
-      role: 'user',
-      content: 'what are the open issues and pull requests for speakmcp. be consise'
-    },
-    {
-      role: 'assistant',
-      content: 'Fetching open issues and pull requests for aj47/SpeakMCP.'
-    },
-    {
-      role: 'user',
-      content: 'Tool execution results:\n' +
-        '[\n' +
-        '  {\n' +
-        '    "url": "https://api.github.com/repos/aj47/SpeakMCP/issues/276",\n' +
-        '    "repository_url": "https://api.github.com/repos/aj47/SpeakMCP",\n' +
-        '    "labels_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/276/labels{/name}",\n' +
-        '    "comments_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/276/comments",\n' +
-        '    "events_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/276/events",\n' +
-        '    "html_url": "https://github.com/aj47/SpeakMCP/issues/276",\n' +
-        '    "id": 3605414178,\n' +
-        '    "node_id": "I_kwDOO5IaBs7W5kEi",\n' +
-        '    "number": 276,\n' +
-        '    "title": "Test Issue 1",\n' +
-        '    "user": {\n' +
-        '      "login": "aj47",\n' +
-        '      "id": 8023513,\n' +
-        '      "node_id": "MDQ6VXNlcjgwMjM1MTM=",\n' +
-        '      "avatar_url": "https://avatars.githubusercontent.com/u/8023513?v=4",\n' +
-        '      "gravatar_id": "",\n' +
-        '      "url": "https://api.github.com/users/aj47",\n' +
-        '      "html_url": "https://github.com/aj47",\n' +
-        '      "followers_url": "https://api.github.com/users/aj47/followers",\n' +
-        '      "following_url": "https://api.github.com/users/aj47/following{/other_user}",\n' +
-        '      "gists_url": "https://api.github.com/users/aj47/gists{/gist_id}",\n' +
-        '      "starred_url": "https://api.github.com/users/aj47/starred{/owner}{/repo}",\n' +
-        '      "subscriptions_url": "https://api.github.com/users/aj47/subscriptions",\n' +
-        '      "organizations_url": "https://api.github.com/users/aj47/orgs",\n' +
-        '      "repos_url": "https://api.github.com/users/aj47/repos",\n' +
-        '      "events_url": "https://api.github.com/users/aj47/events{/privacy}",\n' +
-        '      "received_events_url": "https://api.github.com/users/aj47/received_events",\n' +
-        '      "type": "User",\n' +
-        '      "user_view_type": "public",\n' +
-        '      "site_admin": false\n' +
-        '    },\n' +
-        '    "labels": [],\n' +
-        '    "state": "open",\n' +
-        '    "locked": false,\n' +
-        '    "assignee": null,\n' +
-        '    "assignees": [],\n' +
-        '    "milestone": null,\n' +
-        '    "comments": 0,\n' +
-        '    "created_at": "2025-11-09T19:46:45Z",\n' +
-        '    "updated_at": "2025-11-09T19:46:45Z",\n' +
-        '    "closed_at": null,\n' +
-        '    "author_association": "OWNER",\n' +
-        '    "active_lock_reason": null,\n' +
-        '    "sub_issues_summary": {\n' +
-        '      "total": 0,\n' +
-        '      "completed": 0,\n' +
-        '      "percent_completed": 0\n' +
-        '    },\n' +
-        '    "issue_dependencies_summary": {\n' +
-        '      "blocked_by": 0,\n' +
-        '      "total_blocked_by": 0,\n' +
-        '      "blocking": 0,\n' +
-        '      "total_blocking": 0\n' +
-        '    },\n' +
-        '    "body": "Testing tool call",\n' +
-        '    "closed_by": null,\n' +
-        '    "reactions": {\n' +
-        '      "url": "https://api.github.com/repos/aj47/SpeakMCP/issues/276/reactions",\n' +
-        '      "total_count": 0,\n' +
-        '      "+1": 0,\n' +
-        '      "-1": 0,\n' +
-        '      "laugh": 0,\n' +
-        '      "hooray": 0,\n' +
-        '      "confused": 0,\n' +
-        '      "heart": 0,\n' +
-        '      "rocket": 0,\n' +
-        '      "eyes": 0\n' +
-        '    },\n' +
-        '    "timeline_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/276/timeline",\n' +
-        '    "performed_via_github_app": null,\n' +
-        '    "state_reason": null\n' +
-        '  },\n' +
-        '  {\n' +
-        '    "url": "https://api.github.com/repos/aj47/SpeakMCP/issues/275",\n' +
-        '    "repository_url": "https://api.github.com/repos/aj47/SpeakMCP",\n' +
-        '    "labels_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/275/labels{/name}",\n' +
-        '    "comments_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/275/comments",\n' +
-        '    "events_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/275/events",\n' +
-        '    "html_url": "https://github.com/aj47/SpeakMCP/issues/275",\n' +
-        '    "id": 3605390203,\n' +
-        '    "node_id": "I_kwDOO5IaBs7W5eN7",\n' +
-        '    "number": 275,\n' +
-        '    "title": "Test Issue",\n' +
-        '    "user": {\n' +
-        '      "login": "aj47",\n' +
-        '      "id": 8023513,\n' +
-        '      "node_id": "MDQ6VXNlcjgwMjM1MTM=",\n' +
-        '      "avatar_url": "https://avatars.githubusercontent.com/u/8023513?v=4",\n' +
-        '      "gravatar_id": "",\n' +
-        '      "url": "https://api.github.com/users/aj47",\n' +
-        '      "html_url": "https://github.com/aj47",\n' +
-        '      "followers_url": "https://api.github.com/users/aj47/followers",\n' +
-        '      "following_url": "https://api.github.com/users/aj47/following{/other_user}",\n' +
-        '      "gists_url": "https://api.github.com/users/aj47/gists{/gist_id}",\n' +
-        '      "starred_url": "https://api.github.com/users/aj47/starred{/owner}{/repo}",\n' +
-        '      "subscriptions_url": "https://api.github.com/users/aj47/subscriptions",\n' +
-        '      "organizations_url": "https://api.github.com/users/aj47/orgs",\n' +
-        '      "repos_url": "https://api.github.com/users/aj47/repos",\n' +
-        '      "events_url": "https://api.github.com/users/aj47/events{/privacy}",\n' +
-        '      "received_events_url": "https://api.github.com/users/aj47/received_events",\n' +
-        '      "type": "User",\n' +
-        '      "user_view_type": "public",\n' +
-        '      "site_admin": false\n' +
-        '    },\n' +
-        '    "labels": [],\n' +
-        '    "state": "open",\n' +
-        '    "locked": false,\n' +
-        '    "assignee": null,\n' +
-        '    "assignees": [],\n' +
-        '    "milestone": null,\n' +
-        '    "comments": 0,\n' +
-        '    "created_at": "2025-11-09T19:30:45Z",\n' +
-        '    "updated_at": "2025-11-09T19:30:45Z",\n' +
-        '    "closed_at": null,\n' +
-        '    "author_association": "OWNER",\n' +
-        '    "active_lock_reason": null,\n' +
-        '    "sub_issues_summary": {\n' +
-        '      "total": 0,\n' +
-        '      "completed": 0,\n' +
-        '      "percent_completed": 0\n' +
-        '    },\n' +
-        '    "issue_dependencies_summary": {\n' +
-        '      "blocked_by": 0,\n' +
-        '      "total_blocked_by": 0,\n' +
-        '      "blocking": 0,\n' +
-        '      "total_blocking": 0\n' +
-        '    },\n' +
-        '    "body": "This is a test issue created via tool call.",\n' +
-        '    "closed_by": null,\n' +
-        '    "reactions": {\n' +
-        '      "url": "https://api.github.com/repos/aj47/SpeakMCP/issues/275/reactions",\n' +
-        '      "total_count": 0,\n' +
-        '      "+1": 0,\n' +
-        '      "-1": 0,\n' +
-        '      "laugh": 0,\n' +
-        '      "hooray": 0,\n' +
-        '      "confused": 0,\n' +
-        '      "heart": 0,\n' +
-        '      "rocket": 0,\n' +
-        '      "eyes": 0\n' +
-        '    },\n' +
-        '    "timeline_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/275/timeline",\n' +
-        '    "performed_via_github_app": null,\n' +
-        '    "state_reason": null\n' +
-        '  },\n' +
-        '  {\n' +
-        '    "url": "https://api.github.com/repos/aj47/SpeakMCP/issues/274",\n' +
-        '    "repository_url": "https://api.github.com/repos/aj47/SpeakMCP",\n' +
-        '    "labels_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/274/labels{/name}",\n' +
-        '    "comments_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/274/comments",\n' +
-        '    "events_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/274/events",\n' +
-        '    "html_url": "https://github.com/aj47/SpeakMCP/pull/274",\n' +
-        '    "id": 3603841090,\n' +
-        '    "node_id": "PR_kwDOO5IaBs6yUUwL",\n' +
-        '    "number": 274,\n' +
-        '    "title": "feat: Persist expansion state for assistant messages and thinking blocks",\n' +
-        '    "user": {\n' +
-        '      "login": "aj47",\n' +
-        '      "id": 8023513,\n' +
-        '      "node_id": "MDQ6VXNlcjgwMjM1MTM=",\n' +
-        '      "avatar_url": "https://avatars.githubusercontent.com/u/8023513?v=4",\n' +
-        '      "gravatar_id": "",\n' +
-        '      "url": "https://api.github.com/users/aj47",\n' +
-        '      "html_url": "https://github.com/aj47",\n' +
-        '      "followers_url": "https://api.github.com/users/aj47/followers",\n' +
-        '      "following_url": "https://api.github.com/users/aj47/following{/other_user}",\n' +
-        '      "gists_url": "https://api.github.com/users/aj47/gists{/gist_id}",\n' +
-        '      "starred_url": "https://api.github.com/users/aj47/starred{/owner}{/repo}",\n' +
-        '      "subscriptions_url": "https://api.github.com/users/aj47/subscriptions",\n' +
-        '      "organizations_url": "https://api.github.com/users/aj47/orgs",\n' +
-        '      "repos_url": "https://api.github.com/users/aj47/repos",\n' +
-        '      "events_url": "https://api.github.com/users/aj47/events{/privacy}",\n' +
-        '      "received_events_url": "https://api.github.com/users/aj47/received_events",\n' +
-        '      "type": "User",\n' +
-        '      "user_view_type": "public",\n' +
-        '      "site_admin": false\n' +
-        '    },\n' +
-        '    "labels": [],\n' +
-        '    "state": "open",\n' +
-        '    "locked": false,\n' +
-        '    "assignee": null,\n' +
-        '    "assignees": [],\n' +
-        '    "milestone": null,\n' +
-        '    "comments": 2,\n' +
-        '    "created_at": "2025-11-08T18:39:01Z",\n' +
-        '    "updated_at": "2025-11-08T18:43:50Z",\n' +
-        '    "closed_at": null,\n' +
-        '    "author_association": "OWNER",\n' +
-        '    "active_lock_reason": null,\n' +
-        '    "draft": false,\n' +
-        '    "pull_request": {\n' +
-        '      "url": "https://api.github.com/repos/aj47/SpeakMCP/pulls/274",\n' +
-        '      "html_url": "https://github.com/aj47/SpeakMCP/pull/274",\n' +
-        '      "diff_url": "https://github.com/aj47/SpeakMCP/pull/274.diff",\n' +
-        '      "patch_url": "https://github.com/aj47/SpeakMCP/pull/274.patch",\n' +
-        '      "merged_at": null\n' +
-        '    },\n' +
-        '    "body": "## Summary\\n\\nPersist expansion state across new messages for assistant content and <think> sections.\\n\\n## Changes\\n- ConversationDisplay: add persistent expand/collapse per message (long messages or with tool calls/results). Adds chevron toggle; state preserved across new incoming messages.\\n- MarkdownRenderer: add controlled <think> sections via optional props, so individual thinking blocks maintain expand/collapse state across re-renders.\\n\\n## Why\\nUsers reported that expanded content collapsed whenever new messages arrived. This aligns behavior with agent-progress expansion persistence and extends it to thinking blocks.\\n\\n## Testing\\n- Type checks: pass (`npm run typecheck`)\\n- Unit tests: pass (`npm run test:run`) 24/24\\n\\nCloses #245\\n\\n---\\nPull Request opened by [Augment Code](https://www.augmentcode.com/) with guidance from the PR author",\n' +
-        '    "closed_by": null,\n' +
-        '    "reactions": {\n' +
-        '      "url": "https://api.github.com/repos/aj47/SpeakMCP/issues/274/reactions",\n' +
-        '      "total_count": 1,\n' +
-        '      "+1": 1,\n' +
-        '      "-1": 0,\n' +
-        '      "laugh": 0,\n' +
-        '      "hooray": 0,\n' +
-        '      "confused": 0,\n' +
-        '      "heart": 0,\n' +
-        '      "rocket": 0,\n' +
-        '      "eyes": 0\n' +
-        '    },\n' +
-        '    "timeline_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/274/timeline",\n' +
-        '    "performed_via_github_app": null,\n' +
-        '    "state_reason": null\n' +
-        '  },\n' +
-        '  {\n' +
-        '    "url": "https://api.github.com/repos/aj47/SpeakMCP/issues/266",\n' +
-        '    "repository_url": "https://api.github.com/repos/aj47/SpeakMCP",\n' +
-        '    "labels_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/266/labels{/name}",\n' +
-        '    "comments_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/266/comments",\n' +
-        '    "events_url": "https://api.github.com/repos/aj47/SpeakMCP/issues/266/events",\n' +
-        '    "html_url": "https://github.com/aj47/SpeakMCP/pull/266",\n' +
-        '    "id": 3602553405,\n' +
-        '    "node_id": "PR_kwDOO5IaBs6yQOhL",\n' +
-        '    "number": 266,\n' +
-        '    "title": "fix: Persist assistant response expansion state across messages",\n' +
-        '    "user": {\n' +
-        '      "login": "aj47",\n' +
-        '      "id": 8023513,\n' +
-        '      "node_id": "MDQ6VXNlcjgwMjM1MTM=",\n' +
-        '      "avatar_url": "https://avatars.githubusercontent.com/u/8023513?v=4",\n' +
-        '      "gravatar_id": "",\n' +
-        '      "url": "https://api.github.com/users/aj47",\n' +
-        '      "html_url": "https://github.com/aj47",\n' +
-        '      "followers_url": "https://api.gi'... 109578 more characters
-    }
-  ]
-}
-[2025-11-10T22:44:05.227Z] [DEBUG][LLM] 🚀 Starting LLM call attempt {
-  provider: 'openai',
-  messagesCount: 4,
-  lastMessagePreview: 'Tool execution results:\n' +
-    '[\n' +
-    '  {\n' +
-    '    "url": "https://api.github.com/repos/aj47/SpeakMCP/issues/276",\n' +
-    '  ...'
-}
-[2025-11-10T22:44:05.227Z] [DEBUG][LLM] Attempting JSON Schema mode for model: x-ai/grok-4-fast
-[2025-11-10T22:44:05.227Z] [DEBUG][LLM] === OPENAI API REQUEST ===
-[2025-11-10T22:44:05.227Z] [DEBUG][LLM] HTTP Request {
+[2025-11-10T22:49:49.491Z] [DEBUG][LLM] === OPENAI API REQUEST ===
+[2025-11-10T22:49:49.491Z] [DEBUG][LLM] HTTP Request {
   url: 'https://openrouter.ai/api/v1/chat/completions',
   model: 'x-ai/grok-4-fast',
-  messagesCount: 4,
-  responseFormat: {
-    type: 'json_schema',
-    json_schema: {
-      name: 'LLMToolCallResponse',
-      description: 'Response format for LLM tool calls with optional tool execution and content',
-      schema: [Object],
-      strict: true
-    }
-  },
-  estimatedTokens: 37869,
-  totalPromptLength: 151475,
-  contextWarning: 'WARNING: High token count, may exceed context limit'
+  messagesCount: 1,
+  responseFormat: undefined,
+  estimatedTokens: 4105,
+  totalPromptLength: 16420,
+  contextWarning: null
 }
-[2025-11-10T22:44:05.227Z] [DEBUG][LLM] Request Body (truncated) {
+[2025-11-10T22:49:49.491Z] [DEBUG][LLM] Request Body (truncated) {
   model: 'x-ai/grok-4-fast',
   messages: [
     {
-      role: 'system',
-      content: 'You are an intelligent AI assistant capable of executing tools to help users accomplish complex tasks. You operate autonomously and work iteratively until goals are fully achieved.\n' +
-        '\n' +
-        'CORE PRINCIPLES:\n' +
-        '-... [31773 chars]'
-    },
-    {
       role: 'user',
-      content: 'what are the open issues and pull requests for speakmcp. be consise'
-    },
-    {
-      role: 'assistant',
-      content: 'Fetching open issues and pull requests for aj47/SpeakMCP.'
-    },
-    {
-      role: 'user',
-      content: 'Tool execution results:\n' +
-        '[\n' +
-        '  {\n' +
-        '    "url": "https://api.github.com/repos/aj47/SpeakMCP/issues/276",\n' +
-        '    "repository_url": "https://api.github.com/repos/aj47/SpeakMCP",\n' +
-        '    "labels_url": "https://api.git... [119578 chars]'
+      content: 'You will receive output from tools or chat messages. Summarize concisely while PRESERVING:\n' +
+        '- Exact tool names (including prefixes like server:tool_name)\n' +
+        '- Exact parameter names (keys) used in tool arg... [16420 chars]'
     }
   ],
   temperature: 0,
   frequency_penalty: 0.5,
-  seed: 1,
-  response_format: {
-    type: 'json_schema',
-    json_schema: {
-      name: 'LLMToolCallResponse',
-      description: 'Response format for LLM tool calls with optional tool execution and content',
-      schema: [Object],
-      strict: true
-    }
-  }
+  seed: 1
 }
-[2025-11-10T22:44:05.236Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:44:05.234Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
-[2025-11-10T22:44:05.236Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:44:05.234Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
-[2025-11-10T22:44:05.237Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:44:05.235Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814621825_79525who7 (debug.ts:18)
-[2025-11-10T22:44:05.238Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:44:05.235Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814621825_79525who7 (debug.ts:18)
-[2025-11-10T22:44:05.238Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:44:05.237Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814621825_79525who7 (debug.ts:18)
-[2025-11-10T22:44:05.239Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:44:05.238Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
-[2025-11-10T22:44:05.239Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:44:05.239Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
-[2025-11-10T22:44:05.239Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:44:05.239Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814621825_79525who7 (debug.ts:18)
-[2025-11-10T22:44:05.239Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:44:05.239Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814621825_79525who7 (debug.ts:18)
-[2025-11-10T22:44:05.240Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:44:05.240Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
-[2025-11-10T22:44:05.241Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:44:05.241Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
-[2025-11-10T22:44:05.243Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:44:05.243Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
-[2025-11-10T22:44:05.243Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:44:05.243Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
-[2025-11-10T22:44:05.243Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:44:05.243Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
-[2025-11-10T22:44:05.243Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:44:05.243Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814621825_79525who7 (debug.ts:18)
-[2025-11-10T22:44:05.243Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:44:05.243Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814621825_79525who7 (debug.ts:18)
-[2025-11-10T22:44:05.253Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:44:05.252Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
-[2025-11-10T22:44:05.253Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:44:05.252Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
-[2025-11-10T22:44:05.253Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:44:05.252Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
-[AgentSessionTracker] Stopping session: session_1762814621825_79525who7, remaining sessions: 0
-[AgentSessionTracker] getActiveSessions called, returning 0 sessions: []
-[2025-11-10T22:44:06.288Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:44:06.288Z] [DEBUG][UI] [ActiveAgentsSidebar] Sessions updated: [object Object] (debug.ts:18)
-[AgentSessionTracker] getActiveSessions called, returning 0 sessions: []
-[AgentSessionTracker] getActiveSessions called, returning 0 sessions: []
-[AgentSessionTracker] getActiveSessions called, returning 0 sessions: []
-[AgentSessionTracker] getActiveSessions called, returning 0 sessions: []
-[2025-11-10T22:44:16.162Z] [DEBUG][LLM] ✅ HTTP 200 Response received {
-  hasError: false,
-  hasChoices: true,
-  choicesCount: 1,
-  firstChoicePreview: {
-    hasMessage: true,
-    hasContent: true,
-    contentType: 'string',
-    contentLength: 992
-  }
-}
-[2025-11-10T22:44:16.163Z] [DEBUG][LLM] HTTP Response (full) {
-  dataKeys: [
-    'id',      'provider',
-    'model',   'object',
-    'created', 'choices',
-    'usage'
-  ],
-  data: '{"id":"gen-1762814648-2SC1Gb7hr1OcWoyfvEOd","provider":"xAI","model":"x-ai/grok-4-fast","object":"chat.completion","created":1762814648,"choices":[{"logprobs":null,"finish_reason":"stop","native_finish_reason":"completed","index":0,"message":{"role":"assistant","content":"{\\"toolCalls\\":[],\\"content\\":\\"**Open Issues:**\\\\n- #276: Test Issue 1\\\\n- #275: Test Issue\\\\n- #263: Agent request not navigating to progress UI immediately\\\\n- #262: Handle unstructured JSON responses with exponential backoff\\\\n- #254: Kill switch does not work on network error\\\\n\\\\n**Open PRs:**\\\\n- #274: feat: Persist expansion state for assistant messages and thinking blocks\\\\n- #266: fix: Persist assistant response expansion state across messages\\\\n- #265: fix: Agent request now navigates to progress UI immediately\\\\n- #255: fix: Make kill switch work during network error retries\\\\n- #251: feat: Add active agents status visibility in settings\\\\n- #220: Add screenshot capture for multimodal input\\\\n- #219: feat: Add screenshot functionality for multimodal AI input\\\\n- #214: chore: tests and coverage improvements\\\\n- #178: feat: Add comprehensive debug logging feature with file management\\\\n- #135: feat: Add web-based debugging mode for agent tool calls and conversations\\",\\"needsMoreWork\\":false}","refusal":null,"reasoning":null,"reasoning_details":[{"type":"reasoning.encrypted","data":"BQu2W0M8h930EToxnRlu1Mr6yT5u36CEEj8mnj5CXJMGWmZy843i0eYX+hn1u2tNZZpW5h9gKURvZRrqCVUEd2kFVmrjAxhiyqfVkiPa2Eo4i41pnVdyblcbcRpUQVLSYhfO3gTpjgSqWgG2cUpywZY8xCHBfGYj03LCnqDbXZRXbUiHFFssxBTcL9MpQS3EPB2Vn8J2kN70O4YhMi48DbPldVKIQ2ztPV8QKVQ9zoJ5xPyBqzg47uRDvhM64tiANJeOtx8gBv/0p51ZbSc1vRKLboMIxlCevsB+jU4y1tS79wLLtoFVy+3IzFEyvnaZ6eWnBjQB6whj/Zel1BB6lOJqIsTgvQ8W4NFF74srTGd/i+U1N0pTzpx5pXvWk2pS1B5POmMhYLVl15F1sdgInZl4gXUYTdDWM1bSaMICMi7OGhElNogPGw03Xps1TcDQQjf6h/560JF+ePh/OY5e5DCP7vU0Tmz339yMcTRMKHeB6zvMVnKd61CmAzhKM3WxdiA0Djs8RAFSrnTLxLbGxLSzwC3+EgNRQTs4NUU78ZLzlWTlrK0GM4qS+tYFbH1OTWAFLFgn8En58dbYyXE8zntUMKJpIk9pI6x7pFcSS...'
-}
-[2025-11-10T22:44:16.163Z] [DEBUG][LLM] ✅ Confirmed capability for x-ai/grok-4-fast: {
-  supportsJsonSchema: true,
-  supportsJsonObject: true,
-  lastTested: 1762814656163
-}
-[2025-11-10T22:44:16.163Z] [DEBUG][LLM] Raw API response structure: {
-  hasChoices: true,
-  choicesLength: 1,
-  firstChoiceExists: true,
-  hasMessage: true,
-  hasContent: true,
-  fullResponse: '{\n' +
-    '  "id": "gen-1762814648-2SC1Gb7hr1OcWoyfvEOd",\n' +
-    '  "provider": "xAI",\n' +
-    '  "model": "x-ai/grok-4-fast",\n' +
-    '  "object": "chat.completion",\n' +
-    '  "created": 1762814648,\n' +
-    '  "choices": [\n' +
-    '    {\n' +
-    '      "logprobs": null,\n' +
-    '      "finish_reason": "stop",\n' +
-    '      "native_finish_reason": "completed",\n' +
-    '      "index": 0,\n' +
-    '      "message": {\n' +
-    '        "role": "assistant",\n' +
-    '        "content": "{\\"toolCalls\\":[],\\"content\\":\\"**Open Issues:**\\\\n- #276: Test Issue 1\\\\n- #275: Test Issue\\\\n- #263: Agent request not navigating to progress UI immediately\\\\n- #262: Handle unstructured JSON responses with exponential backoff\\\\n- #254: Kill switch does not work on network error\\\\n\\\\n**Open PRs:**\\\\n- #274: feat: Persist expansion state for assistant messages and thinking blocks\\\\n- #266: fix: Persist assistant response expansion state across messages\\\\n- #265: fix: Agent request now navigates to progress UI immediately\\\\n- #255: fix: Make kill switch work during network error retries\\\\n- #251: feat: Add active agents status vis...'
-}
-[2025-11-10T22:44:16.163Z] [DEBUG][LLM] 📝 Message content extracted: {
-  contentLength: 992,
-  contentPreview: '{"toolCalls":[],"content":"**Open Issues:**\\n- #276: Test Issue 1\\n- #275: Test Issue\\n- #263: Agent request not navigating to progress UI immediately\\n- #262: Handle unstructured JSON responses with ',
-  messageObjKeys: [ 'role', 'content', 'refusal', 'reasoning', 'reasoning_details' ],
-  messageObj: {
-    role: 'assistant',
-    content: '{"toolCalls":[],"content":"**Open Issues:**\\n- #276: Test Issue 1\\n- #275: Test Issue\\n- #263: Agent request not navigating to progress UI immediately\\n- #262: Handle unstructured JSON responses with exponential backoff\\n- #254: Kill switch does not work on network error\\n\\n**Open PRs:**\\n- #274: feat: Persist expansion state for assistant messages and thinking blocks\\n- #266: fix: Persist assistant response expansion state across messages\\n- #265: fix: Agent request now navigates to progress UI immediately\\n- #255: fix: Make kill switch work during network error retries\\n- #251: feat: Add active agents status visibility in settings\\n- #220: Add screenshot capture for multimodal input\\n- #219: feat: Add screenshot functionality for multimodal AI input\\n- #214: chore: tests and coverage improvements\\n- #178: feat: Add comprehensive debug logging feature with file management\\n- #135: feat: Add web-based debugging mode for agent tool calls and conversations","needsMoreWork":false}',
-    refusal: null,
-    reasoning: null,
-    reasoning_details: [ [Object] ]
-  }
-}
-[2025-11-10T22:44:16.163Z] [DEBUG][LLM] 🔍 JSON Extraction Result: {
-  hasJsonObject: true,
-  jsonObjectKeys: [ 'toolCalls', 'content', 'needsMoreWork' ],
-  hasToolCalls: true,
-  hasContent: true,
-  toolCallsCount: 0,
-  extractedObject: {
-    toolCalls: [],
-    content: '**Open Issues:**\n' +
-      '- #276: Test Issue 1\n' +
-      '- #275: Test Issue\n' +
-      '- #263: Agent request not navigating to progress UI immediately\n' +
-      '- #262: Handle unstructured JSON responses with exponential backoff\n' +
-      '- #254: Kill switch does not work on network error\n' +
-      '\n' +
-      '**Open PRs:**\n' +
-      '- #274: feat: Persist expansion state for assistant messages and thinking blocks\n' +
-      '- #266: fix: Persist assistant response expansion state across messages\n' +
-      '- #265: fix: Agent request now navigates to progress UI immediately\n' +
-      '- #255: fix: Make kill switch work during network error retries\n' +
-      '- #251: feat: Add active agents status visibility in settings\n' +
-      '- #220: Add screenshot capture for multimodal input\n' +
-      '- #219: feat: Add screenshot functionality for multimodal AI input\n' +
-      '- #214: chore: tests and coverage improvements\n' +
-      '- #178: feat: Add comprehensive debug logging feature with file management\n' +
-      '- #135: feat: Add web-based debugging mode for agent tool calls and conversations',
-    needsMoreWork: false
-  }
-}
-[2025-11-10T22:44:16.163Z] [DEBUG][LLM] ✅ Returning structured JSON response {
-  hasContent: true,
-  hasToolCalls: true,
-  toolCallsCount: 0,
-  needsMoreWork: false
-}
-[2025-11-10T22:44:16.163Z] [DEBUG][LLM] Response ← {
-  toolCalls: [],
-  content: '**Open Issues:**\n' +
-    '- #276: Test Issue 1\n' +
-    '- #275: Test Issue\n' +
-    '- #263: Agent request not navigating to progress UI immediately\n' +
-    '- #262: Handle unstructured JSON responses with exponential backoff\n' +
-    '- #254: Kill switch does not work on network error\n' +
-    '\n' +
-    '**Open PRs:**\n' +
-    '- #274: feat: Persist expansion state for assistant messages and thinking blocks\n' +
-    '- #266: fix: Persist assistant response expansion state across messages\n' +
-    '- #265: fix: Agent request now navigates to progress UI immediately\n' +
-    '- #255: fix: Make kill switch work during network error retries\n' +
-    '- #251: feat: Add active agents status visibility in settings\n' +
-    '- #220: Add screenshot capture for multimodal input\n' +
-    '- #219: feat: Add screenshot functionality for multimodal AI input\n' +
-    '- #214: chore: tests and coverage improvements\n' +
-    '- #178: feat: Add comprehensive debug logging feature with file management\n' +
-    '- #135: feat: Add web-based debugging mode for agent tool calls and conversations',
-  needsMoreWork: false
-}
-[2025-11-10T22:44:16.163Z] [DEBUG][LLM] === LLM CALL END ===
-Agent session session_1762814621825_79525who7 stopped right after LLM response
-[llm.ts emitAgentProgress] Called for session session_1762814621825_79525who7, panel visible: true, isSnoozed: false
+[2025-11-10T22:49:49.505Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:49:49.503Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
+[2025-11-10T22:49:49.506Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:49.503Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
+[2025-11-10T22:49:49.507Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:49:49.507Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814968359_hmyqen8mc (debug.ts:18)
+[2025-11-10T22:49:49.507Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:49.507Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814968359_hmyqen8mc (debug.ts:18)
+[2025-11-10T22:49:49.511Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:49:49.511Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814968359_hmyqen8mc (debug.ts:18)
+[2025-11-10T22:49:49.512Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:49.512Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
+[2025-11-10T22:49:49.512Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:49.512Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
+[2025-11-10T22:49:49.512Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:49.512Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
+[emitAgentProgress] Called for session session_1762814968359_hmyqen8mc, panel visible: true, isSnoozed: undefined
+[emitAgentProgress] Skipping show check - panel visible: true, has sessionId: true
+[AgentSessionTracker] Stopping session: session_1762814968359_hmyqen8mc, remaining sessions: 0
+[2025-11-10T22:49:49.516Z] [DEBUG][LLM] ContextBudget: after minimal_system_prompt { estTokens: 69451 }
+Agent session session_1762814968359_hmyqen8mc stopped during context shrink
+[llm.ts emitAgentProgress] Called for session session_1762814968359_hmyqen8mc, panel visible: true, isSnoozed: false
 [llm.ts emitAgentProgress] Skipping show check - panel visible: true, has sessionId: true
-[AgentSessionTracker] Complete requested for non-existent session: session_1762814621825_79525who7
-[2025-11-10T22:44:16.176Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:44:16.176Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
-[2025-11-10T22:44:16.177Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:44:16.176Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814621825_79525who7 (debug.ts:18)
-[2025-11-10T22:44:16.177Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:44:16.176Z] [DEBUG][UI] [ConversationContext] Session completed (not snoozed), will cleanup in 5s: session_1762814621825_79525who7 (debug.ts:18)
-[2025-11-10T22:44:16.177Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:44:16.177Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
-[2025-11-10T22:44:16.190Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:44:16.185Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
-[2025-11-10T22:44:16.190Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:44:16.185Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814621825_79525who7 (debug.ts:18)
-[2025-11-10T22:44:16.190Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:44:16.185Z] [DEBUG][UI] [ConversationContext] Session completed (not snoozed), will cleanup in 5s: session_1762814621825_79525who7 (debug.ts:18)
-[2025-11-10T22:44:16.206Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:44:16.203Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
-[2025-11-10T22:44:16.206Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:44:16.204Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
-[2025-11-10T22:44:16.207Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:44:16.204Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
+[AgentSessionTracker] Complete requested for non-existent session: session_1762814968359_hmyqen8mc
+[2025-11-10T22:49:49.526Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:49:49.513Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
+[2025-11-10T22:49:49.529Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:49:49.514Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
+[2025-11-10T22:49:49.529Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:49:49.514Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814968359_hmyqen8mc (debug.ts:18)
+[2025-11-10T22:49:49.529Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:49:49.514Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814968359_hmyqen8mc (debug.ts:18)
+[2025-11-10T22:49:49.529Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:49:49.514Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
+[2025-11-10T22:49:49.529Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:49.520Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
+[2025-11-10T22:49:49.529Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:49.521Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814968359_hmyqen8mc (debug.ts:18)
+[2025-11-10T22:49:49.530Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:49:49.529Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
+[2025-11-10T22:49:49.530Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:49:49.529Z] [DEBUG][UI] [ConversationContext] Session completed (not snoozed), will cleanup in 5s: session_1762814968359_hmyqen8mc (debug.ts:18)
+[2025-11-10T22:49:49.530Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:49:49.529Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814968359_hmyqen8mc (debug.ts:18)
+[2025-11-10T22:49:49.531Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:49:49.529Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814968359_hmyqen8mc (debug.ts:18)
+[2025-11-10T22:49:49.531Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:49:49.530Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
+[2025-11-10T22:49:49.546Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:49.532Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
+[2025-11-10T22:49:49.546Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:49.532Z] [DEBUG][UI] [ConversationContext] Session completed (not snoozed), will cleanup in 5s: session_1762814968359_hmyqen8mc (debug.ts:18)
+[2025-11-10T22:49:49.546Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:49.533Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
+[2025-11-10T22:49:49.546Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:49.533Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
+[2025-11-10T22:49:49.546Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:49.533Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
+[2025-11-10T22:49:49.547Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:49.545Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:18)
+[2025-11-10T22:49:49.547Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:49.545Z] [DEBUG][UI] [ConversationContext] Session completed (not snoozed), will cleanup in 5s: session_1762814968359_hmyqen8mc (debug.ts:18)
+[2025-11-10T22:49:49.550Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:49.545Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814968359_hmyqen8mc (debug.ts:18)
+[2025-11-10T22:49:49.550Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:49.545Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814968359_hmyqen8mc (debug.ts:18)
+[2025-11-10T22:49:49.551Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:49.545Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814968359_hmyqen8mc (debug.ts:18)
+[2025-11-10T22:49:49.551Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:49.545Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1762814968359_hmyqen8mc (debug.ts:18)
+[2025-11-10T22:49:49.579Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:49.568Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
+[2025-11-10T22:49:49.579Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:49.568Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
+[2025-11-10T22:49:49.579Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:49.568Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
+[AgentSessionTracker] getActiveSessions called, returning 0 sessions: []
+[2025-11-10T22:49:49.904Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:49:49.903Z] [DEBUG][UI] [ActiveAgentsSidebar] Sessions updated: [object Object] (debug.ts:18)
 [AgentSessionTracker] getActiveSessions called, returning 0 sessions: []
 [AgentSessionTracker] getActiveSessions called, returning 0 sessions: []
-[AgentSessionTracker] getActiveSessions called, returning 0 sessions: []
-[2025-11-10T22:44:21.178Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:44:21.178Z] [DEBUG][UI] [ConversationContext] Cleaning up completed session: session_1762814621825_79525who7 (debug.ts:18)
-[2025-11-10T22:44:21.178Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:44:21.178Z] [DEBUG][UI] [ConversationContext] Clearing focus for completed session: session_1762814621825_79525who7 (debug.ts:18)
-[2025-11-10T22:44:21.178Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:44:21.178Z] [DEBUG][UI] [ConversationContext] Clearing focus for completed session: session_1762814621825_79525who7 (debug.ts:18)
-[2025-11-10T22:44:21.180Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:44:21.179Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
-[2025-11-10T22:44:21.187Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:44:21.187Z] [DEBUG][UI] [ConversationContext] Cleaning up completed session: session_1762814621825_79525who7 (debug.ts:18)
-[2025-11-10T22:44:21.187Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:44:21.187Z] [DEBUG][UI] [ConversationContext] Clearing focus for completed session: session_1762814621825_79525who7 (debug.ts:18)
-[2025-11-10T22:44:21.187Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:44:21.187Z] [DEBUG][UI] [ConversationContext] Clearing focus for completed session: session_1762814621825_79525who7 (debug.ts:18)
-[2025-11-10T22:44:21.188Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:44:21.188Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
-[2025-11-10T22:44:21.189Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:44:21.188Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
-[2025-11-10T22:44:21.189Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:44:21.188Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
+[2025-11-10T22:49:54.531Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:49:54.530Z] [DEBUG][UI] [ConversationContext] Cleaning up completed session: session_1762814968359_hmyqen8mc (debug.ts:18)
+[2025-11-10T22:49:54.531Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:49:54.531Z] [DEBUG][UI] [ConversationContext] Clearing focus for completed session: session_1762814968359_hmyqen8mc (debug.ts:18)
+[2025-11-10T22:49:54.531Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:49:54.531Z] [DEBUG][UI] [ConversationContext] Clearing focus for completed session: session_1762814968359_hmyqen8mc (debug.ts:18)
+[2025-11-10T22:49:54.532Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:49:54.532Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
+[2025-11-10T22:49:54.533Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:54.533Z] [DEBUG][UI] [ConversationContext] Cleaning up completed session: session_1762814968359_hmyqen8mc (debug.ts:18)
+[2025-11-10T22:49:54.534Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:54.534Z] [DEBUG][UI] [ConversationContext] Clearing focus for completed session: session_1762814968359_hmyqen8mc (debug.ts:18)
+[2025-11-10T22:49:54.534Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:54.534Z] [DEBUG][UI] [ConversationContext] Clearing focus for completed session: session_1762814968359_hmyqen8mc (debug.ts:18)
+[2025-11-10T22:49:54.535Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:54.535Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:18)
+[2025-11-10T22:49:54.535Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:54.535Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:18)
+[2025-11-10T22:49:54.535Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:54.535Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:18)
 [window.ts] getSavedSizeForMode(normal) - checking config...
 [window.ts] Found saved normal mode size: { width: 600, height: 443 }
 [window.ts] getSavedSizeForMode(normal) - checking config...
 [window.ts] Found saved normal mode size: { width: 600, height: 443 }
+[2025-11-10T22:49:54.555Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-10T22:49:54.545Z] [DEBUG][UI] [ConversationContext] Cleaning up completed session: session_1762814968359_hmyqen8mc (debug.ts:18)
 [hidePanelWindow] Called. Panel exists: true, visible: true
 [hidePanelWindow] Panel hidden
 [WINDOW PANEL] blur
@@ -2898,5 +2239,14 @@ Agent session session_1762814621825_79525who7 stopped right after LLM response
 Skip checkForUpdates because application is not packed and dev update config is not forced
 [AgentSessionTracker] getActiveSessions called, returning 0 sessions: []
 [WINDOW PANEL] hide
+[2025-11-10T22:49:56.263Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-10T22:49:56.263Z] [DEBUG][UI] [ActiveAgentsSidebar] Navigating to history for completed session: conv_1762814968353_4nw77ruz8 (debug.ts:18)
+[WINDOW MAIN] blur
+[WINDOW MAIN] focus
+[WINDOW MAIN] blur
+[2025-11-10T22:50:10.974Z] [DEBUG][KEYBINDS] Ctrl key pressed, isPressedCtrlKey = true
 [WINDOW PANEL] close
 [WINDOW MAIN] close
+[2025-11-10T22:50:11.233Z] [DEBUG][KEYBINDS] Keyboard listener process exited: { code: null, signal: 'SIGINT' }
+[2025-11-10T22:50:11.233Z] [DEBUG][UI] [PANEL] [WARN] [vite] server connection lost. Polling for restart... (client:560)
+Skip checkForUpdates because application is not packed and dev update config is not forced
+[AgentSessionTracker] getActiveSessions called, returning 0 sessions: []

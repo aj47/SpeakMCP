@@ -1163,6 +1163,18 @@ Always use actual resource IDs from the conversation history or create new ones 
       // Check for stop signal before executing each tool
       if (agentSessionStateManager.shouldStopSession(currentSessionId)) {
         console.log(`Agent session ${currentSessionId} stopped during tool execution`)
+        // Emit final progress with complete status
+        const killNote = "\n\n(Agent mode was stopped by emergency kill switch)"
+        const finalOutput = (finalContent || "") + killNote
+        conversationHistory.push({ role: "assistant", content: finalOutput })
+        emit({
+          currentIteration: iteration,
+          maxIterations,
+          steps: progressSteps.slice(-3),
+          isComplete: true,
+          finalContent: finalOutput,
+          conversationHistory: formatConversationForProgress(conversationHistory),
+        })
         break
       }
 
@@ -1247,6 +1259,18 @@ Always use actual resource IDs from the conversation history or create new ones 
 
       // If kill switch was pressed during retries, stop retrying
       if (agentSessionStateManager.shouldStopSession(currentSessionId)) {
+        // Emit final progress with complete status
+        const killNote = "\n\n(Agent mode was stopped by emergency kill switch)"
+        const finalOutput = (finalContent || "") + killNote
+        conversationHistory.push({ role: "assistant", content: finalOutput })
+        emit({
+          currentIteration: iteration,
+          maxIterations,
+          steps: progressSteps.slice(-3),
+          isComplete: true,
+          finalContent: finalOutput,
+          conversationHistory: formatConversationForProgress(conversationHistory),
+        })
         break
       }
 
@@ -1335,6 +1359,18 @@ Always use actual resource IDs from the conversation history or create new ones 
 
     // If stop was requested during tool execution, exit the agent loop now
     if (agentSessionStateManager.shouldStopSession(currentSessionId)) {
+      // Emit final progress with complete status
+      const killNote = "\n\n(Agent mode was stopped by emergency kill switch)"
+      const finalOutput = (finalContent || "") + killNote
+      conversationHistory.push({ role: "assistant", content: finalOutput })
+      emit({
+        currentIteration: iteration,
+        maxIterations,
+        steps: progressSteps.slice(-3),
+        isComplete: true,
+        finalContent: finalOutput,
+        conversationHistory: formatConversationForProgress(conversationHistory),
+      })
       break
     }
 

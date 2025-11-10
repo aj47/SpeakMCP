@@ -556,17 +556,15 @@ export const closeAgentModeAndHidePanelWindow = () => {
     state.shouldStopAgent = false
     state.agentIterationCount = 0
 
-    // Clear agent progress
+    // Hide the panel immediately to avoid flash when mode changes
+    if (win.isVisible()) {
+      win.hide()
+    }
+
+    // Clear agent progress after hiding to avoid triggering mode change while visible
     getRendererHandlers<RendererHandlers>(win.webContents).clearAgentProgress.send()
     // Suppress auto-show briefly to avoid immediate reopen from any trailing progress
     suppressPanelAutoShow(1000)
-
-    // Hide the panel after a small delay
-    setTimeout(() => {
-      if (win.isVisible()) {
-        win.hide()
-      }
-    }, 200)
   }
 }
 

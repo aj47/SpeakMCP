@@ -40,9 +40,6 @@ export function ActiveAgentsSidebar() {
   const { focusedSessionId, setFocusedSessionId } = useConversation()
   const navigate = useNavigate()
 
-  // (removed) optimistic snooze state - not used; backend is source of truth
-  // const [optimisticSnoozeState, setOptimisticSnoozeState] = useState<Map<string, boolean>>(new Map())
-
   const { data } = useQuery<AgentSessionsResponse>({
     queryKey: ["agentSessions"],
     queryFn: async () => {

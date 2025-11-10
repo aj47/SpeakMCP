@@ -802,13 +802,53 @@ Always use actual resource IDs from the conversation history or create new ones 
       availableTools: uniqueAvailableTools,
       relevantTools: toolCapabilities.relevantTools,
       isAgentMode: true,
+      sessionId: currentSessionId,
     })
 
+    // If stop was requested during context shrinking, exit now
+    if (agentSessionStateManager.shouldStopSession(currentSessionId)) {
+      console.log(`Agent session ${currentSessionId} stopped during context shrink`)
+      thinkingStep.status = "completed"
+      thinkingStep.title = "Agent stopped"
+      thinkingStep.description = "Emergency stop triggered"
+      const killNote = "\n\n(Agent mode was stopped by emergency kill switch)"
+      const finalOutput = (finalContent || "") + killNote
+      conversationHistory.push({ role: "assistant", content: finalOutput })
+      emit({
+        currentIteration: iteration,
+        maxIterations,
+        steps: progressSteps.slice(-3),
+        isComplete: true,
+        finalContent: finalOutput,
+        conversationHistory: formatConversationForProgress(conversationHistory),
+      })
+      break
+    }
 
     // Make LLM call (abort-aware)
     let llmResponse: any
     try {
       llmResponse = await makeLLMCall(shrunkMessages, config)
+
+      // If stop was requested while the LLM call was in-flight and it returned before aborting, exit now
+      if (agentSessionStateManager.shouldStopSession(currentSessionId)) {
+        console.log(`Agent session ${currentSessionId} stopped right after LLM response`)
+        thinkingStep.status = "completed"
+        thinkingStep.title = "Agent stopped"
+        thinkingStep.description = "Emergency stop triggered"
+        const killNote = "\n\n(Agent mode was stopped by emergency kill switch)"
+        const finalOutput = (finalContent || "") + killNote
+        conversationHistory.push({ role: "assistant", content: finalOutput })
+        emit({
+          currentIteration: iteration,
+          maxIterations,
+          steps: progressSteps.slice(-3),
+          isComplete: true,
+          finalContent: finalOutput,
+          conversationHistory: formatConversationForProgress(conversationHistory),
+        })
+        break
+      }
     } catch (error: any) {
       if (error?.name === "AbortError" || agentSessionStateManager.shouldStopSession(currentSessionId)) {
         console.log(`LLM call aborted for session ${currentSessionId} due to emergency stop`)
@@ -1058,6 +1098,7 @@ Always use actual resource IDs from the conversation history or create new ones 
             availableTools: uniqueAvailableTools,
             relevantTools: toolCapabilities.relevantTools,
             isAgentMode: true,
+            sessionId: currentSessionId,
           })
 
           const postVerifySummaryResponse = await makeLLMCall(shrunkPostVerifySummaryMessages, config)
@@ -1530,11 +1571,29 @@ Please try alternative approaches, break down the task into smaller steps, or pr
           availableTools: uniqueAvailableTools,
           relevantTools: toolCapabilities.relevantTools,
           isAgentMode: true,
+          sessionId: currentSessionId,
         })
 
 
         try {
           const summaryResponse = await makeLLMCall(shrunkSummaryMessages, config)
+
+          // Check if stop was requested during summary generation
+          if (agentSessionStateManager.shouldStopSession(currentSessionId)) {
+            console.log(`Agent session ${currentSessionId} stopped during summary generation`)
+            const killNote = "\n\n(Agent mode was stopped by emergency kill switch)"
+            const finalOutput = (finalContent || "") + killNote
+            conversationHistory.push({ role: "assistant", content: finalOutput })
+            emit({
+              currentIteration: iteration,
+              maxIterations,
+              steps: progressSteps.slice(-3),
+              isComplete: true,
+              finalContent: finalOutput,
+              conversationHistory: formatConversationForProgress(conversationHistory),
+            })
+            break
+          }
 
           // Update summary step with the response
           summaryStep.status = "completed"
@@ -1595,6 +1654,23 @@ Please try alternative approaches, break down the task into smaller steps, or pr
 	          if (verification?.isComplete === true) { verified = true; break }
 	        }
 
+	        // Check if stop was requested during verification
+	        if (agentSessionStateManager.shouldStopSession(currentSessionId)) {
+	          console.log(`Agent session ${currentSessionId} stopped during verification`)
+	          const killNote = "\n\n(Agent mode was stopped by emergency kill switch)"
+	          const finalOutput = (finalContent || "") + killNote
+	          conversationHistory.push({ role: "assistant", content: finalOutput })
+	          emit({
+	            currentIteration: iteration,
+	            maxIterations,
+	            steps: progressSteps.slice(-3),
+	            isComplete: true,
+	            finalContent: finalOutput,
+	            conversationHistory: formatConversationForProgress(conversationHistory),
+	          })
+	          break
+	        }
+
 	        if (!verified) {
 	          verifyStep.status = "error"
 	          verifyStep.description = "Verification failed: continuing to address missing items"
@@ -1652,12 +1728,30 @@ Please try alternative approaches, break down the task into smaller steps, or pr
             availableTools: uniqueAvailableTools,
             relevantTools: toolCapabilities.relevantTools,
             isAgentMode: true,
+            sessionId: currentSessionId,
           })
 
           const postVerifySummaryResponse = await makeLLMCall(
             shrunkPostVerifySummaryMessages,
             config,
           )
+
+          // Check if stop was requested during post-verify summary generation
+          if (agentSessionStateManager.shouldStopSession(currentSessionId)) {
+            console.log(`Agent session ${currentSessionId} stopped during post-verify summary generation`)
+            const killNote = "\n\n(Agent mode was stopped by emergency kill switch)"
+            const finalOutput = (finalContent || "") + killNote
+            conversationHistory.push({ role: "assistant", content: finalOutput })
+            emit({
+              currentIteration: iteration,
+              maxIterations,
+              steps: progressSteps.slice(-3),
+              isComplete: true,
+              finalContent: finalOutput,
+              conversationHistory: formatConversationForProgress(conversationHistory),
+            })
+            break
+          }
 
           postVerifySummaryStep.status = "completed"
           postVerifySummaryStep.llmContent = postVerifySummaryResponse.content || ""
@@ -1767,6 +1861,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
           availableTools: uniqueAvailableTools,
           relevantTools: toolCapabilities.relevantTools,
           isAgentMode: true,
+          sessionId: currentSessionId,
         })
 
 
@@ -1829,6 +1924,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
             availableTools: uniqueAvailableTools,
             relevantTools: toolCapabilities.relevantTools,
             isAgentMode: true,
+            sessionId: currentSessionId,
           })
 
           const postVerifySummaryResponse = await makeLLMCall(

@@ -2,6 +2,7 @@ import { configStore } from "./config"
 import { isDebugLLM, logLLM } from "./debug"
 import { makeTextCompletionWithFetch } from "./llm-fetch"
 import { constructMinimalSystemPrompt } from "./system-prompts"
+import { agentSessionStateManager } from "./state"
 
 export type LLMMessage = { role: string; content: string }
 
@@ -94,7 +95,7 @@ function getProviderAndModel(): { providerId: string; model: string } {
   return { providerId, model }
 }
 
-async function summarizeContent(content: string): Promise<string> {
+async function summarizeContent(content: string, sessionId?: string): Promise<string> {
   const { providerId: provider } = getProviderAndModel() // align with agent provider
   const MAX_TOKENS_HINT = 400 // soft guidance via prompt only
   const CHUNK_SIZE = 16000 // ~4k tokens per chunk (roughly)
@@ -113,7 +114,11 @@ ${src}`
 
   const summarizeOnce = async (src: string): Promise<string> => {
     try {
-      const summary = await makeTextCompletionWithFetch(makePrompt(src), provider)
+      // Check if session should stop before making LLM call
+      if (sessionId && agentSessionStateManager.shouldStopSession(sessionId)) {
+        return src
+      }
+      const summary = await makeTextCompletionWithFetch(makePrompt(src), provider, sessionId)
       return summary?.trim() || src
     } catch (e) {
       return src
@@ -154,6 +159,7 @@ export interface ShrinkOptions {
   targetRatio?: number // default 0.7
   lastNMessages?: number // default 3
   summarizeCharThreshold?: number // default 2000
+  sessionId?: string // optional session ID for abort control
 }
 
 export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<{ messages: LLMMessage[]; appliedStrategies: string[]; estTokensBefore: number; estTokensAfter: number }>{
@@ -191,7 +197,11 @@ export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<{ messa
     .sort((a, b) => b.len - a.len)
 
   for (const item of indicesByLength) {
-    const summarized = await summarizeContent(item.content!)
+    // Check if session should stop before summarizing
+    if (opts.sessionId && agentSessionStateManager.shouldStopSession(opts.sessionId)) {
+      break
+    }
+    const summarized = await summarizeContent(item.content!, opts.sessionId)
     messages[item.i] = { ...messages[item.i], content: summarized }
     applied.push("summarize")
     tokens = estimateTokensFromMessages(messages)

@@ -203,23 +203,8 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
             logUI('[ConversationContext] Progress changed for session:', sessionId)
             newMap.set(sessionId, update)
 
-            // If session was unsnoozed (snoozed -> not snoozed) and is complete,
-            // schedule cleanup since it's now visible and user can see it's done
-            if (prevProgress.isSnoozed && !update.isSnoozed && update.isComplete) {
-              logUI('[ConversationContext] Unsnoozed completed session, will cleanup in 5s:', sessionId)
-              setTimeout(() => {
-                logUI('[ConversationContext] Cleaning up unsnoozed completed session:', sessionId)
-                setAgentProgressById((prevMap) => {
-                  const newMap = new Map(prevMap)
-                  const current = newMap.get(sessionId)
-                  // Only delete if still not snoozed and complete
-                  if (current && !current.isSnoozed && current.isComplete) {
-                    newMap.delete(sessionId)
-                  }
-                  return newMap
-                })
-              }, 5000)
-            }
+            // Don't auto-cleanup unsnoozed completed sessions
+            // Let the user close them manually with the close button
 
             return newMap
           }
@@ -229,41 +214,19 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
 
         // Auto-focus this session if no session is currently focused AND it's not snoozed
         // Snoozed sessions run in background without stealing focus
-        if (!update.isSnoozed) {
+        // Only auto-focus active, non-snoozed sessions. Do not re-focus completed sessions.
+        if (!update.isSnoozed && !update.isComplete) {
           setFocusedSessionIdInternal((prev) => {
-            const newFocus = prev ?? sessionId
-            if (prev !== newFocus) {
-              logUI('[ConversationContext] Auto-focusing session:', newFocus)
-            }
-            return newFocus
+            if (prev) return prev
+            logUI('[ConversationContext] Auto-focusing session:', sessionId)
+            return sessionId
           })
         }
 
-        // Clean up completed sessions from the map after a delay
-        // BUT: Don't delete snoozed sessions - they need to be restorable from the sidebar
-        if (update.isComplete && !update.isSnoozed) {
-          logUI('[ConversationContext] Session completed (not snoozed), will cleanup in 5s:', sessionId)
-          setTimeout(() => {
-            logUI('[ConversationContext] Cleaning up completed session:', sessionId)
-            setAgentProgressById((prevMap) => {
-              const newMap = new Map(prevMap)
-              // Double-check it's still not snoozed before deleting
-              const current = newMap.get(sessionId)
-              if (current && !current.isSnoozed) {
-                newMap.delete(sessionId)
-              }
-              return newMap
-            })
-            // Clear focus if this was the focused session
-            setFocusedSessionIdInternal((prev) => {
-              if (prev === sessionId) {
-                logUI('[ConversationContext] Clearing focus for completed session:', sessionId)
-                return null
-              }
-              return prev
-            })
-          }, 5000) // Keep completed sessions visible for 5 seconds
-        }
+        // Don't auto-cleanup completed sessions - let the user close them manually
+        // The close button (gray X) is shown when isComplete: true
+        // Completed sessions are only removed when user clicks the close button
+        // (which calls clearAgentSessionProgress or closeAgentModeAndHidePanelWindow)
 
         // Save complete conversation history when agent completes
         // Use conversation ID from the update (sent by backend) instead of local state
@@ -293,6 +256,38 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
 
     return unlisten
   }, [])
+
+  // Listen for session-scoped progress clear (dismiss a single session)
+  useEffect(() => {
+    const unlisten = (rendererHandlers as any).clearAgentSessionProgress?.listen?.((sessionId: string) => {
+      logUI('[ConversationContext] Clearing agent progress for session:', sessionId)
+      // Remove the session and adjust focus to the next available active (non-snoozed) session
+      setAgentProgressById((prevMap) => {
+        const newMap = new Map(prevMap)
+        newMap.delete(sessionId)
+
+        // Determine next focus if current focus was removed
+        setFocusedSessionIdInternal((prev) => {
+          if (prev !== sessionId) return prev
+          const candidates = Array.from(newMap.entries())
+            .filter(([_, p]) => !p.isSnoozed)
+            .sort((a, b) => {
+              const ta = a[1].conversationHistory?.[0]?.timestamp || 0
+              const tb = b[1].conversationHistory?.[0]?.timestamp || 0
+              return tb - ta
+            })
+          const nextId = candidates[0]?.[0] || null
+          logUI('[ConversationContext] Focus moved to next session after dismiss:', nextId)
+          return nextId
+        })
+
+        return newMap
+      })
+    })
+
+    return unlisten
+  }, [])
+
 
   // Cross-window: focus a specific agent session when requested by main or other windows
   useEffect(() => {

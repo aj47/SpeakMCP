@@ -2,7 +2,7 @@ import { configStore } from "./config"
 import { LLMToolCallResponse } from "./mcp-service"
 import { diagnosticsService } from "./diagnostics"
 import { isDebugLLM, logLLM } from "./debug"
-import { state, llmRequestAbortManager } from "./state"
+import { state, llmRequestAbortManager, agentSessionStateManager } from "./state"
 import OpenAI from "openai"
 
 // Define the JSON schema for structured output
@@ -547,6 +547,7 @@ async function makeAPICallAttempt(
   apiKey: string,
   requestBody: any,
   estimatedTokens: number,
+  sessionId?: string,
 ): Promise<any> {
   if (isDebugLLM()) {
     logLLM("=== OPENAI API REQUEST ===")
@@ -577,9 +578,14 @@ async function makeAPICallAttempt(
 
   // Create abort controller and register it so emergency stop can cancel
   const controller = new AbortController()
-  llmRequestAbortManager.register(controller)
+  if (sessionId) {
+    agentSessionStateManager.registerAbortController(sessionId, controller)
+  } else {
+    llmRequestAbortManager.register(controller)
+  }
   try {
-    if (state.shouldStopAgent) {
+    // Check both global and session-specific stop flags
+    if (state.shouldStopAgent || (sessionId && agentSessionStateManager.shouldStopSession(sessionId))) {
       controller.abort()
     }
 
@@ -682,7 +688,11 @@ async function makeAPICallAttempt(
 
     return data
   } finally {
-    llmRequestAbortManager.unregister(controller)
+    if (sessionId) {
+      agentSessionStateManager.unregisterAbortController(sessionId, controller)
+    } else {
+      llmRequestAbortManager.unregister(controller)
+    }
   }
 }
 
@@ -693,6 +703,7 @@ async function makeOpenAICompatibleCall(
   messages: Array<{ role: string; content: string }>,
   providerId: string,
   useStructuredOutput: boolean = true,
+  sessionId?: string,
 ): Promise<any> {
   const config = configStore.get()
 
@@ -721,7 +732,7 @@ async function makeOpenAICompatibleCall(
   if (!useStructuredOutput) {
     // No structured output requested, make simple call
     return apiCallWithRetry(async () => {
-      return makeAPICallAttempt(baseURL, apiKey, baseRequestBody, estimatedTokens)
+      return makeAPICallAttempt(baseURL, apiKey, baseRequestBody, estimatedTokens, sessionId)
     }, config.apiRetryCount, config.apiRetryBaseDelay, config.apiRetryMaxDelay)
   }
 
@@ -743,7 +754,7 @@ async function makeOpenAICompatibleCall(
         }
 
         {
-          const data = await makeAPICallAttempt(baseURL, apiKey, requestBodyWithSchema, estimatedTokens)
+          const data = await makeAPICallAttempt(baseURL, apiKey, requestBodyWithSchema, estimatedTokens, sessionId)
           if (isEmptyContentResponse(data)) {
             if (isDebugLLM()) {
               logLLM("Empty content from JSON Schema response; falling back to JSON/Object or plain text")
@@ -793,7 +804,7 @@ async function makeOpenAICompatibleCall(
         }
 
         {
-          const data = await makeAPICallAttempt(baseURL, apiKey, requestBodyWithJson, estimatedTokens)
+          const data = await makeAPICallAttempt(baseURL, apiKey, requestBodyWithJson, estimatedTokens, sessionId)
           if (isEmptyContentResponse(data)) {
             if (isDebugLLM()) {
               logLLM("Empty content from JSON Object response; falling back to plain text")
@@ -835,7 +846,7 @@ async function makeOpenAICompatibleCall(
       logLLM("Using plain text mode for model:", model)
     }
 
-    return await makeAPICallAttempt(baseURL, apiKey, baseRequestBody, estimatedTokens)
+    return await makeAPICallAttempt(baseURL, apiKey, baseRequestBody, estimatedTokens, sessionId)
   }, config.apiRetryCount, config.apiRetryBaseDelay, config.apiRetryMaxDelay)
 
 }
@@ -845,6 +856,7 @@ async function makeOpenAICompatibleCall(
  */
 async function makeGeminiCall(
   messages: Array<{ role: string; content: string }>,
+  sessionId?: string,
 ): Promise<any> {
   const config = configStore.get()
 
@@ -869,9 +881,14 @@ async function makeGeminiCall(
     }
 
     const controller = new AbortController()
-    llmRequestAbortManager.register(controller)
+    if (sessionId) {
+      agentSessionStateManager.registerAbortController(sessionId, controller)
+    } else {
+      llmRequestAbortManager.register(controller)
+    }
     try {
-      if (state.shouldStopAgent) {
+      // Check both global and session-specific stop flags
+      if (state.shouldStopAgent || (sessionId && agentSessionStateManager.shouldStopSession(sessionId))) {
         controller.abort()
       }
 
@@ -951,7 +968,11 @@ async function makeGeminiCall(
       ],
     }
     } finally {
-      llmRequestAbortManager.unregister(controller)
+      if (sessionId) {
+        agentSessionStateManager.unregisterAbortController(sessionId, controller)
+      } else {
+        llmRequestAbortManager.unregister(controller)
+      }
     }
   }, config.apiRetryCount, config.apiRetryBaseDelay, config.apiRetryMaxDelay)
 }
@@ -1168,6 +1189,7 @@ export async function makeLLMCallWithFetch(
 export async function makeTextCompletionWithFetch(
   prompt: string,
   providerId?: string,
+  sessionId?: string,
 ): Promise<string> {
   const config = configStore.get()
   const chatProviderId =
@@ -1184,9 +1206,9 @@ export async function makeTextCompletionWithFetch(
     let response: any
 
     if (chatProviderId === "gemini") {
-      response = await makeGeminiCall(messages)
+      response = await makeGeminiCall(messages, sessionId)
     } else {
-      response = await makeOpenAICompatibleCall(messages, chatProviderId, false)
+      response = await makeOpenAICompatibleCall(messages, chatProviderId, false, sessionId)
     }
 
     return response.choices[0]?.message.content?.trim() || ""

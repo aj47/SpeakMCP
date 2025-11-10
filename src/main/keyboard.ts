@@ -391,14 +391,19 @@ export function listenToKeyboardEvents() {
         }
 
         // Handle kill switch hotkey: Ctrl+Shift+Escape
+        // Robust behavior: Always allow Ctrl+Shift+Escape as a hard emergency stop,
+        // even if the configured hotkey is different. This provides a universal safety combo.
         if (
           config.agentKillSwitchEnabled &&
-          config.agentKillSwitchHotkey === "ctrl-shift-escape" &&
           isPressedCtrlKey &&
           isPressedShiftKey
         ) {
           if (isDebugKeybinds()) {
-            logKeybinds("Kill switch triggered: Ctrl+Shift+Escape")
+            const reason =
+              config.agentKillSwitchHotkey === "ctrl-shift-escape"
+                ? "Ctrl+Shift+Escape"
+                : "Ctrl+Shift+Escape (fallback hard kill)"
+            logKeybinds(`Kill switch triggered: ${reason}`)
           }
           // Emergency stop agent mode - always trigger to handle stuck states
           // even if isAgentModeActive flag is not set correctly

@@ -5,6 +5,7 @@ import { Activity, ChevronDown, ChevronRight, X, Minimize2, Maximize2 } from "lu
 import { cn } from "@renderer/lib/utils"
 import { useConversation } from "@renderer/contexts/conversation-context"
 import { logUI, logStateChange } from "@renderer/lib/debug"
+import { useNavigate } from "react-router-dom"
 
 interface AgentSession {
   id: string
@@ -37,6 +38,7 @@ export function ActiveAgentsSidebar() {
   })
 
   const { focusedSessionId, setFocusedSessionId } = useConversation()
+  const navigate = useNavigate()
 
   const { data } = useQuery<AgentSessionsResponse>({
     queryKey: ["agentSessions"],
@@ -47,7 +49,10 @@ export function ActiveAgentsSidebar() {
   })
 
   const activeSessions = data?.activeSessions || []
+  const recentSessions = data?.recentSessions || []
   const hasActiveSessions = activeSessions.length > 0
+  const hasRecentSessions = recentSessions.length > 0
+  const hasAnySessions = hasActiveSessions || hasRecentSessions
 
   // Persist expand state to localStorage whenever it changes
   useEffect(() => {
@@ -63,9 +68,9 @@ export function ActiveAgentsSidebar() {
     })
   }, [activeSessions.length])
 
-  // Don't render anything if there are no active sessions
-  if (!hasActiveSessions) {
-    logUI('[ActiveAgentsSidebar] No active sessions, hiding sidebar')
+  // Don't render anything if there are no sessions (active or recent)
+  if (!hasAnySessions) {
+    logUI('[ActiveAgentsSidebar] No sessions (active or recent), hiding sidebar')
     return null
   }
 
@@ -79,6 +84,10 @@ export function ActiveAgentsSidebar() {
     logUI('[ActiveAgentsSidebar] Stopping session:', sessionId)
     try {
       await tipcClient.stopAgentSession({ sessionId })
+      // If we just stopped the focused session, just unfocus; do not clear all progress
+      if (focusedSessionId === sessionId) {
+        setFocusedSessionId(null)
+      }
     } catch (error) {
       console.error("Failed to stop session:", error)
     }
@@ -109,7 +118,7 @@ export function ActiveAgentsSidebar() {
         await tipcClient.focusAgentSession({ sessionId })
 
         // Resize to agent mode BEFORE showing the panel to avoid flashing to small size
-        await tipcClient.resizePanelForAgentMode({})
+        await tipcClient.setPanelMode({ mode: "agent" })
 
         // Show the panel (it's already sized correctly)
         await tipcClient.showPanelWindow({})
@@ -220,6 +229,42 @@ export function ActiveAgentsSidebar() {
           })}
         </div>
       )}
+
+      {isExpanded && hasRecentSessions && (
+        <div className="mt-2 space-y-1 pl-2">
+          <div className="px-2 py-1 text-[10px] text-muted-foreground uppercase tracking-wide">Recent</div>
+          {recentSessions.map((session) => {
+            const statusLabel = session.status === "stopped" ? "Stopped" : session.status === "error" ? "Error" : "Completed"
+            return (
+              <div
+                key={session.id}
+                onClick={() => {
+                  if (session.conversationId) {
+                    logUI('[ActiveAgentsSidebar] Navigating to history for completed session:', session.conversationId)
+                    navigate(`/history/${session.conversationId}`)
+                  }
+                }}
+                className={cn(
+                  "relative rounded-md border px-2 py-1.5 text-xs text-muted-foreground bg-card/30 transition-all",
+                  session.conversationId && "cursor-pointer hover:bg-card/50 hover:border-border"
+                )}
+              >
+                <div className="flex items-center gap-1.5">
+                  <Activity className="h-3 w-3 shrink-0 text-muted-foreground" />
+                  <p className="flex-1 truncate">{session.conversationTitle}</p>
+                  <span className="shrink-0 rounded bg-accent/20 px-1.5 py-0.5 text-[10px]">{statusLabel}</span>
+                </div>
+                {session.lastActivity && (
+                  <p className="mt-0.5 truncate pl-4 text-[10px] text-muted-foreground">
+                    {session.lastActivity}
+                  </p>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+
     </div>
   )
 }

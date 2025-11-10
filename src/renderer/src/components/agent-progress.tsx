@@ -511,7 +511,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({})
 
   // Get current conversation ID for deep-linking and session focus control
-  const { currentConversationId, setFocusedSessionId } = useConversation()
+  const { currentConversationId, setFocusedSessionId, agentProgressById } = useConversation()
 
   // Helper to toggle expansion state for a specific item
   const toggleItemExpansion = (itemKey: string) => {
@@ -521,16 +521,16 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
     }))
   }
 
-  // Kill switch handler
+  // Kill switch handler - stop only this session
   const handleKillSwitch = async () => {
-    if (isKilling) return // Prevent double-clicks
+    if (isKilling || !progress?.sessionId) return // Prevent double-clicks
 
     setIsKilling(true)
     try {
-      await tipcClient.emergencyStopAgent()
+      await tipcClient.stopAgentSession({ sessionId: progress.sessionId })
       setShowKillConfirmation(false)
     } catch (error) {
-      console.error("Failed to stop agent:", error)
+      console.error("Failed to stop agent session:", error)
     } finally {
       setIsKilling(false)
     }
@@ -570,9 +570,20 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
   // Close button handler for completed agent view
   const handleClose = async () => {
     try {
-      await tipcClient.closeAgentModeAndHidePanelWindow()
+      const thisId = progress?.sessionId
+      const hasOtherVisible = thisId
+        ? Array.from(agentProgressById.values()).some(p => p.sessionId !== thisId && !p.isSnoozed)
+        : false
+
+      if (thisId && hasOtherVisible) {
+        // Session-scoped dismiss: remove only this session's progress and keep panel open
+        await tipcClient.clearAgentSessionProgress({ sessionId: thisId })
+      } else {
+        // Last visible session: exit agent mode and hide panel
+        await tipcClient.closeAgentModeAndHidePanelWindow()
+      }
     } catch (error) {
-      console.error("Failed to close agent mode:", error)
+      console.error("Failed to close agent session/panel:", error)
     }
   }
 
@@ -974,7 +985,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
               <h3 className="text-sm font-medium">Stop Agent Execution</h3>
             </div>
             <p className="text-xs text-muted-foreground mb-4">
-              Are you sure you want to stop the agent? This will immediately terminate all running processes and cannot be undone.
+              Are you sure you want to stop this session? Other sessions will continue running.
             </p>
             <div className="flex gap-2 justify-end">
               <Button

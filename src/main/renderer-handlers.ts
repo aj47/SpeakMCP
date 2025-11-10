@@ -21,6 +21,8 @@ export type RendererHandlers = {
   agentProgressUpdate: (update: AgentProgressUpdate) => void
   clearAgentProgress: () => void
   emergencyStopAgent: () => void
+  clearAgentSessionProgress: (sessionId: string) => void
+
 
   // Cross-window focus control for agent sessions
   focusAgentSession: (sessionId: string) => void

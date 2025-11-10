@@ -13,7 +13,7 @@ import { diagnosticsService } from "./diagnostics"
 import { makeStructuredContextExtraction, ContextExtractionResponse } from "./structured-output"
 import { makeLLMCallWithFetch, makeTextCompletionWithFetch, verifyCompletionWithFetch } from "./llm-fetch"
 import { constructSystemPrompt } from "./system-prompts"
-import { state, agentSessionStateManager } from "./state"
+import { state, agentSessionStateManager, isPanelAutoShowSuppressed } from "./state"
 import { isDebugLLM, logLLM, isDebugTools, logTools } from "./debug"
 import { shrinkMessagesForLLM } from "./context-budget"
 import { agentSessionTracker } from "./agent-session-tracker"
@@ -246,16 +246,34 @@ export interface AgentModeResponse {
 
 // Helper function to emit progress updates to the renderer with better error handling
 // Note: This function now expects sessionId to be included in the update object
-function emitAgentProgress(update: AgentProgressUpdate) {
+async function emitAgentProgress(update: AgentProgressUpdate) {
   const panel = WINDOWS.get("panel")
   if (!panel) {
     console.warn("Panel window not available for progress update")
     return
   }
 
-  // Show the panel window if it's not visible
-  if (!panel.isVisible()) {
-    showPanelWindow()
+  console.log(`[llm.ts emitAgentProgress] Called for session ${update.sessionId}, panel visible: ${panel.isVisible()}, isSnoozed: ${update.isSnoozed}`)
+
+  // Only show the panel window if it's not visible AND the session is not snoozed
+  if (!panel.isVisible() && update.sessionId) {
+    // Check if this session is snoozed before showing the panel
+    const { agentSessionTracker } = await import("./agent-session-tracker")
+    const isSnoozed = agentSessionTracker.isSessionSnoozed(update.sessionId)
+
+    console.log(`[llm.ts emitAgentProgress] Panel not visible. Session ${update.sessionId} snoozed check: ${isSnoozed}`)
+
+    if (isPanelAutoShowSuppressed()) {
+      console.log(`[llm.ts emitAgentProgress] Panel auto-show suppressed; NOT showing panel for session ${update.sessionId}`)
+    } else if (!isSnoozed) {
+      // Only show panel for non-snoozed sessions
+      console.log(`[llm.ts emitAgentProgress] Showing panel for non-snoozed session ${update.sessionId}`)
+      showPanelWindow()
+    } else {
+      console.log(`[llm.ts emitAgentProgress] Session ${update.sessionId} is snoozed, NOT showing panel`)
+    }
+  } else {
+    console.log(`[llm.ts emitAgentProgress] Skipping show check - panel visible: ${panel.isVisible()}, has sessionId: ${!!update.sessionId}`)
   }
 
   // Also send updates to main window if it's open for live progress visualization
@@ -485,11 +503,14 @@ export async function processTranscriptWithAgentMode(
   const emit = (update: Omit<AgentProgressUpdate, 'sessionId' | 'conversationId' | 'isSnoozed'>) => {
     const isSnoozed = agentSessionTracker.isSessionSnoozed(currentSessionId)
 
+    // Fire and forget - don't await, but catch errors
     emitAgentProgress({
       ...update,
       sessionId: currentSessionId,
       conversationId: currentConversationId,
       isSnoozed,
+    }).catch(err => {
+      console.warn("[emit] Failed to emit agent progress:", err)
     })
   }
 
@@ -664,15 +685,16 @@ export async function processTranscriptWithAgentMode(
       )
       progressSteps.push(stopStep)
 
-      // Emit final progress
+      // Emit final progress (ensure final output is saved in history)
+      const killNote = "\n\n(Agent mode was stopped by emergency kill switch)"
+      const finalOutput = (finalContent || "") + killNote
+      conversationHistory.push({ role: "assistant", content: finalOutput })
       emit({
         currentIteration: iteration,
         maxIterations,
         steps: progressSteps.slice(-3),
         isComplete: true,
-        finalContent:
-          finalContent +
-          "\n\n(Agent mode was stopped by emergency kill switch)",
+        finalContent: finalOutput,
         conversationHistory: formatConversationForProgress(conversationHistory),
       })
 
@@ -793,12 +815,16 @@ Always use actual resource IDs from the conversation history or create new ones 
         thinkingStep.status = "completed"
         thinkingStep.title = "Agent stopped"
         thinkingStep.description = "Emergency stop triggered"
+        // Ensure final output appears in saved conversation on abort
+        const killNote = "\n\n(Agent mode was stopped by emergency kill switch)"
+        const finalOutput = (finalContent || "") + killNote
+        conversationHistory.push({ role: "assistant", content: finalOutput })
         emit({
           currentIteration: iteration,
           maxIterations,
           steps: progressSteps.slice(-3),
           isComplete: true,
-          finalContent: finalContent + "\n\n(Agent mode was stopped by emergency kill switch)",
+          finalContent: finalOutput,
           conversationHistory: formatConversationForProgress(conversationHistory),
         })
         break
@@ -1162,8 +1188,68 @@ Always use actual resource IDs from the conversation history or create new ones 
         conversationHistory: formatConversationForProgress(conversationHistory),
       })
 
-      // Execute tool with retry logic for transient failures
-      let result = await executeToolCall(toolCall)
+      // Execute tool with cancel-aware race so kill switch can stop mid-tool
+      let cancelledByKill = false
+      let cancelInterval: NodeJS.Timeout | null = null
+      const stopPromise: Promise<MCPToolResult> = new Promise((resolve) => {
+        cancelInterval = setInterval(() => {
+          if (agentSessionStateManager.shouldStopSession(currentSessionId)) {
+            cancelledByKill = true
+            if (cancelInterval) clearInterval(cancelInterval)
+            resolve({
+              content: [{ type: "text", text: "Tool execution cancelled by emergency kill switch" }],
+              isError: true,
+            })
+          }
+        }, 100)
+      })
+      const execPromise = executeToolCall(toolCall)
+      let result = (await Promise.race([
+        execPromise,
+        stopPromise,
+      ])) as MCPToolResult
+      // Avoid unhandled rejection if the tool promise rejects after we already stopped
+      if (cancelledByKill) {
+        execPromise.catch(() => { /* swallow after kill switch */ })
+      }
+      if (cancelInterval) clearInterval(cancelInterval)
+
+      if (cancelledByKill) {
+        // Mark step and emit final progress, then break out of tool loop
+        toolCallStep.status = "error"
+        toolCallStep.toolResult = {
+          success: false,
+          content: "Tool execution cancelled by emergency kill switch",
+          error: "Cancelled by emergency kill switch",
+        }
+        const toolResultStep = createProgressStep(
+          "tool_result",
+          `${toolCall.name} cancelled`,
+          "Tool execution cancelled by emergency kill switch",
+          "error",
+        )
+        toolResultStep.toolResult = toolCallStep.toolResult
+        progressSteps.push(toolResultStep)
+        // Ensure final output appears and is saved when tool execution is cancelled
+        const killNote = "\n\n(Agent mode was stopped by emergency kill switch)"
+        const finalOutput = (finalContent || "") + killNote
+        conversationHistory.push({ role: "assistant", content: finalOutput })
+        emit({
+          currentIteration: iteration,
+          maxIterations,
+          steps: progressSteps.slice(-3),
+          isComplete: true,
+          finalContent: finalOutput,
+          conversationHistory: formatConversationForProgress(conversationHistory),
+        })
+        break
+      }
+
+      // If kill switch was pressed during retries, stop retrying
+      if (agentSessionStateManager.shouldStopSession(currentSessionId)) {
+        break
+      }
+
       let retryCount = 0
       const maxRetries = 2
 
@@ -1246,6 +1332,12 @@ Always use actual resource IDs from the conversation history or create new ones 
         conversationHistory: formatConversationForProgress(conversationHistory),
       })
     }
+
+    // If stop was requested during tool execution, exit the agent loop now
+    if (agentSessionStateManager.shouldStopSession(currentSessionId)) {
+      break
+    }
+
 
     // Note: Assistant response with tool calls was already added before tool execution
     // This ensures the tool call request is visible immediately in the UI

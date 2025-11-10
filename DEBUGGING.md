@@ -146,14 +146,16 @@ When app debug is enabled, you'll see:
 
 ### UI Debug (`debug-ui` or `dui`)
 
-When UI debug is enabled, you'll see detailed logging in the browser console (DevTools):
+When UI debug is enabled, you'll see detailed logging from all renderer windows in the main console:
 
 ```
-[DEBUG][UI] [ModelSelector] mount/update { providerId: 'openai', value: 'gpt-4', ... }
-[DEBUG][UI] [FOCUS] ModelSelector.searchInput focus { activeElement: 'INPUT' }
-[DEBUG][UI] [STATE] ModelSelector.searchQuery: { from: '', to: 'gpt' }
-[DEBUG][UI] [Input] onChange: { placeholder: 'Search models...', value: 'gpt', isFocused: true }
-[DEBUG][UI] [FOCUS] Input blur { relatedTarget: 'DIV', activeElement: 'BODY' }
+[DEBUG][UI] [N] [ModelSelector] mount/update { providerId: 'openai', value: 'gpt-4', ... }
+[DEBUG][UI] [PANEL] [FOCUS] ModelSelector.searchInput focus { activeElement: 'INPUT' }
+[DEBUG][UI] [MAIN] [STATE] ModelSelector.searchQuery: { from: '', to: 'gpt' }
+[DEBUG][UI] [PANEL] [InputMAI] onChange: { placeholder: 'Search models...', value: 'gpt', isFocused: true }
+[DEBUG][UI] [PANEL] [FOCUS] Input blur { relatedTarget: 'DIV', activeElement: 'BODY' }
+[DEBUG][UI] [MAIN] console.log from renderer (App.tsx:42)
+[DEBUG][UI] [PANEL] [ERROR] Failed to load data (panel.tsx:123)
 ```
 
 **What it shows:**
@@ -162,6 +164,12 @@ When UI debug is enabled, you'll see detailed logging in the browser console (De
 - State changes in components
 - User interactions with UI elements
 - Active element tracking to debug focus issues
+- **All console messages from renderer processes** (console.log, console.warn, console.error)
+- **Window identifier** ([MAIN], [PANEL], [SETUP]) to distinguish which UI window the log came from
+- **Source file and line number** for easier debugging
+
+**How it works:**
+The debug system automatically captures console messages from all renderer windows (main, panel, setup) and pipes them to the main process console with the `[DEBUG][UI]` prefix. This means you can see all UI logs in one place without opening DevTools for each window.
 
 ## 🛠️ Advanced Debugging
 

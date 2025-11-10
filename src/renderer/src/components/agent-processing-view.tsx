@@ -42,12 +42,11 @@ export function AgentProcessingView({
     setIsKilling(true)
     try {
       if (agentProgress?.sessionId) {
-        // Stop only the focused session
+        // Stop only the focused session; let final progress update clean up UI
         await tipcClient.stopAgentSession({ sessionId: agentProgress.sessionId })
       } else {
-        // No session progress yet (e.g., submitting input). Do not kill all sessions.
-        // Just clear the overlay/state in the panel.
-        await tipcClient.clearAgentProgress({})
+        // No session progress yet (e.g., submitting input). Defer to parent to control UI.
+        // Intentionally no global clear here to avoid wiping other sessions.
       }
       setShowKillConfirmation(false)
     } catch (error) {

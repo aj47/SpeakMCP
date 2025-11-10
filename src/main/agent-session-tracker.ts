@@ -20,6 +20,8 @@ export interface AgentSession {
 class AgentSessionTracker {
   private static instance: AgentSessionTracker | null = null
   private sessions: Map<string, AgentSession> = new Map()
+  private completedSessions: AgentSession[] = []
+
 
   static getInstance(): AgentSessionTracker {
     if (!AgentSessionTracker.instance) {
@@ -69,30 +71,65 @@ class AgentSessionTracker {
   }
 
   /**
-   * Mark a session as completed and remove it
+   * Mark a session as completed and move it to recent sessions
    */
   completeSession(sessionId: string, finalActivity?: string): void {
-    // Remove completed sessions immediately
-    console.log(`[AgentSessionTracker] Completing session: ${sessionId}, remaining sessions: ${this.sessions.size - 1}`)
+    const session = this.sessions.get(sessionId)
+    if (!session) {
+      console.log(`[AgentSessionTracker] Complete requested for non-existent session: ${sessionId}`)
+      return
+    }
+    session.status = "completed"
+    session.endTime = Date.now()
+    if (finalActivity) {
+      session.lastActivity = finalActivity
+    }
+    // Move to recent list (newest first), cap length
+    this.completedSessions.unshift({ ...session })
+    if (this.completedSessions.length > 20) {
+      this.completedSessions.length = 20
+    }
     this.sessions.delete(sessionId)
+    console.log(`[AgentSessionTracker] Completing session: ${sessionId}, remaining sessions: ${this.sessions.size}`)
   }
 
   /**
-   * Mark a session as stopped (via kill switch) and remove it
+   * Mark a session as stopped and move it to recent sessions
    */
   stopSession(sessionId: string): void {
-    // Remove stopped sessions immediately
-    console.log(`[AgentSessionTracker] Stopping session: ${sessionId}, remaining sessions: ${this.sessions.size - 1}`)
+    const session = this.sessions.get(sessionId)
+    if (!session) {
+      console.log(`[AgentSessionTracker] Stop requested for non-existent session: ${sessionId}`)
+      return
+    }
+    session.status = "stopped"
+    session.endTime = Date.now()
+    this.completedSessions.unshift({ ...session })
+    if (this.completedSessions.length > 20) {
+      this.completedSessions.length = 20
+    }
     this.sessions.delete(sessionId)
+    console.log(`[AgentSessionTracker] Stopping session: ${sessionId}, remaining sessions: ${this.sessions.size}`)
   }
 
   /**
-   * Mark a session as errored and remove it
+   * Mark a session as errored and move it to recent sessions
    */
   errorSession(sessionId: string, errorMessage: string): void {
-    // Remove errored sessions immediately
-    console.log(`[AgentSessionTracker] Error in session: ${sessionId}, remaining sessions: ${this.sessions.size - 1}`)
+    const session = this.sessions.get(sessionId)
+    if (!session) {
+      console.log(`[AgentSessionTracker] Error reported for non-existent session: ${sessionId}`)
+      return
+    }
+    session.status = "error"
+    session.errorMessage = errorMessage
+    session.endTime = Date.now()
+    this.completedSessions.unshift({ ...session })
+    if (this.completedSessions.length > 20) {
+      this.completedSessions.length = 20
+    }
     this.sessions.delete(sessionId)
+    console.log(`[AgentSessionTracker] Error in session: ${sessionId}, remaining sessions: ${this.sessions.size}`)
   }
 
   /**
@@ -106,10 +143,12 @@ class AgentSessionTracker {
   }
 
   /**
-   * Get recent sessions - returns empty array since we only track active sessions
+   * Get recent sessions (completed/stopped/error), newest first
    */
   getRecentSessions(limit: number = 4): AgentSession[] {
-    return []
+    return this.completedSessions
+      .slice(0, limit)
+      .sort((a, b) => (b.endTime || 0) - (a.endTime || 0))
   }
 
   /**

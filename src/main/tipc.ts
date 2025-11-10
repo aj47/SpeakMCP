@@ -8,6 +8,9 @@ import {
   resizePanelToNormal,
   closeAgentModeAndHidePanelWindow,
   getWindowRendererHandlers,
+  setPanelMode,
+  getCurrentPanelMode,
+  markManualResize,
 } from "./window"
 import {
   app,
@@ -42,13 +45,13 @@ import {
   constrainPositionToScreen,
   PanelPosition,
 } from "./panel-position"
-import { state, agentProcessManager } from "./state"
+import { state, agentProcessManager, suppressPanelAutoShow, isPanelAutoShowSuppressed } from "./state"
 
 
 import { startRemoteServer, stopRemoteServer, restartRemoteServer } from "./remote-server"
 
 // Helper function to emit agent progress updates to the renderer
-function emitAgentProgress(update: AgentProgressUpdate) {
+async function emitAgentProgress(update: AgentProgressUpdate) {
   const panel = WINDOWS.get("panel")
   if (!panel) {
     console.warn("Panel window not available for progress update")
@@ -56,9 +59,27 @@ function emitAgentProgress(update: AgentProgressUpdate) {
     return
   }
 
-  // Show the panel window if it's not visible
-  if (!panel.isVisible()) {
-    showPanelWindow()
+  console.log(`[emitAgentProgress] Called for session ${update.sessionId}, panel visible: ${panel.isVisible()}, isSnoozed: ${update.isSnoozed}`)
+
+  // Only show the panel window if it's not visible AND the session is not snoozed
+  if (!panel.isVisible() && update.sessionId) {
+    // Check if this session is snoozed before showing the panel
+    const { agentSessionTracker } = await import("./agent-session-tracker")
+    const isSnoozed = agentSessionTracker.isSessionSnoozed(update.sessionId)
+
+    console.log(`[emitAgentProgress] Panel not visible. Session ${update.sessionId} snoozed check: ${isSnoozed}`)
+
+    if (isPanelAutoShowSuppressed()) {
+      console.log(`[emitAgentProgress] Panel auto-show suppressed; NOT showing panel for session ${update.sessionId}`)
+    } else if (!isSnoozed) {
+      // Only show panel for non-snoozed sessions
+      console.log(`[emitAgentProgress] Showing panel for non-snoozed session ${update.sessionId}`)
+      showPanelWindow()
+    } else {
+      console.log(`[emitAgentProgress] Session ${update.sessionId} is snoozed, NOT showing panel`)
+    }
+  } else {
+    console.log(`[emitAgentProgress] Skipping show check - panel visible: ${panel.isVisible()}, has sessionId: ${!!update.sessionId}`)
   }
 
   try {
@@ -87,7 +108,7 @@ async function initializeMcpWithProgress(config: Config, sessionId: string): Pro
   const initStatus = mcpService.getInitializationStatus()
 
   // Emit initial progress showing MCP initialization
-  emitAgentProgress({
+  await emitAgentProgress({
     sessionId,
     currentIteration: 0,
     maxIterations: config.mcpMaxIterations ?? 10,
@@ -107,10 +128,10 @@ async function initializeMcpWithProgress(config: Config, sessionId: string): Pro
   })
 
   // Poll for initialization progress updates
-  const progressInterval = setInterval(() => {
+  const progressInterval = setInterval(async () => {
     const currentStatus = mcpService.getInitializationStatus()
     if (currentStatus.isInitializing) {
-      emitAgentProgress({
+      await emitAgentProgress({
         sessionId,
         currentIteration: 0,
         maxIterations: config.mcpMaxIterations ?? 10,
@@ -143,7 +164,7 @@ async function initializeMcpWithProgress(config: Config, sessionId: string): Pro
   }
 
   // Emit completion of MCP initialization
-  emitAgentProgress({
+  await emitAgentProgress({
     sessionId,
     currentIteration: 0,
     maxIterations: config.mcpMaxIterations ?? 10,
@@ -179,7 +200,7 @@ async function processWithAgentMode(
   const sessionId = agentSessionTracker.startSession(conversationId, conversationTitle)
 
   // Emit initial progress immediately so the session is restorable from sidebar
-  emitAgentProgress({
+  await emitAgentProgress({
     sessionId,
     conversationId,
     currentIteration: 0,
@@ -392,7 +413,13 @@ export const router = {
   hidePanelWindow: t.procedure.action(async () => {
     const panel = WINDOWS.get("panel")
 
-    panel?.hide()
+    console.log(`[hidePanelWindow] Called. Panel exists: ${!!panel}, visible: ${panel?.isVisible()}`)
+
+    if (panel) {
+      suppressPanelAutoShow(1000)
+      panel.hide()
+      console.log(`[hidePanelWindow] Panel hidden`)
+    }
   }),
 
   resizePanelForAgentMode: t.procedure.action(async () => {
@@ -402,6 +429,13 @@ export const router = {
   resizePanelToNormal: t.procedure.action(async () => {
     resizePanelToNormal()
   }),
+
+  setPanelMode: t.procedure
+    .input<{ mode: "normal" | "agent" | "textInput" }>()
+    .action(async ({ input }) => {
+      setPanelMode(input.mode)
+      return { success: true }
+    }),
 
   debugPanelState: t.procedure.action(async () => {
     const panel = WINDOWS.get("panel")
@@ -487,6 +521,21 @@ export const router = {
     return { success: true }
   }),
 
+
+  clearAgentSessionProgress: t.procedure
+    .input<{ sessionId: string }>()
+    .action(async ({ input }) => {
+      const win = WINDOWS.get("panel")
+      if (win) {
+        try {
+          getRendererHandlers<RendererHandlers>(win.webContents).clearAgentSessionProgress?.send(input.sessionId)
+        } catch (e) {
+          console.warn("[tipc] clearAgentSessionProgress send failed:", e)
+        }
+      }
+      return { success: true }
+    }),
+
   closeAgentModeAndHidePanelWindow: t.procedure.action(async () => {
     closeAgentModeAndHidePanelWindow()
     return { success: true }
@@ -518,10 +567,10 @@ export const router = {
       // Stop the session in the state manager (aborts LLM requests, kills processes)
       agentSessionStateManager.stopSession(input.sessionId)
 
-      // Clean up the session state (removes from state.agentSessions)
-      agentSessionStateManager.cleanupSession(input.sessionId)
+      // Do NOT cleanup here; allow the session loop to finish and clean up itself
+      // This ensures a final "stopped" progress update is emitted to the UI
 
-      // Mark the session as stopped in the tracker
+      // Mark the session as stopped in the tracker (removes from active sessions UI)
       agentSessionTracker.stopSession(input.sessionId)
 
       return { success: true }
@@ -1679,6 +1728,8 @@ export const router = {
       win.setMaximumSize(finalWidth + 1000, finalHeight + 1000) // Allow growth
 
       // Set the actual size
+      // Mark manual resize to avoid immediate mode re-apply fighting user
+      markManualResize()
       win.setSize(finalWidth, finalHeight, true) // animate = true
       return { width: finalWidth, height: finalHeight }
     }),
@@ -1714,14 +1765,9 @@ export const router = {
       return { mode: input.mode, size: { width: input.width, height: input.height } }
     }),
 
-  // Get current panel mode
+  // Get current panel mode (from centralized window state)
   getPanelMode: t.procedure.action(async () => {
-    if (state.isTextInputActive) {
-      return "textInput"
-    } else if (state.isAgentModeActive) {
-      return "agent"
-    }
-    return "normal"
+    return getCurrentPanelMode()
   }),
 
   initializePanelSize: t.procedure.action(async () => {

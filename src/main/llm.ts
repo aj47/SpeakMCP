@@ -254,6 +254,7 @@ async function emitAgentProgress(update: AgentProgressUpdate) {
   }
 
   console.log(`[llm.ts emitAgentProgress] Called for session ${update.sessionId}, panel visible: ${panel.isVisible()}, isSnoozed: ${update.isSnoozed}`)
+  console.log(`[llm.ts emitAgentProgress] conversationHistory length: ${update.conversationHistory?.length || 0}, roles: [${update.conversationHistory?.map(m => m.role).join(', ') || 'none'}]`)
 
   // Only show the panel window if it's not visible AND the session is not snoozed
   if (!panel.isVisible() && update.sessionId) {
@@ -573,6 +574,12 @@ export async function processTranscriptWithAgentMode(
     return history.slice(-8) // Last 8 messages provide sufficient context
   }
 
+  console.log(`[llm.ts processTranscriptWithAgentMode] Initializing conversationHistory for session ${currentSessionId}`)
+  console.log(`[llm.ts processTranscriptWithAgentMode] previousConversationHistory length: ${previousConversationHistory?.length || 0}`)
+  if (previousConversationHistory && previousConversationHistory.length > 0) {
+    console.log(`[llm.ts processTranscriptWithAgentMode] previousConversationHistory roles: [${previousConversationHistory.map(m => m.role).join(', ')}]`)
+  }
+
   const conversationHistory: Array<{
     role: "user" | "assistant" | "tool"
     content: string
@@ -583,6 +590,8 @@ export async function processTranscriptWithAgentMode(
     ...(previousConversationHistory || []),
     { role: "user", content: transcript, timestamp: Date.now() },
   ]
+
+  console.log(`[llm.ts processTranscriptWithAgentMode] conversationHistory initialized with ${conversationHistory.length} messages, roles: [${conversationHistory.map(m => m.role).join(', ')}]`)
 
   // Helper function to convert conversation history to the format expected by AgentProgressUpdate
   const formatConversationForProgress = (
@@ -1437,6 +1446,15 @@ Always use actual resource IDs from the conversation history or create new ones 
         content: toolResultsText,
         toolResults: meaningfulResults,
         timestamp: Date.now(),
+      })
+
+      // Emit progress update immediately after adding tool results so UI shows them
+      emit({
+        currentIteration: iteration,
+        maxIterations,
+        steps: progressSteps.slice(-3),
+        isComplete: false,
+        conversationHistory: formatConversationForProgress(conversationHistory),
       })
     }
 

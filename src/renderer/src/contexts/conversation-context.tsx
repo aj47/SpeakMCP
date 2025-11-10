@@ -174,7 +174,9 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
           iteration: `${update.currentIteration}/${update.maxIterations}`,
           isComplete: update.isComplete,
           isSnoozed: update.isSnoozed,
-          stepsCount: update.steps.length
+          stepsCount: update.steps.length,
+          conversationHistoryLength: update.conversationHistory?.length || 0,
+          conversationHistoryRoles: update.conversationHistory?.map(m => m.role).join(', ') || 'none'
         })
 
         // Update the progress map for this specific session
@@ -190,6 +192,11 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
           }
 
           // Compare key properties to determine if update is needed
+          const prevHistoryLen = prevProgress.conversationHistory?.length ?? 0
+          const newHistoryLen = update.conversationHistory?.length ?? 0
+          const prevLastTimestamp = prevProgress.conversationHistory?.[prevHistoryLen - 1]?.timestamp ?? 0
+          const newLastTimestamp = update.conversationHistory?.[newHistoryLen - 1]?.timestamp ?? 0
+
           const hasChanged =
             prevProgress.isComplete !== update.isComplete ||
             prevProgress.currentIteration !== update.currentIteration ||
@@ -197,7 +204,9 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
             JSON.stringify(prevProgress.steps) !==
               JSON.stringify(update.steps) ||
             prevProgress.finalContent !== update.finalContent ||
-            prevProgress.isSnoozed !== update.isSnoozed
+            prevProgress.isSnoozed !== update.isSnoozed ||
+            prevHistoryLen !== newHistoryLen ||
+            prevLastTimestamp !== newLastTimestamp
 
           if (hasChanged) {
             logUI('[ConversationContext] Progress changed for session:', sessionId)
@@ -238,6 +247,15 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
           saveCompleteConversationHistory(update.conversationId, update.conversationHistory).catch(() => {
             // Silently handle error
           })
+
+          // Clear currentConversationId when agent session completes
+          // This ensures the next text input starts a fresh conversation
+          // If user wants to continue this conversation, they can explicitly click "continue"
+          // which will set the conversationId again via continueConversation()
+          if (currentConversationId === update.conversationId) {
+            logUI('[ConversationContext] Clearing currentConversationId after agent completion:', update.conversationId)
+            setCurrentConversationId(null)
+          }
         }
       },
     )

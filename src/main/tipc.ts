@@ -199,39 +199,6 @@ async function processWithAgentMode(
   let conversationTitle = text.length > 50 ? text.substring(0, 50) + "..." : text
   const sessionId = agentSessionTracker.startSession(conversationId, conversationTitle)
 
-  // Emit initial progress immediately so the session is restorable from sidebar
-  await emitAgentProgress({
-    sessionId,
-    conversationId,
-    currentIteration: 0,
-    maxIterations: config.mcpMaxIterations ?? 10,
-    steps: [
-      {
-        id: `init_${Date.now()}`,
-        type: "thinking",
-        title: "Starting agent session",
-        description: text.length > 100 ? text.substring(0, 100) + "..." : text,
-        status: "in_progress",
-        timestamp: Date.now(),
-      },
-    ],
-    isComplete: false,
-    conversationHistory: [
-      {
-        role: "user",
-        content: text,
-        timestamp: Date.now(),
-      },
-    ],
-  })
-
-  // Focus this session in the panel window so it's immediately visible
-  try {
-    getWindowRendererHandlers("panel")?.focusAgentSession.send(sessionId)
-  } catch (e) {
-    console.warn("[tipc] Failed to focus new agent session:", e)
-  }
-
   try {
     if (!config.mcpToolsEnabled) {
       throw new Error("MCP tools are not enabled")
@@ -254,27 +221,33 @@ async function processWithAgentMode(
       }
 
       // Load previous conversation history if continuing a conversation
+      // IMPORTANT: Load this BEFORE emitting initial progress to ensure consistency
       let previousConversationHistory:
         | Array<{
             role: "user" | "assistant" | "tool"
             content: string
             toolCalls?: any[]
             toolResults?: any[]
+            timestamp?: number
           }>
         | undefined
 
       if (conversationId) {
+        console.log(`[tipc.ts processWithAgentMode] Loading conversation history for conversationId: ${conversationId}`)
         const conversation =
           await conversationService.loadConversation(conversationId)
 
         if (conversation && conversation.messages.length > 0) {
+          console.log(`[tipc.ts processWithAgentMode] Loaded conversation with ${conversation.messages.length} messages`)
           // Convert conversation messages to the format expected by agent mode
           // Exclude the last message since it's the current user input that will be added
           const messagesToConvert = conversation.messages.slice(0, -1)
+          console.log(`[tipc.ts processWithAgentMode] Converting ${messagesToConvert.length} messages (excluding last message)`)
           previousConversationHistory = messagesToConvert.map((msg) => ({
             role: msg.role,
             content: msg.content,
             toolCalls: msg.toolCalls,
+            timestamp: msg.timestamp,
             // Convert toolResults from stored format (content as string) to MCPToolResult format (content as array)
             toolResults: msg.toolResults?.map((tr) => ({
               content: [
@@ -287,7 +260,55 @@ async function processWithAgentMode(
               isError: !tr.success,
             })),
           }))
+          console.log(`[tipc.ts processWithAgentMode] previousConversationHistory roles: [${previousConversationHistory.map(m => m.role).join(', ')}]`)
+        } else {
+          console.log(`[tipc.ts processWithAgentMode] No conversation found or conversation is empty`)
         }
+      } else {
+        console.log(`[tipc.ts processWithAgentMode] No conversationId provided, starting fresh conversation`)
+      }
+
+      // Build the complete conversation history that will be used throughout the session
+      // This ensures consistency between initial progress and all subsequent updates
+      const fullConversationHistory = [
+        ...(previousConversationHistory || []),
+        {
+          role: "user" as const,
+          content: text,
+          timestamp: Date.now(),
+        },
+      ]
+
+      // Emit initial progress with the COMPLETE conversation history
+      // This prevents UI inconsistencies where the first emit shows only the new message
+      // while subsequent emits show the full history
+      console.log(`[tipc.ts processWithAgentMode] Emitting initial progress for session ${sessionId}`)
+      console.log(`[tipc.ts processWithAgentMode] fullConversationHistory length: ${fullConversationHistory.length}, roles: [${fullConversationHistory.map(m => m.role).join(', ')}]`)
+
+      await emitAgentProgress({
+        sessionId,
+        conversationId,
+        currentIteration: 0,
+        maxIterations: config.mcpMaxIterations ?? 10,
+        steps: [
+          {
+            id: `init_${Date.now()}`,
+            type: "thinking",
+            title: "Starting agent session",
+            description: text.length > 100 ? text.substring(0, 100) + "..." : text,
+            status: "in_progress",
+            timestamp: Date.now(),
+          },
+        ],
+        isComplete: false,
+        conversationHistory: fullConversationHistory,
+      })
+
+      // Focus this session in the panel window so it's immediately visible
+      try {
+        getWindowRendererHandlers("panel")?.focusAgentSession.send(sessionId)
+      } catch (e) {
+        console.warn("[tipc] Failed to focus new agent session:", e)
       }
 
       const agentResult = await processTranscriptWithAgentMode(

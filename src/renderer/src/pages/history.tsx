@@ -314,7 +314,27 @@ export function Component() {
           </header>
 
           <div className="flex-1 overflow-hidden bg-muted/30">
-            {selectedHistoryItem && selectedHistoryItemQuery.data ? (
+            {selectedHistoryItemQuery.isError ? (
+              <div className="flex h-full items-center justify-center p-8 text-center">
+                <div>
+                  <Eye className="mx-auto mb-4 h-12 w-12 text-destructive" />
+                  <h3 className="mb-2 text-lg font-semibold">
+                    Error loading conversation
+                  </h3>
+                  <p className="text-muted-foreground">
+                    Failed to load conversation data. The file may be missing or corrupted.
+                  </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleBackToList}
+                    className="mt-4"
+                  >
+                    Back to list
+                  </Button>
+                </div>
+              </div>
+            ) : selectedHistoryItem && selectedHistoryItemQuery.data && Array.isArray(selectedHistoryItemQuery.data.messages) ? (
               <div className="flex h-full flex-col">
                 <div className="border-b bg-background p-4">
                   <div className="flex items-center justify-between">
@@ -338,6 +358,26 @@ export function Component() {
                     maxHeight="100%"
                     className="h-full"
                   />
+                </div>
+              </div>
+            ) : selectedHistoryItem && selectedHistoryItemQuery.data && !Array.isArray(selectedHistoryItemQuery.data.messages) ? (
+              <div className="flex h-full items-center justify-center p-8 text-center">
+                <div>
+                  <Eye className="mx-auto mb-4 h-12 w-12 text-destructive" />
+                  <h3 className="mb-2 text-lg font-semibold">
+                    Invalid conversation data
+                  </h3>
+                  <p className="text-muted-foreground">
+                    This conversation data appears to be corrupted or incomplete.
+                  </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleBackToList}
+                    className="mt-4"
+                  >
+                    Back to list
+                  </Button>
                 </div>
               </div>
             ) : (

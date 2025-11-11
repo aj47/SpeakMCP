@@ -268,43 +268,9 @@ async function processWithAgentMode(
         console.log(`[tipc.ts processWithAgentMode] No conversationId provided, starting fresh conversation`)
       }
 
-      // Build the complete conversation history that will be used throughout the session
-      // This ensures consistency between initial progress and all subsequent updates
-      const fullConversationHistory = [
-        ...(previousConversationHistory || []),
-        {
-          role: "user" as const,
-          content: text,
-          timestamp: Date.now(),
-        },
-      ]
-
-      // Emit initial progress with the COMPLETE conversation history
-      // This prevents UI inconsistencies where the first emit shows only the new message
-      // while subsequent emits show the full history
-      console.log(`[tipc.ts processWithAgentMode] Emitting initial progress for session ${sessionId}`)
-      console.log(`[tipc.ts processWithAgentMode] fullConversationHistory length: ${fullConversationHistory.length}, roles: [${fullConversationHistory.map(m => m.role).join(', ')}]`)
-
-      await emitAgentProgress({
-        sessionId,
-        conversationId,
-        currentIteration: 0,
-        maxIterations: config.mcpMaxIterations ?? 10,
-        steps: [
-          {
-            id: `init_${Date.now()}`,
-            type: "thinking",
-            title: "Starting agent session",
-            description: text.length > 100 ? text.substring(0, 100) + "..." : text,
-            status: "in_progress",
-            timestamp: Date.now(),
-          },
-        ],
-        isComplete: false,
-        conversationHistory: fullConversationHistory,
-      })
-
       // Focus this session in the panel window so it's immediately visible
+      // Note: Initial progress will be emitted by processTranscriptWithAgentMode
+      // to avoid duplicate user messages in the conversation history
       try {
         getWindowRendererHandlers("panel")?.focusAgentSession.send(sessionId)
       } catch (e) {

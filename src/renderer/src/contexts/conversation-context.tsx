@@ -240,22 +240,33 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
         // Save complete conversation history when agent completes
         // Use conversation ID from the update (sent by backend) instead of local state
         // This ensures we save even if the frontend context doesn't have the ID set
-        if (update.isComplete &&
-            update.conversationId &&
+        if (update.isComplete && update.conversationId) {
+          if (
             update.conversationHistory &&
-            update.conversationHistory.length > 0) {
-          saveCompleteConversationHistory(update.conversationId, update.conversationHistory).catch(() => {
-            // Silently handle error
-          })
-
-          // Clear currentConversationId when agent session completes
-          // This ensures the next text input starts a fresh conversation
-          // If user wants to continue this conversation, they can explicitly click "continue"
-          // which will set the conversationId again via continueConversation()
-          if (currentConversationId === update.conversationId) {
-            logUI('[ConversationContext] Clearing currentConversationId after agent completion:', update.conversationId)
-            setCurrentConversationId(null)
+            update.conversationHistory.length > 0
+          ) {
+            saveCompleteConversationHistory(
+              update.conversationId,
+              update.conversationHistory,
+            ).catch(() => {
+              // Silently handle error
+            })
           }
+
+          // Clear currentConversationId when this agent session's conversation completes
+          // This ensures the next text input starts a fresh conversation.
+          // If user wants to continue this conversation, they can explicitly click "continue",
+          // which will set the conversationId again via continueConversation().
+          setCurrentConversationId((prev) => {
+            if (prev === update.conversationId) {
+              logUI(
+                '[ConversationContext] Clearing currentConversationId after agent completion:',
+                update.conversationId,
+              )
+              return null
+            }
+            return prev
+          })
         }
       },
     )

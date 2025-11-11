@@ -59,7 +59,7 @@ export function Component() {
     endConversation,
     continueConversation,
   } = useConversationActions()
-  const { currentConversationId, focusedSessionId, agentProgressById } = useConversation()
+  const { currentConversationId, focusedSessionId, agentProgressById, lastCompletedConversationId } = useConversation()
 
   // Check if we have multiple active (non-snoozed) sessions
   const activeSessionCount = Array.from(agentProgressById.values())
@@ -141,7 +141,7 @@ export function Component() {
       const result = await tipcClient.createMcpRecording({
         recording: arrayBuffer,
         duration,
-        conversationId: currentConversationId || undefined,
+        conversationId: currentConversationId || lastCompletedConversationId || undefined,
       })
 
       // Update conversation ID if backend created/returned one
@@ -404,7 +404,7 @@ export function Component() {
       if ((config as any).mcpToolsEnabled) {
         mcpTextInputMutation.mutate({
           text,
-          conversationId: currentConversation?.id,
+          conversationId: currentConversation?.id ?? currentConversationId ?? lastCompletedConversationId ?? undefined,
         })
       } else {
         textInputMutation.mutate({ text })

@@ -26,6 +26,10 @@ interface ConversationContextType {
   currentConversationId: string | null
   isConversationActive: boolean
 
+  // Last completed conversation (used to enable one-click/voice continuation)
+  lastCompletedConversationId: string | null
+
+
   // Conversation management
   startNewConversation: (
     firstMessage: string,
@@ -68,6 +72,10 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
   >(null)
   const [showContinueButton, setShowContinueButton] = useState(false)
   const [isWaitingForResponse, setIsWaitingForResponse] = useState(false)
+
+
+  // Track the last completed conversation so we can continue it
+  const [lastCompletedConversationId, setLastCompletedConversationId] = useState<string | null>(null)
 
   // Store progress per session (Map<sessionId, AgentProgressUpdate>)
   const [agentProgressById, setAgentProgressById] = useState<Map<string, AgentProgressUpdate>>(new Map())
@@ -253,6 +261,9 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
             })
           }
 
+          // Remember this conversation as the most recent completed one so the user can continue it
+          setLastCompletedConversationId(update.conversationId)
+
           // Clear currentConversationId when this agent session's conversation completes
           // This ensures the next text input starts a fresh conversation.
           // If user wants to continue this conversation, they can explicitly click "continue",
@@ -400,6 +411,8 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
     currentConversation,
     currentConversationId,
     isConversationActive,
+    lastCompletedConversationId,
+
     startNewConversation,
     continueConversation,
     addMessage,

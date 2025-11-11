@@ -10,7 +10,7 @@ import { useConversation } from "@renderer/contexts/conversation-context"
 import { AudioPlayer } from "@renderer/components/audio-player"
 import { useConfigQuery } from "@renderer/lib/queries"
 import { useTheme } from "@renderer/contexts/theme-context"
-import { logUI } from "@renderer/lib/debug"
+import { logUI, logExpand } from "@renderer/lib/debug"
 
 interface AgentProgressProps {
   progress: AgentProgressUpdate | null
@@ -22,7 +22,7 @@ interface AgentProgressProps {
 
 // Types for unified tool execution display items
 type DisplayItem =
-  | { kind: "message"; data: {
+  | { kind: "message"; id: string; data: {
       role: "user" | "assistant" | "tool"
       content: string
       isComplete: boolean
@@ -31,11 +31,10 @@ type DisplayItem =
       toolCalls?: Array<{ name: string; arguments: any }>
       toolResults?: Array<{ success: boolean; content: string; error?: string }>
     } }
-  | { kind: "tool_execution"; data: {
+  | { kind: "tool_execution"; id: string; data: {
       timestamp: number
       calls: Array<{ name: string; arguments: any }>
       results: Array<{ success: boolean; content: string; error?: string }>
-      id?: string // Stable ID for tracking expansion state
     } }
 
 
@@ -515,10 +514,15 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
 
   // Helper to toggle expansion state for a specific item
   const toggleItemExpansion = (itemKey: string) => {
-    setExpandedItems(prev => ({
-      ...prev,
-      [itemKey]: !prev[itemKey]
-    }))
+    setExpandedItems(prev => {
+      const from = !!prev[itemKey]
+      const to = !from
+      logExpand("AgentProgress", "toggle", { itemKey, from, to })
+      return {
+        ...prev,
+        [itemKey]: to,
+      }
+    })
   }
 
   // Kill switch handler - stop only this session
@@ -721,24 +725,41 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
     return Math.abs(hash).toString(36)
   }
 
+  // Stable string hash for IDs (32-bit -> base36)
+  const hashString = (s: string) => {
+    let h = 0
+    for (let i = 0; i < s.length; i++) {
+      h = ((h << 5) - h) + s.charCodeAt(i)
+      h |= 0
+    }
+    return Math.abs(h).toString(36)
+  }
+
+  // Stable message id independent of streaming content; timestamp+role is sufficient
+  const messageStableId = (m: { timestamp: number; role: string; content: string }) => {
+    return `${m.timestamp}-${m.role}`
+  }
+
   // Build unified display items that combine tool calls with subsequent results
   const displayItems: DisplayItem[] = []
+  const roleCounters: Record<'user' | 'assistant' | 'tool', number> = { user: 0, assistant: 0, tool: 0 }
   for (let i = 0; i < messages.length; i++) {
     const m = messages[i]
     if (m.role === "assistant" && m.toolCalls && m.toolCalls.length > 0) {
       const next = messages[i + 1]
       const results = next && next.role === "tool" && next.toolResults ? next.toolResults : []
-      // Show assistant message without extras
-      displayItems.push({ kind: "message", data: { ...m, toolCalls: undefined, toolResults: undefined } })
+      // Show assistant message without extras (stable key by role ordinal)
+      const aIndex = ++roleCounters.assistant
+      displayItems.push({ kind: "message", id: `msg-assistant-${aIndex}`, data: { ...m, toolCalls: undefined, toolResults: undefined } })
       // Unified execution bubble with stable ID
       const toolExecId = generateToolExecutionId(m.toolCalls)
       displayItems.push({
         kind: "tool_execution",
+        id: `exec-${toolExecId}`,
         data: {
           timestamp: next?.timestamp ?? m.timestamp,
           calls: m.toolCalls,
           results,
-          id: toolExecId, // Add stable ID
         },
       })
       if (next && next.role === "tool" && next.toolResults) {
@@ -750,9 +771,12 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
       !(i > 0 && messages[i - 1].role === "assistant" && (messages[i - 1].toolCalls?.length ?? 0) > 0)
     ) {
       // Standalone tool result without a preceding assistant call in sequence
-      displayItems.push({ kind: "tool_execution", data: { timestamp: m.timestamp, calls: [], results: m.toolResults, id: `standalone-${i}` } })
+      const tIndex = ++roleCounters.tool
+      displayItems.push({ kind: "tool_execution", id: `exec-standalone-${tIndex}` , data: { timestamp: m.timestamp, calls: [], results: m.toolResults } })
     } else {
-      displayItems.push({ kind: "message", data: m })
+      // Regular message (user/assistant/tool) with stable ordinal per role
+      const idx = ++roleCounters[m.role]
+      displayItems.push({ kind: "message", id: `msg-${m.role}-${idx}`, data: m })
     }
   }
 
@@ -928,9 +952,9 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
           {displayItems.length > 0 ? (
             <div className="space-y-1 p-2">
               {displayItems.map((item, index) => {
-                const itemKey = item.kind === "message"
-                  ? `msg-${item.data.timestamp}-${index}`
-                  : `exec-${item.data.id || item.data.timestamp}-${index}`
+                const itemKey = item.id || (item.kind === "message"
+                  ? `msg-${messageStableId(item.data as any)}`
+                  : `exec-${(item as any).data?.id || (item as any).data?.timestamp}`)
 
                 const isExpanded = !!expandedItems[itemKey]
 

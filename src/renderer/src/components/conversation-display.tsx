@@ -1,8 +1,8 @@
-import React, { useState } from "react"
+import React, { useState, useCallback } from "react"
 import { Card, CardContent } from "@renderer/components/ui/card"
 import { Badge } from "@renderer/components/ui/badge"
 import { ScrollArea } from "@renderer/components/ui/scroll-area"
-import { User, Bot, Wrench } from "lucide-react"
+import { User, Bot, Wrench, ChevronDown, ChevronUp } from "lucide-react"
 import { cn } from "@renderer/lib/utils"
 import { ConversationMessage } from "@shared/types"
 import { useConversationState } from "@renderer/contexts/conversation-context"
@@ -12,6 +12,10 @@ import { AudioPlayer } from "@renderer/components/audio-player"
 import { tipcClient } from "@renderer/lib/tipc-client"
 import { useConfigQuery } from "@renderer/lib/queries"
 import dayjs from "dayjs"
+
+import { logExpand } from "@renderer/lib/debug"
+
+const COLLAPSE_THRESHOLD = 200
 
 interface ConversationDisplayProps {
   messages: ConversationMessage[]
@@ -26,6 +30,37 @@ export function ConversationDisplay({
 }: ConversationDisplayProps) {
   const isFullHeight = maxHeight === "100%"
   const { agentProgress, isAgentProcessing } = useConversationState()
+
+
+
+  // Persistent expansion state for messages and <think> sections
+  const [expandedMessages, setExpandedMessages] = useState<Record<string, boolean>>({})
+  const [expandedThinks, setExpandedThinks] = useState<Record<string, boolean>>({})
+
+  const toggleMessageExpansion = useCallback(
+    (id: string) =>
+      setExpandedMessages((prev) => {
+        const from = !!prev[id]
+        const to = !from
+        logExpand("ConversationDisplay.message", "toggle", { id, from, to })
+        return { ...prev, [id]: to }
+      }),
+    [],
+  )
+
+  const toggleThinkExpansion = useCallback(
+    (key: string) =>
+      setExpandedThinks((prev) => {
+        const from = !!prev[key]
+        const to = !from
+        logExpand("ConversationDisplay.think", "toggle", { key, from, to })
+        return { ...prev, [key]: to }
+      }),
+    [],
+  )
+
+  const makeThinkKeyForMessage = (messageId: string) => (_content: string, index: number) =>
+    `${messageId}|think|${index}`
 
   if (messages.length === 0) {
     return (
@@ -57,6 +92,13 @@ export function ConversationDisplay({
               key={message.id}
               message={message}
               isLast={index === messages.length - 1}
+              isExpanded={!!expandedMessages[message.id]}
+              onToggleExpand={() => toggleMessageExpansion(message.id)}
+              getThinkKey={makeThinkKeyForMessage(message.id)}
+              isThinkExpanded={(key) => !!expandedThinks[key]}
+              onToggleThink={toggleThinkExpansion}
+              hasExpandedThink={Object.keys(expandedThinks).some((k) => k.startsWith(`${message.id}|think|`) && expandedThinks[k])}
+
             />
           ))}
 
@@ -85,6 +127,13 @@ export function ConversationDisplay({
               key={message.id}
               message={message}
               isLast={index === messages.length - 1}
+              isExpanded={!!expandedMessages[message.id]}
+              onToggleExpand={() => toggleMessageExpansion(message.id)}
+              getThinkKey={makeThinkKeyForMessage(message.id)}
+              isThinkExpanded={(key) => !!expandedThinks[key]}
+              onToggleThink={toggleThinkExpansion}
+              hasExpandedThink={Object.keys(expandedThinks).some((k) => k.startsWith(`${message.id}|think|`) && expandedThinks[k])}
+
             />
           ))}
 
@@ -107,11 +156,23 @@ export function ConversationDisplay({
 interface ConversationMessageItemProps {
   message: ConversationMessage
   isLast?: boolean
+  isExpanded?: boolean
+  onToggleExpand?: () => void
+  getThinkKey?: (content: string, index: number) => string
+  isThinkExpanded?: (key: string) => boolean
+  onToggleThink?: (key: string) => void
+  hasExpandedThink?: boolean
 }
 
 function ConversationMessageItem({
   message,
   isLast,
+  isExpanded = false,
+  onToggleExpand,
+  getThinkKey,
+  isThinkExpanded,
+  onToggleThink,
+  hasExpandedThink = false,
 }: ConversationMessageItemProps) {
   const configQuery = useConfigQuery()
   const [audioData, setAudioData] = useState<ArrayBuffer | null>(null)
@@ -184,6 +245,7 @@ function ConversationMessageItem({
       default:
         return null
     }
+
   }
 
   const getRoleColor = (role: string) => {
@@ -216,6 +278,9 @@ function ConversationMessageItem({
       return dayjs(timestamp).format("MMM D, HH:mm")
     }
   }
+
+  const hasExtras = (message.toolCalls?.length ?? 0) > 0 || (message.toolResults?.length ?? 0) > 0
+  const shouldCollapse = message.content.length > COLLAPSE_THRESHOLD || hasExtras
 
   return (
     <div
@@ -261,10 +326,30 @@ function ConversationMessageItem({
               </div>
             </>
           )}
+          {shouldCollapse && (
+            <button
+              type="button"
+              onClick={() => onToggleExpand && onToggleExpand()}
+              className="ml-auto inline-flex items-center text-xs text-muted-foreground hover:text-foreground"
+              aria-expanded={isExpanded}
+            >
+              {isExpanded ? (
+                <ChevronUp className="h-3 w-3" />
+              ) : (
+                <ChevronDown className="h-3 w-3" />
+              )}
+              <span className="ml-1">{isExpanded ? "Collapse" : "Expand"}</span>
+            </button>
+          )}
         </div>
 
-        <div className="modern-text-strong">
-          <MarkdownRenderer content={message.content} />
+        <div className={cn("leading-relaxed text-left", !isExpanded && !hasExpandedThink && shouldCollapse && "line-clamp-3")}>
+          <MarkdownRenderer
+            content={message.content}
+            getThinkKey={getThinkKey}
+            isThinkExpanded={isThinkExpanded}
+            onToggleThink={onToggleThink}
+          />
         </div>
 
         {/* TTS Audio Player - only show for assistant messages */}

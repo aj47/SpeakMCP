@@ -1,4 +1,4 @@
-import React, { useState } from "react"
+import React, { useState, useId } from "react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import rehypeHighlight from "rehype-highlight"
@@ -6,44 +6,69 @@ import { ChevronDown, ChevronRight, Brain } from "lucide-react"
 import { cn } from "@renderer/lib/utils"
 import "highlight.js/styles/github.css"
 
+import { logExpand } from "@renderer/lib/debug"
+
 interface MarkdownRendererProps {
   content: string
   className?: string
+  // Optional controls for <think> sections expansion persistence
+  getThinkKey?: (content: string, index: number) => string
+  isThinkExpanded?: (key: string) => boolean
+  onToggleThink?: (key: string) => void
 }
 
 interface ThinkSectionProps {
   content: string
   defaultCollapsed?: boolean
+  // Controlled mode (optional)
+  isCollapsed?: boolean
+  onToggle?: () => void
 }
 
 const ThinkSection: React.FC<ThinkSectionProps> = ({
   content,
   defaultCollapsed = true,
+  isCollapsed,
+  onToggle,
 }) => {
-  const [isCollapsed, setIsCollapsed] = useState(defaultCollapsed)
+  const [internalCollapsed, setInternalCollapsed] = useState(defaultCollapsed)
+  const collapsed = isCollapsed ?? internalCollapsed
+
+  const handleToggle = () => {
+    if (onToggle) {
+      onToggle()
+    } else {
+      const prev = internalCollapsed
+      setInternalCollapsed(!prev)
+      // Only log in uncontrolled mode so we don't duplicate logs when parent controls the state
+      logExpand("ThinkSection", "toggle", { fromCollapsed: prev, toCollapsed: !prev })
+    }
+  }
+
+  const uid = useId()
 
   return (
     <div className="my-4 overflow-hidden rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30">
       <button
-        onClick={() => setIsCollapsed(!isCollapsed)}
+        onClick={handleToggle}
         className="flex w-full items-center gap-2 p-3 text-left transition-colors hover:bg-amber-100 dark:hover:bg-amber-900/30"
-        aria-expanded={!isCollapsed}
-        aria-controls="think-content"
+        aria-expanded={!collapsed}
+        aria-controls={`think-content-${uid}`}
       >
-        {isCollapsed ? (
+        {collapsed ? (
           <ChevronRight className="h-4 w-4 text-amber-600 dark:text-amber-400" />
         ) : (
           <ChevronDown className="h-4 w-4 text-amber-600 dark:text-amber-400" />
         )}
         <Brain className="h-4 w-4 text-amber-600 dark:text-amber-400" />
         <span className="text-sm font-medium text-amber-800 dark:text-amber-200">
-          {isCollapsed ? "Show thinking process" : "Hide thinking process"}
+          {collapsed ? "Show thinking process" : "Hide thinking process"}
         </span>
       </button>
 
-      {!isCollapsed && (
+      {!collapsed && (
         <div
-          id="think-content"
+          id={`think-content-${uid}`}
           className="px-3 pb-3 text-sm text-amber-900 dark:text-amber-100"
         >
           <div className="prose prose-sm prose-amber dark:prose-invert max-w-none">
@@ -102,6 +127,9 @@ const parseThinkSections = (content: string) => {
 export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
   content,
   className,
+  getThinkKey,
+  isThinkExpanded,
+  onToggleThink,
 }) => {
   const parts = parseThinkSections(content)
 
@@ -111,11 +139,15 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
     >
       {parts.map((part, index) => {
         if (part.type === "think") {
+          const keyBase = getThinkKey ? getThinkKey(part.content, index) : `think-${index}`
+          const isControlled = !!(isThinkExpanded && onToggleThink)
+          const expanded = isControlled ? !!isThinkExpanded!(keyBase) : undefined
           return (
             <ThinkSection
-              key={`think-${index}`}
+              key={keyBase}
               content={part.content}
               defaultCollapsed={true}
+              {...(isControlled ? { isCollapsed: !expanded, onToggle: () => onToggleThink!(keyBase) } : {})}
             />
           )
         } else {

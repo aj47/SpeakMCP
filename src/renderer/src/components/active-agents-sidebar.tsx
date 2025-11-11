@@ -4,7 +4,7 @@ import { tipcClient } from "@renderer/lib/tipc-client"
 import { Activity, ChevronDown, ChevronRight, X, Minimize2, Maximize2 } from "lucide-react"
 import { cn } from "@renderer/lib/utils"
 import { useConversation } from "@renderer/contexts/conversation-context"
-import { logUI, logStateChange } from "@renderer/lib/debug"
+import { logUI, logStateChange, logExpand } from "@renderer/lib/debug"
 import { useNavigate } from "react-router-dom"
 
 interface AgentSession {
@@ -33,7 +33,7 @@ export function ActiveAgentsSidebar() {
   const [isExpanded, setIsExpanded] = useState(() => {
     const stored = localStorage.getItem(STORAGE_KEY)
     const initial = stored !== null ? stored === 'true' : true
-    logUI('[ActiveAgentsSidebar] Initial expand state:', initial, 'from localStorage:', stored)
+    logExpand("ActiveAgentsSidebar", "init", { key: STORAGE_KEY, raw: stored, parsed: initial })
     return initial
   })
 
@@ -57,7 +57,15 @@ export function ActiveAgentsSidebar() {
   // Persist expand state to localStorage whenever it changes
   useEffect(() => {
     logStateChange('ActiveAgentsSidebar', 'isExpanded', !isExpanded, isExpanded)
-    localStorage.setItem(STORAGE_KEY, String(isExpanded))
+    logExpand("ActiveAgentsSidebar", "write", { key: STORAGE_KEY, value: isExpanded })
+    try {
+      const valueStr = String(isExpanded)
+      localStorage.setItem(STORAGE_KEY, valueStr)
+      const verify = localStorage.getItem(STORAGE_KEY)
+      logExpand("ActiveAgentsSidebar", "verify", { key: STORAGE_KEY, wrote: valueStr, readBack: verify })
+    } catch (e) {
+      logExpand("ActiveAgentsSidebar", "error", { key: STORAGE_KEY, error: e instanceof Error ? e.message : String(e) })
+    }
   }, [isExpanded])
 
   // Log when sessions change
@@ -143,7 +151,7 @@ export function ActiveAgentsSidebar() {
 
   const handleToggleExpand = () => {
     const newState = !isExpanded
-    logUI('[ActiveAgentsSidebar] Toggling expand:', { from: isExpanded, to: newState })
+    logExpand("ActiveAgentsSidebar", "toggle", { from: isExpanded, to: newState, source: "user" })
     setIsExpanded(newState)
   }
 

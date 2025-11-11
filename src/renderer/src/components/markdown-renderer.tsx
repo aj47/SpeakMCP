@@ -6,6 +6,8 @@ import { ChevronDown, ChevronRight, Brain } from "lucide-react"
 import { cn } from "@renderer/lib/utils"
 import "highlight.js/styles/github.css"
 
+import { logExpand } from "@renderer/lib/debug"
+
 interface MarkdownRendererProps {
   content: string
   className?: string
@@ -36,7 +38,10 @@ const ThinkSection: React.FC<ThinkSectionProps> = ({
     if (onToggle) {
       onToggle()
     } else {
-      setInternalCollapsed(!internalCollapsed)
+      const prev = internalCollapsed
+      setInternalCollapsed(!prev)
+      // Only log in uncontrolled mode so we don't duplicate logs when parent controls the state
+      logExpand("ThinkSection", "toggle", { fromCollapsed: prev, toCollapsed: !prev })
     }
   }
 

@@ -8,6 +8,20 @@ function ts(): string {
   return d.toISOString()
 }
 
+
+// Safely stringify values for single-line logs captured by main console logger
+function safeStringify(value: any): string {
+  try {
+    return JSON.stringify(value)
+  } catch {
+    try {
+      return String(value)
+    } catch {
+      return '[unserializable]'
+    }
+  }
+}
+
 /**
  * Log UI-related debug information
  * Includes focus events, re-renders, state changes, etc.
@@ -55,7 +69,20 @@ export function logFocus(element: string, event: 'focus' | 'blur', data?: any) {
  * Log state changes
  */
 export function logStateChange(component: string, stateName: string, oldValue: any, newValue: any) {
-  logUI(`[STATE] ${component}.${stateName}:`, { from: oldValue, to: newValue })
+  const detail = safeStringify({ from: oldValue, to: newValue })
+  // Important: put details into the same string so main console capture includes them
+  logUI(`[STATE] ${component}.${stateName}: ${detail}`)
+}
+
+
+/**
+ * Structured expand-state logging for consistent capture in killswitch logs.
+ * Example line:
+ *   [EXPAND] ActiveAgentsSidebar toggle {"from":true,"to":false}
+ */
+export function logExpand(component: string, event: string, data?: any) {
+  const suffix = data !== undefined ? ` ${safeStringify(data)}` : ''
+  logUI(`[EXPAND] ${component} ${event}${suffix}`)
 }
 
 /**

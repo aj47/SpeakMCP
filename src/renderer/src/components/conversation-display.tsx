@@ -13,6 +13,8 @@ import { tipcClient } from "@renderer/lib/tipc-client"
 import { useConfigQuery } from "@renderer/lib/queries"
 import dayjs from "dayjs"
 
+import { logExpand } from "@renderer/lib/debug"
+
 const COLLAPSE_THRESHOLD = 200
 
 interface ConversationDisplayProps {
@@ -37,13 +39,23 @@ export function ConversationDisplay({
 
   const toggleMessageExpansion = useCallback(
     (id: string) =>
-      setExpandedMessages((prev) => ({ ...prev, [id]: !prev[id] })),
+      setExpandedMessages((prev) => {
+        const from = !!prev[id]
+        const to = !from
+        logExpand("ConversationDisplay.message", "toggle", { id, from, to })
+        return { ...prev, [id]: to }
+      }),
     [],
   )
 
   const toggleThinkExpansion = useCallback(
     (key: string) =>
-      setExpandedThinks((prev) => ({ ...prev, [key]: !prev[key] })),
+      setExpandedThinks((prev) => {
+        const from = !!prev[key]
+        const to = !from
+        logExpand("ConversationDisplay.think", "toggle", { key, from, to })
+        return { ...prev, [key]: to }
+      }),
     [],
   )
 

@@ -930,42 +930,45 @@ export const router = {
         )
       }
 
-      // Use unified agent mode processing
-      const finalResponse = await processWithAgentMode(
-        input.text,
-        conversationId,
-      )
-
-      // Save to history
-      const history = getRecordingHistory()
-      const item: RecordingHistoryItem = {
-        id: Date.now().toString(),
-        createdAt: Date.now(),
-        duration: 0, // Text input has no duration
-        transcript: finalResponse,
-      }
-      history.push(item)
-      saveRecordingsHitory(history)
-
-      const main = WINDOWS.get("main")
-      if (main) {
-        getRendererHandlers<RendererHandlers>(
-          main.webContents,
-        ).refreshRecordingHistory.send()
-      }
-
-      // Auto-paste if enabled
-      if (config.mcpAutoPasteEnabled && state.focusedAppBeforeRecording) {
-        setTimeout(async () => {
-          try {
-            await writeText(finalResponse)
-          } catch (error) {
-            // Ignore paste errors
+      // Fire-and-forget: Start agent processing without blocking
+      // This allows multiple sessions to run concurrently
+      processWithAgentMode(input.text, conversationId)
+        .then((finalResponse) => {
+          // Save to history after completion
+          const history = getRecordingHistory()
+          const item: RecordingHistoryItem = {
+            id: Date.now().toString(),
+            createdAt: Date.now(),
+            duration: 0, // Text input has no duration
+            transcript: finalResponse,
           }
-        }, config.mcpAutoPasteDelay || 1000)
-      }
+          history.push(item)
+          saveRecordingsHitory(history)
 
-      // Return the conversation ID so frontend can use it
+          const main = WINDOWS.get("main")
+          if (main) {
+            getRendererHandlers<RendererHandlers>(
+              main.webContents,
+            ).refreshRecordingHistory.send()
+          }
+
+          // Auto-paste if enabled
+          if (config.mcpAutoPasteEnabled && state.focusedAppBeforeRecording) {
+            setTimeout(async () => {
+              try {
+                await writeText(finalResponse)
+              } catch (error) {
+                // Ignore paste errors
+              }
+            }, config.mcpAutoPasteDelay || 1000)
+          }
+        })
+        .catch((error) => {
+          console.error("[createMcpTextInput] Agent processing error:", error)
+        })
+
+      // Return immediately with conversation ID
+      // Progress updates will be sent via emitAgentProgress
       return { conversationId }
     }),
 
@@ -1062,39 +1065,41 @@ export const router = {
         }
       }
 
-      // Use unified agent mode processing
-      const finalResponse = await processWithAgentMode(
-        transcript,
-        conversationId,
-      )
-
-
-      // Save to history
-      const history = getRecordingHistory()
-      const item: RecordingHistoryItem = {
-        id: Date.now().toString(),
-        createdAt: Date.now(),
-        duration: input.duration,
-        transcript: finalResponse,
-      }
-      history.push(item)
-      saveRecordingsHitory(history)
-
+      // Save the recording file immediately
+      const recordingId = Date.now().toString()
       fs.writeFileSync(
-        path.join(recordingsFolder, `${item.id}.webm`),
+        path.join(recordingsFolder, `${recordingId}.webm`),
         Buffer.from(input.recording),
       )
 
-      const main = WINDOWS.get("main")
-      if (main) {
-        getRendererHandlers<RendererHandlers>(
-          main.webContents,
-        ).refreshRecordingHistory.send()
-      }
+      // Fire-and-forget: Start agent processing without blocking
+      // This allows multiple sessions to run concurrently
+      processWithAgentMode(transcript, conversationId)
+        .then((finalResponse) => {
+          // Save to history after completion
+          const history = getRecordingHistory()
+          const item: RecordingHistoryItem = {
+            id: recordingId,
+            createdAt: Date.now(),
+            duration: input.duration,
+            transcript: finalResponse,
+          }
+          history.push(item)
+          saveRecordingsHitory(history)
 
-      // Agent mode result is displayed in GUI - no clipboard or pasting logic needed
+          const main = WINDOWS.get("main")
+          if (main) {
+            getRendererHandlers<RendererHandlers>(
+              main.webContents,
+            ).refreshRecordingHistory.send()
+          }
+        })
+        .catch((error) => {
+          console.error("[createMcpRecording] Agent processing error:", error)
+        })
 
-      // Return the conversation ID so frontend can use it for subsequent requests
+      // Return immediately with conversation ID
+      // Progress updates will be sent via emitAgentProgress
       return { conversationId }
     }),
 

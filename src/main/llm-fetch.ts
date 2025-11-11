@@ -1111,11 +1111,10 @@ async function makeLLMCallAttempt(
       response.needsMoreWork = true
     }
     // Safety: If JSON says no more work but there are no toolCalls and the content
-    // looks like intent-only or contains tool-call markers, override to needsMoreWork=true
+    // contains tool-call markers, override to needsMoreWork=true
     const toolMarkers = /<\|tool_calls_section_begin\|>|<\|tool_call_begin\|>/i
     const text = (response.content || "").replace(/<\|[^|]*\|>/g, "").trim()
-    const intentOnly = /\b(fetching|get(ting)?|retriev(ing|e)|searching|planning|analyzing|processing|scanning|starting|preparing|i'?ll|i\s+will|let'?s|trying|attempting|checking|reading|writing|applying|connecting|opening|creating|updating|deleting|installing|running)\b/i.test(text)
-    if (response.needsMoreWork === false && (!response.toolCalls || response.toolCalls.length === 0) && (toolMarkers.test(text) || intentOnly)) {
+    if (response.needsMoreWork === false && (!response.toolCalls || response.toolCalls.length === 0) && toolMarkers.test(text)) {
       response.needsMoreWork = true
     }
 
@@ -1132,21 +1131,12 @@ async function makeLLMCallAttempt(
   }
 
   // If no valid JSON found, decide conservatively based on content
-  // If content contains tool-call markers or hints of planned tool usage,
-  // do NOT mark complete: keep needsMoreWork=true so the agent can iterate.
+  // If content contains tool-call markers, do NOT mark complete: keep needsMoreWork=true so the agent can iterate.
   const hasToolMarkers = /<\|tool_calls_section_begin\|>|<\|tool_call_begin\|>/i.test(content || "")
   const cleaned = (content || "").replace(/<\|[^|]*\|>/g, "").trim()
   if (hasToolMarkers) {
     if (isDebugLLM()) {
       logLLM("✅ Returning plain text with tool markers (needsMoreWork=true)")
-    }
-    return { content: cleaned, needsMoreWork: true }
-  }
-  // If the assistant only states intent (no JSON/toolCalls), treat as needing more work
-  const intentOnly = /\b(fetching|get(ting)?|retriev(ing|e)|searching|planning|analyzing|processing|scanning|starting|preparing|i'?ll|i\s+will|let'?s|trying|attempting|checking|reading|writing|applying|connecting|opening|creating|updating|deleting|installing|running)\b/i.test(cleaned)
-  if (intentOnly) {
-    if (isDebugLLM()) {
-      logLLM("✅ Returning intent-only response (needsMoreWork=true)")
     }
     return { content: cleaned, needsMoreWork: true }
   }

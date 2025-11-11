@@ -994,14 +994,6 @@ Always use actual resource IDs from the conversation history or create new ones 
 
       // Only apply aggressive heuristics if there are actually relevant tools for this request
       if (hasActionableTools) {
-        // If actionable tools exist and the assistant only states intent (no toolCalls), do not finalize.
-        const intentOnly = /\b(fetching|get(ting)?|retriev(ing|e)|searching|planning|analyzing|processing|scanning|starting|preparing|i'?ll|i\s+will|let'?s|trying|attempting|checking|reading|writing|applying|connecting|opening|creating|updating|deleting|installing|running)\b/i.test(contentText)
-        if (intentOnly && !hasToolResultsSoFar) {
-          conversationHistory.push({ role: "assistant", content: contentText.trim() })
-          conversationHistory.push({ role: "user", content: "Important: Use the available tools to actually perform the steps. Reply with a valid JSON object per the tool-calling schema, including a toolCalls array with concrete parameters. Do not only state intent." })
-          continue
-        }
-
         // If there are actionable tools and no tool results yet, do not verify or finalize.
         // Nudge the model to produce structured toolCalls to actually perform the work.
         if (!hasToolResultsSoFar) {

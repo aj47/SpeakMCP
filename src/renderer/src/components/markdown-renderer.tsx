@@ -1,4 +1,4 @@
-import React, { useState } from "react"
+import React, { useState, useId } from "react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import rehypeHighlight from "rehype-highlight"
@@ -45,13 +45,15 @@ const ThinkSection: React.FC<ThinkSectionProps> = ({
     }
   }
 
+  const uid = useId()
+
   return (
     <div className="my-4 overflow-hidden rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30">
       <button
         onClick={handleToggle}
         className="flex w-full items-center gap-2 p-3 text-left transition-colors hover:bg-amber-100 dark:hover:bg-amber-900/30"
         aria-expanded={!collapsed}
-        aria-controls="think-content"
+        aria-controls={`think-content-${uid}`}
       >
         {collapsed ? (
           <ChevronRight className="h-4 w-4 text-amber-600 dark:text-amber-400" />
@@ -66,7 +68,7 @@ const ThinkSection: React.FC<ThinkSectionProps> = ({
 
       {!collapsed && (
         <div
-          id="think-content"
+          id={`think-content-${uid}`}
           className="px-3 pb-3 text-sm text-amber-900 dark:text-amber-100"
         >
           <div className="prose prose-sm prose-amber dark:prose-invert max-w-none">

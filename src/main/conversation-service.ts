@@ -218,6 +218,17 @@ export class ConversationService {
         return null
       }
 
+      // Idempotency guard: avoid pushing consecutive duplicate messages
+      const last = conversation.messages[conversation.messages.length - 1]
+      const incomingContent = (content || "").trim()
+      const lastContent = (last?.content || "").trim()
+      if (last && last.role === role && lastContent === incomingContent) {
+        // No-op: duplicate of last message; just update updatedAt and return
+        conversation.updatedAt = Date.now()
+        await this.saveConversation(conversation)
+        return conversation
+      }
+
       const messageId = this.generateMessageId()
       const message: ConversationMessage = {
         id: messageId,

@@ -260,22 +260,7 @@ async function processWithAgentMode(
               isError: !tr.success,
             })),
           }))
-          // Collapse consecutive identical messages (same role+content)
-          if (previousConversationHistory && previousConversationHistory.length > 0) {
-            const deduped: typeof previousConversationHistory = []
-            for (const m of previousConversationHistory) {
-              const last = deduped[deduped.length - 1]
-              const mContent = (m.content || '').trim()
-              const lastContent = (last?.content || '').trim()
-              if (!last || last.role !== m.role || lastContent !== mContent) {
-                deduped.push(m)
-              }
-            }
-            if (deduped.length !== previousConversationHistory.length) {
-              console.log(`[tipc.ts processWithAgentMode] Deduplicated previous conversation messages from ${previousConversationHistory.length} to ${deduped.length}`)
-            }
-            previousConversationHistory = deduped
-          }
+
           console.log(`[tipc.ts processWithAgentMode] previousConversationHistory roles: [${previousConversationHistory.map(m => m.role).join(', ')}]`)
         } else {
           console.log(`[tipc.ts processWithAgentMode] No conversation found or conversation is empty`)

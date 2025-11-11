@@ -92,6 +92,17 @@ export class ConversationService {
     return preview.length > 200 ? `${preview.slice(0, 200)}...` : preview
   }
 
+  private isConsecutiveDuplicate(
+    last: ConversationMessage | undefined,
+    role: ConversationMessage["role"],
+    content: string,
+  ): boolean {
+    const incomingContent = (content || "").trim()
+    const lastContent = (last?.content || "").trim()
+    return !!last && last.role === role && lastContent === incomingContent
+  }
+
+
   async saveConversation(conversation: Conversation): Promise<void> {
     try {
       this.ensureConversationsFolder()
@@ -220,10 +231,7 @@ export class ConversationService {
 
       // Idempotency guard: avoid pushing consecutive duplicate messages
       const last = conversation.messages[conversation.messages.length - 1]
-      const incomingContent = (content || "").trim()
-      const lastContent = (last?.content || "").trim()
-      if (last && last.role === role && lastContent === incomingContent) {
-        // No-op: duplicate of last message; just update updatedAt and return
+      if (this.isConsecutiveDuplicate(last, role, content)) {
         conversation.updatedAt = Date.now()
         await this.saveConversation(conversation)
         return conversation

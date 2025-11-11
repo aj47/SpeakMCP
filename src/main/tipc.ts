@@ -1683,7 +1683,13 @@ export const router = {
 
   // Conversation Management
   getConversationHistory: t.procedure.action(async () => {
-    return conversationService.getConversationHistory()
+    console.log("[tipc] getConversationHistory called")
+    const result = await conversationService.getConversationHistory()
+    console.log("[tipc] getConversationHistory result:", {
+      count: result.length,
+      items: result.map(h => ({ id: h.id, title: h.title })),
+    })
+    return result
   }),
 
   loadConversation: t.procedure

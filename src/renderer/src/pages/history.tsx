@@ -60,6 +60,17 @@ export function Component() {
 
   const { continueConversation } = useConversationActions()
 
+  // Debug logging
+  useEffect(() => {
+    console.log("[History Page] historyQuery state:", {
+      isLoading: historyQuery.isLoading,
+      isError: historyQuery.isError,
+      error: historyQuery.error,
+      dataLength: historyQuery.data?.length,
+      data: historyQuery.data,
+    })
+  }, [historyQuery.isLoading, historyQuery.isError, historyQuery.data])
+
   // Handle route parameter for deep-linking to specific history item
   useEffect(() => {
     if (routeHistoryItemId) {
@@ -69,16 +80,33 @@ export function Component() {
   }, [routeHistoryItemId])
 
   const filteredHistory = useMemo(() => {
+    console.log("[History Page] Computing filteredHistory:", {
+      hasData: !!historyQuery.data,
+      dataLength: historyQuery.data?.length,
+      searchQuery,
+    })
+
     if (!historyQuery.data) return []
 
-    return historyQuery.data.filter(
+    const filtered = historyQuery.data.filter(
       (historyItem) =>
         historyItem.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         historyItem.preview.toLowerCase().includes(searchQuery.toLowerCase()),
     )
+
+    console.log("[History Page] Filtered history:", {
+      originalLength: historyQuery.data.length,
+      filteredLength: filtered.length,
+    })
+
+    return filtered
   }, [historyQuery.data, searchQuery])
 
   const groupedHistory = useMemo(() => {
+    console.log("[History Page] Computing groupedHistory from filteredHistory:", {
+      filteredLength: filteredHistory.length,
+    })
+
     const groups = new Map<string, ConversationHistoryItem[]>()
     const today = dayjs().format("YYYY-MM-DD")
     const yesterday = dayjs().subtract(1, "day").format("YYYY-MM-DD")

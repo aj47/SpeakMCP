@@ -43,7 +43,13 @@ export const useConversationHistoryQuery = () =>
   useQuery({
     queryKey: ["conversation-history"],
     queryFn: async () => {
+      console.log("[Query Client] Fetching conversation history...")
       const result = await tipcClient.getConversationHistory()
+      console.log("[Query Client] Conversation history result:", {
+        isArray: Array.isArray(result),
+        length: Array.isArray(result) ? result.length : "N/A",
+        result,
+      })
       return result
     },
   })

@@ -495,13 +495,19 @@ export async function processTranscriptWithAgentMode(
 
   // Store IDs for use in progress updates
   const currentConversationId = conversationId
-  const currentSessionId = sessionId || `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+  const currentSessionId =
+    sessionId || `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+  // Number of messages in the conversation history that predate this agent session.
+  // Used by the UI to show only this session's messages while still saving full history.
+  const sessionStartIndex = previousConversationHistory?.length || 0
 
   // Create session state for this agent run
   agentSessionStateManager.createSession(currentSessionId)
 
-  // Create bound emitter that always includes sessionId, conversationId, and snooze state
-  const emit = (update: Omit<AgentProgressUpdate, 'sessionId' | 'conversationId' | 'isSnoozed'>) => {
+  // Create bound emitter that always includes sessionId, conversationId, snooze state and sessionStartIndex
+  const emit = (
+    update: Omit<AgentProgressUpdate, 'sessionId' | 'conversationId' | 'isSnoozed'>,
+  ) => {
     const isSnoozed = agentSessionTracker.isSessionSnoozed(currentSessionId)
 
     // Fire and forget - don't await, but catch errors
@@ -510,6 +516,7 @@ export async function processTranscriptWithAgentMode(
       sessionId: currentSessionId,
       conversationId: currentConversationId,
       isSnoozed,
+      sessionStartIndex,
     }).catch(err => {
       console.warn("[emit] Failed to emit agent progress:", err)
     })

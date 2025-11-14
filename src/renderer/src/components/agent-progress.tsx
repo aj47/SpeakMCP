@@ -602,6 +602,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
     isComplete,
     finalContent,
     conversationHistory,
+    sessionStartIndex,
   } = progress
 
   // Detect if agent was stopped by kill switch
@@ -621,12 +622,20 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
   }> = []
 
   if (conversationHistory && conversationHistory.length > 0) {
-    // Use the complete conversation history (filter internal nudges)
+    // Use only the portion of the conversation history that belongs to this session
+    const startIndex =
+      typeof sessionStartIndex === "number" && sessionStartIndex > 0
+        ? Math.min(sessionStartIndex, conversationHistory.length)
+        : 0
+    const historyForSession =
+      startIndex > 0 ? conversationHistory.slice(startIndex) : conversationHistory
+
+    // Filter internal nudges from the visible history
     const isNudge = (c: string) =>
       c.includes("Please either take action using available tools") ||
       c.includes("You have relevant tools available for this request")
 
-    messages = conversationHistory
+    messages = historyForSession
       .filter((entry) => !(entry.role === "user" && isNudge(entry.content)))
       .map((entry) => ({
         role: entry.role,

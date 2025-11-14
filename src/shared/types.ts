@@ -135,6 +135,11 @@ export interface AgentProgressUpdate {
     toolResults?: Array<{ success: boolean; content: string; error?: string }>
     timestamp?: number
   }>
+  /**
+   * Index into conversationHistory where this agent session's messages begin.
+   * Entries before this index belong to previous sessions in the same conversation.
+   */
+  sessionStartIndex?: number
 }
 
 // Conversation Types

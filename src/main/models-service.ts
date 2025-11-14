@@ -35,6 +35,10 @@ async function fetchOpenAIModels(
   const url = `${baseUrl || "https://api.openai.com/v1"}/models`
   const isOpenRouter = baseUrl?.includes("openrouter.ai")
   const isCerebras = baseUrl?.includes("cerebras.ai")
+  const isNativeOpenAI =
+    !isOpenRouter && !isCerebras && (!baseUrl || baseUrl.includes("api.openai.com"))
+  const isGenericOpenAICompatible =
+    !isOpenRouter && !isCerebras && !!baseUrl && !baseUrl.includes("api.openai.com")
 
   // Log the request details for debugging
   diagnosticsService.logInfo(
@@ -97,7 +101,7 @@ async function fetchOpenAIModels(
     },
   )
 
-  // Different filtering logic for OpenRouter vs native OpenAI vs Cerebras
+  // Different filtering logic for OpenRouter, native OpenAI, Cerebras, and generic OpenAI-compatible
   let filteredModels = data.data
 
   if (isOpenRouter) {
@@ -128,7 +132,7 @@ async function fetchOpenAIModels(
         modelIds: filteredModels.map(m => m.id),
       },
     )
-  } else {
+  } else if (isNativeOpenAI) {
     // For native OpenAI, use the original restrictive filtering
     filteredModels = data.data.filter(
       (model) =>
@@ -136,6 +140,17 @@ async function fetchOpenAIModels(
         !model.id.includes(":") &&
         !model.id.includes("instruct") &&
         (model.id.includes("gpt") || model.id.includes("o1")),
+    )
+  } else if (isGenericOpenAICompatible) {
+    // For generic OpenAI-compatible providers (custom base URLs), be permissive:
+    // just ensure the model has a non-empty ID
+    filteredModels = data.data.filter(
+      (model) => model.id && model.id.length > 0,
+    )
+  } else {
+    // Fallback: basic validation
+    filteredModels = data.data.filter(
+      (model) => model.id && model.id.length > 0,
     )
   }
 
@@ -183,10 +198,18 @@ async function fetchOpenAIModels(
       }
     })
 
+  const providerLabel = isOpenRouter
+    ? "OpenRouter"
+    : isCerebras
+      ? "Cerebras"
+      : isNativeOpenAI
+        ? "OpenAI"
+        : "OpenAI-compatible"
+
   // Log final results
   diagnosticsService.logInfo(
     "models-service",
-    `Final models list for ${isCerebras ? 'Cerebras' : isOpenRouter ? 'OpenRouter' : 'OpenAI'}`,
+    `Final models list for ${providerLabel}`,
     {
       url,
       totalCount: finalModels.length,
@@ -393,8 +416,27 @@ function formatModelName(modelId: string): string {
 export async function fetchAvailableModels(
   providerId: string,
 ): Promise<ModelInfo[]> {
-  const cacheKey = providerId
+  const config = configStore.get()
+
+  // Include base URL in cache key so changing provider endpoints invalidates cache
+  const cacheKeyParts = [providerId]
+  if (providerId === "openai") {
+    cacheKeyParts.push(config.openaiBaseUrl || "https://api.openai.com/v1")
+  } else if (providerId === "groq") {
+    cacheKeyParts.push(config.groqBaseUrl || "https://api.groq.com/openai/v1")
+  } else if (providerId === "gemini") {
+    cacheKeyParts.push(
+      config.geminiBaseUrl || "https://generativelanguage.googleapis.com",
+    )
+  }
+
+  const cacheKey = cacheKeyParts.join("|")
   const cached = modelsCache.get(cacheKey)
+  const now = Date.now()
+  const cacheValid =
+    !!cached &&
+    now - cached.timestamp < CACHE_DURATION &&
+    cached.models.length > 0
 
   // Log the request
   diagnosticsService.logInfo(
@@ -402,24 +444,24 @@ export async function fetchAvailableModels(
     `Fetching models for provider: ${providerId}`,
     {
       providerId,
+      cacheKey,
       hasCached: !!cached,
-      cacheAge: cached ? Date.now() - cached.timestamp : null,
-      cacheValid: cached ? Date.now() - cached.timestamp < CACHE_DURATION : false,
+      cacheAge: cached ? now - cached.timestamp : null,
+      cacheValid,
     },
   )
 
   // Return cached result if still valid
-  if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+  if (cacheValid) {
     diagnosticsService.logInfo(
       "models-service",
       `Returning cached models for ${providerId}`,
-      { count: cached.models.length },
+      { count: cached?.models.length || 0 },
     )
-    return cached.models
+    return cached!.models
   }
 
   try {
-    const config = configStore.get()
     let models: ModelInfo[] = []
 
     // Log config details for debugging
@@ -466,11 +508,22 @@ export async function fetchAvailableModels(
       },
     )
 
-    // Cache the result
-    modelsCache.set(cacheKey, {
-      models,
-      timestamp: Date.now(),
-    })
+    // Cache the result only if we have at least one model
+    if (models.length > 0) {
+      modelsCache.set(cacheKey, {
+        models,
+        timestamp: now,
+      })
+    } else {
+      diagnosticsService.logInfo(
+        "models-service",
+        `Not caching empty models list for ${providerId}`,
+        {
+          providerId,
+          cacheKey,
+        },
+      )
+    }
 
     return models
   } catch (error) {

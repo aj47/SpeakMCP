@@ -1134,6 +1134,24 @@ export const router = {
       // Persist config
       configStore.save(next)
 
+      // Clear models cache if provider endpoints or API keys changed
+      try {
+        const providerConfigChanged =
+          (prev as any)?.openaiBaseUrl !== (merged as any)?.openaiBaseUrl ||
+          (prev as any)?.openaiApiKey !== (merged as any)?.openaiApiKey ||
+          (prev as any)?.groqBaseUrl !== (merged as any)?.groqBaseUrl ||
+          (prev as any)?.groqApiKey !== (merged as any)?.groqApiKey ||
+          (prev as any)?.geminiBaseUrl !== (merged as any)?.geminiBaseUrl ||
+          (prev as any)?.geminiApiKey !== (merged as any)?.geminiApiKey
+
+        if (providerConfigChanged) {
+          const { clearModelsCache } = await import("./models-service")
+          clearModelsCache()
+        }
+      } catch (_e) {
+        // best-effort only; cache will eventually expire
+      }
+
       // Apply login item setting when configuration changes (production only; dev would launch bare Electron)
       try {
         if ((process.env.NODE_ENV === "production" || !process.env.ELECTRON_RENDERER_URL) && process.platform !== "linux") {

@@ -52,8 +52,11 @@ export function ModelSelector({
 
   const handleRefresh = async () => {
     setIsRefreshing(true)
-    await modelsQuery.refetch()
-    setIsRefreshing(false)
+    try {
+      await modelsQuery.refetch()
+    } finally {
+      setIsRefreshing(false)
+    }
   }
 
   // Auto-select first model if no value is set and models are available

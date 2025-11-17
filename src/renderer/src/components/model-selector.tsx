@@ -23,8 +23,6 @@ interface ModelSelectorProps {
   disabled?: boolean
 }
 
-const CUSTOM_MODEL_KEY = "__custom_model__"
-
 export function ModelSelector({
   providerId,
   value,
@@ -39,6 +37,7 @@ export function ModelSelector({
   const [isOpen, setIsOpen] = useState(false)
   const [useCustomModel, setUseCustomModel] = useState(false)
   const [customModelName, setCustomModelName] = useState("")
+  const [lastDropdownValue, setLastDropdownValue] = useState<string | undefined>()
   const searchInputRef = useRef<HTMLInputElement>(null)
   const customInputRef = useRef<HTMLInputElement>(null)
 
@@ -58,17 +57,18 @@ export function ModelSelector({
   })
 
   // Check if current value is a custom model (not in the list)
+  // Only auto-detect if not already in custom mode to prevent unwanted toggling
   useEffect(() => {
-    if (value && modelsQuery.data && modelsQuery.data.length > 0) {
+    if (value && modelsQuery.data && !useCustomModel) {
       const isInList = modelsQuery.data.some(model => model.id === value)
-      if (!isInList && value !== CUSTOM_MODEL_KEY) {
+      if (!isInList) {
         // Current value is a custom model
         setUseCustomModel(true)
         setCustomModelName(value)
         logUI('[ModelSelector] Detected custom model:', value)
       }
     }
-  }, [value, modelsQuery.data])
+  }, [value, modelsQuery.data, useCustomModel])
 
   const handleRefresh = async () => {
     setIsRefreshing(true)
@@ -80,12 +80,13 @@ export function ModelSelector({
   }
 
   // Auto-select first model if no value is set and models are available
+  // Also auto-select if custom model name is empty
   useEffect(() => {
-    if (!value && modelsQuery.data && modelsQuery.data.length > 0 && !useCustomModel) {
+    if (!value && modelsQuery.data && modelsQuery.data.length > 0 && (!useCustomModel || !customModelName)) {
       logUI('[ModelSelector] Auto-selecting first model:', modelsQuery.data[0].id)
       onValueChange(modelsQuery.data[0].id)
     }
-  }, [value, modelsQuery.data, useCustomModel]) // Remove onValueChange from dependencies to prevent infinite loops
+  }, [value, modelsQuery.data, useCustomModel, customModelName]) // Remove onValueChange from dependencies to prevent infinite loops
 
   // Clear search when dropdown closes and manage focus
   useEffect(() => {
@@ -142,18 +143,22 @@ export function ModelSelector({
       // Switching back to dropdown
       setUseCustomModel(false)
       setCustomModelName("")
-      // Select first model from list if available
-      if (allModels.length > 0) {
-        onValueChange(allModels[0].id)
+      // Restore previous dropdown selection or select first model
+      const valueToRestore = lastDropdownValue && allModels.some(m => m.id === lastDropdownValue)
+        ? lastDropdownValue
+        : allModels[0]?.id
+      if (valueToRestore) {
+        onValueChange(valueToRestore)
       }
     } else {
       // Switching to custom input
       setUseCustomModel(true)
+      setLastDropdownValue(value)
       setCustomModelName(value || "")
       // Focus the custom input after state update
-      setTimeout(() => {
+      requestAnimationFrame(() => {
         customInputRef.current?.focus()
-      }, 0)
+      })
     }
   }
 
@@ -215,6 +220,7 @@ export function ModelSelector({
           value={value}
           onValueChange={(newValue) => {
             logUI('[ModelSelector] Select onValueChange:', newValue)
+            setLastDropdownValue(newValue)
             onValueChange(newValue)
           }}
           disabled={disabled || isLoading || allModels.length === 0}

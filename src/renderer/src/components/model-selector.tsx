@@ -57,18 +57,26 @@ export function ModelSelector({
   })
 
   // Check if current value is a custom model (not in the list)
-  // Only auto-detect if not already in custom mode to prevent unwanted toggling
+  // Synchronize mode with value: switch to custom if value not in list, switch to dropdown if it is
   useEffect(() => {
-    if (value && modelsQuery.data && !useCustomModel) {
+    if (value && modelsQuery.data) {
       const isInList = modelsQuery.data.some(model => model.id === value)
       if (!isInList) {
-        // Current value is a custom model
-        setUseCustomModel(true)
-        setCustomModelName(value)
-        logUI('[ModelSelector] Detected custom model:', value)
+        // Current value is a custom model - switch to custom mode if not already
+        if (!useCustomModel || customModelName !== value) {
+          setUseCustomModel(true)
+          setCustomModelName(value)
+          logUI('[ModelSelector] Detected custom model:', value)
+        }
+      } else if (isInList && useCustomModel) {
+        // Value is now in the list but we're in custom mode - switch back to dropdown
+        setUseCustomModel(false)
+        setCustomModelName('')
+        logUI('[ModelSelector] Value now in list, switching to dropdown mode')
       }
     }
-  }, [value, modelsQuery.data, useCustomModel])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value, modelsQuery.data])
 
   const handleRefresh = async () => {
     setIsRefreshing(true)
@@ -80,13 +88,14 @@ export function ModelSelector({
   }
 
   // Auto-select first model if no value is set and models are available
-  // Also auto-select if custom model name is empty
+  // Only auto-select when not in custom mode to avoid state inconsistency
   useEffect(() => {
-    if (!value && modelsQuery.data && modelsQuery.data.length > 0 && (!useCustomModel || !customModelName)) {
+    if (!value && modelsQuery.data && modelsQuery.data.length > 0 && !useCustomModel) {
       logUI('[ModelSelector] Auto-selecting first model:', modelsQuery.data[0].id)
       onValueChange(modelsQuery.data[0].id)
     }
-  }, [value, modelsQuery.data, useCustomModel, customModelName]) // Remove onValueChange from dependencies to prevent infinite loops
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value, modelsQuery.data, useCustomModel])
 
   // Clear search when dropdown closes and manage focus
   useEffect(() => {
@@ -143,12 +152,15 @@ export function ModelSelector({
       // Switching back to dropdown
       setUseCustomModel(false)
       setCustomModelName("")
-      // Restore previous dropdown selection or select first model
+      // Restore previous dropdown selection or select first model, or clear if no models
       const valueToRestore = lastDropdownValue && allModels.some(m => m.id === lastDropdownValue)
         ? lastDropdownValue
         : allModels[0]?.id
       if (valueToRestore) {
         onValueChange(valueToRestore)
+      } else {
+        // No models available, clear the value
+        onValueChange('')
       }
     } else {
       // Switching to custom input
@@ -162,10 +174,17 @@ export function ModelSelector({
     }
   }
 
-  // Handle custom model name change
+  // Handle custom model name change with validation and sanitization
   const handleCustomModelChange = (newValue: string) => {
-    setCustomModelName(newValue)
-    onValueChange(newValue)
+    // Sanitize: only allow alphanumeric, dots, hyphens, underscores, and colons (for provider:model format)
+    const sanitized = newValue.replace(/[^a-zA-Z0-9._:-]/g, '')
+    // Truncate to reasonable length to prevent DoS
+    const truncated = sanitized.substring(0, 100)
+    setCustomModelName(truncated)
+    // Only propagate non-empty values
+    if (truncated.trim()) {
+      onValueChange(truncated)
+    }
   }
 
   return (
@@ -210,9 +229,12 @@ export function ModelSelector({
             placeholder="Enter custom model name (e.g., gpt-4, claude-3-opus)"
             disabled={disabled}
             className="w-full"
+            maxLength={100}
+            pattern="[a-zA-Z0-9._:-]+"
+            title="Model name can only contain letters, numbers, dots, hyphens, underscores, and colons"
           />
           <p className="text-xs text-muted-foreground">
-            Enter any model name supported by your provider
+            Enter any model name supported by your provider (alphanumeric, dots, hyphens, underscores, colons only)
           </p>
         </div>
       ) : (

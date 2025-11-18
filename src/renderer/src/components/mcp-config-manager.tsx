@@ -649,6 +649,15 @@ const MCP_EXAMPLES: Record<string, { name: string; config: MCPServerConfig }> = 
       env: {},
     },
   },
+  playwright: {
+    name: "playwright",
+    config: {
+      transport: "stdio" as MCPTransportType,
+      command: "npx",
+      args: ["-y", "@playwright/mcp@latest"],
+      env: {},
+    },
+  },
 }
 
 export function MCPConfigManager({

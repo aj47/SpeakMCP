@@ -1,10 +1,12 @@
-import { rendererHandlers } from "@renderer/lib/tipc-client"
+import { rendererHandlers, tipcClient } from "@renderer/lib/tipc-client"
 import { cn } from "@renderer/lib/utils"
-import { useEffect } from "react"
+import { useEffect, useRef, useState } from "react"
 import { NavLink, Outlet, useNavigate, useLocation } from "react-router-dom"
 import { LoadingSpinner } from "@renderer/components/ui/loading-spinner"
 import { SettingsDragBar } from "@renderer/components/settings-drag-bar"
 import { ActiveAgentsSidebar } from "@renderer/components/active-agents-sidebar"
+import { DesktopRecorder } from "@renderer/lib/desktop-recorder"
+import { toast } from "sonner"
 
 type NavLink = {
   text: string
@@ -50,6 +52,150 @@ export const Component = () => {
     },
 
   ]
+
+  const desktopRecorderRef = useRef<DesktopRecorder | null>(null)
+  const desktopChunkPromisesRef = useRef<Promise<string>[]>([])
+  const [isDesktopRecording, setIsDesktopRecording] = useState(false)
+
+  // Initialize desktop + mic long recorder once
+  useEffect(() => {
+    console.log("[AppLayout] DesktopRecorder init effect running")
+    if (desktopRecorderRef.current) return
+
+    console.log("[AppLayout] Creating DesktopRecorder instance")
+    const recorder = (desktopRecorderRef.current = new DesktopRecorder())
+
+    recorder.on("session-start", () => {
+      console.log("[AppLayout] DesktopRecorder session-start")
+      setIsDesktopRecording(true)
+      desktopChunkPromisesRef.current = []
+      tipcClient.desktopRecordEvent({ type: "start" }).catch((error: any) => {
+        console.error(
+          "[DesktopRecorder] Failed to notify main of desktop recording start",
+          error,
+        )
+      })
+    })
+
+    recorder.on("chunk", (blob, duration) => {
+      console.log("[AppLayout] DesktopRecorder chunk; duration(ms):", duration)
+      const promise = (async () => {
+        const arrayBuffer = await blob.arrayBuffer()
+        const result = await tipcClient.transcribeAudioChunk({
+          recording: arrayBuffer,
+          duration: Math.round(duration),
+        })
+        return (result && result.transcript) || ""
+      })().catch((error: any) => {
+        console.error("[DesktopRecorder] Chunk transcription failed", error)
+        return ""
+      })
+
+      desktopChunkPromisesRef.current.push(promise)
+    })
+
+    recorder.on("session-end", async (finalBlob, totalDuration) => {
+      console.log(
+        "[AppLayout] DesktopRecorder session-end; totalDuration(ms):",
+        totalDuration,
+      )
+      setIsDesktopRecording(false)
+      try {
+        await tipcClient.desktopRecordEvent({ type: "end" })
+      } catch (error: any) {
+        console.error(
+          "[DesktopRecorder] Failed to notify main of desktop recording end",
+          error,
+        )
+      }
+
+      let transcripts: string[] = []
+      try {
+        transcripts = await Promise.all(desktopChunkPromisesRef.current)
+      } catch (error: any) {
+        console.error(
+          "[DesktopRecorder] Failed to resolve chunk transcripts",
+          error,
+        )
+      } finally {
+        desktopChunkPromisesRef.current = []
+      }
+
+      const mergedTranscript = transcripts.filter(Boolean).join("\n\n").trim()
+      console.log(
+        "[AppLayout] DesktopRecorder merged transcript length:",
+        mergedTranscript.length,
+      )
+      if (!mergedTranscript) {
+        return
+      }
+
+      const id = Date.now().toString()
+      const createdAt = Date.now()
+      const arrayBuffer = await finalBlob.arrayBuffer()
+
+      try {
+        await tipcClient.saveLongRecording({
+          id,
+          createdAt,
+          duration: Math.round(totalDuration),
+          transcript: mergedTranscript,
+          recording: arrayBuffer,
+        })
+      } catch (error: any) {
+        console.error("[DesktopRecorder] Failed to save long recording", error)
+      }
+    })
+
+    recorder.on("error", (error) => {
+      console.error(
+        "[DesktopRecorder] Error",
+        error?.name || "",
+        error?.message || "",
+        error,
+      )
+      toast.error(
+        error?.message || "Desktop recording failed. Screen capture may not be supported in this environment.",
+        error?.name ? { description: `Error type: ${error.name}` } : undefined,
+      )
+      setIsDesktopRecording(false)
+      desktopChunkPromisesRef.current = []
+      tipcClient.desktopRecordEvent({ type: "end" }).catch(() => {
+        // best-effort only
+      })
+    })
+  }, [])
+
+  // Listen for start/stop events triggered from the tray/menu
+  useEffect(() => {
+    console.log("[AppLayout] Subscribing to startDesktopRecording handler")
+    const unlisten = rendererHandlers.startDesktopRecording.listen(async () => {
+      console.log("[AppLayout] startDesktopRecording event received")
+      try {
+        await desktopRecorderRef.current?.start()
+      } catch (error) {
+        console.error("[DesktopRecorder] Failed to start from tray", error)
+      }
+    })
+
+    return () => {
+      console.log("[AppLayout] Unsubscribing from startDesktopRecording handler")
+      unlisten()
+    }
+  }, [])
+
+  useEffect(() => {
+    console.log("[AppLayout] Subscribing to stopDesktopRecording handler")
+    const unlisten = rendererHandlers.stopDesktopRecording.listen(() => {
+      console.log("[AppLayout] stopDesktopRecording event received")
+      desktopRecorderRef.current?.stop()
+    })
+
+    return () => {
+      console.log("[AppLayout] Unsubscribing from stopDesktopRecording handler")
+      unlisten()
+    }
+  }, [])
 
   useEffect(() => {
     return rendererHandlers.navigate.listen((url) => {
@@ -103,12 +249,29 @@ export const Component = () => {
           </div>
         </div>
       </div>
-      <div className="flex grow flex-col bg-background">
+      <div className="flex min-w-0 grow flex-col bg-background">
         {/* Draggable top bar for Mac - allows window dragging while content scrolls */}
         {process.env.IS_MAC && <SettingsDragBar />}
 
+        {/* Desktop recording banner */}
+        {isDesktopRecording && (
+          <div className="flex items-center justify-between border-b border-orange-200 bg-orange-50 px-3 py-2 text-xs text-orange-700 dark:border-orange-900/50 dark:bg-orange-900/30 dark:text-orange-200">
+            <span className="flex items-center gap-2">
+              <span className="i-mingcute-record-fill text-red-500" />
+              <span>Desktop recording in progress...</span>
+            </span>
+            <button
+              type="button"
+              className="rounded px-2 py-1 text-xs font-medium hover:bg-orange-100 dark:hover:bg-orange-800"
+              onClick={() => desktopRecorderRef.current?.stop()}
+            >
+              Stop
+            </button>
+          </div>
+        )}
+
         {/* Scrollable content area */}
-        <div className="flex-1 overflow-auto">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden">
           <Outlet />
         </div>
       </div>

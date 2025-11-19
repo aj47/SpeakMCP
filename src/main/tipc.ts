@@ -1104,6 +1104,103 @@ export const router = {
       return { conversationId }
     }),
 
+  transcribeAudioChunk: t.procedure
+    .input<{
+      recording: ArrayBuffer
+      duration: number
+    }>()
+    .action(async ({ input }) => {
+      // Reuse the same transcription provider configuration as createRecording
+      const config = configStore.get()
+
+      const form = new FormData()
+      form.append(
+        "file",
+        new File([input.recording], "recording.webm", { type: "audio/webm" }),
+      )
+      form.append(
+        "model",
+        config.sttProviderId === "groq" ? "whisper-large-v3" : "whisper-1",
+      )
+      form.append("response_format", "json")
+
+      // Add prompt parameter for Groq if provided
+      if (config.sttProviderId === "groq" && config.groqSttPrompt?.trim()) {
+        form.append("prompt", config.groqSttPrompt.trim())
+      }
+
+      // Add language parameter if specified
+      const languageCode = config.sttProviderId === "groq"
+        ? config.groqSttLanguage || config.sttLanguage
+        : config.openaiSttLanguage || config.sttLanguage;
+
+      if (languageCode && languageCode !== "auto") {
+        form.append("language", languageCode)
+      }
+
+      const groqBaseUrl = config.groqBaseUrl || "https://api.groq.com/openai/v1"
+      const openaiBaseUrl = config.openaiBaseUrl || "https://api.openai.com/v1"
+
+      const transcriptResponse = await fetch(
+        config.sttProviderId === "groq"
+          ? `${groqBaseUrl}/audio/transcriptions`
+          : `${openaiBaseUrl}/audio/transcriptions`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${config.sttProviderId === "groq" ? config.groqApiKey : config.openaiApiKey}`,
+          },
+          body: form,
+        },
+      )
+
+      if (!transcriptResponse.ok) {
+        const message = `${transcriptResponse.statusText} ${(await transcriptResponse.text()).slice(0, 300)}`
+        throw new Error(message)
+      }
+
+      const json: { text: string } = await transcriptResponse.json()
+
+      return {
+        transcript: json.text,
+      }
+    }),
+
+  saveLongRecording: t.procedure
+    .input<{
+      id: string
+      createdAt: number
+      duration: number
+      transcript: string
+      recording: ArrayBuffer
+    }>()
+    .action(async ({ input }) => {
+      fs.mkdirSync(recordingsFolder, { recursive: true })
+
+      const history = getRecordingHistory()
+      const item: RecordingHistoryItem = {
+        id: input.id,
+        createdAt: input.createdAt,
+        duration: input.duration,
+        transcript: input.transcript,
+      }
+      history.push(item)
+      saveRecordingsHitory(history)
+
+      fs.writeFileSync(
+        path.join(recordingsFolder, `${input.id}.webm`),
+        Buffer.from(input.recording),
+      )
+
+      const main = WINDOWS.get("main")
+      if (main) {
+        getRendererHandlers<RendererHandlers>(
+          main.webContents,
+        ).refreshRecordingHistory.send()
+      }
+    }),
+
+
   getRecordingHistory: t.procedure.action(async () => getRecordingHistory()),
 
   deleteRecordingItem: t.procedure
@@ -1194,10 +1291,23 @@ export const router = {
   recordEvent: t.procedure
     .input<{ type: "start" | "end" }>()
     .action(async ({ input }) => {
+      console.log("[tipc] recordEvent:", input.type)
       if (input.type === "start") {
         state.isRecording = true
       } else {
         state.isRecording = false
+      }
+      updateTrayIcon()
+    }),
+
+  desktopRecordEvent: t.procedure
+    .input<{ type: "start" | "end" }>()
+    .action(async ({ input }) => {
+      console.log("[tipc] desktopRecordEvent:", input.type)
+      if (input.type === "start") {
+        state.isDesktopRecordingActive = true
+      } else {
+        state.isDesktopRecordingActive = false
       }
       updateTrayIcon()
     }),

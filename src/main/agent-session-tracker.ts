@@ -138,7 +138,6 @@ class AgentSessionTracker {
   getActiveSessions(): AgentSession[] {
     const sessions = Array.from(this.sessions.values())
       .sort((a, b) => b.startTime - a.startTime)
-    console.log(`[AgentSessionTracker] getActiveSessions called, returning ${sessions.length} sessions:`, sessions.map(s => ({ id: s.id, title: s.conversationTitle, snoozed: s.isSnoozed })))
     return sessions
   }
 

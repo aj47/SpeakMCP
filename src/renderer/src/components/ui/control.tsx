@@ -73,13 +73,13 @@ export const ControlGroup = ({
   endDescription?: React.ReactNode
 }) => {
   return (
-    <div className={className}>
+    <div className={cn("w-full", className)}>
       {title && (
         <div className="mb-3">
           <span className="text-sm font-semibold">{title}</span>
         </div>
       )}
-      <div className="divide-y rounded-lg border">{children}</div>
+      <div className="divide-y rounded-lg border w-full">{children}</div>
       {endDescription && (
         <div className="mt-2 flex justify-end text-right text-xs text-muted-foreground">
           <div className="max-w-[70%]">{endDescription}</div>

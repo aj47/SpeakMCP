@@ -14,7 +14,6 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@renderer/components/ui/tooltip"
-import { playSound } from "@renderer/lib/sound"
 
 export function Component() {
   const historyQuery = useQuery({
@@ -78,6 +77,7 @@ export function Component() {
     })
   }, [])
 
+
   return (
     <>
       <header className="app-drag-region flex h-12 shrink-0 items-center justify-between border-b bg-background px-4 text-sm">
@@ -126,8 +126,8 @@ export function Component() {
           )}
         </div>
       ) : (
-        <div className="grow overflow-auto px-8 py-8">
-          <div className="grid gap-5">
+        <div className="px-8 py-8">
+          <div className="flex w-full flex-col gap-5">
             {historyGroupsByDate.map((group) => {
               return (
                 <ControlGroup
@@ -145,7 +145,7 @@ export function Component() {
                     return (
                       <div
                         key={item.id}
-                        className="hover:modern-panel-subtle flex items-center justify-between gap-5 rounded-lg p-4 transition-all duration-200"
+                        className="hover:modern-panel-subtle flex w-full items-center justify-between gap-5 rounded-lg p-4 transition-all duration-200"
                       >
                         <TooltipProvider>
                           <Tooltip delayDuration={0} disableHoverableContent>
@@ -162,7 +162,7 @@ export function Component() {
                             </TooltipContent>
                           </Tooltip>
                         </TooltipProvider>
-                        <div className="grow select-text">
+                        <div className="min-w-0 grow select-text whitespace-pre-wrap break-words">
                           {item.transcript}
                         </div>
                         <div className="flex shrink-0 gap-2 text-sm">

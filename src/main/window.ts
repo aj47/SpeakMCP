@@ -136,11 +136,14 @@ export function showMainWindow(url?: string) {
   const win = WINDOWS.get("main")
 
   if (win) {
+    console.log("[window.ts] showMainWindow: reusing existing main window, url:", url)
     win.show()
     if (url) {
+      console.log("[window.ts] showMainWindow: sending navigate to", url)
       getRendererHandlers<RendererHandlers>(win.webContents).navigate.send(url)
     }
   } else {
+    console.log("[window.ts] showMainWindow: creating main window, url:", url)
     createMainWindow({ url })
   }
 }

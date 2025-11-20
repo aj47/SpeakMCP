@@ -9,7 +9,7 @@ import {
 import { Label } from "@renderer/components/ui/label"
 import { Input } from "@renderer/components/ui/input"
 import { useAvailableModelsQuery } from "@renderer/lib/query-client"
-import { AlertCircle, RefreshCw, Search } from "lucide-react"
+import { AlertCircle, RefreshCw, Search, Edit3 } from "lucide-react"
 import { Button } from "@renderer/components/ui/button"
 import { logUI, logFocus, logStateChange, logRender } from "@renderer/lib/debug"
 
@@ -35,7 +35,11 @@ export function ModelSelector({
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [isOpen, setIsOpen] = useState(false)
+  const [useCustomModel, setUseCustomModel] = useState(false)
+  const [customModelName, setCustomModelName] = useState("")
+  const [lastDropdownValue, setLastDropdownValue] = useState<string | undefined>()
   const searchInputRef = useRef<HTMLInputElement>(null)
+  const customInputRef = useRef<HTMLInputElement>(null)
 
   const modelsQuery = useAvailableModelsQuery(providerId, !!providerId)
 
@@ -46,9 +50,33 @@ export function ModelSelector({
       value,
       isOpen,
       searchQuery,
-      modelsCount: modelsQuery.data?.length
+      modelsCount: modelsQuery.data?.length,
+      useCustomModel,
+      customModelName
     })
   })
+
+  // Check if current value is a custom model (not in the list)
+  // Synchronize mode with value: switch to custom if value not in list, switch to dropdown if it is
+  useEffect(() => {
+    if (value && modelsQuery.data) {
+      const isInList = modelsQuery.data.some(model => model.id === value)
+      if (!isInList) {
+        // Current value is a custom model - switch to custom mode if not already
+        if (!useCustomModel || customModelName !== value) {
+          setUseCustomModel(true)
+          setCustomModelName(value)
+          logUI('[ModelSelector] Detected custom model:', value)
+        }
+      } else if (isInList && useCustomModel) {
+        // Value is now in the list but we're in custom mode - switch back to dropdown
+        setUseCustomModel(false)
+        setCustomModelName('')
+        logUI('[ModelSelector] Value now in list, switching to dropdown mode')
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value, modelsQuery.data])
 
   const handleRefresh = async () => {
     setIsRefreshing(true)
@@ -60,12 +88,14 @@ export function ModelSelector({
   }
 
   // Auto-select first model if no value is set and models are available
+  // Only auto-select when not in custom mode to avoid state inconsistency
   useEffect(() => {
-    if (!value && modelsQuery.data && modelsQuery.data.length > 0) {
+    if (!value && modelsQuery.data && modelsQuery.data.length > 0 && !useCustomModel) {
       logUI('[ModelSelector] Auto-selecting first model:', modelsQuery.data[0].id)
       onValueChange(modelsQuery.data[0].id)
     }
-  }, [value, modelsQuery.data]) // Remove onValueChange from dependencies to prevent infinite loops
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value, modelsQuery.data, useCustomModel])
 
   // Clear search when dropdown closes and manage focus
   useEffect(() => {
@@ -116,49 +146,123 @@ export function ModelSelector({
     )
   })
 
+  // Handle custom model toggle
+  const handleCustomModelToggle = () => {
+    if (useCustomModel) {
+      // Switching back to dropdown
+      setUseCustomModel(false)
+      setCustomModelName("")
+      // Restore previous dropdown selection or select first model, or clear if no models
+      const valueToRestore = lastDropdownValue && allModels.some(m => m.id === lastDropdownValue)
+        ? lastDropdownValue
+        : allModels[0]?.id
+      if (valueToRestore) {
+        onValueChange(valueToRestore)
+      } else {
+        // No models available, clear the value
+        onValueChange('')
+      }
+    } else {
+      // Switching to custom input
+      setUseCustomModel(true)
+      setLastDropdownValue(value)
+      setCustomModelName(value || "")
+      // Focus the custom input after state update
+      requestAnimationFrame(() => {
+        customInputRef.current?.focus()
+      })
+    }
+  }
+
+  // Handle custom model name change with validation and sanitization
+  const handleCustomModelChange = (newValue: string) => {
+    // Sanitize: only allow alphanumeric, dots, hyphens, underscores, and colons (for provider:model format)
+    const sanitized = newValue.replace(/[^a-zA-Z0-9._:-]/g, '')
+    // Truncate to reasonable length to prevent DoS
+    const truncated = sanitized.substring(0, 100)
+    setCustomModelName(truncated)
+    // Only propagate non-empty values
+    if (truncated.trim()) {
+      onValueChange(truncated)
+    }
+  }
+
   return (
     <div className={`space-y-2 ${className}`}>
       {label && (
         <div className="flex items-center justify-between">
           <Label className="text-sm font-medium">{label}</Label>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleRefresh}
-            disabled={isLoading || disabled}
-            className="h-6 px-2 text-xs ml-2 flex-shrink-0"
-          >
-            <RefreshCw
-              className={`h-3 w-3 ${isLoading ? "animate-spin" : ""}`}
-            />
-          </Button>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleCustomModelToggle}
+              disabled={disabled}
+              className="h-6 px-2 text-xs flex-shrink-0"
+              title={useCustomModel ? "Switch to model list" : "Use custom model name"}
+            >
+              <Edit3 className="h-3 w-3" />
+            </Button>
+            {!useCustomModel && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleRefresh}
+                disabled={isLoading || disabled}
+                className="h-6 px-2 text-xs flex-shrink-0"
+              >
+                <RefreshCw
+                  className={`h-3 w-3 ${isLoading ? "animate-spin" : ""}`}
+                />
+              </Button>
+            )}
+          </div>
         </div>
       )}
 
-      <Select
-        value={value}
-        onValueChange={(newValue) => {
-          logUI('[ModelSelector] Select onValueChange:', newValue)
-          onValueChange(newValue)
-        }}
-        disabled={disabled || isLoading || allModels.length === 0}
-        open={isOpen}
-        onOpenChange={(open) => {
-          logUI('[ModelSelector] Select onOpenChange:', open)
-          setIsOpen(open)
-        }}
-      >
-        <SelectTrigger className="w-full">
-          <SelectValue
-            placeholder={
-              isLoading
-                ? "Loading models..."
-                : hasError
-                  ? "Failed to load models"
-                  : placeholder || "Select a model"
-            }
+      {useCustomModel ? (
+        <div className="space-y-1">
+          <Input
+            ref={customInputRef}
+            value={customModelName}
+            onChange={(e) => handleCustomModelChange(e.target.value)}
+            placeholder="Enter custom model name (e.g., gpt-4, claude-3-opus)"
+            disabled={disabled}
+            className="w-full"
+            maxLength={100}
+            pattern="[a-zA-Z0-9._:-]+"
+            title="Model name can only contain letters, numbers, dots, hyphens, underscores, and colons"
           />
-        </SelectTrigger>
+          <p className="text-xs text-muted-foreground">
+            Enter any model name supported by your provider (alphanumeric, dots, hyphens, underscores, colons only)
+          </p>
+        </div>
+      ) : (
+        <Select
+          value={value}
+          onValueChange={(newValue) => {
+            logUI('[ModelSelector] Select onValueChange:', newValue)
+            setLastDropdownValue(newValue)
+            onValueChange(newValue)
+          }}
+          disabled={disabled || isLoading || allModels.length === 0}
+          open={isOpen}
+          onOpenChange={(open) => {
+            logUI('[ModelSelector] Select onOpenChange:', open)
+            setIsOpen(open)
+          }}
+        >
+          <SelectTrigger className="w-full">
+            <SelectValue
+              placeholder={
+                isLoading
+                  ? "Loading models..."
+                  : hasError
+                    ? "Failed to load models"
+                    : placeholder || "Select a model"
+              }
+            />
+          </SelectTrigger>
         <SelectContent
           className="max-h-[400px] w-[300px]"
           onCloseAutoFocus={(e) => {
@@ -261,14 +365,15 @@ export function ModelSelector({
           </div>
         </SelectContent>
       </Select>
+      )}
 
-      {hasError && (
+      {!useCustomModel && hasError && (
         <p className="text-xs text-destructive">
           Failed to load models. Using fallback options.
         </p>
       )}
 
-      {!hasError && allModels.length > 0 && (
+      {!useCustomModel && !hasError && allModels.length > 0 && (
         <p className="text-xs text-muted-foreground">
           {searchQuery.trim()
             ? `${filteredModels.length} of ${allModels.length} models match "${searchQuery}"`

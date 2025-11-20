@@ -54,7 +54,6 @@ export const Component = () => {
   ]
 
   const desktopRecorderRef = useRef<DesktopRecorder | null>(null)
-  const desktopChunkPromisesRef = useRef<Promise<string>[]>([])
   const [isDesktopRecording, setIsDesktopRecording] = useState(false)
 
   // Initialize desktop + mic long recorder once
@@ -68,7 +67,6 @@ export const Component = () => {
     recorder.on("session-start", () => {
       console.log("[AppLayout] DesktopRecorder session-start")
       setIsDesktopRecording(true)
-      desktopChunkPromisesRef.current = []
       tipcClient.desktopRecordEvent({ type: "start" }).catch((error: any) => {
         console.error(
           "[DesktopRecorder] Failed to notify main of desktop recording start",
@@ -77,28 +75,10 @@ export const Component = () => {
       })
     })
 
-    recorder.on("chunk", (blob, duration) => {
-      console.log("[AppLayout] DesktopRecorder chunk; duration(ms):", duration)
-      const promise = (async () => {
-        const arrayBuffer = await blob.arrayBuffer()
-        const result = await tipcClient.transcribeAudioChunk({
-          recording: arrayBuffer,
-          duration: Math.round(duration),
-        })
-        return (result && result.transcript) || ""
-      })().catch((error: any) => {
-        console.error("[DesktopRecorder] Chunk transcription failed", error)
-        return ""
-      })
 
-      desktopChunkPromisesRef.current.push(promise)
-    })
 
-    recorder.on("session-end", async (finalBlob, totalDuration) => {
-      console.log(
-        "[AppLayout] DesktopRecorder session-end; totalDuration(ms):",
-        totalDuration,
-      )
+    recorder.on("session-end", async () => {
+      console.log("[AppLayout] DesktopRecorder session-end")
       setIsDesktopRecording(false)
       try {
         await tipcClient.desktopRecordEvent({ type: "end" })
@@ -107,43 +87,6 @@ export const Component = () => {
           "[DesktopRecorder] Failed to notify main of desktop recording end",
           error,
         )
-      }
-
-      let transcripts: string[] = []
-      try {
-        transcripts = await Promise.all(desktopChunkPromisesRef.current)
-      } catch (error: any) {
-        console.error(
-          "[DesktopRecorder] Failed to resolve chunk transcripts",
-          error,
-        )
-      } finally {
-        desktopChunkPromisesRef.current = []
-      }
-
-      const mergedTranscript = transcripts.filter(Boolean).join("\n\n").trim()
-      console.log(
-        "[AppLayout] DesktopRecorder merged transcript length:",
-        mergedTranscript.length,
-      )
-      if (!mergedTranscript) {
-        return
-      }
-
-      const id = Date.now().toString()
-      const createdAt = Date.now()
-      const arrayBuffer = await finalBlob.arrayBuffer()
-
-      try {
-        await tipcClient.saveLongRecording({
-          id,
-          createdAt,
-          duration: Math.round(totalDuration),
-          transcript: mergedTranscript,
-          recording: arrayBuffer,
-        })
-      } catch (error: any) {
-        console.error("[DesktopRecorder] Failed to save long recording", error)
       }
     })
 
@@ -159,7 +102,6 @@ export const Component = () => {
         error?.name ? { description: `Error type: ${error.name}` } : undefined,
       )
       setIsDesktopRecording(false)
-      desktopChunkPromisesRef.current = []
       tipcClient.desktopRecordEvent({ type: "end" }).catch(() => {
         // best-effort only
       })

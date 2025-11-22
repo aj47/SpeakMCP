@@ -122,6 +122,7 @@ export interface AgentProgressStep {
 export interface AgentProgressUpdate {
   sessionId: string // Unique session identifier for progress routing
   conversationId?: string // Optional conversation ID for linking to conversation history
+  conversationTitle?: string // Title of the conversation/session for display in tabs
   currentIteration: number
   maxIterations: number
   steps: AgentProgressStep[]

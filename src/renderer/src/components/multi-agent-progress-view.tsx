@@ -50,7 +50,16 @@ export function MultiAgentProgressView({
 
   // Helper to get session title
   const getSessionTitle = (progress: AgentProgressUpdate): string => {
-    const userMessage = progress.conversationHistory?.find(m => m.role === "user")
+    // Use conversationTitle from progress update if available
+    if (progress.conversationTitle) {
+      return progress.conversationTitle
+    }
+
+    // Fallback: Use sessionStartIndex to find the first user message of THIS session
+    // (not from previous sessions in the same conversation)
+    const startIndex = typeof progress.sessionStartIndex === "number" ? progress.sessionStartIndex : 0
+    const sessionHistory = progress.conversationHistory?.slice(startIndex) || []
+    const userMessage = sessionHistory.find(m => m.role === "user")
     if (userMessage?.content) {
       return userMessage.content.length > 30
         ? userMessage.content.substring(0, 30) + "..."

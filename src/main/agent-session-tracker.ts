@@ -182,6 +182,13 @@ class AgentSessionTracker {
   }
 
   /**
+   * Get a session by ID
+   */
+  getSession(sessionId: string): AgentSession | undefined {
+    return this.sessions.get(sessionId)
+  }
+
+  /**
    * Check if a session is snoozed
    */
   isSessionSnoozed(sessionId: string): boolean {

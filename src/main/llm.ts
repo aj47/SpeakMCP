@@ -680,10 +680,6 @@ export async function processTranscriptWithAgentMode(
     conversationHistory: formatConversationForProgress(conversationHistory),
   })
 
-  // Get recent context for the LLM - no specific extraction needed
-  // Note: recentContext will be recalculated in each iteration to include new messages
-  const recentContext = extractRecentContext(conversationHistory)
-
   let iteration = 0
   let finalContent = ""
   let noOpCount = 0 // Track iterations without meaningful progress
@@ -753,11 +749,14 @@ export async function processTranscriptWithAgentMode(
     let contextAwarePrompt = systemPrompt
 
     // Add enhanced context instruction using LLM-based context extraction
+    // Recalculate recent context each iteration to include newly added messages
+    const currentSessionHistory = conversationHistory.slice(sessionStartIndex)
+    const recentContext = extractRecentContext(currentSessionHistory)
+
     if (recentContext.length > 1) {
       // Use LLM to extract useful context from conversation history
       // IMPORTANT: Only extract context from the current session's messages to prevent
       // context leakage between sessions. sessionStartIndex marks where this session began.
-      const currentSessionHistory = conversationHistory.slice(sessionStartIndex)
       const contextInfo = await extractContextFromHistory(
         currentSessionHistory,
         config,

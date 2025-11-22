@@ -227,6 +227,7 @@ export function listenToKeyboardEvents() {
   let isPressedCtrlKey = false
   let isPressedShiftKey = false
   let isPressedAltKey = false
+  let isPressedMetaKey = false
 
   // MCP tool calling state
   let isHoldingCtrlAltKey = false
@@ -338,6 +339,13 @@ export function listenToKeyboardEvents() {
             "isPressedCtrlAltKey =",
             isPressedCtrlAltKey,
           )
+        }
+      }
+
+      if (e.data.key === "MetaLeft" || e.data.key === "MetaRight") {
+        isPressedMetaKey = true
+        if (isDebugKeybinds()) {
+          logKeybinds("Meta key pressed, isPressedMetaKey =", isPressedMetaKey)
         }
       }
 
@@ -472,6 +480,7 @@ export function listenToKeyboardEvents() {
               ctrl: isPressedCtrlKey,
               shift: isPressedShiftKey,
               alt: isPressedAltKey,
+              meta: isPressedMetaKey,
             },
             effectiveKillSwitchHotkey,
           )
@@ -546,6 +555,7 @@ export function listenToKeyboardEvents() {
               ctrl: isPressedCtrlKey,
               shift: isPressedShiftKey,
               alt: isPressedAltKey,
+              meta: isPressedMetaKey,
             },
             effectiveTextInputShortcut,
           )
@@ -620,6 +630,7 @@ export function listenToKeyboardEvents() {
               ctrl: isPressedCtrlKey,
               shift: isPressedShiftKey,
               alt: isPressedAltKey,
+              meta: isPressedMetaKey,
             },
             effectiveSettingsHotkey,
           )
@@ -661,6 +672,7 @@ export function listenToKeyboardEvents() {
               ctrl: isPressedCtrlKey,
               shift: isPressedShiftKey,
               alt: isPressedAltKey,
+              meta: isPressedMetaKey,
             },
             effectiveMcpToolsShortcut,
           )
@@ -706,6 +718,7 @@ export function listenToKeyboardEvents() {
                     ctrl: isPressedCtrlKey,
                     shift: isPressedShiftKey,
                     alt: isPressedAltKey,
+                    meta: isPressedMetaKey,
                   },
                   effectiveMcpToolsShortcut,
                 )
@@ -775,6 +788,7 @@ export function listenToKeyboardEvents() {
               ctrl: isPressedCtrlKey,
               shift: isPressedShiftKey,
               alt: isPressedAltKey,
+              meta: isPressedMetaKey,
             },
             effectiveToggleShortcut,
           )
@@ -820,6 +834,7 @@ export function listenToKeyboardEvents() {
             ctrl: isPressedCtrlKey,
             shift: isPressedShiftKey,
             alt: isPressedAltKey,
+            meta: isPressedMetaKey,
           },
           effectiveRecordingShortcut,
         )
@@ -861,6 +876,7 @@ export function listenToKeyboardEvents() {
                   ctrl: isPressedCtrlKey,
                   shift: isPressedShiftKey,
                   alt: isPressedAltKey,
+                  meta: isPressedMetaKey,
                 },
                 effectiveRecordingShortcut,
               )
@@ -986,6 +1002,13 @@ export function listenToKeyboardEvents() {
         }
       }
 
+      if (e.data.key === "MetaLeft" || e.data.key === "MetaRight") {
+        isPressedMetaKey = false
+        if (isDebugKeybinds()) {
+          logKeybinds("Meta key released, isPressedMetaKey =", isPressedMetaKey)
+        }
+      }
+
       const currentConfig = configStore.get()
 
       // Handle custom shortcut key releases for hold mode
@@ -1009,6 +1032,7 @@ export function listenToKeyboardEvents() {
                 ctrl: isPressedCtrlKey,
                 shift: isPressedShiftKey,
                 alt: isPressedAltKey,
+                meta: isPressedMetaKey,
               },
               effectiveRecordingShortcut,
             )
@@ -1038,6 +1062,7 @@ export function listenToKeyboardEvents() {
                 ctrl: isPressedCtrlKey,
                 shift: isPressedShiftKey,
                 alt: isPressedAltKey,
+                meta: isPressedMetaKey,
               },
               effectiveMcpToolsShortcut,
             )

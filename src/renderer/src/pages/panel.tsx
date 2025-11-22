@@ -472,6 +472,12 @@ export function Component() {
     let targetMode: "agent" | "normal" | null = null
     if (anyActiveNonSnoozed) {
       targetMode = "agent"
+      // When switching to agent mode, stop any ongoing recording
+      if (recording) {
+        logUI('[Panel] Switching to agent mode - stopping ongoing recording')
+        isConfirmedRef.current = false
+        recorderRef.current?.stopRecording()
+      }
     } else if (isTextSubmissionPending) {
       targetMode = null // keep current size briefly to avoid flicker
     } else {
@@ -488,7 +494,7 @@ export function Component() {
     return () => {
       if (tid) clearTimeout(tid)
     }
-  }, [anyActiveNonSnoozed, textInputMutation.isPending, mcpTextInputMutation.isPending])
+  }, [anyActiveNonSnoozed, recording, textInputMutation.isPending, mcpTextInputMutation.isPending])
 
   // Note: We don't need to hide text input when agentProgress changes because:
   // 1. handleTextSubmit already hides it immediately on submit (line 375)
@@ -515,6 +521,12 @@ export function Component() {
       // Stop all TTS audio when clearing progress (ESC key pressed)
       ttsManager.stopAll()
 
+      // Stop any ongoing recording and reset recording state
+      if (recording) {
+        isConfirmedRef.current = false
+        recorderRef.current?.stopRecording()
+      }
+
       // Reset all mutations to clear isPending state
       transcribeMutation.reset()
       mcpTranscribeMutation.reset()
@@ -530,13 +542,19 @@ export function Component() {
     })
 
     return unlisten
-  }, [isConversationActive, endConversation, transcribeMutation, mcpTranscribeMutation, textInputMutation, mcpTextInputMutation])
+  }, [isConversationActive, endConversation, recording, transcribeMutation, mcpTranscribeMutation, textInputMutation, mcpTextInputMutation])
 
   // Emergency stop handler - stop all TTS audio and reset processing state
   useEffect(() => {
     const unlisten = rendererHandlers.emergencyStopAgent.listen(() => {
       console.log('[Panel] Emergency stop triggered - stopping all TTS audio and resetting state')
       ttsManager.stopAll()
+
+      // Stop any ongoing recording and reset recording state
+      if (recording) {
+        isConfirmedRef.current = false
+        recorderRef.current?.stopRecording()
+      }
 
       // Reset all processing states
       setMcpMode(false)
@@ -556,7 +574,7 @@ export function Component() {
     })
 
     return unlisten
-  }, [isConversationActive, endConversation, transcribeMutation, mcpTranscribeMutation, textInputMutation, mcpTextInputMutation])
+  }, [isConversationActive, endConversation, recording, transcribeMutation, mcpTranscribeMutation, textInputMutation, mcpTextInputMutation])
 
 
 	  // Auto-close the panel when there's nothing to show

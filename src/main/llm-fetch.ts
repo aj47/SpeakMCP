@@ -690,7 +690,7 @@ async function makeAPICallAttempt(
 
       // Log if this is a json_validate_failed error (will be retried)
       if (errorCode === 'json_validate_failed' && isDebugLLM()) {
-        logLLM("❌ Non-structured-output error, re-throwing:", error.message)
+        logLLM("❌ json_validate_failed error detected, will be retried with exponential backoff")
       }
 
       throw new HttpError(response.status, response.statusText, errorText, undefined, errorCode)

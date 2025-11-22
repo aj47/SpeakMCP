@@ -48,6 +48,17 @@ const testCases = [
       pathname: '/oauth/callback',
       code: 'test789'
     }
+  },
+  {
+    name: 'OAuth callback with uppercase protocol (Windows compatibility)',
+    url: 'SPEAKMCP://oauth/callback?code=test999&state=upper',
+    expected: {
+      protocol: 'speakmcp:', // URL constructor normalizes to lowercase
+      host: 'oauth',
+      pathname: '/callback',
+      code: 'test999',
+      state: 'upper'
+    }
   }
 ];
 
@@ -78,8 +89,8 @@ testCases.forEach((testCase, index) => {
     console.log(`  Full Path (host + pathname): ${fullPath}`);
     console.log(`  Normalized Pathname: ${normalizedPathname}`);
 
-    // Check protocol
-    const isOAuthProtocol = parsedUrl.protocol === 'speakmcp:' || parsedUrl.protocol === 'speakmcp';
+    // Check protocol (case-insensitive for cross-platform compatibility)
+    const isOAuthProtocol = parsedUrl.protocol.toLowerCase() === 'speakmcp:';
     const isOAuthPath = normalizedPathname === '/oauth/callback';
 
     console.log(`\nValidation:`);

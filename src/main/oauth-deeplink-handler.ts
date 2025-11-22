@@ -107,8 +107,8 @@ export class OAuthDeepLinkHandler {
       const pathname = fullPath.replace(/^\/+/, '/')
 
       // Check if this is an OAuth callback
-      // Accept both speakmcp: and speakmcp: protocols (with or without trailing colon)
-      const isOAuthProtocol = parsedUrl.protocol === 'speakmcp:' || parsedUrl.protocol === 'speakmcp'
+      // Use case-insensitive comparison for cross-platform compatibility (Windows may normalize to uppercase)
+      const isOAuthProtocol = parsedUrl.protocol.toLowerCase() === 'speakmcp:'
       const isOAuthPath = pathname === '/oauth/callback'
 
       if (isOAuthProtocol && isOAuthPath) {

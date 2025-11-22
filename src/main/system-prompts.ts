@@ -65,6 +65,8 @@ assistant: src/foo.c
 </example>
 
 RESPONSE FORMAT:
+CRITICAL: You MUST respond with valid JSON in one of these exact formats. Do NOT use markdown code blocks or any other formatting.
+
 For tool calls:
 {
   "toolCalls": [
@@ -81,7 +83,14 @@ For final responses (no more tools needed):
 {
   "content": "Your comprehensive final response with results",
   "needsMoreWork": false
-}`
+}
+
+IMPORTANT JSON FORMATTING RULES:
+1. Return ONLY the JSON object - no markdown, no code blocks, no extra text
+2. Ensure all strings are properly escaped (use \\" for quotes inside strings)
+3. The JSON must be valid and parseable
+4. Do not wrap the JSON in ```json or any other markers
+5. If you have a final answer, wrap it in the JSON format shown above`
 
 export const AGENT_MODE_ADDITIONS = `
 
@@ -95,6 +104,13 @@ WORKFLOW:
 4. Review results and determine next steps
 5. Continue iterating until the goal is fully achieved
 6. Only set needsMoreWork: false when the task is completely resolved
+
+CRITICAL REMINDER FOR EVERY RESPONSE:
+- ALWAYS return valid JSON in the exact format specified above
+- NEVER use markdown code blocks (no \`\`\`json)
+- NEVER add explanatory text before or after the JSON
+- If you have a final answer, wrap it in: {"content": "your answer here", "needsMoreWork": false}
+- Properly escape all special characters in JSON strings
 
 `
 

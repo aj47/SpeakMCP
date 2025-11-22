@@ -476,6 +476,8 @@ export function Component() {
       if (recording) {
         logUI('[Panel] Switching to agent mode - stopping ongoing recording')
         isConfirmedRef.current = false
+        setRecording(false)
+        setVisualizerData(() => getInitialVisualizerData())
         recorderRef.current?.stopRecording()
       }
     } else if (isTextSubmissionPending) {
@@ -494,7 +496,7 @@ export function Component() {
     return () => {
       if (tid) clearTimeout(tid)
     }
-  }, [anyActiveNonSnoozed, recording, textInputMutation.isPending, mcpTextInputMutation.isPending])
+  }, [anyActiveNonSnoozed, textInputMutation.isPending, mcpTextInputMutation.isPending])
 
   // Note: We don't need to hide text input when agentProgress changes because:
   // 1. handleTextSubmit already hides it immediately on submit (line 375)
@@ -524,6 +526,8 @@ export function Component() {
       // Stop any ongoing recording and reset recording state
       if (recording) {
         isConfirmedRef.current = false
+        setRecording(false)
+        setVisualizerData(() => getInitialVisualizerData())
         recorderRef.current?.stopRecording()
       }
 
@@ -542,7 +546,7 @@ export function Component() {
     })
 
     return unlisten
-  }, [isConversationActive, endConversation, recording, transcribeMutation, mcpTranscribeMutation, textInputMutation, mcpTextInputMutation])
+  }, [isConversationActive, endConversation, transcribeMutation, mcpTranscribeMutation, textInputMutation, mcpTextInputMutation])
 
   // Emergency stop handler - stop all TTS audio and reset processing state
   useEffect(() => {
@@ -553,6 +557,8 @@ export function Component() {
       // Stop any ongoing recording and reset recording state
       if (recording) {
         isConfirmedRef.current = false
+        setRecording(false)
+        setVisualizerData(() => getInitialVisualizerData())
         recorderRef.current?.stopRecording()
       }
 

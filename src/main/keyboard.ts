@@ -573,7 +573,8 @@ export function listenToKeyboardEvents() {
       }
 
       // Handle settings window hotkey
-      if (config.settingsHotkeyEnabled) {
+      // Allow settings access during most states, but prevent during recording to avoid interruption
+      if (config.settingsHotkeyEnabled && !state.isRecording) {
         const effectiveSettingsHotkey = getEffectiveShortcut(
           config.settingsHotkey,
           config.customSettingsHotkey,

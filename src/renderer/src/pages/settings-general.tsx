@@ -46,12 +46,20 @@ export function Component() {
 
   const saveConfig = useCallback(
     (config: Partial<Config>) => {
-      saveConfigMutation.mutate({
-        config: {
-          ...(configQuery.data as any),
-          ...config,
+      saveConfigMutation.mutate(
+        {
+          config: {
+            ...(configQuery.data as any),
+            ...config,
+          },
         },
-      })
+        {
+          onError: (error) => {
+            console.error("Failed to save config:", error)
+            // TODO: Show user-friendly error notification
+          },
+        },
+      )
     },
     [saveConfigMutation, configQuery.data],
   )

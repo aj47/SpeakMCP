@@ -357,6 +357,22 @@ const ToolExecutionBubble: React.FC<{
     onToggleExpand()
   }
 
+  // Handle hide/show buttons with event propagation stopped
+  const handleToggleInputs = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    setShowInputs((v) => !v)
+  }
+
+  const handleToggleOutputs = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    setShowOutputs((v) => !v)
+  }
+
+  const handleCopy = (e: React.MouseEvent, text: string) => {
+    e.stopPropagation()
+    copy(text)
+  }
+
 
   return (
     <div
@@ -403,10 +419,10 @@ const ToolExecutionBubble: React.FC<{
             <div className="flex items-center justify-between">
               <div className="text-[11px] font-semibold opacity-80">Call Parameters</div>
               <div className="flex items-center gap-1">
-                <Button size="sm" variant="ghost" className="h-6 px-2" onClick={() => setShowInputs((v) => !v)}>
+                <Button size="sm" variant="ghost" className="h-6 px-2" onClick={handleToggleInputs}>
                   {showInputs ? "Hide" : "Show"}
                 </Button>
-                <Button size="sm" variant="ghost" className="h-6 px-2" onClick={() => copy(JSON.stringify(execution.calls, null, 2))}>
+                <Button size="sm" variant="ghost" className="h-6 px-2" onClick={(e) => handleCopy(e, JSON.stringify(execution.calls, null, 2))}>
                   Copy
                 </Button>
               </div>
@@ -435,10 +451,10 @@ const ToolExecutionBubble: React.FC<{
               <div className="text-[11px] font-semibold opacity-80">Response</div>
               {!isPending && (
                 <div className="flex items-center gap-1">
-                  <Button size="sm" variant="ghost" className="h-6 px-2" onClick={() => setShowOutputs((v) => !v)}>
+                  <Button size="sm" variant="ghost" className="h-6 px-2" onClick={handleToggleOutputs}>
                     {showOutputs ? "Hide" : "Show"}
                   </Button>
-                  <Button size="sm" variant="ghost" className="h-6 px-2" onClick={() => copy(JSON.stringify(execution.results, null, 2))}>
+                  <Button size="sm" variant="ghost" className="h-6 px-2" onClick={(e) => handleCopy(e, JSON.stringify(execution.results, null, 2))}>
                     Copy
                   </Button>
                 </div>

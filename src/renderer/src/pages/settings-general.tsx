@@ -347,6 +347,54 @@ export function Component() {
                 )}
             </div>
           </Control>
+
+          <Control label="Settings Window" className="px-3">
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <Switch
+                  checked={configQuery.data?.settingsHotkeyEnabled ?? true}
+                  onCheckedChange={(checked) => {
+                    saveConfig({
+                      settingsHotkeyEnabled: checked,
+                    })
+                  }}
+                />
+                <Select
+                  value={configQuery.data?.settingsHotkey || "ctrl-shift-s"}
+                  onValueChange={(value) => {
+                    saveConfig({
+                      settingsHotkey:
+                        value as typeof configQuery.data.settingsHotkey,
+                    })
+                  }}
+                  disabled={!configQuery.data?.settingsHotkeyEnabled}
+                >
+                  <SelectTrigger className="w-40">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ctrl-shift-s">Ctrl+Shift+S</SelectItem>
+                    <SelectItem value="ctrl-comma">Ctrl+,</SelectItem>
+                    <SelectItem value="ctrl-shift-comma">Ctrl+Shift+,</SelectItem>
+                    <SelectItem value="custom">Custom</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {configQuery.data?.settingsHotkey === "custom" &&
+                configQuery.data?.settingsHotkeyEnabled && (
+                  <KeyRecorder
+                    value={configQuery.data?.customSettingsHotkey || ""}
+                    onChange={(keyCombo) => {
+                      saveConfig({
+                        customSettingsHotkey: keyCombo,
+                      })
+                    }}
+                    placeholder="Click to record custom settings hotkey"
+                  />
+                )}
+            </div>
+          </Control>
         </ControlGroup>
 
         <ControlGroup title="Speech to Text">

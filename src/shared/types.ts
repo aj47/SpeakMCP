@@ -281,6 +281,11 @@ export type Config = {
   textInputShortcut?: "ctrl-t" | "ctrl-shift-t" | "alt-t" | "custom"
   customTextInputShortcut?: string
 
+  // Settings Window Hotkey Configuration
+  settingsHotkeyEnabled?: boolean
+  settingsHotkey?: "ctrl-shift-s" | "ctrl-comma" | "ctrl-shift-comma" | "custom"
+  customSettingsHotkey?: string
+
   // Agent Kill Switch Configuration
   agentKillSwitchEnabled?: boolean
   agentKillSwitchHotkey?:

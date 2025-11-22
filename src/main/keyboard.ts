@@ -7,6 +7,7 @@ import {
   stopTextInputAndHidePanelWindow,
   closeAgentModeAndHidePanelWindow,
   emergencyStopAgentMode,
+  showMainWindow,
   WINDOWS,
 } from "./window"
 import { systemPreferences } from "electron"
@@ -556,6 +557,80 @@ export function listenToKeyboardEvents() {
           }
           if (matches) {
             showPanelWindowAndShowTextInput()
+            return
+          }
+        }
+      }
+
+      // Handle settings window hotkey
+      if (config.settingsHotkeyEnabled) {
+        const effectiveSettingsHotkey = getEffectiveShortcut(
+          config.settingsHotkey,
+          config.customSettingsHotkey,
+        )
+
+        if (
+          config.settingsHotkey === "ctrl-shift-s" &&
+          e.data.key === "KeyS" &&
+          isPressedCtrlKey &&
+          isPressedShiftKey &&
+          !isPressedAltKey
+        ) {
+          if (isDebugKeybinds()) {
+            logKeybinds("Settings window triggered: Ctrl+Shift+S")
+          }
+          showMainWindow("/settings")
+          return
+        }
+        if (
+          config.settingsHotkey === "ctrl-comma" &&
+          e.data.key === "Comma" &&
+          isPressedCtrlKey &&
+          !isPressedShiftKey &&
+          !isPressedAltKey
+        ) {
+          if (isDebugKeybinds()) {
+            logKeybinds("Settings window triggered: Ctrl+,")
+          }
+          showMainWindow("/settings")
+          return
+        }
+        if (
+          config.settingsHotkey === "ctrl-shift-comma" &&
+          e.data.key === "Comma" &&
+          isPressedCtrlKey &&
+          isPressedShiftKey &&
+          !isPressedAltKey
+        ) {
+          if (isDebugKeybinds()) {
+            logKeybinds("Settings window triggered: Ctrl+Shift+,")
+          }
+          showMainWindow("/settings")
+          return
+        }
+
+        // Handle custom settings hotkey
+        if (
+          config.settingsHotkey === "custom" &&
+          effectiveSettingsHotkey
+        ) {
+          const matches = matchesKeyCombo(
+            e.data,
+            {
+              ctrl: isPressedCtrlKey,
+              shift: isPressedShiftKey,
+              alt: isPressedAltKey,
+            },
+            effectiveSettingsHotkey,
+          )
+          if (isDebugKeybinds() && matches) {
+            logKeybinds(
+              "Settings window triggered: Custom hotkey",
+              effectiveSettingsHotkey,
+            )
+          }
+          if (matches) {
+            showMainWindow("/settings")
             return
           }
         }

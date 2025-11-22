@@ -35,6 +35,10 @@ const getConfig = () => {
     conversationsEnabled: true,
     maxConversationsToKeep: 100,
     autoSaveConversations: true,
+    // Settings hotkey defaults
+    settingsHotkeyEnabled: true,
+    settingsHotkey: "ctrl-shift-s",
+    customSettingsHotkey: "",
     // Agent kill switch defaults
     agentKillSwitchEnabled: true,
     agentKillSwitchHotkey: "ctrl-shift-escape",

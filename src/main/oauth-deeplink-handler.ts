@@ -96,8 +96,16 @@ export class OAuthDeepLinkHandler {
     try {
       const parsedUrl = new URL(url)
 
+      // Normalize pathname - custom protocols may parse with // prefix
+      // e.g., speakmcp://oauth/callback might parse as pathname: //oauth/callback
+      const pathname = parsedUrl.pathname.replace(/^\/+/, '/')
+
       // Check if this is an OAuth callback
-      if (parsedUrl.protocol === 'speakmcp:' && parsedUrl.pathname === '/oauth/callback') {
+      // Accept both speakmcp: and speakmcp: protocols (with or without trailing colon)
+      const isOAuthProtocol = parsedUrl.protocol === 'speakmcp:' || parsedUrl.protocol === 'speakmcp'
+      const isOAuthPath = pathname === '/oauth/callback'
+
+      if (isOAuthProtocol && isOAuthPath) {
         const code = parsedUrl.searchParams.get('code')
         const state = parsedUrl.searchParams.get('state')
         const error = parsedUrl.searchParams.get('error')

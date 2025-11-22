@@ -97,12 +97,12 @@ export class OAuthDeepLinkHandler {
       const parsedUrl = new URL(url)
 
       // Normalize pathname - custom protocols parse URLs differently:
-      // - speakmcp://oauth/callback parses as host="oauth", pathname="/callback"
-      // - speakmcp:/oauth/callback parses as host="", pathname="/oauth/callback"
-      // We need to combine host and pathname to get the full path
+      // - speakmcp://oauth/callback parses as hostname="oauth", pathname="/callback"
+      // - speakmcp:/oauth/callback parses as hostname="", pathname="/oauth/callback"
+      // We need to combine hostname and pathname to get the full path
       let fullPath = parsedUrl.pathname
-      if (parsedUrl.host) {
-        fullPath = `/${parsedUrl.host}${parsedUrl.pathname}`
+      if (parsedUrl.hostname) {
+        fullPath = `/${parsedUrl.hostname}${parsedUrl.pathname}`
       }
       const pathname = fullPath.replace(/^\/+/, '/')
 

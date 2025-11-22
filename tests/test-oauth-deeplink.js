@@ -80,13 +80,13 @@ testCases.forEach((testCase, index) => {
     console.log(`  Pathname: ${parsedUrl.pathname}`);
     console.log(`  Search: ${parsedUrl.search}`);
 
-    // Apply the normalization fix - combine host and pathname
+    // Apply the normalization fix - combine hostname and pathname
     let fullPath = parsedUrl.pathname;
-    if (parsedUrl.host) {
-      fullPath = `/${parsedUrl.host}${parsedUrl.pathname}`;
+    if (parsedUrl.hostname) {
+      fullPath = `/${parsedUrl.hostname}${parsedUrl.pathname}`;
     }
     const normalizedPathname = fullPath.replace(/^\/+/, '/');
-    console.log(`  Full Path (host + pathname): ${fullPath}`);
+    console.log(`  Full Path (hostname + pathname): ${fullPath}`);
     console.log(`  Normalized Pathname: ${normalizedPathname}`);
 
     // Check protocol (case-insensitive for cross-platform compatibility)

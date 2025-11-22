@@ -1,5 +1,6 @@
 import { UpdateDownloadedEvent } from "electron-updater"
 import { AgentProgressUpdate } from "../shared/types"
+import { AgentSession } from "./agent-session-tracker"
 
 export type RendererHandlers = {
   startRecording: () => void
@@ -23,6 +24,8 @@ export type RendererHandlers = {
   emergencyStopAgent: () => void
   clearAgentSessionProgress: (sessionId: string) => void
 
+  // Agent Session tracking - push-based updates instead of polling
+  agentSessionsUpdated: (data: { activeSessions: AgentSession[], recentSessions: AgentSession[] }) => void
 
   // Cross-window focus control for agent sessions
   focusAgentSession: (sessionId: string) => void

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react"
 import { useQuery } from "@tanstack/react-query"
-import { tipcClient } from "@renderer/lib/tipc-client"
+import { tipcClient, rendererHandlers } from "@renderer/lib/tipc-client"
 import { Activity, ChevronDown, ChevronRight, X, Minimize2, Maximize2 } from "lucide-react"
 import { cn } from "@renderer/lib/utils"
 import { useConversation } from "@renderer/contexts/conversation-context"
@@ -40,13 +40,22 @@ export function ActiveAgentsSidebar() {
   const { focusedSessionId, setFocusedSessionId } = useConversation()
   const navigate = useNavigate()
 
-  const { data } = useQuery<AgentSessionsResponse>({
+  const { data, refetch } = useQuery<AgentSessionsResponse>({
     queryKey: ["agentSessions"],
     queryFn: async () => {
       return await tipcClient.getAgentSessions()
     },
-    refetchInterval: 2000, // Refresh every 2 seconds
+    // No polling - we'll use push-based updates via rendererHandlers
   })
+
+  // Listen for push-based session updates from main process
+  useEffect(() => {
+    const unlisten = rendererHandlers.agentSessionsUpdated.listen((updatedData) => {
+      // Invalidate the query to trigger a refetch with the new data
+      refetch()
+    })
+    return unlisten
+  }, [refetch])
 
   const activeSessions = data?.activeSessions || []
   const recentSessions = data?.recentSessions || []

@@ -3,6 +3,8 @@
  * Tracks only active agent sessions for visibility in sidebar
  */
 
+import type { RendererHandlers } from "./renderer-handlers"
+
 export interface AgentSession {
   id: string
   conversationId?: string
@@ -15,6 +17,46 @@ export interface AgentSession {
   lastActivity?: string
   errorMessage?: string
   isSnoozed?: boolean // When true, session runs in background without stealing focus
+}
+
+/**
+ * Emit session updates to all renderer windows
+ */
+async function emitSessionUpdate() {
+  try {
+    const { WINDOWS } = await import("./window")
+    const { getRendererHandlers } = await import("@egoist/tipc/main")
+
+    const agentSessionTracker = AgentSessionTracker.getInstance()
+    const data = {
+      activeSessions: agentSessionTracker.getActiveSessions(),
+      recentSessions: agentSessionTracker.getRecentSessions(4),
+    }
+
+    // Emit to main window
+    const mainWindow = WINDOWS.get("main")
+    if (mainWindow) {
+      try {
+        const handlers = getRendererHandlers<RendererHandlers>(mainWindow.webContents)
+        handlers.agentSessionsUpdated?.send(data)
+      } catch (e) {
+        // Window might not be ready yet
+      }
+    }
+
+    // Emit to panel window
+    const panelWindow = WINDOWS.get("panel")
+    if (panelWindow) {
+      try {
+        const handlers = getRendererHandlers<RendererHandlers>(panelWindow.webContents)
+        handlers.agentSessionsUpdated?.send(data)
+      } catch (e) {
+        // Window might not be ready yet
+      }
+    }
+  } catch (e) {
+    // Silently fail - this is a best-effort notification
+  }
 }
 
 class AgentSessionTracker {
@@ -54,6 +96,9 @@ class AgentSessionTracker {
     this.sessions.set(sessionId, session)
     console.log(`[AgentSessionTracker] Started session: ${sessionId}, total sessions: ${this.sessions.size}`)
 
+    // Emit update to UI
+    emitSessionUpdate()
+
     return sessionId
   }
 
@@ -91,6 +136,9 @@ class AgentSessionTracker {
     }
     this.sessions.delete(sessionId)
     console.log(`[AgentSessionTracker] Completing session: ${sessionId}, remaining sessions: ${this.sessions.size}`)
+
+    // Emit update to UI
+    emitSessionUpdate()
   }
 
   /**
@@ -110,6 +158,9 @@ class AgentSessionTracker {
     }
     this.sessions.delete(sessionId)
     console.log(`[AgentSessionTracker] Stopping session: ${sessionId}, remaining sessions: ${this.sessions.size}`)
+
+    // Emit update to UI
+    emitSessionUpdate()
   }
 
   /**
@@ -130,6 +181,9 @@ class AgentSessionTracker {
     }
     this.sessions.delete(sessionId)
     console.log(`[AgentSessionTracker] Error in session: ${sessionId}, remaining sessions: ${this.sessions.size}`)
+
+    // Emit update to UI
+    emitSessionUpdate()
   }
 
   /**
@@ -138,7 +192,6 @@ class AgentSessionTracker {
   getActiveSessions(): AgentSession[] {
     const sessions = Array.from(this.sessions.values())
       .sort((a, b) => b.startTime - a.startTime)
-    console.log(`[AgentSessionTracker] getActiveSessions called, returning ${sessions.length} sessions:`, sessions.map(s => ({ id: s.id, title: s.conversationTitle, snoozed: s.isSnoozed })))
     return sessions
   }
 
@@ -161,6 +214,9 @@ class AgentSessionTracker {
       session.isSnoozed = true
       this.sessions.set(sessionId, session)
       console.log(`[AgentSessionTracker] Session ${sessionId} is now snoozed: ${session.isSnoozed}`)
+
+      // Emit update to UI
+      emitSessionUpdate()
     } else {
       console.log(`[AgentSessionTracker] Cannot snooze - session not found: ${sessionId}`)
     }
@@ -176,6 +232,9 @@ class AgentSessionTracker {
       session.isSnoozed = false
       this.sessions.set(sessionId, session)
       console.log(`[AgentSessionTracker] Session ${sessionId} is now snoozed: ${session.isSnoozed}`)
+
+      // Emit update to UI
+      emitSessionUpdate()
     } else {
       console.log(`[AgentSessionTracker] Cannot unsnooze - session not found: ${sessionId}`)
     }

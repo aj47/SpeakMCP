@@ -590,7 +590,7 @@ export function Component() {
     })
 
     return unlisten
-  }, [isConversationActive, endConversation, recording, transcribeMutation, mcpTranscribeMutation, textInputMutation, mcpTextInputMutation])
+  }, [isConversationActive, endConversation, transcribeMutation, mcpTranscribeMutation, textInputMutation, mcpTextInputMutation])
 
 
 	  // Auto-close the panel when there's nothing to show

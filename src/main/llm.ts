@@ -528,6 +528,81 @@ export async function processTranscriptWithAgentMode(
     })
   }
 
+  // Helper function to save a message incrementally to the conversation
+  // This ensures messages are persisted even if the agent crashes or is stopped
+  const saveMessageIncremental = async (
+    role: "user" | "assistant" | "tool",
+    content: string,
+    toolCalls?: MCPToolCall[],
+    toolResults?: MCPToolResult[]
+  ) => {
+    if (!currentConversationId) {
+      return // No conversation to save to
+    }
+
+    try {
+      const { conversationService } = await import("./conversation-service")
+
+      // Convert toolResults from MCPToolResult format to stored format
+      const convertedToolResults = toolResults?.map(tr => ({
+        success: !tr.isError,
+        content: Array.isArray(tr.content)
+          ? tr.content.map(c => c.text).join("\n")
+          : String(tr.content || ""),
+        error: tr.isError
+          ? (Array.isArray(tr.content) ? tr.content.map(c => c.text).join("\n") : String(tr.content || ""))
+          : undefined
+      }))
+
+      await conversationService.addMessageToConversation(
+        currentConversationId,
+        content,
+        role,
+        toolCalls,
+        convertedToolResults
+      )
+
+      if (isDebugLLM()) {
+        logLLM("💾 Saved message incrementally", {
+          conversationId: currentConversationId,
+          role,
+          contentLength: content.length,
+          hasToolCalls: !!toolCalls,
+          hasToolResults: !!toolResults
+        })
+      }
+    } catch (error) {
+      // Log but don't throw - persistence failures shouldn't crash the agent
+      console.warn("[saveMessageIncremental] Failed to save message:", error)
+      diagnosticsService.logWarning("llm", "Failed to save message incrementally", error)
+    }
+  }
+
+  // Helper function to add a message to conversation history AND save it incrementally
+  // This ensures all messages are both in memory and persisted to disk
+  const addMessage = (
+    role: "user" | "assistant" | "tool",
+    content: string,
+    toolCalls?: MCPToolCall[],
+    toolResults?: MCPToolResult[],
+    timestamp?: number
+  ) => {
+    // Add to in-memory history
+    const message: typeof conversationHistory[0] = {
+      role,
+      content,
+      toolCalls,
+      toolResults,
+      timestamp: timestamp || Date.now()
+    }
+    conversationHistory.push(message)
+
+    // Save to disk asynchronously (fire and forget)
+    saveMessageIncremental(role, content, toolCalls, toolResults).catch(err => {
+      console.warn("[addMessage] Failed to save message:", err)
+    })
+  }
+
   // Initialize progress tracking
   const progressSteps: AgentProgressStep[] = []
 
@@ -605,6 +680,15 @@ export async function processTranscriptWithAgentMode(
   ]
 
   console.log(`[llm.ts processTranscriptWithAgentMode] conversationHistory initialized with ${conversationHistory.length} messages, roles: [${conversationHistory.map(m => m.role).join(', ')}]`)
+
+  // Save the initial user message incrementally
+  // Only save if this is a new message (not from previous conversation history)
+  if (!previousConversationHistory || previousConversationHistory.length === 0 ||
+      previousConversationHistory[previousConversationHistory.length - 1]?.content !== transcript) {
+    saveMessageIncremental("user", transcript).catch(err => {
+      console.warn("[processTranscriptWithAgentMode] Failed to save initial user message:", err)
+    })
+  }
 
   // Helper function to convert conversation history to the format expected by AgentProgressUpdate
   const formatConversationForProgress = (
@@ -909,10 +993,93 @@ Always use actual resource IDs from the conversation history or create new ones 
           isComplete: false,
           conversationHistory: formatConversationForProgress(conversationHistory),
         })
-        conversationHistory.push({ role: "user", content: "Previous request had empty response. Please retry or summarize progress." })
+        addMessage("user", "Previous request had empty response. Please retry or summarize progress.")
         continue
       }
 
+      // Handle JSON validation errors gracefully
+      if (errorMessage.includes("json") || errorMessage.includes("validation") || errorMessage.includes("format")) {
+        console.error(`LLM JSON validation error on iteration ${iteration}:`, error?.message || error)
+        diagnosticsService.logError("llm", "JSON validation error in agent mode", error)
+        thinkingStep.status = "error"
+        thinkingStep.description = "Response formatting issue. Retrying..."
+
+        // If we have failed generation content, use it
+        if ((error as any).failedGeneration) {
+          const failedContent = (error as any).failedGeneration
+          console.log(`Using failed generation content (${failedContent.length} chars)`)
+
+          // Add the failed content as a valid response
+          addMessage("assistant", failedContent)
+
+          // Update thinking step with the recovered content
+          thinkingStep.status = "completed"
+          thinkingStep.llmContent = failedContent
+          thinkingStep.title = "Agent response (recovered)"
+          thinkingStep.description = failedContent.length > 100
+            ? failedContent.substring(0, 100) + "..."
+            : failedContent
+
+          emit({
+            currentIteration: iteration,
+            maxIterations,
+            steps: progressSteps.slice(-3),
+            isComplete: false,
+            conversationHistory: formatConversationForProgress(conversationHistory),
+          })
+
+          // Check if this looks like a final answer (no tool calls mentioned)
+          const looksLikeFinalAnswer = !failedContent.toLowerCase().includes("tool") &&
+                                       !failedContent.toLowerCase().includes("function") &&
+                                       !failedContent.toLowerCase().includes("execute")
+
+          if (looksLikeFinalAnswer) {
+            // Treat as final response
+            finalContent = failedContent
+            break
+          }
+
+          // Otherwise continue the loop
+          continue
+        }
+
+        // No failed generation content, retry with guidance
+        emit({
+          currentIteration: iteration,
+          maxIterations,
+          steps: progressSteps.slice(-3),
+          isComplete: false,
+          conversationHistory: formatConversationForProgress(conversationHistory),
+        })
+        addMessage("user", "Previous response had formatting issues. Please provide your response in valid JSON format.")
+        continue
+      }
+
+      // Handle other errors - log but try to continue if possible
+      console.error(`LLM error on iteration ${iteration}:`, error?.message || error)
+      diagnosticsService.logError("llm", "LLM call failed in agent mode", error)
+      thinkingStep.status = "error"
+      thinkingStep.description = `Error: ${error?.message || "Unknown error"}`
+
+      // If we're past the first iteration, we have some progress - try to summarize and exit gracefully
+      if (iteration > 1) {
+        console.log("Error occurred after some progress, attempting graceful exit")
+        const errorSummary = `I encountered an error while processing your request: ${error?.message || "Unknown error"}. Here's what I accomplished before the error occurred.`
+        addMessage("assistant", errorSummary)
+        finalContent = errorSummary
+
+        emit({
+          currentIteration: iteration,
+          maxIterations,
+          steps: progressSteps.slice(-3),
+          isComplete: true,
+          finalContent,
+          conversationHistory: formatConversationForProgress(conversationHistory),
+        })
+        break
+      }
+
+      // First iteration error - can't recover, throw
       throw error
     }
 
@@ -944,7 +1111,7 @@ Always use actual resource IDs from the conversation history or create new ones 
         isComplete: false,
         conversationHistory: formatConversationForProgress(conversationHistory),
       })
-      conversationHistory.push({ role: "user", content: "Previous request had invalid response. Please retry or summarize progress." })
+      addMessage("user", "Previous request had invalid response. Please retry or summarize progress.")
       continue
     }
 
@@ -1030,7 +1197,7 @@ Always use actual resource IDs from the conversation history or create new ones 
       const assistantContent = llmResponse.content || ""
 
       finalContent = assistantContent
-      conversationHistory.push({ role: "assistant", content: finalContent })
+      addMessage("assistant", finalContent)
 
       // Optional verification before completing
       if (config.mcpVerifyCompletionEnabled) {
@@ -1139,7 +1306,7 @@ Always use actual resource IDs from the conversation history or create new ones 
           finalContent = postVerifySummaryResponse.content || finalContent
 
           // Append as the final assistant message
-          conversationHistory.push({ role: "assistant", content: finalContent })
+          addMessage("assistant", finalContent)
         } catch (e) {
           // If summary generation fails, proceed with existing finalContent
         }
@@ -1176,19 +1343,13 @@ Always use actual resource IDs from the conversation history or create new ones 
 
       if (noOpCount >= 2 || (isActionableRequest && noOpCount >= 1)) {
         // Add nudge to push the agent forward
-        conversationHistory.push({
-          role: "assistant",
-          content: llmResponse.content || "",
-        })
+        addMessage("assistant", llmResponse.content || "")
 
         const nudgeMessage = isActionableRequest
           ? "You have relevant tools available for this request. Please choose and call at least one tool to make progress, or if you truly cannot proceed, explicitly set needsMoreWork=false and provide a detailed explanation of why no action can be taken."
           : "Please either take action using available tools or explicitly set needsMoreWork=false if the task is complete."
 
-        conversationHistory.push({
-          role: "user",
-          content: nudgeMessage,
-        })
+        addMessage("user", nudgeMessage)
 
         noOpCount = 0 // Reset counter after nudge
         continue
@@ -1204,12 +1365,7 @@ Always use actual resource IDs from the conversation history or create new ones 
 
     // Add assistant response with tool calls to conversation history BEFORE executing tools
     // This ensures the tool call request is visible immediately in the UI
-    conversationHistory.push({
-      role: "assistant",
-      content: llmResponse.content || "",
-      toolCalls: llmResponse.toolCalls || [],
-      timestamp: Date.now(),
-    })
+    addMessage("assistant", llmResponse.content || "", llmResponse.toolCalls || [])
 
     // Emit progress update to show tool calls immediately
     emit({
@@ -1428,7 +1584,7 @@ Always use actual resource IDs from the conversation history or create new ones 
       // Emit final progress with complete status
       const killNote = "\n\n(Agent mode was stopped by emergency kill switch)"
       const finalOutput = (finalContent || "") + killNote
-      conversationHistory.push({ role: "assistant", content: finalOutput })
+      addMessage("assistant", finalOutput)
       emit({
         currentIteration: iteration,
         maxIterations,
@@ -1457,11 +1613,7 @@ Always use actual resource IDs from the conversation history or create new ones 
         .map((result) => result.content.map((c) => c.text).join("\n"))
         .join("\n\n")
 
-      conversationHistory.push({
-        role: "tool",
-        content: toolResultsText,
-        toolResults: meaningfulResults,
-        timestamp: Date.now(),
+      addMessage("tool", toolResultsText, undefined, meaningfulResults)
       })
 
       // Emit progress update immediately after adding tool results so UI shows them

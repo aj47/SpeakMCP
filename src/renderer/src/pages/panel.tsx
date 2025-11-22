@@ -34,6 +34,7 @@ export function Component() {
   const [showTextInput, setShowTextInput] = useState(false)
   const isConfirmedRef = useRef(false)
   const mcpModeRef = useRef(false)
+  const recordingRef = useRef(false)
   const textInputPanelRef = useRef<TextInputPanelRef>(null)
   const { isDark } = useTheme()
   const lastRequestedModeRef = useRef<"normal" | "agent" | "textInput">("normal")
@@ -62,6 +63,10 @@ export function Component() {
   const { currentConversationId, focusedSessionId, agentProgressById, lastCompletedConversationId } = useConversation()
 
   // Check if we have multiple active (non-snoozed) sessions
+  // Note: We intentionally include completed sessions in the count because:
+  // 1. Completed sessions should remain visible until the user manually closes them
+  // 2. The panel should stay in agent mode to show the completed results
+  // 3. Recording cleanup is handled separately when switching TO agent mode (line 479)
   const activeSessionCount = Array.from(agentProgressById.values())
     .filter(progress => !progress.isSnoozed).length
   const hasMultipleSessions = activeSessionCount > 1
@@ -87,6 +92,16 @@ export function Component() {
       allSessionIds: Array.from(agentProgressById.keys())
     })
   }, [agentProgress, focusedSessionId, agentProgressById.size, activeSessionCount, hasMultipleSessions])
+
+  // Debug: Log when recording state changes
+  useEffect(() => {
+    logUI('[Panel] recording state changed:', {
+      recording,
+      anyActiveNonSnoozed,
+      showTextInput,
+      mcpMode
+    })
+  }, [recording, anyActiveNonSnoozed, showTextInput, mcpMode])
 
   // Config for drag functionality
   const configQuery = useConfigQuery()
@@ -233,6 +248,7 @@ export function Component() {
 
     recorder.on("record-start", () => {
       setRecording(true)
+      recordingRef.current = true
       tipcClient.recordEvent({ type: "start" })
     })
 
@@ -251,6 +267,7 @@ export function Component() {
     recorder.on("record-end", (blob, duration) => {
       const currentMcpMode = mcpModeRef.current
       setRecording(false)
+      recordingRef.current = false
       setVisualizerData(() => getInitialVisualizerData())
       tipcClient.recordEvent({ type: "end" })
 
@@ -462,6 +479,15 @@ export function Component() {
     let targetMode: "agent" | "normal" | null = null
     if (anyActiveNonSnoozed) {
       targetMode = "agent"
+      // When switching to agent mode, stop any ongoing recording
+      if (recordingRef.current) {
+        logUI('[Panel] Switching to agent mode - stopping ongoing recording')
+        isConfirmedRef.current = false
+        setRecording(false)
+        recordingRef.current = false
+        setVisualizerData(() => getInitialVisualizerData())
+        recorderRef.current?.stopRecording()
+      }
     } else if (isTextSubmissionPending) {
       targetMode = null // keep current size briefly to avoid flicker
     } else {
@@ -505,6 +531,15 @@ export function Component() {
       // Stop all TTS audio when clearing progress (ESC key pressed)
       ttsManager.stopAll()
 
+      // Stop any ongoing recording and reset recording state
+      if (recordingRef.current) {
+        isConfirmedRef.current = false
+        setRecording(false)
+        recordingRef.current = false
+        setVisualizerData(() => getInitialVisualizerData())
+        recorderRef.current?.stopRecording()
+      }
+
       // Reset all mutations to clear isPending state
       transcribeMutation.reset()
       mcpTranscribeMutation.reset()
@@ -527,6 +562,15 @@ export function Component() {
     const unlisten = rendererHandlers.emergencyStopAgent.listen(() => {
       console.log('[Panel] Emergency stop triggered - stopping all TTS audio and resetting state')
       ttsManager.stopAll()
+
+      // Stop any ongoing recording and reset recording state
+      if (recordingRef.current) {
+        isConfirmedRef.current = false
+        setRecording(false)
+        recordingRef.current = false
+        setVisualizerData(() => getInitialVisualizerData())
+        recorderRef.current?.stopRecording()
+      }
 
       // Reset all processing states
       setMcpMode(false)

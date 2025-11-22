@@ -88,6 +88,16 @@ export function Component() {
     })
   }, [agentProgress, focusedSessionId, agentProgressById.size, activeSessionCount, hasMultipleSessions])
 
+  // Debug: Log when recording state changes
+  useEffect(() => {
+    logUI('[Panel] recording state changed:', {
+      recording,
+      anyActiveNonSnoozed,
+      showTextInput,
+      mcpMode
+    })
+  }, [recording, anyActiveNonSnoozed, showTextInput, mcpMode])
+
   // Config for drag functionality
   const configQuery = useConfigQuery()
   const isDragEnabled = (configQuery.data as any)?.panelDragEnabled ?? true

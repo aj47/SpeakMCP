@@ -17,6 +17,7 @@ interface AgentSessionState {
   abortControllers: Set<AbortController>
   processes: Set<ChildProcess>
   retryProgressCallback?: RetryProgressCallback
+  consecutiveJsonValidateFailures: number // Track consecutive json_validate_failed errors
 }
 
 export const state = {
@@ -151,6 +152,7 @@ export const agentSessionStateManager = {
         iterationCount: 0,
         abortControllers: new Set(),
         processes: new Set(),
+        consecutiveJsonValidateFailures: 0,
       })
       // Update legacy global flag
       state.isAgentModeActive = true
@@ -310,5 +312,29 @@ export const agentSessionStateManager = {
   getRetryProgressCallback(sessionId: string): RetryProgressCallback | undefined {
     const session = state.agentSessions.get(sessionId)
     return session?.retryProgressCallback
+  },
+
+  // Increment consecutive json_validate_failed error count
+  incrementJsonValidateFailures(sessionId: string): number {
+    const session = state.agentSessions.get(sessionId)
+    if (session) {
+      session.consecutiveJsonValidateFailures++
+      return session.consecutiveJsonValidateFailures
+    }
+    return 0
+  },
+
+  // Reset consecutive json_validate_failed error count
+  resetJsonValidateFailures(sessionId: string): void {
+    const session = state.agentSessions.get(sessionId)
+    if (session) {
+      session.consecutiveJsonValidateFailures = 0
+    }
+  },
+
+  // Get consecutive json_validate_failed error count
+  getJsonValidateFailures(sessionId: string): number {
+    const session = state.agentSessions.get(sessionId)
+    return session?.consecutiveJsonValidateFailures || 0
   },
 }

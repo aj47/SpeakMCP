@@ -343,6 +343,18 @@ function isRetryableError(error: unknown): boolean {
 }
 
 /**
+ * Sanitize error messages before displaying to UI to prevent leaking sensitive information
+ */
+function sanitizeErrorMessage(message: string): string {
+  return message
+    .replace(/https?:\/\/[^\s]+/g, '[URL]')
+    .replace(/\/[\w\/-]+\.(ts|js|json)/g, '[PATH]')
+    .replace(/Bearer\s+[\w-]+/gi, '[TOKEN]')
+    .replace(/sk-[a-zA-Z0-9]+/g, '[API_KEY]')
+    .substring(0, 200)
+}
+
+/**
  * Calculate delay for exponential backoff with jitter
  */
 function calculateBackoffDelay(attempt: number, baseDelay: number = 1000, maxDelay: number = 30000): number {
@@ -387,6 +399,21 @@ async function apiCallWithRetry<T>(
 
     try {
       const response = await call()
+      // Clear retry progress and reset error counters on successful call
+      if (sessionId && agentSessionStateManager.getSession(sessionId)) {
+        const retryCallback = agentSessionStateManager.getRetryProgressCallback(sessionId)
+        if (retryCallback) {
+          retryCallback({
+            isRetrying: false,
+            currentAttempt: 0,
+            maxAttempts: 0,
+            delayMs: 0,
+            errorMessage: '',
+          })
+        }
+        // Reset consecutive json_validate_failed error counter on success
+        agentSessionStateManager.resetJsonValidateFailures(sessionId)
+      }
       return response
     } catch (error) {
       lastError = error
@@ -409,6 +436,27 @@ async function apiCallWithRetry<T>(
           },
         )
         throw error
+      }
+
+      // Check for consecutive json_validate_failed errors to prevent resource exhaustion
+      const MAX_CONSECUTIVE_JSON_VALIDATE_FAILURES = 5
+      if (error instanceof HttpError && error.errorCode === 'json_validate_failed' && sessionId) {
+        const consecutiveFailures = agentSessionStateManager.incrementJsonValidateFailures(sessionId)
+        if (consecutiveFailures > MAX_CONSECUTIVE_JSON_VALIDATE_FAILURES) {
+          diagnosticsService.logError(
+            "llm-fetch",
+            `Exceeded maximum consecutive json_validate_failed errors (${MAX_CONSECUTIVE_JSON_VALIDATE_FAILURES})`,
+            {
+              consecutiveFailures,
+              sessionId,
+              message: "Stopping retries to prevent resource exhaustion"
+            }
+          )
+          throw new Error(`LLM consistently failing to generate valid JSON after ${MAX_CONSECUTIVE_JSON_VALIDATE_FAILURES} attempts. This may indicate a model configuration issue.`)
+        }
+      } else if (sessionId) {
+        // Reset counter on non-json_validate_failed errors
+        agentSessionStateManager.resetJsonValidateFailures(sessionId)
       }
 
       // Handle rate limit errors (429) - no retry limit, keep trying indefinitely
@@ -438,6 +486,20 @@ async function apiCallWithRetry<T>(
 
         // User-friendly console output so users can see progress
         console.log(`⏳ Rate limit hit - waiting ${waitTimeSeconds} seconds before retrying... (attempt ${attempt + 1})`)
+
+        // Emit retry progress update if session ID is provided
+        if (sessionId && agentSessionStateManager.getSession(sessionId)) {
+          const retryCallback = agentSessionStateManager.getRetryProgressCallback(sessionId)
+          if (retryCallback) {
+            retryCallback({
+              isRetrying: true,
+              currentAttempt: attempt + 1,
+              maxAttempts: retryCount + 1,
+              delayMs: delay,
+              errorMessage: sanitizeErrorMessage(error.message),
+            })
+          }
+        }
 
         // Wait before retrying unless we've been asked to stop
         if (state.shouldStopAgent) {
@@ -488,7 +550,7 @@ async function apiCallWithRetry<T>(
       }
 
       // Emit retry progress update if session ID is provided
-      if (sessionId) {
+      if (sessionId && agentSessionStateManager.getSession(sessionId)) {
         const retryCallback = agentSessionStateManager.getRetryProgressCallback(sessionId)
         if (retryCallback) {
           retryCallback({
@@ -496,7 +558,7 @@ async function apiCallWithRetry<T>(
             currentAttempt: attempt + 1,
             maxAttempts: retryCount + 1,
             delayMs: delay,
-            errorMessage: error instanceof Error ? error.message : String(error),
+            errorMessage: sanitizeErrorMessage(error instanceof Error ? error.message : String(error)),
           })
         }
       }
@@ -506,20 +568,6 @@ async function apiCallWithRetry<T>(
         throw new Error("Aborted by emergency stop")
       }
       await new Promise(resolve => setTimeout(resolve, delay))
-
-      // Clear retry progress after delay
-      if (sessionId) {
-        const retryCallback = agentSessionStateManager.getRetryProgressCallback(sessionId)
-        if (retryCallback) {
-          retryCallback({
-            isRetrying: false,
-            currentAttempt: 0,
-            maxAttempts: 0,
-            delayMs: 0,
-            errorMessage: '',
-          })
-        }
-      }
 
       attempt++
     }
@@ -660,9 +708,14 @@ async function makeAPICallAttempt(
       let errorCode: string | undefined
       try {
         const errorJson = JSON.parse(errorText)
-        errorCode = errorJson.error?.code
+        // Validate error code is a string matching expected patterns
+        if (typeof errorJson.error?.code === 'string' &&
+            /^[a-z_]+$/.test(errorJson.error.code) &&
+            errorJson.error.code.length < 100) {
+          errorCode = errorJson.error.code
+        }
       } catch (e) {
-        // Not JSON or no error code, continue without it
+        // Not JSON or invalid error code, continue without it
       }
 
       // Check if this is a structured output related error
@@ -989,9 +1042,14 @@ async function makeGeminiCall(
       let errorCode: string | undefined
       try {
         const errorJson = JSON.parse(errorText)
-        errorCode = errorJson.error?.code
+        // Validate error code is a string matching expected patterns
+        if (typeof errorJson.error?.code === 'string' &&
+            /^[a-z_]+$/.test(errorJson.error.code) &&
+            errorJson.error.code.length < 100) {
+          errorCode = errorJson.error.code
+        }
       } catch (e) {
-        // Not JSON or no error code, continue without it
+        // Not JSON or invalid error code, continue without it
       }
 
       if (isDebugLLM()) {
@@ -1053,6 +1111,7 @@ async function makeGeminiCall(
 async function makeLLMCallAttempt(
   messages: Array<{ role: string; content: string }>,
   chatProviderId: string,
+  sessionId?: string,
 ): Promise<LLMToolCallResponse> {
   if (isDebugLLM()) {
     logLLM("🚀 Starting LLM call attempt", {
@@ -1065,9 +1124,9 @@ async function makeLLMCallAttempt(
   let response: any
 
   if (chatProviderId === "gemini") {
-    response = await makeGeminiCall(messages)
+    response = await makeGeminiCall(messages, sessionId)
   } else {
-    response = await makeOpenAICompatibleCall(messages, chatProviderId, true)
+    response = await makeOpenAICompatibleCall(messages, chatProviderId, true, sessionId)
   }
 
   if (isDebugLLM()) {
@@ -1232,7 +1291,7 @@ export async function makeLLMCallWithFetch(
   try {
     // Wrap the LLM call with retry logic to handle empty responses
     return await apiCallWithRetry(
-      async () => makeLLMCallAttempt(messages, chatProviderId),
+      async () => makeLLMCallAttempt(messages, chatProviderId, sessionId),
       config.apiRetryCount,
       config.apiRetryBaseDelay,
       config.apiRetryMaxDelay,

@@ -522,6 +522,18 @@ export async function processTranscriptWithAgentMode(
     })
   }
 
+  // Set up retry progress callback for this session
+  agentSessionStateManager.setRetryProgressCallback(currentSessionId, (retryInfo) => {
+    // Emit progress update with retry information
+    emit({
+      currentIteration: agentSessionStateManager.getSession(currentSessionId)?.iterationCount || 0,
+      maxIterations,
+      steps: progressSteps.slice(-3),
+      isComplete: false,
+      retryInfo,
+    })
+  })
+
   // Initialize progress tracking
   const progressSteps: AgentProgressStep[] = []
 
@@ -844,7 +856,7 @@ Always use actual resource IDs from the conversation history or create new ones 
     // Make LLM call (abort-aware)
     let llmResponse: any
     try {
-      llmResponse = await makeLLMCall(shrunkMessages, config)
+      llmResponse = await makeLLMCall(shrunkMessages, config, currentSessionId)
 
       // If stop was requested while the LLM call was in-flight and it returned before aborting, exit now
       if (agentSessionStateManager.shouldStopSession(currentSessionId)) {
@@ -1117,7 +1129,7 @@ Always use actual resource IDs from the conversation history or create new ones 
             sessionId: currentSessionId,
           })
 
-          const postVerifySummaryResponse = await makeLLMCall(shrunkPostVerifySummaryMessages, config)
+          const postVerifySummaryResponse = await makeLLMCall(shrunkPostVerifySummaryMessages, config, currentSessionId)
 
           // Update summary step with the response and use it as final content
           postVerifySummaryStep.status = "completed"
@@ -1601,7 +1613,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
 
 
         try {
-          const summaryResponse = await makeLLMCall(shrunkSummaryMessages, config)
+          const summaryResponse = await makeLLMCall(shrunkSummaryMessages, config, currentSessionId)
 
           // Check if stop was requested during summary generation
           if (agentSessionStateManager.shouldStopSession(currentSessionId)) {
@@ -1759,6 +1771,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
           const postVerifySummaryResponse = await makeLLMCall(
             shrunkPostVerifySummaryMessages,
             config,
+            currentSessionId,
           )
 
           // Check if stop was requested during post-verify summary generation
@@ -1891,7 +1904,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
 
 
         try {
-          const summaryResponse = await makeLLMCall(shrunkSummaryMessages, config)
+          const summaryResponse = await makeLLMCall(shrunkSummaryMessages, config, currentSessionId)
 
           // Update summary step with the response
           summaryStep.status = "completed"
@@ -1955,6 +1968,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
           const postVerifySummaryResponse = await makeLLMCall(
             shrunkPostVerifySummaryMessages,
             config,
+            currentSessionId,
           )
 
           postVerifySummaryStep.status = "completed"
@@ -2153,6 +2167,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
 async function makeLLMCall(
   messages: Array<{ role: string; content: string }>,
   config: any,
+  sessionId?: string,
 ): Promise<LLMToolCallResponse> {
   const chatProviderId = config.mcpToolsProviderId
 
@@ -2165,7 +2180,7 @@ async function makeLLMCall(
         messages: messages,
       })
     }
-    const result = await makeLLMCallWithFetch(messages, chatProviderId)
+    const result = await makeLLMCallWithFetch(messages, chatProviderId, sessionId)
     if (isDebugLLM()) {
       logLLM("Response ←", result)
       logLLM("=== LLM CALL END ===")

@@ -1,5 +1,14 @@
 import { ChildProcess } from "child_process"
 
+// Retry progress callback type
+export type RetryProgressCallback = (info: {
+  isRetrying: boolean
+  currentAttempt: number
+  maxAttempts: number
+  delayMs: number
+  errorMessage: string
+}) => void
+
 // Per-session agent state
 interface AgentSessionState {
   sessionId: string
@@ -7,6 +16,7 @@ interface AgentSessionState {
   iterationCount: number
   abortControllers: Set<AbortController>
   processes: Set<ChildProcess>
+  retryProgressCallback?: RetryProgressCallback
 }
 
 export const state = {
@@ -286,5 +296,19 @@ export const agentSessionStateManager = {
   // Get count of active sessions
   getActiveSessionCount(): number {
     return state.agentSessions.size
+  },
+
+  // Set retry progress callback for session
+  setRetryProgressCallback(sessionId: string, callback: RetryProgressCallback): void {
+    const session = state.agentSessions.get(sessionId)
+    if (session) {
+      session.retryProgressCallback = callback
+    }
+  },
+
+  // Get retry progress callback for session
+  getRetryProgressCallback(sessionId: string): RetryProgressCallback | undefined {
+    const session = state.agentSessions.get(sessionId)
+    return session?.retryProgressCallback
   },
 }

@@ -997,6 +997,24 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
 
       </div>
 
+      {/* Retry Status Banner */}
+      {!isComplete && progress.retryInfo?.isRetrying && (
+        <div className="px-3 py-2 bg-yellow-50 dark:bg-yellow-900/20 border-t border-yellow-200 dark:border-yellow-800/50">
+          <div className="flex items-center gap-2 text-xs">
+            <span className="animate-pulse">⏳</span>
+            <span className="font-medium text-yellow-800 dark:text-yellow-200">
+              Retrying... (attempt {progress.retryInfo.currentAttempt}/{progress.retryInfo.maxAttempts})
+            </span>
+            <span className="text-yellow-600 dark:text-yellow-400">
+              - waiting {Math.round(progress.retryInfo.delayMs / 1000)}s
+            </span>
+          </div>
+          <div className="text-xs text-yellow-700 dark:text-yellow-300 mt-1 truncate">
+            {progress.retryInfo.errorMessage}
+          </div>
+        </div>
+      )}
+
       {/* Slim Progress Bar */}
       {!isComplete && (
         <div className="h-0.5 w-full bg-muted/50">

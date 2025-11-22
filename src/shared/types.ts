@@ -140,6 +140,16 @@ export interface AgentProgressUpdate {
    * Entries before this index belong to previous sessions in the same conversation.
    */
   sessionStartIndex?: number
+  /**
+   * Retry information for displaying retry progress in the UI
+   */
+  retryInfo?: {
+    isRetrying: boolean // Whether a retry is currently in progress
+    currentAttempt: number // Current retry attempt number (1-based)
+    maxAttempts: number // Maximum number of retry attempts
+    delayMs: number // Delay in milliseconds before next retry
+    errorMessage: string // Error message that triggered the retry
+  }
 }
 
 // Conversation Types

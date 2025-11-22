@@ -269,6 +269,9 @@ async function emitAgentProgress(update: AgentProgressUpdate) {
     } else if (!isSnoozed) {
       // Only show panel for non-snoozed sessions
       console.log(`[llm.ts emitAgentProgress] Showing panel for non-snoozed session ${update.sessionId}`)
+      // Set panel mode to agent before showing to ensure correct sizing
+      const { resizePanelForAgentMode } = await import("./window")
+      resizePanelForAgentMode()
       showPanelWindow()
     } else {
       console.log(`[llm.ts emitAgentProgress] Session ${update.sessionId} is snoozed, NOT showing panel`)
@@ -504,17 +507,20 @@ export async function processTranscriptWithAgentMode(
   // Create session state for this agent run
   agentSessionStateManager.createSession(currentSessionId)
 
-  // Create bound emitter that always includes sessionId, conversationId, snooze state and sessionStartIndex
+  // Create bound emitter that always includes sessionId, conversationId, snooze state, sessionStartIndex, and conversationTitle
   const emit = (
-    update: Omit<AgentProgressUpdate, 'sessionId' | 'conversationId' | 'isSnoozed'>,
+    update: Omit<AgentProgressUpdate, 'sessionId' | 'conversationId' | 'isSnoozed' | 'conversationTitle'>,
   ) => {
     const isSnoozed = agentSessionTracker.isSessionSnoozed(currentSessionId)
+    const session = agentSessionTracker.getSession(currentSessionId)
+    const conversationTitle = session?.conversationTitle
 
     // Fire and forget - don't await, but catch errors
     emitAgentProgress({
       ...update,
       sessionId: currentSessionId,
       conversationId: currentConversationId,
+      conversationTitle,
       isSnoozed,
       sessionStartIndex,
     }).catch(err => {

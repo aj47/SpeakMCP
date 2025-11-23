@@ -156,7 +156,10 @@ export function Component() {
       const result = await tipcClient.createMcpRecording({
         recording: arrayBuffer,
         duration,
-        conversationId: currentConversationId || lastCompletedConversationId || undefined,
+        // Only pass currentConversationId, NOT lastCompletedConversationId
+        // Using lastCompletedConversationId causes message leaking where old conversation
+        // history gets loaded into new separate sessions
+        conversationId: currentConversationId || undefined,
       })
 
       // Update conversation ID if backend created/returned one

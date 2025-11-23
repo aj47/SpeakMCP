@@ -525,13 +525,15 @@ export function Component() {
     logUI('[Panel] Overlay visibility check:', {
       hasAgentProgress: !!agentProgress,
       mcpTranscribePending: mcpTranscribeMutation.isPending,
-      shouldShowOverlay: anyVisibleSessions,
+      shouldShowOverlay: anyVisibleSessions && !recording,
+      anyVisibleSessions,
+      recording,
       anyActiveNonSnoozed,
       agentProgressSessionId: agentProgress?.sessionId,
       agentProgressComplete: agentProgress?.isComplete,
       agentProgressSnoozed: agentProgress?.isSnoozed
     })
-  }, [agentProgress, anyActiveNonSnoozed, anyVisibleSessions, mcpTranscribeMutation.isPending])
+  }, [agentProgress, anyActiveNonSnoozed, anyVisibleSessions, recording, mcpTranscribeMutation.isPending])
 
   // Clear agent progress handler
   useEffect(() => {

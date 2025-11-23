@@ -62,17 +62,21 @@ export function Component() {
   } = useConversationActions()
   const { currentConversationId, focusedSessionId, agentProgressById, lastCompletedConversationId } = useConversation()
 
-  // Check if we have multiple active (non-snoozed) sessions
-  // Note: We intentionally include completed sessions in the count because:
-  // 1. Completed sessions should remain visible until the user manually closes them
-  // 2. The panel should stay in agent mode to show the completed results
-  // 3. Recording cleanup is handled separately when switching TO agent mode (line 479)
+  // Count truly active sessions (not complete, not snoozed) for mode switching
+  // Completed sessions should not prevent the panel from switching back to normal mode for voice dictation
   const activeSessionCount = Array.from(agentProgressById.values())
+    .filter(progress => !progress.isSnoozed && !progress.isComplete).length
+
+  // Count all visible sessions (including completed but not snoozed) for overlay display
+  const visibleSessionCount = Array.from(agentProgressById.values())
     .filter(progress => !progress.isSnoozed).length
-  const hasMultipleSessions = activeSessionCount > 1
+  const hasMultipleSessions = visibleSessionCount > 1
 
   // Aggregate session state helpers
+  // Only consider non-snoozed AND non-completed sessions as "active" for mode switching
   const anyActiveNonSnoozed = activeSessionCount > 0
+  // Any non-snoozed session (including completed) should show the overlay
+  const anyVisibleSessions = visibleSessionCount > 0
   const displayProgress = useMemo(() => {
     if (agentProgress && !agentProgress.isSnoozed) return agentProgress
     // pick first non-snoozed session if focused one is missing/snoozed
@@ -98,10 +102,11 @@ export function Component() {
     logUI('[Panel] recording state changed:', {
       recording,
       anyActiveNonSnoozed,
+      anyVisibleSessions,
       showTextInput,
       mcpMode
     })
-  }, [recording, anyActiveNonSnoozed, showTextInput, mcpMode])
+  }, [recording, anyActiveNonSnoozed, anyVisibleSessions, showTextInput, mcpMode])
 
   // Config for drag functionality
   const configQuery = useConfigQuery()
@@ -520,12 +525,13 @@ export function Component() {
     logUI('[Panel] Overlay visibility check:', {
       hasAgentProgress: !!agentProgress,
       mcpTranscribePending: mcpTranscribeMutation.isPending,
-      shouldShowOverlay: anyActiveNonSnoozed,
+      shouldShowOverlay: anyVisibleSessions,
+      anyActiveNonSnoozed,
       agentProgressSessionId: agentProgress?.sessionId,
       agentProgressComplete: agentProgress?.isComplete,
       agentProgressSnoozed: agentProgress?.isSnoozed
     })
-  }, [agentProgress, anyActiveNonSnoozed, mcpTranscribeMutation.isPending])
+  }, [agentProgress, anyActiveNonSnoozed, anyVisibleSessions, mcpTranscribeMutation.isPending])
 
   // Clear agent progress handler
   useEffect(() => {
@@ -600,7 +606,7 @@ export function Component() {
 	  useEffect(() => {
 	    // Keep panel open if a text submission is still pending (to avoid flicker)
 	    const isTextSubmissionPending = textInputMutation.isPending || mcpTextInputMutation.isPending
-	    const showsAgentOverlay = anyActiveNonSnoozed
+	    const showsAgentOverlay = anyVisibleSessions
 
 	    const shouldAutoClose =
 	      !showsAgentOverlay &&
@@ -619,7 +625,7 @@ export function Component() {
 
       return undefined as void
 
-	  }, [anyActiveNonSnoozed, showTextInput, recording, textInputMutation.isPending, mcpTextInputMutation.isPending])
+	  }, [anyVisibleSessions, showTextInput, recording, textInputMutation.isPending, mcpTextInputMutation.isPending])
 
   return (
     <PanelResizeWrapper
@@ -671,7 +677,7 @@ export function Component() {
               )}
 
               {/* Agent progress overlay - left-aligned and full coverage */}
-              {anyActiveNonSnoozed && (
+              {anyVisibleSessions && (
                 hasMultipleSessions ? (
                   <MultiAgentProgressView
                     variant="overlay"

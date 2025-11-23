@@ -677,7 +677,8 @@ export function Component() {
               )}
 
               {/* Agent progress overlay - left-aligned and full coverage */}
-              {anyVisibleSessions && (
+              {/* Hide overlay when recording to prevent waveform from appearing over completed sessions */}
+              {anyVisibleSessions && !recording && (
                 hasMultipleSessions ? (
                   <MultiAgentProgressView
                     variant="overlay"

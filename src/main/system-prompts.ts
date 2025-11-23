@@ -90,7 +90,9 @@ user: what files are in the directory src/?
 assistant: [runs ls and sees foo.c, bar.c, baz.c]
 user: which file contains the implementation of foo?
 assistant: src/foo.c
-</example>
+</example>`
+
+const RESPONSE_FORMAT_INSTRUCTIONS = `
 
 RESPONSE FORMAT:
 For tool calls:
@@ -157,6 +159,7 @@ export function constructSystemPrompt(
 
   if (isAgentMode) {
     prompt += AGENT_MODE_ADDITIONS
+    prompt += RESPONSE_FORMAT_INSTRUCTIONS
   }
 
   // Helper function to format tool information (simplified to reduce token usage)
@@ -310,6 +313,7 @@ export function constructMinimalSystemPrompt(
   let prompt = "You are an MCP-capable assistant. Use exact tool names and exact parameter keys. Be concise. Do not invent IDs or paths."
   if (isAgentMode) {
     prompt += " Always continue iterating with tools until the task is complete; set needsMoreWork=false only when fully done."
+    prompt += " ALWAYS respond in valid JSON format: {\"toolCalls\":[{\"name\":\"tool_name\",\"arguments\":{}}],\"content\":\"text\",\"needsMoreWork\":true/false}"
   }
 
   const list = (tools: Array<{ name: string; inputSchema?: any }>) =>

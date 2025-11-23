@@ -712,10 +712,26 @@ export class MCPService {
     toolName: string,
     content: Array<{ type: string; text: string }>
   ): Array<{ type: string; text: string }> {
-    // Only filter GitHub responses for now
-    if (serverName !== 'github') {
-      return content
+    // Handle different server types
+    if (serverName === 'github') {
+      return this.filterGitHubResponse(toolName, content)
+    } else if (serverName === 'Playwright') {
+      return this.filterPlaywrightResponse(toolName, content)
+    } else if (serverName === 'desktop-commander') {
+      return this.filterDesktopCommanderResponse(toolName, content)
     }
+
+    // For other servers, apply generic large response filtering
+    return this.filterGenericLargeResponse(content)
+  }
+
+  /**
+   * Filter GitHub-specific responses
+   */
+  private filterGitHubResponse(
+    toolName: string,
+    content: Array<{ type: string; text: string }>
+  ): Array<{ type: string; text: string }> {
 
     return content.map((item) => {
       try {
@@ -784,10 +800,282 @@ export class MCPService {
     })
   }
 
+  /**
+   * Filter Playwright browser automation responses
+   */
+  private filterPlaywrightResponse(
+    toolName: string,
+    content: Array<{ type: string; text: string }>
+  ): Array<{ type: string; text: string }> {
+    return content.map((item) => {
+      // For browser navigation and snapshot responses, truncate large YAML structures
+      if (toolName === 'browser_navigate' || toolName === 'browser_snapshot') {
+        if (item.text.length > 5000) {
+          const lines = item.text.split('\n')
+          const truncatedLines = lines.slice(0, 100) // Keep first 100 lines
+          const remainingLines = lines.length - 100
+
+          return {
+            type: item.type,
+            text: truncatedLines.join('\n') +
+                  `\n\n... (${remainingLines} more lines truncated for context management)\n` +
+                  `Full page structure available but summarized to prevent context overflow.`
+          }
+        }
+      }
+
+      // For other Playwright tools, apply generic large response filtering
+      return this.truncateIfTooLarge(item, 8000)
+    })
+  }
+
+  /**
+   * Filter Desktop Commander responses
+   */
+  private filterDesktopCommanderResponse(
+    toolName: string,
+    content: Array<{ type: string; text: string }>
+  ): Array<{ type: string; text: string }> {
+    return content.map((item) => {
+      // For file reading operations, truncate very large files
+      if (toolName === 'read_file' || toolName === 'read_multiple_files') {
+        if (item.text.length > 15000) {
+          const truncated = item.text.substring(0, 15000)
+          return {
+            type: item.type,
+            text: truncated + '\n\n... (file content truncated for context management)'
+          }
+        }
+      }
+
+      // For directory listings, limit the number of items shown
+      if (toolName === 'list_directory') {
+        const lines = item.text.split('\n')
+        if (lines.length > 200) {
+          const truncatedLines = lines.slice(0, 200)
+          return {
+            type: item.type,
+            text: truncatedLines.join('\n') +
+                  `\n\n... (${lines.length - 200} more items truncated for context management)`
+          }
+        }
+      }
+
+      return this.truncateIfTooLarge(item, 10000)
+    })
+  }
+
+  /**
+   * Apply generic filtering for large responses from any server
+   */
+  private filterGenericLargeResponse(
+    content: Array<{ type: string; text: string }>
+  ): Array<{ type: string; text: string }> {
+    return content.map((item) => this.truncateIfTooLarge(item, 8000))
+  }
+
+  /**
+   * Helper method to truncate content if it exceeds the specified limit
+   */
+  private truncateIfTooLarge(
+    item: { type: string; text: string },
+    limit: number
+  ): { type: string; text: string } {
+    if (item.text.length > limit) {
+      return {
+        type: item.type,
+        text: item.text.substring(0, limit) + '\n\n... (truncated for context management)'
+      }
+    }
+    return item
+  }
+
+  /**
+   * Process large tool responses with chunking and summarization
+   */
+  private async processLargeToolResponse(
+    serverName: string,
+    toolName: string,
+    content: Array<{ type: string; text: string }>,
+    onProgress?: (message: string) => void
+  ): Promise<Array<{ type: string; text: string }>> {
+    const config = configStore.get()
+
+    // Use configurable thresholds
+    const LARGE_RESPONSE_THRESHOLD = config.mcpToolResponseLargeThreshold ?? 20000
+    const CRITICAL_RESPONSE_THRESHOLD = config.mcpToolResponseCriticalThreshold ?? 50000
+
+    // Check if processing is enabled
+    if (!config.mcpToolResponseProcessingEnabled) {
+      return content // Return unprocessed if disabled
+    }
+
+    return Promise.all(content.map(async (item) => {
+      const responseSize = item.text.length
+
+      // Small responses - no additional processing needed
+      if (responseSize < LARGE_RESPONSE_THRESHOLD) {
+        return item
+      }
+
+      // Large responses - apply intelligent summarization
+      if (responseSize >= CRITICAL_RESPONSE_THRESHOLD) {
+        // Notify user of processing if enabled
+        if (onProgress && config.mcpToolResponseProgressUpdates) {
+          onProgress(`Processing large response from ${serverName}:${toolName} (${Math.round(responseSize/1000)}KB)`)
+        }
+
+        // For very large responses, use aggressive summarization
+        const summarized = await this.summarizeLargeResponse(
+          item.text,
+          serverName,
+          toolName,
+          'aggressive',
+          onProgress
+        )
+        return {
+          type: item.type,
+          text: `[SUMMARIZED - Original size: ${responseSize} chars]\n\n${summarized}\n\n[End of summarized content]`
+        }
+      } else {
+        // Notify user of processing if enabled
+        if (onProgress && config.mcpToolResponseProgressUpdates) {
+          onProgress(`Processing response from ${serverName}:${toolName} (${Math.round(responseSize/1000)}KB)`)
+        }
+
+        // For moderately large responses, use gentle summarization
+        const summarized = await this.summarizeLargeResponse(
+          item.text,
+          serverName,
+          toolName,
+          'gentle',
+          onProgress
+        )
+        return {
+          type: item.type,
+          text: `[PROCESSED - Original size: ${responseSize} chars]\n\n${summarized}`
+        }
+      }
+    }))
+  }
+
+  /**
+   * Summarize large responses with context-aware strategies
+   */
+  private async summarizeLargeResponse(
+    content: string,
+    serverName: string,
+    toolName: string,
+    strategy: 'gentle' | 'aggressive',
+    onProgress?: (message: string) => void
+  ): Promise<string> {
+    try {
+      // Import summarization function from context-budget
+      const { summarizeContent } = await import('./context-budget')
+
+      // Create context-aware prompt based on server and tool
+      const contextPrompt = this.createSummarizationPrompt(serverName, toolName, strategy)
+
+      // For very large content, chunk it first
+      if (content.length > 30000) {
+        const config = configStore.get()
+        if (onProgress && config.mcpToolResponseProgressUpdates) {
+          onProgress(`Chunking large response (${Math.round(content.length/1000)}KB) for processing`)
+        }
+        return await this.chunkAndSummarize(content, contextPrompt, strategy, onProgress)
+      }
+
+      // For moderately large content, summarize directly
+      const config = configStore.get()
+      if (onProgress && config.mcpToolResponseProgressUpdates) {
+        onProgress(`Summarizing response content`)
+      }
+      return await summarizeContent(content)
+    } catch (error) {
+      console.warn('Failed to summarize large response:', error)
+      // Fallback to simple truncation
+      const maxLength = strategy === 'aggressive' ? 2000 : 5000
+      return content.substring(0, maxLength) + '\n\n... (truncated due to summarization failure)'
+    }
+  }
+
+  /**
+   * Create context-aware summarization prompts
+   */
+  private createSummarizationPrompt(
+    serverName: string,
+    toolName: string,
+    strategy: 'gentle' | 'aggressive'
+  ): string {
+    const basePrompt = strategy === 'aggressive'
+      ? 'Aggressively summarize this content, keeping only the most essential information:'
+      : 'Summarize this content while preserving important details:'
+
+    // Add server-specific context
+    if (serverName === 'Playwright') {
+      return `${basePrompt} This is a browser automation result from ${toolName}. Focus on page structure, key elements, and actionable information. Preserve element references and URLs.`
+    } else if (serverName === 'github') {
+      return `${basePrompt} This is a GitHub API response from ${toolName}. Preserve issue/PR numbers, titles, states, URLs, and key metadata.`
+    } else if (serverName === 'desktop-commander') {
+      return `${basePrompt} This is a desktop automation result from ${toolName}. Focus on file paths, command outputs, and key results.`
+    }
+
+    return `${basePrompt} This is output from ${serverName}:${toolName}.`
+  }
+
+  /**
+   * Chunk large content and summarize each chunk
+   */
+  private async chunkAndSummarize(
+    content: string,
+    contextPrompt: string,
+    strategy: 'gentle' | 'aggressive',
+    onProgress?: (message: string) => void
+  ): Promise<string> {
+    const config = configStore.get()
+    const baseChunkSize = config.mcpToolResponseChunkSize ?? 15000
+    const chunkSize = strategy === 'aggressive' ? Math.floor(baseChunkSize * 0.67) : baseChunkSize
+    const chunks: string[] = []
+
+    // Split content into manageable chunks
+    for (let i = 0; i < content.length; i += chunkSize) {
+      chunks.push(content.slice(i, i + chunkSize))
+    }
+
+    // Summarize each chunk
+    const { summarizeContent } = await import('./context-budget')
+    const summarizedChunks = await Promise.all(
+      chunks.map(async (chunk, index) => {
+        const config = configStore.get()
+        if (onProgress && config.mcpToolResponseProgressUpdates) {
+          onProgress(`Summarizing chunk ${index + 1}/${chunks.length}`)
+        }
+        const chunkPrompt = `${contextPrompt} (Part ${index + 1}/${chunks.length})\n\n${chunk}`
+        return await summarizeContent(chunkPrompt)
+      })
+    )
+
+    // Combine summarized chunks
+    const combined = summarizedChunks.join('\n\n---\n\n')
+
+    // If combined result is still too large, summarize once more
+    if (combined.length > (strategy === 'aggressive' ? 3000 : 8000)) {
+      const config = configStore.get()
+      if (onProgress && config.mcpToolResponseProgressUpdates) {
+        onProgress(`Creating final summary from ${chunks.length} processed chunks`)
+      }
+      const finalPrompt = `${contextPrompt} (Final summary of ${chunks.length} parts)\n\n${combined}`
+      return await summarizeContent(finalPrompt)
+    }
+
+    return combined
+  }
+
   private async executeServerTool(
     serverName: string,
     toolName: string,
     arguments_: any,
+    onProgress?: (message: string) => void
   ): Promise<MCPToolResult> {
     const client = this.clients.get(serverName)
     if (!client) {
@@ -911,8 +1199,19 @@ export class MCPService {
       // Apply response filtering to reduce context size
       const filteredContent = this.filterToolResponse(serverName, toolName, content)
 
-      const finalResult = {
-        content: filteredContent,
+      // Check if response needs further processing for context management
+      const processedContent = await this.processLargeToolResponse(
+        serverName,
+        toolName,
+        filteredContent,
+        onProgress
+      )
+
+      const finalResult: MCPToolResult = {
+        content: processedContent.map(item => ({
+          type: "text" as const,
+          text: item.text
+        })),
         isError: Boolean(result.isError),
       }
 
@@ -1727,7 +2026,10 @@ export class MCPService {
     }
   }
 
-  async executeToolCall(toolCall: MCPToolCall): Promise<MCPToolResult> {
+  async executeToolCall(
+    toolCall: MCPToolCall,
+    onProgress?: (message: string) => void
+  ): Promise<MCPToolResult> {
     try {
       if (isDebugTools()) {
         logTools("Requested tool call", toolCall)
@@ -1772,6 +2074,7 @@ export class MCPService {
           serverName,
           toolName,
           toolCall.arguments,
+          onProgress
         )
 
         // Track resource information from tool results
@@ -1795,6 +2098,7 @@ export class MCPService {
           serverName,
           toolName,
           toolCall.arguments,
+          onProgress
         )
 
         // Track resource information from tool results

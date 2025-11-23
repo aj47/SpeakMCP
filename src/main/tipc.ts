@@ -217,8 +217,8 @@ async function processWithAgentMode(
 
     if (config.mcpAgentModeEnabled) {
       // Use agent mode for iterative tool calling
-      const executeToolCall = async (toolCall: any): Promise<MCPToolResult> => {
-        return await mcpService.executeToolCall(toolCall)
+      const executeToolCall = async (toolCall: any, onProgress?: (message: string) => void): Promise<MCPToolResult> => {
+        return await mcpService.executeToolCall(toolCall, onProgress)
       }
 
       // Load previous conversation history if continuing a conversation
@@ -996,14 +996,20 @@ export const router = {
       await emitAgentProgress({
         sessionId,
         conversationId: tempConversationId,
-        isInitializing: true,
+        currentIteration: 0,
+        maxIterations: 1,
+        steps: [{
+          id: `transcribe_${Date.now()}`,
+          type: "thinking",
+          title: "Transcribing audio",
+          description: "Processing audio input...",
+          status: "in_progress",
+          timestamp: Date.now(),
+        }],
         isComplete: false,
         isSnoozed: false,
         conversationTitle: "Transcribing...",
-        messages: [],
-        currentStep: "Transcribing audio...",
-        totalSteps: 1,
-        currentStepIndex: 0,
+        conversationHistory: [],
       })
 
       // First, transcribe the audio using the same logic as regular recording

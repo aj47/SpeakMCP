@@ -97,6 +97,13 @@ const getConfig = () => {
     mcpContextLastNMessages: 3,
     mcpContextSummarizeCharThreshold: 2000,
 
+    // Tool response processing defaults
+    mcpToolResponseProcessingEnabled: true,
+    mcpToolResponseLargeThreshold: 20000, // 20KB threshold for processing
+    mcpToolResponseCriticalThreshold: 50000, // 50KB threshold for aggressive summarization
+    mcpToolResponseChunkSize: 15000, // Size of chunks for processing
+    mcpToolResponseProgressUpdates: true, // Show progress updates during processing
+
     // Completion verification defaults
     mcpVerifyCompletionEnabled: true,
     mcpVerifyContextMaxItems: 10,

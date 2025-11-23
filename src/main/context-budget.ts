@@ -95,7 +95,7 @@ function getProviderAndModel(): { providerId: string; model: string } {
   return { providerId, model }
 }
 
-async function summarizeContent(content: string, sessionId?: string): Promise<string> {
+export async function summarizeContent(content: string, sessionId?: string): Promise<string> {
   const { providerId: provider } = getProviderAndModel() // align with agent provider
   const MAX_TOKENS_HINT = 400 // soft guidance via prompt only
   const CHUNK_SIZE = 16000 // ~4k tokens per chunk (roughly)

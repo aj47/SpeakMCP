@@ -503,7 +503,7 @@ function analyzeToolCapabilities(
 export async function processTranscriptWithAgentMode(
   transcript: string,
   availableTools: MCPTool[],
-  executeToolCall: (toolCall: MCPToolCall) => Promise<MCPToolResult>,
+  executeToolCall: (toolCall: MCPToolCall, onProgress?: (message: string) => void) => Promise<MCPToolResult>,
   maxIterations: number = 10,
   previousConversationHistory?: Array<{
     role: "user" | "assistant" | "tool"
@@ -1243,7 +1243,11 @@ Always use actual resource IDs from the conversation history or create new ones 
             isAgentMode: true,
             sessionId: currentSessionId,
             onSummarizationProgress: (current, total, message) => {
-              verifyStep.description = `Summarizing for verification (${current}/${total})`
+              // Update the last thinking step with summarization progress
+              const lastThinkingStep = progressSteps.findLast(step => step.type === "thinking")
+              if (lastThinkingStep) {
+                lastThinkingStep.description = `Summarizing for verification (${current}/${total})`
+              }
               emit({
                 currentIteration: iteration,
                 maxIterations,
@@ -1409,7 +1413,20 @@ Always use actual resource IDs from the conversation history or create new ones 
           }
         }, 100)
       })
-      const execPromise = executeToolCall(toolCall)
+      // Create progress callback to update tool execution step
+      const onToolProgress = (message: string) => {
+        toolCallStep.description = message
+        // Emit progress update to show processing status
+        emit({
+          currentIteration: iteration,
+          maxIterations,
+          steps: progressSteps.slice(-3),
+          isComplete: false,
+          conversationHistory: formatConversationForProgress(conversationHistory),
+        })
+      }
+
+      const execPromise = executeToolCall(toolCall, onToolProgress)
       let result = (await Promise.race([
         execPromise,
         stopPromise,
@@ -1504,7 +1521,7 @@ Always use actual resource IDs from the conversation history or create new ones 
             setTimeout(resolve, Math.pow(2, retryCount) * 1000),
           )
 
-          result = await executeToolCall(toolCall)
+          result = await executeToolCall(toolCall, onToolProgress)
         } else {
           break // Don't retry non-transient errors
         }
@@ -1916,7 +1933,11 @@ Please try alternative approaches, break down the task into smaller steps, or pr
             isAgentMode: true,
             sessionId: currentSessionId,
             onSummarizationProgress: (current, total, message) => {
-              verifyStep.description = `Summarizing for verification (${current}/${total})`
+              // Update the last thinking step with summarization progress
+              const lastThinkingStep = progressSteps.findLast(step => step.type === "thinking")
+              if (lastThinkingStep) {
+                lastThinkingStep.description = `Summarizing for verification (${current}/${total})`
+              }
               emit({
                 currentIteration: iteration,
                 maxIterations,
@@ -2132,7 +2153,11 @@ Please try alternative approaches, break down the task into smaller steps, or pr
             isAgentMode: true,
             sessionId: currentSessionId,
             onSummarizationProgress: (current, total, message) => {
-              verifyStep.description = `Summarizing for verification (${current}/${total})`
+              // Update the last thinking step with summarization progress
+              const lastThinkingStep = progressSteps.findLast(step => step.type === "thinking")
+              if (lastThinkingStep) {
+                lastThinkingStep.description = `Summarizing for verification (${current}/${total})`
+              }
               emit({
                 currentIteration: iteration,
                 maxIterations,

@@ -92,7 +92,7 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
   // Computed: get the progress for the focused session ONLY
   // Don't show any progress if no session is focused (e.g., when snoozed)
   const agentProgress = focusedSessionId
-    ? agentProgressById.get(focusedSessionId) ?? null
+    ? agentProgressById?.get(focusedSessionId) ?? null
     : null
 
   // Log when agentProgress changes
@@ -174,7 +174,14 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
   // Listen for agent progress updates
   useEffect(() => {
     const unlisten = rendererHandlers.agentProgressUpdate.listen(
-      (update: AgentProgressUpdate) => {
+      (rawUpdate: AgentProgressUpdate) => {
+        // Normalize optional arrays to prevent undefined .length crashes in UI
+        const update: AgentProgressUpdate = {
+          ...rawUpdate,
+          steps: rawUpdate.steps ?? [],
+          conversationHistory: rawUpdate.conversationHistory ?? [],
+        }
+
         const sessionId = update.sessionId
 
         logUI('[ConversationContext] Received progress update:', {
@@ -183,8 +190,8 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
           isComplete: update.isComplete,
           isSnoozed: update.isSnoozed,
           stepsCount: update.steps.length,
-          conversationHistoryLength: update.conversationHistory?.length || 0,
-          conversationHistoryRoles: update.conversationHistory?.map(m => m.role).join(', ') || 'none'
+          conversationHistoryLength: update.conversationHistory.length,
+          conversationHistoryRoles: update.conversationHistory.map(m => m.role).join(', ') || 'none'
         })
 
         // Update the progress map for this specific session
@@ -201,15 +208,16 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
 
           // Compare key properties to determine if update is needed
           const prevHistoryLen = prevProgress.conversationHistory?.length ?? 0
-          const newHistoryLen = update.conversationHistory?.length ?? 0
+          const newHistoryLen = update.conversationHistory.length
           const prevLastTimestamp = prevProgress.conversationHistory?.[prevHistoryLen - 1]?.timestamp ?? 0
           const newLastTimestamp = update.conversationHistory?.[newHistoryLen - 1]?.timestamp ?? 0
 
+          const prevStepsLen = prevProgress.steps?.length ?? 0
           const hasChanged =
             prevProgress.isComplete !== update.isComplete ||
             prevProgress.currentIteration !== update.currentIteration ||
-            prevProgress.steps.length !== update.steps.length ||
-            JSON.stringify(prevProgress.steps) !==
+            prevStepsLen !== update.steps.length ||
+            JSON.stringify(prevProgress.steps ?? []) !==
               JSON.stringify(update.steps) ||
             prevProgress.finalContent !== update.finalContent ||
             prevProgress.isSnoozed !== update.isSnoozed ||

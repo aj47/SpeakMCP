@@ -69,7 +69,7 @@ const CompactMessage: React.FC<{
   const hasExtras =
     (message.toolCalls?.length ?? 0) > 0 ||
     displayResults.length > 0
-  const shouldCollapse = message.content.length > 100 || hasExtras
+  const shouldCollapse = (message.content?.length ?? 0) > 100 || hasExtras
 
   // TTS functionality
   const generateAudio = async (): Promise<ArrayBuffer> => {
@@ -175,7 +175,7 @@ const CompactMessage: React.FC<{
             "leading-relaxed text-left",
             !isExpanded && shouldCollapse && "line-clamp-2"
           )}>
-            <MarkdownRenderer content={message.content.trim()} />
+          <MarkdownRenderer content={(message.content ?? "").trim()} />
           </div>
           {hasExtras && isExpanded && (
             <div className="mt-2 space-y-2 text-left">
@@ -592,7 +592,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
     try {
       const thisId = progress?.sessionId
       const hasOtherVisible = thisId
-        ? Array.from(agentProgressById.values()).some(p => p.sessionId !== thisId && !p.isSnoozed)
+        ? Array.from(agentProgressById?.values() ?? []).some(p => p && p.sessionId !== thisId && !p.isSnoozed)
         : false
 
       if (thisId && hasOtherVisible) {
@@ -668,10 +668,10 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
       (step) => step.type === "thinking" && step.status === "in_progress",
     )
     if (currentThinkingStep) {
-      if (
-        currentThinkingStep.llmContent &&
-        currentThinkingStep.llmContent.trim().length > 0
-      ) {
+        if (
+          currentThinkingStep.llmContent &&
+          currentThinkingStep.llmContent.trim().length > 0
+        ) {
         messages.push({
           role: "assistant",
           content: currentThinkingStep.llmContent,
@@ -716,7 +716,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
       })
 
     // Add final content if available and different from last thinking step
-    if (finalContent && finalContent.trim().length > 0) {
+      if (finalContent && finalContent.trim().length > 0) {
       const lastMessage = messages[messages.length - 1]
       if (!lastMessage || lastMessage.content !== finalContent) {
         messages.push({
@@ -826,7 +826,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
 
     // Calculate total content length for streaming detection
     const totalContentLength = messages.reduce(
-      (sum, msg) => sum + msg.content.length,
+      (sum, msg) => sum + (msg.content?.length ?? 0),
       0,
     )
 

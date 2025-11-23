@@ -186,6 +186,7 @@ async function initializeMcpWithProgress(config: Config, sessionId: string): Pro
 async function processWithAgentMode(
   text: string,
   conversationId?: string,
+  existingSessionId?: string, // Optional: reuse existing session instead of creating new one
 ): Promise<string> {
   const config = configStore.get()
 
@@ -194,10 +195,10 @@ async function processWithAgentMode(
 
   // Agent mode state is managed per-session via agentSessionStateManager
 
-  // Start tracking this agent session
+  // Start tracking this agent session (or reuse existing one)
   const { agentSessionTracker } = await import("./agent-session-tracker")
   let conversationTitle = text.length > 50 ? text.substring(0, 50) + "..." : text
-  const sessionId = agentSessionTracker.startSession(conversationId, conversationTitle)
+  const sessionId = existingSessionId || agentSessionTracker.startSession(conversationId, conversationTitle)
 
   try {
     if (!config.mcpToolsEnabled) {
@@ -985,6 +986,25 @@ export const router = {
       const config = configStore.get()
       let transcript: string
 
+      // Emit initial loading progress immediately BEFORE transcription
+      // This ensures users see feedback during the (potentially long) STT call
+      const { agentSessionTracker } = await import("./agent-session-tracker")
+      const tempConversationId = input.conversationId || `temp_${Date.now()}`
+      const sessionId = agentSessionTracker.startSession(tempConversationId, "Transcribing...")
+
+      // Emit initial "initializing" progress update
+      await emitAgentProgress({
+        sessionId,
+        conversationId: tempConversationId,
+        isInitializing: true,
+        isComplete: false,
+        isSnoozed: false,
+        conversationTitle: "Transcribing...",
+        messages: [],
+        currentStep: "Transcribing audio...",
+        totalSteps: 1,
+        currentStepIndex: 0,
+      })
 
       // First, transcribe the audio using the same logic as regular recording
       // Use OpenAI or Groq for transcription
@@ -1066,6 +1086,13 @@ export const router = {
         }
       }
 
+      // Update session with actual conversation ID and title after transcription
+      const conversationTitle = transcript.length > 50 ? transcript.substring(0, 50) + "..." : transcript
+      agentSessionTracker.updateSession(sessionId, {
+        conversationId,
+        conversationTitle,
+      })
+
       // Save the recording file immediately
       const recordingId = Date.now().toString()
       fs.writeFileSync(
@@ -1075,7 +1102,8 @@ export const router = {
 
       // Fire-and-forget: Start agent processing without blocking
       // This allows multiple sessions to run concurrently
-      processWithAgentMode(transcript, conversationId)
+      // Pass the sessionId to avoid creating a duplicate session
+      processWithAgentMode(transcript, conversationId, sessionId)
         .then((finalResponse) => {
           // Save to history after completion
           const history = getRecordingHistory()

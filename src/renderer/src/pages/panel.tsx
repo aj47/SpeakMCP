@@ -64,12 +64,12 @@ export function Component() {
 
   // Count truly active sessions (not complete, not snoozed) for mode switching
   // Completed sessions should not prevent the panel from switching back to normal mode for voice dictation
-  const activeSessionCount = Array.from(agentProgressById.values())
-    .filter(progress => !progress.isSnoozed && !progress.isComplete).length
+  const activeSessionCount = Array.from(agentProgressById?.values() ?? [])
+    .filter(progress => progress && !progress.isSnoozed && !progress.isComplete).length
 
   // Count all visible sessions (including completed but not snoozed) for overlay display
-  const visibleSessionCount = Array.from(agentProgressById.values())
-    .filter(progress => !progress.isSnoozed).length
+  const visibleSessionCount = Array.from(agentProgressById?.values() ?? [])
+    .filter(progress => progress && !progress.isSnoozed).length
   const hasMultipleSessions = visibleSessionCount > 1
 
   // Aggregate session state helpers
@@ -80,7 +80,7 @@ export function Component() {
   const displayProgress = useMemo(() => {
     if (agentProgress && !agentProgress.isSnoozed) return agentProgress
     // pick first non-snoozed session if focused one is missing/snoozed
-    const entry = Array.from(agentProgressById.values()).find(p => !p.isSnoozed)
+    const entry = Array.from(agentProgressById?.values() ?? []).find(p => p && !p.isSnoozed)
     return entry || null
   }, [agentProgress, agentProgressById])
 
@@ -525,13 +525,15 @@ export function Component() {
     logUI('[Panel] Overlay visibility check:', {
       hasAgentProgress: !!agentProgress,
       mcpTranscribePending: mcpTranscribeMutation.isPending,
-      shouldShowOverlay: anyVisibleSessions,
+      shouldShowOverlay: anyVisibleSessions && !recording,
+      anyVisibleSessions,
+      recording,
       anyActiveNonSnoozed,
       agentProgressSessionId: agentProgress?.sessionId,
       agentProgressComplete: agentProgress?.isComplete,
       agentProgressSnoozed: agentProgress?.isSnoozed
     })
-  }, [agentProgress, anyActiveNonSnoozed, anyVisibleSessions, mcpTranscribeMutation.isPending])
+  }, [agentProgress, anyActiveNonSnoozed, anyVisibleSessions, recording, mcpTranscribeMutation.isPending])
 
   // Clear agent progress handler
   useEffect(() => {
@@ -677,7 +679,8 @@ export function Component() {
               )}
 
               {/* Agent progress overlay - left-aligned and full coverage */}
-              {anyVisibleSessions && (
+              {/* Hide overlay when recording to prevent waveform from appearing over completed sessions */}
+              {anyVisibleSessions && !recording && (
                 hasMultipleSessions ? (
                   <MultiAgentProgressView
                     variant="overlay"

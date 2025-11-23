@@ -168,6 +168,7 @@ execute_javascript_electron-native({
 - `snoozeAgentSession({ sessionId })` - Snooze a session
 - `unsnoozeAgentSession({ sessionId })` - Unsnooze a session
 - `clearAgentProgress()` - Clear all agent progress
+- `emergencyStopAgent()` - Emergency stop all agent sessions (kill switch)
 
 ### Text Input
 - `createTextInput({ text })` - Process text without agent mode
@@ -175,6 +176,35 @@ execute_javascript_electron-native({
 ### Configuration
 - `getConfig()` - Get current configuration
 - `updateConfig({ ...config })` - Update configuration
+
+### Text-to-Speech (TTS)
+- `generateSpeech({ text, providerId?, voice?, model?, speed? })` - Generate speech audio
+  - Providers: `openai`, `groq`, `gemini`
+  - Returns: `{ audio: ArrayBuffer, processedText: string, provider: string }`
+
+### OAuth (via `window.electronAPI`)
+- `initiateOAuthFlow(serverName)` - Start OAuth flow for MCP server
+- `completeOAuthFlow(serverName, code, state)` - Complete OAuth with authorization code
+- `getOAuthStatus(serverName)` - Check OAuth authentication status
+- `revokeOAuthTokens(serverName)` - Revoke OAuth tokens for server
+
+### Conversation Management
+- `getConversationHistory()` - Get all conversation history
+- `loadConversation({ conversationId })` - Load specific conversation
+- `addMessageToConversation({ conversationId, content, role, toolCalls?, toolResults? })` - Add message
+- `deleteConversation({ conversationId })` - Delete specific conversation
+- `deleteAllConversations()` - Delete all conversations
+
+### MCP Server Management
+- `getMcpServerStatus()` - Get status of all MCP servers
+- `restartMcpServer({ serverName })` - Restart specific MCP server
+- `stopMcpServer({ serverName })` - Stop specific MCP server
+- `getMcpServerLogs({ serverName })` - Get logs from MCP server
+- `clearMcpServerLogs({ serverName })` - Clear MCP server logs
+- `testMCPServer(serverName, config)` - Test MCP server configuration (via `window.electronAPI`)
+
+### Model Management
+- `fetchAvailableModels({ providerId })` - Fetch available models for provider
 
 ---
 
@@ -265,6 +295,896 @@ execute_javascript_electron-native({
 execute_javascript_electron-native({
   targetId: "C8AC35BF57CC8E8E4540C5DB65FBC2C0",
   code: "window.electron.ipcRenderer.invoke('getAgentSessions')"
+})
+```
+
+---
+
+## Advanced Testing Patterns
+
+### Pattern 4: Toggle Voice Dictation (Fn Key)
+
+**Note:** The Fn key toggle voice dictation is a keyboard-driven feature that starts/stops recording with a single key press (instead of hold-to-record). This is primarily tested through keyboard interaction, but you can monitor the recording state.
+
+**Step 1:** Check recording state using `execute_javascript_electron-native`:
+```javascript
+execute_javascript_electron-native({
+  targetId: "C8AC35BF57CC8E8E4540C5DB65FBC2C0",
+  code: `
+    window.electron.ipcRenderer.invoke('getConfig').then(config => {
+      return {
+        toggleVoiceDictationEnabled: config.toggleVoiceDictationEnabled,
+        toggleVoiceDictationKey: config.toggleVoiceDictationKey
+      };
+    })
+  `
+})
+```
+
+**Step 2:** Monitor recording events in terminal:
+```
+Expected logs when Fn key is pressed:
+[recordEvent] type: start
+[keyboard.ts] Toggle voice dictation started
+[recordEvent] type: end
+[keyboard.ts] Toggle voice dictation stopped
+```
+
+**Step 3:** Check recording history after dictation:
+```javascript
+execute_javascript_electron-native({
+  targetId: "C8AC35BF57CC8E8E4540C5DB65FBC2C0",
+  code: `
+    window.electron.ipcRenderer.invoke('getRecordingHistory').then(result => {
+      console.log('[TEST] Recording history:', result.slice(0, 3));
+      return result.slice(0, 3).map(r => ({
+        id: r.id,
+        transcript: r.transcript,
+        duration: r.duration
+      }));
+    })
+  `
+})
+```
+
+**Expected behavior:**
+- First Fn press: Start recording (tray icon changes)
+- Second Fn press: Stop recording and transcribe
+- Transcript auto-pasted to active application
+- Recording saved to history
+
+**Alternative: Simulate recording creation (for testing):**
+```javascript
+execute_javascript_electron-native({
+  targetId: "C8AC35BF57CC8E8E4540C5DB65FBC2C0",
+  code: `
+    // Note: This requires actual audio data, so it's mainly for reference
+    // Real testing should use keyboard interaction
+    window.electron.ipcRenderer.invoke('recordEvent', {
+      type: 'start'
+    }).then(() => {
+      console.log('[TEST] Recording started');
+      return { success: true };
+    })
+  `
+})
+```
+
+### Pattern 5: Text Input Mode (Ctrl+T)
+
+**Step 1:** Connect to main window using `connect_to_electron_target_electron-native`:
+```javascript
+connect_to_electron_target_electron-native({
+  targetId: "C8AC35BF57CC8E8E4540C5DB65FBC2C0"
+})
+```
+
+**Step 2:** Trigger text input mode using `execute_javascript_electron-native`:
+```javascript
+execute_javascript_electron-native({
+  targetId: "C8AC35BF57CC8E8E4540C5DB65FBC2C0",
+  code: `
+    window.electron.ipcRenderer.invoke('createTextInput', {
+      text: 'Test text input without agent mode'
+    }).then(result => {
+      console.log('[TEST] Text input result:', result);
+      return result;
+    })
+  `
+})
+```
+
+**Expected behavior:**
+- Text is processed without agent mode
+- Post-processing applied if enabled in config
+- Text is auto-pasted if configured
+- Saved to recording history
+
+**Check config for text input:**
+```javascript
+execute_javascript_electron-native({
+  targetId: "C8AC35BF57CC8E8E4540C5DB65FBC2C0",
+  code: `
+    window.electron.ipcRenderer.invoke('getConfig').then(config => {
+      return {
+        transcriptPostProcessingEnabled: config.transcriptPostProcessingEnabled,
+        customTextInputShortcut: config.customTextInputShortcut
+      };
+    })
+  `
+})
+```
+
+### Pattern 5: Kill Switch / Emergency Stop
+
+**Step 1:** Start an agent session using `execute_javascript_electron-native`:
+```javascript
+execute_javascript_electron-native({
+  targetId: "C8AC35BF57CC8E8E4540C5DB65FBC2C0",
+  code: `
+    window.electron.ipcRenderer.invoke('createMcpTextInput', {
+      text: 'Long running task that will be stopped'
+    }).then(result => {
+      console.log('[TEST] Session started:', result);
+      return result;
+    })
+  `
+})
+```
+
+**Step 2:** Trigger emergency stop using `execute_javascript_electron-native`:
+```javascript
+execute_javascript_electron-native({
+  targetId: "C8AC35BF57CC8E8E4540C5DB65FBC2C0",
+  code: `
+    window.electron.ipcRenderer.invoke('emergencyStopAgent').then(result => {
+      console.log('[TEST] Emergency stop result:', result);
+      return result;
+    })
+  `
+})
+```
+
+**Expected behavior:**
+- All active agent sessions are stopped
+- LLM requests are aborted
+- Child processes are killed
+- Panel shows "Agent stopped" message
+- Sessions removed from active sessions list
+
+**Verify sessions were stopped:**
+```javascript
+execute_javascript_electron-native({
+  targetId: "C8AC35BF57CC8E8E4540C5DB65FBC2C0",
+  code: "window.electron.ipcRenderer.invoke('getAgentSessions')"
+})
+```
+
+**Stop a specific session (alternative to emergency stop):**
+```javascript
+execute_javascript_electron-native({
+  targetId: "C8AC35BF57CC8E8E4540C5DB65FBC2C0",
+  code: `
+    window.electron.ipcRenderer.invoke('stopAgentSession', {
+      sessionId: 'session_XXX'
+    }).then(result => {
+      console.log('[TEST] Session stopped:', result);
+      return result;
+    })
+  `
+})
+```
+
+### Pattern 7: Text-to-Speech (TTS)
+
+**Step 1:** Check TTS configuration using `execute_javascript_electron-native`:
+```javascript
+execute_javascript_electron-native({
+  targetId: "C8AC35BF57CC8E8E4540C5DB65FBC2C0",
+  code: `
+    window.electron.ipcRenderer.invoke('getConfig').then(config => {
+      return {
+        ttsEnabled: config.ttsEnabled,
+        ttsProviderId: config.ttsProviderId,
+        openaiTtsVoice: config.openaiTtsVoice,
+        openaiTtsModel: config.openaiTtsModel,
+        groqTtsVoice: config.groqTtsVoice,
+        groqTtsModel: config.groqTtsModel,
+        geminiTtsVoice: config.geminiTtsVoice,
+        geminiTtsModel: config.geminiTtsModel,
+        ttsAutoPlay: config.ttsAutoPlay,
+        ttsPreprocessingEnabled: config.ttsPreprocessingEnabled
+      };
+    })
+  `
+})
+```
+
+**Step 2:** Generate speech using `execute_javascript_electron-native`:
+```javascript
+execute_javascript_electron-native({
+  targetId: "C8AC35BF57CC8E8E4540C5DB65FBC2C0",
+  code: `
+    window.electron.ipcRenderer.invoke('generateSpeech', {
+      text: 'Hello, this is a test of text to speech.',
+      providerId: 'openai',
+      voice: 'alloy',
+      model: 'tts-1',
+      speed: 1.0
+    }).then(result => {
+      console.log('[TEST] TTS generated:', {
+        provider: result.provider,
+        processedText: result.processedText,
+        audioSize: result.audio.byteLength
+      });
+      return { success: true, audioSize: result.audio.byteLength };
+    }).catch(error => {
+      console.error('[TEST] TTS error:', error);
+      return { error: error.message };
+    })
+  `
+})
+```
+
+**Test different TTS providers:**
+
+**OpenAI TTS:**
+```javascript
+execute_javascript_electron-native({
+  targetId: "C8AC35BF57CC8E8E4540C5DB65FBC2C0",
+  code: `
+    window.electron.ipcRenderer.invoke('generateSpeech', {
+      text: 'Testing OpenAI TTS',
+      providerId: 'openai',
+      voice: 'nova',
+      model: 'tts-1-hd'
+    })
+  `
+})
+```
+
+**Groq TTS:**
+```javascript
+execute_javascript_electron-native({
+  targetId: "C8AC35BF57CC8E8E4540C5DB65FBC2C0",
+  code: `
+    window.electron.ipcRenderer.invoke('generateSpeech', {
+      text: 'Testing Groq TTS',
+      providerId: 'groq',
+      voice: 'Fritz-PlayAI',
+      model: 'playai-tts'
+    })
+  `
+})
+```
+
+**Gemini TTS:**
+```javascript
+execute_javascript_electron-native({
+  targetId: "C8AC35BF57CC8E8E4540C5DB65FBC2C0",
+  code: `
+    window.electron.ipcRenderer.invoke('generateSpeech', {
+      text: 'Testing Gemini TTS',
+      providerId: 'gemini',
+      voice: 'Puck',
+      model: 'gemini-2.5-flash-preview-tts'
+    })
+  `
+})
+```
+
+**Test TTS preprocessing:**
+```javascript
+execute_javascript_electron-native({
+  targetId: "C8AC35BF57CC8E8E4540C5DB65FBC2C0",
+  code: `
+    window.electron.ipcRenderer.invoke('generateSpeech', {
+      text: 'Check out https://example.com and this code: \`console.log("test")\`',
+      providerId: 'openai'
+    }).then(result => {
+      console.log('[TEST] Preprocessed text:', result.processedText);
+      return result;
+    })
+  `
+})
+```
+
+**Expected preprocessing:**
+- URLs removed or converted
+- Code blocks removed or converted
+- Markdown converted to natural speech
+
+### Pattern 8: OAuth Flow
+
+**Step 1:** Check OAuth status for a server using `execute_javascript_electron-native`:
+```javascript
+execute_javascript_electron-native({
+  targetId: "C8AC35BF57CC8E8E4540C5DB65FBC2C0",
+  code: `
+    window.electronAPI.getOAuthStatus('your-server-name').then(result => {
+      console.log('[TEST] OAuth status:', result);
+      return result;
+    })
+  `
+})
+```
+
+**Expected response:**
+```json
+{
+  "configured": true,
+  "authenticated": false,
+  "tokenExpiry": null
+}
+```
+
+**Step 2:** Initiate OAuth flow using `execute_javascript_electron-native`:
+```javascript
+execute_javascript_electron-native({
+  targetId: "C8AC35BF57CC8E8E4540C5DB65FBC2C0",
+  code: `
+    window.electronAPI.initiateOAuthFlow('your-server-name').then(result => {
+      console.log('[TEST] OAuth initiated:', result);
+      return result;
+    })
+  `
+})
+```
+
+**Expected response:**
+```json
+{
+  "authorizationUrl": "https://...",
+  "state": "random-state-string"
+}
+```
+
+**Step 3:** Complete OAuth flow (after user authorizes):
+```javascript
+execute_javascript_electron-native({
+  targetId: "C8AC35BF57CC8E8E4540C5DB65FBC2C0",
+  code: `
+    window.electronAPI.completeOAuthFlow(
+      'your-server-name',
+      'authorization-code',
+      'state-from-step-2'
+    ).then(result => {
+      console.log('[TEST] OAuth completed:', result);
+      return result;
+    })
+  `
+})
+```
+
+**Step 4:** Verify authentication:
+```javascript
+execute_javascript_electron-native({
+  targetId: "C8AC35BF57CC8E8E4540C5DB65FBC2C0",
+  code: `
+    window.electronAPI.getOAuthStatus('your-server-name').then(result => {
+      console.log('[TEST] OAuth status after auth:', result);
+      return result;
+    })
+  `
+})
+```
+
+**Expected response:**
+```json
+{
+  "configured": true,
+  "authenticated": true,
+  "tokenExpiry": 1234567890
+}
+```
+
+**Step 5:** Revoke OAuth tokens:
+```javascript
+execute_javascript_electron-native({
+  targetId: "C8AC35BF57CC8E8E4540C5DB65FBC2C0",
+  code: `
+    window.electronAPI.revokeOAuthTokens('your-server-name').then(result => {
+      console.log('[TEST] OAuth revoked:', result);
+      return result;
+    })
+  `
+})
+```
+
+### Pattern 9: Conversation Management
+
+**Step 1:** Get conversation history using `execute_javascript_electron-native`:
+```javascript
+execute_javascript_electron-native({
+  targetId: "C8AC35BF57CC8E8E4540C5DB65FBC2C0",
+  code: `
+    window.electron.ipcRenderer.invoke('getConversationHistory').then(result => {
+      console.log('[TEST] Conversation history:', result);
+      return result.map(c => ({ id: c.id, title: c.title, messageCount: c.messages?.length }));
+    })
+  `
+})
+```
+
+**Step 2:** Load a specific conversation:
+```javascript
+execute_javascript_electron-native({
+  targetId: "C8AC35BF57CC8E8E4540C5DB65FBC2C0",
+  code: `
+    window.electron.ipcRenderer.invoke('loadConversation', {
+      conversationId: 'conversation-id-here'
+    }).then(result => {
+      console.log('[TEST] Loaded conversation:', result);
+      return result;
+    })
+  `
+})
+```
+
+**Step 3:** Add message to conversation:
+```javascript
+execute_javascript_electron-native({
+  targetId: "C8AC35BF57CC8E8E4540C5DB65FBC2C0",
+  code: `
+    window.electron.ipcRenderer.invoke('addMessageToConversation', {
+      conversationId: 'conversation-id-here',
+      content: 'Follow-up question',
+      role: 'user'
+    }).then(result => {
+      console.log('[TEST] Message added:', result);
+      return result;
+    })
+  `
+})
+```
+
+**Step 4:** Continue conversation with agent:
+```javascript
+execute_javascript_electron-native({
+  targetId: "C8AC35BF57CC8E8E4540C5DB65FBC2C0",
+  code: `
+    window.electron.ipcRenderer.invoke('createMcpTextInput', {
+      text: 'Continue the previous task',
+      conversationId: 'conversation-id-here'
+    }).then(result => {
+      console.log('[TEST] Continued conversation:', result);
+      return result;
+    })
+  `
+})
+```
+
+**Step 5:** Delete a conversation:
+```javascript
+execute_javascript_electron-native({
+  targetId: "C8AC35BF57CC8E8E4540C5DB65FBC2C0",
+  code: `
+    window.electron.ipcRenderer.invoke('deleteConversation', {
+      conversationId: 'conversation-id-here'
+    }).then(result => {
+      console.log('[TEST] Conversation deleted');
+      return { success: true };
+    })
+  `
+})
+```
+
+**Step 6:** Delete all conversations:
+```javascript
+execute_javascript_electron-native({
+  targetId: "C8AC35BF57CC8E8E4540C5DB65FBC2C0",
+  code: `
+    window.electron.ipcRenderer.invoke('deleteAllConversations').then(result => {
+      console.log('[TEST] All conversations deleted');
+      return { success: true };
+    })
+  `
+})
+```
+
+### Pattern 10: Tool Management
+
+**Step 1:** Get MCP server status using `execute_javascript_electron-native`:
+```javascript
+execute_javascript_electron-native({
+  targetId: "C8AC35BF57CC8E8E4540C5DB65FBC2C0",
+  code: `
+    window.electron.ipcRenderer.invoke('getMcpServerStatus').then(result => {
+      console.log('[TEST] MCP server status:', result);
+      return result;
+    })
+  `
+})
+```
+
+**Step 2:** Get available tools from a server:
+```javascript
+execute_javascript_electron-native({
+  targetId: "C8AC35BF57CC8E8E4540C5DB65FBC2C0",
+  code: `
+    window.electron.ipcRenderer.invoke('getMcpServerStatus').then(result => {
+      const server = result.find(s => s.name === 'your-server-name');
+      console.log('[TEST] Available tools:', server?.tools);
+      return server?.tools;
+    })
+  `
+})
+```
+
+**Step 3:** Restart an MCP server:
+```javascript
+execute_javascript_electron-native({
+  targetId: "C8AC35BF57CC8E8E4540C5DB65FBC2C0",
+  code: `
+    window.electron.ipcRenderer.invoke('restartMcpServer', {
+      serverName: 'your-server-name'
+    }).then(result => {
+      console.log('[TEST] Server restarted:', result);
+      return result;
+    })
+  `
+})
+```
+
+**Step 4:** Stop an MCP server:
+```javascript
+execute_javascript_electron-native({
+  targetId: "C8AC35BF57CC8E8E4540C5DB65FBC2C0",
+  code: `
+    window.electron.ipcRenderer.invoke('stopMcpServer', {
+      serverName: 'your-server-name'
+    }).then(result => {
+      console.log('[TEST] Server stopped:', result);
+      return result;
+    })
+  `
+})
+```
+
+**Step 5:** Get server logs:
+```javascript
+execute_javascript_electron-native({
+  targetId: "C8AC35BF57CC8E8E4540C5DB65FBC2C0",
+  code: `
+    window.electron.ipcRenderer.invoke('getMcpServerLogs', {
+      serverName: 'your-server-name'
+    }).then(result => {
+      console.log('[TEST] Server logs:', result);
+      return result;
+    })
+  `
+})
+```
+
+**Step 6:** Clear server logs:
+```javascript
+execute_javascript_electron-native({
+  targetId: "C8AC35BF57CC8E8E4540C5DB65FBC2C0",
+  code: `
+    window.electron.ipcRenderer.invoke('clearMcpServerLogs', {
+      serverName: 'your-server-name'
+    }).then(result => {
+      console.log('[TEST] Logs cleared');
+      return result;
+    })
+  `
+})
+```
+
+**Step 7:** Test MCP server configuration:
+```javascript
+execute_javascript_electron-native({
+  targetId: "C8AC35BF57CC8E8E4540C5DB65FBC2C0",
+  code: `
+    window.electronAPI.testMCPServer('your-server-name', {
+      command: 'npx',
+      args: ['-y', '@modelcontextprotocol/server-filesystem', '/tmp']
+    }).then(result => {
+      console.log('[TEST] Server test result:', result);
+      return result;
+    })
+  `
+})
+```
+
+### Pattern 11: Model Selection
+
+**Step 1:** Get current model configuration:
+```javascript
+execute_javascript_electron-native({
+  targetId: "C8AC35BF57CC8E8E4540C5DB65FBC2C0",
+  code: `
+    window.electron.ipcRenderer.invoke('getConfig').then(config => {
+      return {
+        chatProviderId: config.chatProviderId,
+        openaiChatModel: config.openaiChatModel,
+        groqChatModel: config.groqChatModel,
+        geminiChatModel: config.geminiChatModel,
+        sttProviderId: config.sttProviderId,
+        openaiSttModel: config.openaiSttModel,
+        groqSttModel: config.groqSttModel,
+        ttsProviderId: config.ttsProviderId,
+        openaiTtsModel: config.openaiTtsModel,
+        groqTtsModel: config.groqTtsModel,
+        geminiTtsModel: config.geminiTtsModel
+      };
+    })
+  `
+})
+```
+
+**Step 2:** Fetch available models for a provider:
+```javascript
+execute_javascript_electron-native({
+  targetId: "C8AC35BF57CC8E8E4540C5DB65FBC2C0",
+  code: `
+    window.electron.ipcRenderer.invoke('fetchAvailableModels', {
+      providerId: 'openai'
+    }).then(result => {
+      console.log('[TEST] Available models:', result);
+      return result;
+    })
+  `
+})
+```
+
+**Step 3:** Update chat model:
+```javascript
+execute_javascript_electron-native({
+  targetId: "C8AC35BF57CC8E8E4540C5DB65FBC2C0",
+  code: `
+    window.electron.ipcRenderer.invoke('updateConfig', {
+      chatProviderId: 'openai',
+      openaiChatModel: 'gpt-4o'
+    }).then(result => {
+      console.log('[TEST] Model updated');
+      return { success: true };
+    })
+  `
+})
+```
+
+**Step 4:** Update TTS model and voice:
+```javascript
+execute_javascript_electron-native({
+  targetId: "C8AC35BF57CC8E8E4540C5DB65FBC2C0",
+  code: `
+    window.electron.ipcRenderer.invoke('updateConfig', {
+      ttsProviderId: 'openai',
+      openaiTtsModel: 'tts-1-hd',
+      openaiTtsVoice: 'nova'
+    }).then(result => {
+      console.log('[TEST] TTS model updated');
+      return { success: true };
+    })
+  `
+})
+```
+
+**Step 5:** Test with new model:
+```javascript
+execute_javascript_electron-native({
+  targetId: "C8AC35BF57CC8E8E4540C5DB65FBC2C0",
+  code: `
+    window.electron.ipcRenderer.invoke('createMcpTextInput', {
+      text: 'Test with new model configuration'
+    }).then(result => {
+      console.log('[TEST] Testing new model:', result);
+      return result;
+    })
+  `
+})
+```
+
+### Pattern 12: Rate Limit Handling
+
+**Note:** Rate limit handling is automatic with exponential backoff. To test it, you need to trigger rate limits.
+
+**Step 1:** Check current retry configuration:
+```javascript
+execute_javascript_electron-native({
+  targetId: "C8AC35BF57CC8E8E4540C5DB65FBC2C0",
+  code: `
+    window.electron.ipcRenderer.invoke('getConfig').then(config => {
+      return {
+        chatProviderId: config.chatProviderId,
+        openaiApiKey: config.openaiApiKey ? '***configured***' : 'not set',
+        groqApiKey: config.groqApiKey ? '***configured***' : 'not set',
+        geminiApiKey: config.geminiApiKey ? '***configured***' : 'not set'
+      };
+    })
+  `
+})
+```
+
+**Step 2:** Trigger multiple requests to potentially hit rate limits:
+```javascript
+execute_javascript_electron-native({
+  targetId: "C8AC35BF57CC8E8E4540C5DB65FBC2C0",
+  code: `
+    // Trigger multiple agent sessions rapidly
+    const promises = [];
+    for (let i = 0; i < 5; i++) {
+      promises.push(
+        window.electron.ipcRenderer.invoke('createMcpTextInput', {
+          text: \`Rate limit test \${i + 1}\`
+        })
+      );
+    }
+    Promise.all(promises).then(results => {
+      console.log('[TEST] All requests completed:', results);
+      return results;
+    }).catch(error => {
+      console.error('[TEST] Rate limit error:', error);
+      return { error: error.message };
+    })
+  `
+})
+```
+
+**Step 3:** Watch terminal output for retry behavior:
+```
+Expected logs:
+[llm.ts] Rate limit hit (429), retrying in 1000ms...
+[llm.ts] Rate limit hit (429), retrying in 2000ms...
+[llm.ts] Rate limit hit (429), retrying in 4000ms...
+```
+
+**Step 4:** Monitor agent sessions during rate limiting:
+```javascript
+execute_javascript_electron-native({
+  targetId: "C8AC35BF57CC8E8E4540C5DB65FBC2C0",
+  code: `
+    window.electron.ipcRenderer.invoke('getAgentSessions').then(result => {
+      console.log('[TEST] Sessions during rate limit:', {
+        activeCount: result.activeSessions.length,
+        recentCount: result.recentSessions.length
+      });
+      return result;
+    })
+  `
+})
+```
+
+**Expected behavior:**
+- Automatic retry with exponential backoff (1s, 2s, 4s, 8s, etc.)
+- Sessions remain active during retries
+- Eventually succeeds or fails after max retries
+- Error messages shown in UI if all retries fail
+
+### Pattern 13: Multi-Language Support
+
+**Step 1:** Check current language configuration:
+```javascript
+execute_javascript_electron-native({
+  targetId: "C8AC35BF57CC8E8E4540C5DB65FBC2C0",
+  code: `
+    window.electron.ipcRenderer.invoke('getConfig').then(config => {
+      return {
+        sttLanguage: config.sttLanguage,
+        sttProviderId: config.sttProviderId,
+        ttsProviderId: config.ttsProviderId
+      };
+    })
+  `
+})
+```
+
+**Step 2:** Update language for speech recognition:
+```javascript
+execute_javascript_electron-native({
+  targetId: "C8AC35BF57CC8E8E4540C5DB65FBC2C0",
+  code: `
+    window.electron.ipcRenderer.invoke('updateConfig', {
+      sttLanguage: 'es'  // Spanish
+    }).then(result => {
+      console.log('[TEST] Language updated to Spanish');
+      return { success: true };
+    })
+  `
+})
+```
+
+**Supported languages:**
+- `en` - English
+- `es` - Spanish
+- `fr` - French
+- `de` - German
+- `zh` - Chinese
+- `ja` - Japanese
+- `ar` - Arabic
+- `hi` - Hindi
+- And 20+ more languages
+
+**Step 3:** Test TTS with different languages:
+
+**Spanish TTS:**
+```javascript
+execute_javascript_electron-native({
+  targetId: "C8AC35BF57CC8E8E4540C5DB65FBC2C0",
+  code: `
+    window.electron.ipcRenderer.invoke('generateSpeech', {
+      text: 'Hola, ¿cómo estás?',
+      providerId: 'openai',
+      voice: 'nova'
+    }).then(result => {
+      console.log('[TEST] Spanish TTS generated');
+      return { success: true };
+    })
+  `
+})
+```
+
+**French TTS:**
+```javascript
+execute_javascript_electron-native({
+  targetId: "C8AC35BF57CC8E8E4540C5DB65FBC2C0",
+  code: `
+    window.electron.ipcRenderer.invoke('generateSpeech', {
+      text: 'Bonjour, comment allez-vous?',
+      providerId: 'openai',
+      voice: 'alloy'
+    }).then(result => {
+      console.log('[TEST] French TTS generated');
+      return { success: true };
+    })
+  `
+})
+```
+
+**Arabic TTS (Groq):**
+```javascript
+execute_javascript_electron-native({
+  targetId: "C8AC35BF57CC8E8E4540C5DB65FBC2C0",
+  code: `
+    window.electron.ipcRenderer.invoke('updateConfig', {
+      ttsProviderId: 'groq',
+      groqTtsModel: 'playai-tts-arabic',
+      groqTtsVoice: 'Ammar-PlayAI'
+    }).then(() => {
+      return window.electron.ipcRenderer.invoke('generateSpeech', {
+        text: 'مرحبا، كيف حالك؟',
+        providerId: 'groq'
+      });
+    }).then(result => {
+      console.log('[TEST] Arabic TTS generated');
+      return { success: true };
+    })
+  `
+})
+```
+
+**Step 4:** Test multi-language agent session:
+```javascript
+execute_javascript_electron-native({
+  targetId: "C8AC35BF57CC8E8E4540C5DB65FBC2C0",
+  code: `
+    window.electron.ipcRenderer.invoke('updateConfig', {
+      sttLanguage: 'es'
+    }).then(() => {
+      return window.electron.ipcRenderer.invoke('createMcpTextInput', {
+        text: '¿Cuál es el clima hoy?'
+      });
+    }).then(result => {
+      console.log('[TEST] Spanish agent session started:', result);
+      return result;
+    })
+  `
+})
+```
+
+**Step 5:** Reset to English:
+```javascript
+execute_javascript_electron-native({
+  targetId: "C8AC35BF57CC8E8E4540C5DB65FBC2C0",
+  code: `
+    window.electron.ipcRenderer.invoke('updateConfig', {
+      sttLanguage: 'en'
+    }).then(result => {
+      console.log('[TEST] Language reset to English');
+      return { success: true };
+    })
+  `
 })
 ```
 
@@ -444,6 +1364,6 @@ This gives you the same capabilities but through Chrome's DevTools UI instead of
 
 ---
 
-**Last Updated:** November 11, 2025
-**Status:** ✅ Working - CDP debugging fully functional
+**Last Updated:** November 23, 2025
+**Status:** ✅ Working - CDP debugging fully functional with comprehensive testing patterns
 

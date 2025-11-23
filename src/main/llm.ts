@@ -1099,12 +1099,14 @@ Always use actual resource IDs from the conversation history or create new ones 
 
     if (explicitlyComplete && !hasToolCalls) {
       // Agent claims completion but provided no toolCalls.
-      // If the content still contains tool-call markers, treat as not complete and nudge for structured toolCalls.
+      // If the content contains any invalid formatting, nudge for proper JSON
       const contentText = (llmResponse.content || "")
-      const hasToolMarkers = /<\|tool_calls_section_begin\|>|<\|tool_call_begin\|>/i.test(contentText)
-      if (hasToolMarkers) {
-        conversationHistory.push({ role: "assistant", content: contentText.replace(/<\|[^|]*\|>/g, "").trim() })
-        conversationHistory.push({ role: "user", content: "Please return a valid JSON object with toolCalls per the schema so we can proceed." })
+      // Check for any non-JSON formatting that indicates the model is confused
+      const hasInvalidFormat = /<\|/.test(contentText) || contentText.includes("```") ||
+                              (!contentText.startsWith("{") && contentText.length > 10)
+      if (hasInvalidFormat) {
+        conversationHistory.push({ role: "assistant", content: contentText.trim() })
+        conversationHistory.push({ role: "user", content: "Please return a valid JSON object with toolCalls per the schema. Do not use any special markers or formatting - only pure JSON." })
         continue
       }
 

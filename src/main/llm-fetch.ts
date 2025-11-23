@@ -1110,12 +1110,12 @@ async function makeLLMCallAttempt(
     if (response.needsMoreWork === undefined && !response.toolCalls) {
       response.needsMoreWork = true
     }
-    // Safety: If JSON says no more work but there are no toolCalls and the content
-    // contains tool-call markers, override to needsMoreWork=true
-    const toolMarkers = /<\|tool_calls_section_begin\|>|<\|tool_call_begin\|>/i
-    const text = (response.content || "").replace(/<\|[^|]*\|>/g, "").trim()
-    if (response.needsMoreWork === false && (!response.toolCalls || response.toolCalls.length === 0) && toolMarkers.test(text)) {
-      response.needsMoreWork = true
+    // Safety: If JSON says no more work but there are no toolCalls, ensure needsMoreWork is properly set
+    if (response.needsMoreWork === false && (!response.toolCalls || response.toolCalls.length === 0)) {
+      // Only allow completion if there's meaningful content
+      if (!response.content || response.content.trim().length < 10) {
+        response.needsMoreWork = true
+      }
     }
 
     if (isDebugLLM()) {
@@ -1130,14 +1130,16 @@ async function makeLLMCallAttempt(
     return response
   }
 
-  // If no valid JSON found, decide conservatively based on content
-  // If content contains tool-call markers, do NOT mark complete: keep needsMoreWork=true so the agent can iterate.
-  const hasToolMarkers = /<\|tool_calls_section_begin\|>|<\|tool_call_begin\|>/i.test(content || "")
+  // If no valid JSON found, treat as invalid response that needs correction
+  // Clean any special markers that might confuse the model
   const cleaned = (content || "").replace(/<\|[^|]*\|>/g, "").trim()
-  if (hasToolMarkers) {
+
+  // If the response contains any special markers or invalid formatting, it needs to be corrected
+  if (/<\|/.test(content || "") || content?.includes("```")) {
     if (isDebugLLM()) {
-      logLLM("✅ Returning plain text with tool markers (needsMoreWork=true)")
+      logLLM("⚠️ Response contains invalid formatting - needs correction")
     }
+    // Return as content but mark as needing more work to trigger correction
     return { content: cleaned, needsMoreWork: true }
   }
   // Otherwise, treat plain text as a final response

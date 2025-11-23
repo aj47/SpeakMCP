@@ -992,27 +992,28 @@ export const router = {
       const tempConversationId = input.conversationId || `temp_${Date.now()}`
       const sessionId = agentSessionTracker.startSession(tempConversationId, "Transcribing...")
 
-      // Emit initial "initializing" progress update
-      await emitAgentProgress({
-        sessionId,
-        conversationId: tempConversationId,
-        currentIteration: 0,
-        maxIterations: 1,
-        steps: [{
-          id: `transcribe_${Date.now()}`,
-          type: "thinking",
-          title: "Transcribing audio",
-          description: "Processing audio input...",
-          status: "in_progress",
-          timestamp: Date.now(),
-        }],
-        isComplete: false,
-        isSnoozed: false,
-        conversationTitle: "Transcribing...",
-        conversationHistory: [],
-      })
+      try {
+        // Emit initial "initializing" progress update
+        await emitAgentProgress({
+          sessionId,
+          conversationId: tempConversationId,
+          currentIteration: 0,
+          maxIterations: 1,
+          steps: [{
+            id: `transcribe_${Date.now()}`,
+            type: "thinking",
+            title: "Transcribing audio",
+            description: "Processing audio input...",
+            status: "in_progress",
+            timestamp: Date.now(),
+          }],
+          isComplete: false,
+          isSnoozed: false,
+          conversationTitle: "Transcribing...",
+          conversationHistory: [],
+        })
 
-      // First, transcribe the audio using the same logic as regular recording
+        // First, transcribe the audio using the same logic as regular recording
       // Use OpenAI or Groq for transcription
       const form = new FormData()
       form.append(
@@ -1106,10 +1107,10 @@ export const router = {
         Buffer.from(input.recording),
       )
 
-      // Fire-and-forget: Start agent processing without blocking
-      // This allows multiple sessions to run concurrently
-      // Pass the sessionId to avoid creating a duplicate session
-      processWithAgentMode(transcript, conversationId, sessionId)
+        // Fire-and-forget: Start agent processing without blocking
+        // This allows multiple sessions to run concurrently
+        // Pass the sessionId to avoid creating a duplicate session
+        processWithAgentMode(transcript, conversationId, sessionId)
         .then((finalResponse) => {
           // Save to history after completion
           const history = getRecordingHistory()
@@ -1129,13 +1130,44 @@ export const router = {
             ).refreshRecordingHistory.send()
           }
         })
-        .catch((error) => {
-          console.error("[createMcpRecording] Agent processing error:", error)
+          .catch((error) => {
+            console.error("[createMcpRecording] Agent processing error:", error)
+          })
+
+        // Return immediately with conversation ID
+        // Progress updates will be sent via emitAgentProgress
+        return { conversationId }
+      } catch (error) {
+        // Handle transcription or conversation creation errors
+        console.error("[createMcpRecording] Transcription error:", error)
+
+        // Clean up the session and emit error state
+        await emitAgentProgress({
+          sessionId,
+          conversationId: tempConversationId,
+          currentIteration: 1,
+          maxIterations: 1,
+          steps: [{
+            id: `transcribe_error_${Date.now()}`,
+            type: "completion",
+            title: "Transcription failed",
+            description: error instanceof Error ? error.message : "Unknown transcription error",
+            status: "error",
+            timestamp: Date.now(),
+          }],
+          isComplete: true,
+          isSnoozed: false,
+          conversationTitle: "Transcription Error",
+          conversationHistory: [],
+          finalContent: `Transcription failed: ${error instanceof Error ? error.message : "Unknown error"}`,
         })
 
-      // Return immediately with conversation ID
-      // Progress updates will be sent via emitAgentProgress
-      return { conversationId }
+        // Mark the session as errored to clean up the UI
+        agentSessionTracker.errorSession(sessionId, error instanceof Error ? error.message : "Transcription failed")
+
+        // Re-throw the error so the caller knows transcription failed
+        throw error
+      }
     }),
 
   getRecordingHistory: t.procedure.action(async () => getRecordingHistory()),

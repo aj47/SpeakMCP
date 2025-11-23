@@ -1,6 +1,6 @@
 import { UpdateDownloadedEvent } from "electron-updater"
 import { AgentProgressUpdate } from "../shared/types"
-import { AgentSession } from "./agent-session-tracker"
+import type { AgentSession } from "./agent-session-tracker"
 
 export type RendererHandlers = {
   startRecording: () => void

@@ -95,7 +95,7 @@ function getProviderAndModel(): { providerId: string; model: string } {
   return { providerId, model }
 }
 
-async function summarizeContent(content: string, sessionId?: string): Promise<string> {
+export async function summarizeContent(content: string, sessionId?: string): Promise<string> {
   const { providerId: provider } = getProviderAndModel() // align with agent provider
   const MAX_TOKENS_HINT = 400 // soft guidance via prompt only
   const CHUNK_SIZE = 16000 // ~4k tokens per chunk (roughly)
@@ -160,6 +160,7 @@ export interface ShrinkOptions {
   lastNMessages?: number // default 3
   summarizeCharThreshold?: number // default 2000
   sessionId?: string // optional session ID for abort control
+  onSummarizationProgress?: (current: number, total: number, message: string) => void // callback for progress updates
 }
 
 export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<{ messages: LLMMessage[]; appliedStrategies: string[]; estTokensBefore: number; estTokensAfter: number }>{
@@ -190,17 +191,57 @@ export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<{ messa
     return { messages, appliedStrategies: applied, estTokensBefore: tokens, estTokensAfter: tokens }
   }
 
+  // Tier 0: Aggressive truncation of very large tool responses (>5000 chars)
+  // This happens BEFORE summarization to avoid expensive LLM calls on huge payloads
+  const AGGRESSIVE_TRUNCATE_THRESHOLD = 5000
+  for (let i = 0; i < messages.length; i++) {
+    const msg = messages[i]
+    if (msg.role === "user" && msg.content && msg.content.length > AGGRESSIVE_TRUNCATE_THRESHOLD) {
+      // Check if this looks like a tool result (contains JSON arrays/objects)
+      if (msg.content.includes('"url":') || msg.content.includes('"id":')) {
+        // Truncate aggressively and add note
+        messages[i] = {
+          ...msg,
+          content: msg.content.substring(0, AGGRESSIVE_TRUNCATE_THRESHOLD) +
+                   '\n\n... (truncated ' + (msg.content.length - AGGRESSIVE_TRUNCATE_THRESHOLD) +
+                   ' characters for context management. Key information preserved above.)'
+        }
+        applied.push("aggressive_truncate")
+        tokens = estimateTokensFromMessages(messages)
+        if (tokens <= targetTokens) {
+          if (isDebugLLM()) logLLM("ContextBudget: after aggressive_truncate", { estTokens: tokens })
+          return { messages, appliedStrategies: applied, estTokensBefore: tokens, estTokensAfter: tokens }
+        }
+      }
+    }
+  }
+
   // Tier 1: Summarize large messages (prefer tool outputs or very long entries)
   const indicesByLength = messages
     .map((m, i) => ({ i, len: m.content?.length || 0, role: m.role, content: m.content }))
     .filter((x) => x.len > summarizeThreshold && x.role !== "system")
     .sort((a, b) => b.len - a.len)
 
+  const totalToSummarize = indicesByLength.length
+  let summarizedCount = 0
+
   for (const item of indicesByLength) {
     // Check if session should stop before summarizing
     if (opts.sessionId && agentSessionStateManager.shouldStopSession(opts.sessionId)) {
       break
     }
+
+    // Emit progress update before summarization
+    summarizedCount++
+    if (opts.onSummarizationProgress) {
+      const messagePreview = item.content!.substring(0, 100).replace(/\n/g, ' ')
+      opts.onSummarizationProgress(
+        summarizedCount,
+        totalToSummarize,
+        `Summarizing large message ${summarizedCount}/${totalToSummarize} (${item.len} chars): ${messagePreview}...`
+      )
+    }
+
     const summarized = await summarizeContent(item.content!, opts.sessionId)
     messages[item.i] = { ...messages[item.i], content: summarized }
     applied.push("summarize")
@@ -214,16 +255,19 @@ export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<{ messa
   }
 
   // Tier 2: Remove middle messages (keep system, first user, last N)
+  // If still over budget, reduce lastN to be more aggressive
+  const effectiveLastN = tokens > targetTokens * 1.5 ? Math.max(1, Math.floor(lastN / 2)) : lastN
+
   const systemIdx = messages.findIndex((m) => m.role === "system")
   const firstUserIdx = messages.findIndex((m, idx) => m.role === "user" && idx !== systemIdx)
 
-  const tail = messages.slice(-lastN)
+  const tail = messages.slice(-effectiveLastN)
   const keptSet = new Set<number>()
   if (systemIdx >= 0) keptSet.add(systemIdx)
   if (firstUserIdx >= 0) keptSet.add(firstUserIdx)
   // Add indices for last N
   const baseLen = messages.length
-  for (let k = baseLen - lastN; k < baseLen; k++) {
+  for (let k = baseLen - effectiveLastN; k < baseLen; k++) {
     if (k >= 0) keptSet.add(k)
   }
 
@@ -232,7 +276,7 @@ export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<{ messa
   const ordered: LLMMessage[] = []
   if (systemIdx >= 0) ordered.push(messages[systemIdx])
   if (firstUserIdx >= 0 && firstUserIdx !== systemIdx) ordered.push(messages[firstUserIdx])
-  for (let k = baseLen - lastN; k < baseLen; k++) {
+  for (let k = baseLen - effectiveLastN; k < baseLen; k++) {
     if (k >= 0 && k !== systemIdx && k !== firstUserIdx) ordered.push(messages[k])
   }
   messages = ordered

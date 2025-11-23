@@ -351,6 +351,13 @@ export type Config = {
   mcpContextSummarizeCharThreshold?: number
   mcpMaxContextTokensOverride?: number
 
+  // Tool Response Processing Configuration
+  mcpToolResponseProcessingEnabled?: boolean
+  mcpToolResponseLargeThreshold?: number
+  mcpToolResponseCriticalThreshold?: number
+  mcpToolResponseChunkSize?: number
+  mcpToolResponseProgressUpdates?: boolean
+
   // Completion Verification Configuration
   mcpVerifyCompletionEnabled?: boolean
   mcpVerifyContextMaxItems?: number

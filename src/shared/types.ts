@@ -128,6 +128,7 @@ export interface AgentProgressUpdate {
   steps: AgentProgressStep[]
   isComplete: boolean
   isSnoozed?: boolean // When true, session runs in background without stealing focus
+  isInitializing?: boolean // When true, shows loading spinner while transcribing/initializing
   finalContent?: string
   conversationHistory?: Array<{
     role: "user" | "assistant" | "tool"

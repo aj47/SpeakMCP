@@ -11,6 +11,7 @@ import { AudioPlayer } from "@renderer/components/audio-player"
 import { useConfigQuery } from "@renderer/lib/queries"
 import { useTheme } from "@renderer/contexts/theme-context"
 import { logUI, logExpand } from "@renderer/lib/debug"
+import { LoadingSpinner } from "@renderer/components/ui/loading-spinner"
 
 interface AgentProgressProps {
   progress: AgentProgressUpdate | null
@@ -619,6 +620,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
     finalContent,
     conversationHistory,
     sessionStartIndex,
+    isInitializing,
   } = progress
 
   // Detect if agent was stopped by kill switch
@@ -916,7 +918,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
           )}>
             {isComplete ?
               (wasStopped ? "Stopped" : hasErrors ? "Failed" : "Complete") :
-              "Processing"
+              isInitializing ? "Initializing" : "Processing"
             }
           </span>
           {wasStopped && (
@@ -1005,8 +1007,9 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
               })}
             </div>
           ) : (
-            <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-              Initializing...
+            <div className="flex h-full flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
+              {isInitializing && <LoadingSpinner size="md" />}
+              <span>{isInitializing ? "Initializing agent..." : "Initializing..."}</span>
             </div>
           )}
         </div>

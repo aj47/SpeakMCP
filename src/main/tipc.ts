@@ -186,6 +186,7 @@ async function initializeMcpWithProgress(config: Config, sessionId: string): Pro
 async function processWithAgentMode(
   text: string,
   conversationId?: string,
+  existingSessionId?: string, // Optional pre-created session ID
 ): Promise<string> {
   const config = configStore.get()
 
@@ -194,10 +195,10 @@ async function processWithAgentMode(
 
   // Agent mode state is managed per-session via agentSessionStateManager
 
-  // Start tracking this agent session
+  // Start tracking this agent session (or use existing one)
   const { agentSessionTracker } = await import("./agent-session-tracker")
   let conversationTitle = text.length > 50 ? text.substring(0, 50) + "..." : text
-  const sessionId = agentSessionTracker.startSession(conversationId, conversationTitle)
+  const sessionId = existingSessionId || agentSessionTracker.startSession(conversationId, conversationTitle)
 
   try {
     if (!config.mcpToolsEnabled) {
@@ -931,9 +932,36 @@ export const router = {
         )
       }
 
+      // Emit initial loading progress immediately to show UI feedback
+      const { agentSessionTracker } = await import("./agent-session-tracker")
+      const conversationTitle = input.text.length > 50 ? input.text.substring(0, 50) + "..." : input.text
+      const sessionId = agentSessionTracker.startSession(conversationId, conversationTitle)
+
+      // Emit initial "initializing" progress update
+      await emitAgentProgress({
+        sessionId,
+        conversationId,
+        conversationTitle,
+        currentIteration: 0,
+        maxIterations: config.mcpMaxIterations ?? 10,
+        steps: [],
+        isComplete: false,
+        isInitializing: true,
+        isSnoozed: false,
+        conversationHistory: [
+          {
+            role: "user",
+            content: input.text,
+            timestamp: Date.now(),
+          }
+        ],
+        sessionStartIndex: 0,
+      })
+
       // Fire-and-forget: Start agent processing without blocking
       // This allows multiple sessions to run concurrently
-      processWithAgentMode(input.text, conversationId)
+      // Pass the sessionId we already created to avoid duplicate session creation
+      processWithAgentMode(input.text, conversationId, sessionId)
         .then((finalResponse) => {
           // Save to history after completion
           const history = getRecordingHistory()
@@ -1073,9 +1101,37 @@ export const router = {
         Buffer.from(input.recording),
       )
 
+      // Emit initial loading progress immediately to show UI feedback
+      // This happens before processWithAgentMode starts, so user sees immediate response
+      const { agentSessionTracker } = await import("./agent-session-tracker")
+      const conversationTitle = transcript.length > 50 ? transcript.substring(0, 50) + "..." : transcript
+      const sessionId = agentSessionTracker.startSession(conversationId, conversationTitle)
+
+      // Emit initial "initializing" progress update
+      await emitAgentProgress({
+        sessionId,
+        conversationId,
+        conversationTitle,
+        currentIteration: 0,
+        maxIterations: config.mcpMaxIterations ?? 10,
+        steps: [],
+        isComplete: false,
+        isInitializing: true,
+        isSnoozed: false,
+        conversationHistory: [
+          {
+            role: "user",
+            content: transcript,
+            timestamp: Date.now(),
+          }
+        ],
+        sessionStartIndex: 0,
+      })
+
       // Fire-and-forget: Start agent processing without blocking
       // This allows multiple sessions to run concurrently
-      processWithAgentMode(transcript, conversationId)
+      // Pass the sessionId we already created to avoid duplicate session creation
+      processWithAgentMode(transcript, conversationId, sessionId)
         .then((finalResponse) => {
           // Save to history after completion
           const history = getRecordingHistory()

@@ -90,12 +90,7 @@ user: what files are in the directory src/?
 assistant: [runs ls and sees foo.c, bar.c, baz.c]
 user: which file contains the implementation of foo?
 assistant: src/foo.c
-</example>`
-
-const RESPONSE_FORMAT_INSTRUCTIONS = `
-
-CRITICAL: ALWAYS RESPOND IN VALID JSON FORMAT
-You MUST respond with a valid JSON object. Do not use any special markers, code blocks, or plain text.
+</example>
 
 RESPONSE FORMAT:
 For tool calls:
@@ -114,9 +109,7 @@ For final responses (no more tools needed):
 {
   "content": "Your comprehensive final response with results",
   "needsMoreWork": false
-}
-
-IMPORTANT: Never use <|tool_calls_section_begin|> or any special markers. Only pure JSON.`
+}`
 
 export const AGENT_MODE_ADDITIONS = `
 
@@ -164,7 +157,6 @@ export function constructSystemPrompt(
 
   if (isAgentMode) {
     prompt += AGENT_MODE_ADDITIONS
-    prompt += RESPONSE_FORMAT_INSTRUCTIONS
   }
 
   // Helper function to format tool information (simplified to reduce token usage)
@@ -318,7 +310,6 @@ export function constructMinimalSystemPrompt(
   let prompt = "You are an MCP-capable assistant. Use exact tool names and exact parameter keys. Be concise. Do not invent IDs or paths."
   if (isAgentMode) {
     prompt += " Always continue iterating with tools until the task is complete; set needsMoreWork=false only when fully done."
-    prompt += " CRITICAL: ALWAYS respond in valid JSON format. Never use special markers or code blocks. Only pure JSON: {\"toolCalls\":[{\"name\":\"tool_name\",\"arguments\":{}}],\"content\":\"text\",\"needsMoreWork\":true/false}"
   }
 
   const list = (tools: Array<{ name: string; inputSchema?: any }>) =>

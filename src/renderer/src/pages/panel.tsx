@@ -525,13 +525,15 @@ export function Component() {
     logUI('[Panel] Overlay visibility check:', {
       hasAgentProgress: !!agentProgress,
       mcpTranscribePending: mcpTranscribeMutation.isPending,
-      shouldShowOverlay: anyVisibleSessions,
+      shouldShowOverlay: anyVisibleSessions && !recording,
+      anyVisibleSessions,
+      recording,
       anyActiveNonSnoozed,
       agentProgressSessionId: agentProgress?.sessionId,
       agentProgressComplete: agentProgress?.isComplete,
       agentProgressSnoozed: agentProgress?.isSnoozed
     })
-  }, [agentProgress, anyActiveNonSnoozed, anyVisibleSessions, mcpTranscribeMutation.isPending])
+  }, [agentProgress, anyActiveNonSnoozed, anyVisibleSessions, recording, mcpTranscribeMutation.isPending])
 
   // Clear agent progress handler
   useEffect(() => {
@@ -677,7 +679,8 @@ export function Component() {
               )}
 
               {/* Agent progress overlay - left-aligned and full coverage */}
-              {anyVisibleSessions && (
+              {/* Hide overlay when recording to prevent waveform from appearing over completed sessions */}
+              {anyVisibleSessions && !recording && (
                 hasMultipleSessions ? (
                   <MultiAgentProgressView
                     variant="overlay"

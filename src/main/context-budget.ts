@@ -160,6 +160,7 @@ export interface ShrinkOptions {
   lastNMessages?: number // default 3
   summarizeCharThreshold?: number // default 2000
   sessionId?: string // optional session ID for abort control
+  onSummarizationProgress?: (current: number, total: number, message: string) => void // callback for progress updates
 }
 
 export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<{ messages: LLMMessage[]; appliedStrategies: string[]; estTokensBefore: number; estTokensAfter: number }>{
@@ -221,11 +222,26 @@ export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<{ messa
     .filter((x) => x.len > summarizeThreshold && x.role !== "system")
     .sort((a, b) => b.len - a.len)
 
+  const totalToSummarize = indicesByLength.length
+  let summarizedCount = 0
+
   for (const item of indicesByLength) {
     // Check if session should stop before summarizing
     if (opts.sessionId && agentSessionStateManager.shouldStopSession(opts.sessionId)) {
       break
     }
+
+    // Emit progress update before summarization
+    summarizedCount++
+    if (opts.onSummarizationProgress) {
+      const messagePreview = item.content!.substring(0, 100).replace(/\n/g, ' ')
+      opts.onSummarizationProgress(
+        summarizedCount,
+        totalToSummarize,
+        `Summarizing large message ${summarizedCount}/${totalToSummarize} (${item.len} chars): ${messagePreview}...`
+      )
+    }
+
     const summarized = await summarizeContent(item.content!, opts.sessionId)
     messages[item.i] = { ...messages[item.i], content: summarized }
     applied.push("summarize")

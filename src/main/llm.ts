@@ -920,6 +920,18 @@ Always use actual resource IDs from the conversation history or create new ones 
       relevantTools: toolCapabilities.relevantTools,
       isAgentMode: true,
       sessionId: currentSessionId,
+      onSummarizationProgress: (current, total, message) => {
+        // Update thinking step with summarization progress
+        thinkingStep.description = `Summarizing context (${current}/${total})`
+        thinkingStep.llmContent = message
+        emit({
+          currentIteration: iteration,
+          maxIterations,
+          steps: progressSteps.slice(-3),
+          isComplete: false,
+          conversationHistory: formatConversationForProgress(conversationHistory),
+        })
+      },
     })
 
     // If stop was requested during context shrinking, exit now
@@ -1230,6 +1242,16 @@ Always use actual resource IDs from the conversation history or create new ones 
             relevantTools: toolCapabilities.relevantTools,
             isAgentMode: true,
             sessionId: currentSessionId,
+            onSummarizationProgress: (current, total, message) => {
+              verifyStep.description = `Summarizing for verification (${current}/${total})`
+              emit({
+                currentIteration: iteration,
+                maxIterations,
+                steps: progressSteps.slice(-3),
+                isComplete: false,
+                conversationHistory: formatConversationForProgress(conversationHistory),
+              })
+            },
           })
 
           const postVerifySummaryResponse = await makeLLMCall(shrunkPostVerifySummaryMessages, config)
@@ -1712,6 +1734,16 @@ Please try alternative approaches, break down the task into smaller steps, or pr
           relevantTools: toolCapabilities.relevantTools,
           isAgentMode: true,
           sessionId: currentSessionId,
+          onSummarizationProgress: (current, total, message) => {
+            summaryStep.description = `Summarizing for summary generation (${current}/${total})`
+            emit({
+              currentIteration: iteration,
+              maxIterations,
+              steps: progressSteps.slice(-3),
+              isComplete: false,
+              conversationHistory: formatConversationForProgress(conversationHistory),
+            })
+          },
         })
 
 
@@ -1883,6 +1915,16 @@ Please try alternative approaches, break down the task into smaller steps, or pr
             relevantTools: toolCapabilities.relevantTools,
             isAgentMode: true,
             sessionId: currentSessionId,
+            onSummarizationProgress: (current, total, message) => {
+              verifyStep.description = `Summarizing for verification (${current}/${total})`
+              emit({
+                currentIteration: iteration,
+                maxIterations,
+                steps: progressSteps.slice(-3),
+                isComplete: false,
+                conversationHistory: formatConversationForProgress(conversationHistory),
+              })
+            },
           })
 
           const postVerifySummaryResponse = await makeLLMCall(
@@ -2016,6 +2058,16 @@ Please try alternative approaches, break down the task into smaller steps, or pr
           relevantTools: toolCapabilities.relevantTools,
           isAgentMode: true,
           sessionId: currentSessionId,
+          onSummarizationProgress: (current, total, message) => {
+            summaryStep.description = `Summarizing for summary generation (${current}/${total})`
+            emit({
+              currentIteration: iteration,
+              maxIterations,
+              steps: progressSteps.slice(-3),
+              isComplete: false,
+              conversationHistory: formatConversationForProgress(conversationHistory),
+            })
+          },
         })
 
 
@@ -2079,6 +2131,16 @@ Please try alternative approaches, break down the task into smaller steps, or pr
             relevantTools: toolCapabilities.relevantTools,
             isAgentMode: true,
             sessionId: currentSessionId,
+            onSummarizationProgress: (current, total, message) => {
+              verifyStep.description = `Summarizing for verification (${current}/${total})`
+              emit({
+                currentIteration: iteration,
+                maxIterations,
+                steps: progressSteps.slice(-3),
+                isComplete: false,
+                conversationHistory: formatConversationForProgress(conversationHistory),
+              })
+            },
           })
 
           const postVerifySummaryResponse = await makeLLMCall(

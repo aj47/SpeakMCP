@@ -627,6 +627,24 @@ export function Component() {
   }, [isConversationActive, endConversation, transcribeMutation, mcpTranscribeMutation, textInputMutation, mcpTextInputMutation])
 
 
+	  // Track latest state values in a ref to avoid race conditions with auto-close timeout
+	  const autoCloseStateRef = useRef({
+	    anyVisibleSessions,
+	    showTextInput,
+	    recording,
+	    isTextSubmissionPending: textInputMutation.isPending || mcpTextInputMutation.isPending
+	  })
+
+	  // Keep ref in sync with latest state
+	  useEffect(() => {
+	    autoCloseStateRef.current = {
+	      anyVisibleSessions,
+	      showTextInput,
+	      recording,
+	      isTextSubmissionPending: textInputMutation.isPending || mcpTextInputMutation.isPending
+	    }
+	  }, [anyVisibleSessions, showTextInput, recording, textInputMutation.isPending, mcpTextInputMutation.isPending])
+
 	  // Auto-close the panel when there's nothing to show
 	  useEffect(() => {
 	    // Keep panel open if a text submission is still pending (to avoid flicker)
@@ -641,9 +659,18 @@ export function Component() {
 
 	    if (shouldAutoClose) {
 	      const t = setTimeout(() => {
-	        // Ensure normal size before hide, then hide the window
+	        // Re-check latest state before closing to prevent race conditions
+	        // State may have changed during the 200ms delay
+	        const latestState = autoCloseStateRef.current
+	        const stillShouldClose =
+	          !latestState.anyVisibleSessions &&
+	          !latestState.showTextInput &&
+	          !latestState.recording &&
+	          !latestState.isTextSubmissionPending
 
-	        tipcClient.hidePanelWindow({})
+	        if (stillShouldClose) {
+	          tipcClient.hidePanelWindow({})
+	        }
 	      }, 200)
 	      return () => clearTimeout(t)
 	    }

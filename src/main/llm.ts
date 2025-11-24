@@ -776,8 +776,6 @@ Return ONLY JSON per schema.`,
   let finalContent = ""
   let noOpCount = 0 // Track iterations without meaningful progress
 
-  let executedToolsThisIteration = false // Whether any tools were executed in the current iteration
-
   let verificationFailCount = 0 // Count consecutive verification failures to avoid loops
 
   while (iteration < maxIterations) {
@@ -2104,23 +2102,14 @@ Please try alternative approaches, break down the task into smaller steps, or pr
 
           // Use the summary as final content
           finalContent = summaryResponse.content || assistantContent
-
-          // Add the summary to conversation history
-          conversationHistory.push({
-            role: "assistant",
-            content: finalContent,
-          })
+          // Note: We don't push to conversationHistory here - it's done after the tool-execution check
         } catch (error) {
           // If summary generation fails, fall back to the original content
           console.warn("Failed to generate summary:", error)
           finalContent = assistantContent || "Task completed successfully."
           summaryStep.status = "error"
           summaryStep.description = "Failed to generate summary, using fallback"
-
-          conversationHistory.push({
-            role: "assistant",
-            content: finalContent,
-          })
+          // Note: We don't push to conversationHistory here - it's done after the tool-execution check
         }
 
         // Post-verify: produce a concise final summary for the user
@@ -2196,7 +2185,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
             : postVerifySummaryResponse.content || "Summary generated"
 
           finalContent = postVerifySummaryResponse.content || finalContent
-          conversationHistory.push({ role: "assistant", content: finalContent })
+          // Note: We don't push to conversationHistory here - it's done after the tool-execution check
         } catch (e) {
           // If summary generation fails, proceed with existing finalContent
         }
@@ -2214,6 +2203,12 @@ Please try alternative approaches, break down the task into smaller steps, or pr
           noOpCount = 0
           continue
         }
+
+        // Add final assistant response to conversation history (after tool-execution check passed)
+        conversationHistory.push({
+          role: "assistant",
+          content: finalContent,
+        })
       } else {
         // Agent provided sufficient content, use it as final content
         finalContent = assistantContent

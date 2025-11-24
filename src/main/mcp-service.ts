@@ -321,10 +321,14 @@ export class MCPService {
     if (isDebugTools()) {
       logTools(`MCP Service initialization complete. Total tools available: ${this.availableTools.length}`)
     }
-      } finally {
-        // Always clear the initialization promise so subsequent calls can re-run if needed
+      } catch (error) {
+        // On error, clear the promise so initialization can be retried
         this.initializationPromise = null
+        throw error
       }
+      // Note: Don't clear initializationPromise on success - keep it to prevent
+      // duplicate initializations. A new initialization will only happen when
+      // reinitialize() is called explicitly, which sets initializationPromise = null first.
     })()
 
     return this.initializationPromise
@@ -516,8 +520,13 @@ export class MCPService {
         }
       }
 
+      // Verify client is valid before storing
+      if (!client) {
+        throw new Error(`Failed to create client for server ${serverName}`)
+      }
+
       // Store the client and transport
-      this.clients.set(serverName, client!)
+      this.clients.set(serverName, client)
       this.transports.set(serverName, transport)
 
       // Get available tools from the server
@@ -529,6 +538,11 @@ export class MCPService {
           tools: toolsResult.tools.map(t => ({ name: t.name, description: t.description }))
         })
       }
+
+      // Remove any existing tools from this server to prevent duplicates on reinitialize
+      this.availableTools = this.availableTools.filter(
+        (tool) => !tool.name.startsWith(`${serverName}:`),
+      )
 
       // Add tools to our registry with server prefix
       for (const tool of toolsResult.tools) {
@@ -2248,6 +2262,12 @@ export class MCPService {
   }
 
   async cleanup(): Promise<void> {
+    // Clear the session cleanup interval to prevent memory leak
+    if (this.sessionCleanupInterval) {
+      clearInterval(this.sessionCleanupInterval)
+      this.sessionCleanupInterval = null
+    }
+
     // Close all clients and transports
     for (const [serverName, client] of this.clients) {
       try {

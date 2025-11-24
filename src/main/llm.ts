@@ -1088,12 +1088,11 @@ Always use actual resource IDs from the conversation history or create new ones 
           receivedType: typeof (llmResponse as any).toolCalls,
           value: (llmResponse as any).toolCalls,
         })
-    // Track whether tools are planned this iteration
-    executedToolsThisIteration = toolCallsArray.length > 0
-
       }
       logTools("Planned tool calls from LLM", toolCallsArray)
     }
+    // Track whether tools are planned this iteration
+    executedToolsThisIteration = toolCallsArray.length > 0
     const hasToolCalls = toolCallsArray.length > 0
     const explicitlyComplete = llmResponse.needsMoreWork === false
 
@@ -2107,6 +2106,22 @@ Please try alternative approaches, break down the task into smaller steps, or pr
           finalContent = summaryResponse.content || assistantContent
 
           // Add the summary to conversation history
+          conversationHistory.push({
+            role: "assistant",
+            content: finalContent,
+          })
+        } catch (error) {
+          // If summary generation fails, fall back to the original content
+          console.warn("Failed to generate summary:", error)
+          finalContent = assistantContent || "Task completed successfully."
+          summaryStep.status = "error"
+          summaryStep.description = "Failed to generate summary, using fallback"
+
+          conversationHistory.push({
+            role: "assistant",
+            content: finalContent,
+          })
+        }
 
         // Post-verify: produce a concise final summary for the user
         try {
@@ -2198,23 +2213,6 @@ Please try alternative approaches, break down the task into smaller steps, or pr
           })
           noOpCount = 0
           continue
-        }
-
-          conversationHistory.push({
-            role: "assistant",
-            content: finalContent,
-          })
-        } catch (error) {
-          // If summary generation fails, fall back to the original content
-          console.warn("Failed to generate summary:", error)
-          finalContent = assistantContent || "Task completed successfully."
-          summaryStep.status = "error"
-          summaryStep.description = "Failed to generate summary, using fallback"
-
-          conversationHistory.push({
-            role: "assistant",
-            content: finalContent,
-          })
         }
       } else {
         // Agent provided sufficient content, use it as final content

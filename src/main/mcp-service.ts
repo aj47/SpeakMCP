@@ -710,8 +710,8 @@ export class MCPService {
   private filterToolResponse(
     serverName: string,
     toolName: string,
-    content: Array<{ type: string; text: string }>
-  ): Array<{ type: string; text: string }> {
+    content: Array<{ type: "text"; text: string }>
+  ): Array<{ type: "text"; text: string }> {
     // Only filter GitHub responses for now
     if (serverName !== 'github') {
       return content
@@ -966,8 +966,11 @@ export class MCPService {
                     },
                   ]
 
+              // Apply response filtering to retry results as well
+              const filteredRetryContent = this.filterToolResponse(serverName, toolName, retryContent)
+
               return {
-                content: retryContent,
+                content: filteredRetryContent,
                 isError: Boolean(retryResult.isError),
               }
             } catch (retryError) {

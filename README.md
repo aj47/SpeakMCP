@@ -106,31 +106,7 @@ pnpm build:linux  # Linux build (x64)
 pnpm test         # Run test suite
 pnpm test:run     # Run tests once (CI mode)
 pnpm test:coverage # Run tests with coverage
-
-# VNC GUI Testing (GitHub Actions)
-# Test the full app in a Linux desktop environment with remote VNC access
-# See .github/VNC_TESTING_GUIDE.md for detailed instructions
 ```
-
-### 🖥️ VNC GUI Testing
-
-Test SpeakMCP in a full Linux desktop environment via GitHub Actions with remote VNC access:
-
-1. **Setup secrets** (one-time):
-   ```bash
-   # Linux/macOS
-   ./.github/setup-vnc-secrets.sh
-
-   # Windows
-   .\.github\setup-vnc-secrets.ps1
-   ```
-
-2. **Run VNC workflow**:
-   - Go to Actions → VNC GUI Testing → Run workflow
-   - Connect via VNC client or web browser
-   - Interact with the app in real-time
-
-See [VNC Testing Guide](.github/VNC_TESTING_GUIDE.md) for complete documentation.
 
 ### 🔧 Troubleshooting Development Setup
 

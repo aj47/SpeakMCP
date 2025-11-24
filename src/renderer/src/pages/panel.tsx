@@ -10,11 +10,8 @@ import { rendererHandlers, tipcClient } from "~/lib/tipc-client"
 import { TextInputPanel, TextInputPanelRef } from "@renderer/components/text-input-panel"
 import { PanelResizeWrapper } from "@renderer/components/panel-resize-wrapper"
 import { logUI } from "@renderer/lib/debug"
-import {
-  useConversationActions,
-  useConversationState,
-  useConversation,
-} from "@renderer/contexts/conversation-context"
+import { useUIStore, useAgentStore, useAgentProgress, useConversationStore } from "@renderer/stores"
+import { useConversationQuery, useCreateConversationMutation, useAddMessageToConversationMutation } from "@renderer/lib/queries"
 import { PanelDragBar } from "@renderer/components/panel-drag-bar"
 import { useConfigQuery } from "@renderer/lib/query-client"
 import { useTheme } from "@renderer/contexts/theme-context"
@@ -45,22 +42,48 @@ export function Component() {
   }
 
 
-  // Conversation state
-  const {
-    showContinueButton,
-    isWaitingForResponse,
-    isConversationActive,
-    currentConversation,
-    agentProgress, // Get agent progress from conversation context (session-aware)
-  } = useConversationState()
-  const {
-    addMessage,
-    setIsWaitingForResponse,
-    startNewConversation,
-    endConversation,
-    continueConversation,
-  } = useConversationActions()
-  const { currentConversationId, focusedSessionId, agentProgressById, lastCompletedConversationId } = useConversation()
+  // UI state from Zustand
+  const showContinueButton = useUIStore((s) => s.showContinueButton)
+
+  // Agent state from Zustand
+  const agentProgress = useAgentProgress()
+  const focusedSessionId = useAgentStore((s) => s.focusedSessionId)
+  const agentProgressById = useAgentStore((s) => s.agentProgressById)
+
+  // Conversation state from Zustand
+  const currentConversationId = useConversationStore((s) => s.currentConversationId)
+  const lastCompletedConversationId = useConversationStore((s) => s.lastCompletedConversationId)
+  const setCurrentConversationId = useConversationStore((s) => s.setCurrentConversationId)
+  const continueConversation = useConversationStore((s) => s.continueConversation)
+  const endConversation = useConversationStore((s) => s.endConversation)
+
+  // Query for current conversation data
+  const conversationQuery = useConversationQuery(currentConversationId)
+  const currentConversation = conversationQuery.data ?? null
+  const isConversationActive = !!currentConversation
+
+  // Mutations for conversation management
+  const createConversationMutation = useCreateConversationMutation()
+  const addMessageMutation = useAddMessageToConversationMutation()
+
+  // Helper function to start a new conversation
+  const startNewConversation = async (message: string, role: "user" | "assistant") => {
+    const result = await createConversationMutation.mutateAsync({ firstMessage: message, role })
+    if (result?.id) {
+      setCurrentConversationId(result.id)
+    }
+    return result
+  }
+
+  // Helper function to add a message to the current conversation
+  const addMessage = async (content: string, role: "user" | "assistant") => {
+    if (!currentConversationId) return
+    await addMessageMutation.mutateAsync({
+      conversationId: currentConversationId,
+      content,
+      role,
+    })
+  }
 
   // Count truly active sessions (not complete, not snoozed) for mode switching
   // Completed sessions should not prevent the panel from switching back to normal mode for voice dictation

@@ -6,7 +6,7 @@ import { MarkdownRenderer } from "@renderer/components/markdown-renderer"
 import { Button } from "./ui/button"
 import { Badge } from "./ui/badge"
 import { tipcClient } from "@renderer/lib/tipc-client"
-import { useConversation } from "@renderer/contexts/conversation-context"
+import { useAgentStore, useConversationStore } from "@renderer/stores"
 import { AudioPlayer } from "@renderer/components/audio-player"
 import { useConfigQuery } from "@renderer/lib/queries"
 import { useTheme } from "@renderer/contexts/theme-context"
@@ -526,7 +526,9 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({})
 
   // Get current conversation ID for deep-linking and session focus control
-  const { currentConversationId, setFocusedSessionId, agentProgressById } = useConversation()
+  const currentConversationId = useConversationStore((s) => s.currentConversationId)
+  const setFocusedSessionId = useAgentStore((s) => s.setFocusedSessionId)
+  const agentProgressById = useAgentStore((s) => s.agentProgressById)
 
   // Helper to toggle expansion state for a specific item
   const toggleItemExpansion = (itemKey: string) => {

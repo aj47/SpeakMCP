@@ -6,7 +6,7 @@ import {
 } from "@tanstack/react-query"
 import { tipcClient } from "./tipc-client"
 
-// Create a properly typed query client
+// Set up focus manager for refetching on window focus
 focusManager.setEventListener((handleFocus) => {
   const handler = () => handleFocus()
   window.addEventListener("focus", handler)
@@ -15,56 +15,97 @@ focusManager.setEventListener((handleFocus) => {
   }
 })
 
+// QueryClient instance
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      retry: false,
-      staleTime: 5 * 60 * 1000, // 5 minutes
+      networkMode: "always",
     },
   },
 })
 
-// Type-safe query hooks
-export const useMicrophoneStatusQuery = () => {
-  return useQuery({
+// ============================================================================
+// Query Hooks
+// ============================================================================
+
+export const useMicrophoneStatusQuery = () =>
+  useQuery({
     queryKey: ["microphone-status"],
     queryFn: async () => {
-      return await tipcClient.getMicrophoneStatus()
+      return tipcClient.getMicrophoneStatus()
     },
   })
-}
 
-export const useConfigQuery = () => {
-  return useQuery({
+export const useConfigQuery = () =>
+  useQuery({
     queryKey: ["config"],
     queryFn: async () => {
-      return await tipcClient.getConfig()
+      return tipcClient.getConfig()
     },
   })
-}
 
-export const useConversationHistoryQuery = () => {
-  return useQuery({
+export const useConversationHistoryQuery = () =>
+  useQuery({
     queryKey: ["conversation-history"],
     queryFn: async () => {
-      return await tipcClient.getConversationHistory()
+      console.log("[Query Client] Fetching conversation history...")
+      const result = await tipcClient.getConversationHistory()
+      console.log("[Query Client] Conversation history result:", {
+        isArray: Array.isArray(result),
+        length: Array.isArray(result) ? result.length : "N/A",
+        result,
+      })
+      return result
     },
   })
-}
 
-export const useConversationQuery = (conversationId: string | null) => {
-  return useQuery({
+export const useConversationQuery = (conversationId: string | null) =>
+  useQuery({
     queryKey: ["conversation", conversationId],
     queryFn: async () => {
       if (!conversationId) return null
-      return await tipcClient.loadConversation({ conversationId })
+      const result = await tipcClient.loadConversation({ conversationId })
+      return result
     },
     enabled: !!conversationId,
   })
-}
 
-export const useSaveConversationMutation = () => {
-  return useMutation({
+export const useMcpServerStatus = () =>
+  useQuery({
+    queryKey: ["mcp-server-status"],
+    queryFn: async () => {
+      return tipcClient.getMcpServerStatus()
+    },
+  })
+
+export const useMcpInitializationStatus = () =>
+  useQuery({
+    queryKey: ["mcp-initialization-status"],
+    queryFn: async () => {
+      return tipcClient.getMcpInitializationStatus()
+    },
+  })
+
+export const useAvailableModelsQuery = (
+  providerId: string,
+  enabled: boolean = true,
+) =>
+  useQuery({
+    queryKey: ["available-models", providerId],
+    queryFn: async () => {
+      return tipcClient.fetchAvailableModels({ providerId })
+    },
+    enabled: enabled && !!providerId,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    retry: 1,
+  })
+
+// ============================================================================
+// Mutation Hooks
+// ============================================================================
+
+export const useSaveConversationMutation = () =>
+  useMutation({
     mutationFn: async ({ conversation }: { conversation: any }) => {
       await tipcClient.saveConversation({ conversation })
     },
@@ -72,21 +113,9 @@ export const useSaveConversationMutation = () => {
       queryClient.invalidateQueries({ queryKey: ["conversation-history"] })
     },
   })
-}
 
-export const useUpdateConfigMutation = () => {
-  return useMutation({
-    mutationFn: async ({ config }: { config: any }) => {
-      await tipcClient.updateConfig({ config })
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["config"] })
-    },
-  })
-}
-
-export const useCreateConversationMutation = () => {
-  return useMutation({
+export const useCreateConversationMutation = () =>
+  useMutation({
     mutationFn: async ({
       firstMessage,
       role,
@@ -94,52 +123,105 @@ export const useCreateConversationMutation = () => {
       firstMessage: string
       role?: "user" | "assistant"
     }) => {
-      return await tipcClient.createConversation({
-        firstMessage,
+      const result = await tipcClient.createConversation({ firstMessage, role })
+      return result
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["conversation-history"] })
+    },
+  })
+
+export const useAddMessageToConversationMutation = () =>
+  useMutation({
+    mutationFn: async ({
+      conversationId,
+      content,
+      role,
+      toolCalls,
+      toolResults,
+    }: {
+      conversationId: string
+      content: string
+      role: "user" | "assistant" | "tool"
+      toolCalls?: Array<{ name: string; arguments: any }>
+      toolResults?: Array<{ success: boolean; content: string; error?: string }>
+    }) => {
+      return tipcClient.addMessageToConversation({
+        conversationId,
+        content,
         role,
+        toolCalls,
+        toolResults,
+      })
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: ["conversation", variables.conversationId],
+      })
+      queryClient.invalidateQueries({ queryKey: ["conversation-history"] })
+    },
+  })
+
+export const useDeleteConversationMutation = () =>
+  useMutation({
+    mutationFn: async (conversationId: string) => {
+      return tipcClient.deleteConversation({ conversationId })
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["conversation-history"] })
+    },
+  })
+
+export const useDeleteAllConversationsMutation = () =>
+  useMutation({
+    mutationFn: async () => {
+      return tipcClient.deleteAllConversations()
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["conversation-history"] })
+      queryClient.invalidateQueries({ queryKey: ["conversation"] })
+    },
+  })
+
+export const useSaveConfigMutation = () =>
+  useMutation({
+    mutationFn: tipcClient.saveConfig,
+    onSuccess() {
+      queryClient.invalidateQueries({
+        queryKey: ["config"],
       })
     },
   })
-}
 
-export const useDeleteConversationMutation = () => {
-  return useMutation({
-    mutationFn: async ({ conversationId }: { conversationId: string }) => {
-      await tipcClient.deleteConversation({ conversationId })
+export const useUpdateConfigMutation = () =>
+  useMutation({
+    mutationFn: async ({ config }: { config: any }) => {
+      await tipcClient.updateConfig({ config })
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["config"] })
     },
   })
-}
 
-export const useLoadMcpConfigFile = () => {
-  return useMutation({
+export const useLoadMcpConfigFile = () =>
+  useMutation({
     mutationFn: async () => {
-      return await tipcClient.loadMcpConfigFile()
+      return tipcClient.loadMcpConfigFile()
     },
   })
-}
 
-export const useSaveMcpConfigFile = () => {
-  return useMutation({
+export const useSaveMcpConfigFile = () =>
+  useMutation({
     mutationFn: async ({ config }: { config: any }) => {
       await tipcClient.saveMcpConfigFile({ config })
     },
   })
-}
 
-export const useMcpServerStatus = () => {
-  return useQuery({
-    queryKey: ["mcp-server-status"],
-    queryFn: async () => {
-      return await tipcClient.getMcpServerStatus()
-    },
-  })
-}
+// ============================================================================
+// History-themed aliases for better semantic naming
+// ============================================================================
 
-export const useMcpInitializationStatus = () => {
-  return useQuery({
-    queryKey: ["mcp-initialization-status"],
-    queryFn: async () => {
-      return await tipcClient.getMcpInitializationStatus()
-    },
-  })
-}
+export const useHistoryQuery = useConversationHistoryQuery
+export const useHistoryItemQuery = useConversationQuery
+export const useDeleteHistoryItemMutation = useDeleteConversationMutation
+export const useDeleteAllHistoryMutation = useDeleteAllConversationsMutation

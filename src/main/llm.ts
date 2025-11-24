@@ -776,8 +776,6 @@ Return ONLY JSON per schema.`,
   let finalContent = ""
   let noOpCount = 0 // Track iterations without meaningful progress
 
-  let executedToolsThisIteration = false // Whether any tools were executed in the current iteration
-
   let verificationFailCount = 0 // Count consecutive verification failures to avoid loops
 
   while (iteration < maxIterations) {

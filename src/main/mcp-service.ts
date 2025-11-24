@@ -322,13 +322,14 @@ export class MCPService {
       logTools(`MCP Service initialization complete. Total tools available: ${this.availableTools.length}`)
     }
       } catch (error) {
-        // On error, clear the promise so initialization can be retried
+        // On error, reset state so initialization can be retried
+        this.isInitializing = false
         this.initializationPromise = null
         throw error
       }
       // Note: Don't clear initializationPromise on success - keep it to prevent
-      // duplicate initializations. A new initialization will only happen when
-      // reinitialize() is called explicitly, which sets initializationPromise = null first.
+      // duplicate initializations (race condition). The promise will be cleared
+      // in cleanup() to allow re-initialization after a full cleanup.
     })()
 
     return this.initializationPromise

@@ -69,8 +69,8 @@ export function Component() {
   // Helper function to start a new conversation
   const startNewConversation = async (message: string, role: "user" | "assistant") => {
     const result = await createConversationMutation.mutateAsync({ firstMessage: message, role })
-    if (result?.conversationId) {
-      setCurrentConversationId(result.conversationId)
+    if (result?.id) {
+      setCurrentConversationId(result.id)
     }
     return result
   }

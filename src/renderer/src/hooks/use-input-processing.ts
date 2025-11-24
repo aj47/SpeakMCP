@@ -63,19 +63,23 @@ export function useInputProcessing(options: UseInputProcessingOptions = {}) {
     }) => {
       const arrayBuffer = await blob.arrayBuffer()
 
+      // Track the conversation ID to use (may be new or existing)
+      let conversationIdToUse = currentConversationId
+
       // If we have a transcript, start a conversation with it
       if (transcript && !isConversationActive) {
         const newConversation = await createConversationMutation.mutateAsync({
           firstMessage: transcript,
           role: "user",
         })
+        conversationIdToUse = newConversation.id
         setCurrentConversationId(newConversation.id)
       }
 
       const result = await tipcClient.createMcpRecording({
         recording: arrayBuffer,
         duration,
-        conversationId: currentConversation?.id || undefined,
+        conversationId: conversationIdToUse || undefined,
       })
 
       return result

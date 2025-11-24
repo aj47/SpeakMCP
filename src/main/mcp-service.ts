@@ -704,6 +704,86 @@ export class MCPService {
     return !this.runtimeDisabledServers.has(serverName)
   }
 
+  /**
+   * Filter tool responses to reduce context size by removing unnecessary fields
+   */
+  private filterToolResponse(
+    serverName: string,
+    toolName: string,
+    content: Array<{ type: string; text: string }>
+  ): Array<{ type: string; text: string }> {
+    // Only filter GitHub responses for now
+    if (serverName !== 'github') {
+      return content
+    }
+
+    return content.map((item) => {
+      try {
+        const parsed = JSON.parse(item.text)
+
+        // Filter GitHub list_issues and list_pull_requests responses
+        if (toolName === 'list_issues' || toolName === 'list_pull_requests') {
+          if (Array.isArray(parsed)) {
+            const filtered = parsed.map((issue: any) => ({
+              number: issue.number,
+              title: issue.title,
+              state: issue.state,
+              html_url: issue.html_url,
+              created_at: issue.created_at,
+              updated_at: issue.updated_at,
+              user: issue.user ? { login: issue.user.login } : null,
+              labels: issue.labels?.map((l: any) => l.name) || [],
+              draft: issue.draft,
+              pull_request: issue.pull_request ? { url: issue.pull_request.url } : undefined,
+            }))
+            return {
+              type: item.type,
+              text: JSON.stringify(filtered, null, 2)
+            }
+          }
+        }
+
+        // Filter single issue/PR responses
+        if (toolName === 'get_issue' || toolName === 'get_pull_request') {
+          const filtered = {
+            number: parsed.number,
+            title: parsed.title,
+            state: parsed.state,
+            html_url: parsed.html_url,
+            body: parsed.body?.substring(0, 500), // Truncate body
+            created_at: parsed.created_at,
+            updated_at: parsed.updated_at,
+            user: parsed.user ? { login: parsed.user.login } : null,
+            labels: parsed.labels?.map((l: any) => l.name) || [],
+          }
+          return {
+            type: item.type,
+            text: JSON.stringify(filtered, null, 2)
+          }
+        }
+
+        // For other GitHub tools, return as-is but truncate if too large
+        if (item.text.length > 10000) {
+          return {
+            type: item.type,
+            text: item.text.substring(0, 10000) + '\n\n... (truncated for context management)'
+          }
+        }
+
+        return item
+      } catch (e) {
+        // Not JSON or parsing failed, return as-is but truncate if too large
+        if (item.text.length > 10000) {
+          return {
+            type: item.type,
+            text: item.text.substring(0, 10000) + '\n\n... (truncated for context management)'
+          }
+        }
+        return item
+      }
+    })
+  }
+
   private async executeServerTool(
     serverName: string,
     toolName: string,
@@ -828,8 +908,11 @@ export class MCPService {
             },
           ]
 
+      // Apply response filtering to reduce context size
+      const filteredContent = this.filterToolResponse(serverName, toolName, content)
+
       const finalResult = {
-        content,
+        content: filteredContent,
         isError: Boolean(result.isError),
       }
 

@@ -321,10 +321,14 @@ export class MCPService {
     if (isDebugTools()) {
       logTools(`MCP Service initialization complete. Total tools available: ${this.availableTools.length}`)
     }
-      } finally {
-        // Always clear the initialization promise so subsequent calls can re-run if needed
+      } catch (error) {
+        // On error, clear the promise so initialization can be retried
         this.initializationPromise = null
+        throw error
       }
+      // Note: Don't clear initializationPromise on success - keep it to prevent
+      // duplicate initializations (race condition). The promise will be cleared
+      // in cleanup() to allow re-initialization after a full cleanup.
     })()
 
     return this.initializationPromise
@@ -2248,6 +2252,12 @@ export class MCPService {
   }
 
   async cleanup(): Promise<void> {
+    // Clear the session cleanup interval to prevent memory leak
+    if (this.sessionCleanupInterval) {
+      clearInterval(this.sessionCleanupInterval)
+      this.sessionCleanupInterval = null
+    }
+
     // Close all clients and transports
     for (const [serverName, client] of this.clients) {
       try {
@@ -2268,10 +2278,13 @@ export class MCPService {
     // Gracefully terminate server processes via transports
     await this.terminateAllServerProcesses()
 
-    // Clear all maps
+    // Clear all maps and reset state to allow re-initialization
     this.clients.clear()
     this.transports.clear()
     this.availableTools = []
+    this.initializationPromise = null
+    this.hasBeenInitialized = false
+    this.initializedServers.clear()
   }
 
   /**

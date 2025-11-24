@@ -86,20 +86,29 @@ export function ModelSelector({
     }
   }, [isOpen])
 
-  // Ensure the search input retains focus while typing (some Radix focus management can steal it)
-  useEffect(() => {
-    if (isOpen) {
-      requestAnimationFrame(() => {
-        if (
-          searchInputRef.current &&
-          document.activeElement !== searchInputRef.current
-        ) {
-          logUI('[ModelSelector] Refocusing search input after query change')
-          searchInputRef.current.focus()
-        }
-      })
+  // Handle blur - only refocus if focus moved to an element inside the dropdown content
+  const handleSearchBlur = useCallback((e: React.FocusEvent<HTMLInputElement>) => {
+    e.stopPropagation()
+    logFocus('ModelSelector.searchInput', 'blur', {
+      relatedTarget: e.relatedTarget?.tagName,
+      activeElement: document.activeElement?.tagName
+    })
+
+    // If dropdown is open and focus is moving to something inside the SelectContent,
+    // refocus the search input to maintain typing capability
+    if (isOpen && e.relatedTarget) {
+      const selectContent = e.currentTarget.closest('[data-radix-select-content]')
+      if (selectContent?.contains(e.relatedTarget as Node)) {
+        // Focus moved within the dropdown - restore focus to search input
+        requestAnimationFrame(() => {
+          if (searchInputRef.current && isOpen) {
+            logUI('[ModelSelector] Refocusing search input after internal blur')
+            searchInputRef.current.focus()
+          }
+        })
+      }
     }
-  }, [searchQuery, isOpen])
+  }, [isOpen])
 
   const isLoading = modelsQuery.isLoading || isRefreshing
   const hasError = modelsQuery.isError && !modelsQuery.data
@@ -202,13 +211,7 @@ export function ModelSelector({
                   activeElement: document.activeElement?.tagName
                 })
               }}
-              onBlur={(e) => {
-                e.stopPropagation()
-                logFocus('ModelSelector.searchInput', 'blur', {
-                  relatedTarget: e.relatedTarget?.tagName,
-                  activeElement: document.activeElement?.tagName
-                })
-              }}
+              onBlur={handleSearchBlur}
               onMouseDown={(e) => e.stopPropagation()}
               className="h-auto border-0 p-0 focus-visible:ring-0 focus-visible:ring-offset-0"
             />

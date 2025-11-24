@@ -1,9 +1,11 @@
 import { useMutation } from "@tanstack/react-query"
 import { tipcClient } from "~/lib/tipc-client"
+import { useConversationStore } from "@renderer/stores"
 import {
-  useConversationActions,
-  useConversationState,
-} from "@renderer/contexts/conversation-context"
+  useConversationQuery,
+  useCreateConversationMutation,
+  useAddMessageToConversationMutation,
+} from "@renderer/lib/queries"
 
 interface UseInputProcessingOptions {
   onError?: (error: Error) => void
@@ -15,8 +17,14 @@ interface UseInputProcessingOptions {
  * Consolidates the common mutation logic and state management.
  */
 export function useInputProcessing(options: UseInputProcessingOptions = {}) {
-  const { isConversationActive, currentConversation } = useConversationState()
-  const { addMessage, startNewConversation } = useConversationActions()
+  const currentConversationId = useConversationStore((s) => s.currentConversationId)
+  const setCurrentConversationId = useConversationStore((s) => s.setCurrentConversationId)
+  const conversationQuery = useConversationQuery(currentConversationId)
+  const createConversationMutation = useCreateConversationMutation()
+  const addMessageMutation = useAddMessageToConversationMutation()
+
+  const currentConversation = conversationQuery.data
+  const isConversationActive = !!currentConversationId
 
   // Regular text input mutation (fallback)
   const textInputMutation = useMutation({
@@ -57,7 +65,11 @@ export function useInputProcessing(options: UseInputProcessingOptions = {}) {
 
       // If we have a transcript, start a conversation with it
       if (transcript && !isConversationActive) {
-        await startNewConversation(transcript, "user")
+        const newConversation = await createConversationMutation.mutateAsync({
+          firstMessage: transcript,
+          role: "user",
+        })
+        setCurrentConversationId(newConversation.id)
       }
 
       const result = await tipcClient.createMcpRecording({
@@ -74,11 +86,22 @@ export function useInputProcessing(options: UseInputProcessingOptions = {}) {
 
   // Unified text processing function
   const processText = async (text: string) => {
+    let conversationId = currentConversationId
+
     // Start new conversation or add to existing one
     if (!isConversationActive) {
-      await startNewConversation(text, "user")
-    } else {
-      await addMessage(text, "user")
+      const newConversation = await createConversationMutation.mutateAsync({
+        firstMessage: text,
+        role: "user",
+      })
+      conversationId = newConversation.id
+      setCurrentConversationId(newConversation.id)
+    } else if (conversationId) {
+      await addMessageMutation.mutateAsync({
+        conversationId,
+        content: text,
+        role: "user",
+      })
     }
 
     // Always try to use MCP processing first if available
@@ -87,7 +110,7 @@ export function useInputProcessing(options: UseInputProcessingOptions = {}) {
       if (config.mcpToolsEnabled) {
         mcpTextInputMutation.mutate({
           text,
-          conversationId: currentConversation?.id,
+          conversationId,
         })
       } else {
         textInputMutation.mutate({ text })

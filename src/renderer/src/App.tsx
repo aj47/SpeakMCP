@@ -2,15 +2,21 @@ import { RouterProvider } from "react-router-dom"
 import { router } from "./router"
 import { lazy, Suspense } from "react"
 import { Toaster } from "sonner"
-import { ConversationProvider } from "./contexts/conversation-context"
 import { ThemeProvider } from "./contexts/theme-context"
+import { useStoreSync } from "./hooks/use-store-sync"
 
 const Updater = lazy(() => import("./components/updater"))
+
+// Component to initialize store synchronization
+function StoreInitializer({ children }: { children: React.ReactNode }) {
+  useStoreSync()
+  return <>{children}</>
+}
 
 function App(): JSX.Element {
   return (
     <ThemeProvider>
-      <ConversationProvider>
+      <StoreInitializer>
         <RouterProvider router={router}></RouterProvider>
 
         <Suspense>
@@ -18,7 +24,7 @@ function App(): JSX.Element {
         </Suspense>
 
         <Toaster />
-      </ConversationProvider>
+      </StoreInitializer>
     </ThemeProvider>
   )
 }

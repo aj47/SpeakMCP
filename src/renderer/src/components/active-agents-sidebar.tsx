@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query"
 import { tipcClient, rendererHandlers } from "@renderer/lib/tipc-client"
 import { Activity, ChevronDown, ChevronRight, X, Minimize2, Maximize2 } from "lucide-react"
 import { cn } from "@renderer/lib/utils"
-import { useConversation } from "@renderer/contexts/conversation-context"
+import { useAgentStore } from "@renderer/stores"
 import { logUI, logStateChange, logExpand } from "@renderer/lib/debug"
 import { useNavigate } from "react-router-dom"
 
@@ -37,7 +37,8 @@ export function ActiveAgentsSidebar() {
     return initial
   })
 
-  const { focusedSessionId, setFocusedSessionId } = useConversation()
+  const focusedSessionId = useAgentStore((s) => s.focusedSessionId)
+  const setFocusedSessionId = useAgentStore((s) => s.setFocusedSessionId)
   const navigate = useNavigate()
 
   const { data, refetch } = useQuery<AgentSessionsResponse>({

@@ -3,8 +3,7 @@ import { cn } from "@renderer/lib/utils"
 import { AgentProgress } from "@renderer/components/agent-progress"
 import { AgentProgressUpdate } from "../../../shared/types"
 import { useTheme } from "@renderer/contexts/theme-context"
-
-import { useConversation } from "@renderer/contexts/conversation-context"
+import { useAgentStore } from "@renderer/stores"
 
 interface MultiAgentProgressViewProps {
   className?: string
@@ -22,7 +21,9 @@ export function MultiAgentProgressView({
   showBackgroundSpinner = true,
 }: MultiAgentProgressViewProps) {
   const { isDark } = useTheme()
-  const { agentProgressById, focusedSessionId, setFocusedSessionId } = useConversation()
+  const agentProgressById = useAgentStore((s) => s.agentProgressById)
+  const focusedSessionId = useAgentStore((s) => s.focusedSessionId)
+  const setFocusedSessionId = useAgentStore((s) => s.setFocusedSessionId)
 
   // Get all active sessions (non-snoozed)
   const activeSessions = useMemo(() => {

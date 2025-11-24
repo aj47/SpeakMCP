@@ -5,7 +5,7 @@ import { ScrollArea } from "@renderer/components/ui/scroll-area"
 import { User, Bot, Wrench, ChevronDown, ChevronUp } from "lucide-react"
 import { cn } from "@renderer/lib/utils"
 import { ConversationMessage } from "@shared/types"
-import { useConversationState } from "@renderer/contexts/conversation-context"
+import { useAgentProgress, useIsAgentProcessing } from "@renderer/stores"
 import { AgentProgress } from "@renderer/components/agent-progress"
 import { MarkdownRenderer } from "@renderer/components/markdown-renderer"
 import { AudioPlayer } from "@renderer/components/audio-player"
@@ -29,7 +29,8 @@ export function ConversationDisplay({
   maxHeight = "400px",
 }: ConversationDisplayProps) {
   const isFullHeight = maxHeight === "100%"
-  const { agentProgress, isAgentProcessing } = useConversationState()
+  const agentProgress = useAgentProgress()
+  const isAgentProcessing = useIsAgentProcessing()
 
 
 

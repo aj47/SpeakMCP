@@ -15,19 +15,20 @@ https://github.com/user-attachments/assets/0c181c70-d1f1-4c5d-a6f5-a73147e75182
 
 ### Download
 
-**Cross-Platform Support**: macOS (Apple Silicon & Intel), Windows (x64), Linux (x64)
-
 **[📥 Download Latest Release](https://github.com/aj47/SpeakMCP/releases/latest)**
+
+> **Platform Support**: macOS (Apple Silicon & Intel) with full MCP agent functionality.
+> ⚠️ **Windows/Linux**: MCP tools not currently supported — see [v0.2.2](https://github.com/aj47/SpeakMCP/releases/tag/v0.2.2) for dictation-only builds.
 
 ### Basic Usage
 
 **Voice Recording:**
 
-1. **Hold `Ctrl`** key to start recording your voice
-2. **Release `Ctrl`** to stop recording and transcribe
+1. **Hold `Ctrl`** (macOS/Linux) or **`Ctrl+/`** (Windows) to start recording
+2. **Release** to stop recording and transcribe
 3. Text is automatically inserted into your active application
 
-**MCP Agent Mode:**
+**MCP Agent Mode** (macOS only):
 
 1. **Hold `Ctrl+Alt`** to start recording for agent mode
 2. **Release `Ctrl+Alt`** to process with MCP tools
@@ -36,14 +37,14 @@ https://github.com/user-attachments/assets/0c181c70-d1f1-4c5d-a6f5-a73147e75182
 
 **Text Input:**
 
-- **Press `Ctrl+T`** to open text input mode for direct typing
+- **`Ctrl+T`** (macOS/Linux) or **`Ctrl+Shift+T`** (Windows) for direct typing
 
 
 
 ## ✨ Features
 
 ### 🎤 Voice & Speech
-- **Voice-to-Text**: Hold `Ctrl` to record, release to transcribe
+- **Voice-to-Text**: Hold `Ctrl` (macOS/Linux) or `Ctrl+/` (Windows) to record
 - **Toggle Voice Dictation**: Press `Fn` key to start/stop recording (configurable)
 - **Multi-Language Support**: 30+ languages including Spanish, French, German, Chinese, Japanese, Arabic, Hindi
 - **Text-to-Speech (TTS)**: AI-generated speech with 50+ voices across OpenAI, Groq, and Gemini
@@ -64,10 +65,10 @@ https://github.com/user-attachments/assets/0c181c70-d1f1-4c5d-a6f5-a73147e75182
 - **Universal Integration**: Works with any text-input application
 
 ### 🎨 User Experience
-- **Text Input**: Press `Ctrl+T` for direct text input mode
+- **Text Input**: `Ctrl+T` (macOS/Linux) or `Ctrl+Shift+T` (Windows) for direct input
 - **Dark/Light Themes**: Toggle between dark and light modes
 - **Resizable Panels**: Drag-to-resize interface components
-- **Kill Switch**: Emergency stop for agent operations (`Escape` key)
+- **Kill Switch**: Emergency stop for agent operations (`Ctrl+Shift+Escape`)
 - **Conversation Management**: Full conversation history with tool call visualization
 
 ## 🏗️ Architecture
@@ -106,31 +107,7 @@ pnpm build:linux  # Linux build (x64)
 pnpm test         # Run test suite
 pnpm test:run     # Run tests once (CI mode)
 pnpm test:coverage # Run tests with coverage
-
-# VNC GUI Testing (GitHub Actions)
-# Test the full app in a Linux desktop environment with remote VNC access
-# See .github/VNC_TESTING_GUIDE.md for detailed instructions
 ```
-
-### 🖥️ VNC GUI Testing
-
-Test SpeakMCP in a full Linux desktop environment via GitHub Actions with remote VNC access:
-
-1. **Setup secrets** (one-time):
-   ```bash
-   # Linux/macOS
-   ./.github/setup-vnc-secrets.sh
-
-   # Windows
-   .\.github\setup-vnc-secrets.ps1
-   ```
-
-2. **Run VNC workflow**:
-   - Go to Actions → VNC GUI Testing → Run workflow
-   - Connect via VNC client or web browser
-   - Interact with the app in real-time
-
-See [VNC Testing Guide](.github/VNC_TESTING_GUIDE.md) for complete documentation.
 
 ### 🔧 Troubleshooting Development Setup
 
@@ -195,11 +172,11 @@ nvm use 20
 ```
 
 **Keyboard Shortcuts**:
-- **Hold Ctrl**: Voice recording (traditional mode)
+- **Hold Ctrl** (macOS/Linux) / **Ctrl+/** (Windows): Voice recording
 - **Fn Key**: Toggle voice dictation (press once to start/stop)
-- **Hold Ctrl+Alt**: MCP agent mode
-- **Ctrl+T**: Text input mode
-- **Escape**: Cancel/kill switch for operations
+- **Hold Ctrl+Alt**: MCP agent mode (macOS only)
+- **Ctrl+T** (macOS/Linux) / **Ctrl+Shift+T** (Windows): Text input mode
+- **Ctrl+Shift+Escape**: Kill switch for agent operations
 
 ## 🤖 MCP Agent Mode
 
@@ -211,7 +188,7 @@ nvm use 20
 - **Conversation Continuity**: Context preservation across multi-turn interactions
 - **OAuth 2.1 Integration**: Secure authentication for MCP servers
 - **Rate Limit Handling**: Automatic retry with exponential backoff
-- **Kill Switch**: Emergency stop functionality with `Escape` key
+- **Kill Switch**: Emergency stop functionality with `Ctrl+Shift+Escape`
 - **Tool Management**: Per-server tool toggles and approval prompts
 
 **Example commands**:
@@ -219,32 +196,6 @@ nvm use 20
 - "Search for latest AI news and summarize the top 3 articles"
 - "Send a message to the team about today's progress"
 - "Analyze this codebase and suggest improvements"
-
-## 🆕 What's New
-
-**Recent Major Features**:
-
-### 🎵 Text-to-Speech (TTS) Integration
-- **50+ AI Voices**: OpenAI (6 voices), Groq (23 voices), Gemini (30+ voices)
-- **Auto-Play**: Seamless conversation flow with automatic speech playback
-- **Smart Preprocessing**: Converts code blocks, URLs, and markdown to natural speech
-- **Multi-Language**: Support for 30+ languages with native pronunciation
-
-### 🖥️ Cross-Platform Support
-- **Windows Build**: Full Windows compatibility with native builds
-- **Enhanced macOS**: Apple Silicon and Intel support
-- **Linux Ready**: Complete Linux build pipeline
-
-### 🎛️ Enhanced Voice Controls
-- **Toggle Voice Dictation**: Press `Fn` key to start/stop recording
-- **Multi-Language Recognition**: 30+ languages with automatic detection
-- **Configurable Hotkeys**: Customize keyboard shortcuts for all functions
-
-### 🔧 Reliability & Performance
-- **Rate Limit Handling**: Automatic retry with exponential backoff for API limits
-- **OAuth 2.1**: Secure authentication for MCP servers with deep link integration
-- **Kill Switch**: Emergency stop functionality for all operations
-- **Model Selection**: Choose specific AI models for each provider
 
 ## 🐛 Debug Mode
 

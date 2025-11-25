@@ -13,6 +13,7 @@ import {
   useSaveConfigMutation,
 } from "@renderer/lib/query-client"
 import { Config } from "@shared/types"
+import { ModelPresetManager } from "@renderer/components/model-preset-manager"
 
 import {
   STT_PROVIDERS,
@@ -21,15 +22,6 @@ import {
   STT_PROVIDER_ID,
   CHAT_PROVIDER_ID,
   TTS_PROVIDER_ID,
-  OPENAI_TTS_VOICES,
-  OPENAI_TTS_MODELS,
-  GROQ_TTS_VOICES_ENGLISH,
-  GROQ_TTS_VOICES_ARABIC,
-  GROQ_TTS_MODELS,
-  GEMINI_TTS_VOICES,
-  GEMINI_TTS_MODELS,
-  OPENAI_COMPATIBLE_PRESETS,
-  OPENAI_COMPATIBLE_PRESET_ID,
 } from "@shared/index"
 
 export function Component() {
@@ -148,63 +140,13 @@ export function Component() {
             </Select>
           </Control>
         </ControlGroup>
-        <ControlGroup title="OpenAI Compatible">
-          <Control label="API Key" className="px-3">
-            <Input
-              type="password"
-              defaultValue={configQuery.data.openaiApiKey}
-              onChange={(e) => {
-                saveConfig({
-                  openaiApiKey: e.currentTarget.value,
-                })
-              }}
-            />
-          </Control>
-
-          <Control label={<ControlLabel label="Provider Preset" tooltip="Choose a popular OpenAI-compatible provider or select Custom to enter your own base URL" />} className="px-3">
-            <Select
-              value={configQuery.data.openaiCompatiblePreset || "openai"}
-              onValueChange={(value) => {
-                const preset = OPENAI_COMPATIBLE_PRESETS.find(p => p.value === value)
-                saveConfig({
-                  openaiCompatiblePreset: value as OPENAI_COMPATIBLE_PRESET_ID,
-                  // Auto-fill base URL when selecting a preset (except custom)
-                  ...(preset && preset.value !== "custom" && {
-                    openaiBaseUrl: preset.baseUrl,
-                  }),
-                })
-              }}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {OPENAI_COMPATIBLE_PRESETS.map((preset) => (
-                  <SelectItem key={preset.value} value={preset.value}>
-                    <div className="flex flex-col">
-                      <span>{preset.label}</span>
-                      <span className="text-xs text-muted-foreground">{preset.description}</span>
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Control>
-
-          <Control label="API Base URL" className="px-3">
-            <Input
-              type="url"
-              placeholder="https://api.openai.com/v1"
-              value={configQuery.data.openaiBaseUrl || ""}
-              disabled={configQuery.data.openaiCompatiblePreset !== "custom"}
-              onChange={(e) => {
-                saveConfig({
-                  openaiBaseUrl: e.currentTarget.value,
-                })
-              }}
-            />
-          </Control>
-
+        <ControlGroup title="OpenAI Compatible Presets">
+          <div className="px-3 py-2">
+            <ModelPresetManager />
+            <p className="text-xs text-muted-foreground mt-3">
+              Create presets with individual API keys for different providers (OpenRouter, Together AI, etc.)
+            </p>
+          </div>
         </ControlGroup>
 
         <ControlGroup title="Groq">

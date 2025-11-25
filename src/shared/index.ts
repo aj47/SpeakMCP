@@ -1,3 +1,5 @@
+import { ModelPreset } from "./types"
+
 export const STT_PROVIDERS = [
   {
     label: "OpenAI",
@@ -178,7 +180,7 @@ export const OPENAI_COMPATIBLE_PRESETS = [
 export type OPENAI_COMPATIBLE_PRESET_ID = (typeof OPENAI_COMPATIBLE_PRESETS)[number]["value"]
 
 // Helper to get built-in presets as ModelPreset objects (without API keys)
-export const getBuiltInModelPresets = () => {
+export const getBuiltInModelPresets = (): ModelPreset[] => {
   return OPENAI_COMPATIBLE_PRESETS.filter(p => p.value !== "custom").map(preset => ({
     id: `builtin-${preset.value}`,
     name: preset.label,

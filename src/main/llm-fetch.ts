@@ -742,6 +742,7 @@ async function makeAPICallAttempt(
       // Enhanced debugging for structured output errors
       if ((error as any).isStructuredOutputError) {
         // Log comprehensive context for debugging JSON validation failures
+        const messages = requestBody.messages as Array<{ role: string; content: string }>
         const lastUserMessage = messages.filter(m => m.role === 'user').slice(-1)[0]
         const lastAssistantMessage = messages.filter(m => m.role === 'assistant').slice(-1)[0]
 

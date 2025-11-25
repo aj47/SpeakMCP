@@ -92,24 +92,9 @@ user: which file contains the implementation of foo?
 assistant: src/foo.c
 </example>
 
-RESPONSE FORMAT:
-For tool calls:
-{
-  "toolCalls": [
-    {
-      "name": "exact_tool_name_from_available_list",
-      "arguments": { "param1": "value1", "param2": "value2" }
-    }
-  ],
-  "content": "Clear explanation of what you're doing and why",
-  "needsMoreWork": true
-}
-
-For final responses (no more tools needed):
-{
-  "content": "Your comprehensive final response with results",
-  "needsMoreWork": false
-}`
+RESPONSE FORMAT (return ONLY valid JSON, no markdown):
+For tool calls: {"toolCalls": [{"name": "tool_name", "arguments": {...}}], "content": "explanation", "needsMoreWork": true}
+For final responses: {"content": "your answer", "needsMoreWork": false}`
 
 export const AGENT_MODE_ADDITIONS = `
 
@@ -133,7 +118,6 @@ AUTONOMOUS DECISION MAKING:
 - Don't wait for explicit permission to use tools - that's why they're provided
 - If a tool fails or returns an error, try a different approach or tool
 - Be persistent and creative in finding solutions with available tools
-
 `
 
 /**

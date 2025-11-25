@@ -563,11 +563,15 @@ export async function processTranscriptWithAgentMode(
     })
   }
 
+  // Track current iteration for retry progress callback
+  // This is updated in the agent loop and read by onRetryProgress
+  let currentIterationRef = 0
+
   // Create retry progress callback that emits updates to the UI
   // This callback is passed to makeLLMCall to show retry status
   const onRetryProgress: RetryProgressCallback = (retryInfo) => {
     emit({
-      currentIteration: 0, // Will be updated with actual iteration when used
+      currentIteration: currentIterationRef,
       maxIterations,
       steps: [], // Empty - retry info is separate from steps
       isComplete: false,
@@ -792,6 +796,7 @@ Return ONLY JSON per schema.`,
 
   while (iteration < maxIterations) {
     iteration++
+    currentIterationRef = iteration // Update ref for retry progress callback
 
     // Check for stop signal (session-specific or global)
     if (agentSessionStateManager.shouldStopSession(currentSessionId)) {

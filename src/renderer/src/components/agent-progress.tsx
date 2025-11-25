@@ -710,14 +710,19 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
   // Tool approval handlers
   // Track the approval ID we're responding to, to handle race conditions
   const [respondingApprovalId, setRespondingApprovalId] = useState<string | null>(null)
+  // Use a ref to synchronously block re-entrancy (prevents double-click race condition)
+  const respondingApprovalIdRef = useRef<string | null>(null)
 
   // Derive isRespondingToApproval from whether we have a pending response for the current approval
   const isRespondingToApproval = respondingApprovalId === progress?.pendingToolApproval?.approvalId
 
   const handleApproveToolCall = async () => {
-    if (isRespondingToApproval || !progress?.pendingToolApproval?.approvalId) return
+    const approvalId = progress?.pendingToolApproval?.approvalId
+    if (!approvalId) return
+    // Synchronous check to prevent double-click race condition
+    if (respondingApprovalIdRef.current === approvalId) return
 
-    const approvalId = progress.pendingToolApproval.approvalId
+    respondingApprovalIdRef.current = approvalId
     setRespondingApprovalId(approvalId)
     try {
       await tipcClient.respondToToolApproval({
@@ -729,14 +734,18 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
     } catch (error) {
       console.error("Failed to approve tool call:", error)
       // Only reset on error so user can retry
+      respondingApprovalIdRef.current = null
       setRespondingApprovalId(null)
     }
   }
 
   const handleDenyToolCall = async () => {
-    if (isRespondingToApproval || !progress?.pendingToolApproval?.approvalId) return
+    const approvalId = progress?.pendingToolApproval?.approvalId
+    if (!approvalId) return
+    // Synchronous check to prevent double-click race condition
+    if (respondingApprovalIdRef.current === approvalId) return
 
-    const approvalId = progress.pendingToolApproval.approvalId
+    respondingApprovalIdRef.current = approvalId
     setRespondingApprovalId(approvalId)
     try {
       await tipcClient.respondToToolApproval({
@@ -748,6 +757,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
     } catch (error) {
       console.error("Failed to deny tool call:", error)
       // Only reset on error so user can retry
+      respondingApprovalIdRef.current = null
       setRespondingApprovalId(null)
     }
   }

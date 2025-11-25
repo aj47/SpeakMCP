@@ -221,6 +221,17 @@ export type ProfilesData = {
   currentProfileId?: string
 }
 
+// Model Preset Types - allows per-preset API keys
+export interface ModelPreset {
+  id: string
+  name: string
+  baseUrl: string
+  apiKey: string
+  isBuiltIn?: boolean // true for presets derived from OPENAI_COMPATIBLE_PRESETS
+  createdAt?: number
+  updatedAt?: number
+}
+
 export type Config = {
   shortcut?: "hold-ctrl" | "ctrl-slash" | "custom"
   customShortcut?: string
@@ -242,6 +253,10 @@ export type Config = {
   openaiApiKey?: string
   openaiBaseUrl?: string
   openaiCompatiblePreset?: OPENAI_COMPATIBLE_PRESET_ID
+
+  // Model Presets - allows per-preset API keys
+  modelPresets?: ModelPreset[]
+  currentModelPresetId?: string // ID of the currently active preset
 
   groqApiKey?: string
   groqBaseUrl?: string

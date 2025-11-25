@@ -1,3 +1,5 @@
+import { ModelPreset } from "./types"
+
 export const STT_PROVIDERS = [
   {
     label: "OpenAI",
@@ -144,12 +146,6 @@ export const OPENAI_COMPATIBLE_PRESETS = [
     baseUrl: "https://api.openai.com/v1",
   },
   {
-    label: "Groq",
-    value: "groq",
-    description: "Groq's fast inference API",
-    baseUrl: "https://api.groq.com/openai/v1",
-  },
-  {
     label: "OpenRouter",
     value: "openrouter",
     description: "Access to multiple AI models via OpenRouter",
@@ -160,6 +156,18 @@ export const OPENAI_COMPATIBLE_PRESETS = [
     value: "together",
     description: "Together AI's inference platform",
     baseUrl: "https://api.together.xyz/v1",
+  },
+  {
+    label: "Cerebras",
+    value: "cerebras",
+    description: "Cerebras fast inference API",
+    baseUrl: "https://api.cerebras.ai/v1",
+  },
+  {
+    label: "Zhipu GLM",
+    value: "zhipu",
+    description: "Zhipu AI GLM models (China)",
+    baseUrl: "https://open.bigmodel.cn/api/paas/v4",
   },
   {
     label: "Perplexity",
@@ -176,3 +184,17 @@ export const OPENAI_COMPATIBLE_PRESETS = [
 ] as const
 
 export type OPENAI_COMPATIBLE_PRESET_ID = (typeof OPENAI_COMPATIBLE_PRESETS)[number]["value"]
+
+// Helper to get built-in presets as ModelPreset objects (without API keys)
+export const getBuiltInModelPresets = (): ModelPreset[] => {
+  return OPENAI_COMPATIBLE_PRESETS.filter(p => p.value !== "custom").map(preset => ({
+    id: `builtin-${preset.value}`,
+    name: preset.label,
+    baseUrl: preset.baseUrl,
+    apiKey: "", // API key should be filled by user
+    isBuiltIn: true,
+  }))
+}
+
+// Default preset ID
+export const DEFAULT_MODEL_PRESET_ID = "builtin-openai"

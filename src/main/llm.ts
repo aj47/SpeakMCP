@@ -1098,11 +1098,9 @@ Always use actual resource IDs from the conversation history or create new ones 
         break
       }
 
-      // Handle empty/null response errors gracefully
+      // Handle empty response errors - retry with guidance
       const errorMessage = (error?.message || String(error)).toLowerCase()
       if (errorMessage.includes("empty") || errorMessage.includes("no text") || errorMessage.includes("no content")) {
-        console.error(`LLM empty response on iteration ${iteration}:`, error?.message || error)
-        diagnosticsService.logError("llm", "Empty LLM response in agent mode", error)
         thinkingStep.status = "error"
         thinkingStep.description = "Empty response. Retrying..."
         emit({
@@ -1116,89 +1114,7 @@ Always use actual resource IDs from the conversation history or create new ones 
         continue
       }
 
-      // Handle JSON validation errors gracefully
-      if (errorMessage.includes("json") || errorMessage.includes("validation") || errorMessage.includes("format")) {
-        console.error(`LLM JSON validation error on iteration ${iteration}:`, error?.message || error)
-        diagnosticsService.logError("llm", "JSON validation error in agent mode", error)
-        thinkingStep.status = "error"
-        thinkingStep.description = "Response formatting issue. Retrying..."
-
-        // If we have failed generation content, use it
-        if ((error as any).failedGeneration) {
-          const failedContent = (error as any).failedGeneration
-          console.log(`Using failed generation content (${failedContent.length} chars)`)
-
-          // Add the failed content as a valid response
-          addMessage("assistant", failedContent)
-
-          // Update thinking step with the recovered content
-          thinkingStep.status = "completed"
-          thinkingStep.llmContent = failedContent
-          thinkingStep.title = "Agent response (recovered)"
-          thinkingStep.description = failedContent.length > 100
-            ? failedContent.substring(0, 100) + "..."
-            : failedContent
-
-          emit({
-            currentIteration: iteration,
-            maxIterations,
-            steps: progressSteps.slice(-3),
-            isComplete: false,
-            conversationHistory: formatConversationForProgress(conversationHistory),
-          })
-
-          // Check if this looks like a final answer (no tool calls mentioned)
-          const looksLikeFinalAnswer = !failedContent.toLowerCase().includes("tool") &&
-                                       !failedContent.toLowerCase().includes("function") &&
-                                       !failedContent.toLowerCase().includes("execute")
-
-          if (looksLikeFinalAnswer) {
-            // Treat as final response
-            finalContent = failedContent
-            break
-          }
-
-          // Otherwise continue the loop
-          continue
-        }
-
-        // No failed generation content, retry with guidance
-        emit({
-          currentIteration: iteration,
-          maxIterations,
-          steps: progressSteps.slice(-3),
-          isComplete: false,
-          conversationHistory: formatConversationForProgress(conversationHistory),
-        })
-        addMessage("user", "Previous response had formatting issues. Please provide your response in valid JSON format.")
-        continue
-      }
-
-      // Handle other errors - log but try to continue if possible
-      console.error(`LLM error on iteration ${iteration}:`, error?.message || error)
-      diagnosticsService.logError("llm", "LLM call failed in agent mode", error)
-      thinkingStep.status = "error"
-      thinkingStep.description = `Error: ${error?.message || "Unknown error"}`
-
-      // If we're past the first iteration, we have some progress - try to summarize and exit gracefully
-      if (iteration > 1) {
-        console.log("Error occurred after some progress, attempting graceful exit")
-        const errorSummary = `I encountered an error while processing your request: ${error?.message || "Unknown error"}. Here's what I accomplished before the error occurred.`
-        addMessage("assistant", errorSummary)
-        finalContent = errorSummary
-
-        emit({
-          currentIteration: iteration,
-          maxIterations,
-          steps: progressSteps.slice(-3),
-          isComplete: true,
-          finalContent,
-          conversationHistory: formatConversationForProgress(conversationHistory),
-        })
-        break
-      }
-
-      // First iteration error - can't recover, throw
+      // Other errors - throw (llm-fetch.ts handles JSON validation/failedGeneration recovery)
       throw error
     }
 

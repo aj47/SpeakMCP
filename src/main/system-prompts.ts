@@ -92,33 +92,9 @@ user: which file contains the implementation of foo?
 assistant: src/foo.c
 </example>
 
-RESPONSE FORMAT:
-CRITICAL: You MUST respond with valid JSON in one of these exact formats. Do NOT use markdown code blocks or any other formatting.
-
-For tool calls:
-{
-  "toolCalls": [
-    {
-      "name": "exact_tool_name_from_available_list",
-      "arguments": { "param1": "value1", "param2": "value2" }
-    }
-  ],
-  "content": "Clear explanation of what you're doing and why",
-  "needsMoreWork": true
-}
-
-For final responses (no more tools needed):
-{
-  "content": "Your comprehensive final response with results",
-  "needsMoreWork": false
-}
-
-IMPORTANT JSON FORMATTING RULES:
-1. Return ONLY the JSON object - no markdown, no code blocks, no extra text
-2. Ensure all strings are properly escaped (use \\" for quotes inside strings)
-3. The JSON must be valid and parseable
-4. Do not wrap the JSON in ```json or any other markers
-5. If you have a final answer, wrap it in the JSON format shown above`
+RESPONSE FORMAT (return ONLY valid JSON, no markdown):
+For tool calls: {"toolCalls": [{"name": "tool_name", "arguments": {...}}], "content": "explanation", "needsMoreWork": true}
+For final responses: {"content": "your answer", "needsMoreWork": false}`
 
 export const AGENT_MODE_ADDITIONS = `
 
@@ -142,14 +118,6 @@ AUTONOMOUS DECISION MAKING:
 - Don't wait for explicit permission to use tools - that's why they're provided
 - If a tool fails or returns an error, try a different approach or tool
 - Be persistent and creative in finding solutions with available tools
-
-CRITICAL REMINDER FOR EVERY RESPONSE:
-- ALWAYS return valid JSON in the exact format specified above
-- NEVER use markdown code blocks (no \`\`\`json)
-- NEVER add explanatory text before or after the JSON
-- If you have a final answer, wrap it in: {"content": "your answer here", "needsMoreWork": false}
-- Properly escape all special characters in JSON strings
-
 `
 
 /**

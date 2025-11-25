@@ -727,53 +727,17 @@ async function makeAPICallAttempt(
                                                errorMessageLower.includes("model inference") ||
                                                errorMessageLower.includes("unknown error in the model")
 
-      // Extract failed_generation content if available
-      // This contains the actual LLM response when JSON formatting fails
+      // Extract failed_generation content if available (LLM response when JSON formatting fails)
       if (data.error.failed_generation) {
         ;(error as any).failedGeneration = data.error.failed_generation
-        if (isDebugLLM()) {
-          logLLM("📝 Failed generation content extracted:", {
-            contentLength: data.error.failed_generation.length,
-            contentPreview: data.error.failed_generation.substring(0, 200)
-          })
-        }
       }
 
-      // Enhanced debugging for structured output errors
-      if ((error as any).isStructuredOutputError) {
-        // Log comprehensive context for debugging JSON validation failures
-        const messages = requestBody.messages as Array<{ role: string; content: string }>
-        const lastUserMessage = messages.filter(m => m.role === 'user').slice(-1)[0]
-        const lastAssistantMessage = messages.filter(m => m.role === 'assistant').slice(-1)[0]
-
-        logLLM("⚠️ STRUCTURED OUTPUT ERROR DETECTED", {
-          timestamp: new Date().toISOString(),
-          model: requestBody.model,
-          errorMessage,
-          errorCode: data.error.code,
-          responseFormat: requestBody.response_format,
-          fullError: data.error,
-          hasFailedGeneration: !!data.error.failed_generation,
-          failedGenerationPreview: data.error.failed_generation?.substring(0, 500),
-          conversationContext: {
-            totalMessages: messages.length,
-            lastUserMessage: lastUserMessage?.content?.substring(0, 200),
-            lastAssistantMessage: lastAssistantMessage?.content?.substring(0, 200),
-            messageRoles: messages.map(m => m.role).join(' -> ')
-          },
-          requestDetails: {
-            temperature: requestBody.temperature,
-            maxTokens: requestBody.max_tokens,
-            hasTools: !!requestBody.tools,
-            toolCount: requestBody.tools?.length || 0
-          }
-        })
-
-        // Also log to console for easier debugging
-        console.error("[JSON Validation Failure]", {
+      // Log structured output errors for debugging
+      if ((error as any).isStructuredOutputError && isDebugLLM()) {
+        logLLM("⚠️ JSON Schema error", {
           model: requestBody.model,
           error: errorMessage,
-          failedGeneration: data.error.failed_generation?.substring(0, 300)
+          hasFailedGeneration: !!data.error.failed_generation
         })
       }
 
@@ -871,82 +835,32 @@ async function makeOpenAICompatibleCall(
         }
       } catch (error: any) {
         if (error.isStructuredOutputError) {
-          // If we have failed_generation content, try one retry with explicit JSON wrapping instructions
+          // If we have failed_generation content, try one retry with JSON wrapping
           if (error.failedGeneration) {
-            if (isDebugLLM()) {
-              logLLM("🔄 Retrying with explicit JSON wrapping instructions for failed generation")
-            }
-
             try {
-              // Create a retry message that explicitly asks to wrap the content in JSON
               const retryMessages = [
                 ...messages,
-                {
-                  role: "assistant",
-                  content: error.failedGeneration
-                },
-                {
-                  role: "user",
-                  content: `Please wrap your previous response in this exact JSON format:
-{
-  "content": "<your previous response here>",
-  "needsMoreWork": false
-}
-
-Make sure to:
-1. Escape any quotes in your response content
-2. Return ONLY valid JSON, no markdown code blocks
-3. Set needsMoreWork to false since you've already provided the answer`
-                }
+                { role: "assistant", content: error.failedGeneration },
+                { role: "user", content: `Return your previous response as valid JSON: {"content": "...", "needsMoreWork": false}. Escape quotes properly.` }
               ]
 
-              const retryRequestBody = {
+              const retryData = await makeAPICallAttempt(baseURL, apiKey, {
                 ...baseRequestBody,
                 messages: retryMessages,
                 response_format: { type: "json_schema", json_schema: toolCallResponseSchema }
-              }
+              }, estimatedTokens, sessionId)
 
-              const retryData = await makeAPICallAttempt(baseURL, apiKey, retryRequestBody, estimatedTokens, sessionId)
               if (!isEmptyContentResponse(retryData)) {
-                if (isDebugLLM()) {
-                  logLLM("✅ Retry with JSON wrapping succeeded!", {
-                    model,
-                    originalErrorCode: error.message,
-                    retryAttempt: 1,
-                    failedGenerationLength: error.failedGeneration?.length
-                  })
-                }
-                console.log("[JSON Retry Success]", {
-                  model,
-                  timestamp: new Date().toISOString()
-                })
                 recordStructuredOutputSuccess(model, 'json_schema')
                 return retryData
               }
-            } catch (retryError: any) {
-              if (isDebugLLM()) {
-                logLLM("⚠️ Retry with JSON wrapping failed, continuing to fallback modes", {
-                  model,
-                  retryError: retryError.message,
-                  hasFailedGeneration: !!retryError.failedGeneration
-                })
-              }
-              console.warn("[JSON Retry Failed]", {
-                model,
-                error: retryError.message,
-                timestamp: new Date().toISOString()
-              })
+            } catch {
               // Continue to fallback modes
             }
           }
 
           if (isDebugLLM()) {
-            logLLM("⚠️ JSON Schema mode FAILED for model", model, "- falling back to JSON Object mode")
-            logLLM("Error details:", {
-              message: error.message,
-              stack: error.stack?.split('\n').slice(0, 3).join('\n'),
-              hasFailedGeneration: !!error.failedGeneration
-            })
+            logLLM("⚠️ JSON Schema failed for", model, "- falling back")
           }
           // Record that this model doesn't support JSON Schema
           recordStructuredOutputFailure(model, 'json_schema')
@@ -1340,24 +1254,10 @@ export async function makeLLMCallWithFetch(
       onRetryProgress
     )
   } catch (error: any) {
-    // If we have failed_generation content, use it as a fallback
-    // This happens when the LLM generated a valid answer but failed to format it as JSON
+    // Use failed_generation content as fallback if available
     if (error?.failedGeneration) {
-      if (isDebugLLM()) {
-        logLLM("💡 Using failed_generation content as fallback response", {
-          contentLength: error.failedGeneration.length,
-          contentPreview: error.failedGeneration.substring(0, 200)
-        })
-      }
-
-      // Return the failed generation content as a valid response
-      // Mark needsMoreWork as false since this is typically a final answer
-      return {
-        content: error.failedGeneration,
-        needsMoreWork: false
-      }
+      return { content: error.failedGeneration, needsMoreWork: false }
     }
-
     diagnosticsService.logError("llm-fetch", "LLM call failed after all retries", error)
     throw error
   }

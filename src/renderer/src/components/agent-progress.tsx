@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react"
 import { cn } from "@renderer/lib/utils"
 import { AgentProgressUpdate } from "../../../shared/types"
-import { ChevronDown, ChevronUp, ChevronRight, X, AlertTriangle, Minimize2, Shield, Check, XCircle } from "lucide-react"
+import { ChevronDown, ChevronUp, ChevronRight, X, AlertTriangle, Minimize2, Shield, Check, XCircle, Loader2 } from "lucide-react"
 import { MarkdownRenderer } from "@renderer/components/markdown-renderer"
 import { Button } from "./ui/button"
 import { Badge } from "./ui/badge"
@@ -531,12 +531,15 @@ const ToolApprovalBubble: React.FC<{
       <div className="flex items-center gap-2 px-3 py-2 bg-amber-100/50 dark:bg-amber-900/30 border-b border-amber-200 dark:border-amber-800">
         <Shield className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
         <span className="text-xs font-medium text-amber-800 dark:text-amber-200">
-          Tool Approval Required
+          {isResponding ? "Processing..." : "Tool Approval Required"}
         </span>
+        {isResponding && (
+          <Loader2 className="h-3 w-3 text-amber-600 dark:text-amber-400 animate-spin ml-auto" />
+        )}
       </div>
 
       {/* Content */}
-      <div className="px-3 py-2">
+      <div className={cn("px-3 py-2", isResponding && "opacity-60")}>
         <div className="flex items-center gap-2 mb-2">
           <span className="text-xs text-amber-700 dark:text-amber-300">Tool:</span>
           <code className="text-xs font-mono font-medium text-amber-900 dark:text-amber-100 bg-amber-100 dark:bg-amber-900/50 px-1.5 py-0.5 rounded">
@@ -549,6 +552,7 @@ const ToolApprovalBubble: React.FC<{
           <button
             onClick={() => setShowArgs(!showArgs)}
             className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-200"
+            disabled={isResponding}
           >
             <ChevronRight className={cn("h-3 w-3 transition-transform", showArgs && "rotate-90")} />
             {showArgs ? "Hide" : "View"} arguments
@@ -574,12 +578,26 @@ const ToolApprovalBubble: React.FC<{
           </Button>
           <Button
             size="sm"
-            className="h-7 text-xs bg-green-600 hover:bg-green-700 text-white"
+            className={cn(
+              "h-7 text-xs text-white",
+              isResponding
+                ? "bg-green-500 cursor-not-allowed"
+                : "bg-green-600 hover:bg-green-700"
+            )}
             onClick={onApprove}
             disabled={isResponding}
           >
-            <Check className="h-3 w-3 mr-1" />
-            Approve
+            {isResponding ? (
+              <>
+                <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                Processing...
+              </>
+            ) : (
+              <>
+                <Check className="h-3 w-3 mr-1" />
+                Approve
+              </>
+            )}
           </Button>
         </div>
       </div>
@@ -690,37 +708,47 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
   }
 
   // Tool approval handlers
-  const [isRespondingToApproval, setIsRespondingToApproval] = useState(false)
+  // Track the approval ID we're responding to, to handle race conditions
+  const [respondingApprovalId, setRespondingApprovalId] = useState<string | null>(null)
+
+  // Derive isRespondingToApproval from whether we have a pending response for the current approval
+  const isRespondingToApproval = respondingApprovalId === progress?.pendingToolApproval?.approvalId
 
   const handleApproveToolCall = async () => {
     if (isRespondingToApproval || !progress?.pendingToolApproval?.approvalId) return
 
-    setIsRespondingToApproval(true)
+    const approvalId = progress.pendingToolApproval.approvalId
+    setRespondingApprovalId(approvalId)
     try {
       await tipcClient.respondToToolApproval({
-        approvalId: progress.pendingToolApproval.approvalId,
+        approvalId,
         approved: true,
       })
+      // Don't reset respondingApprovalId on success - keep showing "Processing..."
+      // The approval bubble will be removed when pendingToolApproval is cleared from progress
     } catch (error) {
       console.error("Failed to approve tool call:", error)
-    } finally {
-      setIsRespondingToApproval(false)
+      // Only reset on error so user can retry
+      setRespondingApprovalId(null)
     }
   }
 
   const handleDenyToolCall = async () => {
     if (isRespondingToApproval || !progress?.pendingToolApproval?.approvalId) return
 
-    setIsRespondingToApproval(true)
+    const approvalId = progress.pendingToolApproval.approvalId
+    setRespondingApprovalId(approvalId)
     try {
       await tipcClient.respondToToolApproval({
-        approvalId: progress.pendingToolApproval.approvalId,
+        approvalId,
         approved: false,
       })
+      // Don't reset respondingApprovalId on success - keep showing "Processing..."
+      // The approval bubble will be removed when pendingToolApproval is cleared from progress
     } catch (error) {
       console.error("Failed to deny tool call:", error)
-    } finally {
-      setIsRespondingToApproval(false)
+      // Only reset on error so user can retry
+      setRespondingApprovalId(null)
     }
   }
 

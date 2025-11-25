@@ -25,22 +25,28 @@ export const useAgentStore = create<AgentState>((set, get) => ({
       const newMap = new Map(state.agentProgressById)
       const existingProgress = newMap.get(sessionId)
 
-      // If update has pendingToolApproval but no/empty conversationHistory,
-      // merge with existing progress to preserve conversation history
+      // Merge with existing progress to preserve conversation history and steps
+      // when they're not provided in the update (e.g., tool approval updates)
       let mergedUpdate = update
-      if (existingProgress && update.pendingToolApproval !== undefined) {
-        // This is a tool approval update - merge with existing data
-        mergedUpdate = {
-          ...existingProgress,
-          ...update,
-          // Preserve existing conversation history if the update has empty/missing history
-          conversationHistory: (update.conversationHistory && update.conversationHistory.length > 0)
-            ? update.conversationHistory
-            : existingProgress.conversationHistory,
-          // Preserve existing steps if the update has empty steps
-          steps: (update.steps && update.steps.length > 0)
-            ? update.steps
-            : existingProgress.steps,
+      if (existingProgress) {
+        // Check if this is a partial update (empty conversationHistory or steps)
+        const hasEmptyHistory = !update.conversationHistory || update.conversationHistory.length === 0
+        const hasEmptySteps = !update.steps || update.steps.length === 0
+
+        // If either is empty, merge with existing data to preserve state
+        if (hasEmptyHistory || hasEmptySteps) {
+          mergedUpdate = {
+            ...existingProgress,
+            ...update,
+            // Preserve existing conversation history if the update has empty/missing history
+            conversationHistory: hasEmptyHistory
+              ? existingProgress.conversationHistory
+              : update.conversationHistory,
+            // Preserve existing steps if the update has empty steps
+            steps: hasEmptySteps
+              ? existingProgress.steps
+              : update.steps,
+          }
         }
       }
 

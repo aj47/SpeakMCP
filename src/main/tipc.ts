@@ -601,10 +601,13 @@ export const router = {
     .input<{ sessionId: string }>()
     .action(async ({ input }) => {
       const { agentSessionTracker } = await import("./agent-session-tracker")
-      const { agentSessionStateManager } = await import("./state")
+      const { agentSessionStateManager, toolApprovalManager } = await import("./state")
 
       // Stop the session in the state manager (aborts LLM requests, kills processes)
       agentSessionStateManager.stopSession(input.sessionId)
+
+      // Cancel any pending tool approvals for this session so executeToolCall doesn't hang
+      toolApprovalManager.cancelSessionApprovals(input.sessionId)
 
       // Immediately emit a final progress update with isComplete: true
       // This ensures the UI updates immediately without waiting for the agent loop

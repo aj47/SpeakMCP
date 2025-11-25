@@ -45,7 +45,7 @@ import {
   constrainPositionToScreen,
   PanelPosition,
 } from "./panel-position"
-import { state, agentProcessManager, suppressPanelAutoShow, isPanelAutoShowSuppressed } from "./state"
+import { state, agentProcessManager, suppressPanelAutoShow, isPanelAutoShowSuppressed, toolApprovalManager } from "./state"
 
 
 import { startRemoteServer, stopRemoteServer, restartRemoteServer } from "./remote-server"
@@ -218,7 +218,57 @@ async function processWithAgentMode(
     if (config.mcpAgentModeEnabled) {
       // Use agent mode for iterative tool calling
       const executeToolCall = async (toolCall: any, onProgress?: (message: string) => void): Promise<MCPToolResult> => {
-        return await mcpService.executeToolCall(toolCall, onProgress)
+        // Handle inline tool approval if enabled in config
+        if (config.mcpRequireApprovalBeforeToolCall) {
+          // Request approval and wait for user response via the UI
+          const { approvalId, promise: approvalPromise } = toolApprovalManager.requestApproval(
+            sessionId,
+            toolCall.name,
+            toolCall.arguments
+          )
+
+          // Emit progress update with pending approval to show approve/deny buttons
+          await emitAgentProgress({
+            sessionId,
+            currentIteration: 0, // Will be updated by the agent loop
+            maxIterations: config.mcpMaxIterations ?? 10,
+            steps: [],
+            isComplete: false,
+            pendingToolApproval: {
+              approvalId,
+              toolName: toolCall.name,
+              arguments: toolCall.arguments,
+            },
+          })
+
+          // Wait for user response
+          const approved = await approvalPromise
+
+          // Clear the pending approval from the UI by emitting without pendingToolApproval
+          await emitAgentProgress({
+            sessionId,
+            currentIteration: 0,
+            maxIterations: config.mcpMaxIterations ?? 10,
+            steps: [],
+            isComplete: false,
+            // No pendingToolApproval - clears it
+          })
+
+          if (!approved) {
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `Tool call denied by user: ${toolCall.name}`,
+                },
+              ],
+              isError: true,
+            }
+          }
+        }
+
+        // Execute the tool call (approval either not required or was granted)
+        return await mcpService.executeToolCall(toolCall, onProgress, true) // Pass skipApprovalCheck=true
       }
 
       // Load previous conversation history if continuing a conversation
@@ -604,6 +654,15 @@ export const router = {
       agentSessionTracker.unsnoozeSession(input.sessionId)
 
       return { success: true }
+    }),
+
+  // Respond to a tool approval request
+  respondToToolApproval: t.procedure
+    .input<{ approvalId: string; approved: boolean }>()
+    .action(async ({ input }) => {
+      const { toolApprovalManager } = await import("./state")
+      const success = toolApprovalManager.respondToApproval(input.approvalId, input.approved)
+      return { success }
     }),
 
   // Request the Panel window to focus a specific agent session

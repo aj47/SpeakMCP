@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react"
 import { cn } from "@renderer/lib/utils"
 import { AgentProgressUpdate } from "../../../shared/types"
-import { ChevronDown, ChevronUp, ChevronRight, X, AlertTriangle, Minimize2 } from "lucide-react"
+import { ChevronDown, ChevronUp, ChevronRight, X, AlertTriangle, Minimize2, Shield, Check, XCircle } from "lucide-react"
 import { MarkdownRenderer } from "@renderer/components/markdown-renderer"
 import { Button } from "./ui/button"
 import { Badge } from "./ui/badge"
@@ -609,6 +609,41 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
     }
   }
 
+  // Tool approval handlers
+  const [isRespondingToApproval, setIsRespondingToApproval] = useState(false)
+
+  const handleApproveToolCall = async () => {
+    if (isRespondingToApproval || !progress?.pendingToolApproval?.approvalId) return
+
+    setIsRespondingToApproval(true)
+    try {
+      await tipcClient.respondToToolApproval({
+        approvalId: progress.pendingToolApproval.approvalId,
+        approved: true,
+      })
+    } catch (error) {
+      console.error("Failed to approve tool call:", error)
+    } finally {
+      setIsRespondingToApproval(false)
+    }
+  }
+
+  const handleDenyToolCall = async () => {
+    if (isRespondingToApproval || !progress?.pendingToolApproval?.approvalId) return
+
+    setIsRespondingToApproval(true)
+    try {
+      await tipcClient.respondToToolApproval({
+        approvalId: progress.pendingToolApproval.approvalId,
+        approved: false,
+      })
+    } catch (error) {
+      console.error("Failed to deny tool call:", error)
+    } finally {
+      setIsRespondingToApproval(false)
+    }
+  }
+
   if (!progress) {
     return null
   }
@@ -1024,6 +1059,56 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
               width: `${Math.min(100, (currentIteration / maxIterations) * 100)}%`,
             }}
           />
+        </div>
+      )}
+
+      {/* Pending Tool Approval UI */}
+      {progress.pendingToolApproval && (
+        <div className="border-t border-border/50 bg-amber-50/50 dark:bg-amber-950/20 p-3">
+          <div className="flex items-start gap-3">
+            <div className="flex-shrink-0 mt-0.5">
+              <Shield className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-xs font-medium text-amber-800 dark:text-amber-200">
+                  Tool Approval Required
+                </span>
+              </div>
+              <p className="text-xs text-amber-700 dark:text-amber-300 mb-1">
+                <span className="font-mono font-medium">{progress.pendingToolApproval.toolName}</span>
+              </p>
+              <details className="mb-2">
+                <summary className="text-xs text-amber-600 dark:text-amber-400 cursor-pointer hover:underline">
+                  View arguments
+                </summary>
+                <pre className="mt-1 p-2 text-xs bg-amber-100/50 dark:bg-amber-900/30 rounded overflow-x-auto max-h-24">
+                  {JSON.stringify(progress.pendingToolApproval.arguments, null, 2)}
+                </pre>
+              </details>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs border-red-300 text-red-700 hover:bg-red-50 dark:border-red-700 dark:text-red-400 dark:hover:bg-red-950/30"
+                  onClick={handleDenyToolCall}
+                  disabled={isRespondingToApproval}
+                >
+                  <XCircle className="h-3 w-3 mr-1" />
+                  Deny
+                </Button>
+                <Button
+                  size="sm"
+                  className="h-7 text-xs bg-green-600 hover:bg-green-700 text-white"
+                  onClick={handleApproveToolCall}
+                  disabled={isRespondingToApproval}
+                >
+                  <Check className="h-3 w-3 mr-1" />
+                  Approve
+                </Button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 

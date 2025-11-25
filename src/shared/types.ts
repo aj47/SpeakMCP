@@ -102,10 +102,10 @@ export interface ServerLogEntry {
 // Agent Mode Progress Tracking Types
 export interface AgentProgressStep {
   id: string
-  type: "thinking" | "tool_call" | "tool_result" | "completion"
+  type: "thinking" | "tool_call" | "tool_result" | "completion" | "tool_approval"
   title: string
   description?: string
-  status: "pending" | "in_progress" | "completed" | "error"
+  status: "pending" | "in_progress" | "completed" | "error" | "awaiting_approval"
   timestamp: number
   llmContent?: string // Store actual LLM response content for thinking steps
   toolCall?: {
@@ -116,6 +116,12 @@ export interface AgentProgressStep {
     success: boolean
     content: string
     error?: string
+  }
+  // For tool approval requests
+  approvalRequest?: {
+    approvalId: string
+    toolName: string
+    arguments: any
   }
 }
 
@@ -141,6 +147,12 @@ export interface AgentProgressUpdate {
    * Entries before this index belong to previous sessions in the same conversation.
    */
   sessionStartIndex?: number
+  // Pending tool approval request - when set, UI should show approve/deny buttons
+  pendingToolApproval?: {
+    approvalId: string
+    toolName: string
+    arguments: any
+  }
 }
 
 // Conversation Types

@@ -11,7 +11,7 @@ import { WINDOWS, showPanelWindow } from "./window"
 import { RendererHandlers } from "./renderer-handlers"
 import { diagnosticsService } from "./diagnostics"
 import { makeStructuredContextExtraction, ContextExtractionResponse } from "./structured-output"
-import { makeLLMCallWithFetch, makeTextCompletionWithFetch, verifyCompletionWithFetch } from "./llm-fetch"
+import { makeLLMCallWithFetch, makeTextCompletionWithFetch, verifyCompletionWithFetch, RetryProgressCallback } from "./llm-fetch"
 import { constructSystemPrompt } from "./system-prompts"
 import { state, agentSessionStateManager, isPanelAutoShowSuppressed } from "./state"
 import { isDebugLLM, logLLM, isDebugTools, logTools } from "./debug"
@@ -563,6 +563,18 @@ export async function processTranscriptWithAgentMode(
     })
   }
 
+  // Create retry progress callback that emits updates to the UI
+  // This callback is passed to makeLLMCall to show retry status
+  const onRetryProgress: RetryProgressCallback = (retryInfo) => {
+    emit({
+      currentIteration: 0, // Will be updated with actual iteration when used
+      maxIterations,
+      steps: [], // Empty - retry info is separate from steps
+      isComplete: false,
+      retryInfo: retryInfo.isRetrying ? retryInfo : undefined,
+    })
+  }
+
   // Initialize progress tracking
   const progressSteps: AgentProgressStep[] = []
 
@@ -955,7 +967,7 @@ Always use actual resource IDs from the conversation history or create new ones 
     // Make LLM call (abort-aware)
     let llmResponse: any
     try {
-      llmResponse = await makeLLMCall(shrunkMessages, config)
+      llmResponse = await makeLLMCall(shrunkMessages, config, onRetryProgress)
 
       // If stop was requested while the LLM call was in-flight and it returned before aborting, exit now
       if (agentSessionStateManager.shouldStopSession(currentSessionId)) {
@@ -1253,7 +1265,7 @@ Always use actual resource IDs from the conversation history or create new ones 
             },
           })
 
-          const postVerifySummaryResponse = await makeLLMCall(shrunkPostVerifySummaryMessages, config)
+          const postVerifySummaryResponse = await makeLLMCall(shrunkPostVerifySummaryMessages, config, onRetryProgress)
 
           // Update summary step with the response and use it as final content
           postVerifySummaryStep.status = "completed"
@@ -1760,7 +1772,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
 
 
         try {
-          const summaryResponse = await makeLLMCall(shrunkSummaryMessages, config)
+          const summaryResponse = await makeLLMCall(shrunkSummaryMessages, config, onRetryProgress)
 
           // Check if stop was requested during summary generation
           if (agentSessionStateManager.shouldStopSession(currentSessionId)) {
@@ -1946,6 +1958,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
           const postVerifySummaryResponse = await makeLLMCall(
             shrunkPostVerifySummaryMessages,
             config,
+            onRetryProgress,
           )
 
           // Check if stop was requested during post-verify summary generation
@@ -2088,7 +2101,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
 
 
         try {
-          const summaryResponse = await makeLLMCall(shrunkSummaryMessages, config)
+          const summaryResponse = await makeLLMCall(shrunkSummaryMessages, config, onRetryProgress)
 
           // Update summary step with the response
           summaryStep.status = "completed"
@@ -2182,6 +2195,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
           const postVerifySummaryResponse = await makeLLMCall(
             shrunkPostVerifySummaryMessages,
             config,
+            onRetryProgress,
           )
 
           postVerifySummaryStep.status = "completed"
@@ -2377,6 +2391,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
 async function makeLLMCall(
   messages: Array<{ role: string; content: string }>,
   config: any,
+  onRetryProgress?: RetryProgressCallback,
 ): Promise<LLMToolCallResponse> {
   const chatProviderId = config.mcpToolsProviderId
 
@@ -2389,7 +2404,7 @@ async function makeLLMCall(
         messages: messages,
       })
     }
-    const result = await makeLLMCallWithFetch(messages, chatProviderId)
+    const result = await makeLLMCallWithFetch(messages, chatProviderId, onRetryProgress)
     if (isDebugLLM()) {
       logLLM("Response ←", result)
       logLLM("=== LLM CALL END ===")

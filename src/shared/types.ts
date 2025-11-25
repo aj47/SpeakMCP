@@ -153,6 +153,15 @@ export interface AgentProgressUpdate {
     toolName: string
     arguments: any
   }
+  // Retry status - when set, UI should show retry banner with countdown
+  retryInfo?: {
+    isRetrying: boolean
+    attempt: number
+    maxAttempts?: number  // undefined for rate limits (infinite retries)
+    delaySeconds: number
+    reason: string  // e.g., "Rate limit exceeded", "Network error"
+    startedAt: number  // timestamp for countdown calculation
+  }
 }
 
 // Conversation Types

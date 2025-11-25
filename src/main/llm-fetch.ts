@@ -5,6 +5,18 @@ import { isDebugLLM, logLLM } from "./debug"
 import { state, llmRequestAbortManager, agentSessionStateManager } from "./state"
 import OpenAI from "openai"
 
+/**
+ * Callback for reporting retry progress to the UI
+ */
+export type RetryProgressCallback = (info: {
+  isRetrying: boolean
+  attempt: number
+  maxAttempts?: number  // undefined for rate limits (infinite retries)
+  delaySeconds: number
+  reason: string
+  startedAt: number
+}) => void
+
 // Define the JSON schema for structured output
 const toolCallResponseSchema: OpenAI.ResponseFormatJSONSchema["json_schema"] = {
   name: "LLMToolCallResponse",
@@ -359,24 +371,41 @@ async function apiCallWithRetry<T>(
   retryCount: number = 3,
   baseDelay: number = 1000,
   maxDelay: number = 30000,
+  onRetryProgress?: RetryProgressCallback,
 ): Promise<T> {
   let lastError: unknown
   let attempt = 0
 
+  // Helper to clear retry status when done
+  const clearRetryStatus = () => {
+    if (onRetryProgress) {
+      onRetryProgress({
+        isRetrying: false,
+        attempt: 0,
+        delaySeconds: 0,
+        reason: "",
+        startedAt: 0,
+      })
+    }
+  }
+
   while (true) {
     // If an emergency stop has been requested, abort immediately
     if (state.shouldStopAgent) {
+      clearRetryStatus()
       throw lastError instanceof Error ? lastError : new Error("Aborted by emergency stop")
     }
 
     try {
       const response = await call()
+      clearRetryStatus()
       return response
     } catch (error) {
       lastError = error
 
       // Do not retry on abort or if we've been asked to stop
       if ((error as any)?.name === "AbortError" || state.shouldStopAgent) {
+        clearRetryStatus()
         throw error
       }
 
@@ -392,6 +421,7 @@ async function apiCallWithRetry<T>(
             stack: error instanceof Error ? error.stack : undefined,
           },
         )
+        clearRetryStatus()
         throw error
       }
 
@@ -423,8 +453,21 @@ async function apiCallWithRetry<T>(
         // User-friendly console output so users can see progress
         console.log(`⏳ Rate limit hit - waiting ${waitTimeSeconds} seconds before retrying... (attempt ${attempt + 1})`)
 
+        // Emit retry progress to UI
+        if (onRetryProgress) {
+          onRetryProgress({
+            isRetrying: true,
+            attempt: attempt + 1,
+            maxAttempts: undefined, // Rate limits retry indefinitely
+            delaySeconds: waitTimeSeconds,
+            reason: "Rate limit exceeded",
+            startedAt: Date.now(),
+          })
+        }
+
         // Wait before retrying unless we've been asked to stop
         if (state.shouldStopAgent) {
+          clearRetryStatus()
           throw new Error("Aborted by emergency stop")
         }
         await new Promise(resolve => setTimeout(resolve, delay))
@@ -445,6 +488,7 @@ async function apiCallWithRetry<T>(
             maxRetries: retryCount + 1,
           },
         )
+        clearRetryStatus()
         throw lastError
       }
 
@@ -465,14 +509,30 @@ async function apiCallWithRetry<T>(
       )
 
       // User-friendly console output so users can see retry progress
+      const reason = error instanceof HttpError
+        ? `HTTP ${error.status} error`
+        : "Network error"
       if (error instanceof HttpError) {
         console.log(`⏳ HTTP ${error.status} error - retrying in ${Math.round(delay / 1000)} seconds... (attempt ${attempt + 1}/${retryCount + 1})`)
       } else {
         console.log(`⏳ Network error - retrying in ${Math.round(delay / 1000)} seconds... (attempt ${attempt + 1}/${retryCount + 1})`)
       }
 
+      // Emit retry progress to UI
+      if (onRetryProgress) {
+        onRetryProgress({
+          isRetrying: true,
+          attempt: attempt + 1,
+          maxAttempts: retryCount + 1,
+          delaySeconds: Math.round(delay / 1000),
+          reason,
+          startedAt: Date.now(),
+        })
+      }
+
       // Wait before retrying unless we've been asked to stop
       if (state.shouldStopAgent) {
+        clearRetryStatus()
         throw new Error("Aborted by emergency stop")
       }
       await new Promise(resolve => setTimeout(resolve, delay))
@@ -1154,6 +1214,7 @@ async function makeLLMCallAttempt(
 export async function makeLLMCallWithFetch(
   messages: Array<{ role: string; content: string }>,
   providerId?: string,
+  onRetryProgress?: RetryProgressCallback,
 ): Promise<LLMToolCallResponse> {
   const config = configStore.get()
   const chatProviderId = providerId || config.mcpToolsProviderId || "openai"
@@ -1164,7 +1225,8 @@ export async function makeLLMCallWithFetch(
       async () => makeLLMCallAttempt(messages, chatProviderId),
       config.apiRetryCount,
       config.apiRetryBaseDelay,
-      config.apiRetryMaxDelay
+      config.apiRetryMaxDelay,
+      onRetryProgress
     )
   } catch (error) {
     diagnosticsService.logError("llm-fetch", "LLM call failed after all retries", error)

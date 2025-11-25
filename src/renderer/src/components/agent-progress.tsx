@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react"
 import { cn } from "@renderer/lib/utils"
 import { AgentProgressUpdate } from "../../../shared/types"
-import { ChevronDown, ChevronUp, ChevronRight, X, AlertTriangle, Minimize2, Shield, Check, XCircle, Loader2 } from "lucide-react"
+import { ChevronDown, ChevronUp, ChevronRight, X, AlertTriangle, Minimize2, Shield, Check, XCircle, Loader2, Clock } from "lucide-react"
 import { MarkdownRenderer } from "@renderer/components/markdown-renderer"
 import { Button } from "./ui/button"
 import { Badge } from "./ui/badge"
@@ -40,6 +40,14 @@ type DisplayItem =
       approvalId: string
       toolName: string
       arguments: any
+    } }
+  | { kind: "retry_status"; id: string; data: {
+      isRetrying: boolean
+      attempt: number
+      maxAttempts?: number
+      delaySeconds: number
+      reason: string
+      startedAt: number
     } }
 
 
@@ -605,6 +613,73 @@ const ToolApprovalBubble: React.FC<{
   )
 }
 
+// Retry Status Banner - shows when LLM API is being retried (rate limits, network errors)
+const RetryStatusBanner: React.FC<{
+  retryInfo: {
+    isRetrying: boolean
+    attempt: number
+    maxAttempts?: number
+    delaySeconds: number
+    reason: string
+    startedAt: number
+  }
+}> = ({ retryInfo }) => {
+  const [countdown, setCountdown] = useState(retryInfo.delaySeconds)
+
+  // Update countdown timer
+  useEffect(() => {
+    if (!retryInfo.isRetrying) {
+      setCountdown(0)
+      return undefined
+    }
+
+    // Calculate remaining time based on startedAt
+    const updateCountdown = () => {
+      const elapsed = Math.floor((Date.now() - retryInfo.startedAt) / 1000)
+      const remaining = Math.max(0, retryInfo.delaySeconds - elapsed)
+      setCountdown(remaining)
+    }
+
+    updateCountdown()
+    const interval = setInterval(updateCountdown, 1000)
+    return () => clearInterval(interval)
+  }, [retryInfo.isRetrying, retryInfo.startedAt, retryInfo.delaySeconds])
+
+  if (!retryInfo.isRetrying) return null
+
+  const attemptText = retryInfo.maxAttempts
+    ? `Attempt ${retryInfo.attempt}/${retryInfo.maxAttempts}`
+    : `Attempt ${retryInfo.attempt}`
+
+  return (
+    <div className="rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-950/30 overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center gap-2 px-3 py-2 bg-amber-100/50 dark:bg-amber-900/30 border-b border-amber-200 dark:border-amber-800">
+        <Clock className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+        <span className="text-xs font-medium text-amber-800 dark:text-amber-200">
+          {retryInfo.reason}
+        </span>
+        <Loader2 className="h-3 w-3 text-amber-600 dark:text-amber-400 animate-spin ml-auto" />
+      </div>
+
+      {/* Content */}
+      <div className="px-3 py-2">
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-amber-700 dark:text-amber-300">
+            {attemptText}
+          </span>
+          <span className="text-xs font-mono font-medium text-amber-900 dark:text-amber-100 bg-amber-100 dark:bg-amber-900/50 px-2 py-0.5 rounded">
+            Retrying in {countdown}s
+          </span>
+        </div>
+        <p className="text-xs text-amber-600 dark:text-amber-400 mt-1.5">
+          The agent will automatically retry when the API is available.
+        </p>
+      </div>
+    </div>
+  )
+}
+
 
 export const AgentProgress: React.FC<AgentProgressProps> = ({
   progress,
@@ -970,6 +1045,15 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
     })
   }
 
+  // Add retry status to display items if present
+  if (progress.retryInfo && progress.retryInfo.isRetrying) {
+    displayItems.push({
+      kind: "retry_status",
+      id: `retry-${progress.retryInfo.startedAt}`,
+      data: progress.retryInfo,
+    })
+  }
+
   // Determine the last assistant message among display items (by position, not timestamp)
   const lastAssistantDisplayIndex = (() => {
     for (let i = displayItems.length - 1; i >= 0; i--) {
@@ -1171,6 +1255,13 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
                       onApprove={handleApproveToolCall}
                       onDeny={handleDenyToolCall}
                       isResponding={isRespondingToApproval}
+                    />
+                  )
+                } else if (item.kind === "retry_status") {
+                  return (
+                    <RetryStatusBanner
+                      key={itemKey}
+                      retryInfo={item.data}
                     />
                   )
                 } else {

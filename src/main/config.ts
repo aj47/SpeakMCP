@@ -152,18 +152,16 @@ function getActivePreset(config: Partial<Config>): ModelPreset | undefined {
 }
 
 /**
- * Sync the active preset's credentials to legacy config fields for backward compatibility
+ * Sync the active preset's credentials to legacy config fields for backward compatibility.
+ * Always syncs both fields together to keep them consistent with the active preset.
  */
 function syncPresetToLegacyFields(config: Partial<Config>): Partial<Config> {
   const activePreset = getActivePreset(config)
   if (activePreset) {
-    // Only update if the preset has values (don't overwrite existing with empty)
-    if (activePreset.apiKey) {
-      config.openaiApiKey = activePreset.apiKey
-    }
-    if (activePreset.baseUrl) {
-      config.openaiBaseUrl = activePreset.baseUrl
-    }
+    // Always sync both fields to keep them consistent with the active preset
+    // If preset has empty values, legacy fields should reflect that
+    config.openaiApiKey = activePreset.apiKey || ''
+    config.openaiBaseUrl = activePreset.baseUrl || ''
   }
   return config
 }

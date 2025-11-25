@@ -146,12 +146,6 @@ export const OPENAI_COMPATIBLE_PRESETS = [
     baseUrl: "https://api.openai.com/v1",
   },
   {
-    label: "Anthropic",
-    value: "anthropic",
-    description: "Claude models via OpenAI-compatible API",
-    baseUrl: "https://api.anthropic.com/v1/",
-  },
-  {
     label: "OpenRouter",
     value: "openrouter",
     description: "Access to multiple AI models via OpenRouter",

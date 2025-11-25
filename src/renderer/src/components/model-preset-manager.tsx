@@ -41,17 +41,24 @@ export function ModelPresetManager() {
   const allPresets = useMemo(() => {
     const builtIn = getBuiltInModelPresets()
     const custom = config?.modelPresets || []
-    
+
     // Merge built-in presets with any saved API keys
     const mergedBuiltIn = builtIn.map(preset => {
       const saved = custom.find(c => c.id === preset.id)
-      return saved ? { ...preset, apiKey: saved.apiKey } : preset
+      if (saved) {
+        return { ...preset, apiKey: saved.apiKey }
+      }
+      // For builtin-openai, seed with legacy openaiApiKey if no saved preset exists
+      if (preset.id === DEFAULT_MODEL_PRESET_ID && config?.openaiApiKey) {
+        return { ...preset, apiKey: config.openaiApiKey }
+      }
+      return preset
     })
-    
+
     // Add custom (non-built-in) presets
     const customOnly = custom.filter(c => !c.isBuiltIn)
     return [...mergedBuiltIn, ...customOnly]
-  }, [config?.modelPresets])
+  }, [config?.modelPresets, config?.openaiApiKey])
 
   const currentPresetId = config?.currentModelPresetId || DEFAULT_MODEL_PRESET_ID
   const currentPreset = allPresets.find(p => p.id === currentPresetId)
@@ -148,7 +155,11 @@ export function ModelPresetManager() {
       }
       // If deleting current preset, switch to default
       if (preset.id === currentPresetId) {
+        const defaultPreset = allPresets.find(p => p.id === DEFAULT_MODEL_PRESET_ID)
         updates.currentModelPresetId = DEFAULT_MODEL_PRESET_ID
+        // Also update the legacy fields for backward compatibility
+        updates.openaiBaseUrl = defaultPreset?.baseUrl || ""
+        updates.openaiApiKey = defaultPreset?.apiKey || ""
       }
       saveConfig(updates)
       toast.success("Preset deleted")

@@ -14,9 +14,9 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@renderer/components/ui/dialog"
 import {
   MessageCircle,
@@ -148,19 +148,12 @@ export function Component() {
   }
 
   const handleDeleteAllHistory = async () => {
-    if (
-      !window.confirm(
-        "Are you sure you want to delete all history? This action cannot be undone.",
-      )
-    ) {
-      return
-    }
-
     try {
       await deleteAllHistoryMutation.mutateAsync()
       toast.success("All history deleted")
       setSelectedHistoryItem(null)
       setViewMode("list")
+      setShowDeleteAllDialog(false)
     } catch (error) {
       toast.error("Failed to delete history")
     }
@@ -396,6 +389,33 @@ export function Component() {
           </div>
         </>
       )}
+
+      {/* Delete All Confirmation Dialog */}
+      <Dialog open={showDeleteAllDialog} onOpenChange={setShowDeleteAllDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete All History</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete all history? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowDeleteAllDialog(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteAllHistory}
+              disabled={deleteAllHistoryMutation.isPending}
+            >
+              {deleteAllHistoryMutation.isPending ? "Deleting..." : "Delete All"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   )
 }

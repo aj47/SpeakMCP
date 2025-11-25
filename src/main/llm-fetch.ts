@@ -725,7 +725,6 @@ async function makeOpenAICompatibleCall(
     model,
     messages,
     temperature: 0,
-    frequency_penalty: 0.5,
     seed: 1,
   }
 

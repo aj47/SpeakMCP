@@ -172,6 +172,10 @@ export function Component() {
     }) => {
       const arrayBuffer = await blob.arrayBuffer()
 
+      // Capture the conversation ID at recording time - if user explicitly continued a conversation
+      // from history, currentConversationId will be set. Otherwise it's null for new inputs.
+      const conversationIdForMcp = currentConversationId
+
       // If we have a transcript, start a conversation with it
       if (transcript && !isConversationActive) {
         await startNewConversation(transcript, "user")
@@ -180,10 +184,10 @@ export function Component() {
       const result = await tipcClient.createMcpRecording({
         recording: arrayBuffer,
         duration,
-        // Always pass undefined to start a fresh conversation for each new voice input
-        // This prevents message leaking where old conversation history gets loaded into new sessions
-        // Users can explicitly continue conversations via the history page
-        conversationId: undefined,
+        // Pass currentConversationId if user explicitly continued from history,
+        // otherwise undefined to create a fresh conversation.
+        // This prevents message leaking while still supporting explicit continuation.
+        conversationId: conversationIdForMcp ?? undefined,
       })
 
       // Update conversation ID if backend created/returned one
@@ -421,6 +425,10 @@ export function Component() {
   }, [])
 
   const handleTextSubmit = async (text: string) => {
+    // Capture the conversation ID at submit time - if user explicitly continued a conversation
+    // from history, currentConversationId will be set. Otherwise it's null for new inputs.
+    const conversationIdForMcp = currentConversationId
+
     // Start new conversation or add to existing one
     if (!isConversationActive) {
       await startNewConversation(text, "user")
@@ -439,10 +447,10 @@ export function Component() {
       if ((config as any).mcpToolsEnabled) {
         mcpTextInputMutation.mutate({
           text,
-          // Always pass undefined to start a fresh conversation for each new text input
-          // This prevents message leaking where old conversation history gets loaded into new sessions
-          // Users can explicitly continue conversations via the history page
-          conversationId: undefined,
+          // Pass currentConversationId if user explicitly continued from history,
+          // otherwise undefined to create a fresh conversation.
+          // This prevents message leaking while still supporting explicit continuation.
+          conversationId: conversationIdForMcp ?? undefined,
         })
       } else {
         textInputMutation.mutate({ text })

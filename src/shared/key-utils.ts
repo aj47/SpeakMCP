@@ -87,6 +87,7 @@ export function matchesKeyCombo(
   // Handle special keys
   const keyMappings: Record<string, string> = {
     slash: "/",
+    comma: ",",
     space: " ",
     escape: "escape",
     enter: "enter",

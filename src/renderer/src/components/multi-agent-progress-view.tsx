@@ -3,8 +3,7 @@ import { cn } from "@renderer/lib/utils"
 import { AgentProgress } from "@renderer/components/agent-progress"
 import { AgentProgressUpdate } from "../../../shared/types"
 import { useTheme } from "@renderer/contexts/theme-context"
-
-import { useConversation } from "@renderer/contexts/conversation-context"
+import { useAgentStore } from "@renderer/stores"
 
 interface MultiAgentProgressViewProps {
   className?: string
@@ -22,12 +21,14 @@ export function MultiAgentProgressView({
   showBackgroundSpinner = true,
 }: MultiAgentProgressViewProps) {
   const { isDark } = useTheme()
-  const { agentProgressById, focusedSessionId, setFocusedSessionId } = useConversation()
+  const agentProgressById = useAgentStore((s) => s.agentProgressById)
+  const focusedSessionId = useAgentStore((s) => s.focusedSessionId)
+  const setFocusedSessionId = useAgentStore((s) => s.setFocusedSessionId)
 
   // Get all active sessions (non-snoozed)
   const activeSessions = useMemo(() => {
-    return Array.from(agentProgressById.entries())
-      .filter(([_, progress]) => !progress.isSnoozed)
+    return Array.from(agentProgressById?.entries() ?? [])
+      .filter(([_, progress]) => progress && !progress.isSnoozed)
       .sort((a, b) => {
         // Sort by start time (newer first)
         const timeA = a[1].conversationHistory?.[0]?.timestamp || 0
@@ -43,10 +44,10 @@ export function MultiAgentProgressView({
 
   // Determine which session to display: prefer focused if active; otherwise first active
   const displaySessionId = (
-    focusedSessionId && agentProgressById.get(focusedSessionId) && !agentProgressById.get(focusedSessionId)!.isSnoozed
+    focusedSessionId && agentProgressById?.get(focusedSessionId) && !agentProgressById.get(focusedSessionId)!.isSnoozed
   ) ? focusedSessionId : (activeSessions[0]?.[0] || null)
 
-  const focusedProgress = displaySessionId ? agentProgressById.get(displaySessionId) : undefined
+  const focusedProgress = displaySessionId ? agentProgressById?.get(displaySessionId) : undefined
 
   // Helper to get session title
   const getSessionTitle = (progress: AgentProgressUpdate): string => {

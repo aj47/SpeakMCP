@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from "react"
 import { useQuery } from "@tanstack/react-query"
-import { tipcClient } from "@renderer/lib/tipc-client"
-import { Activity, ChevronDown, ChevronRight, X, Minimize2, Maximize2 } from "lucide-react"
+import { tipcClient, rendererHandlers } from "@renderer/lib/tipc-client"
+import { Activity, ChevronDown, ChevronRight, X, Minimize2, Maximize2, Shield } from "lucide-react"
 import { cn } from "@renderer/lib/utils"
-import { useConversation } from "@renderer/contexts/conversation-context"
+import { useAgentStore } from "@renderer/stores"
 import { logUI, logStateChange, logExpand } from "@renderer/lib/debug"
 import { useNavigate } from "react-router-dom"
 
@@ -37,16 +37,27 @@ export function ActiveAgentsSidebar() {
     return initial
   })
 
-  const { focusedSessionId, setFocusedSessionId } = useConversation()
+  const focusedSessionId = useAgentStore((s) => s.focusedSessionId)
+  const setFocusedSessionId = useAgentStore((s) => s.setFocusedSessionId)
+  const agentProgressById = useAgentStore((s) => s.agentProgressById)
   const navigate = useNavigate()
 
-  const { data } = useQuery<AgentSessionsResponse>({
+  const { data, refetch } = useQuery<AgentSessionsResponse>({
     queryKey: ["agentSessions"],
     queryFn: async () => {
       return await tipcClient.getAgentSessions()
     },
-    refetchInterval: 2000, // Refresh every 2 seconds
+    // No polling - we'll use push-based updates via rendererHandlers
   })
+
+  // Listen for push-based session updates from main process
+  useEffect(() => {
+    const unlisten = rendererHandlers.agentSessionsUpdated.listen((updatedData) => {
+      // Invalidate the query to trigger a refetch with the new data
+      refetch()
+    })
+    return unlisten
+  }, [refetch])
 
   const activeSessions = data?.activeSessions || []
   const recentSessions = data?.recentSessions || []
@@ -180,24 +191,33 @@ export function ActiveAgentsSidebar() {
         <div className="mt-1 space-y-1 pl-2">
           {activeSessions.map((session) => {
             const isFocused = focusedSessionId === session.id
+            const sessionProgress = agentProgressById.get(session.id)
+            const hasPendingApproval = !!sessionProgress?.pendingToolApproval
             return (
               <div
                 key={session.id}
                 onClick={() => handleSessionClick(session.id)}
                 className={cn(
                   "group relative cursor-pointer rounded-md border px-2 py-1.5 text-xs transition-all",
-                  isFocused
+                  hasPendingApproval
+                    ? "border-amber-500 bg-amber-500/10 ring-1 ring-amber-500/20"
+                    : isFocused
                     ? "border-blue-500 bg-blue-500/10 ring-1 ring-blue-500/20"
                     : "border-border/50 bg-card/50 hover:border-border hover:bg-card"
                 )}
               >
                 <div className="flex items-center gap-1.5">
-                  <Activity className={cn(
-                    "h-3 w-3 shrink-0",
-                    session.isSnoozed ? "text-muted-foreground" : "animate-pulse text-blue-500"
-                  )} />
+                  {hasPendingApproval ? (
+                    <Shield className="h-3 w-3 shrink-0 text-amber-500 animate-pulse" />
+                  ) : (
+                    <Activity className={cn(
+                      "h-3 w-3 shrink-0",
+                      session.isSnoozed ? "text-muted-foreground" : "animate-pulse text-blue-500"
+                    )} />
+                  )}
                   <p className={cn(
                     "flex-1 truncate font-medium",
+                    hasPendingApproval ? "text-amber-700 dark:text-amber-300" :
                     session.isSnoozed ? "text-muted-foreground" : "text-foreground"
                   )}>
                     {session.conversationTitle}
@@ -227,7 +247,11 @@ export function ActiveAgentsSidebar() {
                     <X className="h-3 w-3" />
                   </button>
                 </div>
-                {session.lastActivity && (
+                {hasPendingApproval ? (
+                  <p className="mt-0.5 truncate pl-4 text-[10px] text-amber-600 dark:text-amber-400 font-medium">
+                    ⚠ Approval required: {sessionProgress.pendingToolApproval?.toolName}
+                  </p>
+                ) : session.lastActivity && (
                   <p className="mt-0.5 truncate pl-4 text-[10px] text-muted-foreground">
                     {session.lastActivity}
                   </p>

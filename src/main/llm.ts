@@ -11,7 +11,7 @@ import { WINDOWS, showPanelWindow } from "./window"
 import { RendererHandlers } from "./renderer-handlers"
 import { diagnosticsService } from "./diagnostics"
 import { makeStructuredContextExtraction, ContextExtractionResponse } from "./structured-output"
-import { makeLLMCallWithFetch, makeTextCompletionWithFetch, verifyCompletionWithFetch } from "./llm-fetch"
+import { makeLLMCallWithFetch, makeTextCompletionWithFetch, verifyCompletionWithFetch, RetryProgressCallback } from "./llm-fetch"
 import { constructSystemPrompt } from "./system-prompts"
 import { state, agentSessionStateManager, isPanelAutoShowSuppressed } from "./state"
 import { isDebugLLM, logLLM, isDebugTools, logTools } from "./debug"
@@ -391,7 +391,36 @@ function analyzeToolCapabilities(
       ],
     },
     web: {
-      keywords: ["web", "http", "api", "request", "url", "fetch", "search"],
+      keywords: [
+        "web",
+        "http",
+        "api",
+        "request",
+        "url",
+        "fetch",
+        "search",
+        "amazon",
+        "google",
+        "website",
+        "online",
+        "browser",
+        "navigate",
+        "click",
+        "form",
+        "login",
+        "purchase",
+        "buy",
+        "order",
+        "cart",
+        "checkout",
+        "email",
+        "gmail",
+        "social media",
+        "facebook",
+        "twitter",
+        "linkedin",
+        "instagram",
+      ],
       toolDescriptionKeywords: [
         "web",
         "http",
@@ -401,6 +430,12 @@ function analyzeToolCapabilities(
         "fetch",
         "search",
         "browser",
+        "navigate",
+        "click",
+        "snapshot",
+        "screenshot",
+        "playwright",
+        "automation",
       ],
     },
     communication: {
@@ -468,7 +503,7 @@ function analyzeToolCapabilities(
 export async function processTranscriptWithAgentMode(
   transcript: string,
   availableTools: MCPTool[],
-  executeToolCall: (toolCall: MCPToolCall) => Promise<MCPToolResult>,
+  executeToolCall: (toolCall: MCPToolCall, onProgress?: (message: string) => void) => Promise<MCPToolResult>,
   maxIterations: number = 10,
   previousConversationHistory?: Array<{
     role: "user" | "assistant" | "tool"
@@ -603,6 +638,22 @@ export async function processTranscriptWithAgentMode(
     })
   }
 
+  // Track current iteration for retry progress callback
+  // This is updated in the agent loop and read by onRetryProgress
+  let currentIterationRef = 0
+
+  // Create retry progress callback that emits updates to the UI
+  // This callback is passed to makeLLMCall to show retry status
+  const onRetryProgress: RetryProgressCallback = (retryInfo) => {
+    emit({
+      currentIteration: currentIterationRef,
+      maxIterations,
+      steps: [], // Empty - retry info is separate from steps
+      isComplete: false,
+      retryInfo: retryInfo.isRetrying ? retryInfo : undefined,
+    })
+  }
+
   // Initialize progress tracking
   const progressSteps: AgentProgressStep[] = []
 
@@ -724,6 +775,44 @@ export async function processTranscriptWithAgentMode(
       }))
   }
 
+  // Helper to detect if agent is repeating the same response (infinite loop)
+  const detectRepeatedResponse = (currentResponse: string): boolean => {
+    // Get last 3 assistant responses (excluding the current one)
+    const assistantResponses = conversationHistory
+      .filter(entry => entry.role === "assistant")
+      .map(entry => entry.content.trim().toLowerCase())
+      .slice(-3)
+
+    if (assistantResponses.length < 2) return false
+
+    const currentTrimmed = currentResponse.trim().toLowerCase()
+
+    // Check if current response is very similar to any of the last 2 responses
+    // Using a simple similarity check: if 80% of the content matches
+    for (const prevResponse of assistantResponses.slice(-2)) {
+      if (prevResponse.length === 0 || currentTrimmed.length === 0) continue
+
+      // Simple similarity: check if responses are nearly identical
+      const similarity = calculateSimilarity(currentTrimmed, prevResponse)
+      if (similarity > 0.8) {
+        return true
+      }
+    }
+
+    return false
+  }
+
+  // Simple similarity calculation (Jaccard similarity on words)
+  const calculateSimilarity = (str1: string, str2: string): number => {
+    const words1 = new Set(str1.split(/\s+/))
+    const words2 = new Set(str2.split(/\s+/))
+
+    const intersection = new Set([...words1].filter(x => words2.has(x)))
+    const union = new Set([...words1, ...words2])
+
+    return union.size === 0 ? 0 : intersection.size / union.size
+  }
+
   // Build compact verification messages (schema-first verifier)
   const buildVerificationMessages = (finalAssistantText: string) => {
     const maxItems = Math.max(1, config.mcpVerifyContextMaxItems || 10)
@@ -732,7 +821,26 @@ export async function processTranscriptWithAgentMode(
     messages.push({
       role: "system",
       content:
-        "You are a strict completion verifier. Determine if the user's original request has been fully satisfied in the conversation. Be conservative: if uncertain, mark not complete and list what's missing. Return ONLY JSON per schema.",
+        `You are a strict completion verifier. Determine if the user's original request has been fully satisfied in the conversation.
+
+IMPORTANT: Mark as COMPLETE if ANY of these conditions are met:
+1. The request was successfully fulfilled with concrete actions/results
+2. The agent correctly identified the request is IMPOSSIBLE (e.g., can't access private data, lacks permissions, requires unavailable resources)
+3. The agent is asking for CLARIFICATION or MORE INFORMATION needed to proceed (this is a valid completion - the ball is in the user's court)
+4. The agent has given the SAME RESPONSE multiple times (indicates a loop - accept the response as final)
+
+Examples of VALID completions:
+- "I cannot access your Amazon purchase history. Please provide the product link."
+- "I don't have permission to access that database. Please provide credentials."
+- "Which file would you like me to edit? Please specify the path."
+- "I need more details about the feature you want. Can you describe it?"
+
+Only mark as INCOMPLETE if:
+- The agent can fulfill the request but hasn't yet
+- The agent is making progress but hasn't finished
+- The agent hasn't acknowledged the request at all
+
+Return ONLY JSON per schema.`,
     })
     messages.push({ role: "user", content: `Original request:\n${transcript}` })
     for (const entry of recent) {
@@ -768,12 +876,11 @@ export async function processTranscriptWithAgentMode(
   let finalContent = ""
   let noOpCount = 0 // Track iterations without meaningful progress
 
-  let executedToolsThisIteration = false // Whether any tools were executed in the current iteration
-
   let verificationFailCount = 0 // Count consecutive verification failures to avoid loops
 
   while (iteration < maxIterations) {
     iteration++
+    currentIterationRef = iteration // Update ref for retry progress callback
 
     // Check for stop signal (session-specific or global)
     if (agentSessionStateManager.shouldStopSession(currentSessionId)) {
@@ -912,6 +1019,18 @@ Always use actual resource IDs from the conversation history or create new ones 
       relevantTools: toolCapabilities.relevantTools,
       isAgentMode: true,
       sessionId: currentSessionId,
+      onSummarizationProgress: (current, total, message) => {
+        // Update thinking step with summarization progress
+        thinkingStep.description = `Summarizing context (${current}/${total})`
+        thinkingStep.llmContent = message
+        emit({
+          currentIteration: iteration,
+          maxIterations,
+          steps: progressSteps.slice(-3),
+          isComplete: false,
+          conversationHistory: formatConversationForProgress(conversationHistory),
+        })
+      },
     })
 
     // If stop was requested during context shrinking, exit now
@@ -937,7 +1056,7 @@ Always use actual resource IDs from the conversation history or create new ones 
     // Make LLM call (abort-aware)
     let llmResponse: any
     try {
-      llmResponse = await makeLLMCall(shrunkMessages, config)
+      llmResponse = await makeLLMCall(shrunkMessages, config, onRetryProgress)
 
       // If stop was requested while the LLM call was in-flight and it returned before aborting, exit now
       if (agentSessionStateManager.shouldStopSession(currentSessionId)) {
@@ -1151,9 +1270,6 @@ Always use actual resource IDs from the conversation history or create new ones 
           receivedType: typeof (llmResponse as any).toolCalls,
           value: (llmResponse as any).toolCalls,
         })
-    // Track whether tools are planned this iteration
-    executedToolsThisIteration = toolCallsArray.length > 0
-
       }
       logTools("Planned tool calls from LLM", toolCallsArray)
     }
@@ -1216,12 +1332,26 @@ Always use actual resource IDs from the conversation history or create new ones 
           conversationHistory: formatConversationForProgress(conversationHistory),
         })
 
+        // Check for infinite loop (repeated responses)
+        const isRepeating = detectRepeatedResponse(finalContent)
+
         const retries = Math.max(0, config.mcpVerifyRetryCount ?? 1)
         let verified = false
         let verification: any = null
-        for (let i = 0; i <= retries; i++) {
-          verification = await verifyCompletionWithFetch(buildVerificationMessages(finalContent), config.mcpToolsProviderId)
-          if (verification?.isComplete === true) { verified = true; break }
+
+        // If agent is repeating itself, skip verification and accept as complete
+        if (isRepeating) {
+          verified = true
+          verifyStep.status = "completed"
+          verifyStep.description = "Agent response is repeating - accepting as final"
+          if (isDebugLLM()) {
+            logLLM("Infinite loop detected - treating as complete", { finalContent: finalContent.substring(0, 200) })
+          }
+        } else {
+          for (let i = 0; i <= retries; i++) {
+            verification = await verifyCompletionWithFetch(buildVerificationMessages(finalContent), config.mcpToolsProviderId)
+            if (verification?.isComplete === true) { verified = true; break }
+          }
         }
 
         if (!verified) {
@@ -1291,9 +1421,23 @@ Always use actual resource IDs from the conversation history or create new ones 
             relevantTools: toolCapabilities.relevantTools,
             isAgentMode: true,
             sessionId: currentSessionId,
+            onSummarizationProgress: (current, total, message) => {
+              // Update the last thinking step with summarization progress
+              const lastThinkingStep = progressSteps.findLast(step => step.type === "thinking")
+              if (lastThinkingStep) {
+                lastThinkingStep.description = `Summarizing for verification (${current}/${total})`
+              }
+              emit({
+                currentIteration: iteration,
+                maxIterations,
+                steps: progressSteps.slice(-3),
+                isComplete: false,
+                conversationHistory: formatConversationForProgress(conversationHistory),
+              })
+            },
           })
 
-          const postVerifySummaryResponse = await makeLLMCall(shrunkPostVerifySummaryMessages, config)
+          const postVerifySummaryResponse = await makeLLMCall(shrunkPostVerifySummaryMessages, config, onRetryProgress)
 
           // Update summary step with the response and use it as final content
           postVerifySummaryStep.status = "completed"
@@ -1437,7 +1581,20 @@ Always use actual resource IDs from the conversation history or create new ones 
           }
         }, 100)
       })
-      const execPromise = executeToolCall(toolCall)
+      // Create progress callback to update tool execution step
+      const onToolProgress = (message: string) => {
+        toolCallStep.description = message
+        // Emit progress update to show processing status
+        emit({
+          currentIteration: iteration,
+          maxIterations,
+          steps: progressSteps.slice(-3),
+          isComplete: false,
+          conversationHistory: formatConversationForProgress(conversationHistory),
+        })
+      }
+
+      const execPromise = executeToolCall(toolCall, onToolProgress)
       let result = (await Promise.race([
         execPromise,
         stopPromise,
@@ -1532,7 +1689,7 @@ Always use actual resource IDs from the conversation history or create new ones 
             setTimeout(resolve, Math.pow(2, retryCount) * 1000),
           )
 
-          result = await executeToolCall(toolCall)
+          result = await executeToolCall(toolCall, onToolProgress)
         } else {
           break // Don't retry non-transient errors
         }
@@ -1758,11 +1915,21 @@ Please try alternative approaches, break down the task into smaller steps, or pr
           relevantTools: toolCapabilities.relevantTools,
           isAgentMode: true,
           sessionId: currentSessionId,
+          onSummarizationProgress: (current, total, message) => {
+            summaryStep.description = `Summarizing for summary generation (${current}/${total})`
+            emit({
+              currentIteration: iteration,
+              maxIterations,
+              steps: progressSteps.slice(-3),
+              isComplete: false,
+              conversationHistory: formatConversationForProgress(conversationHistory),
+            })
+          },
         })
 
 
         try {
-          const summaryResponse = await makeLLMCall(shrunkSummaryMessages, config)
+          const summaryResponse = await makeLLMCall(shrunkSummaryMessages, config, onRetryProgress)
 
           // Check if stop was requested during summary generation
           if (agentSessionStateManager.shouldStopSession(currentSessionId)) {
@@ -1832,12 +1999,26 @@ Please try alternative approaches, break down the task into smaller steps, or pr
 	          conversationHistory: formatConversationForProgress(conversationHistory),
 	        })
 
+	        // Check for infinite loop (repeated responses)
+	        const isRepeating = detectRepeatedResponse(finalContent)
+
 	        const retries = Math.max(0, config.mcpVerifyRetryCount ?? 1)
 	        let verified = false
 	        let verification: any = null
-	        for (let i = 0; i <= retries; i++) {
-	          verification = await verifyCompletionWithFetch(buildVerificationMessages(finalContent), config.mcpToolsProviderId)
-	          if (verification?.isComplete === true) { verified = true; break }
+
+	        // If agent is repeating itself, skip verification and accept as complete
+	        if (isRepeating) {
+	          verified = true
+	          verifyStep.status = "completed"
+	          verifyStep.description = "Agent response is repeating - accepting as final"
+	          if (isDebugLLM()) {
+	            logLLM("Infinite loop detected - treating as complete", { finalContent: finalContent.substring(0, 200) })
+	          }
+	        } else {
+	          for (let i = 0; i <= retries; i++) {
+	            verification = await verifyCompletionWithFetch(buildVerificationMessages(finalContent), config.mcpToolsProviderId)
+	            if (verification?.isComplete === true) { verified = true; break }
+	          }
 	        }
 
 	        // Check if stop was requested during verification
@@ -1915,11 +2096,26 @@ Please try alternative approaches, break down the task into smaller steps, or pr
             relevantTools: toolCapabilities.relevantTools,
             isAgentMode: true,
             sessionId: currentSessionId,
+            onSummarizationProgress: (current, total, message) => {
+              // Update the last thinking step with summarization progress
+              const lastThinkingStep = progressSteps.findLast(step => step.type === "thinking")
+              if (lastThinkingStep) {
+                lastThinkingStep.description = `Summarizing for verification (${current}/${total})`
+              }
+              emit({
+                currentIteration: iteration,
+                maxIterations,
+                steps: progressSteps.slice(-3),
+                isComplete: false,
+                conversationHistory: formatConversationForProgress(conversationHistory),
+              })
+            },
           })
 
           const postVerifySummaryResponse = await makeLLMCall(
             shrunkPostVerifySummaryMessages,
             config,
+            onRetryProgress,
           )
 
           // Check if stop was requested during post-verify summary generation
@@ -2048,11 +2244,21 @@ Please try alternative approaches, break down the task into smaller steps, or pr
           relevantTools: toolCapabilities.relevantTools,
           isAgentMode: true,
           sessionId: currentSessionId,
+          onSummarizationProgress: (current, total, message) => {
+            summaryStep.description = `Summarizing for summary generation (${current}/${total})`
+            emit({
+              currentIteration: iteration,
+              maxIterations,
+              steps: progressSteps.slice(-3),
+              isComplete: false,
+              conversationHistory: formatConversationForProgress(conversationHistory),
+            })
+          },
         })
 
 
         try {
-          const summaryResponse = await makeLLMCall(shrunkSummaryMessages, config)
+          const summaryResponse = await makeLLMCall(shrunkSummaryMessages, config, onRetryProgress)
 
           // Update summary step with the response
           summaryStep.status = "completed"
@@ -2066,6 +2272,22 @@ Please try alternative approaches, break down the task into smaller steps, or pr
           finalContent = summaryResponse.content || assistantContent
 
           // Add the summary to conversation history
+          conversationHistory.push({
+            role: "assistant",
+            content: finalContent,
+          })
+        } catch (error) {
+          // If summary generation fails, fall back to the original content
+          console.warn("Failed to generate summary:", error)
+          finalContent = assistantContent || "Task completed successfully."
+          summaryStep.status = "error"
+          summaryStep.description = "Failed to generate summary, using fallback"
+
+          conversationHistory.push({
+            role: "assistant",
+            content: finalContent,
+          })
+        }
 
         // Post-verify: produce a concise final summary for the user
         try {
@@ -2111,11 +2333,26 @@ Please try alternative approaches, break down the task into smaller steps, or pr
             relevantTools: toolCapabilities.relevantTools,
             isAgentMode: true,
             sessionId: currentSessionId,
+            onSummarizationProgress: (current, total, message) => {
+              // Update the last thinking step with summarization progress
+              const lastThinkingStep = progressSteps.findLast(step => step.type === "thinking")
+              if (lastThinkingStep) {
+                lastThinkingStep.description = `Summarizing for verification (${current}/${total})`
+              }
+              emit({
+                currentIteration: iteration,
+                maxIterations,
+                steps: progressSteps.slice(-3),
+                isComplete: false,
+                conversationHistory: formatConversationForProgress(conversationHistory),
+              })
+            },
           })
 
           const postVerifySummaryResponse = await makeLLMCall(
             shrunkPostVerifySummaryMessages,
             config,
+            onRetryProgress,
           )
 
           postVerifySummaryStep.status = "completed"
@@ -2144,23 +2381,6 @@ Please try alternative approaches, break down the task into smaller steps, or pr
           noOpCount = 0
           continue
         }
-
-          conversationHistory.push({
-            role: "assistant",
-            content: finalContent,
-          })
-        } catch (error) {
-          // If summary generation fails, fall back to the original content
-          console.warn("Failed to generate summary:", error)
-          finalContent = assistantContent || "Task completed successfully."
-          summaryStep.status = "error"
-          summaryStep.description = "Failed to generate summary, using fallback"
-
-          conversationHistory.push({
-            role: "assistant",
-            content: finalContent,
-          })
-        }
       } else {
         // Agent provided sufficient content, use it as final content
         finalContent = assistantContent
@@ -2188,12 +2408,26 @@ Please try alternative approaches, break down the task into smaller steps, or pr
 	          conversationHistory: formatConversationForProgress(conversationHistory),
 	        })
 
+	        // Check for infinite loop (repeated responses)
+	        const isRepeating = detectRepeatedResponse(finalContent)
+
 	        const retries = Math.max(0, config.mcpVerifyRetryCount ?? 1)
 	        let verified = false
 	        let verification: any = null
-	        for (let i = 0; i <= retries; i++) {
-	          verification = await verifyCompletionWithFetch(buildVerificationMessages(finalContent), config.mcpToolsProviderId)
-	          if (verification?.isComplete === true) { verified = true; break }
+
+	        // If agent is repeating itself, skip verification and accept as complete
+	        if (isRepeating) {
+	          verified = true
+	          verifyStep.status = "completed"
+	          verifyStep.description = "Agent response is repeating - accepting as final"
+	          if (isDebugLLM()) {
+	            logLLM("Infinite loop detected - treating as complete", { finalContent: finalContent.substring(0, 200) })
+	          }
+	        } else {
+	          for (let i = 0; i <= retries; i++) {
+	            verification = await verifyCompletionWithFetch(buildVerificationMessages(finalContent), config.mcpToolsProviderId)
+	            if (verification?.isComplete === true) { verified = true; break }
+	          }
 	        }
 
 	        if (!verified) {
@@ -2314,6 +2548,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
 async function makeLLMCall(
   messages: Array<{ role: string; content: string }>,
   config: any,
+  onRetryProgress?: RetryProgressCallback,
 ): Promise<LLMToolCallResponse> {
   const chatProviderId = config.mcpToolsProviderId
 
@@ -2326,7 +2561,7 @@ async function makeLLMCall(
         messages: messages,
       })
     }
-    const result = await makeLLMCallWithFetch(messages, chatProviderId)
+    const result = await makeLLMCallWithFetch(messages, chatProviderId, onRetryProgress)
     if (isDebugLLM()) {
       logLLM("Response ←", result)
       logLLM("=== LLM CALL END ===")

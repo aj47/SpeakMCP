@@ -658,6 +658,15 @@ const MCP_EXAMPLES: Record<string, { name: string; config: MCPServerConfig }> = 
       env: {},
     },
   },
+  "headless-terminal": {
+    name: "headless-terminal",
+    config: {
+      transport: "stdio" as MCPTransportType,
+      command: "ht-mcp",
+      args: [],
+      env: {},
+    },
+  },
 }
 
 export function MCPConfigManager({

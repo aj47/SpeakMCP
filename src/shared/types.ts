@@ -102,10 +102,10 @@ export interface ServerLogEntry {
 // Agent Mode Progress Tracking Types
 export interface AgentProgressStep {
   id: string
-  type: "thinking" | "tool_call" | "tool_result" | "completion"
+  type: "thinking" | "tool_call" | "tool_result" | "completion" | "tool_approval"
   title: string
   description?: string
-  status: "pending" | "in_progress" | "completed" | "error"
+  status: "pending" | "in_progress" | "completed" | "error" | "awaiting_approval"
   timestamp: number
   llmContent?: string // Store actual LLM response content for thinking steps
   toolCall?: {
@@ -116,6 +116,12 @@ export interface AgentProgressStep {
     success: boolean
     content: string
     error?: string
+  }
+  // For tool approval requests
+  approvalRequest?: {
+    approvalId: string
+    toolName: string
+    arguments: any
   }
 }
 
@@ -141,6 +147,21 @@ export interface AgentProgressUpdate {
    * Entries before this index belong to previous sessions in the same conversation.
    */
   sessionStartIndex?: number
+  // Pending tool approval request - when set, UI should show approve/deny buttons
+  pendingToolApproval?: {
+    approvalId: string
+    toolName: string
+    arguments: any
+  }
+  // Retry status - when set, UI should show retry banner with countdown
+  retryInfo?: {
+    isRetrying: boolean
+    attempt: number
+    maxAttempts?: number  // undefined for rate limits (infinite retries)
+    delaySeconds: number
+    reason: string  // e.g., "Rate limit exceeded", "Network error"
+    startedAt: number  // timestamp for countdown calculation
+  }
 }
 
 // Conversation Types
@@ -209,6 +230,17 @@ export type ProfilesData = {
   currentProfileId?: string
 }
 
+// Model Preset Types - allows per-preset API keys
+export interface ModelPreset {
+  id: string
+  name: string
+  baseUrl: string
+  apiKey: string
+  isBuiltIn?: boolean // true for presets derived from OPENAI_COMPATIBLE_PRESETS
+  createdAt?: number
+  updatedAt?: number
+}
+
 export type Config = {
   shortcut?: "hold-ctrl" | "ctrl-slash" | "custom"
   customShortcut?: string
@@ -230,6 +262,10 @@ export type Config = {
   openaiApiKey?: string
   openaiBaseUrl?: string
   openaiCompatiblePreset?: OPENAI_COMPATIBLE_PRESET_ID
+
+  // Model Presets - allows per-preset API keys
+  modelPresets?: ModelPreset[]
+  currentModelPresetId?: string // ID of the currently active preset
 
   groqApiKey?: string
   groqBaseUrl?: string
@@ -280,6 +316,11 @@ export type Config = {
   textInputEnabled?: boolean
   textInputShortcut?: "ctrl-t" | "ctrl-shift-t" | "alt-t" | "custom"
   customTextInputShortcut?: string
+
+  // Settings Window Hotkey Configuration
+  settingsHotkeyEnabled?: boolean
+  settingsHotkey?: "ctrl-shift-s" | "ctrl-comma" | "ctrl-shift-comma" | "custom"
+  customSettingsHotkey?: string
 
   // Agent Kill Switch Configuration
   agentKillSwitchEnabled?: boolean
@@ -350,6 +391,13 @@ export type Config = {
   mcpContextLastNMessages?: number
   mcpContextSummarizeCharThreshold?: number
   mcpMaxContextTokensOverride?: number
+
+  // Tool Response Processing Configuration
+  mcpToolResponseProcessingEnabled?: boolean
+  mcpToolResponseLargeThreshold?: number
+  mcpToolResponseCriticalThreshold?: number
+  mcpToolResponseChunkSize?: number
+  mcpToolResponseProgressUpdates?: boolean
 
   // Completion Verification Configuration
   mcpVerifyCompletionEnabled?: boolean

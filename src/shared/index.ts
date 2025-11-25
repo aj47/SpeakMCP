@@ -146,10 +146,10 @@ export const OPENAI_COMPATIBLE_PRESETS = [
     baseUrl: "https://api.openai.com/v1",
   },
   {
-    label: "Groq",
-    value: "groq",
-    description: "Groq's fast inference API",
-    baseUrl: "https://api.groq.com/openai/v1",
+    label: "Anthropic",
+    value: "anthropic",
+    description: "Claude models via OpenAI-compatible API",
+    baseUrl: "https://api.anthropic.com/v1/",
   },
   {
     label: "OpenRouter",
@@ -162,6 +162,18 @@ export const OPENAI_COMPATIBLE_PRESETS = [
     value: "together",
     description: "Together AI's inference platform",
     baseUrl: "https://api.together.xyz/v1",
+  },
+  {
+    label: "Cerebras",
+    value: "cerebras",
+    description: "Cerebras fast inference API",
+    baseUrl: "https://api.cerebras.ai/v1",
+  },
+  {
+    label: "Zhipu GLM",
+    value: "zhipu",
+    description: "Zhipu AI GLM models (China)",
+    baseUrl: "https://open.bigmodel.cn/api/paas/v4",
   },
   {
     label: "Perplexity",

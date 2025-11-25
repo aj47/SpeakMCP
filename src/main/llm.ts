@@ -776,8 +776,6 @@ Return ONLY JSON per schema.`,
   let finalContent = ""
   let noOpCount = 0 // Track iterations without meaningful progress
 
-  let executedToolsThisIteration = false // Whether any tools were executed in the current iteration
-
   let verificationFailCount = 0 // Count consecutive verification failures to avoid loops
 
   while (iteration < maxIterations) {
@@ -1091,8 +1089,6 @@ Always use actual resource IDs from the conversation history or create new ones 
       }
       logTools("Planned tool calls from LLM", toolCallsArray)
     }
-    // Track whether tools are planned this iteration
-    executedToolsThisIteration = toolCallsArray.length > 0
     const hasToolCalls = toolCallsArray.length > 0
     const explicitlyComplete = llmResponse.needsMoreWork === false
 

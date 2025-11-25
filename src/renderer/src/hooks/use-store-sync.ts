@@ -4,7 +4,7 @@
  */
 import { useEffect } from 'react'
 import { rendererHandlers, tipcClient } from '@renderer/lib/tipc-client'
-import { useAgentStore, useConversationStore, useUIStore } from '@renderer/stores'
+import { useAgentStore, useConversationStore } from '@renderer/stores'
 import { AgentProgressUpdate, Conversation, ConversationMessage } from '@shared/types'
 import { logUI, logStateChange } from '@renderer/lib/debug'
 import { useSaveConversationMutation } from '@renderer/lib/queries'

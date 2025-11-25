@@ -735,13 +735,13 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
   // Sort by timestamp to ensure chronological order
   messages.sort((a, b) => a.timestamp - b.timestamp)
 
-  // Helper function to generate a stable ID for tool executions based on content
-  const generateToolExecutionId = (calls: Array<{ name: string; arguments: any }>) => {
-    // Create a stable hash from tool call names and a subset of arguments
+  // Helper function to generate a stable ID for tool executions based on content and timestamp
+  const generateToolExecutionId = (calls: Array<{ name: string; arguments: any }>, timestamp: number) => {
+    // Create a stable hash from tool call names, a subset of arguments, and timestamp for uniqueness
     const signature = calls.map(c => {
       const argsStr = c.arguments ? JSON.stringify(c.arguments) : ''
       return `${c.name}:${argsStr.substring(0, 50)}`
-    }).join('|')
+    }).join('|') + `@${timestamp}`
     // Simple hash function
     let hash = 0
     for (let i = 0; i < signature.length; i++) {
@@ -778,13 +778,14 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
       // Show assistant message without extras (stable key by role ordinal)
       const aIndex = ++roleCounters.assistant
       displayItems.push({ kind: "message", id: `msg-assistant-${aIndex}`, data: { ...m, toolCalls: undefined, toolResults: undefined } })
-      // Unified execution bubble with stable ID
-      const toolExecId = generateToolExecutionId(m.toolCalls)
+      // Unified execution bubble with stable ID (include timestamp for uniqueness)
+      const execTimestamp = next?.timestamp ?? m.timestamp
+      const toolExecId = generateToolExecutionId(m.toolCalls, execTimestamp)
       displayItems.push({
         kind: "tool_execution",
         id: `exec-${toolExecId}`,
         data: {
-          timestamp: next?.timestamp ?? m.timestamp,
+          timestamp: execTimestamp,
           calls: m.toolCalls,
           results,
         },

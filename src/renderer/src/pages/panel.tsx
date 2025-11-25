@@ -10,7 +10,7 @@ import { rendererHandlers, tipcClient } from "~/lib/tipc-client"
 import { TextInputPanel, TextInputPanelRef } from "@renderer/components/text-input-panel"
 import { PanelResizeWrapper } from "@renderer/components/panel-resize-wrapper"
 import { logUI } from "@renderer/lib/debug"
-import { useUIStore, useAgentStore, useAgentProgress, useConversationStore } from "@renderer/stores"
+import { useAgentStore, useAgentProgress, useConversationStore } from "@renderer/stores"
 import { useConversationQuery, useCreateConversationMutation, useAddMessageToConversationMutation } from "@renderer/lib/queries"
 import { PanelDragBar } from "@renderer/components/panel-drag-bar"
 import { useConfigQuery } from "@renderer/lib/query-client"
@@ -42,9 +42,6 @@ export function Component() {
   }
 
 
-  // UI state from Zustand
-  const showContinueButton = useUIStore((s) => s.showContinueButton)
-
   // Agent state from Zustand
   const agentProgress = useAgentProgress()
   const focusedSessionId = useAgentStore((s) => s.focusedSessionId)
@@ -52,7 +49,6 @@ export function Component() {
 
   // Conversation state from Zustand
   const currentConversationId = useConversationStore((s) => s.currentConversationId)
-  const lastCompletedConversationId = useConversationStore((s) => s.lastCompletedConversationId)
   const setCurrentConversationId = useConversationStore((s) => s.setCurrentConversationId)
   const continueConversation = useConversationStore((s) => s.continueConversation)
   const endConversation = useConversationStore((s) => s.endConversation)
@@ -176,6 +172,10 @@ export function Component() {
     }) => {
       const arrayBuffer = await blob.arrayBuffer()
 
+      // Capture the conversation ID at recording time - if user explicitly continued a conversation
+      // from history, currentConversationId will be set. Otherwise it's null for new inputs.
+      const conversationIdForMcp = currentConversationId
+
       // If we have a transcript, start a conversation with it
       if (transcript && !isConversationActive) {
         await startNewConversation(transcript, "user")
@@ -184,10 +184,10 @@ export function Component() {
       const result = await tipcClient.createMcpRecording({
         recording: arrayBuffer,
         duration,
-        // Only pass currentConversationId, NOT lastCompletedConversationId
-        // Using lastCompletedConversationId causes message leaking where old conversation
-        // history gets loaded into new separate sessions
-        conversationId: currentConversationId || undefined,
+        // Pass currentConversationId if user explicitly continued from history,
+        // otherwise undefined to create a fresh conversation.
+        // This prevents message leaking while still supporting explicit continuation.
+        conversationId: conversationIdForMcp ?? undefined,
       })
 
       // Update conversation ID if backend created/returned one
@@ -385,25 +385,16 @@ export function Component() {
         isConfirmedRef.current = true
         recorderRef.current?.stopRecording()
       } else {
-        // If there's an active conversation, automatically continue in MCP mode
-        const continueConv = showContinueButton && !mcpMode
-        if (continueConv) {
-          setMcpMode(true)
-          mcpModeRef.current = true
-          requestPanelMode("normal")
-          tipcClient.showPanelWindow({})
-        } else {
-          // Force normal dictation mode when not continuing a conversation
-          setMcpMode(false)
-          mcpModeRef.current = false
-          tipcClient.showPanelWindow({})
-        }
+        // Force normal dictation mode - each new recording starts fresh
+        setMcpMode(false)
+        mcpModeRef.current = false
+        tipcClient.showPanelWindow({})
         recorderRef.current?.startRecording()
       }
     })
 
     return unlisten
-  }, [recording, showContinueButton, mcpMode])
+  }, [recording, mcpMode])
 
   // Text input handlers
   useEffect(() => {
@@ -434,6 +425,10 @@ export function Component() {
   }, [])
 
   const handleTextSubmit = async (text: string) => {
+    // Capture the conversation ID at submit time - if user explicitly continued a conversation
+    // from history, currentConversationId will be set. Otherwise it's null for new inputs.
+    const conversationIdForMcp = currentConversationId
+
     // Start new conversation or add to existing one
     if (!isConversationActive) {
       await startNewConversation(text, "user")
@@ -452,7 +447,10 @@ export function Component() {
       if ((config as any).mcpToolsEnabled) {
         mcpTextInputMutation.mutate({
           text,
-          conversationId: currentConversation?.id ?? currentConversationId ?? lastCompletedConversationId ?? undefined,
+          // Pass currentConversationId if user explicitly continued from history,
+          // otherwise undefined to create a fresh conversation.
+          // This prevents message leaking while still supporting explicit continuation.
+          conversationId: conversationIdForMcp ?? undefined,
         })
       } else {
         textInputMutation.mutate({ text })
@@ -716,18 +714,6 @@ export function Component() {
           )}>
 
             <div className="relative flex grow items-center overflow-hidden">
-              {/* Conversation continuation indicator - subtle overlay that doesn't block waveform */}
-              {showContinueButton && !agentProgress && (
-                <div className="absolute left-3 top-3 z-10 flex items-center gap-2">
-                  <div className="flex items-center gap-1.5 rounded-full bg-black/20 px-2 py-1 backdrop-blur-sm">
-                    <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-green-400" />
-                    <span className="text-xs font-medium text-white/90">
-                      Continue conversation
-                    </span>
-                  </div>
-                </div>
-              )}
-
               {/* Agent progress overlay - left-aligned and full coverage */}
               {/* Hide overlay when recording to prevent waveform from appearing over completed sessions */}
               {anyVisibleSessions && !recording && (

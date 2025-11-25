@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react"
 import { cn } from "@renderer/lib/utils"
 import { AgentProgressUpdate } from "../../../shared/types"
-import { ChevronDown, ChevronUp, ChevronRight, X, AlertTriangle, Minimize2 } from "lucide-react"
+import { ChevronDown, ChevronUp, ChevronRight, X, AlertTriangle, Minimize2, Shield, Check, XCircle } from "lucide-react"
 import { MarkdownRenderer } from "@renderer/components/markdown-renderer"
 import { Button } from "./ui/button"
 import { Badge } from "./ui/badge"
@@ -35,6 +35,11 @@ type DisplayItem =
       timestamp: number
       calls: Array<{ name: string; arguments: any }>
       results: Array<{ success: boolean; content: string; error?: string }>
+    } }
+  | { kind: "tool_approval"; id: string; data: {
+      approvalId: string
+      toolName: string
+      arguments: any
     } }
 
 
@@ -507,6 +512,81 @@ const ToolExecutionBubble: React.FC<{
   )
 }
 
+// Inline Tool Approval bubble - appears in the conversation flow
+const ToolApprovalBubble: React.FC<{
+  approval: {
+    approvalId: string
+    toolName: string
+    arguments: any
+  }
+  onApprove: () => void
+  onDeny: () => void
+  isResponding: boolean
+}> = ({ approval, onApprove, onDeny, isResponding }) => {
+  const [showArgs, setShowArgs] = useState(false)
+
+  return (
+    <div className="rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-950/30 overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center gap-2 px-3 py-2 bg-amber-100/50 dark:bg-amber-900/30 border-b border-amber-200 dark:border-amber-800">
+        <Shield className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+        <span className="text-xs font-medium text-amber-800 dark:text-amber-200">
+          Tool Approval Required
+        </span>
+      </div>
+
+      {/* Content */}
+      <div className="px-3 py-2">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-xs text-amber-700 dark:text-amber-300">Tool:</span>
+          <code className="text-xs font-mono font-medium text-amber-900 dark:text-amber-100 bg-amber-100 dark:bg-amber-900/50 px-1.5 py-0.5 rounded">
+            {approval.toolName}
+          </code>
+        </div>
+
+        {/* Expandable arguments */}
+        <div className="mb-3">
+          <button
+            onClick={() => setShowArgs(!showArgs)}
+            className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-200"
+          >
+            <ChevronRight className={cn("h-3 w-3 transition-transform", showArgs && "rotate-90")} />
+            {showArgs ? "Hide" : "View"} arguments
+          </button>
+          {showArgs && (
+            <pre className="mt-1.5 p-2 text-xs bg-amber-100/70 dark:bg-amber-900/40 rounded overflow-x-auto max-h-32 text-amber-900 dark:text-amber-100">
+              {JSON.stringify(approval.arguments, null, 2)}
+            </pre>
+          )}
+        </div>
+
+        {/* Action buttons */}
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 text-xs border-red-300 text-red-700 hover:bg-red-50 dark:border-red-700 dark:text-red-400 dark:hover:bg-red-950/30"
+            onClick={onDeny}
+            disabled={isResponding}
+          >
+            <XCircle className="h-3 w-3 mr-1" />
+            Deny
+          </Button>
+          <Button
+            size="sm"
+            className="h-7 text-xs bg-green-600 hover:bg-green-700 text-white"
+            onClick={onApprove}
+            disabled={isResponding}
+          >
+            <Check className="h-3 w-3 mr-1" />
+            Approve
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 
 export const AgentProgress: React.FC<AgentProgressProps> = ({
   progress,
@@ -606,6 +686,41 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
       }
     } catch (error) {
       console.error("Failed to close agent session/panel:", error)
+    }
+  }
+
+  // Tool approval handlers
+  const [isRespondingToApproval, setIsRespondingToApproval] = useState(false)
+
+  const handleApproveToolCall = async () => {
+    if (isRespondingToApproval || !progress?.pendingToolApproval?.approvalId) return
+
+    setIsRespondingToApproval(true)
+    try {
+      await tipcClient.respondToToolApproval({
+        approvalId: progress.pendingToolApproval.approvalId,
+        approved: true,
+      })
+    } catch (error) {
+      console.error("Failed to approve tool call:", error)
+    } finally {
+      setIsRespondingToApproval(false)
+    }
+  }
+
+  const handleDenyToolCall = async () => {
+    if (isRespondingToApproval || !progress?.pendingToolApproval?.approvalId) return
+
+    setIsRespondingToApproval(true)
+    try {
+      await tipcClient.respondToToolApproval({
+        approvalId: progress.pendingToolApproval.approvalId,
+        approved: false,
+      })
+    } catch (error) {
+      console.error("Failed to deny tool call:", error)
+    } finally {
+      setIsRespondingToApproval(false)
     }
   }
 
@@ -808,6 +923,15 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
     }
   }
 
+  // Add pending tool approval to display items if present
+  if (progress.pendingToolApproval) {
+    displayItems.push({
+      kind: "tool_approval",
+      id: `approval-${progress.pendingToolApproval.approvalId}`,
+      data: progress.pendingToolApproval,
+    })
+  }
+
   // Determine the last assistant message among display items (by position, not timestamp)
   const lastAssistantDisplayIndex = (() => {
     for (let i = displayItems.length - 1; i >= 0; i--) {
@@ -982,29 +1106,45 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
               {displayItems.map((item, index) => {
                 const itemKey = item.id || (item.kind === "message"
                   ? `msg-${messageStableId(item.data as any)}`
+                  : item.kind === "tool_approval"
+                  ? `approval-${(item.data as any).approvalId}`
                   : `exec-${(item as any).data?.id || (item as any).data?.timestamp}`)
 
                 const isExpanded = !!expandedItems[itemKey]
 
-                return item.kind === "message" ? (
-                  <CompactMessage
-                    key={itemKey}
-                    message={item.data}
-                    isLast={index === lastAssistantDisplayIndex}
-                    isComplete={isComplete}
-                    hasErrors={hasErrors}
-                    wasStopped={wasStopped}
-                    isExpanded={isExpanded}
-                    onToggleExpand={() => toggleItemExpansion(itemKey)}
-                  />
-                ) : (
-                  <ToolExecutionBubble
-                    key={itemKey}
-                    execution={item.data}
-                    isExpanded={isExpanded}
-                    onToggleExpand={() => toggleItemExpansion(itemKey)}
-                  />
-                )
+                if (item.kind === "message") {
+                  return (
+                    <CompactMessage
+                      key={itemKey}
+                      message={item.data}
+                      isLast={index === lastAssistantDisplayIndex}
+                      isComplete={isComplete}
+                      hasErrors={hasErrors}
+                      wasStopped={wasStopped}
+                      isExpanded={isExpanded}
+                      onToggleExpand={() => toggleItemExpansion(itemKey)}
+                    />
+                  )
+                } else if (item.kind === "tool_approval") {
+                  return (
+                    <ToolApprovalBubble
+                      key={itemKey}
+                      approval={item.data}
+                      onApprove={handleApproveToolCall}
+                      onDeny={handleDenyToolCall}
+                      isResponding={isRespondingToApproval}
+                    />
+                  )
+                } else {
+                  return (
+                    <ToolExecutionBubble
+                      key={itemKey}
+                      execution={item.data}
+                      isExpanded={isExpanded}
+                      onToggleExpand={() => toggleItemExpansion(itemKey)}
+                    />
+                  )
+                }
               })}
             </div>
           ) : (

@@ -2028,7 +2028,8 @@ export class MCPService {
 
   async executeToolCall(
     toolCall: MCPToolCall,
-    onProgress?: (message: string) => void
+    onProgress?: (message: string) => void,
+    skipApprovalCheck: boolean = false
   ): Promise<MCPToolResult> {
     try {
       if (isDebugTools()) {
@@ -2036,8 +2037,11 @@ export class MCPService {
       }
 
       // Safety gate: require user approval before executing any tool call if enabled in config
+      // Skip if approval was already handled by the caller (e.g., inline approval in agent mode UI)
       const cfg = configStore.get()
-      if (cfg.mcpRequireApprovalBeforeToolCall) {
+      if (cfg.mcpRequireApprovalBeforeToolCall && !skipApprovalCheck) {
+        // This path is only hit when called outside of agent mode (e.g., single-shot tool calling)
+        // In agent mode, approval is handled inline in the UI via tipc.ts wrapper
         const argPreview = (() => {
           try {
             return JSON.stringify(toolCall.arguments, null, 2)

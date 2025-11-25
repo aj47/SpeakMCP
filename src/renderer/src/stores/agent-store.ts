@@ -23,12 +23,39 @@ export const useAgentStore = create<AgentState>((set, get) => ({
 
     set((state) => {
       const newMap = new Map(state.agentProgressById)
-      newMap.set(sessionId, update)
+      const existingProgress = newMap.get(sessionId)
+
+      // Merge with existing progress to preserve conversation history and steps
+      // when they're not provided in the update (e.g., tool approval updates)
+      let mergedUpdate = update
+      if (existingProgress) {
+        // Check if this is a partial update (empty conversationHistory or steps)
+        const hasEmptyHistory = !update.conversationHistory || update.conversationHistory.length === 0
+        const hasEmptySteps = !update.steps || update.steps.length === 0
+
+        // If either is empty, merge with existing data to preserve state
+        if (hasEmptyHistory || hasEmptySteps) {
+          mergedUpdate = {
+            ...existingProgress,
+            ...update,
+            // Preserve existing conversation history if the update has empty/missing history
+            conversationHistory: hasEmptyHistory
+              ? existingProgress.conversationHistory
+              : update.conversationHistory,
+            // Preserve existing steps if the update has empty steps
+            steps: hasEmptySteps
+              ? existingProgress.steps
+              : update.steps,
+          }
+        }
+      }
+
+      newMap.set(sessionId, mergedUpdate)
 
       // Auto-focus this session if no session is currently focused
       // AND it's not snoozed AND not complete
       let newFocusedSessionId = state.focusedSessionId
-      if (!state.focusedSessionId && !update.isSnoozed && !update.isComplete) {
+      if (!state.focusedSessionId && !mergedUpdate.isSnoozed && !mergedUpdate.isComplete) {
         newFocusedSessionId = sessionId
       }
 

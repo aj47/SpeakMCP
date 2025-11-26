@@ -103,7 +103,9 @@ export function ModelPresetManager() {
           ...existingPresets,
           {
             ...builtInPreset,
-            apiKey: config.openaiApiKey || '',
+            // Don't auto-seed API key from global config - each preset should have its own key
+            // configured explicitly to avoid credential misuse across different providers
+            apiKey: '',
             [modelType]: modelId,
             updatedAt: Date.now(),
           }

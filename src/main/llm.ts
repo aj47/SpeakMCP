@@ -1687,7 +1687,6 @@ Always use actual resource IDs from the conversation history or create new ones 
         .join("\n\n")
 
       addMessage("tool", toolResultsText, undefined, meaningfulResults)
-      })
 
       // Emit progress update immediately after adding tool results so UI shows them
       emit({

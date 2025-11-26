@@ -89,9 +89,13 @@ export const useMcpInitializationStatus = () =>
 export const useAvailableModelsQuery = (
   providerId: string,
   enabled: boolean = true,
+  presetId?: string,
 ) =>
   useQuery({
-    queryKey: ["available-models", providerId],
+    // Include presetId in query key for OpenAI provider so changing presets triggers refetch
+    queryKey: providerId === "openai" && presetId
+      ? ["available-models", providerId, presetId]
+      : ["available-models", providerId],
     queryFn: async () => {
       return tipcClient.fetchAvailableModels({ providerId })
     },

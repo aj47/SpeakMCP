@@ -198,3 +198,37 @@ export const getBuiltInModelPresets = (): ModelPreset[] => {
 
 // Default preset ID
 export const DEFAULT_MODEL_PRESET_ID = "builtin-openai"
+
+// Helper to check if a provider has TTS support
+export const providerHasTts = (providerId: string): boolean => {
+  return TTS_PROVIDERS.some(p => p.value === providerId)
+}
+
+// Helper to get TTS models for a provider
+export const getTtsModelsForProvider = (providerId: string) => {
+  switch (providerId) {
+    case 'openai':
+      return OPENAI_TTS_MODELS
+    case 'groq':
+      return GROQ_TTS_MODELS
+    case 'gemini':
+      return GEMINI_TTS_MODELS
+    default:
+      return []
+  }
+}
+
+// Helper to get TTS voices for a provider
+export const getTtsVoicesForProvider = (providerId: string, ttsModel?: string) => {
+  switch (providerId) {
+    case 'openai':
+      return OPENAI_TTS_VOICES
+    case 'groq':
+      // Groq voices depend on the selected model (English vs Arabic)
+      return ttsModel === 'playai-tts-arabic' ? GROQ_TTS_VOICES_ARABIC : GROQ_TTS_VOICES_ENGLISH
+    case 'gemini':
+      return GEMINI_TTS_VOICES
+    default:
+      return []
+  }
+}

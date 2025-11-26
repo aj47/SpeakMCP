@@ -8,10 +8,11 @@ import {
 } from "@renderer/components/ui/select"
 import { Label } from "@renderer/components/ui/label"
 import { Input } from "@renderer/components/ui/input"
-import { useAvailableModelsQuery } from "@renderer/lib/query-client"
+import { useAvailableModelsQuery, useConfigQuery } from "@renderer/lib/query-client"
 import { AlertCircle, RefreshCw, Search } from "lucide-react"
 import { Button } from "@renderer/components/ui/button"
 import { logUI, logFocus, logStateChange, logRender } from "@renderer/lib/debug"
+import { DEFAULT_MODEL_PRESET_ID } from "@shared/index"
 
 interface ModelSelectorProps {
   providerId: string
@@ -37,7 +38,13 @@ export function ModelSelector({
   const [isOpen, setIsOpen] = useState(false)
   const searchInputRef = useRef<HTMLInputElement>(null)
 
-  const modelsQuery = useAvailableModelsQuery(providerId, !!providerId)
+  const configQuery = useConfigQuery()
+  // Get current preset ID for OpenAI provider so query invalidates when preset changes
+  const currentPresetId = providerId === "openai"
+    ? configQuery.data?.currentModelPresetId || DEFAULT_MODEL_PRESET_ID
+    : undefined
+
+  const modelsQuery = useAvailableModelsQuery(providerId, !!providerId, currentPresetId)
 
   // Log component renders
   useEffect(() => {

@@ -617,3 +617,32 @@ function getFallbackModels(providerId: string): ModelInfo[] {
 export function clearModelsCache(): void {
   modelsCache.clear()
 }
+
+/**
+ * Fetch models for a specific preset (base URL + API key combination)
+ * This is used by the preset manager to show available models when configuring a preset
+ */
+export async function fetchModelsForPreset(
+  baseUrl: string,
+  apiKey: string,
+): Promise<ModelInfo[]> {
+  if (!baseUrl || !apiKey) {
+    throw new Error("Base URL and API key are required")
+  }
+
+  // Use the same fetchOpenAIModels function but with the preset's credentials
+  try {
+    const models = await fetchOpenAIModels(baseUrl, apiKey)
+    return models
+  } catch (error) {
+    diagnosticsService.logError(
+      "models-service",
+      `Failed to fetch models for preset`,
+      {
+        baseUrl,
+        error: error instanceof Error ? error.message : String(error),
+      },
+    )
+    throw error
+  }
+}

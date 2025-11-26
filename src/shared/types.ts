@@ -230,7 +230,7 @@ export type ProfilesData = {
   currentProfileId?: string
 }
 
-// Model Preset Types - allows per-preset API keys
+// Model Preset Types - allows per-preset API keys and model preferences
 export interface ModelPreset {
   id: string
   name: string
@@ -239,6 +239,9 @@ export interface ModelPreset {
   isBuiltIn?: boolean // true for presets derived from OPENAI_COMPATIBLE_PRESETS
   createdAt?: number
   updatedAt?: number
+  // Model preferences - when set, these will be applied when switching to this preset
+  mcpToolsModel?: string // Model to use for agent/MCP tools
+  transcriptProcessingModel?: string // Model to use for transcript post-processing
 }
 
 export type Config = {

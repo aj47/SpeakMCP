@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react"
+import { useState, useMemo, useCallback } from "react"
 import { Button } from "./ui/button"
 import { Input } from "./ui/input"
 import { Label } from "./ui/label"
@@ -20,8 +20,10 @@ import {
 import { useConfigQuery, useSaveConfigMutation } from "@renderer/lib/query-client"
 import { ModelPreset, Config } from "@shared/types"
 import { toast } from "sonner"
-import { Plus, Pencil, Trash2, Key, Globe } from "lucide-react"
+import { Plus, Pencil, Trash2, Key, Globe, Bot, FileText, Settings2 } from "lucide-react"
 import { getBuiltInModelPresets, DEFAULT_MODEL_PRESET_ID } from "@shared/index"
+import { PresetModelSelector } from "./preset-model-selector"
+import { ModelSelector } from "./model-selector"
 
 export function ModelPresetManager() {
   const configQuery = useConfigQuery()
@@ -33,6 +35,8 @@ export function ModelPresetManager() {
     name: "",
     baseUrl: "",
     apiKey: "",
+    mcpToolsModel: "",
+    transcriptProcessingModel: "",
   })
 
   const config = configQuery.data
@@ -42,11 +46,12 @@ export function ModelPresetManager() {
     const builtIn = getBuiltInModelPresets()
     const custom = config?.modelPresets || []
 
-    // Merge built-in presets with any saved API keys
+    // Merge built-in presets with any saved data (API keys, model preferences, etc.)
     const mergedBuiltIn = builtIn.map(preset => {
       const saved = custom.find(c => c.id === preset.id)
       if (saved) {
-        return { ...preset, apiKey: saved.apiKey }
+        // Merge all saved properties (apiKey, mcpToolsModel, transcriptProcessingModel, etc.)
+        return { ...preset, ...saved }
       }
       // For builtin-openai, seed with legacy openaiApiKey if no saved preset exists
       if (preset.id === DEFAULT_MODEL_PRESET_ID && config?.openaiApiKey) {
@@ -63,21 +68,79 @@ export function ModelPresetManager() {
   const currentPresetId = config?.currentModelPresetId || DEFAULT_MODEL_PRESET_ID
   const currentPreset = allPresets.find(p => p.id === currentPresetId)
 
-  const saveConfig = (updates: Partial<Config>) => {
+  const saveConfig = useCallback((updates: Partial<Config>) => {
     saveConfigMutation.mutate({
       config: { ...config, ...updates },
     })
-  }
+  }, [config, saveConfigMutation])
+
+  // Save model selection to the current preset (called when user changes model)
+  // Save model selection to both global config AND the current preset in a single save
+  const saveModelWithPreset = useCallback((
+    modelType: 'mcpToolsModel' | 'transcriptProcessingModel',
+    globalConfigKey: 'mcpToolsOpenaiModel' | 'transcriptPostProcessingOpenaiModel',
+    modelId: string
+  ) => {
+    if (!currentPresetId || !config) return
+
+    const existingPresets = config.modelPresets || []
+    const presetIndex = existingPresets.findIndex(p => p.id === currentPresetId)
+
+    let updatedPresets: ModelPreset[]
+
+    if (presetIndex >= 0) {
+      // Update existing preset entry
+      updatedPresets = existingPresets.map(p =>
+        p.id === currentPresetId
+          ? { ...p, [modelType]: modelId, updatedAt: Date.now() }
+          : p
+      )
+    } else {
+      // Create new entry for built-in preset that hasn't been customized yet
+      const builtInPreset = getBuiltInModelPresets().find(p => p.id === currentPresetId)
+      if (builtInPreset) {
+        updatedPresets = [
+          ...existingPresets,
+          {
+            ...builtInPreset,
+            // Don't auto-seed API key from global config - each preset should have its own key
+            // configured explicitly to avoid credential misuse across different providers
+            apiKey: '',
+            [modelType]: modelId,
+            updatedAt: Date.now(),
+          }
+        ]
+      } else {
+        // Fallback: just save the global config without preset
+        saveConfig({ [globalConfigKey]: modelId })
+        return
+      }
+    }
+
+    // Save BOTH the global config field AND the preset in a single call
+    saveConfig({
+      [globalConfigKey]: modelId,
+      modelPresets: updatedPresets
+    })
+  }, [currentPresetId, config, saveConfig])
 
   const handlePresetChange = (presetId: string) => {
     const preset = allPresets.find(p => p.id === presetId)
     if (preset) {
-      saveConfig({
+      const updates: Partial<Config> = {
         currentModelPresetId: presetId,
         // Also update the legacy fields for backward compatibility
         openaiBaseUrl: preset.baseUrl,
         openaiApiKey: preset.apiKey,
-      })
+      }
+      // Apply model preferences if they are set on the preset
+      if (preset.mcpToolsModel) {
+        updates.mcpToolsOpenaiModel = preset.mcpToolsModel
+      }
+      if (preset.transcriptProcessingModel) {
+        updates.transcriptPostProcessingOpenaiModel = preset.transcriptProcessingModel
+      }
+      saveConfig(updates)
       toast.success(`Switched to preset: ${preset.name}`)
     }
   }
@@ -101,6 +164,8 @@ export function ModelPresetManager() {
       isBuiltIn: false,
       createdAt: Date.now(),
       updatedAt: Date.now(),
+      mcpToolsModel: newPreset.mcpToolsModel || "",
+      transcriptProcessingModel: newPreset.transcriptProcessingModel || "",
     }
 
     const existingPresets = config?.modelPresets || []
@@ -109,7 +174,7 @@ export function ModelPresetManager() {
     })
 
     setIsCreateDialogOpen(false)
-    setNewPreset({ name: "", baseUrl: "", apiKey: "" })
+    setNewPreset({ name: "", baseUrl: "", apiKey: "", mcpToolsModel: "", transcriptProcessingModel: "" })
     toast.success("Preset created successfully")
   }
 
@@ -177,14 +242,26 @@ export function ModelPresetManager() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <Label>Model Provider Preset</Label>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setIsCreateDialogOpen(true)}
-        >
-          <Plus className="h-3 w-3 mr-1" />
-          New Preset
-        </Button>
+        <div className="flex gap-2">
+          {currentPreset && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleEditPreset(currentPreset)}
+            >
+              <Settings2 className="h-3 w-3 mr-1" />
+              {currentPreset.isBuiltIn ? "Configure" : "Edit"}
+            </Button>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setIsCreateDialogOpen(true)}
+          >
+            <Plus className="h-3 w-3 mr-1" />
+            New Preset
+          </Button>
+        </div>
       </div>
 
       <Select value={currentPresetId} onValueChange={handlePresetChange}>
@@ -209,41 +286,54 @@ export function ModelPresetManager() {
       </Select>
 
       {currentPreset && (
-        <div className="space-y-3">
+        <div className="space-y-4">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Globe className="h-4 w-4" />
             <span className="truncate">{currentPreset.baseUrl || "No URL set"}</span>
           </div>
-          <div className="flex gap-2">
+
+          {/* Inline model selectors - changes are auto-saved to preset */}
+          <div className="space-y-3">
+            <ModelSelector
+              providerId="openai"
+              value={config?.mcpToolsOpenaiModel || ""}
+              onValueChange={(value) => {
+                saveModelWithPreset('mcpToolsModel', 'mcpToolsOpenaiModel', value)
+              }}
+              label="Agent/MCP Tools Model"
+              placeholder="Select model"
+            />
+            <ModelSelector
+              providerId="openai"
+              value={config?.transcriptPostProcessingOpenaiModel || ""}
+              onValueChange={(value) => {
+                saveModelWithPreset('transcriptProcessingModel', 'transcriptPostProcessingOpenaiModel', value)
+              }}
+              label="Transcript Processing Model"
+              placeholder="Select model"
+            />
+          </div>
+
+          {!currentPreset.isBuiltIn && (
             <Button
               variant="outline"
               size="sm"
-              onClick={() => handleEditPreset(currentPreset)}
+              onClick={() => handleDeletePreset(currentPreset)}
             >
-              <Pencil className="h-3 w-3 mr-1" />
-              {currentPreset.isBuiltIn ? "Set API Key" : "Edit"}
+              <Trash2 className="h-3 w-3 mr-1" />
+              Delete Preset
             </Button>
-            {!currentPreset.isBuiltIn && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleDeletePreset(currentPreset)}
-              >
-                <Trash2 className="h-3 w-3 mr-1" />
-                Delete
-              </Button>
-            )}
-          </div>
+          )}
         </div>
       )}
 
       {/* Create Preset Dialog */}
       <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Create New Preset</DialogTitle>
             <DialogDescription>
-              Create a custom preset with its own API key and base URL.
+              Create a custom preset with its own API key, base URL, and model preferences.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -276,6 +366,45 @@ export function ModelPresetManager() {
                 placeholder="sk-..."
               />
             </div>
+
+            {/* Model Preferences Section */}
+            {newPreset.baseUrl && newPreset.apiKey && (
+              <div className="border-t pt-4 mt-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <Bot className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm font-medium">Model Preferences (Optional)</span>
+                </div>
+                <p className="text-xs text-muted-foreground mb-4">
+                  Set default models that will be selected when switching to this preset.
+                </p>
+
+                <div className="space-y-4">
+                  <PresetModelSelector
+                    presetId="new-preset"
+                    baseUrl={newPreset.baseUrl || ""}
+                    apiKey={newPreset.apiKey || ""}
+                    value={newPreset.mcpToolsModel || ""}
+                    onValueChange={(value) =>
+                      setNewPreset({ ...newPreset, mcpToolsModel: value })
+                    }
+                    label="Agent/MCP Tools Model"
+                    placeholder="Select model for agent mode"
+                  />
+
+                  <PresetModelSelector
+                    presetId="new-preset"
+                    baseUrl={newPreset.baseUrl || ""}
+                    apiKey={newPreset.apiKey || ""}
+                    value={newPreset.transcriptProcessingModel || ""}
+                    onValueChange={(value) =>
+                      setNewPreset({ ...newPreset, transcriptProcessingModel: value })
+                    }
+                    label="Transcript Processing Model"
+                    placeholder="Select model for transcripts"
+                  />
+                </div>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
@@ -290,15 +419,15 @@ export function ModelPresetManager() {
 
       {/* Edit Preset Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               {editingPreset?.isBuiltIn ? "Configure Preset" : "Edit Preset"}
             </DialogTitle>
             <DialogDescription>
               {editingPreset?.isBuiltIn
-                ? "Set the API key for this built-in preset."
-                : "Update the preset settings."}
+                ? "Set the API key and model preferences for this built-in preset."
+                : "Update the preset settings and model preferences."}
             </DialogDescription>
           </DialogHeader>
           {editingPreset && (
@@ -337,6 +466,43 @@ export function ModelPresetManager() {
                   }
                   placeholder="sk-..."
                 />
+              </div>
+
+              {/* Model Preferences Section */}
+              <div className="border-t pt-4 mt-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <Bot className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm font-medium">Model Preferences</span>
+                </div>
+                <p className="text-xs text-muted-foreground mb-4">
+                  Optionally set default models for this preset. When switching to this preset, these models will be selected automatically.
+                </p>
+
+                <div className="space-y-4">
+                  <PresetModelSelector
+                    presetId={editingPreset.id}
+                    baseUrl={editingPreset.baseUrl}
+                    apiKey={editingPreset.apiKey}
+                    value={editingPreset.mcpToolsModel || ""}
+                    onValueChange={(value) =>
+                      setEditingPreset({ ...editingPreset, mcpToolsModel: value })
+                    }
+                    label="Agent/MCP Tools Model"
+                    placeholder="Select model for agent mode"
+                  />
+
+                  <PresetModelSelector
+                    presetId={editingPreset.id}
+                    baseUrl={editingPreset.baseUrl}
+                    apiKey={editingPreset.apiKey}
+                    value={editingPreset.transcriptProcessingModel || ""}
+                    onValueChange={(value) =>
+                      setEditingPreset({ ...editingPreset, transcriptProcessingModel: value })
+                    }
+                    label="Transcript Processing Model"
+                    placeholder="Select model for transcripts"
+                  />
+                </div>
               </div>
             </div>
           )}

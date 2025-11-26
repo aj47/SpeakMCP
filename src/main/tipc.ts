@@ -1799,6 +1799,14 @@ export const router = {
       return fetchAvailableModels(input.providerId)
     }),
 
+  // Fetch models for a specific preset (base URL + API key)
+  fetchModelsForPreset: t.procedure
+    .input<{ baseUrl: string; apiKey: string }>()
+    .action(async ({ input }) => {
+      const { fetchModelsForPreset } = await import("./models-service")
+      return fetchModelsForPreset(input.baseUrl, input.apiKey)
+    }),
+
   // Conversation Management
   getConversationHistory: t.procedure.action(async () => {
     console.log("[tipc] getConversationHistory called")

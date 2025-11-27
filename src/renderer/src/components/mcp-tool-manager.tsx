@@ -217,8 +217,8 @@ export function MCPToolManager({ onToolToggle }: MCPToolManagerProps) {
   const enabledTools = tools.filter((tool) => tool.enabled).length
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-2">
+    <div className="min-w-0 space-y-6">
+      <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-3">
           <h3 className="text-lg font-medium">MCP Tool Management</h3>
           <Badge variant="secondary" className="shrink-0 text-sm">

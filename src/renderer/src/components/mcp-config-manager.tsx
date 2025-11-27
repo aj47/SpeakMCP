@@ -1016,8 +1016,8 @@ export function MCPConfigManager({
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="min-w-0 space-y-6">
+      <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h3 className="text-lg font-medium">MCP Server Configuration</h3>
         </div>
@@ -1088,45 +1088,46 @@ export function MCPConfigManager({
           Object.entries(servers).map(([name, serverConfig]) => (
             <Card key={name}>
               <CardHeader className="pb-3">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-                    <CardTitle className="truncate text-base">{name}</CardTitle>
-                    {serverConfig.disabled ? (
-                      <Badge variant="secondary">Disabled</Badge>
-                    ) : serverStatus[name]?.runtimeEnabled === false ? (
-                      <div className="flex items-center gap-2">
-                        <Square className="h-4 w-4 text-orange-500" />
-                        <Badge
-                          variant="outline"
-                          className="border-orange-300 text-orange-600"
-                        >
-                          Stopped by User
-                        </Badge>
-                      </div>
-                    ) : (
-                      <>
-                        {serverStatus[name]?.connected ? (
-                          <div className="flex items-center gap-2">
-                            <CheckCircle className="h-4 w-4 text-green-500" />
-                            <Badge variant="default">
-                              Connected ({serverStatus[name].toolCount} tools)
-                            </Badge>
-                          </div>
-                        ) : serverStatus[name]?.error ? (
-                          <div className="flex items-center gap-2">
-                            <XCircle className="h-4 w-4 text-red-500" />
-                            <Badge variant="destructive">Error</Badge>
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-2">
-                            <AlertCircle className="h-4 w-4 text-yellow-500" />
-                            <Badge variant="outline">Disconnected</Badge>
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </div>
-                  <div className="flex shrink-0 flex-wrap gap-1">
+                <div className="flex flex-col gap-2">
+                  <div className="flex min-w-0 items-center justify-between gap-2">
+                    <div className="flex min-w-0 flex-1 items-center gap-2">
+                      <CardTitle className="truncate text-base">{name}</CardTitle>
+                      {serverConfig.disabled ? (
+                        <Badge variant="secondary" className="shrink-0">Disabled</Badge>
+                      ) : serverStatus[name]?.runtimeEnabled === false ? (
+                        <div className="flex shrink-0 items-center gap-1">
+                          <Square className="h-4 w-4 text-orange-500" />
+                          <Badge
+                            variant="outline"
+                            className="border-orange-300 text-orange-600"
+                          >
+                            Stopped
+                          </Badge>
+                        </div>
+                      ) : (
+                        <>
+                          {serverStatus[name]?.connected ? (
+                            <div className="flex shrink-0 items-center gap-1">
+                              <CheckCircle className="h-4 w-4 text-green-500" />
+                              <Badge variant="default">
+                                {serverStatus[name].toolCount} tools
+                              </Badge>
+                            </div>
+                          ) : serverStatus[name]?.error ? (
+                            <div className="flex shrink-0 items-center gap-1">
+                              <XCircle className="h-4 w-4 text-red-500" />
+                              <Badge variant="destructive">Error</Badge>
+                            </div>
+                          ) : (
+                            <div className="flex shrink-0 items-center gap-1">
+                              <AlertCircle className="h-4 w-4 text-yellow-500" />
+                              <Badge variant="outline">Disconnected</Badge>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                    <div className="flex shrink-0 items-center gap-1">
                     {/* OAuth authorization controls - moved to top level */}
                     {serverConfig.transport === "streamableHttp" && serverConfig.url && (
                       <>
@@ -1278,6 +1279,7 @@ export function MCPConfigManager({
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
+                    </div>
                   </div>
                 </div>
                 <CardDescription className="truncate">

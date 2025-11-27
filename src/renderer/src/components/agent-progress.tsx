@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react"
 import { cn } from "@renderer/lib/utils"
 import { AgentProgressUpdate } from "../../../shared/types"
-import { ChevronDown, ChevronUp, ChevronRight, X, AlertTriangle, Minimize2, Shield, Check, XCircle, Loader2, Clock } from "lucide-react"
+import { ChevronDown, ChevronUp, ChevronRight, X, AlertTriangle, Minimize2, Shield, Check, XCircle, Loader2, Clock, Copy, CheckCheck } from "lucide-react"
 import { MarkdownRenderer } from "@renderer/components/markdown-renderer"
 import { Button } from "./ui/button"
 import { Badge } from "./ui/badge"
@@ -72,7 +72,20 @@ const CompactMessage: React.FC<{
   const [audioData, setAudioData] = useState<ArrayBuffer | null>(null)
   const [isGeneratingAudio, setIsGeneratingAudio] = useState(false)
   const [ttsError, setTtsError] = useState<string | null>(null)
+  const [isCopied, setIsCopied] = useState(false)
   const configQuery = useConfigQuery()
+
+  // Copy to clipboard handler
+  const handleCopyResponse = async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    try {
+      await navigator.clipboard.writeText(message.content)
+      setIsCopied(true)
+      setTimeout(() => setIsCopied(false), 2000)
+    } catch (err) {
+      console.error("Failed to copy response:", err)
+    }
+  }
 
   const displayResults = (message.toolResults || []).filter(
     (r) =>
@@ -312,18 +325,34 @@ const CompactMessage: React.FC<{
 
 
         </div>
-        {shouldCollapse && (
-          <button
-            onClick={handleChevronClick}
-            className="p-1 rounded hover:bg-muted/30 transition-colors flex-shrink-0"
-          >
-            {isExpanded ? (
-              <ChevronUp className="h-3 w-3" />
-            ) : (
-              <ChevronDown className="h-3 w-3" />
-            )}
-          </button>
-        )}
+        <div className="flex items-center gap-1 flex-shrink-0">
+          {/* Copy button for final assistant response */}
+          {message.role === "assistant" && isLast && isComplete && (
+            <button
+              onClick={handleCopyResponse}
+              className="p-1 rounded hover:bg-muted/30 transition-colors"
+              title={isCopied ? "Copied!" : "Copy response"}
+            >
+              {isCopied ? (
+                <CheckCheck className="h-3 w-3 text-green-500" />
+              ) : (
+                <Copy className="h-3 w-3 opacity-60 hover:opacity-100" />
+              )}
+            </button>
+          )}
+          {shouldCollapse && (
+            <button
+              onClick={handleChevronClick}
+              className="p-1 rounded hover:bg-muted/30 transition-colors"
+            >
+              {isExpanded ? (
+                <ChevronUp className="h-3 w-3" />
+              ) : (
+                <ChevronDown className="h-3 w-3" />
+              )}
+            </button>
+          )}
+        </div>
       </div>
     </div>
   )

@@ -221,6 +221,8 @@ export class MacDesktopAndMicBackend implements AudioBackend {
 
 	  private runningSessionId: string | null = null
 
+	  // TODO: For very long recordings, consider incremental mixing or file-based
+	  // buffering to avoid memory growth. Current approach works for typical use cases.
 	  private systemBuffers: Buffer[] = []
 	  private micBuffers: Buffer[] = []
 	  private systemFormat: { sampleRate: number | null; channels: number | null } = {

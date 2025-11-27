@@ -49,58 +49,7 @@ import { state, agentProcessManager, suppressPanelAutoShow, isPanelAutoShowSuppr
 
 
 import { startRemoteServer, stopRemoteServer, restartRemoteServer } from "./remote-server"
-
-// Helper function to emit agent progress updates to the renderer
-async function emitAgentProgress(update: AgentProgressUpdate) {
-  const panel = WINDOWS.get("panel")
-  if (!panel) {
-    console.warn("Panel window not available for progress update")
-
-    return
-  }
-
-  console.log(`[emitAgentProgress] Called for session ${update.sessionId}, panel visible: ${panel.isVisible()}, isSnoozed: ${update.isSnoozed}`)
-
-  // Only show the panel window if it's not visible AND the session is not snoozed
-  if (!panel.isVisible() && update.sessionId) {
-    // Check if this session is snoozed before showing the panel
-    const { agentSessionTracker } = await import("./agent-session-tracker")
-    const isSnoozed = agentSessionTracker.isSessionSnoozed(update.sessionId)
-
-    console.log(`[emitAgentProgress] Panel not visible. Session ${update.sessionId} snoozed check: ${isSnoozed}`)
-
-    if (isPanelAutoShowSuppressed()) {
-      console.log(`[emitAgentProgress] Panel auto-show suppressed; NOT showing panel for session ${update.sessionId}`)
-    } else if (!isSnoozed) {
-      // Only show panel for non-snoozed sessions
-      console.log(`[emitAgentProgress] Showing panel for non-snoozed session ${update.sessionId}`)
-      showPanelWindow()
-    } else {
-      console.log(`[emitAgentProgress] Session ${update.sessionId} is snoozed, NOT showing panel`)
-    }
-  } else {
-    console.log(`[emitAgentProgress] Skipping show check - panel visible: ${panel.isVisible()}, has sessionId: ${!!update.sessionId}`)
-  }
-
-  try {
-    const handlers = getRendererHandlers<RendererHandlers>(panel.webContents)
-    if (!handlers.agentProgressUpdate) {
-      console.warn("Agent progress handler not available")
-      return
-    }
-
-    // Add a small delay to ensure UI updates are processed
-    setTimeout(() => {
-      try {
-        handlers.agentProgressUpdate.send(update)
-      } catch (error) {
-        console.warn("Failed to send progress update:", error)
-      }
-    }, 10)
-  } catch (error) {
-    console.warn("Failed to get renderer handlers:", error)
-  }
-}
+import { emitAgentProgress } from "./emit-agent-progress"
 
 // Helper function to initialize MCP with progress feedback
 async function initializeMcpWithProgress(config: Config, sessionId: string): Promise<void> {

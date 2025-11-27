@@ -6,16 +6,14 @@ import {
   MCPToolResult,
 } from "./mcp-service"
 import { AgentProgressStep, AgentProgressUpdate } from "../shared/types"
-import { getRendererHandlers } from "@egoist/tipc/main"
-import { WINDOWS, showPanelWindow } from "./window"
-import { RendererHandlers } from "./renderer-handlers"
 import { diagnosticsService } from "./diagnostics"
 import { makeStructuredContextExtraction, ContextExtractionResponse } from "./structured-output"
 import { makeLLMCallWithFetch, makeTextCompletionWithFetch, verifyCompletionWithFetch, RetryProgressCallback } from "./llm-fetch"
 import { constructSystemPrompt } from "./system-prompts"
-import { state, agentSessionStateManager, isPanelAutoShowSuppressed } from "./state"
+import { state, agentSessionStateManager } from "./state"
 import { isDebugLLM, logLLM, isDebugTools, logTools } from "./debug"
 import { shrinkMessagesForLLM } from "./context-budget"
+import { emitAgentProgress } from "./emit-agent-progress"
 import { agentSessionTracker } from "./agent-session-tracker"
 
 /**
@@ -242,69 +240,6 @@ export interface AgentModeResponse {
     toolResults?: MCPToolResult[]
   }>
   totalIterations: number
-}
-
-// Helper function to emit progress updates to the renderer with better error handling
-// Note: This function now expects sessionId to be included in the update object
-async function emitAgentProgress(update: AgentProgressUpdate) {
-  const panel = WINDOWS.get("panel")
-  if (!panel) {
-    console.warn("Panel window not available for progress update")
-    return
-  }
-
-  console.log(`[llm.ts emitAgentProgress] Called for session ${update.sessionId}, panel visible: ${panel.isVisible()}, isSnoozed: ${update.isSnoozed}`)
-  console.log(`[llm.ts emitAgentProgress] conversationHistory length: ${update.conversationHistory?.length || 0}, roles: [${update.conversationHistory?.map(m => m.role).join(', ') || 'none'}]`)
-
-  // Only show the panel window if it's not visible AND the session is not snoozed
-  if (!panel.isVisible() && update.sessionId) {
-    // Check if this session is snoozed before showing the panel
-    const { agentSessionTracker } = await import("./agent-session-tracker")
-    const isSnoozed = agentSessionTracker.isSessionSnoozed(update.sessionId)
-
-    console.log(`[llm.ts emitAgentProgress] Panel not visible. Session ${update.sessionId} snoozed check: ${isSnoozed}`)
-
-    if (isPanelAutoShowSuppressed()) {
-      console.log(`[llm.ts emitAgentProgress] Panel auto-show suppressed; NOT showing panel for session ${update.sessionId}`)
-    } else if (!isSnoozed) {
-      // Only show panel for non-snoozed sessions
-      console.log(`[llm.ts emitAgentProgress] Showing panel for non-snoozed session ${update.sessionId}`)
-      // Set panel mode to agent before showing to ensure correct sizing
-      const { resizePanelForAgentMode } = await import("./window")
-      resizePanelForAgentMode()
-      showPanelWindow()
-    } else {
-      console.log(`[llm.ts emitAgentProgress] Session ${update.sessionId} is snoozed, NOT showing panel`)
-    }
-  } else {
-    console.log(`[llm.ts emitAgentProgress] Skipping show check - panel visible: ${panel.isVisible()}, has sessionId: ${!!update.sessionId}`)
-  }
-
-  // Also send updates to main window if it's open for live progress visualization
-  const main = WINDOWS.get("main")
-  if (main && main.isVisible()) {
-    const mainHandlers = getRendererHandlers<RendererHandlers>(main.webContents)
-    setTimeout(() => mainHandlers.agentProgressUpdate.send(update), 10)
-  }
-
-  try {
-    const handlers = getRendererHandlers<RendererHandlers>(panel.webContents)
-    if (!handlers.agentProgressUpdate) {
-      console.warn("Agent progress handler not available")
-      return
-    }
-
-    // Add a small delay to ensure UI updates are processed
-    setTimeout(() => {
-      try {
-        handlers.agentProgressUpdate.send(update)
-      } catch (error) {
-        console.warn("Failed to send progress update:", error)
-      }
-    }, 10)
-  } catch (error) {
-    console.warn("Failed to get renderer handlers:", error)
-  }
 }
 
 // Helper function to create progress steps

@@ -95,7 +95,7 @@ git clone https://github.com/aj47/SpeakMCP.git
 cd SpeakMCP
 pnpm install
 pnpm build-rs            # Build Rust helper binaries for your platform
-pnpm build:mac-audio-tap # (macOS only) Build ScreenCaptureKit system-audio bridge
+pnpm build:screencapture-audio # (macOS only) Build ScreenCaptureKit system-audio bridge
 pnpm dev                 # Start development server
 
 # Platform-specific builds
@@ -205,7 +205,7 @@ nvm use 20
 
 **macOS Desktop Audio (System + Mic)**:
 - Controlled by `useSystemAudioTap` in the config.
-- When enabled on macOS 13+ and the `mac-audio-tap-bridge` native module is built, long recordings capture **system audio and microphone together** using Apple's ScreenCaptureKit.
+- When enabled on macOS 13+ and the `screencapture-audio` binary is built, long recordings capture **system audio and microphone together** using Apple's ScreenCaptureKit.
 - Requires granting **Screen Recording** and **Microphone** permissions when prompted by macOS.
 
 ## 🤖 MCP Agent Mode

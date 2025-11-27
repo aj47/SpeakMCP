@@ -1,4 +1,5 @@
 import fs from "fs"
+import { logApp, logLLM, getDebugFlags } from "./debug"
 import { getRendererHandlers, tipc } from "@egoist/tipc/main"
 import {
   showPanelWindow,
@@ -50,62 +51,11 @@ import { audioService } from "./audio-service"
 import { getRecordingHistory, saveRecordingHistory } from "./recordings-store"
 import { longRecordingService } from "./long-recording-service"
 
-import { state, agentProcessManager, suppressPanelAutoShow, isPanelAutoShowSuppressed } from "./state"
+import { state, agentProcessManager, suppressPanelAutoShow, isPanelAutoShowSuppressed, toolApprovalManager } from "./state"
 
 
 import { startRemoteServer, stopRemoteServer, restartRemoteServer } from "./remote-server"
-
-// Helper function to emit agent progress updates to the renderer
-async function emitAgentProgress(update: AgentProgressUpdate) {
-  const panel = WINDOWS.get("panel")
-  if (!panel) {
-    console.warn("Panel window not available for progress update")
-
-    return
-  }
-
-  console.log(`[emitAgentProgress] Called for session ${update.sessionId}, panel visible: ${panel.isVisible()}, isSnoozed: ${update.isSnoozed}`)
-
-  // Only show the panel window if it's not visible AND the session is not snoozed
-  if (!panel.isVisible() && update.sessionId) {
-    // Check if this session is snoozed before showing the panel
-    const { agentSessionTracker } = await import("./agent-session-tracker")
-    const isSnoozed = agentSessionTracker.isSessionSnoozed(update.sessionId)
-
-    console.log(`[emitAgentProgress] Panel not visible. Session ${update.sessionId} snoozed check: ${isSnoozed}`)
-
-    if (isPanelAutoShowSuppressed()) {
-      console.log(`[emitAgentProgress] Panel auto-show suppressed; NOT showing panel for session ${update.sessionId}`)
-    } else if (!isSnoozed) {
-      // Only show panel for non-snoozed sessions
-      console.log(`[emitAgentProgress] Showing panel for non-snoozed session ${update.sessionId}`)
-      showPanelWindow()
-    } else {
-      console.log(`[emitAgentProgress] Session ${update.sessionId} is snoozed, NOT showing panel`)
-    }
-  } else {
-    console.log(`[emitAgentProgress] Skipping show check - panel visible: ${panel.isVisible()}, has sessionId: ${!!update.sessionId}`)
-  }
-
-  try {
-    const handlers = getRendererHandlers<RendererHandlers>(panel.webContents)
-    if (!handlers.agentProgressUpdate) {
-      console.warn("Agent progress handler not available")
-      return
-    }
-
-    // Add a small delay to ensure UI updates are processed
-    setTimeout(() => {
-      try {
-        handlers.agentProgressUpdate.send(update)
-      } catch (error) {
-        console.warn("Failed to send progress update:", error)
-      }
-    }, 10)
-  } catch (error) {
-    console.warn("Failed to get renderer handlers:", error)
-  }
-}
+import { emitAgentProgress } from "./emit-agent-progress"
 
 // Helper function to initialize MCP with progress feedback
 async function initializeMcpWithProgress(config: Config, sessionId: string): Promise<void> {
@@ -191,6 +141,7 @@ async function initializeMcpWithProgress(config: Config, sessionId: string): Pro
 async function processWithAgentMode(
   text: string,
   conversationId?: string,
+  existingSessionId?: string, // Optional: reuse existing session instead of creating new one
 ): Promise<string> {
   const config = configStore.get()
 
@@ -199,10 +150,10 @@ async function processWithAgentMode(
 
   // Agent mode state is managed per-session via agentSessionStateManager
 
-  // Start tracking this agent session
+  // Start tracking this agent session (or reuse existing one)
   const { agentSessionTracker } = await import("./agent-session-tracker")
   let conversationTitle = text.length > 50 ? text.substring(0, 50) + "..." : text
-  const sessionId = agentSessionTracker.startSession(conversationId, conversationTitle)
+  const sessionId = existingSessionId || agentSessionTracker.startSession(conversationId, conversationTitle)
 
   try {
     if (!config.mcpToolsEnabled) {
@@ -221,8 +172,58 @@ async function processWithAgentMode(
 
     if (config.mcpAgentModeEnabled) {
       // Use agent mode for iterative tool calling
-      const executeToolCall = async (toolCall: any): Promise<MCPToolResult> => {
-        return await mcpService.executeToolCall(toolCall)
+      const executeToolCall = async (toolCall: any, onProgress?: (message: string) => void): Promise<MCPToolResult> => {
+        // Handle inline tool approval if enabled in config
+        if (config.mcpRequireApprovalBeforeToolCall) {
+          // Request approval and wait for user response via the UI
+          const { approvalId, promise: approvalPromise } = toolApprovalManager.requestApproval(
+            sessionId,
+            toolCall.name,
+            toolCall.arguments
+          )
+
+          // Emit progress update with pending approval to show approve/deny buttons
+          await emitAgentProgress({
+            sessionId,
+            currentIteration: 0, // Will be updated by the agent loop
+            maxIterations: config.mcpMaxIterations ?? 10,
+            steps: [],
+            isComplete: false,
+            pendingToolApproval: {
+              approvalId,
+              toolName: toolCall.name,
+              arguments: toolCall.arguments,
+            },
+          })
+
+          // Wait for user response
+          const approved = await approvalPromise
+
+          // Clear the pending approval from the UI by emitting without pendingToolApproval
+          await emitAgentProgress({
+            sessionId,
+            currentIteration: 0,
+            maxIterations: config.mcpMaxIterations ?? 10,
+            steps: [],
+            isComplete: false,
+            // No pendingToolApproval - clears it
+          })
+
+          if (!approved) {
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `Tool call denied by user: ${toolCall.name}`,
+                },
+              ],
+              isError: true,
+            }
+          }
+        }
+
+        // Execute the tool call (approval either not required or was granted)
+        return await mcpService.executeToolCall(toolCall, onProgress, true) // Pass skipApprovalCheck=true
       }
 
       // Load previous conversation history if continuing a conversation
@@ -238,16 +239,16 @@ async function processWithAgentMode(
         | undefined
 
       if (conversationId) {
-        console.log(`[tipc.ts processWithAgentMode] Loading conversation history for conversationId: ${conversationId}`)
+        logLLM(`[tipc.ts processWithAgentMode] Loading conversation history for conversationId: ${conversationId}`)
         const conversation =
           await conversationService.loadConversation(conversationId)
 
         if (conversation && conversation.messages.length > 0) {
-          console.log(`[tipc.ts processWithAgentMode] Loaded conversation with ${conversation.messages.length} messages`)
+          logLLM(`[tipc.ts processWithAgentMode] Loaded conversation with ${conversation.messages.length} messages`)
           // Convert conversation messages to the format expected by agent mode
           // Exclude the last message since it's the current user input that will be added
           const messagesToConvert = conversation.messages.slice(0, -1)
-          console.log(`[tipc.ts processWithAgentMode] Converting ${messagesToConvert.length} messages (excluding last message)`)
+          logLLM(`[tipc.ts processWithAgentMode] Converting ${messagesToConvert.length} messages (excluding last message)`)
           previousConversationHistory = messagesToConvert.map((msg) => ({
             role: msg.role,
             content: msg.content,
@@ -266,12 +267,12 @@ async function processWithAgentMode(
             })),
           }))
 
-          console.log(`[tipc.ts processWithAgentMode] previousConversationHistory roles: [${previousConversationHistory.map(m => m.role).join(', ')}]`)
+          logLLM(`[tipc.ts processWithAgentMode] previousConversationHistory roles: [${previousConversationHistory.map(m => m.role).join(', ')}]`)
         } else {
-          console.log(`[tipc.ts processWithAgentMode] No conversation found or conversation is empty`)
+          logLLM(`[tipc.ts processWithAgentMode] No conversation found or conversation is empty`)
         }
       } else {
-        console.log(`[tipc.ts processWithAgentMode] No conversationId provided, starting fresh conversation`)
+        logLLM(`[tipc.ts processWithAgentMode] No conversationId provided, starting fresh conversation`)
       }
 
       // Focus this session in the panel window so it's immediately visible
@@ -280,7 +281,7 @@ async function processWithAgentMode(
       try {
         getWindowRendererHandlers("panel")?.focusAgentSession.send(sessionId)
       } catch (e) {
-        console.warn("[tipc] Failed to focus new agent session:", e)
+        logApp("[tipc] Failed to focus new agent session:", e)
       }
 
       const agentResult = await processTranscriptWithAgentMode(
@@ -447,12 +448,12 @@ export const router = {
   hidePanelWindow: t.procedure.action(async () => {
     const panel = WINDOWS.get("panel")
 
-    console.log(`[hidePanelWindow] Called. Panel exists: ${!!panel}, visible: ${panel?.isVisible()}`)
+    logApp(`[hidePanelWindow] Called. Panel exists: ${!!panel}, visible: ${panel?.isVisible()}`)
 
     if (panel) {
       suppressPanelAutoShow(1000)
       panel.hide()
-      console.log(`[hidePanelWindow] Panel hidden`)
+      logApp(`[hidePanelWindow] Panel hidden`)
     }
   }),
 
@@ -564,7 +565,7 @@ export const router = {
         try {
           getRendererHandlers<RendererHandlers>(win.webContents).clearAgentSessionProgress?.send(input.sessionId)
         } catch (e) {
-          console.warn("[tipc] clearAgentSessionProgress send failed:", e)
+          logApp("[tipc] clearAgentSessionProgress send failed:", e)
         }
       }
       return { success: true }
@@ -596,10 +597,13 @@ export const router = {
     .input<{ sessionId: string }>()
     .action(async ({ input }) => {
       const { agentSessionTracker } = await import("./agent-session-tracker")
-      const { agentSessionStateManager } = await import("./state")
+      const { agentSessionStateManager, toolApprovalManager } = await import("./state")
 
       // Stop the session in the state manager (aborts LLM requests, kills processes)
       agentSessionStateManager.stopSession(input.sessionId)
+
+      // Cancel any pending tool approvals for this session so executeToolCall doesn't hang
+      toolApprovalManager.cancelSessionApprovals(input.sessionId)
 
       // Immediately emit a final progress update with isComplete: true
       // This ensures the UI updates immediately without waiting for the agent loop
@@ -651,6 +655,15 @@ export const router = {
       return { success: true }
     }),
 
+  // Respond to a tool approval request
+  respondToToolApproval: t.procedure
+    .input<{ approvalId: string; approved: boolean }>()
+    .action(async ({ input }) => {
+      const { toolApprovalManager } = await import("./state")
+      const success = toolApprovalManager.respondToApproval(input.approvalId, input.approved)
+      return { success }
+    }),
+
   // Request the Panel window to focus a specific agent session
   focusAgentSession: t.procedure
     .input<{ sessionId: string }>()
@@ -658,7 +671,7 @@ export const router = {
       try {
         getWindowRendererHandlers("panel")?.focusAgentSession.send(input.sessionId)
       } catch (e) {
-        console.warn("[tipc] focusAgentSession send failed:", e)
+        logApp("[tipc] focusAgentSession send failed:", e)
       }
       return { success: true }
     }),
@@ -1032,7 +1045,7 @@ export const router = {
           }
         })
         .catch((error) => {
-          console.error("[createMcpTextInput] Agent processing error:", error)
+          logLLM("[createMcpTextInput] Agent processing error:", error)
         })
 
       // Return immediately with conversation ID
@@ -1052,8 +1065,34 @@ export const router = {
       const config = configStore.get()
       let transcript: string
 
+      // Emit initial loading progress immediately BEFORE transcription
+      // This ensures users see feedback during the (potentially long) STT call
+      const { agentSessionTracker } = await import("./agent-session-tracker")
+      const tempConversationId = input.conversationId || `temp_${Date.now()}`
+      const sessionId = agentSessionTracker.startSession(tempConversationId, "Transcribing...")
 
-      // First, transcribe the audio using the same logic as regular recording
+      try {
+        // Emit initial "initializing" progress update
+        await emitAgentProgress({
+          sessionId,
+          conversationId: tempConversationId,
+          currentIteration: 0,
+          maxIterations: 1,
+          steps: [{
+            id: `transcribe_${Date.now()}`,
+            type: "thinking",
+            title: "Transcribing audio",
+            description: "Processing audio input...",
+            status: "in_progress",
+            timestamp: Date.now(),
+          }],
+          isComplete: false,
+          isSnoozed: false,
+          conversationTitle: "Transcribing...",
+          conversationHistory: [],
+        })
+
+        // First, transcribe the audio using the same logic as regular recording
       // Use OpenAI or Groq for transcription
       const form = new FormData()
       form.append(
@@ -1133,6 +1172,13 @@ export const router = {
         }
       }
 
+      // Update session with actual conversation ID and title after transcription
+      const conversationTitle = transcript.length > 50 ? transcript.substring(0, 50) + "..." : transcript
+      agentSessionTracker.updateSession(sessionId, {
+        conversationId,
+        conversationTitle,
+      })
+
       // Save the recording file immediately
       const recordingId = Date.now().toString()
       fs.writeFileSync(
@@ -1140,9 +1186,10 @@ export const router = {
         Buffer.from(input.recording),
       )
 
-      // Fire-and-forget: Start agent processing without blocking
-      // This allows multiple sessions to run concurrently
-      processWithAgentMode(transcript, conversationId)
+        // Fire-and-forget: Start agent processing without blocking
+        // This allows multiple sessions to run concurrently
+        // Pass the sessionId to avoid creating a duplicate session
+        processWithAgentMode(transcript, conversationId, sessionId)
         .then((finalResponse) => {
           // Save to history after completion
           const history = getRecordingHistory()
@@ -1162,13 +1209,44 @@ export const router = {
             ).refreshRecordingHistory.send()
           }
         })
-        .catch((error) => {
-          console.error("[createMcpRecording] Agent processing error:", error)
+          .catch((error) => {
+            logLLM("[createMcpRecording] Agent processing error:", error)
+          })
+
+        // Return immediately with conversation ID
+        // Progress updates will be sent via emitAgentProgress
+        return { conversationId }
+      } catch (error) {
+        // Handle transcription or conversation creation errors
+        logLLM("[createMcpRecording] Transcription error:", error)
+
+        // Clean up the session and emit error state
+        await emitAgentProgress({
+          sessionId,
+          conversationId: tempConversationId,
+          currentIteration: 1,
+          maxIterations: 1,
+          steps: [{
+            id: `transcribe_error_${Date.now()}`,
+            type: "completion",
+            title: "Transcription failed",
+            description: error instanceof Error ? error.message : "Unknown transcription error",
+            status: "error",
+            timestamp: Date.now(),
+          }],
+          isComplete: true,
+          isSnoozed: false,
+          conversationTitle: "Transcription Error",
+          conversationHistory: [],
+          finalContent: `Transcription failed: ${error instanceof Error ? error.message : "Unknown error"}`,
         })
 
-      // Return immediately with conversation ID
-      // Progress updates will be sent via emitAgentProgress
-      return { conversationId }
+        // Mark the session as errored to clean up the UI
+        agentSessionTracker.errorSession(sessionId, error instanceof Error ? error.message : "Transcription failed")
+
+        // Re-throw the error so the caller knows transcription failed
+        throw error
+      }
     }),
 
   transcribeAudioChunk: t.procedure
@@ -1293,6 +1371,11 @@ export const router = {
 
   getConfig: t.procedure.action(async () => {
     return configStore.get()
+  }),
+
+  // Debug flags - exposed to renderer for synchronized debug logging
+  getDebugFlags: t.procedure.action(async () => {
+    return getDebugFlags()
   }),
 
   saveConfig: t.procedure
@@ -1855,11 +1938,19 @@ export const router = {
       return fetchAvailableModels(input.providerId)
     }),
 
+  // Fetch models for a specific preset (base URL + API key)
+  fetchModelsForPreset: t.procedure
+    .input<{ baseUrl: string; apiKey: string }>()
+    .action(async ({ input }) => {
+      const { fetchModelsForPreset } = await import("./models-service")
+      return fetchModelsForPreset(input.baseUrl, input.apiKey)
+    }),
+
   // Conversation Management
   getConversationHistory: t.procedure.action(async () => {
-    console.log("[tipc] getConversationHistory called")
+    logApp("[tipc] getConversationHistory called")
     const result = await conversationService.getConversationHistory()
-    console.log("[tipc] getConversationHistory result:", {
+    logApp("[tipc] getConversationHistory result:", {
       count: result.length,
       items: result.map(h => ({ id: h.id, title: h.title })),
     })

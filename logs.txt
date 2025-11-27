@@ -1,0 +1,1072 @@
+
+> speakmcp@0.3.0 dev /Users/ajjoobandi/Development/SpeakMCP
+> electron-vite dev --watch -- "d"
+
+vite v5.4.8 building SSR bundle for development...
+
+watching for file changes...
+
+build started...
+transforming...
+✓ 407 modules transformed.
+rendering chunks...
+out/main/emergency-stop-SPSmu1DX.js           1.01 kB
+out/main/profile-service-DvBidhdA.js          6.10 kB
+out/main/oauth-callback-server-fzqzUOMc.js    6.84 kB
+out/main/models-service-Bkrw8_sU.js          15.34 kB
+out/main/index.js                           374.56 kB
+out/main/updater-HHDJRCo3.js                472.95 kB
+built in 840ms.
+
+build the electron main process successfully
+
+-----
+
+vite v5.4.8 building SSR bundle for development...
+
+watching for file changes...
+
+build started...
+transforming...
+✓ 2 modules transformed.
+rendering chunks...
+out/preload/index.mjs  2.83 kB
+built in 9ms.
+
+build the electron preload files successfully
+
+-----
+
+dev server running for the electron renderer process at:
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose
+
+start electron app...
+
+[DEBUG] Enabled: LLM, TOOLS, KEYBINDS, APP, UI (argv: d)
+[2025-11-20T21:13:23.679Z] [DEBUG][APP] SpeakMCP starting up...
+[2025-11-20T21:13:23.680Z] [DEBUG][APP] Deep link handling initialized
+[2025-11-20T21:13:23.700Z] [DEBUG][APP] Accessibility granted: true
+[2025-11-20T21:13:23.704Z] [DEBUG][APP] Application menu created
+[2025-11-20T21:13:23.705Z] [DEBUG][APP] IPC main registered
+[2025-11-20T21:13:23.718Z] [DEBUG][APP] Serve protocol registered
+[2025-11-20T21:13:23.718Z] [DEBUG][APP] Creating main window...
+[2025-11-20T21:13:23.773Z] [DEBUG][APP] Main window created
+[2025-11-20T21:13:23.774Z] [DEBUG][APP] Creating panel window...
+[window.ts] createPanelWindow - MIN_WAVEFORM_WIDTH: 312
+[window.ts] getSavedSizeForMode(normal) - checking config...
+[window.ts] Found saved normal mode size: { width: 600, height: 443 }
+[window.ts] createPanelWindow - position: { x: 376, y: 45 }
+[window.ts] getSavedSizeForMode(normal) - checking config...
+[window.ts] Found saved normal mode size: { width: 600, height: 443 }
+[window.ts] createPanelWindow - savedSize: { width: 600, height: 443 }
+[window.ts] createPanelWindow - minWidth: 312
+[window.ts] createPanelWindow - window created with size: { width: 600, height: 443 }
+[2025-11-20T21:13:23.795Z] [DEBUG][APP] Panel window created
+[2025-11-20T21:13:23.797Z] [DEBUG][KEYBINDS] Starting keyboard event listener with rdev path: /Users/ajjoobandi/Development/SpeakMCP/resources/bin/speakmcp-rs
+[2025-11-20T21:13:23.798Z] [DEBUG][APP] Keyboard event listener started
+[2025-11-20T21:13:23.812Z] [DEBUG][APP] System tray initialized
+[2025-11-20T21:13:23.812Z] [DEBUG][TOOLS] MCP Service initialization starting
+[2025-11-20T21:13:23.813Z] [DEBUG][TOOLS] Skipping server rube - runtime disabled by user
+[2025-11-20T21:13:23.813Z] [DEBUG][TOOLS] Skipping server perplexity-ask - runtime disabled by user
+[2025-11-20T21:13:23.813Z] [DEBUG][TOOLS] Skipping server auggie mcp - runtime disabled by user
+[2025-11-20T21:13:23.813Z] [DEBUG][TOOLS] Skipping server MacOS Control - runtime disabled by user
+[2025-11-20T21:13:23.813Z] [DEBUG][TOOLS] Skipping server terminal - runtime disabled by user
+[2025-11-20T21:13:23.813Z] [DEBUG][TOOLS] Skipping server exa - runtime disabled by user
+[2025-11-20T21:13:23.813Z] [DEBUG][TOOLS] Skipping server cloudflare - runtime disabled by user
+[2025-11-20T21:13:23.813Z] [DEBUG][TOOLS] Skipping server playwright chromium - runtime disabled by user
+[2025-11-20T21:13:23.813Z] [DEBUG][TOOLS] Found 3 servers to initialize [ 'github', 'desktop-commander', 'Playwright' ]
+[2025-11-20T21:13:23.814Z] [DEBUG][TOOLS] Starting initialization of server: github
+[2025-11-20T21:13:23.814Z] [DEBUG][TOOLS] Initializing server: github {
+  transport: 'stdio',
+  command: 'npx',
+  args: [ '-y', '@modelcontextprotocol/server-github' ],
+  env: [ 'GITHUB_PERSONAL_ACCESS_TOKEN' ]
+}
+[2025-11-20T21:13:24.046Z] [DEBUG][UI] [PANEL] [vite] connecting... (client:495)
+[2025-11-20T21:13:24.052Z] [DEBUG][UI] [MAIN] [vite] connecting... (client:495)
+[2025-11-20T21:13:24.071Z] [DEBUG][UI] [PANEL] [vite] connected. (client:614)
+[2025-11-20T21:13:24.114Z] [DEBUG][TOOLS] [github] npm warn Unknown env config "shamefully-hoist". This will stop working in the next major version of npm.
+
+[2025-11-20T21:13:24.115Z] [DEBUG][TOOLS] [github] npm warn Unknown project config "shamefully-hoist". This will stop working in the next major version of npm.
+
+[2025-11-20T21:13:24.271Z] [DEBUG][UI] [MAIN] [vite] connected. (client:614)
+[2025-11-20T21:13:24.461Z] [DEBUG][UI] [PANEL] [WARN] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold (chunk-DVCT6SLB.js?v=b076ac1c:21551)
+[2025-11-20T21:13:24.461Z] [DEBUG][UI] [MAIN] [WARN] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold (chunk-DVCT6SLB.js?v=b076ac1c:21551)
+[2025-11-20T21:13:24.468Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-20T21:13:24.467Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:29)
+[2025-11-20T21:13:24.468Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-20T21:13:24.467Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:29)
+[2025-11-20T21:13:24.468Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-20T21:13:24.468Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:29)
+[2025-11-20T21:13:24.468Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-20T21:13:24.468Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:29)
+[WINDOW MAIN] show
+[WINDOW MAIN] focus
+Skip checkForUpdates because application is not packed and dev update config is not forced
+Skip checkForUpdates because application is not packed and dev update config is not forced
+[2025-11-20T21:13:24.721Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-20T21:13:24.721Z] [DEBUG][UI] [EXPAND] ActiveAgentsSidebar init {"key":"active-agents-sidebar-expanded","raw":"true","parsed":true} (debug.ts:29)
+[2025-11-20T21:13:24.722Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-20T21:13:24.721Z] [DEBUG][UI] [ActiveAgentsSidebar] No sessions (active or recent), hiding sidebar (debug.ts:29)
+[2025-11-20T21:13:24.722Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-20T21:13:24.721Z] [DEBUG][UI] [EXPAND] ActiveAgentsSidebar init {"key":"active-agents-sidebar-expanded","raw":"true","parsed":true} (debug.ts:29)
+[2025-11-20T21:13:24.722Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-20T21:13:24.722Z] [DEBUG][UI] [ActiveAgentsSidebar] No sessions (active or recent), hiding sidebar (debug.ts:29)
+[2025-11-20T21:13:24.742Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-20T21:13:24.742Z] [DEBUG][UI] [STATE] ActiveAgentsSidebar.isExpanded: {"from":false,"to":true} (debug.ts:29)
+[2025-11-20T21:13:24.743Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-20T21:13:24.742Z] [DEBUG][UI] [EXPAND] ActiveAgentsSidebar write {"key":"active-agents-sidebar-expanded","value":true} (debug.ts:29)
+[2025-11-20T21:13:24.743Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-20T21:13:24.742Z] [DEBUG][UI] [EXPAND] ActiveAgentsSidebar verify {"key":"active-agents-sidebar-expanded","wrote":"true","readBack":"true"} (debug.ts:29)
+[2025-11-20T21:13:24.743Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-20T21:13:24.742Z] [DEBUG][UI] [ActiveAgentsSidebar] Sessions updated: [object Object] (debug.ts:29)
+[2025-11-20T21:13:24.743Z] [DEBUG][UI] [MAIN] [WARN] [AppLayout] DesktopRecorder init effect running (app-layout.tsx:66)
+[2025-11-20T21:13:24.743Z] [DEBUG][UI] [MAIN] [WARN] [AppLayout] Creating DesktopRecorder instance (app-layout.tsx:68)
+[2025-11-20T21:13:24.743Z] [DEBUG][UI] [MAIN] [WARN] [AppLayout] Subscribing to startDesktopRecording handler (app-layout.tsx:109)
+[2025-11-20T21:13:24.743Z] [DEBUG][UI] [MAIN] [WARN] [AppLayout] Subscribing to stopDesktopRecording handler (app-layout.tsx:124)
+[2025-11-20T21:13:24.743Z] [DEBUG][UI] [MAIN] [WARN] [AppLayout] Unsubscribing from startDesktopRecording handler (app-layout.tsx:119)
+[2025-11-20T21:13:24.743Z] [DEBUG][UI] [MAIN] [WARN] [AppLayout] Unsubscribing from stopDesktopRecording handler (app-layout.tsx:130)
+[2025-11-20T21:13:24.743Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-20T21:13:24.743Z] [DEBUG][UI] [STATE] ActiveAgentsSidebar.isExpanded: {"from":false,"to":true} (debug.ts:29)
+[2025-11-20T21:13:24.743Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-20T21:13:24.743Z] [DEBUG][UI] [EXPAND] ActiveAgentsSidebar write {"key":"active-agents-sidebar-expanded","value":true} (debug.ts:29)
+[2025-11-20T21:13:24.743Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-20T21:13:24.743Z] [DEBUG][UI] [EXPAND] ActiveAgentsSidebar verify {"key":"active-agents-sidebar-expanded","wrote":"true","readBack":"true"} (debug.ts:29)
+[2025-11-20T21:13:24.743Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-20T21:13:24.743Z] [DEBUG][UI] [ActiveAgentsSidebar] Sessions updated: [object Object] (debug.ts:29)
+[2025-11-20T21:13:24.743Z] [DEBUG][UI] [MAIN] [WARN] [AppLayout] DesktopRecorder init effect running (app-layout.tsx:66)
+[2025-11-20T21:13:24.743Z] [DEBUG][UI] [MAIN] [WARN] [AppLayout] Subscribing to startDesktopRecording handler (app-layout.tsx:109)
+[2025-11-20T21:13:24.743Z] [DEBUG][UI] [MAIN] [WARN] [AppLayout] Subscribing to stopDesktopRecording handler (app-layout.tsx:124)
+[2025-11-20T21:13:24.745Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-20T21:13:24.745Z] [DEBUG][UI] [ActiveAgentsSidebar] No sessions (active or recent), hiding sidebar (debug.ts:29)
+[2025-11-20T21:13:24.745Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-20T21:13:24.745Z] [DEBUG][UI] [ActiveAgentsSidebar] No sessions (active or recent), hiding sidebar (debug.ts:29)
+[2025-11-20T21:13:24.782Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-20T21:13:24.781Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:29)
+[2025-11-20T21:13:24.783Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-20T21:13:24.781Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:29)
+[2025-11-20T21:13:24.783Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-20T21:13:24.781Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:29)
+[2025-11-20T21:13:24.783Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-20T21:13:24.781Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:29)
+[hidePanelWindow] Called. Panel exists: true, visible: false
+[hidePanelWindow] Panel hidden
+[tray] Tray left-click; isRecording: false isDesktopRecordingActive: false
+[2025-11-20T21:13:26.074Z] [DEBUG][TOOLS] [github] GitHub MCP Server running on stdio
+
+[tray] Desktop recording menu clicked; isDesktopRecordingActive: false
+[window.ts] showMainWindow: reusing existing main window, url: /recordings
+[window.ts] showMainWindow: sending navigate to /recordings
+[tray] getWindowRendererHandlers('main') returned: true
+[2025-11-20T21:13:26.084Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-20T21:13:26.083Z] [DEBUG][UI] [ActiveAgentsSidebar] No sessions (active or recent), hiding sidebar (debug.ts:29)
+[2025-11-20T21:13:26.084Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-20T21:13:26.083Z] [DEBUG][UI] [ActiveAgentsSidebar] No sessions (active or recent), hiding sidebar (debug.ts:29)
+[2025-11-20T21:13:26.084Z] [DEBUG][UI] [MAIN] [WARN] [AppLayout] startDesktopRecording event received (app-layout.tsx:111)
+[2025-11-20T21:13:26.084Z] [DEBUG][UI] [MAIN] [WARN] [DesktopRecorder] start() called (native/main pipeline) (desktop-recorder.ts:17)
+[2025-11-20T21:13:26.084Z] [DEBUG][APP] [MacSystemTapBackend] Using native mac-audio-tap-bridge backend
+[2025-11-20T21:13:26.085Z] [DEBUG][APP] [AUDIO] Starting audio capture service: /Users/ajjoobandi/Development/SpeakMCP/resources/bin/speakmcp-audio
+[2025-11-20T21:13:26.087Z] [DEBUG][APP] [AUDIO] startSystemCapture requested for session 1763673206084
+[2025-11-20T21:13:26.088Z] [DEBUG][TOOLS] Server github connected successfully {
+  toolCount: 26,
+  tools: [
+    {
+      name: 'create_or_update_file',
+      description: 'Create or update a single file in a GitHub repository'
+    },
+    {
+      name: 'search_repositories',
+      description: 'Search for GitHub repositories'
+    },
+    {
+      name: 'create_repository',
+      description: 'Create a new GitHub repository in your account'
+    },
+    {
+      name: 'get_file_contents',
+      description: 'Get the contents of a file or directory from a GitHub repository'
+    },
+    {
+      name: 'push_files',
+      description: 'Push multiple files to a GitHub repository in a single commit'
+    },
+    {
+      name: 'create_issue',
+      description: 'Create a new issue in a GitHub repository'
+    },
+    {
+      name: 'create_pull_request',
+      description: 'Create a new pull request in a GitHub repository'
+    },
+    {
+      name: 'fork_repository',
+      description: 'Fork a GitHub repository to your account or specified organization'
+    },
+    {
+      name: 'create_branch',
+      description: 'Create a new branch in a GitHub repository'
+    },
+    {
+      name: 'list_commits',
+      description: 'Get list of commits of a branch in a GitHub repository'
+    },
+    {
+      name: 'list_issues',
+      description: 'List issues in a GitHub repository with filtering options'
+    },
+    {
+      name: 'update_issue',
+      description: 'Update an existing issue in a GitHub repository'
+    },
+    {
+      name: 'add_issue_comment',
+      description: 'Add a comment to an existing issue'
+    },
+    {
+      name: 'search_code',
+      description: 'Search for code across GitHub repositories'
+    },
+    {
+      name: 'search_issues',
+      description: 'Search for issues and pull requests across GitHub repositories'
+    },
+    { name: 'search_users', description: 'Search for users on GitHub' },
+    {
+      name: 'get_issue',
+      description: 'Get details of a specific issue in a GitHub repository.'
+    },
+    {
+      name: 'get_pull_request',
+      description: 'Get details of a specific pull request'
+    },
+    {
+      name: 'list_pull_requests',
+      description: 'List and filter repository pull requests'
+    },
+    {
+      name: 'create_pull_request_review',
+      description: 'Create a review on a pull request'
+    },
+    { name: 'merge_pull_request', description: 'Merge a pull request' },
+    {
+      name: 'get_pull_request_files',
+      description: 'Get the list of files changed in a pull request'
+    },
+    {
+      name: 'get_pull_request_status',
+      description: 'Get the combined status of all status checks for a pull request'
+    },
+    {
+      name: 'update_pull_request_branch',
+      description: 'Update a pull request branch with the latest changes from the base branch'
+    },
+    {
+      name: 'get_pull_request_comments',
+      description: 'Get the review comments on a pull request'
+    },
+    {
+      name: 'get_pull_request_reviews',
+      description: 'Get the reviews on a pull request'
+    }
+  ]
+}
+[2025-11-20T21:13:26.088Z] [DEBUG][TOOLS] [github] Process started with PID: 2026
+[2025-11-20T21:13:26.088Z] [DEBUG][TOOLS] Successfully initialized server: github
+[2025-11-20T21:13:26.088Z] [DEBUG][TOOLS] Starting initialization of server: desktop-commander
+[2025-11-20T21:13:26.088Z] [DEBUG][TOOLS] Initializing server: desktop-commander {
+  transport: 'stdio',
+  command: 'npx',
+  args: [ '-y', '@wonderwhy-er/desktop-commander@latest' ],
+  env: []
+}
+[2025-11-20T21:13:26.088Z] [DEBUG][UI] [MAIN] [WARN] [AppLayout] DesktopRecorder session-start (app-layout.tsx:71)
+[tipc] desktopRecordEvent: start
+[2025-11-20T21:13:26.090Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-20T21:13:26.088Z] [DEBUG][UI] [ActiveAgentsSidebar] No sessions (active or recent), hiding sidebar (debug.ts:29)
+[2025-11-20T21:13:26.090Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-20T21:13:26.088Z] [DEBUG][UI] [ActiveAgentsSidebar] No sessions (active or recent), hiding sidebar (debug.ts:29)
+[2025-11-20T21:13:26.143Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-20T21:13:26.143Z] [DEBUG][UI] [ActiveAgentsSidebar] No sessions (active or recent), hiding sidebar (debug.ts:29)
+[2025-11-20T21:13:26.143Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-20T21:13:26.143Z] [DEBUG][UI] [ActiveAgentsSidebar] No sessions (active or recent), hiding sidebar (debug.ts:29)
+[2025-11-20T21:13:26.207Z] [DEBUG][TOOLS] [desktop-commander] npm warn Unknown env config "shamefully-hoist". This will stop working in the next major version of npm.
+
+[2025-11-20T21:13:26.207Z] [DEBUG][TOOLS] [desktop-commander] npm warn Unknown project config "shamefully-hoist". This will stop working in the next major version of npm.
+
+[2025-11-20T21:13:26.627Z] [DEBUG][APP] [AUDIO] First chunk for session 1763673206084 sequence=0 bytes=640 sampleRate=16000 channels=1
+[2025-11-20T21:13:26.627Z] [DEBUG][APP] [MacDesktopAndMicBackend] Received first mic audio chunk sessionId= 1763673206084 bytes= 640 sampleRate= 16000 channels= 1
+[WINDOW MAIN] blur
+[WINDOW MAIN] hide
+[2025-11-20T21:13:28.353Z] [DEBUG][TOOLS] Server desktop-commander connected successfully {
+  toolCount: 25,
+  tools: [
+    {
+      name: 'get_config',
+      description: '\n' +
+        '                        Get the complete server configuration as JSON. Config includes fields for:\n' +
+        '                        - blockedCommands (array of blocked shell commands)\n' +
+        '                        - defaultShell (shell to use for commands)\n' +
+        '                        - allowedDirectories (paths the server can access)\n' +
+        '                        - fileReadLineLimit (max lines for read_file, default 1000)\n' +
+        '                        - fileWriteLineLimit (max lines per write_file call, default 50)\n' +
+        '                        - telemetryEnabled (boolean for telemetry opt-in/out)\n' +
+        '                        - currentClient (information about the currently connected MCP client)\n' +
+        '                        - clientHistory (history of all clients that have connected)\n' +
+        '                        - version (version of the DesktopCommander)\n' +
+        '                        - systemInfo (operating system and environment details)\n' +
+        '                        This command can be referenced as "DC: ..." or "use Desktop Commander to ..." in your instructions.'
+    },
+    {
+      name: 'set_config_value',
+      description: '\n' +
+        '                        Set a specific configuration value by key.\n' +
+        '                        \n' +
+        '                        WARNING: Should be used in a separate chat from file operations and \n' +
+        '                        command execution to prevent security issues.\n' +
+        '                        \n' +
+        '                        Config keys include:\n' +
+        '                        - blockedCommands (array)\n' +
+        '                        - defaultShell (string)\n' +
+        '                        - allowedDirectories (array of paths)\n' +
+        '                        - fileReadLineLimit (number, max lines for read_file)\n' +
+        '                        - fileWriteLineLimit (number, max lines per write_file call)\n' +
+        '                        - telemetryEnabled (boolean)\n' +
+        '                        \n' +
+        '                        IMPORTANT: Setting allowedDirectories to an empty array ([]) allows full access \n' +
+        '                        to the entire file system, regardless of the operating system.\n' +
+        '                        \n' +
+        '                        This command can be referenced as "DC: ..." or "use Desktop Commander to ..." in your instructions.'
+    },
+    {
+      name: 'read_file',
+      description: '\n' +
+        '                        Read the contents of a file from the file system or a URL with optional offset and length parameters.\n' +
+        '                        \n' +
+        "                        Prefer this over 'execute_command' with cat/type for viewing files.\n" +
+        '                        \n' +
+        '                        Supports partial file reading with:\n' +
+        "                        - 'offset' (start line, default: 0)\n" +
+        '                          * Positive: Start from line N (0-based indexing)\n' +
+        '                          * Negative: Read last N lines from end (tail behavior)\n' +
+        "                        - 'length' (max lines to read, default: configurable via 'fileReadLineLimit' setting, initially 1000)\n" +
+        '                          * Used with positive offsets for range reading\n' +
+        '                          * Ignored when offset is negative (reads all requested tail lines)\n' +
+        '                        \n' +
+        '                        Examples:\n' +
+        '                        - offset: 0, length: 10     → First 10 lines\n' +
+        '                        - offset: 100, length: 5    → Lines 100-104\n' +
+        '                        - offset: -20               → Last 20 lines  \n' +
+        '                        - offset: -5, length: 10    → Last 5 lines (length ignored)\n' +
+        '                        \n' +
+        '                        Performance optimizations:\n' +
+        '                        - Large files with negative offsets use reverse reading for efficiency\n' +
+        '                        - Large files with deep positive offsets use byte estimation\n' +
+        '                        - Small files use fast readline streaming\n' +
+        '                        \n' +
+        '                        When reading from the file system, only works within allowed directories.\n' +
+        '                        Can fetch content from URLs when isUrl parameter is set to true\n' +
+        '                        (URLs are always read in full regardless of offset/length).\n' +
+        '                        \n' +
+        '                        Handles text files normally and image files are returned as viewable images.\n' +
+        '                        Recognized image types: PNG, JPEG, GIF, WebP.\n' +
+        '                        \n' +
+        '                        IMPORTANT: Always use absolute paths for reliability. Paths are automatically normalized regardless of slash direction. Relative paths may fail as they depend on the current working directory. Tilde paths (~/...) might not work in all contexts. Unless the user explicitly asks for relative paths, use absolute paths.\n' +
+        '                        This command can be referenced as "DC: ..." or "use Desktop Commander to ..." in your instructions.'
+    },
+    {
+      name: 'read_multiple_files',
+      description: '\n' +
+        '                        Read the contents of multiple files simultaneously.\n' +
+        '                        \n' +
+        "                        Each file's content is returned with its path as a reference.\n" +
+        '                        Handles text files normally and renders images as viewable content.\n' +
+        '                        Recognized image types: PNG, JPEG, GIF, WebP.\n' +
+        '                        \n' +
+        "                        Failed reads for individual files won't stop the entire operation.\n" +
+        '                        Only works within allowed directories.\n' +
+        '                        \n' +
+        '                        IMPORTANT: Always use absolute paths for reliability. Paths are automatically normalized regardless of slash direction. Relative paths may fail as they depend on the current working directory. Tilde paths (~/...) might not work in all contexts. Unless the user explicitly asks for relative paths, use absolute paths.\n' +
+        '                        This command can be referenced as "DC: ..." or "use Desktop Commander to ..." in your instructions.'
+    },
+    {
+      name: 'write_file',
+      description: '\n' +
+        '                        Write or append to file contents. \n' +
+        '\n' +
+        '                        CHUNKING IS STANDARD PRACTICE: Always write files in chunks of 25-30 lines maximum.\n' +
+        '                        This is the normal, recommended way to write files - not an emergency measure.\n' +
+        '\n' +
+        '                        STANDARD PROCESS FOR ANY FILE:\n' +
+        "                        1. FIRST → write_file(filePath, firstChunk, {mode: 'rewrite'})  [≤30 lines]\n" +
+        "                        2. THEN → write_file(filePath, secondChunk, {mode: 'append'})   [≤30 lines]\n" +
+        "                        3. CONTINUE → write_file(filePath, nextChunk, {mode: 'append'}) [≤30 lines]\n" +
+        '\n' +
+        "                        ALWAYS CHUNK PROACTIVELY - don't wait for performance warnings!\n" +
+        '\n' +
+        '                        WHEN TO CHUNK (always be proactive):\n' +
+        '                        1. Any file expected to be longer than 25-30 lines\n' +
+        '                        2. When writing multiple files in sequence\n' +
+        '                        3. When creating documentation, code files, or configuration files\n' +
+        '                        \n' +
+        '                        HANDLING CONTINUATION ("Continue" prompts):\n' +
+        '                        If user asks to "Continue" after an incomplete operation:\n' +
+        '                        1. Read the file to see what was successfully written\n' +
+        "                        2. Continue writing ONLY the remaining content using {mode: 'append'}\n" +
+        '                        3. Keep chunks to 25-30 lines each\n' +
+        '                        \n' +
+        '                        Files over 50 lines will generate performance notes but are still written successfully.\n' +
+        '                        Only works within allowed directories.\n' +
+        '                        \n' +
+        '                        IMPORTANT: Always use absolute paths for reliability. Paths are automatically normalized regardless of slash direction. Relative paths may fail as they depend on the current working directory. Tilde paths (~/...) might not work in all contexts. Unless the user explicitly asks for relative paths, use absolute paths.\n' +
+        '                        This command can be referenced as "DC: ..." or "use Desktop Commander to ..." in your instructions.'
+    },
+    {
+      name: 'create_directory',
+      description: '\n' +
+        '                        Create a new directory or ensure a directory exists.\n' +
+        '                        \n' +
+        '                        Can create multiple nested directories in one operation.\n' +
+        '                        Only works within allowed directories.\n' +
+        '                        \n' +
+        '                        IMPORTANT: Always use absolute paths for reliability. Paths are automatically normalized regardless of slash direction. Relative paths may fail as they depend on the current working directory. Tilde paths (~/...) might not work in all contexts. Unless the user explicitly asks for relative paths, use absolute paths.\n' +
+        '                        This command can be referenced as "DC: ..." or "use Desktop Commander to ..." in your instructions.'
+    },
+    {
+      name: 'list_directory',
+      description: '\n' +
+        '                        Get a detailed listing of all files and directories in a specified path.\n' +
+        '                        \n' +
+        "                        Use this instead of 'execute_command' with ls/dir commands.\n" +
+        '                        Results distinguish between files and directories with [FILE] and [DIR] prefixes.\n' +
+        '                        \n' +
+        "                        Supports recursive listing with the 'depth' parameter (default: 2):\n" +
+        '                        - depth=1: Only direct contents of the directory\n' +
+        '                        - depth=2: Contents plus one level of subdirectories\n' +
+        '                        - depth=3+: Multiple levels deep\n' +
+        '                        \n' +
+        '                        CONTEXT OVERFLOW PROTECTION:\n' +
+        '                        - Top-level directory shows ALL items\n' +
+        '                        - Nested directories are limited to 100 items maximum per directory\n' +
+        "                        - When a nested directory has more than 100 items, you'll see a warning like:\n" +
+        '                          [WARNING] node_modules: 500 items hidden (showing first 100 of 600 total)\n' +
+        '                        - This prevents overwhelming the context with large directories like node_modules\n' +
+        '                        \n' +
+        '                        Results show full relative paths from the root directory being listed.\n' +
+        '                        Example output with depth=2:\n' +
+        '                        [DIR] src\n' +
+        '                        [FILE] src/index.ts\n' +
+        '                        [DIR] src/tools\n' +
+        '                        [FILE] src/tools/filesystem.ts\n' +
+        '                        \n' +
+        '                        If a directory cannot be accessed, it will show [DENIED] instead.\n' +
+        '                        Only works within allowed directories.\n' +
+        '                        \n' +
+        '                        IMPORTANT: Always use absolute paths for reliability. Paths are automatically normalized regardless of slash direction. Relative paths may fail as they depend on the current working directory. Tilde paths (~/...) might not work in all contexts. Unless the user explicitly asks for relative paths, use absolute paths.\n' +
+        '                        This command can be referenced as "DC: ..." or "use Desktop Commander to ..." in your instructions.'
+    },
+    {
+      name: 'move_file',
+      description: '\n' +
+        '                        Move or rename files and directories.\n' +
+        '                        \n' +
+        '                        Can move files between directories and rename them in a single operation.\n' +
+        '                        Both source and destination must be within allowed directories.\n' +
+        '                        \n' +
+        '                        IMPORTANT: Always use absolute paths for reliability. Paths are automatically normalized regardless of slash direction. Relative paths may fail as they depend on the current working directory. Tilde paths (~/...) might not work in all contexts. Unless the user explicitly asks for relative paths, use absolute paths.\n' +
+        '                        This command can be referenced as "DC: ..." or "use Desktop Commander to ..." in your instructions.'
+    },
+    {
+      name: 'start_search',
+      description: '\n' +
+        '                        Start a streaming search that can return results progressively.\n' +
+        '                        \n' +
+        '                        SEARCH STRATEGY GUIDE:\n' +
+        '                        Choose the right search type based on what the user is looking for:\n' +
+        '                        \n' +
+        '                        USE searchType="files" WHEN:\n' +
+        '                        - User asks for specific files: "find package.json", "locate config files"\n' +
+        '                        - Pattern looks like a filename: "*.js", "README.md", "test-*.tsx" \n' +
+        '                        - User wants to find files by name/extension: "all TypeScript files", "Python scripts"\n' +
+        '                        - Looking for configuration/setup files: ".env", "dockerfile", "tsconfig.json"\n' +
+        '                        \n' +
+        '                        USE searchType="content" WHEN:\n' +
+        '                        - User asks about code/logic: "authentication logic", "error handling", "API calls"\n' +
+        '                        - Looking for functions/variables: "getUserData function", "useState hook"\n' +
+        '                        - Searching for text/comments: "TODO items", "FIXME comments", "documentation"\n' +
+        '                        - Finding patterns in code: "console.log statements", "import statements"\n' +
+        '                        - User describes functionality: "components that handle login", "files with database queries"\n' +
+        '                        \n' +
+        '                        WHEN UNSURE OR USER REQUEST IS AMBIGUOUS:\n' +
+        '                        Run TWO searches in parallel - one for files and one for content:\n' +
+        '                        \n' +
+        '                        Example approach for ambiguous queries like "find authentication stuff":\n' +
+        '                        1. Start file search: searchType="files", pattern="auth"\n' +
+        '                        2. Simultaneously start content search: searchType="content", pattern="authentication"  \n' +
+        '                        3. Present combined results: "Found 3 auth-related files and 8 files containing authentication code"\n' +
+        '                        \n' +
+        '                        SEARCH TYPES:\n' +
+        '                        - searchType="files": Find files by name (pattern matches file names)\n' +
+        '                        - searchType="content": Search inside files for text patterns\n' +
+        '                        \n' +
+        '                        PATTERN MATCHING MODES:\n' +
+        '                        - Default (literalSearch=false): Patterns are treated as regular expressions\n' +
+        '                        - Literal (literalSearch=true): Patterns are treated as exact strings\n' +
+        '                        \n' +
+        '                        WHEN TO USE literalSearch=true:\n' +
+        '                        Use literal search when searching for code patterns with special characters:\n' +
+        '                        - Function calls with parentheses and quotes\n' +
+        '                        - Array access with brackets\n' +
+        '                        - Object methods with dots and parentheses\n' +
+        '                        - File paths with backslashes\n' +
+        '                        - Any pattern containing: . * + ? ^ $ { } [ ] | \\ ( )\n' +
+        '                        \n' +
+        '                        IMPORTANT PARAMETERS:\n' +
+        '                        - pattern: What to search for (file names OR content text)\n' +
+        '                        - literalSearch: Use exact string matching instead of regex (default: false)\n' +
+        '                        - filePattern: Optional filter to limit search to specific file types (e.g., "*.js", "package.json")\n' +
+        '                        - ignoreCase: Case-insensitive search (default: true). Works for both file names and content.\n' +
+        '                        - earlyTermination: Stop search early when exact filename match is found (optional: defaults to true for file searches, false for content searches)\n' +
+        '                        \n' +
+        '                        DECISION EXAMPLES:\n' +
+        '                        - "find package.json" → searchType="files", pattern="package.json" (specific file)\n' +
+        '                        - "find authentication components" → searchType="content", pattern="authentication" (looking for functionality)\n' +
+        '                        - "locate all React components" → searchType="files", pattern="*.tsx" or "*.jsx" (file pattern)\n' +
+        '                        - "find TODO comments" → searchType="content", pattern="TODO" (text in files)\n' +
+        '                        - "show me login files" → AMBIGUOUS → run both: files with "login" AND content with "login"\n' +
+        '                        - "find config" → AMBIGUOUS → run both: config files AND files containing config code\n' +
+        '                        \n' +
+        '                        COMPREHENSIVE SEARCH EXAMPLES:\n' +
+        '                        - Find package.json files: searchType="files", pattern="package.json"\n' +
+        '                        - Find all JS files: searchType="files", pattern="*.js"\n' +
+        '                        - Search for TODO in code: searchType="content", pattern="TODO", filePattern="*.js|*.ts"\n' +
+        `                        - Search for exact code: searchType="content", pattern="toast.error('test')", literalSearch=true\n` +
+        '                        - Ambiguous request "find auth stuff": Run two searches:\n' +
+        '                          1. searchType="files", pattern="auth"\n' +
+        '                          2. searchType="content", pattern="authentication"\n' +
+        '                        \n' +
+        '                        PRO TIP: When user requests are ambiguous about whether they want files or content,\n' +
+        '                        run both searches concurrently and combine results for comprehensive coverage.\n' +
+        '                        \n' +
+        '                        Unlike regular search tools, this starts a background search process and returns\n' +
+        '                        immediately with a session ID. Use get_more_search_results to get results as they\n' +
+        '                        come in, and stop_search to stop the search early if needed.\n' +
+        '                        \n' +
+        '                        Perfect for large directories where you want to see results immediately and\n' +
+        '                        have the option to cancel if the search takes too long or you find what you need.\n' +
+        '                        \n' +
+        '                        IMPORTANT: Always use absolute paths for reliability. Paths are automatically normalized regardless of slash direction. Relative paths may fail as they depend on the current working directory. Tilde paths (~/...) might not work in all contexts. Unless the user explicitly asks for relative paths, use absolute paths.\n' +
+        '                        This command can be referenced as "DC: ..." or "use Desktop Commander to ..." in your instructions.'
+    },
+    {
+      name: 'get_more_search_results',
+      description: '\n' +
+        '                        Get more results from an active search with offset-based pagination.\n' +
+        '                        \n' +
+        '                        Supports partial result reading with:\n' +
+        "                        - 'offset' (start result index, default: 0)\n" +
+        '                          * Positive: Start from result N (0-based indexing)\n' +
+        '                          * Negative: Read last N results from end (tail behavior)\n' +
+        "                        - 'length' (max results to read, default: 100)\n" +
+        '                          * Used with positive offsets for range reading\n' +
+        '                          * Ignored when offset is negative (reads all requested tail results)\n' +
+        '                        \n' +
+        '                        Examples:\n' +
+        '                        - offset: 0, length: 100     → First 100 results\n' +
+        '                        - offset: 200, length: 50    → Results 200-249\n' +
+        '                        - offset: -20                → Last 20 results\n' +
+        '                        - offset: -5, length: 10     → Last 5 results (length ignored)\n' +
+        '                        \n' +
+        '                        Returns only results in the specified range, along with search status.\n' +
+        '                        Works like read_process_output - call this repeatedly to get progressive\n' +
+        '                        results from a search started with start_search.\n' +
+        '                        \n' +
+        '                        This command can be referenced as "DC: ..." or "use Desktop Commander to ..." in your instructions.'
+    },
+    {
+      name: 'stop_search',
+      description: '\n' +
+        '                        Stop an active search.\n' +
+        '                        \n' +
+        "                        Stops the background search process gracefully. Use this when you've found\n" +
+        '                        what you need or if a search is taking too long. Similar to force_terminate\n' +
+        '                        for terminal processes.\n' +
+        '                        \n' +
+        "                        The search will still be available for reading final results until it's\n" +
+        '                        automatically cleaned up after 5 minutes.\n' +
+        '                        \n' +
+        '                        This command can be referenced as "DC: ..." or "use Desktop Commander to ..." in your instructions.'
+    },
+    {
+      name: 'list_searches',
+      description: '\n' +
+        '                        List all active searches.\n' +
+        '                        \n' +
+        '                        Shows search IDs, search types, patterns, status, and runtime.\n' +
+        '                        Similar to list_sessions for terminal processes. Useful for managing\n' +
+        '                        multiple concurrent searches.\n' +
+        '                        \n' +
+        '                        This command can be referenced as "DC: ..." or "use Desktop Commander to ..." in your instructions.'
+    },
+    {
+      name: 'get_file_info',
+      description: '\n' +
+        '                        Retrieve detailed metadata about a file or directory including:\n' +
+        '                        - size\n' +
+        '                        - creation time\n' +
+        '                        - last modified time \n' +
+        '                        - permissions\n' +
+        '                        - type\n' +
+        '                        - lineCount (for text files)\n' +
+        '                        - lastLine (zero-indexed number of last line, for text files)\n' +
+        '                        - appendPosition (line number for appending, for text files)\n' +
+        '                        \n' +
+        '                        Only works within allowed directories.\n' +
+        '                        \n' +
+        '                        IMPORTANT: Always use absolute paths for reliability. Paths are automatically normalized regardless of slash direction. Relative paths may fail as they depend on the current working directory. Tilde paths (~/...) might not work in all contexts. Unless the user explicitly asks for relative paths, use absolute paths.\n' +
+        '                        This command can be referenced as "DC: ..." or "use Desktop Commander to ..." in your instructions.'
+    },
+    {
+      name: 'edit_block',
+      description: '\n' +
+        '                        Apply surgical text replacements to files.\n' +
+        '                        \n' +
+        '                        BEST PRACTICE: Make multiple small, focused edits rather than one large edit.\n' +
+        '                        Each edit_block call should change only what needs to be changed - include just enough \n' +
+        '                        context to uniquely identify the text being modified.\n' +
+        '                        \n' +
+        '                        Takes:\n' +
+        '                        - file_path: Path to the file to edit\n' +
+        '                        - old_string: Text to replace\n' +
+        '                        - new_string: Replacement text\n' +
+        '                        - expected_replacements: Optional parameter for number of replacements\n' +
+        '                        \n' +
+        '                        By default, replaces only ONE occurrence of the search text.\n' +
+        '                        To replace multiple occurrences, provide the expected_replacements parameter with\n' +
+        '                        the exact number of matches expected.\n' +
+        '                        \n' +
+        '                        UNIQUENESS REQUIREMENT: When expected_replacements=1 (default), include the minimal\n' +
+        '                        amount of context necessary (typically 1-3 lines) before and after the change point,\n' +
+        '                        with exact whitespace and indentation.\n' +
+        '                        \n' +
+        '                        When editing multiple sections, make separate edit_block calls for each distinct change\n' +
+        '                        rather than one large replacement.\n' +
+        '                        \n' +
+        '                        When a close but non-exact match is found, a character-level diff is shown in the format:\n' +
+        "                        common_prefix{-removed-}{+added+}common_suffix to help you identify what's different.\n" +
+        '                        \n' +
+        '                        Similar to write_file, there is a configurable line limit (fileWriteLineLimit) that warns\n' +
+        '                        if the edited file exceeds this limit. If this happens, consider breaking your edits into\n' +
+        '                        smaller, more focused changes.\n' +
+        '                        \n' +
+        '                        IMPORTANT: Always use absolute paths for reliability. Paths are automatically normalized regardless of slash direction. Relative paths may fail as they depend on the current working directory. Tilde paths (~/...) might not work in all contexts. Unless the user explicitly asks for relative paths, use absolute paths.\n' +
+        '                        This command can be referenced as "DC: ..." or "use Desktop Commander to ..." in your instructions.'
+    },
+    {
+      name: 'start_process',
+      description: '\n' +
+        '                        Start a new terminal process with intelligent state detection.\n' +
+        '                        \n' +
+        '                        PRIMARY TOOL FOR FILE ANALYSIS AND DATA PROCESSING\n' +
+        '                        This is the ONLY correct tool for analyzing local files (CSV, JSON, logs, etc.).\n' +
+        '                        The analysis tool CANNOT access local files and WILL FAIL - always use processes for file-based work.\n' +
+        '                        \n' +
+        '                        CRITICAL RULE: For ANY local file work, ALWAYS use this tool + interact_with_process, NEVER use analysis/REPL tool.\n' +
+        '                        \n' +
+        '                        Running on macOS. Default shell: zsh.\n' +
+        '        \n' +
+        'MACOS-SPECIFIC NOTES:\n' +
+        '- Package manager: brew (Homebrew) is commonly used\n' +
+        "- Python 3 might be 'python3' command, not 'python'\n" +
+        '- Some GNU tools have different names (e.g., gsed instead of sed)\n' +
+        '- System Integrity Protection (SIP) may block certain operations\n' +
+        "- Use 'open' command to open files/applications from terminal\n" +
+        '- For file search: Use mdfind (Spotlight) for fastest exact filename searches\n' +
+        '                        \n' +
+        '                        REQUIRED WORKFLOW FOR LOCAL FILES:\n' +
+        '                        1. start_process("python3 -i") - Start Python REPL for data analysis\n' +
+        '                        2. interact_with_process(pid, "import pandas as pd, numpy as np")\n' +
+        `                        3. interact_with_process(pid, "df = pd.read_csv('/absolute/path/file.csv')")\n` +
+        '                        4. interact_with_process(pid, "print(df.describe())")\n' +
+        '                        5. Continue analysis with pandas, matplotlib, seaborn, etc.\n' +
+        '                        \n' +
+        '                        COMMON FILE ANALYSIS PATTERNS:\n' +
+        '                        • start_process("python3 -i") → Python REPL for data analysis (RECOMMENDED)\n' +
+        '                        • start_process("node -i") → Node.js for JSON processing  \n' +
+        `                        • start_process("cut -d',' -f1 file.csv | sort | uniq -c") → Quick CSV analysis\n` +
+        '                        • start_process("wc -l /path/file.csv") → Line counting\n' +
+        '                        • start_process("head -10 /path/file.csv") → File preview\n' +
+        '                        \n' +
+        '                        BINARY FILE SUPPORT:\n' +
+        '                        For PDF, Excel, Word, archives, databases, and other binary formats, use process tools with appropriate libraries or command-line utilities.\n' +
+        '                        \n' +
+        '                        INTERACTIVE PROCESSES FOR DATA ANALYSIS:\n' +
+        '                        1. start_process("python3 -i") - Start Python REPL for data work\n' +
+        '                        2. start_process("node -i") - Start Node.js REPL for JSON/JS\n' +
+        '                        3. start_process("bash") - Start interactive bash shell\n' +
+        '                        4. Use interact_with_process() to send commands\n' +
+        '                        5. Use read_process_output() to get responses\n' +
+        '                        \n' +
+        '                        SMART DETECTION:\n' +
+        '                        - Detects REPL prompts (>>>, >, $, etc.)\n' +
+        '                        - Identifies when process is waiting for input\n' +
+        '                        - Recognizes process completion vs timeout\n' +
+        '                        - Early exit prevents unnecessary waiting\n' +
+        '                        \n' +
+        '                        STATES DETECTED:\n' +
+        '                        Process waiting for input (shows prompt)\n' +
+        '                        Process finished execution\n' +
+        '                        Process running (use read_process_output)\n' +
+        '\n' +
+        '                        PERFORMANCE DEBUGGING (verbose_timing parameter):\n' +
+        '                        Set verbose_timing: true to get detailed timing information including:\n' +
+        '                        - Exit reason (early_exit_quick_pattern, early_exit_periodic_check, process_exit, timeout)\n' +
+        '                        - Total duration and time to first output\n' +
+        '                        - Complete timeline of all output events with timestamps\n' +
+        '                        - Which detection mechanism triggered early exit\n' +
+        '                        Use this to identify missed optimization opportunities and improve detection patterns.\n' +
+        '\n' +
+        '                        ALWAYS USE FOR: Local file analysis, CSV processing, data exploration, system commands\n' +
+        '                        NEVER USE ANALYSIS TOOL FOR: Local file access (analysis tool is browser-only and WILL FAIL)\n' +
+        '\n' +
+        '                        IMPORTANT: Always use absolute paths for reliability. Paths are automatically normalized regardless of slash direction. Relative paths may fail as they depend on the current working directory. Tilde paths (~/...) might not work in all contexts. Unless the user explicitly asks for relative paths, use absolute paths.\n' +
+        '                        This command can be referenced as "DC: ..." or "use Desktop Commander to ..." in your instructions.'
+    },
+    {
+      name: 'read_process_output',
+      description: '\n' +
+        '                        Read output from a running process with intelligent completion detection.\n' +
+        '                        \n' +
+        '                        Automatically detects when process is ready for more input instead of timing out.\n' +
+        '                        \n' +
+        '                        SMART FEATURES:\n' +
+        '                        - Early exit when REPL shows prompt (>>>, >, etc.)\n' +
+        '                        - Detects process completion vs still running\n' +
+        '                        - Prevents hanging on interactive prompts\n' +
+        '                        - Clear status messages about process state\n' +
+        '                        \n' +
+        '                        REPL USAGE:\n' +
+        '                        - Stops immediately when REPL prompt detected\n' +
+        '                        - Shows clear status: waiting for input vs finished\n' +
+        '                        - Shorter timeouts needed due to smart detection\n' +
+        '                        - Works with Python, Node.js, R, Julia, etc.\n' +
+        '                        \n' +
+        '                        DETECTION STATES:\n' +
+        '                        Process waiting for input (ready for interact_with_process)\n' +
+        '                        Process finished execution\n' +
+        '                        Timeout reached (may still be running)\n' +
+        '\n' +
+        '                        PERFORMANCE DEBUGGING (verbose_timing parameter):\n' +
+        '                        Set verbose_timing: true to get detailed timing information including:\n' +
+        '                        - Exit reason (early_exit_quick_pattern, early_exit_periodic_check, process_finished, timeout)\n' +
+        '                        - Total duration and time to first output\n' +
+        '                        - Complete timeline of all output events with timestamps\n' +
+        '                        - Which detection mechanism triggered early exit\n' +
+        '                        Use this to identify when timeouts could be reduced or detection patterns improved.\n' +
+        '\n' +
+        '                        This command can be referenced as "DC: ..." or "use Desktop Commander to ..." in your instructions.'
+    },
+    {
+      name: 'interact_with_process',
+      description: '\n' +
+        '                        Send input to a running process and automatically receive the response.\n' +
+        '                        \n' +
+        '                        CRITICAL: THIS IS THE PRIMARY TOOL FOR ALL LOCAL FILE ANALYSIS\n' +
+        '                        For ANY local file analysis (CSV, JSON, data processing), ALWAYS use this instead of the analysis tool.\n' +
+        '                        The analysis tool CANNOT access local files and WILL FAIL - use processes for ALL file-based work.\n' +
+        '                        \n' +
+        '                        FILE ANALYSIS PRIORITY ORDER (MANDATORY):\n' +
+        '                        1. ALWAYS FIRST: Use this tool (start_process + interact_with_process) for local data analysis\n' +
+        '                        2. ALTERNATIVE: Use command-line tools (cut, awk, grep) for quick processing  \n' +
+        '                        3. NEVER EVER: Use analysis tool for local file access (IT WILL FAIL)\n' +
+        '                        \n' +
+        '                        REQUIRED INTERACTIVE WORKFLOW FOR FILE ANALYSIS:\n' +
+        '                        1. Start REPL: start_process("python3 -i")\n' +
+        '                        2. Load libraries: interact_with_process(pid, "import pandas as pd, numpy as np")\n' +
+        `                        3. Read file: interact_with_process(pid, "df = pd.read_csv('/absolute/path/file.csv')")\n` +
+        '                        4. Analyze: interact_with_process(pid, "print(df.describe())")\n' +
+        `                        5. Continue: interact_with_process(pid, "df.groupby('column').size()")\n` +
+        '                        \n' +
+        '                        BINARY FILE PROCESSING WORKFLOWS:\n' +
+        '                        Use appropriate Python libraries (PyPDF2, pandas, docx2txt, etc.) or command-line tools for binary file analysis.\n' +
+        '                        \n' +
+        '                        SMART DETECTION:\n' +
+        '                        - Automatically waits for REPL prompt (>>>, >, etc.)\n' +
+        '                        - Detects errors and completion states\n' +
+        '                        - Early exit prevents timeout delays\n' +
+        '                        - Clean output formatting (removes prompts)\n' +
+        '                        \n' +
+        '                        SUPPORTED REPLs:\n' +
+        '                        - Python: python3 -i (RECOMMENDED for data analysis)\n' +
+        '                        - Node.js: node -i  \n' +
+        '                        - R: R\n' +
+        '                        - Julia: julia\n' +
+        '                        - Shell: bash, zsh\n' +
+        '                        - Database: mysql, postgres\n' +
+        '                        \n' +
+        '                        PARAMETERS:\n' +
+        '                        - pid: Process ID from start_process\n' +
+        '                        - input: Code/command to execute\n' +
+        '                        - timeout_ms: Max wait (default: 8000ms)\n' +
+        '                        - wait_for_prompt: Auto-wait for response (default: true)\n' +
+        '                        - verbose_timing: Enable detailed performance telemetry (default: false)\n' +
+        '\n' +
+        '                        Returns execution result with status indicators.\n' +
+        '\n' +
+        '                        PERFORMANCE DEBUGGING (verbose_timing parameter):\n' +
+        '                        Set verbose_timing: true to get detailed timing information including:\n' +
+        '                        - Exit reason (early_exit_quick_pattern, early_exit_periodic_check, process_finished, timeout, no_wait)\n' +
+        '                        - Total duration and time to first output\n' +
+        '                        - Complete timeline of all output events with timestamps\n' +
+        '                        - Which detection mechanism triggered early exit\n' +
+        '                        Use this to identify slow interactions and optimize detection patterns.\n' +
+        '\n' +
+        '                        ALWAYS USE FOR: CSV analysis, JSON processing, file statistics, data visualization prep, ANY local file work\n' +
+        '                        NEVER USE ANALYSIS TOOL FOR: Local file access (it cannot read files from disk and WILL FAIL)\n' +
+        '\n' +
+        '                        This command can be referenced as "DC: ..." or "use Desktop Commander to ..." in your instructions.'
+    },
+    {
+      name: 'force_terminate',
+      description: '\n' +
+        '                        Force terminate a running terminal session.\n' +
+        '                        \n' +
+        '                        This command can be referenced as "DC: ..." or "use Desktop Commander to ..." in your instructions.'
+    },
+    {
+      name: 'list_sessions',
+      description: '\n' +
+        '                        List all active terminal sessions.\n' +
+        '                        \n' +
+        '                        Shows session status including:\n' +
+        '                        - PID: Process identifier  \n' +
+        '                        - Blocked: Whether session is waiting for input\n' +
+        '                        - Runtime: How long the session has been running\n' +
+        '                        \n' +
+        '                        DEBUGGING REPLs:\n' +
+        '                        - "Blocked: true" often means REPL is waiting for input\n' +
+        '                        - Use this to verify sessions are running before sending input\n' +
+        '                        - Long runtime with blocked status may indicate stuck process\n' +
+        '                        \n' +
+        '                        This command can be referenced as "DC: ..." or "use Desktop Commander to ..." in your instructions.'
+    },
+    {
+      name: 'list_processes',
+      description: '\n' +
+        '                        List all running processes.\n' +
+        '                        \n' +
+        '                        Returns process information including PID, command name, CPU usage, and memory usage.\n' +
+        '                        \n' +
+        '                        This command can be referenced as "DC: ..." or "use Desktop Commander to ..." in your instructions.'
+    },
+    {
+      name: 'kill_process',
+      description: '\n' +
+        '                        Terminate a running process by PID.\n' +
+        '                        \n' +
+        '                        Use with caution as this will forcefully terminate the specified process.\n' +
+        '                        \n' +
+        '                        This command can be referenced as "DC: ..." or "use Desktop Commander to ..." in your instructions.'
+    },
+    {
+      name: 'get_usage_stats',
+      description: '\n' +
+        '                        Get usage statistics for debugging and analysis.\n' +
+        '                        \n' +
+        '                        Returns summary of tool usage, success/failure rates, and performance metrics.\n' +
+        '                        \n' +
+        '                        This command can be referenced as "DC: ..." or "use Desktop Commander to ..." in your instructions.'
+    },
+    {
+      name: 'get_recent_tool_calls',
+      description: '\n' +
+        '                        Get recent tool call history with their arguments and outputs.\n' +
+        '                        Returns chronological list of tool calls made during this session.\n' +
+        '                        \n' +
+        '                        Useful for:\n' +
+        '                        - Onboarding new chats about work already done\n' +
+        '                        - Recovering context after chat history loss\n' +
+        '                        - Debugging tool call sequences\n' +
+        '                        \n' +
+        '                        Note: Does not track its own calls or other meta/query tools.\n' +
+        '                        History kept in memory (last 1000 calls, lost on restart).\n' +
+        '                        \n' +
+        '                        This command can be referenced as "DC: ..." or "use Desktop Commander to ..." in your instructions.'
+    },
+    {
+      name: 'give_feedback_to_desktop_commander',
+      description: '\n' +
+        '                        Open feedback form in browser to provide feedback about Desktop Commander.\n' +
+        '                        \n' +
+        '                        IMPORTANT: This tool simply opens the feedback form - no pre-filling available.\n' +
+        '                        The user will fill out the form manually in their browser.\n' +
+        '                        \n' +
+        '                        WORKFLOW:\n' +
+        '                        1. When user agrees to give feedback, just call this tool immediately\n' +
+        '                        2. No need to ask questions or collect information\n' +
+        '                        3. Tool opens form with only usage statistics pre-filled automatically:\n' +
+        "                           - tool_call_count: Number of commands they've made\n" +
+        "                           - days_using: How many days they've used Desktop Commander\n" +
+        '                           - platform: Their operating system (Mac/Windows/Linux)\n' +
+        '                           - client_id: Analytics identifier\n' +
+        '                        \n' +
+        '                        All survey questions will be answered directly in the form:\n' +
+        '                        - Job title and technical comfort level\n' +
+        '                        - Company URL for industry context\n' +
+        '                        - Other AI tools they use\n' +
+        "                        - Desktop Commander's biggest advantage\n" +
+        '                        - How they typically use it\n' +
+        '                        - Recommendation likelihood (0-10)\n' +
+        '                        - User study participation interest\n' +
+        '                        - Email and any additional feedback\n' +
+        '                        \n' +
+        '                        EXAMPLE INTERACTION:\n' +
+        `                        User: "sure, I'll give feedback"\n` +
+        '                        Claude: "Perfect! Let me open the feedback form for you."\n' +
+        '                        [calls tool immediately]\n' +
+        '                        \n' +
+        '                        No parameters are needed - just call the tool to open the form.\n' +
+        '                        \n' +
+        '                        This command can be referenced as "DC: ..." or "use Desktop Commander to ..." in your instructions.'
+    },
+    {
+      name: 'get_prompts',
+      description: '\n' +
+        '                        Retrieve a specific Desktop Commander onboarding prompt by ID and execute it.\n' +
+        '                        \n' +
+        '                        SIMPLIFIED ONBOARDING V2: This tool only supports direct prompt retrieval.\n' +
+        '                        The onboarding system presents 5 options as a simple numbered list:\n' +
+        '                        \n' +
+        "                        1. Organize my Downloads folder (promptId: 'onb2_01')\n" +
+        "                        2. Explain a codebase or repository (promptId: 'onb2_02')\n" +
+        "                        3. Create organized knowledge base (promptId: 'onb2_03')\n" +
+        "                        4. Analyze a data file (promptId: 'onb2_04')\n" +
+        "                        5. Check system health and resources (promptId: 'onb2_05')\n" +
+        '                        \n' +
+        '                        USAGE:\n' +
+        '                        When user says "1", "2", "3", "4", or "5" from onboarding:\n' +
+        `                        - "1" → get_prompts(action='get_prompt', promptId='onb2_01', anonymous_user_use_case='...')\n` +
+        `                        - "2" → get_prompts(action='get_prompt', promptId='onb2_02', anonymous_user_use_case='...')\n` +
+        `                        - "3" → get_prompts(action='get_prompt', promptId='onb2_03', anonymous_user_use_case='...')\n` +
+        `                        - "4" → get_prompts(action='get_prompt', promptId='onb2_04', anonymous_user_use_case='...')\n` +
+        `                        - "5" → get_prompts(action='get_prompt', promptId='onb2_05', anonymous_user_use_case='...')\n` +
+        '                        \n' +
+        '                        ANONYMOUS USE CASE (REQUIRED):\n' +
+        '                        Infer what GOAL or PROBLEM the user is trying to solve from conversation history.\n' +
+        '                        Focus on the job-to-be-done, not just what they were doing.\n' +
+        '                        \n' +
+        '                        GOOD (problem/goal focused):\n' +
+        '                        "automating backup workflow", "converting PDFs to CSV", "debugging test failures",\n' +
+        '                        "organizing project files", "monitoring server logs", "extracting data from documents"\n' +
+        '                        \n' +
+        '                        BAD (too vague or contains PII):\n' +
+        `                        "using Desktop Commander", "working on John's project", "fixing acme-corp bug"\n` +
+        '                        \n' +
+        '                        If unclear from context, use: "exploring tool capabilities"\n' +
+        '                        \n' +
+        '                        The prompt content will be injected and execution begins immediately.\n' +
+        '                        \n' +
+        '                        This command can be referenced as "DC: ..." or "use Desktop Commander to ..." in your instructions.'
+    }
+  ]
+}
+[2025-11-20T21:13:28.355Z] [DEBUG][TOOLS] [desktop-commander] Process started with PID: 2079
+[2025-11-20T21:13:28.355Z] [DEBUG][TOOLS] Successfully initialized server: desktop-commander
+[2025-11-20T21:13:28.355Z] [DEBUG][TOOLS] Starting initialization of server: Playwright
+[2025-11-20T21:13:28.355Z] [DEBUG][TOOLS] Initializing server: Playwright {
+  transport: 'stdio',
+  command: 'npx',
+  args: [ '-y', '@playwright/mcp@latest', '--extension' ],
+  env: [ 'PLAYWRIGHT_MCP_EXTENSION_TOKEN' ]
+}
+[2025-11-20T21:13:28.453Z] [DEBUG][TOOLS] [Playwright] npm warn Unknown env config "shamefully-hoist". This will stop working in the next major version of npm.
+
+[2025-11-20T21:13:28.453Z] [DEBUG][TOOLS] [Playwright] npm warn Unknown project config "shamefully-hoist". This will stop working in the next major version of npm.
+
+[2025-11-20T21:13:30.384Z] [DEBUG][TOOLS] Server Playwright connected successfully {
+  toolCount: 22,
+  tools: [
+    { name: 'browser_close', description: 'Close the page' },
+    {
+      name: 'browser_resize',
+      description: 'Resize the browser window'
+    },
+    {
+      name: 'browser_console_messages',
+      description: 'Returns all console messages'
+    },
+    { name: 'browser_handle_dialog', description: 'Handle a dialog' },
+    {
+      name: 'browser_evaluate',
+      description: 'Evaluate JavaScript expression on page or element'
+    },
+    {
+      name: 'browser_file_upload',
+      description: 'Upload one or multiple files'
+    },
+    {
+      name: 'browser_fill_form',
+      description: 'Fill multiple form fields'
+    },
+    {
+      name: 'browser_install',
+      description: 'Install the browser specified in the config. Call this if you get an error about the browser not being installed.'
+    },
+    {
+      name: 'browser_press_key',
+      description: 'Press a key on the keyboard'
+    },
+    {
+      name: 'browser_type',
+      description: 'Type text into editable element'
+    },
+    { name: 'browser_navigate', description: 'Navigate to a URL' },
+    {
+      name: 'browser_navigate_back',
+      description: 'Go back to the previous page'
+    },
+    {
+      name: 'browser_network_requests',
+      description: 'Returns all network requests since loading the page'
+    },
+    {
+      name: 'browser_run_code',
+      description: 'Run Playwright code snippet'
+    },
+    {
+      name: 'browser_take_screenshot',
+      description: "Take a screenshot of the current page. You can't perform actions based on the screenshot, use browser_snapshot for actions."
+    },
+    {
+      name: 'browser_snapshot',
+      description: 'Capture accessibility snapshot of the current page, this is better than screenshot'
+    },
+    {
+      name: 'browser_click',
+      description: 'Perform click on a web page'
+    },
+    {
+      name: 'browser_drag',
+      description: 'Perform drag and drop between two elements'
+    },
+    {
+      name: 'browser_hover',
+      description: 'Hover over element on page'
+    },
+    {
+      name: 'browser_select_option',
+      description: 'Select an option in a dropdown'
+    },
+    {
+      name: 'browser_tabs',
+      description: 'List, create, close, or select a browser tab.'
+    },
+    {
+      name: 'browser_wait_for',
+      description: 'Wait for text to appear or disappear or a specified time to pass'
+    }
+  ]
+}
+[2025-11-20T21:13:30.385Z] [DEBUG][TOOLS] [Playwright] Process started with PID: 2122
+[2025-11-20T21:13:30.385Z] [DEBUG][TOOLS] Successfully initialized server: Playwright
+[2025-11-20T21:13:30.385Z] [DEBUG][TOOLS] MCP Service initialization complete. Total tools available: 73
+[2025-11-20T21:13:30.385Z] [DEBUG][APP] MCP service initialized successfully
+[2025-11-20T21:13:39.341Z] [DEBUG][KEYBINDS] Config change #1: {
+  agentKillSwitchEnabled: true,
+  agentKillSwitchHotkey: 'ctrl-shift-q',
+  textInputEnabled: true,
+  textInputShortcut: 'ctrl-t',
+  mcpToolsEnabled: true,
+  mcpToolsShortcut: 'hold-ctrl-alt',
+  shortcut: 'hold-ctrl'
+}
+[WINDOW MAIN] show
+[WINDOW MAIN] focus
+Skip checkForUpdates because application is not packed and dev update config is not forced
+[WINDOW MAIN] hide
+[WINDOW MAIN] show
+[2025-11-20T21:13:42.493Z] [DEBUG][APP] [MacSystemTapBackend] Stopped audio capture for session 1763673206084
+[2025-11-20T21:13:42.598Z] [DEBUG][APP] [MacDesktopAndMicBackend] Mixing tracks for session 1763673206084 systemBuffers= 0 micBuffers= 796 systemFormat= { sampleRate: null, channels: null } micFormat= { sampleRate: 16000, channels: 1 }
+[2025-11-20T21:13:42.609Z] [DEBUG][APP] [LongRecordingService] Received first audio chunk for session 1763673206084 sequence= 0 bytes= 509440 sampleRate= 16000 channels= 1
+[2025-11-20T21:13:42.609Z] [DEBUG][APP] [LongRecordingService] Stopping session 1763673206084 bytes= 509440 buffers= 1 sampleRate= 16000 channels= 1 durationMs= 15920
+[2025-11-20T21:13:43.121Z] [DEBUG][UI] [MAIN] [WARN] [AppLayout] DesktopRecorder session-end (app-layout.tsx:81)
+[tipc] desktopRecordEvent: end
+[2025-11-20T21:13:43.124Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-20T21:13:43.117Z] [DEBUG][UI] [ActiveAgentsSidebar] No sessions (active or recent), hiding sidebar (debug.ts:29)
+[2025-11-20T21:13:43.124Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-20T21:13:43.117Z] [DEBUG][UI] [ActiveAgentsSidebar] No sessions (active or recent), hiding sidebar (debug.ts:29)
+[WINDOW MAIN] blur
+[tray] Tray left-click; isRecording: false isDesktopRecordingActive: false
+[WINDOW PANEL] close
+[WINDOW MAIN] close

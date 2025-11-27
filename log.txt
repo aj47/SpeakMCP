@@ -1,0 +1,1198 @@
+
+> speakmcp@0.3.0 dev /Users/ajjoobandi/Development/SpeakMCP
+> electron-vite dev --watch -- "d"
+
+vite v5.4.19 building SSR bundle for development...
+
+watching for file changes...
+
+build started...
+transforming...
+✓ 413 modules transformed.
+rendering chunks...
+out/main/emergency-stop-SPSmu1DX.js           1.01 kB
+out/main/profile-service-DvBidhdA.js          6.10 kB
+out/main/oauth-callback-server-fzqzUOMc.js    6.84 kB
+out/main/models-service-Bkrw8_sU.js          15.34 kB
+out/main/index.js                           347.83 kB
+out/main/updater-BDiG8kM8.js                475.46 kB
+built in 733ms.
+
+build the electron main process successfully
+
+-----
+
+vite v5.4.19 building SSR bundle for development...
+
+watching for file changes...
+
+build started...
+transforming...
+✓ 2 modules transformed.
+rendering chunks...
+out/preload/index.mjs  2.93 kB
+built in 8ms.
+
+build the electron preload files successfully
+
+-----
+
+dev server running for the electron renderer process at:
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose
+
+start electron app...
+
+[DEBUG] Enabled: LLM, TOOLS, KEYBINDS, APP, UI (argv: d)
+[2025-11-14T05:03:37.170Z] [DEBUG][APP] SpeakMCP starting up...
+[2025-11-14T05:03:37.170Z] [DEBUG][APP] Deep link handling initialized
+[2025-11-14T05:03:37.177Z] [DEBUG][APP] Accessibility granted: true
+[2025-11-14T05:03:37.179Z] [DEBUG][APP] Application menu created
+[2025-11-14T05:03:37.179Z] [DEBUG][APP] IPC main registered
+[2025-11-14T05:03:37.190Z] [DEBUG][APP] Serve protocol registered
+[2025-11-14T05:03:37.191Z] [DEBUG][APP] Creating main window...
+[2025-11-14T05:03:37.225Z] [DEBUG][APP] Main window created
+[2025-11-14T05:03:37.226Z] [DEBUG][APP] Creating panel window...
+[window.ts] createPanelWindow - MIN_WAVEFORM_WIDTH: 312
+[window.ts] getSavedSizeForMode(normal) - checking config...
+[window.ts] Found saved normal mode size: { width: 600, height: 443 }
+[window.ts] createPanelWindow - position: { x: 376, y: 45 }
+[window.ts] getSavedSizeForMode(normal) - checking config...
+[window.ts] Found saved normal mode size: { width: 600, height: 443 }
+[window.ts] createPanelWindow - savedSize: { width: 600, height: 443 }
+[window.ts] createPanelWindow - minWidth: 312
+[window.ts] createPanelWindow - window created with size: { width: 600, height: 443 }
+[2025-11-14T05:03:37.239Z] [DEBUG][APP] Panel window created
+[2025-11-14T05:03:37.241Z] [DEBUG][KEYBINDS] Starting keyboard event listener with rdev path: /Users/ajjoobandi/Development/SpeakMCP/resources/bin/speakmcp-rs
+[2025-11-14T05:03:37.241Z] [DEBUG][APP] Keyboard event listener started
+[2025-11-14T05:03:37.246Z] [DEBUG][APP] System tray initialized
+[2025-11-14T05:03:37.246Z] [DEBUG][TOOLS] MCP Service initialization starting
+[2025-11-14T05:03:37.246Z] [DEBUG][TOOLS] Skipping server rube - runtime disabled by user
+[2025-11-14T05:03:37.246Z] [DEBUG][TOOLS] Skipping server perplexity-ask - runtime disabled by user
+[2025-11-14T05:03:37.246Z] [DEBUG][TOOLS] Skipping server auggie mcp - runtime disabled by user
+[2025-11-14T05:03:37.246Z] [DEBUG][TOOLS] Skipping server MacOS Control - runtime disabled by user
+[2025-11-14T05:03:37.246Z] [DEBUG][TOOLS] Skipping server desktop-commander - runtime disabled by user
+[2025-11-14T05:03:37.246Z] [DEBUG][TOOLS] Skipping server terminal - runtime disabled by user
+[2025-11-14T05:03:37.246Z] [DEBUG][TOOLS] Skipping server exa - runtime disabled by user
+[2025-11-14T05:03:37.246Z] [DEBUG][TOOLS] Skipping server cloudflare - runtime disabled by user
+[2025-11-14T05:03:37.246Z] [DEBUG][TOOLS] Found 2 servers to initialize [ 'github', 'Playwright' ]
+[2025-11-14T05:03:37.246Z] [DEBUG][TOOLS] Starting initialization of server: github
+[2025-11-14T05:03:37.247Z] [DEBUG][TOOLS] Initializing server: github {
+  transport: 'stdio',
+  command: 'npx',
+  args: [ '-y', '@modelcontextprotocol/server-github' ],
+  env: [ 'GITHUB_PERSONAL_ACCESS_TOKEN' ]
+}
+[2025-11-14T05:03:37.385Z] [DEBUG][TOOLS] [github] npm warn Unknown env config "shamefully-hoist". This will stop working in the next major version of npm.
+
+[2025-11-14T05:03:37.385Z] [DEBUG][TOOLS] [github] npm warn Unknown project config "shamefully-hoist". This will stop working in the next major version of npm.
+
+[2025-11-14T05:03:37.544Z] [DEBUG][UI] [PANEL] [vite] connecting... (client:495)
+[2025-11-14T05:03:37.545Z] [DEBUG][UI] [MAIN] [vite] connecting... (client:495)
+[2025-11-14T05:03:37.709Z] [DEBUG][UI] [PANEL] [vite] connected. (client:618)
+[2025-11-14T05:03:37.719Z] [DEBUG][UI] [MAIN] [WARN] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold (chunk-RPCDYKBN.js?v=a4add9b9:21551)
+[2025-11-14T05:03:37.719Z] [DEBUG][UI] [PANEL] [WARN] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold (chunk-RPCDYKBN.js?v=a4add9b9:21551)
+[2025-11-14T05:03:37.725Z] [DEBUG][UI] [MAIN] [ERROR] ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition. (react-router-dom.js?v=a4add9b9:4393)
+[2025-11-14T05:03:37.725Z] [DEBUG][UI] [PANEL] [ERROR] ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition. (react-router-dom.js?v=a4add9b9:4393)
+[2025-11-14T05:03:37.725Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-14T05:03:37.725Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:29)
+[2025-11-14T05:03:37.725Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-14T05:03:37.725Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:29)
+[2025-11-14T05:03:37.726Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-14T05:03:37.726Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:29)
+[2025-11-14T05:03:37.726Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-14T05:03:37.726Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:29)
+[2025-11-14T05:03:37.759Z] [DEBUG][UI] [MAIN] [vite] connected. (client:618)
+[WINDOW MAIN] show
+[WINDOW MAIN] focus
+Skip checkForUpdates because application is not packed and dev update config is not forced
+Skip checkForUpdates because application is not packed and dev update config is not forced
+[2025-11-14T05:03:37.933Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-14T05:03:37.933Z] [DEBUG][UI] [EXPAND] ActiveAgentsSidebar init {"key":"active-agents-sidebar-expanded","raw":"true","parsed":true} (debug.ts:29)
+[2025-11-14T05:03:37.934Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-14T05:03:37.934Z] [DEBUG][UI] [ActiveAgentsSidebar] No sessions (active or recent), hiding sidebar (debug.ts:29)
+[2025-11-14T05:03:37.934Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-14T05:03:37.934Z] [DEBUG][UI] [EXPAND] ActiveAgentsSidebar init {"key":"active-agents-sidebar-expanded","raw":"true","parsed":true} (debug.ts:29)
+[2025-11-14T05:03:37.934Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-14T05:03:37.934Z] [DEBUG][UI] [ActiveAgentsSidebar] No sessions (active or recent), hiding sidebar (debug.ts:29)
+[AgentSessionTracker] getActiveSessions called, returning 0 sessions: []
+[2025-11-14T05:03:37.953Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-14T05:03:37.953Z] [DEBUG][UI] [STATE] ActiveAgentsSidebar.isExpanded: {"from":false,"to":true} (debug.ts:29)
+[2025-11-14T05:03:37.953Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-14T05:03:37.953Z] [DEBUG][UI] [EXPAND] ActiveAgentsSidebar write {"key":"active-agents-sidebar-expanded","value":true} (debug.ts:29)
+[2025-11-14T05:03:37.953Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-14T05:03:37.953Z] [DEBUG][UI] [EXPAND] ActiveAgentsSidebar verify {"key":"active-agents-sidebar-expanded","wrote":"true","readBack":"true"} (debug.ts:29)
+[2025-11-14T05:03:37.953Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-14T05:03:37.953Z] [DEBUG][UI] [ActiveAgentsSidebar] Sessions updated: [object Object] (debug.ts:29)
+[2025-11-14T05:03:37.953Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-14T05:03:37.953Z] [DEBUG][UI] [STATE] ActiveAgentsSidebar.isExpanded: {"from":false,"to":true} (debug.ts:29)
+[2025-11-14T05:03:37.953Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-14T05:03:37.953Z] [DEBUG][UI] [EXPAND] ActiveAgentsSidebar write {"key":"active-agents-sidebar-expanded","value":true} (debug.ts:29)
+[2025-11-14T05:03:37.953Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-14T05:03:37.953Z] [DEBUG][UI] [EXPAND] ActiveAgentsSidebar verify {"key":"active-agents-sidebar-expanded","wrote":"true","readBack":"true"} (debug.ts:29)
+[2025-11-14T05:03:37.954Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-14T05:03:37.953Z] [DEBUG][UI] [ActiveAgentsSidebar] Sessions updated: [object Object] (debug.ts:29)
+[2025-11-14T05:03:37.956Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-14T05:03:37.955Z] [DEBUG][UI] [ActiveAgentsSidebar] No sessions (active or recent), hiding sidebar (debug.ts:29)
+[2025-11-14T05:03:37.956Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-14T05:03:37.955Z] [DEBUG][UI] [ActiveAgentsSidebar] No sessions (active or recent), hiding sidebar (debug.ts:29)
+[2025-11-14T05:03:37.989Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-14T05:03:37.984Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:29)
+[2025-11-14T05:03:37.990Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-14T05:03:37.984Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:29)
+[2025-11-14T05:03:37.990Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-14T05:03:37.984Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:29)
+[2025-11-14T05:03:37.990Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-14T05:03:37.984Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:29)
+[2025-11-14T05:03:38.050Z] [DEBUG][TOOLS] [github] GitHub MCP Server running on stdio
+
+[2025-11-14T05:03:38.060Z] [DEBUG][TOOLS] Server github connected successfully {
+  toolCount: 26,
+  tools: [
+    {
+      name: 'create_or_update_file',
+      description: 'Create or update a single file in a GitHub repository'
+    },
+    {
+      name: 'search_repositories',
+      description: 'Search for GitHub repositories'
+    },
+    {
+      name: 'create_repository',
+      description: 'Create a new GitHub repository in your account'
+    },
+    {
+      name: 'get_file_contents',
+      description: 'Get the contents of a file or directory from a GitHub repository'
+    },
+    {
+      name: 'push_files',
+      description: 'Push multiple files to a GitHub repository in a single commit'
+    },
+    {
+      name: 'create_issue',
+      description: 'Create a new issue in a GitHub repository'
+    },
+    {
+      name: 'create_pull_request',
+      description: 'Create a new pull request in a GitHub repository'
+    },
+    {
+      name: 'fork_repository',
+      description: 'Fork a GitHub repository to your account or specified organization'
+    },
+    {
+      name: 'create_branch',
+      description: 'Create a new branch in a GitHub repository'
+    },
+    {
+      name: 'list_commits',
+      description: 'Get list of commits of a branch in a GitHub repository'
+    },
+    {
+      name: 'list_issues',
+      description: 'List issues in a GitHub repository with filtering options'
+    },
+    {
+      name: 'update_issue',
+      description: 'Update an existing issue in a GitHub repository'
+    },
+    {
+      name: 'add_issue_comment',
+      description: 'Add a comment to an existing issue'
+    },
+    {
+      name: 'search_code',
+      description: 'Search for code across GitHub repositories'
+    },
+    {
+      name: 'search_issues',
+      description: 'Search for issues and pull requests across GitHub repositories'
+    },
+    { name: 'search_users', description: 'Search for users on GitHub' },
+    {
+      name: 'get_issue',
+      description: 'Get details of a specific issue in a GitHub repository.'
+    },
+    {
+      name: 'get_pull_request',
+      description: 'Get details of a specific pull request'
+    },
+    {
+      name: 'list_pull_requests',
+      description: 'List and filter repository pull requests'
+    },
+    {
+      name: 'create_pull_request_review',
+      description: 'Create a review on a pull request'
+    },
+    { name: 'merge_pull_request', description: 'Merge a pull request' },
+    {
+      name: 'get_pull_request_files',
+      description: 'Get the list of files changed in a pull request'
+    },
+    {
+      name: 'get_pull_request_status',
+      description: 'Get the combined status of all status checks for a pull request'
+    },
+    {
+      name: 'update_pull_request_branch',
+      description: 'Update a pull request branch with the latest changes from the base branch'
+    },
+    {
+      name: 'get_pull_request_comments',
+      description: 'Get the review comments on a pull request'
+    },
+    {
+      name: 'get_pull_request_reviews',
+      description: 'Get the reviews on a pull request'
+    }
+  ]
+}
+[2025-11-14T05:03:38.060Z] [DEBUG][TOOLS] [github] Process started with PID: 15736
+[2025-11-14T05:03:38.060Z] [DEBUG][TOOLS] Successfully initialized server: github
+[2025-11-14T05:03:38.061Z] [DEBUG][TOOLS] Starting initialization of server: Playwright
+[2025-11-14T05:03:38.061Z] [DEBUG][TOOLS] Initializing server: Playwright {
+  transport: 'stdio',
+  command: 'npx',
+  args: [ '-y', '@playwright/mcp@latest', '--extension' ],
+  env: [ 'PLAYWRIGHT_MCP_EXTENSION_TOKEN' ]
+}
+[2025-11-14T05:03:38.152Z] [DEBUG][TOOLS] [Playwright] npm warn Unknown env config "shamefully-hoist". This will stop working in the next major version of npm.
+
+[2025-11-14T05:03:38.153Z] [DEBUG][TOOLS] [Playwright] npm warn Unknown project config "shamefully-hoist". This will stop working in the next major version of npm.
+
+[hidePanelWindow] Called. Panel exists: true, visible: false
+[hidePanelWindow] Panel hidden
+[2025-11-14T05:03:38.869Z] [DEBUG][TOOLS] Server Playwright connected successfully {
+  toolCount: 21,
+  tools: [
+    { name: 'browser_close', description: 'Close the page' },
+    {
+      name: 'browser_resize',
+      description: 'Resize the browser window'
+    },
+    {
+      name: 'browser_console_messages',
+      description: 'Returns all console messages'
+    },
+    { name: 'browser_handle_dialog', description: 'Handle a dialog' },
+    {
+      name: 'browser_evaluate',
+      description: 'Evaluate JavaScript expression on page or element'
+    },
+    {
+      name: 'browser_file_upload',
+      description: 'Upload one or multiple files'
+    },
+    {
+      name: 'browser_fill_form',
+      description: 'Fill multiple form fields'
+    },
+    {
+      name: 'browser_install',
+      description: 'Install the browser specified in the config. Call this if you get an error about the browser not being installed.'
+    },
+    {
+      name: 'browser_press_key',
+      description: 'Press a key on the keyboard'
+    },
+    {
+      name: 'browser_type',
+      description: 'Type text into editable element'
+    },
+    { name: 'browser_navigate', description: 'Navigate to a URL' },
+    {
+      name: 'browser_navigate_back',
+      description: 'Go back to the previous page'
+    },
+    {
+      name: 'browser_network_requests',
+      description: 'Returns all network requests since loading the page'
+    },
+    {
+      name: 'browser_take_screenshot',
+      description: "Take a screenshot of the current page. You can't perform actions based on the screenshot, use browser_snapshot for actions."
+    },
+    {
+      name: 'browser_snapshot',
+      description: 'Capture accessibility snapshot of the current page, this is better than screenshot'
+    },
+    {
+      name: 'browser_click',
+      description: 'Perform click on a web page'
+    },
+    {
+      name: 'browser_drag',
+      description: 'Perform drag and drop between two elements'
+    },
+    {
+      name: 'browser_hover',
+      description: 'Hover over element on page'
+    },
+    {
+      name: 'browser_select_option',
+      description: 'Select an option in a dropdown'
+    },
+    {
+      name: 'browser_tabs',
+      description: 'List, create, close, or select a browser tab.'
+    },
+    {
+      name: 'browser_wait_for',
+      description: 'Wait for text to appear or disappear or a specified time to pass'
+    }
+  ]
+}
+[2025-11-14T05:03:38.870Z] [DEBUG][TOOLS] [Playwright] Process started with PID: 15770
+[2025-11-14T05:03:38.870Z] [DEBUG][TOOLS] Successfully initialized server: Playwright
+[2025-11-14T05:03:38.870Z] [DEBUG][TOOLS] MCP Service initialization complete. Total tools available: 47
+[2025-11-14T05:03:38.870Z] [DEBUG][APP] MCP service initialized successfully
+[AgentSessionTracker] getActiveSessions called, returning 0 sessions: []
+[AgentSessionTracker] getActiveSessions called, returning 0 sessions: []
+[2025-11-14T05:03:42.648Z] [DEBUG][KEYBINDS] Ctrl key pressed, isPressedCtrlKey = true
+[2025-11-14T05:03:42.648Z] [DEBUG][KEYBINDS] Config change #1: {
+  agentKillSwitchEnabled: true,
+  agentKillSwitchHotkey: 'ctrl-shift-q',
+  textInputEnabled: true,
+  textInputShortcut: 'ctrl-t',
+  mcpToolsEnabled: true,
+  mcpToolsShortcut: 'hold-ctrl-alt',
+  shortcut: 'hold-ctrl'
+}
+[2025-11-14T05:03:42.648Z] [DEBUG][KEYBINDS] Alt key pressed, isPressedAltKey = true isPressedCtrlAltKey = true
+[window.ts] getSavedSizeForMode(normal) - checking config...
+[window.ts] Found saved normal mode size: { width: 600, height: 443 }
+[window.ts] getSavedSizeForMode(normal) - checking config...
+[window.ts] Found saved normal mode size: { width: 600, height: 443 }
+[showPanelWindow] Called. Current visibility: false
+[window.ts] getSavedSizeForMode(normal) - checking config...
+[window.ts] Found saved normal mode size: { width: 600, height: 443 }
+[window.ts] getSavedSizeForMode(normal) - checking config...
+[window.ts] Found saved normal mode size: { width: 600, height: 443 }
+[showPanelWindow] Showing panel with showInactive() for normal mode
+[WINDOW PANEL] show
+[AgentSessionTracker] getActiveSessions called, returning 0 sessions: []
+[2025-11-14T05:03:44.622Z] [DEBUG][KEYBINDS] Ctrl key released, isPressedCtrlKey = false
+[2025-11-14T05:03:44.623Z] [DEBUG][KEYBINDS] Alt key released, isPressedAltKey = false isPressedCtrlAltKey = false
+[2025-11-14T05:03:44.627Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-14T05:03:44.627Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:29)
+[WINDOW PANEL] hide
+[hidePanelWindow] Called. Panel exists: true, visible: false
+[hidePanelWindow] Panel hidden
+[AgentSessionTracker] Started session: session_1763096624953_2lapbdptx, total sessions: 1
+[emitAgentProgress] Called for session session_1763096624953_2lapbdptx, panel visible: false, isSnoozed: undefined
+[emitAgentProgress] Panel not visible. Session session_1763096624953_2lapbdptx snoozed check: false
+[emitAgentProgress] Panel auto-show suppressed; NOT showing panel for session session_1763096624953_2lapbdptx
+[2025-11-14T05:03:44.953Z] [DEBUG][TOOLS] MCP Service initialization starting
+[2025-11-14T05:03:44.953Z] [DEBUG][TOOLS] Skipping server github - already initialized
+[2025-11-14T05:03:44.954Z] [DEBUG][TOOLS] Skipping server rube - runtime disabled by user
+[2025-11-14T05:03:44.954Z] [DEBUG][TOOLS] Skipping server perplexity-ask - runtime disabled by user
+[2025-11-14T05:03:44.954Z] [DEBUG][TOOLS] Skipping server auggie mcp - runtime disabled by user
+[2025-11-14T05:03:44.954Z] [DEBUG][TOOLS] Skipping server MacOS Control - runtime disabled by user
+[2025-11-14T05:03:44.954Z] [DEBUG][TOOLS] Skipping server desktop-commander - runtime disabled by user
+[2025-11-14T05:03:44.954Z] [DEBUG][TOOLS] Skipping server terminal - runtime disabled by user
+[2025-11-14T05:03:44.954Z] [DEBUG][TOOLS] Skipping server exa - runtime disabled by user
+[2025-11-14T05:03:44.954Z] [DEBUG][TOOLS] Skipping server Playwright - already initialized
+[2025-11-14T05:03:44.954Z] [DEBUG][TOOLS] Skipping server cloudflare - runtime disabled by user
+[2025-11-14T05:03:44.954Z] [DEBUG][TOOLS] Found 0 servers to initialize []
+[2025-11-14T05:03:44.954Z] [DEBUG][TOOLS] MCP Service initialization complete. Total tools available: 47
+[emitAgentProgress] Called for session session_1763096624953_2lapbdptx, panel visible: false, isSnoozed: undefined
+[emitAgentProgress] Panel not visible. Session session_1763096624953_2lapbdptx snoozed check: false
+[emitAgentProgress] Panel auto-show suppressed; NOT showing panel for session session_1763096624953_2lapbdptx
+[tipc.ts processWithAgentMode] Loading conversation history for conversationId: conv_1763096624941_jeuos4ubd
+[tipc.ts processWithAgentMode] Loaded conversation with 1 messages
+[tipc.ts processWithAgentMode] Converting 0 messages (excluding last message)
+[tipc.ts processWithAgentMode] previousConversationHistory roles: []
+[llm.ts processTranscriptWithAgentMode] Initializing conversationHistory for session session_1763096624953_2lapbdptx
+[llm.ts processTranscriptWithAgentMode] previousConversationHistory length: 0
+[llm.ts processTranscriptWithAgentMode] conversationHistory initialized with 1 messages, roles: [user]
+[llm.ts emitAgentProgress] Called for session session_1763096624953_2lapbdptx, panel visible: false, isSnoozed: false
+[llm.ts emitAgentProgress] conversationHistory length: 1, roles: [user]
+[llm.ts emitAgentProgress] Called for session session_1763096624953_2lapbdptx, panel visible: false, isSnoozed: false
+[llm.ts emitAgentProgress] conversationHistory length: 1, roles: [user]
+[2025-11-14T05:03:44.956Z] [DEBUG][LLM] ContextBudget: initial {
+  providerId: 'openai',
+  model: 'x-ai/grok-4-fast',
+  maxTokens: 64000,
+  targetTokens: 44800,
+  estTokens: 1773,
+  count: 2
+}
+[llm.ts emitAgentProgress] Panel not visible. Session session_1763096624953_2lapbdptx snoozed check: false
+[llm.ts emitAgentProgress] Panel auto-show suppressed; NOT showing panel for session session_1763096624953_2lapbdptx
+[llm.ts emitAgentProgress] Panel not visible. Session session_1763096624953_2lapbdptx snoozed check: false
+[llm.ts emitAgentProgress] Panel auto-show suppressed; NOT showing panel for session session_1763096624953_2lapbdptx
+[2025-11-14T05:03:44.956Z] [DEBUG][LLM] === LLM CALL START ===
+[2025-11-14T05:03:44.956Z] [DEBUG][LLM] Messages → {
+  count: 2,
+  totalChars: 7092,
+  messages: [
+    {
+      role: 'system',
+      content: 'You are an intelligent AI assistant capable of executing tools to help users accomplish complex tasks. You operate autonomously and work iteratively until goals are fully achieved.\n' +
+        '\n' +
+        'CORE PRINCIPLES:\n' +
+        "- Work autonomously until the user's request is completely resolved\n" +
+        '- Use available tools iteratively and strategically to gather information and execute actions\n' +
+        '- Use exact tool names from the available tools list (including server prefixes like "server:tool_name")\n' +
+        '- Prefer using tools to gather information rather than asking users for details\n' +
+        "- Continue working until the user's request is fully satisfied - only stop when the task is complete\n" +
+        '\n' +
+        'TOOL USAGE PHILOSOPHY:\n' +
+        '- ALWAYS follow tool schemas exactly as specified with all required parameters\n' +
+        '- NEVER call tools that are not explicitly provided in the available tools list\n' +
+        '- If you need additional information that you can get via tool calls, prefer that over asking the user\n' +
+        '- Use tools proactively to explore and understand the context before making changes\n' +
+        '- When making code changes, ensure they can be executed immediately by the user\n' +
+        '\n' +
+        '# Tone and style\n' +
+        'You should be concise, direct, and to the point.\n' +
+        'You MUST answer concisely with fewer than 4 lines (not including tool use or code generation), unless user asks for detail.\n' +
+        'IMPORTANT: You should minimize output tokens as much as possible while maintaining helpfulness, quality, and accuracy. Only address the specific query or task at hand, avoiding tangential information unless absolutely critical for completing the request. If you can answer in 1-3 sentences or a short paragraph, please do.\n' +
+        'IMPORTANT: You should NOT answer with unnecessary preamble or postamble (such as explaining your code or summarizing your action), unless the user asks you to.\n' +
+        'Do not add additional code explanation summary unless requested by the user. After working on a file, just stop, rather than providing an explanation of what you did.\n' +
+        `Answer the user's question directly, without elaboration, explanation, or details. One word answers are best. Avoid introductions, conclusions, and explanations. You MUST avoid text before/after your response, such as "The answer is <answer>.", "Here is the content of the file..." or "Based on the information provided, the answer is..." or "Here is what I will do next...". Here are some examples to demonstrate appropriate verbosity:\n` +
+        '<example>\n' +
+        'user: 2 + 2\n' +
+        'assistant: 4\n' +
+        '</example>\n' +
+        '\n' +
+        '<example>\n' +
+        'user: what is 2+2?\n' +
+        'assistant: 4\n' +
+        '</example>\n' +
+        '\n' +
+        '<example>\n' +
+        'user: is 11 a prime number?\n' +
+        'assistant: Yes\n' +
+        '</example>\n' +
+        '\n' +
+        '<example>\n' +
+        'user: what command should I run to list files in the current directory?\n' +
+        'assistant: ls\n' +
+        '</example>\n' +
+        '\n' +
+        '<example>\n' +
+        'user: what command should I run to watch files in the current directory?\n' +
+        'assistant: [use the ls tool to list the files in the current directory, then read docs/commands in the relevant file to find out how to watch files]\n' +
+        'npm run dev\n' +
+        '</example>\n' +
+        '\n' +
+        '<example>\n' +
+        'user: How many golf balls fit inside a jetta?\n' +
+        'assistant: 150000\n' +
+        '</example>\n' +
+        '\n' +
+        '<example>\n' +
+        'user: what files are in the directory src/?\n' +
+        'assistant: [runs ls and sees foo.c, bar.c, baz.c]\n' +
+        'user: which file contains the implementation of foo?\n' +
+        'assistant: src/foo.c\n' +
+        '</example>\n' +
+        '\n' +
+        'RESPONSE FORMAT:\n' +
+        'For tool calls:\n' +
+        '{\n' +
+        '  "toolCalls": [\n' +
+        '    {\n' +
+        '      "name": "exact_tool_name_from_available_list",\n' +
+        '      "arguments": { "param1": "value1", "param2": "value2" }\n' +
+        '    }\n' +
+        '  ],\n' +
+        `  "content": "Clear explanation of what you're doing and why",\n` +
+        '  "needsMoreWork": true\n' +
+        '}\n' +
+        '\n' +
+        'For final responses (no more tools needed):\n' +
+        '{\n' +
+        '  "content": "Your comprehensive final response with results",\n' +
+        '  "needsMoreWork": false\n' +
+        '}\n' +
+        '\n' +
+        'AGENT MODE - AUTONOMOUS OPERATION:\n' +
+        'You can see tool results and make follow-up calls. Work iteratively and thoroughly:\n' +
+        '\n' +
+        'WORKFLOW:\n' +
+        "1. Analyze the user's request comprehensively\n" +
+        '2. Gather necessary information using available tools\n' +
+        '3. Execute appropriate tools in logical sequence\n' +
+        '4. Review results and determine next steps\n' +
+        '5. Continue iterating until the goal is fully achieved\n' +
+        '6. Only set needsMoreWork: false when the task is completely resolved\n' +
+        '\n' +
+        '\n' +
+        '\n' +
+        'AVAILABLE TOOLS:\n' +
+        '- Playwright:browser_close: Close the page\n' +
+        '- Playwright:browser_resize: Resize the browser window\n' +
+        '  Parameters: {width: number (required), height: number (required)}\n' +
+        '- Playwright:browser_console_messages: Returns all console messages\n' +
+        '  Parameters: {onlyErrors: boolean}\n' +
+        '- Playwright:browser_handle_dialog: Handle a dialog\n' +
+        '  Parameters: {accept: boolean (required), promptText: string}\n' +
+        '- Playwright:browser_evaluate: Evaluate JavaScript expression on page or element\n' +
+        '  Parameters: {function: string (required), element: string, ref: string}\n' +
+        '- Playwright:browser_file_upload: Upload one or multiple files\n' +
+        '  Parameters: {paths: array}\n' +
+        '- Playwright:browser_fill_form: Fill multiple form fields\n' +
+        '  Parameters: {fields: array (required)}\n' +
+        '- Playwright:browser_install: Install the browser specified in the config. Call this if you get an error about the browser not being installed.\n' +
+        '- Playwright:browser_press_key: Press a key on the keyboard\n' +
+        '  Parameters: {key: string (required)}\n' +
+        '- Playwright:browser_type: Type text into editable element\n' +
+        '  Parameters: {element: string (required), ref: string (required), text: string (required), submit: boolean, slowly: boolean}\n' +
+        '- Playwright:browser_navigate: Navigate to a URL\n' +
+        '  Parameters: {url: string (required)}\n' +
+        '- Playwright:browser_navigate_back: Go back to the previous page\n' +
+        '- Playwright:browser_network_requests: Returns all network requests since loading the page\n' +
+        "- Playwright:browser_take_screenshot: Take a screenshot of the current page. You can't perform actions based on the screenshot, use browser_snapshot for actions.\n" +
+        '  Parameters: {type: string, filename: string, element: string, ref: string, fullPage: boolean}\n' +
+        '- Playwright:browser_snapshot: Capture accessibility snapshot of the current page, this is better than screenshot\n' +
+        '- Playwright:browser_click: Perform click on a web page\n' +
+        '  Parameters: {element: string (required), ref: string (required), doubleClick: boolean, button: string, modifiers: array}\n' +
+        '- Playwright:browser_drag: Perform drag and drop between two elements\n' +
+        '  Parameters: {startElement: string (required), startRef: string (required), endElement: string (required), endRef: string (required)}\n' +
+        '- Playwright:browser_hover: Hover over element on page\n' +
+        '  Parameters: {element: string (required), ref: string (required)}\n' +
+        '- Playwright:browser_select_option: Select an option in a dropdown\n' +
+        '  Parameters: {element: string (required), ref: string (required), values: array (required)}\n' +
+        '- Playwright:browser_tabs: List, create, close, or select a browser tab.\n' +
+        '  Parameters: {action: string (required), index: number}\n' +
+        '- Playwright:browser_wait_for: Wait for text to appear or disappear or a specified time to pass\n' +
+        '  Parameters: {time: number, text: string, textGone: string}user is livestreaming to audience and using you as an assistant. they have you complete tasks for them while they stream\n' +
+        '\n' +
+        'user has livestream status in `~/Desktop/stream_status.txt"\n' +
+        '\n' +
+        'user is working on github repos aj47/SpeakMCP, aj47/agent-battler, aj47/CreatorToolHub and aj47/techfren-discord-bot'
+    },
+    { role: 'user', content: ' Hello.' }
+  ]
+}
+[2025-11-14T05:03:44.957Z] [DEBUG][LLM] 🚀 Starting LLM call attempt {
+  provider: 'openai',
+  messagesCount: 2,
+  lastMessagePreview: ' Hello....'
+}
+[2025-11-14T05:03:44.957Z] [DEBUG][LLM] Attempting JSON Schema mode for model: x-ai/grok-4-fast
+[2025-11-14T05:03:44.958Z] [DEBUG][LLM] === OPENAI API REQUEST ===
+[2025-11-14T05:03:44.958Z] [DEBUG][LLM] HTTP Request {
+  url: 'https://openrouter.ai/api/v1/chat/completions',
+  model: 'x-ai/grok-4-fast',
+  messagesCount: 2,
+  responseFormat: {
+    type: 'json_schema',
+    json_schema: {
+      name: 'LLMToolCallResponse',
+      description: 'Response format for LLM tool calls with optional tool execution and content',
+      schema: [Object],
+      strict: true
+    }
+  },
+  estimatedTokens: 1773,
+  totalPromptLength: 7092,
+  contextWarning: null
+}
+[2025-11-14T05:03:44.958Z] [DEBUG][LLM] Request Body (truncated) {
+  model: 'x-ai/grok-4-fast',
+  messages: [
+    {
+      role: 'system',
+      content: 'You are an intelligent AI assistant capable of executing tools to help users accomplish complex tasks. You operate autonomously and work iteratively until goals are fully achieved.\n' +
+        '\n' +
+        'CORE PRINCIPLES:\n' +
+        '-... [7085 chars]'
+    },
+    { role: 'user', content: ' Hello.' }
+  ],
+  temperature: 0,
+  frequency_penalty: 0.5,
+  seed: 1,
+  response_format: {
+    type: 'json_schema',
+    json_schema: {
+      name: 'LLMToolCallResponse',
+      description: 'Response format for LLM tool calls with optional tool execution and content',
+      schema: [Object],
+      strict: true
+    }
+  }
+}
+[2025-11-14T05:03:44.959Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-14T05:03:44.954Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:29)
+[2025-11-14T05:03:44.959Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-14T05:03:44.955Z] [DEBUG][UI] [ConversationContext] External focusAgentSession received: session_1763096624953_2lapbdptx (debug.ts:29)
+[2025-11-14T05:03:44.959Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-14T05:03:44.955Z] [DEBUG][UI] [STATE] ConversationContext.focusedSessionId: {"from":null,"to":"session_1763096624953_2lapbdptx"} (debug.ts:29)
+[2025-11-14T05:03:44.959Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-14T05:03:44.958Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:29)
+[2025-11-14T05:03:44.959Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-14T05:03:44.958Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:29)
+[2025-11-14T05:03:44.959Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-14T05:03:44.958Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:29)
+[2025-11-14T05:03:44.965Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-14T05:03:44.965Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:29)
+[2025-11-14T05:03:44.965Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-14T05:03:44.965Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1763096624953_2lapbdptx (debug.ts:29)
+[2025-11-14T05:03:44.965Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-14T05:03:44.965Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1763096624953_2lapbdptx (debug.ts:29)
+[2025-11-14T05:03:44.967Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-14T05:03:44.967Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:29)
+[2025-11-14T05:03:44.967Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-14T05:03:44.967Z] [DEBUG][UI] [ConversationContext] New session progress: session_1763096624953_2lapbdptx (debug.ts:29)
+[2025-11-14T05:03:44.967Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-14T05:03:44.967Z] [DEBUG][UI] [ConversationContext] Auto-focusing session: session_1763096624953_2lapbdptx (debug.ts:29)
+[2025-11-14T05:03:44.967Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-14T05:03:44.967Z] [DEBUG][UI] [ConversationContext] Auto-focusing session: session_1763096624953_2lapbdptx (debug.ts:29)
+[2025-11-14T05:03:44.968Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-14T05:03:44.968Z] [DEBUG][UI] [ActiveAgentsSidebar] No sessions (active or recent), hiding sidebar (debug.ts:29)
+[2025-11-14T05:03:44.968Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-14T05:03:44.968Z] [DEBUG][UI] [ActiveAgentsSidebar] No sessions (active or recent), hiding sidebar (debug.ts:29)
+[2025-11-14T05:03:44.968Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-14T05:03:44.968Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:29)
+[2025-11-14T05:03:44.968Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-14T05:03:44.968Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:29)
+[2025-11-14T05:03:44.968Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-14T05:03:44.968Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1763096624953_2lapbdptx (debug.ts:29)
+[2025-11-14T05:03:44.968Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-14T05:03:44.968Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1763096624953_2lapbdptx (debug.ts:29)
+[2025-11-14T05:03:44.968Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-14T05:03:44.968Z] [DEBUG][UI] [ActiveAgentsSidebar] No sessions (active or recent), hiding sidebar (debug.ts:29)
+[2025-11-14T05:03:44.968Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-14T05:03:44.968Z] [DEBUG][UI] [ActiveAgentsSidebar] No sessions (active or recent), hiding sidebar (debug.ts:29)
+[2025-11-14T05:03:44.968Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-14T05:03:44.968Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:29)
+[2025-11-14T05:03:44.986Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-14T05:03:44.986Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:29)
+[2025-11-14T05:03:44.986Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-14T05:03:44.986Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:29)
+[2025-11-14T05:03:44.986Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-14T05:03:44.986Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:29)
+[2025-11-14T05:03:44.987Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-14T05:03:44.986Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:29)
+[2025-11-14T05:03:44.994Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-14T05:03:44.994Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:29)
+[2025-11-14T05:03:44.994Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-14T05:03:44.994Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:29)
+[2025-11-14T05:03:44.995Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-14T05:03:44.995Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1763096624953_2lapbdptx (debug.ts:29)
+[2025-11-14T05:03:44.995Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-14T05:03:44.995Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1763096624953_2lapbdptx (debug.ts:29)
+[2025-11-14T05:03:44.995Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-14T05:03:44.995Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1763096624953_2lapbdptx (debug.ts:29)
+[2025-11-14T05:03:44.995Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-14T05:03:44.995Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1763096624953_2lapbdptx (debug.ts:29)
+[2025-11-14T05:03:44.995Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-14T05:03:44.995Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1763096624953_2lapbdptx (debug.ts:29)
+[2025-11-14T05:03:44.995Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-14T05:03:44.995Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1763096624953_2lapbdptx (debug.ts:29)
+[2025-11-14T05:03:45.010Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-14T05:03:45.010Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:29)
+[2025-11-14T05:03:45.010Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-14T05:03:45.010Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:29)
+[2025-11-14T05:03:45.010Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-14T05:03:45.010Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:29)
+[window.ts] getSavedSizeForMode(agent) - checking config...
+[window.ts] Found saved agent mode size: { width: 312, height: 357 }
+[window.ts] getSavedSizeForMode(agent) - checking config...
+[window.ts] Found saved agent mode size: { width: 312, height: 357 }
+[AgentSessionTracker] getActiveSessions called, returning 1 sessions: [
+  {
+    id: 'session_1763096624953_2lapbdptx',
+    title: ' Hello.',
+    snoozed: undefined
+  }
+]
+[2025-11-14T05:03:45.971Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-14T05:03:45.971Z] [DEBUG][UI] [ActiveAgentsSidebar] Sessions updated: [object Object] (debug.ts:29)
+[2025-11-14T05:03:46.470Z] [DEBUG][LLM] ✅ HTTP 200 Response received {
+  hasError: false,
+  hasChoices: true,
+  choicesCount: 1,
+  firstChoicePreview: {
+    hasMessage: true,
+    hasContent: true,
+    contentType: 'string',
+    contentLength: 70
+  }
+}
+[2025-11-14T05:03:46.471Z] [DEBUG][LLM] HTTP Response (full) {
+  dataKeys: [
+    'id',      'provider',
+    'model',   'object',
+    'created', 'choices',
+    'usage'
+  ],
+  data: '{"id":"gen-1763096625-pfv4vcPFgVs3gsbw2I4Z","provider":"xAI","model":"x-ai/grok-4-fast","object":"chat.completion","created":1763096625,"choices":[{"logprobs":null,"finish_reason":"stop","native_finish_reason":"completed","index":0,"message":{"role":"assistant","content":"{\\"content\\":\\"Hello! How can I assist you today?\\",\\"needsMoreWork\\":false}","refusal":null,"reasoning":null,"reasoning_details":[{"type":"reasoning.encrypted","data":"mbDvO/UZxmf3SSg6BwXne0u/Ez9Xy+2yhdZptyzWZftv1MLEDTk8GvPbtB2WurlCN/XcVlRq31RMTA1QNnB0+UflDj2XeBbWBH2Wa2qoCjyt5Adh6BLbohKV5oAGNlGIuzlXkJywg0jeqrXgxIakqyAc3bPVs3l2PCl0HHUv6c37J0EyaSSody8wbbLZYYNWqrBBLCG3HQdxsd6uuTBCY+zKlCawDSGgXREMwDk9N5iySBdAXrKz9mZ0jFNxlEkWtJUgIJfBJHGVFHxfga3sU3bHDJGofhxggsc7NJCm7Fw1PoCi0ZrvWvlX485ckI65jrsb1K5yusY28iuhyLH7+iFWuLD19lQJytoZ7G9YKiwqSs1LwDnrq9HI0rqqc9m/Hnck443FPRnO5MTdQeAPy0umEgW9h3MNTbHGmxKxdNjVyD8SLGaRLYKGJJ6Hxr27NNLCrmGOcuoBd0rzS2XgpQQTy78iy/mXBl5p0sCsC5M0xonPXTs3jypIPFNwUKzDz/GZtiZpH7vh/z0cpowPpZv0JgBOj6W9K1Imk9QSO8wXgHfI9/LatM18NhZdCfJTk/NAYGBmNpiNuICcSj7Q8rLdL1vxDCEpMnNGHLS752HJkKEMlvPC4D9QkGusNOBBZWgqIGAh3KXNTTYYB06wZuy3CemA6gcTR5wX5tjzoIU3GMMqU821Nkt3nYQ3+5AzPLbZu5OnpcoXiiNl+25l9DN0wLKdm/izj1TnlbgYVnmVmurfOgje2eY05YiJYFx3OofV4QB6t3QOKyCP0EYw+ZSCw49UkXbLUGD1XIDFYrBxP/BR2Ow7Tm/It3YpPlCDA1f7uItSnzsTUazN9/ENYFN0qTea+AgpZ8cpPlBHxiCz43gpBJ0hTQrHfLisJzCbMRTWp1ceFm1AqDKtgzpqLRxYw6tJnVrD4jz1/3YbQGeYQ9lfIZx07douR5tFuJHmnAkai6MzuL7TnYWYxYhDVjLyESGDe3x+kJuDUM0","id":"rs_56adaf91-da09-c80f-21be-538e2ff59dc2","format":"xai-responses-v1","index":0}]}}],"usage":{"prompt_tokens":1874,"completion_tokens":177,"total_tokens":2051,"completion_tokens_details":{"reasoning_tokens":158}}}...'
+}
+[2025-11-14T05:03:46.471Z] [DEBUG][LLM] ✅ Confirmed capability for x-ai/grok-4-fast: {
+  supportsJsonSchema: true,
+  supportsJsonObject: true,
+  lastTested: 1763096626471
+}
+[2025-11-14T05:03:46.471Z] [DEBUG][LLM] Raw API response structure: {
+  hasChoices: true,
+  choicesLength: 1,
+  firstChoiceExists: true,
+  hasMessage: true,
+  hasContent: true,
+  fullResponse: '{\n' +
+    '  "id": "gen-1763096625-pfv4vcPFgVs3gsbw2I4Z",\n' +
+    '  "provider": "xAI",\n' +
+    '  "model": "x-ai/grok-4-fast",\n' +
+    '  "object": "chat.completion",\n' +
+    '  "created": 1763096625,\n' +
+    '  "choices": [\n' +
+    '    {\n' +
+    '      "logprobs": null,\n' +
+    '      "finish_reason": "stop",\n' +
+    '      "native_finish_reason": "completed",\n' +
+    '      "index": 0,\n' +
+    '      "message": {\n' +
+    '        "role": "assistant",\n' +
+    '        "content": "{\\"content\\":\\"Hello! How can I assist you today?\\",\\"needsMoreWork\\":false}",\n' +
+    '        "refusal": null,\n' +
+    '        "reasoning": null,\n' +
+    '        "reasoning_details": [\n' +
+    '          {\n' +
+    '            "type": "reasoning.encrypted",\n' +
+    '            "data": "mbDvO/UZxmf3SSg6BwXne0u/Ez9Xy+2yhdZptyzWZftv1MLEDTk8GvPbtB2WurlCN/XcVlRq31RMTA1QNnB0+UflDj2XeBbWBH2Wa2qoCjyt5Adh6BLbohKV5oAGNlGIuzlXkJywg0jeqrXgxIakqyAc3bPVs3l2PCl0HHUv6c37J0EyaSSody8wbbLZYYNWqrBBLCG3HQdxsd6uuTBCY+zKlCawDSGgXREMwDk9N5iySBdAXrKz9mZ0jFNxlEkWtJUgIJfBJHGVFHxfga3sU3bHDJGofhxggsc7NJCm7Fw1PoCi0ZrvWvlX485ckI65jrsb1K5yusY28iuhyLH7+iFWuLD19lQJytoZ7G9YKiwqSs1LwDnrq9HI0rqqc9m/Hnck443FPRnO5MTd...'
+}
+[2025-11-14T05:03:46.472Z] [DEBUG][LLM] 📝 Message content extracted: {
+  contentLength: 70,
+  contentPreview: '{"content":"Hello! How can I assist you today?","needsMoreWork":false}',
+  messageObjKeys: [ 'role', 'content', 'refusal', 'reasoning', 'reasoning_details' ],
+  messageObj: {
+    role: 'assistant',
+    content: '{"content":"Hello! How can I assist you today?","needsMoreWork":false}',
+    refusal: null,
+    reasoning: null,
+    reasoning_details: [ [Object] ]
+  }
+}
+[2025-11-14T05:03:46.472Z] [DEBUG][LLM] 🔍 JSON Extraction Result: {
+  hasJsonObject: true,
+  jsonObjectKeys: [ 'content', 'needsMoreWork' ],
+  hasToolCalls: false,
+  hasContent: true,
+  toolCallsCount: 0,
+  extractedObject: {
+    content: 'Hello! How can I assist you today?',
+    needsMoreWork: false
+  }
+}
+[2025-11-14T05:03:46.472Z] [DEBUG][LLM] ✅ Returning structured JSON response {
+  hasContent: true,
+  hasToolCalls: false,
+  toolCallsCount: 0,
+  needsMoreWork: false
+}
+[2025-11-14T05:03:46.472Z] [DEBUG][LLM] Response ← { content: 'Hello! How can I assist you today?', needsMoreWork: false }
+[2025-11-14T05:03:46.472Z] [DEBUG][LLM] === LLM CALL END ===
+[llm.ts emitAgentProgress] Called for session session_1763096624953_2lapbdptx, panel visible: false, isSnoozed: false
+[llm.ts emitAgentProgress] conversationHistory length: 1, roles: [user]
+[2025-11-14T05:03:46.473Z] [DEBUG][TOOLS] Planned tool calls from LLM []
+[llm.ts emitAgentProgress] Called for session session_1763096624953_2lapbdptx, panel visible: false, isSnoozed: false
+[llm.ts emitAgentProgress] conversationHistory length: 2, roles: [user, assistant]
+[2025-11-14T05:03:46.473Z] [DEBUG][LLM] === OPENAI API REQUEST ===
+[2025-11-14T05:03:46.473Z] [DEBUG][LLM] HTTP Request {
+  url: 'https://openrouter.ai/api/v1/chat/completions',
+  model: 'x-ai/grok-4-fast',
+  messagesCount: 6,
+  responseFormat: {
+    type: 'json_schema',
+    json_schema: {
+      name: 'CompletionVerification',
+      description: "Strict verifier to determine if the user's request has been fully satisfied.",
+      schema: [Object],
+      strict: true
+    }
+  },
+  estimatedTokens: 116,
+  totalPromptLength: 464,
+  contextWarning: null
+}
+[2025-11-14T05:03:46.473Z] [DEBUG][LLM] Request Body (truncated) {
+  model: 'x-ai/grok-4-fast',
+  messages: [
+    {
+      role: 'system',
+      content: "You are a strict completion verifier. Determine if the user's original request has been fully satisfied in the conversation. Be conservative: if uncertain, mark not complete and list what's missing. R... [227 chars]"
+    },
+    { role: 'user', content: 'Original request:\n Hello.' },
+    { role: 'user', content: ' Hello.' },
+    {
+      role: 'assistant',
+      content: 'Hello! How can I assist you today?'
+    },
+    {
+      role: 'assistant',
+      content: 'Hello! How can I assist you today?'
+    },
+    {
+      role: 'user',
+      content: 'Return a JSON object with fields: isComplete (boolean), confidence (0..1), missingItems (string[]), reason (string). No extra commentary.'
+    }
+  ],
+  temperature: 0,
+  seed: 1,
+  response_format: {
+    type: 'json_schema',
+    json_schema: {
+      name: 'CompletionVerification',
+      description: "Strict verifier to determine if the user's request has been fully satisfied.",
+      schema: [Object],
+      strict: true
+    }
+  }
+}
+[llm.ts emitAgentProgress] Panel not visible. Session session_1763096624953_2lapbdptx snoozed check: false
+[llm.ts emitAgentProgress] Showing panel for non-snoozed session session_1763096624953_2lapbdptx
+[showPanelWindow] Called. Current visibility: false
+[window.ts] getSavedSizeForMode(agent) - checking config...
+[window.ts] Found saved agent mode size: { width: 312, height: 357 }
+[window.ts] getSavedSizeForMode(agent) - checking config...
+[window.ts] Found saved agent mode size: { width: 312, height: 357 }
+[showPanelWindow] Showing panel with showInactive() for agent mode
+[llm.ts emitAgentProgress] Panel not visible. Session session_1763096624953_2lapbdptx snoozed check: false
+[llm.ts emitAgentProgress] Showing panel for non-snoozed session session_1763096624953_2lapbdptx
+[showPanelWindow] Called. Current visibility: true
+[window.ts] getSavedSizeForMode(agent) - checking config...
+[window.ts] Found saved agent mode size: { width: 312, height: 357 }
+[window.ts] getSavedSizeForMode(agent) - checking config...
+[window.ts] Found saved agent mode size: { width: 312, height: 357 }
+[showPanelWindow] Showing panel with showInactive() for agent mode
+[2025-11-14T05:03:46.489Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-14T05:03:46.489Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:29)
+[2025-11-14T05:03:46.490Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-14T05:03:46.489Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1763096624953_2lapbdptx (debug.ts:29)
+[2025-11-14T05:03:46.490Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-14T05:03:46.489Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:29)
+[2025-11-14T05:03:46.490Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-14T05:03:46.490Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1763096624953_2lapbdptx (debug.ts:29)
+[2025-11-14T05:03:46.491Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-14T05:03:46.491Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:29)
+[2025-11-14T05:03:46.492Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-14T05:03:46.492Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:29)
+[2025-11-14T05:03:46.492Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-14T05:03:46.492Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1763096624953_2lapbdptx (debug.ts:29)
+[2025-11-14T05:03:46.492Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-14T05:03:46.492Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1763096624953_2lapbdptx (debug.ts:29)
+[2025-11-14T05:03:46.493Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-14T05:03:46.493Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:29)
+[2025-11-14T05:03:46.495Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-14T05:03:46.495Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:29)
+[2025-11-14T05:03:46.495Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-14T05:03:46.495Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:29)
+[2025-11-14T05:03:46.495Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-14T05:03:46.495Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:29)
+[2025-11-14T05:03:46.495Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-14T05:03:46.495Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:29)
+[2025-11-14T05:03:46.496Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-14T05:03:46.495Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1763096624953_2lapbdptx (debug.ts:29)
+[2025-11-14T05:03:46.496Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-14T05:03:46.495Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1763096624953_2lapbdptx (debug.ts:29)
+[WINDOW PANEL] show
+[2025-11-14T05:03:46.511Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-14T05:03:46.510Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:29)
+[2025-11-14T05:03:46.511Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-14T05:03:46.510Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:29)
+[2025-11-14T05:03:46.511Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-14T05:03:46.510Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:29)
+[AgentSessionTracker] getActiveSessions called, returning 1 sessions: [
+  {
+    id: 'session_1763096624953_2lapbdptx',
+    title: ' Hello.',
+    snoozed: undefined
+  }
+]
+[AgentSessionTracker] getActiveSessions called, returning 1 sessions: [
+  {
+    id: 'session_1763096624953_2lapbdptx',
+    title: ' Hello.',
+    snoozed: undefined
+  }
+]
+[2025-11-14T05:03:51.357Z] [DEBUG][LLM] ✅ HTTP 200 Response received {
+  hasError: false,
+  hasChoices: true,
+  choicesCount: 1,
+  firstChoicePreview: {
+    hasMessage: true,
+    hasContent: true,
+    contentType: 'string',
+    contentLength: 202
+  }
+}
+[2025-11-14T05:03:51.357Z] [DEBUG][LLM] HTTP Response (full) {
+  dataKeys: [
+    'id',      'provider',
+    'model',   'object',
+    'created', 'choices',
+    'usage'
+  ],
+  data: '{"id":"gen-1763096626-6bx25tYdBvZ7BVqALnek","provider":"xAI","model":"x-ai/grok-4-fast","object":"chat.completion","created":1763096626,"choices":[{"logprobs":null,"finish_reason":"stop","native_finish_reason":"completed","index":0,"message":{"role":"assistant","content":" {\\"isComplete\\":true,\\"confidence\\":1.0,\\"missingItems\\":[],\\"reason\\":\\"The original request was a simple greeting, and the assistant responded with an appropriate greeting, fully satisfying the interaction.\\"}","refusal":null,"reasoning":null,"reasoning_details":[{"type":"reasoning.encrypted","data":"/jgHZQ39c0P1GNfxQhguzbPMliIngOzG3qrvTmvQ0nbvf6jdDOnBmdN7O8aQ0rtYAiuWBZsP+BkP/3pxTgATqcxoUocu3LVqvVZyZDmdrvZ+nnOni6weoLBjOCnkWbkJzpSiFO++X+uYF1f+iP/wFM7t7auNfgA7NMQPLJtNyEwAl4rBoQvgErNTFcABej3i9nVXHVll96h7pVXUnq97fGOKRDW1/SCikIFN6f4aeP1k5g7eFbNFWkCqkC7MuAk6UVhw/2kKHCmoWCD9cGO9n9V0M1ZDU8jk1WKojjnsP39I3mAnnkVZm2WM/IddMI2vyfwN/6DoswQFn0Iex1kfMq+op6WVPLG6blH6oAKBuYuVooLbRQfuXYo/bOW0yBg15zPpjO6zKj5It2mUign18pOczJtN01Y9qk8L/Pq5zTZSrikDxuetcyJfnYqRXbVRripfcX4njqaB70z/GD2N5t6QXaMUe9y0ttzYEnZQJdgpKSiKxb0SONGClK5YtgYSGquTx79HZYolNxi+EW0cS5ka0Dy1mpvnsdTObcyszwK2buuBotQcog+31c+8FCWoPzfMJ2wlQk8HlKkda9RQ0wRx4eCow3aGfNLl/YqMJqqt7WW/Tx20D5B7qhHF0ackYREzuAZ0QBuyLH+H35DkEbixcMHpkxNQtnATYAB8Dy5DlrXrkzP7LWniZ2Q34Ly4tw82qA9Mc2u2bBy07Jw2PAKxrQMmY5rhgQy5E8fxt+QiZdQ/gyE3ccN4MT2dcYjg6lr/HxZJiWN2MYXN3XcjcVAovqNluKAUIMiiYRECQam6wsQBFbpPpRIQdX5E93+DhizcCqyoVITc9j+zT3l0mnp6VCU5OagzHAxJSYPMyZZpdzzeYqOMl19McBx22OZoTKJgHkwadJGgfjPaDLCUNnshn3VNC8fBMvNok4/VvpDr9v7XIRLvbaRbVmIfCUZosja9ZrdSNDi7XuNN/gU0H4sLTxDiFGhg0Azib22Gkshs3Z0mAIEbmJprm17iZI5pOg8gGgvDF8aQXCIQfU4rFTqcyAUAwbY4J2wLbvGxQ6eE46NbI7+uGJnV/H+K/o200faJhK1SaF1cyf1YCBf4/Kn+v36nfSgMHsC1Gvfq1KgoAgm64Sex4nxKKtD8CkcaGX4f9zhmnVALQPFfDfijwlz+9NEHzI70qy3Je/IRt3pHohshjlh2fceDmC6Pn1O+moxKhp8Yq2V5Z+bG2RbFI/bBHPF5BdPTu7V5FJB3YkXwHUKSYKbKeJWr7nbyTfiGId7SJUgCwayCI8Pl9LCsW56TARizd0OGHBKLTTWRtTP5m3JTvVbu+6TznOidVXxHuJ0HMUyfk76/qPgjV+lQwAoM3A3Dj/4E1tXK9zzSehqqwpRZWyWZ/bHROWF212l9IdvllfnKLJgiYu...'
+}
+[llm.ts emitAgentProgress] Called for session session_1763096624953_2lapbdptx, panel visible: true, isSnoozed: false
+[llm.ts emitAgentProgress] conversationHistory length: 2, roles: [user, assistant]
+[llm.ts emitAgentProgress] Skipping show check - panel visible: true, has sessionId: true
+[2025-11-14T05:03:51.358Z] [DEBUG][LLM] ContextBudget: initial {
+  providerId: 'openai',
+  model: 'x-ai/grok-4-fast',
+  maxTokens: 64000,
+  targetTokens: 44800,
+  estTokens: 1782,
+  count: 3
+}
+[2025-11-14T05:03:51.358Z] [DEBUG][LLM] === LLM CALL START ===
+[2025-11-14T05:03:51.358Z] [DEBUG][LLM] Messages → {
+  count: 3,
+  totalChars: 7126,
+  messages: [
+    {
+      role: 'system',
+      content: 'You are an intelligent AI assistant capable of executing tools to help users accomplish complex tasks. You operate autonomously and work iteratively until goals are fully achieved.\n' +
+        '\n' +
+        'CORE PRINCIPLES:\n' +
+        "- Work autonomously until the user's request is completely resolved\n" +
+        '- Use available tools iteratively and strategically to gather information and execute actions\n' +
+        '- Use exact tool names from the available tools list (including server prefixes like "server:tool_name")\n' +
+        '- Prefer using tools to gather information rather than asking users for details\n' +
+        "- Continue working until the user's request is fully satisfied - only stop when the task is complete\n" +
+        '\n' +
+        'TOOL USAGE PHILOSOPHY:\n' +
+        '- ALWAYS follow tool schemas exactly as specified with all required parameters\n' +
+        '- NEVER call tools that are not explicitly provided in the available tools list\n' +
+        '- If you need additional information that you can get via tool calls, prefer that over asking the user\n' +
+        '- Use tools proactively to explore and understand the context before making changes\n' +
+        '- When making code changes, ensure they can be executed immediately by the user\n' +
+        '\n' +
+        '# Tone and style\n' +
+        'You should be concise, direct, and to the point.\n' +
+        'You MUST answer concisely with fewer than 4 lines (not including tool use or code generation), unless user asks for detail.\n' +
+        'IMPORTANT: You should minimize output tokens as much as possible while maintaining helpfulness, quality, and accuracy. Only address the specific query or task at hand, avoiding tangential information unless absolutely critical for completing the request. If you can answer in 1-3 sentences or a short paragraph, please do.\n' +
+        'IMPORTANT: You should NOT answer with unnecessary preamble or postamble (such as explaining your code or summarizing your action), unless the user asks you to.\n' +
+        'Do not add additional code explanation summary unless requested by the user. After working on a file, just stop, rather than providing an explanation of what you did.\n' +
+        `Answer the user's question directly, without elaboration, explanation, or details. One word answers are best. Avoid introductions, conclusions, and explanations. You MUST avoid text before/after your response, such as "The answer is <answer>.", "Here is the content of the file..." or "Based on the information provided, the answer is..." or "Here is what I will do next...". Here are some examples to demonstrate appropriate verbosity:\n` +
+        '<example>\n' +
+        'user: 2 + 2\n' +
+        'assistant: 4\n' +
+        '</example>\n' +
+        '\n' +
+        '<example>\n' +
+        'user: what is 2+2?\n' +
+        'assistant: 4\n' +
+        '</example>\n' +
+        '\n' +
+        '<example>\n' +
+        'user: is 11 a prime number?\n' +
+        'assistant: Yes\n' +
+        '</example>\n' +
+        '\n' +
+        '<example>\n' +
+        'user: what command should I run to list files in the current directory?\n' +
+        'assistant: ls\n' +
+        '</example>\n' +
+        '\n' +
+        '<example>\n' +
+        'user: what command should I run to watch files in the current directory?\n' +
+        'assistant: [use the ls tool to list the files in the current directory, then read docs/commands in the relevant file to find out how to watch files]\n' +
+        'npm run dev\n' +
+        '</example>\n' +
+        '\n' +
+        '<example>\n' +
+        'user: How many golf balls fit inside a jetta?\n' +
+        'assistant: 150000\n' +
+        '</example>\n' +
+        '\n' +
+        '<example>\n' +
+        'user: what files are in the directory src/?\n' +
+        'assistant: [runs ls and sees foo.c, bar.c, baz.c]\n' +
+        'user: which file contains the implementation of foo?\n' +
+        'assistant: src/foo.c\n' +
+        '</example>\n' +
+        '\n' +
+        'RESPONSE FORMAT:\n' +
+        'For tool calls:\n' +
+        '{\n' +
+        '  "toolCalls": [\n' +
+        '    {\n' +
+        '      "name": "exact_tool_name_from_available_list",\n' +
+        '      "arguments": { "param1": "value1", "param2": "value2" }\n' +
+        '    }\n' +
+        '  ],\n' +
+        `  "content": "Clear explanation of what you're doing and why",\n` +
+        '  "needsMoreWork": true\n' +
+        '}\n' +
+        '\n' +
+        'For final responses (no more tools needed):\n' +
+        '{\n' +
+        '  "content": "Your comprehensive final response with results",\n' +
+        '  "needsMoreWork": false\n' +
+        '}\n' +
+        '\n' +
+        'AGENT MODE - AUTONOMOUS OPERATION:\n' +
+        'You can see tool results and make follow-up calls. Work iteratively and thoroughly:\n' +
+        '\n' +
+        'WORKFLOW:\n' +
+        "1. Analyze the user's request comprehensively\n" +
+        '2. Gather necessary information using available tools\n' +
+        '3. Execute appropriate tools in logical sequence\n' +
+        '4. Review results and determine next steps\n' +
+        '5. Continue iterating until the goal is fully achieved\n' +
+        '6. Only set needsMoreWork: false when the task is completely resolved\n' +
+        '\n' +
+        '\n' +
+        '\n' +
+        'AVAILABLE TOOLS:\n' +
+        '- Playwright:browser_close: Close the page\n' +
+        '- Playwright:browser_resize: Resize the browser window\n' +
+        '  Parameters: {width: number (required), height: number (required)}\n' +
+        '- Playwright:browser_console_messages: Returns all console messages\n' +
+        '  Parameters: {onlyErrors: boolean}\n' +
+        '- Playwright:browser_handle_dialog: Handle a dialog\n' +
+        '  Parameters: {accept: boolean (required), promptText: string}\n' +
+        '- Playwright:browser_evaluate: Evaluate JavaScript expression on page or element\n' +
+        '  Parameters: {function: string (required), element: string, ref: string}\n' +
+        '- Playwright:browser_file_upload: Upload one or multiple files\n' +
+        '  Parameters: {paths: array}\n' +
+        '- Playwright:browser_fill_form: Fill multiple form fields\n' +
+        '  Parameters: {fields: array (required)}\n' +
+        '- Playwright:browser_install: Install the browser specified in the config. Call this if you get an error about the browser not being installed.\n' +
+        '- Playwright:browser_press_key: Press a key on the keyboard\n' +
+        '  Parameters: {key: string (required)}\n' +
+        '- Playwright:browser_type: Type text into editable element\n' +
+        '  Parameters: {element: string (required), ref: string (required), text: string (required), submit: boolean, slowly: boolean}\n' +
+        '- Playwright:browser_navigate: Navigate to a URL\n' +
+        '  Parameters: {url: string (required)}\n' +
+        '- Playwright:browser_navigate_back: Go back to the previous page\n' +
+        '- Playwright:browser_network_requests: Returns all network requests since loading the page\n' +
+        "- Playwright:browser_take_screenshot: Take a screenshot of the current page. You can't perform actions based on the screenshot, use browser_snapshot for actions.\n" +
+        '  Parameters: {type: string, filename: string, element: string, ref: string, fullPage: boolean}\n' +
+        '- Playwright:browser_snapshot: Capture accessibility snapshot of the current page, this is better than screenshot\n' +
+        '- Playwright:browser_click: Perform click on a web page\n' +
+        '  Parameters: {element: string (required), ref: string (required), doubleClick: boolean, button: string, modifiers: array}\n' +
+        '- Playwright:browser_drag: Perform drag and drop between two elements\n' +
+        '  Parameters: {startElement: string (required), startRef: string (required), endElement: string (required), endRef: string (required)}\n' +
+        '- Playwright:browser_hover: Hover over element on page\n' +
+        '  Parameters: {element: string (required), ref: string (required)}\n' +
+        '- Playwright:browser_select_option: Select an option in a dropdown\n' +
+        '  Parameters: {element: string (required), ref: string (required), values: array (required)}\n' +
+        '- Playwright:browser_tabs: List, create, close, or select a browser tab.\n' +
+        '  Parameters: {action: string (required), index: number}\n' +
+        '- Playwright:browser_wait_for: Wait for text to appear or disappear or a specified time to pass\n' +
+        '  Parameters: {time: number, text: string, textGone: string}user is livestreaming to audience and using you as an assistant. they have you complete tasks for them while they stream\n' +
+        '\n' +
+        'user has livestream status in `~/Desktop/stream_status.txt"\n' +
+        '\n' +
+        'user is working on github repos aj47/SpeakMCP, aj47/agent-battler, aj47/CreatorToolHub and aj47/techfren-discord-bot'
+    },
+    { role: 'user', content: ' Hello.' },
+    {
+      role: 'assistant',
+      content: 'Hello! How can I assist you today?'
+    }
+  ]
+}
+[2025-11-14T05:03:51.359Z] [DEBUG][LLM] 🚀 Starting LLM call attempt {
+  provider: 'openai',
+  messagesCount: 3,
+  lastMessagePreview: 'Hello! How can I assist you today?...'
+}
+[2025-11-14T05:03:51.359Z] [DEBUG][LLM] Attempting JSON Schema mode for model: x-ai/grok-4-fast
+[2025-11-14T05:03:51.359Z] [DEBUG][LLM] === OPENAI API REQUEST ===
+[2025-11-14T05:03:51.359Z] [DEBUG][LLM] HTTP Request {
+  url: 'https://openrouter.ai/api/v1/chat/completions',
+  model: 'x-ai/grok-4-fast',
+  messagesCount: 3,
+  responseFormat: {
+    type: 'json_schema',
+    json_schema: {
+      name: 'LLMToolCallResponse',
+      description: 'Response format for LLM tool calls with optional tool execution and content',
+      schema: [Object],
+      strict: true
+    }
+  },
+  estimatedTokens: 1782,
+  totalPromptLength: 7126,
+  contextWarning: null
+}
+[2025-11-14T05:03:51.359Z] [DEBUG][LLM] Request Body (truncated) {
+  model: 'x-ai/grok-4-fast',
+  messages: [
+    {
+      role: 'system',
+      content: 'You are an intelligent AI assistant capable of executing tools to help users accomplish complex tasks. You operate autonomously and work iteratively until goals are fully achieved.\n' +
+        '\n' +
+        'CORE PRINCIPLES:\n' +
+        '-... [7085 chars]'
+    },
+    { role: 'user', content: ' Hello.' },
+    {
+      role: 'assistant',
+      content: 'Hello! How can I assist you today?'
+    }
+  ],
+  temperature: 0,
+  frequency_penalty: 0.5,
+  seed: 1,
+  response_format: {
+    type: 'json_schema',
+    json_schema: {
+      name: 'LLMToolCallResponse',
+      description: 'Response format for LLM tool calls with optional tool execution and content',
+      schema: [Object],
+      strict: true
+    }
+  }
+}
+[2025-11-14T05:03:51.371Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-14T05:03:51.370Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:29)
+[2025-11-14T05:03:51.371Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-14T05:03:51.370Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:29)
+[2025-11-14T05:03:51.371Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-14T05:03:51.371Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1763096624953_2lapbdptx (debug.ts:29)
+[2025-11-14T05:03:51.371Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-14T05:03:51.371Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1763096624953_2lapbdptx (debug.ts:29)
+[2025-11-14T05:03:51.371Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-14T05:03:51.371Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1763096624953_2lapbdptx (debug.ts:29)
+[2025-11-14T05:03:51.373Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-14T05:03:51.372Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:29)
+[2025-11-14T05:03:51.389Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-14T05:03:51.388Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:29)
+[2025-11-14T05:03:51.389Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-14T05:03:51.388Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:29)
+[2025-11-14T05:03:51.389Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-14T05:03:51.389Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:29)
+[AgentSessionTracker] getActiveSessions called, returning 1 sessions: [
+  {
+    id: 'session_1763096624953_2lapbdptx',
+    title: ' Hello.',
+    snoozed: undefined
+  }
+]
+[2025-11-14T05:03:51.983Z] [DEBUG][LLM] ✅ HTTP 200 Response received {
+  hasError: false,
+  hasChoices: true,
+  choicesCount: 1,
+  firstChoicePreview: {
+    hasMessage: true,
+    hasContent: true,
+    contentType: 'string',
+    contentLength: 120
+  }
+}
+[2025-11-14T05:03:51.983Z] [DEBUG][LLM] HTTP Response (full) {
+  dataKeys: [
+    'id',      'provider',
+    'model',   'object',
+    'created', 'choices',
+    'usage'
+  ],
+  data: `{"id":"gen-1763096631-EVNLPCVUhZOlCe9OGrFi","provider":"xAI","model":"x-ai/grok-4-fast","object":"chat.completion","created":1763096631,"choices":[{"logprobs":null,"finish_reason":"stop","native_finish_reason":"completed","index":0,"message":{"role":"assistant","content":"No, I don't think so. I'm here to help with any tasks related to your GitHub repos or streaming setup. What do you need?","refusal":null,"reasoning":null,"reasoning_details":[{"type":"reasoning.encrypted","data":"ZpU6/vOIf+ofZgWuCqJEPC+oKC8Vdm5S6jBpG6KdEba3cJIxAawkOn5kahgNEgykNG3vRc/m3L9SEdzlayvYyRSwsODKkdLonLamScZulcHklFM8zbiE+CD1aTgXYAWRHvBoqbNESYLaejJtTjxm148XnyyRuC/tkOrI59mFEoTWH0y/B1oD/Fwrhc4xVY8rVjwu0g","id":"rs_0a781537-85aa-1814-8a4b-a57d9c9a033b","format":"xai-responses-v1","index":0}]}}],"usage":{"prompt_tokens":1886,"completion_tokens":58,"total_tokens":1944,"completion_tokens_details":{"reasoning_tokens":29}}}...`
+}
+[2025-11-14T05:03:51.983Z] [DEBUG][LLM] ✅ Confirmed capability for x-ai/grok-4-fast: {
+  supportsJsonSchema: true,
+  supportsJsonObject: true,
+  lastTested: 1763096631983
+}
+[2025-11-14T05:03:51.983Z] [DEBUG][LLM] Raw API response structure: {
+  hasChoices: true,
+  choicesLength: 1,
+  firstChoiceExists: true,
+  hasMessage: true,
+  hasContent: true,
+  fullResponse: '{\n' +
+    '  "id": "gen-1763096631-EVNLPCVUhZOlCe9OGrFi",\n' +
+    '  "provider": "xAI",\n' +
+    '  "model": "x-ai/grok-4-fast",\n' +
+    '  "object": "chat.completion",\n' +
+    '  "created": 1763096631,\n' +
+    '  "choices": [\n' +
+    '    {\n' +
+    '      "logprobs": null,\n' +
+    '      "finish_reason": "stop",\n' +
+    '      "native_finish_reason": "completed",\n' +
+    '      "index": 0,\n' +
+    '      "message": {\n' +
+    '        "role": "assistant",\n' +
+    `        "content": "No, I don't think so. I'm here to help with any tasks related to your GitHub repos or streaming setup. What do you need?",\n` +
+    '        "refusal": null,\n' +
+    '        "reasoning": null,\n' +
+    '        "reasoning_details": [\n' +
+    '          {\n' +
+    '            "type": "reasoning.encrypted",\n' +
+    '            "data": "ZpU6/vOIf+ofZgWuCqJEPC+oKC8Vdm5S6jBpG6KdEba3cJIxAawkOn5kahgNEgykNG3vRc/m3L9SEdzlayvYyRSwsODKkdLonLamScZulcHklFM8zbiE+CD1aTgXYAWRHvBoqbNESYLaejJtTjxm148XnyyRuC/tkOrI59mFEoTWH0y/B1oD/Fwrhc4xVY8rVjwu0g",\n' +
+    '            "id": "rs_0a781537-85aa-1814-8a4b-a57d9c9a033b",\n' +
+    '            "format": "xai-responses-v1",\n' +
+    '            "index": 0\n' +
+    '          }\n' +
+    '        ]\n' +
+    '      }...'
+}
+[2025-11-14T05:03:51.983Z] [DEBUG][LLM] 📝 Message content extracted: {
+  contentLength: 120,
+  contentPreview: "No, I don't think so. I'm here to help with any tasks related to your GitHub repos or streaming setup. What do you need?",
+  messageObjKeys: [ 'role', 'content', 'refusal', 'reasoning', 'reasoning_details' ],
+  messageObj: {
+    role: 'assistant',
+    content: "No, I don't think so. I'm here to help with any tasks related to your GitHub repos or streaming setup. What do you need?",
+    refusal: null,
+    reasoning: null,
+    reasoning_details: [ [Object] ]
+  }
+}
+[2025-11-14T05:03:51.984Z] [DEBUG][LLM] 🔍 JSON Extraction Result: {
+  hasJsonObject: false,
+  jsonObjectKeys: [],
+  hasToolCalls: false,
+  hasContent: false,
+  toolCallsCount: 0,
+  extractedObject: null
+}
+[2025-11-14T05:03:51.984Z] [DEBUG][LLM] ✅ Returning final plain text response (needsMoreWork=false) { contentLength: 120 }
+[2025-11-14T05:03:51.984Z] [DEBUG][LLM] Response ← {
+  content: "No, I don't think so. I'm here to help with any tasks related to your GitHub repos or streaming setup. What do you need?",
+  needsMoreWork: false
+}
+[2025-11-14T05:03:51.984Z] [DEBUG][LLM] === LLM CALL END ===
+[llm.ts emitAgentProgress] Called for session session_1763096624953_2lapbdptx, panel visible: true, isSnoozed: false
+[llm.ts emitAgentProgress] conversationHistory length: 3, roles: [user, assistant, assistant]
+[llm.ts emitAgentProgress] Skipping show check - panel visible: true, has sessionId: true
+[AgentSessionTracker] Completing session: session_1763096624953_2lapbdptx, remaining sessions: 0
+[2025-11-14T05:03:51.998Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-14T05:03:51.998Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:29)
+[2025-11-14T05:03:51.998Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-14T05:03:51.998Z] [DEBUG][UI] [ConversationContext] Received progress update: [object Object] (debug.ts:29)
+[2025-11-14T05:03:51.999Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-14T05:03:51.998Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1763096624953_2lapbdptx (debug.ts:29)
+[2025-11-14T05:03:51.999Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-14T05:03:51.998Z] [DEBUG][UI] [ConversationContext] Clearing currentConversationId after agent completion: conv_1763096624941_jeuos4ubd (debug.ts:29)
+[2025-11-14T05:03:51.999Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-14T05:03:51.998Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1763096624953_2lapbdptx (debug.ts:29)
+[2025-11-14T05:03:51.999Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-14T05:03:51.999Z] [DEBUG][UI] [ConversationContext] Clearing currentConversationId after agent completion: conv_1763096624941_jeuos4ubd (debug.ts:29)
+[2025-11-14T05:03:51.999Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-14T05:03:51.999Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1763096624953_2lapbdptx (debug.ts:29)
+[2025-11-14T05:03:51.999Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-14T05:03:51.999Z] [DEBUG][UI] [ConversationContext] Progress changed for session: session_1763096624953_2lapbdptx (debug.ts:29)
+[2025-11-14T05:03:52.000Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-14T05:03:52.000Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:29)
+[2025-11-14T05:03:52.021Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-14T05:03:52.013Z] [DEBUG][UI] [Panel] agentProgress changed: [object Object] (debug.ts:29)
+[2025-11-14T05:03:52.022Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-14T05:03:52.013Z] [DEBUG][UI] [Panel] Overlay visibility check: [object Object] (debug.ts:29)
+[2025-11-14T05:03:52.022Z] [DEBUG][UI] [PANEL] [WARN] [2025-11-14T05:03:52.013Z] [DEBUG][UI] [ConversationContext] agentProgress changed: [object Object] (debug.ts:29)
+[AgentSessionTracker] getActiveSessions called, returning 0 sessions: []
+[2025-11-14T05:03:53.991Z] [DEBUG][UI] [MAIN] [WARN] [2025-11-14T05:03:53.991Z] [DEBUG][UI] [ActiveAgentsSidebar] Sessions updated: [object Object] (debug.ts:29)
+[AgentSessionTracker] getActiveSessions called, returning 0 sessions: []
+[AgentSessionTracker] getActiveSessions called, returning 0 sessions: []
+[AgentSessionTracker] getActiveSessions called, returning 0 sessions: []
+[AgentSessionTracker] getActiveSessions called, returning 0 sessions: []
+[AgentSessionTracker] getActiveSessions called, returning 0 sessions: []
+[AgentSessionTracker] getActiveSessions called, returning 0 sessions: []
+[WINDOW PANEL] close
+[WINDOW MAIN] close

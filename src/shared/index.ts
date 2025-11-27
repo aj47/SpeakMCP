@@ -1,3 +1,5 @@
+import { ModelPreset } from "./types"
+
 export const STT_PROVIDERS = [
   {
     label: "OpenAI",
@@ -144,12 +146,6 @@ export const OPENAI_COMPATIBLE_PRESETS = [
     baseUrl: "https://api.openai.com/v1",
   },
   {
-    label: "Groq",
-    value: "groq",
-    description: "Groq's fast inference API",
-    baseUrl: "https://api.groq.com/openai/v1",
-  },
-  {
     label: "OpenRouter",
     value: "openrouter",
     description: "Access to multiple AI models via OpenRouter",
@@ -160,6 +156,18 @@ export const OPENAI_COMPATIBLE_PRESETS = [
     value: "together",
     description: "Together AI's inference platform",
     baseUrl: "https://api.together.xyz/v1",
+  },
+  {
+    label: "Cerebras",
+    value: "cerebras",
+    description: "Cerebras fast inference API",
+    baseUrl: "https://api.cerebras.ai/v1",
+  },
+  {
+    label: "Zhipu GLM",
+    value: "zhipu",
+    description: "Zhipu AI GLM models (China)",
+    baseUrl: "https://open.bigmodel.cn/api/paas/v4",
   },
   {
     label: "Perplexity",
@@ -176,3 +184,51 @@ export const OPENAI_COMPATIBLE_PRESETS = [
 ] as const
 
 export type OPENAI_COMPATIBLE_PRESET_ID = (typeof OPENAI_COMPATIBLE_PRESETS)[number]["value"]
+
+// Helper to get built-in presets as ModelPreset objects (without API keys)
+export const getBuiltInModelPresets = (): ModelPreset[] => {
+  return OPENAI_COMPATIBLE_PRESETS.filter(p => p.value !== "custom").map(preset => ({
+    id: `builtin-${preset.value}`,
+    name: preset.label,
+    baseUrl: preset.baseUrl,
+    apiKey: "", // API key should be filled by user
+    isBuiltIn: true,
+  }))
+}
+
+// Default preset ID
+export const DEFAULT_MODEL_PRESET_ID = "builtin-openai"
+
+// Helper to check if a provider has TTS support
+export const providerHasTts = (providerId: string): boolean => {
+  return TTS_PROVIDERS.some(p => p.value === providerId)
+}
+
+// Helper to get TTS models for a provider
+export const getTtsModelsForProvider = (providerId: string) => {
+  switch (providerId) {
+    case 'openai':
+      return OPENAI_TTS_MODELS
+    case 'groq':
+      return GROQ_TTS_MODELS
+    case 'gemini':
+      return GEMINI_TTS_MODELS
+    default:
+      return []
+  }
+}
+
+// Helper to get TTS voices for a provider
+export const getTtsVoicesForProvider = (providerId: string, ttsModel?: string) => {
+  switch (providerId) {
+    case 'openai':
+      return OPENAI_TTS_VOICES
+    case 'groq':
+      // Groq voices depend on the selected model (English vs Arabic)
+      return ttsModel === 'playai-tts-arabic' ? GROQ_TTS_VOICES_ARABIC : GROQ_TTS_VOICES_ENGLISH
+    case 'gemini':
+      return GEMINI_TTS_VOICES
+    default:
+      return []
+  }
+}

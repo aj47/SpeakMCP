@@ -229,6 +229,19 @@ export function KeyRecorder({
   }
 
   const saveRecording = () => {
+    // Validate: must have at least one modifier key
+    const hasModifier = recordedKeys.ctrl || recordedKeys.shift || recordedKeys.alt || recordedKeys.meta
+    if (!hasModifier) {
+      // Don't save if no modifier key is pressed
+      return
+    }
+
+    // Validate: must have a non-modifier key
+    if (!recordedKeys.key) {
+      // Don't save if only modifier keys are pressed
+      return
+    }
+
     const internalFormat = keyComboToInternal(recordedKeys)
     onChange(internalFormat)
     setIsRecording(false)
@@ -250,7 +263,9 @@ export function KeyRecorder({
 
   const displayValue = value ? internalToDisplay(value) : ""
   const currentRecording = formatKeyCombo(recordedKeys)
-  const hasRecordedKeys = recordedKeys.ctrl || recordedKeys.shift || recordedKeys.alt || recordedKeys.meta || recordedKeys.key
+  // Valid key combo requires at least one modifier AND a non-modifier key
+  const hasModifier = recordedKeys.ctrl || recordedKeys.shift || recordedKeys.alt || recordedKeys.meta
+  const hasRecordedKeys = hasModifier && recordedKeys.key
 
   return (
     <div className={cn("flex items-center gap-2", className)}>

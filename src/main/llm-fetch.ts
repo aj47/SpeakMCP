@@ -5,6 +5,18 @@ import { isDebugLLM, logLLM } from "./debug"
 import { state, llmRequestAbortManager, agentSessionStateManager } from "./state"
 import OpenAI from "openai"
 
+/**
+ * Callback for reporting retry progress to the UI
+ */
+export type RetryProgressCallback = (info: {
+  isRetrying: boolean
+  attempt: number
+  maxAttempts?: number  // undefined for rate limits (infinite retries)
+  delaySeconds: number
+  reason: string
+  startedAt: number
+}) => void
+
 // Define the JSON schema for structured output
 const toolCallResponseSchema: OpenAI.ResponseFormatJSONSchema["json_schema"] = {
   name: "LLMToolCallResponse",
@@ -359,24 +371,41 @@ async function apiCallWithRetry<T>(
   retryCount: number = 3,
   baseDelay: number = 1000,
   maxDelay: number = 30000,
+  onRetryProgress?: RetryProgressCallback,
 ): Promise<T> {
   let lastError: unknown
   let attempt = 0
 
+  // Helper to clear retry status when done
+  const clearRetryStatus = () => {
+    if (onRetryProgress) {
+      onRetryProgress({
+        isRetrying: false,
+        attempt: 0,
+        delaySeconds: 0,
+        reason: "",
+        startedAt: 0,
+      })
+    }
+  }
+
   while (true) {
     // If an emergency stop has been requested, abort immediately
     if (state.shouldStopAgent) {
+      clearRetryStatus()
       throw lastError instanceof Error ? lastError : new Error("Aborted by emergency stop")
     }
 
     try {
       const response = await call()
+      clearRetryStatus()
       return response
     } catch (error) {
       lastError = error
 
       // Do not retry on abort or if we've been asked to stop
       if ((error as any)?.name === "AbortError" || state.shouldStopAgent) {
+        clearRetryStatus()
         throw error
       }
 
@@ -392,6 +421,7 @@ async function apiCallWithRetry<T>(
             stack: error instanceof Error ? error.stack : undefined,
           },
         )
+        clearRetryStatus()
         throw error
       }
 
@@ -420,11 +450,24 @@ async function apiCallWithRetry<T>(
           }
         )
 
-        // User-friendly console output so users can see progress
-        console.log(`⏳ Rate limit hit - waiting ${waitTimeSeconds} seconds before retrying... (attempt ${attempt + 1})`)
+        // User-friendly log output so users can see progress
+        logLLM(`⏳ Rate limit hit - waiting ${waitTimeSeconds} seconds before retrying... (attempt ${attempt + 1})`)
+
+        // Emit retry progress to UI
+        if (onRetryProgress) {
+          onRetryProgress({
+            isRetrying: true,
+            attempt: attempt + 1,
+            maxAttempts: undefined, // Rate limits retry indefinitely
+            delaySeconds: waitTimeSeconds,
+            reason: "Rate limit exceeded",
+            startedAt: Date.now(),
+          })
+        }
 
         // Wait before retrying unless we've been asked to stop
         if (state.shouldStopAgent) {
+          clearRetryStatus()
           throw new Error("Aborted by emergency stop")
         }
         await new Promise(resolve => setTimeout(resolve, delay))
@@ -445,6 +488,7 @@ async function apiCallWithRetry<T>(
             maxRetries: retryCount + 1,
           },
         )
+        clearRetryStatus()
         throw lastError
       }
 
@@ -464,15 +508,31 @@ async function apiCallWithRetry<T>(
         }
       )
 
-      // User-friendly console output so users can see retry progress
+      // User-friendly log output so users can see retry progress
+      const reason = error instanceof HttpError
+        ? `HTTP ${error.status} error`
+        : "Network error"
       if (error instanceof HttpError) {
-        console.log(`⏳ HTTP ${error.status} error - retrying in ${Math.round(delay / 1000)} seconds... (attempt ${attempt + 1}/${retryCount + 1})`)
+        logLLM(`⏳ HTTP ${error.status} error - retrying in ${Math.round(delay / 1000)} seconds... (attempt ${attempt + 1}/${retryCount + 1})`)
       } else {
-        console.log(`⏳ Network error - retrying in ${Math.round(delay / 1000)} seconds... (attempt ${attempt + 1}/${retryCount + 1})`)
+        logLLM(`⏳ Network error - retrying in ${Math.round(delay / 1000)} seconds... (attempt ${attempt + 1}/${retryCount + 1})`)
+      }
+
+      // Emit retry progress to UI
+      if (onRetryProgress) {
+        onRetryProgress({
+          isRetrying: true,
+          attempt: attempt + 1,
+          maxAttempts: retryCount + 1,
+          delaySeconds: Math.round(delay / 1000),
+          reason,
+          startedAt: Date.now(),
+        })
       }
 
       // Wait before retrying unless we've been asked to stop
       if (state.shouldStopAgent) {
+        clearRetryStatus()
         throw new Error("Aborted by emergency stop")
       }
       await new Promise(resolve => setTimeout(resolve, delay))
@@ -662,17 +722,22 @@ async function makeAPICallAttempt(
       const error = new Error(errorMessage)
       ;(error as any).isStructuredOutputError = errorMessageLower.includes("json_schema") ||
                                                errorMessageLower.includes("response_format") ||
+                                               errorMessageLower.includes("json_validate_failed") ||
                                                // Novita and other providers may return generic errors
                                                errorMessageLower.includes("model inference") ||
                                                errorMessageLower.includes("unknown error in the model")
 
-      // Enhanced debugging for structured output errors
-      if ((error as any).isStructuredOutputError) {
-        logLLM("⚠️ STRUCTURED OUTPUT ERROR DETECTED", {
+      // Extract failed_generation content if available (LLM response when JSON formatting fails)
+      if (data.error.failed_generation) {
+        ;(error as any).failedGeneration = data.error.failed_generation
+      }
+
+      // Log structured output errors for debugging
+      if ((error as any).isStructuredOutputError && isDebugLLM()) {
+        logLLM("⚠️ JSON Schema error", {
           model: requestBody.model,
-          errorMessage,
-          responseFormat: requestBody.response_format,
-          fullError: data.error
+          error: errorMessage,
+          hasFailedGeneration: !!data.error.failed_generation
         })
       }
 
@@ -725,7 +790,6 @@ async function makeOpenAICompatibleCall(
     model,
     messages,
     temperature: 0,
-    frequency_penalty: 0.5,
     seed: 1,
   }
 
@@ -771,12 +835,32 @@ async function makeOpenAICompatibleCall(
         }
       } catch (error: any) {
         if (error.isStructuredOutputError) {
+          // If we have failed_generation content, try one retry with JSON wrapping
+          if (error.failedGeneration) {
+            try {
+              const retryMessages = [
+                ...messages,
+                { role: "assistant", content: error.failedGeneration },
+                { role: "user", content: `Return your previous response as valid JSON: {"content": "...", "needsMoreWork": false}. Escape quotes properly.` }
+              ]
+
+              const retryData = await makeAPICallAttempt(baseURL, apiKey, {
+                ...baseRequestBody,
+                messages: retryMessages,
+                response_format: { type: "json_schema", json_schema: toolCallResponseSchema }
+              }, estimatedTokens, sessionId)
+
+              if (!isEmptyContentResponse(retryData)) {
+                recordStructuredOutputSuccess(model, 'json_schema')
+                return retryData
+              }
+            } catch {
+              // Continue to fallback modes
+            }
+          }
+
           if (isDebugLLM()) {
-            logLLM("⚠️ JSON Schema mode FAILED for model", model, "- falling back to JSON Object mode")
-            logLLM("Error details:", {
-              message: error.message,
-              stack: error.stack?.split('\n').slice(0, 3).join('\n')
-            })
+            logLLM("⚠️ JSON Schema failed for", model, "- falling back")
           }
           // Record that this model doesn't support JSON Schema
           recordStructuredOutputFailure(model, 'json_schema')
@@ -1155,6 +1239,7 @@ async function makeLLMCallAttempt(
 export async function makeLLMCallWithFetch(
   messages: Array<{ role: string; content: string }>,
   providerId?: string,
+  onRetryProgress?: RetryProgressCallback,
 ): Promise<LLMToolCallResponse> {
   const config = configStore.get()
   const chatProviderId = providerId || config.mcpToolsProviderId || "openai"
@@ -1165,9 +1250,14 @@ export async function makeLLMCallWithFetch(
       async () => makeLLMCallAttempt(messages, chatProviderId),
       config.apiRetryCount,
       config.apiRetryBaseDelay,
-      config.apiRetryMaxDelay
+      config.apiRetryMaxDelay,
+      onRetryProgress
     )
-  } catch (error) {
+  } catch (error: any) {
+    // Use failed_generation content as fallback if available
+    if (error?.failedGeneration) {
+      return { content: error.failedGeneration, needsMoreWork: false }
+    }
     diagnosticsService.logError("llm-fetch", "LLM call failed after all retries", error)
     throw error
   }

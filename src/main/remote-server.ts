@@ -116,8 +116,8 @@ async function runAgent(prompt: string): Promise<string> {
     mcpService.registerExistingProcessesWithAgentManager()
 
     const availableTools = mcpService.getAvailableTools()
-    const executeToolCall = async (toolCall: any): Promise<MCPToolResult> => {
-      return await mcpService.executeToolCall(toolCall)
+    const executeToolCall = async (toolCall: any, onProgress?: (message: string) => void): Promise<MCPToolResult> => {
+      return await mcpService.executeToolCall(toolCall, onProgress)
     }
 
     const agentResult = await processTranscriptWithAgentMode(

@@ -418,16 +418,32 @@ export async function fetchAvailableModels(
 ): Promise<ModelInfo[]> {
   const config = configStore.get()
 
-  // Include base URL in cache key so changing provider endpoints invalidates cache
+  // Include base URL and API key hash in cache key so changing credentials invalidates cache
+  // This ensures switching between presets with the same URL but different keys fetches fresh models
   const cacheKeyParts = [providerId]
   if (providerId === "openai") {
-    cacheKeyParts.push(config.openaiBaseUrl || "https://api.openai.com/v1")
+    const baseUrl = config.openaiBaseUrl || "https://api.openai.com/v1"
+    const apiKey = config.openaiApiKey || ""
+    cacheKeyParts.push(baseUrl)
+    // Include a simple hash of API key (first 8 chars) to invalidate cache on key change
+    // without exposing the full key in logs/debug output
+    if (apiKey) {
+      cacheKeyParts.push(apiKey.slice(0, 8))
+    }
   } else if (providerId === "groq") {
-    cacheKeyParts.push(config.groqBaseUrl || "https://api.groq.com/openai/v1")
+    const baseUrl = config.groqBaseUrl || "https://api.groq.com/openai/v1"
+    const apiKey = config.groqApiKey || ""
+    cacheKeyParts.push(baseUrl)
+    if (apiKey) {
+      cacheKeyParts.push(apiKey.slice(0, 8))
+    }
   } else if (providerId === "gemini") {
-    cacheKeyParts.push(
-      config.geminiBaseUrl || "https://generativelanguage.googleapis.com",
-    )
+    const baseUrl = config.geminiBaseUrl || "https://generativelanguage.googleapis.com"
+    const apiKey = config.geminiApiKey || ""
+    cacheKeyParts.push(baseUrl)
+    if (apiKey) {
+      cacheKeyParts.push(apiKey.slice(0, 8))
+    }
   }
 
   const cacheKey = cacheKeyParts.join("|")
@@ -616,4 +632,33 @@ function getFallbackModels(providerId: string): ModelInfo[] {
  */
 export function clearModelsCache(): void {
   modelsCache.clear()
+}
+
+/**
+ * Fetch models for a specific preset (base URL + API key combination)
+ * This is used by the preset manager to show available models when configuring a preset
+ */
+export async function fetchModelsForPreset(
+  baseUrl: string,
+  apiKey: string,
+): Promise<ModelInfo[]> {
+  if (!baseUrl || !apiKey) {
+    throw new Error("Base URL and API key are required")
+  }
+
+  // Use the same fetchOpenAIModels function but with the preset's credentials
+  try {
+    const models = await fetchOpenAIModels(baseUrl, apiKey)
+    return models
+  } catch (error) {
+    diagnosticsService.logError(
+      "models-service",
+      `Failed to fetch models for preset`,
+      {
+        baseUrl,
+        error: error instanceof Error ? error.message : String(error),
+      },
+    )
+    throw error
+  }
 }

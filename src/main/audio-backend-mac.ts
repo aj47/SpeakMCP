@@ -9,12 +9,13 @@ import fs from "fs"
 /**
  * Get the path to the screencapture-audio binary.
  * In development: macos-audio-tap/ScreenCaptureAudio/.build/release/screencapture-audio
- * In production: resources/bin/screencapture-audio
+ * In production: resources/bin/screencapture-audio (via process.resourcesPath)
  */
 function getScreenCaptureAudioPath(): string {
   // Production path (packaged app)
+  // electron-builder copies extraResources to process.resourcesPath
   const prodPath = path
-    .join(__dirname, "../../resources/bin/screencapture-audio")
+    .join(process.resourcesPath, "bin/screencapture-audio")
     .replace("app.asar", "app.asar.unpacked")
 
   if (fs.existsSync(prodPath)) {
@@ -26,6 +27,17 @@ function getScreenCaptureAudioPath(): string {
     __dirname,
     "../../macos-audio-tap/ScreenCaptureAudio/.build/release/screencapture-audio",
   )
+
+  if (fs.existsSync(devPath)) {
+    return devPath
+  }
+
+  // Fallback: check resources/bin relative to __dirname for dev mode
+  const fallbackPath = path.join(__dirname, "../../resources/bin/screencapture-audio")
+
+  if (fs.existsSync(fallbackPath)) {
+    return fallbackPath
+  }
 
   return devPath
 }

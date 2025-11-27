@@ -1,7 +1,8 @@
 import { app } from "electron"
 import path from "path"
 import fs from "fs"
-import { Config } from "@shared/types"
+import { Config, ModelPreset } from "@shared/types"
+import { getBuiltInModelPresets, DEFAULT_MODEL_PRESET_ID } from "@shared/index"
 
 export const dataFolder = path.join(app.getPath("appData"), process.env.APP_ID)
 
@@ -35,6 +36,10 @@ const getConfig = () => {
     conversationsEnabled: true,
     maxConversationsToKeep: 100,
     autoSaveConversations: true,
+    // Settings hotkey defaults
+    settingsHotkeyEnabled: true,
+    settingsHotkey: "ctrl-shift-s",
+    customSettingsHotkey: "",
     // Agent kill switch defaults
     agentKillSwitchEnabled: true,
     agentKillSwitchHotkey: "ctrl-shift-escape",
@@ -97,6 +102,13 @@ const getConfig = () => {
     mcpContextLastNMessages: 3,
     mcpContextSummarizeCharThreshold: 2000,
 
+    // Tool response processing defaults
+    mcpToolResponseProcessingEnabled: true,
+    mcpToolResponseLargeThreshold: 20000, // 20KB threshold for processing
+    mcpToolResponseCriticalThreshold: 50000, // 50KB threshold for aggressive summarization
+    mcpToolResponseChunkSize: 15000, // Size of chunks for processing
+    mcpToolResponseProgressUpdates: true, // Show progress updates during processing
+
     // Completion verification defaults
     mcpVerifyCompletionEnabled: true,
     mcpVerifyContextMaxItems: 10,
@@ -124,11 +136,49 @@ const getConfig = () => {
   }
 }
 
+/**
+ * Get the active model preset from config, merging built-in presets with saved API keys
+ */
+function getActivePreset(config: Partial<Config>): ModelPreset | undefined {
+  const builtIn = getBuiltInModelPresets()
+  const savedPresets = config.modelPresets || []
+  const currentPresetId = config.currentModelPresetId || DEFAULT_MODEL_PRESET_ID
+
+  // Merge built-in presets with saved API keys
+  const allPresets = builtIn.map(preset => {
+    const saved = savedPresets.find(s => s.id === preset.id)
+    return saved ? { ...preset, apiKey: saved.apiKey } : preset
+  })
+
+  // Add custom (non-built-in) presets
+  const customPresets = savedPresets.filter(p => !p.isBuiltIn)
+  allPresets.push(...customPresets)
+
+  return allPresets.find(p => p.id === currentPresetId)
+}
+
+/**
+ * Sync the active preset's credentials to legacy config fields for backward compatibility.
+ * Always syncs both fields together to keep them consistent with the active preset.
+ */
+function syncPresetToLegacyFields(config: Partial<Config>): Partial<Config> {
+  const activePreset = getActivePreset(config)
+  if (activePreset) {
+    // Always sync both fields to keep them consistent with the active preset
+    // If preset has empty values, legacy fields should reflect that
+    config.openaiApiKey = activePreset.apiKey || ''
+    config.openaiBaseUrl = activePreset.baseUrl || ''
+  }
+  return config
+}
+
 class ConfigStore {
   config: Config | undefined
 
   constructor() {
-    this.config = getConfig()
+    const loadedConfig = getConfig()
+    // Sync active preset credentials to legacy fields on startup
+    this.config = syncPresetToLegacyFields(loadedConfig) as Config
   }
 
   get(): Config {
@@ -136,9 +186,10 @@ class ConfigStore {
   }
 
   save(config: Config) {
-    this.config = config
+    // Sync active preset credentials before saving
+    this.config = syncPresetToLegacyFields(config) as Config
     fs.mkdirSync(dataFolder, { recursive: true })
-    fs.writeFileSync(configPath, JSON.stringify(config))
+    fs.writeFileSync(configPath, JSON.stringify(this.config))
   }
 }
 

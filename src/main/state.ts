@@ -9,6 +9,15 @@ interface AgentSessionState {
   processes: Set<ChildProcess>
 }
 
+// Pending tool approval request
+interface PendingToolApproval {
+  approvalId: string
+  sessionId: string
+  toolName: string
+  arguments: any
+  resolve: (approved: boolean) => void
+}
+
 export const state = {
   isRecording: false,
   isDesktopRecordingActive: false,
@@ -27,7 +36,8 @@ export const state = {
   agentSessions: new Map<string, AgentSessionState>(),
   // Prevent auto-showing panel for a short cooldown after hide
   panelAutoShowSuppressedUntil: 0,
-
+  // Pending tool approval requests
+  pendingToolApprovals: new Map<string, PendingToolApproval>(),
 }
 
 // Process management for agent mode
@@ -287,5 +297,65 @@ export const agentSessionStateManager = {
   // Get count of active sessions
   getActiveSessionCount(): number {
     return state.agentSessions.size
+  },
+}
+
+// Tool approval manager for inline approval in agent progress UI
+export const toolApprovalManager = {
+  // Request approval for a tool call - returns approvalId and a promise that resolves when user responds
+  requestApproval(sessionId: string, toolName: string, args: any): { approvalId: string; promise: Promise<boolean> } {
+    const approvalId = `${sessionId}-${Date.now()}-${Math.random().toString(36).slice(2)}`
+
+    const promise = new Promise<boolean>((resolve) => {
+      const approval: PendingToolApproval = {
+        approvalId,
+        sessionId,
+        toolName,
+        arguments: args,
+        resolve,
+      }
+      state.pendingToolApprovals.set(approvalId, approval)
+    })
+
+    return { approvalId, promise }
+  },
+
+  // Respond to a tool approval request
+  respondToApproval(approvalId: string, approved: boolean): boolean {
+    const approval = state.pendingToolApprovals.get(approvalId)
+    if (approval) {
+      approval.resolve(approved)
+      state.pendingToolApprovals.delete(approvalId)
+      return true
+    }
+    return false
+  },
+
+  // Get pending approval for a session
+  getPendingApproval(sessionId: string): PendingToolApproval | undefined {
+    for (const approval of state.pendingToolApprovals.values()) {
+      if (approval.sessionId === sessionId) {
+        return approval
+      }
+    }
+    return undefined
+  },
+
+  // Cancel all pending approvals for a session (e.g., when session is stopped)
+  cancelSessionApprovals(sessionId: string): void {
+    for (const [approvalId, approval] of state.pendingToolApprovals.entries()) {
+      if (approval.sessionId === sessionId) {
+        approval.resolve(false) // Deny the tool call
+        state.pendingToolApprovals.delete(approvalId)
+      }
+    }
+  },
+
+  // Cancel all pending approvals
+  cancelAllApprovals(): void {
+    for (const approval of state.pendingToolApprovals.values()) {
+      approval.resolve(false) // Deny all tool calls
+    }
+    state.pendingToolApprovals.clear()
   },
 }

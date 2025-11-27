@@ -6,16 +6,14 @@ import {
   MCPToolResult,
 } from "./mcp-service"
 import { AgentProgressStep, AgentProgressUpdate } from "../shared/types"
-import { getRendererHandlers } from "@egoist/tipc/main"
-import { WINDOWS, showPanelWindow } from "./window"
-import { RendererHandlers } from "./renderer-handlers"
 import { diagnosticsService } from "./diagnostics"
 import { makeStructuredContextExtraction, ContextExtractionResponse } from "./structured-output"
-import { makeLLMCallWithFetch, makeTextCompletionWithFetch, verifyCompletionWithFetch } from "./llm-fetch"
+import { makeLLMCallWithFetch, makeTextCompletionWithFetch, verifyCompletionWithFetch, RetryProgressCallback } from "./llm-fetch"
 import { constructSystemPrompt } from "./system-prompts"
-import { state, agentSessionStateManager, isPanelAutoShowSuppressed } from "./state"
+import { state, agentSessionStateManager } from "./state"
 import { isDebugLLM, logLLM, isDebugTools, logTools } from "./debug"
 import { shrinkMessagesForLLM } from "./context-budget"
+import { emitAgentProgress } from "./emit-agent-progress"
 import { agentSessionTracker } from "./agent-session-tracker"
 
 /**
@@ -244,66 +242,6 @@ export interface AgentModeResponse {
   totalIterations: number
 }
 
-// Helper function to emit progress updates to the renderer with better error handling
-// Note: This function now expects sessionId to be included in the update object
-async function emitAgentProgress(update: AgentProgressUpdate) {
-  const panel = WINDOWS.get("panel")
-  if (!panel) {
-    console.warn("Panel window not available for progress update")
-    return
-  }
-
-  console.log(`[llm.ts emitAgentProgress] Called for session ${update.sessionId}, panel visible: ${panel.isVisible()}, isSnoozed: ${update.isSnoozed}`)
-  console.log(`[llm.ts emitAgentProgress] conversationHistory length: ${update.conversationHistory?.length || 0}, roles: [${update.conversationHistory?.map(m => m.role).join(', ') || 'none'}]`)
-
-  // Only show the panel window if it's not visible AND the session is not snoozed
-  if (!panel.isVisible() && update.sessionId) {
-    // Check if this session is snoozed before showing the panel
-    const { agentSessionTracker } = await import("./agent-session-tracker")
-    const isSnoozed = agentSessionTracker.isSessionSnoozed(update.sessionId)
-
-    console.log(`[llm.ts emitAgentProgress] Panel not visible. Session ${update.sessionId} snoozed check: ${isSnoozed}`)
-
-    if (isPanelAutoShowSuppressed()) {
-      console.log(`[llm.ts emitAgentProgress] Panel auto-show suppressed; NOT showing panel for session ${update.sessionId}`)
-    } else if (!isSnoozed) {
-      // Only show panel for non-snoozed sessions
-      console.log(`[llm.ts emitAgentProgress] Showing panel for non-snoozed session ${update.sessionId}`)
-      showPanelWindow()
-    } else {
-      console.log(`[llm.ts emitAgentProgress] Session ${update.sessionId} is snoozed, NOT showing panel`)
-    }
-  } else {
-    console.log(`[llm.ts emitAgentProgress] Skipping show check - panel visible: ${panel.isVisible()}, has sessionId: ${!!update.sessionId}`)
-  }
-
-  // Also send updates to main window if it's open for live progress visualization
-  const main = WINDOWS.get("main")
-  if (main && main.isVisible()) {
-    const mainHandlers = getRendererHandlers<RendererHandlers>(main.webContents)
-    setTimeout(() => mainHandlers.agentProgressUpdate.send(update), 10)
-  }
-
-  try {
-    const handlers = getRendererHandlers<RendererHandlers>(panel.webContents)
-    if (!handlers.agentProgressUpdate) {
-      console.warn("Agent progress handler not available")
-      return
-    }
-
-    // Add a small delay to ensure UI updates are processed
-    setTimeout(() => {
-      try {
-        handlers.agentProgressUpdate.send(update)
-      } catch (error) {
-        console.warn("Failed to send progress update:", error)
-      }
-    }, 10)
-  } catch (error) {
-    console.warn("Failed to get renderer handlers:", error)
-  }
-}
-
 // Helper function to create progress steps
 function createProgressStep(
   type: AgentProgressStep["type"],
@@ -388,7 +326,36 @@ function analyzeToolCapabilities(
       ],
     },
     web: {
-      keywords: ["web", "http", "api", "request", "url", "fetch", "search"],
+      keywords: [
+        "web",
+        "http",
+        "api",
+        "request",
+        "url",
+        "fetch",
+        "search",
+        "amazon",
+        "google",
+        "website",
+        "online",
+        "browser",
+        "navigate",
+        "click",
+        "form",
+        "login",
+        "purchase",
+        "buy",
+        "order",
+        "cart",
+        "checkout",
+        "email",
+        "gmail",
+        "social media",
+        "facebook",
+        "twitter",
+        "linkedin",
+        "instagram",
+      ],
       toolDescriptionKeywords: [
         "web",
         "http",
@@ -398,6 +365,12 @@ function analyzeToolCapabilities(
         "fetch",
         "search",
         "browser",
+        "navigate",
+        "click",
+        "snapshot",
+        "screenshot",
+        "playwright",
+        "automation",
       ],
     },
     communication: {
@@ -465,7 +438,7 @@ function analyzeToolCapabilities(
 export async function processTranscriptWithAgentMode(
   transcript: string,
   availableTools: MCPTool[],
-  executeToolCall: (toolCall: MCPToolCall) => Promise<MCPToolResult>,
+  executeToolCall: (toolCall: MCPToolCall, onProgress?: (message: string) => void) => Promise<MCPToolResult>,
   maxIterations: number = 10,
   previousConversationHistory?: Array<{
     role: "user" | "assistant" | "tool"
@@ -504,21 +477,115 @@ export async function processTranscriptWithAgentMode(
   // Create session state for this agent run
   agentSessionStateManager.createSession(currentSessionId)
 
-  // Create bound emitter that always includes sessionId, conversationId, snooze state and sessionStartIndex
+  // Create bound emitter that always includes sessionId, conversationId, snooze state, sessionStartIndex, and conversationTitle
   const emit = (
-    update: Omit<AgentProgressUpdate, 'sessionId' | 'conversationId' | 'isSnoozed'>,
+    update: Omit<AgentProgressUpdate, 'sessionId' | 'conversationId' | 'isSnoozed' | 'conversationTitle'>,
   ) => {
     const isSnoozed = agentSessionTracker.isSessionSnoozed(currentSessionId)
+    const session = agentSessionTracker.getSession(currentSessionId)
+    const conversationTitle = session?.conversationTitle
 
     // Fire and forget - don't await, but catch errors
     emitAgentProgress({
       ...update,
       sessionId: currentSessionId,
       conversationId: currentConversationId,
+      conversationTitle,
       isSnoozed,
       sessionStartIndex,
     }).catch(err => {
-      console.warn("[emit] Failed to emit agent progress:", err)
+      logLLM("[emit] Failed to emit agent progress:", err)
+    })
+  }
+
+  // Helper function to save a message incrementally to the conversation
+  // This ensures messages are persisted even if the agent crashes or is stopped
+  const saveMessageIncremental = async (
+    role: "user" | "assistant" | "tool",
+    content: string,
+    toolCalls?: MCPToolCall[],
+    toolResults?: MCPToolResult[]
+  ) => {
+    if (!currentConversationId) {
+      return // No conversation to save to
+    }
+
+    try {
+      const { conversationService } = await import("./conversation-service")
+
+      // Convert toolResults from MCPToolResult format to stored format
+      const convertedToolResults = toolResults?.map(tr => ({
+        success: !tr.isError,
+        content: Array.isArray(tr.content)
+          ? tr.content.map(c => c.text).join("\n")
+          : String(tr.content || ""),
+        error: tr.isError
+          ? (Array.isArray(tr.content) ? tr.content.map(c => c.text).join("\n") : String(tr.content || ""))
+          : undefined
+      }))
+
+      await conversationService.addMessageToConversation(
+        currentConversationId,
+        content,
+        role,
+        toolCalls,
+        convertedToolResults
+      )
+
+      if (isDebugLLM()) {
+        logLLM("💾 Saved message incrementally", {
+          conversationId: currentConversationId,
+          role,
+          contentLength: content.length,
+          hasToolCalls: !!toolCalls,
+          hasToolResults: !!toolResults
+        })
+      }
+    } catch (error) {
+      // Log but don't throw - persistence failures shouldn't crash the agent
+      logLLM("[saveMessageIncremental] Failed to save message:", error)
+      diagnosticsService.logWarning("llm", "Failed to save message incrementally", error)
+    }
+  }
+
+  // Helper function to add a message to conversation history AND save it incrementally
+  // This ensures all messages are both in memory and persisted to disk
+  const addMessage = (
+    role: "user" | "assistant" | "tool",
+    content: string,
+    toolCalls?: MCPToolCall[],
+    toolResults?: MCPToolResult[],
+    timestamp?: number
+  ) => {
+    // Add to in-memory history
+    const message: typeof conversationHistory[0] = {
+      role,
+      content,
+      toolCalls,
+      toolResults,
+      timestamp: timestamp || Date.now()
+    }
+    conversationHistory.push(message)
+
+    // Save to disk asynchronously (fire and forget)
+    saveMessageIncremental(role, content, toolCalls, toolResults).catch(err => {
+      logLLM("[addMessage] Failed to save message:", err)
+    })
+  }
+
+  // Track current iteration for retry progress callback
+  // This is updated in the agent loop and read by onRetryProgress
+  let currentIterationRef = 0
+
+  // Create retry progress callback that emits updates to the UI
+  // This callback is passed to makeLLMCall to show retry status
+  const onRetryProgress: RetryProgressCallback = (retryInfo) => {
+    emit({
+      currentIteration: currentIterationRef,
+      maxIterations,
+      steps: [], // Empty - retry info is separate from steps
+      isComplete: false,
+      retryInfo: retryInfo.isRetrying ? retryInfo : undefined,
     })
   }
 
@@ -581,10 +648,10 @@ export async function processTranscriptWithAgentMode(
     return history.slice(-8) // Last 8 messages provide sufficient context
   }
 
-  console.log(`[llm.ts processTranscriptWithAgentMode] Initializing conversationHistory for session ${currentSessionId}`)
-  console.log(`[llm.ts processTranscriptWithAgentMode] previousConversationHistory length: ${previousConversationHistory?.length || 0}`)
+  logLLM(`[llm.ts processTranscriptWithAgentMode] Initializing conversationHistory for session ${currentSessionId}`)
+  logLLM(`[llm.ts processTranscriptWithAgentMode] previousConversationHistory length: ${previousConversationHistory?.length || 0}`)
   if (previousConversationHistory && previousConversationHistory.length > 0) {
-    console.log(`[llm.ts processTranscriptWithAgentMode] previousConversationHistory roles: [${previousConversationHistory.map(m => m.role).join(', ')}]`)
+    logLLM(`[llm.ts processTranscriptWithAgentMode] previousConversationHistory roles: [${previousConversationHistory.map(m => m.role).join(', ')}]`)
   }
 
   const conversationHistory: Array<{
@@ -598,7 +665,16 @@ export async function processTranscriptWithAgentMode(
     { role: "user", content: transcript, timestamp: Date.now() },
   ]
 
-  console.log(`[llm.ts processTranscriptWithAgentMode] conversationHistory initialized with ${conversationHistory.length} messages, roles: [${conversationHistory.map(m => m.role).join(', ')}]`)
+  logLLM(`[llm.ts processTranscriptWithAgentMode] conversationHistory initialized with ${conversationHistory.length} messages, roles: [${conversationHistory.map(m => m.role).join(', ')}]`)
+
+  // Save the initial user message incrementally
+  // Only save if this is a new message (not from previous conversation history)
+  if (!previousConversationHistory || previousConversationHistory.length === 0 ||
+      previousConversationHistory[previousConversationHistory.length - 1]?.content !== transcript) {
+    saveMessageIncremental("user", transcript).catch(err => {
+      logLLM("[processTranscriptWithAgentMode] Failed to save initial user message:", err)
+    })
+  }
 
   // Helper function to convert conversation history to the format expected by AgentProgressUpdate
   const formatConversationForProgress = (
@@ -634,6 +710,44 @@ export async function processTranscriptWithAgentMode(
       }))
   }
 
+  // Helper to detect if agent is repeating the same response (infinite loop)
+  const detectRepeatedResponse = (currentResponse: string): boolean => {
+    // Get last 3 assistant responses (excluding the current one)
+    const assistantResponses = conversationHistory
+      .filter(entry => entry.role === "assistant")
+      .map(entry => entry.content.trim().toLowerCase())
+      .slice(-3)
+
+    if (assistantResponses.length < 2) return false
+
+    const currentTrimmed = currentResponse.trim().toLowerCase()
+
+    // Check if current response is very similar to any of the last 2 responses
+    // Using a simple similarity check: if 80% of the content matches
+    for (const prevResponse of assistantResponses.slice(-2)) {
+      if (prevResponse.length === 0 || currentTrimmed.length === 0) continue
+
+      // Simple similarity: check if responses are nearly identical
+      const similarity = calculateSimilarity(currentTrimmed, prevResponse)
+      if (similarity > 0.8) {
+        return true
+      }
+    }
+
+    return false
+  }
+
+  // Simple similarity calculation (Jaccard similarity on words)
+  const calculateSimilarity = (str1: string, str2: string): number => {
+    const words1 = new Set(str1.split(/\s+/))
+    const words2 = new Set(str2.split(/\s+/))
+
+    const intersection = new Set([...words1].filter(x => words2.has(x)))
+    const union = new Set([...words1, ...words2])
+
+    return union.size === 0 ? 0 : intersection.size / union.size
+  }
+
   // Build compact verification messages (schema-first verifier)
   const buildVerificationMessages = (finalAssistantText: string) => {
     const maxItems = Math.max(1, config.mcpVerifyContextMaxItems || 10)
@@ -642,7 +756,26 @@ export async function processTranscriptWithAgentMode(
     messages.push({
       role: "system",
       content:
-        "You are a strict completion verifier. Determine if the user's original request has been fully satisfied in the conversation. Be conservative: if uncertain, mark not complete and list what's missing. Return ONLY JSON per schema.",
+        `You are a strict completion verifier. Determine if the user's original request has been fully satisfied in the conversation.
+
+IMPORTANT: Mark as COMPLETE if ANY of these conditions are met:
+1. The request was successfully fulfilled with concrete actions/results
+2. The agent correctly identified the request is IMPOSSIBLE (e.g., can't access private data, lacks permissions, requires unavailable resources)
+3. The agent is asking for CLARIFICATION or MORE INFORMATION needed to proceed (this is a valid completion - the ball is in the user's court)
+4. The agent has given the SAME RESPONSE multiple times (indicates a loop - accept the response as final)
+
+Examples of VALID completions:
+- "I cannot access your Amazon purchase history. Please provide the product link."
+- "I don't have permission to access that database. Please provide credentials."
+- "Which file would you like me to edit? Please specify the path."
+- "I need more details about the feature you want. Can you describe it?"
+
+Only mark as INCOMPLETE if:
+- The agent can fulfill the request but hasn't yet
+- The agent is making progress but hasn't finished
+- The agent hasn't acknowledged the request at all
+
+Return ONLY JSON per schema.`,
     })
     messages.push({ role: "user", content: `Original request:\n${transcript}` })
     for (const entry of recent) {
@@ -674,23 +807,19 @@ export async function processTranscriptWithAgentMode(
     conversationHistory: formatConversationForProgress(conversationHistory),
   })
 
-  // Get recent context for the LLM - no specific extraction needed
-  const recentContext = extractRecentContext(conversationHistory)
-
   let iteration = 0
   let finalContent = ""
   let noOpCount = 0 // Track iterations without meaningful progress
-
-  let executedToolsThisIteration = false // Whether any tools were executed in the current iteration
 
   let verificationFailCount = 0 // Count consecutive verification failures to avoid loops
 
   while (iteration < maxIterations) {
     iteration++
+    currentIterationRef = iteration // Update ref for retry progress callback
 
     // Check for stop signal (session-specific or global)
     if (agentSessionStateManager.shouldStopSession(currentSessionId)) {
-      console.log(`Agent session ${currentSessionId} stopped by kill switch`)
+      logLLM(`Agent session ${currentSessionId} stopped by kill switch`)
 
       // Add emergency stop step
       const stopStep = createProgressStep(
@@ -746,10 +875,16 @@ export async function processTranscriptWithAgentMode(
     let contextAwarePrompt = systemPrompt
 
     // Add enhanced context instruction using LLM-based context extraction
+    // Recalculate recent context each iteration to include newly added messages
+    const currentSessionHistory = conversationHistory.slice(sessionStartIndex)
+    const recentContext = extractRecentContext(currentSessionHistory)
+
     if (recentContext.length > 1) {
       // Use LLM to extract useful context from conversation history
+      // IMPORTANT: Only extract context from the current session's messages to prevent
+      // context leakage between sessions. sessionStartIndex marks where this session began.
       const contextInfo = await extractContextFromHistory(
-        conversationHistory,
+        currentSessionHistory,
         config,
       )
 
@@ -819,11 +954,23 @@ Always use actual resource IDs from the conversation history or create new ones 
       relevantTools: toolCapabilities.relevantTools,
       isAgentMode: true,
       sessionId: currentSessionId,
+      onSummarizationProgress: (current, total, message) => {
+        // Update thinking step with summarization progress
+        thinkingStep.description = `Summarizing context (${current}/${total})`
+        thinkingStep.llmContent = message
+        emit({
+          currentIteration: iteration,
+          maxIterations,
+          steps: progressSteps.slice(-3),
+          isComplete: false,
+          conversationHistory: formatConversationForProgress(conversationHistory),
+        })
+      },
     })
 
     // If stop was requested during context shrinking, exit now
     if (agentSessionStateManager.shouldStopSession(currentSessionId)) {
-      console.log(`Agent session ${currentSessionId} stopped during context shrink`)
+      logLLM(`Agent session ${currentSessionId} stopped during context shrink`)
       thinkingStep.status = "completed"
       thinkingStep.title = "Agent stopped"
       thinkingStep.description = "Emergency stop triggered"
@@ -844,11 +991,11 @@ Always use actual resource IDs from the conversation history or create new ones 
     // Make LLM call (abort-aware)
     let llmResponse: any
     try {
-      llmResponse = await makeLLMCall(shrunkMessages, config)
+      llmResponse = await makeLLMCall(shrunkMessages, config, onRetryProgress)
 
       // If stop was requested while the LLM call was in-flight and it returned before aborting, exit now
       if (agentSessionStateManager.shouldStopSession(currentSessionId)) {
-        console.log(`Agent session ${currentSessionId} stopped right after LLM response`)
+        logLLM(`Agent session ${currentSessionId} stopped right after LLM response`)
         thinkingStep.status = "completed"
         thinkingStep.title = "Agent stopped"
         thinkingStep.description = "Emergency stop triggered"
@@ -867,7 +1014,7 @@ Always use actual resource IDs from the conversation history or create new ones 
       }
     } catch (error: any) {
       if (error?.name === "AbortError" || agentSessionStateManager.shouldStopSession(currentSessionId)) {
-        console.log(`LLM call aborted for session ${currentSessionId} due to emergency stop`)
+        logLLM(`LLM call aborted for session ${currentSessionId} due to emergency stop`)
         thinkingStep.status = "completed"
         thinkingStep.title = "Agent stopped"
         thinkingStep.description = "Emergency stop triggered"
@@ -886,11 +1033,9 @@ Always use actual resource IDs from the conversation history or create new ones 
         break
       }
 
-      // Handle empty/null response errors gracefully
+      // Handle empty response errors - retry with guidance
       const errorMessage = (error?.message || String(error)).toLowerCase()
       if (errorMessage.includes("empty") || errorMessage.includes("no text") || errorMessage.includes("no content")) {
-        console.error(`LLM empty response on iteration ${iteration}:`, error?.message || error)
-        diagnosticsService.logError("llm", "Empty LLM response in agent mode", error)
         thinkingStep.status = "error"
         thinkingStep.description = "Empty response. Retrying..."
         emit({
@@ -900,17 +1045,18 @@ Always use actual resource IDs from the conversation history or create new ones 
           isComplete: false,
           conversationHistory: formatConversationForProgress(conversationHistory),
         })
-        conversationHistory.push({ role: "user", content: "Previous request had empty response. Please retry or summarize progress." })
+        addMessage("user", "Previous request had empty response. Please retry or summarize progress.")
         continue
       }
 
+      // Other errors - throw (llm-fetch.ts handles JSON validation/failedGeneration recovery)
       throw error
     }
 
     // Validate response is not null/empty
     if (!llmResponse || !llmResponse.content) {
-      console.error(`❌ LLM null/empty response on iteration ${iteration}`)
-      console.error("Response details:", {
+      logLLM(`❌ LLM null/empty response on iteration ${iteration}`)
+      logLLM("Response details:", {
         hasResponse: !!llmResponse,
         responseType: typeof llmResponse,
         responseKeys: llmResponse ? Object.keys(llmResponse) : [],
@@ -935,7 +1081,7 @@ Always use actual resource IDs from the conversation history or create new ones 
         isComplete: false,
         conversationHistory: formatConversationForProgress(conversationHistory),
       })
-      conversationHistory.push({ role: "user", content: "Previous request had invalid response. Please retry or summarize progress." })
+      addMessage("user", "Previous request had invalid response. Please retry or summarize progress.")
       continue
     }
 
@@ -975,9 +1121,6 @@ Always use actual resource IDs from the conversation history or create new ones 
           receivedType: typeof (llmResponse as any).toolCalls,
           value: (llmResponse as any).toolCalls,
         })
-    // Track whether tools are planned this iteration
-    executedToolsThisIteration = toolCallsArray.length > 0
-
       }
       logTools("Planned tool calls from LLM", toolCallsArray)
     }
@@ -1021,7 +1164,7 @@ Always use actual resource IDs from the conversation history or create new ones 
       const assistantContent = llmResponse.content || ""
 
       finalContent = assistantContent
-      conversationHistory.push({ role: "assistant", content: finalContent })
+      addMessage("assistant", finalContent)
 
       // Optional verification before completing
       if (config.mcpVerifyCompletionEnabled) {
@@ -1040,12 +1183,26 @@ Always use actual resource IDs from the conversation history or create new ones 
           conversationHistory: formatConversationForProgress(conversationHistory),
         })
 
+        // Check for infinite loop (repeated responses)
+        const isRepeating = detectRepeatedResponse(finalContent)
+
         const retries = Math.max(0, config.mcpVerifyRetryCount ?? 1)
         let verified = false
         let verification: any = null
-        for (let i = 0; i <= retries; i++) {
-          verification = await verifyCompletionWithFetch(buildVerificationMessages(finalContent), config.mcpToolsProviderId)
-          if (verification?.isComplete === true) { verified = true; break }
+
+        // If agent is repeating itself, skip verification and accept as complete
+        if (isRepeating) {
+          verified = true
+          verifyStep.status = "completed"
+          verifyStep.description = "Agent response is repeating - accepting as final"
+          if (isDebugLLM()) {
+            logLLM("Infinite loop detected - treating as complete", { finalContent: finalContent.substring(0, 200) })
+          }
+        } else {
+          for (let i = 0; i <= retries; i++) {
+            verification = await verifyCompletionWithFetch(buildVerificationMessages(finalContent), config.mcpToolsProviderId)
+            if (verification?.isComplete === true) { verified = true; break }
+          }
         }
 
         if (!verified) {
@@ -1115,9 +1272,23 @@ Always use actual resource IDs from the conversation history or create new ones 
             relevantTools: toolCapabilities.relevantTools,
             isAgentMode: true,
             sessionId: currentSessionId,
+            onSummarizationProgress: (current, total, message) => {
+              // Update the last thinking step with summarization progress
+              const lastThinkingStep = progressSteps.findLast(step => step.type === "thinking")
+              if (lastThinkingStep) {
+                lastThinkingStep.description = `Summarizing for verification (${current}/${total})`
+              }
+              emit({
+                currentIteration: iteration,
+                maxIterations,
+                steps: progressSteps.slice(-3),
+                isComplete: false,
+                conversationHistory: formatConversationForProgress(conversationHistory),
+              })
+            },
           })
 
-          const postVerifySummaryResponse = await makeLLMCall(shrunkPostVerifySummaryMessages, config)
+          const postVerifySummaryResponse = await makeLLMCall(shrunkPostVerifySummaryMessages, config, onRetryProgress)
 
           // Update summary step with the response and use it as final content
           postVerifySummaryStep.status = "completed"
@@ -1130,7 +1301,7 @@ Always use actual resource IDs from the conversation history or create new ones 
           finalContent = postVerifySummaryResponse.content || finalContent
 
           // Append as the final assistant message
-          conversationHistory.push({ role: "assistant", content: finalContent })
+          addMessage("assistant", finalContent)
         } catch (e) {
           // If summary generation fails, proceed with existing finalContent
         }
@@ -1167,19 +1338,13 @@ Always use actual resource IDs from the conversation history or create new ones 
 
       if (noOpCount >= 2 || (isActionableRequest && noOpCount >= 1)) {
         // Add nudge to push the agent forward
-        conversationHistory.push({
-          role: "assistant",
-          content: llmResponse.content || "",
-        })
+        addMessage("assistant", llmResponse.content || "")
 
         const nudgeMessage = isActionableRequest
           ? "You have relevant tools available for this request. Please choose and call at least one tool to make progress, or if you truly cannot proceed, explicitly set needsMoreWork=false and provide a detailed explanation of why no action can be taken."
           : "Please either take action using available tools or explicitly set needsMoreWork=false if the task is complete."
 
-        conversationHistory.push({
-          role: "user",
-          content: nudgeMessage,
-        })
+        addMessage("user", nudgeMessage)
 
         noOpCount = 0 // Reset counter after nudge
         continue
@@ -1195,12 +1360,7 @@ Always use actual resource IDs from the conversation history or create new ones 
 
     // Add assistant response with tool calls to conversation history BEFORE executing tools
     // This ensures the tool call request is visible immediately in the UI
-    conversationHistory.push({
-      role: "assistant",
-      content: llmResponse.content || "",
-      toolCalls: llmResponse.toolCalls || [],
-      timestamp: Date.now(),
-    })
+    addMessage("assistant", llmResponse.content || "", llmResponse.toolCalls || [])
 
     // Emit progress update to show tool calls immediately
     emit({
@@ -1219,7 +1379,7 @@ Always use actual resource IDs from the conversation history or create new ones 
       }
       // Check for stop signal before executing each tool
       if (agentSessionStateManager.shouldStopSession(currentSessionId)) {
-        console.log(`Agent session ${currentSessionId} stopped during tool execution`)
+        logLLM(`Agent session ${currentSessionId} stopped during tool execution`)
         // Emit final progress with complete status
         const killNote = "\n\n(Agent mode was stopped by emergency kill switch)"
         const finalOutput = (finalContent || "") + killNote
@@ -1272,7 +1432,20 @@ Always use actual resource IDs from the conversation history or create new ones 
           }
         }, 100)
       })
-      const execPromise = executeToolCall(toolCall)
+      // Create progress callback to update tool execution step
+      const onToolProgress = (message: string) => {
+        toolCallStep.description = message
+        // Emit progress update to show processing status
+        emit({
+          currentIteration: iteration,
+          maxIterations,
+          steps: progressSteps.slice(-3),
+          isComplete: false,
+          conversationHistory: formatConversationForProgress(conversationHistory),
+        })
+      }
+
+      const execPromise = executeToolCall(toolCall, onToolProgress)
       let result = (await Promise.race([
         execPromise,
         stopPromise,
@@ -1367,7 +1540,7 @@ Always use actual resource IDs from the conversation history or create new ones 
             setTimeout(resolve, Math.pow(2, retryCount) * 1000),
           )
 
-          result = await executeToolCall(toolCall)
+          result = await executeToolCall(toolCall, onToolProgress)
         } else {
           break // Don't retry non-transient errors
         }
@@ -1419,7 +1592,7 @@ Always use actual resource IDs from the conversation history or create new ones 
       // Emit final progress with complete status
       const killNote = "\n\n(Agent mode was stopped by emergency kill switch)"
       const finalOutput = (finalContent || "") + killNote
-      conversationHistory.push({ role: "assistant", content: finalOutput })
+      addMessage("assistant", finalOutput)
       emit({
         currentIteration: iteration,
         maxIterations,
@@ -1448,12 +1621,7 @@ Always use actual resource IDs from the conversation history or create new ones 
         .map((result) => result.content.map((c) => c.text).join("\n"))
         .join("\n\n")
 
-      conversationHistory.push({
-        role: "tool",
-        content: toolResultsText,
-        toolResults: meaningfulResults,
-        timestamp: Date.now(),
-      })
+      addMessage("tool", toolResultsText, undefined, meaningfulResults)
 
       // Emit progress update immediately after adding tool results so UI shows them
       emit({
@@ -1597,15 +1765,25 @@ Please try alternative approaches, break down the task into smaller steps, or pr
           relevantTools: toolCapabilities.relevantTools,
           isAgentMode: true,
           sessionId: currentSessionId,
+          onSummarizationProgress: (current, total, message) => {
+            summaryStep.description = `Summarizing for summary generation (${current}/${total})`
+            emit({
+              currentIteration: iteration,
+              maxIterations,
+              steps: progressSteps.slice(-3),
+              isComplete: false,
+              conversationHistory: formatConversationForProgress(conversationHistory),
+            })
+          },
         })
 
 
         try {
-          const summaryResponse = await makeLLMCall(shrunkSummaryMessages, config)
+          const summaryResponse = await makeLLMCall(shrunkSummaryMessages, config, onRetryProgress)
 
           // Check if stop was requested during summary generation
           if (agentSessionStateManager.shouldStopSession(currentSessionId)) {
-            console.log(`Agent session ${currentSessionId} stopped during summary generation`)
+            logLLM(`Agent session ${currentSessionId} stopped during summary generation`)
             const killNote = "\n\n(Agent mode was stopped by emergency kill switch)"
             const finalOutput = (finalContent || "") + killNote
             conversationHistory.push({ role: "assistant", content: finalOutput })
@@ -1638,7 +1816,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
           })
         } catch (error) {
           // If summary generation fails, fall back to the original content
-          console.warn("Failed to generate summary:", error)
+          logLLM("Failed to generate summary:", error)
           finalContent = lastAssistantContent || "Task completed successfully."
           summaryStep.status = "error"
           summaryStep.description = "Failed to generate summary, using fallback"
@@ -1671,17 +1849,31 @@ Please try alternative approaches, break down the task into smaller steps, or pr
 	          conversationHistory: formatConversationForProgress(conversationHistory),
 	        })
 
+	        // Check for infinite loop (repeated responses)
+	        const isRepeating = detectRepeatedResponse(finalContent)
+
 	        const retries = Math.max(0, config.mcpVerifyRetryCount ?? 1)
 	        let verified = false
 	        let verification: any = null
-	        for (let i = 0; i <= retries; i++) {
-	          verification = await verifyCompletionWithFetch(buildVerificationMessages(finalContent), config.mcpToolsProviderId)
-	          if (verification?.isComplete === true) { verified = true; break }
+
+	        // If agent is repeating itself, skip verification and accept as complete
+	        if (isRepeating) {
+	          verified = true
+	          verifyStep.status = "completed"
+	          verifyStep.description = "Agent response is repeating - accepting as final"
+	          if (isDebugLLM()) {
+	            logLLM("Infinite loop detected - treating as complete", { finalContent: finalContent.substring(0, 200) })
+	          }
+	        } else {
+	          for (let i = 0; i <= retries; i++) {
+	            verification = await verifyCompletionWithFetch(buildVerificationMessages(finalContent), config.mcpToolsProviderId)
+	            if (verification?.isComplete === true) { verified = true; break }
+	          }
 	        }
 
 	        // Check if stop was requested during verification
 	        if (agentSessionStateManager.shouldStopSession(currentSessionId)) {
-	          console.log(`Agent session ${currentSessionId} stopped during verification`)
+	          logLLM(`Agent session ${currentSessionId} stopped during verification`)
 	          const killNote = "\n\n(Agent mode was stopped by emergency kill switch)"
 	          const finalOutput = (finalContent || "") + killNote
 	          conversationHistory.push({ role: "assistant", content: finalOutput })
@@ -1754,16 +1946,31 @@ Please try alternative approaches, break down the task into smaller steps, or pr
             relevantTools: toolCapabilities.relevantTools,
             isAgentMode: true,
             sessionId: currentSessionId,
+            onSummarizationProgress: (current, total, message) => {
+              // Update the last thinking step with summarization progress
+              const lastThinkingStep = progressSteps.findLast(step => step.type === "thinking")
+              if (lastThinkingStep) {
+                lastThinkingStep.description = `Summarizing for verification (${current}/${total})`
+              }
+              emit({
+                currentIteration: iteration,
+                maxIterations,
+                steps: progressSteps.slice(-3),
+                isComplete: false,
+                conversationHistory: formatConversationForProgress(conversationHistory),
+              })
+            },
           })
 
           const postVerifySummaryResponse = await makeLLMCall(
             shrunkPostVerifySummaryMessages,
             config,
+            onRetryProgress,
           )
 
           // Check if stop was requested during post-verify summary generation
           if (agentSessionStateManager.shouldStopSession(currentSessionId)) {
-            console.log(`Agent session ${currentSessionId} stopped during post-verify summary generation`)
+            logLLM(`Agent session ${currentSessionId} stopped during post-verify summary generation`)
             const killNote = "\n\n(Agent mode was stopped by emergency kill switch)"
             const finalOutput = (finalContent || "") + killNote
             conversationHistory.push({ role: "assistant", content: finalOutput })
@@ -1887,11 +2094,21 @@ Please try alternative approaches, break down the task into smaller steps, or pr
           relevantTools: toolCapabilities.relevantTools,
           isAgentMode: true,
           sessionId: currentSessionId,
+          onSummarizationProgress: (current, total, message) => {
+            summaryStep.description = `Summarizing for summary generation (${current}/${total})`
+            emit({
+              currentIteration: iteration,
+              maxIterations,
+              steps: progressSteps.slice(-3),
+              isComplete: false,
+              conversationHistory: formatConversationForProgress(conversationHistory),
+            })
+          },
         })
 
 
         try {
-          const summaryResponse = await makeLLMCall(shrunkSummaryMessages, config)
+          const summaryResponse = await makeLLMCall(shrunkSummaryMessages, config, onRetryProgress)
 
           // Update summary step with the response
           summaryStep.status = "completed"
@@ -1905,6 +2122,22 @@ Please try alternative approaches, break down the task into smaller steps, or pr
           finalContent = summaryResponse.content || assistantContent
 
           // Add the summary to conversation history
+          conversationHistory.push({
+            role: "assistant",
+            content: finalContent,
+          })
+        } catch (error) {
+          // If summary generation fails, fall back to the original content
+          logLLM("Failed to generate summary:", error)
+          finalContent = assistantContent || "Task completed successfully."
+          summaryStep.status = "error"
+          summaryStep.description = "Failed to generate summary, using fallback"
+
+          conversationHistory.push({
+            role: "assistant",
+            content: finalContent,
+          })
+        }
 
         // Post-verify: produce a concise final summary for the user
         try {
@@ -1950,11 +2183,26 @@ Please try alternative approaches, break down the task into smaller steps, or pr
             relevantTools: toolCapabilities.relevantTools,
             isAgentMode: true,
             sessionId: currentSessionId,
+            onSummarizationProgress: (current, total, message) => {
+              // Update the last thinking step with summarization progress
+              const lastThinkingStep = progressSteps.findLast(step => step.type === "thinking")
+              if (lastThinkingStep) {
+                lastThinkingStep.description = `Summarizing for verification (${current}/${total})`
+              }
+              emit({
+                currentIteration: iteration,
+                maxIterations,
+                steps: progressSteps.slice(-3),
+                isComplete: false,
+                conversationHistory: formatConversationForProgress(conversationHistory),
+              })
+            },
           })
 
           const postVerifySummaryResponse = await makeLLMCall(
             shrunkPostVerifySummaryMessages,
             config,
+            onRetryProgress,
           )
 
           postVerifySummaryStep.status = "completed"
@@ -1983,23 +2231,6 @@ Please try alternative approaches, break down the task into smaller steps, or pr
           noOpCount = 0
           continue
         }
-
-          conversationHistory.push({
-            role: "assistant",
-            content: finalContent,
-          })
-        } catch (error) {
-          // If summary generation fails, fall back to the original content
-          console.warn("Failed to generate summary:", error)
-          finalContent = assistantContent || "Task completed successfully."
-          summaryStep.status = "error"
-          summaryStep.description = "Failed to generate summary, using fallback"
-
-          conversationHistory.push({
-            role: "assistant",
-            content: finalContent,
-          })
-        }
       } else {
         // Agent provided sufficient content, use it as final content
         finalContent = assistantContent
@@ -2027,12 +2258,26 @@ Please try alternative approaches, break down the task into smaller steps, or pr
 	          conversationHistory: formatConversationForProgress(conversationHistory),
 	        })
 
+	        // Check for infinite loop (repeated responses)
+	        const isRepeating = detectRepeatedResponse(finalContent)
+
 	        const retries = Math.max(0, config.mcpVerifyRetryCount ?? 1)
 	        let verified = false
 	        let verification: any = null
-	        for (let i = 0; i <= retries; i++) {
-	          verification = await verifyCompletionWithFetch(buildVerificationMessages(finalContent), config.mcpToolsProviderId)
-	          if (verification?.isComplete === true) { verified = true; break }
+
+	        // If agent is repeating itself, skip verification and accept as complete
+	        if (isRepeating) {
+	          verified = true
+	          verifyStep.status = "completed"
+	          verifyStep.description = "Agent response is repeating - accepting as final"
+	          if (isDebugLLM()) {
+	            logLLM("Infinite loop detected - treating as complete", { finalContent: finalContent.substring(0, 200) })
+	          }
+	        } else {
+	          for (let i = 0; i <= retries; i++) {
+	            verification = await verifyCompletionWithFetch(buildVerificationMessages(finalContent), config.mcpToolsProviderId)
+	            if (verification?.isComplete === true) { verified = true; break }
+	          }
 	        }
 
 	        if (!verified) {
@@ -2153,6 +2398,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
 async function makeLLMCall(
   messages: Array<{ role: string; content: string }>,
   config: any,
+  onRetryProgress?: RetryProgressCallback,
 ): Promise<LLMToolCallResponse> {
   const chatProviderId = config.mcpToolsProviderId
 
@@ -2165,7 +2411,7 @@ async function makeLLMCall(
         messages: messages,
       })
     }
-    const result = await makeLLMCallWithFetch(messages, chatProviderId)
+    const result = await makeLLMCallWithFetch(messages, chatProviderId, onRetryProgress)
     if (isDebugLLM()) {
       logLLM("Response ←", result)
       logLLM("=== LLM CALL END ===")

@@ -1,12 +1,12 @@
 import React, { useEffect, useRef, useState } from "react"
 import { cn } from "@renderer/lib/utils"
 import { AgentProgressUpdate } from "../../../shared/types"
-import { ChevronDown, ChevronUp, ChevronRight, X, AlertTriangle, Minimize2 } from "lucide-react"
+import { ChevronDown, ChevronUp, ChevronRight, X, AlertTriangle, Minimize2, Shield, Check, XCircle, Loader2, Clock, Copy, CheckCheck } from "lucide-react"
 import { MarkdownRenderer } from "@renderer/components/markdown-renderer"
 import { Button } from "./ui/button"
 import { Badge } from "./ui/badge"
 import { tipcClient } from "@renderer/lib/tipc-client"
-import { useConversation } from "@renderer/contexts/conversation-context"
+import { useAgentStore, useConversationStore } from "@renderer/stores"
 import { AudioPlayer } from "@renderer/components/audio-player"
 import { useConfigQuery } from "@renderer/lib/queries"
 import { useTheme } from "@renderer/contexts/theme-context"
@@ -36,6 +36,19 @@ type DisplayItem =
       calls: Array<{ name: string; arguments: any }>
       results: Array<{ success: boolean; content: string; error?: string }>
     } }
+  | { kind: "tool_approval"; id: string; data: {
+      approvalId: string
+      toolName: string
+      arguments: any
+    } }
+  | { kind: "retry_status"; id: string; data: {
+      isRetrying: boolean
+      attempt: number
+      maxAttempts?: number
+      delaySeconds: number
+      reason: string
+      startedAt: number
+    } }
 
 
 // Compact message component for space efficiency
@@ -59,7 +72,20 @@ const CompactMessage: React.FC<{
   const [audioData, setAudioData] = useState<ArrayBuffer | null>(null)
   const [isGeneratingAudio, setIsGeneratingAudio] = useState(false)
   const [ttsError, setTtsError] = useState<string | null>(null)
+  const [isCopied, setIsCopied] = useState(false)
   const configQuery = useConfigQuery()
+
+  // Copy to clipboard handler
+  const handleCopyResponse = async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    try {
+      await navigator.clipboard.writeText(message.content)
+      setIsCopied(true)
+      setTimeout(() => setIsCopied(false), 2000)
+    } catch (err) {
+      console.error("Failed to copy response:", err)
+    }
+  }
 
   const displayResults = (message.toolResults || []).filter(
     (r) =>
@@ -69,7 +95,7 @@ const CompactMessage: React.FC<{
   const hasExtras =
     (message.toolCalls?.length ?? 0) > 0 ||
     displayResults.length > 0
-  const shouldCollapse = message.content.length > 100 || hasExtras
+  const shouldCollapse = (message.content?.length ?? 0) > 100 || hasExtras
 
   // TTS functionality
   const generateAudio = async (): Promise<ArrayBuffer> => {
@@ -175,7 +201,7 @@ const CompactMessage: React.FC<{
             "leading-relaxed text-left",
             !isExpanded && shouldCollapse && "line-clamp-2"
           )}>
-            <MarkdownRenderer content={message.content.trim()} />
+          <MarkdownRenderer content={(message.content ?? "").trim()} />
           </div>
           {hasExtras && isExpanded && (
             <div className="mt-2 space-y-2 text-left">
@@ -299,18 +325,34 @@ const CompactMessage: React.FC<{
 
 
         </div>
-        {shouldCollapse && (
-          <button
-            onClick={handleChevronClick}
-            className="p-1 rounded hover:bg-muted/30 transition-colors flex-shrink-0"
-          >
-            {isExpanded ? (
-              <ChevronUp className="h-3 w-3" />
-            ) : (
-              <ChevronDown className="h-3 w-3" />
-            )}
-          </button>
-        )}
+        <div className="flex items-center gap-1 flex-shrink-0">
+          {/* Copy button for final assistant response */}
+          {message.role === "assistant" && isLast && isComplete && (
+            <button
+              onClick={handleCopyResponse}
+              className="p-1 rounded hover:bg-muted/30 transition-colors"
+              title={isCopied ? "Copied!" : "Copy response"}
+            >
+              {isCopied ? (
+                <CheckCheck className="h-3 w-3 text-green-500" />
+              ) : (
+                <Copy className="h-3 w-3 opacity-60 hover:opacity-100" />
+              )}
+            </button>
+          )}
+          {shouldCollapse && (
+            <button
+              onClick={handleChevronClick}
+              className="p-1 rounded hover:bg-muted/30 transition-colors"
+            >
+              {isExpanded ? (
+                <ChevronUp className="h-3 w-3" />
+              ) : (
+                <ChevronDown className="h-3 w-3" />
+              )}
+            </button>
+          )}
+        </div>
       </div>
     </div>
   )
@@ -355,6 +397,22 @@ const ToolExecutionBubble: React.FC<{
   const handleChevronClick = (e: React.MouseEvent) => {
     e.stopPropagation()
     onToggleExpand()
+  }
+
+  // Handle hide/show buttons with event propagation stopped
+  const handleToggleInputs = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    setShowInputs((v) => !v)
+  }
+
+  const handleToggleOutputs = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    setShowOutputs((v) => !v)
+  }
+
+  const handleCopy = (e: React.MouseEvent, text: string) => {
+    e.stopPropagation()
+    copy(text)
   }
 
 
@@ -403,10 +461,10 @@ const ToolExecutionBubble: React.FC<{
             <div className="flex items-center justify-between">
               <div className="text-[11px] font-semibold opacity-80">Call Parameters</div>
               <div className="flex items-center gap-1">
-                <Button size="sm" variant="ghost" className="h-6 px-2" onClick={() => setShowInputs((v) => !v)}>
+                <Button size="sm" variant="ghost" className="h-6 px-2" onClick={handleToggleInputs}>
                   {showInputs ? "Hide" : "Show"}
                 </Button>
-                <Button size="sm" variant="ghost" className="h-6 px-2" onClick={() => copy(JSON.stringify(execution.calls, null, 2))}>
+                <Button size="sm" variant="ghost" className="h-6 px-2" onClick={(e) => handleCopy(e, JSON.stringify(execution.calls, null, 2))}>
                   Copy
                 </Button>
               </div>
@@ -435,10 +493,10 @@ const ToolExecutionBubble: React.FC<{
               <div className="text-[11px] font-semibold opacity-80">Response</div>
               {!isPending && (
                 <div className="flex items-center gap-1">
-                  <Button size="sm" variant="ghost" className="h-6 px-2" onClick={() => setShowOutputs((v) => !v)}>
+                  <Button size="sm" variant="ghost" className="h-6 px-2" onClick={handleToggleOutputs}>
                     {showOutputs ? "Hide" : "Show"}
                   </Button>
-                  <Button size="sm" variant="ghost" className="h-6 px-2" onClick={() => copy(JSON.stringify(execution.results, null, 2))}>
+                  <Button size="sm" variant="ghost" className="h-6 px-2" onClick={(e) => handleCopy(e, JSON.stringify(execution.results, null, 2))}>
                     Copy
                   </Button>
                 </div>
@@ -491,6 +549,166 @@ const ToolExecutionBubble: React.FC<{
   )
 }
 
+// Inline Tool Approval bubble - appears in the conversation flow
+const ToolApprovalBubble: React.FC<{
+  approval: {
+    approvalId: string
+    toolName: string
+    arguments: any
+  }
+  onApprove: () => void
+  onDeny: () => void
+  isResponding: boolean
+}> = ({ approval, onApprove, onDeny, isResponding }) => {
+  const [showArgs, setShowArgs] = useState(false)
+
+  return (
+    <div className="rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-950/30 overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center gap-2 px-3 py-2 bg-amber-100/50 dark:bg-amber-900/30 border-b border-amber-200 dark:border-amber-800">
+        <Shield className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+        <span className="text-xs font-medium text-amber-800 dark:text-amber-200">
+          {isResponding ? "Processing..." : "Tool Approval Required"}
+        </span>
+        {isResponding && (
+          <Loader2 className="h-3 w-3 text-amber-600 dark:text-amber-400 animate-spin ml-auto" />
+        )}
+      </div>
+
+      {/* Content */}
+      <div className={cn("px-3 py-2", isResponding && "opacity-60")}>
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-xs text-amber-700 dark:text-amber-300">Tool:</span>
+          <code className="text-xs font-mono font-medium text-amber-900 dark:text-amber-100 bg-amber-100 dark:bg-amber-900/50 px-1.5 py-0.5 rounded">
+            {approval.toolName}
+          </code>
+        </div>
+
+        {/* Expandable arguments */}
+        <div className="mb-3">
+          <button
+            onClick={() => setShowArgs(!showArgs)}
+            className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-200"
+            disabled={isResponding}
+          >
+            <ChevronRight className={cn("h-3 w-3 transition-transform", showArgs && "rotate-90")} />
+            {showArgs ? "Hide" : "View"} arguments
+          </button>
+          {showArgs && (
+            <pre className="mt-1.5 p-2 text-xs bg-amber-100/70 dark:bg-amber-900/40 rounded overflow-x-auto max-h-32 text-amber-900 dark:text-amber-100">
+              {JSON.stringify(approval.arguments, null, 2)}
+            </pre>
+          )}
+        </div>
+
+        {/* Action buttons */}
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 text-xs border-red-300 text-red-700 hover:bg-red-50 dark:border-red-700 dark:text-red-400 dark:hover:bg-red-950/30"
+            onClick={onDeny}
+            disabled={isResponding}
+          >
+            <XCircle className="h-3 w-3 mr-1" />
+            Deny
+          </Button>
+          <Button
+            size="sm"
+            className={cn(
+              "h-7 text-xs text-white",
+              isResponding
+                ? "bg-green-500 cursor-not-allowed"
+                : "bg-green-600 hover:bg-green-700"
+            )}
+            onClick={onApprove}
+            disabled={isResponding}
+          >
+            {isResponding ? (
+              <>
+                <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                Processing...
+              </>
+            ) : (
+              <>
+                <Check className="h-3 w-3 mr-1" />
+                Approve
+              </>
+            )}
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Retry Status Banner - shows when LLM API is being retried (rate limits, network errors)
+const RetryStatusBanner: React.FC<{
+  retryInfo: {
+    isRetrying: boolean
+    attempt: number
+    maxAttempts?: number
+    delaySeconds: number
+    reason: string
+    startedAt: number
+  }
+}> = ({ retryInfo }) => {
+  const [countdown, setCountdown] = useState(retryInfo.delaySeconds)
+
+  // Update countdown timer
+  useEffect(() => {
+    if (!retryInfo.isRetrying) {
+      setCountdown(0)
+      return undefined
+    }
+
+    // Calculate remaining time based on startedAt
+    const updateCountdown = () => {
+      const elapsed = Math.floor((Date.now() - retryInfo.startedAt) / 1000)
+      const remaining = Math.max(0, retryInfo.delaySeconds - elapsed)
+      setCountdown(remaining)
+    }
+
+    updateCountdown()
+    const interval = setInterval(updateCountdown, 1000)
+    return () => clearInterval(interval)
+  }, [retryInfo.isRetrying, retryInfo.startedAt, retryInfo.delaySeconds])
+
+  if (!retryInfo.isRetrying) return null
+
+  const attemptText = retryInfo.maxAttempts
+    ? `Attempt ${retryInfo.attempt}/${retryInfo.maxAttempts}`
+    : `Attempt ${retryInfo.attempt}`
+
+  return (
+    <div className="rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-950/30 overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center gap-2 px-3 py-2 bg-amber-100/50 dark:bg-amber-900/30 border-b border-amber-200 dark:border-amber-800">
+        <Clock className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+        <span className="text-xs font-medium text-amber-800 dark:text-amber-200">
+          {retryInfo.reason}
+        </span>
+        <Loader2 className="h-3 w-3 text-amber-600 dark:text-amber-400 animate-spin ml-auto" />
+      </div>
+
+      {/* Content */}
+      <div className="px-3 py-2">
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-amber-700 dark:text-amber-300">
+            {attemptText}
+          </span>
+          <span className="text-xs font-mono font-medium text-amber-900 dark:text-amber-100 bg-amber-100 dark:bg-amber-900/50 px-2 py-0.5 rounded">
+            Retrying in {countdown}s
+          </span>
+        </div>
+        <p className="text-xs text-amber-600 dark:text-amber-400 mt-1.5">
+          The agent will automatically retry when the API is available.
+        </p>
+      </div>
+    </div>
+  )
+}
+
 
 export const AgentProgress: React.FC<AgentProgressProps> = ({
   progress,
@@ -510,7 +728,9 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({})
 
   // Get current conversation ID for deep-linking and session focus control
-  const { currentConversationId, setFocusedSessionId, agentProgressById } = useConversation()
+  const currentConversationId = useConversationStore((s) => s.currentConversationId)
+  const setFocusedSessionId = useAgentStore((s) => s.setFocusedSessionId)
+  const agentProgressById = useAgentStore((s) => s.agentProgressById)
 
   // Helper to toggle expansion state for a specific item
   const toggleItemExpansion = (itemKey: string) => {
@@ -576,7 +796,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
     try {
       const thisId = progress?.sessionId
       const hasOtherVisible = thisId
-        ? Array.from(agentProgressById.values()).some(p => p.sessionId !== thisId && !p.isSnoozed)
+        ? Array.from(agentProgressById?.values() ?? []).some(p => p && p.sessionId !== thisId && !p.isSnoozed)
         : false
 
       if (thisId && hasOtherVisible) {
@@ -588,6 +808,61 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
       }
     } catch (error) {
       console.error("Failed to close agent session/panel:", error)
+    }
+  }
+
+  // Tool approval handlers
+  // Track the approval ID we're responding to, to handle race conditions
+  const [respondingApprovalId, setRespondingApprovalId] = useState<string | null>(null)
+  // Use a ref to synchronously block re-entrancy (prevents double-click race condition)
+  const respondingApprovalIdRef = useRef<string | null>(null)
+
+  // Derive isRespondingToApproval from whether we have a pending response for the current approval
+  const isRespondingToApproval = respondingApprovalId === progress?.pendingToolApproval?.approvalId
+
+  const handleApproveToolCall = async () => {
+    const approvalId = progress?.pendingToolApproval?.approvalId
+    if (!approvalId) return
+    // Synchronous check to prevent double-click race condition
+    if (respondingApprovalIdRef.current === approvalId) return
+
+    respondingApprovalIdRef.current = approvalId
+    setRespondingApprovalId(approvalId)
+    try {
+      await tipcClient.respondToToolApproval({
+        approvalId,
+        approved: true,
+      })
+      // Don't reset respondingApprovalId on success - keep showing "Processing..."
+      // The approval bubble will be removed when pendingToolApproval is cleared from progress
+    } catch (error) {
+      console.error("Failed to approve tool call:", error)
+      // Only reset on error so user can retry
+      respondingApprovalIdRef.current = null
+      setRespondingApprovalId(null)
+    }
+  }
+
+  const handleDenyToolCall = async () => {
+    const approvalId = progress?.pendingToolApproval?.approvalId
+    if (!approvalId) return
+    // Synchronous check to prevent double-click race condition
+    if (respondingApprovalIdRef.current === approvalId) return
+
+    respondingApprovalIdRef.current = approvalId
+    setRespondingApprovalId(approvalId)
+    try {
+      await tipcClient.respondToToolApproval({
+        approvalId,
+        approved: false,
+      })
+      // Don't reset respondingApprovalId on success - keep showing "Processing..."
+      // The approval bubble will be removed when pendingToolApproval is cleared from progress
+    } catch (error) {
+      console.error("Failed to deny tool call:", error)
+      // Only reset on error so user can retry
+      respondingApprovalIdRef.current = null
+      setRespondingApprovalId(null)
     }
   }
 
@@ -652,10 +927,10 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
       (step) => step.type === "thinking" && step.status === "in_progress",
     )
     if (currentThinkingStep) {
-      if (
-        currentThinkingStep.llmContent &&
-        currentThinkingStep.llmContent.trim().length > 0
-      ) {
+        if (
+          currentThinkingStep.llmContent &&
+          currentThinkingStep.llmContent.trim().length > 0
+        ) {
         messages.push({
           role: "assistant",
           content: currentThinkingStep.llmContent,
@@ -700,7 +975,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
       })
 
     // Add final content if available and different from last thinking step
-    if (finalContent && finalContent.trim().length > 0) {
+      if (finalContent && finalContent.trim().length > 0) {
       const lastMessage = messages[messages.length - 1]
       if (!lastMessage || lastMessage.content !== finalContent) {
         messages.push({
@@ -717,13 +992,13 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
   // Sort by timestamp to ensure chronological order
   messages.sort((a, b) => a.timestamp - b.timestamp)
 
-  // Helper function to generate a stable ID for tool executions based on content
-  const generateToolExecutionId = (calls: Array<{ name: string; arguments: any }>) => {
-    // Create a stable hash from tool call names and a subset of arguments
+  // Helper function to generate a stable ID for tool executions based on content and timestamp
+  const generateToolExecutionId = (calls: Array<{ name: string; arguments: any }>, timestamp: number) => {
+    // Create a stable hash from tool call names, a subset of arguments, and timestamp for uniqueness
     const signature = calls.map(c => {
       const argsStr = c.arguments ? JSON.stringify(c.arguments) : ''
       return `${c.name}:${argsStr.substring(0, 50)}`
-    }).join('|')
+    }).join('|') + `@${timestamp}`
     // Simple hash function
     let hash = 0
     for (let i = 0; i < signature.length; i++) {
@@ -760,13 +1035,14 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
       // Show assistant message without extras (stable key by role ordinal)
       const aIndex = ++roleCounters.assistant
       displayItems.push({ kind: "message", id: `msg-assistant-${aIndex}`, data: { ...m, toolCalls: undefined, toolResults: undefined } })
-      // Unified execution bubble with stable ID
-      const toolExecId = generateToolExecutionId(m.toolCalls)
+      // Unified execution bubble with stable ID (include timestamp for uniqueness)
+      const execTimestamp = next?.timestamp ?? m.timestamp
+      const toolExecId = generateToolExecutionId(m.toolCalls, execTimestamp)
       displayItems.push({
         kind: "tool_execution",
         id: `exec-${toolExecId}`,
         data: {
-          timestamp: next?.timestamp ?? m.timestamp,
+          timestamp: execTimestamp,
           calls: m.toolCalls,
           results,
         },
@@ -787,6 +1063,24 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
       const idx = ++roleCounters[m.role]
       displayItems.push({ kind: "message", id: `msg-${m.role}-${idx}`, data: m })
     }
+  }
+
+  // Add pending tool approval to display items if present
+  if (progress.pendingToolApproval) {
+    displayItems.push({
+      kind: "tool_approval",
+      id: `approval-${progress.pendingToolApproval.approvalId}`,
+      data: progress.pendingToolApproval,
+    })
+  }
+
+  // Add retry status to display items if present
+  if (progress.retryInfo && progress.retryInfo.isRetrying) {
+    displayItems.push({
+      kind: "retry_status",
+      id: `retry-${progress.retryInfo.startedAt}`,
+      data: progress.retryInfo,
+    })
   }
 
   // Determine the last assistant message among display items (by position, not timestamp)
@@ -810,7 +1104,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
 
     // Calculate total content length for streaming detection
     const totalContentLength = messages.reduce(
-      (sum, msg) => sum + msg.content.length,
+      (sum, msg) => sum + (msg.content?.length ?? 0),
       0,
     )
 
@@ -963,29 +1257,52 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
               {displayItems.map((item, index) => {
                 const itemKey = item.id || (item.kind === "message"
                   ? `msg-${messageStableId(item.data as any)}`
+                  : item.kind === "tool_approval"
+                  ? `approval-${(item.data as any).approvalId}`
                   : `exec-${(item as any).data?.id || (item as any).data?.timestamp}`)
 
                 const isExpanded = !!expandedItems[itemKey]
 
-                return item.kind === "message" ? (
-                  <CompactMessage
-                    key={itemKey}
-                    message={item.data}
-                    isLast={index === lastAssistantDisplayIndex}
-                    isComplete={isComplete}
-                    hasErrors={hasErrors}
-                    wasStopped={wasStopped}
-                    isExpanded={isExpanded}
-                    onToggleExpand={() => toggleItemExpansion(itemKey)}
-                  />
-                ) : (
-                  <ToolExecutionBubble
-                    key={itemKey}
-                    execution={item.data}
-                    isExpanded={isExpanded}
-                    onToggleExpand={() => toggleItemExpansion(itemKey)}
-                  />
-                )
+                if (item.kind === "message") {
+                  return (
+                    <CompactMessage
+                      key={itemKey}
+                      message={item.data}
+                      isLast={index === lastAssistantDisplayIndex}
+                      isComplete={isComplete}
+                      hasErrors={hasErrors}
+                      wasStopped={wasStopped}
+                      isExpanded={isExpanded}
+                      onToggleExpand={() => toggleItemExpansion(itemKey)}
+                    />
+                  )
+                } else if (item.kind === "tool_approval") {
+                  return (
+                    <ToolApprovalBubble
+                      key={itemKey}
+                      approval={item.data}
+                      onApprove={handleApproveToolCall}
+                      onDeny={handleDenyToolCall}
+                      isResponding={isRespondingToApproval}
+                    />
+                  )
+                } else if (item.kind === "retry_status") {
+                  return (
+                    <RetryStatusBanner
+                      key={itemKey}
+                      retryInfo={item.data}
+                    />
+                  )
+                } else {
+                  return (
+                    <ToolExecutionBubble
+                      key={itemKey}
+                      execution={item.data}
+                      isExpanded={isExpanded}
+                      onToggleExpand={() => toggleItemExpansion(itemKey)}
+                    />
+                  )
+                }
               })}
             </div>
           ) : (

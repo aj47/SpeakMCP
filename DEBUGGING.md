@@ -279,6 +279,50 @@ pnpm dev dk  # Enable keybinds debug
 - Text insertion failures
 - Accessibility permission problems
 
+## 🔌 CDP (Chrome DevTools Protocol) Debugging
+
+For programmatic control of the Electron app (useful for automated testing or AI-assisted debugging):
+
+### Start App with CDP Enabled
+
+```bash
+pnpm dev dui --remote-debugging-port=9222
+```
+
+You should see: `DevTools listening on ws://127.0.0.1:9222/devtools/browser/...`
+
+### Available IPC Methods
+
+Access via `window.electron.ipcRenderer.invoke()` in DevTools console:
+
+**Agent Sessions:**
+- `createMcpTextInput({ text, conversationId? })` - Start agent session
+- `getAgentSessions()` - List active/snoozed sessions
+- `stopAgentSession({ sessionId })` - Stop specific session
+- `emergencyStopAgent()` - Kill switch for all sessions
+
+**Panel Control:**
+- `debugPanelState()` - Get panel visibility/bounds
+- `showPanelWindow()` / `hidePanelWindow()`
+
+**Configuration:**
+- `getConfig()` - Get current config
+- `updateConfig({ ...options })` - Update config
+
+**Example:**
+```javascript
+// In DevTools console (View > Toggle Developer Tools)
+window.electron.ipcRenderer.invoke('debugPanelState').then(console.log)
+window.electron.ipcRenderer.invoke('createMcpTextInput', { text: 'Hello' })
+```
+
+### Chrome DevTools Access
+
+1. Start app with CDP: `pnpm dev dui --remote-debugging-port=9222`
+2. Open Chrome browser → `chrome://inspect`
+3. Click "Configure" → add `localhost:9222`
+4. Click "inspect" on your Electron windows
+
 ## 📊 Performance Debugging
 
 ### Timing Information

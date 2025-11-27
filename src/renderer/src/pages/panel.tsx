@@ -10,11 +10,8 @@ import { rendererHandlers, tipcClient } from "~/lib/tipc-client"
 import { TextInputPanel, TextInputPanelRef } from "@renderer/components/text-input-panel"
 import { PanelResizeWrapper } from "@renderer/components/panel-resize-wrapper"
 import { logUI } from "@renderer/lib/debug"
-import {
-  useConversationActions,
-  useConversationState,
-  useConversation,
-} from "@renderer/contexts/conversation-context"
+import { useAgentStore, useAgentProgress, useConversationStore } from "@renderer/stores"
+import { useConversationQuery, useCreateConversationMutation, useAddMessageToConversationMutation } from "@renderer/lib/queries"
 import { PanelDragBar } from "@renderer/components/panel-drag-bar"
 import { useConfigQuery } from "@renderer/lib/query-client"
 import { useTheme } from "@renderer/contexts/theme-context"
@@ -34,6 +31,7 @@ export function Component() {
   const [showTextInput, setShowTextInput] = useState(false)
   const isConfirmedRef = useRef(false)
   const mcpModeRef = useRef(false)
+  const recordingRef = useRef(false)
   const textInputPanelRef = useRef<TextInputPanelRef>(null)
   const { isDark } = useTheme()
   const lastRequestedModeRef = useRef<"normal" | "agent" | "textInput">("normal")
@@ -44,34 +42,64 @@ export function Component() {
   }
 
 
-  // Conversation state
-  const {
-    showContinueButton,
-    isWaitingForResponse,
-    isConversationActive,
-    currentConversation,
-    agentProgress, // Get agent progress from conversation context (session-aware)
-  } = useConversationState()
-  const {
-    addMessage,
-    setIsWaitingForResponse,
-    startNewConversation,
-    endConversation,
-    continueConversation,
-  } = useConversationActions()
-  const { currentConversationId, focusedSessionId, agentProgressById, lastCompletedConversationId } = useConversation()
+  // Agent state from Zustand
+  const agentProgress = useAgentProgress()
+  const focusedSessionId = useAgentStore((s) => s.focusedSessionId)
+  const agentProgressById = useAgentStore((s) => s.agentProgressById)
 
-  // Check if we have multiple active (non-snoozed) sessions
-  const activeSessionCount = Array.from(agentProgressById.values())
-    .filter(progress => !progress.isSnoozed).length
-  const hasMultipleSessions = activeSessionCount > 1
+  // Conversation state from Zustand
+  const currentConversationId = useConversationStore((s) => s.currentConversationId)
+  const setCurrentConversationId = useConversationStore((s) => s.setCurrentConversationId)
+  const continueConversation = useConversationStore((s) => s.continueConversation)
+  const endConversation = useConversationStore((s) => s.endConversation)
+
+  // Query for current conversation data
+  const conversationQuery = useConversationQuery(currentConversationId)
+  const currentConversation = conversationQuery.data ?? null
+  const isConversationActive = !!currentConversation
+
+  // Mutations for conversation management
+  const createConversationMutation = useCreateConversationMutation()
+  const addMessageMutation = useAddMessageToConversationMutation()
+
+  // Helper function to start a new conversation
+  const startNewConversation = async (message: string, role: "user" | "assistant") => {
+    const result = await createConversationMutation.mutateAsync({ firstMessage: message, role })
+    if (result?.id) {
+      setCurrentConversationId(result.id)
+    }
+    return result
+  }
+
+  // Helper function to add a message to the current conversation
+  const addMessage = async (content: string, role: "user" | "assistant") => {
+    if (!currentConversationId) return
+    await addMessageMutation.mutateAsync({
+      conversationId: currentConversationId,
+      content,
+      role,
+    })
+  }
+
+  // Count truly active sessions (not complete, not snoozed) for mode switching
+  // Completed sessions should not prevent the panel from switching back to normal mode for voice dictation
+  const activeSessionCount = Array.from(agentProgressById?.values() ?? [])
+    .filter(progress => progress && !progress.isSnoozed && !progress.isComplete).length
+
+  // Count all visible sessions (including completed but not snoozed) for overlay display
+  const visibleSessionCount = Array.from(agentProgressById?.values() ?? [])
+    .filter(progress => progress && !progress.isSnoozed).length
+  const hasMultipleSessions = visibleSessionCount > 1
 
   // Aggregate session state helpers
+  // Only consider non-snoozed AND non-completed sessions as "active" for mode switching
   const anyActiveNonSnoozed = activeSessionCount > 0
+  // Any non-snoozed session (including completed) should show the overlay
+  const anyVisibleSessions = visibleSessionCount > 0
   const displayProgress = useMemo(() => {
     if (agentProgress && !agentProgress.isSnoozed) return agentProgress
     // pick first non-snoozed session if focused one is missing/snoozed
-    const entry = Array.from(agentProgressById.values()).find(p => !p.isSnoozed)
+    const entry = Array.from(agentProgressById?.values() ?? []).find(p => p && !p.isSnoozed)
     return entry || null
   }, [agentProgress, agentProgressById])
 
@@ -87,6 +115,17 @@ export function Component() {
       allSessionIds: Array.from(agentProgressById.keys())
     })
   }, [agentProgress, focusedSessionId, agentProgressById.size, activeSessionCount, hasMultipleSessions])
+
+  // Debug: Log when recording state changes
+  useEffect(() => {
+    logUI('[Panel] recording state changed:', {
+      recording,
+      anyActiveNonSnoozed,
+      anyVisibleSessions,
+      showTextInput,
+      mcpMode
+    })
+  }, [recording, anyActiveNonSnoozed, anyVisibleSessions, showTextInput, mcpMode])
 
   // Config for drag functionality
   const configQuery = useConfigQuery()
@@ -133,6 +172,10 @@ export function Component() {
     }) => {
       const arrayBuffer = await blob.arrayBuffer()
 
+      // Capture the conversation ID at recording time - if user explicitly continued a conversation
+      // from history, currentConversationId will be set. Otherwise it's null for new inputs.
+      const conversationIdForMcp = currentConversationId
+
       // If we have a transcript, start a conversation with it
       if (transcript && !isConversationActive) {
         await startNewConversation(transcript, "user")
@@ -141,7 +184,10 @@ export function Component() {
       const result = await tipcClient.createMcpRecording({
         recording: arrayBuffer,
         duration,
-        conversationId: currentConversationId || lastCompletedConversationId || undefined,
+        // Pass currentConversationId if user explicitly continued from history,
+        // otherwise undefined to create a fresh conversation.
+        // This prevents message leaking while still supporting explicit continuation.
+        conversationId: conversationIdForMcp ?? undefined,
       })
 
       // Update conversation ID if backend created/returned one
@@ -233,6 +279,7 @@ export function Component() {
 
     recorder.on("record-start", () => {
       setRecording(true)
+      recordingRef.current = true
       tipcClient.recordEvent({ type: "start" })
     })
 
@@ -251,6 +298,7 @@ export function Component() {
     recorder.on("record-end", (blob, duration) => {
       const currentMcpMode = mcpModeRef.current
       setRecording(false)
+      recordingRef.current = false
       setVisualizerData(() => getInitialVisualizerData())
       tipcClient.recordEvent({ type: "end" })
 
@@ -337,25 +385,16 @@ export function Component() {
         isConfirmedRef.current = true
         recorderRef.current?.stopRecording()
       } else {
-        // If there's an active conversation, automatically continue in MCP mode
-        const continueConv = showContinueButton && !mcpMode
-        if (continueConv) {
-          setMcpMode(true)
-          mcpModeRef.current = true
-          requestPanelMode("normal")
-          tipcClient.showPanelWindow({})
-        } else {
-          // Force normal dictation mode when not continuing a conversation
-          setMcpMode(false)
-          mcpModeRef.current = false
-          tipcClient.showPanelWindow({})
-        }
+        // Force normal dictation mode - each new recording starts fresh
+        setMcpMode(false)
+        mcpModeRef.current = false
+        tipcClient.showPanelWindow({})
         recorderRef.current?.startRecording()
       }
     })
 
     return unlisten
-  }, [recording, showContinueButton, mcpMode])
+  }, [recording, mcpMode])
 
   // Text input handlers
   useEffect(() => {
@@ -386,6 +425,10 @@ export function Component() {
   }, [])
 
   const handleTextSubmit = async (text: string) => {
+    // Capture the conversation ID at submit time - if user explicitly continued a conversation
+    // from history, currentConversationId will be set. Otherwise it's null for new inputs.
+    const conversationIdForMcp = currentConversationId
+
     // Start new conversation or add to existing one
     if (!isConversationActive) {
       await startNewConversation(text, "user")
@@ -404,7 +447,10 @@ export function Component() {
       if ((config as any).mcpToolsEnabled) {
         mcpTextInputMutation.mutate({
           text,
-          conversationId: currentConversation?.id ?? currentConversationId ?? lastCompletedConversationId ?? undefined,
+          // Pass currentConversationId if user explicitly continued from history,
+          // otherwise undefined to create a fresh conversation.
+          // This prevents message leaking while still supporting explicit continuation.
+          conversationId: conversationIdForMcp ?? undefined,
         })
       } else {
         textInputMutation.mutate({ text })
@@ -462,6 +508,15 @@ export function Component() {
     let targetMode: "agent" | "normal" | null = null
     if (anyActiveNonSnoozed) {
       targetMode = "agent"
+      // When switching to agent mode, stop any ongoing recording
+      if (recordingRef.current) {
+        logUI('[Panel] Switching to agent mode - stopping ongoing recording')
+        isConfirmedRef.current = false
+        setRecording(false)
+        recordingRef.current = false
+        setVisualizerData(() => getInitialVisualizerData())
+        recorderRef.current?.stopRecording()
+      }
     } else if (isTextSubmissionPending) {
       targetMode = null // keep current size briefly to avoid flicker
     } else {
@@ -491,12 +546,15 @@ export function Component() {
     logUI('[Panel] Overlay visibility check:', {
       hasAgentProgress: !!agentProgress,
       mcpTranscribePending: mcpTranscribeMutation.isPending,
-      shouldShowOverlay: anyActiveNonSnoozed,
+      shouldShowOverlay: anyVisibleSessions && !recording,
+      anyVisibleSessions,
+      recording,
+      anyActiveNonSnoozed,
       agentProgressSessionId: agentProgress?.sessionId,
       agentProgressComplete: agentProgress?.isComplete,
       agentProgressSnoozed: agentProgress?.isSnoozed
     })
-  }, [agentProgress, anyActiveNonSnoozed, mcpTranscribeMutation.isPending])
+  }, [agentProgress, anyActiveNonSnoozed, anyVisibleSessions, recording, mcpTranscribeMutation.isPending])
 
   // Clear agent progress handler
   useEffect(() => {
@@ -504,6 +562,15 @@ export function Component() {
       console.log('[Panel] Clearing agent progress - stopping all TTS audio and resetting mutations')
       // Stop all TTS audio when clearing progress (ESC key pressed)
       ttsManager.stopAll()
+
+      // Stop any ongoing recording and reset recording state
+      if (recordingRef.current) {
+        isConfirmedRef.current = false
+        setRecording(false)
+        recordingRef.current = false
+        setVisualizerData(() => getInitialVisualizerData())
+        recorderRef.current?.stopRecording()
+      }
 
       // Reset all mutations to clear isPending state
       transcribeMutation.reset()
@@ -528,6 +595,15 @@ export function Component() {
       console.log('[Panel] Emergency stop triggered - stopping all TTS audio and resetting state')
       ttsManager.stopAll()
 
+      // Stop any ongoing recording and reset recording state
+      if (recordingRef.current) {
+        isConfirmedRef.current = false
+        setRecording(false)
+        recordingRef.current = false
+        setVisualizerData(() => getInitialVisualizerData())
+        recorderRef.current?.stopRecording()
+      }
+
       // Reset all processing states
       setMcpMode(false)
       mcpModeRef.current = false
@@ -549,11 +625,29 @@ export function Component() {
   }, [isConversationActive, endConversation, transcribeMutation, mcpTranscribeMutation, textInputMutation, mcpTextInputMutation])
 
 
+	  // Track latest state values in a ref to avoid race conditions with auto-close timeout
+	  const autoCloseStateRef = useRef({
+	    anyVisibleSessions,
+	    showTextInput,
+	    recording,
+	    isTextSubmissionPending: textInputMutation.isPending || mcpTextInputMutation.isPending
+	  })
+
+	  // Keep ref in sync with latest state
+	  useEffect(() => {
+	    autoCloseStateRef.current = {
+	      anyVisibleSessions,
+	      showTextInput,
+	      recording,
+	      isTextSubmissionPending: textInputMutation.isPending || mcpTextInputMutation.isPending
+	    }
+	  }, [anyVisibleSessions, showTextInput, recording, textInputMutation.isPending, mcpTextInputMutation.isPending])
+
 	  // Auto-close the panel when there's nothing to show
 	  useEffect(() => {
 	    // Keep panel open if a text submission is still pending (to avoid flicker)
 	    const isTextSubmissionPending = textInputMutation.isPending || mcpTextInputMutation.isPending
-	    const showsAgentOverlay = anyActiveNonSnoozed
+	    const showsAgentOverlay = anyVisibleSessions
 
 	    const shouldAutoClose =
 	      !showsAgentOverlay &&
@@ -563,16 +657,25 @@ export function Component() {
 
 	    if (shouldAutoClose) {
 	      const t = setTimeout(() => {
-	        // Ensure normal size before hide, then hide the window
+	        // Re-check latest state before closing to prevent race conditions
+	        // State may have changed during the 200ms delay
+	        const latestState = autoCloseStateRef.current
+	        const stillShouldClose =
+	          !latestState.anyVisibleSessions &&
+	          !latestState.showTextInput &&
+	          !latestState.recording &&
+	          !latestState.isTextSubmissionPending
 
-	        tipcClient.hidePanelWindow({})
+	        if (stillShouldClose) {
+	          tipcClient.hidePanelWindow({})
+	        }
 	      }, 200)
 	      return () => clearTimeout(t)
 	    }
 
       return undefined as void
 
-	  }, [anyActiveNonSnoozed, showTextInput, recording, textInputMutation.isPending, mcpTextInputMutation.isPending])
+	  }, [anyVisibleSessions, showTextInput, recording, textInputMutation.isPending, mcpTextInputMutation.isPending])
 
   return (
     <PanelResizeWrapper
@@ -611,20 +714,9 @@ export function Component() {
           )}>
 
             <div className="relative flex grow items-center overflow-hidden">
-              {/* Conversation continuation indicator - subtle overlay that doesn't block waveform */}
-              {showContinueButton && !agentProgress && (
-                <div className="absolute left-3 top-3 z-10 flex items-center gap-2">
-                  <div className="flex items-center gap-1.5 rounded-full bg-black/20 px-2 py-1 backdrop-blur-sm">
-                    <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-green-400" />
-                    <span className="text-xs font-medium text-white/90">
-                      Continue conversation
-                    </span>
-                  </div>
-                </div>
-              )}
-
               {/* Agent progress overlay - left-aligned and full coverage */}
-              {anyActiveNonSnoozed && (
+              {/* Hide overlay when recording to prevent waveform from appearing over completed sessions */}
+              {anyVisibleSessions && !recording && (
                 hasMultipleSessions ? (
                   <MultiAgentProgressView
                     variant="overlay"

@@ -1,6 +1,7 @@
 import OpenAI from "openai"
 import { z } from "zod"
 import { configStore } from "./config"
+import { logLLM } from "./debug"
 
 // Define the schema for LLM tool call responses
 const LLMToolCallSchema = z.object({
@@ -233,7 +234,7 @@ export async function makeStructuredToolCall(
                                        error.status === 400
 
         if (isStructuredOutputError) {
-          console.log("JSON Schema mode failed, falling back to regular completion:", error.message)
+          logLLM("JSON Schema mode failed, falling back to regular completion:", error.message)
           // Fall through to regular completion
         } else {
           // Non-structured-output error, re-throw
@@ -336,7 +337,7 @@ export async function makeStructuredContextExtraction(
                                        error.status === 400
 
         if (isStructuredOutputError) {
-          console.log("JSON Schema mode failed for context extraction, falling back to regular completion:", error.message)
+          logLLM("JSON Schema mode failed for context extraction, falling back to regular completion:", error.message)
           // Fall through to regular completion
         } else {
           // Non-structured-output error, re-throw

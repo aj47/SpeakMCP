@@ -14,9 +14,9 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@renderer/components/ui/dialog"
 import {
   MessageCircle,
@@ -36,8 +36,8 @@ import {
   useDeleteHistoryItemMutation,
   useDeleteAllHistoryMutation,
   useHistoryItemQuery,
-} from "@renderer/lib/query-client"
-import { useConversationActions } from "@renderer/contexts/conversation-context"
+} from "@renderer/lib/queries"
+import { useConversationStore } from "@renderer/stores"
 import { tipcClient } from "@renderer/lib/tipc-client"
 import { ConversationDisplay } from "@renderer/components/conversation-display"
 import { ConversationHistoryItem } from "@shared/types"
@@ -58,7 +58,7 @@ export function Component() {
   const deleteAllHistoryMutation = useDeleteAllHistoryMutation()
   const selectedHistoryItemQuery = useHistoryItemQuery(selectedHistoryItem)
 
-  const { continueConversation } = useConversationActions()
+  const continueConversation = useConversationStore((s) => s.continueConversation)
 
   // Debug logging
   useEffect(() => {
@@ -148,19 +148,12 @@ export function Component() {
   }
 
   const handleDeleteAllHistory = async () => {
-    if (
-      !window.confirm(
-        "Are you sure you want to delete all history? This action cannot be undone.",
-      )
-    ) {
-      return
-    }
-
     try {
       await deleteAllHistoryMutation.mutateAsync()
       toast.success("All history deleted")
       setSelectedHistoryItem(null)
       setViewMode("list")
+      setShowDeleteAllDialog(false)
     } catch (error) {
       toast.error("Failed to delete history")
     }
@@ -396,6 +389,33 @@ export function Component() {
           </div>
         </>
       )}
+
+      {/* Delete All Confirmation Dialog */}
+      <Dialog open={showDeleteAllDialog} onOpenChange={setShowDeleteAllDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete All History</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete all history? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowDeleteAllDialog(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteAllHistory}
+              disabled={deleteAllHistoryMutation.isPending}
+            >
+              {deleteAllHistoryMutation.isPending ? "Deleting..." : "Delete All"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   )
 }

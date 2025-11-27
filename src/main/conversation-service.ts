@@ -1,6 +1,7 @@
 import fs from "fs"
 import path from "path"
 import { conversationsFolder } from "./config"
+import { logApp } from "./debug"
 import {
   Conversation,
   ConversationMessage,
@@ -141,28 +142,28 @@ export class ConversationService {
   async getConversationHistory(): Promise<ConversationHistoryItem[]> {
     try {
       const indexPath = this.getConversationIndexPath()
-      console.log("[ConversationService] getConversationHistory - indexPath:", indexPath)
+      logApp("[ConversationService] getConversationHistory - indexPath:", indexPath)
 
       if (!fs.existsSync(indexPath)) {
-        console.log("[ConversationService] Index file does not exist, returning empty array")
+        logApp("[ConversationService] Index file does not exist, returning empty array")
         return []
       }
 
       const indexData = fs.readFileSync(indexPath, "utf8")
-      console.log("[ConversationService] Index file content length:", indexData.length)
+      logApp("[ConversationService] Index file content length:", indexData.length)
 
       const history: ConversationHistoryItem[] = JSON.parse(indexData)
-      console.log("[ConversationService] Parsed history items:", history.length)
+      logApp("[ConversationService] Parsed history items:", history.length)
 
       // Sort by updatedAt descending (most recent first)
       const sorted = history.sort((a, b) => b.updatedAt - a.updatedAt)
-      console.log("[ConversationService] Returning sorted history:", {
+      logApp("[ConversationService] Returning sorted history:", {
         count: sorted.length,
         items: sorted.map(h => ({ id: h.id, title: h.title, messageCount: h.messageCount })),
       })
       return sorted
     } catch (error) {
-      console.error("[ConversationService] Error loading conversation history:", error)
+      logApp("[ConversationService] Error loading conversation history:", error)
       return []
     }
   }

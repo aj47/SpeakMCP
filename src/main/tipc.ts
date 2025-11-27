@@ -1,4 +1,5 @@
 import fs from "fs"
+import { logApp, logLLM, getDebugFlags } from "./debug"
 import { getRendererHandlers, tipc } from "@egoist/tipc/main"
 import {
   showPanelWindow,
@@ -233,16 +234,16 @@ async function processWithAgentMode(
         | undefined
 
       if (conversationId) {
-        console.log(`[tipc.ts processWithAgentMode] Loading conversation history for conversationId: ${conversationId}`)
+        logLLM(`[tipc.ts processWithAgentMode] Loading conversation history for conversationId: ${conversationId}`)
         const conversation =
           await conversationService.loadConversation(conversationId)
 
         if (conversation && conversation.messages.length > 0) {
-          console.log(`[tipc.ts processWithAgentMode] Loaded conversation with ${conversation.messages.length} messages`)
+          logLLM(`[tipc.ts processWithAgentMode] Loaded conversation with ${conversation.messages.length} messages`)
           // Convert conversation messages to the format expected by agent mode
           // Exclude the last message since it's the current user input that will be added
           const messagesToConvert = conversation.messages.slice(0, -1)
-          console.log(`[tipc.ts processWithAgentMode] Converting ${messagesToConvert.length} messages (excluding last message)`)
+          logLLM(`[tipc.ts processWithAgentMode] Converting ${messagesToConvert.length} messages (excluding last message)`)
           previousConversationHistory = messagesToConvert.map((msg) => ({
             role: msg.role,
             content: msg.content,
@@ -261,12 +262,12 @@ async function processWithAgentMode(
             })),
           }))
 
-          console.log(`[tipc.ts processWithAgentMode] previousConversationHistory roles: [${previousConversationHistory.map(m => m.role).join(', ')}]`)
+          logLLM(`[tipc.ts processWithAgentMode] previousConversationHistory roles: [${previousConversationHistory.map(m => m.role).join(', ')}]`)
         } else {
-          console.log(`[tipc.ts processWithAgentMode] No conversation found or conversation is empty`)
+          logLLM(`[tipc.ts processWithAgentMode] No conversation found or conversation is empty`)
         }
       } else {
-        console.log(`[tipc.ts processWithAgentMode] No conversationId provided, starting fresh conversation`)
+        logLLM(`[tipc.ts processWithAgentMode] No conversationId provided, starting fresh conversation`)
       }
 
       // Focus this session in the panel window so it's immediately visible
@@ -275,7 +276,7 @@ async function processWithAgentMode(
       try {
         getWindowRendererHandlers("panel")?.focusAgentSession.send(sessionId)
       } catch (e) {
-        console.warn("[tipc] Failed to focus new agent session:", e)
+        logApp("[tipc] Failed to focus new agent session:", e)
       }
 
       const agentResult = await processTranscriptWithAgentMode(
@@ -401,12 +402,12 @@ export const router = {
   hidePanelWindow: t.procedure.action(async () => {
     const panel = WINDOWS.get("panel")
 
-    console.log(`[hidePanelWindow] Called. Panel exists: ${!!panel}, visible: ${panel?.isVisible()}`)
+    logApp(`[hidePanelWindow] Called. Panel exists: ${!!panel}, visible: ${panel?.isVisible()}`)
 
     if (panel) {
       suppressPanelAutoShow(1000)
       panel.hide()
-      console.log(`[hidePanelWindow] Panel hidden`)
+      logApp(`[hidePanelWindow] Panel hidden`)
     }
   }),
 
@@ -518,7 +519,7 @@ export const router = {
         try {
           getRendererHandlers<RendererHandlers>(win.webContents).clearAgentSessionProgress?.send(input.sessionId)
         } catch (e) {
-          console.warn("[tipc] clearAgentSessionProgress send failed:", e)
+          logApp("[tipc] clearAgentSessionProgress send failed:", e)
         }
       }
       return { success: true }
@@ -624,7 +625,7 @@ export const router = {
       try {
         getWindowRendererHandlers("panel")?.focusAgentSession.send(input.sessionId)
       } catch (e) {
-        console.warn("[tipc] focusAgentSession send failed:", e)
+        logApp("[tipc] focusAgentSession send failed:", e)
       }
       return { success: true }
     }),
@@ -977,7 +978,7 @@ export const router = {
           }
         })
         .catch((error) => {
-          console.error("[createMcpTextInput] Agent processing error:", error)
+          logLLM("[createMcpTextInput] Agent processing error:", error)
         })
 
       // Return immediately with conversation ID
@@ -1142,7 +1143,7 @@ export const router = {
           }
         })
           .catch((error) => {
-            console.error("[createMcpRecording] Agent processing error:", error)
+            logLLM("[createMcpRecording] Agent processing error:", error)
           })
 
         // Return immediately with conversation ID
@@ -1150,7 +1151,7 @@ export const router = {
         return { conversationId }
       } catch (error) {
         // Handle transcription or conversation creation errors
-        console.error("[createMcpRecording] Transcription error:", error)
+        logLLM("[createMcpRecording] Transcription error:", error)
 
         // Clean up the session and emit error state
         await emitAgentProgress({
@@ -1199,6 +1200,11 @@ export const router = {
 
   getConfig: t.procedure.action(async () => {
     return configStore.get()
+  }),
+
+  // Debug flags - exposed to renderer for synchronized debug logging
+  getDebugFlags: t.procedure.action(async () => {
+    return getDebugFlags()
   }),
 
   saveConfig: t.procedure
@@ -1758,9 +1764,9 @@ export const router = {
 
   // Conversation Management
   getConversationHistory: t.procedure.action(async () => {
-    console.log("[tipc] getConversationHistory called")
+    logApp("[tipc] getConversationHistory called")
     const result = await conversationService.getConversationHistory()
-    console.log("[tipc] getConversationHistory result:", {
+    logApp("[tipc] getConversationHistory result:", {
       count: result.length,
       items: result.map(h => ({ id: h.id, title: h.title })),
     })

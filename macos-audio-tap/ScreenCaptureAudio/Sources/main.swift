@@ -11,38 +11,92 @@ func log(_ message: String) {
 // MARK: - Audio Stream Handler
 class AudioStreamHandler: NSObject, SCStreamOutput {
     private let outputHandle = FileHandle.standardOutput
-    
+
     func stream(_ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer, of type: SCStreamOutputType) {
         guard type == .audio else { return }
-        
-        guard let blockBuffer = CMSampleBufferGetDataBuffer(sampleBuffer) else {
-            return
-        }
-        
-        var length = 0
-        var dataPointer: UnsafeMutablePointer<Int8>?
-        
-        let status = CMBlockBufferGetDataPointer(blockBuffer, atOffset: 0, lengthAtOffsetOut: nil, totalLengthOut: &length, dataPointerOut: &dataPointer)
-        
-        guard status == kCMBlockBufferNoErr, let data = dataPointer else {
-            return
-        }
-        
-        // Convert Float32 samples to Int16 PCM
-        let floatCount = length / MemoryLayout<Float32>.size
-        let floatPointer = UnsafeRawPointer(data).bindMemory(to: Float32.self, capacity: floatCount)
-        
-        var int16Buffer = [Int16](repeating: 0, count: floatCount)
-        for i in 0..<floatCount {
-            let sample = floatPointer[i]
-            let clamped = max(-1.0, min(1.0, sample))
-            int16Buffer[i] = Int16(clamped * Float32(Int16.max))
-        }
-        
-        // Write PCM data to stdout
-        int16Buffer.withUnsafeBytes { bufferPointer in
-            let pcmData = Data(bufferPointer)
-            try? outputHandle.write(contentsOf: pcmData)
+
+        // First, get the required buffer list size
+        var bufferListSizeNeeded: Int = 0
+        CMSampleBufferGetAudioBufferListWithRetainedBlockBuffer(
+            sampleBuffer,
+            bufferListSizeNeededOut: &bufferListSizeNeeded,
+            bufferListOut: nil,
+            bufferListSize: 0,
+            blockBufferAllocator: nil,
+            blockBufferMemoryAllocator: nil,
+            flags: 0,
+            blockBufferOut: nil
+        )
+
+        guard bufferListSizeNeeded > 0 else { return }
+
+        // Allocate properly sized AudioBufferList
+        let audioBufferListPtr = UnsafeMutableRawPointer.allocate(
+            byteCount: bufferListSizeNeeded,
+            alignment: MemoryLayout<AudioBufferList>.alignment
+        )
+        defer { audioBufferListPtr.deallocate() }
+
+        let audioBufferList = audioBufferListPtr.bindMemory(to: AudioBufferList.self, capacity: 1)
+        var blockBuffer: CMBlockBuffer?
+
+        let status = CMSampleBufferGetAudioBufferListWithRetainedBlockBuffer(
+            sampleBuffer,
+            bufferListSizeNeededOut: nil,
+            bufferListOut: audioBufferList,
+            bufferListSize: bufferListSizeNeeded,
+            blockBufferAllocator: nil,
+            blockBufferMemoryAllocator: nil,
+            flags: kCMSampleBufferFlag_AudioBufferList_Assure16ByteAlignment,
+            blockBufferOut: &blockBuffer
+        )
+
+        guard status == noErr else { return }
+
+        let buffers = UnsafeMutableAudioBufferListPointer(audioBufferList)
+        let bufferCount = buffers.count
+
+        if bufferCount == 1 {
+            // Interleaved audio - convert Float32 to Int16 directly
+            let buffer = buffers[0]
+            guard let data = buffer.mData else { return }
+
+            let floatCount = Int(buffer.mDataByteSize) / MemoryLayout<Float32>.size
+            let floatPointer = data.bindMemory(to: Float32.self, capacity: floatCount)
+
+            var int16Buffer = [Int16](repeating: 0, count: floatCount)
+            for i in 0..<floatCount {
+                let sample = floatPointer[i]
+                let clamped = max(-1.0, min(1.0, sample))
+                int16Buffer[i] = Int16(clamped * Float32(Int16.max))
+            }
+
+            int16Buffer.withUnsafeBytes { bufferPointer in
+                let pcmData = Data(bufferPointer)
+                try? outputHandle.write(contentsOf: pcmData)
+            }
+        } else if bufferCount >= 2 {
+            // Non-interleaved audio - interleave L/R channels to stereo Int16
+            guard let leftData = buffers[0].mData,
+                  let rightData = buffers[1].mData else { return }
+
+            let samplesPerChannel = Int(buffers[0].mDataByteSize) / MemoryLayout<Float32>.size
+            let leftPointer = leftData.bindMemory(to: Float32.self, capacity: samplesPerChannel)
+            let rightPointer = rightData.bindMemory(to: Float32.self, capacity: samplesPerChannel)
+
+            // Interleave: L0, R0, L1, R1, L2, R2, ...
+            var int16Buffer = [Int16](repeating: 0, count: samplesPerChannel * 2)
+            for i in 0..<samplesPerChannel {
+                let leftSample = max(-1.0, min(1.0, leftPointer[i]))
+                let rightSample = max(-1.0, min(1.0, rightPointer[i]))
+                int16Buffer[i * 2] = Int16(leftSample * Float32(Int16.max))
+                int16Buffer[i * 2 + 1] = Int16(rightSample * Float32(Int16.max))
+            }
+
+            int16Buffer.withUnsafeBytes { bufferPointer in
+                let pcmData = Data(bufferPointer)
+                try? outputHandle.write(contentsOf: pcmData)
+            }
         }
     }
 }

@@ -38,10 +38,10 @@ export function Component() {
   }, [config.mcpToolsEnabled])
 
   return (
-    <div className="modern-panel h-full overflow-auto px-6 py-4">
+    <div className="modern-panel h-full min-w-0 overflow-y-auto overflow-x-hidden px-6 py-4">
 
       {!config.mcpToolsEnabled ? (
-        <div className="space-y-4">
+        <div className="min-w-0 space-y-4">
           <div className="rounded-lg border p-4">
             <h3 className="text-lg font-semibold">MCP Tool Calling is disabled</h3>
             <p className="text-sm text-muted-foreground">
@@ -52,19 +52,19 @@ export function Component() {
             </div>
           </div>
 
-          
+
         </div>
       ) : (
-        <div className="space-y-8">
-          
+        <div className="min-w-0 space-y-8">
 
-          <div className="space-y-8 border-t pt-6">
+
+          <div className="min-w-0 space-y-8 border-t pt-6">
             <MCPConfigManager
               config={config.mcpConfig || { mcpServers: {} }}
               onConfigChange={updateMcpConfig}
             />
 
-            <div className="border-t pt-6">
+            <div className="min-w-0 border-t pt-6">
               <MCPToolManager />
             </div>
           </div>

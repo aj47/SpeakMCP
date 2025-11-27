@@ -213,7 +213,7 @@ export const Component = () => {
         )}
 
         {/* Scrollable content area */}
-        <div className="flex-1 overflow-y-auto overflow-x-hidden">
+        <div className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden">
           <Outlet />
         </div>
       </div>

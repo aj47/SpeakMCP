@@ -1128,57 +1128,6 @@ export function MCPConfigManager({
                       )}
                     </div>
                     <div className="flex shrink-0 items-center gap-1">
-                    {/* OAuth authorization controls - moved to top level */}
-                    {serverConfig.transport === "streamableHttp" && serverConfig.url && (
-                      <>
-                        {oauthStatus[name]?.authenticated ? (
-                          <>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={async () => {
-                                try {
-                                  await window.electronAPI.revokeOAuthTokens(name)
-                                  toast.success("OAuth authentication revoked")
-                                  refreshOAuthStatus()
-                                } catch (error) {
-                                  toast.error(`Failed to revoke authentication: ${error instanceof Error ? error.message : String(error)}`)
-                                }
-                              }}
-                              title="Revoke OAuth authentication"
-                            >
-                              <XCircle className="h-4 w-4" />
-                            </Button>
-                          </>
-                        ) : oauthStatus[name]?.configured ? (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={async () => {
-                              try {
-                                await window.electronAPI.initiateOAuthFlow(name)
-                                toast.success("OAuth authentication started")
-                                // Poll for completion
-                                const checkCompletion = setInterval(async () => {
-                                  const status = await window.electronAPI.getOAuthStatus(name)
-                                  if (status.authenticated) {
-                                    clearInterval(checkCompletion)
-                                    refreshOAuthStatus()
-                                    toast.success("OAuth authentication completed")
-                                  }
-                                }, 2000)
-                                setTimeout(() => clearInterval(checkCompletion), 60000)
-                              } catch (error) {
-                                toast.error(`Failed to start OAuth flow: ${error instanceof Error ? error.message : String(error)}`)
-                              }
-                            }}
-                            title="Start OAuth authentication"
-                          >
-                            <ExternalLink className="h-4 w-4" />
-                          </Button>
-                        ) : null}
-                      </>
-                    )}
                     {!serverConfig.disabled && (
                       <>
                         {serverStatus[name]?.runtimeEnabled === false ? (

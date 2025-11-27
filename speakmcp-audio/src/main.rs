@@ -119,7 +119,8 @@ fn start_capture(
                         let mut bytes = Vec::with_capacity(data.len() * 2);
                         for &sample in data {
                             // Center unsigned samples around zero and convert to i16
-                            let s = (sample as i32 - i16::MAX as i32) as i16;
+                            // U16 samples range from 0-65535, so the true midpoint is 32768 (0x8000)
+                            let s = (sample as i32 - 32768) as i16;
                             bytes.extend_from_slice(&s.to_le_bytes());
                         }
                         let seq = seq_cb.fetch_add(1, Ordering::Relaxed);

@@ -77,7 +77,7 @@ class ProfileService {
         return data
       }
     } catch (error) {
-      logApp(`Error loading profiles: ${error}`)
+      logApp("Error loading profiles:", error)
     }
 
     // Return default profiles if file doesn't exist or there's an error
@@ -97,7 +97,7 @@ class ProfileService {
       fs.mkdirSync(dataFolder, { recursive: true })
       fs.writeFileSync(profilesPath, JSON.stringify(this.profilesData, null, 2))
     } catch (error) {
-      logApp(`Error saving profiles: ${error}`)
+      logApp("Error saving profiles:", error)
       throw new Error(`Failed to save profiles: ${error instanceof Error ? error.message : String(error)}`)
     }
   }

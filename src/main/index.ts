@@ -91,7 +91,7 @@ app.whenReady().then(() => {
       error
     )
     // Also log to console if debug mode is enabled
-    logApp(`Failed to initialize MCP service on startup: ${error}`)
+    logApp("Failed to initialize MCP service on startup:", error)
   }).then(() => {
     logApp("MCP service initialized successfully")
   })

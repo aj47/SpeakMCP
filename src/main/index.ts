@@ -17,6 +17,7 @@ import { isAccessibilityGranted } from "./utils"
 import { mcpService } from "./mcp-service"
 import { initDebugFlags, logApp } from "./debug"
 import { initializeDeepLinkHandling } from "./oauth-deeplink-handler"
+import { diagnosticsService } from "./diagnostics"
 
 import { configStore } from "./config"
 import { startRemoteServer } from "./remote-server"
@@ -83,6 +84,13 @@ app.whenReady().then(() => {
 
   // Initialize MCP service on app startup
   mcpService.initialize().catch((error) => {
+    // Always log to diagnostics so failures are captured for health checks
+    diagnosticsService.logError(
+      "mcp-service",
+      "Failed to initialize MCP service on startup",
+      error
+    )
+    // Also log to console if debug mode is enabled
     logApp(`Failed to initialize MCP service on startup: ${error}`)
   }).then(() => {
     logApp("MCP service initialized successfully")

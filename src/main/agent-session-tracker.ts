@@ -4,6 +4,7 @@
  */
 
 import type { RendererHandlers } from "./renderer-handlers"
+import { logApp } from "./debug"
 
 export interface AgentSession {
   id: string
@@ -94,7 +95,7 @@ class AgentSessionTracker {
     }
 
     this.sessions.set(sessionId, session)
-    console.log(`[AgentSessionTracker] Started session: ${sessionId}, total sessions: ${this.sessions.size}`)
+    logApp(`[AgentSessionTracker] Started session: ${sessionId}, total sessions: ${this.sessions.size}`)
 
     // Emit update to UI
     emitSessionUpdate()
@@ -121,7 +122,7 @@ class AgentSessionTracker {
   completeSession(sessionId: string, finalActivity?: string): void {
     const session = this.sessions.get(sessionId)
     if (!session) {
-      console.log(`[AgentSessionTracker] Complete requested for non-existent session: ${sessionId}`)
+      logApp(`[AgentSessionTracker] Complete requested for non-existent session: ${sessionId}`)
       return
     }
     session.status = "completed"
@@ -135,7 +136,7 @@ class AgentSessionTracker {
       this.completedSessions.length = 20
     }
     this.sessions.delete(sessionId)
-    console.log(`[AgentSessionTracker] Completing session: ${sessionId}, remaining sessions: ${this.sessions.size}`)
+    logApp(`[AgentSessionTracker] Completing session: ${sessionId}, remaining sessions: ${this.sessions.size}`)
 
     // Emit update to UI
     emitSessionUpdate()
@@ -147,7 +148,7 @@ class AgentSessionTracker {
   stopSession(sessionId: string): void {
     const session = this.sessions.get(sessionId)
     if (!session) {
-      console.log(`[AgentSessionTracker] Stop requested for non-existent session: ${sessionId}`)
+      logApp(`[AgentSessionTracker] Stop requested for non-existent session: ${sessionId}`)
       return
     }
     session.status = "stopped"
@@ -157,7 +158,7 @@ class AgentSessionTracker {
       this.completedSessions.length = 20
     }
     this.sessions.delete(sessionId)
-    console.log(`[AgentSessionTracker] Stopping session: ${sessionId}, remaining sessions: ${this.sessions.size}`)
+    logApp(`[AgentSessionTracker] Stopping session: ${sessionId}, remaining sessions: ${this.sessions.size}`)
 
     // Emit update to UI
     emitSessionUpdate()
@@ -169,7 +170,7 @@ class AgentSessionTracker {
   errorSession(sessionId: string, errorMessage: string): void {
     const session = this.sessions.get(sessionId)
     if (!session) {
-      console.log(`[AgentSessionTracker] Error reported for non-existent session: ${sessionId}`)
+      logApp(`[AgentSessionTracker] Error reported for non-existent session: ${sessionId}`)
       return
     }
     session.status = "error"
@@ -180,7 +181,7 @@ class AgentSessionTracker {
       this.completedSessions.length = 20
     }
     this.sessions.delete(sessionId)
-    console.log(`[AgentSessionTracker] Error in session: ${sessionId}, remaining sessions: ${this.sessions.size}`)
+    logApp(`[AgentSessionTracker] Error in session: ${sessionId}, remaining sessions: ${this.sessions.size}`)
 
     // Emit update to UI
     emitSessionUpdate()
@@ -210,15 +211,15 @@ class AgentSessionTracker {
   snoozeSession(sessionId: string): void {
     const session = this.sessions.get(sessionId)
     if (session) {
-      console.log(`[AgentSessionTracker] Snoozing session: ${sessionId}, was snoozed: ${session.isSnoozed}`)
+      logApp(`[AgentSessionTracker] Snoozing session: ${sessionId}, was snoozed: ${session.isSnoozed}`)
       session.isSnoozed = true
       this.sessions.set(sessionId, session)
-      console.log(`[AgentSessionTracker] Session ${sessionId} is now snoozed: ${session.isSnoozed}`)
+      logApp(`[AgentSessionTracker] Session ${sessionId} is now snoozed: ${session.isSnoozed}`)
 
       // Emit update to UI
       emitSessionUpdate()
     } else {
-      console.log(`[AgentSessionTracker] Cannot snooze - session not found: ${sessionId}`)
+      logApp(`[AgentSessionTracker] Cannot snooze - session not found: ${sessionId}`)
     }
   }
 
@@ -228,15 +229,15 @@ class AgentSessionTracker {
   unsnoozeSession(sessionId: string): void {
     const session = this.sessions.get(sessionId)
     if (session) {
-      console.log(`[AgentSessionTracker] Unsnoozing session: ${sessionId}, was snoozed: ${session.isSnoozed}`)
+      logApp(`[AgentSessionTracker] Unsnoozing session: ${sessionId}, was snoozed: ${session.isSnoozed}`)
       session.isSnoozed = false
       this.sessions.set(sessionId, session)
-      console.log(`[AgentSessionTracker] Session ${sessionId} is now snoozed: ${session.isSnoozed}`)
+      logApp(`[AgentSessionTracker] Session ${sessionId} is now snoozed: ${session.isSnoozed}`)
 
       // Emit update to UI
       emitSessionUpdate()
     } else {
-      console.log(`[AgentSessionTracker] Cannot unsnooze - session not found: ${sessionId}`)
+      logApp(`[AgentSessionTracker] Cannot unsnooze - session not found: ${sessionId}`)
     }
   }
 

@@ -992,7 +992,7 @@ export class MCPService {
       }
       return await summarizeContent(content)
     } catch (error) {
-      console.warn('Failed to summarize large response:', error)
+      logTools('Failed to summarize large response:', error)
       // Fallback to simple truncation
       const maxLength = strategy === 'aggressive' ? 2000 : 5000
       return content.substring(0, maxLength) + '\n\n... (truncated due to summarization failure)'
@@ -1727,12 +1727,12 @@ export class MCPService {
       throw new Error("URL is required for OAuth flow")
     }
 
-    console.log(`🔐 Server ${serverName} requires OAuth authentication, initiating flow...`)
+    logTools(`🔐 Server ${serverName} requires OAuth authentication, initiating flow...`)
     diagnosticsService.logInfo("mcp-service", `Server ${serverName} requires OAuth authentication, initiating flow`)
 
     // Ensure OAuth configuration exists
     if (!serverConfig.oauth) {
-      console.log(`📝 Creating default OAuth configuration for ${serverName}`)
+      logTools(`📝 Creating default OAuth configuration for ${serverName}`)
       // Create default OAuth configuration for the server
       serverConfig.oauth = {
         scope: 'user',
@@ -1745,7 +1745,7 @@ export class MCPService {
       if (config.mcpConfig?.mcpServers?.[serverName]) {
         config.mcpConfig.mcpServers[serverName] = serverConfig
         configStore.save(config)
-        console.log(`✅ OAuth configuration saved for ${serverName}`)
+        logTools(`✅ OAuth configuration saved for ${serverName}`)
       }
     }
 
@@ -1769,11 +1769,11 @@ export class MCPService {
         },
       })
 
-      console.log(`✅ OAuth authentication completed successfully for ${serverName}`)
+      logTools(`✅ OAuth authentication completed successfully for ${serverName}`)
       return transport
     } catch (error) {
       const errorMsg = `OAuth authentication failed for server ${serverName}: ${error instanceof Error ? error.message : String(error)}`
-      console.error(`❌ ${errorMsg}`)
+      logTools(`❌ ${errorMsg}`)
       diagnosticsService.logError("mcp-service", errorMsg)
       throw new Error(errorMsg)
     }
@@ -1994,7 +1994,7 @@ export class MCPService {
 
       return null
     } catch (error) {
-      console.error('Error finding server by OAuth state:', error)
+      logTools('Error finding server by OAuth state:', error)
       return null
     }
   }

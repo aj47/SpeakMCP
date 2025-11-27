@@ -6,6 +6,11 @@ import App from "./App"
 import { tipcClient } from "./lib/tipc-client"
 import { QueryClientProvider } from "@tanstack/react-query"
 import { queryClient } from "./lib/query-client"
+import { initDebugFlags } from "./lib/debug"
+
+// Initialize debug flags from main process (fire-and-forget)
+// This syncs CLI flags like --debug-ui to the renderer
+initDebugFlags()
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>

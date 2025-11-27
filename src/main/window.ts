@@ -9,7 +9,7 @@ import path from "path"
 import { getRendererHandlers } from "@egoist/tipc/main"
 // Removed dependency on @egoist/electron-panel-window
 import { RendererHandlers } from "./renderer-handlers"
-import { logApp } from "./debug"
+import { logApp, logUI } from "./debug"
 import { configStore } from "./config"
 import { getFocusedAppInfo } from "./keyboard"
 import { state, agentProcessManager, suppressPanelAutoShow } from "./state"
@@ -56,12 +56,12 @@ function createBaseWindow({
 
   // Lightweight window lifecycle logging to diagnose unexpected hides/closes
   const _label = id.toUpperCase()
-  win.on("show", () => console.log(`[WINDOW ${_label}] show`))
-  win.on("hide", () => console.log(`[WINDOW ${_label}] hide`))
-  win.on("minimize", () => console.log(`[WINDOW ${_label}] minimize`))
-  win.on("restore", () => console.log(`[WINDOW ${_label}] restore`))
-  win.on("focus", () => console.log(`[WINDOW ${_label}] focus`))
-  win.on("blur", () => console.log(`[WINDOW ${_label}] blur`))
+  win.on("show", () => logUI(`[WINDOW ${_label}] show`))
+  win.on("hide", () => logUI(`[WINDOW ${_label}] hide`))
+  win.on("minimize", () => logUI(`[WINDOW ${_label}] minimize`))
+  win.on("restore", () => logUI(`[WINDOW ${_label}] restore`))
+  win.on("focus", () => logUI(`[WINDOW ${_label}] focus`))
+  win.on("blur", () => logUI(`[WINDOW ${_label}] blur`))
 
   if (showWhenReady) {
     win.on("ready-to-show", () => {
@@ -70,7 +70,7 @@ function createBaseWindow({
   }
 
   win.on("close", () => {
-    console.log(`[WINDOW ${_label}] close`)
+    logUI(`[WINDOW ${_label}] close`)
     WINDOWS.delete(id)
   })
 
@@ -177,7 +177,7 @@ const textInputPanelWindowSize = {
 const getSavedSizeForMode = (mode: "normal" | "agent" | "textInput") => {
   const config = configStore.get()
 
-  console.log(`[window.ts] getSavedSizeForMode(${mode}) - checking config...`)
+  logApp(`[window.ts] getSavedSizeForMode(${mode}) - checking config...`)
 
   // Helper to validate and cap saved sizes to reasonable maximums
   const validateSize = (savedSize: { width: number; height: number }, defaultSize: { width: number; height: number }) => {
@@ -190,12 +190,12 @@ const getSavedSizeForMode = (mode: "normal" | "agent" | "textInput") => {
 
     if (mode === "textInput") {
       if (savedSize.width > maxTextInputWidth || savedSize.height > maxTextInputHeight) {
-        console.log(`[window.ts] Saved textInput size too large (${savedSize.width}x${savedSize.height}), using default:`, defaultSize)
+        logApp(`[window.ts] Saved textInput size too large (${savedSize.width}x${savedSize.height}), using default:`, defaultSize)
         return defaultSize
       }
     } else {
       if (savedSize.width > maxWidth || savedSize.height > maxHeight) {
-        console.log(`[window.ts] Saved ${mode} size too large (${savedSize.width}x${savedSize.height}), using default:`, defaultSize)
+        logApp(`[window.ts] Saved ${mode} size too large (${savedSize.width}x${savedSize.height}), using default:`, defaultSize)
         return defaultSize
       }
     }
@@ -204,25 +204,25 @@ const getSavedSizeForMode = (mode: "normal" | "agent" | "textInput") => {
   }
 
   if (mode === "normal" && config.panelNormalModeSize) {
-    console.log(`[window.ts] Found saved normal mode size:`, config.panelNormalModeSize)
+    logApp(`[window.ts] Found saved normal mode size:`, config.panelNormalModeSize)
     return validateSize(config.panelNormalModeSize, panelWindowSize)
   } else if (mode === "agent" && config.panelAgentModeSize) {
-    console.log(`[window.ts] Found saved agent mode size:`, config.panelAgentModeSize)
+    logApp(`[window.ts] Found saved agent mode size:`, config.panelAgentModeSize)
     return validateSize(config.panelAgentModeSize, agentPanelWindowSize)
   } else if (mode === "textInput" && config.panelTextInputModeSize) {
-    console.log(`[window.ts] Found saved textInput mode size:`, config.panelTextInputModeSize)
+    logApp(`[window.ts] Found saved textInput mode size:`, config.panelTextInputModeSize)
     return validateSize(config.panelTextInputModeSize, textInputPanelWindowSize)
   }
 
   // Return default sizes if no saved size
   if (mode === "agent") {
-    console.log(`[window.ts] No saved agent mode size, using default:`, agentPanelWindowSize)
+    logApp(`[window.ts] No saved agent mode size, using default:`, agentPanelWindowSize)
     return agentPanelWindowSize
   } else if (mode === "textInput") {
-    console.log(`[window.ts] No saved textInput mode size, using default:`, textInputPanelWindowSize)
+    logApp(`[window.ts] No saved textInput mode size, using default:`, textInputPanelWindowSize)
     return textInputPanelWindowSize
   }
-  console.log(`[window.ts] No saved normal mode size, using default:`, panelWindowSize)
+  logApp(`[window.ts] No saved normal mode size, using default:`, panelWindowSize)
   return panelWindowSize
 }
 
@@ -242,19 +242,19 @@ function ensurePanelZOrder(win: BrowserWindow) {
         // @ts-ignore - macOS-only options not in cross-platform typings
         win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
       } catch (e) {
-        console.warn("[window.ts] setVisibleOnAllWorkspaces not supported:", e)
+        logApp("[window.ts] setVisibleOnAllWorkspaces not supported:", e)
       }
       try {
         // Prefer NSModalPanel-like level for WM compatibility (Aerospace)
         // @ts-ignore - level arg is macOS-specific
         win.setAlwaysOnTop(true, "modal-panel", 1)
       } catch (e) {
-        console.warn("[window.ts] setAlwaysOnTop('modal-panel') failed, trying 'screen-saver':", e)
+        logApp("[window.ts] setAlwaysOnTop('modal-panel') failed, trying 'screen-saver':", e)
         try {
           // @ts-ignore - level arg is macOS-specific
           win.setAlwaysOnTop(true, "screen-saver")
         } catch (e2) {
-          console.warn("[window.ts] setAlwaysOnTop('screen-saver') failed, falling back to default:", e2)
+          logApp("[window.ts] setAlwaysOnTop('screen-saver') failed, falling back to default:", e2)
           win.setAlwaysOnTop(true)
         }
       }
@@ -267,7 +267,7 @@ function ensurePanelZOrder(win: BrowserWindow) {
       } catch {}
     }
   } catch (error) {
-    console.error("[window.ts] ensurePanelZOrder error:", error)
+    logApp("[window.ts] ensurePanelZOrder error:", error)
   }
 }
 
@@ -282,7 +282,7 @@ function setPanelFocusableForMode(win: BrowserWindow, mode: "normal"|"agent"|"te
       win.setFocusable(false)
     }
   } catch (e) {
-    console.warn("[window.ts] setPanelFocusableForMode failed:", e)
+    logApp("[window.ts] setPanelFocusableForMode failed:", e)
   }
 }
 
@@ -381,16 +381,16 @@ export function getCurrentPanelMode(): "normal" | "agent" | "textInput" {
 
 export function createPanelWindow() {
   logApp("Creating panel window...")
-  console.log("[window.ts] createPanelWindow - MIN_WAVEFORM_WIDTH:", MIN_WAVEFORM_WIDTH)
+  logApp("[window.ts] createPanelWindow - MIN_WAVEFORM_WIDTH:", MIN_WAVEFORM_WIDTH)
 
   const position = getPanelWindowPosition()
-  console.log("[window.ts] createPanelWindow - position:", position)
+  logApp("[window.ts] createPanelWindow - position:", position)
 
   const savedSize = getSavedSizeForMode("normal")
-  console.log("[window.ts] createPanelWindow - savedSize:", savedSize)
+  logApp("[window.ts] createPanelWindow - savedSize:", savedSize)
 
   const minWidth = Math.max(200, MIN_WAVEFORM_WIDTH)
-  console.log("[window.ts] createPanelWindow - minWidth:", minWidth)
+  logApp("[window.ts] createPanelWindow - minWidth:", minWidth)
 
 
   const win = createBaseWindow({
@@ -424,7 +424,7 @@ export function createPanelWindow() {
     },
   })
 
-  console.log("[window.ts] createPanelWindow - window created with size:", { width: savedSize.width, height: savedSize.height })
+  logApp("[window.ts] createPanelWindow - window created with size:", { width: savedSize.width, height: savedSize.height })
 
   win.on("hide", () => {
     getRendererHandlers<RendererHandlers>(win.webContents).stopRecording.send()
@@ -447,17 +447,17 @@ export function createPanelWindow() {
 export function showPanelWindow() {
   const win = WINDOWS.get("panel")
   if (win) {
-    console.log(`[showPanelWindow] Called. Current visibility: ${win.isVisible()}`)
+    logApp(`[showPanelWindow] Called. Current visibility: ${win.isVisible()}`)
 
     const mode = getCurrentPanelMode()
     // Apply mode sizing/positioning just before showing
     try { applyPanelMode(mode) } catch {}
 
     if (mode === "textInput") {
-      console.log(`[showPanelWindow] Showing panel with show() for ${mode} mode`)
+      logApp(`[showPanelWindow] Showing panel with show() for ${mode} mode`)
       win.show()
     } else {
-      console.log(`[showPanelWindow] Showing panel with showInactive() for ${mode} mode`)
+      logApp(`[showPanelWindow] Showing panel with showInactive() for ${mode} mode`)
       win.showInactive()
       if (process.platform === "win32") {
         win.focus()
@@ -569,7 +569,7 @@ export const closeAgentModeAndHidePanelWindow = () => {
 }
 
 export const emergencyStopAgentMode = async () => {
-  console.log("Emergency stop triggered for agent mode")
+  logApp("Emergency stop triggered for agent mode")
 
   const win = WINDOWS.get("panel")
   if (win) {
@@ -582,9 +582,9 @@ export const emergencyStopAgentMode = async () => {
   try {
     const { emergencyStopAll } = await import("./emergency-stop")
     const { before, after } = await emergencyStopAll()
-    console.log(`Emergency stop completed. Killed ${before} processes. Remaining: ${after}`)
+    logApp(`Emergency stop completed. Killed ${before} processes. Remaining: ${after}`)
   } catch (error) {
-    console.error("Error during emergency stop:", error)
+    logApp("Error during emergency stop:", error)
   }
 
   // Close panel without resizing; next show will apply correct mode

@@ -494,7 +494,7 @@ export async function processTranscriptWithAgentMode(
       isSnoozed,
       sessionStartIndex,
     }).catch(err => {
-      console.warn("[emit] Failed to emit agent progress:", err)
+      logLLM("[emit] Failed to emit agent progress:", err)
     })
   }
 
@@ -543,7 +543,7 @@ export async function processTranscriptWithAgentMode(
       }
     } catch (error) {
       // Log but don't throw - persistence failures shouldn't crash the agent
-      console.warn("[saveMessageIncremental] Failed to save message:", error)
+      logLLM("[saveMessageIncremental] Failed to save message:", error)
       diagnosticsService.logWarning("llm", "Failed to save message incrementally", error)
     }
   }
@@ -569,7 +569,7 @@ export async function processTranscriptWithAgentMode(
 
     // Save to disk asynchronously (fire and forget)
     saveMessageIncremental(role, content, toolCalls, toolResults).catch(err => {
-      console.warn("[addMessage] Failed to save message:", err)
+      logLLM("[addMessage] Failed to save message:", err)
     })
   }
 
@@ -648,10 +648,10 @@ export async function processTranscriptWithAgentMode(
     return history.slice(-8) // Last 8 messages provide sufficient context
   }
 
-  console.log(`[llm.ts processTranscriptWithAgentMode] Initializing conversationHistory for session ${currentSessionId}`)
-  console.log(`[llm.ts processTranscriptWithAgentMode] previousConversationHistory length: ${previousConversationHistory?.length || 0}`)
+  logLLM(`[llm.ts processTranscriptWithAgentMode] Initializing conversationHistory for session ${currentSessionId}`)
+  logLLM(`[llm.ts processTranscriptWithAgentMode] previousConversationHistory length: ${previousConversationHistory?.length || 0}`)
   if (previousConversationHistory && previousConversationHistory.length > 0) {
-    console.log(`[llm.ts processTranscriptWithAgentMode] previousConversationHistory roles: [${previousConversationHistory.map(m => m.role).join(', ')}]`)
+    logLLM(`[llm.ts processTranscriptWithAgentMode] previousConversationHistory roles: [${previousConversationHistory.map(m => m.role).join(', ')}]`)
   }
 
   const conversationHistory: Array<{
@@ -665,14 +665,14 @@ export async function processTranscriptWithAgentMode(
     { role: "user", content: transcript, timestamp: Date.now() },
   ]
 
-  console.log(`[llm.ts processTranscriptWithAgentMode] conversationHistory initialized with ${conversationHistory.length} messages, roles: [${conversationHistory.map(m => m.role).join(', ')}]`)
+  logLLM(`[llm.ts processTranscriptWithAgentMode] conversationHistory initialized with ${conversationHistory.length} messages, roles: [${conversationHistory.map(m => m.role).join(', ')}]`)
 
   // Save the initial user message incrementally
   // Only save if this is a new message (not from previous conversation history)
   if (!previousConversationHistory || previousConversationHistory.length === 0 ||
       previousConversationHistory[previousConversationHistory.length - 1]?.content !== transcript) {
     saveMessageIncremental("user", transcript).catch(err => {
-      console.warn("[processTranscriptWithAgentMode] Failed to save initial user message:", err)
+      logLLM("[processTranscriptWithAgentMode] Failed to save initial user message:", err)
     })
   }
 
@@ -819,7 +819,7 @@ Return ONLY JSON per schema.`,
 
     // Check for stop signal (session-specific or global)
     if (agentSessionStateManager.shouldStopSession(currentSessionId)) {
-      console.log(`Agent session ${currentSessionId} stopped by kill switch`)
+      logLLM(`Agent session ${currentSessionId} stopped by kill switch`)
 
       // Add emergency stop step
       const stopStep = createProgressStep(
@@ -970,7 +970,7 @@ Always use actual resource IDs from the conversation history or create new ones 
 
     // If stop was requested during context shrinking, exit now
     if (agentSessionStateManager.shouldStopSession(currentSessionId)) {
-      console.log(`Agent session ${currentSessionId} stopped during context shrink`)
+      logLLM(`Agent session ${currentSessionId} stopped during context shrink`)
       thinkingStep.status = "completed"
       thinkingStep.title = "Agent stopped"
       thinkingStep.description = "Emergency stop triggered"
@@ -995,7 +995,7 @@ Always use actual resource IDs from the conversation history or create new ones 
 
       // If stop was requested while the LLM call was in-flight and it returned before aborting, exit now
       if (agentSessionStateManager.shouldStopSession(currentSessionId)) {
-        console.log(`Agent session ${currentSessionId} stopped right after LLM response`)
+        logLLM(`Agent session ${currentSessionId} stopped right after LLM response`)
         thinkingStep.status = "completed"
         thinkingStep.title = "Agent stopped"
         thinkingStep.description = "Emergency stop triggered"
@@ -1014,7 +1014,7 @@ Always use actual resource IDs from the conversation history or create new ones 
       }
     } catch (error: any) {
       if (error?.name === "AbortError" || agentSessionStateManager.shouldStopSession(currentSessionId)) {
-        console.log(`LLM call aborted for session ${currentSessionId} due to emergency stop`)
+        logLLM(`LLM call aborted for session ${currentSessionId} due to emergency stop`)
         thinkingStep.status = "completed"
         thinkingStep.title = "Agent stopped"
         thinkingStep.description = "Emergency stop triggered"
@@ -1055,8 +1055,8 @@ Always use actual resource IDs from the conversation history or create new ones 
 
     // Validate response is not null/empty
     if (!llmResponse || !llmResponse.content) {
-      console.error(`❌ LLM null/empty response on iteration ${iteration}`)
-      console.error("Response details:", {
+      logLLM(`❌ LLM null/empty response on iteration ${iteration}`)
+      logLLM("Response details:", {
         hasResponse: !!llmResponse,
         responseType: typeof llmResponse,
         responseKeys: llmResponse ? Object.keys(llmResponse) : [],
@@ -1379,7 +1379,7 @@ Always use actual resource IDs from the conversation history or create new ones 
       }
       // Check for stop signal before executing each tool
       if (agentSessionStateManager.shouldStopSession(currentSessionId)) {
-        console.log(`Agent session ${currentSessionId} stopped during tool execution`)
+        logLLM(`Agent session ${currentSessionId} stopped during tool execution`)
         // Emit final progress with complete status
         const killNote = "\n\n(Agent mode was stopped by emergency kill switch)"
         const finalOutput = (finalContent || "") + killNote
@@ -1783,7 +1783,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
 
           // Check if stop was requested during summary generation
           if (agentSessionStateManager.shouldStopSession(currentSessionId)) {
-            console.log(`Agent session ${currentSessionId} stopped during summary generation`)
+            logLLM(`Agent session ${currentSessionId} stopped during summary generation`)
             const killNote = "\n\n(Agent mode was stopped by emergency kill switch)"
             const finalOutput = (finalContent || "") + killNote
             conversationHistory.push({ role: "assistant", content: finalOutput })
@@ -1816,7 +1816,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
           })
         } catch (error) {
           // If summary generation fails, fall back to the original content
-          console.warn("Failed to generate summary:", error)
+          logLLM("Failed to generate summary:", error)
           finalContent = lastAssistantContent || "Task completed successfully."
           summaryStep.status = "error"
           summaryStep.description = "Failed to generate summary, using fallback"
@@ -1873,7 +1873,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
 
 	        // Check if stop was requested during verification
 	        if (agentSessionStateManager.shouldStopSession(currentSessionId)) {
-	          console.log(`Agent session ${currentSessionId} stopped during verification`)
+	          logLLM(`Agent session ${currentSessionId} stopped during verification`)
 	          const killNote = "\n\n(Agent mode was stopped by emergency kill switch)"
 	          const finalOutput = (finalContent || "") + killNote
 	          conversationHistory.push({ role: "assistant", content: finalOutput })
@@ -1970,7 +1970,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
 
           // Check if stop was requested during post-verify summary generation
           if (agentSessionStateManager.shouldStopSession(currentSessionId)) {
-            console.log(`Agent session ${currentSessionId} stopped during post-verify summary generation`)
+            logLLM(`Agent session ${currentSessionId} stopped during post-verify summary generation`)
             const killNote = "\n\n(Agent mode was stopped by emergency kill switch)"
             const finalOutput = (finalContent || "") + killNote
             conversationHistory.push({ role: "assistant", content: finalOutput })
@@ -2128,7 +2128,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
           })
         } catch (error) {
           // If summary generation fails, fall back to the original content
-          console.warn("Failed to generate summary:", error)
+          logLLM("Failed to generate summary:", error)
           finalContent = assistantContent || "Task completed successfully."
           summaryStep.status = "error"
           summaryStep.description = "Failed to generate summary, using fallback"

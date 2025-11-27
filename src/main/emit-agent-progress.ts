@@ -12,6 +12,7 @@ import { RendererHandlers } from "./renderer-handlers"
 import { AgentProgressUpdate } from "../shared/types"
 import { isPanelAutoShowSuppressed } from "./state"
 import { agentSessionTracker } from "./agent-session-tracker"
+import { logApp } from "./debug"
 
 /**
  * Emit agent progress updates to the renderer.
@@ -26,8 +27,8 @@ import { agentSessionTracker } from "./agent-session-tracker"
  * @param update - The agent progress update to emit
  */
 export async function emitAgentProgress(update: AgentProgressUpdate): Promise<void> {
-  console.log(`[emitAgentProgress] Called for session ${update.sessionId}, isSnoozed: ${update.isSnoozed}`)
-  console.log(`[emitAgentProgress] conversationHistory length: ${update.conversationHistory?.length || 0}, roles: [${update.conversationHistory?.map(m => m.role).join(', ') || 'none'}]`)
+  logApp(`[emitAgentProgress] Called for session ${update.sessionId}, isSnoozed: ${update.isSnoozed}`)
+  logApp(`[emitAgentProgress] conversationHistory length: ${update.conversationHistory?.length || 0}, roles: [${update.conversationHistory?.map(m => m.role).join(', ') || 'none'}]`)
 
   // Always send updates to main window if it's open for live progress visualization
   // This is done first to ensure main window updates even if panel is unavailable
@@ -39,49 +40,49 @@ export async function emitAgentProgress(update: AgentProgressUpdate): Promise<vo
         try {
           mainHandlers.agentProgressUpdate.send(update)
         } catch (error) {
-          console.warn("Failed to send progress update to main window:", error)
+          logApp("Failed to send progress update to main window:", error)
         }
       }, 10)
     } catch (error) {
-      console.warn("Failed to get main window renderer handlers:", error)
+      logApp("Failed to get main window renderer handlers:", error)
     }
   }
 
   // Now handle panel window updates
   const panel = WINDOWS.get("panel")
   if (!panel) {
-    console.warn("Panel window not available for progress update")
+    logApp("Panel window not available for progress update")
     return
   }
 
-  console.log(`[emitAgentProgress] Panel visible: ${panel.isVisible()}`)
+  logApp(`[emitAgentProgress] Panel visible: ${panel.isVisible()}`)
 
   // Only show the panel window if it's not visible AND the session is not snoozed
   if (!panel.isVisible() && update.sessionId) {
     // Check if this session is snoozed before showing the panel
     const isSnoozed = agentSessionTracker.isSessionSnoozed(update.sessionId)
 
-    console.log(`[emitAgentProgress] Panel not visible. Session ${update.sessionId} snoozed check: ${isSnoozed}`)
+    logApp(`[emitAgentProgress] Panel not visible. Session ${update.sessionId} snoozed check: ${isSnoozed}`)
 
     if (isPanelAutoShowSuppressed()) {
-      console.log(`[emitAgentProgress] Panel auto-show suppressed; NOT showing panel for session ${update.sessionId}`)
+      logApp(`[emitAgentProgress] Panel auto-show suppressed; NOT showing panel for session ${update.sessionId}`)
     } else if (!isSnoozed) {
       // Only show panel for non-snoozed sessions
-      console.log(`[emitAgentProgress] Showing panel for non-snoozed session ${update.sessionId}`)
+      logApp(`[emitAgentProgress] Showing panel for non-snoozed session ${update.sessionId}`)
       // Set panel mode to agent before showing to ensure correct sizing
       resizePanelForAgentMode()
       showPanelWindow()
     } else {
-      console.log(`[emitAgentProgress] Session ${update.sessionId} is snoozed, NOT showing panel`)
+      logApp(`[emitAgentProgress] Session ${update.sessionId} is snoozed, NOT showing panel`)
     }
   } else {
-    console.log(`[emitAgentProgress] Skipping show check - panel visible: ${panel.isVisible()}, has sessionId: ${!!update.sessionId}`)
+    logApp(`[emitAgentProgress] Skipping show check - panel visible: ${panel.isVisible()}, has sessionId: ${!!update.sessionId}`)
   }
 
   try {
     const handlers = getRendererHandlers<RendererHandlers>(panel.webContents)
     if (!handlers.agentProgressUpdate) {
-      console.warn("Agent progress handler not available")
+      logApp("Agent progress handler not available")
       return
     }
 
@@ -90,11 +91,11 @@ export async function emitAgentProgress(update: AgentProgressUpdate): Promise<vo
       try {
         handlers.agentProgressUpdate.send(update)
       } catch (error) {
-        console.warn("Failed to send progress update:", error)
+        logApp("Failed to send progress update:", error)
       }
     }, 10)
   } catch (error) {
-    console.warn("Failed to get renderer handlers:", error)
+    logApp("Failed to get renderer handlers:", error)
   }
 }
 

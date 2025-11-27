@@ -450,8 +450,8 @@ async function apiCallWithRetry<T>(
           }
         )
 
-        // User-friendly console output so users can see progress
-        console.log(`⏳ Rate limit hit - waiting ${waitTimeSeconds} seconds before retrying... (attempt ${attempt + 1})`)
+        // User-friendly log output so users can see progress
+        logLLM(`⏳ Rate limit hit - waiting ${waitTimeSeconds} seconds before retrying... (attempt ${attempt + 1})`)
 
         // Emit retry progress to UI
         if (onRetryProgress) {
@@ -508,14 +508,14 @@ async function apiCallWithRetry<T>(
         }
       )
 
-      // User-friendly console output so users can see retry progress
+      // User-friendly log output so users can see retry progress
       const reason = error instanceof HttpError
         ? `HTTP ${error.status} error`
         : "Network error"
       if (error instanceof HttpError) {
-        console.log(`⏳ HTTP ${error.status} error - retrying in ${Math.round(delay / 1000)} seconds... (attempt ${attempt + 1}/${retryCount + 1})`)
+        logLLM(`⏳ HTTP ${error.status} error - retrying in ${Math.round(delay / 1000)} seconds... (attempt ${attempt + 1}/${retryCount + 1})`)
       } else {
-        console.log(`⏳ Network error - retrying in ${Math.round(delay / 1000)} seconds... (attempt ${attempt + 1}/${retryCount + 1})`)
+        logLLM(`⏳ Network error - retrying in ${Math.round(delay / 1000)} seconds... (attempt ${attempt + 1}/${retryCount + 1})`)
       }
 
       // Emit retry progress to UI

@@ -3,6 +3,7 @@ import path from "path"
 import fs from "fs"
 import { Profile, ProfilesData } from "@shared/types"
 import { randomUUID } from "crypto"
+import { logApp } from "./debug"
 
 export const profilesPath = path.join(
   app.getPath("appData"),
@@ -76,7 +77,7 @@ class ProfileService {
         return data
       }
     } catch (error) {
-      console.error("Error loading profiles:", error)
+      logApp(`Error loading profiles: ${error}`)
     }
 
     // Return default profiles if file doesn't exist or there's an error
@@ -96,7 +97,7 @@ class ProfileService {
       fs.mkdirSync(dataFolder, { recursive: true })
       fs.writeFileSync(profilesPath, JSON.stringify(this.profilesData, null, 2))
     } catch (error) {
-      console.error("Error saving profiles:", error)
+      logApp(`Error saving profiles: ${error}`)
       throw new Error(`Failed to save profiles: ${error instanceof Error ? error.message : String(error)}`)
     }
   }

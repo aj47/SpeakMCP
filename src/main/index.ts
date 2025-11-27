@@ -83,8 +83,7 @@ app.whenReady().then(() => {
 
   // Initialize MCP service on app startup
   mcpService.initialize().catch((error) => {
-    console.error("Failed to initialize MCP service on startup:", error)
-    logApp(`MCP service initialization failed: ${error}`)
+    logApp(`Failed to initialize MCP service on startup: ${error}`)
   }).then(() => {
     logApp("MCP service initialized successfully")
   })

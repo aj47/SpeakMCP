@@ -83,18 +83,21 @@ app.whenReady().then(() => {
   logApp("System tray initialized")
 
   // Initialize MCP service on app startup
-  mcpService.initialize().catch((error) => {
-    // Always log to diagnostics so failures are captured for health checks
-    diagnosticsService.logError(
-      "mcp-service",
-      "Failed to initialize MCP service on startup",
-      error
-    )
-    // Also log to console if debug mode is enabled
-    logApp("Failed to initialize MCP service on startup:", error)
-  }).then(() => {
-    logApp("MCP service initialized successfully")
-  })
+  mcpService
+    .initialize()
+    .then(() => {
+      logApp("MCP service initialized successfully")
+    })
+    .catch((error) => {
+      // Always log to diagnostics so failures are captured for health checks
+      diagnosticsService.logError(
+        "mcp-service",
+        "Failed to initialize MCP service on startup",
+        error
+      )
+      // Also log to console if debug mode is enabled
+      logApp("Failed to initialize MCP service on startup:", error)
+    })
 
 	  // Start Remote Server if enabled
 	  try {

@@ -1,7 +1,7 @@
 import fs from "fs"
 import path from "path"
-import { audioService } from "./audio-service"
 import { recordingsFolder, configStore } from "./config"
+import { getAudioBackend } from "./audio-backends"
 import { getRecordingHistory, saveRecordingHistory } from "./recordings-store"
 import { RecordingHistoryItem } from "../shared/types"
 import { postProcessTranscript } from "./llm"
@@ -114,9 +114,12 @@ function createWavFromPcm(
 
 class LongRecordingService {
   private currentSession: LongRecordingSession | null = null
+  private backend = getAudioBackend()
+
+
 
   constructor() {
-    audioService.onTyped("audio-chunk", (buffer, info) => {
+    this.backend.onAudioChunk((buffer, info) => {
       if (!this.currentSession || info.sessionId !== this.currentSession.id) {
         return
       }
@@ -147,13 +150,16 @@ class LongRecordingService {
       this.currentSession.buffers.push(buffer)
     })
 
-    audioService.onTyped("error", (error) => {
+    this.backend.onError((error) => {
       logApp(
         "[LongRecordingService] Audio service error",
         error?.name || "",
         error?.message || "",
       )
     })
+
+
+    // Subscriptions are configured via backend instance in constructor.
   }
 
   async start() {
@@ -173,7 +179,7 @@ class LongRecordingService {
     }
 
     try {
-      await audioService.startSystemCapture(id)
+      await this.backend.startCapture(id)
     } catch (err) {
       this.currentSession = null
       throw err
@@ -188,9 +194,11 @@ class LongRecordingService {
       throw new Error("No long recording in progress")
     }
 
-    this.currentSession = null
-
-    await audioService.stopCapture(session.id)
+	    try {
+	      await this.backend.stopCapture(session.id)
+	    } finally {
+	      this.currentSession = null
+	    }
 
     const pcmBuffer = Buffer.concat(session.buffers)
 

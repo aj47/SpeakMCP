@@ -369,4 +369,6 @@ export type Config = {
   streamStatusWatcherEnabled?: boolean
   streamStatusFilePath?: string
 
+  // Audio backend configuration
+  useSystemAudioTap?: boolean
 }

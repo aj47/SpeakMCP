@@ -45,6 +45,7 @@ https://github.com/user-attachments/assets/0c181c70-d1f1-4c5d-a6f5-a73147e75182
 ### 🎤 Voice & Speech
 - **Voice-to-Text**: Hold `Ctrl` to record, release to transcribe
 - **Toggle Voice Dictation**: Press `Fn` key to start/stop recording (configurable)
+- **Desktop + Mic Capture (macOS)**: On macOS 13+ you can capture **system audio + microphone together** using Apple's ScreenCaptureKit (no virtual audio drivers)
 - **Multi-Language Support**: 30+ languages including Spanish, French, German, Chinese, Japanese, Arabic, Hindi
 - **Text-to-Speech (TTS)**: AI-generated speech with 50+ voices across OpenAI, Groq, and Gemini
 - **Auto-Play TTS**: Automatic speech playback for seamless conversations
@@ -93,18 +94,19 @@ Built with modern technologies for cross-platform performance:
 git clone https://github.com/aj47/SpeakMCP.git
 cd SpeakMCP
 pnpm install
-pnpm build-rs  # Build Rust binary for your platform
-pnpm dev       # Start development server
+pnpm build-rs            # Build Rust helper binaries for your platform
+pnpm build:mac-audio-tap # (macOS only) Build ScreenCaptureKit system-audio bridge
+pnpm dev                 # Start development server
 
 # Platform-specific builds
-pnpm build        # Production build for current platform
+pnpm build        # Production build for current platform (includes mac audio tap)
 pnpm build:mac    # macOS build (Apple Silicon + Intel)
 pnpm build:win    # Windows build (x64)
 pnpm build:linux  # Linux build (x64)
 
 # Testing
-pnpm test         # Run test suite
-pnpm test:run     # Run tests once (CI mode)
+pnpm test          # Run test suite
+pnpm test:run      # Run tests once (CI mode)
 pnpm test:coverage # Run tests with coverage
 
 # VNC GUI Testing (GitHub Actions)
@@ -200,6 +202,11 @@ nvm use 20
 - **Hold Ctrl+Alt**: MCP agent mode
 - **Ctrl+T**: Text input mode
 - **Escape**: Cancel/kill switch for operations
+
+**macOS Desktop Audio (System + Mic)**:
+- Controlled by `useSystemAudioTap` in the config.
+- When enabled on macOS 13+ and the `mac-audio-tap-bridge` native module is built, long recordings capture **system audio and microphone together** using Apple's ScreenCaptureKit.
+- Requires granting **Screen Recording** and **Microphone** permissions when prompted by macOS.
 
 ## 🤖 MCP Agent Mode
 

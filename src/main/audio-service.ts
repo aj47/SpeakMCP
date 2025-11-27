@@ -3,6 +3,7 @@ import path from "path"
 import fs from "fs"
 import { EventEmitter } from "events"
 import { logApp } from "./debug"
+import type { AudioBackend } from "./audio-backend"
 
 export type AudioChunkInfo = {
   sessionId: string
@@ -31,7 +32,7 @@ class TypedEmitter<T extends Record<string, any[]>> extends EventEmitter {
   }
 }
 
-class AudioService extends TypedEmitter<AudioServiceEvents> {
+class AudioService extends TypedEmitter<AudioServiceEvents> implements AudioBackend {
   private child: ChildProcessWithoutNullStreams | null = null
   private stdoutBuffer = ""
   private seenSessionIds = new Set<string>()
@@ -117,9 +118,33 @@ class AudioService extends TypedEmitter<AudioServiceEvents> {
         }
       }
     })
-
     this.child = child
   }
+
+
+  onAudioChunk(
+    handler: (
+      buffer: Buffer,
+      info: { sessionId: string; sequence: number; sampleRate: number; channels: number },
+    ) => void,
+  ) {
+    this.onTyped("audio-chunk", handler)
+  }
+
+  onError(handler: (error: Error) => void) {
+    this.onTyped("error", handler)
+  }
+
+  async startCapture(sessionId: string): Promise<void> {
+    await this.startSystemCapture(sessionId)
+  }
+
+  async stopCapture(sessionId: string): Promise<void> {
+    await this.stopCaptureInternal(sessionId)
+  }
+
+
+
 
   async startSystemCapture(sessionId: string): Promise<void> {
     // Placeholder implementation: we will implement real capture per-OS
@@ -137,7 +162,7 @@ class AudioService extends TypedEmitter<AudioServiceEvents> {
     this.child?.stdin.write(JSON.stringify(payload) + "\n")
   }
 
-  async stopCapture(sessionId: string): Promise<void> {
+  private async stopCaptureInternal(sessionId: string): Promise<void> {
     if (!this.child || this.child.killed) return
 
     const payload = {
@@ -147,6 +172,7 @@ class AudioService extends TypedEmitter<AudioServiceEvents> {
 
     this.child.stdin.write(JSON.stringify(payload) + "\n")
   }
+
 
   shutdown() {
     if (!this.child || this.child.killed) return

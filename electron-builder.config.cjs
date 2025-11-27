@@ -71,6 +71,14 @@ module.exports = {
     binaries: [
       "resources/bin/speakmcp-rs",
       "resources/bin/speakmcp-audio",
+      "resources/bin/screencapture-audio",
+    ],
+    extraResources: [
+      {
+        from: "resources/bin/screencapture-audio",
+        to: "bin/screencapture-audio",
+        filter: ["**/*"]
+      }
     ],
     artifactName: "${productName}-${version}-${arch}.${ext}",
     entitlementsInherit: "build/entitlements.mac.plist",

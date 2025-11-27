@@ -32,6 +32,18 @@ fi
 
 cd ..
 
+# On macOS, copy the ScreenCaptureKit audio binary if it exists
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    SWIFT_BINARY="macos-audio-tap/ScreenCaptureAudio/.build/release/screencapture-audio"
+    if [[ -f "$SWIFT_BINARY" ]]; then
+        echo "📦 Copying screencapture-audio binary..."
+        cp "$SWIFT_BINARY" resources/bin/screencapture-audio
+    else
+        echo "⚠️  screencapture-audio binary not found at $SWIFT_BINARY"
+        echo "   Run 'npm run build:screencapture-audio' to build it"
+    fi
+fi
+
 # Sign the binaries on macOS
 if [[ "$OSTYPE" == "darwin"* ]]; then
     echo "🔐 Signing Rust binaries..."

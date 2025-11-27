@@ -39,14 +39,24 @@ class AudioService extends TypedEmitter<AudioServiceEvents> implements AudioBack
 
 
   private getBinaryPath() {
-    const base = path
-      .join(
-        __dirname,
-        `../../resources/bin/speakmcp-audio${process.platform === "win32" ? ".exe" : ""}`,
-      )
+    const binaryName = `speakmcp-audio${process.platform === "win32" ? ".exe" : ""}`
+
+    // Production path (packaged app)
+    // electron-builder copies extraResources to process.resourcesPath
+    const prodPath = path
+      .join(process.resourcesPath, "bin", binaryName)
       .replace("app.asar", "app.asar.unpacked")
 
-    return base
+    if (fs.existsSync(prodPath)) {
+      return prodPath
+    }
+
+    // Development path - relative to __dirname
+    const devPath = path
+      .join(__dirname, `../../resources/bin/${binaryName}`)
+      .replace("app.asar", "app.asar.unpacked")
+
+    return devPath
   }
 
   private ensureProcess() {

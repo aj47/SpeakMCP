@@ -75,6 +75,11 @@ module.exports = {
     ],
     extraResources: [
       {
+        from: "resources/bin/speakmcp-audio",
+        to: "bin/speakmcp-audio",
+        filter: ["**/*"]
+      },
+      {
         from: "resources/bin/screencapture-audio",
         to: "bin/screencapture-audio",
         filter: ["**/*"]

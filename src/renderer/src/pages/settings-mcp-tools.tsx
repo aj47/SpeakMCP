@@ -38,7 +38,7 @@ export function Component() {
   }, [config.mcpToolsEnabled])
 
   return (
-    <div className="modern-panel h-full overflow-auto px-6 py-4">
+    <div className="modern-panel h-full overflow-y-auto overflow-x-hidden px-6 py-4">
 
       {!config.mcpToolsEnabled ? (
         <div className="space-y-4">

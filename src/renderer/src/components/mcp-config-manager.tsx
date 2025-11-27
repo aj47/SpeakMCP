@@ -1088,9 +1088,9 @@ export function MCPConfigManager({
           Object.entries(servers).map(([name, serverConfig]) => (
             <Card key={name}>
               <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <CardTitle className="text-base">{name}</CardTitle>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+                    <CardTitle className="truncate text-base">{name}</CardTitle>
                     {serverConfig.disabled ? (
                       <Badge variant="secondary">Disabled</Badge>
                     ) : serverStatus[name]?.runtimeEnabled === false ? (
@@ -1126,7 +1126,7 @@ export function MCPConfigManager({
                       </>
                     )}
                   </div>
-                  <div className="flex gap-1">
+                  <div className="flex shrink-0 flex-wrap gap-1">
                     {/* OAuth authorization controls - moved to top level */}
                     {serverConfig.transport === "streamableHttp" && serverConfig.url && (
                       <>
@@ -1280,7 +1280,7 @@ export function MCPConfigManager({
                     </Button>
                   </div>
                 </div>
-                <CardDescription>
+                <CardDescription className="truncate">
                   {serverConfig.transport === "stdio" || !serverConfig.transport
                     ? `${serverConfig.command || ""} ${serverConfig.args ? serverConfig.args.join(" ") : ""}`
                     : `${serverConfig.transport}: ${serverConfig.url || ""}`}

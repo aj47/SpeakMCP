@@ -101,16 +101,20 @@ class AudioStreamHandler: NSObject, SCStreamOutput {
     }
 }
 
+// Global reference for signal handlers (C functions can't access instance members)
+private var globalAppInstance: ScreenCaptureAudioApp?
+
 // MARK: - Main Application
 class ScreenCaptureAudioApp {
     private var stream: SCStream?
     private let handler = AudioStreamHandler()
-    private var isRunning = true
-    
+    var isRunning = true
+
     func run() async {
         log("Starting ScreenCaptureAudio...")
-        
+
         // Setup signal handlers for graceful shutdown
+        globalAppInstance = self
         setupSignalHandlers()
         
         // Get available content
@@ -171,12 +175,12 @@ class ScreenCaptureAudioApp {
     
     private func setupSignalHandlers() {
         signal(SIGTERM) { _ in
-            FileHandle.standardError.write("Received SIGTERM\n".data(using: .utf8)!)
-            exit(0)
+            FileHandle.standardError.write("Received SIGTERM, stopping gracefully...\n".data(using: .utf8)!)
+            globalAppInstance?.isRunning = false
         }
         signal(SIGINT) { _ in
-            FileHandle.standardError.write("Received SIGINT\n".data(using: .utf8)!)
-            exit(0)
+            FileHandle.standardError.write("Received SIGINT, stopping gracefully...\n".data(using: .utf8)!)
+            globalAppInstance?.isRunning = false
         }
     }
 }

@@ -217,15 +217,15 @@ export function MCPToolManager({ onToolToggle }: MCPToolManagerProps) {
   const enabledTools = tools.filter((tool) => tool.enabled).length
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
+    <div className="min-w-0 space-y-6">
+      <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-3">
           <h3 className="text-lg font-medium">MCP Tool Management</h3>
-          <Badge variant="secondary" className="text-sm">
+          <Badge variant="secondary" className="shrink-0 text-sm">
             {enabledTools}/{totalTools} enabled
           </Badge>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
           <Button
             variant="outline"
             size="sm"
@@ -242,8 +242,8 @@ export function MCPToolManager({ onToolToggle }: MCPToolManagerProps) {
       </div>
 
       {/* Search and Filter Controls */}
-      <div className="flex gap-4">
-        <div className="flex-1">
+      <div className="flex flex-col gap-4 sm:flex-row">
+        <div className="min-w-0 flex-1">
           <div className="relative">
             <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
@@ -254,7 +254,7 @@ export function MCPToolManager({ onToolToggle }: MCPToolManagerProps) {
             />
           </div>
         </div>
-        <div className="w-48">
+        <div className="w-full sm:w-48">
           <select
             value={selectedServer}
             onChange={(e) => setSelectedServer(e.target.value)}
@@ -291,20 +291,20 @@ export function MCPToolManager({ onToolToggle }: MCPToolManagerProps) {
                   className="cursor-pointer transition-colors hover:bg-accent/50"
                   onClick={() => toggleServerExpansion(serverName)}
                 >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex min-w-0 flex-1 items-center gap-2">
                       {expandedServers.has(serverName) ? (
-                        <ChevronDown className="h-4 w-4" />
+                        <ChevronDown className="h-4 w-4 shrink-0" />
                       ) : (
-                        <ChevronRight className="h-4 w-4" />
+                        <ChevronRight className="h-4 w-4 shrink-0" />
                       )}
-                      <CardTitle className="text-base">{serverName}</CardTitle>
-                      <Badge variant="secondary">
+                      <CardTitle className="truncate text-base">{serverName}</CardTitle>
+                      <Badge variant="secondary" className="shrink-0">
                         {serverTools.filter((t) => t.enabled).length}/
                         {serverTools.length} enabled
                       </Badge>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex shrink-0 items-center gap-2">
                       <Button
                         variant="ghost"
                         size="sm"

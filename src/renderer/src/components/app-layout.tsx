@@ -103,12 +103,12 @@ export const Component = () => {
           </div>
         </div>
       </div>
-      <div className="flex grow flex-col bg-background">
+      <div className="flex min-w-0 grow flex-col bg-background">
         {/* Draggable top bar for Mac - allows window dragging while content scrolls */}
         {process.env.IS_MAC && <SettingsDragBar />}
 
         {/* Scrollable content area */}
-        <div className="flex-1 overflow-auto">
+        <div className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden">
           <Outlet />
         </div>
       </div>

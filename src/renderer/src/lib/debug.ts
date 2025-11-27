@@ -39,7 +39,8 @@ export async function initDebugFlags(): Promise<void> {
       tools: false,
       keybinds: false,
       app: false,
-      ui: localStorage.getItem('DEBUG_UI') === 'true' || localStorage.getItem('DEBUG') === '*',
+      // Include DEV mode to preserve dev logging when sync fails
+      ui: import.meta.env.DEV || localStorage.getItem('DEBUG_UI') === 'true' || localStorage.getItem('DEBUG') === '*',
       all: localStorage.getItem('DEBUG') === '*',
     }
   }

@@ -147,8 +147,7 @@ class ScreenCaptureAudioApp {
                 exit(1)
             }
             
-            // Add outputs for both screen and audio
-            try stream.addStreamOutput(handler, type: .screen, sampleHandlerQueue: .main)
+            // Add audio output only - no need for screen capture
             try stream.addStreamOutput(handler, type: .audio, sampleHandlerQueue: .main)
             
             log("Starting audio capture stream...")

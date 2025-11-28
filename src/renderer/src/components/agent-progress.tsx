@@ -615,17 +615,25 @@ const ToolApprovalBubble: React.FC<{
       // Don't handle if already responding or if user is typing in an input
       if (isResponding) return
       const target = e.target as HTMLElement
-      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+      // Ignore when focus is on interactive elements to preserve standard keyboard navigation
+      if (
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.tagName === 'BUTTON' ||
+        target.tagName === 'A' ||
+        target.isContentEditable
+      ) {
         return
       }
 
+      // Use e.code for more consistent Space detection across browsers/platforms
       // Space to approve (without modifiers)
-      if (e.key === ' ' && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey) {
+      if (e.code === 'Space' && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey) {
         e.preventDefault()
         onApprove()
       }
       // Shift+Space to deny
-      else if (e.key === ' ' && e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey) {
+      else if (e.code === 'Space' && e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey) {
         e.preventDefault()
         onDeny()
       }

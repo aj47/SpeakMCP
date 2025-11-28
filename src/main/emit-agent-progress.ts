@@ -30,7 +30,9 @@ import { logApp } from "./debug"
 export async function emitAgentProgress(update: AgentProgressUpdate): Promise<void> {
   // Check if this session has been stopped by killswitch - skip emitting if so
   // This prevents progress updates from being sent after emergency stop is triggered
-  if (update.sessionId) {
+  // EXCEPTION: Always allow final completion updates (isComplete: true) through so the
+  // "Agent stopped" message from stopAgentSession can reach the UI
+  if (update.sessionId && !update.isComplete) {
     const shouldStop = agentSessionStateManager.shouldStopSession(update.sessionId) || state.shouldStopAgent
     if (shouldStop) {
       logApp(`[emitAgentProgress] Skipping update for stopped session ${update.sessionId}`)

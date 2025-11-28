@@ -1261,7 +1261,12 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
                   ? `approval-${(item.data as any).approvalId}`
                   : `exec-${(item as any).data?.id || (item as any).data?.timestamp}`)
 
-                const isExpanded = !!expandedItems[itemKey]
+                // Final assistant message should be expanded by default when agent is complete
+                // unless user has explicitly toggled it (itemKey exists in expandedItems)
+                const isFinalAssistantMessage = item.kind === "message" && index === lastAssistantDisplayIndex && isComplete
+                const isExpanded = itemKey in expandedItems
+                  ? expandedItems[itemKey]
+                  : isFinalAssistantMessage
 
                 if (item.kind === "message") {
                   return (

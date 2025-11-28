@@ -10,7 +10,7 @@ import { getRendererHandlers } from "@egoist/tipc/main"
 import { WINDOWS, showPanelWindow, resizePanelForAgentMode } from "./window"
 import { RendererHandlers } from "./renderer-handlers"
 import { AgentProgressUpdate } from "../shared/types"
-import { isPanelAutoShowSuppressed, agentSessionStateManager, state } from "./state"
+import { isPanelAutoShowSuppressed, agentSessionStateManager } from "./state"
 import { agentSessionTracker } from "./agent-session-tracker"
 import { logApp } from "./debug"
 
@@ -33,7 +33,7 @@ export async function emitAgentProgress(update: AgentProgressUpdate): Promise<vo
   // EXCEPTION: Always allow final completion updates (isComplete: true) through so the
   // "Agent stopped" message from stopAgentSession can reach the UI
   if (update.sessionId && !update.isComplete) {
-    const shouldStop = agentSessionStateManager.shouldStopSession(update.sessionId) || state.shouldStopAgent
+    const shouldStop = agentSessionStateManager.shouldStopSession(update.sessionId)
     if (shouldStop) {
       logApp(`[emitAgentProgress] Skipping update for stopped session ${update.sessionId}`)
       return

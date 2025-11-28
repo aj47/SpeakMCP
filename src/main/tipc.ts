@@ -55,10 +55,10 @@ import { emitAgentProgress } from "./emit-agent-progress"
 // Helper function to initialize MCP with progress feedback
 async function initializeMcpWithProgress(config: Config, sessionId: string): Promise<void> {
   // Import agentSessionStateManager to check for stop signals during MCP initialization
-  const { agentSessionStateManager, state } = await import("./state")
+  const { agentSessionStateManager } = await import("./state")
 
   // Helper to check if we should stop (session-specific or global)
-  const shouldStop = () => agentSessionStateManager.shouldStopSession(sessionId) || state.shouldStopAgent
+  const shouldStop = () => agentSessionStateManager.shouldStopSession(sessionId)
 
   // Check if already stopped before starting
   if (shouldStop()) {

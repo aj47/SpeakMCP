@@ -122,6 +122,8 @@ const getConfig = () => {
 	    remoteServerCorsOrigins: ["*"],
 
 
+    // Audio backend configuration
+    useSystemAudioTap: false,
   }
 
   try {

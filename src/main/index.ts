@@ -21,6 +21,8 @@ import { diagnosticsService } from "./diagnostics"
 
 import { configStore } from "./config"
 import { startRemoteServer } from "./remote-server"
+import { audioService } from "./audio-service"
+
 
 registerServeSchema()
 
@@ -139,6 +141,7 @@ app.whenReady().then(() => {
 
   app.on("before-quit", () => {
     makePanelWindowClosable()
+    audioService.shutdown()
   })
 })
 

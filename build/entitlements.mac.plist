@@ -12,6 +12,10 @@
     <true/>
     <key>com.apple.security.device.audio-input</key>
     <true/>
+	    <!-- Screen Recording permission is required for ScreenCaptureKit
+	         system-audio capture on macOS -->
+	    <key>com.apple.security.screen-recording</key>
+	    <true/>
     <key>com.apple.security.automation.apple-events</key>
     <true/>
   </dict>

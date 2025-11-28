@@ -18,6 +18,11 @@
     <key>com.apple.security.device.audio-input</key>
     <true/>
 
+	    <!-- Screen Recording permission is required for ScreenCaptureKit
+	         system-audio capture on macOS -->
+	    <key>com.apple.security.screen-recording</key>
+	    <true/>
+
     <!-- File access for saving transcriptions -->
     <key>com.apple.security.files.user-selected.read-write</key>
     <true/>

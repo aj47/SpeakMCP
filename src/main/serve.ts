@@ -71,8 +71,18 @@ export function registerServeProtocol() {
 
     if (host === "recording") {
       const id = pathname.slice(1)
-      const loc = path.join(recordingsFolder, `${id}.webm`)
-      return callback({ path: loc })
+      const webmPath = path.join(recordingsFolder, `${id}.webm`)
+      const wavPath = path.join(recordingsFolder, `${id}.wav`)
+
+      if (fs.existsSync(webmPath)) {
+        return callback({ path: webmPath })
+      }
+
+      if (fs.existsSync(wavPath)) {
+        return callback({ path: wavPath })
+      }
+
+      return callback({ error: FILE_NOT_FOUND })
     }
 
     if (host === "file") {

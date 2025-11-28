@@ -17,6 +17,9 @@ bin/
 
 .aider
 
+# Swift build artifacts
+macos-audio-tap/ScreenCaptureAudio/.build/
+
 # Environment files with secrets
 .env.local
 .env.production

@@ -22,6 +22,10 @@ const buildMenu = (tray: Tray) =>
     {
       label: state.isRecording ? "Cancel Recording" : "Start Recording",
       click() {
+        console.log(
+          "[tray] Start/Cancel Recording clicked; isRecording:",
+          state.isRecording,
+        )
         if (state.isRecording) {
           state.isRecording = false
           tray.setImage(defaultIcon)
@@ -34,9 +38,35 @@ const buildMenu = (tray: Tray) =>
       },
     },
     {
+      label: state.isDesktopRecordingActive
+        ? "Stop Desktop Recording"
+        : "Start Desktop Recording",
+      click() {
+        console.log(
+          "[tray] Desktop recording menu clicked; isDesktopRecordingActive:",
+          state.isDesktopRecordingActive,
+        )
+        // Show main window on recordings route and start/stop desktop recording
+        showMainWindow("/recordings")
+        const handlers = getWindowRendererHandlers("main")
+        console.log(
+          "[tray] getWindowRendererHandlers('main') returned:",
+          !!handlers,
+        )
+        if (!handlers) {
+          return
+        }
+        if (state.isDesktopRecordingActive) {
+          handlers.stopDesktopRecording?.send()
+        } else {
+          handlers.startDesktopRecording?.send()
+        }
+      },
+    },
+    {
       label: "View History",
       click() {
-        showMainWindow("/")
+        showMainWindow("/recordings")
       },
     },
     {
@@ -61,13 +91,20 @@ let _tray: Tray | undefined
 export const updateTrayIcon = () => {
   if (!_tray) return
 
-  _tray.setImage(state.isRecording ? stopIcon : defaultIcon)
+  const isAnyRecording = state.isRecording || state.isDesktopRecordingActive
+  _tray.setImage(isAnyRecording ? stopIcon : defaultIcon)
 }
 
 export const initTray = () => {
   const tray = (_tray = new Tray(defaultIcon))
 
   tray.on("click", () => {
+    console.log(
+      "[tray] Tray left-click; isRecording:",
+      state.isRecording,
+      "isDesktopRecordingActive:",
+      state.isDesktopRecordingActive,
+    )
     if (state.isRecording) {
       getWindowRendererHandlers("panel")?.finishRecording.send()
       return
@@ -77,6 +114,7 @@ export const initTray = () => {
   })
 
   tray.on("right-click", () => {
+    console.log("[tray] Tray right-click (context menu)")
     tray.popUpContextMenu(buildMenu(tray))
   })
 }

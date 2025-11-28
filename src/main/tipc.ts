@@ -20,6 +20,7 @@ import {
   shell,
   systemPreferences,
   dialog,
+  desktopCapturer,
 } from "electron"
 import path from "path"
 import { configStore, recordingsFolder, conversationsFolder } from "./config"
@@ -46,6 +47,10 @@ import {
   constrainPositionToScreen,
   PanelPosition,
 } from "./panel-position"
+import { audioService } from "./audio-service"
+import { getRecordingHistory, saveRecordingHistory } from "./recordings-store"
+import { longRecordingService } from "./long-recording-service"
+
 import { state, agentProcessManager, suppressPanelAutoShow, isPanelAutoShowSuppressed, toolApprovalManager } from "./state"
 
 
@@ -373,25 +378,66 @@ import { preprocessTextForTTS, validateTTSText } from "./tts-preprocessing"
 
 const t = tipc.create()
 
-const getRecordingHistory = () => {
-  try {
-    const history = JSON.parse(
-      fs.readFileSync(path.join(recordingsFolder, "history.json"), "utf8"),
-    ) as RecordingHistoryItem[]
+async function transcribeRecordingArrayBuffer(
+  recording: ArrayBuffer,
+  durationMs: number,
+): Promise<{ transcript: string }> {
+  const config = configStore.get()
 
-    // sort desc by createdAt
-    return history.sort((a, b) => b.createdAt - a.createdAt)
-  } catch {
-    return []
-  }
-}
-
-const saveRecordingsHitory = (history: RecordingHistoryItem[]) => {
-  fs.writeFileSync(
-    path.join(recordingsFolder, "history.json"),
-    JSON.stringify(history),
+  const form = new FormData()
+  form.append(
+    "file",
+    new File([recording], "recording.webm", { type: "audio/webm" }),
   )
+  form.append(
+    "model",
+    config.sttProviderId === "groq" ? "whisper-large-v3" : "whisper-1",
+  )
+  form.append("response_format", "json")
+
+  if (config.sttProviderId === "groq" && config.groqSttPrompt?.trim()) {
+    form.append("prompt", config.groqSttPrompt.trim())
+  }
+
+  const languageCode =
+    config.sttProviderId === "groq"
+      ? config.groqSttLanguage || config.sttLanguage
+      : config.openaiSttLanguage || config.sttLanguage
+
+  if (languageCode && languageCode !== "auto") {
+    form.append("language", languageCode)
+  }
+
+  const groqBaseUrl = config.groqBaseUrl || "https://api.groq.com/openai/v1"
+  const openaiBaseUrl = config.openaiBaseUrl || "https://api.openai.com/v1"
+
+  const transcriptResponse = await fetch(
+    config.sttProviderId === "groq"
+      ? `${groqBaseUrl}/audio/transcriptions`
+      : `${openaiBaseUrl}/audio/transcriptions`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${
+          config.sttProviderId === "groq" ? config.groqApiKey : config.openaiApiKey
+        }`,
+      },
+      body: form,
+    },
+  )
+
+  if (!transcriptResponse.ok) {
+    const message = `${transcriptResponse.statusText} ${(await transcriptResponse
+      .text())
+      .slice(0, 300)}`
+    throw new Error(message)
+  }
+
+  const json: { text: string } = await transcriptResponse.json()
+
+  return { transcript: json.text }
 }
+
 
 export const router = {
   restartApp: t.procedure.action(async () => {
@@ -721,6 +767,27 @@ export const router = {
         y: input.y,
       })
     }),
+  getDesktopCaptureSource: t.procedure
+    .input<{ types?: ("screen" | "window")[] }>()
+    .action(async ({ input }) => {
+      const types = (input.types && input.types.length ? input.types : ["screen"]) as ("screen" | "window")[]
+
+      const sources = await desktopCapturer.getSources({
+        types,
+        fetchWindowIcons: false,
+        thumbnailSize: { width: 0, height: 0 },
+      })
+
+      const primary = sources[0]
+      if (!primary) return null
+
+      return {
+        id: primary.id,
+        name: primary.name,
+      }
+    }),
+
+
 
   getMicrophoneStatus: t.procedure.action(async () => {
     return systemPreferences.getMediaAccessStatus("microphone")
@@ -851,7 +918,7 @@ export const router = {
         transcript,
       }
       history.push(item)
-      saveRecordingsHitory(history)
+      saveRecordingHistory(history)
 
       fs.writeFileSync(
         path.join(recordingsFolder, `${item.id}.webm`),
@@ -911,7 +978,7 @@ export const router = {
         transcript: processedText,
       }
       history.push(item)
-      saveRecordingsHitory(history)
+      saveRecordingHistory(history)
 
       const main = WINDOWS.get("main")
       if (main) {
@@ -980,7 +1047,7 @@ export const router = {
             transcript: finalResponse,
           }
           history.push(item)
-          saveRecordingsHitory(history)
+          saveRecordingHistory(history)
 
           const main = WINDOWS.get("main")
           if (main) {
@@ -1156,7 +1223,7 @@ export const router = {
             transcript: finalResponse,
           }
           history.push(item)
-          saveRecordingsHitory(history)
+          saveRecordingHistory(history)
 
           const main = WINDOWS.get("main")
           if (main) {
@@ -1205,6 +1272,100 @@ export const router = {
       }
     }),
 
+  transcribeAudioChunk: t.procedure
+    .input<{
+      recording: ArrayBuffer
+      duration: number
+    }>()
+    .action(async ({ input }) => {
+      const result = await transcribeRecordingArrayBuffer(
+        input.recording,
+        input.duration,
+      )
+      return {
+        transcript: result.transcript,
+      }
+    }),
+  startSystemAudioCapture: t.procedure
+    .input<{ sessionId?: string }>()
+    .action(async ({ input }) => {
+      const sessionId = input.sessionId || Date.now().toString()
+      try {
+        await audioService.startSystemCapture(sessionId)
+        return { sessionId }
+      } catch (err) {
+        console.error("[audio] startSystemAudioCapture failed", err)
+        const error = err instanceof Error ? err : new Error(String(err))
+        throw error
+      }
+    }),
+
+  stopSystemAudioCapture: t.procedure
+    .input<{ sessionId: string }>()
+    .action(async ({ input }) => {
+      try {
+        await audioService.stopCapture(input.sessionId)
+        return { ok: true }
+      } catch (err) {
+        console.error("[audio] stopSystemAudioCapture failed", err)
+        const error = err instanceof Error ? err : new Error(String(err))
+        throw error
+      }
+    }),
+
+  startDesktopLongRecording: t.procedure.action(async () => {
+    return longRecordingService.start()
+  }),
+
+  stopDesktopLongRecording: t.procedure.action(async () => {
+    const result = await longRecordingService.stop()
+
+    const main = WINDOWS.get("main")
+    if (main) {
+      getRendererHandlers<RendererHandlers>(
+        main.webContents,
+      ).refreshRecordingHistory.send()
+    }
+
+    return result
+  }),
+
+
+  saveLongRecording: t.procedure
+    .input<{
+      id: string
+      createdAt: number
+      duration: number
+      transcript: string
+      recording: ArrayBuffer
+    }>()
+    .action(async ({ input }) => {
+      fs.mkdirSync(recordingsFolder, { recursive: true })
+
+      const history = getRecordingHistory()
+      const item: RecordingHistoryItem = {
+        id: input.id,
+        createdAt: input.createdAt,
+        duration: input.duration,
+        transcript: input.transcript,
+      }
+      history.push(item)
+      saveRecordingHistory(history)
+
+      fs.writeFileSync(
+        path.join(recordingsFolder, `${input.id}.webm`),
+        Buffer.from(input.recording),
+      )
+
+      const main = WINDOWS.get("main")
+      if (main) {
+        getRendererHandlers<RendererHandlers>(
+          main.webContents,
+        ).refreshRecordingHistory.send()
+      }
+    }),
+
+
   getRecordingHistory: t.procedure.action(async () => getRecordingHistory()),
 
   deleteRecordingItem: t.procedure
@@ -1213,8 +1374,18 @@ export const router = {
       const recordings = getRecordingHistory().filter(
         (item) => item.id !== input.id,
       )
-      saveRecordingsHitory(recordings)
-      fs.unlinkSync(path.join(recordingsFolder, `${input.id}.webm`))
+      saveRecordingHistory(recordings)
+
+      const webmPath = path.join(recordingsFolder, `${input.id}.webm`)
+      const wavPath = path.join(recordingsFolder, `${input.id}.wav`)
+
+      if (fs.existsSync(webmPath)) {
+        fs.unlinkSync(webmPath)
+      }
+
+      if (fs.existsSync(wavPath)) {
+        fs.unlinkSync(wavPath)
+      }
     }),
 
   deleteRecordingHistory: t.procedure.action(async () => {
@@ -1300,10 +1471,23 @@ export const router = {
   recordEvent: t.procedure
     .input<{ type: "start" | "end" }>()
     .action(async ({ input }) => {
+      console.log("[tipc] recordEvent:", input.type)
       if (input.type === "start") {
         state.isRecording = true
       } else {
         state.isRecording = false
+      }
+      updateTrayIcon()
+    }),
+
+  desktopRecordEvent: t.procedure
+    .input<{ type: "start" | "end" }>()
+    .action(async ({ input }) => {
+      console.log("[tipc] desktopRecordEvent:", input.type)
+      if (input.type === "start") {
+        state.isDesktopRecordingActive = true
+      } else {
+        state.isDesktopRecordingActive = false
       }
       updateTrayIcon()
     }),

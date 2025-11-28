@@ -619,14 +619,13 @@ const ToolApprovalBubble: React.FC<{
         return
       }
 
-      // Space to approve
+      // Space to approve (without modifiers)
       if (e.key === ' ' && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey) {
         e.preventDefault()
         onApprove()
       }
-      // Tab + Space to deny (Tab pressed first, then Space while Tab is held via shiftKey check not needed)
-      // Alternative: Escape to deny
-      else if (e.key === 'Escape') {
+      // Shift+Space to deny
+      else if (e.key === ' ' && e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey) {
         e.preventDefault()
         onDeny()
       }
@@ -693,11 +692,11 @@ const ToolApprovalBubble: React.FC<{
             className="h-7 text-xs border-red-300 text-red-700 hover:bg-red-50 dark:border-red-700 dark:text-red-400 dark:hover:bg-red-950/30"
             onClick={onDeny}
             disabled={isResponding}
-            title="Press Escape to deny"
+            title="Press Shift+Space to deny"
           >
             <XCircle className="h-3 w-3 mr-1" />
             Deny
-            <kbd className="ml-1.5 px-1 py-0.5 text-[9px] font-mono bg-red-100 dark:bg-red-900/50 rounded">Esc</kbd>
+            <kbd className="ml-1.5 px-1 py-0.5 text-[9px] font-mono bg-red-100 dark:bg-red-900/50 rounded">⇧Space</kbd>
           </Button>
           <Button
             size="sm"

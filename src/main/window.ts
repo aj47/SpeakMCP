@@ -587,15 +587,15 @@ export const emergencyStopAgentMode = async () => {
     logApp("Error during emergency stop:", error)
   }
 
-  // Close panel without resizing; next show will apply correct mode
+  // Close panel immediately without resizing; next show will apply correct mode
   if (win) {
     // Suppress auto-show for a short cooldown so background progress doesn't re-open the panel
     suppressPanelAutoShow(1000)
-    setTimeout(() => {
-      if (win.isVisible()) {
-        win.hide()
-      }
-    }, 100)
+    // Hide immediately for emergency stop - no delay to prevent race conditions
+    // with any in-flight progress updates
+    if (win.isVisible()) {
+      win.hide()
+    }
   }
 }
 

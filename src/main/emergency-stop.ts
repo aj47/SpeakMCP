@@ -51,10 +51,13 @@ export async function emergencyStopAll(): Promise<{ before: number; after: numbe
     agentSessionStateManager.cleanupSession(sessionId)
   }
 
-  // Reset core agent state flags to ensure clean state for next agent session
+  // Reset some core agent state flags for clean state
+  // NOTE: We intentionally do NOT reset state.shouldStopAgent here!
+  // It should remain true to block any late/in-flight progress updates that may
+  // arrive after cleanup. It will be reset to false when a new session is created.
+  // This prevents a race condition where stray updates slip through after emergency stop.
   state.isAgentModeActive = false
   state.agentIterationCount = 0
-  state.shouldStopAgent = false
 
   return { before, after }
 }

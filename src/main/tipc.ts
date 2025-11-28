@@ -54,6 +54,17 @@ import { emitAgentProgress } from "./emit-agent-progress"
 
 // Helper function to initialize MCP with progress feedback
 async function initializeMcpWithProgress(config: Config, sessionId: string): Promise<void> {
+  // Import agentSessionStateManager to check for stop signals during MCP initialization
+  const { agentSessionStateManager } = await import("./state")
+
+  // Helper to check if we should stop (session-specific or global)
+  const shouldStop = () => agentSessionStateManager.shouldStopSession(sessionId)
+
+  // Check if already stopped before starting
+  if (shouldStop()) {
+    return
+  }
+
   // Check if MCP is initializing and emit progress updates
   const initStatus = mcpService.getInitializationStatus()
 
@@ -78,7 +89,14 @@ async function initializeMcpWithProgress(config: Config, sessionId: string): Pro
   })
 
   // Poll for initialization progress updates
+  // Check for stop signal in each iteration to allow killswitch to interrupt
   const progressInterval = setInterval(async () => {
+    // Check for killswitch signal - stop polling if triggered
+    if (shouldStop()) {
+      clearInterval(progressInterval)
+      return
+    }
+
     const currentStatus = mcpService.getInitializationStatus()
     if (currentStatus.isInitializing) {
       await emitAgentProgress({
@@ -111,6 +129,11 @@ async function initializeMcpWithProgress(config: Config, sessionId: string): Pro
   } finally {
     // Clear the interval when initialization completes or fails
     clearInterval(progressInterval)
+  }
+
+  // Check for killswitch before emitting completion
+  if (shouldStop()) {
+    return
   }
 
   // Emit completion of MCP initialization

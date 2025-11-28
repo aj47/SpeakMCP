@@ -10,7 +10,7 @@ import { getRendererHandlers } from "@egoist/tipc/main"
 import { WINDOWS, showPanelWindow, resizePanelForAgentMode } from "./window"
 import { RendererHandlers } from "./renderer-handlers"
 import { AgentProgressUpdate } from "../shared/types"
-import { isPanelAutoShowSuppressed } from "./state"
+import { isPanelAutoShowSuppressed, agentSessionStateManager } from "./state"
 import { agentSessionTracker } from "./agent-session-tracker"
 import { logApp } from "./debug"
 
@@ -18,6 +18,7 @@ import { logApp } from "./debug"
  * Emit agent progress updates to the renderer.
  *
  * This function handles:
+ * - Checking if the session has been stopped by killswitch (skips update if so)
  * - Sending updates to the main window (if visible) for live progress visualization
  * - Checking if the panel window is available
  * - Auto-showing the panel for non-snoozed sessions (unless suppressed)
@@ -27,6 +28,18 @@ import { logApp } from "./debug"
  * @param update - The agent progress update to emit
  */
 export async function emitAgentProgress(update: AgentProgressUpdate): Promise<void> {
+  // Check if this session has been stopped by killswitch - skip emitting if so
+  // This prevents progress updates from being sent after emergency stop is triggered
+  // EXCEPTION: Always allow final completion updates (isComplete: true) through so the
+  // "Agent stopped" message from stopAgentSession can reach the UI
+  if (update.sessionId && !update.isComplete) {
+    const shouldStop = agentSessionStateManager.shouldStopSession(update.sessionId)
+    if (shouldStop) {
+      logApp(`[emitAgentProgress] Skipping update for stopped session ${update.sessionId}`)
+      return
+    }
+  }
+
   logApp(`[emitAgentProgress] Called for session ${update.sessionId}, isSnoozed: ${update.isSnoozed}`)
   logApp(`[emitAgentProgress] conversationHistory length: ${update.conversationHistory?.length || 0}, roles: [${update.conversationHistory?.map(m => m.role).join(', ') || 'none'}]`)
 

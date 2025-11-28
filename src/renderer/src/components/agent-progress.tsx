@@ -416,6 +416,15 @@ const ToolExecutionBubble: React.FC<{
   }
 
 
+  // Generate preview for collapsed state
+  const collapsedPreview = (() => {
+    if (isExpanded) return null
+    // Create a summary of the first tool call's parameters
+    const firstCall = execution.calls[0]
+    if (!firstCall?.arguments) return null
+    return formatArgumentsPreview(firstCall.arguments)
+  })()
+
   return (
     <div
       className={cn(
@@ -432,15 +441,20 @@ const ToolExecutionBubble: React.FC<{
         onClick={handleToggleExpand}
         aria-expanded={isExpanded}
       >
-        <div className="flex items-center gap-2">
-          <span className="font-mono font-semibold">{headerTitle}</span>
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          <span className="font-mono font-semibold truncate">{headerTitle}</span>
+          {!isExpanded && (
+            <Badge variant="outline" className="text-[10px] flex-shrink-0">
+              {isPending ? "Pending..." : allSuccess ? "✓" : "✗"}
+            </Badge>
+          )}
           {isExpanded && (
             <Badge variant="outline" className="text-[10px]">
               {isPending ? "Pending..." : allSuccess ? "Success" : "With errors"}
             </Badge>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-shrink-0">
           {isExpanded && (
             <span className="opacity-60 text-[10px]">{new Date(execution.timestamp).toLocaleTimeString()}</span>
           )}
@@ -453,6 +467,13 @@ const ToolExecutionBubble: React.FC<{
           </button>
         </div>
       </div>
+
+      {/* Collapsed preview of parameters */}
+      {!isExpanded && collapsedPreview && (
+        <div className="px-1 pb-1 text-[10px] opacity-70 font-mono truncate" title={collapsedPreview}>
+          {collapsedPreview}
+        </div>
+      )}
 
       {isExpanded && (
         <>
@@ -549,6 +570,31 @@ const ToolExecutionBubble: React.FC<{
   )
 }
 
+// Helper function to format tool arguments for preview
+const formatArgumentsPreview = (args: any): string => {
+  if (!args || typeof args !== 'object') return ''
+  const entries = Object.entries(args)
+  if (entries.length === 0) return ''
+
+  // Take first 3 key parameters
+  const preview = entries.slice(0, 3).map(([key, value]) => {
+    let displayValue: string
+    if (typeof value === 'string') {
+      displayValue = value.length > 30 ? value.slice(0, 30) + '...' : value
+    } else if (typeof value === 'object') {
+      displayValue = Array.isArray(value) ? `[${value.length} items]` : '{...}'
+    } else {
+      displayValue = String(value)
+    }
+    return `${key}: ${displayValue}`
+  }).join(', ')
+
+  if (entries.length > 3) {
+    return preview + ` (+${entries.length - 3} more)`
+  }
+  return preview
+}
+
 // Inline Tool Approval bubble - appears in the conversation flow
 const ToolApprovalBubble: React.FC<{
   approval: {
@@ -561,6 +607,37 @@ const ToolApprovalBubble: React.FC<{
   isResponding: boolean
 }> = ({ approval, onApprove, onDeny, isResponding }) => {
   const [showArgs, setShowArgs] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  // Keyboard shortcut handler for tool approval
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't handle if already responding or if user is typing in an input
+      if (isResponding) return
+      const target = e.target as HTMLElement
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+        return
+      }
+
+      // Space to approve
+      if (e.key === ' ' && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey) {
+        e.preventDefault()
+        onApprove()
+      }
+      // Tab + Space to deny (Tab pressed first, then Space while Tab is held via shiftKey check not needed)
+      // Alternative: Escape to deny
+      else if (e.key === 'Escape') {
+        e.preventDefault()
+        onDeny()
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [isResponding, onApprove, onDeny])
+
+  // Generate preview text for collapsed view hint
+  const argsPreview = formatArgumentsPreview(approval.arguments)
 
   return (
     <div className="rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-950/30 overflow-hidden">
@@ -576,13 +653,20 @@ const ToolApprovalBubble: React.FC<{
       </div>
 
       {/* Content */}
-      <div className={cn("px-3 py-2", isResponding && "opacity-60")}>
+      <div ref={containerRef} className={cn("px-3 py-2", isResponding && "opacity-60")}>
         <div className="flex items-center gap-2 mb-2">
           <span className="text-xs text-amber-700 dark:text-amber-300">Tool:</span>
           <code className="text-xs font-mono font-medium text-amber-900 dark:text-amber-100 bg-amber-100 dark:bg-amber-900/50 px-1.5 py-0.5 rounded">
             {approval.toolName}
           </code>
         </div>
+
+        {/* Arguments preview - always visible */}
+        {argsPreview && (
+          <div className="mb-2 text-xs text-amber-700/80 dark:text-amber-300/80 font-mono truncate" title={argsPreview}>
+            {argsPreview}
+          </div>
+        )}
 
         {/* Expandable arguments */}
         <div className="mb-3">
@@ -592,7 +676,7 @@ const ToolApprovalBubble: React.FC<{
             disabled={isResponding}
           >
             <ChevronRight className={cn("h-3 w-3 transition-transform", showArgs && "rotate-90")} />
-            {showArgs ? "Hide" : "View"} arguments
+            {showArgs ? "Hide" : "View"} full arguments
           </button>
           {showArgs && (
             <pre className="mt-1.5 p-2 text-xs bg-amber-100/70 dark:bg-amber-900/40 rounded overflow-x-auto max-h-32 text-amber-900 dark:text-amber-100">
@@ -601,17 +685,19 @@ const ToolApprovalBubble: React.FC<{
           )}
         </div>
 
-        {/* Action buttons */}
-        <div className="flex gap-2">
+        {/* Action buttons with hotkey hints */}
+        <div className="flex items-center gap-2">
           <Button
             variant="outline"
             size="sm"
             className="h-7 text-xs border-red-300 text-red-700 hover:bg-red-50 dark:border-red-700 dark:text-red-400 dark:hover:bg-red-950/30"
             onClick={onDeny}
             disabled={isResponding}
+            title="Press Escape to deny"
           >
             <XCircle className="h-3 w-3 mr-1" />
             Deny
+            <kbd className="ml-1.5 px-1 py-0.5 text-[9px] font-mono bg-red-100 dark:bg-red-900/50 rounded">Esc</kbd>
           </Button>
           <Button
             size="sm"
@@ -623,6 +709,7 @@ const ToolApprovalBubble: React.FC<{
             )}
             onClick={onApprove}
             disabled={isResponding}
+            title="Press Space to approve"
           >
             {isResponding ? (
               <>
@@ -633,6 +720,7 @@ const ToolApprovalBubble: React.FC<{
               <>
                 <Check className="h-3 w-3 mr-1" />
                 Approve
+                <kbd className="ml-1.5 px-1 py-0.5 text-[9px] font-mono bg-green-700 rounded">Space</kbd>
               </>
             )}
           </Button>

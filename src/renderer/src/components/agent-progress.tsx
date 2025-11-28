@@ -696,7 +696,7 @@ const ToolApprovalBubble: React.FC<{
           >
             <XCircle className="h-3 w-3 mr-1" />
             Deny
-            <kbd className="ml-1.5 px-1 py-0.5 text-[9px] font-mono bg-red-100 dark:bg-red-900/50 rounded">⇧Space</kbd>
+            <kbd className="ml-1.5 px-1 py-0.5 text-[9px] font-mono bg-red-100 dark:bg-red-900/50 rounded">Shift+Space</kbd>
           </Button>
           <Button
             size="sm"

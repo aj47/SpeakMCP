@@ -154,6 +154,9 @@ export const agentSessionStateManager = {
       })
       // Update legacy global flag
       state.isAgentModeActive = true
+      // Reset the global stop flag when starting a new session
+      // (it may have been left true from a previous emergency stop)
+      state.shouldStopAgent = false
     }
   },
 
@@ -285,9 +288,11 @@ export const agentSessionStateManager = {
       state.agentSessions.delete(sessionId)
 
       // Update legacy global flag if no more sessions
+      // NOTE: We intentionally do NOT reset state.shouldStopAgent here!
+      // It should remain true to block any late/in-flight progress updates.
+      // It will be reset to false only when a new session is created.
       if (state.agentSessions.size === 0) {
         state.isAgentModeActive = false
-        state.shouldStopAgent = false
         state.agentIterationCount = 0
       }
     }

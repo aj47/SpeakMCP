@@ -235,7 +235,7 @@ Then:
 7. Watch the console for focus/blur events and re-renders
 
 Look for:
-- `[FOCUS] Input blur` events that shouldn't happen
+- `[FOCUS] Input blur-sm` events that shouldn't happen
 - `[RENDER] ModelSelector` events that might cause re-mounting
 - `[STATE]` changes that trigger unexpected updates
 - Active element changes that indicate focus is being stolen

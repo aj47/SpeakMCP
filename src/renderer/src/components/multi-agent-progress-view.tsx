@@ -79,7 +79,7 @@ export function MultiAgentProgressView({
     )}>
       {/* Tab bar - only show if multiple sessions */}
       {activeSessions.length > 1 && (
-        <div className="flex shrink-0 gap-1 border-b border-border bg-background/95 px-2 py-1.5 backdrop-blur-sm">
+        <div className="flex shrink-0 gap-1 border-b border-border bg-background/95 px-2 py-1.5 backdrop-blur-xs">
           {activeSessions.map(([sessionId, progress]) => {
             const isActive = sessionId === (displaySessionId || focusedSessionId)
 
@@ -91,7 +91,7 @@ export function MultiAgentProgressView({
                   "flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs transition-all",
                   "hover:bg-accent/50",
                   isActive
-                    ? "bg-accent text-accent-foreground shadow-sm"
+                    ? "bg-accent text-accent-foreground shadow-xs"
                     : "text-muted-foreground"
                 )}
                 title={getSessionTitle(progress)}

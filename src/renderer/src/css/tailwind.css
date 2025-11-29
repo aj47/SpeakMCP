@@ -1,190 +1,226 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
 
-/* Dark mode syntax highlighting override */
-@media (prefers-color-scheme: dark) {
-  .hljs {
-    background: rgba(0, 0, 0, 0.3) !important;
-    color: #e6edf3 !important;
-  }
+@config '../../../../tailwind.config.js';
 
-  .hljs-keyword,
-  .hljs-selector-tag,
-  .hljs-literal,
-  .hljs-section,
-  .hljs-link {
-    color: #ff7b72 !important;
-  }
+/*
+  The default border color has changed to `currentcolor` in Tailwind CSS v4,
+  so we've added these compatibility styles to make sure everything still
+  looks the same as it did with Tailwind CSS v3.
 
-  .hljs-string {
-    color: #a5d6ff !important;
-  }
-
-  .hljs-title,
-  .hljs-name,
-  .hljs-type,
-  .hljs-attribute,
-  .hljs-symbol,
-  .hljs-bullet,
-  .hljs-built_in,
-  .hljs-addition,
-  .hljs-variable,
-  .hljs-template-tag,
-  .hljs-template-variable {
-    color: #79c0ff !important;
-  }
-
-  .hljs-comment,
-  .hljs-quote,
-  .hljs-deletion,
-  .hljs-meta {
-    color: #8b949e !important;
-  }
-
-  .hljs-number {
-    color: #79c0ff !important;
+  If we ever want to remove these styles, we need to add an explicit border
+  color utility to any element that depends on these defaults.
+*/
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentcolor);
   }
 }
 
-/* Custom scrollbar styles for agent progress */
-@layer utilities {
-  .scrollbar-thin {
-    scrollbar-width: thin;
-  }
-
-  .scrollbar-thumb-gray-300 {
-    scrollbar-color: rgb(209 213 219) transparent;
-  }
-
-  .dark .scrollbar-thumb-gray-600 {
-    scrollbar-color: rgb(75 85 99) transparent;
-  }
+@utility scrollbar-thin {
+  scrollbar-width: thin;
 
   /* Webkit scrollbar styles */
-  .scrollbar-thin::-webkit-scrollbar {
+  &::-webkit-scrollbar {
     width: 6px;
   }
 
-  .scrollbar-thin::-webkit-scrollbar-track {
+  &::-webkit-scrollbar-track {
     background: rgba(0, 0, 0, 0.05);
     border-radius: 3px;
   }
 
-  .dark .scrollbar-thin::-webkit-scrollbar-track {
+  .dark &::-webkit-scrollbar-track {
     background: rgba(255, 255, 255, 0.05);
   }
 
-  .scrollbar-thin::-webkit-scrollbar-thumb {
+  &::-webkit-scrollbar-thumb {
     background-color: rgba(209, 213, 219, 0.8);
     border-radius: 3px;
     transition: background-color 0.2s ease;
   }
 
-  .dark .scrollbar-thin::-webkit-scrollbar-thumb {
+  .dark &::-webkit-scrollbar-thumb {
     background-color: rgba(75, 85, 99, 0.8);
   }
 
-  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  &::-webkit-scrollbar-thumb:hover {
     background-color: rgba(156, 163, 175, 0.9);
   }
 
-  .dark .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  .dark &::-webkit-scrollbar-thumb:hover {
     background-color: rgba(107, 114, 128, 0.9);
   }
 
   /* Enhanced scrollbar for agent progress components */
-  .scrollbar-thin::-webkit-scrollbar-corner {
+  &::-webkit-scrollbar-corner {
     background: transparent;
   }
 }
-@tailwind variants;
-
-/* Modern Clean UI System - Replacing Liquid Glass */
-@layer utilities {
-  /* Base Panel Styling */
-  .modern-panel {
-    background: hsl(var(--card));
-    border: 1px solid hsl(var(--border));
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-    transition: all 0.2s ease-in-out;
+@utility scrollbar-thumb-gray-300 {
+  scrollbar-color: rgb(209 213 219) transparent;
+}
+@utility dark {
+  & .scrollbar-thumb-gray-600 {
+    scrollbar-color: rgb(75 85 99) transparent;
   }
 
-  .dark .modern-panel {
+  & .scrollbar-thin::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+  }
+
+  & .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: rgba(75, 85, 99, 0.8);
+  }
+
+  & .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(107, 114, 128, 0.9);
+  }
+
+  & .modern-panel {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
   }
 
-  /* Subtle Panel Variant */
-  .modern-panel-subtle {
-    background: hsl(var(--muted) / 0.5);
-    border: 1px solid hsl(var(--border) / 0.5);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-  }
-
-  .dark .modern-panel-subtle {
+  & .modern-panel-subtle {
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
   }
 
-  /* Strong Panel Variant */
-  .modern-panel-strong {
-    background: hsl(var(--card));
-    border: 1px solid hsl(var(--border));
-    box-shadow:
-      0 8px 24px rgba(0, 0, 0, 0.12),
-      0 2px 6px rgba(0, 0, 0, 0.08);
-  }
-
-  .dark .modern-panel-strong {
+  & .modern-panel-strong {
     box-shadow:
       0 8px 24px rgba(0, 0, 0, 0.4),
       0 2px 6px rgba(0, 0, 0, 0.2);
   }
 
-  /* Interactive Elements */
-  .modern-interactive {
-    background: hsl(var(--accent));
-    border: 1px solid hsl(var(--border));
-    transition: all 0.2s ease-in-out;
+  & .modern-interactive:hover {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
   }
 
-  .modern-interactive:hover {
+  & .modern-card {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  }
+
+  & .modern-nav {
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
+  }
+
+  & .floating-panel {
+    box-shadow:
+      0 10px 38px -10px rgba(0, 0, 0, 0.5),
+      0 10px 20px -15px rgba(0, 0, 0, 0.3);
+  }
+
+  & .floating-panel-glass {
+    background: hsl(var(--card) / 0.9);
+    box-shadow:
+      0 10px 38px -10px rgba(0, 0, 0, 0.5),
+      0 10px 20px -15px rgba(0, 0, 0, 0.3);
+  }
+
+  & .voice-input-panel {
+    box-shadow:
+      0 20px 25px -5px rgba(0, 0, 0, 0.4),
+      0 10px 10px -5px rgba(0, 0, 0, 0.2);
+  }
+
+  & .text-input-panel {
+    box-shadow:
+      0 4px 6px -1px rgba(0, 0, 0, 0.3),
+      0 2px 4px -1px rgba(0, 0, 0, 0.2);
+  }
+
+  & .progress-panel {
+    box-shadow:
+      0 10px 15px -3px rgba(0, 0, 0, 0.4),
+      0 4px 6px -2px rgba(0, 0, 0, 0.2);
+  }
+}
+@utility scrollbar-thumb-gray-600 {
+  .dark & {
+    scrollbar-color: rgb(75 85 99) transparent;
+  }
+}
+
+/* Modern Clean UI System - Replacing Liquid Glass */
+@utility modern-panel {
+  /* Base Panel Styling */
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s ease-in-out;
+
+  .dark & {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  }
+}
+@utility modern-panel-subtle {
+  /* Subtle Panel Variant */
+  background: hsl(var(--muted) / 0.5);
+  border: 1px solid hsl(var(--border) / 0.5);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+
+  .dark & {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  }
+}
+@utility modern-panel-strong {
+  /* Strong Panel Variant */
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  box-shadow:
+    0 8px 24px rgba(0, 0, 0, 0.12),
+    0 2px 6px rgba(0, 0, 0, 0.08);
+
+  .dark & {
+    box-shadow:
+      0 8px 24px rgba(0, 0, 0, 0.4),
+      0 2px 6px rgba(0, 0, 0, 0.2);
+  }
+}
+@utility modern-interactive {
+  /* Interactive Elements */
+  background: hsl(var(--accent));
+  border: 1px solid hsl(var(--border));
+  transition: all 0.2s ease-in-out;
+
+  &:hover {
     background: hsl(var(--accent) / 0.8);
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     transform: translateY(-1px);
   }
 
-  .dark .modern-interactive:hover {
+  .dark &:hover {
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
   }
-
+}
+@utility modern-button {
   /* Button Styling */
-  .modern-button {
-    background: hsl(var(--primary));
-    color: hsl(var(--primary-foreground));
-    border: 1px solid hsl(var(--primary));
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    transition: all 0.2s ease-in-out;
-  }
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  border: 1px solid hsl(var(--primary));
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s ease-in-out;
 
-  .modern-button:hover {
+  &:hover {
     background: hsl(var(--primary) / 0.9);
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
     transform: translateY(-1px);
   }
 
-  .modern-button:active {
+  &:active {
     transform: translateY(0);
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
   }
-
+}
+@utility modern-shine {
   /* Shine Effect for Interactive Elements */
-  .modern-shine {
-    position: relative;
-    overflow: hidden;
-  }
+  position: relative;
+  overflow: hidden;
 
-  .modern-shine::after {
-    content: "";
+  &::after {
+    content: '';
     position: absolute;
     top: 0;
     left: -100%;
@@ -200,142 +236,180 @@
     pointer-events: none;
   }
 
-  .modern-shine:hover::after {
+  &:hover::after {
     left: 100%;
   }
-
+}
+@utility modern-input {
   /* Input Styling */
-  .modern-input {
-    background: hsl(var(--background));
-    border: 1px solid hsl(var(--input));
-    transition: all 0.2s ease-in-out;
-  }
+  background: hsl(var(--background));
+  border: 1px solid hsl(var(--input));
+  transition: all 0.2s ease-in-out;
 
-  .modern-input:focus {
+  &:focus {
     border-color: hsl(var(--ring));
     box-shadow: 0 0 0 2px hsl(var(--ring) / 0.2);
   }
-
+}
+@utility modern-card {
   /* Card Styling */
-  .modern-card {
-    background: hsl(var(--card));
-    border: 1px solid hsl(var(--border));
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  }
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 
-  .dark .modern-card {
+  .dark & {
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
   }
-
+}
+@utility modern-nav {
   /* Navigation Styling */
-  .modern-nav {
-    background: hsl(var(--background) / 0.95);
-    border: 1px solid hsl(var(--border));
-    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
-  }
+  background: hsl(var(--background) / 0.95);
+  border: 1px solid hsl(var(--border));
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
 
-  .dark .modern-nav {
+  .dark & {
     box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
   }
-
+}
+@utility modern-text-strong {
   /* Text Styling Utilities */
-  .modern-text-strong {
-    color: hsl(var(--foreground));
-    font-weight: 500;
-  }
-
-  .modern-text-muted {
-    color: hsl(var(--muted-foreground));
-  }
-
+  color: hsl(var(--foreground));
+  font-weight: 500;
+}
+@utility modern-text-muted {
+  color: hsl(var(--muted-foreground));
+}
+@utility floating-panel {
   /* Floating Panel Utilities - Enhanced for proper theme support */
-  .floating-panel {
-    background: hsl(var(--card));
-    border: 1px solid hsl(var(--border));
-    box-shadow:
-      0 10px 38px -10px rgba(22, 23, 24, 0.35),
-      0 10px 20px -15px rgba(22, 23, 24, 0.2);
-    backdrop-filter: blur(8px);
-    transition: all 0.2s ease-in-out;
-  }
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  box-shadow:
+    0 10px 38px -10px rgba(22, 23, 24, 0.35),
+    0 10px 20px -15px rgba(22, 23, 24, 0.2);
+  backdrop-filter: blur(8px);
+  transition: all 0.2s ease-in-out;
 
-  .dark .floating-panel {
+  .dark & {
     box-shadow:
       0 10px 38px -10px rgba(0, 0, 0, 0.5),
       0 10px 20px -15px rgba(0, 0, 0, 0.3);
   }
-
+}
+@utility floating-panel-glass {
   /* Floating Panel Variants */
-  .floating-panel-glass {
-    background: hsl(var(--card) / 0.95);
-    border: 1px solid hsl(var(--border) / 0.8);
-    box-shadow:
-      0 10px 38px -10px rgba(22, 23, 24, 0.35),
-      0 10px 20px -15px rgba(22, 23, 24, 0.2);
-    backdrop-filter: blur(12px);
-  }
+  background: hsl(var(--card) / 0.95);
+  border: 1px solid hsl(var(--border) / 0.8);
+  box-shadow:
+    0 10px 38px -10px rgba(22, 23, 24, 0.35),
+    0 10px 20px -15px rgba(22, 23, 24, 0.2);
+  backdrop-filter: blur(12px);
 
-  .dark .floating-panel-glass {
+  .dark & {
     background: hsl(var(--card) / 0.9);
     box-shadow:
       0 10px 38px -10px rgba(0, 0, 0, 0.5),
       0 10px 20px -15px rgba(0, 0, 0, 0.3);
   }
-
+}
+@utility voice-input-panel {
   /* Voice Input Panel Specific */
-  .voice-input-panel {
-    background: hsl(var(--card));
-    border: 1px solid hsl(var(--border));
-    box-shadow:
-      0 20px 25px -5px rgba(0, 0, 0, 0.1),
-      0 10px 10px -5px rgba(0, 0, 0, 0.04);
-  }
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  box-shadow:
+    0 20px 25px -5px rgba(0, 0, 0, 0.1),
+    0 10px 10px -5px rgba(0, 0, 0, 0.04);
 
-  .dark .voice-input-panel {
+  .dark & {
     box-shadow:
       0 20px 25px -5px rgba(0, 0, 0, 0.4),
       0 10px 10px -5px rgba(0, 0, 0, 0.2);
   }
-
+}
+@utility text-input-panel {
   /* Text Input Panel Specific */
-  .text-input-panel {
-    background: hsl(var(--card));
-    border: 1px solid hsl(var(--border));
-    box-shadow:
-      0 4px 6px -1px rgba(0, 0, 0, 0.1),
-      0 2px 4px -1px rgba(0, 0, 0, 0.06);
-  }
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  box-shadow:
+    0 4px 6px -1px rgba(0, 0, 0, 0.1),
+    0 2px 4px -1px rgba(0, 0, 0, 0.06);
 
-  .dark .text-input-panel {
+  .dark & {
     box-shadow:
       0 4px 6px -1px rgba(0, 0, 0, 0.3),
       0 2px 4px -1px rgba(0, 0, 0, 0.2);
   }
-
+}
+@utility progress-panel {
   /* Progress Panel Specific */
-  .progress-panel {
-    background: hsl(var(--card));
-    border: 1px solid hsl(var(--border));
-    box-shadow:
-      0 10px 15px -3px rgba(0, 0, 0, 0.1),
-      0 4px 6px -2px rgba(0, 0, 0, 0.05);
-  }
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  box-shadow:
+    0 10px 15px -3px rgba(0, 0, 0, 0.1),
+    0 4px 6px -2px rgba(0, 0, 0, 0.05);
 
-  .dark .progress-panel {
+  .dark & {
     box-shadow:
       0 10px 15px -3px rgba(0, 0, 0, 0.4),
       0 4px 6px -2px rgba(0, 0, 0, 0.2);
   }
-
+}
+@utility modern-border {
   /* Border Utilities */
-  .modern-border {
-    border: 1px solid hsl(var(--border));
+  border: 1px solid hsl(var(--border));
+}
+@utility modern-border-subtle {
+  border: 1px solid hsl(var(--border) / 0.5);
+}
+
+@layer utilities {
+  /* Dark mode syntax highlighting override */
+  @media (prefers-color-scheme: dark) {
+    .hljs {
+      background: rgba(0, 0, 0, 0.3) !important;
+      color: #e6edf3 !important;
+    }
+
+    .hljs-keyword,
+    .hljs-selector-tag,
+    .hljs-literal,
+    .hljs-section,
+    .hljs-link {
+      color: #ff7b72 !important;
+    }
+
+    .hljs-string {
+      color: #a5d6ff !important;
+    }
+
+    .hljs-title,
+    .hljs-name,
+    .hljs-type,
+    .hljs-attribute,
+    .hljs-symbol,
+    .hljs-bullet,
+    .hljs-built_in,
+    .hljs-addition,
+    .hljs-variable,
+    .hljs-template-tag,
+    .hljs-template-variable {
+      color: #79c0ff !important;
+    }
+
+    .hljs-comment,
+    .hljs-quote,
+    .hljs-deletion,
+    .hljs-meta {
+      color: #8b949e !important;
+    }
+
+    .hljs-number {
+      color: #79c0ff !important;
+    }
   }
 
-  .modern-border-subtle {
-    border: 1px solid hsl(var(--border) / 0.5);
-  }
-
+  /* Custom scrollbar styles for agent progress */
+}
+@layer utilities {
 }
 
 :root {

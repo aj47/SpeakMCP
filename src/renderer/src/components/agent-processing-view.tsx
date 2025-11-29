@@ -114,7 +114,7 @@ export function AgentProcessingView({
 
       {/* Kill Switch Confirmation Dialog - shown for loading state */}
       {!agentProgress && showKillConfirmation && (
-        <div className="absolute inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+        <div className="absolute inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center z-50">
           <div className="bg-background border border-border rounded-lg p-4 max-w-sm mx-4 shadow-lg">
             <div className="flex items-center gap-2 mb-3">
               <AlertTriangle className="h-4 w-4 text-red-500" />

@@ -40,7 +40,7 @@ export function Slider({
         disabled={disabled}
         className={cn(
           "h-2 w-full cursor-pointer appearance-none rounded-lg bg-gray-200 dark:bg-gray-700",
-          "focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50",
+          "focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50",
           "disabled:cursor-not-allowed disabled:opacity-50",
           "[&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4",
           "[&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-blue-500 [&::-webkit-slider-thumb]:cursor-pointer",

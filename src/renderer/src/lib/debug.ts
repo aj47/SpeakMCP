@@ -129,7 +129,7 @@ export function logComponentLifecycle(componentName: string, event: string, data
 /**
  * Log focus events
  */
-export function logFocus(element: string, event: 'focus' | 'blur', data?: any) {
+export function logFocus(element: string, event: 'focus' | 'blur-sm', data?: any) {
   logUI(`[FOCUS] ${element} ${event}`, data)
 }
 

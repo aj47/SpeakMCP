@@ -195,7 +195,7 @@ const CompactMessage: React.FC<{
         className="flex items-start gap-2 px-2 py-1 text-left"
         onClick={handleToggleExpand}
       >
-        <span className="opacity-60 mt-0.5 flex-shrink-0">{getRoleIcon()}</span>
+        <span className="opacity-60 mt-0.5 shrink-0">{getRoleIcon()}</span>
         <div className="flex-1 min-w-0">
           <div className={cn(
             "leading-relaxed text-left",
@@ -325,7 +325,7 @@ const CompactMessage: React.FC<{
 
 
         </div>
-        <div className="flex items-center gap-1 flex-shrink-0">
+        <div className="flex items-center gap-1 shrink-0">
           {/* Copy button for final assistant response */}
           {message.role === "assistant" && isLast && isComplete && (
             <button
@@ -1174,8 +1174,8 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
   const containerClasses = cn(
     "progress-panel flex flex-col w-full h-full rounded-xl overflow-hidden",
     variant === "overlay"
-      ? "bg-background/80 backdrop-blur-sm border border-border/50"
-      : "bg-muted/20 backdrop-blur-sm border border-border/40",
+      ? "bg-background/80 backdrop-blur-xs border border-border/50"
+      : "bg-muted/20 backdrop-blur-xs border border-border/40",
     isDark ? "dark" : ""
   )
 
@@ -1186,7 +1186,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
       style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
     >
       {/* Unified Header */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-border/30 bg-muted/10 backdrop-blur-sm">
+      <div className="flex items-center justify-between px-3 py-2 border-b border-border/30 bg-muted/10 backdrop-blur-xs">
         <div className="flex items-center gap-2">
           <span className={cn(
             "text-xs font-medium",
@@ -1328,7 +1328,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
 
       {/* Kill Switch Confirmation Dialog */}
       {showKillConfirmation && (
-        <div className="absolute inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+        <div className="absolute inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center z-50">
           <div className="bg-background border border-border rounded-lg p-4 max-w-sm mx-4 shadow-lg">
             <div className="flex items-center gap-2 mb-3">
               <AlertTriangle className="h-4 w-4 text-red-500" />

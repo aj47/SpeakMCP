@@ -50,7 +50,7 @@ export function Component() {
         <ControlGroup
           title="Remote Server"
           endDescription={(
-            <div className="break-words whitespace-normal">
+            <div className="wrap-break-word whitespace-normal">
               Exposes your SpeakMCP agent over an OpenAI BaseURL-compatible /v1 HTTP endpoint so other clients (e.g., mobile or other apps) can connect to this desktop app and use the agent remotely. Recommended: use with the{" "}
               <a
                 href="https://github.com/aj47/SpeakMCPMobile"

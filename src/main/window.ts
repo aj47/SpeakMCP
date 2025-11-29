@@ -103,13 +103,13 @@ export function createMainWindow({ url }: { url?: string } = {}) {
     win.on("close", () => {
       if (configStore.get().hideDockIcon) {
         app.setActivationPolicy("accessory")
-        app.dock.hide()
+        app.dock?.hide()
       }
     })
 
     win.on("show", () => {
-      if (configStore.get().hideDockIcon && !app.dock.isVisible()) {
-        app.dock.show()
+      if (configStore.get().hideDockIcon && !app.dock?.isVisible()) {
+        app.dock?.show()
       }
     })
   }

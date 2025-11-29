@@ -25,7 +25,7 @@ export function Component() {
         <h2 className="mb-10 text-center text-neutral-500 dark:text-neutral-400">
           We need some system permissions before we can run the app
         </h2>
-        <div className="mx-auto max-w-screen-md">
+        <div className="mx-auto max-w-(--breakpoint-md)">
           <div className="grid divide-y rounded-lg border">
             {process.env.IS_MAC && (
               <PermissionBlock
@@ -74,7 +74,7 @@ export function Component() {
 
         <div className="mt-10 flex items-center justify-center">
           <Button
-            variant={allPermissionsGranted ? "default" : "outline"}
+            variant={allPermissionsGranted ? "default" : "outline-solid"}
             className={`gap-2 ${allPermissionsGranted ? "animate-pulse bg-green-600 hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-800" : ""}`}
             onClick={() => {
               tipcClient.restartApp()

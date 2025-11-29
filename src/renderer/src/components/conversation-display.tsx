@@ -291,7 +291,7 @@ function ConversationMessageItem({
       )}
       onContextMenu={handleContextMenu}
     >
-      <div className="flex-shrink-0">
+      <div className="shrink-0">
         <div
           className={cn(
             "flex h-8 w-8 items-center justify-center rounded-full",
@@ -505,7 +505,7 @@ export function ConversationDisplayCompact({
             <div key={message.id} className="flex gap-2 text-sm">
               <div
                 className={cn(
-                  "flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full",
+                  "flex h-6 w-6 shrink-0 items-center justify-center rounded-full",
                   getRoleColorCompact(message.role),
                 )}
               >

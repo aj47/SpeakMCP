@@ -51,7 +51,7 @@ export const ControlLabel = ({
             collisionPadding={20}
             avoidCollisions={true}
             sideOffset={8}
-            className="z-[99999] max-w-xs"
+            className="z-99999 max-w-xs"
           >
             <p>{tooltip}</p>
           </TooltipContent>

@@ -133,7 +133,7 @@ export function ModelSelector({
             size="sm"
             onClick={handleRefresh}
             disabled={isLoading || disabled}
-            className="h-6 px-2 text-xs ml-2 flex-shrink-0"
+            className="h-6 px-2 text-xs ml-2 shrink-0"
           >
             <RefreshCw
               className={`h-3 w-3 ${isLoading ? "animate-spin" : ""}`}
@@ -211,7 +211,7 @@ export function ModelSelector({
               }}
               onBlur={(e) => {
                 e.stopPropagation()
-                logFocus('ModelSelector.searchInput', 'blur', {
+                logFocus('ModelSelector.searchInput', 'blur-sm', {
                   relatedTarget: e.relatedTarget?.tagName,
                   activeElement: document.activeElement?.tagName
                 })

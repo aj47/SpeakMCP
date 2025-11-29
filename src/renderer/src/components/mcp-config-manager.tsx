@@ -240,7 +240,7 @@ function ServerDialog({ server, onSave, onCancel }: ServerDialogProps) {
       <div className="w-full">
         <div className="flex space-x-1 mb-4">
           <Button
-            variant={activeTab === 'manual' ? 'default' : 'outline'}
+            variant={activeTab === 'manual' ? 'default' : 'outline-solid'}
             onClick={() => setActiveTab('manual')}
             className="flex-1"
             size="sm"
@@ -248,7 +248,7 @@ function ServerDialog({ server, onSave, onCancel }: ServerDialogProps) {
             Manual
           </Button>
           <Button
-            variant={activeTab === 'examples' ? 'default' : 'outline'}
+            variant={activeTab === 'examples' ? 'default' : 'outline-solid'}
             onClick={() => setActiveTab('examples')}
             className="flex-1"
             size="sm"
@@ -1346,7 +1346,7 @@ export function MCPConfigManager({
           <div className="w-full">
             <div className="flex space-x-1 mb-4">
               <Button
-                variant={importTab === 'file' ? 'default' : 'outline'}
+                variant={importTab === 'file' ? 'default' : 'outline-solid'}
                 onClick={() => setImportTab('file')}
                 className="flex-1"
               >
@@ -1354,7 +1354,7 @@ export function MCPConfigManager({
                 From File
               </Button>
               <Button
-                variant={importTab === 'text' ? 'default' : 'outline'}
+                variant={importTab === 'text' ? 'default' : 'outline-solid'}
                 onClick={() => setImportTab('text')}
                 className="flex-1"
               >
@@ -1362,7 +1362,7 @@ export function MCPConfigManager({
                 Paste Text
               </Button>
               <Button
-                variant={importTab === 'examples' ? 'default' : 'outline'}
+                variant={importTab === 'examples' ? 'default' : 'outline-solid'}
                 onClick={() => setImportTab('examples')}
                 className="flex-1"
               >

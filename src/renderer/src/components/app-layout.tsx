@@ -1,10 +1,11 @@
 import { rendererHandlers } from "@renderer/lib/tipc-client"
 import { cn } from "@renderer/lib/utils"
-import { useEffect } from "react"
+import { useEffect, useMemo } from "react"
 import { NavLink, Outlet, useNavigate, useLocation } from "react-router-dom"
 import { LoadingSpinner } from "@renderer/components/ui/loading-spinner"
 import { SettingsDragBar } from "@renderer/components/settings-drag-bar"
 import { ActiveAgentsSidebar } from "@renderer/components/active-agents-sidebar"
+import { useConfigQuery } from "@renderer/lib/query-client"
 
 type NavLink = {
   text: string
@@ -15,41 +16,55 @@ type NavLink = {
 export const Component = () => {
   const navigate = useNavigate()
   const location = useLocation()
+  const configQuery = useConfigQuery()
 
-  const navLinks: NavLink[] = [
-    {
-      text: "General",
-      href: "/settings",
-      icon: "i-mingcute-settings-3-line",
-    },
-    {
-      text: "History",
-      href: "/history",
-      icon: "i-mingcute-message-3-line",
-    },
-    {
-      text: "Models",
-      href: "/settings/models",
-      icon: "i-mingcute-brain-line",
-    },
+  const navLinks: NavLink[] = useMemo(() => {
+    const links: NavLink[] = []
 
-    {
-      text: "Agents",
-      href: "/settings/tools",
-      icon: "i-mingcute-android-2-line",
-    },
-    {
-      text: "MCP Tools",
-      href: "/settings/mcp-tools",
-      icon: "i-mingcute-tool-line",
-    },
-    {
-      text: "Remote Server",
-      href: "/settings/remote-server",
-      icon: "i-mingcute-server-line",
-    },
+    // Add Welcome tab first if enabled (defaults to true)
+    if (configQuery.data?.showWelcomeTab !== false) {
+      links.push({
+        text: "Welcome",
+        href: "/welcome",
+        icon: "i-mingcute-home-4-line",
+      })
+    }
 
-  ]
+    links.push(
+      {
+        text: "General",
+        href: "/settings",
+        icon: "i-mingcute-settings-3-line",
+      },
+      {
+        text: "History",
+        href: "/history",
+        icon: "i-mingcute-message-3-line",
+      },
+      {
+        text: "Models",
+        href: "/settings/models",
+        icon: "i-mingcute-brain-line",
+      },
+      {
+        text: "Agents",
+        href: "/settings/tools",
+        icon: "i-mingcute-android-2-line",
+      },
+      {
+        text: "MCP Tools",
+        href: "/settings/mcp-tools",
+        icon: "i-mingcute-tool-line",
+      },
+      {
+        text: "Remote Server",
+        href: "/settings/remote-server",
+        icon: "i-mingcute-server-line",
+      },
+    )
+
+    return links
+  }, [configQuery.data?.showWelcomeTab])
 
   useEffect(() => {
     return rendererHandlers.navigate.listen((url) => {

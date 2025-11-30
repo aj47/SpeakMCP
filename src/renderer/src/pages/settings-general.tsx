@@ -134,6 +134,16 @@ export function Component() {
               }}
             />
           </Control>
+          <Control label="Show Welcome Tab" className="px-3">
+            <Switch
+              defaultChecked={configQuery.data.showWelcomeTab ?? true}
+              onCheckedChange={(value) => {
+                saveConfig({
+                  showWelcomeTab: value,
+                })
+              }}
+            />
+          </Control>
         </ControlGroup>
 
         <ControlGroup title="Appearance">

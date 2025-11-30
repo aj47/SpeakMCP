@@ -421,4 +421,7 @@ export type Config = {
   streamStatusWatcherEnabled?: boolean
   streamStatusFilePath?: string
 
+  // Welcome Screen Configuration
+  showWelcomeTab?: boolean
+
 }

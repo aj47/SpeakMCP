@@ -68,6 +68,9 @@ const getConfig = () => {
     // Theme preference defaults
     themePreference: "system",
 
+    // Welcome screen defaults
+    showWelcomeTab: true,
+
 	    // App behavior
 	    launchAtLogin: false,
 

@@ -45,10 +45,10 @@ export function Component() {
           <div className="rounded-lg border p-4">
             <h3 className="text-lg font-semibold">MCP Tool Calling is disabled</h3>
             <p className="text-sm text-muted-foreground">
-              Enable MCP Tool Calling in the Agents page to configure servers and manage tools.
+              Enable MCP Tool Calling in the General Settings page to configure servers and manage tools.
             </p>
             <div className="mt-3">
-              <Button onClick={() => navigate("/settings/tools")}>Go to Agents</Button>
+              <Button onClick={() => navigate("/settings")}>Go to General Settings</Button>
             </div>
           </div>
 

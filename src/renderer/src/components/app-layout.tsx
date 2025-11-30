@@ -32,12 +32,6 @@ export const Component = () => {
       href: "/settings/models",
       icon: "i-mingcute-brain-line",
     },
-
-    {
-      text: "Agents",
-      href: "/settings/tools",
-      icon: "i-mingcute-android-2-line",
-    },
     {
       text: "MCP Tools",
       href: "/settings/mcp-tools",
@@ -48,7 +42,6 @@ export const Component = () => {
       href: "/settings/remote-server",
       icon: "i-mingcute-server-line",
     },
-
   ]
 
   useEffect(() => {

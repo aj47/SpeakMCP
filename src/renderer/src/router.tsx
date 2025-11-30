@@ -1,4 +1,4 @@
-import { createBrowserRouter } from "react-router-dom"
+import { createBrowserRouter, redirect } from "react-router-dom"
 
 export const router: ReturnType<typeof createBrowserRouter> =
   createBrowserRouter([
@@ -31,8 +31,9 @@ export const router: ReturnType<typeof createBrowserRouter> =
           lazy: () => import("./pages/settings-providers-and-models"),
         },
         {
+          // Redirect old /settings/tools to /settings (agent settings are now in general settings)
           path: "settings/tools",
-          lazy: () => import("./pages/settings-tools"),
+          loader: () => redirect("/settings"),
         },
         {
           path: "settings/mcp-tools",

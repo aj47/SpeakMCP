@@ -26,6 +26,7 @@ import {
 } from "@renderer/components/ui/dialog"
 import { ModelSelector } from "@renderer/components/model-selector"
 import { Button } from "@renderer/components/ui/button"
+import { Label } from "@renderer/components/ui/label"
 import {
   useConfigQuery,
   useSaveConfigMutation,
@@ -38,6 +39,8 @@ import {
   getEffectiveShortcut,
   formatKeyComboForDisplay,
 } from "@shared/key-utils"
+import { ProfileManager } from "@renderer/components/profile-manager"
+import { Save } from "lucide-react"
 
 export function Component() {
   const configQuery = useConfigQuery()
@@ -104,6 +107,42 @@ export function Component() {
   const shortcut = (configQuery.data as any)?.shortcut || "hold-ctrl"
   const textInputShortcut = (configQuery.data as any)?.textInputShortcut || "ctrl-t"
 
+  // Agent settings state
+  const [additionalGuidelines, setAdditionalGuidelines] = useState("")
+  const [hasGuidelinesUnsavedChanges, setHasGuidelinesUnsavedChanges] = useState(false)
+
+  // Initialize agent guidelines state when config loads
+  useEffect(() => {
+    if (configQuery.data?.mcpToolsSystemPrompt !== undefined) {
+      setAdditionalGuidelines(configQuery.data.mcpToolsSystemPrompt)
+      setHasGuidelinesUnsavedChanges(false)
+    }
+  }, [configQuery.data?.mcpToolsSystemPrompt])
+
+  const saveAdditionalGuidelines = () => {
+    saveConfig({ mcpToolsSystemPrompt: additionalGuidelines })
+    setHasGuidelinesUnsavedChanges(false)
+  }
+
+  const revertGuidelinesChanges = () => {
+    setAdditionalGuidelines(configQuery.data?.mcpToolsSystemPrompt || "")
+    setHasGuidelinesUnsavedChanges(false)
+  }
+
+  const handleGuidelinesChange = (value: string) => {
+    setAdditionalGuidelines(value)
+    setHasGuidelinesUnsavedChanges(value !== (configQuery.data?.mcpToolsSystemPrompt || ""))
+  }
+
+  const defaultAdditionalGuidelines = `CUSTOM GUIDELINES:
+- Prioritize user privacy and security
+- Provide clear explanations of actions taken
+- Ask for confirmation before destructive operations
+
+DOMAIN-SPECIFIC RULES:
+- For file operations: Always backup important files
+- For system commands: Use safe, non-destructive commands when possible
+- For API calls: Respect rate limits and handle errors gracefully`
 
   if (!configQuery.data) return null
 
@@ -679,6 +718,216 @@ export function Component() {
 
 
         </ControlGroup>
+
+        {/* Agent Settings Section */}
+        <ControlGroup title="Agent Settings">
+          <Control label={<ControlLabel label="Enable MCP Tool Calling" tooltip="Allow the AI to use MCP tools to perform actions" />} className="px-3">
+            <Switch
+              checked={configQuery.data?.mcpToolsEnabled || false}
+              onCheckedChange={(checked) => saveConfig({ mcpToolsEnabled: checked })}
+            />
+          </Control>
+
+          {configQuery.data?.mcpToolsEnabled && (
+            <>
+              <Control label={<ControlLabel label="Shortcut" tooltip="Choose how to activate MCP tool calling mode" />} className="px-3">
+                <div className="space-y-2">
+                  <Select
+                    value={configQuery.data?.mcpToolsShortcut || "hold-ctrl-alt"}
+                    onValueChange={(value: "hold-ctrl-alt" | "ctrl-alt-slash" | "custom") =>
+                      saveConfig({ mcpToolsShortcut: value })
+                    }
+                  >
+                    <SelectTrigger className="w-40">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="hold-ctrl-alt">Hold Ctrl+Alt</SelectItem>
+                      <SelectItem value="ctrl-alt-slash">Ctrl+Alt+/</SelectItem>
+                      <SelectItem value="custom">Custom</SelectItem>
+                    </SelectContent>
+                  </Select>
+
+                  {configQuery.data?.mcpToolsShortcut === "custom" && (
+                    <KeyRecorder
+                      value={configQuery.data?.customMcpToolsShortcut || ""}
+                      onChange={(keyCombo) => saveConfig({ customMcpToolsShortcut: keyCombo })}
+                      placeholder="Click to record custom MCP tools shortcut"
+                    />
+                  )}
+                </div>
+              </Control>
+
+              <Control label={<ControlLabel label="Enable Agent Mode" tooltip="When enabled, the agent can see tool results and make follow-up tool calls until the task is complete" />} className="px-3">
+                <Switch
+                  checked={configQuery.data?.mcpAgentModeEnabled || false}
+                  onCheckedChange={(checked) => saveConfig({ mcpAgentModeEnabled: checked })}
+                />
+              </Control>
+
+              <Control label={<ControlLabel label="Require Approval" tooltip="Adds a confirmation dialog before any tool executes. Recommended for safety, especially in production environments." />} className="px-3">
+                <Switch
+                  checked={!!configQuery.data?.mcpRequireApprovalBeforeToolCall}
+                  onCheckedChange={(checked) => saveConfig({ mcpRequireApprovalBeforeToolCall: checked })}
+                />
+              </Control>
+
+              {configQuery.data?.mcpAgentModeEnabled && (
+                <Control label={<ControlLabel label="Max Iterations" tooltip="Maximum number of iterations the agent can perform before stopping. Higher values allow more complex tasks but may take longer." />} className="px-3">
+                  <Input
+                    type="number"
+                    min="1"
+                    max="50"
+                    step="1"
+                    value={configQuery.data?.mcpMaxIterations ?? 10}
+                    onChange={(e) => saveConfig({ mcpMaxIterations: parseInt(e.target.value) || 1 })}
+                    className="w-20"
+                  />
+                </Control>
+              )}
+
+              {!configQuery.data?.mcpAgentModeEnabled && (
+                <>
+                  <Control label={<ControlLabel label="Auto-paste Results" tooltip="Automatically paste tool results to the focused input field" />} className="px-3">
+                    <Switch
+                      checked={configQuery.data?.mcpAutoPasteEnabled !== false}
+                      onCheckedChange={(checked) => saveConfig({ mcpAutoPasteEnabled: checked })}
+                    />
+                  </Control>
+
+                  {configQuery.data?.mcpAutoPasteEnabled !== false && (
+                    <Control label={<ControlLabel label="Auto-paste Delay (ms)" tooltip="Delay before pasting to allow you to return focus to the desired input field. Recommended: 1000ms (1 second)." />} className="px-3">
+                      <Input
+                        type="number"
+                        min="0"
+                        max="10000"
+                        step="100"
+                        value={configQuery.data?.mcpAutoPasteDelay || 1000}
+                        onChange={(e) => saveConfig({ mcpAutoPasteDelay: parseInt(e.target.value) || 1000 })}
+                        className="w-24"
+                      />
+                    </Control>
+                  )}
+                </>
+              )}
+            </>
+          )}
+        </ControlGroup>
+
+        {/* Agent Guidelines Section - shown when agent mode is enabled */}
+        {configQuery.data?.mcpToolsEnabled && configQuery.data?.mcpAgentModeEnabled && (
+          <ControlGroup title="Agent Guidelines">
+            <div className="px-3 py-2 space-y-4">
+              <div className="rounded-lg border p-4 space-y-4">
+                <div>
+                  <h3 className="text-sm font-semibold mb-1">Profile Management</h3>
+                  <p className="text-xs text-muted-foreground mb-3">
+                    Save and load different guideline configurations for different workflows.
+                  </p>
+                </div>
+                <ProfileManager
+                  currentGuidelines={additionalGuidelines}
+                  onGuidelinesChange={(guidelines) => {
+                    setAdditionalGuidelines(guidelines)
+                    setHasGuidelinesUnsavedChanges(guidelines !== (configQuery.data?.mcpToolsSystemPrompt || ""))
+                  }}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Additional Guidelines</Label>
+                <p className="text-xs text-muted-foreground">
+                  Optional additional rules and guidelines for the AI agent. The base system prompt with tool usage instructions is automatically included.
+                </p>
+                <Textarea
+                  value={additionalGuidelines}
+                  onChange={(e) => handleGuidelinesChange(e.target.value)}
+                  rows={6}
+                  className="font-mono text-sm"
+                  placeholder={defaultAdditionalGuidelines}
+                />
+              </div>
+
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setAdditionalGuidelines(defaultAdditionalGuidelines)
+                    setHasGuidelinesUnsavedChanges(defaultAdditionalGuidelines !== (configQuery.data?.mcpToolsSystemPrompt || ""))
+                  }}
+                >
+                  Use Example Guidelines
+                </Button>
+                {hasGuidelinesUnsavedChanges && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={revertGuidelinesChanges}
+                    disabled={saveConfigMutation.isPending}
+                  >
+                    Revert Changes
+                  </Button>
+                )}
+                <Button
+                  size="sm"
+                  onClick={saveAdditionalGuidelines}
+                  disabled={!hasGuidelinesUnsavedChanges || saveConfigMutation.isPending}
+                  className="gap-1"
+                >
+                  <Save className="h-3 w-3" />
+                  {saveConfigMutation.isPending ? "Saving..." : "Save Changes"}
+                </Button>
+              </div>
+              {hasGuidelinesUnsavedChanges && (
+                <p className="text-xs text-amber-600">
+                  You have unsaved changes. Click "Save Changes" to apply them.
+                </p>
+              )}
+            </div>
+          </ControlGroup>
+        )}
+
+        {/* Emergency Kill Switch - shown when agent mode is enabled */}
+        {configQuery.data?.mcpAgentModeEnabled && (
+          <ControlGroup title="Emergency Kill Switch">
+            <div className="px-3 py-2 space-y-4 rounded-lg border border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950/20">
+              <Control label={<ControlLabel label="Enable Kill Switch" tooltip="Provides a global hotkey to immediately stop agent mode and kill all agent-created processes" />} className="!py-0">
+                <Switch
+                  checked={configQuery.data?.agentKillSwitchEnabled !== false}
+                  onCheckedChange={(checked) => saveConfig({ agentKillSwitchEnabled: checked })}
+                />
+              </Control>
+              <p className="text-xs text-red-700 dark:text-red-300">
+                Provides a global hotkey to immediately stop agent mode and kill all agent-created processes.
+              </p>
+
+              {configQuery.data?.agentKillSwitchEnabled !== false && (
+                <div className="space-y-2">
+                  <Label className="text-red-800 dark:text-red-200">Kill Switch Hotkey</Label>
+                  <select
+                    value={configQuery.data?.agentKillSwitchHotkey || "ctrl-shift-escape"}
+                    onChange={(e) => saveConfig({ agentKillSwitchHotkey: e.target.value as any })}
+                    className="w-full rounded-md border bg-background p-2"
+                  >
+                    <option value="ctrl-shift-escape">Ctrl + Shift + Escape</option>
+                    <option value="ctrl-alt-q">Ctrl + Alt + Q</option>
+                    <option value="ctrl-shift-q">Ctrl + Shift + Q</option>
+                    <option value="custom">Custom</option>
+                  </select>
+
+                  {configQuery.data?.agentKillSwitchHotkey === "custom" && (
+                    <KeyRecorder
+                      value={configQuery.data?.customAgentKillSwitchHotkey || ""}
+                      onChange={(keyCombo) => saveConfig({ customAgentKillSwitchHotkey: keyCombo })}
+                      placeholder="Click to record custom kill switch hotkey"
+                    />
+                  )}
+                </div>
+              )}
+            </div>
+          </ControlGroup>
+        )}
 
         {/* About Section */}
         <ControlGroup title="About">

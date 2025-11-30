@@ -60,6 +60,8 @@ const toolCallResponseSchema: OpenAI.ResponseFormatJSONSchema["json_schema"] = {
 }
 
 // JSON schema for completion verification
+// Note: 'minimum' and 'maximum' are NOT supported by OpenAI's strict structured outputs.
+// The constraint is documented in the description field instead.
 const verificationResponseSchema: OpenAI.ResponseFormatJSONSchema["json_schema"] = {
   name: "CompletionVerification",
   description: "Strict verifier to determine if the user's request has been fully satisfied.",
@@ -67,7 +69,7 @@ const verificationResponseSchema: OpenAI.ResponseFormatJSONSchema["json_schema"]
     type: "object",
     properties: {
       isComplete: { type: "boolean", description: "True only if the user's original request has been fully satisfied." },
-      confidence: { type: "number", minimum: 0, maximum: 1, description: "Confidence in the judgment (0-1)." },
+      confidence: { type: "number", description: "Confidence in the judgment, must be between 0 and 1 inclusive." },
       missingItems: { type: "array", items: { type: "string" }, description: "List of missing steps, outputs, or requirements, if any." },
       reason: { type: "string", description: "Brief explanation of the judgment." }
     },

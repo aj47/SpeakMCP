@@ -32,6 +32,7 @@ import {
   ConversationHistoryItem,
   AgentProgressUpdate,
 } from "../shared/types"
+import { inferTransportType, normalizeMcpConfig } from "../shared/mcp-utils"
 import { conversationService } from "./conversation-service"
 import { RendererHandlers } from "./renderer-handlers"
 import {
@@ -1330,27 +1331,18 @@ export const router = {
     try {
       const configContent = fs.readFileSync(result.filePaths[0], "utf8")
       const mcpConfig = JSON.parse(configContent) as MCPConfig
+      const { normalized: normalizedConfig } = normalizeMcpConfig(mcpConfig)
 
       // Basic validation
-      if (!mcpConfig.mcpServers || typeof mcpConfig.mcpServers !== "object") {
+      if (!normalizedConfig.mcpServers || typeof normalizedConfig.mcpServers !== "object") {
         throw new Error("Invalid MCP config: missing or invalid mcpServers")
       }
 
       // Validate each server config based on transport type
       for (const [serverName, serverConfig] of Object.entries(
-        mcpConfig.mcpServers,
+        normalizedConfig.mcpServers,
       )) {
-        // Infer transport type if not specified
-        let transportType = serverConfig.transport
-        if (!transportType) {
-          // If url is present, assume it's an HTTP transport
-          if (serverConfig.url) {
-            transportType = "streamableHttp"
-          } else {
-            // Default to stdio for backward compatibility
-            transportType = "stdio"
-          }
-        }
+        const transportType = inferTransportType(serverConfig)
 
         if (transportType === "stdio") {
           // stdio transport requires command and args
@@ -1373,7 +1365,7 @@ export const router = {
         }
       }
 
-      return mcpConfig
+      return normalizedConfig
     } catch (error) {
       throw new Error(
         `Failed to load MCP config: ${error instanceof Error ? error.message : String(error)}`,
@@ -1386,27 +1378,18 @@ export const router = {
     .action(async ({ input }) => {
       try {
         const mcpConfig = JSON.parse(input.text) as MCPConfig
+        const { normalized: normalizedConfig } = normalizeMcpConfig(mcpConfig)
 
         // Basic validation - same as file upload
-        if (!mcpConfig.mcpServers || typeof mcpConfig.mcpServers !== "object") {
+        if (!normalizedConfig.mcpServers || typeof normalizedConfig.mcpServers !== "object") {
           throw new Error("Invalid MCP config: missing or invalid mcpServers")
         }
 
         // Validate each server config based on transport type
         for (const [serverName, serverConfig] of Object.entries(
-          mcpConfig.mcpServers,
+          normalizedConfig.mcpServers,
         )) {
-          // Infer transport type if not specified
-          let transportType = serverConfig.transport
-          if (!transportType) {
-            // If url is present, assume it's an HTTP transport
-            if (serverConfig.url) {
-              transportType = "streamableHttp"
-            } else {
-              // Default to stdio for backward compatibility
-              transportType = "stdio"
-            }
-          }
+          const transportType = inferTransportType(serverConfig)
 
           if (transportType === "stdio") {
             // stdio transport requires command and args
@@ -1429,7 +1412,7 @@ export const router = {
           }
         }
 
-        return mcpConfig
+        return normalizedConfig
       } catch (error) {
         throw new Error(
           `Invalid MCP config: ${error instanceof Error ? error.message : String(error)}`,
@@ -1467,27 +1450,16 @@ export const router = {
     .input<{ config: MCPConfig }>()
     .action(async ({ input }) => {
       try {
-        if (
-          !input.config.mcpServers ||
-          typeof input.config.mcpServers !== "object"
-        ) {
+        const { normalized: normalizedConfig } = normalizeMcpConfig(input.config)
+
+        if (!normalizedConfig.mcpServers || typeof normalizedConfig.mcpServers !== "object") {
           return { valid: false, error: "Missing or invalid mcpServers" }
         }
 
         for (const [serverName, serverConfig] of Object.entries(
-          input.config.mcpServers,
+          normalizedConfig.mcpServers,
         )) {
-          // Infer transport type if not specified
-          let transportType = serverConfig.transport
-          if (!transportType) {
-            // If url is present, assume it's an HTTP transport
-            if (serverConfig.url) {
-              transportType = "streamableHttp"
-            } else {
-              // Default to stdio for backward compatibility
-              transportType = "stdio"
-            }
-          }
+          const transportType = inferTransportType(serverConfig)
 
           // Validate based on transport type
           if (transportType === "stdio") {

@@ -10,6 +10,7 @@ import {
   Config,
   ServerLogEntry,
 } from "../shared/types"
+import { inferTransportType, normalizeMcpConfig } from "../shared/mcp-utils"
 import { spawn } from "child_process"
 import { promisify } from "util"
 import { access, constants } from "fs"
@@ -227,7 +228,19 @@ export class MCPService {
         this.isInitializing = true
         this.initializationProgress = { current: 0, total: 0 }
 
-        const config = configStore.get()
+        const baseConfig = configStore.get()
+        const { normalized: normalizedMcpConfig, changed: mcpConfigChanged } = normalizeMcpConfig(
+          baseConfig.mcpConfig || { mcpServers: {} },
+        )
+
+        const config: Config = mcpConfigChanged
+          ? { ...baseConfig, mcpConfig: normalizedMcpConfig }
+          : baseConfig
+
+        if (mcpConfigChanged) {
+          configStore.save(config)
+        }
+
         const mcpConfig = config.mcpConfig
 
         if (isDebugTools()) {
@@ -338,7 +351,7 @@ export class MCPService {
     | WebSocketClientTransport
     | StreamableHTTPClientTransport
   > {
-    const transportType = serverConfig.transport || "stdio" // default to stdio for backward compatibility
+    const transportType = inferTransportType(serverConfig)
 
     switch (transportType) {
       case "stdio":
@@ -391,7 +404,7 @@ export class MCPService {
 
     if (isDebugTools()) {
       logTools(`Initializing server: ${serverName}`, {
-        transport: serverConfig.transport || "stdio",
+        transport: inferTransportType(serverConfig),
         command: serverConfig.command,
         args: serverConfig.args,
         env: Object.keys(serverConfig.env || {}),
@@ -399,7 +412,7 @@ export class MCPService {
     }
 
     try {
-      const transportType = serverConfig.transport || "stdio"
+      const transportType = inferTransportType(serverConfig)
 
       // Initialize log storage for this server
       this.serverLogs.set(serverName, [])
@@ -1490,7 +1503,7 @@ export class MCPService {
   ): Promise<{ success: boolean; error?: string; toolCount?: number }> {
     try {
       // Basic validation based on transport type
-      const transportType = serverConfig.transport || "stdio"
+      const transportType = inferTransportType(serverConfig)
 
       if (transportType === "stdio") {
         if (!serverConfig.command) {

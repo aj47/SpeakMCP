@@ -2,11 +2,15 @@ import { MCPConfig, MCPServerConfig, MCPTransportType } from "./types"
 
 /**
  * Determine transport type when it isn't explicitly set.
- * Falls back to streamableHttp when a URL is present, otherwise stdio.
+ * Infers websocket for ws/wss URLs, streamableHttp for http/https URLs,
+ * and falls back to stdio when no URL is present.
  */
 export function inferTransportType(config: MCPServerConfig): MCPTransportType {
   if (config.transport) return config.transport
-  return config.url ? "streamableHttp" : "stdio"
+  if (!config.url) return "stdio"
+  const lower = config.url.toLowerCase()
+  if (lower.startsWith("ws://") || lower.startsWith("wss://")) return "websocket"
+  return "streamableHttp"
 }
 
 /**

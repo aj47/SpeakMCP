@@ -1054,7 +1054,11 @@ Always use actual resource IDs from the conversation history or create new ones 
     }
 
     // Validate response is not null/empty
-    if (!llmResponse || !llmResponse.content) {
+    // A response is valid if it has either content OR toolCalls (tool-only responses have empty content)
+    const hasValidContent = llmResponse?.content && llmResponse.content.trim().length > 0
+    const hasValidToolCalls = llmResponse?.toolCalls && Array.isArray(llmResponse.toolCalls) && llmResponse.toolCalls.length > 0
+
+    if (!llmResponse || (!hasValidContent && !hasValidToolCalls)) {
       logLLM(`❌ LLM null/empty response on iteration ${iteration}`)
       logLLM("Response details:", {
         hasResponse: !!llmResponse,
@@ -1070,7 +1074,7 @@ Always use actual resource IDs from the conversation history or create new ones 
       diagnosticsService.logError("llm", "Null/empty LLM response in agent mode", {
         iteration,
         response: llmResponse,
-        message: "LLM response is null or has no content"
+        message: "LLM response has neither content nor toolCalls"
       })
       thinkingStep.status = "error"
       thinkingStep.description = "Invalid response. Retrying..."

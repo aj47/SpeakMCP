@@ -18,6 +18,9 @@ export type RendererHandlers = {
   showTextInput: () => void
   hideTextInput: () => void
 
+  // Meeting Mode handlers
+  showMeetingModeInput: (context: { transcript: string }) => void
+
   // Agent Mode Progress handlers
   agentProgressUpdate: (update: AgentProgressUpdate) => void
   clearAgentProgress: () => void

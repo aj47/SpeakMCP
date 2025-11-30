@@ -512,6 +512,22 @@ export async function showPanelWindowAndShowTextInput() {
   getWindowRendererHandlers("panel")?.showTextInput.send()
 }
 
+export async function showPanelWindowWithMeetingContext(transcript: string) {
+  // Capture focus before showing panel
+  try {
+    const focusedApp = await getFocusedAppInfo()
+    state.focusedAppBeforeRecording = focusedApp
+  } catch (error) {
+    state.focusedAppBeforeRecording = null
+  }
+
+  // Set text input state and show panel with meeting context
+  state.isTextInputActive = true
+  setPanelMode("textInput")
+  showPanelWindow()
+  getWindowRendererHandlers("panel")?.showMeetingModeInput.send({ transcript })
+}
+
 export function makePanelWindowClosable() {
   const panel = WINDOWS.get("panel")
   if (panel && !panel.isClosable()) {

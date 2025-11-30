@@ -121,6 +121,11 @@ const getConfig = () => {
 	    remoteServerLogLevel: "info",
 	    remoteServerCorsOrigins: ["*"],
 
+    // Meeting Mode defaults
+    meetingModeEnabled: false,
+    meetingModeHotkey: "ctrl-shift-a",
+    customMeetingModeHotkey: "",
+    meetingModeContextDuration: 120, // 2 minutes of context by default
 
   }
 

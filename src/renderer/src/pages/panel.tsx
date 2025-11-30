@@ -424,16 +424,49 @@ export function Component() {
     return unlisten
   }, [])
 
+  // Meeting Mode state
+  const [meetingContext, setMeetingContext] = useState<string | null>(null)
+
+  // Meeting Mode handler
+  useEffect(() => {
+    const unlisten = rendererHandlers.showMeetingModeInput.listen((context) => {
+      // Reset any previous pending state to ensure textarea is enabled
+      logUI('[Panel] showMeetingModeInput received with transcript context')
+      textInputMutation.reset()
+      mcpTextInputMutation.reset()
+
+      // Store the meeting context for use in submission
+      setMeetingContext(context.transcript)
+
+      // Show text input and focus
+      setShowTextInput(true)
+      // Focus the text input after a short delay to ensure it's rendered
+      setTimeout(() => {
+        textInputPanelRef.current?.focus()
+      }, 100)
+    })
+
+    return unlisten
+  }, [])
+
   const handleTextSubmit = async (text: string) => {
     // Capture the conversation ID at submit time - if user explicitly continued a conversation
     // from history, currentConversationId will be set. Otherwise it's null for new inputs.
     const conversationIdForMcp = currentConversationId
 
+    // If we have meeting context, prepend it to the user's question
+    let processedText = text
+    if (meetingContext) {
+      processedText = `[Meeting Context - Recent Transcript]\n${meetingContext}\n\n[User Question]\n${text}`
+      // Clear the meeting context after use
+      setMeetingContext(null)
+    }
+
     // Start new conversation or add to existing one
     if (!isConversationActive) {
-      await startNewConversation(text, "user")
+      await startNewConversation(processedText, "user")
     } else {
-      await addMessage(text, "user")
+      await addMessage(processedText, "user")
     }
 
     // Hide the text input immediately and show processing/overlay
@@ -446,17 +479,17 @@ export function Component() {
       const config = await tipcClient.getConfig({})
       if ((config as any).mcpToolsEnabled) {
         mcpTextInputMutation.mutate({
-          text,
+          text: processedText,
           // Pass currentConversationId if user explicitly continued from history,
           // otherwise undefined to create a fresh conversation.
           // This prevents message leaking while still supporting explicit continuation.
           conversationId: conversationIdForMcp ?? undefined,
         })
       } else {
-        textInputMutation.mutate({ text })
+        textInputMutation.mutate({ text: processedText })
       }
     } catch (error) {
-      textInputMutation.mutate({ text })
+      textInputMutation.mutate({ text: processedText })
     }
   }
 

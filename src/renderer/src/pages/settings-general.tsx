@@ -802,8 +802,11 @@ DOMAIN-SPECIFIC RULES:
                         min="0"
                         max="10000"
                         step="100"
-                        value={configQuery.data?.mcpAutoPasteDelay || 1000}
-                        onChange={(e) => saveConfig({ mcpAutoPasteDelay: parseInt(e.target.value) || 1000 })}
+                        value={configQuery.data?.mcpAutoPasteDelay ?? 1000}
+                        onChange={(e) => {
+                          const parsed = parseInt(e.target.value)
+                          saveConfig({ mcpAutoPasteDelay: Number.isNaN(parsed) ? 1000 : parsed })
+                        }}
                         className="w-24"
                       />
                     </Control>

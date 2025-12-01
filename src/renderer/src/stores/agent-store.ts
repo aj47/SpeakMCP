@@ -22,6 +22,7 @@ interface AgentState {
   clearAllProgress: () => void
   clearSessionProgress: (sessionId: string) => void
   setFocusedSessionId: (sessionId: string | null) => void
+  setSessionSnoozed: (sessionId: string, isSnoozed: boolean) => void
   getAgentProgress: () => AgentProgressUpdate | null
 
   // View settings actions
@@ -125,6 +126,17 @@ export const useAgentStore = create<AgentState>((set, get) => ({
 
   setFocusedSessionId: (sessionId: string | null) => {
     set({ focusedSessionId: sessionId })
+  },
+
+  setSessionSnoozed: (sessionId: string, isSnoozed: boolean) => {
+    set((state) => {
+      const existingProgress = state.agentProgressById.get(sessionId)
+      if (!existingProgress) return state
+
+      const newMap = new Map(state.agentProgressById)
+      newMap.set(sessionId, { ...existingProgress, isSnoozed })
+      return { agentProgressById: newMap }
+    })
   },
 
   getAgentProgress: () => {

@@ -871,6 +871,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
   // Get current conversation ID for deep-linking and session focus control
   const currentConversationId = useConversationStore((s) => s.currentConversationId)
   const setFocusedSessionId = useAgentStore((s) => s.setFocusedSessionId)
+  const setSessionSnoozed = useAgentStore((s) => s.setSessionSnoozed)
   const agentProgressById = useAgentStore((s) => s.agentProgressById)
 
   // Helper to toggle expansion state for a specific item
@@ -1404,7 +1405,9 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
               <Button variant="ghost" size="icon" className="h-6 w-6" onClick={async (e) => {
                 e.stopPropagation()
                 if (!progress?.sessionId) return
-                // Focus this session in state first
+                // Update local store first so panel shows content immediately
+                setSessionSnoozed(progress.sessionId, false)
+                // Focus this session in state
                 setFocusedSessionId(progress.sessionId)
                 // Unsnooze the session in backend
                 await tipcClient.unsnoozeAgentSession({ sessionId: progress.sessionId })

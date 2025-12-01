@@ -1509,7 +1509,6 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
 
         {/* Follow-up input - always visible for quick continuation */}
         <TileFollowUpInput
-          sessionId={progress.sessionId}
           conversationId={progress.conversationId}
           isSessionActive={!isComplete}
           className="flex-shrink-0"
@@ -1683,7 +1682,6 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
 
       {/* Follow-up input - for continuing conversation in the floating panel */}
       <OverlayFollowUpInput
-        sessionId={progress.sessionId}
         conversationId={progress.conversationId}
         isSessionActive={!isComplete}
         className="flex-shrink-0"

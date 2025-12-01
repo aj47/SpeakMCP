@@ -7,7 +7,6 @@ import { tipcClient } from "@renderer/lib/tipc-client"
 import { useConversationStore } from "@renderer/stores"
 
 interface TileFollowUpInputProps {
-  sessionId: string
   conversationId?: string
   isSessionActive?: boolean
   className?: string
@@ -19,7 +18,6 @@ interface TileFollowUpInputProps {
  * Compact text input for continuing a conversation within a session tile.
  */
 export function TileFollowUpInput({
-  sessionId,
   conversationId,
   isSessionActive = false,
   className,

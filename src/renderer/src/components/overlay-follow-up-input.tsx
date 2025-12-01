@@ -7,7 +7,6 @@ import { tipcClient } from "@renderer/lib/tipc-client"
 import { useConversationStore } from "@renderer/stores"
 
 interface OverlayFollowUpInputProps {
-  sessionId?: string
   conversationId?: string
   isSessionActive?: boolean
   className?: string
@@ -20,7 +19,6 @@ interface OverlayFollowUpInputProps {
  * Includes text input, submit button, and voice button for multiple input modalities.
  */
 export function OverlayFollowUpInput({
-  sessionId,
   conversationId,
   isSessionActive = false,
   className,

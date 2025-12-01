@@ -579,6 +579,8 @@ export async function processTranscriptWithAgentMode(
 
   // Create retry progress callback that emits updates to the UI
   // This callback is passed to makeLLMCall to show retry status
+  // Note: This callback captures conversationHistory and formatConversationForProgress by reference,
+  // so it will have access to them when called (they are defined later in this function)
   const onRetryProgress: RetryProgressCallback = (retryInfo) => {
     emit({
       currentIteration: currentIterationRef,
@@ -586,6 +588,10 @@ export async function processTranscriptWithAgentMode(
       steps: [], // Empty - retry info is separate from steps
       isComplete: false,
       retryInfo: retryInfo.isRetrying ? retryInfo : undefined,
+      // Include conversationHistory to avoid "length: 0" logs in emitAgentProgress
+      conversationHistory: typeof formatConversationForProgress === 'function' && conversationHistory
+        ? formatConversationForProgress(conversationHistory)
+        : [],
     })
   }
 

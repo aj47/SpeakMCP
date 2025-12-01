@@ -38,6 +38,7 @@ const toolCallResponseSchema: OpenAI.ResponseFormatJSONSchema["json_schema"] = {
             arguments: {
               type: "object",
               description: "Arguments to pass to the tool",
+              properties: {},
               additionalProperties: true,
             },
           },
@@ -686,7 +687,9 @@ async function makeAPICallAttempt(
                                       // Novita and other providers may return generic "model inference" errors
                                       // when they don't support structured output features
                                       (errorTextLower.includes("model inference") && errorTextLower.includes("error")) ||
-                                      errorTextLower.includes("unknown error in the model"))
+                                      errorTextLower.includes("unknown error in the model") ||
+                                      // Cerebras API returns this error when JSON schema format is incompatible
+                                      (errorTextLower.includes("object fields require") && errorTextLower.includes("properties")))
       if (isStructuredOutputError) {
         if (isDebugLLM()) {
           logLLM("🔴 Detected as structured output error")

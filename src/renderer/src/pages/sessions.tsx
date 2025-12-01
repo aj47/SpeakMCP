@@ -1,17 +1,20 @@
 import React, { useEffect, useState, useCallback } from "react"
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { useNavigate } from "react-router-dom"
 import { tipcClient, rendererHandlers } from "@renderer/lib/tipc-client"
 import { useAgentStore } from "@renderer/stores"
 import { SessionGrid, SessionTileWrapper } from "@renderer/components/session-grid"
 import { AgentProgress } from "@renderer/components/agent-progress"
 import { SessionInput } from "@renderer/components/session-input"
-import { Settings, MessageCircle, Mic, Plus } from "lucide-react"
+import { Settings, MessageCircle, Mic, Plus, Clock, ArrowRight } from "lucide-react"
 import { Button } from "@renderer/components/ui/button"
+import { useConversationHistoryQuery } from "@renderer/lib/queries"
+import { ConversationHistoryItem } from "@shared/types"
+import { cn } from "@renderer/lib/utils"
 
 function EmptyState({ onTextClick, onVoiceClick }: { onTextClick: () => void; onVoiceClick: () => void }) {
   return (
-    <div className="flex h-full flex-col items-center justify-center p-8 text-center">
+    <div className="flex flex-col items-center justify-center p-8 text-center">
       <div className="rounded-full bg-muted p-4 mb-4">
         <MessageCircle className="h-8 w-8 text-muted-foreground" />
       </div>
@@ -31,6 +34,63 @@ function EmptyState({ onTextClick, onVoiceClick }: { onTextClick: () => void; on
       </div>
     </div>
   )
+}
+
+/** Compact card for a recent conversation */
+function RecentConversationCard({
+  conversation,
+  onContinue
+}: {
+  conversation: ConversationHistoryItem
+  onContinue: (id: string) => void
+}) {
+  const timeAgo = getTimeAgo(conversation.updatedAt)
+
+  return (
+    <div
+      className={cn(
+        "flex items-center gap-3 p-3 rounded-lg border bg-card",
+        "hover:bg-accent/50 cursor-pointer transition-colors group"
+      )}
+      onClick={() => onContinue(conversation.id)}
+    >
+      <div className="flex-shrink-0">
+        <Clock className="h-4 w-4 text-muted-foreground" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="font-medium text-sm truncate">{conversation.title}</div>
+        <div className="text-xs text-muted-foreground truncate">
+          {conversation.messageCount} messages · {timeAgo}
+        </div>
+      </div>
+      <Button
+        variant="ghost"
+        size="sm"
+        className="opacity-0 group-hover:opacity-100 transition-opacity h-7 px-2"
+        onClick={(e) => {
+          e.stopPropagation()
+          onContinue(conversation.id)
+        }}
+      >
+        <ArrowRight className="h-4 w-4" />
+      </Button>
+    </div>
+  )
+}
+
+/** Format timestamp to relative time */
+function getTimeAgo(timestamp: number): string {
+  const now = Date.now()
+  const diff = now - timestamp
+  const minutes = Math.floor(diff / 60000)
+  const hours = Math.floor(diff / 3600000)
+  const days = Math.floor(diff / 86400000)
+
+  if (minutes < 1) return "just now"
+  if (minutes < 60) return `${minutes}m ago`
+  if (hours < 24) return `${hours}h ago`
+  if (days < 7) return `${days}d ago`
+  return new Date(timestamp).toLocaleDateString()
 }
 
 export function Component() {
@@ -109,6 +169,43 @@ export function Component() {
     },
   })
 
+  // Fetch recent conversations from history
+  const conversationHistoryQuery = useConversationHistoryQuery()
+  const recentConversations = React.useMemo(() => {
+    if (!conversationHistoryQuery.data) return []
+    // Get top 3, excluding any that have active sessions
+    const activeConversationIds = new Set(
+      Array.from(agentProgressById.values())
+        .filter(p => p !== null)
+        .map(p => p?.conversationId)
+        .filter(Boolean)
+    )
+    return conversationHistoryQuery.data
+      .filter(c => !activeConversationIds.has(c.id))
+      .slice(0, 3)
+  }, [conversationHistoryQuery.data, agentProgressById])
+
+  // Continue conversation mutation
+  const continueConversationMutation = useMutation({
+    mutationFn: async (conversationId: string) => {
+      // Load the conversation to get the context, then start with a prompt
+      const conversation = await tipcClient.loadConversation({ conversationId })
+      if (!conversation) throw new Error("Conversation not found")
+
+      // Start a new agent session that continues this conversation
+      // The user can type in the tile input to send the actual message
+      await tipcClient.createMcpTextInput({
+        text: "(Continuing previous conversation...)",
+        conversationId
+      })
+    },
+  })
+
+  // Handle continuing a conversation
+  const handleContinueConversation = (conversationId: string) => {
+    continueConversationMutation.mutate(conversationId)
+  }
+
   // Handle text submit
   const handleTextSubmit = (text: string) => {
     createTextMutation.mutate(text)
@@ -182,39 +279,85 @@ export function Component() {
         </Button>
       </div>
 
-      {/* Sessions grid */}
+      {/* Main content area */}
       <div className="flex-1 overflow-y-auto">
         {allProgressEntries.length === 0 ? (
-          <EmptyState onTextClick={() => setShowTextInput(true)} onVoiceClick={handleVoiceStart} />
+          <div className="flex flex-col h-full">
+            <EmptyState onTextClick={() => setShowTextInput(true)} onVoiceClick={handleVoiceStart} />
+
+            {/* Recent conversations section when no active sessions */}
+            {recentConversations.length > 0 && (
+              <div className="px-4 pb-4 mt-auto">
+                <div className="max-w-md mx-auto">
+                  <h3 className="text-sm font-medium text-muted-foreground mb-3 flex items-center gap-2">
+                    <Clock className="h-4 w-4" />
+                    Recent Conversations
+                  </h3>
+                  <div className="space-y-2">
+                    {recentConversations.map((conv) => (
+                      <RecentConversationCard
+                        key={conv.id}
+                        conversation={conv}
+                        onContinue={handleContinueConversation}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
         ) : (
-          <SessionGrid sessionCount={allProgressEntries.length}>
-            {allProgressEntries.map(([sessionId, progress], index) => {
-              const isCollapsed = collapsedSessions[sessionId] ?? false
-              return (
-                <SessionTileWrapper
-                  key={sessionId}
-                  sessionId={sessionId}
-                  index={index}
-                  isCollapsed={isCollapsed}
-                  onDragStart={handleDragStart}
-                  onDragOver={handleDragOver}
-                  onDragEnd={handleDragEnd}
-                  isDragTarget={dragTargetIndex === index && draggedSessionId !== sessionId}
-                  isDragging={draggedSessionId === sessionId}
-                >
-                  <AgentProgress
-                    progress={progress}
-                    variant="tile"
-                    isFocused={focusedSessionId === sessionId}
-                    onFocus={() => handleFocusSession(sessionId)}
-                    onDismiss={() => handleDismissSession(sessionId)}
+          <div className="flex flex-col">
+            {/* Active sessions grid */}
+            <SessionGrid sessionCount={allProgressEntries.length}>
+              {allProgressEntries.map(([sessionId, progress], index) => {
+                const isCollapsed = collapsedSessions[sessionId] ?? false
+                return (
+                  <SessionTileWrapper
+                    key={sessionId}
+                    sessionId={sessionId}
+                    index={index}
                     isCollapsed={isCollapsed}
-                    onCollapsedChange={(collapsed) => handleCollapsedChange(sessionId, collapsed)}
-                  />
-                </SessionTileWrapper>
-              )
-            })}
-          </SessionGrid>
+                    onDragStart={handleDragStart}
+                    onDragOver={handleDragOver}
+                    onDragEnd={handleDragEnd}
+                    isDragTarget={dragTargetIndex === index && draggedSessionId !== sessionId}
+                    isDragging={draggedSessionId === sessionId}
+                  >
+                    <AgentProgress
+                      progress={progress}
+                      variant="tile"
+                      isFocused={focusedSessionId === sessionId}
+                      onFocus={() => handleFocusSession(sessionId)}
+                      onDismiss={() => handleDismissSession(sessionId)}
+                      isCollapsed={isCollapsed}
+                      onCollapsedChange={(collapsed) => handleCollapsedChange(sessionId, collapsed)}
+                    />
+                  </SessionTileWrapper>
+                )
+              })}
+            </SessionGrid>
+
+            {/* Recent conversations section below active sessions */}
+            {recentConversations.length > 0 && (
+              <div className="px-4 py-4 border-t bg-muted/10">
+                <h3 className="text-sm font-medium text-muted-foreground mb-3 flex items-center gap-2">
+                  <Clock className="h-4 w-4" />
+                  Continue Recent Conversation
+                </h3>
+                <div className="flex gap-3 overflow-x-auto pb-2">
+                  {recentConversations.map((conv) => (
+                    <div key={conv.id} className="flex-shrink-0 w-64">
+                      <RecentConversationCard
+                        conversation={conv}
+                        onContinue={handleContinueConversation}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         )}
       </div>
     </div>

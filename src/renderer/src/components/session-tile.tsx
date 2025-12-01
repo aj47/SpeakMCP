@@ -1,0 +1,240 @@
+import React from "react"
+import { cn } from "@renderer/lib/utils"
+import { AgentProgressUpdate } from "@shared/types"
+import { ScrollArea } from "@renderer/components/ui/scroll-area"
+import {
+  Activity,
+  CheckCircle2,
+  XCircle,
+  Moon,
+  X,
+  Minimize2,
+  Maximize2,
+  Play,
+  RefreshCw,
+  Shield,
+} from "lucide-react"
+import { Button } from "@renderer/components/ui/button"
+import { Badge } from "@renderer/components/ui/badge"
+import { MarkdownRenderer } from "@renderer/components/markdown-renderer"
+
+interface SessionTileProps {
+  session: {
+    id: string
+    conversationId?: string
+    conversationTitle?: string
+    status: "active" | "completed" | "error" | "stopped"
+    startTime: number
+    endTime?: number
+    currentIteration?: number
+    maxIterations?: number
+    lastActivity?: string
+    errorMessage?: string
+    isSnoozed?: boolean
+  }
+  progress?: AgentProgressUpdate | null
+  isFocused?: boolean
+  onFocus?: () => void
+  onStop?: () => void
+  onSnooze?: () => void
+  onUnsnooze?: () => void
+  onRetry?: () => void
+  onDismiss?: () => void
+  className?: string
+}
+
+/**
+ * Rich session tile component displaying full conversation with internal scroll.
+ * Shows status indicator, title, conversation history, tool executions, and action buttons.
+ */
+export function SessionTile({
+  session,
+  progress,
+  isFocused,
+  onFocus,
+  onStop,
+  onSnooze,
+  onUnsnooze,
+  onRetry,
+  onDismiss,
+  className,
+}: SessionTileProps) {
+  const isActive = session.status === "active"
+  const isComplete = session.status === "completed"
+  const hasError = session.status === "error"
+  const isStopped = session.status === "stopped"
+  const isSnoozed = session.isSnoozed
+  const hasPendingApproval = !!progress?.pendingToolApproval
+
+  // Get status icon and color
+  const getStatusIndicator = () => {
+    if (hasPendingApproval) {
+      return <Shield className="h-4 w-4 text-amber-500 animate-pulse" />
+    }
+    if (isSnoozed) {
+      return <Moon className="h-4 w-4 text-muted-foreground" />
+    }
+    if (isActive) {
+      return <Activity className="h-4 w-4 text-blue-500 animate-pulse" />
+    }
+    if (isComplete) {
+      return <CheckCircle2 className="h-4 w-4 text-green-500" />
+    }
+    if (hasError || isStopped) {
+      return <XCircle className="h-4 w-4 text-red-500" />
+    }
+    return <Activity className="h-4 w-4 text-muted-foreground" />
+  }
+
+  // Get title - prefer conversationTitle, fall back to progress data
+  const getTitle = () => {
+    if (session.conversationTitle) {
+      return session.conversationTitle
+    }
+    if (progress?.conversationTitle) {
+      return progress.conversationTitle
+    }
+    // Extract from first user message in conversation
+    const firstUserMsg = progress?.conversationHistory?.find(m => m.role === "user")
+    if (firstUserMsg?.content) {
+      return firstUserMsg.content.length > 50
+        ? firstUserMsg.content.substring(0, 50) + "..."
+        : firstUserMsg.content
+    }
+    return `Session ${session.id.substring(0, 8)}`
+  }
+
+  // Get conversation messages to display
+  const messages = progress?.conversationHistory || []
+
+  return (
+    <div
+      onClick={onFocus}
+      className={cn(
+        "flex flex-col h-full rounded-lg border overflow-hidden transition-all cursor-pointer",
+        hasPendingApproval
+          ? "border-amber-500 bg-amber-50/30 dark:bg-amber-950/20 ring-1 ring-amber-500/30"
+          : isFocused
+          ? "border-blue-500 bg-blue-50/30 dark:bg-blue-950/20 ring-1 ring-blue-500/30"
+          : "border-border bg-card hover:border-border/80 hover:bg-card/80",
+        className
+      )}
+    >
+      {/* Header */}
+      <div className="flex items-center gap-2 px-3 py-2 border-b bg-muted/30">
+        {getStatusIndicator()}
+        <span className="flex-1 truncate font-medium text-sm">
+          {getTitle()}
+        </span>
+        {hasPendingApproval && (
+          <Badge variant="outline" className="text-amber-600 border-amber-500 text-xs">
+            Approval
+          </Badge>
+        )}
+        <div className="flex items-center gap-1">
+          {isActive && !isSnoozed && onSnooze && (
+            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); onSnooze(); }} title="Minimize">
+              <Minimize2 className="h-3 w-3" />
+            </Button>
+          )}
+          {isSnoozed && onUnsnooze && (
+            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); onUnsnooze(); }} title="Restore">
+              <Maximize2 className="h-3 w-3" />
+            </Button>
+          )}
+          {isActive && onStop && (
+            <Button variant="ghost" size="icon" className="h-6 w-6 hover:bg-destructive/20 hover:text-destructive" onClick={(e) => { e.stopPropagation(); onStop(); }} title="Stop">
+              <X className="h-3 w-3" />
+            </Button>
+          )}
+          {(hasError || isStopped) && onRetry && (
+            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); onRetry(); }} title="Retry">
+              <RefreshCw className="h-3 w-3" />
+            </Button>
+          )}
+          {!isActive && onDismiss && (
+            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); onDismiss(); }} title="Dismiss">
+              <X className="h-3 w-3" />
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* Conversation content - scrollable */}
+      <ScrollArea className="flex-1 min-h-0">
+        <div className="p-3 space-y-3">
+          {messages.length === 0 ? (
+            <div className="text-center text-muted-foreground text-sm py-4">
+              {isActive ? "Starting..." : "No messages"}
+            </div>
+          ) : (
+            messages.map((message, index) => (
+              <div
+                key={index}
+                className={cn(
+                  "text-sm",
+                  message.role === "user"
+                    ? "pl-0"
+                    : message.role === "assistant"
+                    ? "pl-3 border-l-2 border-blue-500/30"
+                    : "pl-3 border-l-2 border-muted"
+                )}
+              >
+                <div className="text-xs text-muted-foreground mb-1 capitalize">
+                  {message.role}
+                </div>
+                <div className="prose prose-sm dark:prose-invert max-w-none">
+                  {typeof message.content === "string" ? (
+                    <MarkdownRenderer content={message.content} />
+                  ) : (
+                    <span>{JSON.stringify(message.content)}</span>
+                  )}
+                </div>
+              </div>
+            ))
+          )}
+
+          {/* Error message if present */}
+          {session.errorMessage && (
+            <div className="rounded-md bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 p-3">
+              <div className="text-xs font-medium text-red-600 dark:text-red-400 mb-1">
+                Error
+              </div>
+              <div className="text-sm text-red-700 dark:text-red-300">
+                {session.errorMessage}
+              </div>
+            </div>
+          )}
+
+          {/* Pending tool approval */}
+          {hasPendingApproval && progress?.pendingToolApproval && (
+            <div className="rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 p-3">
+              <div className="text-xs font-medium text-amber-600 dark:text-amber-400 mb-1">
+                Tool Approval Required
+              </div>
+              <div className="text-sm text-amber-700 dark:text-amber-300">
+                <strong>{progress.pendingToolApproval.toolName}</strong>
+                <pre className="mt-1 text-xs bg-amber-100/50 dark:bg-amber-900/30 p-2 rounded overflow-x-auto">
+                  {JSON.stringify(progress.pendingToolApproval.arguments, null, 2)}
+                </pre>
+              </div>
+            </div>
+          )}
+        </div>
+      </ScrollArea>
+
+      {/* Footer with status info */}
+      <div className="px-3 py-2 border-t bg-muted/20 text-xs text-muted-foreground">
+        {session.currentIteration && session.maxIterations && (
+          <span>
+            Step {session.currentIteration}/{session.maxIterations}
+          </span>
+        )}
+        {session.lastActivity && (
+          <span className="ml-2 truncate">{session.lastActivity}</span>
+        )}
+      </div>
+    </div>
+  )
+}
+

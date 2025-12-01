@@ -745,6 +745,11 @@ export const router = {
     showPanelWindow()
   }),
 
+  triggerMcpRecording: t.procedure.action(async () => {
+    const { showPanelWindowAndStartMcpRecording } = await import("./window")
+    await showPanelWindowAndStartMcpRecording()
+  }),
+
   showMainWindow: t.procedure
     .input<{ url?: string }>()
     .action(async ({ input }) => {

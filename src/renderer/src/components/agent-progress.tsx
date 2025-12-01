@@ -1063,10 +1063,12 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
         toolResults: entry.toolResults,
       }))
 
-    // Add any in-progress thinking from current steps
-    const currentThinkingStep = steps.find(
-      (step) => step.type === "thinking" && step.status === "in_progress",
-    )
+    // Add any in-progress thinking from current steps (only when not complete)
+    const currentThinkingStep = !isComplete
+      ? steps.find(
+          (step) => step.type === "thinking" && step.status === "in_progress",
+        )
+      : undefined
     if (currentThinkingStep) {
         if (
           currentThinkingStep.llmContent &&
@@ -1104,7 +1106,8 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
             timestamp: step.timestamp,
             isThinking: false,
           })
-        } else if (step.status === "in_progress") {
+        } else if (step.status === "in_progress" && !isComplete) {
+          // Only show in-progress thinking when task is not complete
           messages.push({
             role: "assistant",
             content: step.description || "Agent is thinking...",

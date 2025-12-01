@@ -983,6 +983,7 @@ export const router = {
     .input<{
       text: string
       conversationId?: string
+      startSnoozed?: boolean // When true, session starts snoozed (no panel auto-show)
     }>()
     .action(async ({ input }) => {
       const config = configStore.get()
@@ -1011,7 +1012,8 @@ export const router = {
 
       // Fire-and-forget: Start agent processing without blocking
       // This allows multiple sessions to run concurrently
-      processWithAgentMode(input.text, conversationId)
+      // Use startSnoozed when caller wants session to run in background (e.g., from tiled view)
+      processWithAgentMode(input.text, conversationId, undefined, input.startSnoozed ?? false)
         .then((finalResponse) => {
           // Save to history after completion
           const history = getRecordingHistory()

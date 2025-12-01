@@ -31,12 +31,15 @@ export function TileFollowUpInput({
     mutationFn: async (message: string) => {
       if (!conversationId) {
         // Start a new conversation if none exists
-        await tipcClient.createMcpTextInput({ text: message })
+        // Start snoozed since we're in tile view (main window) - don't show panel
+        await tipcClient.createMcpTextInput({ text: message, startSnoozed: true })
       } else {
         // Continue the existing conversation
+        // Start snoozed since we're in tile view (main window) - don't show panel
         await tipcClient.createMcpTextInput({
           text: message,
           conversationId,
+          startSnoozed: true,
         })
       }
     },

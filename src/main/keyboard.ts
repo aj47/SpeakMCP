@@ -572,8 +572,8 @@ export function listenToKeyboardEvents() {
         }
       }
 
-      // Handle settings window hotkey
-      // Allow settings access during most states, but prevent during recording to avoid interruption
+      // Handle main window hotkey (opens/focuses UI without navigating)
+      // Allow UI access during most states, but prevent during recording to avoid interruption
       if (config.settingsHotkeyEnabled && !state.isRecording) {
         const effectiveSettingsHotkey = getEffectiveShortcut(
           config.settingsHotkey,
@@ -588,9 +588,9 @@ export function listenToKeyboardEvents() {
           !isPressedAltKey
         ) {
           if (isDebugKeybinds()) {
-            logKeybinds("Settings window triggered: Ctrl+Shift+S")
+            logKeybinds("Main window triggered: Ctrl+Shift+S")
           }
-          showMainWindow("/settings")
+          showMainWindow()
           return
         }
         if (
@@ -601,9 +601,9 @@ export function listenToKeyboardEvents() {
           !isPressedAltKey
         ) {
           if (isDebugKeybinds()) {
-            logKeybinds("Settings window triggered: Ctrl+,")
+            logKeybinds("Main window triggered: Ctrl+,")
           }
-          showMainWindow("/settings")
+          showMainWindow()
           return
         }
         if (
@@ -614,13 +614,13 @@ export function listenToKeyboardEvents() {
           !isPressedAltKey
         ) {
           if (isDebugKeybinds()) {
-            logKeybinds("Settings window triggered: Ctrl+Shift+,")
+            logKeybinds("Main window triggered: Ctrl+Shift+,")
           }
-          showMainWindow("/settings")
+          showMainWindow()
           return
         }
 
-        // Handle custom settings hotkey
+        // Handle custom main window hotkey
         if (
           config.settingsHotkey === "custom" &&
           effectiveSettingsHotkey
@@ -637,12 +637,12 @@ export function listenToKeyboardEvents() {
           )
           if (isDebugKeybinds() && matches) {
             logKeybinds(
-              "Settings window triggered: Custom hotkey",
+              "Main window triggered: Custom hotkey",
               effectiveSettingsHotkey,
             )
           }
           if (matches) {
-            showMainWindow("/settings")
+            showMainWindow()
             return
           }
         }

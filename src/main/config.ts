@@ -135,17 +135,19 @@ const getConfig = () => {
 }
 
 /**
- * Get the active model preset from config, merging built-in presets with saved API keys
+ * Get the active model preset from config, merging built-in presets with saved data
+ * This includes API keys, model preferences, and any other saved properties
  */
 function getActivePreset(config: Partial<Config>): ModelPreset | undefined {
   const builtIn = getBuiltInModelPresets()
   const savedPresets = config.modelPresets || []
   const currentPresetId = config.currentModelPresetId || DEFAULT_MODEL_PRESET_ID
 
-  // Merge built-in presets with saved API keys
+  // Merge built-in presets with ALL saved properties (apiKey, mcpToolsModel, transcriptProcessingModel, etc.)
   const allPresets = builtIn.map(preset => {
     const saved = savedPresets.find(s => s.id === preset.id)
-    return saved ? { ...preset, apiKey: saved.apiKey } : preset
+    // Spread saved properties over built-in preset to preserve all customizations
+    return saved ? { ...preset, ...saved } : preset
   })
 
   // Add custom (non-built-in) presets
@@ -156,8 +158,8 @@ function getActivePreset(config: Partial<Config>): ModelPreset | undefined {
 }
 
 /**
- * Sync the active preset's credentials to legacy config fields for backward compatibility.
- * Always syncs both fields together to keep them consistent with the active preset.
+ * Sync the active preset's credentials and model preferences to legacy config fields for backward compatibility.
+ * Always syncs all fields together to keep them consistent with the active preset.
  */
 function syncPresetToLegacyFields(config: Partial<Config>): Partial<Config> {
   const activePreset = getActivePreset(config)
@@ -166,6 +168,14 @@ function syncPresetToLegacyFields(config: Partial<Config>): Partial<Config> {
     // If preset has empty values, legacy fields should reflect that
     config.openaiApiKey = activePreset.apiKey || ''
     config.openaiBaseUrl = activePreset.baseUrl || ''
+
+    // Also sync model preferences if they are set on the preset
+    if (activePreset.mcpToolsModel) {
+      config.mcpToolsOpenaiModel = activePreset.mcpToolsModel
+    }
+    if (activePreset.transcriptProcessingModel) {
+      config.transcriptPostProcessingOpenaiModel = activePreset.transcriptProcessingModel
+    }
   }
   return config
 }

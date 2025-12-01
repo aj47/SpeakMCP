@@ -261,6 +261,28 @@ class HttpError extends Error {
     retryAfter?: number
   ): string {
     switch (status) {
+      case 400: {
+        // Bad Request - often caused by invalid model names or malformed requests
+        // Try to extract specific error message from response
+        let errorDetail = ''
+        try {
+          const errorJson = JSON.parse(responseText)
+          if (errorJson.error?.message) {
+            errorDetail = errorJson.error.message
+          }
+        } catch (e) {
+          errorDetail = responseText
+        }
+
+        // Check if it's a model-related error
+        const lowerDetail = errorDetail.toLowerCase()
+        if (lowerDetail.includes('model') || lowerDetail.includes('does not exist') || lowerDetail.includes('not found')) {
+          return `Invalid model name. The specified model does not exist or is not available. Please check your model settings and ensure the model name is correct. Error details: ${errorDetail}`
+        }
+
+        return `Bad request. The API rejected the request. ${errorDetail ? `Error details: ${errorDetail}` : 'Please check your configuration.'}`
+      }
+
       case 429:
         const waitTime = retryAfter ? `${retryAfter} seconds` : 'a moment'
         return `Rate limit exceeded. The API is temporarily unavailable due to too many requests. We'll automatically retry after waiting ${waitTime}. You don't need to do anything - just wait for the request to complete.`

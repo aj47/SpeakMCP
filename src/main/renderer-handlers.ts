@@ -9,6 +9,10 @@ export type RendererHandlers = {
   startOrFinishRecording: () => void
   refreshRecordingHistory: () => void
 
+  // Desktop + mic long recording handlers
+  startDesktopRecording: () => void
+  stopDesktopRecording: () => void
+
   // MCP Tool Calling handlers
   startMcpRecording: () => void
   finishMcpRecording: () => void

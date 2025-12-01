@@ -20,6 +20,7 @@ module.exports = {
     "!components.json",
     "!.prettierrc",
     "!speakmcp-rs/*",
+    "!speakmcp-audio/*",
   ],
   asar: false,
   win: {
@@ -47,6 +48,11 @@ module.exports = {
         filter: ["**/*"]
       },
       {
+        from: "resources/bin/speakmcp-audio.exe",
+        to: "bin/speakmcp-audio.exe",
+        filter: ["**/*"]
+      },
+      {
         from: "build/icon.ico",
         to: "icon.ico"
       }
@@ -64,6 +70,20 @@ module.exports = {
   mac: {
     binaries: [
       "resources/bin/speakmcp-rs",
+      "resources/bin/speakmcp-audio",
+      "resources/bin/screencapture-audio",
+    ],
+    extraResources: [
+      {
+        from: "resources/bin/speakmcp-audio",
+        to: "bin/speakmcp-audio",
+        filter: ["**/*"]
+      },
+      {
+        from: "resources/bin/screencapture-audio",
+        to: "bin/screencapture-audio",
+        filter: ["**/*"]
+      }
     ],
     artifactName: "${productName}-${version}-${arch}.${ext}",
     entitlementsInherit: "build/entitlements.mac.plist",
@@ -213,6 +233,11 @@ module.exports = {
       {
         from: "resources/bin/speakmcp-rs",
         to: "bin/speakmcp-rs",
+        filter: ["**/*"]
+      },
+      {
+        from: "resources/bin/speakmcp-audio",
+        to: "bin/speakmcp-audio",
         filter: ["**/*"]
       }
     ]

@@ -20,6 +20,7 @@ interface PendingToolApproval {
 
 export const state = {
   isRecording: false,
+  isDesktopRecordingActive: false,
   isTextInputActive: false,
   focusedAppBeforeRecording: null as string | null,
   // Toggle voice dictation state

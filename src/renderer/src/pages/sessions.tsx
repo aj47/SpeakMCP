@@ -43,6 +43,9 @@ export function Component() {
   // Custom ordering state - persists session order across re-renders
   const [sessionOrder, setSessionOrder] = useState<string[]>([])
 
+  // Text input visibility state - lifted up to allow EmptyState to trigger it
+  const [showTextInput, setShowTextInput] = useState(false)
+
   // Drag state
   const [draggedSessionId, setDraggedSessionId] = useState<string | null>(null)
   const [dragTargetIndex, setDragTargetIndex] = useState<number | null>(null)
@@ -163,6 +166,8 @@ export function Component() {
           onTextSubmit={handleTextSubmit}
           onVoiceStart={handleVoiceStart}
           isProcessing={createTextMutation.isPending}
+          showTextInput={showTextInput}
+          onShowTextInputChange={setShowTextInput}
           className="flex-1 max-w-2xl mx-4 border-0 bg-transparent p-0"
         />
         <Button variant="ghost" size="icon" onClick={() => navigate("/history")} title="History">
@@ -173,7 +178,7 @@ export function Component() {
       {/* Sessions grid */}
       <div className="flex-1 overflow-y-auto">
         {allProgressEntries.length === 0 ? (
-          <EmptyState onTextClick={() => {}} onVoiceClick={handleVoiceStart} />
+          <EmptyState onTextClick={() => setShowTextInput(true)} onVoiceClick={handleVoiceStart} />
         ) : (
           <SessionGrid sessionCount={allProgressEntries.length}>
             {allProgressEntries.map(([sessionId, progress], index) => (

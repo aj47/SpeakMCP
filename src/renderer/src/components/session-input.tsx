@@ -11,6 +11,10 @@ interface SessionInputProps {
   isRecording?: boolean
   isProcessing?: boolean
   className?: string
+  /** Controlled prop to show/hide text input from parent */
+  showTextInput?: boolean
+  /** Callback when text input visibility changes */
+  onShowTextInputChange?: (show: boolean) => void
 }
 
 /**
@@ -23,8 +27,17 @@ export function SessionInput({
   isRecording = false,
   isProcessing = false,
   className,
+  showTextInput: controlledShowTextInput,
+  onShowTextInputChange,
 }: SessionInputProps) {
-  const [showTextInput, setShowTextInput] = useState(false)
+  const [internalShowTextInput, setInternalShowTextInput] = useState(false)
+
+  // Use controlled prop if provided, otherwise use internal state
+  const showTextInput = controlledShowTextInput ?? internalShowTextInput
+  const setShowTextInput = (show: boolean) => {
+    setInternalShowTextInput(show)
+    onShowTextInputChange?.(show)
+  }
   const [text, setText] = useState("")
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 

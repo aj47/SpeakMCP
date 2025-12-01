@@ -1367,7 +1367,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
     return (
       <div
         onClick={onFocus}
-        className={cn(containerClasses, "min-h-0 border h-full", className)}
+        className={cn(containerClasses, "relative min-h-0 border h-full", className)}
         dir="ltr"
         style={{
           WebkitAppRegion: "no-drag"

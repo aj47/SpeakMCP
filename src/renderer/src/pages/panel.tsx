@@ -52,7 +52,9 @@ export function Component() {
   // Conversation state from Zustand
   const currentConversationId = useConversationStore((s) => s.currentConversationId)
   const setCurrentConversationId = useConversationStore((s) => s.setCurrentConversationId)
-  const continueConversation = useConversationStore((s) => s.continueConversation)
+  // NOTE: continueConversation is intentionally NOT used here.
+  // New sessions should NOT automatically set currentConversationId - that causes session pollution.
+  // continueConversation should only be called from explicit user actions (e.g., history "Continue" button).
   const endConversation = useConversationStore((s) => s.endConversation)
 
   // Query for current conversation data
@@ -232,10 +234,11 @@ export function Component() {
         conversationId: conversationIdForMcp ?? undefined,
       })
 
-      // Update conversation ID if backend created/returned one
-      if (result?.conversationId && result.conversationId !== currentConversationId) {
-        continueConversation(result.conversationId)
-      }
+      // NOTE: Do NOT call continueConversation here!
+      // The currentConversationId should only be set through explicit user actions
+      // (like clicking "Continue" in history or using TileFollowUpInput).
+      // Automatically setting it here would cause subsequent new sessions to
+      // inherit this session's conversation history (session pollution bug).
 
       return result
     },
@@ -286,10 +289,11 @@ export function Component() {
     }) => {
       const result = await tipcClient.createMcpTextInput({ text, conversationId })
 
-      // Update conversation ID if backend created/returned one
-      if (result?.conversationId && result.conversationId !== currentConversationId) {
-        continueConversation(result.conversationId)
-      }
+      // NOTE: Do NOT call continueConversation here!
+      // The currentConversationId should only be set through explicit user actions
+      // (like clicking "Continue" in history or using TileFollowUpInput).
+      // Automatically setting it here would cause subsequent new sessions to
+      // inherit this session's conversation history (session pollution bug).
 
       return result
     },

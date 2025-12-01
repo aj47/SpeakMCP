@@ -843,7 +843,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
   const [internalIsCollapsed, setInternalIsCollapsed] = useState(false)
   const isCollapsed = controlledIsCollapsed ?? internalIsCollapsed
 
-  // Use shared resize hook for tile variant
+  // Use shared resize hook for tile variant with localStorage persistence
   const {
     height: tileHeight,
     isResizing,
@@ -852,6 +852,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
     initialHeight: TILE_DIMENSIONS.height.default,
     minHeight: TILE_DIMENSIONS.height.min,
     maxHeight: TILE_DIMENSIONS.height.max,
+    storageKey: "speakmcp-agent-progress-tile-height",
   })
 
   // Handle tile collapse toggle

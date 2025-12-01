@@ -31,6 +31,8 @@ export interface UseResizableOptions {
   onResizeStart?: () => void
   /** Callback when resize ends */
   onResizeEnd?: (size: { width: number; height: number }) => void
+  /** Optional localStorage key for persisting dimensions */
+  storageKey?: string
 }
 
 export interface UseResizableReturn {
@@ -53,8 +55,31 @@ export interface UseResizableReturn {
 }
 
 /**
+ * Load persisted dimensions from localStorage
+ */
+function loadPersistedSize(storageKey: string | undefined): { width?: number; height?: number } | null {
+  if (!storageKey) return null
+  try {
+    const stored = localStorage.getItem(storageKey)
+    if (stored) {
+      const parsed = JSON.parse(stored)
+      if (typeof parsed === 'object' && parsed !== null) {
+        return {
+          width: typeof parsed.width === 'number' ? parsed.width : undefined,
+          height: typeof parsed.height === 'number' ? parsed.height : undefined,
+        }
+      }
+    }
+  } catch {
+    // Ignore parse errors
+  }
+  return null
+}
+
+/**
  * Hook for making elements resizable via mouse drag.
  * Supports width-only, height-only, and corner (both) resize.
+ * Optionally persists dimensions to localStorage using the storageKey option.
  */
 export function useResizable(options: UseResizableOptions = {}): UseResizableReturn {
   const {
@@ -66,14 +91,38 @@ export function useResizable(options: UseResizableOptions = {}): UseResizableRet
     maxHeight = TILE_DIMENSIONS.height.max,
     onResizeStart,
     onResizeEnd,
+    storageKey,
   } = options
 
-  const [width, setWidth] = useState(initialWidth)
-  const [height, setHeight] = useState(initialHeight)
+  // Initialize dimensions from localStorage if available, otherwise use defaults
+  const [width, setWidth] = useState(() => {
+    const persisted = loadPersistedSize(storageKey)
+    if (persisted?.width !== undefined) {
+      return Math.min(maxWidth, Math.max(minWidth, persisted.width))
+    }
+    return initialWidth
+  })
+  const [height, setHeight] = useState(() => {
+    const persisted = loadPersistedSize(storageKey)
+    if (persisted?.height !== undefined) {
+      return Math.min(maxHeight, Math.max(minHeight, persisted.height))
+    }
+    return initialHeight
+  })
   const [isResizing, setIsResizing] = useState(false)
-  
+
   // Use ref to track resize type for cleanup
   const resizeTypeRef = useRef<"width" | "height" | "corner" | null>(null)
+
+  // Persist dimensions to localStorage when they change (after resize ends)
+  const persistSize = useCallback((newWidth: number, newHeight: number) => {
+    if (!storageKey) return
+    try {
+      localStorage.setItem(storageKey, JSON.stringify({ width: newWidth, height: newHeight }))
+    } catch {
+      // Ignore storage errors
+    }
+  }, [storageKey])
 
   const clampWidth = useCallback((w: number) => Math.min(maxWidth, Math.max(minWidth, w)), [minWidth, maxWidth])
   const clampHeight = useCallback((h: number) => Math.min(maxHeight, Math.max(minHeight, h)), [minHeight, maxHeight])
@@ -101,12 +150,13 @@ export function useResizable(options: UseResizableOptions = {}): UseResizableRet
       resizeTypeRef.current = null
       document.removeEventListener("mousemove", handleMouseMove)
       document.removeEventListener("mouseup", handleMouseUp)
+      persistSize(lastWidth, height)
       onResizeEnd?.({ width: lastWidth, height })
     }
 
     document.addEventListener("mousemove", handleMouseMove)
     document.addEventListener("mouseup", handleMouseUp)
-  }, [width, height, clampWidth, onResizeStart, onResizeEnd])
+  }, [width, height, clampWidth, onResizeStart, onResizeEnd, persistSize])
 
   const handleHeightResizeStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
@@ -131,12 +181,13 @@ export function useResizable(options: UseResizableOptions = {}): UseResizableRet
       resizeTypeRef.current = null
       document.removeEventListener("mousemove", handleMouseMove)
       document.removeEventListener("mouseup", handleMouseUp)
+      persistSize(width, lastHeight)
       onResizeEnd?.({ width, height: lastHeight })
     }
 
     document.addEventListener("mousemove", handleMouseMove)
     document.addEventListener("mouseup", handleMouseUp)
-  }, [width, height, clampHeight, onResizeStart, onResizeEnd])
+  }, [width, height, clampHeight, onResizeStart, onResizeEnd, persistSize])
 
   const handleCornerResizeStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
@@ -167,6 +218,7 @@ export function useResizable(options: UseResizableOptions = {}): UseResizableRet
       resizeTypeRef.current = null
       document.removeEventListener("mousemove", handleMouseMove)
       document.removeEventListener("mouseup", handleMouseUp)
+      persistSize(lastWidth, lastHeight)
       onResizeEnd?.({
         width: lastWidth,
         height: lastHeight
@@ -175,7 +227,7 @@ export function useResizable(options: UseResizableOptions = {}): UseResizableRet
 
     document.addEventListener("mousemove", handleMouseMove)
     document.addEventListener("mouseup", handleMouseUp)
-  }, [width, height, clampWidth, clampHeight, onResizeStart, onResizeEnd])
+  }, [width, height, clampWidth, clampHeight, onResizeStart, onResizeEnd, persistSize])
 
   const reset = useCallback(() => {
     setWidth(initialWidth)

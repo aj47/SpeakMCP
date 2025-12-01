@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState, useEffect } from "react"
+import { useCallback, useMemo, useState } from "react"
 import { Control, ControlGroup, ControlLabel } from "@renderer/components/ui/control"
 import { Switch } from "@renderer/components/ui/switch"
 import { Input } from "@renderer/components/ui/input"
@@ -14,6 +14,7 @@ import { useConfigQuery, useSaveConfigMutation } from "@renderer/lib/query-clien
 import { tipcClient } from "@renderer/lib/tipc-client"
 import type { Config } from "@shared/types"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import { QRCodeSVG } from "qrcode.react"
 
 export function Component() {
   const configQuery = useConfigQuery()
@@ -208,9 +209,41 @@ export function Component() {
               </Control>
 
               {baseUrl && (
-                <Control label="Base URL" className="px-3">
-                  <div className="text-sm text-muted-foreground select-text break-all">{baseUrl}</div>
-                </Control>
+                <>
+                  <Control label="Base URL" className="px-3">
+                    <div className="text-sm text-muted-foreground select-text break-all">{baseUrl}</div>
+                  </Control>
+
+                  {cfg?.remoteServerApiKey && (
+                    <Control label={<ControlLabel label="Mobile App QR Code" tooltip="Scan this QR code with the SpeakMCP mobile app to connect (local network only)" />} className="px-3">
+                      <div className="flex flex-col items-start gap-3">
+                        <div className="p-3 bg-white rounded-lg">
+                          <QRCodeSVG
+                            value={`speakmcp://config?baseUrl=${encodeURIComponent(baseUrl)}&apiKey=${encodeURIComponent(cfg.remoteServerApiKey)}`}
+                            size={160}
+                            level="M"
+                          />
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              const deepLink = `speakmcp://config?baseUrl=${encodeURIComponent(baseUrl)}&apiKey=${encodeURIComponent(cfg.remoteServerApiKey || "")}`
+                              navigator.clipboard.writeText(deepLink)
+                            }}
+                          >
+                            Copy Deep Link
+                          </Button>
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          Scan with the SpeakMCP mobile app to auto-configure. Works on local network only.
+                          For internet access, use Cloudflare Tunnel below.
+                        </div>
+                      </div>
+                    </Control>
+                  )}
+                </>
               )}
             </>
           )}
@@ -295,26 +328,57 @@ export function Component() {
                 </Control>
 
                 {tunnelStatus?.url && (
-                  <Control label={<ControlLabel label="Public URL" tooltip="Use this URL to access your remote server from anywhere" />} className="px-3">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Input
-                        type="text"
-                        value={`${tunnelStatus.url}/v1`}
-                        readOnly
-                        className="w-full sm:w-[360px] max-w-full min-w-0 font-mono text-xs"
-                      />
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => navigator.clipboard.writeText(`${tunnelStatus.url}/v1`)}
-                      >
-                        Copy
-                      </Button>
-                    </div>
-                    <div className="mt-1 text-xs text-muted-foreground">
-                      This URL is temporary and will change when you restart the tunnel.
-                    </div>
-                  </Control>
+                  <>
+                    <Control label={<ControlLabel label="Public URL" tooltip="Use this URL to access your remote server from anywhere" />} className="px-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Input
+                          type="text"
+                          value={`${tunnelStatus.url}/v1`}
+                          readOnly
+                          className="w-full sm:w-[360px] max-w-full min-w-0 font-mono text-xs"
+                        />
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => navigator.clipboard.writeText(`${tunnelStatus.url}/v1`)}
+                        >
+                          Copy
+                        </Button>
+                      </div>
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        This URL is temporary and will change when you restart the tunnel.
+                      </div>
+                    </Control>
+
+                    {cfg?.remoteServerApiKey && (
+                      <Control label={<ControlLabel label="Mobile App QR Code" tooltip="Scan this QR code with the SpeakMCP mobile app to connect" />} className="px-3">
+                        <div className="flex flex-col items-start gap-3">
+                          <div className="p-3 bg-white rounded-lg">
+                            <QRCodeSVG
+                              value={`speakmcp://config?baseUrl=${encodeURIComponent(`${tunnelStatus.url}/v1`)}&apiKey=${encodeURIComponent(cfg.remoteServerApiKey)}`}
+                              size={160}
+                              level="M"
+                            />
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                const deepLink = `speakmcp://config?baseUrl=${encodeURIComponent(`${tunnelStatus.url}/v1`)}&apiKey=${encodeURIComponent(cfg.remoteServerApiKey || "")}`
+                                navigator.clipboard.writeText(deepLink)
+                              }}
+                            >
+                              Copy Deep Link
+                            </Button>
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            Scan with the SpeakMCP mobile app to auto-configure the connection.
+                          </div>
+                        </div>
+                      </Control>
+                    )}
+                  </>
                 )}
 
                 {tunnelStatus?.error && (

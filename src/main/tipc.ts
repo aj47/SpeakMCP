@@ -1011,9 +1011,24 @@ export const router = {
         )
       }
 
+      // Try to find and revive an existing session for this conversation
+      // This handles the case where user continues from history
+      const { agentSessionTracker } = await import("./agent-session-tracker")
+      let existingSessionId: string | undefined
+      if (input.conversationId) {
+        const foundSessionId = agentSessionTracker.findSessionByConversationId(input.conversationId)
+        if (foundSessionId) {
+          const revived = agentSessionTracker.reviveSession(foundSessionId)
+          if (revived) {
+            existingSessionId = foundSessionId
+          }
+        }
+      }
+
       // Fire-and-forget: Start agent processing without blocking
       // This allows multiple sessions to run concurrently
-      processWithAgentMode(input.text, conversationId)
+      // Pass existingSessionId to reuse the session if found
+      processWithAgentMode(input.text, conversationId, existingSessionId)
         .then((finalResponse) => {
           // Save to history after completion
           const history = getRecordingHistory()
@@ -1071,10 +1086,12 @@ export const router = {
       const { agentSessionTracker } = await import("./agent-session-tracker")
       const tempConversationId = input.conversationId || `temp_${Date.now()}`
 
-      // If sessionId is provided, try to revive the existing session instead of creating new
+      // If sessionId is provided, try to revive that session.
+      // Otherwise, if conversationId is provided, try to find and revive a session for that conversation.
+      // This handles the case where user continues from history (only conversationId is set).
       let sessionId: string
       if (input.sessionId) {
-        // Try to revive the existing session
+        // Try to revive the existing session by ID
         const revived = agentSessionTracker.reviveSession(input.sessionId)
         if (revived) {
           sessionId = input.sessionId
@@ -1087,8 +1104,28 @@ export const router = {
           // Session not found, create a new one
           sessionId = agentSessionTracker.startSession(tempConversationId, "Transcribing...", false)
         }
+      } else if (input.conversationId) {
+        // No sessionId but have conversationId - try to find existing session for this conversation
+        const existingSessionId = agentSessionTracker.findSessionByConversationId(input.conversationId)
+        if (existingSessionId) {
+          const revived = agentSessionTracker.reviveSession(existingSessionId)
+          if (revived) {
+            sessionId = existingSessionId
+            // Update the session title while transcribing
+            agentSessionTracker.updateSession(sessionId, {
+              conversationTitle: "Transcribing...",
+              lastActivity: "Transcribing audio...",
+            })
+          } else {
+            // Revive failed, create new session
+            sessionId = agentSessionTracker.startSession(tempConversationId, "Transcribing...", false)
+          }
+        } else {
+          // No existing session for this conversation, create new
+          sessionId = agentSessionTracker.startSession(tempConversationId, "Transcribing...", false)
+        }
       } else {
-        // No sessionId provided, create a new session
+        // No sessionId or conversationId provided, create a new session
         sessionId = agentSessionTracker.startSession(tempConversationId, "Transcribing...", false)
       }
 

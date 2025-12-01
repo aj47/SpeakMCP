@@ -782,10 +782,10 @@ export const router = {
   }),
 
   triggerMcpRecording: t.procedure
-    .input<{ conversationId?: string }>()
+    .input<{ conversationId?: string; sessionId?: string }>()
     .action(async ({ input }) => {
       const { showPanelWindowAndStartMcpRecording } = await import("./window")
-      await showPanelWindowAndStartMcpRecording(input.conversationId)
+      await showPanelWindowAndStartMcpRecording(input.conversationId, input.sessionId)
     }),
 
   showMainWindow: t.procedure
@@ -1058,6 +1058,7 @@ export const router = {
       recording: ArrayBuffer
       duration: number
       conversationId?: string
+      sessionId?: string
     }>()
     .action(async ({ input }) => {
       fs.mkdirSync(recordingsFolder, { recursive: true })
@@ -1069,9 +1070,27 @@ export const router = {
       // This ensures users see feedback during the (potentially long) STT call
       const { agentSessionTracker } = await import("./agent-session-tracker")
       const tempConversationId = input.conversationId || `temp_${Date.now()}`
-      // Start session NOT snoozed so the floating panel shows immediately
-      // This is triggered by keybind, so the user expects to see the panel
-      const sessionId = agentSessionTracker.startSession(tempConversationId, "Transcribing...", false)
+
+      // If sessionId is provided, try to revive the existing session instead of creating new
+      let sessionId: string
+      if (input.sessionId) {
+        // Try to revive the existing session
+        const revived = agentSessionTracker.reviveSession(input.sessionId)
+        if (revived) {
+          sessionId = input.sessionId
+          // Update the session title while transcribing
+          agentSessionTracker.updateSession(sessionId, {
+            conversationTitle: "Transcribing...",
+            lastActivity: "Transcribing audio...",
+          })
+        } else {
+          // Session not found, create a new one
+          sessionId = agentSessionTracker.startSession(tempConversationId, "Transcribing...", false)
+        }
+      } else {
+        // No sessionId provided, create a new session
+        sessionId = agentSessionTracker.startSession(tempConversationId, "Transcribing...", false)
+      }
 
       try {
         // Emit initial "initializing" progress update

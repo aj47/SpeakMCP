@@ -7,6 +7,7 @@ import { tipcClient } from "@renderer/lib/tipc-client"
 
 interface TileFollowUpInputProps {
   conversationId?: string
+  sessionId?: string
   isSessionActive?: boolean
   className?: string
   /** Called when a message is successfully sent */
@@ -18,6 +19,7 @@ interface TileFollowUpInputProps {
  */
 export function TileFollowUpInput({
   conversationId,
+  sessionId,
   isSessionActive = false,
   className,
   onMessageSent,
@@ -61,9 +63,9 @@ export function TileFollowUpInput({
 
   const handleVoiceClick = async (e: React.MouseEvent) => {
     e.stopPropagation()
-    // Pass conversationId directly through IPC to continue the conversation
+    // Pass conversationId and sessionId directly through IPC to continue in the same session
     // This is more reliable than using Zustand store which has timing issues
-    await tipcClient.triggerMcpRecording({ conversationId })
+    await tipcClient.triggerMcpRecording({ conversationId, sessionId })
   }
 
   // Don't allow input while session is still active (agent is processing)

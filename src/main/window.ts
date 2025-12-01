@@ -481,7 +481,7 @@ export async function showPanelWindowAndStartRecording() {
   getWindowRendererHandlers("panel")?.startRecording.send()
 }
 
-export async function showPanelWindowAndStartMcpRecording(conversationId?: string) {
+export async function showPanelWindowAndStartMcpRecording(conversationId?: string, sessionId?: string) {
   // Capture focus before showing panel
   try {
     const focusedApp = await getFocusedAppInfo()
@@ -493,7 +493,7 @@ export async function showPanelWindowAndStartMcpRecording(conversationId?: strin
   // Ensure consistent sizing by setting mode in main before showing
   setPanelMode("normal")
   showPanelWindow()
-  getWindowRendererHandlers("panel")?.startMcpRecording.send(conversationId)
+  getWindowRendererHandlers("panel")?.startMcpRecording.send({ conversationId, sessionId })
 }
 
 export async function showPanelWindowAndShowTextInput() {

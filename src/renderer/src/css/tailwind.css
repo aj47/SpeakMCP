@@ -97,6 +97,47 @@
   .scrollbar-thin::-webkit-scrollbar-corner {
     background: transparent;
   }
+
+  /* Scrollbar hidden until hover - for tile view */
+  .scrollbar-hide-until-hover {
+    scrollbar-width: thin;
+  }
+
+  .scrollbar-hide-until-hover::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .scrollbar-hide-until-hover::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scrollbar-hide-until-hover::-webkit-scrollbar-thumb {
+    background-color: transparent;
+    border-radius: 3px;
+    transition: background-color 0.2s ease;
+  }
+
+  /* Show scrollbar on hover of the scroll container or its parent tile */
+  .scrollbar-hide-until-hover:hover::-webkit-scrollbar-thumb,
+  .group\/tile:hover .scrollbar-hide-until-hover::-webkit-scrollbar-thumb {
+    background-color: rgba(209, 213, 219, 0.8);
+  }
+
+  .dark .scrollbar-hide-until-hover:hover::-webkit-scrollbar-thumb,
+  .dark .group\/tile:hover .scrollbar-hide-until-hover::-webkit-scrollbar-thumb {
+    background-color: rgba(75, 85, 99, 0.8);
+  }
+
+  /* Also show scrollbar when focus is within the scroll area */
+  .scrollbar-hide-until-hover:focus-within::-webkit-scrollbar-thumb,
+  .group\/tile:focus-within .scrollbar-hide-until-hover::-webkit-scrollbar-thumb {
+    background-color: rgba(209, 213, 219, 0.8);
+  }
+
+  .dark .scrollbar-hide-until-hover:focus-within::-webkit-scrollbar-thumb,
+  .dark .group\/tile:focus-within .scrollbar-hide-until-hover::-webkit-scrollbar-thumb {
+    background-color: rgba(75, 85, 99, 0.8);
+  }
 }
 @tailwind variants;
 

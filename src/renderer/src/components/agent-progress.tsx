@@ -1374,7 +1374,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
     return (
       <div
         onClick={onFocus}
-        className={cn(containerClasses, "relative min-h-0 border h-full", className)}
+        className={cn(containerClasses, "relative min-h-0 border h-full group/tile", className)}
         dir="ltr"
         style={{
           WebkitAppRegion: "no-drag"
@@ -1440,7 +1440,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
               <div
                 ref={scrollContainerRef}
                 onScroll={handleScroll}
-                className="h-full overflow-y-auto"
+                className="h-full overflow-y-auto scrollbar-hide-until-hover"
               >
                 {displayItems.length > 0 ? (
                   <div className="space-y-1 p-2">

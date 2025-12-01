@@ -39,6 +39,7 @@ export function ActiveAgentsSidebar() {
 
   const focusedSessionId = useAgentStore((s) => s.focusedSessionId)
   const setFocusedSessionId = useAgentStore((s) => s.setFocusedSessionId)
+  const setSessionSnoozed = useAgentStore((s) => s.setSessionSnoozed)
   const agentProgressById = useAgentStore((s) => s.agentProgressById)
   const navigate = useNavigate()
 
@@ -126,8 +127,10 @@ export function ActiveAgentsSidebar() {
         // Unsnoozing: restore the session to foreground
         logUI('[ActiveAgentsSidebar] Unsnoozing session')
 
-        // IMPORTANT: Focus the session FIRST before showing panel
-        // This ensures agentProgress is computed before the panel renders
+        // Update local store first so panel shows content immediately
+        setSessionSnoozed(sessionId, false)
+
+        // Focus the session
         setFocusedSessionId(sessionId)
 
         // Unsnooze the session in backend
@@ -146,6 +149,8 @@ export function ActiveAgentsSidebar() {
       } else {
         // Snoozing: move session to background
         logUI('[ActiveAgentsSidebar] Snoozing session')
+        // Update local store first
+        setSessionSnoozed(sessionId, true)
         await tipcClient.snoozeAgentSession({ sessionId })
         // Unfocus if this was the focused session
         if (focusedSessionId === sessionId) {

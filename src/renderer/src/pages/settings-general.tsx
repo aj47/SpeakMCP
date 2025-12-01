@@ -356,7 +356,7 @@ export function Component() {
             </div>
           </Control>
 
-          <Control label="Settings Window" className="px-3">
+          <Control label="Show Main Window" className="px-3">
             <div className="space-y-2">
               <div className="flex items-center gap-2">
                 <Switch
@@ -398,7 +398,7 @@ export function Component() {
                         customSettingsHotkey: keyCombo,
                       })
                     }}
-                    placeholder="Click to record custom settings hotkey"
+                    placeholder="Click to record custom hotkey"
                   />
                 )}
             </div>

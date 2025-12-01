@@ -327,7 +327,7 @@ export function Component() {
                   </div>
                 </Control>
 
-                {tunnelStatus?.url && (
+                {tunnelStatus?.url && tunnelStatus?.running && (
                   <>
                     <Control label={<ControlLabel label="Public URL" tooltip="Use this URL to access your remote server from anywhere" />} className="px-3">
                       <div className="flex flex-wrap items-center gap-2">

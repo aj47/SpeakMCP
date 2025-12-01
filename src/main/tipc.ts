@@ -161,6 +161,7 @@ async function processWithAgentMode(
   text: string,
   conversationId?: string,
   existingSessionId?: string, // Optional: reuse existing session instead of creating new one
+  startSnoozed: boolean = false, // Whether to start session snoozed (default: false to show panel)
 ): Promise<string> {
   const config = configStore.get()
 
@@ -172,7 +173,8 @@ async function processWithAgentMode(
   // Start tracking this agent session (or reuse existing one)
   const { agentSessionTracker } = await import("./agent-session-tracker")
   let conversationTitle = text.length > 50 ? text.substring(0, 50) + "..." : text
-  const sessionId = existingSessionId || agentSessionTracker.startSession(conversationId, conversationTitle)
+  // When creating a new session from keybind/UI, start unsnoozed so panel shows immediately
+  const sessionId = existingSessionId || agentSessionTracker.startSession(conversationId, conversationTitle, startSnoozed)
 
   try {
     if (!config.mcpToolsEnabled) {
@@ -1065,7 +1067,9 @@ export const router = {
       // This ensures users see feedback during the (potentially long) STT call
       const { agentSessionTracker } = await import("./agent-session-tracker")
       const tempConversationId = input.conversationId || `temp_${Date.now()}`
-      const sessionId = agentSessionTracker.startSession(tempConversationId, "Transcribing...")
+      // Start session NOT snoozed so the floating panel shows immediately
+      // This is triggered by keybind, so the user expects to see the panel
+      const sessionId = agentSessionTracker.startSession(tempConversationId, "Transcribing...", false)
 
       try {
         // Emit initial "initializing" progress update

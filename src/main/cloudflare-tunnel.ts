@@ -119,7 +119,7 @@ export async function startCloudflareTunnel(): Promise<{
         if (isStarting && !tunnelUrl) {
           isStarting = false
           tunnelError = "Timeout waiting for tunnel URL"
-          stopCloudflareTunnel()
+          stopCloudflareTunnel({ preserveError: true })
           resolve({ success: false, error: tunnelError })
         }
       }, 30000)
@@ -135,7 +135,7 @@ export async function startCloudflareTunnel(): Promise<{
 /**
  * Stop the Cloudflare Tunnel
  */
-export async function stopCloudflareTunnel(): Promise<void> {
+export async function stopCloudflareTunnel(options?: { preserveError?: boolean }): Promise<void> {
   if (tunnelProcess) {
     try {
       tunnelProcess.kill("SIGTERM")
@@ -145,7 +145,9 @@ export async function stopCloudflareTunnel(): Promise<void> {
     } finally {
       tunnelProcess = null
       tunnelUrl = null
-      tunnelError = null
+      if (!options?.preserveError) {
+        tunnelError = null
+      }
       isStarting = false
     }
   }

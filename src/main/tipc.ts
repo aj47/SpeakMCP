@@ -2042,6 +2042,27 @@ export const router = {
       )
     }
   }),
+
+  // Cloudflare Tunnel handlers
+  checkCloudflaredInstalled: t.procedure.action(async () => {
+    const { checkCloudflaredInstalled } = await import("./cloudflare-tunnel")
+    return checkCloudflaredInstalled()
+  }),
+
+  startCloudflareTunnel: t.procedure.action(async () => {
+    const { startCloudflareTunnel } = await import("./cloudflare-tunnel")
+    return startCloudflareTunnel()
+  }),
+
+  stopCloudflareTunnel: t.procedure.action(async () => {
+    const { stopCloudflareTunnel } = await import("./cloudflare-tunnel")
+    return stopCloudflareTunnel()
+  }),
+
+  getCloudflareTunnelStatus: t.procedure.action(async () => {
+    const { getCloudflareTunnelStatus } = await import("./cloudflare-tunnel")
+    return getCloudflareTunnelStatus()
+  }),
 }
 
 // TTS Provider Implementation Functions

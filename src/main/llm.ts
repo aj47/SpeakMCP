@@ -472,7 +472,9 @@ export async function processTranscriptWithAgentMode(
     sessionId || `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
   // Number of messages in the conversation history that predate this agent session.
   // Used by the UI to show only this session's messages while still saving full history.
-  const sessionStartIndex = previousConversationHistory?.length || 0
+  // When continuing a conversation, we set this to 0 so the UI shows the full history.
+  // The user explicitly wants to see the previous context when they click "Continue".
+  const sessionStartIndex = 0
 
   // Create session state for this agent run
   agentSessionStateManager.createSession(currentSessionId)

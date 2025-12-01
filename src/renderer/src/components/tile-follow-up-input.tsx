@@ -10,6 +10,8 @@ interface TileFollowUpInputProps {
   conversationId?: string
   isSessionActive?: boolean
   className?: string
+  /** Called when a message is successfully sent */
+  onMessageSent?: () => void
 }
 
 /**
@@ -20,6 +22,7 @@ export function TileFollowUpInput({
   conversationId,
   isSessionActive = false,
   className,
+  onMessageSent,
 }: TileFollowUpInputProps) {
   const [text, setText] = useState("")
   const inputRef = useRef<HTMLInputElement>(null)
@@ -31,7 +34,7 @@ export function TileFollowUpInput({
         await tipcClient.createMcpTextInput({ text: message })
       } else {
         // Continue the existing conversation
-        await tipcClient.createMcpTextInput({ 
+        await tipcClient.createMcpTextInput({
           text: message,
           conversationId,
         })
@@ -39,6 +42,7 @@ export function TileFollowUpInput({
     },
     onSuccess: () => {
       setText("")
+      onMessageSent?.()
     },
   })
 

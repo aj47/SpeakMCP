@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useCallback } from "react"
-import { useMutation, useQueryClient } from "@tanstack/react-query"
+import React, { useEffect, useState, useCallback, useMemo } from "react"
+import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query"
 import { useNavigate } from "react-router-dom"
 import { tipcClient, rendererHandlers } from "@renderer/lib/tipc-client"
 import { useAgentStore } from "@renderer/stores"
@@ -9,7 +9,7 @@ import { SessionInput } from "@renderer/components/session-input"
 import { Settings, MessageCircle, Mic, Plus, Clock, ArrowRight } from "lucide-react"
 import { Button } from "@renderer/components/ui/button"
 import { useConversationHistoryQuery } from "@renderer/lib/queries"
-import { ConversationHistoryItem } from "@shared/types"
+import { ConversationHistoryItem, AgentProgressUpdate } from "@shared/types"
 import { cn } from "@renderer/lib/utils"
 
 function EmptyState({ onTextClick, onVoiceClick }: { onTextClick: () => void; onVoiceClick: () => void }) {
@@ -169,11 +169,14 @@ export function Component() {
     },
   })
 
+  // State for pending conversation continuation (user selected a conversation to continue)
+  const [pendingConversationId, setPendingConversationId] = useState<string | null>(null)
+
   // Fetch recent conversations from history
   const conversationHistoryQuery = useConversationHistoryQuery()
   const recentConversations = React.useMemo(() => {
     if (!conversationHistoryQuery.data) return []
-    // Get top 3, excluding any that have active sessions
+    // Get top 3, excluding any that have active sessions or the pending conversation
     const activeConversationIds = new Set(
       Array.from(agentProgressById.values())
         .filter(p => p !== null)
@@ -181,29 +184,53 @@ export function Component() {
         .filter(Boolean)
     )
     return conversationHistoryQuery.data
-      .filter(c => !activeConversationIds.has(c.id))
+      .filter(c => !activeConversationIds.has(c.id) && c.id !== pendingConversationId)
       .slice(0, 3)
-  }, [conversationHistoryQuery.data, agentProgressById])
+  }, [conversationHistoryQuery.data, agentProgressById, pendingConversationId])
 
-  // Continue conversation mutation
-  const continueConversationMutation = useMutation({
-    mutationFn: async (conversationId: string) => {
-      // Load the conversation to get the context, then start with a prompt
-      const conversation = await tipcClient.loadConversation({ conversationId })
-      if (!conversation) throw new Error("Conversation not found")
-
-      // Start a new agent session that continues this conversation
-      // The user can type in the tile input to send the actual message
-      await tipcClient.createMcpTextInput({
-        text: "(Continuing previous conversation...)",
-        conversationId
-      })
+  // Load the pending conversation data when one is selected
+  const pendingConversationQuery = useQuery({
+    queryKey: ["conversation", pendingConversationId],
+    queryFn: async () => {
+      if (!pendingConversationId) return null
+      return tipcClient.loadConversation({ conversationId: pendingConversationId })
     },
+    enabled: !!pendingConversationId,
   })
 
-  // Handle continuing a conversation
+  // Create a synthetic AgentProgressUpdate for the pending conversation
+  // This allows us to reuse the AgentProgress component with the same UI
+  const pendingSessionId = pendingConversationId ? `pending-${pendingConversationId}` : null
+  const pendingProgress: AgentProgressUpdate | null = useMemo(() => {
+    if (!pendingConversationId || !pendingConversationQuery.data) return null
+    const conv = pendingConversationQuery.data
+    return {
+      sessionId: `pending-${pendingConversationId}`,
+      conversationId: pendingConversationId,
+      conversationTitle: conv.title || "Continue Conversation",
+      currentIteration: 0,
+      maxIterations: 10,
+      steps: [],
+      isComplete: true, // Mark as complete so it shows the follow-up input
+      conversationHistory: conv.messages.map(m => ({
+        role: m.role,
+        content: m.content,
+        toolCalls: m.toolCalls,
+        toolResults: m.toolResults,
+        timestamp: m.timestamp,
+      })),
+    }
+  }, [pendingConversationId, pendingConversationQuery.data])
+
+  // Handle continuing a conversation - set the pending ID to show the tile
+  // LLM inference will only happen when user sends an actual message
   const handleContinueConversation = (conversationId: string) => {
-    continueConversationMutation.mutate(conversationId)
+    setPendingConversationId(conversationId)
+  }
+
+  // Handle dismissing the pending continuation
+  const handleDismissPendingContinuation = () => {
+    setPendingConversationId(null)
   }
 
   // Handle text submit
@@ -281,7 +308,8 @@ export function Component() {
 
       {/* Main content area */}
       <div className="flex-1 overflow-y-auto">
-        {allProgressEntries.length === 0 ? (
+        {/* Show empty state when no sessions and no pending */}
+        {allProgressEntries.length === 0 && !pendingProgress ? (
           <div className="flex flex-col h-full">
             <EmptyState onTextClick={() => setShowTextInput(true)} onVoiceClick={handleVoiceStart} />
 
@@ -308,20 +336,47 @@ export function Component() {
           </div>
         ) : (
           <div className="flex flex-col">
-            {/* Active sessions grid */}
-            <SessionGrid sessionCount={allProgressEntries.length}>
+            {/* Active sessions grid - includes pending continuation if any */}
+            <SessionGrid sessionCount={allProgressEntries.length + (pendingProgress ? 1 : 0)}>
+              {/* Pending continuation tile first */}
+              {pendingProgress && pendingSessionId && (
+                <SessionTileWrapper
+                  key={pendingSessionId}
+                  sessionId={pendingSessionId}
+                  index={0}
+                  isCollapsed={false}
+                  onDragStart={() => {}}
+                  onDragOver={() => {}}
+                  onDragEnd={() => {}}
+                  isDragTarget={false}
+                  isDragging={false}
+                >
+                  <AgentProgress
+                    progress={pendingProgress}
+                    variant="tile"
+                    isFocused={true}
+                    onFocus={() => {}}
+                    onDismiss={handleDismissPendingContinuation}
+                    isCollapsed={false}
+                    onCollapsedChange={() => {}}
+                    onFollowUpSent={handleDismissPendingContinuation}
+                  />
+                </SessionTileWrapper>
+              )}
+              {/* Regular sessions */}
               {allProgressEntries.map(([sessionId, progress], index) => {
                 const isCollapsed = collapsedSessions[sessionId] ?? false
+                const adjustedIndex = pendingProgress ? index + 1 : index
                 return (
                   <SessionTileWrapper
                     key={sessionId}
                     sessionId={sessionId}
-                    index={index}
+                    index={adjustedIndex}
                     isCollapsed={isCollapsed}
                     onDragStart={handleDragStart}
                     onDragOver={handleDragOver}
                     onDragEnd={handleDragEnd}
-                    isDragTarget={dragTargetIndex === index && draggedSessionId !== sessionId}
+                    isDragTarget={dragTargetIndex === adjustedIndex && draggedSessionId !== sessionId}
                     isDragging={draggedSessionId === sessionId}
                   >
                     <AgentProgress

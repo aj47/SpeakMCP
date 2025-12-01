@@ -28,6 +28,8 @@ interface AgentProgressProps {
   isCollapsed?: boolean
   /** For tile variant: callback when collapsed state changes */
   onCollapsedChange?: (collapsed: boolean) => void
+  /** For tile variant: callback when a follow-up message is sent */
+  onFollowUpSent?: () => void
 }
 
 // Enhanced conversation message component
@@ -826,6 +828,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
   onDismiss,
   isCollapsed: controlledIsCollapsed,
   onCollapsedChange,
+  onFollowUpSent,
 }) => {
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const [isUserScrolling, setIsUserScrolling] = useState(false)
@@ -1503,6 +1506,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
           conversationId={progress.conversationId}
           isSessionActive={!isComplete}
           className="flex-shrink-0"
+          onMessageSent={onFollowUpSent}
         />
 
         {/* Kill Switch Confirmation Dialog */}

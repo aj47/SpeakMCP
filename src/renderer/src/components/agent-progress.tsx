@@ -1372,10 +1372,9 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
     return (
       <div
         onClick={onFocus}
-        className={cn(containerClasses, "min-h-0 border", className)}
+        className={cn(containerClasses, "min-h-0 border h-full", className)}
         dir="ltr"
         style={{
-          height: isCollapsed ? "auto" : tileHeight,
           WebkitAppRegion: "no-drag"
         } as React.CSSProperties}
       >
@@ -1499,14 +1498,6 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
               {isComplete && (
                 <span>{wasStopped ? "Stopped" : hasErrors ? "Failed" : "Complete"}</span>
               )}
-            </div>
-
-            {/* Resize handle */}
-            <div
-              className="h-2 cursor-ns-resize flex items-center justify-center bg-muted/30 hover:bg-muted/50 transition-colors flex-shrink-0"
-              onMouseDown={handleResizeStart}
-            >
-              <GripHorizontal className="h-3 w-3 text-muted-foreground/50" />
             </div>
           </>
         )}

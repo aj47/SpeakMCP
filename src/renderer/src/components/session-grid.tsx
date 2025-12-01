@@ -1,5 +1,6 @@
-import React from "react"
+import React, { useState, useCallback, useRef, useEffect } from "react"
 import { cn } from "@renderer/lib/utils"
+import { GripVertical } from "lucide-react"
 
 interface SessionGridProps {
   children: React.ReactNode
@@ -8,36 +9,14 @@ interface SessionGridProps {
 }
 
 /**
- * Responsive tiling layout manager for sessions.
- * 
- * Layout behavior based on session count:
- * - 1 session: Full width tile
- * - 2 sessions: 50/50 split horizontally
- * - 3 sessions: 2 on top (50/50), 1 full width on bottom
- * - 4+ sessions: 3-column grid that grows vertically
+ * Flexible layout manager for sessions.
+ * Uses flex-wrap to allow tiles to flow and be resized individually.
  */
 export function SessionGrid({ children, sessionCount, className }: SessionGridProps) {
-  // Determine grid layout classes based on session count
-  const getGridClasses = () => {
-    if (sessionCount === 0) {
-      return ""
-    }
-    if (sessionCount === 1) {
-      return "grid-cols-1"
-    }
-    if (sessionCount === 2) {
-      return "grid-cols-2"
-    }
-    // For 3+ sessions, use a 3-column responsive grid
-    // On smaller screens, fall back to fewer columns
-    return "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"
-  }
-
   return (
     <div
       className={cn(
-        "grid gap-4 p-4",
-        getGridClasses(),
+        "flex flex-wrap gap-4 p-4 content-start",
         className
       )}
     >
@@ -46,35 +25,194 @@ export function SessionGrid({ children, sessionCount, className }: SessionGridPr
   )
 }
 
+// Default tile dimensions
+const TILE_DEFAULT_WIDTH = 400
+const TILE_MIN_WIDTH = 200
+const TILE_MAX_WIDTH = 1200
+const TILE_DEFAULT_HEIGHT = 300
+const TILE_MIN_HEIGHT = 150
+const TILE_MAX_HEIGHT = 800
+
 interface SessionTileWrapperProps {
   children: React.ReactNode
-  sessionCount: number
+  sessionId: string
   index: number
   className?: string
+  // Drag and drop callbacks
+  onDragStart?: (sessionId: string, index: number) => void
+  onDragOver?: (index: number) => void
+  onDragEnd?: () => void
+  isDragTarget?: boolean
+  isDragging?: boolean
 }
 
 /**
- * Wrapper for individual session tiles that handles special layout cases.
- * For example, when there are 3 sessions, the last one spans full width.
+ * Wrapper for individual session tiles with resizable width/height and drag support.
  */
 export function SessionTileWrapper({
   children,
-  sessionCount,
+  sessionId,
   index,
   className,
+  onDragStart,
+  onDragOver,
+  onDragEnd,
+  isDragTarget,
+  isDragging,
 }: SessionTileWrapperProps) {
-  // Special case: 3 sessions - last one spans full width
-  const shouldSpanFull = sessionCount === 3 && index === 2
+  const [width, setWidth] = useState(TILE_DEFAULT_WIDTH)
+  const [height, setHeight] = useState(TILE_DEFAULT_HEIGHT)
+  const [isResizingWidth, setIsResizingWidth] = useState(false)
+  const [isResizingHeight, setIsResizingHeight] = useState(false)
+  const [isResizingCorner, setIsResizingCorner] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  // Handle horizontal resize (right edge)
+  const handleWidthResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsResizingWidth(true)
+    const startX = e.clientX
+    const startWidth = width
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      const delta = moveEvent.clientX - startX
+      const newWidth = Math.min(TILE_MAX_WIDTH, Math.max(TILE_MIN_WIDTH, startWidth + delta))
+      setWidth(newWidth)
+    }
+
+    const handleMouseUp = () => {
+      setIsResizingWidth(false)
+      document.removeEventListener("mousemove", handleMouseMove)
+      document.removeEventListener("mouseup", handleMouseUp)
+    }
+
+    document.addEventListener("mousemove", handleMouseMove)
+    document.addEventListener("mouseup", handleMouseUp)
+  }, [width])
+
+  // Handle vertical resize (bottom edge)
+  const handleHeightResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsResizingHeight(true)
+    const startY = e.clientY
+    const startHeight = height
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      const delta = moveEvent.clientY - startY
+      const newHeight = Math.min(TILE_MAX_HEIGHT, Math.max(TILE_MIN_HEIGHT, startHeight + delta))
+      setHeight(newHeight)
+    }
+
+    const handleMouseUp = () => {
+      setIsResizingHeight(false)
+      document.removeEventListener("mousemove", handleMouseMove)
+      document.removeEventListener("mouseup", handleMouseUp)
+    }
+
+    document.addEventListener("mousemove", handleMouseMove)
+    document.addEventListener("mouseup", handleMouseUp)
+  }, [height])
+
+  // Handle corner resize (both dimensions)
+  const handleCornerResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsResizingCorner(true)
+    const startX = e.clientX
+    const startY = e.clientY
+    const startWidth = width
+    const startHeight = height
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      const deltaX = moveEvent.clientX - startX
+      const deltaY = moveEvent.clientY - startY
+      const newWidth = Math.min(TILE_MAX_WIDTH, Math.max(TILE_MIN_WIDTH, startWidth + deltaX))
+      const newHeight = Math.min(TILE_MAX_HEIGHT, Math.max(TILE_MIN_HEIGHT, startHeight + deltaY))
+      setWidth(newWidth)
+      setHeight(newHeight)
+    }
+
+    const handleMouseUp = () => {
+      setIsResizingCorner(false)
+      document.removeEventListener("mousemove", handleMouseMove)
+      document.removeEventListener("mouseup", handleMouseUp)
+    }
+
+    document.addEventListener("mousemove", handleMouseMove)
+    document.addEventListener("mouseup", handleMouseUp)
+  }, [width, height])
+
+  // Drag handlers
+  const handleDragStart = (e: React.DragEvent) => {
+    e.dataTransfer.effectAllowed = "move"
+    e.dataTransfer.setData("text/plain", sessionId)
+    onDragStart?.(sessionId, index)
+  }
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = "move"
+    onDragOver?.(index)
+  }
+
+  const handleDragEnd = () => {
+    onDragEnd?.()
+  }
+
+  const isResizing = isResizingWidth || isResizingHeight || isResizingCorner
 
   return (
     <div
+      ref={containerRef}
       className={cn(
-        "min-h-[300px] max-h-[600px]",
-        shouldSpanFull && "sm:col-span-2 lg:col-span-3",
+        "relative flex-shrink-0 transition-shadow",
+        isResizing && "select-none",
+        isDragTarget && "ring-2 ring-blue-500 ring-offset-2",
+        isDragging && "opacity-50",
         className
       )}
+      style={{ width, height }}
+      draggable={!isResizing}
+      onDragStart={handleDragStart}
+      onDragOver={handleDragOver}
+      onDragEnd={handleDragEnd}
     >
-      {children}
+      {/* Drag handle indicator in top-left */}
+      <div
+        className="absolute top-2 left-2 z-10 p-1 rounded bg-muted/50 cursor-grab active:cursor-grabbing opacity-0 hover:opacity-100 transition-opacity"
+        title="Drag to reorder"
+      >
+        <GripVertical className="h-4 w-4 text-muted-foreground" />
+      </div>
+
+      {/* Main content */}
+      <div className="w-full h-full">
+        {children}
+      </div>
+
+      {/* Right edge resize handle */}
+      <div
+        className="absolute top-0 right-0 w-2 h-full cursor-ew-resize hover:bg-blue-500/30 transition-colors"
+        onMouseDown={handleWidthResizeStart}
+      />
+
+      {/* Bottom edge resize handle */}
+      <div
+        className="absolute bottom-0 left-0 w-full h-2 cursor-ns-resize hover:bg-blue-500/30 transition-colors"
+        onMouseDown={handleHeightResizeStart}
+      />
+
+      {/* Corner resize handle */}
+      <div
+        className="absolute bottom-0 right-0 w-4 h-4 cursor-nwse-resize hover:bg-blue-500/50 transition-colors rounded-tl"
+        onMouseDown={handleCornerResizeStart}
+      >
+        <svg className="w-4 h-4 text-muted-foreground/50" viewBox="0 0 16 16">
+          <path d="M14 14H10M14 14V10M14 14L10 10M14 8V6M8 14H6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" fill="none" />
+        </svg>
+      </div>
     </div>
   )
 }

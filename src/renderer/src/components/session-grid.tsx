@@ -1,6 +1,7 @@
-import React, { useState, useCallback, useRef, useEffect } from "react"
+import React, { useRef } from "react"
 import { cn } from "@renderer/lib/utils"
 import { GripVertical } from "lucide-react"
+import { useResizable, TILE_DIMENSIONS } from "@renderer/hooks/use-resizable"
 
 interface SessionGridProps {
   children: React.ReactNode
@@ -24,14 +25,6 @@ export function SessionGrid({ children, sessionCount, className }: SessionGridPr
     </div>
   )
 }
-
-// Default tile dimensions
-const TILE_DEFAULT_WIDTH = 400
-const TILE_MIN_WIDTH = 200
-const TILE_MAX_WIDTH = 1200
-const TILE_DEFAULT_HEIGHT = 300
-const TILE_MIN_HEIGHT = 150
-const TILE_MAX_HEIGHT = 800
 
 interface SessionTileWrapperProps {
   children: React.ReactNode
@@ -63,89 +56,19 @@ export function SessionTileWrapper({
   isDragTarget,
   isDragging,
 }: SessionTileWrapperProps) {
-  const [width, setWidth] = useState(TILE_DEFAULT_WIDTH)
-  const [height, setHeight] = useState(TILE_DEFAULT_HEIGHT)
-  const [isResizingWidth, setIsResizingWidth] = useState(false)
-  const [isResizingHeight, setIsResizingHeight] = useState(false)
-  const [isResizingCorner, setIsResizingCorner] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
 
-  // Handle horizontal resize (right edge)
-  const handleWidthResizeStart = useCallback((e: React.MouseEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    setIsResizingWidth(true)
-    const startX = e.clientX
-    const startWidth = width
-
-    const handleMouseMove = (moveEvent: MouseEvent) => {
-      const delta = moveEvent.clientX - startX
-      const newWidth = Math.min(TILE_MAX_WIDTH, Math.max(TILE_MIN_WIDTH, startWidth + delta))
-      setWidth(newWidth)
-    }
-
-    const handleMouseUp = () => {
-      setIsResizingWidth(false)
-      document.removeEventListener("mousemove", handleMouseMove)
-      document.removeEventListener("mouseup", handleMouseUp)
-    }
-
-    document.addEventListener("mousemove", handleMouseMove)
-    document.addEventListener("mouseup", handleMouseUp)
-  }, [width])
-
-  // Handle vertical resize (bottom edge)
-  const handleHeightResizeStart = useCallback((e: React.MouseEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    setIsResizingHeight(true)
-    const startY = e.clientY
-    const startHeight = height
-
-    const handleMouseMove = (moveEvent: MouseEvent) => {
-      const delta = moveEvent.clientY - startY
-      const newHeight = Math.min(TILE_MAX_HEIGHT, Math.max(TILE_MIN_HEIGHT, startHeight + delta))
-      setHeight(newHeight)
-    }
-
-    const handleMouseUp = () => {
-      setIsResizingHeight(false)
-      document.removeEventListener("mousemove", handleMouseMove)
-      document.removeEventListener("mouseup", handleMouseUp)
-    }
-
-    document.addEventListener("mousemove", handleMouseMove)
-    document.addEventListener("mouseup", handleMouseUp)
-  }, [height])
-
-  // Handle corner resize (both dimensions)
-  const handleCornerResizeStart = useCallback((e: React.MouseEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    setIsResizingCorner(true)
-    const startX = e.clientX
-    const startY = e.clientY
-    const startWidth = width
-    const startHeight = height
-
-    const handleMouseMove = (moveEvent: MouseEvent) => {
-      const deltaX = moveEvent.clientX - startX
-      const deltaY = moveEvent.clientY - startY
-      const newWidth = Math.min(TILE_MAX_WIDTH, Math.max(TILE_MIN_WIDTH, startWidth + deltaX))
-      const newHeight = Math.min(TILE_MAX_HEIGHT, Math.max(TILE_MIN_HEIGHT, startHeight + deltaY))
-      setWidth(newWidth)
-      setHeight(newHeight)
-    }
-
-    const handleMouseUp = () => {
-      setIsResizingCorner(false)
-      document.removeEventListener("mousemove", handleMouseMove)
-      document.removeEventListener("mouseup", handleMouseUp)
-    }
-
-    document.addEventListener("mousemove", handleMouseMove)
-    document.addEventListener("mouseup", handleMouseUp)
-  }, [width, height])
+  const {
+    width,
+    height,
+    isResizing,
+    handleWidthResizeStart,
+    handleHeightResizeStart,
+    handleCornerResizeStart,
+  } = useResizable({
+    initialWidth: TILE_DIMENSIONS.width.default,
+    initialHeight: TILE_DIMENSIONS.height.default,
+  })
 
   // Drag handlers
   const handleDragStart = (e: React.DragEvent) => {
@@ -163,8 +86,6 @@ export function SessionTileWrapper({
   const handleDragEnd = () => {
     onDragEnd?.()
   }
-
-  const isResizing = isResizingWidth || isResizingHeight || isResizingCorner
 
   return (
     <div

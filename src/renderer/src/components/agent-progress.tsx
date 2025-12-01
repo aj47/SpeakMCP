@@ -12,10 +12,7 @@ import { useConfigQuery } from "@renderer/lib/queries"
 import { useTheme } from "@renderer/contexts/theme-context"
 import { logUI, logExpand } from "@renderer/lib/debug"
 import { TileFollowUpInput } from "./tile-follow-up-input"
-
-const TILE_MIN_HEIGHT = 120
-const TILE_MAX_HEIGHT = 600
-const TILE_DEFAULT_HEIGHT = 280
+import { useResizable, TILE_DIMENSIONS } from "@renderer/hooks/use-resizable"
 
 interface AgentProgressProps {
   progress: AgentProgressUpdate | null
@@ -842,8 +839,17 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
   // Tile-specific state - support controlled mode
   const [internalIsCollapsed, setInternalIsCollapsed] = useState(false)
   const isCollapsed = controlledIsCollapsed ?? internalIsCollapsed
-  const [tileHeight, setTileHeight] = useState(TILE_DEFAULT_HEIGHT)
-  const [isResizing, setIsResizing] = useState(false)
+
+  // Use shared resize hook for tile variant
+  const {
+    height: tileHeight,
+    isResizing,
+    handleHeightResizeStart: handleResizeStart,
+  } = useResizable({
+    initialHeight: TILE_DIMENSIONS.height.default,
+    minHeight: TILE_DIMENSIONS.height.min,
+    maxHeight: TILE_DIMENSIONS.height.max,
+  })
 
   // Handle tile collapse toggle
   const handleToggleCollapse = (e: React.MouseEvent) => {
@@ -855,30 +861,6 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
       setInternalIsCollapsed(newCollapsed)
     }
   }
-
-  // Handle tile resize
-  const handleResizeStart = React.useCallback((e: React.MouseEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    setIsResizing(true)
-    const startY = e.clientY
-    const startHeight = tileHeight
-
-    const handleMouseMove = (moveEvent: MouseEvent) => {
-      const delta = moveEvent.clientY - startY
-      const newHeight = Math.min(TILE_MAX_HEIGHT, Math.max(TILE_MIN_HEIGHT, startHeight + delta))
-      setTileHeight(newHeight)
-    }
-
-    const handleMouseUp = () => {
-      setIsResizing(false)
-      document.removeEventListener("mousemove", handleMouseMove)
-      document.removeEventListener("mouseup", handleMouseUp)
-    }
-
-    document.addEventListener("mousemove", handleMouseMove)
-    document.addEventListener("mouseup", handleMouseUp)
-  }, [tileHeight])
 
   // Expansion state management - preserve across re-renders
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({})

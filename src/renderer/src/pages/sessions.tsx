@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useMemo } from "react"
-import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query"
+import { useQueryClient, useQuery } from "@tanstack/react-query"
 import { tipcClient } from "@renderer/lib/tipc-client"
 import { useAgentStore } from "@renderer/stores"
 import { SessionGrid, SessionTileWrapper } from "@renderer/components/session-grid"
@@ -155,13 +155,6 @@ export function Component() {
       }
     }
   }, [agentProgressById])
-
-  // Create text input mutation
-  const createTextMutation = useMutation({
-    mutationFn: async (text: string) => {
-      await tipcClient.createMcpTextInput({ text })
-    },
-  })
 
   // State for pending conversation continuation (user selected a conversation to continue)
   const [pendingConversationId, setPendingConversationId] = useState<string | null>(null)

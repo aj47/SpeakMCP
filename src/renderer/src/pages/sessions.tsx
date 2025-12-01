@@ -1,34 +1,13 @@
-import React, { useMemo } from "react"
+import React, { useEffect } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { useNavigate } from "react-router-dom"
 import { tipcClient, rendererHandlers } from "@renderer/lib/tipc-client"
 import { useAgentStore } from "@renderer/stores"
 import { SessionGrid, SessionTileWrapper } from "@renderer/components/session-grid"
-import { SessionTile } from "@renderer/components/session-tile"
+import { AgentProgress } from "@renderer/components/agent-progress"
 import { SessionInput } from "@renderer/components/session-input"
 import { Settings, MessageCircle, Mic, Plus } from "lucide-react"
 import { Button } from "@renderer/components/ui/button"
-import { cn } from "@renderer/lib/utils"
-import { useEffect } from "react"
-
-interface AgentSession {
-  id: string
-  conversationId?: string
-  conversationTitle?: string
-  status: "active" | "completed" | "error" | "stopped"
-  startTime: number
-  endTime?: number
-  currentIteration?: number
-  maxIterations?: number
-  lastActivity?: string
-  errorMessage?: string
-  isSnoozed?: boolean
-}
-
-interface AgentSessionsResponse {
-  activeSessions: AgentSession[]
-  recentSessions: AgentSession[]
-}
 
 function EmptyState({ onTextClick, onVoiceClick }: { onTextClick: () => void; onVoiceClick: () => void }) {
   return (
@@ -61,23 +40,18 @@ export function Component() {
   const focusedSessionId = useAgentStore((s) => s.focusedSessionId)
   const setFocusedSessionId = useAgentStore((s) => s.setFocusedSessionId)
 
-  // Fetch sessions
-  const { data: sessionsData, refetch } = useQuery<AgentSessionsResponse>({
-    queryKey: ["agentSessions"],
-    queryFn: async () => tipcClient.getAgentSessions(),
-  })
-
-  // Listen for session updates
-  useEffect(() => {
-    const unlisten = rendererHandlers.agentSessionsUpdated.listen(() => {
-      refetch()
-    })
-    return unlisten
-  }, [refetch])
-
-  const activeSessions = sessionsData?.activeSessions || []
-  const recentSessions = sessionsData?.recentSessions || []
-  const allSessions = [...activeSessions, ...recentSessions]
+  // Get all sessions from the progress store - this is the single source of truth
+  const allProgressEntries = React.useMemo(() => {
+    return Array.from(agentProgressById.entries())
+      .filter(([_, progress]) => progress !== null)
+      .sort((a, b) => {
+        // Sort active sessions first, then by start time (newest first)
+        const aComplete = a[1]?.isComplete ?? false
+        const bComplete = b[1]?.isComplete ?? false
+        if (aComplete !== bComplete) return aComplete ? 1 : -1
+        return (b[1]?.steps?.[0]?.timestamp ?? 0) - (a[1]?.steps?.[0]?.timestamp ?? 0)
+      })
+  }, [agentProgressById])
 
   // Create text input mutation
   const createTextMutation = useMutation({
@@ -95,24 +69,6 @@ export function Component() {
   const handleVoiceStart = async () => {
     await tipcClient.showPanelWindow({})
     await tipcClient.triggerMcpRecording({})
-  }
-
-  // Session action handlers
-  const handleStopSession = async (sessionId: string) => {
-    await tipcClient.stopAgentSession({ sessionId })
-  }
-
-  const handleSnoozeSession = async (sessionId: string) => {
-    await tipcClient.snoozeAgentSession({ sessionId })
-    if (focusedSessionId === sessionId) {
-      setFocusedSessionId(null)
-    }
-  }
-
-  const handleUnsnoozeSession = async (sessionId: string) => {
-    setFocusedSessionId(sessionId)
-    await tipcClient.unsnoozeAgentSession({ sessionId })
-    await tipcClient.focusAgentSession({ sessionId })
   }
 
   const handleFocusSession = (sessionId: string) => {
@@ -147,21 +103,18 @@ export function Component() {
 
       {/* Sessions grid */}
       <div className="flex-1 overflow-y-auto">
-        {allSessions.length === 0 ? (
+        {allProgressEntries.length === 0 ? (
           <EmptyState onTextClick={() => {}} onVoiceClick={handleVoiceStart} />
         ) : (
-          <SessionGrid sessionCount={allSessions.length}>
-            {allSessions.map((session, index) => (
-              <SessionTileWrapper key={session.id} sessionCount={allSessions.length} index={index}>
-                <SessionTile
-                  session={session}
-                  progress={agentProgressById.get(session.id)}
-                  isFocused={focusedSessionId === session.id}
-                  onFocus={() => handleFocusSession(session.id)}
-                  onStop={() => handleStopSession(session.id)}
-                  onSnooze={() => handleSnoozeSession(session.id)}
-                  onUnsnooze={() => handleUnsnoozeSession(session.id)}
-                  onDismiss={() => handleDismissSession(session.id)}
+          <SessionGrid sessionCount={allProgressEntries.length}>
+            {allProgressEntries.map(([sessionId, progress], index) => (
+              <SessionTileWrapper key={sessionId} sessionCount={allProgressEntries.length} index={index}>
+                <AgentProgress
+                  progress={progress}
+                  variant="tile"
+                  isFocused={focusedSessionId === sessionId}
+                  onFocus={() => handleFocusSession(sessionId)}
+                  onDismiss={() => handleDismissSession(sessionId)}
                 />
               </SessionTileWrapper>
             ))}

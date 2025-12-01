@@ -18,14 +18,19 @@ export const Component = () => {
 
   const navLinks: NavLink[] = [
     {
-      text: "General",
-      href: "/settings",
-      icon: "i-mingcute-settings-3-line",
+      text: "Sessions",
+      href: "/",
+      icon: "i-mingcute-grid-line",
     },
     {
       text: "History",
       href: "/history",
       icon: "i-mingcute-message-3-line",
+    },
+    {
+      text: "General",
+      href: "/settings-general",
+      icon: "i-mingcute-settings-3-line",
     },
     {
       text: "Models",

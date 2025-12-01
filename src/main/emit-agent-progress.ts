@@ -74,8 +74,9 @@ export async function emitAgentProgress(update: AgentProgressUpdate): Promise<vo
   if (!panel.isVisible() && update.sessionId) {
     // Check if this session is snoozed before showing the panel
     const isSnoozed = agentSessionTracker.isSessionSnoozed(update.sessionId)
+    const session = agentSessionTracker.getSession(update.sessionId)
 
-    logApp(`[emitAgentProgress] Panel not visible. Session ${update.sessionId} snoozed check: ${isSnoozed}`)
+    logApp(`[emitAgentProgress] Panel not visible. Session ${update.sessionId} snoozed check: ${isSnoozed}, session exists: ${!!session}, session.isSnoozed: ${session?.isSnoozed}`)
 
     if (isPanelAutoShowSuppressed()) {
       logApp(`[emitAgentProgress] Panel auto-show suppressed; NOT showing panel for session ${update.sessionId}`)

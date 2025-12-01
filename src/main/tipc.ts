@@ -52,6 +52,7 @@ import { state, agentProcessManager, suppressPanelAutoShow, isPanelAutoShowSuppr
 
 import { startRemoteServer, stopRemoteServer, restartRemoteServer } from "./remote-server"
 import { emitAgentProgress } from "./emit-agent-progress"
+import { agentSessionTracker } from "./agent-session-tracker"
 
 // Helper function to initialize MCP with progress feedback
 async function initializeMcpWithProgress(config: Config, sessionId: string): Promise<void> {
@@ -163,6 +164,7 @@ async function processWithAgentMode(
   existingSessionId?: string, // Optional: reuse existing session instead of creating new one
   startSnoozed: boolean = false, // Whether to start session snoozed (default: false to show panel)
 ): Promise<string> {
+  logApp(`[processWithAgentMode] Called with startSnoozed: ${startSnoozed}, conversationId: ${conversationId}, existingSessionId: ${existingSessionId}`)
   const config = configStore.get()
 
   // NOTE: Don't clear all agent progress here - we support multiple concurrent sessions
@@ -171,10 +173,12 @@ async function processWithAgentMode(
   // Agent mode state is managed per-session via agentSessionStateManager
 
   // Start tracking this agent session (or reuse existing one)
-  const { agentSessionTracker } = await import("./agent-session-tracker")
+  // Note: agentSessionTracker is now statically imported at the top of the file
+  // to ensure the same singleton instance is used across all modules
   let conversationTitle = text.length > 50 ? text.substring(0, 50) + "..." : text
   // When creating a new session from keybind/UI, start unsnoozed so panel shows immediately
   const sessionId = existingSessionId || agentSessionTracker.startSession(conversationId, conversationTitle, startSnoozed)
+  logApp(`[processWithAgentMode] Session created/reused: ${sessionId}, isSnoozed: ${agentSessionTracker.isSessionSnoozed(sessionId)}`)
 
   try {
     if (!config.mcpToolsEnabled) {
@@ -595,7 +599,7 @@ export const router = {
   }),
 
   getAgentSessions: t.procedure.action(async () => {
-    const { agentSessionTracker } = await import("./agent-session-tracker")
+    // agentSessionTracker is statically imported at the top of the file
     return {
       activeSessions: agentSessionTracker.getActiveSessions(),
       recentSessions: agentSessionTracker.getRecentSessions(4),
@@ -605,7 +609,7 @@ export const router = {
   stopAgentSession: t.procedure
     .input<{ sessionId: string }>()
     .action(async ({ input }) => {
-      const { agentSessionTracker } = await import("./agent-session-tracker")
+      // agentSessionTracker is statically imported at the top of the file
       const { agentSessionStateManager, toolApprovalManager } = await import("./state")
 
       // Stop the session in the state manager (aborts LLM requests, kills processes)
@@ -645,8 +649,7 @@ export const router = {
   snoozeAgentSession: t.procedure
     .input<{ sessionId: string }>()
     .action(async ({ input }) => {
-      const { agentSessionTracker } = await import("./agent-session-tracker")
-
+      // agentSessionTracker is statically imported at the top of the file
       // Snooze the session (runs in background without stealing focus)
       agentSessionTracker.snoozeSession(input.sessionId)
 
@@ -656,8 +659,7 @@ export const router = {
   unsnoozeAgentSession: t.procedure
     .input<{ sessionId: string }>()
     .action(async ({ input }) => {
-      const { agentSessionTracker } = await import("./agent-session-tracker")
-
+      // agentSessionTracker is statically imported at the top of the file
       // Unsnooze the session (allow it to show progress UI again)
       agentSessionTracker.unsnoozeSession(input.sessionId)
 
@@ -986,6 +988,7 @@ export const router = {
       startSnoozed?: boolean // When true, session starts snoozed (no panel auto-show)
     }>()
     .action(async ({ input }) => {
+      logApp(`[createMcpTextInput] Called with startSnoozed: ${input.startSnoozed}, conversationId: ${input.conversationId}`)
       const config = configStore.get()
 
       if (!config.mcpToolsEnabled) {
@@ -1067,7 +1070,7 @@ export const router = {
 
       // Emit initial loading progress immediately BEFORE transcription
       // This ensures users see feedback during the (potentially long) STT call
-      const { agentSessionTracker } = await import("./agent-session-tracker")
+      // agentSessionTracker is statically imported at the top of the file
       const tempConversationId = input.conversationId || `temp_${Date.now()}`
       // Start session NOT snoozed so the floating panel shows immediately
       // This is triggered by keybind, so the user expects to see the panel

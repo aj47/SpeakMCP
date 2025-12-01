@@ -1,12 +1,10 @@
 import React, { useEffect, useState, useCallback, useMemo } from "react"
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query"
-import { useNavigate } from "react-router-dom"
-import { tipcClient, rendererHandlers } from "@renderer/lib/tipc-client"
+import { tipcClient } from "@renderer/lib/tipc-client"
 import { useAgentStore } from "@renderer/stores"
 import { SessionGrid, SessionTileWrapper } from "@renderer/components/session-grid"
 import { AgentProgress } from "@renderer/components/agent-progress"
-import { SessionInput } from "@renderer/components/session-input"
-import { Settings, MessageCircle, Mic, Plus, Clock, ArrowRight } from "lucide-react"
+import { MessageCircle, Mic, Plus, Clock, ArrowRight } from "lucide-react"
 import { Button } from "@renderer/components/ui/button"
 import { useConversationHistoryQuery } from "@renderer/lib/queries"
 import { ConversationHistoryItem, AgentProgressUpdate } from "@shared/types"
@@ -94,7 +92,6 @@ function getTimeAgo(timestamp: number): string {
 }
 
 export function Component() {
-  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const agentProgressById = useAgentStore((s) => s.agentProgressById)
   const focusedSessionId = useAgentStore((s) => s.focusedSessionId)
@@ -102,9 +99,6 @@ export function Component() {
 
   // Custom ordering state - persists session order across re-renders
   const [sessionOrder, setSessionOrder] = useState<string[]>([])
-
-  // Text input visibility state - lifted up to allow EmptyState to trigger it
-  const [showTextInput, setShowTextInput] = useState(false)
 
   // Drag state
   const [draggedSessionId, setDraggedSessionId] = useState<string | null>(null)
@@ -233,9 +227,9 @@ export function Component() {
     setPendingConversationId(null)
   }
 
-  // Handle text submit
-  const handleTextSubmit = (text: string) => {
-    createTextMutation.mutate(text)
+  // Handle text click - open panel with text input
+  const handleTextClick = async () => {
+    await tipcClient.showPanelWindowWithTextInput({})
   }
 
   // Handle voice start - trigger MCP recording
@@ -285,33 +279,12 @@ export function Component() {
 
   return (
     <div className="flex h-full flex-col">
-      {/* Top bar with input and settings */}
-      <div className="flex items-center justify-between border-b bg-background/95 backdrop-blur-sm px-4 py-2">
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon" onClick={() => navigate("/settings")} title="Settings">
-            <Settings className="h-5 w-5" />
-          </Button>
-          <span className="font-semibold">SpeakMCP</span>
-        </div>
-        <SessionInput
-          onTextSubmit={handleTextSubmit}
-          onVoiceStart={handleVoiceStart}
-          isProcessing={createTextMutation.isPending}
-          showTextInput={showTextInput}
-          onShowTextInputChange={setShowTextInput}
-          className="flex-1 max-w-2xl mx-4 border-0 bg-transparent p-0"
-        />
-        <Button variant="ghost" size="icon" onClick={() => navigate("/history")} title="History">
-          <MessageCircle className="h-5 w-5" />
-        </Button>
-      </div>
-
       {/* Main content area */}
       <div className="flex-1 overflow-y-auto">
         {/* Show empty state when no sessions and no pending */}
         {allProgressEntries.length === 0 && !pendingProgress ? (
           <div className="flex flex-col h-full">
-            <EmptyState onTextClick={() => setShowTextInput(true)} onVoiceClick={handleVoiceStart} />
+            <EmptyState onTextClick={handleTextClick} onVoiceClick={handleVoiceStart} />
 
             {/* Recent conversations section when no active sessions */}
             {recentConversations.length > 0 && (

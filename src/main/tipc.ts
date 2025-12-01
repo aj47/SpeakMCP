@@ -3,6 +3,7 @@ import { logApp, logLLM, getDebugFlags } from "./debug"
 import { getRendererHandlers, tipc } from "@egoist/tipc/main"
 import {
   showPanelWindow,
+  showPanelWindowAndShowTextInput,
   showMainWindow,
   WINDOWS,
   resizePanelForAgentMode,
@@ -743,6 +744,10 @@ export const router = {
 
   showPanelWindow: t.procedure.action(async () => {
     showPanelWindow()
+  }),
+
+  showTextInput: t.procedure.action(async () => {
+    showPanelWindowAndShowTextInput()
   }),
 
   showMainWindow: t.procedure

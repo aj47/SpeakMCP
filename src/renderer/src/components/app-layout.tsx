@@ -1,12 +1,13 @@
 import { rendererHandlers } from "@renderer/lib/tipc-client"
 import { cn } from "@renderer/lib/utils"
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { NavLink, Outlet, useNavigate, useLocation } from "react-router-dom"
 import { LoadingSpinner } from "@renderer/components/ui/loading-spinner"
 import { SettingsDragBar } from "@renderer/components/settings-drag-bar"
 import { ActiveAgentsSidebar } from "@renderer/components/active-agents-sidebar"
+import { ChevronDown, ChevronRight } from "lucide-react"
 
-type NavLink = {
+type NavLinkItem = {
   text: string
   href: string
   icon: string
@@ -15,24 +16,37 @@ type NavLink = {
 export const Component = () => {
   const navigate = useNavigate()
   const location = useLocation()
+  const [settingsExpanded, setSettingsExpanded] = useState(() => {
+    // Expand settings by default if user is on a settings page
+    return location.pathname.startsWith("/settings")
+  })
 
-  const navLinks: NavLink[] = [
+  // Primary navigation - Agent Sessions is the main view
+  const primaryLinks: NavLinkItem[] = [
     {
-      text: "General",
-      href: "/settings",
-      icon: "i-mingcute-settings-3-line",
+      text: "Sessions",
+      href: "/",
+      icon: "i-mingcute-robot-2-line",
     },
     {
       text: "History",
       href: "/history",
       icon: "i-mingcute-message-3-line",
     },
+  ]
+
+  // Settings sub-navigation
+  const settingsLinks: NavLinkItem[] = [
+    {
+      text: "General",
+      href: "/settings",
+      icon: "i-mingcute-settings-3-line",
+    },
     {
       text: "Models",
       href: "/settings/models",
       icon: "i-mingcute-brain-line",
     },
-
     {
       text: "Agents",
       href: "/settings/tools",
@@ -48,14 +62,28 @@ export const Component = () => {
       href: "/settings/remote-server",
       icon: "i-mingcute-server-line",
     },
-
   ]
+
+  // Expand settings when navigating to a settings page
+  useEffect(() => {
+    if (location.pathname.startsWith("/settings")) {
+      setSettingsExpanded(true)
+    }
+  }, [location.pathname])
 
   useEffect(() => {
     return rendererHandlers.navigate.listen((url) => {
       navigate(url)
     })
   }, [])
+
+  // Check if a route is active (exact match or starts with for nested routes)
+  const isRouteActive = (href: string) => {
+    if (href === "/") {
+      return location.pathname === "/" || location.pathname === "/sessions"
+    }
+    return location.pathname === href || location.pathname.startsWith(href + "/")
+  }
 
   return (
     <div className="flex h-dvh">
@@ -66,27 +94,66 @@ export const Component = () => {
         ></header>
 
         <div className="grid gap-0.5 px-2 text-sm">
-          {navLinks.map((link) => (
+          {/* Primary Navigation */}
+          {primaryLinks.map((link) => (
             <NavLink
               key={link.text}
               to={link.href}
               role="button"
               draggable={false}
-              className={({ isActive: _isActive }) => {
-                // For exact matching, check if the current location exactly matches the link href
-                const isExactMatch = location.pathname === link.href
-                return cn(
-                  "flex h-7 items-center gap-2 rounded-md px-2 font-medium transition-all duration-200",
-                  isExactMatch
-                    ? "bg-accent text-accent-foreground"
-                    : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
-                )
-              }}
+              className={() => cn(
+                "flex h-7 items-center gap-2 rounded-md px-2 font-medium transition-all duration-200",
+                isRouteActive(link.href)
+                  ? "bg-accent text-accent-foreground"
+                  : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
+              )}
             >
               <span className={link.icon}></span>
               <span className="font-medium">{link.text}</span>
             </NavLink>
           ))}
+
+          {/* Settings Section - Collapsible */}
+          <button
+            onClick={() => setSettingsExpanded(!settingsExpanded)}
+            className={cn(
+              "flex h-7 items-center gap-2 rounded-md px-2 font-medium transition-all duration-200",
+              location.pathname.startsWith("/settings")
+                ? "bg-accent text-accent-foreground"
+                : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
+            )}
+          >
+            {settingsExpanded ? (
+              <ChevronDown className="h-3.5 w-3.5" />
+            ) : (
+              <ChevronRight className="h-3.5 w-3.5" />
+            )}
+            <span className="i-mingcute-settings-3-line"></span>
+            <span className="font-medium">Settings</span>
+          </button>
+
+          {/* Settings Sub-navigation */}
+          {settingsExpanded && (
+            <div className="ml-4 grid gap-0.5 border-l pl-2">
+              {settingsLinks.map((link) => (
+                <NavLink
+                  key={link.text}
+                  to={link.href}
+                  role="button"
+                  draggable={false}
+                  className={() => cn(
+                    "flex h-6 items-center gap-2 rounded-md px-2 text-xs font-medium transition-all duration-200",
+                    isRouteActive(link.href)
+                      ? "bg-accent text-accent-foreground"
+                      : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
+                  )}
+                >
+                  <span className={cn(link.icon, "text-xs")}></span>
+                  <span>{link.text}</span>
+                </NavLink>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Active Agents Section */}

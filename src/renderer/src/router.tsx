@@ -7,8 +7,13 @@ export const router: ReturnType<typeof createBrowserRouter> =
       lazy: () => import("./components/app-layout"),
       children: [
         {
+          // New landing page - Agent Sessions
           path: "",
-          lazy: () => import("./pages/settings-general"),
+          lazy: () => import("./pages/agent-sessions"),
+        },
+        {
+          path: "sessions",
+          lazy: () => import("./pages/agent-sessions"),
         },
         {
           path: "history",
@@ -42,7 +47,6 @@ export const router: ReturnType<typeof createBrowserRouter> =
           path: "settings/remote-server",
           lazy: () => import("./pages/settings-remote-server"),
         },
-
       ],
     },
     {

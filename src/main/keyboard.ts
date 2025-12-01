@@ -1,5 +1,6 @@
 import {
   getWindowRendererHandlers,
+  showPanelWindow,
   showPanelWindowAndStartRecording,
   showPanelWindowAndStartMcpRecording,
   showPanelWindowAndShowTextInput,
@@ -660,6 +661,9 @@ export function listenToKeyboardEvents() {
             if (isDebugKeybinds()) {
               logKeybinds("MCP tools triggered: Ctrl+Alt+/")
             }
+            // Show panel first to ensure it's visible, then send toggle command
+            // This fixes the issue where panel doesn't appear when app is not focused
+            showPanelWindow()
             getWindowRendererHandlers("panel")?.startOrFinishMcpRecording.send()
             return
           }
@@ -688,6 +692,9 @@ export function listenToKeyboardEvents() {
                   effectiveMcpToolsShortcut,
                 )
               }
+              // Show panel first to ensure it's visible, then send toggle command
+              // This fixes the issue where panel doesn't appear when app is not focused
+              showPanelWindow()
               getWindowRendererHandlers("panel")?.startOrFinishMcpRecording.send()
               return
             } else {
@@ -825,6 +832,9 @@ export function listenToKeyboardEvents() {
           if (isDebugKeybinds()) {
             logKeybinds("Recording triggered: Ctrl+/")
           }
+          // Show panel first to ensure it's visible, then send toggle command
+          // This fixes the issue where panel doesn't appear when app is not focused
+          showPanelWindow()
           getWindowRendererHandlers("panel")?.startOrFinishRecording.send()
         }
       } else if (config.shortcut === "custom" && effectiveRecordingShortcut) {
@@ -850,6 +860,9 @@ export function listenToKeyboardEvents() {
                 effectiveRecordingShortcut,
               )
             }
+            // Show panel first to ensure it's visible, then send toggle command
+            // This fixes the issue where panel doesn't appear when app is not focused
+            showPanelWindow()
             getWindowRendererHandlers("panel")?.startOrFinishRecording.send()
             return
           } else {

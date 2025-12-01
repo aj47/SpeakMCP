@@ -135,17 +135,21 @@ const getConfig = () => {
 }
 
 /**
- * Get the active model preset from config, merging built-in presets with saved API keys
+ * Get the active model preset from config, merging built-in presets with saved data
+ * This includes API keys, model preferences, and any other saved properties
  */
 function getActivePreset(config: Partial<Config>): ModelPreset | undefined {
   const builtIn = getBuiltInModelPresets()
   const savedPresets = config.modelPresets || []
   const currentPresetId = config.currentModelPresetId || DEFAULT_MODEL_PRESET_ID
 
-  // Merge built-in presets with saved API keys
+  // Merge built-in presets with ALL saved properties (apiKey, mcpToolsModel, transcriptProcessingModel, etc.)
+  // Filter out undefined values from saved to prevent overwriting built-in defaults with undefined
   const allPresets = builtIn.map(preset => {
     const saved = savedPresets.find(s => s.id === preset.id)
-    return saved ? { ...preset, apiKey: saved.apiKey } : preset
+    // Spread saved properties over built-in preset to preserve all customizations
+    // Use defensive merge to filter out undefined values that could overwrite defaults
+    return saved ? { ...preset, ...Object.fromEntries(Object.entries(saved).filter(([_, v]) => v !== undefined)) } : preset
   })
 
   // Add custom (non-built-in) presets
@@ -156,8 +160,8 @@ function getActivePreset(config: Partial<Config>): ModelPreset | undefined {
 }
 
 /**
- * Sync the active preset's credentials to legacy config fields for backward compatibility.
- * Always syncs both fields together to keep them consistent with the active preset.
+ * Sync the active preset's credentials and model preferences to legacy config fields for backward compatibility.
+ * Always syncs all fields together to keep them consistent with the active preset.
  */
 function syncPresetToLegacyFields(config: Partial<Config>): Partial<Config> {
   const activePreset = getActivePreset(config)
@@ -166,6 +170,11 @@ function syncPresetToLegacyFields(config: Partial<Config>): Partial<Config> {
     // If preset has empty values, legacy fields should reflect that
     config.openaiApiKey = activePreset.apiKey || ''
     config.openaiBaseUrl = activePreset.baseUrl || ''
+
+    // Always sync model preferences to keep legacy fields consistent with the active preset
+    // If preset has empty/undefined values, legacy fields should reflect that
+    config.mcpToolsOpenaiModel = activePreset.mcpToolsModel || ''
+    config.transcriptPostProcessingOpenaiModel = activePreset.transcriptProcessingModel || ''
   }
   return config
 }

@@ -360,6 +360,31 @@ async function processWithAgentMode(
     // Mark session as errored
     const errorMessage = error instanceof Error ? error.message : "Unknown error"
     agentSessionTracker.errorSession(sessionId, errorMessage)
+
+    // Emit error progress update to the UI so users see the error message
+    const { emitAgentProgress } = await import("./emit-agent-progress")
+    await emitAgentProgress({
+      sessionId,
+      conversationId: conversationId || "",
+      conversationTitle: conversationTitle,
+      currentIteration: 1,
+      maxIterations: config.mcpMaxIterations ?? 10,
+      steps: [{
+        id: `error_${Date.now()}`,
+        type: "thinking",
+        title: "Error",
+        description: errorMessage,
+        status: "error",
+        timestamp: Date.now(),
+      }],
+      isComplete: true,
+      finalContent: `Error: ${errorMessage}`,
+      conversationHistory: [
+        { role: "user", content: text, timestamp: Date.now() },
+        { role: "assistant", content: `Error: ${errorMessage}`, timestamp: Date.now() }
+      ],
+    })
+
     throw error
   } finally {
 

@@ -144,10 +144,12 @@ function getActivePreset(config: Partial<Config>): ModelPreset | undefined {
   const currentPresetId = config.currentModelPresetId || DEFAULT_MODEL_PRESET_ID
 
   // Merge built-in presets with ALL saved properties (apiKey, mcpToolsModel, transcriptProcessingModel, etc.)
+  // Filter out undefined values from saved to prevent overwriting built-in defaults with undefined
   const allPresets = builtIn.map(preset => {
     const saved = savedPresets.find(s => s.id === preset.id)
     // Spread saved properties over built-in preset to preserve all customizations
-    return saved ? { ...preset, ...saved } : preset
+    // Use defensive merge to filter out undefined values that could overwrite defaults
+    return saved ? { ...preset, ...Object.fromEntries(Object.entries(saved).filter(([_, v]) => v !== undefined)) } : preset
   })
 
   // Add custom (non-built-in) presets
@@ -169,13 +171,10 @@ function syncPresetToLegacyFields(config: Partial<Config>): Partial<Config> {
     config.openaiApiKey = activePreset.apiKey || ''
     config.openaiBaseUrl = activePreset.baseUrl || ''
 
-    // Also sync model preferences if they are set on the preset
-    if (activePreset.mcpToolsModel) {
-      config.mcpToolsOpenaiModel = activePreset.mcpToolsModel
-    }
-    if (activePreset.transcriptProcessingModel) {
-      config.transcriptPostProcessingOpenaiModel = activePreset.transcriptProcessingModel
-    }
+    // Always sync model preferences to keep legacy fields consistent with the active preset
+    // If preset has empty/undefined values, legacy fields should reflect that
+    config.mcpToolsOpenaiModel = activePreset.mcpToolsModel || ''
+    config.transcriptPostProcessingOpenaiModel = activePreset.transcriptProcessingModel || ''
   }
   return config
 }

@@ -526,9 +526,13 @@ export const router = {
   }),
 
   clearAgentProgress: t.procedure.action(async () => {
-    const win = WINDOWS.get("panel")
-    if (win) {
-      getRendererHandlers<RendererHandlers>(win.webContents).clearAgentProgress.send()
+    // Send to all windows so both main and panel can update their state
+    for (const [id, win] of WINDOWS.entries()) {
+      try {
+        getRendererHandlers<RendererHandlers>(win.webContents).clearAgentProgress.send()
+      } catch (e) {
+        logApp(`[tipc] clearAgentProgress send to ${id} failed:`, e)
+      }
     }
 
     return { success: true }
@@ -538,12 +542,12 @@ export const router = {
   clearAgentSessionProgress: t.procedure
     .input<{ sessionId: string }>()
     .action(async ({ input }) => {
-      const win = WINDOWS.get("panel")
-      if (win) {
+      // Send to all windows (panel and main) so both can update their state
+      for (const [id, win] of WINDOWS.entries()) {
         try {
           getRendererHandlers<RendererHandlers>(win.webContents).clearAgentSessionProgress?.send(input.sessionId)
         } catch (e) {
-          logApp("[tipc] clearAgentSessionProgress send failed:", e)
+          logApp(`[tipc] clearAgentSessionProgress send to ${id} failed:`, e)
         }
       }
       return { success: true }
@@ -743,6 +747,11 @@ export const router = {
 
   showPanelWindow: t.procedure.action(async () => {
     showPanelWindow()
+  }),
+
+  triggerMcpRecording: t.procedure.action(async () => {
+    const { showPanelWindowAndStartMcpRecording } = await import("./window")
+    await showPanelWindowAndStartMcpRecording()
   }),
 
   showMainWindow: t.procedure

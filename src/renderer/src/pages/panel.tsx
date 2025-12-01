@@ -16,6 +16,8 @@ import { PanelDragBar } from "@renderer/components/panel-drag-bar"
 import { useConfigQuery } from "@renderer/lib/query-client"
 import { useTheme } from "@renderer/contexts/theme-context"
 import { ttsManager } from "@renderer/lib/tts-manager"
+import { formatKeyComboForDisplay } from "@shared/key-utils"
+import { Send } from "lucide-react"
 
 const VISUALIZER_BUFFER_LENGTH = 70
 
@@ -50,7 +52,9 @@ export function Component() {
   // Conversation state from Zustand
   const currentConversationId = useConversationStore((s) => s.currentConversationId)
   const setCurrentConversationId = useConversationStore((s) => s.setCurrentConversationId)
-  const continueConversation = useConversationStore((s) => s.continueConversation)
+  // NOTE: continueConversation is intentionally NOT used here.
+  // New sessions should NOT automatically set currentConversationId - that causes session pollution.
+  // continueConversation should only be called from explicit user actions (e.g., history "Continue" button).
   const endConversation = useConversationStore((s) => s.endConversation)
 
   // Query for current conversation data
@@ -127,9 +131,49 @@ export function Component() {
     })
   }, [recording, anyActiveNonSnoozed, anyVisibleSessions, showTextInput, mcpMode])
 
-  // Config for drag functionality
+  // Config for drag functionality and shortcuts
   const configQuery = useConfigQuery()
   const isDragEnabled = (configQuery.data as any)?.panelDragEnabled ?? true
+
+  // Get the submit shortcut display text based on current mode and config
+  const getSubmitShortcutText = useMemo(() => {
+    const config = configQuery.data
+    if (!config) return "Enter"
+
+    if (mcpMode) {
+      // MCP mode uses mcpToolsShortcut
+      const shortcut = config.mcpToolsShortcut
+      if (shortcut === "hold-ctrl-alt") {
+        return "Release keys"
+      } else if (shortcut === "ctrl-alt-slash") {
+        return "Ctrl+Alt+/"
+      } else if (shortcut === "custom" && config.customMcpToolsShortcut) {
+        return formatKeyComboForDisplay(config.customMcpToolsShortcut)
+      }
+    } else {
+      // Normal dictation mode uses shortcut
+      const shortcut = config.shortcut
+      if (shortcut === "hold-ctrl") {
+        return "Release Ctrl"
+      } else if (shortcut === "ctrl-slash") {
+        return "Ctrl+/"
+      } else if (shortcut === "custom" && config.customShortcut) {
+        const mode = config.customShortcutMode || "hold"
+        if (mode === "hold") {
+          return "Release keys"
+        }
+        return formatKeyComboForDisplay(config.customShortcut)
+      }
+    }
+    return "Enter"
+  }, [configQuery.data, mcpMode])
+
+  // Handle submit button click during recording
+  const handleSubmitRecording = () => {
+    if (!recording) return
+    isConfirmedRef.current = true
+    recorderRef.current?.stopRecording()
+  }
 
   const transcribeMutation = useMutation({
     mutationFn: async ({
@@ -190,10 +234,11 @@ export function Component() {
         conversationId: conversationIdForMcp ?? undefined,
       })
 
-      // Update conversation ID if backend created/returned one
-      if (result?.conversationId && result.conversationId !== currentConversationId) {
-        continueConversation(result.conversationId)
-      }
+      // NOTE: Do NOT call continueConversation here!
+      // The currentConversationId should only be set through explicit user actions
+      // (like clicking "Continue" in history or using TileFollowUpInput).
+      // Automatically setting it here would cause subsequent new sessions to
+      // inherit this session's conversation history (session pollution bug).
 
       return result
     },
@@ -244,10 +289,11 @@ export function Component() {
     }) => {
       const result = await tipcClient.createMcpTextInput({ text, conversationId })
 
-      // Update conversation ID if backend created/returned one
-      if (result?.conversationId && result.conversationId !== currentConversationId) {
-        continueConversation(result.conversationId)
-      }
+      // NOTE: Do NOT call continueConversation here!
+      // The currentConversationId should only be set through explicit user actions
+      // (like clicking "Continue" in history or using TileFollowUpInput).
+      // Automatically setting it here would cause subsequent new sessions to
+      // inherit this session's conversation history (session pollution bug).
 
       return result
     },
@@ -733,32 +779,53 @@ export function Component() {
                 )
               )}
 
-              {/* Waveform visualization - only show when recording is active */}
+              {/* Waveform visualization and submit controls - only show when recording is active */}
               {recording && (
-                <div
-                  className={cn(
-                    "absolute inset-x-0 flex h-6 items-center justify-center transition-opacity duration-300 px-4 z-30 pointer-events-none",
-                    "opacity-100",
-                  )}
-                >
-                  <div className="flex h-6 items-center gap-0.5">
-                    {visualizerData
-                      .slice()
-                      .map((rms, index) => {
-                        return (
-                          <div
-                            key={index}
-                            className={cn(
-                              "h-full w-0.5 shrink-0 rounded-lg",
-                              "bg-red-500 dark:bg-white",
-                              rms === -1000 && "bg-neutral-400 dark:bg-neutral-500",
-                            )}
-                            style={{
-                              height: `${Math.min(100, Math.max(16, rms * 100))}%`,
-                            }}
-                          />
-                        )
-                      })}
+                <div className="absolute inset-0 flex flex-col items-center justify-center z-30">
+                  {/* Waveform */}
+                  <div
+                    className={cn(
+                      "flex h-6 items-center justify-center transition-opacity duration-300 px-4 pointer-events-none",
+                      "opacity-100",
+                    )}
+                  >
+                    <div className="flex h-6 items-center gap-0.5">
+                      {visualizerData
+                        .slice()
+                        .map((rms, index) => {
+                          return (
+                            <div
+                              key={index}
+                              className={cn(
+                                "h-full w-0.5 shrink-0 rounded-lg",
+                                "bg-red-500 dark:bg-white",
+                                rms === -1000 && "bg-neutral-400 dark:bg-neutral-500",
+                              )}
+                              style={{
+                                height: `${Math.min(100, Math.max(16, rms * 100))}%`,
+                              }}
+                            />
+                          )
+                        })}
+                    </div>
+                  </div>
+
+                  {/* Submit button and keyboard hint */}
+                  <div className="flex items-center gap-3 mt-2">
+                    <button
+                      onClick={handleSubmitRecording}
+                      className={cn(
+                        "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
+                        "bg-blue-500 hover:bg-blue-600 text-white",
+                        "dark:bg-blue-600 dark:hover:bg-blue-700"
+                      )}
+                    >
+                      <Send className="h-3.5 w-3.5" />
+                      <span>Submit</span>
+                    </button>
+                    <span className="text-xs text-muted-foreground">
+                      or press <kbd className="px-1.5 py-0.5 rounded bg-muted text-foreground font-mono text-xs">{getSubmitShortcutText}</kbd>
+                    </span>
                   </div>
                 </div>
               )}

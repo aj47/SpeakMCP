@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react"
 import { cn } from "@renderer/lib/utils"
 import { AgentProgressUpdate } from "../../../shared/types"
-import { ChevronDown, ChevronUp, ChevronRight, X, AlertTriangle, Minimize2, Shield, Check, XCircle, Loader2, Clock, Copy, CheckCheck } from "lucide-react"
+import { ChevronDown, ChevronUp, ChevronRight, X, AlertTriangle, Minimize2, Shield, Check, XCircle, Loader2, Clock, Copy, CheckCheck, GripHorizontal, Activity, Moon, Maximize2, RefreshCw } from "lucide-react"
 import { MarkdownRenderer } from "@renderer/components/markdown-renderer"
 import { Button } from "./ui/button"
 import { Badge } from "./ui/badge"
@@ -11,11 +11,25 @@ import { AudioPlayer } from "@renderer/components/audio-player"
 import { useConfigQuery } from "@renderer/lib/queries"
 import { useTheme } from "@renderer/contexts/theme-context"
 import { logUI, logExpand } from "@renderer/lib/debug"
+import { TileFollowUpInput } from "./tile-follow-up-input"
+import { useResizable, TILE_DIMENSIONS } from "@renderer/hooks/use-resizable"
 
 interface AgentProgressProps {
   progress: AgentProgressUpdate | null
   className?: string
-  variant?: "default" | "overlay"
+  variant?: "default" | "overlay" | "tile"
+  /** For tile variant: whether the tile is focused */
+  isFocused?: boolean
+  /** For tile variant: callback when tile is clicked */
+  onFocus?: () => void
+  /** For tile variant: callback to dismiss the tile */
+  onDismiss?: () => void
+  /** For tile variant: controlled collapsed state */
+  isCollapsed?: boolean
+  /** For tile variant: callback when collapsed state changes */
+  onCollapsedChange?: (collapsed: boolean) => void
+  /** For tile variant: callback when a follow-up message is sent */
+  onFollowUpSent?: () => void
 }
 
 // Enhanced conversation message component
@@ -809,6 +823,12 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
   progress,
   className,
   variant = "default",
+  isFocused,
+  onFocus,
+  onDismiss,
+  isCollapsed: controlledIsCollapsed,
+  onCollapsedChange,
+  onFollowUpSent,
 }) => {
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const [isUserScrolling, setIsUserScrolling] = useState(false)
@@ -818,6 +838,32 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
   const [showKillConfirmation, setShowKillConfirmation] = useState(false)
   const [isKilling, setIsKilling] = useState(false)
   const { isDark } = useTheme()
+
+  // Tile-specific state - support controlled mode
+  const [internalIsCollapsed, setInternalIsCollapsed] = useState(false)
+  const isCollapsed = controlledIsCollapsed ?? internalIsCollapsed
+
+  // Use shared resize hook for tile variant
+  const {
+    height: tileHeight,
+    isResizing,
+    handleHeightResizeStart: handleResizeStart,
+  } = useResizable({
+    initialHeight: TILE_DIMENSIONS.height.default,
+    minHeight: TILE_DIMENSIONS.height.min,
+    maxHeight: TILE_DIMENSIONS.height.max,
+  })
+
+  // Handle tile collapse toggle
+  const handleToggleCollapse = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    const newCollapsed = !isCollapsed
+    if (onCollapsedChange) {
+      onCollapsedChange(newCollapsed)
+    } else {
+      setInternalIsCollapsed(newCollapsed)
+    }
+  }
 
   // Expansion state management - preserve across re-renders
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({})
@@ -1017,10 +1063,12 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
         toolResults: entry.toolResults,
       }))
 
-    // Add any in-progress thinking from current steps
-    const currentThinkingStep = steps.find(
-      (step) => step.type === "thinking" && step.status === "in_progress",
-    )
+    // Add any in-progress thinking from current steps (only when not complete)
+    const currentThinkingStep = !isComplete
+      ? steps.find(
+          (step) => step.type === "thinking" && step.status === "in_progress",
+        )
+      : undefined
     if (currentThinkingStep) {
         if (
           currentThinkingStep.llmContent &&
@@ -1058,7 +1106,8 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
             timestamp: step.timestamp,
             isThinking: false,
           })
-        } else if (step.status === "in_progress") {
+        } else if (step.status === "in_progress" && !isComplete) {
+          // Only show in-progress thinking when task is not complete
           messages.push({
             role: "assistant",
             content: step.description || "Agent is thinking...",
@@ -1266,14 +1315,228 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
     (step) => step.status === "error" || step.toolResult?.error,
   )
 
+  // Get status indicator for tile variant
+  const getStatusIndicator = () => {
+    const hasPendingApproval = !!progress.pendingToolApproval
+    const isSnoozed = progress.isSnoozed
+    if (hasPendingApproval) {
+      return <Shield className="h-4 w-4 text-amber-500 animate-pulse" />
+    }
+    if (isSnoozed) {
+      return <Moon className="h-4 w-4 text-muted-foreground" />
+    }
+    if (!isComplete) {
+      return <Activity className="h-4 w-4 text-blue-500 animate-pulse" />
+    }
+    if (hasErrors || wasStopped) {
+      return <XCircle className="h-4 w-4 text-red-500" />
+    }
+    return <Check className="h-4 w-4 text-green-500" />
+  }
+
+  // Get title for tile variant
+  const getTitle = () => {
+    if (progress.conversationTitle) {
+      return progress.conversationTitle
+    }
+    const firstUserMsg = conversationHistory?.find(m => m.role === "user")
+    if (firstUserMsg?.content) {
+      const content = typeof firstUserMsg.content === "string" ? firstUserMsg.content : JSON.stringify(firstUserMsg.content)
+      return content.length > 50 ? content.substring(0, 50) + "..." : content
+    }
+    return `Session ${progress.sessionId?.substring(0, 8) || "..."}`
+  }
+
   const containerClasses = cn(
-    "progress-panel flex flex-col w-full h-full rounded-xl overflow-hidden",
-    variant === "overlay"
-      ? "bg-background/80 backdrop-blur-sm border border-border/50"
-      : "bg-muted/20 backdrop-blur-sm border border-border/40",
+    "progress-panel flex flex-col w-full rounded-xl overflow-hidden",
+    variant === "tile"
+      ? cn(
+          "transition-all duration-200 cursor-pointer",
+          progress.pendingToolApproval
+            ? "border-amber-500 bg-amber-50/30 dark:bg-amber-950/20 ring-1 ring-amber-500/30"
+            : isFocused
+            ? "border-blue-500 bg-blue-50/30 dark:bg-blue-950/20 ring-1 ring-blue-500/30"
+            : "border-border bg-card hover:border-border/80 hover:bg-card/80",
+          isResizing && "select-none"
+        )
+      : variant === "overlay"
+      ? "bg-background/80 backdrop-blur-sm border border-border/50 h-full"
+      : "bg-muted/20 backdrop-blur-sm border border-border/40 h-full",
     isDark ? "dark" : ""
   )
 
+  // Tile variant rendering
+  if (variant === "tile") {
+    const hasPendingApproval = !!progress.pendingToolApproval
+    const isSnoozed = progress.isSnoozed
+
+    return (
+      <div
+        onClick={onFocus}
+        className={cn(containerClasses, "relative min-h-0 border h-full", className)}
+        dir="ltr"
+        style={{
+          WebkitAppRegion: "no-drag"
+        } as React.CSSProperties}
+      >
+        {/* Tile Header */}
+        <div className="flex items-center gap-2 px-3 py-2 border-b bg-muted/30 flex-shrink-0">
+          {getStatusIndicator()}
+          <span className="flex-1 truncate font-medium text-sm">
+            {getTitle()}
+          </span>
+          {hasPendingApproval && (
+            <Badge variant="outline" className="text-amber-600 border-amber-500 text-xs">
+              Approval
+            </Badge>
+          )}
+          <div className="flex items-center gap-1">
+            {/* Collapse/Expand toggle */}
+            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleToggleCollapse} title={isCollapsed ? "Expand panel" : "Collapse panel"}>
+              {isCollapsed ? <ChevronDown className="h-3 w-3" /> : <ChevronUp className="h-3 w-3" />}
+            </Button>
+            {!isComplete && !isSnoozed && (
+              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); handleSnooze(e); }} title="Minimize">
+                <Minimize2 className="h-3 w-3" />
+              </Button>
+            )}
+            {isSnoozed && (
+              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={async (e) => {
+                e.stopPropagation()
+                if (!progress?.sessionId) return
+                // Focus this session in state first
+                setFocusedSessionId(progress.sessionId)
+                // Unsnooze the session in backend
+                await tipcClient.unsnoozeAgentSession({ sessionId: progress.sessionId })
+                await tipcClient.focusAgentSession({ sessionId: progress.sessionId })
+                // Show the floating panel with this session
+                await tipcClient.setPanelMode({ mode: "agent" })
+                await tipcClient.showPanelWindow({})
+              }} title="Maximize - show in floating panel">
+                <Maximize2 className="h-3 w-3" />
+              </Button>
+            )}
+            {!isComplete && (
+              <Button variant="ghost" size="icon" className="h-6 w-6 hover:bg-destructive/20 hover:text-destructive" onClick={(e) => { e.stopPropagation(); handleKillConfirmation(); }} title="Stop">
+                <X className="h-3 w-3" />
+              </Button>
+            )}
+            {onDismiss && (
+              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); onDismiss(); }} title="Dismiss">
+                <X className="h-3 w-3" />
+              </Button>
+            )}
+          </div>
+        </div>
+
+        {/* Collapsible content */}
+        {!isCollapsed && (
+          <>
+            {/* Message Stream */}
+            <div className="relative flex-1 min-h-0">
+              <div
+                ref={scrollContainerRef}
+                onScroll={handleScroll}
+                className="h-full overflow-y-auto"
+              >
+                {displayItems.length > 0 ? (
+                  <div className="space-y-1 p-2">
+                    {displayItems.map((item, index) => {
+                      const itemKey = item.id
+                      const isExpanded = expandedItems[itemKey] ?? false
+                      const isLastAssistant = item.kind === "message" && item.data.role === "assistant" && index === lastAssistantDisplayIndex
+
+                      if (item.kind === "message") {
+                        return (
+                          <CompactMessage
+                            key={itemKey}
+                            message={item.data}
+                            isLast={isLastAssistant}
+                            isComplete={isComplete}
+                            hasErrors={hasErrors}
+                            wasStopped={wasStopped}
+                            isExpanded={isExpanded}
+                            onToggleExpand={() => toggleItemExpansion(itemKey)}
+                          />
+                        )
+                      } else if (item.kind === "tool_approval") {
+                        return (
+                          <ToolApprovalBubble
+                            key={itemKey}
+                            approval={item.data}
+                            onApprove={handleApproveToolCall}
+                            onDeny={handleDenyToolCall}
+                            isResponding={isRespondingToApproval}
+                          />
+                        )
+                      } else if (item.kind === "retry_status") {
+                        return <RetryStatusBanner key={itemKey} retryInfo={item.data} />
+                      } else {
+                        return (
+                          <ToolExecutionBubble
+                            key={itemKey}
+                            execution={item.data}
+                            isExpanded={isExpanded}
+                            onToggleExpand={() => toggleItemExpansion(itemKey)}
+                          />
+                        )
+                      }
+                    })}
+                  </div>
+                ) : (
+                  <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                    Initializing...
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Footer with status info */}
+            <div className="px-3 py-2 border-t bg-muted/20 text-xs text-muted-foreground flex-shrink-0">
+              {!isComplete && (
+                <span>Step {currentIteration}/{maxIterations}</span>
+              )}
+              {isComplete && (
+                <span>{wasStopped ? "Stopped" : hasErrors ? "Failed" : "Complete"}</span>
+              )}
+            </div>
+          </>
+        )}
+
+        {/* Follow-up input - always visible for quick continuation */}
+        <TileFollowUpInput
+          sessionId={progress.sessionId}
+          conversationId={progress.conversationId}
+          isSessionActive={!isComplete}
+          className="flex-shrink-0"
+          onMessageSent={onFollowUpSent}
+        />
+
+        {/* Kill Switch Confirmation Dialog */}
+        {showKillConfirmation && (
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+            <div className="bg-background border border-border rounded-lg p-4 max-w-sm mx-4 shadow-lg">
+              <div className="flex items-center gap-2 mb-3">
+                <AlertTriangle className="h-4 w-4 text-red-500" />
+                <h3 className="text-sm font-medium">Stop Agent Execution</h3>
+              </div>
+              <p className="text-xs text-muted-foreground mb-4">
+                Are you sure you want to stop this session?
+              </p>
+              <div className="flex gap-2 justify-end">
+                <Button variant="outline" size="sm" onClick={handleCancelKill} disabled={isKilling}>Cancel</Button>
+                <Button variant="destructive" size="sm" onClick={handleKillSwitch} disabled={isKilling}>
+                  {isKilling ? "Stopping..." : "Stop Agent"}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // Default/Overlay variant rendering
   return (
     <div
       className={cn(containerClasses, "min-h-0", className)}

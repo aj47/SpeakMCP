@@ -7,8 +7,9 @@ export const router: ReturnType<typeof createBrowserRouter> =
       lazy: () => import("./components/app-layout"),
       children: [
         {
+          // Sessions dashboard is now the landing page
           path: "",
-          lazy: () => import("./pages/settings-general"),
+          lazy: () => import("./pages/sessions"),
         },
         {
           path: "history",
@@ -20,6 +21,10 @@ export const router: ReturnType<typeof createBrowserRouter> =
         },
         {
           path: "settings",
+          lazy: () => import("./pages/settings-general"),
+        },
+        {
+          path: "settings/general",
           lazy: () => import("./pages/settings-general"),
         },
         {

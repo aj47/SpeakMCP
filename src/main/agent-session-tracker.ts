@@ -79,8 +79,10 @@ class AgentSessionTracker {
 
   /**
    * Start tracking a new agent session
+   * Sessions start snoozed by default - they run in background without showing floating panel
+   * User can explicitly maximize/focus a session to see its progress
    */
-  startSession(conversationId?: string, conversationTitle?: string): string {
+  startSession(conversationId?: string, conversationTitle?: string, startSnoozed: boolean = true): string {
     const sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
 
     const session: AgentSession = {
@@ -92,10 +94,11 @@ class AgentSessionTracker {
       currentIteration: 0,
       maxIterations: 10,
       lastActivity: "Starting agent session...",
+      isSnoozed: startSnoozed, // Start snoozed by default - no floating panel auto-show
     }
 
     this.sessions.set(sessionId, session)
-    logApp(`[AgentSessionTracker] Started session: ${sessionId}, total sessions: ${this.sessions.size}`)
+    logApp(`[AgentSessionTracker] Started session: ${sessionId}, snoozed: ${startSnoozed}, total sessions: ${this.sessions.size}`)
 
     // Emit update to UI
     emitSessionUpdate()

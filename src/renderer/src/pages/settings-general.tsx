@@ -405,7 +405,7 @@ export function Component() {
           </Control>
         </ControlGroup>
 
-        <ControlGroup title="Speech to Text">
+        <ControlGroup title="Speech-to-Text">
           <Control label={<ControlLabel label="Language" tooltip="Select the language for speech transcription. 'Auto-detect' lets the model determine the language automatically based on your speech." />} className="px-3">
             <Select
               value={configQuery.data.sttLanguage || "auto"}
@@ -490,6 +490,63 @@ export function Component() {
               />
             </Control>
           )}
+
+          <Control label={<ControlLabel label="Post-Processing" tooltip="Enable AI-powered post-processing to clean up and improve transcripts" />} className="px-3">
+            <Switch
+              defaultChecked={configQuery.data.transcriptPostProcessingEnabled}
+              onCheckedChange={(value) => {
+                saveConfig({
+                  transcriptPostProcessingEnabled: value,
+                })
+              }}
+            />
+          </Control>
+
+          {configQuery.data.transcriptPostProcessingEnabled && (
+            <Control label={<ControlLabel label="Post-Processing Prompt" tooltip="Custom prompt for transcript post-processing. Use {transcript} placeholder to insert the original transcript." />} className="px-3">
+              <div className="flex flex-col items-end gap-1 text-right">
+                {configQuery.data.transcriptPostProcessingPrompt && (
+                  <div className="line-clamp-3 text-sm text-neutral-500 dark:text-neutral-400">
+                    {configQuery.data.transcriptPostProcessingPrompt}
+                  </div>
+                )}
+                <Dialog>
+                  <DialogTrigger className="" asChild>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-6 gap-1 px-2"
+                    >
+                      <span className="i-mingcute-edit-2-line"></span>
+                      Edit
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Edit Post-Processing Prompt</DialogTitle>
+                    </DialogHeader>
+                    <Textarea
+                      rows={10}
+                      defaultValue={
+                        configQuery.data.transcriptPostProcessingPrompt
+                      }
+                      onChange={(e) => {
+                        saveConfig({
+                          transcriptPostProcessingPrompt:
+                            e.currentTarget.value,
+                        })
+                      }}
+                    ></Textarea>
+                    <div className="text-sm text-muted-foreground">
+                      Use{" "}
+                      <span className="select-text">{"{transcript}"}</span>{" "}
+                      placeholder to insert the original transcript
+                    </div>
+                  </DialogContent>
+                </Dialog>
+              </div>
+            </Control>
+          )}
         </ControlGroup>
 
         <ControlGroup title="Text to Speech">
@@ -568,65 +625,6 @@ export function Component() {
               )}
             </>
           )}
-        </ControlGroup>
-
-        <ControlGroup title="Transcript Post-Processing">
-          <Control label="Enabled" className="px-3">
-            <Switch
-              defaultChecked={configQuery.data.transcriptPostProcessingEnabled}
-              onCheckedChange={(value) => {
-                saveConfig({
-                  transcriptPostProcessingEnabled: value,
-                })
-              }}
-            />
-          </Control>
-
-          {configQuery.data.transcriptPostProcessingEnabled && (
-              <Control label="Prompt" className="px-3">
-                <div className="flex flex-col items-end gap-1 text-right">
-                  {configQuery.data.transcriptPostProcessingPrompt && (
-                    <div className="line-clamp-3 text-sm text-neutral-500 dark:text-neutral-400">
-                      {configQuery.data.transcriptPostProcessingPrompt}
-                    </div>
-                  )}
-                  <Dialog>
-                    <DialogTrigger className="" asChild>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-6 gap-1 px-2"
-                      >
-                        <span className="i-mingcute-edit-2-line"></span>
-                        Edit
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent>
-                      <DialogHeader>
-                        <DialogTitle>Edit Prompt</DialogTitle>
-                      </DialogHeader>
-                      <Textarea
-                        rows={10}
-                        defaultValue={
-                          configQuery.data.transcriptPostProcessingPrompt
-                        }
-                        onChange={(e) => {
-                          saveConfig({
-                            transcriptPostProcessingPrompt:
-                              e.currentTarget.value,
-                          })
-                        }}
-                      ></Textarea>
-                      <div className="text-sm text-muted-foreground">
-                        Use{" "}
-                        <span className="select-text">{"{transcript}"}</span>{" "}
-                        placeholder to insert the original transcript
-                      </div>
-                    </DialogContent>
-                  </Dialog>
-                </div>
-              </Control>
-            )}
         </ControlGroup>
 
         {/* Panel Position Settings */}

@@ -12,6 +12,7 @@ import { useConfigQuery } from "@renderer/lib/queries"
 import { useTheme } from "@renderer/contexts/theme-context"
 import { logUI, logExpand } from "@renderer/lib/debug"
 import { TileFollowUpInput } from "./tile-follow-up-input"
+import { OverlayFollowUpInput } from "./overlay-follow-up-input"
 import { useResizable, TILE_DIMENSIONS } from "@renderer/hooks/use-resizable"
 
 interface AgentProgressProps {
@@ -1679,6 +1680,14 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
         </div>
 
       </div>
+
+      {/* Follow-up input - for continuing conversation in the floating panel */}
+      <OverlayFollowUpInput
+        sessionId={progress.sessionId}
+        conversationId={progress.conversationId}
+        isSessionActive={!isComplete}
+        className="flex-shrink-0"
+      />
 
       {/* Slim Progress Bar */}
       {!isComplete && (

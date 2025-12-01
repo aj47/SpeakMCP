@@ -5,8 +5,8 @@ import { Send, Mic } from "lucide-react"
 import { useMutation } from "@tanstack/react-query"
 import { tipcClient } from "@renderer/lib/tipc-client"
 
-interface TileFollowUpInputProps {
-  sessionId: string
+interface OverlayFollowUpInputProps {
+  sessionId?: string
   conversationId?: string
   isSessionActive?: boolean
   className?: string
@@ -15,15 +15,16 @@ interface TileFollowUpInputProps {
 }
 
 /**
- * Compact text input for continuing a conversation within a session tile.
+ * Input component for continuing a conversation in the floating overlay panel.
+ * Includes text input, submit button, and voice button for multiple input modalities.
  */
-export function TileFollowUpInput({
+export function OverlayFollowUpInput({
   sessionId,
   conversationId,
   isSessionActive = false,
   className,
   onMessageSent,
-}: TileFollowUpInputProps) {
+}: OverlayFollowUpInputProps) {
   const [text, setText] = useState("")
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -71,10 +72,10 @@ export function TileFollowUpInput({
   const isDisabled = sendMutation.isPending || isSessionActive
 
   return (
-    <form
+    <form 
       onSubmit={handleSubmit}
       className={cn(
-        "flex items-center gap-2 px-2 py-1.5 border-t bg-muted/20",
+        "flex items-center gap-2 px-3 py-2 border-t bg-muted/30 backdrop-blur-sm",
         className
       )}
       onClick={(e) => e.stopPropagation()}
@@ -97,12 +98,12 @@ export function TileFollowUpInput({
         type="submit"
         size="icon"
         variant="ghost"
-        className="h-6 w-6 flex-shrink-0"
+        className="h-7 w-7 flex-shrink-0"
         disabled={!text.trim() || isDisabled}
-        title="Send follow-up message"
+        title="Send message"
       >
         <Send className={cn(
-          "h-3 w-3",
+          "h-3.5 w-3.5",
           sendMutation.isPending && "animate-pulse"
         )} />
       </Button>
@@ -111,7 +112,7 @@ export function TileFollowUpInput({
         size="icon"
         variant="ghost"
         className={cn(
-          "h-6 w-6 flex-shrink-0",
+          "h-7 w-7 flex-shrink-0",
           "hover:bg-red-100 dark:hover:bg-red-900/30",
           "hover:text-red-600 dark:hover:text-red-400"
         )}
@@ -119,7 +120,7 @@ export function TileFollowUpInput({
         onClick={handleVoiceClick}
         title="Continue with voice"
       >
-        <Mic className="h-3 w-3" />
+        <Mic className="h-3.5 w-3.5" />
       </Button>
     </form>
   )

@@ -4,6 +4,7 @@ import { Button } from "@renderer/components/ui/button"
 import { Send, Mic } from "lucide-react"
 import { useMutation } from "@tanstack/react-query"
 import { tipcClient } from "@renderer/lib/tipc-client"
+import { useConversationStore } from "@renderer/stores"
 
 interface TileFollowUpInputProps {
   sessionId: string
@@ -26,6 +27,7 @@ export function TileFollowUpInput({
 }: TileFollowUpInputProps) {
   const [text, setText] = useState("")
   const inputRef = useRef<HTMLInputElement>(null)
+  const continueConversation = useConversationStore((s) => s.continueConversation)
 
   const sendMutation = useMutation({
     mutationFn: async (message: string) => {
@@ -63,6 +65,10 @@ export function TileFollowUpInput({
 
   const handleVoiceClick = async (e: React.MouseEvent) => {
     e.stopPropagation()
+    // Set conversation context before triggering recording so voice follows up in the same thread
+    if (conversationId) {
+      continueConversation(conversationId)
+    }
     // Trigger MCP recording - this will show the panel and start recording
     await tipcClient.triggerMcpRecording({})
   }

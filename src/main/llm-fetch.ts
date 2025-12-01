@@ -774,6 +774,7 @@ async function makeOpenAICompatibleCall(
   providerId: string,
   useStructuredOutput: boolean = true,
   sessionId?: string,
+  onRetryProgress?: RetryProgressCallback,
 ): Promise<any> {
   const config = configStore.get()
 
@@ -802,7 +803,7 @@ async function makeOpenAICompatibleCall(
     // No structured output requested, make simple call
     return apiCallWithRetry(async () => {
       return makeAPICallAttempt(baseURL, apiKey, baseRequestBody, estimatedTokens, sessionId)
-    }, config.apiRetryCount, config.apiRetryBaseDelay, config.apiRetryMaxDelay)
+    }, config.apiRetryCount, config.apiRetryBaseDelay, config.apiRetryMaxDelay, onRetryProgress)
   }
 
   // Try structured output with fallback
@@ -936,7 +937,7 @@ async function makeOpenAICompatibleCall(
     }
 
     return await makeAPICallAttempt(baseURL, apiKey, baseRequestBody, estimatedTokens, sessionId)
-  }, config.apiRetryCount, config.apiRetryBaseDelay, config.apiRetryMaxDelay)
+  }, config.apiRetryCount, config.apiRetryBaseDelay, config.apiRetryMaxDelay, onRetryProgress)
 
 }
 
@@ -946,6 +947,7 @@ async function makeOpenAICompatibleCall(
 async function makeGeminiCall(
   messages: Array<{ role: string; content: string }>,
   sessionId?: string,
+  onRetryProgress?: RetryProgressCallback,
 ): Promise<any> {
   const config = configStore.get()
 
@@ -1063,7 +1065,7 @@ async function makeGeminiCall(
         llmRequestAbortManager.unregister(controller)
       }
     }
-  }, config.apiRetryCount, config.apiRetryBaseDelay, config.apiRetryMaxDelay)
+  }, config.apiRetryCount, config.apiRetryBaseDelay, config.apiRetryMaxDelay, onRetryProgress)
 }
 
 /**
@@ -1073,6 +1075,7 @@ async function makeGeminiCall(
 async function makeLLMCallAttempt(
   messages: Array<{ role: string; content: string }>,
   chatProviderId: string,
+  onRetryProgress?: RetryProgressCallback,
 ): Promise<LLMToolCallResponse> {
   if (isDebugLLM()) {
     logLLM("🚀 Starting LLM call attempt", {
@@ -1085,9 +1088,9 @@ async function makeLLMCallAttempt(
   let response: any
 
   if (chatProviderId === "gemini") {
-    response = await makeGeminiCall(messages)
+    response = await makeGeminiCall(messages, undefined, onRetryProgress)
   } else {
-    response = await makeOpenAICompatibleCall(messages, chatProviderId, true)
+    response = await makeOpenAICompatibleCall(messages, chatProviderId, true, undefined, onRetryProgress)
   }
 
   if (isDebugLLM()) {
@@ -1252,7 +1255,7 @@ export async function makeLLMCallWithFetch(
   try {
     // Wrap the LLM call with retry logic to handle empty responses
     return await apiCallWithRetry(
-      async () => makeLLMCallAttempt(messages, chatProviderId),
+      async () => makeLLMCallAttempt(messages, chatProviderId, onRetryProgress),
       config.apiRetryCount,
       config.apiRetryBaseDelay,
       config.apiRetryMaxDelay,

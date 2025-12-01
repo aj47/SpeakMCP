@@ -93,7 +93,161 @@ Transform the app so **agent sessions become the landing page** with voice/text 
 
 ---
 
-### Approach C: Hybrid with Collapsible Sessions Panel
+### Approach C: Multi-Column Feed (TweetDeck-Style) ⭐ RECOMMENDED
+
+**Concept**: Multiple sessions displayed as scrollable columns/cards with substantial content visible simultaneously. Each card shows the full conversation flow, not just a preview.
+
+```
+┌──────────────────────────────────────────────────────────────────────────────────┐
+│ [⚙️]  SpeakMCP                                    [+ Text] [🎤 Voice]            │
+├──────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                  │
+│  ┌─────────────────────┐  ┌─────────────────────┐  ┌─────────────────────┐      │
+│  │ 🟢 Session #1       │  │ ✅ Session #2       │  │ 🔴 Session #3       │      │
+│  │ "Analyze codebase"  │  │ "Write unit tests"  │  │ "Deploy to prod"    │      │
+│  ├─────────────────────┤  ├─────────────────────┤  ├─────────────────────┤      │
+│  │                     │  │                     │  │                     │      │
+│  │ User: Can you...    │  │ User: Generate...   │  │ User: Deploy the... │      │
+│  │                     │  │                     │  │                     │      │
+│  │ Agent: I'll start   │  │ Agent: Here are     │  │ ❌ Error: Failed    │      │
+│  │ by examining the    │  │ the tests I wrote:  │  │ to connect to AWS   │      │
+│  │ project structure.  │  │                     │  │                     │      │
+│  │                     │  │ ```typescript       │  │ Stack trace:        │      │
+│  │ 🔧 Running: grep    │  │ describe('User')    │  │ ConnectionError...  │      │
+│  │ 🔧 Running: read    │  │ { ... }             │  │                     │      │
+│  │ ⏳ Analyzing...     │  │ ```                 │  │ [Retry] [Dismiss]   │      │
+│  │                     │  │                     │  │                     │      │
+│  │ [Continue input...] │  │ ✅ Completed        │  │                     │      │
+│  └─────────────────────┘  └─────────────────────┘  └─────────────────────┘      │
+│                                                                                  │
+│  ┌─────────────────────┐  ┌─────────────────────┐                               │
+│  │ 💤 Session #4       │  │ ✅ Session #5       │                               │
+│  │ "Refactor auth"     │  │ "Fix CSS bug"       │                               │
+│  ├─────────────────────┤  ├─────────────────────┤                               │
+│  │                     │  │                     │                               │
+│  │ User: Refactor...   │  │ Agent: The issue    │                               │
+│  │                     │  │ was a missing flex  │                               │
+│  │ Agent: I found 3    │  │ property. Fixed in  │                               │
+│  │ authentication      │  │ styles.css:42       │                               │
+│  │ patterns that...    │  │                     │                               │
+│  │                     │  │ [🔊 Play Response]  │                               │
+│  │ [Snoozed - Resume?] │  │                     │                               │
+│  └─────────────────────┘  └─────────────────────┘                               │
+│                                                                                  │
+└──────────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Each Session Card Shows:**
+- Status indicator (🟢 active, ✅ complete, 🔴 error, 💤 snoozed)
+- Session title/first prompt
+- **Full conversation history** (scrollable within card)
+- Current tool executions with live status
+- Error details when applicable
+- Action buttons (Continue, Retry, Dismiss, Play TTS)
+- Input field for continuing conversation (active sessions)
+
+**Card Sizing Options:**
+```
+┌─────────────────────────────────────────────────────────────┐
+│  View: [Compact ▾]  [Medium ▾]  [Expanded ▾]  [Auto-fit ▾]  │
+└─────────────────────────────────────────────────────────────┘
+
+Compact:   3-4 messages visible, more cards on screen
+Medium:    6-8 messages visible, balanced density
+Expanded:  Full conversation, fewer cards visible
+Auto-fit:  Adjusts based on window size and session count
+```
+
+**Pros:**
+- See substantial content from MULTIPLE sessions at once
+- Live updates visible across all active sessions
+- Quick context switching without losing sight of others
+- Natural for monitoring parallel agent tasks
+- Scales well: 1 session = full width, many = grid
+
+**Cons:**
+- Needs horizontal scrolling or wrapping for many sessions
+- Complex layout logic
+- May need responsive breakpoints
+
+---
+
+### Approach D: Stacked Feed (Single Column, Multiple Expanded)
+
+**Concept**: Vertically stacked cards, each showing substantial content. Like a social feed but for agent sessions.
+
+```
+┌────────────────────────────────────────────────────────────┐
+│ [⚙️]  SpeakMCP                    [+ Text] [🎤 Voice]      │
+├────────────────────────────────────────────────────────────┤
+│                                                            │
+│  ┌──────────────────────────────────────────────────────┐  │
+│  │ 🟢 Session #1 - "Analyze the authentication flow"    │  │
+│  ├──────────────────────────────────────────────────────┤  │
+│  │ User: Can you analyze how authentication works in    │  │
+│  │ this codebase and identify any security issues?      │  │
+│  │                                                      │  │
+│  │ Agent: I'll examine the authentication flow. Let me  │  │
+│  │ start by finding the relevant files...               │  │
+│  │                                                      │  │
+│  │ 🔧 grep "authenticate" → Found 12 matches            │  │
+│  │ 🔧 read src/auth/login.ts → Examining...             │  │
+│  │ ⏳ Analyzing token validation logic...               │  │
+│  │                                                      │  │
+│  │ ┌──────────────────────────────────────┐ [Stop]     │  │
+│  │ │ Continue conversation...             │ [Send]     │  │
+│  │ └──────────────────────────────────────┘            │  │
+│  └──────────────────────────────────────────────────────┘  │
+│                                                            │
+│  ┌──────────────────────────────────────────────────────┐  │
+│  │ ✅ Session #2 - "Write unit tests for UserService"   │  │
+│  ├──────────────────────────────────────────────────────┤  │
+│  │ User: Generate comprehensive unit tests for the      │  │
+│  │ UserService class                                    │  │
+│  │                                                      │  │
+│  │ Agent: I've created 8 test cases covering:           │  │
+│  │ • User creation (valid/invalid inputs)               │  │
+│  │ • Password validation                                │  │
+│  │ • Email verification flow                            │  │
+│  │ • Edge cases for special characters                  │  │
+│  │                                                      │  │
+│  │ ```typescript                                        │  │
+│  │ describe('UserService', () => {                      │  │
+│  │   it('should create user with valid email', ...)     │  │
+│  │ });                                                  │  │
+│  │ ```                                                  │  │
+│  │                                             [▼ More] │  │
+│  │                                   [🔊 Play Response] │  │
+│  └──────────────────────────────────────────────────────┘  │
+│                                                            │
+│  ┌──────────────────────────────────────────────────────┐  │
+│  │ 🔴 Session #3 - "Deploy to production"         [✕]   │  │
+│  ├──────────────────────────────────────────────────────┤  │
+│  │ ❌ Error: AWS credentials not configured             │  │
+│  │                                                      │  │
+│  │ The deployment failed because AWS_ACCESS_KEY is      │  │
+│  │ not set in your environment variables.               │  │
+│  │                                                      │  │
+│  │ [Retry with credentials]  [View full error]          │  │
+│  └──────────────────────────────────────────────────────┘  │
+│                                                            │
+└────────────────────────────────────────────────────────────┘
+```
+
+**Pros:**
+- Maximum content visibility per session
+- Simple vertical scrolling
+- Works well on all screen sizes
+- Easy to scan through all sessions
+
+**Cons:**
+- Can only see 2-3 sessions without scrolling
+- Active sessions may scroll out of view
+- Less efficient for monitoring many parallel tasks
+
+---
+
+### Approach E: Hybrid with Collapsible Sessions Panel
 
 **Concept**: Sessions as a collapsible overlay/drawer that can be dismissed.
 
@@ -143,26 +297,37 @@ Expanded state (sessions panel open):
 
 ### New Components
 
-1. **`pages/sessions.tsx`** - New landing page
-   - Grid/list view of sessions
-   - Session cards with status indicators
+1. **`pages/sessions.tsx`** - New landing page (multi-column dashboard)
+   - Responsive grid layout for session cards
+   - View density controls (compact/medium/expanded)
+   - Sorting/filtering options
    - Empty state for new users
+   - Floating input bar at top
 
-2. **`components/session-card.tsx`** - Session preview card
-   - Status badge (active, completed, error, snoozed)
-   - Last message preview
-   - Timestamp
-   - Click to expand/focus
+2. **`components/session-card.tsx`** - Rich session card with full content
+   - **Header**: Status badge (🟢/✅/🔴/💤), title from first prompt, timestamp, close button
+   - **Body** (scrollable):
+     - Full conversation history (user messages + agent responses)
+     - Tool execution steps with live status indicators
+     - Code blocks with syntax highlighting
+     - Error details with stack traces when applicable
+   - **Footer**:
+     - Continue input field (for active sessions)
+     - Action buttons: Stop, Retry, Play TTS, Snooze, Dismiss
+   - Auto-scroll to bottom on new messages
+   - Configurable max-height with internal scroll
 
 3. **`components/new-session-input.tsx`** - Unified input component
    - Text input field
    - Voice recording button with instructions
    - Submit/cancel affordances
+   - Can target specific session or create new
 
-4. **`components/session-detail.tsx`** - Full session view
-   - Conversation history
-   - Tool executions
-   - Continue conversation input
+4. **`components/session-grid.tsx`** - Grid layout manager
+   - CSS Grid with responsive columns
+   - Masonry-style or fixed-height options
+   - Drag-to-reorder sessions
+   - Pin important sessions to top
 
 ### Modified Components
 
@@ -346,13 +511,13 @@ Expanded state (sessions panel open):
 
 ## Recommendation
 
-**Approach B (Split View)** with **Incremental Migration (Option 1)** seems most practical because:
+**Approach C (Multi-Column Feed)** with **Incremental Migration (Option 1)** is recommended because:
 
-1. Leverages existing components (sidebar can become session list)
-2. Familiar UX pattern users already know
-3. Lower risk with incremental rollout
-4. Maintains keyboard/hotkey ergonomics
-5. Clear path to add features later
+1. **Information density** - See multiple full conversations at once, not just previews
+2. **Parallel monitoring** - Watch several agents work simultaneously
+3. **Familiar pattern** - Similar to TweetDeck, Slack threads, monitoring dashboards
+4. **Scalable** - Works for 1 session (full width) or 10+ (grid with scroll)
+5. **Leverages existing components** - `AgentProgress` and `ConversationDisplay` can be reused inside cards
 
 For the speech input UX, implement **Option 3 (Explicit Submit Button)** with keyboard shortcuts to address the cancel/submit clarity issue.
 
@@ -363,25 +528,31 @@ For the speech input UX, implement **Option 3 (Explicit Submit Button)** with ke
 | File | Change Type | Description |
 |------|-------------|-------------|
 | `src/renderer/src/router.tsx` | Modify | Update routes structure |
-| `src/renderer/src/pages/sessions.tsx` | New | Sessions dashboard page |
-| `src/renderer/src/pages/session-detail.tsx` | New | Single session view |
-| `src/renderer/src/components/session-card.tsx` | New | Session preview card |
-| `src/renderer/src/components/session-input.tsx` | New | Unified input component |
-| `src/renderer/src/components/app-layout.tsx` | Modify | Restructure layout |
-| `src/renderer/src/stores/agent-store.ts` | Modify | Add selection/filtering |
-| `src/renderer/src/pages/panel.tsx` | Modify | Update speech UI with clear submit/cancel |
-| `src/renderer/src/components/active-agents-sidebar.tsx` | Modify/Deprecate | May merge into session list |
+| `src/renderer/src/pages/sessions.tsx` | New | Multi-column session dashboard |
+| `src/renderer/src/components/session-card.tsx` | New | Rich session card with full conversation |
+| `src/renderer/src/components/session-grid.tsx` | New | Responsive grid layout manager |
+| `src/renderer/src/components/session-input.tsx` | New | Unified text/voice input component |
+| `src/renderer/src/components/app-layout.tsx` | Modify | Restructure for sessions-first layout |
+| `src/renderer/src/stores/agent-store.ts` | Modify | Add view settings, filtering, pinning |
+| `src/renderer/src/pages/panel.tsx` | Modify | Update speech UI with explicit submit/cancel |
+| `src/renderer/src/components/agent-progress.tsx` | Modify | Adapt for embedded card use |
+| `src/renderer/src/components/conversation-display.tsx` | Modify | Compact mode for card embedding |
+| `src/renderer/src/components/active-agents-sidebar.tsx` | Deprecate | Replaced by session dashboard |
 
 ---
 
 ## Summary
 
-This redesign shifts SpeakMCP from a "settings app with voice features" to a "session-centric AI assistant". The key changes are:
+This redesign shifts SpeakMCP from a "settings app with voice features" to a **multi-session monitoring dashboard**. The key changes are:
 
-1. **Sessions as landing page** with grid/list of active and past sessions
-2. **Integrated input** with text field + microphone button always visible
-3. **Clear speech UX** with explicit submit/cancel affordances
-4. **Settings demoted** to secondary navigation
-5. **Incremental migration** to reduce risk and allow testing
+1. **Multi-column session dashboard** - See full conversations from multiple sessions at once, not just previews
+2. **Rich session cards** - Each card shows complete conversation history, tool executions, code blocks, and errors
+3. **Live parallel monitoring** - Watch multiple agents work simultaneously with real-time updates
+4. **Integrated input** with text field + microphone button always visible at top
+5. **Clear speech UX** with explicit submit/cancel affordances
+6. **Settings demoted** to secondary navigation
+7. **Incremental migration** to reduce risk and allow testing
 
-Total estimated scope: Medium-Large (8-12 files, significant but not massive)
+**Key differentiator from original brainstorm**: Information density. Users can see 3-6 sessions with substantial content (not just titles/previews) on screen at once, enabling effective monitoring of parallel agent tasks.
+
+Total estimated scope: Medium-Large (10-14 files, significant but not massive)

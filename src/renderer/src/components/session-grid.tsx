@@ -38,6 +38,8 @@ interface SessionTileWrapperProps {
   sessionId: string
   index: number
   className?: string
+  // Collapse state
+  isCollapsed?: boolean
   // Drag and drop callbacks
   onDragStart?: (sessionId: string, index: number) => void
   onDragOver?: (index: number) => void
@@ -54,6 +56,7 @@ export function SessionTileWrapper({
   sessionId,
   index,
   className,
+  isCollapsed,
   onDragStart,
   onDragOver,
   onDragEnd,
@@ -167,13 +170,13 @@ export function SessionTileWrapper({
     <div
       ref={containerRef}
       className={cn(
-        "relative flex-shrink-0 transition-shadow",
+        "relative flex-shrink-0 transition-all duration-200",
         isResizing && "select-none",
         isDragTarget && "ring-2 ring-blue-500 ring-offset-2",
         isDragging && "opacity-50",
         className
       )}
-      style={{ width, height }}
+      style={{ width, height: isCollapsed ? "auto" : height }}
       draggable={!isResizing}
       onDragStart={handleDragStart}
       onDragOver={handleDragOver}
@@ -188,31 +191,36 @@ export function SessionTileWrapper({
       </div>
 
       {/* Main content */}
-      <div className="w-full h-full">
+      <div className={cn("w-full", isCollapsed ? "h-auto" : "h-full")}>
         {children}
       </div>
 
-      {/* Right edge resize handle */}
-      <div
-        className="absolute top-0 right-0 w-2 h-full cursor-ew-resize hover:bg-blue-500/30 transition-colors"
-        onMouseDown={handleWidthResizeStart}
-      />
+      {/* Resize handles - hide when collapsed */}
+      {!isCollapsed && (
+        <>
+          {/* Right edge resize handle */}
+          <div
+            className="absolute top-0 right-0 w-2 h-full cursor-ew-resize hover:bg-blue-500/30 transition-colors"
+            onMouseDown={handleWidthResizeStart}
+          />
 
-      {/* Bottom edge resize handle */}
-      <div
-        className="absolute bottom-0 left-0 w-full h-2 cursor-ns-resize hover:bg-blue-500/30 transition-colors"
-        onMouseDown={handleHeightResizeStart}
-      />
+          {/* Bottom edge resize handle */}
+          <div
+            className="absolute bottom-0 left-0 w-full h-2 cursor-ns-resize hover:bg-blue-500/30 transition-colors"
+            onMouseDown={handleHeightResizeStart}
+          />
 
-      {/* Corner resize handle */}
-      <div
-        className="absolute bottom-0 right-0 w-4 h-4 cursor-nwse-resize hover:bg-blue-500/50 transition-colors rounded-tl"
-        onMouseDown={handleCornerResizeStart}
-      >
-        <svg className="w-4 h-4 text-muted-foreground/50" viewBox="0 0 16 16">
-          <path d="M14 14H10M14 14V10M14 14L10 10M14 8V6M8 14H6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" fill="none" />
-        </svg>
-      </div>
+          {/* Corner resize handle */}
+          <div
+            className="absolute bottom-0 right-0 w-4 h-4 cursor-nwse-resize hover:bg-blue-500/50 transition-colors rounded-tl"
+            onMouseDown={handleCornerResizeStart}
+          >
+            <svg className="w-4 h-4 text-muted-foreground/50" viewBox="0 0 16 16">
+              <path d="M14 14H10M14 14V10M14 14L10 10M14 8V6M8 14H6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" fill="none" />
+            </svg>
+          </div>
+        </>
+      )}
     </div>
   )
 }

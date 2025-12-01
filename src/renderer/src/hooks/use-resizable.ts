@@ -84,13 +84,16 @@ export function useResizable(options: UseResizableOptions = {}): UseResizableRet
     setIsResizing(true)
     resizeTypeRef.current = "width"
     onResizeStart?.()
-    
+
     const startX = e.clientX
     const startWidth = width
+    // Track last computed width to avoid using non-standard window.event
+    let lastWidth = startWidth
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
       const delta = moveEvent.clientX - startX
-      setWidth(clampWidth(startWidth + delta))
+      lastWidth = clampWidth(startWidth + delta)
+      setWidth(lastWidth)
     }
 
     const handleMouseUp = () => {
@@ -98,7 +101,7 @@ export function useResizable(options: UseResizableOptions = {}): UseResizableRet
       resizeTypeRef.current = null
       document.removeEventListener("mousemove", handleMouseMove)
       document.removeEventListener("mouseup", handleMouseUp)
-      onResizeEnd?.({ width: clampWidth(startWidth + (window.event as MouseEvent)?.clientX - startX || 0), height })
+      onResizeEnd?.({ width: lastWidth, height })
     }
 
     document.addEventListener("mousemove", handleMouseMove)
@@ -114,10 +117,13 @@ export function useResizable(options: UseResizableOptions = {}): UseResizableRet
 
     const startY = e.clientY
     const startHeight = height
+    // Track last computed height to avoid using non-standard window.event
+    let lastHeight = startHeight
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
       const delta = moveEvent.clientY - startY
-      setHeight(clampHeight(startHeight + delta))
+      lastHeight = clampHeight(startHeight + delta)
+      setHeight(lastHeight)
     }
 
     const handleMouseUp = () => {
@@ -125,7 +131,7 @@ export function useResizable(options: UseResizableOptions = {}): UseResizableRet
       resizeTypeRef.current = null
       document.removeEventListener("mousemove", handleMouseMove)
       document.removeEventListener("mouseup", handleMouseUp)
-      onResizeEnd?.({ width, height: clampHeight(startHeight + (window.event as MouseEvent)?.clientY - startY || 0) })
+      onResizeEnd?.({ width, height: lastHeight })
     }
 
     document.addEventListener("mousemove", handleMouseMove)
@@ -143,12 +149,17 @@ export function useResizable(options: UseResizableOptions = {}): UseResizableRet
     const startY = e.clientY
     const startWidth = width
     const startHeight = height
+    // Track last computed dimensions to report correct final size
+    let lastWidth = startWidth
+    let lastHeight = startHeight
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
       const deltaX = moveEvent.clientX - startX
       const deltaY = moveEvent.clientY - startY
-      setWidth(clampWidth(startWidth + deltaX))
-      setHeight(clampHeight(startHeight + deltaY))
+      lastWidth = clampWidth(startWidth + deltaX)
+      lastHeight = clampHeight(startHeight + deltaY)
+      setWidth(lastWidth)
+      setHeight(lastHeight)
     }
 
     const handleMouseUp = () => {
@@ -156,9 +167,9 @@ export function useResizable(options: UseResizableOptions = {}): UseResizableRet
       resizeTypeRef.current = null
       document.removeEventListener("mousemove", handleMouseMove)
       document.removeEventListener("mouseup", handleMouseUp)
-      onResizeEnd?.({ 
-        width: clampWidth(startWidth), 
-        height: clampHeight(startHeight) 
+      onResizeEnd?.({
+        width: lastWidth,
+        height: lastHeight
       })
     }
 

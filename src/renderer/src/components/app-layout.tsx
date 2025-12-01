@@ -42,6 +42,11 @@ export const Component = () => {
       icon: "i-mingcute-settings-3-line",
     },
     {
+      text: "General",
+      href: "/settings-general",
+      icon: "i-mingcute-settings-3-line",
+    },
+    {
       text: "Models",
       href: "/settings/models",
       icon: "i-mingcute-brain-line",

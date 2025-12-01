@@ -1,10 +1,21 @@
 import { create } from 'zustand'
 import { AgentProgressUpdate } from '@shared/types'
 
+// View settings for the sessions dashboard
+export type SessionViewMode = 'grid' | 'list'
+export type SessionFilter = 'all' | 'active' | 'completed' | 'error'
+export type SessionSortBy = 'recent' | 'oldest' | 'status'
+
 interface AgentState {
   // State
   agentProgressById: Map<string, AgentProgressUpdate>
   focusedSessionId: string | null
+
+  // View settings for sessions dashboard
+  viewMode: SessionViewMode
+  filter: SessionFilter
+  sortBy: SessionSortBy
+  pinnedSessionIds: Set<string>
 
   // Actions
   updateSessionProgress: (update: AgentProgressUpdate) => void
@@ -12,11 +23,24 @@ interface AgentState {
   clearSessionProgress: (sessionId: string) => void
   setFocusedSessionId: (sessionId: string | null) => void
   getAgentProgress: () => AgentProgressUpdate | null
+
+  // View settings actions
+  setViewMode: (mode: SessionViewMode) => void
+  setFilter: (filter: SessionFilter) => void
+  setSortBy: (sortBy: SessionSortBy) => void
+  togglePinSession: (sessionId: string) => void
+  isPinned: (sessionId: string) => boolean
 }
 
 export const useAgentStore = create<AgentState>((set, get) => ({
   agentProgressById: new Map(),
   focusedSessionId: null,
+
+  // View settings defaults
+  viewMode: 'grid' as SessionViewMode,
+  filter: 'all' as SessionFilter,
+  sortBy: 'recent' as SessionSortBy,
+  pinnedSessionIds: new Set<string>(),
 
   updateSessionProgress: (update: AgentProgressUpdate) => {
     const sessionId = update.sessionId
@@ -107,6 +131,35 @@ export const useAgentStore = create<AgentState>((set, get) => ({
     const state = get()
     if (!state.focusedSessionId) return null
     return state.agentProgressById.get(state.focusedSessionId) ?? null
+  },
+
+  // View settings actions
+  setViewMode: (mode: SessionViewMode) => {
+    set({ viewMode: mode })
+  },
+
+  setFilter: (filter: SessionFilter) => {
+    set({ filter })
+  },
+
+  setSortBy: (sortBy: SessionSortBy) => {
+    set({ sortBy })
+  },
+
+  togglePinSession: (sessionId: string) => {
+    set((state) => {
+      const newPinned = new Set(state.pinnedSessionIds)
+      if (newPinned.has(sessionId)) {
+        newPinned.delete(sessionId)
+      } else {
+        newPinned.add(sessionId)
+      }
+      return { pinnedSessionIds: newPinned }
+    })
+  },
+
+  isPinned: (sessionId: string) => {
+    return get().pinnedSessionIds.has(sessionId)
   },
 }))
 

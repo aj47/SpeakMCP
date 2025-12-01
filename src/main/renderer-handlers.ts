@@ -10,9 +10,9 @@ export type RendererHandlers = {
   refreshRecordingHistory: () => void
 
   // MCP Tool Calling handlers
-  startMcpRecording: () => void
+  startMcpRecording: (conversationId?: string) => void
   finishMcpRecording: () => void
-  startOrFinishMcpRecording: () => void
+  startOrFinishMcpRecording: (conversationId?: string) => void
 
   // Text Input handlers
   showTextInput: () => void

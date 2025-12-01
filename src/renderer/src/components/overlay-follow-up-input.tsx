@@ -4,7 +4,6 @@ import { Button } from "@renderer/components/ui/button"
 import { Send, Mic } from "lucide-react"
 import { useMutation } from "@tanstack/react-query"
 import { tipcClient } from "@renderer/lib/tipc-client"
-import { useConversationStore } from "@renderer/stores"
 
 interface OverlayFollowUpInputProps {
   conversationId?: string
@@ -26,7 +25,6 @@ export function OverlayFollowUpInput({
 }: OverlayFollowUpInputProps) {
   const [text, setText] = useState("")
   const inputRef = useRef<HTMLInputElement>(null)
-  const { continueConversation } = useConversationStore()
 
   const sendMutation = useMutation({
     mutationFn: async (message: string) => {
@@ -64,12 +62,9 @@ export function OverlayFollowUpInput({
 
   const handleVoiceClick = async (e: React.MouseEvent) => {
     e.stopPropagation()
-    // Set conversation context before triggering recording so voice follows up in the same thread
-    if (conversationId) {
-      continueConversation(conversationId)
-    }
-    // Trigger MCP recording - this will show the panel and start recording
-    await tipcClient.triggerMcpRecording({})
+    // Pass conversationId directly through IPC to continue the conversation
+    // This is more reliable than using Zustand store which has timing issues
+    await tipcClient.triggerMcpRecording({ conversationId })
   }
 
   // Don't allow input while session is still active (agent is processing)

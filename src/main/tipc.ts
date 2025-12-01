@@ -3,6 +3,7 @@ import { logApp, logLLM, getDebugFlags } from "./debug"
 import { getRendererHandlers, tipc } from "@egoist/tipc/main"
 import {
   showPanelWindow,
+  showPanelWindowAndStartMcpRecording,
   showMainWindow,
   WINDOWS,
   resizePanelForAgentMode,
@@ -743,6 +744,10 @@ export const router = {
 
   showPanelWindow: t.procedure.action(async () => {
     showPanelWindow()
+  }),
+
+  triggerMcpRecording: t.procedure.action(async () => {
+    showPanelWindowAndStartMcpRecording()
   }),
 
   showMainWindow: t.procedure

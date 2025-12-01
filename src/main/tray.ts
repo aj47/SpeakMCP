@@ -34,9 +34,15 @@ const buildMenu = (tray: Tray) =>
       },
     },
     {
-      label: "View History",
+      label: "Sessions",
       click() {
         showMainWindow("/")
+      },
+    },
+    {
+      label: "History",
+      click() {
+        showMainWindow("/history")
       },
     },
     {

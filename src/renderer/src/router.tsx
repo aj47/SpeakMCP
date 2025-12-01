@@ -8,7 +8,11 @@ export const router: ReturnType<typeof createBrowserRouter> =
       children: [
         {
           path: "",
-          lazy: () => import("./pages/settings-general"),
+          lazy: () => import("./pages/sessions"),
+        },
+        {
+          path: "sessions",
+          lazy: () => import("./pages/sessions"),
         },
         {
           path: "history",

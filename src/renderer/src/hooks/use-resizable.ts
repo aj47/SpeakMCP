@@ -232,12 +232,16 @@ export function useResizable(options: UseResizableOptions = {}): UseResizableRet
   const reset = useCallback(() => {
     setWidth(initialWidth)
     setHeight(initialHeight)
-  }, [initialWidth, initialHeight])
+    persistSize(initialWidth, initialHeight)
+  }, [initialWidth, initialHeight, persistSize])
 
   const setSize = useCallback((size: { width?: number; height?: number }) => {
-    if (size.width !== undefined) setWidth(clampWidth(size.width))
-    if (size.height !== undefined) setHeight(clampHeight(size.height))
-  }, [clampWidth, clampHeight])
+    const newWidth = size.width !== undefined ? clampWidth(size.width) : width
+    const newHeight = size.height !== undefined ? clampHeight(size.height) : height
+    if (size.width !== undefined) setWidth(newWidth)
+    if (size.height !== undefined) setHeight(newHeight)
+    persistSize(newWidth, newHeight)
+  }, [width, height, clampWidth, clampHeight, persistSize])
 
   return {
     width,

@@ -1404,9 +1404,15 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
               <Button variant="ghost" size="icon" className="h-6 w-6" onClick={async (e) => {
                 e.stopPropagation()
                 if (!progress?.sessionId) return
+                // Focus this session in state first
+                setFocusedSessionId(progress.sessionId)
+                // Unsnooze the session in backend
                 await tipcClient.unsnoozeAgentSession({ sessionId: progress.sessionId })
                 await tipcClient.focusAgentSession({ sessionId: progress.sessionId })
-              }} title="Restore">
+                // Show the floating panel with this session
+                await tipcClient.setPanelMode({ mode: "agent" })
+                await tipcClient.showPanelWindow({})
+              }} title="Maximize - show in floating panel">
                 <Maximize2 className="h-3 w-3" />
               </Button>
             )}

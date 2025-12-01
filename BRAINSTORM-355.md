@@ -93,9 +93,9 @@ Transform the app so **agent sessions become the landing page** with voice/text 
 
 ---
 
-### Approach C: Multi-Column Feed (TweetDeck-Style) ⭐ RECOMMENDED
+### Approach C: Growing Scrollable Tiling System ⭐ RECOMMENDED
 
-**Concept**: Multiple sessions displayed as scrollable columns/cards with substantial content visible simultaneously. Each card shows the full conversation flow, not just a preview.
+**Concept**: A dynamic tiling layout where session cards automatically arrange themselves in a responsive grid. As new sessions are created, tiles grow to fill available space. The entire dashboard is scrollable, with each tile also independently scrollable for long conversations.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────────┐
@@ -137,16 +137,48 @@ Transform the app so **agent sessions become the landing page** with voice/text 
 └──────────────────────────────────────────────────────────────────────────────────┘
 ```
 
+**Tiling Behavior:**
+```
+1 session:    ┌────────────────────────────────────┐
+              │         Full width tile            │
+              └────────────────────────────────────┘
+
+2 sessions:   ┌─────────────────┐ ┌─────────────────┐
+              │     50%         │ │      50%        │
+              └─────────────────┘ └─────────────────┘
+
+3 sessions:   ┌─────────────────┐ ┌─────────────────┐
+              │     50%         │ │      50%        │
+              ├─────────────────┴─┴─────────────────┤
+              │           Full width                │
+              └─────────────────────────────────────┘
+
+4+ sessions:  ┌───────────┐ ┌───────────┐ ┌───────────┐
+              │   33%     │ │    33%    │ │    33%    │
+              ├───────────┤ ├───────────┤ ├───────────┤
+              │  (scroll) │ │  (scroll) │ │  (scroll) │
+              └───────────┘ └───────────┘ └───────────┘
+              ┌───────────┐ ┌───────────┐
+              │   33%     │ │    33%    │  ← grows as needed
+              └───────────┘ └───────────┘
+                    ↓ page scrolls vertically ↓
+```
+
+- Tiles automatically reflow based on session count and window size
+- Each tile has internal scroll for long conversations
+- Page scrolls vertically when tiles exceed viewport
+- New sessions animate in, completed sessions can collapse/minimize
+
 **Each Session Card Shows:**
 - Status indicator (🟢 active, ✅ complete, 🔴 error, 💤 snoozed)
 - Session title/first prompt
-- **Full conversation history** (scrollable within card)
+- **Full conversation history** (scrollable within tile)
 - Current tool executions with live status
 - Error details when applicable
 - Action buttons (Continue, Retry, Dismiss, Play TTS)
 - Input field for continuing conversation (active sessions)
 
-**Card Sizing Options:**
+**Tile Sizing Options:**
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  View: [Compact ▾]  [Medium ▾]  [Expanded ▾]  [Auto-fit ▾]  │
@@ -511,13 +543,14 @@ Expanded state (sessions panel open):
 
 ## Recommendation
 
-**Approach C (Multi-Column Feed)** with **Incremental Migration (Option 1)** is recommended because:
+**Approach C (Growing Scrollable Tiling System)** with **Incremental Migration (Option 1)** is recommended because:
 
 1. **Information density** - See multiple full conversations at once, not just previews
-2. **Parallel monitoring** - Watch several agents work simultaneously
-3. **Familiar pattern** - Similar to TweetDeck, Slack threads, monitoring dashboards
-4. **Scalable** - Works for 1 session (full width) or 10+ (grid with scroll)
-5. **Leverages existing components** - `AgentProgress` and `ConversationDisplay` can be reused inside cards
+2. **Dynamic scaling** - Tiles grow/shrink automatically: 1 session = full width, many = responsive grid
+3. **Parallel monitoring** - Watch several agents work simultaneously across all visible tiles
+4. **Dual scroll** - Page scrolls vertically for many sessions; each tile scrolls internally for long conversations
+5. **Familiar pattern** - Similar to dashboard/monitoring UIs (Grafana, TweetDeck)
+6. **Leverages existing components** - `AgentProgress` and `ConversationDisplay` can be reused inside tiles
 
 For the speech input UX, implement **Option 3 (Explicit Submit Button)** with keyboard shortcuts to address the cancel/submit clarity issue.
 
@@ -545,14 +578,15 @@ For the speech input UX, implement **Option 3 (Explicit Submit Button)** with ke
 
 This redesign shifts SpeakMCP from a "settings app with voice features" to a **multi-session monitoring dashboard**. The key changes are:
 
-1. **Multi-column session dashboard** - See full conversations from multiple sessions at once, not just previews
-2. **Rich session cards** - Each card shows complete conversation history, tool executions, code blocks, and errors
-3. **Live parallel monitoring** - Watch multiple agents work simultaneously with real-time updates
-4. **Integrated input** with text field + microphone button always visible at top
-5. **Clear speech UX** with explicit submit/cancel affordances
-6. **Settings demoted** to secondary navigation
-7. **Incremental migration** to reduce risk and allow testing
+1. **Growing scrollable tiling system** - Tiles automatically arrange and resize based on session count; page scrolls as sessions grow
+2. **Rich session tiles** - Each tile shows complete conversation history, tool executions, code blocks, and errors with internal scrolling
+3. **Live parallel monitoring** - Watch multiple agents work simultaneously with real-time updates across all visible tiles
+4. **Dynamic layout** - 1 session = full width, 2 = 50/50, 3+ = responsive grid that grows vertically
+5. **Integrated input** with text field + microphone button always visible at top
+6. **Clear speech UX** with explicit submit/cancel affordances
+7. **Settings demoted** to secondary navigation
+8. **Incremental migration** to reduce risk and allow testing
 
-**Key differentiator from original brainstorm**: Information density. Users can see 3-6 sessions with substantial content (not just titles/previews) on screen at once, enabling effective monitoring of parallel agent tasks.
+**Key differentiator**: Information density + dynamic tiling. Users see 3-6 sessions with substantial content on screen. The tiling system grows organically as sessions are added, with each tile independently scrollable for long conversations.
 
 Total estimated scope: Medium-Large (10-14 files, significant but not massive)

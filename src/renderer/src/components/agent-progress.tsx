@@ -11,6 +11,7 @@ import { AudioPlayer } from "@renderer/components/audio-player"
 import { useConfigQuery } from "@renderer/lib/queries"
 import { useTheme } from "@renderer/contexts/theme-context"
 import { logUI, logExpand } from "@renderer/lib/debug"
+import { TileFollowUpInput } from "./tile-follow-up-input"
 
 const TILE_MIN_HEIGHT = 120
 const TILE_MAX_HEIGHT = 600
@@ -26,6 +27,10 @@ interface AgentProgressProps {
   onFocus?: () => void
   /** For tile variant: callback to dismiss the tile */
   onDismiss?: () => void
+  /** For tile variant: controlled collapsed state */
+  isCollapsed?: boolean
+  /** For tile variant: callback when collapsed state changes */
+  onCollapsedChange?: (collapsed: boolean) => void
 }
 
 // Enhanced conversation message component
@@ -822,6 +827,8 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
   isFocused,
   onFocus,
   onDismiss,
+  isCollapsed: controlledIsCollapsed,
+  onCollapsedChange,
 }) => {
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const [isUserScrolling, setIsUserScrolling] = useState(false)
@@ -832,15 +839,21 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
   const [isKilling, setIsKilling] = useState(false)
   const { isDark } = useTheme()
 
-  // Tile-specific state
-  const [isCollapsed, setIsCollapsed] = useState(false)
+  // Tile-specific state - support controlled mode
+  const [internalIsCollapsed, setInternalIsCollapsed] = useState(false)
+  const isCollapsed = controlledIsCollapsed ?? internalIsCollapsed
   const [tileHeight, setTileHeight] = useState(TILE_DEFAULT_HEIGHT)
   const [isResizing, setIsResizing] = useState(false)
 
   // Handle tile collapse toggle
   const handleToggleCollapse = (e: React.MouseEvent) => {
     e.stopPropagation()
-    setIsCollapsed(!isCollapsed)
+    const newCollapsed = !isCollapsed
+    if (onCollapsedChange) {
+      onCollapsedChange(newCollapsed)
+    } else {
+      setInternalIsCollapsed(newCollapsed)
+    }
   }
 
   // Handle tile resize
@@ -1501,6 +1514,14 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
             </div>
           </>
         )}
+
+        {/* Follow-up input - always visible for quick continuation */}
+        <TileFollowUpInput
+          sessionId={progress.sessionId}
+          conversationId={progress.conversationId}
+          isSessionActive={!isComplete}
+          className="flex-shrink-0"
+        />
 
         {/* Kill Switch Confirmation Dialog */}
         {showKillConfirmation && (

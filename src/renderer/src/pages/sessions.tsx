@@ -50,6 +50,13 @@ export function Component() {
   const [draggedSessionId, setDraggedSessionId] = useState<string | null>(null)
   const [dragTargetIndex, setDragTargetIndex] = useState<number | null>(null)
 
+  // Collapsed state per session
+  const [collapsedSessions, setCollapsedSessions] = useState<Record<string, boolean>>({})
+
+  const handleCollapsedChange = useCallback((sessionId: string, collapsed: boolean) => {
+    setCollapsedSessions(prev => ({ ...prev, [sessionId]: collapsed }))
+  }, [])
+
   // Get all sessions from the progress store - this is the single source of truth
   const allProgressEntries = React.useMemo(() => {
     const entries = Array.from(agentProgressById.entries())
@@ -181,26 +188,32 @@ export function Component() {
           <EmptyState onTextClick={() => setShowTextInput(true)} onVoiceClick={handleVoiceStart} />
         ) : (
           <SessionGrid sessionCount={allProgressEntries.length}>
-            {allProgressEntries.map(([sessionId, progress], index) => (
-              <SessionTileWrapper
-                key={sessionId}
-                sessionId={sessionId}
-                index={index}
-                onDragStart={handleDragStart}
-                onDragOver={handleDragOver}
-                onDragEnd={handleDragEnd}
-                isDragTarget={dragTargetIndex === index && draggedSessionId !== sessionId}
-                isDragging={draggedSessionId === sessionId}
-              >
-                <AgentProgress
-                  progress={progress}
-                  variant="tile"
-                  isFocused={focusedSessionId === sessionId}
-                  onFocus={() => handleFocusSession(sessionId)}
-                  onDismiss={() => handleDismissSession(sessionId)}
-                />
-              </SessionTileWrapper>
-            ))}
+            {allProgressEntries.map(([sessionId, progress], index) => {
+              const isCollapsed = collapsedSessions[sessionId] ?? false
+              return (
+                <SessionTileWrapper
+                  key={sessionId}
+                  sessionId={sessionId}
+                  index={index}
+                  isCollapsed={isCollapsed}
+                  onDragStart={handleDragStart}
+                  onDragOver={handleDragOver}
+                  onDragEnd={handleDragEnd}
+                  isDragTarget={dragTargetIndex === index && draggedSessionId !== sessionId}
+                  isDragging={draggedSessionId === sessionId}
+                >
+                  <AgentProgress
+                    progress={progress}
+                    variant="tile"
+                    isFocused={focusedSessionId === sessionId}
+                    onFocus={() => handleFocusSession(sessionId)}
+                    onDismiss={() => handleDismissSession(sessionId)}
+                    isCollapsed={isCollapsed}
+                    onCollapsedChange={(collapsed) => handleCollapsedChange(sessionId, collapsed)}
+                  />
+                </SessionTileWrapper>
+              )
+            })}
           </SessionGrid>
         )}
       </div>

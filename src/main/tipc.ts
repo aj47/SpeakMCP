@@ -781,10 +781,14 @@ export const router = {
     await showPanelWindowAndShowTextInput()
   }),
 
-  triggerMcpRecording: t.procedure.action(async () => {
-    const { showPanelWindowAndStartMcpRecording } = await import("./window")
-    await showPanelWindowAndStartMcpRecording()
-  }),
+  triggerMcpRecording: t.procedure
+    .input<{ conversationId?: string; sessionId?: string; fromTile?: boolean }>()
+    .action(async ({ input }) => {
+      const { showPanelWindowAndStartMcpRecording } = await import("./window")
+      // Always show the panel during recording for waveform feedback
+      // The fromTile flag tells the panel to hide after recording ends
+      await showPanelWindowAndStartMcpRecording(input.conversationId, input.sessionId, input.fromTile)
+    }),
 
   showMainWindow: t.procedure
     .input<{ url?: string }>()
@@ -1009,9 +1013,24 @@ export const router = {
         )
       }
 
+      // Try to find and revive an existing session for this conversation
+      // This handles the case where user continues from history
+      const { agentSessionTracker } = await import("./agent-session-tracker")
+      let existingSessionId: string | undefined
+      if (input.conversationId) {
+        const foundSessionId = agentSessionTracker.findSessionByConversationId(input.conversationId)
+        if (foundSessionId) {
+          const revived = agentSessionTracker.reviveSession(foundSessionId)
+          if (revived) {
+            existingSessionId = foundSessionId
+          }
+        }
+      }
+
       // Fire-and-forget: Start agent processing without blocking
       // This allows multiple sessions to run concurrently
-      processWithAgentMode(input.text, conversationId)
+      // Pass existingSessionId to reuse the session if found
+      processWithAgentMode(input.text, conversationId, existingSessionId)
         .then((finalResponse) => {
           // Save to history after completion
           const history = getRecordingHistory()
@@ -1056,6 +1075,7 @@ export const router = {
       recording: ArrayBuffer
       duration: number
       conversationId?: string
+      sessionId?: string
     }>()
     .action(async ({ input }) => {
       fs.mkdirSync(recordingsFolder, { recursive: true })
@@ -1067,9 +1087,49 @@ export const router = {
       // This ensures users see feedback during the (potentially long) STT call
       const { agentSessionTracker } = await import("./agent-session-tracker")
       const tempConversationId = input.conversationId || `temp_${Date.now()}`
-      // Start session NOT snoozed so the floating panel shows immediately
-      // This is triggered by keybind, so the user expects to see the panel
-      const sessionId = agentSessionTracker.startSession(tempConversationId, "Transcribing...", false)
+
+      // If sessionId is provided, try to revive that session.
+      // Otherwise, if conversationId is provided, try to find and revive a session for that conversation.
+      // This handles the case where user continues from history (only conversationId is set).
+      let sessionId: string
+      if (input.sessionId) {
+        // Try to revive the existing session by ID
+        const revived = agentSessionTracker.reviveSession(input.sessionId)
+        if (revived) {
+          sessionId = input.sessionId
+          // Update the session title while transcribing
+          agentSessionTracker.updateSession(sessionId, {
+            conversationTitle: "Transcribing...",
+            lastActivity: "Transcribing audio...",
+          })
+        } else {
+          // Session not found, create a new one
+          sessionId = agentSessionTracker.startSession(tempConversationId, "Transcribing...", false)
+        }
+      } else if (input.conversationId) {
+        // No sessionId but have conversationId - try to find existing session for this conversation
+        const existingSessionId = agentSessionTracker.findSessionByConversationId(input.conversationId)
+        if (existingSessionId) {
+          const revived = agentSessionTracker.reviveSession(existingSessionId)
+          if (revived) {
+            sessionId = existingSessionId
+            // Update the session title while transcribing
+            agentSessionTracker.updateSession(sessionId, {
+              conversationTitle: "Transcribing...",
+              lastActivity: "Transcribing audio...",
+            })
+          } else {
+            // Revive failed, create new session
+            sessionId = agentSessionTracker.startSession(tempConversationId, "Transcribing...", false)
+          }
+        } else {
+          // No existing session for this conversation, create new
+          sessionId = agentSessionTracker.startSession(tempConversationId, "Transcribing...", false)
+        }
+      } else {
+        // No sessionId or conversationId provided, create a new session
+        sessionId = agentSessionTracker.startSession(tempConversationId, "Transcribing...", false)
+      }
 
       try {
         // Emit initial "initializing" progress update

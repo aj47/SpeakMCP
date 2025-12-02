@@ -35,6 +35,11 @@ export function Component() {
   const mcpModeRef = useRef(false)
   const recordingRef = useRef(false)
   const textInputPanelRef = useRef<TextInputPanelRef>(null)
+  // Store conversationId and sessionId passed from mic button clicks for continuing conversations
+  const mcpConversationIdRef = useRef<string | undefined>(undefined)
+  const mcpSessionIdRef = useRef<string | undefined>(undefined)
+  // Track if recording was initiated from a tile (sessions view) - if so, don't show floating panel
+  const fromTileRef = useRef<boolean>(false)
   const { isDark } = useTheme()
   const lastRequestedModeRef = useRef<"normal" | "agent" | "textInput">("normal")
   const requestPanelMode = (mode: "normal" | "agent" | "textInput") => {
@@ -216,9 +221,22 @@ export function Component() {
     }) => {
       const arrayBuffer = await blob.arrayBuffer()
 
-      // Capture the conversation ID at recording time - if user explicitly continued a conversation
-      // from history, currentConversationId will be set. Otherwise it's null for new inputs.
-      const conversationIdForMcp = currentConversationId
+      // Use the conversationId and sessionId passed through IPC (from mic button clicks).
+      // The refs are more reliable for mic button clicks as they avoid timing issues.
+      const conversationIdForMcp = mcpConversationIdRef.current ?? currentConversationId
+      const sessionIdForMcp = mcpSessionIdRef.current
+      const wasFromTile = fromTileRef.current
+
+      // Clear the refs after capturing to avoid reusing stale IDs
+      mcpConversationIdRef.current = undefined
+      mcpSessionIdRef.current = undefined
+      fromTileRef.current = false
+
+      // If recording was from a tile, hide the floating panel immediately
+      // The session will continue in the tile view
+      if (wasFromTile) {
+        tipcClient.hidePanelWindow({})
+      }
 
       // If we have a transcript, start a conversation with it
       if (transcript && !isConversationActive) {
@@ -228,10 +246,10 @@ export function Component() {
       const result = await tipcClient.createMcpRecording({
         recording: arrayBuffer,
         duration,
-        // Pass currentConversationId if user explicitly continued from history,
-        // otherwise undefined to create a fresh conversation.
-        // This prevents message leaking while still supporting explicit continuation.
+        // Pass conversationId and sessionId if user explicitly continued a conversation,
+        // otherwise undefined to create a fresh conversation/session.
         conversationId: conversationIdForMcp ?? undefined,
+        sessionId: sessionIdForMcp,
       })
 
       // NOTE: Do NOT call continueConversation here!
@@ -243,6 +261,10 @@ export function Component() {
       return result
     },
     onError(error) {
+      // Clear the refs on error as well
+      mcpConversationIdRef.current = undefined
+      mcpSessionIdRef.current = undefined
+      fromTileRef.current = false
 
       tipcClient.hidePanelWindow({})
       tipcClient.displayError({
@@ -253,6 +275,7 @@ export function Component() {
     onSuccess() {
       // Don't clear progress or hide panel on success - agent mode will handle this
       // The panel needs to stay visible for agent mode progress updates
+      // (unless recording was from a tile, which already hid the panel in mutationFn)
     },
   })
 
@@ -510,7 +533,11 @@ export function Component() {
 
   // MCP handlers
   useEffect(() => {
-    const unlisten = rendererHandlers.startMcpRecording.listen(() => {
+    const unlisten = rendererHandlers.startMcpRecording.listen((data) => {
+      // Store the conversationId, sessionId, and fromTile flag for use when recording ends
+      mcpConversationIdRef.current = data?.conversationId
+      mcpSessionIdRef.current = data?.sessionId
+      fromTileRef.current = data?.fromTile ?? false
       setMcpMode(true)
       mcpModeRef.current = true
       // Mode sizing is now applied in main before show; avoid duplicate calls here
@@ -531,11 +558,14 @@ export function Component() {
   }, [])
 
   useEffect(() => {
-    const unlisten = rendererHandlers.startOrFinishMcpRecording.listen(() => {
+    const unlisten = rendererHandlers.startOrFinishMcpRecording.listen((data) => {
       if (recording) {
         isConfirmedRef.current = true
         recorderRef.current?.stopRecording()
       } else {
+        // Store the conversationId and sessionId for use when recording ends
+        mcpConversationIdRef.current = data?.conversationId
+        mcpSessionIdRef.current = data?.sessionId
         setMcpMode(true)
         requestPanelMode("normal") // Ensure panel is normal size for recording
         tipcClient.showPanelWindow({})

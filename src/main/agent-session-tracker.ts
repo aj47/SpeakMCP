@@ -260,6 +260,55 @@ class AgentSessionTracker {
   }
 
   /**
+   * Find a session by conversationId (active or completed)
+   * Returns the session ID if found, undefined otherwise
+   */
+  findSessionByConversationId(conversationId: string): string | undefined {
+    // First check active sessions
+    for (const [sessionId, session] of this.sessions.entries()) {
+      if (session.conversationId === conversationId) {
+        return sessionId
+      }
+    }
+    // Then check completed sessions
+    for (const session of this.completedSessions) {
+      if (session.conversationId === conversationId) {
+        return session.id
+      }
+    }
+    return undefined
+  }
+
+  /**
+   * Revive a completed session to continue it
+   * Moves the session from completedSessions back to active sessions
+   */
+  reviveSession(sessionId: string): boolean {
+    // Find in completed sessions
+    const completedIndex = this.completedSessions.findIndex(s => s.id === sessionId)
+    if (completedIndex === -1) {
+      // Maybe it's already active?
+      if (this.sessions.has(sessionId)) {
+        logApp(`[AgentSessionTracker] Session ${sessionId} is already active`)
+        return true
+      }
+      logApp(`[AgentSessionTracker] Cannot revive - session not found: ${sessionId}`)
+      return false
+    }
+
+    // Remove from completed and add back to active
+    const [session] = this.completedSessions.splice(completedIndex, 1)
+    session.status = "active"
+    session.isSnoozed = false
+    delete session.endTime
+    this.sessions.set(sessionId, session)
+
+    logApp(`[AgentSessionTracker] Revived session: ${sessionId}`)
+    emitSessionUpdate()
+    return true
+  }
+
+  /**
    * Clear all sessions (for testing/debugging)
    */
   clearAllSessions(): void {

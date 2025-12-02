@@ -784,14 +784,10 @@ export const router = {
   triggerMcpRecording: t.procedure
     .input<{ conversationId?: string; sessionId?: string; fromTile?: boolean }>()
     .action(async ({ input }) => {
-      const { showPanelWindowAndStartMcpRecording, startMcpRecordingWithoutPanel } = await import("./window")
-      if (input.fromTile) {
-        // Recording initiated from a tile in sessions view - don't show floating panel
-        await startMcpRecordingWithoutPanel(input.conversationId, input.sessionId)
-      } else {
-        // Recording initiated from panel or hotkey - show the floating panel
-        await showPanelWindowAndStartMcpRecording(input.conversationId, input.sessionId)
-      }
+      const { showPanelWindowAndStartMcpRecording } = await import("./window")
+      // Always show the panel during recording for waveform feedback
+      // The fromTile flag tells the panel to hide after recording ends
+      await showPanelWindowAndStartMcpRecording(input.conversationId, input.sessionId, input.fromTile)
     }),
 
   showMainWindow: t.procedure

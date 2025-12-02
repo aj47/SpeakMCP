@@ -3,6 +3,7 @@ import {
   showPanelWindowAndStartRecording,
   showPanelWindowAndStartMcpRecording,
   showPanelWindowAndShowTextInput,
+  showPanelWindowWithMeetingContext,
   stopRecordingAndHidePanelWindow,
   stopTextInputAndHidePanelWindow,
   closeAgentModeAndHidePanelWindow,
@@ -17,6 +18,7 @@ import { spawn, ChildProcess } from "child_process"
 import path from "path"
 import { matchesKeyCombo, getEffectiveShortcut } from "../shared/key-utils"
 import { isDebugKeybinds, logKeybinds } from "./debug"
+import { meetingTranscriptBuffer } from "./meeting-transcript-buffer"
 
 const rdevPath = path
   .join(
@@ -219,6 +221,28 @@ const hasRecentKeyPress = () => {
     // therefore we have to check if the key was pressed in the last 10 seconds
     return now - time < 10
   })
+}
+
+/**
+ * Trigger Meeting Mode - opens the agent panel with recent transcript context.
+ * If there's no recent transcript, opens the regular text input panel.
+ */
+const triggerMeetingMode = () => {
+  const transcript = meetingTranscriptBuffer.getRecentTranscript()
+
+  if (transcript) {
+    // We have transcript context - show meeting mode input
+    if (isDebugKeybinds()) {
+      logKeybinds("Meeting Mode: Found transcript context, length:", transcript.length)
+    }
+    showPanelWindowWithMeetingContext(transcript)
+  } else {
+    // No transcript available - fall back to regular text input
+    if (isDebugKeybinds()) {
+      logKeybinds("Meeting Mode: No transcript context available, showing regular text input")
+    }
+    showPanelWindowAndShowTextInput()
+  }
 }
 
 export function listenToKeyboardEvents() {
@@ -809,6 +833,86 @@ export function listenToKeyboardEvents() {
               state.isToggleRecordingActive = true
               showPanelWindowAndStartRecording()
             }
+            return
+          }
+        }
+      }
+
+      // Handle Meeting Mode hotkey
+      if (config.meetingModeEnabled) {
+        const effectiveMeetingModeHotkey = getEffectiveShortcut(
+          config.meetingModeHotkey,
+          config.customMeetingModeHotkey,
+        )
+
+        // Ctrl+Shift+A
+        if (
+          config.meetingModeHotkey === "ctrl-shift-a" &&
+          e.data.key === "KeyA" &&
+          isPressedCtrlKey &&
+          isPressedShiftKey &&
+          !isPressedAltKey
+        ) {
+          if (isDebugKeybinds()) {
+            logKeybinds("Meeting Mode triggered: Ctrl+Shift+A")
+          }
+          triggerMeetingMode()
+          return
+        }
+
+        // Cmd+Shift+A (macOS)
+        if (
+          config.meetingModeHotkey === "cmd-shift-a" &&
+          e.data.key === "KeyA" &&
+          isPressedMetaKey &&
+          isPressedShiftKey &&
+          !isPressedAltKey
+        ) {
+          if (isDebugKeybinds()) {
+            logKeybinds("Meeting Mode triggered: Cmd+Shift+A")
+          }
+          triggerMeetingMode()
+          return
+        }
+
+        // Ctrl+Shift+M
+        if (
+          config.meetingModeHotkey === "ctrl-shift-m" &&
+          e.data.key === "KeyM" &&
+          isPressedCtrlKey &&
+          isPressedShiftKey &&
+          !isPressedAltKey
+        ) {
+          if (isDebugKeybinds()) {
+            logKeybinds("Meeting Mode triggered: Ctrl+Shift+M")
+          }
+          triggerMeetingMode()
+          return
+        }
+
+        // Custom Meeting Mode hotkey
+        if (
+          config.meetingModeHotkey === "custom" &&
+          effectiveMeetingModeHotkey
+        ) {
+          const matches = matchesKeyCombo(
+            e.data,
+            {
+              ctrl: isPressedCtrlKey,
+              shift: isPressedShiftKey,
+              alt: isPressedAltKey,
+              meta: isPressedMetaKey,
+            },
+            effectiveMeetingModeHotkey,
+          )
+          if (isDebugKeybinds() && matches) {
+            logKeybinds(
+              "Meeting Mode triggered: Custom hotkey",
+              effectiveMeetingModeHotkey,
+            )
+          }
+          if (matches) {
+            triggerMeetingMode()
             return
           }
         }

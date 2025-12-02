@@ -421,4 +421,10 @@ export type Config = {
   streamStatusWatcherEnabled?: boolean
   streamStatusFilePath?: string
 
+  // Meeting Mode Configuration
+  meetingModeEnabled?: boolean
+  meetingModeHotkey?: "ctrl-shift-a" | "cmd-shift-a" | "ctrl-shift-m" | "custom"
+  customMeetingModeHotkey?: string
+  meetingModeContextDuration?: number // Duration in seconds to include in context (default: 120)
+
 }

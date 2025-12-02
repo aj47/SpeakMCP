@@ -66,8 +66,9 @@ export function TileFollowUpInput({
     // Pass conversationId and sessionId directly through IPC to continue in the same session
     // This is more reliable than using Zustand store which has timing issues
     // Don't pass fake "pending-*" sessionIds - let the backend find the real session by conversationId
+    // Mark as fromTile so the floating panel doesn't show - session continues in the tile
     const realSessionId = sessionId?.startsWith('pending-') ? undefined : sessionId
-    await tipcClient.triggerMcpRecording({ conversationId, sessionId: realSessionId })
+    await tipcClient.triggerMcpRecording({ conversationId, sessionId: realSessionId, fromTile: true })
   }
 
   // Don't allow input while session is still active (agent is processing)

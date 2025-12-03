@@ -2417,9 +2417,6 @@ async function makeLLMCall(
           agentSessionStateManager.unregisterAbortController(sessionId, streamingAbortController)
         }
       }
-      if (sessionId) {
-        agentSessionStateManager.unregisterAbortController(sessionId, streamingAbortController)
-      }
 
       if (isDebugLLM()) {
         logLLM("Response ←", result)

@@ -1111,10 +1111,15 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
         )
       : undefined
     if (currentThinkingStep) {
-        if (
-          currentThinkingStep.llmContent &&
-          currentThinkingStep.llmContent.trim().length > 0
-        ) {
+      // Don't show assistant message from thinking step when streaming is active
+      // to avoid duplicate content (streaming bubble already shows the text)
+      const isStreaming = progress.streamingContent?.isStreaming
+
+      if (
+        !isStreaming &&
+        currentThinkingStep.llmContent &&
+        currentThinkingStep.llmContent.trim().length > 0
+      ) {
         messages.push({
           role: "assistant",
           content: currentThinkingStep.llmContent,
@@ -1122,13 +1127,11 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
           timestamp: currentThinkingStep.timestamp,
           isThinking: false,
         })
-      } else {
+      } else if (!isStreaming) {
         messages.push({
           role: "assistant",
           content: currentThinkingStep.description || "Agent is thinking...",
           isComplete: false,
-
-
           timestamp: currentThinkingStep.timestamp,
           isThinking: true,
         })

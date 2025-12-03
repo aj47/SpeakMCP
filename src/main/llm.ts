@@ -791,7 +791,17 @@ Return ONLY JSON per schema.`,
         const text = (entry.content || "").trim()
         if (text) messages.push({ role: "user", content: `Tool results:\n${text}` })
       } else {
-        messages.push({ role: entry.role, content: entry.content })
+        // Ensure non-empty content for assistant messages (Anthropic API requirement)
+        let content = entry.content
+        if (entry.role === "assistant" && !content?.trim()) {
+          if (entry.toolCalls && entry.toolCalls.length > 0) {
+            const toolNames = entry.toolCalls.map(tc => tc.name).join(", ")
+            content = `[Calling tools: ${toolNames}]`
+          } else {
+            content = "[Processing...]"
+          }
+        }
+        messages.push({ role: entry.role, content })
       }
     }
     if (finalAssistantText?.trim()) {
@@ -947,9 +957,23 @@ Always use actual resource IDs from the conversation history or create new ones 
               content: `Tool execution results:\n${entry.content}`,
             }
           }
+          // For assistant messages, ensure non-empty content
+          // Anthropic API requires all messages to have non-empty content
+          // except for the optional final assistant message
+          let content = entry.content
+          if (entry.role === "assistant" && !content?.trim()) {
+            // If assistant message has tool calls but no content, describe the tool calls
+            if (entry.toolCalls && entry.toolCalls.length > 0) {
+              const toolNames = entry.toolCalls.map(tc => tc.name).join(", ")
+              content = `[Calling tools: ${toolNames}]`
+            } else {
+              // Fallback for empty assistant messages without tool calls
+              content = "[Processing...]"
+            }
+          }
           return {
             role: entry.role as "user" | "assistant",
-            content: entry.content,
+            content,
           }
         })
         .filter(Boolean as any),

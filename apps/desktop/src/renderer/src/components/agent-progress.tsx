@@ -64,6 +64,10 @@ type DisplayItem =
       reason: string
       startedAt: number
     } }
+  | { kind: "streaming"; id: string; data: {
+      text: string
+      isStreaming: boolean
+    } }
 
 
 // Compact message component for space efficiency
@@ -819,6 +823,41 @@ const RetryStatusBanner: React.FC<{
   )
 }
 
+// Streaming Content Bubble - shows real-time LLM response as it's being generated
+const StreamingContentBubble: React.FC<{
+  streamingContent: {
+    text: string
+    isStreaming: boolean
+  }
+}> = ({ streamingContent }) => {
+  if (!streamingContent.text) return null
+
+  return (
+    <div className="rounded-lg border border-blue-300 dark:border-blue-700 bg-blue-50/50 dark:bg-blue-950/30 overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center gap-2 px-3 py-2 bg-blue-100/50 dark:bg-blue-900/30 border-b border-blue-200 dark:border-blue-800">
+        <Activity className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
+        <span className="text-xs font-medium text-blue-800 dark:text-blue-200">
+          {streamingContent.isStreaming ? "Generating response..." : "Response"}
+        </span>
+        {streamingContent.isStreaming && (
+          <Loader2 className="h-3 w-3 text-blue-600 dark:text-blue-400 animate-spin ml-auto" />
+        )}
+      </div>
+
+      {/* Content */}
+      <div className="px-3 py-2">
+        <div className="text-xs text-blue-900 dark:text-blue-100 whitespace-pre-wrap break-words">
+          <MarkdownRenderer content={streamingContent.text} />
+          {streamingContent.isStreaming && (
+            <span className="inline-block w-1.5 h-3.5 bg-blue-600 dark:bg-blue-400 animate-pulse ml-0.5 align-text-bottom" />
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 
 export const AgentProgress: React.FC<AgentProgressProps> = ({
   progress,
@@ -1229,6 +1268,15 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
     })
   }
 
+  // Add streaming content to display items if present and actively streaming
+  if (progress.streamingContent && progress.streamingContent.isStreaming && progress.streamingContent.text) {
+    displayItems.push({
+      kind: "streaming",
+      id: "streaming-content",
+      data: progress.streamingContent,
+    })
+  }
+
   // Determine the last assistant message among display items (by position, not timestamp)
   const lastAssistantDisplayIndex = (() => {
     for (let i = displayItems.length - 1; i >= 0; i--) {
@@ -1248,11 +1296,11 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
       scrollContainer.scrollTop = scrollContainer.scrollHeight
     }
 
-    // Calculate total content length for streaming detection
+    // Calculate total content length for streaming detection (including streaming content)
     const totalContentLength = messages.reduce(
       (sum, msg) => sum + (msg.content?.length ?? 0),
       0,
-    )
+    ) + (progress.streamingContent?.text?.length ?? 0)
 
     // Check if new messages were added or content changed (streaming)
     const hasNewMessages = messages.length > lastMessageCountRef.current
@@ -1270,7 +1318,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
         })
       }
     }
-  }, [messages.length, shouldAutoScroll, messages])
+  }, [messages.length, shouldAutoScroll, messages, progress.streamingContent?.text])
 
   // Initial scroll to bottom on mount and when first message appears
   useEffect(() => {
@@ -1475,6 +1523,8 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
                         )
                       } else if (item.kind === "retry_status") {
                         return <RetryStatusBanner key={itemKey} retryInfo={item.data} />
+                      } else if (item.kind === "streaming") {
+                        return <StreamingContentBubble key={itemKey} streamingContent={item.data} />
                       } else {
                         return (
                           <ToolExecutionBubble
@@ -1658,6 +1708,13 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
                     <RetryStatusBanner
                       key={itemKey}
                       retryInfo={item.data}
+                    />
+                  )
+                } else if (item.kind === "streaming") {
+                  return (
+                    <StreamingContentBubble
+                      key={itemKey}
+                      streamingContent={item.data}
                     />
                   )
                 } else {

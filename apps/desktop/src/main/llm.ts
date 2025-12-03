@@ -8,7 +8,7 @@ import {
 import { AgentProgressStep, AgentProgressUpdate } from "../shared/types"
 import { diagnosticsService } from "./diagnostics"
 import { makeStructuredContextExtraction, ContextExtractionResponse } from "./structured-output"
-import { makeLLMCallWithFetch, makeTextCompletionWithFetch, verifyCompletionWithFetch, RetryProgressCallback } from "./llm-fetch"
+import { makeLLMCallWithFetch, makeTextCompletionWithFetch, verifyCompletionWithFetch, RetryProgressCallback, makeLLMCallWithStreaming, StreamingCallback } from "./llm-fetch"
 import { constructSystemPrompt } from "./system-prompts"
 import { state, agentSessionStateManager } from "./state"
 import { isDebugLLM, logLLM, isDebugTools, logTools } from "./debug"
@@ -1122,10 +1122,41 @@ Always use actual resource IDs from the conversation history or create new ones 
       break
     }
 
-    // Make LLM call (abort-aware)
+    // Make LLM call (abort-aware) with streaming for real-time UI updates
     let llmResponse: any
     try {
-      llmResponse = await makeLLMCall(shrunkMessages, config, onRetryProgress)
+      // Create streaming callback that emits progress updates as content streams in
+      const onStreamingUpdate: StreamingCallback = (_chunk, accumulated) => {
+        // Update the thinking step with streaming content
+        thinkingStep.llmContent = accumulated
+        // Emit progress update with streaming content
+        emit({
+          currentIteration: iteration,
+          maxIterations,
+          steps: progressSteps.slice(-3),
+          isComplete: false,
+          conversationHistory: formatConversationForProgress(conversationHistory),
+          streamingContent: {
+            text: accumulated,
+            isStreaming: true,
+          },
+        })
+      }
+
+      llmResponse = await makeLLMCall(shrunkMessages, config, onRetryProgress, onStreamingUpdate)
+
+      // Clear streaming state after response is complete
+      emit({
+        currentIteration: iteration,
+        maxIterations,
+        steps: progressSteps.slice(-3),
+        isComplete: false,
+        conversationHistory: formatConversationForProgress(conversationHistory),
+        streamingContent: {
+          text: llmResponse?.content || "",
+          isStreaming: false,
+        },
+      })
 
       // If stop was requested while the LLM call was in-flight and it returned before aborting, exit now
       if (agentSessionStateManager.shouldStopSession(currentSessionId)) {
@@ -2317,6 +2348,7 @@ async function makeLLMCall(
   messages: Array<{ role: string; content: string }>,
   config: any,
   onRetryProgress?: RetryProgressCallback,
+  onStreamingUpdate?: StreamingCallback,
 ): Promise<LLMToolCallResponse> {
   const chatProviderId = config.mcpToolsProviderId
 
@@ -2329,6 +2361,38 @@ async function makeLLMCall(
         messages: messages,
       })
     }
+
+    // If streaming callback is provided and provider supports it, use streaming
+    // Note: Streaming is only for display purposes - we still need the full response for tool calls
+    if (onStreamingUpdate && chatProviderId !== "gemini") {
+      // Start a parallel streaming call for real-time display
+      // This runs alongside the structured call to provide live feedback
+      const streamingPromise = makeLLMCallWithStreaming(
+        messages,
+        onStreamingUpdate,
+        chatProviderId,
+      ).catch(err => {
+        // Streaming errors are non-fatal - we still have the structured call
+        if (isDebugLLM()) {
+          logLLM("Streaming call failed (non-fatal):", err)
+        }
+        return null
+      })
+
+      // Make the structured call for the actual response
+      const result = await makeLLMCallWithFetch(messages, chatProviderId, onRetryProgress)
+
+      // Wait for streaming to complete (or fail) before returning
+      await streamingPromise
+
+      if (isDebugLLM()) {
+        logLLM("Response ←", result)
+        logLLM("=== LLM CALL END ===")
+      }
+      return result
+    }
+
+    // Non-streaming path
     const result = await makeLLMCallWithFetch(messages, chatProviderId, onRetryProgress)
     if (isDebugLLM()) {
       logLLM("Response ←", result)

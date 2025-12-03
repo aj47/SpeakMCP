@@ -2418,6 +2418,11 @@ async function makeLLMCall(
         }
       }
 
+      // Unregister the streaming abort controller since we're done with it
+      if (sessionId) {
+        agentSessionStateManager.unregisterAbortController(sessionId, streamingAbortController)
+      }
+
       if (isDebugLLM()) {
         logLLM("Response ←", result)
         logLLM("=== LLM CALL END ===")

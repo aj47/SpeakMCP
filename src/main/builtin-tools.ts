@@ -41,10 +41,10 @@ export const builtinTools: MCPTool[] = [
         },
         enabled: {
           type: "boolean",
-          description: "Whether to enable (true) or disable (false) the server",
+          description: "Whether to enable (true) or disable (false) the server. If not provided, toggles to the opposite of the current state.",
         },
       },
-      required: ["serverName", "enabled"],
+      required: ["serverName"],
     },
   },
   {
@@ -131,20 +131,19 @@ const toolHandlers: Record<string, ToolHandler> = {
       }
     }
 
-    // Validate enabled parameter
-    if (typeof args.enabled !== "boolean") {
+    // Validate enabled parameter if provided (optional)
+    if (args.enabled !== undefined && typeof args.enabled !== "boolean") {
       return {
-        content: [{ type: "text", text: JSON.stringify({ success: false, error: "enabled must be a boolean" }) }],
+        content: [{ type: "text", text: JSON.stringify({ success: false, error: "enabled must be a boolean if provided" }) }],
         isError: true,
       }
     }
 
     const serverName = args.serverName
-    const enabled = args.enabled
 
     const config = configStore.get()
     const mcpConfig = config.mcpConfig || { mcpServers: {} }
-    
+
     // Check if server exists
     if (!mcpConfig.mcpServers[serverName]) {
       return {
@@ -160,9 +159,13 @@ const toolHandlers: Record<string, ToolHandler> = {
         isError: true,
       }
     }
-    
+
     // Update runtime disabled servers list
     const runtimeDisabled = new Set(config.mcpRuntimeDisabledServers || [])
+
+    // Determine the new enabled state: use provided value or toggle current state
+    const isCurrentlyDisabled = runtimeDisabled.has(serverName) || mcpConfig.mcpServers[serverName].disabled === true
+    const enabled = typeof args.enabled === "boolean" ? args.enabled : isCurrentlyDisabled // toggle to opposite
     
     if (enabled) {
       runtimeDisabled.delete(serverName)

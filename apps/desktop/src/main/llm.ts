@@ -2417,8 +2417,6 @@ async function makeLLMCall(
           agentSessionStateManager.unregisterAbortController(sessionId, streamingAbortController)
         }
       }
-
-      // Unregister the streaming abort controller since we're done with it
       if (sessionId) {
         agentSessionStateManager.unregisterAbortController(sessionId, streamingAbortController)
       }

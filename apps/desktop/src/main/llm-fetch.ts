@@ -1419,6 +1419,21 @@ export async function makeLLMCallWithStreaming(
       }
     }
 
+    // Flush the decoder to get any remaining bytes and process residual buffer
+    buffer += decoder.decode(new Uint8Array(), { stream: false })
+    if (buffer.trim() && buffer.trim() !== "data: [DONE]" && buffer.trim().startsWith("data: ")) {
+      try {
+        const json = JSON.parse(buffer.trim().slice(6))
+        const delta = json.choices?.[0]?.delta?.content
+        if (delta) {
+          accumulated += delta
+          onChunk(delta, accumulated)
+        }
+      } catch {
+        // Skip malformed JSON chunks
+      }
+    }
+
     // Parse the final accumulated content as a response
     // For streaming, we typically get plain text, so wrap it
     return {

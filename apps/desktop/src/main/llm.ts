@@ -840,7 +840,7 @@ export async function processTranscriptWithAgentMode(
       },
     })
 
-    const response = await makeLLMCall(shrunkMessages, config, onRetryProgress)
+    const response = await makeLLMCall(shrunkMessages, config, onRetryProgress, undefined, currentSessionId)
 
     // Check for stop request if needed
     if (checkForStop && agentSessionStateManager.shouldStopSession(currentSessionId)) {
@@ -1143,7 +1143,7 @@ Always use actual resource IDs from the conversation history or create new ones 
         })
       }
 
-      llmResponse = await makeLLMCall(shrunkMessages, config, onRetryProgress, onStreamingUpdate)
+      llmResponse = await makeLLMCall(shrunkMessages, config, onRetryProgress, onStreamingUpdate, currentSessionId)
 
       // Clear streaming state after response is complete
       emit({
@@ -1877,7 +1877,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
 
 
         try {
-          const summaryResponse = await makeLLMCall(shrunkSummaryMessages, config, onRetryProgress)
+          const summaryResponse = await makeLLMCall(shrunkSummaryMessages, config, onRetryProgress, undefined, currentSessionId)
 
           // Check if stop was requested during summary generation
           if (agentSessionStateManager.shouldStopSession(currentSessionId)) {
@@ -2132,7 +2132,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
 
 
         try {
-          const summaryResponse = await makeLLMCall(shrunkSummaryMessages, config, onRetryProgress)
+          const summaryResponse = await makeLLMCall(shrunkSummaryMessages, config, onRetryProgress, undefined, currentSessionId)
 
           // Update summary step with the response
           summaryStep.status = "completed"
@@ -2349,6 +2349,7 @@ async function makeLLMCall(
   config: any,
   onRetryProgress?: RetryProgressCallback,
   onStreamingUpdate?: StreamingCallback,
+  sessionId?: string,
 ): Promise<LLMToolCallResponse> {
   const chatProviderId = config.mcpToolsProviderId
 
@@ -2365,12 +2366,33 @@ async function makeLLMCall(
     // If streaming callback is provided and provider supports it, use streaming
     // Note: Streaming is only for display purposes - we still need the full response for tool calls
     if (onStreamingUpdate && chatProviderId !== "gemini") {
+      // Create abort controller for streaming - we'll abort when structured call completes
+      const streamingAbortController = new AbortController()
+
+      // Register with session manager so user-initiated stop will also cancel streaming
+      if (sessionId) {
+        agentSessionStateManager.registerAbortController(sessionId, streamingAbortController)
+      }
+
+      // Track whether streaming should be aborted (when structured call completes)
+      // This prevents late streaming updates from appearing after the response is ready
+      let streamingAborted = false
+
+      // Wrap the callback to ignore updates after the structured call completes
+      const wrappedOnStreamingUpdate = (chunk: string, accumulated: string) => {
+        if (!streamingAborted) {
+          onStreamingUpdate(chunk, accumulated)
+        }
+      }
+
       // Start a parallel streaming call for real-time display
       // This runs alongside the structured call to provide live feedback
       const streamingPromise = makeLLMCallWithStreaming(
         messages,
-        onStreamingUpdate,
+        wrappedOnStreamingUpdate,
         chatProviderId,
+        sessionId,
+        streamingAbortController,
       ).catch(err => {
         // Streaming errors are non-fatal - we still have the structured call
         if (isDebugLLM()) {
@@ -2380,10 +2402,21 @@ async function makeLLMCall(
       })
 
       // Make the structured call for the actual response
-      const result = await makeLLMCallWithFetch(messages, chatProviderId, onRetryProgress)
+      // Wrap in try/finally to ensure streaming is cleaned up even if the call fails
+      let result: LLMToolCallResponse
+      try {
+        result = await makeLLMCallWithFetch(messages, chatProviderId, onRetryProgress, sessionId)
+      } finally {
+        // Abort streaming request - we have the real response (or error) now
+        // This saves bandwidth/tokens by closing the SSE connection immediately
+        streamingAborted = true
+        streamingAbortController.abort()
 
-      // Wait for streaming to complete (or fail) before returning
-      await streamingPromise
+        // Unregister the streaming abort controller since we're done with it
+        if (sessionId) {
+          agentSessionStateManager.unregisterAbortController(sessionId, streamingAbortController)
+        }
+      }
 
       if (isDebugLLM()) {
         logLLM("Response ←", result)
@@ -2393,7 +2426,7 @@ async function makeLLMCall(
     }
 
     // Non-streaming path
-    const result = await makeLLMCallWithFetch(messages, chatProviderId, onRetryProgress)
+    const result = await makeLLMCallWithFetch(messages, chatProviderId, onRetryProgress, sessionId)
     if (isDebugLLM()) {
       logLLM("Response ←", result)
       logLLM("=== LLM CALL END ===")

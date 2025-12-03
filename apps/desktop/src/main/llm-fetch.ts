@@ -1114,6 +1114,7 @@ async function makeLLMCallAttempt(
   messages: Array<{ role: string; content: string }>,
   chatProviderId: string,
   onRetryProgress?: RetryProgressCallback,
+  sessionId?: string,
 ): Promise<LLMToolCallResponse> {
   if (isDebugLLM()) {
     logLLM("🚀 Starting LLM call attempt", {
@@ -1126,9 +1127,9 @@ async function makeLLMCallAttempt(
   let response: any
 
   if (chatProviderId === "gemini") {
-    response = await makeGeminiCall(messages, undefined, onRetryProgress)
+    response = await makeGeminiCall(messages, sessionId, onRetryProgress)
   } else {
-    response = await makeOpenAICompatibleCall(messages, chatProviderId, true, undefined, onRetryProgress)
+    response = await makeOpenAICompatibleCall(messages, chatProviderId, true, sessionId, onRetryProgress)
   }
 
   if (isDebugLLM()) {
@@ -1286,6 +1287,7 @@ export async function makeLLMCallWithFetch(
   messages: Array<{ role: string; content: string }>,
   providerId?: string,
   onRetryProgress?: RetryProgressCallback,
+  sessionId?: string,
 ): Promise<LLMToolCallResponse> {
   const config = configStore.get()
   const chatProviderId = providerId || config.mcpToolsProviderId || "openai"
@@ -1293,7 +1295,7 @@ export async function makeLLMCallWithFetch(
   try {
     // Wrap the LLM call with retry logic to handle empty responses
     return await apiCallWithRetry(
-      async () => makeLLMCallAttempt(messages, chatProviderId, onRetryProgress),
+      async () => makeLLMCallAttempt(messages, chatProviderId, onRetryProgress, sessionId),
       config.apiRetryCount,
       config.apiRetryBaseDelay,
       config.apiRetryMaxDelay,
@@ -1323,6 +1325,7 @@ export async function makeLLMCallWithStreaming(
   onChunk: StreamingCallback,
   providerId?: string,
   sessionId?: string,
+  externalAbortController?: AbortController,
 ): Promise<LLMToolCallResponse> {
   const config = configStore.get()
   const chatProviderId = providerId || config.mcpToolsProviderId || "openai"
@@ -1349,12 +1352,15 @@ export async function makeLLMCallWithStreaming(
 
   const model = getModel(chatProviderId, "mcp")
 
-  // Create abort controller for this request
-  const abortController = new AbortController()
-  if (sessionId) {
-    agentSessionStateManager.registerAbortController(sessionId, abortController)
-  } else {
-    llmRequestAbortManager.register(abortController)
+  // Use external abort controller if provided, otherwise create our own
+  const abortController = externalAbortController || new AbortController()
+  const shouldManageAbortController = !externalAbortController
+  if (shouldManageAbortController) {
+    if (sessionId) {
+      agentSessionStateManager.registerAbortController(sessionId, abortController)
+    } else {
+      llmRequestAbortManager.register(abortController)
+    }
   }
 
   try {
@@ -1427,11 +1433,13 @@ export async function makeLLMCallWithStreaming(
     diagnosticsService.logError("llm-fetch", "Streaming LLM call failed", error)
     throw error
   } finally {
-    // Clean up abort controller
-    if (sessionId) {
-      agentSessionStateManager.unregisterAbortController(sessionId, abortController)
-    } else {
-      llmRequestAbortManager.unregister(abortController)
+    // Clean up abort controller only if we created it ourselves
+    if (shouldManageAbortController) {
+      if (sessionId) {
+        agentSessionStateManager.unregisterAbortController(sessionId, abortController)
+      } else {
+        llmRequestAbortManager.unregister(abortController)
+      }
     }
   }
 }

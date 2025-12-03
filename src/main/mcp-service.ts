@@ -22,6 +22,7 @@ import { OAuthClient } from "./oauth-client"
 import { oauthStorage } from "./oauth-storage"
 import { isDebugTools, logTools } from "./debug"
 import { dialog } from "electron"
+import { builtinTools, executeBuiltinTool, isBuiltinTool, BUILTIN_SERVER_NAME } from "./builtin-tools"
 
 const accessAsync = promisify(access)
 
@@ -1348,7 +1349,9 @@ export class MCPService {
   }
 
   getAvailableTools(): MCPTool[] {
-    const enabledTools = this.availableTools.filter(
+    // Combine external MCP tools with built-in tools
+    const allTools = [...this.availableTools, ...builtinTools]
+    const enabledTools = allTools.filter(
       (tool) => !this.disabledTools.has(tool.name),
     )
     return enabledTools
@@ -1368,8 +1371,8 @@ export class MCPService {
     const mcpConfig = config.mcpConfig
     const configuredServers = mcpConfig?.mcpServers || {}
 
-    // Filter out tools from servers that no longer exist in configuration
-    return this.availableTools
+    // Get external MCP tools (filter out tools from servers that no longer exist)
+    const externalTools = this.availableTools
       .filter((tool) => {
         const serverName = tool.name.includes(":")
           ? tool.name.split(":")[0]
@@ -1389,6 +1392,17 @@ export class MCPService {
           inputSchema: tool.inputSchema,
         }
       })
+
+    // Add built-in tools
+    const builtinToolsList = builtinTools.map((tool) => ({
+      name: tool.name,
+      description: tool.description,
+      serverName: BUILTIN_SERVER_NAME,
+      enabled: !this.disabledTools.has(tool.name),
+      inputSchema: tool.inputSchema,
+    }))
+
+    return [...externalTools, ...builtinToolsList]
   }
 
   getServerStatus(): Record<
@@ -1449,6 +1463,14 @@ export class MCPService {
           configDisabled: false,
         }
       }
+    }
+
+    // Add built-in settings server (always connected, always enabled)
+    status[BUILTIN_SERVER_NAME] = {
+      connected: true,
+      toolCount: builtinTools.length,
+      runtimeEnabled: true,
+      configDisabled: false,
     }
 
     return status
@@ -2084,6 +2106,20 @@ export class MCPService {
           }
         }
       }
+      // Check if this is a built-in tool first
+      if (isBuiltinTool(toolCall.name)) {
+        if (isDebugTools()) {
+          logTools("Executing built-in tool", { name: toolCall.name, arguments: toolCall.arguments })
+        }
+        const result = await executeBuiltinTool(toolCall.name, toolCall.arguments || {})
+        if (result) {
+          if (isDebugTools()) {
+            logTools("Built-in tool result", { name: toolCall.name, result })
+          }
+          return result
+        }
+      }
+
       // Check if this is a server-prefixed tool
       if (toolCall.name.includes(":")) {
         const [serverName, toolName] = toolCall.name.split(":", 2)
@@ -2101,7 +2137,9 @@ export class MCPService {
       }
 
       // Try to find a matching tool without prefix (fallback for LLM inconsistencies)
-      const matchingTool = this.availableTools.find((tool) => {
+      // Include both external and built-in tools in the search
+      const allTools = [...this.availableTools, ...builtinTools]
+      const matchingTool = allTools.find((tool) => {
         if (tool.name.includes(":")) {
           const [, toolName] = tool.name.split(":", 2)
           return toolName === toolCall.name
@@ -2110,6 +2148,14 @@ export class MCPService {
       })
 
       if (matchingTool && matchingTool.name.includes(":")) {
+        // Check if it's a built-in tool
+        if (isBuiltinTool(matchingTool.name)) {
+          const result = await executeBuiltinTool(matchingTool.name, toolCall.arguments || {})
+          if (result) {
+            return result
+          }
+        }
+
         const [serverName, toolName] = matchingTool.name.split(":", 2)
         const result = await this.executeServerTool(
           serverName,
@@ -2125,7 +2171,7 @@ export class MCPService {
       }
 
       // No matching tools found
-      const availableToolNames = this.availableTools
+      const availableToolNames = allTools
         .map((t) => t.name)
         .join(", ")
       const result: MCPToolResult = {

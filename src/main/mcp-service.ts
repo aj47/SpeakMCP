@@ -1370,6 +1370,16 @@ export class MCPService {
     const config = configStore.get()
     const mcpConfig = config.mcpConfig
     const configuredServers = mcpConfig?.mcpServers || {}
+    const runtimeDisabledServers = new Set(config.mcpRuntimeDisabledServers || [])
+
+    // Helper to check if a server is effectively disabled
+    const isServerDisabled = (serverName: string): boolean => {
+      const serverConfig = configuredServers[serverName]
+      if (!serverConfig) return true
+      const configDisabled = serverConfig.disabled === true
+      const runtimeDisabled = runtimeDisabledServers.has(serverName)
+      return configDisabled || runtimeDisabled
+    }
 
     // Get external MCP tools (filter out tools from servers that no longer exist)
     const externalTools = this.availableTools
@@ -1384,16 +1394,19 @@ export class MCPService {
         const serverName = tool.name.includes(":")
           ? tool.name.split(":")[0]
           : "unknown"
+        // Tool is enabled only if: tool itself is not disabled AND server is not disabled
+        const toolDisabled = this.disabledTools.has(tool.name)
+        const serverDisabled = isServerDisabled(serverName)
         return {
           name: tool.name,
           description: tool.description,
           serverName,
-          enabled: !this.disabledTools.has(tool.name),
+          enabled: !toolDisabled && !serverDisabled,
           inputSchema: tool.inputSchema,
         }
       })
 
-    // Add built-in tools
+    // Add built-in tools (built-in server is always enabled)
     const builtinToolsList = builtinTools.map((tool) => ({
       name: tool.name,
       description: tool.description,

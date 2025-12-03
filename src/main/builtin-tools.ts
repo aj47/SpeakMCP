@@ -163,20 +163,35 @@ const toolHandlers: Record<string, ToolHandler> = {
     // Update runtime disabled servers list
     const runtimeDisabled = new Set(config.mcpRuntimeDisabledServers || [])
 
+    // Check if the server is disabled at the config level (in mcp.json)
+    const configDisabled = mcpConfig.mcpServers[serverName].disabled === true
+
     // Determine the new enabled state: use provided value or toggle current state
-    const isCurrentlyDisabled = runtimeDisabled.has(serverName) || mcpConfig.mcpServers[serverName].disabled === true
+    const isCurrentlyRuntimeDisabled = runtimeDisabled.has(serverName)
+    const isCurrentlyDisabled = isCurrentlyRuntimeDisabled || configDisabled
     const enabled = typeof args.enabled === "boolean" ? args.enabled : isCurrentlyDisabled // toggle to opposite
-    
+
     if (enabled) {
       runtimeDisabled.delete(serverName)
     } else {
       runtimeDisabled.add(serverName)
     }
-    
+
     configStore.save({
       ...config,
       mcpRuntimeDisabledServers: Array.from(runtimeDisabled),
     })
+
+    // Calculate the effective enabled state (considering both runtime and config)
+    const effectivelyEnabled = enabled && !configDisabled
+
+    // Build a clear message that indicates actual state
+    let message = `Server '${serverName}' runtime setting has been ${enabled ? "enabled" : "disabled"}.`
+    if (enabled && configDisabled) {
+      message += ` Warning: Server is still disabled in config file (disabled: true). Edit mcp.json to fully enable.`
+    } else {
+      message += ` Restart agent mode or the app for changes to take effect.`
+    }
 
     return {
       content: [
@@ -186,7 +201,9 @@ const toolHandlers: Record<string, ToolHandler> = {
             success: true,
             serverName,
             enabled,
-            message: `Server '${serverName}' has been ${enabled ? "enabled" : "disabled"}. Restart agent mode or the app for changes to take effect.`,
+            configDisabled,
+            effectivelyEnabled,
+            message,
           }),
         },
       ],

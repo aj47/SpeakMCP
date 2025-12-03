@@ -1332,7 +1332,7 @@ export async function makeLLMCallWithStreaming(
 
   // Gemini doesn't support streaming in the same way, fall back to non-streaming
   if (chatProviderId === "gemini") {
-    const result = await makeLLMCallWithFetch(messages, chatProviderId)
+    const result = await makeLLMCallWithFetch(messages, chatProviderId, undefined, sessionId)
     if (result.content) {
       onChunk(result.content, result.content)
     }

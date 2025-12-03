@@ -13,7 +13,7 @@
 
 import { configStore } from "./config"
 import { profileService } from "./profile-service"
-import type { MCPTool, MCPToolResult } from "./mcp-service"
+import { mcpService, type MCPTool, type MCPToolResult } from "./mcp-service"
 
 // The virtual server name for built-in tools
 export const BUILTIN_SERVER_NAME = "speakmcp-settings"
@@ -89,16 +89,20 @@ const toolHandlers: Record<string, ToolHandler> = {
     const config = configStore.get()
     const mcpConfig = config.mcpConfig || { mcpServers: {} }
     const runtimeDisabled = new Set(config.mcpRuntimeDisabledServers || [])
-    
+    const serverStatus = mcpService.getServerStatus()
+
     const servers = Object.entries(mcpConfig.mcpServers).map(([name, serverConfig]) => {
       const isConfigDisabled = serverConfig.disabled === true
       const isRuntimeDisabled = runtimeDisabled.has(name)
       const status = isConfigDisabled || isRuntimeDisabled ? "disabled" : "enabled"
       const transport = serverConfig.transport || "stdio"
-      
+      const connectionInfo = serverStatus[name]
+
       return {
         name,
         status,
+        connected: connectionInfo?.connected ?? false,
+        toolCount: connectionInfo?.toolCount ?? 0,
         transport,
         configDisabled: isConfigDisabled,
         runtimeDisabled: isRuntimeDisabled,
@@ -119,9 +123,25 @@ const toolHandlers: Record<string, ToolHandler> = {
   },
 
   toggle_mcp_server: async (args: Record<string, unknown>): Promise<MCPToolResult> => {
-    const serverName = args.serverName as string
-    const enabled = args.enabled as boolean
-    
+    // Validate serverName parameter
+    if (typeof args.serverName !== "string" || args.serverName.trim() === "") {
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success: false, error: "serverName must be a non-empty string" }) }],
+        isError: true,
+      }
+    }
+
+    // Validate enabled parameter
+    if (typeof args.enabled !== "boolean") {
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success: false, error: "enabled must be a boolean" }) }],
+        isError: true,
+      }
+    }
+
+    const serverName = args.serverName
+    const enabled = args.enabled
+
     const config = configStore.get()
     const mcpConfig = config.mcpConfig || { mcpServers: {} }
     
@@ -199,7 +219,13 @@ const toolHandlers: Record<string, ToolHandler> = {
   },
 
   switch_profile: async (args: Record<string, unknown>): Promise<MCPToolResult> => {
-    const profileIdOrName = args.profileIdOrName as string
+    const profileIdOrName = args.profileIdOrName
+    if (typeof profileIdOrName !== "string" || profileIdOrName.trim() === "") {
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success: false, error: "profileIdOrName must be a non-empty string" }) }],
+        isError: true,
+      }
+    }
     const profiles = profileService.getProfiles()
 
     // Find profile by ID or name (case-insensitive for name)

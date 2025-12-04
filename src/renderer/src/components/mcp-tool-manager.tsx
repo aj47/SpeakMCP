@@ -334,66 +334,64 @@ export function MCPToolManager({ onToolToggle }: MCPToolManagerProps) {
                 </CardHeader>
                 {expandedServers.has(serverName) && (
                   <CardContent className="pt-0">
-                    <div className="space-y-3">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                       {serverTools.map((tool) => (
                         <div
                           key={tool.name}
-                          className="flex items-center justify-between rounded-lg border p-3"
+                          className="flex flex-col rounded-lg border p-3"
                         >
-                          <div className="min-w-0 flex-1">
-                            <div className="mb-1 flex items-center gap-2">
-                              <h4 className="truncate text-sm font-medium">
-                                {tool.name.includes(":")
-                                  ? tool.name.split(":").slice(1).join(":")
-                                  : tool.name}
-                              </h4>
-                              {!tool.enabled && (
-                                <Badge variant="outline" className="text-xs">
-                                  Disabled
-                                </Badge>
-                              )}
-                            </div>
-                            <p className="line-clamp-2 text-xs text-muted-foreground">
-                              {tool.description}
-                            </p>
-                          </div>
-                          <div className="ml-4 flex items-center gap-2">
-                            <Dialog>
-                              <DialogTrigger asChild>
-                                <Button variant="ghost" size="sm">
-                                  <Eye className="h-4 w-4" />
-                                </Button>
-                              </DialogTrigger>
-                              <DialogContent className="max-w-2xl">
-                                <DialogHeader>
-                                  <DialogTitle>{tool.name}</DialogTitle>
-                                  <DialogDescription>
-                                    {tool.description}
-                                  </DialogDescription>
-                                </DialogHeader>
-                                <div className="space-y-4">
-                                  <div>
-                                    <Label className="text-sm font-medium">
-                                      Input Schema
-                                    </Label>
-                                    <pre className="mt-2 max-h-64 overflow-auto rounded-md bg-muted p-3 text-xs">
-                                      {JSON.stringify(
-                                        tool.inputSchema,
-                                        null,
-                                        2,
-                                      )}
-                                    </pre>
+                          <div className="mb-2 flex items-start justify-between gap-2">
+                            <h4 className="line-clamp-2 text-sm font-medium">
+                              {tool.name.includes(":")
+                                ? tool.name.split(":").slice(1).join(":")
+                                : tool.name}
+                            </h4>
+                            <div className="flex shrink-0 items-center gap-1">
+                              <Dialog>
+                                <DialogTrigger asChild>
+                                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
+                                    <Eye className="h-4 w-4" />
+                                  </Button>
+                                </DialogTrigger>
+                                <DialogContent className="max-w-2xl">
+                                  <DialogHeader>
+                                    <DialogTitle>{tool.name}</DialogTitle>
+                                    <DialogDescription>
+                                      {tool.description}
+                                    </DialogDescription>
+                                  </DialogHeader>
+                                  <div className="space-y-4">
+                                    <div>
+                                      <Label className="text-sm font-medium">
+                                        Input Schema
+                                      </Label>
+                                      <pre className="mt-2 max-h-64 overflow-auto rounded-md bg-muted p-3 text-xs">
+                                        {JSON.stringify(
+                                          tool.inputSchema,
+                                          null,
+                                          2,
+                                        )}
+                                      </pre>
+                                    </div>
                                   </div>
-                                </div>
-                              </DialogContent>
-                            </Dialog>
-                            <Switch
-                              checked={tool.enabled}
-                              onCheckedChange={(enabled) =>
-                                handleToolToggle(tool.name, enabled)
-                              }
-                            />
+                                </DialogContent>
+                              </Dialog>
+                              <Switch
+                                checked={tool.enabled}
+                                onCheckedChange={(enabled) =>
+                                  handleToolToggle(tool.name, enabled)
+                                }
+                              />
+                            </div>
                           </div>
+                          <p className="line-clamp-2 flex-1 text-xs text-muted-foreground">
+                            {tool.description}
+                          </p>
+                          {!tool.enabled && (
+                            <Badge variant="outline" className="mt-2 w-fit text-xs">
+                              Disabled
+                            </Badge>
+                          )}
                         </div>
                       ))}
                     </div>

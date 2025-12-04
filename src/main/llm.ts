@@ -1337,7 +1337,7 @@ Always use actual resource IDs from the conversation history or create new ones 
         if (isRepeating) {
           verified = true
           // Only skip post-verify summary if we have real content (not just a tool call placeholder)
-          if (!isToolCallPlaceholder(finalContent)) {
+          if (!isToolCallPlaceholder(finalContent) && finalContent.trim().length > 0) {
             skipPostVerifySummary = true  // Skip the summary call - we already have valid content
           }
           verifyStep.status = "completed"
@@ -1932,7 +1932,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
 	        if (isRepeating) {
 	          verified = true
 	          // Only skip post-verify summary if we have real content (not just a tool call placeholder)
-	          if (!isToolCallPlaceholder(finalContent)) {
+	          if (!isToolCallPlaceholder(finalContent) && finalContent.trim().length > 0) {
 	            skipPostVerifySummary2 = true  // Skip the summary call - we already have valid content
 	          }
 	          verifyStep.status = "completed"

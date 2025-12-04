@@ -468,7 +468,7 @@ export function showPanelWindow() {
   }
 }
 
-export async function showPanelWindowAndStartRecording() {
+export async function showPanelWindowAndStartRecording(fromButtonClick?: boolean) {
   // Capture focus before showing panel
   try {
     const focusedApp = await getFocusedAppInfo()
@@ -478,7 +478,8 @@ export async function showPanelWindowAndStartRecording() {
   }
 
   showPanelWindow()
-  getWindowRendererHandlers("panel")?.startRecording.send()
+  // Pass fromButtonClick so panel shows correct submit hint (Enter vs Release keys)
+  getWindowRendererHandlers("panel")?.startRecording.send({ fromButtonClick })
 }
 
 export async function showPanelWindowAndStartMcpRecording(conversationId?: string, sessionId?: string, fromTile?: boolean, fromButtonClick?: boolean) {

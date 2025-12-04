@@ -429,10 +429,12 @@ export function Component() {
   }, [mcpMode, mcpTranscribeMutation, transcribeMutation])
 
   useEffect(() => {
-    const unlisten = rendererHandlers.startRecording.listen(() => {
+    const unlisten = rendererHandlers.startRecording.listen((data) => {
       // Ensure we are in normal dictation mode (not MCP/agent)
       setMcpMode(false)
       mcpModeRef.current = false
+      // Track if recording was triggered via UI button click (e.g., tray menu)
+      setFromButtonClick(data?.fromButtonClick ?? false)
       setVisualizerData(() => getInitialVisualizerData())
       recorderRef.current?.startRecording()
     })
@@ -459,7 +461,7 @@ export function Component() {
   }, [])
 
   useEffect(() => {
-    const unlisten = rendererHandlers.startOrFinishRecording.listen(() => {
+    const unlisten = rendererHandlers.startOrFinishRecording.listen((data) => {
       if (recording) {
         isConfirmedRef.current = true
         recorderRef.current?.stopRecording()
@@ -467,6 +469,8 @@ export function Component() {
         // Force normal dictation mode - each new recording starts fresh
         setMcpMode(false)
         mcpModeRef.current = false
+        // Track if recording was triggered via UI button click
+        setFromButtonClick(data?.fromButtonClick ?? false)
         tipcClient.showPanelWindow({})
         recorderRef.current?.startRecording()
       }

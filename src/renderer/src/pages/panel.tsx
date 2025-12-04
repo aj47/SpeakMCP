@@ -250,6 +250,8 @@ export function Component() {
         // otherwise undefined to create a fresh conversation/session.
         conversationId: conversationIdForMcp ?? undefined,
         sessionId: sessionIdForMcp,
+        // Pass fromTile so session starts snoozed when recording was from a tile
+        fromTile: wasFromTile,
       })
 
       // NOTE: Do NOT call continueConversation here!

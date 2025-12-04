@@ -987,6 +987,7 @@ export const router = {
     .input<{
       text: string
       conversationId?: string
+      fromTile?: boolean // When true, session runs in background (snoozed) - panel won't show
     }>()
     .action(async ({ input }) => {
       const config = configStore.get()
@@ -1020,7 +1021,8 @@ export const router = {
       if (input.conversationId) {
         const foundSessionId = agentSessionTracker.findSessionByConversationId(input.conversationId)
         if (foundSessionId) {
-          const revived = agentSessionTracker.reviveSession(foundSessionId)
+          // Pass fromTile to reviveSession so it stays snoozed when continuing from a tile
+          const revived = agentSessionTracker.reviveSession(foundSessionId, input.fromTile ?? false)
           if (revived) {
             existingSessionId = foundSessionId
           }
@@ -1030,7 +1032,8 @@ export const router = {
       // Fire-and-forget: Start agent processing without blocking
       // This allows multiple sessions to run concurrently
       // Pass existingSessionId to reuse the session if found
-      processWithAgentMode(input.text, conversationId, existingSessionId)
+      // When fromTile=true, start snoozed so the floating panel doesn't appear
+      processWithAgentMode(input.text, conversationId, existingSessionId, input.fromTile ?? false)
         .then((finalResponse) => {
           // Save to history after completion
           const history = getRecordingHistory()
@@ -1076,6 +1079,7 @@ export const router = {
       duration: number
       conversationId?: string
       sessionId?: string
+      fromTile?: boolean // When true, session runs in background (snoozed) - panel won't show
     }>()
     .action(async ({ input }) => {
       fs.mkdirSync(recordingsFolder, { recursive: true })
@@ -1091,10 +1095,13 @@ export const router = {
       // If sessionId is provided, try to revive that session.
       // Otherwise, if conversationId is provided, try to find and revive a session for that conversation.
       // This handles the case where user continues from history (only conversationId is set).
+      // When fromTile=true, sessions start snoozed so the floating panel doesn't appear.
+      const startSnoozed = input.fromTile ?? false
       let sessionId: string
       if (input.sessionId) {
         // Try to revive the existing session by ID
-        const revived = agentSessionTracker.reviveSession(input.sessionId)
+        // Pass startSnoozed so session stays snoozed when continuing from a tile
+        const revived = agentSessionTracker.reviveSession(input.sessionId, startSnoozed)
         if (revived) {
           sessionId = input.sessionId
           // Update the session title while transcribing
@@ -1104,13 +1111,14 @@ export const router = {
           })
         } else {
           // Session not found, create a new one
-          sessionId = agentSessionTracker.startSession(tempConversationId, "Transcribing...", false)
+          sessionId = agentSessionTracker.startSession(tempConversationId, "Transcribing...", startSnoozed)
         }
       } else if (input.conversationId) {
         // No sessionId but have conversationId - try to find existing session for this conversation
         const existingSessionId = agentSessionTracker.findSessionByConversationId(input.conversationId)
         if (existingSessionId) {
-          const revived = agentSessionTracker.reviveSession(existingSessionId)
+          // Pass startSnoozed so session stays snoozed when continuing from a tile
+          const revived = agentSessionTracker.reviveSession(existingSessionId, startSnoozed)
           if (revived) {
             sessionId = existingSessionId
             // Update the session title while transcribing
@@ -1120,15 +1128,15 @@ export const router = {
             })
           } else {
             // Revive failed, create new session
-            sessionId = agentSessionTracker.startSession(tempConversationId, "Transcribing...", false)
+            sessionId = agentSessionTracker.startSession(tempConversationId, "Transcribing...", startSnoozed)
           }
         } else {
           // No existing session for this conversation, create new
-          sessionId = agentSessionTracker.startSession(tempConversationId, "Transcribing...", false)
+          sessionId = agentSessionTracker.startSession(tempConversationId, "Transcribing...", startSnoozed)
         }
       } else {
         // No sessionId or conversationId provided, create a new session
-        sessionId = agentSessionTracker.startSession(tempConversationId, "Transcribing...", false)
+        sessionId = agentSessionTracker.startSession(tempConversationId, "Transcribing...", startSnoozed)
       }
 
       try {

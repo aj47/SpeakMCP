@@ -272,6 +272,16 @@ const toolHandlers: Record<string, ToolHandler> = {
     // Switch to the profile
     profileService.setCurrentProfile(profile.id)
 
+    // Apply the profile's MCP server configuration if it exists
+    const { mcpService } = await import("./mcp-service")
+    if (profile.mcpServerConfig) {
+      mcpService.applyProfileMcpConfig(
+        profile.mcpServerConfig.disabledServers,
+        profile.mcpServerConfig.disabledTools
+      )
+    }
+
+    const mcpConfigApplied = !!profile.mcpServerConfig
     return {
       content: [
         {
@@ -282,8 +292,11 @@ const toolHandlers: Record<string, ToolHandler> = {
               id: profile.id,
               name: profile.name,
               guidelines: profile.guidelines,
+              mcpConfigApplied,
+              disabledServers: profile.mcpServerConfig?.disabledServers || [],
+              disabledTools: profile.mcpServerConfig?.disabledTools || [],
             },
-            message: `Switched to profile '${profile.name}'`,
+            message: `Switched to profile '${profile.name}'${mcpConfigApplied ? ' with MCP configuration' : ''}`,
           }, null, 2),
         },
       ],

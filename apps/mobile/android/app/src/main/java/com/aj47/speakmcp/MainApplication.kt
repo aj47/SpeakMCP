@@ -1,4 +1,4 @@
-package com.anonymous.inkeepmobile
+package com.aj47.speakmcp
 
 import android.app.Application
 import android.content.res.Configuration
@@ -54,3 +54,4 @@ class MainApplication : Application(), ReactApplication {
     ApplicationLifecycleDispatcher.onConfigurationChanged(this, newConfig)
   }
 }
+

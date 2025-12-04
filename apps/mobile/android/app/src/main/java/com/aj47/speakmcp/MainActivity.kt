@@ -1,4 +1,4 @@
-package com.anonymous.inkeepmobile
+package com.aj47.speakmcp
 
 import android.os.Build
 import android.os.Bundle
@@ -59,3 +59,4 @@ class MainActivity : ReactActivity() {
       super.invokeDefaultOnBackPressed()
   }
 }
+

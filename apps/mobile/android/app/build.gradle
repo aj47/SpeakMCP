@@ -87,9 +87,9 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace 'com.anonymous.inkeepmobile'
+    namespace 'com.aj47.speakmcp'
     defaultConfig {
-        applicationId 'com.anonymous.inkeepmobile'
+        applicationId 'com.aj47.speakmcp'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

@@ -142,25 +142,17 @@ export class ConversationService {
   async getConversationHistory(): Promise<ConversationHistoryItem[]> {
     try {
       const indexPath = this.getConversationIndexPath()
-      logApp("[ConversationService] getConversationHistory - indexPath:", indexPath)
 
       if (!fs.existsSync(indexPath)) {
-        logApp("[ConversationService] Index file does not exist, returning empty array")
         return []
       }
 
       const indexData = fs.readFileSync(indexPath, "utf8")
-      logApp("[ConversationService] Index file content length:", indexData.length)
 
       const history: ConversationHistoryItem[] = JSON.parse(indexData)
-      logApp("[ConversationService] Parsed history items:", history.length)
 
       // Sort by updatedAt descending (most recent first)
       const sorted = history.sort((a, b) => b.updatedAt - a.updatedAt)
-      logApp("[ConversationService] Returning sorted history:", {
-        count: sorted.length,
-        items: sorted.map(h => ({ id: h.id, title: h.title, messageCount: h.messageCount })),
-      })
       return sorted
     } catch (error) {
       logApp("[ConversationService] Error loading conversation history:", error)

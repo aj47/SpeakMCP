@@ -282,14 +282,26 @@ class AgentSessionTracker {
   /**
    * Revive a completed session to continue it
    * Moves the session from completedSessions back to active sessions
+   * @param sessionId - The session ID to revive
+   * @param startSnoozed - If true, session stays snoozed (runs in background without showing panel)
    */
-  reviveSession(sessionId: string): boolean {
+  reviveSession(sessionId: string, startSnoozed: boolean = false): boolean {
     // Find in completed sessions
     const completedIndex = this.completedSessions.findIndex(s => s.id === sessionId)
     if (completedIndex === -1) {
       // Maybe it's already active?
       if (this.sessions.has(sessionId)) {
         logApp(`[AgentSessionTracker] Session ${sessionId} is already active`)
+        // If already active and startSnoozed is requested, update the snooze state
+        if (startSnoozed) {
+          const session = this.sessions.get(sessionId)
+          if (session) {
+            session.isSnoozed = true
+            this.sessions.set(sessionId, session)
+            // Emit update so UIs reflect the snooze state change (consistent with snoozeSession/unsnoozeSession)
+            emitSessionUpdate()
+          }
+        }
         return true
       }
       logApp(`[AgentSessionTracker] Cannot revive - session not found: ${sessionId}`)
@@ -299,11 +311,11 @@ class AgentSessionTracker {
     // Remove from completed and add back to active
     const [session] = this.completedSessions.splice(completedIndex, 1)
     session.status = "active"
-    session.isSnoozed = false
+    session.isSnoozed = startSnoozed
     delete session.endTime
     this.sessions.set(sessionId, session)
 
-    logApp(`[AgentSessionTracker] Revived session: ${sessionId}`)
+    logApp(`[AgentSessionTracker] Revived session: ${sessionId}, snoozed: ${startSnoozed}`)
     emitSessionUpdate()
     return true
   }

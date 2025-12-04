@@ -730,7 +730,8 @@ async function makeAPICallAttempt(
     const messageContent = data.choices?.[0]?.message?.content
     const hasToolCalls = !!data.choices?.[0]?.message?.tool_calls?.length
     const isEmptyContent = !hasToolCalls && (!messageContent ||
-      (typeof messageContent === 'string' && messageContent.trim() === ''))
+      (typeof messageContent === 'string' && messageContent.trim() === '') ||
+      (Array.isArray(messageContent) && messageContent.length === 0))
 
     if (isEmptyContent) {
       const diagnostic = {

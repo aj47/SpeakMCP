@@ -1,0 +1,6 @@
+version: "Apple Swift version 6.0.3 (swiftlang-6.0.3.1.10 clang-1600.0.30.1)"
+options: "b7d31dc5deb963ccee4aabc1215f4f4275e4c2b8936fe9097f0987c4680270a0"
+build_start_time: [1764272544, 141146000]
+build_end_time: [1764272544, 743953000]
+inputs:
+  "/Users/ajjoobandi/Development/SpeakMCP/macos-audio-tap/ScreenCaptureAudio/Sources/main.swift": [1764272533, 477642048]

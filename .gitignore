@@ -26,3 +26,16 @@ backend/.wrangler
 *.DS_Store*
 .augment
 augment.mjs
+
+# Mobile specific
+.expo/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+web-build/
+
+# Turborepo / build cache
+.turbo

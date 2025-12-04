@@ -1,0 +1,215 @@
+{
+  "builtTestProducts" : [
+
+  ],
+  "copyCommands" : {
+
+  },
+  "explicitTargetDependencyImportCheckingMode" : {
+    "none" : {
+
+    }
+  },
+  "generatedSourceTargetSet" : [
+
+  ],
+  "pluginDescriptions" : [
+
+  ],
+  "swiftCommands" : {
+    "C.ScreenCaptureAudio-arm64-apple-macosx15.0-release.module" : {
+      "executable" : "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "fileList" : "/Users/ajjoobandi/Development/SpeakMCP/macos-audio-tap/ScreenCaptureAudio/.build/arm64-apple-macosx/release/ScreenCaptureAudio.build/sources",
+      "importPath" : "/Users/ajjoobandi/Development/SpeakMCP/macos-audio-tap/ScreenCaptureAudio/.build/arm64-apple-macosx/release/Modules",
+      "inputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/ajjoobandi/Development/SpeakMCP/macos-audio-tap/ScreenCaptureAudio/Sources/main.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/ajjoobandi/Development/SpeakMCP/macos-audio-tap/ScreenCaptureAudio/.build/arm64-apple-macosx/release/swift-version--58304C5D6DBC2206.txt"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/ajjoobandi/Development/SpeakMCP/macos-audio-tap/ScreenCaptureAudio/.build/arm64-apple-macosx/release/ScreenCaptureAudio.build/sources"
+        }
+      ],
+      "isLibrary" : false,
+      "moduleName" : "ScreenCaptureAudio",
+      "moduleOutputPath" : "/Users/ajjoobandi/Development/SpeakMCP/macos-audio-tap/ScreenCaptureAudio/.build/arm64-apple-macosx/release/Modules/ScreenCaptureAudio.swiftmodule",
+      "objects" : [
+        "/Users/ajjoobandi/Development/SpeakMCP/macos-audio-tap/ScreenCaptureAudio/.build/arm64-apple-macosx/release/ScreenCaptureAudio.build/main.swift.o"
+      ],
+      "otherArguments" : [
+        "-target",
+        "arm64-apple-macosx13.0",
+        "-O",
+        "-j10",
+        "-DSWIFT_PACKAGE",
+        "-module-cache-path",
+        "/Users/ajjoobandi/Development/SpeakMCP/macos-audio-tap/ScreenCaptureAudio/.build/arm64-apple-macosx/release/ModuleCache",
+        "-parseable-output",
+        "-Xfrontend",
+        "-entry-point-function-name",
+        "-Xfrontend",
+        "ScreenCaptureAudio_main",
+        "-swift-version",
+        "5",
+        "-sdk",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.2.sdk",
+        "-F",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-I",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-L",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-g",
+        "-Xcc",
+        "-isysroot",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.2.sdk",
+        "-Xcc",
+        "-F",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-Xcc",
+        "-fPIC",
+        "-Xcc",
+        "-g",
+        "-package-name",
+        "screencaptureaudio"
+      ],
+      "outputFileMapPath" : "/Users/ajjoobandi/Development/SpeakMCP/macos-audio-tap/ScreenCaptureAudio/.build/arm64-apple-macosx/release/ScreenCaptureAudio.build/output-file-map.json",
+      "outputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/ajjoobandi/Development/SpeakMCP/macos-audio-tap/ScreenCaptureAudio/.build/arm64-apple-macosx/release/ScreenCaptureAudio.build/main.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/ajjoobandi/Development/SpeakMCP/macos-audio-tap/ScreenCaptureAudio/.build/arm64-apple-macosx/release/Modules/ScreenCaptureAudio.swiftmodule"
+        }
+      ],
+      "prepareForIndexing" : false,
+      "sources" : [
+        "/Users/ajjoobandi/Development/SpeakMCP/macos-audio-tap/ScreenCaptureAudio/Sources/main.swift"
+      ],
+      "tempsPath" : "/Users/ajjoobandi/Development/SpeakMCP/macos-audio-tap/ScreenCaptureAudio/.build/arm64-apple-macosx/release/ScreenCaptureAudio.build",
+      "wholeModuleOptimization" : true
+    }
+  },
+  "swiftFrontendCommands" : {
+
+  },
+  "swiftTargetScanArgs" : {
+    "ScreenCaptureAudio" : [
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "-module-name",
+      "ScreenCaptureAudio",
+      "-package-name",
+      "screencaptureaudio",
+      "-whole-module-optimization",
+      "-num-threads",
+      "10",
+      "-c",
+      "/Users/ajjoobandi/Development/SpeakMCP/macos-audio-tap/ScreenCaptureAudio/Sources/main.swift",
+      "-I",
+      "/Users/ajjoobandi/Development/SpeakMCP/macos-audio-tap/ScreenCaptureAudio/.build/arm64-apple-macosx/release/Modules",
+      "-target",
+      "arm64-apple-macosx13.0",
+      "-O",
+      "-j10",
+      "-DSWIFT_PACKAGE",
+      "-module-cache-path",
+      "/Users/ajjoobandi/Development/SpeakMCP/macos-audio-tap/ScreenCaptureAudio/.build/arm64-apple-macosx/release/ModuleCache",
+      "-parseable-output",
+      "-Xfrontend",
+      "-entry-point-function-name",
+      "-Xfrontend",
+      "ScreenCaptureAudio_main",
+      "-swift-version",
+      "5",
+      "-sdk",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.2.sdk",
+      "-F",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-I",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-L",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-g",
+      "-Xcc",
+      "-isysroot",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.2.sdk",
+      "-Xcc",
+      "-F",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-Xcc",
+      "-fPIC",
+      "-Xcc",
+      "-g",
+      "-package-name",
+      "screencaptureaudio",
+      "-driver-use-frontend-path",
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc"
+    ]
+  },
+  "targetDependencyMap" : {
+    "ScreenCaptureAudio" : [
+
+    ]
+  },
+  "testDiscoveryCommands" : {
+
+  },
+  "testEntryPointCommands" : {
+
+  },
+  "writeCommands" : {
+    "/Users/ajjoobandi/Development/SpeakMCP/macos-audio-tap/ScreenCaptureAudio/.build/arm64-apple-macosx/release/ScreenCaptureAudio.build/sources" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<sources-file-list>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/ajjoobandi/Development/SpeakMCP/macos-audio-tap/ScreenCaptureAudio/Sources/main.swift"
+        }
+      ],
+      "outputFilePath" : "/Users/ajjoobandi/Development/SpeakMCP/macos-audio-tap/ScreenCaptureAudio/.build/arm64-apple-macosx/release/ScreenCaptureAudio.build/sources"
+    },
+    "/Users/ajjoobandi/Development/SpeakMCP/macos-audio-tap/ScreenCaptureAudio/.build/arm64-apple-macosx/release/screencapture-audio.product/Objects.LinkFileList" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<link-file-list>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/ajjoobandi/Development/SpeakMCP/macos-audio-tap/ScreenCaptureAudio/.build/arm64-apple-macosx/release/ScreenCaptureAudio.build/main.swift.o"
+        }
+      ],
+      "outputFilePath" : "/Users/ajjoobandi/Development/SpeakMCP/macos-audio-tap/ScreenCaptureAudio/.build/arm64-apple-macosx/release/screencapture-audio.product/Objects.LinkFileList"
+    },
+    "/Users/ajjoobandi/Development/SpeakMCP/macos-audio-tap/ScreenCaptureAudio/.build/arm64-apple-macosx/release/swift-version--58304C5D6DBC2206.txt" : {
+      "alwaysOutOfDate" : true,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<swift-get-version>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc"
+        }
+      ],
+      "outputFilePath" : "/Users/ajjoobandi/Development/SpeakMCP/macos-audio-tap/ScreenCaptureAudio/.build/arm64-apple-macosx/release/swift-version--58304C5D6DBC2206.txt"
+    }
+  }
+}

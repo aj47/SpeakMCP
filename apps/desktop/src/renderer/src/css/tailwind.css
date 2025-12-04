@@ -1,0 +1,502 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Dark mode syntax highlighting override */
+@media (prefers-color-scheme: dark) {
+  .hljs {
+    background: rgba(0, 0, 0, 0.3) !important;
+    color: #e6edf3 !important;
+  }
+
+  .hljs-keyword,
+  .hljs-selector-tag,
+  .hljs-literal,
+  .hljs-section,
+  .hljs-link {
+    color: #ff7b72 !important;
+  }
+
+  .hljs-string {
+    color: #a5d6ff !important;
+  }
+
+  .hljs-title,
+  .hljs-name,
+  .hljs-type,
+  .hljs-attribute,
+  .hljs-symbol,
+  .hljs-bullet,
+  .hljs-built_in,
+  .hljs-addition,
+  .hljs-variable,
+  .hljs-template-tag,
+  .hljs-template-variable {
+    color: #79c0ff !important;
+  }
+
+  .hljs-comment,
+  .hljs-quote,
+  .hljs-deletion,
+  .hljs-meta {
+    color: #8b949e !important;
+  }
+
+  .hljs-number {
+    color: #79c0ff !important;
+  }
+}
+
+/* Custom scrollbar styles for agent progress */
+@layer utilities {
+  .scrollbar-thin {
+    scrollbar-width: thin;
+  }
+
+  .scrollbar-thumb-gray-300 {
+    scrollbar-color: rgb(209 213 219) transparent;
+  }
+
+  .dark .scrollbar-thumb-gray-600 {
+    scrollbar-color: rgb(75 85 99) transparent;
+  }
+
+  /* Webkit scrollbar styles */
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.05);
+    border-radius: 3px;
+  }
+
+  .dark .scrollbar-thin::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: rgba(209, 213, 219, 0.8);
+    border-radius: 3px;
+    transition: background-color 0.2s ease;
+  }
+
+  .dark .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: rgba(75, 85, 99, 0.8);
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(156, 163, 175, 0.9);
+  }
+
+  .dark .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(107, 114, 128, 0.9);
+  }
+
+  /* Enhanced scrollbar for agent progress components */
+  .scrollbar-thin::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
+  /* Scrollbar hidden until hover - for tile view */
+  .scrollbar-hide-until-hover {
+    scrollbar-width: none; /* Firefox: hide scrollbar by default */
+  }
+
+  .scrollbar-hide-until-hover::-webkit-scrollbar {
+    width: 0; /* Webkit: hide scrollbar by default */
+    background: transparent;
+  }
+
+  .scrollbar-hide-until-hover::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scrollbar-hide-until-hover::-webkit-scrollbar-thumb {
+    background-color: transparent;
+    border-radius: 3px;
+  }
+
+  /* Show scrollbar on hover of the parent tile */
+  .group\/tile:hover .scrollbar-hide-until-hover {
+    scrollbar-width: thin; /* Firefox: show thin scrollbar on hover */
+  }
+
+  .group\/tile:hover .scrollbar-hide-until-hover::-webkit-scrollbar {
+    width: 6px; /* Webkit: expand scrollbar width on hover */
+  }
+
+  .group\/tile:hover .scrollbar-hide-until-hover::-webkit-scrollbar-thumb {
+    background-color: rgba(209, 213, 219, 0.8);
+  }
+
+  .dark .group\/tile:hover .scrollbar-hide-until-hover::-webkit-scrollbar-thumb {
+    background-color: rgba(75, 85, 99, 0.8);
+  }
+
+  /* Also show scrollbar when focus is within the tile */
+  .group\/tile:focus-within .scrollbar-hide-until-hover {
+    scrollbar-width: thin;
+  }
+
+  .group\/tile:focus-within .scrollbar-hide-until-hover::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .group\/tile:focus-within .scrollbar-hide-until-hover::-webkit-scrollbar-thumb {
+    background-color: rgba(209, 213, 219, 0.8);
+  }
+
+  .dark .group\/tile:focus-within .scrollbar-hide-until-hover::-webkit-scrollbar-thumb {
+    background-color: rgba(75, 85, 99, 0.8);
+  }
+}
+@tailwind variants;
+
+/* Modern Clean UI System - Replacing Liquid Glass */
+@layer utilities {
+  /* Base Panel Styling */
+  .modern-panel {
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    transition: all 0.2s ease-in-out;
+  }
+
+  .dark .modern-panel {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  }
+
+  /* Subtle Panel Variant */
+  .modern-panel-subtle {
+    background: hsl(var(--muted) / 0.5);
+    border: 1px solid hsl(var(--border) / 0.5);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  }
+
+  .dark .modern-panel-subtle {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  }
+
+  /* Strong Panel Variant */
+  .modern-panel-strong {
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
+    box-shadow:
+      0 8px 24px rgba(0, 0, 0, 0.12),
+      0 2px 6px rgba(0, 0, 0, 0.08);
+  }
+
+  .dark .modern-panel-strong {
+    box-shadow:
+      0 8px 24px rgba(0, 0, 0, 0.4),
+      0 2px 6px rgba(0, 0, 0, 0.2);
+  }
+
+  /* Interactive Elements */
+  .modern-interactive {
+    background: hsl(var(--accent));
+    border: 1px solid hsl(var(--border));
+    transition: all 0.2s ease-in-out;
+  }
+
+  .modern-interactive:hover {
+    background: hsl(var(--accent) / 0.8);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    transform: translateY(-1px);
+  }
+
+  .dark .modern-interactive:hover {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  }
+
+  /* Button Styling */
+  .modern-button {
+    background: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
+    border: 1px solid hsl(var(--primary));
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    transition: all 0.2s ease-in-out;
+  }
+
+  .modern-button:hover {
+    background: hsl(var(--primary) / 0.9);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+    transform: translateY(-1px);
+  }
+
+  .modern-button:active {
+    transform: translateY(0);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  }
+
+  /* Shine Effect for Interactive Elements */
+  .modern-shine {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .modern-shine::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(255, 255, 255, 0.3),
+      transparent
+    );
+    transition: left 0.5s ease-in-out;
+    pointer-events: none;
+  }
+
+  .modern-shine:hover::after {
+    left: 100%;
+  }
+
+  /* Input Styling */
+  .modern-input {
+    background: hsl(var(--background));
+    border: 1px solid hsl(var(--input));
+    transition: all 0.2s ease-in-out;
+  }
+
+  .modern-input:focus {
+    border-color: hsl(var(--ring));
+    box-shadow: 0 0 0 2px hsl(var(--ring) / 0.2);
+  }
+
+  /* Card Styling */
+  .modern-card {
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  }
+
+  .dark .modern-card {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  }
+
+  /* Navigation Styling */
+  .modern-nav {
+    background: hsl(var(--background) / 0.95);
+    border: 1px solid hsl(var(--border));
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+  }
+
+  .dark .modern-nav {
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
+  }
+
+  /* Text Styling Utilities */
+  .modern-text-strong {
+    color: hsl(var(--foreground));
+    font-weight: 500;
+  }
+
+  .modern-text-muted {
+    color: hsl(var(--muted-foreground));
+  }
+
+  /* Floating Panel Utilities - Enhanced for proper theme support */
+  .floating-panel {
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
+    box-shadow:
+      0 10px 38px -10px rgba(22, 23, 24, 0.35),
+      0 10px 20px -15px rgba(22, 23, 24, 0.2);
+    backdrop-filter: blur(8px);
+    transition: all 0.2s ease-in-out;
+  }
+
+  .dark .floating-panel {
+    box-shadow:
+      0 10px 38px -10px rgba(0, 0, 0, 0.5),
+      0 10px 20px -15px rgba(0, 0, 0, 0.3);
+  }
+
+  /* Floating Panel Variants */
+  .floating-panel-glass {
+    background: hsl(var(--card) / 0.95);
+    border: 1px solid hsl(var(--border) / 0.8);
+    box-shadow:
+      0 10px 38px -10px rgba(22, 23, 24, 0.35),
+      0 10px 20px -15px rgba(22, 23, 24, 0.2);
+    backdrop-filter: blur(12px);
+  }
+
+  .dark .floating-panel-glass {
+    background: hsl(var(--card) / 0.9);
+    box-shadow:
+      0 10px 38px -10px rgba(0, 0, 0, 0.5),
+      0 10px 20px -15px rgba(0, 0, 0, 0.3);
+  }
+
+  /* Voice Input Panel Specific */
+  .voice-input-panel {
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
+    box-shadow:
+      0 20px 25px -5px rgba(0, 0, 0, 0.1),
+      0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  }
+
+  .dark .voice-input-panel {
+    box-shadow:
+      0 20px 25px -5px rgba(0, 0, 0, 0.4),
+      0 10px 10px -5px rgba(0, 0, 0, 0.2);
+  }
+
+  /* Text Input Panel Specific */
+  .text-input-panel {
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
+    box-shadow:
+      0 4px 6px -1px rgba(0, 0, 0, 0.1),
+      0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  }
+
+  .dark .text-input-panel {
+    box-shadow:
+      0 4px 6px -1px rgba(0, 0, 0, 0.3),
+      0 2px 4px -1px rgba(0, 0, 0, 0.2);
+  }
+
+  /* Progress Panel Specific */
+  .progress-panel {
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
+    box-shadow:
+      0 10px 15px -3px rgba(0, 0, 0, 0.1),
+      0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  }
+
+  .dark .progress-panel {
+    box-shadow:
+      0 10px 15px -3px rgba(0, 0, 0, 0.4),
+      0 4px 6px -2px rgba(0, 0, 0, 0.2);
+  }
+
+  /* Border Utilities */
+  .modern-border {
+    border: 1px solid hsl(var(--border));
+  }
+
+  .modern-border-subtle {
+    border: 1px solid hsl(var(--border) / 0.5);
+  }
+
+}
+
+:root {
+  --background: 0 0% 100%;
+  --foreground: 0 0% 3.9%;
+  --card: 0 0% 100%;
+  --card-foreground: 0 0% 3.9%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 0 0% 3.9%;
+  --primary: 0 0% 9%;
+  --primary-foreground: 0 0% 98%;
+  --secondary: 0 0% 96.1%;
+  --secondary-foreground: 0 0% 9%;
+  --muted: 0 0% 96.1%;
+  --muted-foreground: 0 0% 45.1%;
+  --accent: 0 0% 96.1%;
+  --accent-foreground: 0 0% 9%;
+  --destructive: 0 84.2% 60.2%;
+  --destructive-foreground: 0 0% 98%;
+  --border: 0 0% 95%;
+  --input: 0 0% 89.8%;
+  --ring: 217 91% 60%;
+  --chart-1: 12 76% 61%;
+  --chart-2: 173 58% 39%;
+  --chart-3: 197 37% 24%;
+  --chart-4: 43 74% 66%;
+  --chart-5: 27 87% 67%;
+  --radius: 0.5rem;
+}
+
+.dark {
+  --background: 0 0% 0%;
+  --foreground: 0 0% 99%;
+  --card: 0 0% 3.9%;
+  --card-foreground: 0 0% 98%;
+  --popover: 0 0% 3.9%;
+  --popover-foreground: 0 0% 98%;
+  --primary: 0 0% 98%;
+  --primary-foreground: 0 0% 9%;
+  --secondary: 0 0% 14.9%;
+  --secondary-foreground: 0 0% 98%;
+  --muted: 0 0% 14.9%;
+  --muted-foreground: 0 0% 63.9%;
+  --accent: 0 0% 14.9%;
+  --accent-foreground: 0 0% 98%;
+  --destructive: 0 62.8% 30.6%;
+  --destructive-foreground: 0 0% 98%;
+  --border: 0 0% 14.9%;
+  --input: 0 0% 14.9%;
+  --ring: 221 83% 53%;
+  --chart-1: 220 70% 50%;
+  --chart-2: 160 60% 45%;
+  --chart-3: 30 80% 55%;
+  --chart-4: 280 65% 60%;
+  --chart-5: 340 75% 55%;
+}
+
+* {
+  @apply select-none border-border;
+}
+body {
+  @apply text-foreground antialiased;
+}
+html {
+  color-scheme: light;
+}
+
+html.dark {
+  color-scheme: dark;
+}
+
+html,
+body {
+  @apply bg-transparent;
+}
+
+.app-drag-region {
+  -webkit-app-region: drag;
+}
+
+.app-no-drag-region {
+  -webkit-app-region: no-drag;
+}
+
+button,
+a[role="button"] {
+  @apply cursor-default;
+}
+
+button,
+a,
+input,
+textarea,
+select {
+  -webkit-app-region: no-drag;
+}
+
+/* Line clamp utilities */
+.line-clamp-1 {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+}
+
+.line-clamp-2 {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}

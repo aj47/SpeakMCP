@@ -264,6 +264,39 @@ export async function startRemoteServer() {
     })
   })
 
+  // Kill switch endpoint - emergency stop all agent sessions
+  fastify.post("/v1/emergency-stop", async (_req, reply) => {
+    console.log("[KILLSWITCH] /v1/emergency-stop endpoint called")
+    try {
+      console.log("[KILLSWITCH] Loading emergency-stop module...")
+      diagnosticsService.logInfo("remote-server", "Emergency stop triggered via API")
+
+      const { emergencyStopAll } = await import("./emergency-stop")
+      console.log("[KILLSWITCH] Calling emergencyStopAll()...")
+      const { before, after } = await emergencyStopAll()
+
+      console.log(`[KILLSWITCH] Emergency stop completed. Killed ${before} processes. Remaining: ${after}`)
+      diagnosticsService.logInfo(
+        "remote-server",
+        `Emergency stop completed. Killed ${before} processes. Remaining: ${after}`,
+      )
+
+      return reply.send({
+        success: true,
+        message: "Emergency stop executed",
+        processesKilled: before,
+        processesRemaining: after,
+      })
+    } catch (error: any) {
+      console.error("[KILLSWITCH] Error during emergency stop:", error)
+      diagnosticsService.logError("remote-server", "Emergency stop error", error)
+      return reply.code(500).send({
+        success: false,
+        error: error?.message || "Emergency stop failed",
+      })
+    }
+  })
+
   try {
     await fastify.listen({ port, host: bind })
     diagnosticsService.logInfo(

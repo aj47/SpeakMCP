@@ -215,6 +215,15 @@ export interface ConversationHistoryItem {
   preview: string
 }
 
+// Profile MCP Server Configuration - stores which servers are enabled/disabled per profile
+export type ProfileMcpServerConfig = {
+  // Server names that are disabled for this profile
+  // Servers not in this list are enabled by default
+  disabledServers?: string[]
+  // Tool names that are disabled for this profile
+  disabledTools?: string[]
+}
+
 // Profile Management Types
 export type Profile = {
   id: string
@@ -223,6 +232,8 @@ export type Profile = {
   createdAt: number
   updatedAt: number
   isDefault?: boolean
+  // Per-profile MCP server configuration
+  mcpServerConfig?: ProfileMcpServerConfig
 }
 
 export type ProfilesData = {

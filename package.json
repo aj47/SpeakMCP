@@ -5,6 +5,7 @@
   "description": "SpeakMCP monorepo - AI-powered dictation with MCP integration",
   "scripts": {
     "dev": "pnpm --filter @speakmcp/desktop dev",
+    "dev:mobile": "pnpm --filter @speakmcp/mobile start",
     "build": "pnpm --filter @speakmcp/desktop build",
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck",

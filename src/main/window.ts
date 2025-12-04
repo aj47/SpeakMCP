@@ -477,6 +477,10 @@ export async function showPanelWindowAndStartRecording(fromButtonClick?: boolean
     state.focusedAppBeforeRecording = null
   }
 
+  // Track button click state for global Enter key handling
+  state.isRecordingFromButtonClick = fromButtonClick ?? false
+  state.isRecordingMcpMode = false
+
   showPanelWindow()
   // Pass fromButtonClick so panel shows correct submit hint (Enter vs Release keys)
   getWindowRendererHandlers("panel")?.startRecording.send({ fromButtonClick })
@@ -490,6 +494,10 @@ export async function showPanelWindowAndStartMcpRecording(conversationId?: strin
   } catch (error) {
     state.focusedAppBeforeRecording = null
   }
+
+  // Track button click state for global Enter key handling
+  state.isRecordingFromButtonClick = fromButtonClick ?? false
+  state.isRecordingMcpMode = true
 
   // Ensure consistent sizing by setting mode in main before showing
   setPanelMode("normal")
@@ -530,6 +538,10 @@ export const getWindowRendererHandlers = (id: WINDOW_ID) => {
 export const stopRecordingAndHidePanelWindow = () => {
   const win = WINDOWS.get("panel")
   if (win) {
+    // Reset button click state
+    state.isRecordingFromButtonClick = false
+    state.isRecordingMcpMode = false
+
     getRendererHandlers<RendererHandlers>(win.webContents).stopRecording.send()
 
     if (win.isVisible()) {

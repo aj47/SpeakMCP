@@ -190,8 +190,11 @@ export function Component() {
   }
 
   // Handle Enter key press to submit recording when triggered from UI button click
+  // Note: This is a fallback for when the panel has focus. The primary Enter key handling
+  // is done via the global keyboard hook in keyboard.ts since the panel is shown with
+  // showInactive() and doesn't receive keyboard focus.
   useEffect(() => {
-    if (!recording || !fromButtonClick) return
+    if (!recording || !fromButtonClick) return undefined
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Enter" && !e.shiftKey) {

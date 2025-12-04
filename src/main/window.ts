@@ -297,7 +297,16 @@ function applyPanelMode(mode: "normal" | "agent" | "textInput") {
 
   // Panel size is now unified across all modes
   // Mode switching only affects focus behavior and z-order, not size
+  // Position is not updated on mode change - this is intentional since:
+  // 1. Size is unified so position doesn't need adjustment for different dimensions
+  // 2. User's custom positioning should be respected
   const now = Date.now()
+
+  // Ensure minimum size is enforced (prevents OS-level resize below waveform requirements)
+  const minWidth = Math.max(200, MIN_WAVEFORM_WIDTH)
+  try {
+    win.setMinimumSize(minWidth, 100)
+  } catch {}
 
   // Update focus behavior for the mode
   try {

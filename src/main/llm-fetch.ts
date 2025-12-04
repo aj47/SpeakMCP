@@ -726,17 +726,33 @@ async function makeAPICallAttempt(
 
     const data = await response.json()
 
+    // Log empty content cases - this is anomalous behavior
+    const messageContent = data.choices?.[0]?.message?.content
+    const hasToolCalls = !!data.choices?.[0]?.message?.tool_calls?.length
+    const isEmptyContent = !hasToolCalls && (!messageContent ||
+      (typeof messageContent === 'string' && messageContent.trim() === '') ||
+      (Array.isArray(messageContent) && messageContent.length === 0))
+
+    if (isEmptyContent) {
+      const diagnostic = {
+        model: requestBody.model,
+        provider: baseURL,
+        finishReason: data.choices?.[0]?.finish_reason,
+        usage: data.usage,
+        messagesCount: requestBody.messages?.length,
+        lastMessageRole: requestBody.messages?.at(-1)?.role,
+      }
+      diagnosticsService.logError("llm-fetch", "Empty content from LLM API", diagnostic)
+    }
+
     if (isDebugLLM()) {
-      logLLM("✅ HTTP 200 Response received", {
-        hasError: !!data.error,
-        hasChoices: !!data.choices,
-        choicesCount: data.choices?.length,
-        firstChoicePreview: data.choices?.[0] ? {
-          hasMessage: !!data.choices[0].message,
-          hasContent: !!data.choices[0].message?.content,
-          contentType: typeof data.choices[0].message?.content,
-          contentLength: data.choices[0].message?.content?.length || 0
-        } : null
+      const choice = data.choices?.[0]
+      logLLM("✅ Response received", {
+        hasContent: !!choice?.message?.content,
+        contentLength: choice?.message?.content?.length || 0,
+        hasToolCalls: !!choice?.message?.tool_calls?.length,
+        finishReason: choice?.finish_reason,
+        usage: data.usage,
       })
     }
 

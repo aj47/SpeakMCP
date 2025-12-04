@@ -758,7 +758,7 @@ async function makeAPICallAttempt(
           response: (data.choices?.[0]?.message as any)?.response,
         },
         // All keys in message object - helps identify unexpected fields
-        messageObjectKeys: data.choices?.[0]?.message ? Object.keys(data.choices[0].message) : [],
+        messageObjectKeys: data.choices?.[0]?.message && typeof data.choices[0].message === 'object' ? Object.keys(data.choices[0].message) : [],
         // Token usage - may indicate truncation or issues
         usage: data.usage,
         // Request context for correlation
@@ -815,7 +815,7 @@ async function makeAPICallAttempt(
               tool_calls: choice.message?.tool_calls,
               reasoning: choice.message?.reasoning,
               // Log ALL keys in message object to catch unexpected fields
-              allMessageKeys: choice.message ? Object.keys(choice.message) : []
+              allMessageKeys: choice.message && typeof choice.message === 'object' ? Object.keys(choice.message) : []
             }
           }))
         }

@@ -660,6 +660,91 @@ export class MCPService {
   }
 
   /**
+   * Apply MCP configuration from a profile
+   * This updates the runtime enabled/disabled state for servers and tools
+   */
+  applyProfileMcpConfig(disabledServers?: string[], disabledTools?: string[]): void {
+    const config = configStore.get()
+    const mcpConfig = config.mcpConfig
+    const allServerNames = Object.keys(mcpConfig?.mcpServers || {})
+
+    // Reset runtime disabled servers based on profile config
+    // Enable all servers first, then disable those specified in the profile
+    this.runtimeDisabledServers.clear()
+
+    if (disabledServers && disabledServers.length > 0) {
+      for (const serverName of disabledServers) {
+        // Only add if server exists in config
+        if (allServerNames.includes(serverName)) {
+          this.runtimeDisabledServers.add(serverName)
+          // Stop the server if it's running
+          if (this.initializedServers.has(serverName)) {
+            this.stopServer(serverName).catch(() => {
+              // Ignore cleanup errors
+            })
+          }
+        }
+      }
+    }
+
+    // Reset disabled tools based on profile config
+    this.disabledTools.clear()
+
+    if (disabledTools && disabledTools.length > 0) {
+      for (const toolName of disabledTools) {
+        // Only add if tool exists
+        if (this.availableTools.some(t => t.name === toolName)) {
+          this.disabledTools.add(toolName)
+        }
+      }
+    }
+
+    // Persist the new state to config
+    try {
+      const cfg: Config = {
+        ...config,
+        mcpRuntimeDisabledServers: Array.from(this.runtimeDisabledServers),
+        mcpDisabledTools: Array.from(this.disabledTools),
+      }
+      configStore.save(cfg)
+
+      if (isDebugTools()) {
+        logTools(`Applied profile MCP config: ${this.runtimeDisabledServers.size} servers disabled, ${this.disabledTools.size} tools disabled`)
+      }
+    } catch (e) {
+      // Ignore persistence errors; runtime state will still be respected in-session
+    }
+
+    // Start any servers that are now enabled and were not previously running
+    for (const serverName of allServerNames) {
+      const serverConfig = mcpConfig?.mcpServers?.[serverName]
+      if (
+        serverConfig &&
+        !serverConfig.disabled &&
+        !this.runtimeDisabledServers.has(serverName) &&
+        !this.initializedServers.has(serverName)
+      ) {
+        // Initialize the server
+        this.initializeServer(serverName, serverConfig, { allowAutoOAuth: false }).catch((error) => {
+          if (isDebugTools()) {
+            logTools(`Failed to start server ${serverName} after profile switch: ${error}`)
+          }
+        })
+      }
+    }
+  }
+
+  /**
+   * Get current MCP configuration state (for saving to profile)
+   */
+  getCurrentMcpConfigState(): { disabledServers: string[], disabledTools: string[] } {
+    return {
+      disabledServers: Array.from(this.runtimeDisabledServers),
+      disabledTools: Array.from(this.disabledTools),
+    }
+  }
+
+  /**
    * Clean up tools from servers that no longer exist in configuration
    * This prevents accumulation of orphaned tools from deleted servers
    */

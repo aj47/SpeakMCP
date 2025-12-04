@@ -15,10 +15,8 @@ type NavLinkItem = {
 export const Component = () => {
   const navigate = useNavigate()
   const location = useLocation()
-  const [settingsExpanded, setSettingsExpanded] = useState(() => {
-    // Auto-expand if currently on a settings page
-    return location.pathname.startsWith("/settings")
-  })
+  // Settings dropdown is expanded by default for better discoverability
+  const [settingsExpanded, setSettingsExpanded] = useState(true)
 
   // Primary navigation - always visible
   const primaryNavLinks: NavLinkItem[] = [
@@ -62,13 +60,6 @@ export const Component = () => {
       icon: "i-mingcute-server-line",
     },
   ]
-
-  // Auto-expand settings when navigating to a settings page
-  useEffect(() => {
-    if (location.pathname.startsWith("/settings")) {
-      setSettingsExpanded(true)
-    }
-  }, [location.pathname])
 
   useEffect(() => {
     return rendererHandlers.navigate.listen((url) => {

@@ -688,14 +688,15 @@ export class MCPService {
     }
 
     // Reset disabled tools based on profile config
+    // We add all profile-specified disabled tools without checking availableTools
+    // because servers may not be initialized yet. When servers start later,
+    // their tools will be correctly filtered out by getAvailableTools().
+    // Orphaned tool names are cleaned up by cleanupOrphanedTools().
     this.disabledTools.clear()
 
     if (disabledTools && disabledTools.length > 0) {
       for (const toolName of disabledTools) {
-        // Only add if tool exists
-        if (this.availableTools.some(t => t.name === toolName)) {
-          this.disabledTools.add(toolName)
-        }
+        this.disabledTools.add(toolName)
       }
     }
 

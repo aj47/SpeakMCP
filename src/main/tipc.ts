@@ -987,7 +987,6 @@ export const router = {
     .input<{
       text: string
       conversationId?: string
-      fromTile?: boolean // If true, start session snoozed (don't show floating panel)
     }>()
     .action(async ({ input }) => {
       const config = configStore.get()
@@ -1031,8 +1030,7 @@ export const router = {
       // Fire-and-forget: Start agent processing without blocking
       // This allows multiple sessions to run concurrently
       // Pass existingSessionId to reuse the session if found
-      // If fromTile is true, start snoozed so the floating panel doesn't show
-      processWithAgentMode(input.text, conversationId, existingSessionId, input.fromTile ?? false)
+      processWithAgentMode(input.text, conversationId, existingSessionId)
         .then((finalResponse) => {
           // Save to history after completion
           const history = getRecordingHistory()

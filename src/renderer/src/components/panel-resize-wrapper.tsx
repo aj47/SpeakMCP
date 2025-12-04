@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react"
+import React, { useState, useEffect, useCallback, useRef } from "react"
 import { ResizeHandle } from "@renderer/components/resize-handle"
 import { tipcClient } from "@renderer/lib/tipc-client"
 
@@ -19,6 +19,8 @@ export function PanelResizeWrapper({
 }: PanelResizeWrapperProps) {
   const [isResizing, setIsResizing] = useState(false)
   const [currentSize, setCurrentSize] = useState({ width: 300, height: 200 })
+  // Capture the mode when resize starts so we save to the correct mode
+  const resizeStartModeRef = useRef<"normal" | "agent" | "textInput">("normal")
 
   useEffect(() => {
     // Initialize local size state from current window bounds; do not change size on mount
@@ -35,8 +37,16 @@ export function PanelResizeWrapper({
     init()
   }, [])
 
-  const handleResizeStart = useCallback(() => {
+  const handleResizeStart = useCallback(async () => {
     setIsResizing(true)
+    // Capture the current mode when resize starts
+    // This ensures we save to the correct mode even if the agent completes during resize
+    try {
+      const mode = await tipcClient.getPanelMode()
+      resizeStartModeRef.current = mode as "normal" | "agent" | "textInput"
+    } catch (error) {
+      console.error("Failed to get panel mode on resize start:", error)
+    }
   }, [])
 
   const handleResize = useCallback(async (delta: { width: number; height: number }) => {
@@ -59,15 +69,17 @@ export function PanelResizeWrapper({
 
     setIsResizing(false)
 
-    // Save the final size for the current mode
+    // Save the final size for the mode that was active when resize started
+    // This ensures we save to the correct mode even if the agent completed during resize
     try {
       const finalWidth = Math.max(minWidth, size.width)
       const finalHeight = Math.max(minHeight, size.height)
 
-      // Get current panel mode and save size for that mode
-      const mode = await tipcClient.getPanelMode()
+      // Use the mode captured at resize start, not the current mode
+      // This prevents saving to wrong mode if agent completes during resize
+      const mode = resizeStartModeRef.current
       await tipcClient.savePanelModeSize({
-        mode: mode as "normal" | "agent" | "textInput",
+        mode,
         width: finalWidth,
         height: finalHeight
       })

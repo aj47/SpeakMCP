@@ -68,6 +68,8 @@ export function SessionTileWrapper({
   } = useResizable({
     initialWidth: TILE_DIMENSIONS.width.default,
     initialHeight: TILE_DIMENSIONS.height.default,
+    // Use a shared storage key so all session tiles remember the same size
+    storageKey: "session-tile",
   })
 
   // Drag handlers

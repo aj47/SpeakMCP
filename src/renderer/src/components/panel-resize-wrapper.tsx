@@ -17,7 +17,6 @@ export function PanelResizeWrapper({
   minWidth = 200,
   minHeight = 100,
 }: PanelResizeWrapperProps) {
-  const [isResizing, setIsResizing] = useState(false)
   const [currentSize, setCurrentSize] = useState({ width: 300, height: 200 })
 
   useEffect(() => {
@@ -36,7 +35,7 @@ export function PanelResizeWrapper({
   }, [])
 
   const handleResizeStart = useCallback(() => {
-    setIsResizing(true)
+    // No-op: resize start notification if needed for future features
   }, [])
 
   const handleResize = useCallback(async (delta: { width: number; height: number }) => {
@@ -57,22 +56,12 @@ export function PanelResizeWrapper({
   const handleResizeEnd = useCallback(async (size: { width: number; height: number }) => {
     if (!enableResize) return
 
-    setIsResizing(false)
-
-    // Save the final size for the current mode
+    // Save the final size (unified across all modes)
     try {
       const finalWidth = Math.max(minWidth, size.width)
       const finalHeight = Math.max(minHeight, size.height)
 
-      // Get current panel mode and save size for that mode
-      const mode = await tipcClient.getPanelMode()
-      await tipcClient.savePanelModeSize({
-        mode: mode as "normal" | "agent" | "textInput",
-        width: finalWidth,
-        height: finalHeight
-      })
-
-      // Also save to legacy panelCustomSize for backward compatibility
+      // Save to unified panelCustomSize
       await tipcClient.savePanelCustomSize({ width: finalWidth, height: finalHeight })
       setCurrentSize({ width: finalWidth, height: finalHeight })
     } catch (error) {

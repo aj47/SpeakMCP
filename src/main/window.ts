@@ -173,57 +173,46 @@ const textInputPanelWindowSize = {
   height: 180,
 }
 
-// Get the saved size for a specific mode, or default size
-const getSavedSizeForMode = (mode: "normal" | "agent" | "textInput") => {
+// Get the saved panel size (unified across all modes)
+const getSavedPanelSize = () => {
   const config = configStore.get()
 
-  logApp(`[window.ts] getSavedSizeForMode(${mode}) - checking config...`)
+  logApp(`[window.ts] getSavedPanelSize - checking config...`)
 
   // Helper to validate and cap saved sizes to reasonable maximums
-  const validateSize = (savedSize: { width: number; height: number }, defaultSize: { width: number; height: number }) => {
+  const validateSize = (savedSize: { width: number; height: number }) => {
     const maxWidth = 3000 // Maximum reasonable width
     const maxHeight = 2000 // Maximum reasonable height
+    const minWidth = 200
+    const minHeight = 100
 
-    // For textInput mode, enforce stricter limits to prevent huge panels
-    const maxTextInputWidth = 1200
-    const maxTextInputHeight = 800
+    if (savedSize.width > maxWidth || savedSize.height > maxHeight) {
+      logApp(`[window.ts] Saved size too large (${savedSize.width}x${savedSize.height}), using default:`, panelWindowSize)
+      return panelWindowSize
+    }
 
-    if (mode === "textInput") {
-      if (savedSize.width > maxTextInputWidth || savedSize.height > maxTextInputHeight) {
-        logApp(`[window.ts] Saved textInput size too large (${savedSize.width}x${savedSize.height}), using default:`, defaultSize)
-        return defaultSize
-      }
-    } else {
-      if (savedSize.width > maxWidth || savedSize.height > maxHeight) {
-        logApp(`[window.ts] Saved ${mode} size too large (${savedSize.width}x${savedSize.height}), using default:`, defaultSize)
-        return defaultSize
-      }
+    if (savedSize.width < minWidth || savedSize.height < minHeight) {
+      logApp(`[window.ts] Saved size too small (${savedSize.width}x${savedSize.height}), using default:`, panelWindowSize)
+      return panelWindowSize
     }
 
     return savedSize
   }
 
-  if (mode === "normal" && config.panelNormalModeSize) {
-    logApp(`[window.ts] Found saved normal mode size:`, config.panelNormalModeSize)
-    return validateSize(config.panelNormalModeSize, panelWindowSize)
-  } else if (mode === "agent" && config.panelAgentModeSize) {
-    logApp(`[window.ts] Found saved agent mode size:`, config.panelAgentModeSize)
-    return validateSize(config.panelAgentModeSize, agentPanelWindowSize)
-  } else if (mode === "textInput" && config.panelTextInputModeSize) {
-    logApp(`[window.ts] Found saved textInput mode size:`, config.panelTextInputModeSize)
-    return validateSize(config.panelTextInputModeSize, textInputPanelWindowSize)
+  // Use panelCustomSize as the unified size for all modes
+  if (config.panelCustomSize) {
+    logApp(`[window.ts] Found saved panel size:`, config.panelCustomSize)
+    return validateSize(config.panelCustomSize)
   }
 
-  // Return default sizes if no saved size
-  if (mode === "agent") {
-    logApp(`[window.ts] No saved agent mode size, using default:`, agentPanelWindowSize)
-    return agentPanelWindowSize
-  } else if (mode === "textInput") {
-    logApp(`[window.ts] No saved textInput mode size, using default:`, textInputPanelWindowSize)
-    return textInputPanelWindowSize
-  }
-  logApp(`[window.ts] No saved normal mode size, using default:`, panelWindowSize)
+  // Return default size
+  logApp(`[window.ts] No saved panel size, using default:`, panelWindowSize)
   return panelWindowSize
+}
+
+// Unified size getter - mode parameter kept for API compatibility but ignored
+const getSavedSizeForMode = (_mode: "normal" | "agent" | "textInput") => {
+  return getSavedPanelSize()
 }
 
 const getPanelWindowPosition = (
@@ -306,66 +295,30 @@ function applyPanelMode(mode: "normal" | "agent" | "textInput") {
   const win = WINDOWS.get("panel")
   if (!win) return
 
-  const savedSize = getSavedSizeForMode(mode)
-  const position = getPanelWindowPosition(mode)
-
-  // Deduplicate: if same target applied very recently, skip
+  // Panel size is now unified across all modes
+  // Mode switching only affects focus behavior and z-order, not size
+  // Position is not updated on mode change - this is intentional since:
+  // 1. Size is unified so position doesn't need adjustment for different dimensions
+  // 2. User's custom positioning should be respected
   const now = Date.now()
 
-  // If user just manually resized, don't fight them; only adjust focusability/z-order
-  if (now - _lastManualResizeTs < 1000) {
-    try {
-      setPanelFocusableForMode(win, mode)
-      ensurePanelZOrder(win)
-    } catch {}
-    return
-  }
-
-  const sameTarget =
-    _lastApplied.mode === mode &&
-    _lastApplied.bounds &&
-    _lastApplied.bounds.width === savedSize.width &&
-    _lastApplied.bounds.height === savedSize.height &&
-    _lastApplied.bounds.x === position.x &&
-    _lastApplied.bounds.y === position.y
-
-  if (sameTarget && now - _lastApplied.ts < 300) {
-    return
-  }
-
-  // If current bounds already match target exactly, also skip
+  // Ensure minimum size is enforced (prevents OS-level resize below waveform requirements)
+  const minWidth = Math.max(200, MIN_WAVEFORM_WIDTH)
   try {
-    const b = win.getBounds()
-    if (
-      b.width === savedSize.width &&
-      b.height === savedSize.height &&
-      b.x === position.x &&
-      b.y === position.y
-    ) {
-      // Still ensure focus behavior is correct for mode
-      setPanelFocusableForMode(win, mode)
-      ensurePanelZOrder(win)
-      _lastApplied = { mode, ts: now, bounds: { width: b.width, height: b.height, x: b.x, y: b.y } }
-      return
-    }
+    win.setMinimumSize(minWidth, 100)
   } catch {}
 
-  const minWidth = Math.max(200, MIN_WAVEFORM_WIDTH)
-  win.setMinimumSize(minWidth, 100)
+  // Update focus behavior for the mode
+  try {
+    setPanelFocusableForMode(win, mode)
+    ensurePanelZOrder(win)
+  } catch {}
 
-  // Set focus behavior for mode before resizing
-  setPanelFocusableForMode(win, mode)
-
-  // Apply size and position; animate only if visible to avoid flicker
-  const animate = win.isVisible()
-  win.setSize(savedSize.width, savedSize.height, animate)
-  win.setPosition(position.x, position.y, animate)
-
-  ensurePanelZOrder(win)
+  // Track mode change for deduplication
   _lastApplied = {
     mode,
     ts: now,
-    bounds: { width: savedSize.width, height: savedSize.height, x: position.x, y: position.y },
+    bounds: _lastApplied.bounds, // Keep existing bounds since we don't resize
   }
 }
 

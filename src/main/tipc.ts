@@ -1971,20 +1971,15 @@ export const router = {
       return updatedConfig.panelCustomSize
     }),
 
-  // Save size for specific panel mode
+  // Save panel size (unified across all modes)
   savePanelModeSize: t.procedure
     .input<{ mode: "normal" | "agent" | "textInput"; width: number; height: number }>()
     .action(async ({ input }) => {
       const config = configStore.get()
       const updatedConfig = { ...config }
 
-      if (input.mode === "normal") {
-        updatedConfig.panelNormalModeSize = { width: input.width, height: input.height }
-      } else if (input.mode === "agent") {
-        updatedConfig.panelAgentModeSize = { width: input.width, height: input.height }
-      } else if (input.mode === "textInput") {
-        updatedConfig.panelTextInputModeSize = { width: input.width, height: input.height }
-      }
+      // Save to unified panelCustomSize regardless of mode
+      updatedConfig.panelCustomSize = { width: input.width, height: input.height }
 
       configStore.save(updatedConfig)
       return { mode: input.mode, size: { width: input.width, height: input.height } }

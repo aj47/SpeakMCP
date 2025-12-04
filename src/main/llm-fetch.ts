@@ -726,99 +726,32 @@ async function makeAPICallAttempt(
 
     const data = await response.json()
 
-    // ALWAYS log empty content cases - this is anomalous behavior that needs diagnosis
+    // Log empty content cases - this is anomalous behavior
     const messageContent = data.choices?.[0]?.message?.content
-    const isEmptyContent = !messageContent || (typeof messageContent === 'string' && messageContent.trim() === '') || (Array.isArray(messageContent) && messageContent.length === 0)
+    const hasToolCalls = !!data.choices?.[0]?.message?.tool_calls?.length
+    const isEmptyContent = !hasToolCalls && (!messageContent ||
+      (typeof messageContent === 'string' && messageContent.trim() === ''))
 
     if (isEmptyContent) {
-      const emptyContentDiagnostic = {
-        timestamp: new Date().toISOString(),
-        severity: "ANOMALY",
+      const diagnostic = {
         model: requestBody.model,
         provider: baseURL,
-        responseFormat: requestBody.response_format?.type || 'none',
         finishReason: data.choices?.[0]?.finish_reason,
-        // Detailed content analysis
-        contentAnalysis: {
-          rawValue: messageContent,
-          type: typeof messageContent,
-          isNull: messageContent === null,
-          isUndefined: messageContent === undefined,
-          isEmptyString: messageContent === '',
-          trimmedLength: typeof messageContent === 'string' ? messageContent.trim().length : 0,
-        },
-        // Check for content in alternative fields
-        alternativeContent: {
-          refusal: data.choices?.[0]?.message?.refusal,
-          toolCalls: data.choices?.[0]?.message?.tool_calls,
-          functionCall: data.choices?.[0]?.message?.function_call,
-          reasoning: (data.choices?.[0]?.message as any)?.reasoning,
-          // Some providers use different field names
-          text: (data.choices?.[0]?.message as any)?.text,
-          response: (data.choices?.[0]?.message as any)?.response,
-        },
-        // All keys in message object - helps identify unexpected fields
-        messageObjectKeys: data.choices?.[0]?.message && typeof data.choices[0].message === 'object' ? Object.keys(data.choices[0].message) : [],
-        // Token usage - may indicate truncation or issues
         usage: data.usage,
-        // Request context for correlation
-        requestContext: {
-          messagesCount: requestBody.messages?.length,
-          lastMessageRole: requestBody.messages?.at(-1)?.role,
-          lastMessageLength: requestBody.messages?.at(-1)?.content?.length,
-          estimatedTokens,
-          hasSystemPrompt: requestBody.messages?.[0]?.role === 'system',
-        },
-        // Full raw response for debugging (truncated)
-        rawResponsePreview: JSON.stringify(data).substring(0, 1000),
+        messagesCount: requestBody.messages?.length,
+        lastMessageRole: requestBody.messages?.at(-1)?.role,
       }
-
-      // Always log this - it's an anomaly that shouldn't happen
-      logLLM("🚨 EMPTY CONTENT FROM LLM - THIS SHOULD NOT HAPPEN", emptyContentDiagnostic)
-      console.error("[LLM-FETCH] EMPTY CONTENT ANOMALY:", JSON.stringify(emptyContentDiagnostic, null, 2))
-
-      // Also log to diagnostics service for persistence
-      diagnosticsService.logError("llm-fetch", "Empty content anomaly from LLM API", emptyContentDiagnostic)
+      diagnosticsService.logError("llm-fetch", "Empty content from LLM API", diagnostic)
     }
 
     if (isDebugLLM()) {
-      logLLM("✅ HTTP 200 Response received", {
-        hasError: !!data.error,
-        hasChoices: !!data.choices,
-        choicesCount: data.choices?.length,
-        firstChoicePreview: data.choices?.[0] ? {
-          hasMessage: !!data.choices[0].message,
-          hasContent: !!data.choices[0].message?.content,
-          contentType: typeof data.choices[0].message?.content,
-          contentLength: data.choices[0].message?.content?.length || 0,
-          contentPreview: typeof data.choices[0].message?.content === 'string' ? data.choices[0].message.content.substring(0, 100) : JSON.stringify(data.choices[0].message?.content)?.substring(0, 100) || "(non-string or empty)"
-        } : null,
-        // ENHANCED: Log full response structure to diagnose empty content
-        fullResponseStructure: {
-          id: data.id,
-          object: data.object,
-          created: data.created,
-          model: data.model,
-          usage: data.usage,
-          choices: data.choices?.map((choice: any, idx: number) => ({
-            index: idx,
-            finish_reason: choice.finish_reason,
-            message: {
-              role: choice.message?.role,
-              content: choice.message?.content,
-              contentType: typeof choice.message?.content,
-              contentIsNull: choice.message?.content === null,
-              contentIsUndefined: choice.message?.content === undefined,
-              contentIsEmptyString: choice.message?.content === "",
-              contentLength: choice.message?.content?.length || 0,
-              refusal: choice.message?.refusal,
-              tool_calls: choice.message?.tool_calls,
-              reasoning: choice.message?.reasoning,
-              // Log ALL keys in message object to catch unexpected fields
-              allMessageKeys: choice.message && typeof choice.message === 'object' ? Object.keys(choice.message) : []
-            }
-          }))
-        }
+      const choice = data.choices?.[0]
+      logLLM("✅ Response received", {
+        hasContent: !!choice?.message?.content,
+        contentLength: choice?.message?.content?.length || 0,
+        hasToolCalls: !!choice?.message?.tool_calls?.length,
+        finishReason: choice?.finish_reason,
+        usage: data.usage,
       })
     }
 

@@ -8,6 +8,7 @@ import { diagnosticsService } from "./diagnostics"
 import { mcpService, MCPToolResult } from "./mcp-service"
 import { processTranscriptWithAgentMode } from "./llm"
 import { state, agentProcessManager } from "./state"
+import { conversationService } from "./conversation-service"
 
 let server: FastifyInstance | null = null
 let lastError: string | undefined
@@ -94,7 +95,13 @@ function extractUserPrompt(body: any): string | null {
   }
 }
 
-async function runAgent(prompt: string): Promise<string> {
+interface RunAgentOptions {
+  prompt: string
+  conversationId?: string
+}
+
+async function runAgent(options: RunAgentOptions): Promise<{ content: string; conversationId: string }> {
+  const { prompt, conversationId: inputConversationId } = options
   const cfg = configStore.get()
 
   // Set agent mode state for process management - ensure clean state
@@ -102,10 +109,86 @@ async function runAgent(prompt: string): Promise<string> {
   state.shouldStopAgent = false
   state.agentIterationCount = 0
 
-  // Start tracking this agent session
+  // Load previous conversation history if conversationId is provided
+  let previousConversationHistory: Array<{
+    role: "user" | "assistant" | "tool"
+    content: string
+    toolCalls?: any[]
+    toolResults?: any[]
+  }> | undefined
+  let conversationId = inputConversationId
+
+  // Create or continue conversation - matching tipc.ts createMcpTextInput logic
+  if (conversationId) {
+    // Add user message to existing conversation BEFORE processing
+    const updatedConversation = await conversationService.addMessageToConversation(
+      conversationId,
+      prompt,
+      "user"
+    )
+
+    if (updatedConversation) {
+      // Load conversation history excluding the message we just added (the current user input)
+      // This matches tipc.ts processWithAgentMode behavior
+      const messagesToConvert = updatedConversation.messages.slice(0, -1)
+
+      // Debug: Log the conversation history order
+      console.log("[remote-server] ====== CONVERSATION HISTORY ======")
+      console.log("[remote-server] Total messages in conversation:", updatedConversation.messages.length)
+      console.log("[remote-server] Messages to use as history (excluding current):", messagesToConvert.length)
+      messagesToConvert.forEach((msg, i) => {
+        console.log(`[remote-server] History[${i}]: ${msg.role} - "${msg.content.substring(0, 50)}..."`)
+      })
+      console.log("[remote-server] Current user message (will be added by LLM):", prompt.substring(0, 50))
+
+      diagnosticsService.logInfo("remote-server", `Continuing conversation ${conversationId} with ${messagesToConvert.length} previous messages`)
+
+      previousConversationHistory = messagesToConvert.map((msg) => ({
+        role: msg.role,
+        content: msg.content,
+        toolCalls: msg.toolCalls,
+        // Convert toolResults from stored format to MCPToolResult format (matching tipc.ts)
+        toolResults: msg.toolResults?.map((tr) => ({
+          content: [
+            {
+              type: "text" as const,
+              text: tr.success ? tr.content : (tr.error || tr.content),
+            },
+          ],
+          isError: !tr.success,
+        })),
+      }))
+    } else {
+      // Conversation not found, start fresh
+      diagnosticsService.logInfo("remote-server", `Conversation ${conversationId} not found, starting fresh`)
+      conversationId = undefined
+    }
+  }
+
+  // Create a new conversation if none exists
+  if (!conversationId) {
+    const newConversation = await conversationService.createConversation(prompt, "user")
+    conversationId = newConversation.id
+    diagnosticsService.logInfo("remote-server", `Created new conversation ${conversationId}`)
+  }
+
+  // Try to find and revive an existing session for this conversation (matching tipc.ts)
   const { agentSessionTracker } = await import("./agent-session-tracker")
+  let existingSessionId: string | undefined
+  if (inputConversationId) {
+    const foundSessionId = agentSessionTracker.findSessionByConversationId(inputConversationId)
+    if (foundSessionId) {
+      const revived = agentSessionTracker.reviveSession(foundSessionId)
+      if (revived) {
+        existingSessionId = foundSessionId
+        diagnosticsService.logInfo("remote-server", `Revived existing session ${existingSessionId}`)
+      }
+    }
+  }
+
+  // Start or reuse agent session
   const conversationTitle = prompt.length > 50 ? prompt.substring(0, 50) + "..." : prompt
-  const sessionId = agentSessionTracker.startSession(undefined, conversationTitle)
+  const sessionId = existingSessionId || agentSessionTracker.startSession(conversationId, conversationTitle)
 
   try {
     if (!cfg.mcpToolsEnabled) {
@@ -125,15 +208,15 @@ async function runAgent(prompt: string): Promise<string> {
       availableTools,
       executeToolCall,
       cfg.mcpMaxIterations ?? 10,
-      undefined, // No previous conversation history for remote server
-      undefined, // No conversation ID for remote server
+      previousConversationHistory,
+      conversationId,
       sessionId, // Pass session ID for progress routing
     )
 
     // Mark session as completed
     agentSessionTracker.completeSession(sessionId, "Agent completed successfully")
 
-    return agentResult.content
+    return { content: agentResult.content, conversationId }
   } catch (error) {
     // Mark session as errored
     const errorMessage = error instanceof Error ? error.message : "Unknown error"
@@ -241,15 +324,33 @@ export async function startRemoteServer() {
         return reply.code(400).send({ error: "Missing user prompt" })
       }
 
-      diagnosticsService.logInfo("remote-server", "Handling completion request")
+      // Extract conversationId from request body (custom extension to OpenAI API)
+      const conversationId = typeof body.conversation_id === "string" ? body.conversation_id : undefined
 
-      const text = await runAgent(prompt)
+      // Debug logging
+      console.log("[remote-server] ====== CHAT REQUEST ======")
+      console.log("[remote-server] Received conversation_id:", conversationId || "NONE (new conversation)")
+      console.log("[remote-server] Prompt:", prompt.substring(0, 100))
+      diagnosticsService.logInfo("remote-server", `Handling completion request${conversationId ? ` for conversation ${conversationId}` : ""}`)
+
+      const result = await runAgent({ prompt, conversationId })
 
       // Record as if user submitted a text input
-      recordHistory(text)
+      recordHistory(result.content)
 
       const model = resolveActiveModelId(configStore.get())
-      return reply.send(toOpenAIChatResponse(text, model))
+      // Return standard OpenAI response with conversation_id as custom field
+      const response = toOpenAIChatResponse(result.content, model)
+
+      // Debug logging
+      console.log("[remote-server] ====== CHAT RESPONSE ======")
+      console.log("[remote-server] Returning conversation_id:", result.conversationId)
+      console.log("[remote-server] Response length:", result.content.length)
+
+      return reply.send({
+        ...response,
+        conversation_id: result.conversationId, // Include conversation_id for client to use in follow-ups
+      })
     } catch (error: any) {
       diagnosticsService.logError("remote-server", "Handler error", error)
       return reply.code(500).send({ error: "Internal Server Error" })

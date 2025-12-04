@@ -718,6 +718,13 @@ export async function processTranscriptWithAgentMode(
       }))
   }
 
+  // Helper to check if content is just a tool call placeholder (not real content)
+  const isToolCallPlaceholder = (content: string): boolean => {
+    const trimmed = content.trim()
+    // Match patterns like "[Calling tools: ...]" or "[Tool: ...]"
+    return /^\[(?:Calling tools?|Tool|Tools?):[^\]]+\]$/i.test(trimmed)
+  }
+
   // Helper to detect if agent is repeating the same response (infinite loop)
   const detectRepeatedResponse = (currentResponse: string): boolean => {
     // Get last 3 assistant responses (excluding the current one)
@@ -1203,6 +1210,9 @@ Always use actual resource IDs from the conversation history or create new ones 
       addMessage("assistant", finalContent)
 
       // Optional verification before completing
+      // Track if we should skip post-verify summary (when agent is repeating itself)
+      let skipPostVerifySummary = false
+
       if (config.mcpVerifyCompletionEnabled) {
         const verifyStep = createProgressStep(
           "thinking",
@@ -1226,13 +1236,23 @@ Always use actual resource IDs from the conversation history or create new ones 
         let verified = false
         let verification: any = null
 
-        // If agent is repeating itself, skip verification and accept as complete
+        // If agent is repeating itself, skip verification AND post-verify summary
+        // UNLESS the content is just a tool call placeholder (not real content)
+        // In that case, we still need to generate a proper summary
         if (isRepeating) {
           verified = true
+          // Only skip post-verify summary if we have real content (not just a tool call placeholder)
+          if (!isToolCallPlaceholder(finalContent)) {
+            skipPostVerifySummary = true  // Skip the summary call - we already have valid content
+          }
           verifyStep.status = "completed"
           verifyStep.description = "Agent response is repeating - accepting as final"
           if (isDebugLLM()) {
-            logLLM("Infinite loop detected - treating as complete", { finalContent: finalContent.substring(0, 200) })
+            logLLM("Infinite loop detected - treating as complete", {
+              finalContent: finalContent.substring(0, 200),
+              isPlaceholder: isToolCallPlaceholder(finalContent),
+              willGenerateSummary: isToolCallPlaceholder(finalContent)
+            })
           }
         } else {
           for (let i = 0; i <= retries; i++) {
@@ -1264,82 +1284,101 @@ Always use actual resource IDs from the conversation history or create new ones 
       }
 
         // Post-verify: produce a concise final summary for the user
-        try {
-          const postVerifySummaryStep = createProgressStep(
-            "thinking",
-            "Summarizing results",
-            "Creating a concise final summary of what was achieved",
-            "in_progress",
-          )
-          progressSteps.push(postVerifySummaryStep)
-          emit({
-            currentIteration: iteration,
-            maxIterations,
-            steps: progressSteps.slice(-3),
-            isComplete: false,
-            conversationHistory: formatConversationForProgress(conversationHistory),
-          })
+        // Skip this if agent was repeating (already has valid final content)
+        if (!skipPostVerifySummary) {
+          try {
+            const postVerifySummaryStep = createProgressStep(
+              "thinking",
+              "Summarizing results",
+              "Creating a concise final summary of what was achieved",
+              "in_progress",
+            )
+            progressSteps.push(postVerifySummaryStep)
+            emit({
+              currentIteration: iteration,
+              maxIterations,
+              steps: progressSteps.slice(-3),
+              isComplete: false,
+              conversationHistory: formatConversationForProgress(conversationHistory),
+            })
 
-          // Build a fresh system prompt and messages for the summary
-          const postVerifySystemPrompt = constructSystemPrompt(
-            uniqueAvailableTools,
-            config.mcpToolsSystemPrompt,
-            true, // isAgentMode
-            toolCapabilities.relevantTools,
-          )
+            // Build a fresh system prompt and messages for the summary
+            const postVerifySystemPrompt = constructSystemPrompt(
+              uniqueAvailableTools,
+              config.mcpToolsSystemPrompt,
+              true, // isAgentMode
+              toolCapabilities.relevantTools,
+            )
 
-          const postVerifySummaryMessages = [
-            { role: "system", content: postVerifySystemPrompt },
-            ...conversationHistory
-              .map((entry) => {
-                if (entry.role === "tool") {
-                  const text = (entry.content || "").trim()
-                  if (!text) return null
-                  return { role: "user" as const, content: `Tool execution results:\n${entry.content}` }
+            // Build messages and add a summary prompt to ensure LLM responds
+            const mappedMessages = conversationHistory
+                .map((entry) => {
+                  if (entry.role === "tool") {
+                    const text = (entry.content || "").trim()
+                    if (!text) return null
+                    return { role: "user" as const, content: `Tool execution results:\n${entry.content}` }
+                  }
+                  // Filter out messages with empty content (API requires non-empty content)
+                  const content = (entry.content || "").trim()
+                  if (!content) return null
+                  return { role: entry.role as "user" | "assistant", content }
+                })
+                .filter(Boolean as any)
+
+            // Add a user message asking for summary if the last message is from assistant
+            // This ensures the LLM has something to respond to instead of returning empty
+            const lastMappedMessage = mappedMessages[mappedMessages.length - 1]
+            if (lastMappedMessage && lastMappedMessage.role === "assistant") {
+              mappedMessages.push({
+                role: "user" as const,
+                content: "Please provide a brief summary of what was accomplished."
+              })
+            }
+
+            const postVerifySummaryMessages = [
+              { role: "system", content: postVerifySystemPrompt },
+              ...mappedMessages,
+            ]
+
+            const { messages: shrunkPostVerifySummaryMessages } = await shrinkMessagesForLLM({
+              messages: postVerifySummaryMessages as any,
+              availableTools: uniqueAvailableTools,
+              relevantTools: toolCapabilities.relevantTools,
+              isAgentMode: true,
+              sessionId: currentSessionId,
+              onSummarizationProgress: (current, total, message) => {
+                // Update the last thinking step with summarization progress
+                const lastThinkingStep = progressSteps.findLast(step => step.type === "thinking")
+                if (lastThinkingStep) {
+                  lastThinkingStep.description = `Summarizing for verification (${current}/${total})`
                 }
-                return { role: entry.role as "user" | "assistant", content: entry.content }
-              })
-              .filter(Boolean as any),
-          ]
+                emit({
+                  currentIteration: iteration,
+                  maxIterations,
+                  steps: progressSteps.slice(-3),
+                  isComplete: false,
+                  conversationHistory: formatConversationForProgress(conversationHistory),
+                })
+              },
+            })
 
-          const { messages: shrunkPostVerifySummaryMessages } = await shrinkMessagesForLLM({
-            messages: postVerifySummaryMessages as any,
-            availableTools: uniqueAvailableTools,
-            relevantTools: toolCapabilities.relevantTools,
-            isAgentMode: true,
-            sessionId: currentSessionId,
-            onSummarizationProgress: (current, total, message) => {
-              // Update the last thinking step with summarization progress
-              const lastThinkingStep = progressSteps.findLast(step => step.type === "thinking")
-              if (lastThinkingStep) {
-                lastThinkingStep.description = `Summarizing for verification (${current}/${total})`
-              }
-              emit({
-                currentIteration: iteration,
-                maxIterations,
-                steps: progressSteps.slice(-3),
-                isComplete: false,
-                conversationHistory: formatConversationForProgress(conversationHistory),
-              })
-            },
-          })
+            const postVerifySummaryResponse = await makeLLMCall(shrunkPostVerifySummaryMessages, config, onRetryProgress)
 
-          const postVerifySummaryResponse = await makeLLMCall(shrunkPostVerifySummaryMessages, config, onRetryProgress)
+            // Update summary step with the response and use it as final content
+            postVerifySummaryStep.status = "completed"
+            postVerifySummaryStep.llmContent = postVerifySummaryResponse.content || ""
+            postVerifySummaryStep.title = "Summary provided"
+            postVerifySummaryStep.description = postVerifySummaryResponse.content && postVerifySummaryResponse.content.length > 100
+              ? postVerifySummaryResponse.content.substring(0, 100) + "..."
+              : postVerifySummaryResponse.content || "Summary generated"
 
-          // Update summary step with the response and use it as final content
-          postVerifySummaryStep.status = "completed"
-          postVerifySummaryStep.llmContent = postVerifySummaryResponse.content || ""
-          postVerifySummaryStep.title = "Summary provided"
-          postVerifySummaryStep.description = postVerifySummaryResponse.content && postVerifySummaryResponse.content.length > 100
-            ? postVerifySummaryResponse.content.substring(0, 100) + "..."
-            : postVerifySummaryResponse.content || "Summary generated"
+            finalContent = postVerifySummaryResponse.content || finalContent
 
-          finalContent = postVerifySummaryResponse.content || finalContent
-
-          // Append as the final assistant message
-          addMessage("assistant", finalContent)
-        } catch (e) {
-          // If summary generation fails, proceed with existing finalContent
+            // Append as the final assistant message
+            addMessage("assistant", finalContent)
+          } catch (e) {
+            // If summary generation fails, proceed with existing finalContent
+          }
         }
 
 
@@ -1786,9 +1825,12 @@ Please try alternative approaches, break down the task into smaller steps, or pr
                   content: `Tool execution results:\n${entry.content}`,
                 }
               }
+              // Filter out messages with empty content (API requires non-empty content)
+              const content = (entry.content || "").trim()
+              if (!content) return null
               return {
                 role: entry.role as "user" | "assistant",
-                content: entry.content,
+                content,
               }
             })
             .filter(Boolean as any),
@@ -1869,6 +1911,9 @@ Please try alternative approaches, break down the task into smaller steps, or pr
 
 
 	      // Optional verification before completing after tools
+	      // Track if we should skip post-verify summary (when agent is repeating itself)
+	      let skipPostVerifySummary2 = false
+
 	      if (config.mcpVerifyCompletionEnabled) {
 	        const verifyStep = createProgressStep(
 	          "thinking",
@@ -1892,13 +1937,23 @@ Please try alternative approaches, break down the task into smaller steps, or pr
 	        let verified = false
 	        let verification: any = null
 
-	        // If agent is repeating itself, skip verification and accept as complete
+	        // If agent is repeating itself, skip verification AND post-verify summary
+	        // UNLESS the content is just a tool call placeholder (not real content)
+	        // In that case, we still need to generate a proper summary
 	        if (isRepeating) {
 	          verified = true
+	          // Only skip post-verify summary if we have real content (not just a tool call placeholder)
+	          if (!isToolCallPlaceholder(finalContent)) {
+	            skipPostVerifySummary2 = true  // Skip the summary call - we already have valid content
+	          }
 	          verifyStep.status = "completed"
 	          verifyStep.description = "Agent response is repeating - accepting as final"
 	          if (isDebugLLM()) {
-	            logLLM("Infinite loop detected - treating as complete", { finalContent: finalContent.substring(0, 200) })
+	            logLLM("Infinite loop detected - treating as complete", {
+	              finalContent: finalContent.substring(0, 200),
+	              isPlaceholder: isToolCallPlaceholder(finalContent),
+	              willGenerateSummary: isToolCallPlaceholder(finalContent)
+	            })
 	          }
 	        } else {
 	          for (let i = 0; i <= retries; i++) {
@@ -1939,99 +1994,118 @@ Please try alternative approaches, break down the task into smaller steps, or pr
 	      }
 
         // Post-verify: produce a concise final summary for the user
-        try {
-          const postVerifySummaryStep = createProgressStep(
-            "thinking",
-            "Summarizing results",
-            "Creating a concise final summary of what was achieved",
-            "in_progress",
-          )
-          progressSteps.push(postVerifySummaryStep)
-          emit({
-            currentIteration: iteration,
-            maxIterations,
-            steps: progressSteps.slice(-3),
-            isComplete: false,
-            conversationHistory: formatConversationForProgress(conversationHistory),
-          })
-
-          const postVerifySystemPrompt = constructSystemPrompt(
-            uniqueAvailableTools,
-            config.mcpToolsSystemPrompt,
-            true,
-            toolCapabilities.relevantTools,
-          )
-
-          const postVerifySummaryMessages = [
-            { role: "system", content: postVerifySystemPrompt },
-            ...conversationHistory
-              .map((entry) => {
-                if (entry.role === "tool") {
-                  const text = (entry.content || "").trim()
-                  if (!text) return null
-                  return { role: "user" as const, content: `Tool execution results:\n${entry.content}` }
-                }
-                return { role: entry.role as "user" | "assistant", content: entry.content }
-              })
-              .filter(Boolean as any),
-          ]
-
-          const { messages: shrunkPostVerifySummaryMessages } = await shrinkMessagesForLLM({
-            messages: postVerifySummaryMessages as any,
-            availableTools: uniqueAvailableTools,
-            relevantTools: toolCapabilities.relevantTools,
-            isAgentMode: true,
-            sessionId: currentSessionId,
-            onSummarizationProgress: (current, total, message) => {
-              // Update the last thinking step with summarization progress
-              const lastThinkingStep = progressSteps.findLast(step => step.type === "thinking")
-              if (lastThinkingStep) {
-                lastThinkingStep.description = `Summarizing for verification (${current}/${total})`
-              }
-              emit({
-                currentIteration: iteration,
-                maxIterations,
-                steps: progressSteps.slice(-3),
-                isComplete: false,
-                conversationHistory: formatConversationForProgress(conversationHistory),
-              })
-            },
-          })
-
-          const postVerifySummaryResponse = await makeLLMCall(
-            shrunkPostVerifySummaryMessages,
-            config,
-            onRetryProgress,
-          )
-
-          // Check if stop was requested during post-verify summary generation
-          if (agentSessionStateManager.shouldStopSession(currentSessionId)) {
-            logLLM(`Agent session ${currentSessionId} stopped during post-verify summary generation`)
-            const killNote = "\n\n(Agent mode was stopped by emergency kill switch)"
-            const finalOutput = (finalContent || "") + killNote
-            conversationHistory.push({ role: "assistant", content: finalOutput })
+        // Skip this if agent was repeating (already has valid final content)
+        if (!skipPostVerifySummary2) {
+          try {
+            const postVerifySummaryStep = createProgressStep(
+              "thinking",
+              "Summarizing results",
+              "Creating a concise final summary of what was achieved",
+              "in_progress",
+            )
+            progressSteps.push(postVerifySummaryStep)
             emit({
               currentIteration: iteration,
               maxIterations,
               steps: progressSteps.slice(-3),
-              isComplete: true,
-              finalContent: finalOutput,
+              isComplete: false,
               conversationHistory: formatConversationForProgress(conversationHistory),
             })
-            break
+
+            const postVerifySystemPrompt = constructSystemPrompt(
+              uniqueAvailableTools,
+              config.mcpToolsSystemPrompt,
+              true,
+              toolCapabilities.relevantTools,
+            )
+
+            // Build messages and add a summary prompt to ensure LLM responds
+            const mappedMessages2 = conversationHistory
+                .map((entry) => {
+                  if (entry.role === "tool") {
+                    const text = (entry.content || "").trim()
+                    if (!text) return null
+                    return { role: "user" as const, content: `Tool execution results:\n${entry.content}` }
+                  }
+                  // Filter out messages with empty content (API requires non-empty content)
+                  const content = (entry.content || "").trim()
+                  if (!content) return null
+                  return { role: entry.role as "user" | "assistant", content }
+                })
+                .filter(Boolean as any)
+
+            // Add a user message asking for summary if the last message is from assistant
+            // This ensures the LLM has something to respond to instead of returning empty
+            const lastMappedMessage2 = mappedMessages2[mappedMessages2.length - 1]
+            if (lastMappedMessage2 && lastMappedMessage2.role === "assistant") {
+              mappedMessages2.push({
+                role: "user" as const,
+                content: "Please provide a brief summary of what was accomplished."
+              })
+            }
+
+            const postVerifySummaryMessages = [
+              { role: "system", content: postVerifySystemPrompt },
+              ...mappedMessages2,
+            ]
+
+            const { messages: shrunkPostVerifySummaryMessages } = await shrinkMessagesForLLM({
+              messages: postVerifySummaryMessages as any,
+              availableTools: uniqueAvailableTools,
+              relevantTools: toolCapabilities.relevantTools,
+              isAgentMode: true,
+              sessionId: currentSessionId,
+              onSummarizationProgress: (current, total, message) => {
+                // Update the last thinking step with summarization progress
+                const lastThinkingStep = progressSteps.findLast(step => step.type === "thinking")
+                if (lastThinkingStep) {
+                  lastThinkingStep.description = `Summarizing for verification (${current}/${total})`
+                }
+                emit({
+                  currentIteration: iteration,
+                  maxIterations,
+                  steps: progressSteps.slice(-3),
+                  isComplete: false,
+                  conversationHistory: formatConversationForProgress(conversationHistory),
+                })
+              },
+            })
+
+            const postVerifySummaryResponse = await makeLLMCall(
+              shrunkPostVerifySummaryMessages,
+              config,
+              onRetryProgress,
+            )
+
+            // Check if stop was requested during post-verify summary generation
+            if (agentSessionStateManager.shouldStopSession(currentSessionId)) {
+              logLLM(`Agent session ${currentSessionId} stopped during post-verify summary generation`)
+              const killNote = "\n\n(Agent mode was stopped by emergency kill switch)"
+              const finalOutput = (finalContent || "") + killNote
+              conversationHistory.push({ role: "assistant", content: finalOutput })
+              emit({
+                currentIteration: iteration,
+                maxIterations,
+                steps: progressSteps.slice(-3),
+                isComplete: true,
+                finalContent: finalOutput,
+                conversationHistory: formatConversationForProgress(conversationHistory),
+              })
+              break
+            }
+
+            postVerifySummaryStep.status = "completed"
+            postVerifySummaryStep.llmContent = postVerifySummaryResponse.content || ""
+            postVerifySummaryStep.title = "Summary provided"
+            postVerifySummaryStep.description = postVerifySummaryResponse.content && postVerifySummaryResponse.content.length > 100
+              ? postVerifySummaryResponse.content.substring(0, 100) + "..."
+              : postVerifySummaryResponse.content || "Summary generated"
+
+            finalContent = postVerifySummaryResponse.content || finalContent
+            conversationHistory.push({ role: "assistant", content: finalContent })
+          } catch (e) {
+            // If summary generation fails, proceed with existing finalContent
           }
-
-          postVerifySummaryStep.status = "completed"
-          postVerifySummaryStep.llmContent = postVerifySummaryResponse.content || ""
-          postVerifySummaryStep.title = "Summary provided"
-          postVerifySummaryStep.description = postVerifySummaryResponse.content && postVerifySummaryResponse.content.length > 100
-            ? postVerifySummaryResponse.content.substring(0, 100) + "..."
-            : postVerifySummaryResponse.content || "Summary generated"
-
-          finalContent = postVerifySummaryResponse.content || finalContent
-          conversationHistory.push({ role: "assistant", content: finalContent })
-        } catch (e) {
-          // If summary generation fails, proceed with existing finalContent
         }
 
 
@@ -2115,9 +2189,12 @@ Please try alternative approaches, break down the task into smaller steps, or pr
                   content: `Tool execution results:\n${entry.content}`,
                 }
               }
+              // Filter out messages with empty content (API requires non-empty content)
+              const content = (entry.content || "").trim()
+              if (!content) return null
               return {
                 role: entry.role as "user" | "assistant",
-                content: entry.content,
+                content,
               }
             })
             .filter(Boolean as any),
@@ -2175,84 +2252,9 @@ Please try alternative approaches, break down the task into smaller steps, or pr
           })
         }
 
-        // Post-verify: produce a concise final summary for the user
-        try {
-          const postVerifySummaryStep = createProgressStep(
-            "thinking",
-            "Summarizing results",
-            "Creating a concise final summary of what was achieved",
-            "in_progress",
-          )
-          progressSteps.push(postVerifySummaryStep)
-          emit({
-            currentIteration: iteration,
-            maxIterations,
-            steps: progressSteps.slice(-3),
-            isComplete: false,
-            conversationHistory: formatConversationForProgress(conversationHistory),
-          })
-
-          const postVerifySystemPrompt = constructSystemPrompt(
-            uniqueAvailableTools,
-            config.mcpToolsSystemPrompt,
-            true,
-            toolCapabilities.relevantTools,
-          )
-
-          const postVerifySummaryMessages = [
-            { role: "system", content: postVerifySystemPrompt },
-            ...conversationHistory
-              .map((entry) => {
-                if (entry.role === "tool") {
-                  const text = (entry.content || "").trim()
-                  if (!text) return null
-                  return { role: "user" as const, content: `Tool execution results:\n${entry.content}` }
-                }
-                return { role: entry.role as "user" | "assistant", content: entry.content }
-              })
-              .filter(Boolean as any),
-          ]
-
-          const { messages: shrunkPostVerifySummaryMessages } = await shrinkMessagesForLLM({
-            messages: postVerifySummaryMessages as any,
-            availableTools: uniqueAvailableTools,
-            relevantTools: toolCapabilities.relevantTools,
-            isAgentMode: true,
-            sessionId: currentSessionId,
-            onSummarizationProgress: (current, total, message) => {
-              // Update the last thinking step with summarization progress
-              const lastThinkingStep = progressSteps.findLast(step => step.type === "thinking")
-              if (lastThinkingStep) {
-                lastThinkingStep.description = `Summarizing for verification (${current}/${total})`
-              }
-              emit({
-                currentIteration: iteration,
-                maxIterations,
-                steps: progressSteps.slice(-3),
-                isComplete: false,
-                conversationHistory: formatConversationForProgress(conversationHistory),
-              })
-            },
-          })
-
-          const postVerifySummaryResponse = await makeLLMCall(
-            shrunkPostVerifySummaryMessages,
-            config,
-            onRetryProgress,
-          )
-
-          postVerifySummaryStep.status = "completed"
-          postVerifySummaryStep.llmContent = postVerifySummaryResponse.content || ""
-          postVerifySummaryStep.title = "Summary provided"
-          postVerifySummaryStep.description = postVerifySummaryResponse.content && postVerifySummaryResponse.content.length > 100
-            ? postVerifySummaryResponse.content.substring(0, 100) + "..."
-            : postVerifySummaryResponse.content || "Summary generated"
-
-          finalContent = postVerifySummaryResponse.content || finalContent
-          conversationHistory.push({ role: "assistant", content: finalContent })
-        } catch (e) {
-          // If summary generation fails, proceed with existing finalContent
-        }
+        // NOTE: Removed duplicate "Post-verify summary" block that was causing empty content issues.
+        // The summary was already generated above - making another LLM call here would cause
+        // the model to return empty content since it already provided a complete response.
 
         // If there are actionable tools and we haven't executed any tools yet,
         // skip verification and force the model to produce structured toolCalls instead of intent-only text.

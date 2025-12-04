@@ -349,7 +349,7 @@ export function MCPToolManager({ onToolToggle }: MCPToolManagerProps) {
                             <div className="flex shrink-0 items-center gap-1">
                               <Dialog>
                                 <DialogTrigger asChild>
-                                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
+                                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0" aria-label="View tool details">
                                     <Eye className="h-4 w-4" />
                                   </Button>
                                 </DialogTrigger>
@@ -381,6 +381,7 @@ export function MCPToolManager({ onToolToggle }: MCPToolManagerProps) {
                                 onCheckedChange={(enabled) =>
                                   handleToolToggle(tool.name, enabled)
                                 }
+                                aria-label={`Toggle ${tool.name.includes(":") ? tool.name.split(":").slice(1).join(":") : tool.name}`}
                               />
                             </div>
                           </div>

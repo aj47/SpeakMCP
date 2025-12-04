@@ -39,3 +39,10 @@ web-build/
 
 # Turborepo / build cache
 .turbo
+
+# Swift Package Manager build directory
+macos-audio-tap/ScreenCaptureAudio/.build/
+
+# Android build artifacts
+apps/mobile/android/app/debug.keystore
+apps/mobile/android/app/.cxx/

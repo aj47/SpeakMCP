@@ -1,9 +1,12 @@
-import React, { useMemo, useEffect } from "react"
+import React, { useMemo } from "react"
 import { cn } from "@renderer/lib/utils"
 import { AgentProgress } from "@renderer/components/agent-progress"
 import { AgentProgressUpdate } from "../../../shared/types"
 import { useTheme } from "@renderer/contexts/theme-context"
 import { useAgentStore } from "@renderer/stores"
+import { tipcClient } from "@renderer/lib/tipc-client"
+import { Minimize2 } from "lucide-react"
+import { Button } from "./ui/button"
 
 interface MultiAgentProgressViewProps {
   className?: string
@@ -69,6 +72,11 @@ export function MultiAgentProgressView({
     return `Session ${progress.sessionId.substring(0, 8)}`
   }
 
+  // Handle hiding the entire panel (all sessions continue running in background)
+  const handleHidePanel = async () => {
+    await tipcClient.hidePanelWindow({})
+  }
+
 
 
   return (
@@ -79,30 +87,41 @@ export function MultiAgentProgressView({
     )}>
       {/* Tab bar - only show if multiple sessions */}
       {activeSessions.length > 1 && (
-        <div className="flex shrink-0 gap-1 border-b border-border bg-background/95 px-2 py-1.5 backdrop-blur-sm">
-          {activeSessions.map(([sessionId, progress]) => {
-            const isActive = sessionId === (displaySessionId || focusedSessionId)
+        <div className="flex shrink-0 items-center gap-1 border-b border-border bg-background/95 px-2 py-1.5 backdrop-blur-sm">
+          <div className="flex flex-1 gap-1 overflow-x-auto">
+            {activeSessions.map(([sessionId, progress]) => {
+              const isActive = sessionId === (displaySessionId || focusedSessionId)
 
-            return (
-              <button
-                key={sessionId}
-                onClick={() => setFocusedSessionId(sessionId)}
-                className={cn(
-                  "flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs transition-all",
-                  "hover:bg-accent/50",
-                  isActive
-                    ? "bg-accent text-accent-foreground shadow-sm"
-                    : "text-muted-foreground"
-                )}
-                title={getSessionTitle(progress)}
-              >
-
-                <span className="max-w-[120px] truncate">
-                  {getSessionTitle(progress)}
-                </span>
-              </button>
-            )
-          })}
+              return (
+                <button
+                  key={sessionId}
+                  onClick={() => setFocusedSessionId(sessionId)}
+                  className={cn(
+                    "flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs transition-all",
+                    "hover:bg-accent/50",
+                    isActive
+                      ? "bg-accent text-accent-foreground shadow-sm"
+                      : "text-muted-foreground"
+                  )}
+                  title={getSessionTitle(progress)}
+                >
+                  <span className="max-w-[120px] truncate">
+                    {getSessionTitle(progress)}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+          {/* Hide panel button */}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 w-6 shrink-0 p-0 text-muted-foreground hover:text-foreground hover:bg-muted"
+            onClick={handleHidePanel}
+            title="Hide panel - sessions continue in background"
+          >
+            <Minimize2 className="h-3 w-3" />
+          </Button>
         </div>
       )}
 

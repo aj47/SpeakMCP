@@ -189,6 +189,21 @@ export function Component() {
     recorderRef.current?.stopRecording()
   }
 
+  // Handle Enter key press to submit recording when triggered from UI button click
+  useEffect(() => {
+    if (!recording || !fromButtonClick) return
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault()
+        handleSubmitRecording()
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [recording, fromButtonClick])
+
   const transcribeMutation = useMutation({
     mutationFn: async ({
       blob,

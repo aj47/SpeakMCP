@@ -17,7 +17,7 @@
     "test:coverage": "vitest run --coverage",
     "test:ui": "vitest --ui",
     "start": "electron-vite preview",
-    "predev": "sh scripts/ensure-rust-binary.sh",
+    "predev": "npx tsx scripts/ensure-rust-binary.ts",
     "dev": "electron-vite dev --watch --",
     "build": "npm run typecheck && npm run test:run && electron-vite build && npm run build-rs",
     "postinstall": "electron-builder install-app-deps",

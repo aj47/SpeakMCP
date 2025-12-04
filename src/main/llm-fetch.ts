@@ -728,7 +728,7 @@ async function makeAPICallAttempt(
 
     // ALWAYS log empty content cases - this is anomalous behavior that needs diagnosis
     const messageContent = data.choices?.[0]?.message?.content
-    const isEmptyContent = !messageContent || (typeof messageContent === 'string' && messageContent.trim() === '')
+    const isEmptyContent = !messageContent || (typeof messageContent === 'string' && messageContent.trim() === '') || (Array.isArray(messageContent) && messageContent.length === 0)
 
     if (isEmptyContent) {
       const emptyContentDiagnostic = {
@@ -764,8 +764,8 @@ async function makeAPICallAttempt(
         // Request context for correlation
         requestContext: {
           messagesCount: requestBody.messages?.length,
-          lastMessageRole: requestBody.messages?.[requestBody.messages.length - 1]?.role,
-          lastMessageLength: requestBody.messages?.[requestBody.messages.length - 1]?.content?.length,
+          lastMessageRole: requestBody.messages?.at(-1)?.role,
+          lastMessageLength: requestBody.messages?.at(-1)?.content?.length,
           estimatedTokens,
           hasSystemPrompt: requestBody.messages?.[0]?.role === 'system',
         },
@@ -791,7 +791,7 @@ async function makeAPICallAttempt(
           hasContent: !!data.choices[0].message?.content,
           contentType: typeof data.choices[0].message?.content,
           contentLength: data.choices[0].message?.content?.length || 0,
-          contentPreview: data.choices[0].message?.content?.substring(0, 100) || "(empty)"
+          contentPreview: typeof data.choices[0].message?.content === 'string' ? data.choices[0].message.content.substring(0, 100) : JSON.stringify(data.choices[0].message?.content)?.substring(0, 100) || "(non-string or empty)"
         } : null,
         // ENHANCED: Log full response structure to diagnose empty content
         fullResponseStructure: {

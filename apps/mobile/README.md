@@ -94,10 +94,38 @@ The API key is sent as `Authorization: Bearer <API_KEY>`.
 <img src="./assets/screenshot1.png" width="40%" alt="Screenshot 1" />
 <img src="./assets/screenshot2.png" width="40%" alt="Screenshot 2" />
 
+
+## Important: Development Build Required
+
+This app uses `expo-speech-recognition`, which is a native module **not included in Expo Go**. You must use a **development build** to run the app on Android or iOS devices.
+
+If you see the error:
+```
+Error: Cannot find native module 'ExpoSpeechRecognition'
+```
+
+You need to build and run the native app:
+
+```bash
+# For Android
+npx expo run:android
+
+# For iOS
+npx expo run:ios
+
+# If you have existing native folders and need a clean rebuild
+cd android && ./gradlew clean && cd ..
+npx expo run:android
+```
+
+This will compile the native code with all required modules and install the app on your device/emulator.
+
 ## Troubleshooting
 
-- Speech recognition not starting on native:
-  - Ensure you’re running in a development build or prebuilt app (Expo Go may not include native modules). The code dynamically imports the module and falls back to web when unavailable
+- Speech recognition not starting on native / `Cannot find native module 'ExpoSpeechRecognition'`:
+  - **You must use a development build** — Expo Go does not support native modules like `expo-speech-recognition`
+  - Run `npx expo run:android` or `npx expo run:ios` to build and install the development app
+  - See the "Important: Development Build Required" section above
   - Verify microphone/speech permissions are granted
 - Web speech not working:
   - Use Chrome or Edge over HTTPS; some browsers or insecure origins disable Web Speech API

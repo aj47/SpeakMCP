@@ -160,6 +160,9 @@ export default function ChatScreen({ route, navigation }: any) {
   const [willCancel, setWillCancel] = useState(false);
   const startYRef = useRef<number | null>(null);
 
+  // Track if native speech recognition is unavailable (shown once per session)
+  const nativeSRUnavailableShownRef = useRef(false);
+
   // Web fallback state/refs
   const webRecognitionRef = useRef<any>(null);
   const webFinalRef = useRef<string>('');
@@ -268,21 +271,30 @@ export default function ChatScreen({ route, navigation }: any) {
 
   // Ensure Web Speech API recognizer exists and is wired
   const ensureWebRecognizer = () => {
+    console.log('[Voice] ensureWebRecognizer called, Platform.OS:', Platform.OS);
     if (Platform.OS !== 'web') return false;
     // @ts-ignore
     const SRClass = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    console.log('[Voice] SRClass available:', !!SRClass);
     if (!SRClass) {
       console.warn('[Voice] Web Speech API not available (use Chrome/Edge over HTTPS).');
       return false;
     }
     if (!webRecognitionRef.current) {
+      console.log('[Voice] Creating new web recognizer');
       const rec = new SRClass();
       rec.lang = 'en-US';
       rec.interimResults = true;
       rec.continuous = handsFreeRef.current;
-      rec.onstart = () => {};
-      rec.onerror = (ev: any) => console.warn('[Voice] web recognition error', ev?.error || ev);
+      rec.onstart = () => {
+        console.log('[Voice] Web recognition started');
+      };
+      rec.onerror = (ev: any) => {
+        console.error('[Voice] Web recognition error:', ev?.error || ev);
+        console.error('[Voice] Error event details:', JSON.stringify(ev, null, 2));
+      };
       rec.onresult = (ev: any) => {
+        console.log('[Voice] Web recognition result received');
         let interim = '';
         let finalText = '';
         for (let i = ev.resultIndex; i < ev.results.length; i++) {
@@ -304,7 +316,9 @@ export default function ChatScreen({ route, navigation }: any) {
         }
       };
       rec.onend = () => {
+        console.log('[Voice] Web recognition ended');
         const finalText = (webFinalRef.current || '').trim() || (liveTranscriptRef.current || '').trim();
+        console.log('[Voice] Final text on end:', finalText);
         setListening(false);
         setLiveTranscript('');
         const willEdit = willCancelRef.current;
@@ -315,6 +329,8 @@ export default function ChatScreen({ route, navigation }: any) {
         webFinalRef.current = '';
       };
       webRecognitionRef.current = rec;
+    } else {
+      console.log('[Voice] Reusing existing web recognizer');
     }
     return true;
   };
@@ -322,8 +338,14 @@ export default function ChatScreen({ route, navigation }: any) {
   // Native 'end' event handled via lazy listener; web handled in ensureWebRecognizer onend
 
   const startRecording = async (e?: GestureResponderEvent) => {
-    if (startingRef.current || listening) { return; }
+    console.log('[Voice] ========== startRecording called ==========');
+    console.log('[Voice] startingRef.current:', startingRef.current, 'listening:', listening);
+    if (startingRef.current || listening) {
+      console.log('[Voice] Already starting or listening, returning early');
+      return;
+    }
     startingRef.current = true;
+    console.log('[Voice] Setting up recording, Platform.OS:', Platform.OS);
     try {
       setWillCancel(false);
       setLiveTranscript('');
@@ -333,16 +355,24 @@ export default function ChatScreen({ route, navigation }: any) {
 
       // Try native first via dynamic import (avoids Expo Go crash when module is unavailable)
       if (Platform.OS !== 'web') {
+        console.log('[Voice] Attempting native speech recognition...');
         try {
           const SR: any = await import('expo-speech-recognition');
+          console.log('[Voice] expo-speech-recognition imported:', !!SR);
+          console.log('[Voice] ExpoSpeechRecognitionModule:', !!SR?.ExpoSpeechRecognitionModule);
+          console.log('[Voice] start method:', !!SR?.ExpoSpeechRecognitionModule?.start);
           if (SR?.ExpoSpeechRecognitionModule?.start) {
             // Attach listeners
             if (!srEmitterRef.current) {
+              console.log('[Voice] Creating new EventEmitter for SR');
               srEmitterRef.current = new EventEmitter(SR.ExpoSpeechRecognitionModule);
             }
             cleanupNativeSubs();
+            console.log('[Voice] Setting up native listeners...');
             const subResult = srEmitterRef.current.addListener('result', (event: any) => {
+              console.log('[Voice] Native result event:', JSON.stringify(event));
               const t = event?.results?.[0]?.transcript ?? event?.text ?? event?.transcript ?? '';
+              console.log('[Voice] Extracted transcript:', t, 'isFinal:', event?.isFinal);
               if (t) setLiveTranscript(t);
               if (event?.isFinal && t) {
                 if (handsFreeRef.current) {
@@ -356,11 +386,13 @@ export default function ChatScreen({ route, navigation }: any) {
               }
             });
             const subError = srEmitterRef.current.addListener('error', (event: any) => {
-              console.warn('[Voice] recognition error', event);
+              console.error('[Voice] Native recognition error:', JSON.stringify(event));
             });
             const subEnd = srEmitterRef.current.addListener('end', () => {
+              console.log('[Voice] Native recognition ended');
               setListening(false);
               const finalText = (nativeFinalRef.current || liveTranscriptRef.current || '').trim();
+              console.log('[Voice] Final text on native end:', finalText);
               setLiveTranscript('');
               const willEdit = willCancelRef.current;
               if (!handsFreeRef.current && finalText) {
@@ -372,10 +404,14 @@ export default function ChatScreen({ route, navigation }: any) {
             srSubsRef.current.push(subResult, subError, subEnd);
 
             // Permissions flow
+            console.log('[Voice] Checking permissions...');
             try {
               const perm = await SR.ExpoSpeechRecognitionModule.getPermissionsAsync();
+              console.log('[Voice] Current permissions:', JSON.stringify(perm));
               if (!perm?.granted) {
+                console.log('[Voice] Requesting permissions...');
                 const req = await SR.ExpoSpeechRecognitionModule.requestPermissionsAsync();
+                console.log('[Voice] Permission request result:', JSON.stringify(req));
                 if (!req?.granted) {
                   console.warn('[Voice] microphone/speech permission not granted; aborting');
                   setListening(false);
@@ -384,85 +420,125 @@ export default function ChatScreen({ route, navigation }: any) {
                 }
               }
             } catch (perr) {
-              console.warn('[Voice] permission check/request failed', perr);
+              console.error('[Voice] Permission check/request failed:', perr);
             }
 
             // Start recognition
+            console.log('[Voice] Starting native recognition with options:', {
+              lang: 'en-US',
+              interimResults: true,
+              continuous: handsFreeRef.current
+            });
             try {
               SR.ExpoSpeechRecognitionModule.start({ lang: 'en-US', interimResults: true, continuous: handsFreeRef.current, volumeChangeEventOptions: { enabled: handsFreeRef.current, intervalMillis: 250 } });
+              console.log('[Voice] Native recognition start() called successfully');
             } catch (serr) {
-              console.warn('[Voice] native start error', serr);
+              console.error('[Voice] Native start error:', serr);
               setListening(false);
             }
             startingRef.current = false;
             return;
           }
         } catch (err) {
-          console.warn('[Voice] native SR unavailable (likely Expo Go):', (err as any)?.message || err);
+          const errorMsg = (err as any)?.message || String(err);
+          console.warn('[Voice] Native SR unavailable (likely Expo Go):', errorMsg);
+          console.warn('[Voice] Full error:', err);
+
+          // Show alert once per session if native module is missing
+          if (!nativeSRUnavailableShownRef.current && errorMsg.includes('ExpoSpeechRecognition')) {
+            nativeSRUnavailableShownRef.current = true;
+            setListening(false);
+            startingRef.current = false;
+            Alert.alert(
+              'Development Build Required',
+              'Speech recognition requires a development build. Expo Go does not support native modules like expo-speech-recognition.\n\nRun "npx expo run:android" or "npx expo run:ios" to build and install the development app.',
+              [{ text: 'OK' }]
+            );
+            return;
+          }
         }
       }
 
       // Web fallback
+      console.log('[Voice] Attempting web fallback...');
       if (ensureWebRecognizer()) {
+        console.log('[Voice] Web recognizer ensured, starting...');
         try {
           webFinalRef.current = '';
           if (webRecognitionRef.current) {
             try { webRecognitionRef.current.continuous = handsFreeRef.current; } catch {}
           }
           webRecognitionRef.current?.start();
+          console.log('[Voice] Web recognizer start() called');
           startingRef.current = false;
         } catch (err) {
-          console.warn('[Voice] web start error', err);
+          console.error('[Voice] Web start error:', err);
           setListening(false);
           startingRef.current = false;
         }
       } else {
+        console.warn('[Voice] No web recognizer available');
         setListening(false);
         startingRef.current = false;
       }
     } catch (err) {
-      console.warn('[Voice] startRecording error', err);
+      console.error('[Voice] startRecording error:', err);
       setListening(false);
       startingRef.current = false;
     }
   };
 
   const stopRecordingAndHandle = async () => {
-    if (stoppingRef.current) { return; }
+    console.log('[Voice] ========== stopRecordingAndHandle called ==========');
+    console.log('[Voice] stoppingRef.current:', stoppingRef.current);
+    if (stoppingRef.current) {
+      console.log('[Voice] Already stopping, returning early');
+      return;
+    }
     stoppingRef.current = true;
     try {
       // If nothing is recording, ignore
       const hasWeb = Platform.OS === 'web' && webRecognitionRef.current;
-      if (!listening && !hasWeb) return;
+      console.log('[Voice] listening:', listening, 'hasWeb:', hasWeb);
+      if (!listening && !hasWeb) {
+        console.log('[Voice] Nothing recording, returning');
+        return;
+      }
 
       if (Platform.OS !== 'web') {
+        console.log('[Voice] Stopping native recognition...');
         try {
           const SR: any = await import('expo-speech-recognition');
           if (SR?.ExpoSpeechRecognitionModule?.stop) {
+            console.log('[Voice] Calling native stop()');
             SR.ExpoSpeechRecognitionModule.stop();
+            console.log('[Voice] Native stop() called, finalization in end listener');
             // Finalization handled in 'end' listener
           }
         } catch (err) {
-          console.warn('[Voice] native stop unavailable (likely Expo Go):', (err as any)?.message || err);
+          console.warn('[Voice] Native stop unavailable (likely Expo Go):', (err as any)?.message || err);
         }
       }
 
       if (Platform.OS === 'web' && webRecognitionRef.current) {
+        console.log('[Voice] Stopping web recognition...');
         try {
           webRecognitionRef.current.stop();
+          console.log('[Voice] Web stop() called');
           // onend will finalize
         } catch (err) {
-          console.warn('[Voice] web stop error', err);
+          console.error('[Voice] Web stop error:', err);
           setListening(false);
         }
       }
     } catch (err) {
-      console.warn('[Voice] stopRecording error', err);
+      console.error('[Voice] stopRecording error:', err);
       setListening(false);
     } finally {
       startYRef.current = null;
       setWillCancel(false);
       stoppingRef.current = false;
+      console.log('[Voice] stopRecordingAndHandle finished');
     }
   };
 
@@ -518,13 +594,16 @@ export default function ChatScreen({ route, navigation }: any) {
               activeOpacity={0.7}
               delayPressIn={0}
               onPressIn={!handsFree ? (e: GestureResponderEvent) => {
+                console.log('[Voice] onPressIn triggered (hold mode), handsFree:', handsFree);
                 lastGrantTimeRef.current = Date.now();
                 if (!listening) startRecording(e);
               } : undefined}
               onPressOut={!handsFree ? () => {
+                console.log('[Voice] onPressOut triggered (hold mode)');
                 const now = Date.now();
                 const dt = now - lastGrantTimeRef.current;
                 const delay = Math.max(0, minHoldMs - dt);
+                console.log('[Voice] Hold duration:', dt, 'ms, delay before stop:', delay, 'ms');
                 if (delay > 0) {
                   setTimeout(() => { if (listening) stopRecordingAndHandle(); }, delay);
                 } else {
@@ -532,6 +611,7 @@ export default function ChatScreen({ route, navigation }: any) {
                 }
               } : undefined}
               onPress={handsFree ? () => {
+                console.log('[Voice] onPress triggered (hands-free mode), listening:', listening);
                 if (!listening) startRecording(); else stopRecordingAndHandle();
               } : undefined}
             >

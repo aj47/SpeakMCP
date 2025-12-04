@@ -41,7 +41,6 @@ export async function emitAgentProgress(update: AgentProgressUpdate): Promise<vo
   }
 
   logApp(`[emitAgentProgress] Called for session ${update.sessionId}, isSnoozed: ${update.isSnoozed}`)
-  logApp(`[emitAgentProgress] conversationHistory length: ${update.conversationHistory?.length || 0}, roles: [${update.conversationHistory?.map(m => m.role).join(', ') || 'none'}]`)
 
   // Always send updates to main window if it's open for live progress visualization
   // This is done first to ensure main window updates even if panel is unavailable

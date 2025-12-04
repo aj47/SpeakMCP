@@ -220,6 +220,23 @@ export function Component() {
     setPendingConversationId(null)
   }
 
+  // Auto-dismiss pending tile when a real session starts for the same conversationId
+  // This ensures smooth transition from "pending" state to "active" session
+  useEffect(() => {
+    if (!pendingConversationId) return
+
+    // Check if any real session exists for this conversationId
+    const hasRealSession = Array.from(agentProgressById.entries()).some(
+      ([sessionId, progress]) =>
+        !sessionId.startsWith("pending-") && progress?.conversationId === pendingConversationId
+    )
+
+    if (hasRealSession) {
+      // A real session has started for this conversation, dismiss the pending tile
+      setPendingConversationId(null)
+    }
+  }, [pendingConversationId, agentProgressById])
+
   // Handle text click - open panel with text input
   const handleTextClick = async () => {
     await tipcClient.showPanelWindowWithTextInput({})
@@ -325,7 +342,8 @@ export function Component() {
                     onDismiss={handleDismissPendingContinuation}
                     isCollapsed={false}
                     onCollapsedChange={() => {}}
-                    onFollowUpSent={handleDismissPendingContinuation}
+                    // Don't dismiss on follow-up sent - let the useEffect auto-dismiss
+                    // when a real session starts for this conversationId
                   />
                 </SessionTileWrapper>
               )}

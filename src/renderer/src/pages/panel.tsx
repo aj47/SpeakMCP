@@ -40,6 +40,9 @@ export function Component() {
   const mcpSessionIdRef = useRef<string | undefined>(undefined)
   // Track if recording was initiated from a tile (sessions view) - if so, don't show floating panel
   const fromTileRef = useRef<boolean>(false)
+  // Track if recording was initiated from a UI button click (not keyboard shortcut)
+  // When true, show "Enter" as submit hint instead of "Release keys"
+  const [fromButtonClick, setFromButtonClick] = useState(false)
   const { isDark } = useTheme()
   const lastRequestedModeRef = useRef<"normal" | "agent" | "textInput">("normal")
   const requestPanelMode = (mode: "normal" | "agent" | "textInput") => {
@@ -140,10 +143,16 @@ export function Component() {
   const configQuery = useConfigQuery()
   const isDragEnabled = (configQuery.data as any)?.panelDragEnabled ?? true
 
-  // Get the submit shortcut display text based on current mode and config
+  // Get the submit shortcut display text based on current mode, config, and trigger source
   const getSubmitShortcutText = useMemo(() => {
     const config = configQuery.data
     if (!config) return "Enter"
+
+    // If recording was triggered by a UI button click, always show "Enter" as the submit hint
+    // because there are no keys being held that the user needs to release
+    if (fromButtonClick) {
+      return "Enter"
+    }
 
     if (mcpMode) {
       // MCP mode uses mcpToolsShortcut
@@ -171,7 +180,7 @@ export function Component() {
       }
     }
     return "Enter"
-  }, [configQuery.data, mcpMode])
+  }, [configQuery.data, mcpMode, fromButtonClick])
 
   // Handle submit button click during recording
   const handleSubmitRecording = () => {
@@ -412,9 +421,10 @@ export function Component() {
         })
       }
 
-      // Reset MCP mode after recording
+      // Reset MCP mode and button click state after recording
       setMcpMode(false)
       mcpModeRef.current = false
+      setFromButtonClick(false)
     })
   }, [mcpMode, mcpTranscribeMutation, transcribeMutation])
 
@@ -538,6 +548,9 @@ export function Component() {
       mcpConversationIdRef.current = data?.conversationId
       mcpSessionIdRef.current = data?.sessionId
       fromTileRef.current = data?.fromTile ?? false
+      // Track if recording was triggered via UI button click vs keyboard shortcut
+      // When true, we show "Enter" as the submit hint instead of "Release keys"
+      setFromButtonClick(data?.fromButtonClick ?? false)
       setMcpMode(true)
       mcpModeRef.current = true
       // Mode sizing is now applied in main before show; avoid duplicate calls here
@@ -566,6 +579,8 @@ export function Component() {
         // Store the conversationId and sessionId for use when recording ends
         mcpConversationIdRef.current = data?.conversationId
         mcpSessionIdRef.current = data?.sessionId
+        // Track if recording was triggered via UI button click vs keyboard shortcut
+        setFromButtonClick(data?.fromButtonClick ?? false)
         setMcpMode(true)
         requestPanelMode("normal") // Ensure panel is normal size for recording
         tipcClient.showPanelWindow({})

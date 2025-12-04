@@ -3,7 +3,7 @@ import { useState, useCallback, useRef } from "react"
 // Shared tile dimension constants
 export const TILE_DIMENSIONS = {
   width: {
-    default: 400,
+    default: 320,
     min: 200,
     max: 1200,
   },

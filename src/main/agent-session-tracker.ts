@@ -298,6 +298,8 @@ class AgentSessionTracker {
           if (session) {
             session.isSnoozed = true
             this.sessions.set(sessionId, session)
+            // Emit update so UIs reflect the snooze state change (consistent with snoozeSession/unsnoozeSession)
+            emitSessionUpdate()
           }
         }
         return true

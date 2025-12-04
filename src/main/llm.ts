@@ -2326,12 +2326,20 @@ async function makeLLMCall(
       logLLM("Messages →", {
         count: messages.length,
         totalChars: messages.reduce((sum, msg) => sum + msg.content.length, 0),
-        messages: messages,
+        // Only log message roles to avoid exposing sensitive conversation content
+        roles: messages.map(msg => msg.role),
       })
     }
     const result = await makeLLMCallWithFetch(messages, chatProviderId, onRetryProgress)
     if (isDebugLLM()) {
-      logLLM("Response ←", result)
+      // Only log response summary, not full content
+      logLLM("Response ←", {
+        hasContent: !!result.content,
+        contentLength: result.content?.length || 0,
+        hasToolCalls: !!result.toolCalls,
+        toolCallsCount: result.toolCalls?.length || 0,
+        needsMoreWork: result.needsMoreWork,
+      })
       logLLM("=== LLM CALL END ===")
     }
     return result

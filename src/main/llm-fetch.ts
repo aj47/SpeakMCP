@@ -788,9 +788,17 @@ async function makeAPICallAttempt(
     }
 
     if (isDebugLLM()) {
-      logLLM("HTTP Response (full)", {
+      // Only log response structure, not full content to avoid exposing sensitive data
+      const choice = data.choices?.[0]
+      logLLM("HTTP Response summary", {
         dataKeys: Object.keys(data),
-        data: JSON.stringify(data).substring(0, 2000) + "..."
+        hasChoices: !!data.choices,
+        choicesCount: data.choices?.length || 0,
+        finishReason: choice?.finish_reason,
+        hasContent: !!choice?.message?.content,
+        contentLength: choice?.message?.content?.length || 0,
+        hasToolCalls: !!choice?.message?.tool_calls?.length,
+        toolCallsCount: choice?.message?.tool_calls?.length || 0,
       })
     }
 
@@ -1006,7 +1014,8 @@ async function makeGeminiCall(
         url: `${baseURL}/v1beta/models/${model}:generateContent`,
         model,
       })
-      logLLM("Gemini Request Body", { prompt })
+      // Only log prompt length to avoid exposing sensitive conversation content
+      logLLM("Gemini Request Body", { promptLength: prompt?.length || 0 })
     }
 
     const controller = new AbortController()
@@ -1083,7 +1092,11 @@ async function makeGeminiCall(
     }
 
     if (isDebugLLM()) {
-      logLLM("Gemini HTTP Response", data)
+      // Only log response summary to avoid exposing sensitive content
+      logLLM("Gemini HTTP Response", {
+        hasContent: !!data?.candidates?.[0]?.content?.parts?.[0]?.text,
+        contentLength: data?.candidates?.[0]?.content?.parts?.[0]?.text?.length || 0,
+      })
     }
 
     // Return in OpenAI-compatible format
@@ -1148,9 +1161,12 @@ async function makeLLMCallAttempt(
   if (isDebugLLM()) {
     logLLM("📝 Message content extracted:", {
       contentLength: content?.length || 0,
-      contentPreview: content?.substring(0, 200) || "(empty)",
+      // Only log preview, not full content
+      contentPreview: content?.substring(0, 100) || "(empty)",
       messageObjKeys: Object.keys(messageObj),
-      messageObj: messageObj
+      // Don't log full messageObj to avoid exposing sensitive content
+      hasContent: !!messageObj.content,
+      hasToolCalls: !!(messageObj as any).tool_calls,
     })
   }
 

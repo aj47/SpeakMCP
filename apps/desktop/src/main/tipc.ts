@@ -2067,6 +2067,7 @@ export const router = {
     .input<{ id: string }>()
     .action(async ({ input }) => {
       const { profileService } = await import("./profile-service")
+      const { mcpService } = await import("./mcp-service")
       const profile = profileService.setCurrentProfile(input.id)
 
       // Update the config with the profile's guidelines
@@ -2077,6 +2078,14 @@ export const router = {
         mcpCurrentProfileId: profile.id,
       }
       configStore.save(updatedConfig)
+
+      // Apply the profile's MCP server configuration if it exists
+      if (profile.mcpServerConfig) {
+        mcpService.applyProfileMcpConfig(
+          profile.mcpServerConfig.disabledServers,
+          profile.mcpServerConfig.disabledTools
+        )
+      }
 
       return profile
     }),
@@ -2093,6 +2102,32 @@ export const router = {
     .action(async ({ input }) => {
       const { profileService } = await import("./profile-service")
       return profileService.importProfile(input.profileJson)
+    }),
+
+  // Save current MCP server state to a profile
+  saveCurrentMcpStateToProfile: t.procedure
+    .input<{ profileId: string }>()
+    .action(async ({ input }) => {
+      const { profileService } = await import("./profile-service")
+      const { mcpService } = await import("./mcp-service")
+
+      const currentState = mcpService.getCurrentMcpConfigState()
+      return profileService.saveCurrentMcpStateToProfile(
+        input.profileId,
+        currentState.disabledServers,
+        currentState.disabledTools
+      )
+    }),
+
+  // Update profile MCP server configuration
+  updateProfileMcpConfig: t.procedure
+    .input<{ profileId: string; disabledServers?: string[]; disabledTools?: string[] }>()
+    .action(async ({ input }) => {
+      const { profileService } = await import("./profile-service")
+      return profileService.updateProfileMcpConfig(input.profileId, {
+        disabledServers: input.disabledServers,
+        disabledTools: input.disabledTools,
+      })
     }),
 
   saveProfileFile: t.procedure

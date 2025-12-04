@@ -103,8 +103,8 @@ export const Component = () => {
           {primaryNavLinks.map(renderNavLink)}
         </div>
 
-        {/* Active Agents Section */}
-        <div className="mt-4">
+        {/* Active Agents Section - with max-height and scroll to prevent overflow into macOS traffic lights */}
+        <div className="mt-4 max-h-[40vh] overflow-y-auto">
           <ActiveAgentsSidebar />
         </div>
 

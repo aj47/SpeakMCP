@@ -31,12 +31,15 @@ export function TileFollowUpInput({
     mutationFn: async (message: string) => {
       if (!conversationId) {
         // Start a new conversation if none exists
-        await tipcClient.createMcpTextInput({ text: message })
+        // Mark as fromTile so the floating panel doesn't show - session continues in the tile
+        await tipcClient.createMcpTextInput({ text: message, fromTile: true })
       } else {
         // Continue the existing conversation
+        // Mark as fromTile so the floating panel doesn't show - session continues in the tile
         await tipcClient.createMcpTextInput({
           text: message,
           conversationId,
+          fromTile: true,
         })
       }
     },

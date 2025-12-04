@@ -987,6 +987,7 @@ export const router = {
     .input<{
       text: string
       conversationId?: string
+      fromTile?: boolean // When true, session runs in background (snoozed) - panel won't show
     }>()
     .action(async ({ input }) => {
       const config = configStore.get()
@@ -1020,7 +1021,8 @@ export const router = {
       if (input.conversationId) {
         const foundSessionId = agentSessionTracker.findSessionByConversationId(input.conversationId)
         if (foundSessionId) {
-          const revived = agentSessionTracker.reviveSession(foundSessionId)
+          // Pass fromTile to reviveSession so it stays snoozed when continuing from a tile
+          const revived = agentSessionTracker.reviveSession(foundSessionId, input.fromTile ?? false)
           if (revived) {
             existingSessionId = foundSessionId
           }
@@ -1030,7 +1032,8 @@ export const router = {
       // Fire-and-forget: Start agent processing without blocking
       // This allows multiple sessions to run concurrently
       // Pass existingSessionId to reuse the session if found
-      processWithAgentMode(input.text, conversationId, existingSessionId)
+      // When fromTile=true, start snoozed so the floating panel doesn't appear
+      processWithAgentMode(input.text, conversationId, existingSessionId, input.fromTile ?? false)
         .then((finalResponse) => {
           // Save to history after completion
           const history = getRecordingHistory()

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from "react"
+import React, { useState, useEffect, useCallback } from "react"
 import { ResizeHandle } from "@renderer/components/resize-handle"
 import { tipcClient } from "@renderer/lib/tipc-client"
 
@@ -17,10 +17,7 @@ export function PanelResizeWrapper({
   minWidth = 200,
   minHeight = 100,
 }: PanelResizeWrapperProps) {
-  const [isResizing, setIsResizing] = useState(false)
   const [currentSize, setCurrentSize] = useState({ width: 300, height: 200 })
-  // Capture the mode when resize starts so we save to the correct mode
-  const resizeStartModeRef = useRef<"normal" | "agent" | "textInput">("normal")
 
   useEffect(() => {
     // Initialize local size state from current window bounds; do not change size on mount
@@ -37,16 +34,8 @@ export function PanelResizeWrapper({
     init()
   }, [])
 
-  const handleResizeStart = useCallback(async () => {
-    setIsResizing(true)
-    // Capture the current mode when resize starts
-    // This ensures we save to the correct mode even if the agent completes during resize
-    try {
-      const mode = await tipcClient.getPanelMode()
-      resizeStartModeRef.current = mode as "normal" | "agent" | "textInput"
-    } catch (error) {
-      console.error("Failed to get panel mode on resize start:", error)
-    }
+  const handleResizeStart = useCallback(() => {
+    // No-op: resize start notification if needed for future features
   }, [])
 
   const handleResize = useCallback(async (delta: { width: number; height: number }) => {
@@ -67,24 +56,12 @@ export function PanelResizeWrapper({
   const handleResizeEnd = useCallback(async (size: { width: number; height: number }) => {
     if (!enableResize) return
 
-    setIsResizing(false)
-
-    // Save the final size for the mode that was active when resize started
-    // This ensures we save to the correct mode even if the agent completed during resize
+    // Save the final size (unified across all modes)
     try {
       const finalWidth = Math.max(minWidth, size.width)
       const finalHeight = Math.max(minHeight, size.height)
 
-      // Use the mode captured at resize start, not the current mode
-      // This prevents saving to wrong mode if agent completes during resize
-      const mode = resizeStartModeRef.current
-      await tipcClient.savePanelModeSize({
-        mode,
-        width: finalWidth,
-        height: finalHeight
-      })
-
-      // Also save to legacy panelCustomSize for backward compatibility
+      // Save to unified panelCustomSize
       await tipcClient.savePanelCustomSize({ width: finalWidth, height: finalHeight })
       setCurrentSize({ width: finalWidth, height: finalHeight })
     } catch (error) {

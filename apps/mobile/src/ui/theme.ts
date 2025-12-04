@@ -11,7 +11,6 @@ import {
   spacing,
   radius,
   typography as sharedTypography,
-  type ColorPalette,
 } from '@speakmcp/shared';
 
 // Re-export shared tokens

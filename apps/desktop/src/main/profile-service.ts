@@ -1,7 +1,7 @@
 import { app } from "electron"
 import path from "path"
 import fs from "fs"
-import { Profile, ProfilesData } from "@shared/types"
+import { Profile, ProfilesData, ProfileMcpServerConfig } from "@shared/types"
 import { randomUUID } from "crypto"
 import { logApp } from "./debug"
 
@@ -207,6 +207,42 @@ class ProfileService {
     this.profilesData!.currentProfileId = id
     this.saveProfiles()
     return profile
+  }
+
+  /**
+   * Update the MCP server configuration for a profile
+   */
+  updateProfileMcpConfig(id: string, mcpServerConfig: ProfileMcpServerConfig): Profile {
+    if (!this.profilesData) {
+      this.loadProfiles()
+    }
+
+    const profile = this.getProfile(id)
+    if (!profile) {
+      throw new Error(`Profile with id ${id} not found`)
+    }
+
+    const updatedProfile = {
+      ...profile,
+      mcpServerConfig,
+      updatedAt: Date.now(),
+    }
+
+    const index = this.profilesData!.profiles.findIndex((p) => p.id === id)
+    this.profilesData!.profiles[index] = updatedProfile
+    this.saveProfiles()
+    return updatedProfile
+  }
+
+  /**
+   * Save current MCP state to a profile
+   * This allows saving the current enabled/disabled server state to a profile
+   */
+  saveCurrentMcpStateToProfile(id: string, disabledServers: string[], disabledTools: string[]): Profile {
+    return this.updateProfileMcpConfig(id, {
+      disabledServers,
+      disabledTools,
+    })
   }
 
   exportProfile(id: string): string {

@@ -281,29 +281,31 @@ const toolHandlers: Record<string, ToolHandler> = {
       )
     }
 
-    // Apply the profile's model configuration if it exists
-    if (profile.modelConfig) {
-      const config = configStore.get()
-      const updatedConfig = {
-        ...config,
-        ...(profile.modelConfig.mcpToolsProviderId && {
-          mcpToolsProviderId: profile.modelConfig.mcpToolsProviderId,
-        }),
-        ...(profile.modelConfig.mcpToolsOpenaiModel && {
-          mcpToolsOpenaiModel: profile.modelConfig.mcpToolsOpenaiModel,
-        }),
-        ...(profile.modelConfig.mcpToolsGroqModel && {
-          mcpToolsGroqModel: profile.modelConfig.mcpToolsGroqModel,
-        }),
-        ...(profile.modelConfig.mcpToolsGeminiModel && {
-          mcpToolsGeminiModel: profile.modelConfig.mcpToolsGeminiModel,
-        }),
-        ...(profile.modelConfig.currentModelPresetId && {
-          currentModelPresetId: profile.modelConfig.currentModelPresetId,
-        }),
-      }
-      configStore.save(updatedConfig)
+    // Update config with profile's guidelines and model configuration
+    const config = configStore.get()
+    const updatedConfig = {
+      ...config,
+      // Always apply guidelines and profile ID (same as TIPC setCurrentProfile)
+      mcpToolsSystemPrompt: profile.guidelines,
+      mcpCurrentProfileId: profile.id,
+      // Apply model config if it exists
+      ...(profile.modelConfig?.mcpToolsProviderId && {
+        mcpToolsProviderId: profile.modelConfig.mcpToolsProviderId,
+      }),
+      ...(profile.modelConfig?.mcpToolsOpenaiModel && {
+        mcpToolsOpenaiModel: profile.modelConfig.mcpToolsOpenaiModel,
+      }),
+      ...(profile.modelConfig?.mcpToolsGroqModel && {
+        mcpToolsGroqModel: profile.modelConfig.mcpToolsGroqModel,
+      }),
+      ...(profile.modelConfig?.mcpToolsGeminiModel && {
+        mcpToolsGeminiModel: profile.modelConfig.mcpToolsGeminiModel,
+      }),
+      ...(profile.modelConfig?.currentModelPresetId && {
+        currentModelPresetId: profile.modelConfig.currentModelPresetId,
+      }),
     }
+    configStore.save(updatedConfig)
 
     const mcpConfigApplied = !!profile.mcpServerConfig
     const modelConfigApplied = !!profile.modelConfig

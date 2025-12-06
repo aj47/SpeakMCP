@@ -15,6 +15,7 @@ import {
 import { Config } from "@shared/types"
 import { ModelPresetManager } from "@renderer/components/model-preset-manager"
 import { ProviderModelSelector } from "@renderer/components/model-selector"
+import { ProfileBadgeCompact } from "@renderer/components/profile-badge"
 
 import {
   STT_PROVIDERS,
@@ -104,7 +105,7 @@ export function Component() {
             </Select>
           </Control>
 
-          <Control label={<ControlLabel label="Agent/MCP Tools Provider" tooltip="Choose which provider to use for agent mode and MCP tool calling" />} className="px-3">
+          <Control label={<ControlLabel label={<span className="flex items-center gap-1.5">Agent/MCP Tools Provider <ProfileBadgeCompact /></span>} tooltip="Choose which provider to use for agent mode and MCP tool calling. This setting is saved per-profile." />} className="px-3">
             <Select
               value={configQuery.data.mcpToolsProviderId || "openai"}
               onValueChange={(value) => {

@@ -497,6 +497,26 @@ export function listenToKeyboardEvents() {
         }
       }
 
+      // Handle Enter key to submit recording when triggered from UI button click
+      // The panel window is shown with showInactive() so it doesn't receive keyboard focus,
+      // which means we need to use the global keyboard hook to detect Enter key
+      if (e.data.key === "Return" || e.data.key === "Enter" || e.data.key === "NumpadEnter") {
+        if (state.isRecording && state.isRecordingFromButtonClick && !isPressedShiftKey) {
+          if (isDebugKeybinds()) {
+            logKeybinds("Enter key pressed during button-click recording, submitting")
+          }
+          const panelHandlers = getWindowRendererHandlers("panel")
+          if (state.isRecordingMcpMode) {
+            panelHandlers?.finishMcpRecording.send()
+          } else {
+            panelHandlers?.finishRecording.send()
+          }
+          // Reset the button click state
+          state.isRecordingFromButtonClick = false
+          return
+        }
+      }
+
       // Handle text input shortcuts
       if (config.textInputEnabled) {
         const effectiveTextInputShortcut = getEffectiveShortcut(

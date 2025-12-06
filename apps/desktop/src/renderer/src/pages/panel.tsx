@@ -40,6 +40,9 @@ export function Component() {
   const mcpSessionIdRef = useRef<string | undefined>(undefined)
   // Track if recording was initiated from a tile (sessions view) - if so, don't show floating panel
   const fromTileRef = useRef<boolean>(false)
+  // Track if recording was initiated from a UI button click (not keyboard shortcut)
+  // When true, show "Enter" as submit hint instead of "Release keys"
+  const [fromButtonClick, setFromButtonClick] = useState(false)
   const { isDark } = useTheme()
   const lastRequestedModeRef = useRef<"normal" | "agent" | "textInput">("normal")
   const requestPanelMode = (mode: "normal" | "agent" | "textInput") => {
@@ -140,10 +143,16 @@ export function Component() {
   const configQuery = useConfigQuery()
   const isDragEnabled = (configQuery.data as any)?.panelDragEnabled ?? true
 
-  // Get the submit shortcut display text based on current mode and config
+  // Get the submit shortcut display text based on current mode, config, and trigger source
   const getSubmitShortcutText = useMemo(() => {
     const config = configQuery.data
     if (!config) return "Enter"
+
+    // If recording was triggered by a UI button click, always show "Enter" as the submit hint
+    // because there are no keys being held that the user needs to release
+    if (fromButtonClick) {
+      return "Enter"
+    }
 
     if (mcpMode) {
       // MCP mode uses mcpToolsShortcut
@@ -171,7 +180,7 @@ export function Component() {
       }
     }
     return "Enter"
-  }, [configQuery.data, mcpMode])
+  }, [configQuery.data, mcpMode, fromButtonClick])
 
   // Handle submit button click during recording
   const handleSubmitRecording = () => {
@@ -179,6 +188,24 @@ export function Component() {
     isConfirmedRef.current = true
     recorderRef.current?.stopRecording()
   }
+
+  // Handle Enter key press to submit recording when triggered from UI button click
+  // Note: This is a fallback for when the panel has focus. The primary Enter key handling
+  // is done via the global keyboard hook in keyboard.ts since the panel is shown with
+  // showInactive() and doesn't receive keyboard focus.
+  useEffect(() => {
+    if (!recording || !fromButtonClick) return undefined
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.key === "Enter" || e.code === "NumpadEnter") && !e.shiftKey) {
+        e.preventDefault()
+        handleSubmitRecording()
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [recording, fromButtonClick])
 
   const transcribeMutation = useMutation({
     mutationFn: async ({
@@ -414,17 +441,20 @@ export function Component() {
         })
       }
 
-      // Reset MCP mode after recording
+      // Reset MCP mode and button click state after recording
       setMcpMode(false)
       mcpModeRef.current = false
+      setFromButtonClick(false)
     })
   }, [mcpMode, mcpTranscribeMutation, transcribeMutation])
 
   useEffect(() => {
-    const unlisten = rendererHandlers.startRecording.listen(() => {
+    const unlisten = rendererHandlers.startRecording.listen((data) => {
       // Ensure we are in normal dictation mode (not MCP/agent)
       setMcpMode(false)
       mcpModeRef.current = false
+      // Track if recording was triggered via UI button click (e.g., tray menu)
+      setFromButtonClick(data?.fromButtonClick ?? false)
       setVisualizerData(() => getInitialVisualizerData())
       recorderRef.current?.startRecording()
     })
@@ -451,21 +481,25 @@ export function Component() {
   }, [])
 
   useEffect(() => {
-    const unlisten = rendererHandlers.startOrFinishRecording.listen(() => {
-      if (recording) {
+    const unlisten = rendererHandlers.startOrFinishRecording.listen((data) => {
+      // Use recordingRef instead of recording state to avoid race condition
+      // where listener recreation with recording=false could trigger a new recording
+      if (recordingRef.current) {
         isConfirmedRef.current = true
         recorderRef.current?.stopRecording()
       } else {
         // Force normal dictation mode - each new recording starts fresh
         setMcpMode(false)
         mcpModeRef.current = false
+        // Track if recording was triggered via UI button click
+        setFromButtonClick(data?.fromButtonClick ?? false)
         tipcClient.showPanelWindow({})
         recorderRef.current?.startRecording()
       }
     })
 
     return unlisten
-  }, [recording, mcpMode])
+  }, []) // No dependencies - use refs for current state
 
   // Text input handlers
   useEffect(() => {
@@ -540,6 +574,9 @@ export function Component() {
       mcpConversationIdRef.current = data?.conversationId
       mcpSessionIdRef.current = data?.sessionId
       fromTileRef.current = data?.fromTile ?? false
+      // Track if recording was triggered via UI button click vs keyboard shortcut
+      // When true, we show "Enter" as the submit hint instead of "Release keys"
+      setFromButtonClick(data?.fromButtonClick ?? false)
       setMcpMode(true)
       mcpModeRef.current = true
       // Mode sizing is now applied in main before show; avoid duplicate calls here
@@ -561,13 +598,17 @@ export function Component() {
 
   useEffect(() => {
     const unlisten = rendererHandlers.startOrFinishMcpRecording.listen((data) => {
-      if (recording) {
+      // Use recordingRef instead of recording state to avoid race condition
+      // where listener recreation with recording=false could trigger a new recording
+      if (recordingRef.current) {
         isConfirmedRef.current = true
         recorderRef.current?.stopRecording()
       } else {
         // Store the conversationId and sessionId for use when recording ends
         mcpConversationIdRef.current = data?.conversationId
         mcpSessionIdRef.current = data?.sessionId
+        // Track if recording was triggered via UI button click vs keyboard shortcut
+        setFromButtonClick(data?.fromButtonClick ?? false)
         setMcpMode(true)
         requestPanelMode("normal") // Ensure panel is normal size for recording
         tipcClient.showPanelWindow({})
@@ -576,7 +617,7 @@ export function Component() {
     })
 
     return unlisten
-  }, [recording])
+  }, []) // No dependencies - use refs for current state
 
   // Agent progress handler - request mode changes only when target changes
   // Note: Progress updates are session-aware in ConversationContext; avoid redundant mode requests here

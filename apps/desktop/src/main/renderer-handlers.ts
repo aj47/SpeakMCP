@@ -3,16 +3,16 @@ import { AgentProgressUpdate } from "../shared/types"
 import type { AgentSession } from "./agent-session-tracker"
 
 export type RendererHandlers = {
-  startRecording: () => void
+  startRecording: (data?: { fromButtonClick?: boolean }) => void
   finishRecording: () => void
   stopRecording: () => void
-  startOrFinishRecording: () => void
+  startOrFinishRecording: (data?: { fromButtonClick?: boolean }) => void
   refreshRecordingHistory: () => void
 
   // MCP Tool Calling handlers
-  startMcpRecording: (data?: { conversationId?: string; sessionId?: string; fromTile?: boolean }) => void
+  startMcpRecording: (data?: { conversationId?: string; sessionId?: string; fromTile?: boolean; fromButtonClick?: boolean }) => void
   finishMcpRecording: () => void
-  startOrFinishMcpRecording: (data?: { conversationId?: string; sessionId?: string; fromTile?: boolean }) => void
+  startOrFinishMcpRecording: (data?: { conversationId?: string; sessionId?: string; fromTile?: boolean; fromButtonClick?: boolean }) => void
 
   // Text Input handlers
   showTextInput: () => void

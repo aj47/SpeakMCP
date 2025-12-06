@@ -24,6 +24,11 @@ export const state = {
   focusedAppBeforeRecording: null as string | null,
   // Toggle voice dictation state
   isToggleRecordingActive: false,
+  // Track if recording was triggered from UI button click (vs keyboard shortcut)
+  // Used to enable Enter key submission via global keyboard hook
+  isRecordingFromButtonClick: false,
+  // Track if recording is MCP mode (vs regular dictation)
+  isRecordingMcpMode: false,
   // Agent mode state - legacy global flags (kept for backward compatibility)
   isAgentModeActive: false,
   agentProcesses: new Set<ChildProcess>(),

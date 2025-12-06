@@ -787,7 +787,8 @@ export const router = {
       const { showPanelWindowAndStartMcpRecording } = await import("./window")
       // Always show the panel during recording for waveform feedback
       // The fromTile flag tells the panel to hide after recording ends
-      await showPanelWindowAndStartMcpRecording(input.conversationId, input.sessionId, input.fromTile)
+      // fromButtonClick=true indicates this was triggered via UI button (not keyboard shortcut)
+      await showPanelWindowAndStartMcpRecording(input.conversationId, input.sessionId, input.fromTile, true)
     }),
 
   showMainWindow: t.procedure

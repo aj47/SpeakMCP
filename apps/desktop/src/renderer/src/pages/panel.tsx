@@ -482,7 +482,9 @@ export function Component() {
 
   useEffect(() => {
     const unlisten = rendererHandlers.startOrFinishRecording.listen((data) => {
-      if (recording) {
+      // Use recordingRef instead of recording state to avoid race condition
+      // where listener recreation with recording=false could trigger a new recording
+      if (recordingRef.current) {
         isConfirmedRef.current = true
         recorderRef.current?.stopRecording()
       } else {
@@ -497,7 +499,7 @@ export function Component() {
     })
 
     return unlisten
-  }, [recording, mcpMode])
+  }, []) // No dependencies - use refs for current state
 
   // Text input handlers
   useEffect(() => {
@@ -596,7 +598,9 @@ export function Component() {
 
   useEffect(() => {
     const unlisten = rendererHandlers.startOrFinishMcpRecording.listen((data) => {
-      if (recording) {
+      // Use recordingRef instead of recording state to avoid race condition
+      // where listener recreation with recording=false could trigger a new recording
+      if (recordingRef.current) {
         isConfirmedRef.current = true
         recorderRef.current?.stopRecording()
       } else {
@@ -613,7 +617,7 @@ export function Component() {
     })
 
     return unlisten
-  }, [recording])
+  }, []) // No dependencies - use refs for current state
 
   // Agent progress handler - request mode changes only when target changes
   // Note: Progress updates are session-aware in ConversationContext; avoid redundant mode requests here

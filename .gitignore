@@ -6,6 +6,7 @@ out
 out-test
 .DS_Store
 *.log*
+logs.txt
 target/
 bin/
 

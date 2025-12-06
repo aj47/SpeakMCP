@@ -211,8 +211,9 @@ class ProfileService {
 
   /**
    * Update the MCP server configuration for a profile
+   * Merges with existing config - only provided fields are updated
    */
-  updateProfileMcpConfig(id: string, mcpServerConfig: ProfileMcpServerConfig): Profile {
+  updateProfileMcpConfig(id: string, mcpServerConfig: Partial<ProfileMcpServerConfig>): Profile {
     if (!this.profilesData) {
       this.loadProfiles()
     }
@@ -222,9 +223,16 @@ class ProfileService {
       throw new Error(`Profile with id ${id} not found`)
     }
 
+    // Merge with existing config - only update fields that are explicitly provided
+    const mergedMcpServerConfig: ProfileMcpServerConfig = {
+      ...profile.mcpServerConfig,
+      ...(mcpServerConfig.disabledServers !== undefined && { disabledServers: mcpServerConfig.disabledServers }),
+      ...(mcpServerConfig.disabledTools !== undefined && { disabledTools: mcpServerConfig.disabledTools }),
+    }
+
     const updatedProfile = {
       ...profile,
-      mcpServerConfig,
+      mcpServerConfig: mergedMcpServerConfig,
       updatedAt: Date.now(),
     }
 
@@ -247,8 +255,9 @@ class ProfileService {
 
   /**
    * Update the model configuration for a profile
+   * Merges with existing config - only provided fields are updated
    */
-  updateProfileModelConfig(id: string, modelConfig: ProfileModelConfig): Profile {
+  updateProfileModelConfig(id: string, modelConfig: Partial<ProfileModelConfig>): Profile {
     if (!this.profilesData) {
       this.loadProfiles()
     }
@@ -258,9 +267,19 @@ class ProfileService {
       throw new Error(`Profile with id ${id} not found`)
     }
 
+    // Merge with existing config - only update fields that are explicitly provided
+    const mergedModelConfig: ProfileModelConfig = {
+      ...profile.modelConfig,
+      ...(modelConfig.mcpToolsProviderId !== undefined && { mcpToolsProviderId: modelConfig.mcpToolsProviderId }),
+      ...(modelConfig.mcpToolsOpenaiModel !== undefined && { mcpToolsOpenaiModel: modelConfig.mcpToolsOpenaiModel }),
+      ...(modelConfig.mcpToolsGroqModel !== undefined && { mcpToolsGroqModel: modelConfig.mcpToolsGroqModel }),
+      ...(modelConfig.mcpToolsGeminiModel !== undefined && { mcpToolsGeminiModel: modelConfig.mcpToolsGeminiModel }),
+      ...(modelConfig.currentModelPresetId !== undefined && { currentModelPresetId: modelConfig.currentModelPresetId }),
+    }
+
     const updatedProfile = {
       ...profile,
-      modelConfig,
+      modelConfig: mergedModelConfig,
       updatedAt: Date.now(),
     }
 

@@ -200,6 +200,7 @@ export default function ChatScreen({ route, navigation }: any) {
 
     console.log('[ChatScreen] Sending message:', text);
     console.log('[ChatScreen] Platform:', Platform.OS);
+    console.log('[ChatScreen] Current conversation_id:', convoRef.current || 'NONE (new conversation)');
     console.log('[ChatScreen] Current config:', {
       baseUrl: config.baseUrl,
       model: config.model,
@@ -217,7 +218,7 @@ export default function ChatScreen({ route, navigation }: any) {
       let full = '';
       console.log('[ChatScreen] Starting chat request with', messages.length + 1, 'messages');
       setDebugInfo('Request sent, waiting for response...');
-      const reply = await client.chat([...messages, userMsg], (tok) => {
+      const result = await client.chat([...messages, userMsg], (tok) => {
         full += tok;
         console.log('[ChatScreen] Token received:', tok);
         setDebugInfo(`Receiving tokens... (${full.length} chars so far)`);
@@ -233,8 +234,15 @@ export default function ChatScreen({ route, navigation }: any) {
           }
           return copy;
         });
-      });
-      const finalText = reply || full;
+      }, convoRef.current);
+
+      // Store conversation_id for subsequent messages
+      if (result.conversation_id) {
+        console.log('[ChatScreen] Storing conversation_id:', result.conversation_id);
+        convoRef.current = result.conversation_id;
+      }
+
+      const finalText = result.content || full;
       console.log('[ChatScreen] Chat completed, final text length:', finalText?.length || 0);
       setDebugInfo(`Completed! Received ${finalText?.length || 0} characters`);
 

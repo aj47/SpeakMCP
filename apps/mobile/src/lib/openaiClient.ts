@@ -59,13 +59,16 @@ export class OpenAIClient {
    * POST OpenAI-compatible API: /v1/chat/completions
    * If the server responds with text/event-stream, this will parse SSE chunks and accumulate assistant content.
    * You can pass an onToken callback to receive incremental tokens.
+   * Pass conversation_id to continue an existing conversation.
+   * Returns { content, conversation_id } where conversation_id should be passed to subsequent calls.
    */
   async chat(
     messages: ChatMessage[],
-    onToken?: (token: string) => void
-  ): Promise<string> {
+    onToken?: (token: string) => void,
+    conversationId?: string
+  ): Promise<{ content: string; conversation_id?: string }> {
     const url = this.getUrl('/chat/completions');
-    const body = { model: this.cfg.model, messages, stream: true } as any;
+    const body = { model: this.cfg.model, messages, stream: true, conversation_id: conversationId } as any;
 
     console.log('[OpenAIClient] Starting chat request');
     console.log('[OpenAIClient] URL:', url);
@@ -119,11 +122,13 @@ export class OpenAIClient {
         try {
           const j = JSON.parse(text);
           const content = j?.choices?.[0]?.message?.content ?? '';
+          const respConversationId = j?.conversation_id;
           console.log('[OpenAIClient] Extracted content:', content);
-          return typeof content === 'string' ? content : text;
+          console.log('[OpenAIClient] Extracted conversation_id:', respConversationId);
+          return { content: typeof content === 'string' ? content : text, conversation_id: respConversationId };
         } catch (parseError) {
           console.error('[OpenAIClient] JSON parse error:', parseError);
-          return text;
+          return { content: text };
         }
       }
 
@@ -134,6 +139,7 @@ export class OpenAIClient {
         console.log('[OpenAIClient] Raw SSE text length:', text.length);
         console.log('[OpenAIClient] Raw SSE text preview:', text.substring(0, 500));
         let finalText = '';
+        let sseConversationId: string | undefined;
         const chunks = text.split(/\r?\n\r?\n/);
         console.log('[OpenAIClient] Split into', chunks.length, 'chunks');
         for (const chunk of chunks) {
@@ -141,10 +147,15 @@ export class OpenAIClient {
           for (const l of lines) {
             if (l === '[DONE]' || l === '"[DONE]"') {
               console.log('[OpenAIClient] Found DONE marker, returning:', finalText.length, 'characters');
-              return finalText;
+              return { content: finalText, conversation_id: sseConversationId };
             }
             try {
               const obj = JSON.parse(l);
+              // Extract conversation_id if present
+              if (obj?.conversation_id) {
+                sseConversationId = obj.conversation_id;
+                console.log('[OpenAIClient] SSE extracted conversation_id:', sseConversationId);
+              }
               const delta = obj?.choices?.[0]?.delta;
               let token = delta?.content as string | undefined;
               if (!token && obj?.choices?.[0]?.message?.content) {
@@ -169,7 +180,7 @@ export class OpenAIClient {
           }
         }
         console.log('[OpenAIClient] SSE fallback complete, final text length:', finalText.length);
-        return finalText;
+        return { content: finalText, conversation_id: sseConversationId };
       }
 
       // Streaming parse
@@ -178,6 +189,7 @@ export class OpenAIClient {
       const reader = (res.body as ReadableStream<Uint8Array>).getReader();
       let buffer = '';
       let finalText = '';
+      let streamConversationId: string | undefined;
       while (true) {
         const { value, done } = await reader.read();
         if (done) {
@@ -197,10 +209,15 @@ export class OpenAIClient {
             if (l === '[DONE]' || l === '"[DONE]"') {
               // End of stream
               console.log('[OpenAIClient] Stream DONE, returning:', finalText.length, 'characters');
-              return finalText;
+              return { content: finalText, conversation_id: streamConversationId };
             }
           try {
             const obj = JSON.parse(l);
+            // Extract conversation_id if present
+            if (obj?.conversation_id) {
+              streamConversationId = obj.conversation_id;
+              console.log('[OpenAIClient] Stream extracted conversation_id:', streamConversationId);
+            }
             const delta = obj?.choices?.[0]?.delta;
             const token = delta?.content;
             if (typeof token === 'string' && token.length > 0) {
@@ -224,7 +241,7 @@ export class OpenAIClient {
       }
     }
 
-      return finalText;
+      return { content: finalText, conversation_id: streamConversationId };
     } catch (error) {
       console.error('[OpenAIClient] Chat request failed:', error);
       throw error;

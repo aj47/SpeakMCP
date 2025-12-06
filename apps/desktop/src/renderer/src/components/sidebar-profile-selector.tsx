@@ -40,6 +40,8 @@ export function SidebarProfileSelector() {
     onSuccess: (newProfile: Profile) => {
       queryClient.invalidateQueries({ queryKey: ["current-profile"] })
       queryClient.invalidateQueries({ queryKey: ["config"] })
+      queryClient.invalidateQueries({ queryKey: ["mcp-server-status"] })
+      queryClient.invalidateQueries({ queryKey: ["mcp-initialization-status"] })
 
       // Build a summary of what the profile includes
       const details: string[] = []

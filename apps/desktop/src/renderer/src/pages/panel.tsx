@@ -197,7 +197,7 @@ export function Component() {
     if (!recording || !fromButtonClick) return undefined
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Enter" && !e.shiftKey) {
+      if ((e.key === "Enter" || e.code === "NumpadEnter") && !e.shiftKey) {
         e.preventDefault()
         handleSubmitRecording()
       }

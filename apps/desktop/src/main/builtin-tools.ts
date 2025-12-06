@@ -281,7 +281,32 @@ const toolHandlers: Record<string, ToolHandler> = {
       )
     }
 
+    // Apply the profile's model configuration if it exists
+    if (profile.modelConfig) {
+      const config = configStore.get()
+      const updatedConfig = {
+        ...config,
+        ...(profile.modelConfig.mcpToolsProviderId && {
+          mcpToolsProviderId: profile.modelConfig.mcpToolsProviderId,
+        }),
+        ...(profile.modelConfig.mcpToolsOpenaiModel && {
+          mcpToolsOpenaiModel: profile.modelConfig.mcpToolsOpenaiModel,
+        }),
+        ...(profile.modelConfig.mcpToolsGroqModel && {
+          mcpToolsGroqModel: profile.modelConfig.mcpToolsGroqModel,
+        }),
+        ...(profile.modelConfig.mcpToolsGeminiModel && {
+          mcpToolsGeminiModel: profile.modelConfig.mcpToolsGeminiModel,
+        }),
+        ...(profile.modelConfig.currentModelPresetId && {
+          currentModelPresetId: profile.modelConfig.currentModelPresetId,
+        }),
+      }
+      configStore.save(updatedConfig)
+    }
+
     const mcpConfigApplied = !!profile.mcpServerConfig
+    const modelConfigApplied = !!profile.modelConfig
     return {
       content: [
         {
@@ -295,8 +320,10 @@ const toolHandlers: Record<string, ToolHandler> = {
               mcpConfigApplied,
               disabledServers: profile.mcpServerConfig?.disabledServers || [],
               disabledTools: profile.mcpServerConfig?.disabledTools || [],
+              modelConfigApplied,
+              modelConfig: profile.modelConfig || null,
             },
-            message: `Switched to profile '${profile.name}'${mcpConfigApplied ? ' with MCP configuration' : ''}`,
+            message: `Switched to profile '${profile.name}'${mcpConfigApplied ? ' with MCP configuration' : ''}${modelConfigApplied ? ' and model configuration' : ''}`,
           }, null, 2),
         },
       ],

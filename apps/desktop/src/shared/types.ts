@@ -224,6 +224,18 @@ export type ProfileMcpServerConfig = {
   disabledTools?: string[]
 }
 
+// Profile Model Configuration - stores model/provider selection per profile
+export type ProfileModelConfig = {
+  // Chat provider for MCP tools (openai, groq, gemini)
+  mcpToolsProviderId?: "openai" | "groq" | "gemini"
+  // Model names per provider
+  mcpToolsOpenaiModel?: string
+  mcpToolsGroqModel?: string
+  mcpToolsGeminiModel?: string
+  // Model preset ID (for OpenAI-compatible presets)
+  currentModelPresetId?: string
+}
+
 // Profile Management Types
 export type Profile = {
   id: string
@@ -234,6 +246,8 @@ export type Profile = {
   isDefault?: boolean
   // Per-profile MCP server configuration
   mcpServerConfig?: ProfileMcpServerConfig
+  // Per-profile model/provider configuration
+  modelConfig?: ProfileModelConfig
 }
 
 export type ProfilesData = {

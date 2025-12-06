@@ -1,7 +1,7 @@
 import { app } from "electron"
 import path from "path"
 import fs from "fs"
-import { Profile, ProfilesData, ProfileMcpServerConfig } from "@shared/types"
+import { Profile, ProfilesData, ProfileMcpServerConfig, ProfileModelConfig } from "@shared/types"
 import { randomUUID } from "crypto"
 import { logApp } from "./debug"
 
@@ -243,6 +243,42 @@ class ProfileService {
       disabledServers,
       disabledTools,
     })
+  }
+
+  /**
+   * Update the model configuration for a profile
+   */
+  updateProfileModelConfig(id: string, modelConfig: ProfileModelConfig): Profile {
+    if (!this.profilesData) {
+      this.loadProfiles()
+    }
+
+    const profile = this.getProfile(id)
+    if (!profile) {
+      throw new Error(`Profile with id ${id} not found`)
+    }
+
+    const updatedProfile = {
+      ...profile,
+      modelConfig,
+      updatedAt: Date.now(),
+    }
+
+    const index = this.profilesData!.profiles.findIndex((p) => p.id === id)
+    this.profilesData!.profiles[index] = updatedProfile
+    this.saveProfiles()
+    return updatedProfile
+  }
+
+  /**
+   * Save current model state to a profile
+   * This allows saving the current provider/model selection to a profile
+   */
+  saveCurrentModelStateToProfile(
+    id: string,
+    modelConfig: ProfileModelConfig
+  ): Profile {
+    return this.updateProfileModelConfig(id, modelConfig)
   }
 
   exportProfile(id: string): string {

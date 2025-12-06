@@ -116,46 +116,32 @@ export class OpenAIClient {
 
       // Non-SSE responses: parse JSON content or return raw text
       if (!isSSE) {
-        console.log('[OpenAIClient] Processing non-SSE response');
         const text = await res.text();
-        console.log('[OpenAIClient] Response text:', text);
         try {
           const j = JSON.parse(text);
           const content = j?.choices?.[0]?.message?.content ?? '';
           const respConversationId = j?.conversation_id;
-          console.log('[OpenAIClient] Extracted content:', content);
-          console.log('[OpenAIClient] Extracted conversation_id:', respConversationId);
           return { content: typeof content === 'string' ? content : text, conversation_id: respConversationId };
-        } catch (parseError) {
-          console.error('[OpenAIClient] JSON parse error:', parseError);
+        } catch {
           return { content: text };
         }
       }
 
       // SSE but streaming not supported (React Native fetch): fallback to parsing the full text
       if (isSSE && !supportsReader) {
-        console.log('[OpenAIClient] Using SSE fallback (no reader support)');
         const text = await res.text();
-        console.log('[OpenAIClient] Raw SSE text length:', text.length);
-        console.log('[OpenAIClient] Raw SSE text preview:', text.substring(0, 500));
         let finalText = '';
         let sseConversationId: string | undefined;
         const chunks = text.split(/\r?\n\r?\n/);
-        console.log('[OpenAIClient] Split into', chunks.length, 'chunks');
         for (const chunk of chunks) {
-        const lines = chunk.split(/\r?\n/).map(l => l.replace(/^data:\s?/, '').trim()).filter(Boolean);
+          const lines = chunk.split(/\r?\n/).map(l => l.replace(/^data:\s?/, '').trim()).filter(Boolean);
           for (const l of lines) {
             if (l === '[DONE]' || l === '"[DONE]"') {
-              console.log('[OpenAIClient] Found DONE marker, returning:', finalText.length, 'characters');
               return { content: finalText, conversation_id: sseConversationId };
             }
             try {
               const obj = JSON.parse(l);
-              // Extract conversation_id if present
-              if (obj?.conversation_id) {
-                sseConversationId = obj.conversation_id;
-                console.log('[OpenAIClient] SSE extracted conversation_id:', sseConversationId);
-              }
+              if (obj?.conversation_id) sseConversationId = obj.conversation_id;
               const delta = obj?.choices?.[0]?.delta;
               let token = delta?.content as string | undefined;
               if (!token && obj?.choices?.[0]?.message?.content) {
@@ -165,26 +151,19 @@ export class OpenAIClient {
                 if (token.trim().startsWith('{')) {
                   try {
                     const inner = JSON.parse(token);
-                    if (inner?.type === 'data-operation') {
-                      continue; // ignore control events embedded in content
-                    }
+                    if (inner?.type === 'data-operation') continue;
                   } catch {}
                 }
                 finalText += token;
-                console.log('[OpenAIClient] Token received:', token);
                 onToken?.(token);
               }
-            } catch (parseError) {
-              console.log('[OpenAIClient] Ignoring non-JSON line:', l);
-            }
+            } catch {}
           }
         }
-        console.log('[OpenAIClient] SSE fallback complete, final text length:', finalText.length);
         return { content: finalText, conversation_id: sseConversationId };
       }
 
       // Streaming parse
-      console.log('[OpenAIClient] Using streaming reader');
       const decoder = new TextDecoder();
       const reader = (res.body as ReadableStream<Uint8Array>).getReader();
       let buffer = '';
@@ -192,54 +171,38 @@ export class OpenAIClient {
       let streamConversationId: string | undefined;
       while (true) {
         const { value, done } = await reader.read();
-        if (done) {
-          console.log('[OpenAIClient] Stream ended, final text length:', finalText.length);
-          break;
-        }
+        if (done) break;
         buffer += decoder.decode(value, { stream: true });
         let idx;
         while ((idx = buffer.indexOf('\n\n')) !== -1) {
-        const chunk = buffer.slice(0, idx).trim();
-        buffer = buffer.slice(idx + 2);
-        if (!chunk) continue;
-        // Each SSE event line typically starts with "data: "
-        const lines = chunk.split('\n').map(l => l.replace(/^data:\s?/, ''));
-        for (const l of lines) {
-          if (!l) continue;
+          const chunk = buffer.slice(0, idx).trim();
+          buffer = buffer.slice(idx + 2);
+          if (!chunk) continue;
+          const lines = chunk.split('\n').map(l => l.replace(/^data:\s?/, ''));
+          for (const l of lines) {
+            if (!l) continue;
             if (l === '[DONE]' || l === '"[DONE]"') {
-              // End of stream
-              console.log('[OpenAIClient] Stream DONE, returning:', finalText.length, 'characters');
               return { content: finalText, conversation_id: streamConversationId };
             }
-          try {
-            const obj = JSON.parse(l);
-            // Extract conversation_id if present
-            if (obj?.conversation_id) {
-              streamConversationId = obj.conversation_id;
-              console.log('[OpenAIClient] Stream extracted conversation_id:', streamConversationId);
-            }
-            const delta = obj?.choices?.[0]?.delta;
-            const token = delta?.content;
-            if (typeof token === 'string' && token.length > 0) {
-              // Some streams include JSON-encoded control messages in content; skip those
-              if (token.trim().startsWith('{')) {
-                try {
-                  const inner = JSON.parse(token);
-                  if (inner?.type === 'data-operation') {
-                    continue; // ignore control events
-                  }
-                } catch {}
-              }
+            try {
+              const obj = JSON.parse(l);
+              if (obj?.conversation_id) streamConversationId = obj.conversation_id;
+              const delta = obj?.choices?.[0]?.delta;
+              const token = delta?.content;
+              if (typeof token === 'string' && token.length > 0) {
+                if (token.trim().startsWith('{')) {
+                  try {
+                    const inner = JSON.parse(token);
+                    if (inner?.type === 'data-operation') continue;
+                  } catch {}
+                }
                 finalText += token;
-                console.log('[OpenAIClient] Stream token received:', token);
                 onToken?.(token);
               }
-            } catch (parseError) {
-              console.log('[OpenAIClient] Ignoring non-JSON stream line:', l);
-            }
+            } catch {}
+          }
         }
       }
-    }
 
       return { content: finalText, conversation_id: streamConversationId };
     } catch (error) {

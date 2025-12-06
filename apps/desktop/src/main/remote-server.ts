@@ -132,15 +132,6 @@ async function runAgent(options: RunAgentOptions): Promise<{ content: string; co
       // This matches tipc.ts processWithAgentMode behavior
       const messagesToConvert = updatedConversation.messages.slice(0, -1)
 
-      // Debug: Log the conversation history order
-      console.log("[remote-server] ====== CONVERSATION HISTORY ======")
-      console.log("[remote-server] Total messages in conversation:", updatedConversation.messages.length)
-      console.log("[remote-server] Messages to use as history (excluding current):", messagesToConvert.length)
-      messagesToConvert.forEach((msg, i) => {
-        console.log(`[remote-server] History[${i}]: ${msg.role} - "${msg.content.substring(0, 50)}..."`)
-      })
-      console.log("[remote-server] Current user message (will be added by LLM):", prompt.substring(0, 50))
-
       diagnosticsService.logInfo("remote-server", `Continuing conversation ${conversationId} with ${messagesToConvert.length} previous messages`)
 
       previousConversationHistory = messagesToConvert.map((msg) => ({
@@ -326,11 +317,6 @@ export async function startRemoteServer() {
 
       // Extract conversationId from request body (custom extension to OpenAI API)
       const conversationId = typeof body.conversation_id === "string" ? body.conversation_id : undefined
-
-      // Debug logging
-      console.log("[remote-server] ====== CHAT REQUEST ======")
-      console.log("[remote-server] Received conversation_id:", conversationId || "NONE (new conversation)")
-      console.log("[remote-server] Prompt:", prompt.substring(0, 100))
       diagnosticsService.logInfo("remote-server", `Handling completion request${conversationId ? ` for conversation ${conversationId}` : ""}`)
 
       const result = await runAgent({ prompt, conversationId })
@@ -339,17 +325,11 @@ export async function startRemoteServer() {
       recordHistory(result.content)
 
       const model = resolveActiveModelId(configStore.get())
-      // Return standard OpenAI response with conversation_id as custom field
       const response = toOpenAIChatResponse(result.content, model)
-
-      // Debug logging
-      console.log("[remote-server] ====== CHAT RESPONSE ======")
-      console.log("[remote-server] Returning conversation_id:", result.conversationId)
-      console.log("[remote-server] Response length:", result.content.length)
 
       return reply.send({
         ...response,
-        conversation_id: result.conversationId, // Include conversation_id for client to use in follow-ups
+        conversation_id: result.conversationId,
       })
     } catch (error: any) {
       diagnosticsService.logError("remote-server", "Handler error", error)

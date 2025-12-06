@@ -164,16 +164,16 @@ async function runAgent(options: RunAgentOptions): Promise<{ content: string; co
   }
 
   // Try to find and revive an existing session for this conversation (matching tipc.ts)
+  // Note: Use the resolved conversationId (not inputConversationId) to ensure session matches
+  // the actual conversation being used, even if the original conversation was not found
   const { agentSessionTracker } = await import("./agent-session-tracker")
   let existingSessionId: string | undefined
-  if (inputConversationId) {
-    const foundSessionId = agentSessionTracker.findSessionByConversationId(inputConversationId)
-    if (foundSessionId) {
-      const revived = agentSessionTracker.reviveSession(foundSessionId)
-      if (revived) {
-        existingSessionId = foundSessionId
-        diagnosticsService.logInfo("remote-server", `Revived existing session ${existingSessionId}`)
-      }
+  const foundSessionId = agentSessionTracker.findSessionByConversationId(conversationId)
+  if (foundSessionId) {
+    const revived = agentSessionTracker.reviveSession(foundSessionId)
+    if (revived) {
+      existingSessionId = foundSessionId
+      diagnosticsService.logInfo("remote-server", `Revived existing session ${existingSessionId}`)
     }
   }
 

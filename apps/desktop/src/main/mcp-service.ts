@@ -616,6 +616,7 @@ export class MCPService {
   /**
    * Set runtime enabled/disabled state for a server
    * This is separate from the config disabled flag and represents user preference
+   * Also auto-saves to the current profile's mcpServerConfig
    */
   setServerRuntimeEnabled(serverName: string, enabled: boolean): boolean {
     const config = configStore.get()
@@ -648,6 +649,9 @@ export class MCPService {
     } catch (e) {
       // Ignore persistence errors; runtime state will still be respected in-session
     }
+
+    // Auto-save to current profile so switching profiles restores this state
+    this.saveCurrentStateToProfile()
 
     return true
   }
@@ -742,6 +746,35 @@ export class MCPService {
     return {
       disabledServers: Array.from(this.runtimeDisabledServers),
       disabledTools: Array.from(this.disabledTools),
+    }
+  }
+
+  /**
+   * Save current MCP server/tool state to the current profile
+   * This is called automatically when server or tool state changes
+   */
+  private saveCurrentStateToProfile(): void {
+    try {
+      // Dynamic import to avoid circular dependency
+      import("./profile-service").then(({ profileService }) => {
+        const currentProfileId = profileService.getCurrentProfile()?.id
+        if (!currentProfileId) return
+
+        const state = this.getCurrentMcpConfigState()
+        profileService.saveCurrentMcpStateToProfile(
+          currentProfileId,
+          state.disabledServers,
+          state.disabledTools
+        )
+
+        if (isDebugTools()) {
+          logTools(`Auto-saved MCP state to profile ${currentProfileId}: ${state.disabledServers.length} servers disabled, ${state.disabledTools.length} tools disabled`)
+        }
+      }).catch(() => {
+        // Ignore errors - profile save is best-effort
+      })
+    } catch (e) {
+      // Ignore errors - profile save is best-effort
     }
   }
 
@@ -1610,6 +1643,9 @@ export class MCPService {
     } catch (e) {
       // Ignore persistence errors; runtime state will still be respected in-session
     }
+
+    // Auto-save to current profile so switching profiles restores this state
+    this.saveCurrentStateToProfile()
 
     return true
   }

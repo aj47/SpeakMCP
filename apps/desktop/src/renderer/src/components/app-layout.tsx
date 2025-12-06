@@ -5,6 +5,7 @@ import { NavLink, Outlet, useNavigate, useLocation } from "react-router-dom"
 import { LoadingSpinner } from "@renderer/components/ui/loading-spinner"
 import { SettingsDragBar } from "@renderer/components/settings-drag-bar"
 import { ActiveAgentsSidebar } from "@renderer/components/active-agents-sidebar"
+import { SidebarProfileSelector } from "@renderer/components/sidebar-profile-selector"
 
 type NavLinkItem = {
   text: string
@@ -97,6 +98,11 @@ export const Component = () => {
           className={process.env.IS_MAC ? "h-10" : "h-2"}
           aria-hidden
         ></header>
+
+        {/* Profile Selector - quick access to switch profiles */}
+        <div className="px-2 pb-2">
+          <SidebarProfileSelector />
+        </div>
 
         {/* Primary Navigation */}
         <div className="grid gap-0.5 px-2 text-sm">

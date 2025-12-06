@@ -22,6 +22,7 @@ import {
 import { Save, Info } from "lucide-react"
 import { useState, useEffect } from "react"
 import { ProfileManager } from "@renderer/components/profile-manager"
+import { ProfileBadge } from "@renderer/components/profile-badge"
 
 import { Config } from "@shared/types"
 
@@ -282,7 +283,8 @@ DOMAIN-SPECIFIC RULES:
                     <div>
                       <h3 className="text-sm font-semibold mb-1">Profile Management</h3>
                       <p className="text-xs text-muted-foreground mb-3">
-                        Save and load different guideline configurations for different workflows.
+                        Profiles store your guidelines, MCP server/tool settings, and model preferences.
+                        Switching profiles will load all these settings.
                       </p>
                     </div>
                     <ProfileManager
@@ -294,9 +296,12 @@ DOMAIN-SPECIFIC RULES:
                     />
                   </div>
 
-                  <LabelWithTooltip htmlFor="mcp-additional-guidelines" tooltip="Optional additional rules and guidelines for the AI agent. The base system prompt with tool usage instructions is automatically included.">
-                    Additional Guidelines
-                  </LabelWithTooltip>
+                  <div className="flex items-center gap-2">
+                    <LabelWithTooltip htmlFor="mcp-additional-guidelines" tooltip="Optional additional rules and guidelines for the AI agent. The base system prompt with tool usage instructions is automatically included.">
+                      Additional Guidelines
+                    </LabelWithTooltip>
+                    <ProfileBadge />
+                  </div>
                   <Textarea
                     id="mcp-additional-guidelines"
                     value={additionalGuidelines}

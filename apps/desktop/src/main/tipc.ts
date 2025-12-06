@@ -2068,16 +2068,40 @@ export const router = {
     .input<{ id: string }>()
     .action(async ({ input }) => {
       const { profileService } = await import("./profile-service")
+      const { mcpService } = await import("./mcp-service")
       const profile = profileService.setCurrentProfile(input.id)
 
-      // Update the config with the profile's guidelines
+      // Update the config with the profile's guidelines and model config
       const config = configStore.get()
       const updatedConfig = {
         ...config,
         mcpToolsSystemPrompt: profile.guidelines,
         mcpCurrentProfileId: profile.id,
+        // Apply model config if it exists
+        ...(profile.modelConfig?.mcpToolsProviderId && {
+          mcpToolsProviderId: profile.modelConfig.mcpToolsProviderId,
+        }),
+        ...(profile.modelConfig?.mcpToolsOpenaiModel && {
+          mcpToolsOpenaiModel: profile.modelConfig.mcpToolsOpenaiModel,
+        }),
+        ...(profile.modelConfig?.mcpToolsGroqModel && {
+          mcpToolsGroqModel: profile.modelConfig.mcpToolsGroqModel,
+        }),
+        ...(profile.modelConfig?.mcpToolsGeminiModel && {
+          mcpToolsGeminiModel: profile.modelConfig.mcpToolsGeminiModel,
+        }),
+        ...(profile.modelConfig?.currentModelPresetId && {
+          currentModelPresetId: profile.modelConfig.currentModelPresetId,
+        }),
       }
       configStore.save(updatedConfig)
+
+      // Apply the profile's MCP server configuration
+      // If the profile has no mcpServerConfig, we pass empty arrays to reset to default (all enabled)
+      mcpService.applyProfileMcpConfig(
+        profile.mcpServerConfig?.disabledServers ?? [],
+        profile.mcpServerConfig?.disabledTools ?? []
+      )
 
       return profile
     }),
@@ -2094,6 +2118,68 @@ export const router = {
     .action(async ({ input }) => {
       const { profileService } = await import("./profile-service")
       return profileService.importProfile(input.profileJson)
+    }),
+
+  // Save current MCP server state to a profile
+  saveCurrentMcpStateToProfile: t.procedure
+    .input<{ profileId: string }>()
+    .action(async ({ input }) => {
+      const { profileService } = await import("./profile-service")
+      const { mcpService } = await import("./mcp-service")
+
+      const currentState = mcpService.getCurrentMcpConfigState()
+      return profileService.saveCurrentMcpStateToProfile(
+        input.profileId,
+        currentState.disabledServers,
+        currentState.disabledTools
+      )
+    }),
+
+  // Update profile MCP server configuration
+  updateProfileMcpConfig: t.procedure
+    .input<{ profileId: string; disabledServers?: string[]; disabledTools?: string[] }>()
+    .action(async ({ input }) => {
+      const { profileService } = await import("./profile-service")
+      return profileService.updateProfileMcpConfig(input.profileId, {
+        disabledServers: input.disabledServers,
+        disabledTools: input.disabledTools,
+      })
+    }),
+
+  // Save current model state to a profile
+  saveCurrentModelStateToProfile: t.procedure
+    .input<{ profileId: string }>()
+    .action(async ({ input }) => {
+      const { profileService } = await import("./profile-service")
+      const config = configStore.get()
+      return profileService.saveCurrentModelStateToProfile(input.profileId, {
+        mcpToolsProviderId: config.mcpToolsProviderId,
+        mcpToolsOpenaiModel: config.mcpToolsOpenaiModel,
+        mcpToolsGroqModel: config.mcpToolsGroqModel,
+        mcpToolsGeminiModel: config.mcpToolsGeminiModel,
+        currentModelPresetId: config.currentModelPresetId,
+      })
+    }),
+
+  // Update profile model configuration
+  updateProfileModelConfig: t.procedure
+    .input<{
+      profileId: string
+      mcpToolsProviderId?: "openai" | "groq" | "gemini"
+      mcpToolsOpenaiModel?: string
+      mcpToolsGroqModel?: string
+      mcpToolsGeminiModel?: string
+      currentModelPresetId?: string
+    }>()
+    .action(async ({ input }) => {
+      const { profileService } = await import("./profile-service")
+      return profileService.updateProfileModelConfig(input.profileId, {
+        mcpToolsProviderId: input.mcpToolsProviderId,
+        mcpToolsOpenaiModel: input.mcpToolsOpenaiModel,
+        mcpToolsGroqModel: input.mcpToolsGroqModel,
+        mcpToolsGeminiModel: input.mcpToolsGeminiModel,
+        currentModelPresetId: input.currentModelPresetId,
+      })
     }),
 
   saveProfileFile: t.procedure

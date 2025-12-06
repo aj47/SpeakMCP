@@ -616,6 +616,7 @@ export class MCPService {
   /**
    * Set runtime enabled/disabled state for a server
    * This is separate from the config disabled flag and represents user preference
+   * Also auto-saves to the current profile's mcpServerConfig
    */
   setServerRuntimeEnabled(serverName: string, enabled: boolean): boolean {
     const config = configStore.get()
@@ -649,6 +650,9 @@ export class MCPService {
       // Ignore persistence errors; runtime state will still be respected in-session
     }
 
+    // Auto-save to current profile so switching profiles restores this state
+    this.saveCurrentStateToProfile()
+
     return true
   }
 
@@ -657,6 +661,121 @@ export class MCPService {
    */
   isServerRuntimeEnabled(serverName: string): boolean {
     return !this.runtimeDisabledServers.has(serverName)
+  }
+
+  /**
+   * Apply MCP configuration from a profile
+   * This updates the runtime enabled/disabled state for servers and tools
+   */
+  applyProfileMcpConfig(disabledServers?: string[], disabledTools?: string[]): void {
+    const config = configStore.get()
+    const mcpConfig = config.mcpConfig
+    const allServerNames = Object.keys(mcpConfig?.mcpServers || {})
+
+    // Reset runtime disabled servers based on profile config
+    // Enable all servers first, then disable those specified in the profile
+    this.runtimeDisabledServers.clear()
+
+    if (disabledServers && disabledServers.length > 0) {
+      for (const serverName of disabledServers) {
+        // Only add if server exists in config
+        if (allServerNames.includes(serverName)) {
+          this.runtimeDisabledServers.add(serverName)
+          // Stop the server if it's running
+          if (this.initializedServers.has(serverName)) {
+            this.stopServer(serverName).catch(() => {
+              // Ignore cleanup errors
+            })
+          }
+        }
+      }
+    }
+
+    // Reset disabled tools based on profile config
+    // We add all profile-specified disabled tools without checking availableTools
+    // because servers may not be initialized yet. When servers start later,
+    // their tools will be correctly filtered out by getAvailableTools().
+    // Orphaned tool names are cleaned up by cleanupOrphanedTools().
+    this.disabledTools.clear()
+
+    if (disabledTools && disabledTools.length > 0) {
+      for (const toolName of disabledTools) {
+        this.disabledTools.add(toolName)
+      }
+    }
+
+    // Persist the new state to config
+    try {
+      const cfg: Config = {
+        ...config,
+        mcpRuntimeDisabledServers: Array.from(this.runtimeDisabledServers),
+        mcpDisabledTools: Array.from(this.disabledTools),
+      }
+      configStore.save(cfg)
+
+      if (isDebugTools()) {
+        logTools(`Applied profile MCP config: ${this.runtimeDisabledServers.size} servers disabled, ${this.disabledTools.size} tools disabled`)
+      }
+    } catch (e) {
+      // Ignore persistence errors; runtime state will still be respected in-session
+    }
+
+    // Start any servers that are now enabled and were not previously running
+    for (const serverName of allServerNames) {
+      const serverConfig = mcpConfig?.mcpServers?.[serverName]
+      if (
+        serverConfig &&
+        !serverConfig.disabled &&
+        !this.runtimeDisabledServers.has(serverName) &&
+        !this.initializedServers.has(serverName)
+      ) {
+        // Initialize the server
+        this.initializeServer(serverName, serverConfig, { allowAutoOAuth: false }).catch((error) => {
+          if (isDebugTools()) {
+            logTools(`Failed to start server ${serverName} after profile switch: ${error}`)
+          }
+        })
+      }
+    }
+  }
+
+  /**
+   * Get current MCP configuration state (for saving to profile)
+   */
+  getCurrentMcpConfigState(): { disabledServers: string[], disabledTools: string[] } {
+    return {
+      disabledServers: Array.from(this.runtimeDisabledServers),
+      disabledTools: Array.from(this.disabledTools),
+    }
+  }
+
+  /**
+   * Save current MCP server/tool state to the current profile
+   * This is called automatically when server or tool state changes
+   */
+  private saveCurrentStateToProfile(): void {
+    try {
+      // Dynamic import to avoid circular dependency
+      import("./profile-service").then(({ profileService }) => {
+        const currentProfileId = profileService.getCurrentProfile()?.id
+        if (!currentProfileId) return
+
+        const state = this.getCurrentMcpConfigState()
+        profileService.saveCurrentMcpStateToProfile(
+          currentProfileId,
+          state.disabledServers,
+          state.disabledTools
+        )
+
+        if (isDebugTools()) {
+          logTools(`Auto-saved MCP state to profile ${currentProfileId}: ${state.disabledServers.length} servers disabled, ${state.disabledTools.length} tools disabled`)
+        }
+      }).catch(() => {
+        // Ignore errors - profile save is best-effort
+      })
+    } catch (e) {
+      // Ignore errors - profile save is best-effort
+    }
   }
 
   /**
@@ -1524,6 +1643,9 @@ export class MCPService {
     } catch (e) {
       // Ignore persistence errors; runtime state will still be respected in-session
     }
+
+    // Auto-save to current profile so switching profiles restores this state
+    this.saveCurrentStateToProfile()
 
     return true
   }

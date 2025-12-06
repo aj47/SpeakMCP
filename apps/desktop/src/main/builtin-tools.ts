@@ -272,6 +272,42 @@ const toolHandlers: Record<string, ToolHandler> = {
     // Switch to the profile
     profileService.setCurrentProfile(profile.id)
 
+    // Apply the profile's MCP server configuration
+    // If the profile has no mcpServerConfig, we pass empty arrays to reset to default (all enabled)
+    const { mcpService } = await import("./mcp-service")
+    mcpService.applyProfileMcpConfig(
+      profile.mcpServerConfig?.disabledServers ?? [],
+      profile.mcpServerConfig?.disabledTools ?? []
+    )
+
+    // Update config with profile's guidelines and model configuration
+    const config = configStore.get()
+    const updatedConfig = {
+      ...config,
+      // Always apply guidelines and profile ID (same as TIPC setCurrentProfile)
+      mcpToolsSystemPrompt: profile.guidelines,
+      mcpCurrentProfileId: profile.id,
+      // Apply model config if it exists
+      ...(profile.modelConfig?.mcpToolsProviderId && {
+        mcpToolsProviderId: profile.modelConfig.mcpToolsProviderId,
+      }),
+      ...(profile.modelConfig?.mcpToolsOpenaiModel && {
+        mcpToolsOpenaiModel: profile.modelConfig.mcpToolsOpenaiModel,
+      }),
+      ...(profile.modelConfig?.mcpToolsGroqModel && {
+        mcpToolsGroqModel: profile.modelConfig.mcpToolsGroqModel,
+      }),
+      ...(profile.modelConfig?.mcpToolsGeminiModel && {
+        mcpToolsGeminiModel: profile.modelConfig.mcpToolsGeminiModel,
+      }),
+      ...(profile.modelConfig?.currentModelPresetId && {
+        currentModelPresetId: profile.modelConfig.currentModelPresetId,
+      }),
+    }
+    configStore.save(updatedConfig)
+
+    const mcpConfigApplied = !!profile.mcpServerConfig
+    const modelConfigApplied = !!profile.modelConfig
     return {
       content: [
         {
@@ -282,8 +318,13 @@ const toolHandlers: Record<string, ToolHandler> = {
               id: profile.id,
               name: profile.name,
               guidelines: profile.guidelines,
+              mcpConfigApplied,
+              disabledServers: profile.mcpServerConfig?.disabledServers || [],
+              disabledTools: profile.mcpServerConfig?.disabledTools || [],
+              modelConfigApplied,
+              modelConfig: profile.modelConfig || null,
             },
-            message: `Switched to profile '${profile.name}'`,
+            message: `Switched to profile '${profile.name}'${[mcpConfigApplied && 'MCP', modelConfigApplied && 'model'].filter(Boolean).length > 0 ? ' with ' + [mcpConfigApplied && 'MCP', modelConfigApplied && 'model'].filter(Boolean).join(' and ') + ' configuration' : ''}`,
           }, null, 2),
         },
       ],

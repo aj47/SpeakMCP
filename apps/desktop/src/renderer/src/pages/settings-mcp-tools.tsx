@@ -8,6 +8,7 @@ import { tipcClient } from "@renderer/lib/tipc-client"
 import { Config, MCPConfig } from "@shared/types"
 import { MCPConfigManager } from "@renderer/components/mcp-config-manager"
 import { MCPToolManager } from "@renderer/components/mcp-tool-manager"
+import { ProfileBadge } from "@renderer/components/profile-badge"
 
 export function Component() {
   const navigate = useNavigate()
@@ -56,7 +57,12 @@ export function Component() {
         </div>
       ) : (
         <div className="min-w-0 space-y-8">
-
+          <div className="flex items-center gap-2">
+            <p className="text-sm text-muted-foreground">
+              Server and tool enable/disable settings are saved per-profile.
+            </p>
+            <ProfileBadge />
+          </div>
 
           <div className="min-w-0 space-y-8 border-t pt-6">
             <MCPConfigManager

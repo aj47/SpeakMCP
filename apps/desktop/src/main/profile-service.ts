@@ -1,7 +1,7 @@
 import { app } from "electron"
 import path from "path"
 import fs from "fs"
-import { Profile, ProfilesData } from "@shared/types"
+import { Profile, ProfilesData, ProfileMcpServerConfig, ProfileModelConfig } from "@shared/types"
 import { randomUUID } from "crypto"
 import { logApp } from "./debug"
 
@@ -207,6 +207,99 @@ class ProfileService {
     this.profilesData!.currentProfileId = id
     this.saveProfiles()
     return profile
+  }
+
+  /**
+   * Update the MCP server configuration for a profile
+   * Merges with existing config - only provided fields are updated
+   */
+  updateProfileMcpConfig(id: string, mcpServerConfig: Partial<ProfileMcpServerConfig>): Profile {
+    if (!this.profilesData) {
+      this.loadProfiles()
+    }
+
+    const profile = this.getProfile(id)
+    if (!profile) {
+      throw new Error(`Profile with id ${id} not found`)
+    }
+
+    // Merge with existing config - only update fields that are explicitly provided
+    // Use ?? {} to handle undefined profile.mcpServerConfig for profiles without prior config
+    const mergedMcpServerConfig: ProfileMcpServerConfig = {
+      ...(profile.mcpServerConfig ?? {}),
+      ...(mcpServerConfig.disabledServers !== undefined && { disabledServers: mcpServerConfig.disabledServers }),
+      ...(mcpServerConfig.disabledTools !== undefined && { disabledTools: mcpServerConfig.disabledTools }),
+    }
+
+    const updatedProfile = {
+      ...profile,
+      mcpServerConfig: mergedMcpServerConfig,
+      updatedAt: Date.now(),
+    }
+
+    const index = this.profilesData!.profiles.findIndex((p) => p.id === id)
+    this.profilesData!.profiles[index] = updatedProfile
+    this.saveProfiles()
+    return updatedProfile
+  }
+
+  /**
+   * Save current MCP state to a profile
+   * This allows saving the current enabled/disabled server state to a profile
+   */
+  saveCurrentMcpStateToProfile(id: string, disabledServers: string[], disabledTools: string[]): Profile {
+    return this.updateProfileMcpConfig(id, {
+      disabledServers,
+      disabledTools,
+    })
+  }
+
+  /**
+   * Update the model configuration for a profile
+   * Merges with existing config - only provided fields are updated
+   */
+  updateProfileModelConfig(id: string, modelConfig: Partial<ProfileModelConfig>): Profile {
+    if (!this.profilesData) {
+      this.loadProfiles()
+    }
+
+    const profile = this.getProfile(id)
+    if (!profile) {
+      throw new Error(`Profile with id ${id} not found`)
+    }
+
+    // Merge with existing config - only update fields that are explicitly provided
+    // Use ?? {} to handle undefined profile.modelConfig for profiles without prior config
+    const mergedModelConfig: ProfileModelConfig = {
+      ...(profile.modelConfig ?? {}),
+      ...(modelConfig.mcpToolsProviderId !== undefined && { mcpToolsProviderId: modelConfig.mcpToolsProviderId }),
+      ...(modelConfig.mcpToolsOpenaiModel !== undefined && { mcpToolsOpenaiModel: modelConfig.mcpToolsOpenaiModel }),
+      ...(modelConfig.mcpToolsGroqModel !== undefined && { mcpToolsGroqModel: modelConfig.mcpToolsGroqModel }),
+      ...(modelConfig.mcpToolsGeminiModel !== undefined && { mcpToolsGeminiModel: modelConfig.mcpToolsGeminiModel }),
+      ...(modelConfig.currentModelPresetId !== undefined && { currentModelPresetId: modelConfig.currentModelPresetId }),
+    }
+
+    const updatedProfile = {
+      ...profile,
+      modelConfig: mergedModelConfig,
+      updatedAt: Date.now(),
+    }
+
+    const index = this.profilesData!.profiles.findIndex((p) => p.id === id)
+    this.profilesData!.profiles[index] = updatedProfile
+    this.saveProfiles()
+    return updatedProfile
+  }
+
+  /**
+   * Save current model state to a profile
+   * This allows saving the current provider/model selection to a profile
+   */
+  saveCurrentModelStateToProfile(
+    id: string,
+    modelConfig: ProfileModelConfig
+  ): Profile {
+    return this.updateProfileModelConfig(id, modelConfig)
   }
 
   exportProfile(id: string): string {

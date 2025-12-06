@@ -2095,13 +2095,12 @@ export const router = {
       }
       configStore.save(updatedConfig)
 
-      // Apply the profile's MCP server configuration if it exists
-      if (profile.mcpServerConfig) {
-        mcpService.applyProfileMcpConfig(
-          profile.mcpServerConfig.disabledServers,
-          profile.mcpServerConfig.disabledTools
-        )
-      }
+      // Apply the profile's MCP server configuration
+      // If the profile has no mcpServerConfig, we pass empty arrays to reset to default (all enabled)
+      mcpService.applyProfileMcpConfig(
+        profile.mcpServerConfig?.disabledServers ?? [],
+        profile.mcpServerConfig?.disabledTools ?? []
+      )
 
       return profile
     }),

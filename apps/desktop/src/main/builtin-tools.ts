@@ -272,14 +272,13 @@ const toolHandlers: Record<string, ToolHandler> = {
     // Switch to the profile
     profileService.setCurrentProfile(profile.id)
 
-    // Apply the profile's MCP server configuration if it exists
+    // Apply the profile's MCP server configuration
+    // If the profile has no mcpServerConfig, we pass empty arrays to reset to default (all enabled)
     const { mcpService } = await import("./mcp-service")
-    if (profile.mcpServerConfig) {
-      mcpService.applyProfileMcpConfig(
-        profile.mcpServerConfig.disabledServers,
-        profile.mcpServerConfig.disabledTools
-      )
-    }
+    mcpService.applyProfileMcpConfig(
+      profile.mcpServerConfig?.disabledServers ?? [],
+      profile.mcpServerConfig?.disabledTools ?? []
+    )
 
     // Update config with profile's guidelines and model configuration
     const config = configStore.get()

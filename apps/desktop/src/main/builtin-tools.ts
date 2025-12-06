@@ -324,7 +324,7 @@ const toolHandlers: Record<string, ToolHandler> = {
               modelConfigApplied,
               modelConfig: profile.modelConfig || null,
             },
-            message: `Switched to profile '${profile.name}'${mcpConfigApplied ? ' with MCP configuration' : ''}${modelConfigApplied ? ' and model configuration' : ''}`,
+            message: `Switched to profile '${profile.name}'${[mcpConfigApplied && 'MCP', modelConfigApplied && 'model'].filter(Boolean).length > 0 ? ' with ' + [mcpConfigApplied && 'MCP', modelConfigApplied && 'model'].filter(Boolean).join(' and ') + ' configuration' : ''}`,
           }, null, 2),
         },
       ],

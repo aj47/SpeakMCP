@@ -224,8 +224,9 @@ class ProfileService {
     }
 
     // Merge with existing config - only update fields that are explicitly provided
+    // Use ?? {} to handle undefined profile.mcpServerConfig for profiles without prior config
     const mergedMcpServerConfig: ProfileMcpServerConfig = {
-      ...profile.mcpServerConfig,
+      ...(profile.mcpServerConfig ?? {}),
       ...(mcpServerConfig.disabledServers !== undefined && { disabledServers: mcpServerConfig.disabledServers }),
       ...(mcpServerConfig.disabledTools !== undefined && { disabledTools: mcpServerConfig.disabledTools }),
     }
@@ -268,8 +269,9 @@ class ProfileService {
     }
 
     // Merge with existing config - only update fields that are explicitly provided
+    // Use ?? {} to handle undefined profile.modelConfig for profiles without prior config
     const mergedModelConfig: ProfileModelConfig = {
-      ...profile.modelConfig,
+      ...(profile.modelConfig ?? {}),
       ...(modelConfig.mcpToolsProviderId !== undefined && { mcpToolsProviderId: modelConfig.mcpToolsProviderId }),
       ...(modelConfig.mcpToolsOpenaiModel !== undefined && { mcpToolsOpenaiModel: modelConfig.mcpToolsOpenaiModel }),
       ...(modelConfig.mcpToolsGroqModel !== undefined && { mcpToolsGroqModel: modelConfig.mcpToolsGroqModel }),

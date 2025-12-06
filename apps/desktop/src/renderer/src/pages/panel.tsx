@@ -624,6 +624,12 @@ export function Component() {
   useEffect(() => {
     const isTextSubmissionPending = textInputMutation.isPending || mcpTextInputMutation.isPending
 
+    // If text input is active, don't override the mode - keep it as textInput
+    // This prevents the panel from becoming unfocusable while user is typing
+    if (showTextInput) {
+      return undefined
+    }
+
     let targetMode: "agent" | "normal" | null = null
     if (anyActiveNonSnoozed) {
       targetMode = "agent"
@@ -652,7 +658,7 @@ export function Component() {
     return () => {
       if (tid) clearTimeout(tid)
     }
-  }, [anyActiveNonSnoozed, textInputMutation.isPending, mcpTextInputMutation.isPending])
+  }, [anyActiveNonSnoozed, textInputMutation.isPending, mcpTextInputMutation.isPending, showTextInput])
 
   // Note: We don't need to hide text input when agentProgress changes because:
   // 1. handleTextSubmit already hides it immediately on submit (line 375)

@@ -162,6 +162,11 @@ export interface AgentProgressUpdate {
     reason: string  // e.g., "Rate limit exceeded", "Network error"
     startedAt: number  // timestamp for countdown calculation
   }
+  // Streaming content - partial LLM response as it's being generated
+  streamingContent?: {
+    text: string // The accumulated text so far
+    isStreaming: boolean // True while streaming is in progress
+  }
 }
 
 // Conversation Types

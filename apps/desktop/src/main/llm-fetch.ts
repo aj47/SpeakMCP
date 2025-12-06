@@ -1114,6 +1114,7 @@ async function makeLLMCallAttempt(
   messages: Array<{ role: string; content: string }>,
   chatProviderId: string,
   onRetryProgress?: RetryProgressCallback,
+  sessionId?: string,
 ): Promise<LLMToolCallResponse> {
   if (isDebugLLM()) {
     logLLM("🚀 Starting LLM call attempt", {
@@ -1126,9 +1127,9 @@ async function makeLLMCallAttempt(
   let response: any
 
   if (chatProviderId === "gemini") {
-    response = await makeGeminiCall(messages, undefined, onRetryProgress)
+    response = await makeGeminiCall(messages, sessionId, onRetryProgress)
   } else {
-    response = await makeOpenAICompatibleCall(messages, chatProviderId, true, undefined, onRetryProgress)
+    response = await makeOpenAICompatibleCall(messages, chatProviderId, true, sessionId, onRetryProgress)
   }
 
   if (isDebugLLM()) {
@@ -1286,6 +1287,7 @@ export async function makeLLMCallWithFetch(
   messages: Array<{ role: string; content: string }>,
   providerId?: string,
   onRetryProgress?: RetryProgressCallback,
+  sessionId?: string,
 ): Promise<LLMToolCallResponse> {
   const config = configStore.get()
   const chatProviderId = providerId || config.mcpToolsProviderId || "openai"
@@ -1293,7 +1295,7 @@ export async function makeLLMCallWithFetch(
   try {
     // Wrap the LLM call with retry logic to handle empty responses
     return await apiCallWithRetry(
-      async () => makeLLMCallAttempt(messages, chatProviderId, onRetryProgress),
+      async () => makeLLMCallAttempt(messages, chatProviderId, onRetryProgress, sessionId),
       config.apiRetryCount,
       config.apiRetryBaseDelay,
       config.apiRetryMaxDelay,
@@ -1306,6 +1308,154 @@ export async function makeLLMCallWithFetch(
     }
     diagnosticsService.logError("llm-fetch", "LLM call failed after all retries", error)
     throw error
+  }
+}
+
+/**
+ * Callback for streaming content updates
+ */
+export type StreamingCallback = (chunk: string, accumulated: string) => void
+
+/**
+ * Make a streaming LLM call that invokes a callback for each chunk of text received.
+ * Falls back to non-streaming if the provider doesn't support streaming.
+ */
+export async function makeLLMCallWithStreaming(
+  messages: Array<{ role: string; content: string }>,
+  onChunk: StreamingCallback,
+  providerId?: string,
+  sessionId?: string,
+  externalAbortController?: AbortController,
+): Promise<LLMToolCallResponse> {
+  const config = configStore.get()
+  const chatProviderId = providerId || config.mcpToolsProviderId || "openai"
+
+  // Gemini doesn't support streaming in the same way, fall back to non-streaming
+  if (chatProviderId === "gemini") {
+    const result = await makeLLMCallWithFetch(messages, chatProviderId, undefined, sessionId)
+    if (result.content) {
+      onChunk(result.content, result.content)
+    }
+    return result
+  }
+
+  const baseURL =
+    chatProviderId === "groq"
+      ? config.groqBaseUrl || "https://api.groq.com/openai/v1"
+      : config.openaiBaseUrl || "https://api.openai.com/v1"
+
+  const apiKey = chatProviderId === "groq" ? config.groqApiKey : config.openaiApiKey
+
+  if (!apiKey) {
+    throw new Error(`API key is required for ${chatProviderId}`)
+  }
+
+  const model = getModel(chatProviderId, "mcp")
+
+  // Use external abort controller if provided, otherwise create our own
+  const abortController = externalAbortController || new AbortController()
+  const shouldManageAbortController = !externalAbortController
+  if (shouldManageAbortController) {
+    if (sessionId) {
+      agentSessionStateManager.registerAbortController(sessionId, abortController)
+    } else {
+      llmRequestAbortManager.register(abortController)
+    }
+  }
+
+  try {
+    const response = await fetch(`${baseURL}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        messages,
+        temperature: 0,
+        stream: true,
+      }),
+      signal: abortController.signal,
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      throw new Error(`API request failed: ${response.status} ${errorText}`)
+    }
+
+    if (!response.body) {
+      throw new Error("Response body is null")
+    }
+
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let accumulated = ""
+    let buffer = ""
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split("\n")
+      buffer = lines.pop() || "" // Keep incomplete line in buffer
+
+      for (const line of lines) {
+        const trimmed = line.trim()
+        if (!trimmed || trimmed === "data: [DONE]") continue
+        if (!trimmed.startsWith("data: ")) continue
+
+        try {
+          const json = JSON.parse(trimmed.slice(6))
+          const delta = json.choices?.[0]?.delta?.content
+          if (delta) {
+            accumulated += delta
+            onChunk(delta, accumulated)
+          }
+        } catch {
+          // Skip malformed JSON chunks
+        }
+      }
+    }
+
+    // Flush the decoder to get any remaining bytes and process residual buffer
+    buffer += decoder.decode(new Uint8Array(), { stream: false })
+    if (buffer.trim() && buffer.trim() !== "data: [DONE]" && buffer.trim().startsWith("data: ")) {
+      try {
+        const json = JSON.parse(buffer.trim().slice(6))
+        const delta = json.choices?.[0]?.delta?.content
+        if (delta) {
+          accumulated += delta
+          onChunk(delta, accumulated)
+        }
+      } catch {
+        // Skip malformed JSON chunks
+      }
+    }
+
+    // Parse the final accumulated content as a response
+    // For streaming, we typically get plain text, so wrap it
+    return {
+      content: accumulated,
+      needsMoreWork: undefined,
+      toolCalls: undefined,
+    }
+  } catch (error: any) {
+    if (error?.name === "AbortError") {
+      throw error
+    }
+    diagnosticsService.logError("llm-fetch", "Streaming LLM call failed", error)
+    throw error
+  } finally {
+    // Clean up abort controller only if we created it ourselves
+    if (shouldManageAbortController) {
+      if (sessionId) {
+        agentSessionStateManager.unregisterAbortController(sessionId, abortController)
+      } else {
+        llmRequestAbortManager.unregister(abortController)
+      }
+    }
   }
 }
 

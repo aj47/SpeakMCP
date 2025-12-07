@@ -10,7 +10,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@renderer/components/ui/tooltip"
-import { Save, Info } from "lucide-react"
+import { Save, Info, ChevronDown, RotateCcw } from "lucide-react"
 import { toast } from "sonner"
 import { useState, useEffect } from "react"
 import { ProfileManager } from "@renderer/components/profile-manager"
@@ -79,10 +79,10 @@ export function Component() {
     },
   })
 
-  // Mutation to update profile guidelines
+  // Mutation to update profile (guidelines and/or systemPrompt)
   const updateProfileMutation = useMutation({
-    mutationFn: async ({ id, guidelines }: { id: string; guidelines: string }) => {
-      return await tipcClient.updateProfile({ id, guidelines })
+    mutationFn: async ({ id, guidelines, systemPrompt }: { id: string; guidelines?: string; systemPrompt?: string }) => {
+      return await tipcClient.updateProfile({ id, guidelines, systemPrompt })
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["profiles"] })
@@ -90,12 +90,27 @@ export function Component() {
     },
   })
 
+  // Fetch the default system prompt for restore functionality
+  const defaultSystemPromptQuery = useQuery({
+    queryKey: ["default-system-prompt"],
+    queryFn: async () => {
+      return await tipcClient.getDefaultSystemPrompt()
+    },
+    staleTime: Infinity, // This never changes during runtime
+  })
+
   const config = configQuery.data || {}
   const currentProfile = currentProfileQuery.data
+  const defaultSystemPrompt = defaultSystemPromptQuery.data || ""
 
   // Local state for additional guidelines to allow editing without auto-save
   const [additionalGuidelines, setAdditionalGuidelines] = useState("")
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
+
+  // Local state for base system prompt
+  const [customSystemPrompt, setCustomSystemPrompt] = useState("")
+  const [hasUnsavedSystemPromptChanges, setHasUnsavedSystemPromptChanges] = useState(false)
+  const [isSystemPromptOpen, setIsSystemPromptOpen] = useState(false)
 
   // Initialize local state when config loads
   useEffect(() => {
@@ -104,6 +119,14 @@ export function Component() {
       setHasUnsavedChanges(false)
     }
   }, [config.mcpToolsSystemPrompt])
+
+  // Initialize system prompt state when config loads
+  useEffect(() => {
+    // Use custom system prompt from config, or show empty (which means "using default")
+    const currentPrompt = config.mcpCustomSystemPrompt || ""
+    setCustomSystemPrompt(currentPrompt)
+    setHasUnsavedSystemPromptChanges(false)
+  }, [config.mcpCustomSystemPrompt])
 
   // Fire-and-forget config update for toggles/switches (no await needed)
   const updateConfig = (updates: Partial<Config>) => {
@@ -115,6 +138,9 @@ export function Component() {
   // Also check if profile query is still loading to prevent saving before profile data is available
   const isSavingGuidelines = saveConfigMutation.isPending || updateProfileMutation.isPending
   const isProfileLoading = currentProfileQuery.isLoading
+
+  // Check if currently using default system prompt
+  const isUsingDefaultSystemPrompt = !customSystemPrompt.trim()
 
   const saveAdditionalGuidelines = async () => {
     try {
@@ -148,6 +174,44 @@ export function Component() {
   const handleGuidelinesChange = (value: string) => {
     setAdditionalGuidelines(value)
     setHasUnsavedChanges(value !== (config.mcpToolsSystemPrompt || ""))
+  }
+
+  // System prompt handlers
+  const handleSystemPromptChange = (value: string) => {
+    setCustomSystemPrompt(value)
+    setHasUnsavedSystemPromptChanges(value !== (config.mcpCustomSystemPrompt || ""))
+  }
+
+  const saveSystemPrompt = async () => {
+    try {
+      // Save to config
+      const newConfig = { ...config, mcpCustomSystemPrompt: customSystemPrompt }
+      await saveConfigMutation.mutateAsync(newConfig)
+
+      // Also update the current profile's systemPrompt if it's a non-default profile
+      if (currentProfile && !currentProfile.isDefault) {
+        await updateProfileMutation.mutateAsync({
+          id: currentProfile.id,
+          systemPrompt: customSystemPrompt,
+        })
+      }
+
+      setHasUnsavedSystemPromptChanges(false)
+      toast.success("System prompt saved")
+    } catch (error) {
+      toast.error("Failed to save system prompt. Please try again.")
+      console.error("Failed to save system prompt:", error)
+    }
+  }
+
+  const restoreDefaultSystemPrompt = async () => {
+    setCustomSystemPrompt("")
+    setHasUnsavedSystemPromptChanges("" !== (config.mcpCustomSystemPrompt || ""))
+  }
+
+  const revertSystemPromptChanges = () => {
+    setCustomSystemPrompt(config.mcpCustomSystemPrompt || "")
+    setHasUnsavedSystemPromptChanges(false)
   }
 
   const defaultAdditionalGuidelines = `CUSTOM GUIDELINES:
@@ -248,6 +312,75 @@ DOMAIN-SPECIFIC RULES:
                   them.
                 </p>
               )}
+
+              {/* Base System Prompt Section */}
+              <div className="rounded-lg border p-4 space-y-3 mt-6">
+                <button
+                  type="button"
+                  onClick={() => setIsSystemPromptOpen(!isSystemPromptOpen)}
+                  className="flex items-center gap-2 hover:opacity-80 w-full text-left"
+                >
+                  <ChevronDown className={`h-4 w-4 transition-transform ${isSystemPromptOpen ? '' : '-rotate-90'}`} />
+                  <h3 className="text-sm font-semibold">Base System Prompt</h3>
+                  {isUsingDefaultSystemPrompt ? (
+                    <span className="text-xs text-muted-foreground">(using default)</span>
+                  ) : (
+                    <span className="text-xs text-blue-500">(customized)</span>
+                  )}
+                  <ProfileBadge />
+                </button>
+                {isSystemPromptOpen && (
+                  <div className="space-y-3 pt-3">
+                    <p className="text-xs text-muted-foreground">
+                      The base system prompt defines the core behavior and instructions for the AI agent.
+                      Leave empty to use the default prompt. Custom prompts are saved per-profile.
+                    </p>
+                    <Textarea
+                      id="mcp-system-prompt"
+                      value={customSystemPrompt}
+                      onChange={(e) => handleSystemPromptChange(e.target.value)}
+                      rows={12}
+                      className="font-mono text-xs"
+                      placeholder={defaultSystemPrompt || "Loading default system prompt..."}
+                    />
+                    <div className="flex gap-2 flex-wrap">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={restoreDefaultSystemPrompt}
+                        className="gap-1"
+                      >
+                        <RotateCcw className="h-3 w-3" />
+                        Use Default
+                      </Button>
+                      {hasUnsavedSystemPromptChanges && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={revertSystemPromptChanges}
+                          disabled={saveConfigMutation.isPending}
+                        >
+                          Revert Changes
+                        </Button>
+                      )}
+                      <Button
+                        size="sm"
+                        onClick={saveSystemPrompt}
+                        disabled={!hasUnsavedSystemPromptChanges || saveConfigMutation.isPending || isProfileLoading}
+                        className="gap-1"
+                      >
+                        <Save className="h-3 w-3" />
+                        {saveConfigMutation.isPending ? "Saving..." : "Save System Prompt"}
+                      </Button>
+                    </div>
+                    {hasUnsavedSystemPromptChanges && (
+                      <p className="text-xs text-amber-600">
+                        You have unsaved changes to the system prompt.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
           </div>
         </div>
       </div>

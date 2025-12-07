@@ -1296,33 +1296,50 @@ Always use actual resource IDs from the conversation history or create new ones 
       const hasActionableTools = toolCapabilities.relevantTools.length > 0
       const hasToolResultsSoFar = conversationHistory.some((e) => e.role === "tool")
 
-      // Only apply aggressive heuristics if there are actually relevant tools for this request
-      if (hasActionableTools) {
-        // If there are actionable tools and no tool results yet, do not verify or finalize.
-        // Nudge the model to produce structured toolCalls to actually perform the work.
-        if (!hasToolResultsSoFar) {
+      // Check if the response contains substantive content (a real answer, not a placeholder)
+      // If the LLM explicitly sets needsMoreWork=false and provides a real answer,
+      // we should trust it - even if there are tools that could theoretically be used.
+      // This allows the agent to respond directly to simple questions without forcing tool calls.
+      const hasSubstantiveContent = contentText.trim().length >= 1 && !isToolCallPlaceholder(contentText)
+
+      // Only apply aggressive heuristics if:
+      // 1. There are actually relevant tools for this request
+      // 2. No tools have been used yet
+      // 3. The agent's response doesn't contain substantive content (i.e., it's just a placeholder)
+      if (hasActionableTools && !hasToolResultsSoFar && !hasSubstantiveContent) {
+        // If there are actionable tools and no tool results yet, and no real answer provided,
+        // nudge the model to produce structured toolCalls to actually perform the work.
+        // Only add assistant message if non-empty to avoid blank entries
+        if (contentText.trim().length > 0) {
           conversationHistory.push({ role: "assistant", content: contentText.trim() })
-          conversationHistory.push({
-            role: "user",
-            content:
-              "Before marking complete: use the available tools to actually perform the steps. Reply with a valid JSON object per the tool-calling schema, including a toolCalls array with concrete parameters.",
-          })
-          noOpCount = 0
-          continue
         }
+        conversationHistory.push({
+          role: "user",
+          content:
+            "Before marking complete: use the available tools to actually perform the steps. Reply with a valid JSON object per the tool-calling schema, including a toolCalls array with concrete parameters.",
+        })
+        noOpCount = 0
+        continue
       }
 
-      // Agent explicitly indicated completion and either:
+      // Agent explicitly indicated completion and one of the following:
       // - No actionable tools exist for this request (simple Q&A), OR
-      // - Tools were used and work is complete
+      // - Tools were used and work is complete, OR
+      // - Agent provided a substantive direct response (allows direct answers without tool calls)
       const assistantContent = llmResponse.content || ""
 
       finalContent = assistantContent
-      addMessage("assistant", finalContent)
+      if (finalContent.trim().length > 0) {
+        addMessage("assistant", finalContent)
+      }
 
       // Optional verification before completing
-      // Track if we should skip post-verify summary (when agent is repeating itself)
-      let skipPostVerifySummary = false
+      // Track if we should skip post-verify summary
+      // Skip summary when:
+      // 1. Agent is repeating itself (with real content)
+      // 2. No tools were called (simple Q&A - nothing to summarize)
+      const noToolsCalledYet = !conversationHistory.some((e) => e.role === "tool")
+      let skipPostVerifySummary = noToolsCalledYet && !isToolCallPlaceholder(finalContent) && finalContent.trim().length > 0
 
       if (config.mcpVerifyCompletionEnabled) {
         const verifyStep = createProgressStep(
@@ -1434,14 +1451,45 @@ Always use actual resource IDs from the conversation history or create new ones 
 
       // Check if this is an actionable request that should have executed tools
       const isActionableRequest = toolCapabilities.relevantTools.length > 0
+      const contentText = llmResponse.content || ""
+      const hasSubstantiveContent = contentText.trim().length >= 1 && !isToolCallPlaceholder(contentText)
+
+      // If no actionable tools and the response has substantive content,
+      // accept it as a direct response (e.g., simple Q&A, factual questions)
+      if (!isActionableRequest && hasSubstantiveContent) {
+        finalContent = contentText
+        addMessage("assistant", finalContent)
+
+        // Add completion step for UI consistency with other completion paths
+        const completionStep = createProgressStep(
+          "completion",
+          "Task completed",
+          "Question answered directly",
+          "completed",
+        )
+        progressSteps.push(completionStep)
+
+        emit({
+          currentIteration: iteration,
+          maxIterations,
+          steps: progressSteps.slice(-3),
+          isComplete: true,
+          finalContent,
+          conversationHistory: formatConversationForProgress(conversationHistory),
+        })
+        break
+      }
 
       if (noOpCount >= 2 || (isActionableRequest && noOpCount >= 1)) {
-        // Add nudge to push the agent forward
-        addMessage("assistant", llmResponse.content || "")
+        // Add nudge to push the agent forward - require proper JSON format
+        // Only add assistant message if non-empty to avoid blank entries
+        if (contentText.trim().length > 0) {
+          addMessage("assistant", contentText)
+        }
 
         const nudgeMessage = isActionableRequest
-          ? "You have relevant tools available for this request. Please choose and call at least one tool to make progress, or if you truly cannot proceed, explicitly set needsMoreWork=false and provide a detailed explanation of why no action can be taken."
-          : "Please either take action using available tools or explicitly set needsMoreWork=false if the task is complete."
+          ? "You have relevant tools available for this request. Please respond with a valid JSON object: either call tools using the toolCalls array, or set needsMoreWork=false with a complete answer in the content field."
+          : "Please respond with a valid JSON object containing your answer in the content field and needsMoreWork=false if the task is complete."
 
         addMessage("user", nudgeMessage)
 

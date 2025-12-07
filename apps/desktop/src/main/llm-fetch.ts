@@ -1271,13 +1271,16 @@ async function makeLLMCallAttempt(
     }
     return { content: cleaned, needsMoreWork: true }
   }
-  // Otherwise, treat plain text as a final response
+  // For plain text responses without JSON structure, set needsMoreWork=undefined
+  // rather than false. This allows the agent loop to decide whether the response
+  // is acceptable or if it needs to nudge the LLM for a properly formatted response.
+  // This prevents poor-quality plain text responses from being automatically accepted.
   if (isDebugLLM()) {
-    logLLM("✅ Returning final plain text response (needsMoreWork=false)", {
+    logLLM("✅ Returning plain text response (needsMoreWork=undefined - let agent decide)", {
       contentLength: (cleaned || content)?.length || 0
     })
   }
-  return { content: cleaned || content, needsMoreWork: false }
+  return { content: cleaned || content, needsMoreWork: undefined }
 }
 
 /**

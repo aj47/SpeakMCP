@@ -133,7 +133,7 @@ function formatConversationHistoryForApi(
       const contentText = Array.isArray(tr.content)
         ? tr.content.map((c: any) => c.text || c).join("\n")
         : String(tr.content || "")
-      const isError = tr.isError ?? !tr.success
+      const isError = tr.isError ?? (tr.success === false)
       return {
         success: !isError,
         content: contentText,

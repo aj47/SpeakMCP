@@ -2,16 +2,8 @@ import { useConfigQuery } from "@renderer/lib/query-client"
 import { tipcClient } from "@renderer/lib/tipc-client"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { Button } from "@renderer/components/ui/button"
-import { Input } from "@renderer/components/ui/input"
 import { Label } from "@renderer/components/ui/label"
 import { Switch } from "@renderer/components/ui/switch"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@renderer/components/ui/select"
 import { Textarea } from "@renderer/components/ui/textarea"
 import {
   Tooltip,
@@ -21,7 +13,6 @@ import {
 } from "@renderer/components/ui/tooltip"
 import { Save, Info } from "lucide-react"
 import { useState, useEffect } from "react"
-import { ProfileManager } from "@renderer/components/profile-manager"
 import { ProfileBadge } from "@renderer/components/profile-badge"
 
 import { Config } from "@shared/types"
@@ -65,8 +56,6 @@ const LabelWithTooltip = ({
     </div>
   )
 }
-
-import { KeyRecorder } from "@renderer/components/key-recorder"
 
 export function Component() {
   const configQuery = useConfigQuery()
@@ -133,307 +122,88 @@ DOMAIN-SPECIFIC RULES:
       <div className="space-y-6">
         <div className="space-y-4">
           <div className="space-y-2">
-            <h3 className="text-lg font-semibold">MCP Tool Calling</h3>
+            <h3 className="text-lg font-semibold">Agent Settings</h3>
           </div>
 
           <div className="space-y-4">
             <div className="flex items-center space-x-2">
               <Switch
-                id="mcp-enabled"
-                checked={config.mcpToolsEnabled || false}
+                id="mcp-require-approval"
+                checked={!!config.mcpRequireApprovalBeforeToolCall}
                 onCheckedChange={(checked) =>
-                  updateConfig({ mcpToolsEnabled: checked })
+                  updateConfig({
+                    mcpRequireApprovalBeforeToolCall: checked,
+                  })
                 }
               />
-              <Label htmlFor="mcp-enabled">Enable MCP Tool Calling</Label>
-            </div>
-
-            {config.mcpToolsEnabled && (
-              <>
-                <div className="space-y-2">
-                  <LabelWithTooltip htmlFor="mcp-shortcut" tooltip="Choose how to activate MCP tool calling mode">Shortcut</LabelWithTooltip>
-                  <Select
-                    value={config.mcpToolsShortcut || "hold-ctrl-alt"}
-                    onValueChange={(
-                      value: "hold-ctrl-alt" | "ctrl-alt-slash" | "custom",
-                    ) => updateConfig({ mcpToolsShortcut: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="hold-ctrl-alt">
-                        Hold Ctrl+Alt
-                      </SelectItem>
-                      <SelectItem value="ctrl-alt-slash">Ctrl+Alt+/</SelectItem>
-                      <SelectItem value="custom">Custom</SelectItem>
-                    </SelectContent>
-                  </Select>
-
-                  {config.mcpToolsShortcut === "custom" && (
-                    <KeyRecorder
-                      value={config.customMcpToolsShortcut || ""}
-                      onChange={(keyCombo) => {
-                        updateConfig({ customMcpToolsShortcut: keyCombo })
-                      }}
-                      placeholder="Click to record custom MCP tools shortcut"
-                    />
-                  )}
-
-
-                </div>
-
-                <div className="flex items-center space-x-2">
-                  <Switch
-                    id="mcp-agent-mode"
-                    checked={config.mcpAgentModeEnabled || false}
-                    onCheckedChange={(checked) =>
-                      updateConfig({ mcpAgentModeEnabled: checked })
-                    }
-                  />
-                  <LabelWithTooltip htmlFor="mcp-agent-mode" tooltip="When enabled, the agent can see tool results and make follow-up tool calls until the task is complete">Enable Agent Mode</LabelWithTooltip>
-                </div>
-
-
-                <div className="flex items-center space-x-2">
-                  <Switch
-                    id="mcp-require-approval"
-                    checked={!!config.mcpRequireApprovalBeforeToolCall}
-                    onCheckedChange={(checked) =>
-                      updateConfig({
-                        mcpRequireApprovalBeforeToolCall: checked,
-                      })
-                    }
-                  />
-                  <LabelWithTooltip htmlFor="mcp-require-approval" tooltip="Adds a confirmation dialog before any tool executes. Recommended for safety, especially in production environments.">
-                    Require approval before each tool call
-                  </LabelWithTooltip>
-                </div>
-
-
-                {config.mcpAgentModeEnabled && (
-                  <>
-                    <div className="space-y-2">
-                      <LabelWithTooltip htmlFor="mcp-max-iterations" tooltip="Maximum number of iterations the agent can perform before stopping. Higher values allow more complex tasks but may take longer.">Max Iterations</LabelWithTooltip>
-                      <Input
-                        id="mcp-max-iterations"
-                        type="number"
-                        min="1"
-                        max="50"
-                        step="1"
-                        value={config.mcpMaxIterations ?? 10}
-                        onChange={(e) =>
-                          updateConfig({
-                            mcpMaxIterations: parseInt(e.target.value) || 1,
-                          })
-                        }
-                        className="w-32"
-                      />
-
-                    </div>
-                  </>
-                )}
-
-                {!config.mcpAgentModeEnabled && (
-                  <>
-                    <div className="flex items-center space-x-2">
-                      <Switch
-                        id="mcp-auto-paste"
-                        checked={config.mcpAutoPasteEnabled !== false}
-                        onCheckedChange={(checked) =>
-                          updateConfig({ mcpAutoPasteEnabled: checked })
-                        }
-                      />
-                      <Label htmlFor="mcp-auto-paste">Auto-paste Results</Label>
-                    </div>
-
-
-                    {config.mcpAutoPasteEnabled !== false && (
-                      <div className="space-y-2">
-                        <LabelWithTooltip htmlFor="mcp-paste-delay" tooltip="Delay before pasting to allow you to return focus to the desired input field. Recommended: 1000ms (1 second).">
-                          Auto-paste Delay (ms)
-                        </LabelWithTooltip>
-                        <Input
-                          id="mcp-paste-delay"
-                          type="number"
-                          min="0"
-                          max="10000"
-                          step="100"
-                          value={config.mcpAutoPasteDelay || 1000}
-                          onChange={(e) =>
-                            updateConfig({
-                              mcpAutoPasteDelay:
-                                parseInt(e.target.value) || 1000,
-                            })
-                          }
-                          className="w-32"
-                        />
-
-                      </div>
-                    )}
-                  </>
-                )}
-
-
-
-
-
-                <div className="space-y-4">
-                  <div className="rounded-lg border p-4 space-y-4">
-                    <div>
-                      <h3 className="text-sm font-semibold mb-1">Profile Management</h3>
-                      <p className="text-xs text-muted-foreground mb-3">
-                        Profiles store your guidelines, MCP server/tool settings, and model preferences.
-                        Switching profiles will load all these settings.
-                      </p>
-                    </div>
-                    <ProfileManager
-                      currentGuidelines={additionalGuidelines}
-                      onGuidelinesChange={(guidelines) => {
-                        setAdditionalGuidelines(guidelines)
-                        setHasUnsavedChanges(guidelines !== (config.mcpToolsSystemPrompt || ""))
-                      }}
-                    />
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <LabelWithTooltip htmlFor="mcp-additional-guidelines" tooltip="Optional additional rules and guidelines for the AI agent. The base system prompt with tool usage instructions is automatically included.">
-                      Additional Guidelines
-                    </LabelWithTooltip>
-                    <ProfileBadge />
-                  </div>
-                  <Textarea
-                    id="mcp-additional-guidelines"
-                    value={additionalGuidelines}
-                    onChange={(e) => handleGuidelinesChange(e.target.value)}
-                    rows={8}
-                    className="font-mono text-sm"
-                    placeholder={defaultAdditionalGuidelines}
-                  />
-
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setAdditionalGuidelines(defaultAdditionalGuidelines)
-                        setHasUnsavedChanges(
-                          defaultAdditionalGuidelines !==
-                            (config.mcpToolsSystemPrompt || ""),
-                        )
-                      }}
-                    >
-                      Use Example Guidelines
-                    </Button>
-                    {hasUnsavedChanges && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={revertChanges}
-                        disabled={saveConfigMutation.isPending}
-                      >
-                        Revert Changes
-                      </Button>
-                    )}
-                    <Button
-                      size="sm"
-                      onClick={saveAdditionalGuidelines}
-                      disabled={
-                        !hasUnsavedChanges || saveConfigMutation.isPending
-                      }
-                      className="gap-1"
-                    >
-                      <Save className="h-3 w-3" />
-                      {saveConfigMutation.isPending
-                        ? "Saving..."
-                        : "Save Changes"}
-                    </Button>
-                  </div>
-                  {hasUnsavedChanges && (
-                    <p className="text-xs text-amber-600">
-                      You have unsaved changes. Click "Save Changes" to apply
-                      them.
-                    </p>
-                  )}
-                </div>
-
-
-              </>
-            )}
-          </div>
-        </div>
-
-        {config.mcpAgentModeEnabled && (
-          <div className="space-y-4 rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-950/20">
-            <div className="flex items-center space-x-2">
-              <Switch
-                id="agent-kill-switch"
-                checked={config.agentKillSwitchEnabled !== false}
-                onCheckedChange={(checked) =>
-                  updateConfig({ agentKillSwitchEnabled: checked })
-                }
-              />
-              <LabelWithTooltip
-                htmlFor="agent-kill-switch"
-                className="font-medium text-red-800 dark:text-red-200"
-                tooltip="Provides a global hotkey to immediately stop agent mode and kill all agent-created processes"
-              >
-                Enable Emergency Kill Switch
+              <LabelWithTooltip htmlFor="mcp-require-approval" tooltip="Adds a confirmation dialog before any tool executes. Recommended for safety, especially in production environments.">
+                Require approval before each tool call
               </LabelWithTooltip>
             </div>
-            <p className="text-xs text-red-700 dark:text-red-300">
-              Provides a global hotkey to immediately stop agent mode
-              and kill all agent-created processes.
-            </p>
 
-            {config.agentKillSwitchEnabled !== false && (
-              <div className="space-y-2">
-                <Label
-                  htmlFor="kill-switch-hotkey"
-                  className="text-red-800 dark:text-red-200"
-                >
-                  Kill Switch Hotkey
-                </Label>
-                <select
-                  id="kill-switch-hotkey"
-                  value={
-                    config.agentKillSwitchHotkey ||
-                    "ctrl-shift-escape"
-                  }
-                  onChange={(e) =>
-                    updateConfig({
-                      agentKillSwitchHotkey: e.target.value as any,
-                    })
-                  }
-                  className="w-full rounded-md border bg-background p-2"
-                >
-                  <option value="ctrl-shift-escape">
-                    Ctrl + Shift + Escape
-                  </option>
-                  <option value="ctrl-alt-q">Ctrl + Alt + Q</option>
-                  <option value="ctrl-shift-q">
-                    Ctrl + Shift + Q
-                  </option>
-                  <option value="custom">Custom</option>
-                </select>
-
-                {config.agentKillSwitchHotkey === "custom" && (
-                  <KeyRecorder
-                    value={config.customAgentKillSwitchHotkey || ""}
-                    onChange={(keyCombo) => {
-                      updateConfig({
-                        customAgentKillSwitchHotkey: keyCombo,
-                      })
-                    }}
-                    placeholder="Click to record custom kill switch hotkey"
-                  />
-                )}
-
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                <LabelWithTooltip htmlFor="mcp-additional-guidelines" tooltip="Optional additional rules and guidelines for the AI agent. The base system prompt with tool usage instructions is automatically included.">
+                  Additional Guidelines
+                </LabelWithTooltip>
+                <ProfileBadge />
               </div>
-            )}
-          </div>
-        )}
+              <Textarea
+                id="mcp-additional-guidelines"
+                value={additionalGuidelines}
+                onChange={(e) => handleGuidelinesChange(e.target.value)}
+                rows={8}
+                className="font-mono text-sm"
+                placeholder={defaultAdditionalGuidelines}
+              />
 
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setAdditionalGuidelines(defaultAdditionalGuidelines)
+                    setHasUnsavedChanges(
+                      defaultAdditionalGuidelines !==
+                        (config.mcpToolsSystemPrompt || ""),
+                    )
+                  }}
+                >
+                  Use Example Guidelines
+                </Button>
+                {hasUnsavedChanges && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={revertChanges}
+                    disabled={saveConfigMutation.isPending}
+                  >
+                    Revert Changes
+                  </Button>
+                )}
+                <Button
+                  size="sm"
+                  onClick={saveAdditionalGuidelines}
+                  disabled={
+                    !hasUnsavedChanges || saveConfigMutation.isPending
+                  }
+                  className="gap-1"
+                >
+                  <Save className="h-3 w-3" />
+                  {saveConfigMutation.isPending
+                    ? "Saving..."
+                    : "Save Changes"}
+                </Button>
+              </div>
+              {hasUnsavedChanges && (
+                <p className="text-xs text-amber-600">
+                  You have unsaved changes. Click "Save Changes" to apply
+                  them.
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   )

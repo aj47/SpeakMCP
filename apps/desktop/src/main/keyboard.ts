@@ -280,10 +280,7 @@ export function listenToKeyboardEvents() {
 
   const tryStartMcpHoldIfEligible = () => {
     const config = configStore.get()
-    if (
-      !config.mcpToolsEnabled ||
-      config.mcpToolsShortcut !== "hold-ctrl-alt"
-    ) {
+    if (config.mcpToolsShortcut !== "hold-ctrl-alt") {
       return
     }
 

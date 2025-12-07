@@ -177,10 +177,6 @@ async function processWithAgentMode(
   const sessionId = existingSessionId || agentSessionTracker.startSession(conversationId, conversationTitle, startSnoozed)
 
   try {
-    if (!config.mcpToolsEnabled) {
-      throw new Error("MCP tools are not enabled")
-    }
-
     // Initialize MCP with progress feedback
     await initializeMcpWithProgress(config, sessionId)
 
@@ -191,173 +187,133 @@ async function processWithAgentMode(
     // Get available tools
     const availableTools = mcpService.getAvailableTools()
 
-    if (config.mcpAgentModeEnabled) {
-      // Use agent mode for iterative tool calling
-      const executeToolCall = async (toolCall: any, onProgress?: (message: string) => void): Promise<MCPToolResult> => {
-        // Handle inline tool approval if enabled in config
-        if (config.mcpRequireApprovalBeforeToolCall) {
-          // Request approval and wait for user response via the UI
-          const { approvalId, promise: approvalPromise } = toolApprovalManager.requestApproval(
-            sessionId,
-            toolCall.name,
-            toolCall.arguments
-          )
+    // Use agent mode for iterative tool calling
+    const executeToolCall = async (toolCall: any, onProgress?: (message: string) => void): Promise<MCPToolResult> => {
+      // Handle inline tool approval if enabled in config
+      if (config.mcpRequireApprovalBeforeToolCall) {
+        // Request approval and wait for user response via the UI
+        const { approvalId, promise: approvalPromise } = toolApprovalManager.requestApproval(
+          sessionId,
+          toolCall.name,
+          toolCall.arguments
+        )
 
-          // Emit progress update with pending approval to show approve/deny buttons
-          await emitAgentProgress({
-            sessionId,
-            currentIteration: 0, // Will be updated by the agent loop
-            maxIterations: config.mcpMaxIterations ?? 10,
-            steps: [],
-            isComplete: false,
-            pendingToolApproval: {
-              approvalId,
-              toolName: toolCall.name,
-              arguments: toolCall.arguments,
-            },
-          })
+        // Emit progress update with pending approval to show approve/deny buttons
+        await emitAgentProgress({
+          sessionId,
+          currentIteration: 0, // Will be updated by the agent loop
+          maxIterations: config.mcpMaxIterations ?? 10,
+          steps: [],
+          isComplete: false,
+          pendingToolApproval: {
+            approvalId,
+            toolName: toolCall.name,
+            arguments: toolCall.arguments,
+          },
+        })
 
-          // Wait for user response
-          const approved = await approvalPromise
+        // Wait for user response
+        const approved = await approvalPromise
 
-          // Clear the pending approval from the UI by emitting without pendingToolApproval
-          await emitAgentProgress({
-            sessionId,
-            currentIteration: 0,
-            maxIterations: config.mcpMaxIterations ?? 10,
-            steps: [],
-            isComplete: false,
-            // No pendingToolApproval - clears it
-          })
+        // Clear the pending approval from the UI by emitting without pendingToolApproval
+        await emitAgentProgress({
+          sessionId,
+          currentIteration: 0,
+          maxIterations: config.mcpMaxIterations ?? 10,
+          steps: [],
+          isComplete: false,
+          // No pendingToolApproval - clears it
+        })
 
-          if (!approved) {
-            return {
-              content: [
-                {
-                  type: "text",
-                  text: `Tool call denied by user: ${toolCall.name}`,
-                },
-              ],
-              isError: true,
-            }
+        if (!approved) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Tool call denied by user: ${toolCall.name}`,
+              },
+            ],
+            isError: true,
           }
         }
-
-        // Execute the tool call (approval either not required or was granted)
-        return await mcpService.executeToolCall(toolCall, onProgress, true) // Pass skipApprovalCheck=true
       }
 
-      // Load previous conversation history if continuing a conversation
-      // IMPORTANT: Load this BEFORE emitting initial progress to ensure consistency
-      let previousConversationHistory:
-        | Array<{
-            role: "user" | "assistant" | "tool"
-            content: string
-            toolCalls?: any[]
-            toolResults?: any[]
-            timestamp?: number
-          }>
-        | undefined
-
-      if (conversationId) {
-        logLLM(`[tipc.ts processWithAgentMode] Loading conversation history for conversationId: ${conversationId}`)
-        const conversation =
-          await conversationService.loadConversation(conversationId)
-
-        if (conversation && conversation.messages.length > 0) {
-          logLLM(`[tipc.ts processWithAgentMode] Loaded conversation with ${conversation.messages.length} messages`)
-          // Convert conversation messages to the format expected by agent mode
-          // Exclude the last message since it's the current user input that will be added
-          const messagesToConvert = conversation.messages.slice(0, -1)
-          logLLM(`[tipc.ts processWithAgentMode] Converting ${messagesToConvert.length} messages (excluding last message)`)
-          previousConversationHistory = messagesToConvert.map((msg) => ({
-            role: msg.role,
-            content: msg.content,
-            toolCalls: msg.toolCalls,
-            timestamp: msg.timestamp,
-            // Convert toolResults from stored format (content as string) to MCPToolResult format (content as array)
-            toolResults: msg.toolResults?.map((tr) => ({
-              content: [
-                {
-                  type: "text" as const,
-                  // Use content for successful results, error message for failures
-                  text: tr.success ? tr.content : (tr.error || tr.content),
-                },
-              ],
-              isError: !tr.success,
-            })),
-          }))
-
-          logLLM(`[tipc.ts processWithAgentMode] previousConversationHistory roles: [${previousConversationHistory.map(m => m.role).join(', ')}]`)
-        } else {
-          logLLM(`[tipc.ts processWithAgentMode] No conversation found or conversation is empty`)
-        }
-      } else {
-        logLLM(`[tipc.ts processWithAgentMode] No conversationId provided, starting fresh conversation`)
-      }
-
-      // Focus this session in the panel window so it's immediately visible
-      // Note: Initial progress will be emitted by processTranscriptWithAgentMode
-      // to avoid duplicate user messages in the conversation history
-      try {
-        getWindowRendererHandlers("panel")?.focusAgentSession.send(sessionId)
-      } catch (e) {
-        logApp("[tipc] Failed to focus new agent session:", e)
-      }
-
-      const agentResult = await processTranscriptWithAgentMode(
-        text,
-        availableTools,
-        executeToolCall,
-        config.mcpMaxIterations ?? 10, // Use configured max iterations or default to 10
-        previousConversationHistory,
-        conversationId, // Pass conversation ID for linking to conversation history
-        sessionId, // Pass session ID for progress routing and isolation
-      )
-
-      // Mark session as completed
-      agentSessionTracker.completeSession(sessionId, "Agent completed successfully")
-
-      return agentResult.content
-    } else {
-      // Use single-shot tool calling
-      const result = await processTranscriptWithTools(text, availableTools)
-
-      if (result.toolCalls && result.toolCalls.length > 0) {
-        // Execute tool calls and get results
-        const toolResults: MCPToolResult[] = []
-
-        for (const toolCall of result.toolCalls) {
-          try {
-            const toolResult = await mcpService.executeToolCall(toolCall)
-            toolResults.push(toolResult)
-          } catch (error) {
-            toolResults.push({
-              content: [
-                {
-                  type: "text",
-                  text: `Error: ${error instanceof Error ? error.message : "Unknown error"}`,
-                },
-              ],
-              isError: true,
-            })
-          }
-        }
-
-        // Combine tool results into final response
-        const toolResultTexts = toolResults
-          .map((result) => result.content.map((item) => item.text).join("\n"))
-          .join("\n\n")
-
-        return result.content
-          ? `${result.content}\n\n${toolResultTexts}`
-          : toolResultTexts
-      } else {
-        // Mark session as completed for non-agent mode
-        agentSessionTracker.completeSession(sessionId, "Completed with tools")
-        return result.content || text
-      }
+      // Execute the tool call (approval either not required or was granted)
+      return await mcpService.executeToolCall(toolCall, onProgress, true) // Pass skipApprovalCheck=true
     }
+
+    // Load previous conversation history if continuing a conversation
+    // IMPORTANT: Load this BEFORE emitting initial progress to ensure consistency
+    let previousConversationHistory:
+      | Array<{
+          role: "user" | "assistant" | "tool"
+          content: string
+          toolCalls?: any[]
+          toolResults?: any[]
+          timestamp?: number
+        }>
+      | undefined
+
+    if (conversationId) {
+      logLLM(`[tipc.ts processWithAgentMode] Loading conversation history for conversationId: ${conversationId}`)
+      const conversation =
+        await conversationService.loadConversation(conversationId)
+
+      if (conversation && conversation.messages.length > 0) {
+        logLLM(`[tipc.ts processWithAgentMode] Loaded conversation with ${conversation.messages.length} messages`)
+        // Convert conversation messages to the format expected by agent mode
+        // Exclude the last message since it's the current user input that will be added
+        const messagesToConvert = conversation.messages.slice(0, -1)
+        logLLM(`[tipc.ts processWithAgentMode] Converting ${messagesToConvert.length} messages (excluding last message)`)
+        previousConversationHistory = messagesToConvert.map((msg) => ({
+          role: msg.role,
+          content: msg.content,
+          toolCalls: msg.toolCalls,
+          timestamp: msg.timestamp,
+          // Convert toolResults from stored format (content as string) to MCPToolResult format (content as array)
+          toolResults: msg.toolResults?.map((tr) => ({
+            content: [
+              {
+                type: "text" as const,
+                // Use content for successful results, error message for failures
+                text: tr.success ? tr.content : (tr.error || tr.content),
+              },
+            ],
+            isError: !tr.success,
+          })),
+        }))
+
+        logLLM(`[tipc.ts processWithAgentMode] previousConversationHistory roles: [${previousConversationHistory.map(m => m.role).join(', ')}]`)
+      } else {
+        logLLM(`[tipc.ts processWithAgentMode] No conversation found or conversation is empty`)
+      }
+    } else {
+      logLLM(`[tipc.ts processWithAgentMode] No conversationId provided, starting fresh conversation`)
+    }
+
+    // Focus this session in the panel window so it's immediately visible
+    // Note: Initial progress will be emitted by processTranscriptWithAgentMode
+    // to avoid duplicate user messages in the conversation history
+    try {
+      getWindowRendererHandlers("panel")?.focusAgentSession.send(sessionId)
+    } catch (e) {
+      logApp("[tipc] Failed to focus new agent session:", e)
+    }
+
+    const agentResult = await processTranscriptWithAgentMode(
+      text,
+      availableTools,
+      executeToolCall,
+      config.mcpMaxIterations ?? 10, // Use configured max iterations or default to 10
+      previousConversationHistory,
+      conversationId, // Pass conversation ID for linking to conversation history
+      sessionId, // Pass session ID for progress routing and isolation
+    )
+
+    // Mark session as completed
+    agentSessionTracker.completeSession(sessionId, "Agent completed successfully")
+
+    return agentResult.content
   } catch (error) {
     // Mark session as errored
     const errorMessage = error instanceof Error ? error.message : "Unknown error"
@@ -992,11 +948,6 @@ export const router = {
     }>()
     .action(async ({ input }) => {
       const config = configStore.get()
-
-      if (!config.mcpToolsEnabled) {
-        // Fall back to regular text input processing
-        return router.createTextInput({ text: input.text })
-      }
 
       // Create or get conversation ID
       let conversationId = input.conversationId

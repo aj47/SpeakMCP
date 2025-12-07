@@ -191,10 +191,6 @@ async function runAgent(options: RunAgentOptions): Promise<{ content: string; co
   const sessionId = existingSessionId || agentSessionTracker.startSession(conversationId, conversationTitle)
 
   try {
-    if (!cfg.mcpToolsEnabled) {
-      throw new Error("MCP tools are not enabled")
-    }
-
     await mcpService.initialize()
     mcpService.registerExistingProcessesWithAgentManager()
 

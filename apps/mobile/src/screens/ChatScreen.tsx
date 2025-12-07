@@ -214,6 +214,12 @@ export default function ChatScreen({ route, navigation }: any) {
   const convertProgressToMessages = useCallback((update: AgentProgressUpdate): ChatMessage[] => {
     const messages: ChatMessage[] = [];
 
+    console.log('[convertProgress] Input:', {
+      stepsLen: update.steps?.length,
+      historyLen: update.conversationHistory?.length,
+      hasStreaming: !!update.streamingContent?.text,
+    });
+
     // First, try to use steps array (sent in progress events)
     if (update.steps && update.steps.length > 0) {
       // Group steps into messages - each thinking/tool_call/tool_result becomes part of the conversation
@@ -222,12 +228,15 @@ export default function ChatScreen({ route, navigation }: any) {
       let thinkingContent = '';
 
       for (const step of update.steps) {
+        console.log('[convertProgress] Step:', step.type, step.status, 'hasToolCall:', !!step.toolCall, 'hasToolResult:', !!step.toolResult);
         const stepContent = step.content || step.llmContent;
         if (step.type === 'thinking' && stepContent) {
           thinkingContent = stepContent;
         } else if (step.type === 'tool_call' && step.toolCall) {
+          console.log('[convertProgress] Found tool call:', step.toolCall.name);
           currentToolCalls.push(step.toolCall);
         } else if (step.type === 'tool_result' && step.toolResult) {
+          console.log('[convertProgress] Found tool result, success:', step.toolResult.success);
           currentToolResults.push(step.toolResult);
         } else if (step.type === 'completion' && stepContent) {
           // Final completion content
@@ -235,11 +244,17 @@ export default function ChatScreen({ route, navigation }: any) {
         }
       }
 
+      console.log('[convertProgress] Extracted:', {
+        toolCalls: currentToolCalls.length,
+        toolResults: currentToolResults.length,
+        hasThinking: !!thinkingContent,
+      });
+
       // Create a message showing current agent activity
       if (currentToolCalls.length > 0 || currentToolResults.length > 0 || thinkingContent) {
         messages.push({
           role: 'assistant',
-          content: thinkingContent || '',
+          content: thinkingContent || (currentToolCalls.length > 0 ? 'Executing tools...' : ''),
           toolCalls: currentToolCalls.length > 0 ? currentToolCalls : undefined,
           toolResults: currentToolResults.length > 0 ? currentToolResults : undefined,
         });
@@ -248,6 +263,7 @@ export default function ChatScreen({ route, navigation }: any) {
 
     // Also process conversation history if available (more complete data)
     if (update.conversationHistory && update.conversationHistory.length > 0) {
+      console.log('[convertProgress] Has conversationHistory with', update.conversationHistory.length, 'messages');
       // Find the latest user message index to determine where current turn starts
       let currentTurnStartIndex = 0;
       for (let i = 0; i < update.conversationHistory.length; i++) {
@@ -262,6 +278,7 @@ export default function ChatScreen({ route, navigation }: any) {
       // Add messages from the current turn (skip the user message)
       for (let i = currentTurnStartIndex + 1; i < update.conversationHistory.length; i++) {
         const historyMsg = update.conversationHistory[i];
+        console.log('[convertProgress] History msg:', historyMsg.role, 'hasToolCalls:', !!historyMsg.toolCalls?.length, 'hasToolResults:', !!historyMsg.toolResults?.length);
         messages.push({
           role: historyMsg.role === 'tool' ? 'assistant' : historyMsg.role,
           content: historyMsg.content || '',
@@ -283,6 +300,7 @@ export default function ChatScreen({ route, navigation }: any) {
       }
     }
 
+    console.log('[convertProgress] Output messages:', messages.length);
     return messages;
   }, []);
 

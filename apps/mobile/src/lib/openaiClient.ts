@@ -112,6 +112,7 @@ export class OpenAIClient {
   /**
    * POST OpenAI-compatible API: /v1/chat/completions
    * Supports SpeakMCP server SSE streaming with real-time agent progress updates.
+   * Uses XMLHttpRequest for true streaming in React Native (fetch waits for full response).
    *
    * @param messages - Chat messages to send
    * @param onToken - Optional callback for streaming text tokens (legacy, for text-only streaming)
@@ -124,40 +125,16 @@ export class OpenAIClient {
     onProgress?: OnProgressCallback
   ): Promise<ChatResponse> {
     const url = this.getUrl('/chat/completions');
-    const body = { model: this.cfg.model, messages, stream: true } as any;
+    const body = { model: this.cfg.model, messages, stream: true };
 
-    console.log('[OpenAIClient] Starting chat request');
+    console.log('[OpenAIClient] Starting chat request with XHR streaming');
     console.log('[OpenAIClient] URL:', url);
     console.log('[OpenAIClient] Model:', this.cfg.model);
     console.log('[OpenAIClient] Messages count:', messages.length);
 
     try {
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: this.authHeaders(),
-        body: JSON.stringify(body),
-      });
-
-      console.log('[OpenAIClient] Response status:', res.status, res.statusText);
-
-      if (!res.ok) {
-        const text = await res.text().catch(() => '');
-        console.error('[OpenAIClient] Error response body:', text);
-        throw new Error(`Chat failed: ${res.status} ${text}`);
-      }
-
-      const ct = res.headers.get('content-type') || '';
-      const isSSE = ct.includes('text/event-stream');
-
-      console.log('[OpenAIClient] Content-Type:', ct, 'isSSE:', isSSE);
-
-      // Non-SSE responses: parse JSON content and conversation history
-      if (!isSSE) {
-        return this.parseNonSSEResponse(res);
-      }
-
-      // SSE streaming: parse SpeakMCP-specific events (progress, done, error)
-      return this.parseSSEResponse(res, onToken, onProgress);
+      // Use XHR for true streaming - fetch's res.text() waits for full response in React Native
+      return await this.streamSSEWithXHR(url, body, onToken, onProgress);
     } catch (error) {
       console.error('[OpenAIClient] Chat request failed:', error);
       throw error;
@@ -165,97 +142,140 @@ export class OpenAIClient {
   }
 
   /**
-   * Parse non-SSE JSON response
+   * Stream SSE using XMLHttpRequest for true real-time streaming in React Native.
+   * Unlike fetch, XHR's onprogress fires as data arrives, not after the full response.
    */
-  private async parseNonSSEResponse(res: Response): Promise<ChatResponse> {
-    console.log('[OpenAIClient] Processing non-SSE response');
-    const text = await res.text();
-    console.log('[OpenAIClient] Response text:', text);
-    try {
-      const j = JSON.parse(text);
-      const content = j?.choices?.[0]?.message?.content ?? '';
-      const conversationId = j?.conversation_id;
-      const conversationHistory = j?.conversation_history;
-      if (conversationHistory) {
-        console.log('[OpenAIClient] Received conversation history with', conversationHistory.length, 'messages');
-      }
-      return {
-        content: typeof content === 'string' ? content : text,
-        conversationId,
-        conversationHistory,
-      };
-    } catch (parseError) {
-      console.error('[OpenAIClient] JSON parse error:', parseError);
-      return { content: text };
-    }
-  }
-
-  /**
-   * Parse SSE response, handling both SpeakMCP agent progress events and standard OpenAI streaming
-   */
-  private async parseSSEResponse(
-    res: Response,
+  private streamSSEWithXHR(
+    url: string,
+    body: object,
     onToken?: (token: string) => void,
     onProgress?: OnProgressCallback
   ): Promise<ChatResponse> {
-    const text = await res.text();
-    console.log('[OpenAIClient] SSE response length:', text.length);
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', url, true);
 
-    let finalContent = '';
-    let conversationId: string | undefined;
-    let conversationHistory: ConversationHistoryMessage[] | undefined;
-
-    const chunks = text.split(/\r?\n\r?\n/);
-    for (const chunk of chunks) {
-      const lines = chunk.split(/\r?\n/).map(l => l.replace(/^data:\s?/, '').trim()).filter(Boolean);
-      for (const line of lines) {
-        if (line === '[DONE]' || line === '"[DONE]"') {
-          console.log('[OpenAIClient] Found DONE marker');
-          continue;
-        }
-
-        try {
-          const obj = JSON.parse(line);
-
-          // Handle SpeakMCP-specific SSE event types
-          if (obj.type === 'progress' && obj.data) {
-            console.log('[OpenAIClient] Progress event:', obj.data.currentIteration, '/', obj.data.maxIterations);
-            onProgress?.(obj.data as AgentProgressUpdate);
-            // Also update streaming content if available
-            if (obj.data.streamingContent?.text) {
-              onToken?.(obj.data.streamingContent.text);
-            }
-            continue;
-          }
-
-          if (obj.type === 'done' && obj.data) {
-            console.log('[OpenAIClient] Done event received');
-            finalContent = obj.data.content || '';
-            conversationId = obj.data.conversation_id;
-            conversationHistory = obj.data.conversation_history;
-            continue;
-          }
-
-          if (obj.type === 'error' && obj.data) {
-            console.error('[OpenAIClient] Error event:', obj.data.message);
-            throw new Error(obj.data.message || 'Server error');
-          }
-
-          // Handle standard OpenAI streaming format (fallback)
-          const delta = obj?.choices?.[0]?.delta;
-          const token = delta?.content;
-          if (typeof token === 'string' && token.length > 0) {
-            finalContent += token;
-            onToken?.(token);
-          }
-        } catch (parseError) {
-          // Ignore non-JSON lines
-        }
+      // Set headers
+      xhr.setRequestHeader('Content-Type', 'application/json');
+      if (this.cfg.apiKey) {
+        xhr.setRequestHeader('Authorization', `Bearer ${this.cfg.apiKey}`);
       }
-    }
 
-    console.log('[OpenAIClient] SSE complete, content length:', finalContent.length);
-    return { content: finalContent, conversationId, conversationHistory };
+      let processedLength = 0;
+      let finalContent = '';
+      let conversationId: string | undefined;
+      let conversationHistory: ConversationHistoryMessage[] | undefined;
+      let buffer = '';
+
+      xhr.onprogress = () => {
+        // Get new data since last progress event
+        const newData = xhr.responseText.substring(processedLength);
+        processedLength = xhr.responseText.length;
+
+        if (!newData) return;
+
+        // Add to buffer and process complete events
+        buffer += newData;
+
+        // Split by double newline (SSE event separator)
+        const events = buffer.split(/\r?\n\r?\n/);
+        // Keep the last incomplete event in the buffer
+        buffer = events.pop() || '';
+
+        for (const event of events) {
+          if (!event.trim()) continue;
+
+          const lines = event.split(/\r?\n/).map(l => l.replace(/^data:\s?/, '').trim()).filter(Boolean);
+          for (const line of lines) {
+            if (line === '[DONE]' || line === '"[DONE]"') {
+              console.log('[OpenAIClient XHR] Found DONE marker');
+              continue;
+            }
+
+            try {
+              const obj = JSON.parse(line);
+
+              // Handle SpeakMCP-specific SSE event types
+              if (obj.type === 'progress' && obj.data) {
+                const update = obj.data as AgentProgressUpdate;
+                console.log('[OpenAIClient XHR] Progress event:', update.currentIteration, '/', update.maxIterations, 'steps:', update.steps?.length);
+                if (update.steps && update.steps.length > 0) {
+                  console.log('[OpenAIClient XHR] Step types:', update.steps.map((s: AgentProgressStep) => `${s.type}:${s.status}`).join(', '));
+                }
+                onProgress?.(update);
+                if (update.streamingContent?.text) {
+                  onToken?.(update.streamingContent.text);
+                }
+                continue;
+              }
+
+              if (obj.type === 'done' && obj.data) {
+                console.log('[OpenAIClient XHR] Done event received');
+                finalContent = obj.data.content || '';
+                conversationId = obj.data.conversation_id;
+                conversationHistory = obj.data.conversation_history;
+                continue;
+              }
+
+              if (obj.type === 'error' && obj.data) {
+                console.error('[OpenAIClient XHR] Error event:', obj.data.message);
+                reject(new Error(obj.data.message || 'Server error'));
+                return;
+              }
+
+              // Handle standard OpenAI streaming format (fallback)
+              const delta = obj?.choices?.[0]?.delta;
+              const token = delta?.content;
+              if (typeof token === 'string' && token.length > 0) {
+                finalContent += token;
+                onToken?.(token);
+              }
+            } catch {
+              // Ignore non-JSON lines
+            }
+          }
+        }
+      };
+
+      xhr.onload = () => {
+        console.log('[OpenAIClient XHR] Request complete, status:', xhr.status);
+        if (xhr.status >= 200 && xhr.status < 300) {
+          // Process any remaining buffer
+          if (buffer.trim()) {
+            const lines = buffer.split(/\r?\n/).map(l => l.replace(/^data:\s?/, '').trim()).filter(Boolean);
+            for (const line of lines) {
+              try {
+                const obj = JSON.parse(line);
+                if (obj.type === 'done' && obj.data) {
+                  finalContent = obj.data.content || finalContent;
+                  conversationId = obj.data.conversation_id || conversationId;
+                  conversationHistory = obj.data.conversation_history || conversationHistory;
+                }
+              } catch {
+                // Ignore
+              }
+            }
+          }
+          resolve({ content: finalContent, conversationId, conversationHistory });
+        } else {
+          reject(new Error(`Request failed: ${xhr.status} ${xhr.statusText}`));
+        }
+      };
+
+      xhr.onerror = () => {
+        console.error('[OpenAIClient XHR] Request error');
+        reject(new Error('Network request failed'));
+      };
+
+      xhr.ontimeout = () => {
+        console.error('[OpenAIClient XHR] Request timeout');
+        reject(new Error('Request timeout'));
+      };
+
+      // Send the request
+      xhr.send(JSON.stringify(body));
+      console.log('[OpenAIClient XHR] Request sent to:', url);
+    });
   }
 
   /**

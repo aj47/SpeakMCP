@@ -280,13 +280,15 @@ const toolHandlers: Record<string, ToolHandler> = {
       profile.mcpServerConfig?.disabledTools ?? []
     )
 
-    // Update config with profile's guidelines and model configuration
+    // Update config with profile's guidelines, system prompt, and model configuration
     const config = configStore.get()
     const updatedConfig = {
       ...config,
       // Always apply guidelines and profile ID (same as TIPC setCurrentProfile)
       mcpToolsSystemPrompt: profile.guidelines,
       mcpCurrentProfileId: profile.id,
+      // Apply custom system prompt if it exists, otherwise clear it to use default
+      mcpCustomSystemPrompt: profile.systemPrompt || "",
       // Apply model config if it exists
       ...(profile.modelConfig?.mcpToolsProviderId && {
         mcpToolsProviderId: profile.modelConfig.mcpToolsProviderId,

@@ -366,17 +366,13 @@ export default function ChatScreen({ route, navigation }: any) {
           console.log('[ChatScreen] Progress msg:', pm.role, 'content:', pm.content?.substring(0, 50), 'toolCalls:', pm.toolCalls?.length, 'toolResults:', pm.toolResults?.length);
         }
         if (progressMessages.length > 0) {
-          // Use setTimeout to ensure state update happens in a separate tick
-          // This helps with React batching issues in async callbacks
-          setTimeout(() => {
-            setMessages((m) => {
-              // Keep messages up to and including the user message
-              const beforePlaceholder = m.slice(0, messageCountBeforeTurn + 1);
-              const newMessages = [...beforePlaceholder, ...progressMessages];
-              console.log('[ChatScreen] Setting messages: before=', beforePlaceholder.length, 'progress=', progressMessages.length, 'total=', newMessages.length);
-              return newMessages;
-            });
-          }, 0);
+          setMessages((m) => {
+            // Keep messages up to and including the user message
+            const beforePlaceholder = m.slice(0, messageCountBeforeTurn + 1);
+            const newMessages = [...beforePlaceholder, ...progressMessages];
+            console.log('[ChatScreen] Setting messages: before=', beforePlaceholder.length, 'progress=', progressMessages.length, 'total=', newMessages.length);
+            return newMessages;
+          });
         }
       };
 

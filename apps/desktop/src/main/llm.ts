@@ -1300,12 +1300,12 @@ Always use actual resource IDs from the conversation history or create new ones 
       // If the LLM explicitly sets needsMoreWork=false and provides a real answer,
       // we should trust it - even if there are tools that could theoretically be used.
       // This allows the agent to respond directly to simple questions without forcing tool calls.
-      const hasSubstantiveContent = contentText.trim().length >= 10 && !isToolCallPlaceholder(contentText)
+      const hasSubstantiveContent = contentText.trim().length >= 1 && !isToolCallPlaceholder(contentText)
 
       // Only apply aggressive heuristics if:
       // 1. There are actually relevant tools for this request
       // 2. No tools have been used yet
-      // 3. The agent's response doesn't contain substantive content (i.e., it's just a placeholder or very short)
+      // 3. The agent's response doesn't contain substantive content (i.e., it's just a placeholder)
       if (hasActionableTools && !hasToolResultsSoFar && !hasSubstantiveContent) {
         // If there are actionable tools and no tool results yet, and no real answer provided,
         // nudge the model to produce structured toolCalls to actually perform the work.
@@ -1326,7 +1326,9 @@ Always use actual resource IDs from the conversation history or create new ones 
       const assistantContent = llmResponse.content || ""
 
       finalContent = assistantContent
-      addMessage("assistant", finalContent)
+      if (finalContent.trim().length > 0) {
+        addMessage("assistant", finalContent)
+      }
 
       // Optional verification before completing
       // Track if we should skip post-verify summary
@@ -1447,7 +1449,7 @@ Always use actual resource IDs from the conversation history or create new ones 
       // Check if this is an actionable request that should have executed tools
       const isActionableRequest = toolCapabilities.relevantTools.length > 0
       const contentText = llmResponse.content || ""
-      const hasSubstantiveContent = contentText.trim().length >= 10 && !isToolCallPlaceholder(contentText)
+      const hasSubstantiveContent = contentText.trim().length >= 1 && !isToolCallPlaceholder(contentText)
 
       // If no actionable tools and the response has substantive content,
       // accept it as a direct response (e.g., simple Q&A, factual questions)

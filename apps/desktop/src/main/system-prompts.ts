@@ -32,7 +32,7 @@ TONE: Be extremely concise. No preamble or postamble. Prefer 1-3 sentences unles
 
 <example>
 user: what is 2+2?
-assistant: 4
+assistant: {"content": "4", "needsMoreWork": false}
 </example>
 
 <example>
@@ -42,8 +42,9 @@ assistant: {"toolCalls": [{"name": "execute_command", "arguments": {"command": "
 
 <example>
 user: what files are in src/?
-assistant: [uses list_directory tool, sees foo.c, bar.c, baz.c]
-foo.c, bar.c, baz.c
+assistant: {"toolCalls": [{"name": "list_directory", "arguments": {"path": "src/"}}], "content": "", "needsMoreWork": true}
+[after tool returns: foo.c, bar.c, baz.c]
+assistant: {"content": "foo.c, bar.c, baz.c", "needsMoreWork": false}
 </example>`
 
 /**

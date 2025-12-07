@@ -1309,7 +1309,10 @@ Always use actual resource IDs from the conversation history or create new ones 
       if (hasActionableTools && !hasToolResultsSoFar && !hasSubstantiveContent) {
         // If there are actionable tools and no tool results yet, and no real answer provided,
         // nudge the model to produce structured toolCalls to actually perform the work.
-        conversationHistory.push({ role: "assistant", content: contentText.trim() })
+        // Only add assistant message if non-empty to avoid blank entries
+        if (contentText.trim().length > 0) {
+          conversationHistory.push({ role: "assistant", content: contentText.trim() })
+        }
         conversationHistory.push({
           role: "user",
           content:
@@ -1479,7 +1482,10 @@ Always use actual resource IDs from the conversation history or create new ones 
 
       if (noOpCount >= 2 || (isActionableRequest && noOpCount >= 1)) {
         // Add nudge to push the agent forward - require proper JSON format
-        addMessage("assistant", contentText)
+        // Only add assistant message if non-empty to avoid blank entries
+        if (contentText.trim().length > 0) {
+          addMessage("assistant", contentText)
+        }
 
         const nudgeMessage = isActionableRequest
           ? "You have relevant tools available for this request. Please respond with a valid JSON object: either call tools using the toolCalls array, or set needsMoreWork=false with a complete answer in the content field."

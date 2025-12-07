@@ -403,6 +403,40 @@ export function Component() {
                 )}
             </div>
           </Control>
+
+          <Control label={<ControlLabel label="Agent Mode" tooltip="Choose how to activate agent mode for MCP tool calling" />} className="px-3">
+            <div className="space-y-2">
+              <Select
+                value={configQuery.data?.mcpToolsShortcut || "hold-ctrl-alt"}
+                onValueChange={(value: "hold-ctrl-alt" | "ctrl-alt-slash" | "custom") => {
+                  saveConfig({
+                    mcpToolsShortcut: value,
+                  })
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="hold-ctrl-alt">Hold Ctrl+Alt</SelectItem>
+                  <SelectItem value="ctrl-alt-slash">Ctrl+Alt+/</SelectItem>
+                  <SelectItem value="custom">Custom</SelectItem>
+                </SelectContent>
+              </Select>
+
+              {configQuery.data?.mcpToolsShortcut === "custom" && (
+                <KeyRecorder
+                  value={configQuery.data?.customMcpToolsShortcut || ""}
+                  onChange={(keyCombo) => {
+                    saveConfig({
+                      customMcpToolsShortcut: keyCombo,
+                    })
+                  }}
+                  placeholder="Click to record custom agent mode shortcut"
+                />
+              )}
+            </div>
+          </Control>
         </ControlGroup>
 
         <ControlGroup title="Speech-to-Text">

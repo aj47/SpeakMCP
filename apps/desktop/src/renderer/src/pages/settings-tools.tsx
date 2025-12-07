@@ -4,13 +4,6 @@ import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { Button } from "@renderer/components/ui/button"
 import { Input } from "@renderer/components/ui/input"
 import { Label } from "@renderer/components/ui/label"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@renderer/components/ui/select"
 import { Textarea } from "@renderer/components/ui/textarea"
 import {
   Tooltip,
@@ -64,8 +57,6 @@ const LabelWithTooltip = ({
     </div>
   )
 }
-
-import { KeyRecorder } from "@renderer/components/key-recorder"
 
 export function Component() {
   const configQuery = useConfigQuery()
@@ -136,37 +127,6 @@ DOMAIN-SPECIFIC RULES:
           </div>
 
           <div className="space-y-4">
-            <div className="space-y-2">
-              <LabelWithTooltip htmlFor="mcp-shortcut" tooltip="Choose how to activate MCP tool calling mode">Shortcut</LabelWithTooltip>
-              <Select
-                value={config.mcpToolsShortcut || "hold-ctrl-alt"}
-                onValueChange={(
-                  value: "hold-ctrl-alt" | "ctrl-alt-slash" | "custom",
-                ) => updateConfig({ mcpToolsShortcut: value })}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="hold-ctrl-alt">
-                    Hold Ctrl+Alt
-                  </SelectItem>
-                  <SelectItem value="ctrl-alt-slash">Ctrl+Alt+/</SelectItem>
-                  <SelectItem value="custom">Custom</SelectItem>
-                </SelectContent>
-              </Select>
-
-              {config.mcpToolsShortcut === "custom" && (
-                <KeyRecorder
-                  value={config.customMcpToolsShortcut || ""}
-                  onChange={(keyCombo) => {
-                    updateConfig({ customMcpToolsShortcut: keyCombo })
-                  }}
-                  placeholder="Click to record custom MCP tools shortcut"
-                />
-              )}
-            </div>
-
             <div className="space-y-2">
               <LabelWithTooltip htmlFor="mcp-max-iterations" tooltip="Maximum number of iterations the agent can perform before stopping. Higher values allow more complex tasks but may take longer.">Max Iterations</LabelWithTooltip>
               <Input

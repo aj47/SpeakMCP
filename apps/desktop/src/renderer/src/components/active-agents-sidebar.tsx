@@ -186,7 +186,7 @@ export function ActiveAgentsSidebar() {
           <ChevronRight className="h-3.5 w-3.5" />
         )}
         <Activity className="h-3.5 w-3.5" />
-        <span>Active Agents</span>
+        <span>Active</span>
         <span className="ml-auto flex h-4 w-4 items-center justify-center rounded-full bg-blue-500 text-[10px] font-semibold text-white">
           {activeSessions.length}
         </span>
@@ -269,7 +269,6 @@ export function ActiveAgentsSidebar() {
 
       {isExpanded && hasRecentSessions && (
         <div className="mt-2 space-y-1 pl-2">
-          <div className="px-2 py-1 text-[10px] text-muted-foreground uppercase tracking-wide">Recent</div>
           {recentSessions.map((session) => {
             const statusLabel = session.status === "stopped" ? "Stopped" : session.status === "error" ? "Error" : "Completed"
             return (

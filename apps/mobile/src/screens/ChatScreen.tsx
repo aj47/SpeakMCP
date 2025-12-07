@@ -43,6 +43,10 @@ export default function ChatScreen({ route, navigation }: any) {
   const ttsEnabled = config.ttsEnabled !== false; // default true
   const toggleTts = async () => {
     const next = !ttsEnabled;
+    // Stop any currently playing TTS when disabling
+    if (!next) {
+      Speech.stop();
+    }
     const nextCfg = { ...config, ttsEnabled: next } as any;
     setConfig(nextCfg);
     try { await saveConfig(nextCfg); } catch {}
@@ -210,7 +214,39 @@ export default function ChatScreen({ route, navigation }: any) {
   const convertProgressToMessages = useCallback((update: AgentProgressUpdate): ChatMessage[] => {
     const messages: ChatMessage[] = [];
 
-    // Process conversation history from the progress update
+    // First, try to use steps array (sent in progress events)
+    if (update.steps && update.steps.length > 0) {
+      // Group steps into messages - each thinking/tool_call/tool_result becomes part of the conversation
+      let currentToolCalls: any[] = [];
+      let currentToolResults: any[] = [];
+      let thinkingContent = '';
+
+      for (const step of update.steps) {
+        const stepContent = step.content || step.llmContent;
+        if (step.type === 'thinking' && stepContent) {
+          thinkingContent = stepContent;
+        } else if (step.type === 'tool_call' && step.toolCall) {
+          currentToolCalls.push(step.toolCall);
+        } else if (step.type === 'tool_result' && step.toolResult) {
+          currentToolResults.push(step.toolResult);
+        } else if (step.type === 'completion' && stepContent) {
+          // Final completion content
+          thinkingContent = stepContent;
+        }
+      }
+
+      // Create a message showing current agent activity
+      if (currentToolCalls.length > 0 || currentToolResults.length > 0 || thinkingContent) {
+        messages.push({
+          role: 'assistant',
+          content: thinkingContent || '',
+          toolCalls: currentToolCalls.length > 0 ? currentToolCalls : undefined,
+          toolResults: currentToolResults.length > 0 ? currentToolResults : undefined,
+        });
+      }
+    }
+
+    // Also process conversation history if available (more complete data)
     if (update.conversationHistory && update.conversationHistory.length > 0) {
       // Find the latest user message index to determine where current turn starts
       let currentTurnStartIndex = 0;
@@ -219,6 +255,9 @@ export default function ChatScreen({ route, navigation }: any) {
           currentTurnStartIndex = i;
         }
       }
+
+      // Clear steps-based messages if we have proper conversation history
+      messages.length = 0;
 
       // Add messages from the current turn (skip the user message)
       for (let i = currentTurnStartIndex + 1; i < update.conversationHistory.length; i++) {
@@ -275,14 +314,17 @@ export default function ChatScreen({ route, navigation }: any) {
       // Handle real-time progress updates
       const onProgress = (update: AgentProgressUpdate) => {
         console.log('[ChatScreen] Progress update:', update.currentIteration, '/', update.maxIterations, 'steps:', update.steps?.length);
+        console.log('[ChatScreen] Steps detail:', JSON.stringify(update.steps?.map(s => ({ type: s.type, status: s.status, hasToolCall: !!s.toolCall, hasToolResult: !!s.toolResult }))));
         setDebugInfo(`Agent iteration ${update.currentIteration}/${update.maxIterations}`);
 
         // Convert progress to messages and update UI in real-time
         const progressMessages = convertProgressToMessages(update);
+        console.log('[ChatScreen] Converted to', progressMessages.length, 'messages:', JSON.stringify(progressMessages.map(m => ({ role: m.role, hasContent: !!m.content, toolCalls: m.toolCalls?.length, toolResults: m.toolResults?.length }))));
         if (progressMessages.length > 0) {
           setMessages((m) => {
             // Keep messages up to and including the user message
             const beforePlaceholder = m.slice(0, messageCountBeforeTurn + 1);
+            console.log('[ChatScreen] Setting messages:', beforePlaceholder.length, '+', progressMessages.length);
             return [...beforePlaceholder, ...progressMessages];
           });
         }

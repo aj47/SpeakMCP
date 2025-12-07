@@ -194,7 +194,7 @@ export const useSaveConfigMutation = () =>
 export const useUpdateConfigMutation = () =>
   useMutation({
     mutationFn: async ({ config }: { config: any }) => {
-      await tipcClient.updateConfig({ config })
+      await tipcClient.saveConfig({ config })
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["config"] })

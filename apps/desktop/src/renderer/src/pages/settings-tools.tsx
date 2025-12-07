@@ -13,7 +13,6 @@ import {
 import { Save, Info, ChevronDown, RotateCcw } from "lucide-react"
 import { toast } from "sonner"
 import { useState, useEffect } from "react"
-import { ProfileManager } from "@renderer/components/profile-manager"
 import { ProfileBadge } from "@renderer/components/profile-badge"
 
 import { Config } from "@shared/types"
@@ -233,27 +232,11 @@ DOMAIN-SPECIFIC RULES:
       <div className="space-y-6">
         <div className="space-y-4">
           <div className="space-y-2">
-            <h3 className="text-lg font-semibold">Profile</h3>
+            <h3 className="text-lg font-semibold">Agent Settings</h3>
           </div>
 
           <div className="space-y-4">
-              <div className="rounded-lg border p-4 space-y-4">
-                <div>
-                  <h3 className="text-sm font-semibold mb-1">Profile Management</h3>
-                  <p className="text-xs text-muted-foreground mb-3">
-                    Profiles store your guidelines, MCP server/tool settings, and model preferences.
-                    Switching profiles will load all these settings.
-                  </p>
-                </div>
-                <ProfileManager
-                  currentGuidelines={additionalGuidelines}
-                  onGuidelinesChange={(guidelines) => {
-                    setAdditionalGuidelines(guidelines)
-                    setHasUnsavedChanges(guidelines !== (config.mcpToolsSystemPrompt || ""))
-                  }}
-                />
-              </div>
-
+            <div className="space-y-4">
               <div className="flex items-center gap-2">
                 <LabelWithTooltip htmlFor="mcp-additional-guidelines" tooltip="Optional additional rules and guidelines for the AI agent. The base system prompt with tool usage instructions is automatically included.">
                   Additional Guidelines
@@ -384,6 +367,7 @@ DOMAIN-SPECIFIC RULES:
                   </div>
                 )}
               </div>
+            </div>
           </div>
         </div>
       </div>

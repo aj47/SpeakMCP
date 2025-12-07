@@ -190,7 +190,18 @@ export class OpenAIClient {
         for (const event of events) {
           const result = this.processSSEEvent(event, onToken, onProgress);
           if (result) {
-            if (result.content !== undefined) finalContent = result.content;
+            // For 'done' events, the content is complete - overwrite
+            // For streaming tokens, accumulate
+            if (result.content !== undefined) {
+              // Check if this is streaming delta content (OpenAI format) vs complete content (SpeakMCP done event)
+              // If conversationHistory is present, it's a complete response - overwrite
+              // Otherwise, accumulate tokens
+              if (result.conversationHistory) {
+                finalContent = result.content;
+              } else {
+                finalContent += result.content;
+              }
+            }
             if (result.conversationId) conversationId = result.conversationId;
             if (result.conversationHistory) conversationHistory = result.conversationHistory;
           }
@@ -201,7 +212,13 @@ export class OpenAIClient {
       if (buffer.trim()) {
         const result = this.processSSEEvent(buffer, onToken, onProgress);
         if (result) {
-          if (result.content !== undefined) finalContent = result.content;
+          if (result.content !== undefined) {
+            if (result.conversationHistory) {
+              finalContent = result.content;
+            } else {
+              finalContent += result.content;
+            }
+          }
           if (result.conversationId) conversationId = result.conversationId;
           if (result.conversationHistory) conversationHistory = result.conversationHistory;
         }
@@ -214,7 +231,13 @@ export class OpenAIClient {
       for (const event of events) {
         const result = this.processSSEEvent(event, onToken, onProgress);
         if (result) {
-          if (result.content !== undefined) finalContent = result.content;
+          if (result.content !== undefined) {
+            if (result.conversationHistory) {
+              finalContent = result.content;
+            } else {
+              finalContent += result.content;
+            }
+          }
           if (result.conversationId) conversationId = result.conversationId;
           if (result.conversationHistory) conversationHistory = result.conversationHistory;
         }

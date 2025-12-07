@@ -1296,25 +1296,33 @@ Always use actual resource IDs from the conversation history or create new ones 
       const hasActionableTools = toolCapabilities.relevantTools.length > 0
       const hasToolResultsSoFar = conversationHistory.some((e) => e.role === "tool")
 
-      // Only apply aggressive heuristics if there are actually relevant tools for this request
-      if (hasActionableTools) {
-        // If there are actionable tools and no tool results yet, do not verify or finalize.
-        // Nudge the model to produce structured toolCalls to actually perform the work.
-        if (!hasToolResultsSoFar) {
-          conversationHistory.push({ role: "assistant", content: contentText.trim() })
-          conversationHistory.push({
-            role: "user",
-            content:
-              "Before marking complete: use the available tools to actually perform the steps. Reply with a valid JSON object per the tool-calling schema, including a toolCalls array with concrete parameters.",
-          })
-          noOpCount = 0
-          continue
-        }
+      // Check if the response contains substantive content (a real answer, not a placeholder)
+      // If the LLM explicitly sets needsMoreWork=false and provides a real answer,
+      // we should trust it - even if there are tools that could theoretically be used.
+      // This allows the agent to respond directly to simple questions without forcing tool calls.
+      const hasSubstantiveContent = contentText.trim().length >= 10 && !isToolCallPlaceholder(contentText)
+
+      // Only apply aggressive heuristics if:
+      // 1. There are actually relevant tools for this request
+      // 2. No tools have been used yet
+      // 3. The agent's response doesn't contain substantive content (i.e., it's just a placeholder or very short)
+      if (hasActionableTools && !hasToolResultsSoFar && !hasSubstantiveContent) {
+        // If there are actionable tools and no tool results yet, and no real answer provided,
+        // nudge the model to produce structured toolCalls to actually perform the work.
+        conversationHistory.push({ role: "assistant", content: contentText.trim() })
+        conversationHistory.push({
+          role: "user",
+          content:
+            "Before marking complete: use the available tools to actually perform the steps. Reply with a valid JSON object per the tool-calling schema, including a toolCalls array with concrete parameters.",
+        })
+        noOpCount = 0
+        continue
       }
 
-      // Agent explicitly indicated completion and either:
+      // Agent explicitly indicated completion and one of the following:
       // - No actionable tools exist for this request (simple Q&A), OR
-      // - Tools were used and work is complete
+      // - Tools were used and work is complete, OR
+      // - Agent provided a substantive direct response (allows direct answers without tool calls)
       const assistantContent = llmResponse.content || ""
 
       finalContent = assistantContent

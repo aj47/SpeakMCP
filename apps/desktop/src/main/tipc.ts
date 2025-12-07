@@ -947,8 +947,6 @@ export const router = {
       fromTile?: boolean // When true, session runs in background (snoozed) - panel won't show
     }>()
     .action(async ({ input }) => {
-      const config = configStore.get()
-
       // Create or get conversation ID
       let conversationId = input.conversationId
       if (!conversationId) {

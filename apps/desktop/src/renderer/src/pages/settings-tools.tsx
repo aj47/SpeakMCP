@@ -1,6 +1,6 @@
 import { useConfigQuery } from "@renderer/lib/query-client"
 import { tipcClient } from "@renderer/lib/tipc-client"
-import { useMutation, useQueryClient } from "@tanstack/react-query"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { Button } from "@renderer/components/ui/button"
 import { Input } from "@renderer/components/ui/input"
 import { Label } from "@renderer/components/ui/label"
@@ -24,7 +24,7 @@ import { useState, useEffect } from "react"
 import { ProfileManager } from "@renderer/components/profile-manager"
 import { ProfileBadge } from "@renderer/components/profile-badge"
 
-import { Config } from "@shared/types"
+import { Config, Profile } from "@shared/types"
 
 // Helper component for labels with tooltips
 const LabelWithTooltip = ({
@@ -81,7 +81,27 @@ export function Component() {
     },
   })
 
+  // Fetch current profile to sync guidelines with profile
+  const currentProfileQuery = useQuery({
+    queryKey: ["current-profile"],
+    queryFn: async () => {
+      return await tipcClient.getCurrentProfile()
+    },
+  })
+
+  // Mutation to update profile guidelines
+  const updateProfileMutation = useMutation({
+    mutationFn: async ({ id, guidelines }: { id: string; guidelines: string }) => {
+      return await tipcClient.updateProfile({ id, guidelines })
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["profiles"] })
+      queryClient.invalidateQueries({ queryKey: ["current-profile"] })
+    },
+  })
+
   const config = configQuery.data || {}
+  const currentProfile = currentProfileQuery.data
 
   // Local state for additional guidelines to allow editing without auto-save
   const [additionalGuidelines, setAdditionalGuidelines] = useState("")
@@ -104,6 +124,16 @@ export function Component() {
 
   const saveAdditionalGuidelines = () => {
     updateConfig({ mcpToolsSystemPrompt: additionalGuidelines })
+
+    // Also update the current profile's guidelines if it's a non-default profile
+    // This ensures the profile stays in sync with the saved guidelines
+    if (currentProfile && !currentProfile.isDefault) {
+      updateProfileMutation.mutate({
+        id: currentProfile.id,
+        guidelines: additionalGuidelines,
+      })
+    }
+
     setHasUnsavedChanges(false)
   }
 

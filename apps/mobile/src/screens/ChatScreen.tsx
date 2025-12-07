@@ -39,6 +39,15 @@ export default function ChatScreen({ route, navigation }: any) {
     try { await saveConfig(nextCfg); } catch {}
   };
 
+  // TTS toggle
+  const ttsEnabled = config.ttsEnabled !== false; // default true
+  const toggleTts = async () => {
+    const next = !ttsEnabled;
+    const nextCfg = { ...config, ttsEnabled: next } as any;
+    setConfig(nextCfg);
+    try { await saveConfig(nextCfg); } catch {}
+  };
+
   // Create client early so it's available for handleKillSwitch
   const client = new OpenAIClient({
     baseUrl: config.baseUrl,
@@ -760,6 +769,15 @@ export default function ChatScreen({ route, navigation }: any) {
           </View>
         )}
         <View style={[styles.inputRow, { paddingBottom: 12 + insets.bottom }]}>
+          {/* TTS Toggle Button */}
+          <TouchableOpacity
+            style={[styles.ttsToggle, ttsEnabled && styles.ttsToggleOn]}
+            onPress={toggleTts}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.ttsToggleText}>{ttsEnabled ? '🔊' : '🔇'}</Text>
+          </TouchableOpacity>
+          {/* Large Mic Button */}
           <View style={styles.micWrapper}>
             <TouchableOpacity
               style={[styles.mic, listening && styles.micOn]}
@@ -787,8 +805,11 @@ export default function ChatScreen({ route, navigation }: any) {
                 if (!listening) startRecording(); else stopRecordingAndHandle();
               } : undefined}
             >
-              <Text style={{ color: listening ? theme.colors.primaryForeground : theme.colors.foreground }}>
-                {handsFree ? (listening ? 'Listening… Tap to Stop' : 'Tap to Talk') : (listening ? 'Recording…' : 'Hold to Talk')}
+              <Text style={styles.micText}>
+                {listening ? '🎙️' : '🎤'}
+              </Text>
+              <Text style={[styles.micLabel, listening && styles.micLabelOn]}>
+                {handsFree ? (listening ? 'Stop' : 'Talk') : (listening ? '...' : 'Hold')}
               </Text>
             </TouchableOpacity>
           </View>
@@ -796,7 +817,7 @@ export default function ChatScreen({ route, navigation }: any) {
             style={styles.input}
             value={input}
             onChangeText={setInput}
-            placeholder={handsFree ? (listening ? 'Listening…' : 'Type a message or tap the mic') : (listening ? 'Listening…' : 'Type a message or hold the mic')}
+            placeholder={handsFree ? (listening ? 'Listening…' : 'Type or tap mic') : (listening ? 'Listening…' : 'Type or hold mic')}
             placeholderTextColor={theme.colors.mutedForeground}
             multiline
           />
@@ -847,19 +868,49 @@ function createStyles(theme: Theme) {
       maxHeight: 120,
     },
     micWrapper: {
-      borderRadius: radius.lg,
+      borderRadius: radius.full,
     },
     mic: {
-      paddingHorizontal: 12,
-      paddingVertical: 8,
-      borderRadius: radius.full,
-      borderWidth: 1,
+      width: 64,
+      height: 64,
+      borderRadius: 32,
+      borderWidth: 2,
       borderColor: theme.colors.border,
       backgroundColor: theme.colors.card,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
     micOn: {
       backgroundColor: theme.colors.primary,
       borderColor: theme.colors.primary,
+    },
+    micText: {
+      fontSize: 24,
+    },
+    micLabel: {
+      fontSize: 10,
+      color: theme.colors.mutedForeground,
+      marginTop: 2,
+    },
+    micLabelOn: {
+      color: theme.colors.primaryForeground,
+    },
+    ttsToggle: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      backgroundColor: theme.colors.muted,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    ttsToggleOn: {
+      backgroundColor: theme.colors.card,
+      borderColor: theme.colors.primary,
+    },
+    ttsToggleText: {
+      fontSize: 18,
     },
     sendButton: {
       backgroundColor: theme.colors.primary,

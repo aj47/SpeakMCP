@@ -58,6 +58,8 @@ export function Component() {
   const agentProgressById = useAgentStore((s) => s.agentProgressById)
   const focusedSessionId = useAgentStore((s) => s.focusedSessionId)
   const setFocusedSessionId = useAgentStore((s) => s.setFocusedSessionId)
+  const scrollToSessionId = useAgentStore((s) => s.scrollToSessionId)
+  const setScrollToSessionId = useAgentStore((s) => s.setScrollToSessionId)
 
   // Custom ordering state - persists session order across re-renders
   const [sessionOrder, setSessionOrder] = useState<string[]>([])
@@ -203,6 +205,18 @@ export function Component() {
       window.history.replaceState(null, "", "/")
     }
   }, [routeHistoryItemId, agentProgressById, setFocusedSessionId])
+
+  // Handle scroll-to-session requests from sidebar navigation
+  useEffect(() => {
+    if (scrollToSessionId) {
+      // Use a small delay to ensure the DOM has rendered the tile
+      setTimeout(() => {
+        sessionRefs.current[scrollToSessionId]?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }, 100)
+      // Clear the scroll request
+      setScrollToSessionId(null)
+    }
+  }, [scrollToSessionId, setScrollToSessionId])
 
   // Load the pending conversation data when one is selected
   const pendingConversationQuery = useQuery({

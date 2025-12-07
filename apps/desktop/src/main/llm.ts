@@ -1454,6 +1454,16 @@ Always use actual resource IDs from the conversation history or create new ones 
       if (!isActionableRequest && hasSubstantiveContent) {
         finalContent = contentText
         addMessage("assistant", finalContent)
+
+        // Add completion step for UI consistency with other completion paths
+        const completionStep = createProgressStep(
+          "completion",
+          "Task completed",
+          "Question answered directly",
+          "completed",
+        )
+        progressSteps.push(completionStep)
+
         emit({
           currentIteration: iteration,
           maxIterations,

@@ -1329,8 +1329,12 @@ Always use actual resource IDs from the conversation history or create new ones 
       addMessage("assistant", finalContent)
 
       // Optional verification before completing
-      // Track if we should skip post-verify summary (when agent is repeating itself)
-      let skipPostVerifySummary = false
+      // Track if we should skip post-verify summary
+      // Skip summary when:
+      // 1. Agent is repeating itself (with real content)
+      // 2. No tools were called (simple Q&A - nothing to summarize)
+      const noToolsCalledYet = !conversationHistory.some((e) => e.role === "tool")
+      let skipPostVerifySummary = noToolsCalledYet && !isToolCallPlaceholder(finalContent) && finalContent.trim().length > 0
 
       if (config.mcpVerifyCompletionEnabled) {
         const verifyStep = createProgressStep(

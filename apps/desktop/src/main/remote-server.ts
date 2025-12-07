@@ -346,7 +346,9 @@ export async function startRemoteServer() {
   // Configure CORS
   const corsOrigins = cfg.remoteServerCorsOrigins || ["*"]
   await fastify.register(cors, {
-    origin: corsOrigins,
+    // When origin is ["*"] or includes "*", use true to reflect the request origin
+    // This is needed because credentials: true doesn't work with literal "*"
+    origin: corsOrigins.includes("*") ? true : corsOrigins,
     methods: ["GET", "POST", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,

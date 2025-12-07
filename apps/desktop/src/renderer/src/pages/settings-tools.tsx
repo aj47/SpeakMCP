@@ -2,7 +2,6 @@ import { useConfigQuery } from "@renderer/lib/query-client"
 import { tipcClient } from "@renderer/lib/tipc-client"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { Button } from "@renderer/components/ui/button"
-import { Input } from "@renderer/components/ui/input"
 import { Label } from "@renderer/components/ui/label"
 import { Textarea } from "@renderer/components/ui/textarea"
 import {
@@ -171,25 +170,6 @@ DOMAIN-SPECIFIC RULES:
           </div>
 
           <div className="space-y-4">
-            <div className="space-y-2">
-              <LabelWithTooltip htmlFor="mcp-max-iterations" tooltip="Maximum number of iterations the agent can perform before stopping. Higher values allow more complex tasks but may take longer.">Max Iterations</LabelWithTooltip>
-              <Input
-                id="mcp-max-iterations"
-                type="number"
-                min="1"
-                max="50"
-                step="1"
-                value={config.mcpMaxIterations ?? 10}
-                onChange={(e) =>
-                  updateConfig({
-                    mcpMaxIterations: parseInt(e.target.value) || 1,
-                  })
-                }
-                className="w-32"
-              />
-            </div>
-
-            <div className="space-y-4">
               <div className="rounded-lg border p-4 space-y-4">
                 <div>
                   <h3 className="text-sm font-semibold mb-1">Profile Management</h3>
@@ -268,7 +248,6 @@ DOMAIN-SPECIFIC RULES:
                   them.
                 </p>
               )}
-            </div>
           </div>
         </div>
       </div>

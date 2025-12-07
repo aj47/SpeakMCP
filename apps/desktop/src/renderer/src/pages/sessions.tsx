@@ -209,12 +209,13 @@ export function Component() {
   // Handle scroll-to-session requests from sidebar navigation
   useEffect(() => {
     if (scrollToSessionId) {
+      const targetSessionId = scrollToSessionId
       // Use a small delay to ensure the DOM has rendered the tile
       setTimeout(() => {
-        sessionRefs.current[scrollToSessionId]?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        sessionRefs.current[targetSessionId]?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        // Clear the scroll request after attempting scroll to avoid race conditions
+        setScrollToSessionId(null)
       }, 100)
-      // Clear the scroll request
-      setScrollToSessionId(null)
     }
   }, [scrollToSessionId, setScrollToSessionId])
 

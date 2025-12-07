@@ -12,6 +12,7 @@ import {
   setPanelMode,
   getCurrentPanelMode,
   markManualResize,
+  setPanelFocusable,
 } from "./window"
 import {
   app,
@@ -430,6 +431,17 @@ export const router = {
     .input<{ mode: "normal" | "agent" | "textInput" }>()
     .action(async ({ input }) => {
       setPanelMode(input.mode)
+      return { success: true }
+    }),
+
+  /**
+   * Set the focusability of the panel window.
+   * Used to enable input interaction when agent has completed.
+   */
+  setPanelFocusable: t.procedure
+    .input<{ focusable: boolean }>()
+    .action(async ({ input }) => {
+      setPanelFocusable(input.focusable)
       return { success: true }
     }),
 

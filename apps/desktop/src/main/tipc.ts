@@ -1835,10 +1835,6 @@ export const router = {
   getConversationHistory: t.procedure.action(async () => {
     logApp("[tipc] getConversationHistory called")
     const result = await conversationService.getConversationHistory()
-    logApp("[tipc] getConversationHistory result:", {
-      count: result.length,
-      items: result.map(h => ({ id: h.id, title: h.title })),
-    })
     return result
   }),
 

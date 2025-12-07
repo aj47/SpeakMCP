@@ -39,6 +39,7 @@ export function ActiveAgentsSidebar() {
 
   const focusedSessionId = useAgentStore((s) => s.focusedSessionId)
   const setFocusedSessionId = useAgentStore((s) => s.setFocusedSessionId)
+  const setScrollToSessionId = useAgentStore((s) => s.setScrollToSessionId)
   const setSessionSnoozed = useAgentStore((s) => s.setSessionSnoozed)
   const agentProgressById = useAgentStore((s) => s.agentProgressById)
   const navigate = useNavigate()
@@ -96,7 +97,11 @@ export function ActiveAgentsSidebar() {
 
   const handleSessionClick = (sessionId: string) => {
     logUI('[ActiveAgentsSidebar] Session clicked:', sessionId)
+    // Navigate to sessions page and focus this session
+    navigate('/')
     setFocusedSessionId(sessionId)
+    // Trigger scroll to the session tile
+    setScrollToSessionId(sessionId)
   }
 
   const handleStopSession = async (sessionId: string, e: React.MouseEvent) => {

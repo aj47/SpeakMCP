@@ -10,6 +10,7 @@ interface AgentState {
   // State
   agentProgressById: Map<string, AgentProgressUpdate>
   focusedSessionId: string | null
+  scrollToSessionId: string | null // Triggers scroll to a session tile when set
 
   // View settings for sessions dashboard
   viewMode: SessionViewMode
@@ -22,6 +23,7 @@ interface AgentState {
   clearAllProgress: () => void
   clearSessionProgress: (sessionId: string) => void
   setFocusedSessionId: (sessionId: string | null) => void
+  setScrollToSessionId: (sessionId: string | null) => void
   setSessionSnoozed: (sessionId: string, isSnoozed: boolean) => void
   getAgentProgress: () => AgentProgressUpdate | null
 
@@ -36,6 +38,7 @@ interface AgentState {
 export const useAgentStore = create<AgentState>((set, get) => ({
   agentProgressById: new Map(),
   focusedSessionId: null,
+  scrollToSessionId: null,
 
   // View settings defaults
   viewMode: 'grid' as SessionViewMode,
@@ -126,6 +129,10 @@ export const useAgentStore = create<AgentState>((set, get) => ({
 
   setFocusedSessionId: (sessionId: string | null) => {
     set({ focusedSessionId: sessionId })
+  },
+
+  setScrollToSessionId: (sessionId: string | null) => {
+    set({ scrollToSessionId: sessionId })
   },
 
   setSessionSnoozed: (sessionId: string, isSnoozed: boolean) => {

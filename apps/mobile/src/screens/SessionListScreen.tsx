@@ -2,8 +2,6 @@
  * Session List Screen
  * Displays all chat sessions and allows creating/selecting/deleting sessions
  * Adapted from SpeakMCP/src/renderer/src/pages/sessions.tsx patterns
- *
- * NOTE: This screen is not yet integrated - sessions store needs to be implemented
  */
 
 import { useLayoutEffect, useMemo } from 'react';
@@ -11,25 +9,8 @@ import { View, Text, FlatList, TouchableOpacity, StyleSheet, Alert, Platform } f
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../ui/ThemeProvider';
 import { spacing, radius, Theme } from '../ui/theme';
-
-// Placeholder types until sessions store is implemented
-interface SessionListItem {
-  id: string;
-  title: string;
-  preview: string;
-  messageCount: number;
-  updatedAt: number;
-}
-
-// Placeholder session context - will be replaced with actual store
-const useSessionContext = () => ({
-  getSessionList: () => [] as SessionListItem[],
-  currentSessionId: null as string | null,
-  createNewSession: () => {},
-  setCurrentSession: (id: string) => {},
-  deleteSession: (id: string) => {},
-  clearAllSessions: () => {},
-});
+import { useSessionContext, SessionStore } from '../store/sessions';
+import { SessionListItem } from '../types/session';
 
 interface Props {
   navigation: any;

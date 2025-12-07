@@ -17,6 +17,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { EventEmitter } from 'expo-modules-core';
 import { useConfigContext, saveConfig } from '../store/config';
+import { useSessionContext } from '../store/sessions';
 import { OpenAIClient, ChatMessage, AgentProgressUpdate, AgentProgressStep } from '../lib/openaiClient';
 import * as Speech from 'expo-speech';
 import { useHeaderHeight } from '@react-navigation/elements';
@@ -32,6 +33,7 @@ export default function ChatScreen({ route, navigation }: any) {
   const { theme } = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const { config, setConfig } = useConfigContext();
+  const sessionStore = useSessionContext();
   const handsFree = !!config.handsFree;
   const handsFreeRef = useRef<boolean>(handsFree);
   useEffect(() => { handsFreeRef.current = !!config.handsFree; }, [config.handsFree]);
@@ -116,6 +118,18 @@ export default function ChatScreen({ route, navigation }: any) {
 
   useLayoutEffect(() => {
     navigation?.setOptions?.({
+      headerLeft: () => (
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <TouchableOpacity
+            onPress={() => navigation.navigate('Sessions')}
+            accessibilityRole="button"
+            accessibilityLabel="Back to chat history"
+            style={{ paddingHorizontal: 12, paddingVertical: 6 }}
+          >
+            <Text style={{ fontSize: 20, color: theme.colors.foreground }}>←</Text>
+          </TouchableOpacity>
+        </View>
+      ),
       headerRight: () => (
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
           <TouchableOpacity
@@ -139,7 +153,7 @@ export default function ChatScreen({ route, navigation }: any) {
             onPress={toggleHandsFree}
             accessibilityRole="button"
             accessibilityLabel={`Toggle hands-free (currently ${handsFree ? 'on' : 'off'})`}
-            style={{ paddingHorizontal: 12, paddingVertical: 6 }}
+            style={{ paddingHorizontal: 8, paddingVertical: 6 }}
           >
             <View style={{ width: 24, height: 24, alignItems: 'center', justifyContent: 'center' }}>
               <Text style={{ fontSize: 18 }}>🎙️</Text>
@@ -157,10 +171,18 @@ export default function ChatScreen({ route, navigation }: any) {
               )}
             </View>
           </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => navigation.navigate('Settings')}
+            accessibilityRole="button"
+            accessibilityLabel="Settings"
+            style={{ paddingHorizontal: 12, paddingVertical: 6 }}
+          >
+            <Text style={{ fontSize: 18, color: theme.colors.foreground }}>⚙️</Text>
+          </TouchableOpacity>
         </View>
       ),
     });
-  }, [navigation, handsFree, handleKillSwitch]);
+  }, [navigation, handsFree, handleKillSwitch, theme]);
 
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -169,6 +191,34 @@ export default function ChatScreen({ route, navigation }: any) {
   const [liveTranscript, setLiveTranscript] = useState('');
   const [responding, setResponding] = useState(false);
   const [debugInfo, setDebugInfo] = useState<string>('');
+
+  // Load messages from current session on mount
+  const sessionLoadedRef = useRef(false);
+  useEffect(() => {
+    if (sessionLoadedRef.current) return;
+    const currentSession = sessionStore.getCurrentSession();
+    if (currentSession && currentSession.messages.length > 0) {
+      // Convert session messages to ChatMessage format
+      const chatMessages: ChatMessage[] = currentSession.messages.map(m => ({
+        role: m.role,
+        content: m.content,
+        toolCalls: m.toolCalls,
+        toolResults: m.toolResults,
+      }));
+      setMessages(chatMessages);
+    }
+    sessionLoadedRef.current = true;
+  }, [sessionStore]);
+
+  // Save messages to session when they change
+  const prevMessagesLengthRef = useRef(0);
+  useEffect(() => {
+    // Only save if messages have actually changed (not on initial load)
+    if (messages.length > 0 && messages.length !== prevMessagesLengthRef.current) {
+      sessionStore.setMessages(messages);
+    }
+    prevMessagesLengthRef.current = messages.length;
+  }, [messages, sessionStore]);
 
   // Track expanded state for messages (by index)
   const [expandedMessages, setExpandedMessages] = useState<Record<number, boolean>>({});

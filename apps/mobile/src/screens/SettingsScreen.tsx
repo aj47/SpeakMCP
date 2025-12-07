@@ -55,7 +55,7 @@ export default function SettingsScreen({ navigation }: any) {
     };
     setConfig(normalizedDraft);
     await saveConfig(normalizedDraft);
-    navigation.navigate('Chat');
+    navigation.navigate('Sessions');
   };
 
   const handleScanQR = async () => {

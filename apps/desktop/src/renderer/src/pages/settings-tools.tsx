@@ -1,6 +1,6 @@
 import { useConfigQuery } from "@renderer/lib/query-client"
 import { tipcClient } from "@renderer/lib/tipc-client"
-import { useMutation, useQueryClient } from "@tanstack/react-query"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { Button } from "@renderer/components/ui/button"
 import { Input } from "@renderer/components/ui/input"
 import { Label } from "@renderer/components/ui/label"
@@ -12,6 +12,7 @@ import {
   TooltipTrigger,
 } from "@renderer/components/ui/tooltip"
 import { Save, Info } from "lucide-react"
+import { toast } from "sonner"
 import { useState, useEffect } from "react"
 import { ProfileManager } from "@renderer/components/profile-manager"
 import { ProfileBadge } from "@renderer/components/profile-badge"
@@ -71,7 +72,27 @@ export function Component() {
     },
   })
 
+  // Fetch current profile to sync guidelines with profile
+  const currentProfileQuery = useQuery({
+    queryKey: ["current-profile"],
+    queryFn: async () => {
+      return await tipcClient.getCurrentProfile()
+    },
+  })
+
+  // Mutation to update profile guidelines
+  const updateProfileMutation = useMutation({
+    mutationFn: async ({ id, guidelines }: { id: string; guidelines: string }) => {
+      return await tipcClient.updateProfile({ id, guidelines })
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["profiles"] })
+      queryClient.invalidateQueries({ queryKey: ["current-profile"] })
+    },
+  })
+
   const config = configQuery.data || {}
+  const currentProfile = currentProfileQuery.data
 
   // Local state for additional guidelines to allow editing without auto-save
   const [additionalGuidelines, setAdditionalGuidelines] = useState("")
@@ -85,16 +106,39 @@ export function Component() {
     }
   }, [config.mcpToolsSystemPrompt])
 
+  // Fire-and-forget config update for toggles/switches (no await needed)
   const updateConfig = (updates: Partial<Config>) => {
     const newConfig = { ...config, ...updates }
     saveConfigMutation.mutate(newConfig)
   }
 
+  // Combined saving state for the guidelines save operation
+  // Also check if profile query is still loading to prevent saving before profile data is available
+  const isSavingGuidelines = saveConfigMutation.isPending || updateProfileMutation.isPending
+  const isProfileLoading = currentProfileQuery.isLoading
 
+  const saveAdditionalGuidelines = async () => {
+    try {
+      // Save to config
+      const newConfig = { ...config, mcpToolsSystemPrompt: additionalGuidelines }
+      await saveConfigMutation.mutateAsync(newConfig)
 
-  const saveAdditionalGuidelines = () => {
-    updateConfig({ mcpToolsSystemPrompt: additionalGuidelines })
-    setHasUnsavedChanges(false)
+      // Also update the current profile's guidelines if it's a non-default profile
+      // This ensures the profile stays in sync with the saved guidelines
+      if (currentProfile && !currentProfile.isDefault) {
+        await updateProfileMutation.mutateAsync({
+          id: currentProfile.id,
+          guidelines: additionalGuidelines,
+        })
+      }
+
+      // Only clear unsaved changes if both operations succeeded
+      setHasUnsavedChanges(false)
+    } catch (error) {
+      // If either mutation fails, keep hasUnsavedChanges true so user can retry
+      toast.error("Failed to save guidelines. Please try again.")
+      console.error("Failed to save guidelines:", error)
+    }
   }
 
   const revertChanges = () => {
@@ -197,7 +241,7 @@ DOMAIN-SPECIFIC RULES:
                     variant="outline"
                     size="sm"
                     onClick={revertChanges}
-                    disabled={saveConfigMutation.isPending}
+                    disabled={isSavingGuidelines}
                   >
                     Revert Changes
                   </Button>
@@ -206,14 +250,16 @@ DOMAIN-SPECIFIC RULES:
                   size="sm"
                   onClick={saveAdditionalGuidelines}
                   disabled={
-                    !hasUnsavedChanges || saveConfigMutation.isPending
+                    !hasUnsavedChanges || isSavingGuidelines || isProfileLoading
                   }
                   className="gap-1"
                 >
                   <Save className="h-3 w-3" />
-                  {saveConfigMutation.isPending
+                  {isSavingGuidelines
                     ? "Saving..."
-                    : "Save Changes"}
+                    : isProfileLoading
+                      ? "Loading..."
+                      : "Save Changes"}
                 </Button>
               </div>
               {hasUnsavedChanges && (

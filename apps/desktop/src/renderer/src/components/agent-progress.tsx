@@ -1341,6 +1341,14 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
     })
   }, [messages.length > 0])
 
+  // Make panel focusable when agent completes (overlay variant only)
+  // This enables the continue conversation input to receive focus and be interactable
+  useEffect(() => {
+    if (variant === "overlay" && isComplete) {
+      tipcClient.setPanelFocusable({ focusable: true })
+    }
+  }, [variant, isComplete])
+
   // Handle scroll events to detect user interaction
   const handleScroll = () => {
     const scrollContainer = scrollContainerRef.current

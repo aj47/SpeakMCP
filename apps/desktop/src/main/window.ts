@@ -577,3 +577,19 @@ export function resizePanelForTextInput() {
 export function resizePanelToNormal() {
   setPanelMode("normal")
 }
+
+/**
+ * Set the focusability of the panel window.
+ * This is used to enable input interaction in agent mode when the agent has completed.
+ * When agent is still running, the panel should be non-focusable to avoid stealing focus.
+ * When agent is complete, the panel should be focusable so user can interact with the continue input.
+ */
+export function setPanelFocusable(focusable: boolean) {
+  const win = WINDOWS.get("panel")
+  if (!win) return
+  try {
+    win.setFocusable(focusable)
+  } catch (e) {
+    logApp("[window.ts] setPanelFocusable failed:", e)
+  }
+}

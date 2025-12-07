@@ -275,21 +275,28 @@ export default function ChatScreen({ route, navigation }: any) {
         }
       }
 
-      // Clear steps-based messages if we have proper conversation history
-      messages.length = 0;
+      // Only use conversation history if it has messages beyond the user message
+      // Otherwise, keep the steps-based messages which have real-time tool call data
+      const hasAssistantMessages = currentTurnStartIndex + 1 < update.conversationHistory.length;
+      if (hasAssistantMessages) {
+        // Clear steps-based messages and use conversation history instead
+        messages.length = 0;
 
-      // Add messages from the current turn (skip the user message)
-      for (let i = currentTurnStartIndex + 1; i < update.conversationHistory.length; i++) {
-        const historyMsg = update.conversationHistory[i];
-        console.log('[convertProgress] History msg:', historyMsg.role,
-          'toolCalls:', JSON.stringify(historyMsg.toolCalls),
-          'toolResults:', JSON.stringify(historyMsg.toolResults?.map(r => ({ success: r.success, contentLen: r.content?.length }))));
-        messages.push({
-          role: historyMsg.role === 'tool' ? 'assistant' : historyMsg.role,
-          content: historyMsg.content || '',
-          toolCalls: historyMsg.toolCalls,
-          toolResults: historyMsg.toolResults,
-        });
+        // Add messages from the current turn (skip the user message)
+        for (let i = currentTurnStartIndex + 1; i < update.conversationHistory.length; i++) {
+          const historyMsg = update.conversationHistory[i];
+          console.log('[convertProgress] History msg:', historyMsg.role,
+            'toolCalls:', JSON.stringify(historyMsg.toolCalls),
+            'toolResults:', JSON.stringify(historyMsg.toolResults?.map(r => ({ success: r.success, contentLen: r.content?.length }))));
+          messages.push({
+            role: historyMsg.role === 'tool' ? 'assistant' : historyMsg.role,
+            content: historyMsg.content || '',
+            toolCalls: historyMsg.toolCalls,
+            toolResults: historyMsg.toolResults,
+          });
+        }
+      } else {
+        console.log('[convertProgress] Keeping steps-based messages, conversationHistory only has user message');
       }
     }
 

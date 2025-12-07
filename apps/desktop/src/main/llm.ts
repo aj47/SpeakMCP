@@ -1680,7 +1680,8 @@ Always use actual resource IDs from the conversation history or create new ones 
       }
 
       // Create progress steps for all tools upfront
-      const toolCallSteps: Map<string, AgentProgressStep> = new Map()
+      // Use array index as key to avoid collisions when same tool is called with identical args
+      const toolCallSteps: AgentProgressStep[] = []
       for (const toolCall of toolCallsArray) {
         const toolCallStep = createProgressStep(
           "tool_call",
@@ -1693,8 +1694,7 @@ Always use actual resource IDs from the conversation history or create new ones 
           arguments: toolCall.arguments,
         }
         progressSteps.push(toolCallStep)
-        // Use tool name + stringified args as key to handle same tool called multiple times
-        toolCallSteps.set(`${toolCall.name}:${JSON.stringify(toolCall.arguments)}`, toolCallStep)
+        toolCallSteps.push(toolCallStep)
       }
 
       // Emit progress showing all tools starting in parallel
@@ -1707,9 +1707,8 @@ Always use actual resource IDs from the conversation history or create new ones 
       })
 
       // Execute all tools in parallel
-      const executionPromises = toolCallsArray.map(async (toolCall) => {
-        const stepKey = `${toolCall.name}:${JSON.stringify(toolCall.arguments)}`
-        const toolCallStep = toolCallSteps.get(stepKey)!
+      const executionPromises = toolCallsArray.map(async (toolCall, index) => {
+        const toolCallStep = toolCallSteps[index]
 
         const onToolProgress = (message: string) => {
           toolCallStep.description = message

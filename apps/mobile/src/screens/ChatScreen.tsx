@@ -192,11 +192,20 @@ export default function ChatScreen({ route, navigation }: any) {
   const [responding, setResponding] = useState(false);
   const [debugInfo, setDebugInfo] = useState<string>('');
 
-  // Load messages from current session on mount
+  // Load messages from current session on mount, or create a new session if none exists
   const sessionLoadedRef = useRef(false);
   useEffect(() => {
     if (sessionLoadedRef.current) return;
-    const currentSession = sessionStore.getCurrentSession();
+    sessionLoadedRef.current = true;
+
+    let currentSession = sessionStore.getCurrentSession();
+
+    // If no current session, create one
+    if (!currentSession) {
+      currentSession = sessionStore.createNewSession();
+    }
+
+    // Load messages if session has any
     if (currentSession && currentSession.messages.length > 0) {
       // Convert session messages to ChatMessage format
       const chatMessages: ChatMessage[] = currentSession.messages.map(m => ({
@@ -207,7 +216,6 @@ export default function ChatScreen({ route, navigation }: any) {
       }));
       setMessages(chatMessages);
     }
-    sessionLoadedRef.current = true;
   }, [sessionStore]);
 
   // Save messages to session when they change

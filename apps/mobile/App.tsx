@@ -127,22 +127,7 @@ function Navigation() {
 }
 
 function Root() {
-  const cfg = useConfig();
-  const { theme } = useTheme();
-
-  if (!cfg.ready) {
-    return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.background }}>
-        <ActivityIndicator color={theme.colors.foreground} />
-      </View>
-    );
-  }
-
-  return (
-    <ConfigContext.Provider value={cfg}>
-      <Navigation />
-    </ConfigContext.Provider>
-  );
+  return <Navigation />;
 }
 
 function StatusBarWrapper() {

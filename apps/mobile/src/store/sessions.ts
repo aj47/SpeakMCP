@@ -183,7 +183,7 @@ export function useSessions(): SessionStore {
         // Convert ChatMessage to session format
         const sessionMessages = messages.map((m, idx) => ({
           id: generateMessageId(),
-          role: m.role as 'user' | 'assistant',
+          role: m.role as 'system' | 'user' | 'assistant',
           content: m.content || '',
           timestamp: now + idx,
           toolCalls: m.toolCalls,

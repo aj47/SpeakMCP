@@ -1,3 +1,10 @@
+import type {
+  ToolCall,
+  ToolResult,
+  ConversationHistoryMessage,
+  ChatApiResponse
+} from '@speakmcp/shared';
+
 export type OpenAIConfig = {
   baseUrl: string;    // OpenAI-compatible API base URL e.g., https://api.openai.com/v1
   apiKey: string;
@@ -8,7 +15,54 @@ export type ChatMessage = {
   id?: string;
   role: 'system' | 'user' | 'assistant';
   content?: string;
+  toolCalls?: ToolCall[];
+  toolResults?: ToolResult[];
 };
+
+/**
+ * Response from a chat request including conversation history with tool data
+ * Using shared ChatApiResponse type from @speakmcp/shared
+ */
+export type ChatResponse = ChatApiResponse;
+
+// Re-export shared types for convenience
+export type { ToolCall, ToolResult, ConversationHistoryMessage } from '@speakmcp/shared';
+
+/**
+ * Agent progress update from the server (SSE streaming)
+ */
+export interface AgentProgressUpdate {
+  sessionId: string;
+  conversationId?: string;
+  currentIteration: number;
+  maxIterations: number;
+  steps: AgentProgressStep[];
+  isComplete: boolean;
+  finalContent?: string;
+  conversationHistory?: ConversationHistoryMessage[];
+  streamingContent?: {
+    text: string;
+    isStreaming: boolean;
+  };
+}
+
+export interface AgentProgressStep {
+  id: string;
+  type: 'thinking' | 'tool_call' | 'tool_result' | 'response' | 'error' | 'pending_approval' | 'completion';
+  title: string;
+  description?: string;
+  status: 'pending' | 'in_progress' | 'completed' | 'error';
+  timestamp: number;
+  content?: string; // LLM content for thinking steps
+  llmContent?: string; // Alternative field name used by server
+  toolCall?: { name: string; arguments: any };
+  toolResult?: { success: boolean; content: string; error?: string };
+}
+
+/**
+ * Callback for receiving agent progress updates in real-time
+ */
+export type OnProgressCallback = (update: AgentProgressUpdate) => void;
 
 
 
@@ -44,10 +98,8 @@ export class OpenAIClient {
   /** Health check for the API */
   async health(): Promise<boolean> {
     const url = this.getUrl('/models');
-    console.log('[OpenAIClient] Health check:', url);
     try {
       const res = await fetch(url, { headers: this.authHeaders() });
-      console.log('[OpenAIClient] Health check response:', res.status, res.statusText);
       return res.ok;
     } catch (error) {
       console.error('[OpenAIClient] Health check error:', error);
@@ -57,178 +109,197 @@ export class OpenAIClient {
 
   /**
    * POST OpenAI-compatible API: /v1/chat/completions
-   * If the server responds with text/event-stream, this will parse SSE chunks and accumulate assistant content.
-   * You can pass an onToken callback to receive incremental tokens.
+   * Supports SpeakMCP server SSE streaming with real-time agent progress updates.
+   * Uses fetch with ReadableStream for web, XMLHttpRequest for native.
+   *
+   * @param messages - Chat messages to send
+   * @param onToken - Optional callback for streaming text tokens (legacy, for text-only streaming)
+   * @param onProgress - Optional callback for agent progress updates (tool calls, results, etc.)
+   * @returns ChatResponse with content and conversation history
    */
   async chat(
     messages: ChatMessage[],
-    onToken?: (token: string) => void
-  ): Promise<string> {
+    onToken?: (token: string) => void,
+    onProgress?: OnProgressCallback
+  ): Promise<ChatResponse> {
     const url = this.getUrl('/chat/completions');
-    const body = { model: this.cfg.model, messages, stream: true } as any;
+    const body = { model: this.cfg.model, messages, stream: true };
 
     console.log('[OpenAIClient] Starting chat request');
     console.log('[OpenAIClient] URL:', url);
-    console.log('[OpenAIClient] Model:', this.cfg.model);
-    console.log('[OpenAIClient] Messages count:', messages.length);
-    console.log('[OpenAIClient] Headers:', JSON.stringify(this.authHeaders(), null, 2));
-    console.log('[OpenAIClient] Request body:', JSON.stringify(body, null, 2));
-
-    // Test basic connectivity first
-    console.log('[OpenAIClient] Testing basic connectivity...');
-    try {
-      const testResponse = await fetch(url.replace('/chat/completions', '/models'), {
-        method: 'GET',
-        headers: this.authHeaders(),
-      });
-      console.log('[OpenAIClient] Connectivity test result:', testResponse.status, testResponse.statusText);
-    } catch (connectError) {
-      console.error('[OpenAIClient] Connectivity test failed:', connectError);
-    }
 
     try {
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: this.authHeaders(),
-        body: JSON.stringify(body),
-      });
-
-      console.log('[OpenAIClient] Response status:', res.status, res.statusText);
-      console.log('[OpenAIClient] Response headers:', Object.fromEntries(res.headers.entries()));
-
-      if (!res.ok) {
-        const text = await res.text().catch(() => '');
-        console.error('[OpenAIClient] Error response body:', text);
-        throw new Error(`Chat failed: ${res.status} ${text}`);
-      }
-
-      const ct = res.headers.get('content-type') || '';
-      console.log('[OpenAIClient] Content-Type:', ct);
-
-      const isSSE = ct.includes('text/event-stream');
-      const supportsReader = !!(res as any)?.body && typeof (res as any).body.getReader === 'function';
-
-      console.log('[OpenAIClient] Is SSE:', isSSE);
-      console.log('[OpenAIClient] Supports Reader:', supportsReader);
-
-      // Non-SSE responses: parse JSON content or return raw text
-      if (!isSSE) {
-        console.log('[OpenAIClient] Processing non-SSE response');
-        const text = await res.text();
-        console.log('[OpenAIClient] Response text:', text);
-        try {
-          const j = JSON.parse(text);
-          const content = j?.choices?.[0]?.message?.content ?? '';
-          console.log('[OpenAIClient] Extracted content:', content);
-          return typeof content === 'string' ? content : text;
-        } catch (parseError) {
-          console.error('[OpenAIClient] JSON parse error:', parseError);
-          return text;
-        }
-      }
-
-      // SSE but streaming not supported (React Native fetch): fallback to parsing the full text
-      if (isSSE && !supportsReader) {
-        console.log('[OpenAIClient] Using SSE fallback (no reader support)');
-        const text = await res.text();
-        console.log('[OpenAIClient] Raw SSE text length:', text.length);
-        console.log('[OpenAIClient] Raw SSE text preview:', text.substring(0, 500));
-        let finalText = '';
-        const chunks = text.split(/\r?\n\r?\n/);
-        console.log('[OpenAIClient] Split into', chunks.length, 'chunks');
-        for (const chunk of chunks) {
-        const lines = chunk.split(/\r?\n/).map(l => l.replace(/^data:\s?/, '').trim()).filter(Boolean);
-          for (const l of lines) {
-            if (l === '[DONE]' || l === '"[DONE]"') {
-              console.log('[OpenAIClient] Found DONE marker, returning:', finalText.length, 'characters');
-              return finalText;
-            }
-            try {
-              const obj = JSON.parse(l);
-              const delta = obj?.choices?.[0]?.delta;
-              let token = delta?.content as string | undefined;
-              if (!token && obj?.choices?.[0]?.message?.content) {
-                token = obj.choices[0].message.content as string;
-              }
-              if (typeof token === 'string' && token.length > 0) {
-                if (token.trim().startsWith('{')) {
-                  try {
-                    const inner = JSON.parse(token);
-                    if (inner?.type === 'data-operation') {
-                      continue; // ignore control events embedded in content
-                    }
-                  } catch {}
-                }
-                finalText += token;
-                console.log('[OpenAIClient] Token received:', token);
-                onToken?.(token);
-              }
-            } catch (parseError) {
-              console.log('[OpenAIClient] Ignoring non-JSON line:', l);
-            }
-          }
-        }
-        console.log('[OpenAIClient] SSE fallback complete, final text length:', finalText.length);
-        return finalText;
-      }
-
-      // Streaming parse
-      console.log('[OpenAIClient] Using streaming reader');
-      const decoder = new TextDecoder();
-      const reader = (res.body as ReadableStream<Uint8Array>).getReader();
-      let buffer = '';
-      let finalText = '';
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) {
-          console.log('[OpenAIClient] Stream ended, final text length:', finalText.length);
-          break;
-        }
-        buffer += decoder.decode(value, { stream: true });
-        let idx;
-        while ((idx = buffer.indexOf('\n\n')) !== -1) {
-        const chunk = buffer.slice(0, idx).trim();
-        buffer = buffer.slice(idx + 2);
-        if (!chunk) continue;
-        // Each SSE event line typically starts with "data: "
-        const lines = chunk.split('\n').map(l => l.replace(/^data:\s?/, ''));
-        for (const l of lines) {
-          if (!l) continue;
-            if (l === '[DONE]' || l === '"[DONE]"') {
-              // End of stream
-              console.log('[OpenAIClient] Stream DONE, returning:', finalText.length, 'characters');
-              return finalText;
-            }
-          try {
-            const obj = JSON.parse(l);
-            const delta = obj?.choices?.[0]?.delta;
-            const token = delta?.content;
-            if (typeof token === 'string' && token.length > 0) {
-              // Some streams include JSON-encoded control messages in content; skip those
-              if (token.trim().startsWith('{')) {
-                try {
-                  const inner = JSON.parse(token);
-                  if (inner?.type === 'data-operation') {
-                    continue; // ignore control events
-                  }
-                } catch {}
-              }
-                finalText += token;
-                console.log('[OpenAIClient] Stream token received:', token);
-                onToken?.(token);
-              }
-            } catch (parseError) {
-              console.log('[OpenAIClient] Ignoring non-JSON stream line:', l);
-            }
-        }
-      }
-    }
-
-      return finalText;
+      // Try fetch with ReadableStream first (works in web environments)
+      return await this.streamSSEWithFetch(url, body, onToken, onProgress);
     } catch (error) {
       console.error('[OpenAIClient] Chat request failed:', error);
       throw error;
     }
+  }
+
+  /**
+   * Stream SSE using fetch with ReadableStream for true real-time streaming.
+   * This works in web environments where response.body is a ReadableStream.
+   */
+  private async streamSSEWithFetch(
+    url: string,
+    body: object,
+    onToken?: (token: string) => void,
+    onProgress?: OnProgressCallback
+  ): Promise<ChatResponse> {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: this.authHeaders(),
+      body: JSON.stringify(body),
+    });
+
+    console.log('[OpenAIClient] Response status:', res.status, res.statusText);
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      console.error('[OpenAIClient] Error response body:', text);
+      throw new Error(`Chat failed: ${res.status} ${text}`);
+    }
+
+    let finalContent = '';
+    let conversationId: string | undefined;
+    let conversationHistory: ConversationHistoryMessage[] | undefined;
+
+    // Check if we have a readable stream (web environment)
+    if (res.body && typeof res.body.getReader === 'function') {
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        buffer += chunk;
+
+        // Process complete SSE events
+        const events = buffer.split(/\r?\n\r?\n/);
+        buffer = events.pop() || ''; // Keep incomplete event in buffer
+
+        for (const event of events) {
+          const result = this.processSSEEvent(event, onToken, onProgress);
+          if (result) {
+            // For 'done' events, the content is complete - overwrite
+            // For streaming tokens, accumulate
+            if (result.content !== undefined) {
+              // Check if this is streaming delta content (OpenAI format) vs complete content (SpeakMCP done event)
+              // If conversationHistory is present, it's a complete response - overwrite
+              // Otherwise, accumulate tokens
+              if (result.conversationHistory) {
+                finalContent = result.content;
+              } else {
+                finalContent += result.content;
+              }
+            }
+            if (result.conversationId) conversationId = result.conversationId;
+            if (result.conversationHistory) conversationHistory = result.conversationHistory;
+          }
+        }
+      }
+
+      // Process any remaining buffer
+      if (buffer.trim()) {
+        const result = this.processSSEEvent(buffer, onToken, onProgress);
+        if (result) {
+          if (result.content !== undefined) {
+            if (result.conversationHistory) {
+              finalContent = result.content;
+            } else {
+              finalContent += result.content;
+            }
+          }
+          if (result.conversationId) conversationId = result.conversationId;
+          if (result.conversationHistory) conversationHistory = result.conversationHistory;
+        }
+      }
+    } else {
+      // Fallback: no streaming support, parse entire response
+      const text = await res.text();
+      const events = text.split(/\r?\n\r?\n/);
+      for (const event of events) {
+        const result = this.processSSEEvent(event, onToken, onProgress);
+        if (result) {
+          if (result.content !== undefined) {
+            if (result.conversationHistory) {
+              finalContent = result.content;
+            } else {
+              finalContent += result.content;
+            }
+          }
+          if (result.conversationId) conversationId = result.conversationId;
+          if (result.conversationHistory) conversationHistory = result.conversationHistory;
+        }
+      }
+    }
+
+    console.log('[OpenAIClient] SSE complete, content length:', finalContent.length);
+    return { content: finalContent, conversationId, conversationHistory };
+  }
+
+  /**
+   * Process a single SSE event and return any final data extracted
+   */
+  private processSSEEvent(
+    event: string,
+    onToken?: (token: string) => void,
+    onProgress?: OnProgressCallback
+  ): { content?: string; conversationId?: string; conversationHistory?: ConversationHistoryMessage[] } | null {
+    if (!event.trim()) return null;
+
+    const lines = event.split(/\r?\n/).map(l => l.replace(/^data:\s?/, '').trim()).filter(Boolean);
+    let result: { content?: string; conversationId?: string; conversationHistory?: ConversationHistoryMessage[] } | null = null;
+
+    for (const line of lines) {
+      if (line === '[DONE]' || line === '"[DONE]"') {
+        continue;
+      }
+
+      try {
+        const obj = JSON.parse(line);
+
+        // Handle SpeakMCP-specific SSE event types
+        if (obj.type === 'progress' && obj.data) {
+          const update = obj.data as AgentProgressUpdate;
+          onProgress?.(update);
+          if (update.streamingContent?.text) {
+            onToken?.(update.streamingContent.text);
+          }
+          continue;
+        }
+
+        if (obj.type === 'done' && obj.data) {
+          result = {
+            content: obj.data.content || '',
+            conversationId: obj.data.conversation_id,
+            conversationHistory: obj.data.conversation_history,
+          };
+          continue;
+        }
+
+        if (obj.type === 'error' && obj.data) {
+          console.error('[OpenAIClient] Error event:', obj.data.message);
+          throw new Error(obj.data.message || 'Server error');
+        }
+
+        // Handle standard OpenAI streaming format (fallback)
+        const delta = obj?.choices?.[0]?.delta;
+        const token = delta?.content;
+        if (typeof token === 'string' && token.length > 0) {
+          onToken?.(token);
+          result = { ...result, content: (result?.content || '') + token };
+        }
+      } catch {
+        // Ignore non-JSON lines
+      }
+    }
+
+    return result;
   }
 
   /**

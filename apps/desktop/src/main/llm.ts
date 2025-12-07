@@ -446,6 +446,7 @@ export async function processTranscriptWithAgentMode(
   }>,
   conversationId?: string, // Conversation ID for linking to conversation history
   sessionId?: string, // Session ID for progress routing and isolation
+  onProgress?: (update: AgentProgressUpdate) => void, // Optional callback for external progress consumers (e.g., SSE)
 ): Promise<AgentModeResponse> {
   const config = configStore.get()
 
@@ -470,17 +471,28 @@ export async function processTranscriptWithAgentMode(
     const session = agentSessionTracker.getSession(currentSessionId)
     const conversationTitle = session?.conversationTitle
 
-    // Fire and forget - don't await, but catch errors
-    emitAgentProgress({
+    const fullUpdate: AgentProgressUpdate = {
       ...update,
       sessionId: currentSessionId,
       conversationId: currentConversationId,
       conversationTitle,
       isSnoozed,
       sessionStartIndex,
-    }).catch(err => {
+    }
+
+    // Fire and forget - don't await, but catch errors
+    emitAgentProgress(fullUpdate).catch(err => {
       logLLM("[emit] Failed to emit agent progress:", err)
     })
+
+    // Also call external progress callback if provided (for SSE streaming, etc.)
+    if (onProgress) {
+      try {
+        onProgress(fullUpdate)
+      } catch (err) {
+        logLLM("[emit] Failed to call onProgress callback:", err)
+      }
+    }
   }
 
   // Helper function to save a message incrementally to the conversation

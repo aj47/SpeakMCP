@@ -1,4 +1,8 @@
 import type { CHAT_PROVIDER_ID, STT_PROVIDER_ID, TTS_PROVIDER_ID, OPENAI_COMPATIBLE_PRESET_ID } from "."
+import type { ToolCall, ToolResult } from '@speakmcp/shared'
+
+// Re-export shared types for convenience
+export type { ToolCall, ToolResult, BaseChatMessage, ConversationHistoryMessage, ChatApiResponse } from '@speakmcp/shared'
 
 export type RecordingHistoryItem = {
   id: string
@@ -108,15 +112,8 @@ export interface AgentProgressStep {
   status: "pending" | "in_progress" | "completed" | "error" | "awaiting_approval"
   timestamp: number
   llmContent?: string // Store actual LLM response content for thinking steps
-  toolCall?: {
-    name: string
-    arguments: any
-  }
-  toolResult?: {
-    success: boolean
-    content: string
-    error?: string
-  }
+  toolCall?: ToolCall
+  toolResult?: ToolResult
   // For tool approval requests
   approvalRequest?: {
     approvalId: string
@@ -138,8 +135,8 @@ export interface AgentProgressUpdate {
   conversationHistory?: Array<{
     role: "user" | "assistant" | "tool"
     content: string
-    toolCalls?: Array<{ name: string; arguments: any }>
-    toolResults?: Array<{ success: boolean; content: string; error?: string }>
+    toolCalls?: ToolCall[]
+    toolResults?: ToolResult[]
     timestamp?: number
   }>
   /**
@@ -175,15 +172,8 @@ export interface ConversationMessage {
   role: "user" | "assistant" | "tool"
   content: string
   timestamp: number
-  toolCalls?: Array<{
-    name: string
-    arguments: any
-  }>
-  toolResults?: Array<{
-    success: boolean
-    content: string
-    error?: string
-  }>
+  toolCalls?: ToolCall[]
+  toolResults?: ToolResult[]
 }
 
 export interface ConversationMetadata {

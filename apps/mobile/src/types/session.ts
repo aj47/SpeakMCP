@@ -1,14 +1,21 @@
 /**
  * Session and Chat Types for Mobile App
- * Adapted from SpeakMCP/src/shared/types.ts for mobile use
+ * Uses shared types from @speakmcp/shared for consistency with desktop
  */
+
+import type { ToolCall, ToolResult } from '@speakmcp/shared';
 
 export interface ChatMessage {
   id: string;
   role: 'system' | 'user' | 'assistant';
   content: string;
   timestamp: number;
+  toolCalls?: ToolCall[];
+  toolResults?: ToolResult[];
 }
+
+// Re-export shared types for convenience
+export type { ToolCall, ToolResult } from '@speakmcp/shared';
 
 export interface Session {
   id: string;

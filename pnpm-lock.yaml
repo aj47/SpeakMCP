@@ -28,6 +28,9 @@ importers:
       '@radix-ui/react-tabs':
         specifier: ^1.1.13
         version: 1.1.13(@types/react-dom@18.3.7(@types/react@18.3.27))(@types/react@18.3.27)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@speakmcp/shared':
+        specifier: workspace:^
+        version: link:../../packages/shared
       ajv:
         specifier: ^8.17.1
         version: 8.17.1

@@ -9,6 +9,7 @@ import { mcpService, MCPToolResult } from "./mcp-service"
 import { processTranscriptWithAgentMode } from "./llm"
 import { state, agentProcessManager } from "./state"
 import { conversationService } from "./conversation-service"
+import { AgentProgressUpdate } from "../shared/types"
 
 let server: FastifyInstance | null = null
 let lastError: string | undefined
@@ -98,10 +99,63 @@ function extractUserPrompt(body: any): string | null {
 interface RunAgentOptions {
   prompt: string
   conversationId?: string
+  onProgress?: (update: AgentProgressUpdate) => void
 }
 
-async function runAgent(options: RunAgentOptions): Promise<{ content: string; conversationId: string }> {
-  const { prompt, conversationId: inputConversationId } = options
+/**
+ * Format conversation history from internal MCP format to API-friendly format.
+ * Converts MCPToolResult (content as array, isError) to ToolResult (content as string, success).
+ */
+function formatConversationHistoryForApi(
+  history: Array<{
+    role: "user" | "assistant" | "tool"
+    content: string
+    toolCalls?: any[]
+    toolResults?: any[]
+    timestamp?: number
+  }>
+): Array<{
+  role: "user" | "assistant" | "tool"
+  content: string
+  toolCalls?: Array<{ name: string; arguments: any }>
+  toolResults?: Array<{ success: boolean; content: string; error?: string }>
+  timestamp?: number
+}> {
+  return history.map((entry) => ({
+    role: entry.role,
+    content: entry.content,
+    toolCalls: entry.toolCalls?.map((tc: any) => ({
+      name: tc.name,
+      arguments: tc.arguments,
+    })),
+    toolResults: entry.toolResults?.map((tr: any) => {
+      // Handle both MCPToolResult format (content as array, isError) and already-converted format
+      const contentText = Array.isArray(tr.content)
+        ? tr.content.map((c: any) => c.text || c).join("\n")
+        : String(tr.content || "")
+      const isError = tr.isError ?? (tr.success === false)
+      return {
+        success: !isError,
+        content: contentText,
+        error: isError ? contentText : undefined,
+      }
+    }),
+    timestamp: entry.timestamp,
+  }))
+}
+
+async function runAgent(options: RunAgentOptions): Promise<{
+  content: string
+  conversationId: string
+  conversationHistory: Array<{
+    role: "user" | "assistant" | "tool"
+    content: string
+    toolCalls?: Array<{ name: string; arguments: any }>
+    toolResults?: Array<{ success: boolean; content: string; error?: string }>
+    timestamp?: number
+  }>
+}> {
+  const { prompt, conversationId: inputConversationId, onProgress } = options
   const cfg = configStore.get()
 
   // Set agent mode state for process management - ensure clean state
@@ -132,14 +186,7 @@ async function runAgent(options: RunAgentOptions): Promise<{ content: string; co
       // This matches tipc.ts processWithAgentMode behavior
       const messagesToConvert = updatedConversation.messages.slice(0, -1)
 
-      // Debug: Log the conversation history order
-      console.log("[remote-server] ====== CONVERSATION HISTORY ======")
-      console.log("[remote-server] Total messages in conversation:", updatedConversation.messages.length)
-      console.log("[remote-server] Messages to use as history (excluding current):", messagesToConvert.length)
-      messagesToConvert.forEach((msg, i) => {
-        console.log(`[remote-server] History[${i}]: ${msg.role} - "${msg.content.substring(0, 50)}..."`)
-      })
-      console.log("[remote-server] Current user message (will be added by LLM):", prompt.substring(0, 50))
+
 
       diagnosticsService.logInfo("remote-server", `Continuing conversation ${conversationId} with ${messagesToConvert.length} previous messages`)
 
@@ -207,12 +254,16 @@ async function runAgent(options: RunAgentOptions): Promise<{ content: string; co
       previousConversationHistory,
       conversationId,
       sessionId, // Pass session ID for progress routing
+      onProgress, // Pass progress callback for SSE streaming
     )
 
     // Mark session as completed
     agentSessionTracker.completeSession(sessionId, "Agent completed successfully")
 
-    return { content: agentResult.content, conversationId }
+    // Format conversation history for API response (convert MCPToolResult to ToolResult format)
+    const formattedHistory = formatConversationHistoryForApi(agentResult.conversationHistory)
+
+    return { content: agentResult.content, conversationId, conversationHistory: formattedHistory }
   } catch (error) {
     // Mark session as errored
     const errorMessage = error instanceof Error ? error.message : "Unknown error"
@@ -288,11 +339,15 @@ export async function startRemoteServer() {
   // Configure CORS
   const corsOrigins = cfg.remoteServerCorsOrigins || ["*"]
   await fastify.register(cors, {
-    origin: corsOrigins,
+    // When origin is ["*"] or includes "*", use true to reflect the request origin
+    // This is needed because credentials: true doesn't work with literal "*"
+    origin: corsOrigins.includes("*") ? true : corsOrigins,
     methods: ["GET", "POST", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,
     maxAge: 86400, // Cache preflight for 24 hours
+    preflight: true, // Enable preflight pass-through
+    strictPreflight: false, // Don't be strict about preflight requests
   })
 
   // Auth hook (skip for OPTIONS preflight requests)
@@ -322,13 +377,67 @@ export async function startRemoteServer() {
 
       // Extract conversationId from request body (custom extension to OpenAI API)
       const conversationId = typeof body.conversation_id === "string" ? body.conversation_id : undefined
+      // Check if client wants SSE streaming
+      const isStreaming = body.stream === true
 
-      // Debug logging
-      console.log("[remote-server] ====== CHAT REQUEST ======")
-      console.log("[remote-server] Received conversation_id:", conversationId || "NONE (new conversation)")
-      console.log("[remote-server] Prompt:", prompt.substring(0, 100))
-      diagnosticsService.logInfo("remote-server", `Handling completion request${conversationId ? ` for conversation ${conversationId}` : ""}`)
+      console.log("[remote-server] Chat request:", { conversationId: conversationId || "new", promptLength: prompt.length, streaming: isStreaming })
+      diagnosticsService.logInfo("remote-server", `Handling completion request${conversationId ? ` for conversation ${conversationId}` : ""}${isStreaming ? " (streaming)" : ""}`)
 
+      if (isStreaming) {
+        // SSE streaming mode
+        // Get the request origin for CORS
+        const requestOrigin = req.headers.origin || "*"
+        reply.raw.writeHead(200, {
+          "Content-Type": "text/event-stream",
+          "Cache-Control": "no-cache",
+          "Connection": "keep-alive",
+          "Access-Control-Allow-Origin": requestOrigin,
+          "Access-Control-Allow-Credentials": "true",
+        })
+
+        // Helper to write SSE events
+        const writeSSE = (data: object) => {
+          reply.raw.write(`data: ${JSON.stringify(data)}\n\n`)
+        }
+
+        // Create progress callback that emits SSE events
+        const onProgress = (update: AgentProgressUpdate) => {
+          writeSSE({ type: "progress", data: update })
+        }
+
+        try {
+          const result = await runAgent({ prompt, conversationId, onProgress })
+
+          // Record as if user submitted a text input
+          recordHistory(result.content)
+
+          const model = resolveActiveModelId(configStore.get())
+
+          // Send final "done" event with full response data
+          writeSSE({
+            type: "done",
+            data: {
+              content: result.content,
+              conversation_id: result.conversationId,
+              conversation_history: result.conversationHistory,
+              model,
+            },
+          })
+        } catch (error: any) {
+          // Send error event
+          writeSSE({
+            type: "error",
+            data: { message: error?.message || "Internal Server Error" },
+          })
+        } finally {
+          reply.raw.end()
+        }
+
+        // Return reply to indicate we've handled the response
+        return reply
+      }
+
+      // Non-streaming mode (existing behavior)
       const result = await runAgent({ prompt, conversationId })
 
       // Record as if user submitted a text input
@@ -338,14 +447,12 @@ export async function startRemoteServer() {
       // Return standard OpenAI response with conversation_id as custom field
       const response = toOpenAIChatResponse(result.content, model)
 
-      // Debug logging
-      console.log("[remote-server] ====== CHAT RESPONSE ======")
-      console.log("[remote-server] Returning conversation_id:", result.conversationId)
-      console.log("[remote-server] Response length:", result.content.length)
+      console.log("[remote-server] Chat response:", { conversationId: result.conversationId, responseLength: result.content.length })
 
       return reply.send({
         ...response,
         conversation_id: result.conversationId, // Include conversation_id for client to use in follow-ups
+        conversation_history: result.conversationHistory, // Include full conversation history with tool calls/results
       })
     } catch (error: any) {
       diagnosticsService.logError("remote-server", "Handler error", error)

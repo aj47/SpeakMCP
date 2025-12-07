@@ -121,11 +121,11 @@ export function Component() {
 
   // Initialize system prompt state when config loads
   useEffect(() => {
-    // Use custom system prompt from config, or show empty (which means "using default")
-    const currentPrompt = config.mcpCustomSystemPrompt || ""
+    // Use custom system prompt from config, or fall back to the default prompt
+    const currentPrompt = config.mcpCustomSystemPrompt || defaultSystemPrompt
     setCustomSystemPrompt(currentPrompt)
     setHasUnsavedSystemPromptChanges(false)
-  }, [config.mcpCustomSystemPrompt])
+  }, [config.mcpCustomSystemPrompt, defaultSystemPrompt])
 
   // Fire-and-forget config update for toggles/switches (no await needed)
   const updateConfig = (updates: Partial<Config>) => {
@@ -141,8 +141,8 @@ export function Component() {
   // Combined saving state for the system prompt save operation
   const isSavingSystemPrompt = saveConfigMutation.isPending || updateProfileMutation.isPending
 
-  // Check if currently using default system prompt
-  const isUsingDefaultSystemPrompt = !customSystemPrompt.trim()
+  // Check if currently using default system prompt (compare against the actual default)
+  const isUsingDefaultSystemPrompt = customSystemPrompt.trim() === defaultSystemPrompt.trim()
 
   const saveAdditionalGuidelines = async () => {
     try {
@@ -181,20 +181,23 @@ export function Component() {
   // System prompt handlers
   const handleSystemPromptChange = (value: string) => {
     setCustomSystemPrompt(value)
-    setHasUnsavedSystemPromptChanges(value !== (config.mcpCustomSystemPrompt || ""))
+    // Compare against the stored config value (or default if none stored)
+    const storedValue = config.mcpCustomSystemPrompt || defaultSystemPrompt
+    setHasUnsavedSystemPromptChanges(value !== storedValue)
   }
 
   const saveSystemPrompt = async () => {
     try {
-      // Save to config
-      const newConfig = { ...config, mcpCustomSystemPrompt: customSystemPrompt }
+      // If the prompt matches the default, save empty string to indicate "use default"
+      const valueToSave = customSystemPrompt.trim() === defaultSystemPrompt.trim() ? "" : customSystemPrompt
+      const newConfig = { ...config, mcpCustomSystemPrompt: valueToSave }
       await saveConfigMutation.mutateAsync(newConfig)
 
       // Also update the current profile's systemPrompt if it's a non-default profile
       if (currentProfile && !currentProfile.isDefault) {
         await updateProfileMutation.mutateAsync({
           id: currentProfile.id,
-          systemPrompt: customSystemPrompt,
+          systemPrompt: valueToSave,
         })
       }
 
@@ -207,12 +210,14 @@ export function Component() {
   }
 
   const restoreDefaultSystemPrompt = async () => {
-    setCustomSystemPrompt("")
-    setHasUnsavedSystemPromptChanges("" !== (config.mcpCustomSystemPrompt || ""))
+    setCustomSystemPrompt(defaultSystemPrompt)
+    // Check if this is a change from the current stored value
+    const storedValue = config.mcpCustomSystemPrompt || defaultSystemPrompt
+    setHasUnsavedSystemPromptChanges(defaultSystemPrompt !== storedValue)
   }
 
   const revertSystemPromptChanges = () => {
-    setCustomSystemPrompt(config.mcpCustomSystemPrompt || "")
+    setCustomSystemPrompt(config.mcpCustomSystemPrompt || defaultSystemPrompt)
     setHasUnsavedSystemPromptChanges(false)
   }
 
@@ -319,7 +324,7 @@ DOMAIN-SPECIFIC RULES:
                   <div className="space-y-3 pt-3">
                     <p className="text-xs text-muted-foreground">
                       The base system prompt defines the core behavior and instructions for the AI agent.
-                      Leave empty to use the default prompt. Custom prompts are saved per-profile.
+                      Edit the prompt below or click "Use Default" to restore the default. Custom prompts are saved per-profile.
                     </p>
                     <Textarea
                       id="mcp-system-prompt"
@@ -327,7 +332,6 @@ DOMAIN-SPECIFIC RULES:
                       onChange={(e) => handleSystemPromptChange(e.target.value)}
                       rows={12}
                       className="font-mono text-xs"
-                      placeholder={defaultSystemPrompt || "Loading default system prompt..."}
                     />
                     <div className="flex gap-2 flex-wrap">
                       <Button

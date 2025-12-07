@@ -21,45 +21,6 @@ const DEFAULT_PROFILES: Profile[] = [
     updatedAt: Date.now(),
     isDefault: true,
   },
-  {
-    id: "git-profile",
-    name: "Git & Version Control",
-    guidelines: `CUSTOM GUIDELINES FOR GIT & VERSION CONTROL:
-- Always check git status before making commits
-- Write clear, descriptive commit messages following conventional commits format
-- Review changes before committing
-- Ask for confirmation before force pushing or rebasing
-- Suggest creating feature branches for new work
-- Remind about pulling latest changes before pushing
-
-SAFETY RULES:
-- Never force push to main/master branches
-- Always create backups before destructive operations
-- Verify remote repository before pushing
-- Check for merge conflicts before merging`,
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
-  },
-  {
-    id: "ai-coding-agent",
-    name: "AI Coding Agent",
-    guidelines: `CUSTOM GUIDELINES FOR AI CODING ASSISTANCE:
-- Prioritize code quality and maintainability
-- Follow existing code style and conventions
-- Add comments for complex logic
-- Suggest tests for new functionality
-- Consider edge cases and error handling
-- Recommend refactoring when appropriate
-
-CODE REVIEW FOCUS:
-- Check for potential bugs and security issues
-- Verify proper error handling
-- Ensure consistent naming conventions
-- Look for opportunities to reduce code duplication
-- Validate input parameters and return types`,
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
-  },
 ]
 
 class ProfileService {

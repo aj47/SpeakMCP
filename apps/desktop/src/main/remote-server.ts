@@ -353,6 +353,8 @@ export async function startRemoteServer() {
     allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,
     maxAge: 86400, // Cache preflight for 24 hours
+    preflight: true, // Enable preflight pass-through
+    strictPreflight: false, // Don't be strict about preflight requests
   })
 
   // Auth hook (skip for OPTIONS preflight requests)
@@ -394,10 +396,14 @@ export async function startRemoteServer() {
 
       if (isStreaming) {
         // SSE streaming mode
+        // Get the request origin for CORS
+        const requestOrigin = req.headers.origin || "*"
         reply.raw.writeHead(200, {
           "Content-Type": "text/event-stream",
           "Cache-Control": "no-cache",
           "Connection": "keep-alive",
+          "Access-Control-Allow-Origin": requestOrigin,
+          "Access-Control-Allow-Credentials": "true",
         })
 
         // Helper to write SSE events

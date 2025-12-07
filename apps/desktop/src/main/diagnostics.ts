@@ -130,8 +130,8 @@ class DiagnosticsService {
       },
       config: {
         mcpServersCount: Object.keys(config.mcpConfig?.mcpServers || {}).length,
-        mcpToolsEnabled: config.mcpToolsEnabled || false,
-        mcpAgentModeEnabled: config.mcpAgentModeEnabled || false,
+        mcpToolsEnabled: true, // MCP tools are now always enabled
+        mcpAgentModeEnabled: true, // Agent mode is now always enabled
       },
       mcp: {
         availableTools: mcpService.getAvailableTools().length,

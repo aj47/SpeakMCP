@@ -403,6 +403,40 @@ export function Component() {
                 )}
             </div>
           </Control>
+
+          <Control label={<ControlLabel label="Agent Mode" tooltip="Choose how to activate agent mode for MCP tool calling" />} className="px-3">
+            <div className="space-y-2">
+              <Select
+                value={configQuery.data?.mcpToolsShortcut || "hold-ctrl-alt"}
+                onValueChange={(value: "hold-ctrl-alt" | "ctrl-alt-slash" | "custom") => {
+                  saveConfig({
+                    mcpToolsShortcut: value,
+                  })
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="hold-ctrl-alt">Hold Ctrl+Alt</SelectItem>
+                  <SelectItem value="ctrl-alt-slash">Ctrl+Alt+/</SelectItem>
+                  <SelectItem value="custom">Custom</SelectItem>
+                </SelectContent>
+              </Select>
+
+              {configQuery.data?.mcpToolsShortcut === "custom" && (
+                <KeyRecorder
+                  value={configQuery.data?.customMcpToolsShortcut || ""}
+                  onChange={(keyCombo) => {
+                    saveConfig({
+                      customMcpToolsShortcut: keyCombo,
+                    })
+                  }}
+                  placeholder="Click to record custom agent mode shortcut"
+                />
+              )}
+            </div>
+          </Control>
         </ControlGroup>
 
         <ControlGroup title="Speech-to-Text">
@@ -676,6 +710,84 @@ export function Component() {
           </Control>
 
 
+        </ControlGroup>
+
+        {/* Agent Safety Settings */}
+        <ControlGroup title="Agent Safety">
+          <Control
+            label={
+              <ControlLabel
+                label="Require Tool Approval"
+                tooltip="Adds a confirmation dialog before any tool executes. Recommended for safety."
+              />
+            }
+            className="px-3"
+          >
+            <Switch
+              checked={configQuery.data?.mcpRequireApprovalBeforeToolCall ?? false}
+              onCheckedChange={(value) => {
+                saveConfig({
+                  mcpRequireApprovalBeforeToolCall: value,
+                })
+              }}
+            />
+          </Control>
+
+          <Control
+            label={
+              <ControlLabel
+                label="Emergency Kill Switch"
+                tooltip="Provides a global hotkey to immediately stop agent mode and kill all agent-created processes"
+              />
+            }
+            className="px-3"
+          >
+            <Switch
+              checked={configQuery.data?.agentKillSwitchEnabled !== false}
+              onCheckedChange={(value) => {
+                saveConfig({
+                  agentKillSwitchEnabled: value,
+                })
+              }}
+            />
+          </Control>
+
+          {configQuery.data?.agentKillSwitchEnabled !== false && (
+            <Control label="Kill Switch Hotkey" className="px-3">
+              <div className="space-y-2">
+                <Select
+                  value={configQuery.data?.agentKillSwitchHotkey || "ctrl-shift-escape"}
+                  onValueChange={(value: "ctrl-shift-escape" | "ctrl-alt-q" | "ctrl-shift-q" | "custom") => {
+                    saveConfig({
+                      agentKillSwitchHotkey: value,
+                    })
+                  }}
+                >
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ctrl-shift-escape">Ctrl + Shift + Escape</SelectItem>
+                    <SelectItem value="ctrl-alt-q">Ctrl + Alt + Q</SelectItem>
+                    <SelectItem value="ctrl-shift-q">Ctrl + Shift + Q</SelectItem>
+                    <SelectItem value="custom">Custom</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                {configQuery.data?.agentKillSwitchHotkey === "custom" && (
+                  <KeyRecorder
+                    value={configQuery.data?.customAgentKillSwitchHotkey || ""}
+                    onChange={(keyCombo) => {
+                      saveConfig({
+                        customAgentKillSwitchHotkey: keyCombo,
+                      })
+                    }}
+                    placeholder="Click to record custom hotkey"
+                  />
+                )}
+              </div>
+            </Control>
+          )}
         </ControlGroup>
 
         {/* About Section */}

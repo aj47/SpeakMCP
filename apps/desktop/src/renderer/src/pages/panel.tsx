@@ -546,23 +546,14 @@ export function Component() {
     // Ensure main process no longer treats panel as textInput mode
     tipcClient.clearTextInputState({})
 
-    // Always try to use MCP processing first if available
-    try {
-      const config = await tipcClient.getConfig({})
-      if ((config as any).mcpToolsEnabled) {
-        mcpTextInputMutation.mutate({
-          text,
-          // Pass currentConversationId if user explicitly continued from history,
-          // otherwise undefined to create a fresh conversation.
-          // This prevents message leaking while still supporting explicit continuation.
-          conversationId: conversationIdForMcp ?? undefined,
-        })
-      } else {
-        textInputMutation.mutate({ text })
-      }
-    } catch (error) {
-      textInputMutation.mutate({ text })
-    }
+    // Always use MCP processing
+    mcpTextInputMutation.mutate({
+      text,
+      // Pass currentConversationId if user explicitly continued from history,
+      // otherwise undefined to create a fresh conversation.
+      // This prevents message leaking while still supporting explicit continuation.
+      conversationId: conversationIdForMcp ?? undefined,
+    })
   }
 
 

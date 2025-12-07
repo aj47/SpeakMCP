@@ -310,10 +310,25 @@ export function Component() {
     }
   }, [pendingConversationId, pendingConversationQuery.data])
 
-  // Handle continuing a conversation - set the pending ID to show the tile
+  // Handle continuing a conversation - check for existing active session first
+  // If found, focus it; otherwise create a pending tile
   // LLM inference will only happen when user sends an actual message
   const handleContinueConversation = (conversationId: string) => {
-    setPendingConversationId(conversationId)
+    // Check if there's already an active session for this conversationId
+    const existingSession = Array.from(agentProgressById.entries()).find(
+      ([_, progress]) => progress?.conversationId === conversationId
+    )
+    if (existingSession) {
+      // Focus the existing session tile instead of creating a duplicate
+      setFocusedSessionId(existingSession[0])
+      // Scroll to the session tile
+      setTimeout(() => {
+        sessionRefs.current[existingSession[0]]?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }, 100)
+    } else {
+      // No active session exists, create a pending tile
+      setPendingConversationId(conversationId)
+    }
   }
 
   // Handle dismissing the pending continuation

@@ -253,6 +253,8 @@ export type Profile = {
   mcpServerConfig?: ProfileMcpServerConfig
   // Per-profile model/provider configuration
   modelConfig?: ProfileModelConfig
+  // Custom system prompt (base prompt for agent) - if empty/undefined, uses default
+  systemPrompt?: string
 }
 
 export type ProfilesData = {
@@ -375,6 +377,7 @@ export type Config = {
   mcpToolsGroqModel?: string
   mcpToolsGeminiModel?: string
   mcpToolsSystemPrompt?: string
+  mcpCustomSystemPrompt?: string // Custom base system prompt - overrides default when set
   mcpCurrentProfileId?: string // Current active profile ID
   /** @deprecated Agent mode is now always enabled. This field is kept for backwards compatibility but ignored. */
   mcpAgentModeEnabled?: boolean

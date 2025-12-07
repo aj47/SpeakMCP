@@ -139,6 +139,9 @@ export function Component() {
   const isSavingGuidelines = saveConfigMutation.isPending || updateProfileMutation.isPending
   const isProfileLoading = currentProfileQuery.isLoading
 
+  // Combined saving state for the system prompt save operation
+  const isSavingSystemPrompt = saveConfigMutation.isPending || updateProfileMutation.isPending
+
   // Check if currently using default system prompt
   const isUsingDefaultSystemPrompt = !customSystemPrompt.trim()
 
@@ -358,7 +361,7 @@ DOMAIN-SPECIFIC RULES:
                           variant="outline"
                           size="sm"
                           onClick={revertSystemPromptChanges}
-                          disabled={saveConfigMutation.isPending}
+                          disabled={isSavingSystemPrompt}
                         >
                           Revert Changes
                         </Button>
@@ -366,11 +369,11 @@ DOMAIN-SPECIFIC RULES:
                       <Button
                         size="sm"
                         onClick={saveSystemPrompt}
-                        disabled={!hasUnsavedSystemPromptChanges || saveConfigMutation.isPending || isProfileLoading}
+                        disabled={!hasUnsavedSystemPromptChanges || isSavingSystemPrompt || isProfileLoading}
                         className="gap-1"
                       >
                         <Save className="h-3 w-3" />
-                        {saveConfigMutation.isPending ? "Saving..." : "Save System Prompt"}
+                        {isSavingSystemPrompt ? "Saving..." : "Save System Prompt"}
                       </Button>
                     </div>
                     {hasUnsavedSystemPromptChanges && (

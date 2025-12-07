@@ -432,6 +432,9 @@ export type Config = {
   mcpVerifyContextMaxItems?: number
   mcpVerifyRetryCount?: number
 
+  // Parallel Tool Execution Configuration
+  mcpParallelToolExecution?: boolean
+
 
 
 	  // Remote Server Configuration

@@ -257,6 +257,127 @@ function createProgressStep(
   }
 }
 
+/**
+ * Result from a single tool execution including metadata for progress tracking
+ */
+interface ToolExecutionResult {
+  toolCall: MCPToolCall
+  result: MCPToolResult
+  retryCount: number
+  cancelledByKill: boolean
+}
+
+/**
+ * Execute a single tool call with retry logic and kill switch support
+ * This helper is used by both sequential and parallel execution modes
+ */
+async function executeToolWithRetries(
+  toolCall: MCPToolCall,
+  executeToolCall: (toolCall: MCPToolCall, onProgress?: (message: string) => void) => Promise<MCPToolResult>,
+  currentSessionId: string,
+  onToolProgress: (message: string) => void,
+  maxRetries: number = 2,
+): Promise<ToolExecutionResult> {
+  // Check for stop signal before starting
+  if (agentSessionStateManager.shouldStopSession(currentSessionId)) {
+    return {
+      toolCall,
+      result: {
+        content: [{ type: "text", text: "Tool execution cancelled by emergency kill switch" }],
+        isError: true,
+      },
+      retryCount: 0,
+      cancelledByKill: true,
+    }
+  }
+
+  // Execute tool with cancel-aware race so kill switch can stop mid-tool
+  let cancelledByKill = false
+  let cancelInterval: ReturnType<typeof setInterval> | null = null
+  const stopPromise: Promise<MCPToolResult> = new Promise((resolve) => {
+    cancelInterval = setInterval(() => {
+      if (agentSessionStateManager.shouldStopSession(currentSessionId)) {
+        cancelledByKill = true
+        if (cancelInterval) clearInterval(cancelInterval)
+        resolve({
+          content: [{ type: "text", text: "Tool execution cancelled by emergency kill switch" }],
+          isError: true,
+        })
+      }
+    }, 100)
+  })
+
+  const execPromise = executeToolCall(toolCall, onToolProgress)
+  let result = (await Promise.race([
+    execPromise,
+    stopPromise,
+  ])) as MCPToolResult
+  // Avoid unhandled rejection if the tool promise rejects after we already stopped
+  if (cancelledByKill) {
+    execPromise.catch(() => { /* swallow after kill switch */ })
+  }
+  if (cancelInterval) clearInterval(cancelInterval)
+
+  if (cancelledByKill) {
+    return {
+      toolCall,
+      result,
+      retryCount: 0,
+      cancelledByKill: true,
+    }
+  }
+
+  // Enhanced retry logic for specific error types
+  let retryCount = 0
+  while (result.isError && retryCount < maxRetries) {
+    // Check kill switch before retrying
+    if (agentSessionStateManager.shouldStopSession(currentSessionId)) {
+      return {
+        toolCall,
+        result: {
+          content: [{ type: "text", text: "Tool execution cancelled by emergency kill switch" }],
+          isError: true,
+        },
+        retryCount,
+        cancelledByKill: true,
+      }
+    }
+
+    const errorText = result.content
+      .map((c) => c.text)
+      .join(" ")
+      .toLowerCase()
+
+    // Check if this is a retryable error
+    const isRetryableError =
+      errorText.includes("timeout") ||
+      errorText.includes("connection") ||
+      errorText.includes("network") ||
+      errorText.includes("temporary") ||
+      errorText.includes("busy")
+
+    if (isRetryableError) {
+      retryCount++
+
+      // Wait before retry (exponential backoff)
+      await new Promise((resolve) =>
+        setTimeout(resolve, Math.pow(2, retryCount) * 1000),
+      )
+
+      result = await executeToolCall(toolCall, onToolProgress)
+    } else {
+      break // Don't retry non-transient errors
+    }
+  }
+
+  return {
+    toolCall,
+    result,
+    retryCount,
+    cancelledByKill: false,
+  }
+}
+
 // Helper function to analyze tool capabilities and match them to user requests
 function analyzeToolCapabilities(
   availableTools: MCPTool[],
@@ -1532,21 +1653,121 @@ Always use actual resource IDs from the conversation history or create new ones 
 
     // Apply intelligent tool result processing to all queries to prevent context overflow
 
-    for (const toolCall of toolCallsArray) {
+    // Check for stop signal before starting tool execution
+    if (agentSessionStateManager.shouldStopSession(currentSessionId)) {
+      logLLM(`Agent session ${currentSessionId} stopped before tool execution`)
+      const killNote = "\n\n(Agent mode was stopped by emergency kill switch)"
+      const finalOutput = (finalContent || "") + killNote
+      conversationHistory.push({ role: "assistant", content: finalOutput })
+      emit({
+        currentIteration: iteration,
+        maxIterations,
+        steps: progressSteps.slice(-3),
+        isComplete: true,
+        finalContent: finalOutput,
+        conversationHistory: formatConversationForProgress(conversationHistory),
+      })
+      break
+    }
+
+    // Determine execution mode: parallel or sequential
+    const useParallelExecution = config.mcpParallelToolExecution !== false && toolCallsArray.length > 1
+
+    if (useParallelExecution) {
+      // PARALLEL EXECUTION: Execute all tool calls concurrently
       if (isDebugTools()) {
-        logTools("Executing planned tool call", toolCall)
+        logTools(`Executing ${toolCallsArray.length} tool calls in parallel`, toolCallsArray.map(t => t.name))
       }
-      // Check for stop signal before executing each tool
-      if (agentSessionStateManager.shouldStopSession(currentSessionId)) {
-        logLLM(`Agent session ${currentSessionId} stopped during tool execution`)
-        // Emit final progress with complete status
+
+      // Create progress steps for all tools upfront
+      const toolCallSteps: Map<string, AgentProgressStep> = new Map()
+      for (const toolCall of toolCallsArray) {
+        const toolCallStep = createProgressStep(
+          "tool_call",
+          `Executing ${toolCall.name}`,
+          `Running tool with arguments: ${JSON.stringify(toolCall.arguments)}`,
+          "in_progress",
+        )
+        toolCallStep.toolCall = {
+          name: toolCall.name,
+          arguments: toolCall.arguments,
+        }
+        progressSteps.push(toolCallStep)
+        // Use tool name + stringified args as key to handle same tool called multiple times
+        toolCallSteps.set(`${toolCall.name}:${JSON.stringify(toolCall.arguments)}`, toolCallStep)
+      }
+
+      // Emit progress showing all tools starting in parallel
+      emit({
+        currentIteration: iteration,
+        maxIterations,
+        steps: progressSteps.slice(-Math.min(toolCallsArray.length * 2, 6)),
+        isComplete: false,
+        conversationHistory: formatConversationForProgress(conversationHistory),
+      })
+
+      // Execute all tools in parallel
+      const executionPromises = toolCallsArray.map(async (toolCall) => {
+        const stepKey = `${toolCall.name}:${JSON.stringify(toolCall.arguments)}`
+        const toolCallStep = toolCallSteps.get(stepKey)!
+
+        const onToolProgress = (message: string) => {
+          toolCallStep.description = message
+          emit({
+            currentIteration: iteration,
+            maxIterations,
+            steps: progressSteps.slice(-Math.min(toolCallsArray.length * 2, 6)),
+            isComplete: false,
+            conversationHistory: formatConversationForProgress(conversationHistory),
+          })
+        }
+
+        const execResult = await executeToolWithRetries(
+          toolCall,
+          executeToolCall,
+          currentSessionId,
+          onToolProgress,
+          2, // maxRetries
+        )
+
+        // Update the progress step with the result
+        toolCallStep.status = execResult.result.isError ? "error" : "completed"
+        toolCallStep.toolResult = {
+          success: !execResult.result.isError,
+          content: execResult.result.content.map((c) => c.text).join("\n"),
+          error: execResult.result.isError
+            ? execResult.result.content.map((c) => c.text).join("\n")
+            : undefined,
+        }
+
+        // Add tool result step
+        const toolResultStep = createProgressStep(
+          "tool_result",
+          `${toolCall.name} ${execResult.result.isError ? "failed" : "completed"}`,
+          execResult.result.isError
+            ? `Tool execution failed${execResult.retryCount > 0 ? ` after ${execResult.retryCount} retries` : ""}`
+            : "Tool executed successfully",
+          execResult.result.isError ? "error" : "completed",
+        )
+        toolResultStep.toolResult = toolCallStep.toolResult
+        progressSteps.push(toolResultStep)
+
+        return execResult
+      })
+
+      // Wait for all tools to complete
+      const executionResults = await Promise.all(executionPromises)
+
+      // Check if any tool was cancelled by kill switch
+      const anyCancelled = executionResults.some(r => r.cancelledByKill)
+      if (anyCancelled) {
         const killNote = "\n\n(Agent mode was stopped by emergency kill switch)"
         const finalOutput = (finalContent || "") + killNote
         conversationHistory.push({ role: "assistant", content: finalOutput })
         emit({
           currentIteration: iteration,
           maxIterations,
-          steps: progressSteps.slice(-3),
+          steps: progressSteps.slice(-Math.min(toolCallsArray.length * 2, 6)),
           isComplete: true,
           finalContent: finalOutput,
           conversationHistory: formatConversationForProgress(conversationHistory),
@@ -1554,47 +1775,147 @@ Always use actual resource IDs from the conversation history or create new ones 
         break
       }
 
-      // Add tool call step
-      const toolCallStep = createProgressStep(
-        "tool_call",
-        `Executing ${toolCall.name}`,
-        `Running tool with arguments: ${JSON.stringify(toolCall.arguments)}`,
-        "in_progress",
-      )
-      toolCallStep.toolCall = {
-        name: toolCall.name,
-        arguments: toolCall.arguments,
+      // Collect results in order
+      for (const execResult of executionResults) {
+        toolResults.push(execResult.result)
+        if (execResult.result.isError) {
+          failedTools.push(execResult.toolCall.name)
+        }
       }
-      progressSteps.push(toolCallStep)
 
-      // Emit progress update
+      // Emit final progress for parallel execution
       emit({
         currentIteration: iteration,
         maxIterations,
-        steps: progressSteps.slice(-3),
+        steps: progressSteps.slice(-Math.min(toolCallsArray.length * 2, 6)),
         isComplete: false,
         conversationHistory: formatConversationForProgress(conversationHistory),
       })
+    } else {
+      // SEQUENTIAL EXECUTION: Execute tool calls one at a time
+      for (const toolCall of toolCallsArray) {
+        if (isDebugTools()) {
+          logTools("Executing planned tool call", toolCall)
+        }
+        // Check for stop signal before executing each tool
+        if (agentSessionStateManager.shouldStopSession(currentSessionId)) {
+          logLLM(`Agent session ${currentSessionId} stopped during tool execution`)
+          const killNote = "\n\n(Agent mode was stopped by emergency kill switch)"
+          const finalOutput = (finalContent || "") + killNote
+          conversationHistory.push({ role: "assistant", content: finalOutput })
+          emit({
+            currentIteration: iteration,
+            maxIterations,
+            steps: progressSteps.slice(-3),
+            isComplete: true,
+            finalContent: finalOutput,
+            conversationHistory: formatConversationForProgress(conversationHistory),
+          })
+          break
+        }
 
-      // Execute tool with cancel-aware race so kill switch can stop mid-tool
-      let cancelledByKill = false
-      let cancelInterval: NodeJS.Timeout | null = null
-      const stopPromise: Promise<MCPToolResult> = new Promise((resolve) => {
-        cancelInterval = setInterval(() => {
-          if (agentSessionStateManager.shouldStopSession(currentSessionId)) {
-            cancelledByKill = true
-            if (cancelInterval) clearInterval(cancelInterval)
-            resolve({
-              content: [{ type: "text", text: "Tool execution cancelled by emergency kill switch" }],
-              isError: true,
-            })
+        // Add tool call step
+        const toolCallStep = createProgressStep(
+          "tool_call",
+          `Executing ${toolCall.name}`,
+          `Running tool with arguments: ${JSON.stringify(toolCall.arguments)}`,
+          "in_progress",
+        )
+        toolCallStep.toolCall = {
+          name: toolCall.name,
+          arguments: toolCall.arguments,
+        }
+        progressSteps.push(toolCallStep)
+
+        // Emit progress update
+        emit({
+          currentIteration: iteration,
+          maxIterations,
+          steps: progressSteps.slice(-3),
+          isComplete: false,
+          conversationHistory: formatConversationForProgress(conversationHistory),
+        })
+
+        // Create progress callback to update tool execution step
+        const onToolProgress = (message: string) => {
+          toolCallStep.description = message
+          emit({
+            currentIteration: iteration,
+            maxIterations,
+            steps: progressSteps.slice(-3),
+            isComplete: false,
+            conversationHistory: formatConversationForProgress(conversationHistory),
+          })
+        }
+
+        const execResult = await executeToolWithRetries(
+          toolCall,
+          executeToolCall,
+          currentSessionId,
+          onToolProgress,
+          2, // maxRetries
+        )
+
+        if (execResult.cancelledByKill) {
+          // Mark step and emit final progress, then break out of tool loop
+          toolCallStep.status = "error"
+          toolCallStep.toolResult = {
+            success: false,
+            content: "Tool execution cancelled by emergency kill switch",
+            error: "Cancelled by emergency kill switch",
           }
-        }, 100)
-      })
-      // Create progress callback to update tool execution step
-      const onToolProgress = (message: string) => {
-        toolCallStep.description = message
-        // Emit progress update to show processing status
+          const toolResultStep = createProgressStep(
+            "tool_result",
+            `${toolCall.name} cancelled`,
+            "Tool execution cancelled by emergency kill switch",
+            "error",
+          )
+          toolResultStep.toolResult = toolCallStep.toolResult
+          progressSteps.push(toolResultStep)
+          const killNote = "\n\n(Agent mode was stopped by emergency kill switch)"
+          const finalOutput = (finalContent || "") + killNote
+          conversationHistory.push({ role: "assistant", content: finalOutput })
+          emit({
+            currentIteration: iteration,
+            maxIterations,
+            steps: progressSteps.slice(-3),
+            isComplete: true,
+            finalContent: finalOutput,
+            conversationHistory: formatConversationForProgress(conversationHistory),
+          })
+          break
+        }
+
+        toolResults.push(execResult.result)
+
+        // Track failed tools for better error reporting
+        if (execResult.result.isError) {
+          failedTools.push(toolCall.name)
+        }
+
+        // Update tool call step with result
+        toolCallStep.status = execResult.result.isError ? "error" : "completed"
+        toolCallStep.toolResult = {
+          success: !execResult.result.isError,
+          content: execResult.result.content.map((c) => c.text).join("\n"),
+          error: execResult.result.isError
+            ? execResult.result.content.map((c) => c.text).join("\n")
+            : undefined,
+        }
+
+        // Add tool result step with enhanced error information
+        const toolResultStep = createProgressStep(
+          "tool_result",
+          `${toolCall.name} ${execResult.result.isError ? "failed" : "completed"}`,
+          execResult.result.isError
+            ? `Tool execution failed${execResult.retryCount > 0 ? ` after ${execResult.retryCount} retries` : ""}`
+            : "Tool executed successfully",
+          execResult.result.isError ? "error" : "completed",
+        )
+        toolResultStep.toolResult = toolCallStep.toolResult
+        progressSteps.push(toolResultStep)
+
+        // Emit progress update
         emit({
           currentIteration: iteration,
           maxIterations,
@@ -1603,147 +1924,6 @@ Always use actual resource IDs from the conversation history or create new ones 
           conversationHistory: formatConversationForProgress(conversationHistory),
         })
       }
-
-      const execPromise = executeToolCall(toolCall, onToolProgress)
-      let result = (await Promise.race([
-        execPromise,
-        stopPromise,
-      ])) as MCPToolResult
-      // Avoid unhandled rejection if the tool promise rejects after we already stopped
-      if (cancelledByKill) {
-        execPromise.catch(() => { /* swallow after kill switch */ })
-      }
-      if (cancelInterval) clearInterval(cancelInterval)
-
-      if (cancelledByKill) {
-        // Mark step and emit final progress, then break out of tool loop
-        toolCallStep.status = "error"
-        toolCallStep.toolResult = {
-          success: false,
-          content: "Tool execution cancelled by emergency kill switch",
-          error: "Cancelled by emergency kill switch",
-        }
-        const toolResultStep = createProgressStep(
-          "tool_result",
-          `${toolCall.name} cancelled`,
-          "Tool execution cancelled by emergency kill switch",
-          "error",
-        )
-        toolResultStep.toolResult = toolCallStep.toolResult
-        progressSteps.push(toolResultStep)
-        // Ensure final output appears and is saved when tool execution is cancelled
-        const killNote = "\n\n(Agent mode was stopped by emergency kill switch)"
-        const finalOutput = (finalContent || "") + killNote
-        conversationHistory.push({ role: "assistant", content: finalOutput })
-        emit({
-          currentIteration: iteration,
-          maxIterations,
-          steps: progressSteps.slice(-3),
-          isComplete: true,
-          finalContent: finalOutput,
-          conversationHistory: formatConversationForProgress(conversationHistory),
-        })
-        break
-      }
-
-      // If kill switch was pressed during retries, stop retrying
-      if (agentSessionStateManager.shouldStopSession(currentSessionId)) {
-        // Emit final progress with complete status
-        const killNote = "\n\n(Agent mode was stopped by emergency kill switch)"
-        const finalOutput = (finalContent || "") + killNote
-        conversationHistory.push({ role: "assistant", content: finalOutput })
-        emit({
-          currentIteration: iteration,
-          maxIterations,
-          steps: progressSteps.slice(-3),
-          isComplete: true,
-          finalContent: finalOutput,
-          conversationHistory: formatConversationForProgress(conversationHistory),
-        })
-        break
-      }
-
-      let retryCount = 0
-      const maxRetries = 2
-
-      // Enhanced retry logic for specific error types
-      while (result.isError && retryCount < maxRetries) {
-        const errorText = result.content
-          .map((c) => c.text)
-          .join(" ")
-          .toLowerCase()
-
-        // Check if this is a retryable error
-        const isRetryableError =
-          errorText.includes("timeout") ||
-          errorText.includes("connection") ||
-          errorText.includes("network") ||
-          errorText.includes("temporary") ||
-          errorText.includes("busy")
-
-        if (isRetryableError) {
-          retryCount++
-
-          // Special handling for resource-related errors
-          if (
-            errorText.includes("not found") ||
-            errorText.includes("invalid") ||
-            errorText.includes("expired")
-          ) {
-            // The retry mechanism will benefit from the updated context extraction
-            // which will provide the correct resource IDs from conversation history
-          }
-
-          // Wait before retry (exponential backoff)
-          await new Promise((resolve) =>
-            setTimeout(resolve, Math.pow(2, retryCount) * 1000),
-          )
-
-          result = await executeToolCall(toolCall, onToolProgress)
-        } else {
-          break // Don't retry non-transient errors
-        }
-      }
-
-      toolResults.push(result)
-
-      // Track failed tools for better error reporting
-      if (result.isError) {
-        failedTools.push(toolCall.name)
-      }
-
-      // Context is now extracted from conversation history, no need to track manually
-
-      // Update tool call step with result
-      toolCallStep.status = result.isError ? "error" : "completed"
-      toolCallStep.toolResult = {
-        success: !result.isError,
-        content: result.content.map((c) => c.text).join("\n"),
-        error: result.isError
-          ? result.content.map((c) => c.text).join("\n")
-          : undefined,
-      }
-
-      // Add tool result step with enhanced error information
-      const toolResultStep = createProgressStep(
-        "tool_result",
-        `${toolCall.name} ${result.isError ? "failed" : "completed"}`,
-        result.isError
-          ? `Tool execution failed${retryCount > 0 ? ` after ${retryCount} retries` : ""}`
-          : "Tool executed successfully",
-        result.isError ? "error" : "completed",
-      )
-      toolResultStep.toolResult = toolCallStep.toolResult
-      progressSteps.push(toolResultStep)
-
-      // Emit progress update
-      emit({
-        currentIteration: iteration,
-        maxIterations,
-        steps: progressSteps.slice(-3),
-        isComplete: false,
-        conversationHistory: formatConversationForProgress(conversationHistory),
-      })
     }
 
     // If stop was requested during tool execution, exit the agent loop now

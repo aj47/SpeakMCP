@@ -100,7 +100,16 @@ interface RunAgentOptions {
   conversationId?: string
 }
 
-async function runAgent(options: RunAgentOptions): Promise<{ content: string; conversationId: string }> {
+async function runAgent(options: RunAgentOptions): Promise<{
+  content: string
+  conversationId: string
+  conversationHistory: Array<{
+    role: "user" | "assistant" | "tool"
+    content: string
+    toolCalls?: any[]
+    toolResults?: any[]
+  }>
+}> {
   const { prompt, conversationId: inputConversationId } = options
   const cfg = configStore.get()
 
@@ -212,7 +221,7 @@ async function runAgent(options: RunAgentOptions): Promise<{ content: string; co
     // Mark session as completed
     agentSessionTracker.completeSession(sessionId, "Agent completed successfully")
 
-    return { content: agentResult.content, conversationId }
+    return { content: agentResult.content, conversationId, conversationHistory: agentResult.conversationHistory }
   } catch (error) {
     // Mark session as errored
     const errorMessage = error instanceof Error ? error.message : "Unknown error"
@@ -346,6 +355,7 @@ export async function startRemoteServer() {
       return reply.send({
         ...response,
         conversation_id: result.conversationId, // Include conversation_id for client to use in follow-ups
+        conversation_history: result.conversationHistory, // Include full conversation history with tool calls/results
       })
     } catch (error: any) {
       diagnosticsService.logError("remote-server", "Handler error", error)

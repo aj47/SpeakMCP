@@ -1,3 +1,10 @@
+import type {
+  ToolCall,
+  ToolResult,
+  ConversationHistoryMessage,
+  ChatApiResponse
+} from '@speakmcp/shared';
+
 export type OpenAIConfig = {
   baseUrl: string;    // OpenAI-compatible API base URL e.g., https://api.openai.com/v1
   apiKey: string;
@@ -8,7 +15,18 @@ export type ChatMessage = {
   id?: string;
   role: 'system' | 'user' | 'assistant';
   content?: string;
+  toolCalls?: ToolCall[];
+  toolResults?: ToolResult[];
 };
+
+/**
+ * Response from a chat request including conversation history with tool data
+ * Using shared ChatApiResponse type from @speakmcp/shared
+ */
+export type ChatResponse = ChatApiResponse;
+
+// Re-export shared types for convenience
+export type { ToolCall, ToolResult, ConversationHistoryMessage } from '@speakmcp/shared';
 
 
 
@@ -59,11 +77,12 @@ export class OpenAIClient {
    * POST OpenAI-compatible API: /v1/chat/completions
    * If the server responds with text/event-stream, this will parse SSE chunks and accumulate assistant content.
    * You can pass an onToken callback to receive incremental tokens.
+   * Returns a ChatResponse with content and optional conversation history (including tool calls/results)
    */
   async chat(
     messages: ChatMessage[],
     onToken?: (token: string) => void
-  ): Promise<string> {
+  ): Promise<ChatResponse> {
     const url = this.getUrl('/chat/completions');
     const body = { model: this.cfg.model, messages, stream: true } as any;
 
@@ -111,7 +130,7 @@ export class OpenAIClient {
       console.log('[OpenAIClient] Is SSE:', isSSE);
       console.log('[OpenAIClient] Supports Reader:', supportsReader);
 
-      // Non-SSE responses: parse JSON content or return raw text
+      // Non-SSE responses: parse JSON content and conversation history
       if (!isSSE) {
         console.log('[OpenAIClient] Processing non-SSE response');
         const text = await res.text();
@@ -120,14 +139,25 @@ export class OpenAIClient {
           const j = JSON.parse(text);
           const content = j?.choices?.[0]?.message?.content ?? '';
           console.log('[OpenAIClient] Extracted content:', content);
-          return typeof content === 'string' ? content : text;
+          // Extract custom fields from SpeakMCP server response
+          const conversationId = j?.conversation_id;
+          const conversationHistory = j?.conversation_history;
+          if (conversationHistory) {
+            console.log('[OpenAIClient] Received conversation history with', conversationHistory.length, 'messages');
+          }
+          return {
+            content: typeof content === 'string' ? content : text,
+            conversationId,
+            conversationHistory,
+          };
         } catch (parseError) {
           console.error('[OpenAIClient] JSON parse error:', parseError);
-          return text;
+          return { content: text };
         }
       }
 
       // SSE but streaming not supported (React Native fetch): fallback to parsing the full text
+      // Note: SSE responses don't include conversation_history (only available in non-streaming mode)
       if (isSSE && !supportsReader) {
         console.log('[OpenAIClient] Using SSE fallback (no reader support)');
         const text = await res.text();
@@ -141,7 +171,7 @@ export class OpenAIClient {
           for (const l of lines) {
             if (l === '[DONE]' || l === '"[DONE]"') {
               console.log('[OpenAIClient] Found DONE marker, returning:', finalText.length, 'characters');
-              return finalText;
+              return { content: finalText };
             }
             try {
               const obj = JSON.parse(l);
@@ -169,10 +199,11 @@ export class OpenAIClient {
           }
         }
         console.log('[OpenAIClient] SSE fallback complete, final text length:', finalText.length);
-        return finalText;
+        return { content: finalText };
       }
 
       // Streaming parse
+      // Note: SSE responses don't include conversation_history (only available in non-streaming mode)
       console.log('[OpenAIClient] Using streaming reader');
       const decoder = new TextDecoder();
       const reader = (res.body as ReadableStream<Uint8Array>).getReader();
@@ -197,7 +228,7 @@ export class OpenAIClient {
             if (l === '[DONE]' || l === '"[DONE]"') {
               // End of stream
               console.log('[OpenAIClient] Stream DONE, returning:', finalText.length, 'characters');
-              return finalText;
+              return { content: finalText };
             }
           try {
             const obj = JSON.parse(l);
@@ -224,7 +255,7 @@ export class OpenAIClient {
       }
     }
 
-      return finalText;
+      return { content: finalText };
     } catch (error) {
       console.error('[OpenAIClient] Chat request failed:', error);
       throw error;

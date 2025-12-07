@@ -217,7 +217,7 @@ export default function ChatScreen({ route, navigation }: any) {
       let full = '';
       console.log('[ChatScreen] Starting chat request with', messages.length + 1, 'messages');
       setDebugInfo('Request sent, waiting for response...');
-      const reply = await client.chat([...messages, userMsg], (tok) => {
+      const response = await client.chat([...messages, userMsg], (tok) => {
         full += tok;
         console.log('[ChatScreen] Token received:', tok);
         setDebugInfo(`Receiving tokens... (${full.length} chars so far)`);
@@ -234,11 +234,37 @@ export default function ChatScreen({ route, navigation }: any) {
           return copy;
         });
       });
-      const finalText = reply || full;
+      const finalText = response.content || full;
       console.log('[ChatScreen] Chat completed, final text length:', finalText?.length || 0);
       setDebugInfo(`Completed! Received ${finalText?.length || 0} characters`);
 
-      if (finalText) {
+      // Process conversation history to extract tool calls and results
+      if (response.conversationHistory && response.conversationHistory.length > 0) {
+        console.log('[ChatScreen] Processing conversation history with', response.conversationHistory.length, 'messages');
+
+        // Build new messages from conversation history (excluding the user message we already added)
+        const newMessages: ChatMessage[] = [];
+        for (const historyMsg of response.conversationHistory) {
+          // Skip user messages (we already have them)
+          if (historyMsg.role === 'user') continue;
+
+          // Add assistant or tool messages with their tool data
+          newMessages.push({
+            role: historyMsg.role === 'tool' ? 'assistant' : historyMsg.role,
+            content: historyMsg.content || '',
+            toolCalls: historyMsg.toolCalls,
+            toolResults: historyMsg.toolResults,
+          });
+        }
+
+        // Replace the placeholder assistant message with the full conversation history
+        setMessages((m) => {
+          // Remove the placeholder assistant message
+          const withoutPlaceholder = m.slice(0, -1);
+          return [...withoutPlaceholder, ...newMessages];
+        });
+      } else if (finalText) {
+        // Fallback: just update the assistant message content
         setMessages((m) => {
           const copy = [...m];
           for (let i = copy.length - 1; i >= 0; i--) {
@@ -249,6 +275,9 @@ export default function ChatScreen({ route, navigation }: any) {
           }
           return copy;
         });
+      }
+
+      if (finalText) {
         Speech.speak(finalText, { language: 'en-US' });
       }
     } catch (e: any) {
@@ -559,13 +588,82 @@ export default function ChatScreen({ route, navigation }: any) {
           {messages.map((m, i) => (
             <View key={i} style={[styles.msg, m.role === 'user' ? styles.user : styles.assistant]}>
               <Text style={styles.role}>{m.role}</Text>
-              {m.role === 'assistant' && (!m.content || m.content.length === 0) ? (
+              {m.role === 'assistant' && (!m.content || m.content.length === 0) && !m.toolCalls && !m.toolResults ? (
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                   <ActivityIndicator size="small" color={theme.colors.foreground} />
                   <Text style={{ color: theme.colors.foreground }}>Assistant is thinking</Text>
                 </View>
               ) : (
-                <Text style={{ color: theme.colors.foreground }}>{m.content}</Text>
+                <>
+                  {m.content ? (
+                    <Text style={{ color: theme.colors.foreground }}>{m.content}</Text>
+                  ) : null}
+
+                  {/* Tool Calls */}
+                  {m.toolCalls && m.toolCalls.length > 0 && (
+                    <View style={styles.toolSection}>
+                      <Text style={styles.toolSectionTitle}>Tool Calls ({m.toolCalls.length}):</Text>
+                      {m.toolCalls.map((toolCall, idx) => (
+                        <View key={idx} style={styles.toolCallCard}>
+                          <View style={styles.toolCallHeader}>
+                            <Text style={styles.toolName}>{toolCall.name}</Text>
+                            <Text style={styles.toolBadge}>Tool {idx + 1}</Text>
+                          </View>
+                          {toolCall.arguments && (
+                            <View style={styles.toolParams}>
+                              <Text style={styles.toolParamsLabel}>Parameters:</Text>
+                              <ScrollView horizontal style={styles.toolParamsScroll}>
+                                <Text style={styles.toolParamsCode}>
+                                  {JSON.stringify(toolCall.arguments, null, 2)}
+                                </Text>
+                              </ScrollView>
+                            </View>
+                          )}
+                        </View>
+                      ))}
+                    </View>
+                  )}
+
+                  {/* Tool Results */}
+                  {m.toolResults && m.toolResults.length > 0 && (
+                    <View style={styles.toolSection}>
+                      <Text style={styles.toolSectionTitle}>Tool Results ({m.toolResults.length}):</Text>
+                      {m.toolResults.map((result, idx) => (
+                        <View
+                          key={idx}
+                          style={[
+                            styles.toolResultCard,
+                            result.success ? styles.toolResultSuccess : styles.toolResultError
+                          ]}
+                        >
+                          <View style={styles.toolResultHeader}>
+                            <Text style={[
+                              styles.toolResultBadge,
+                              result.success ? styles.toolResultBadgeSuccess : styles.toolResultBadgeError
+                            ]}>
+                              {result.success ? '✅ Success' : '❌ Error'}
+                            </Text>
+                            <Text style={styles.toolResultIndex}>Result {idx + 1}</Text>
+                          </View>
+                          <View style={styles.toolResultContent}>
+                            <Text style={styles.toolResultLabel}>Content:</Text>
+                            <ScrollView horizontal style={styles.toolResultScroll}>
+                              <Text style={styles.toolResultCode}>
+                                {result.content || 'No content returned'}
+                              </Text>
+                            </ScrollView>
+                          </View>
+                          {result.error && (
+                            <View style={styles.toolResultErrorSection}>
+                              <Text style={styles.toolResultErrorLabel}>Error Details:</Text>
+                              <Text style={styles.toolResultErrorText}>{result.error}</Text>
+                            </View>
+                          )}
+                        </View>
+                      ))}
+                    </View>
+                  )}
+                </>
               )}
             </View>
           ))}
@@ -735,6 +833,142 @@ function createStyles(theme: Theme) {
       padding: 10,
       borderRadius: radius.lg,
       maxWidth: '90%',
+    },
+    // Tool calls and results styles
+    toolSection: {
+      marginTop: spacing.md,
+    },
+    toolSectionTitle: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: theme.colors.mutedForeground,
+      marginBottom: spacing.sm,
+    },
+    toolCallCard: {
+      backgroundColor: theme.colors.muted,
+      borderRadius: radius.lg,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      padding: spacing.md,
+      marginBottom: spacing.sm,
+    },
+    toolCallHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: spacing.sm,
+    },
+    toolName: {
+      fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+      fontWeight: '600',
+      color: theme.colors.primary,
+      fontSize: 13,
+    },
+    toolBadge: {
+      fontSize: 10,
+      color: theme.colors.mutedForeground,
+      backgroundColor: theme.colors.background,
+      paddingHorizontal: 8,
+      paddingVertical: 2,
+      borderRadius: radius.sm,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+    },
+    toolParams: {
+      marginTop: spacing.xs,
+    },
+    toolParamsLabel: {
+      fontSize: 11,
+      fontWeight: '500',
+      color: theme.colors.mutedForeground,
+      marginBottom: 4,
+    },
+    toolParamsScroll: {
+      maxHeight: 120,
+    },
+    toolParamsCode: {
+      fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+      fontSize: 11,
+      color: theme.colors.foreground,
+      backgroundColor: theme.colors.background,
+      padding: spacing.sm,
+      borderRadius: radius.sm,
+    },
+    toolResultCard: {
+      borderRadius: radius.lg,
+      borderWidth: 1,
+      padding: spacing.md,
+      marginBottom: spacing.sm,
+    },
+    toolResultSuccess: {
+      backgroundColor: 'rgba(34, 197, 94, 0.1)',
+      borderColor: 'rgba(34, 197, 94, 0.3)',
+    },
+    toolResultError: {
+      backgroundColor: 'rgba(239, 68, 68, 0.1)',
+      borderColor: 'rgba(239, 68, 68, 0.3)',
+    },
+    toolResultHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: spacing.sm,
+    },
+    toolResultBadge: {
+      fontSize: 11,
+      fontWeight: '600',
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      borderRadius: radius.sm,
+    },
+    toolResultBadgeSuccess: {
+      backgroundColor: 'rgba(34, 197, 94, 0.2)',
+      color: '#22c55e',
+    },
+    toolResultBadgeError: {
+      backgroundColor: 'rgba(239, 68, 68, 0.2)',
+      color: '#ef4444',
+    },
+    toolResultIndex: {
+      fontSize: 10,
+      color: theme.colors.mutedForeground,
+    },
+    toolResultContent: {
+      marginTop: spacing.xs,
+    },
+    toolResultLabel: {
+      fontSize: 11,
+      fontWeight: '500',
+      color: theme.colors.mutedForeground,
+      marginBottom: 4,
+    },
+    toolResultScroll: {
+      maxHeight: 120,
+    },
+    toolResultCode: {
+      fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+      fontSize: 11,
+      color: theme.colors.foreground,
+      backgroundColor: theme.colors.background,
+      padding: spacing.sm,
+      borderRadius: radius.sm,
+    },
+    toolResultErrorSection: {
+      marginTop: spacing.sm,
+    },
+    toolResultErrorLabel: {
+      fontSize: 11,
+      fontWeight: '500',
+      color: '#ef4444',
+      marginBottom: 4,
+    },
+    toolResultErrorText: {
+      fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+      fontSize: 11,
+      color: '#ef4444',
+      backgroundColor: 'rgba(239, 68, 68, 0.1)',
+      padding: spacing.sm,
+      borderRadius: radius.sm,
     },
   });
 }

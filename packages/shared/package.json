@@ -1,7 +1,7 @@
 {
   "name": "@speakmcp/shared",
   "version": "1.0.0",
-  "description": "Shared design tokens and utilities for SpeakMCP apps",
+  "description": "Shared design tokens, types, and utilities for SpeakMCP apps",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
@@ -15,6 +15,11 @@
       "types": "./dist/colors.d.ts",
       "import": "./dist/colors.mjs",
       "require": "./dist/colors.js"
+    },
+    "./types": {
+      "types": "./dist/types.d.ts",
+      "import": "./dist/types.mjs",
+      "require": "./dist/types.js"
     }
   },
   "scripts": {

@@ -5,7 +5,7 @@ import { tipcClient } from "@renderer/lib/tipc-client"
 import { useAgentStore } from "@renderer/stores"
 import { SessionGrid, SessionTileWrapper } from "@renderer/components/session-grid"
 import { AgentProgress } from "@renderer/components/agent-progress"
-import { MessageCircle, Mic, Plus, Clock, Calendar, Trash2, Search, ChevronDown, FolderOpen } from "lucide-react"
+import { MessageCircle, Mic, Plus, Calendar, Trash2, Search, ChevronDown, FolderOpen } from "lucide-react"
 import { Button } from "@renderer/components/ui/button"
 import { Input } from "@renderer/components/ui/input"
 import { Card, CardContent } from "@renderer/components/ui/card"
@@ -46,63 +46,6 @@ function EmptyState({ onTextClick, onVoiceClick }: { onTextClick: () => void; on
       </div>
     </div>
   )
-}
-
-/** Compact card for a recent conversation */
-function RecentConversationCard({
-  conversation,
-  onContinue
-}: {
-  conversation: ConversationHistoryItem
-  onContinue: (id: string) => void
-}) {
-  const timeAgo = getTimeAgo(conversation.updatedAt)
-
-  return (
-    <div
-      className={cn(
-        "flex items-center gap-3 p-3 rounded-lg border bg-card",
-        "hover:bg-accent/50 cursor-pointer transition-colors group"
-      )}
-      onClick={() => onContinue(conversation.id)}
-    >
-      <div className="flex-shrink-0">
-        <Clock className="h-4 w-4 text-muted-foreground" />
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="font-medium text-sm truncate">{conversation.title}</div>
-        <div className="text-xs text-muted-foreground truncate">
-          {conversation.messageCount} messages · {timeAgo}
-        </div>
-      </div>
-      <Button
-        variant="ghost"
-        size="sm"
-        className="opacity-0 group-hover:opacity-100 transition-opacity h-7 px-2"
-        onClick={(e) => {
-          e.stopPropagation()
-          onContinue(conversation.id)
-        }}
-      >
-        <MessageCircle className="h-4 w-4" />
-      </Button>
-    </div>
-  )
-}
-
-/** Format timestamp to relative time */
-function getTimeAgo(timestamp: number): string {
-  const now = Date.now()
-  const diff = now - timestamp
-  const minutes = Math.floor(diff / 60000)
-  const hours = Math.floor(diff / 3600000)
-  const days = Math.floor(diff / 86400000)
-
-  if (minutes < 1) return "just now"
-  if (minutes < 60) return `${minutes}m ago`
-  if (hours < 24) return `${hours}h ago`
-  if (days < 7) return `${days}d ago`
-  return new Date(timestamp).toLocaleDateString()
 }
 
 // Initial items to show in past sessions, and how many to load more at a time
@@ -192,21 +135,6 @@ export function Component() {
 
   // Fetch all conversations from history
   const conversationHistoryQuery = useConversationHistoryQuery()
-
-  // Recent conversations (top 3) for the quick access section
-  const recentConversations = React.useMemo(() => {
-    if (!conversationHistoryQuery.data) return []
-    // Get top 3, excluding any that have active sessions or the pending conversation
-    const activeConversationIds = new Set(
-      Array.from(agentProgressById.values())
-        .filter(p => p !== null)
-        .map(p => p?.conversationId)
-        .filter(Boolean)
-    )
-    return conversationHistoryQuery.data
-      .filter(c => !activeConversationIds.has(c.id) && c.id !== pendingConversationId)
-      .slice(0, 3)
-  }, [conversationHistoryQuery.data, agentProgressById, pendingConversationId])
 
   // Filter and group past sessions for display
   const filteredHistory = useMemo(() => {

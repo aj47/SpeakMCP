@@ -100,14 +100,57 @@ interface RunAgentOptions {
   conversationId?: string
 }
 
+/**
+ * Format conversation history from internal MCP format to API-friendly format.
+ * Converts MCPToolResult (content as array, isError) to ToolResult (content as string, success).
+ */
+function formatConversationHistoryForApi(
+  history: Array<{
+    role: "user" | "assistant" | "tool"
+    content: string
+    toolCalls?: any[]
+    toolResults?: any[]
+    timestamp?: number
+  }>
+): Array<{
+  role: "user" | "assistant" | "tool"
+  content: string
+  toolCalls?: Array<{ name: string; arguments: any }>
+  toolResults?: Array<{ success: boolean; content: string; error?: string }>
+  timestamp?: number
+}> {
+  return history.map((entry) => ({
+    role: entry.role,
+    content: entry.content,
+    toolCalls: entry.toolCalls?.map((tc: any) => ({
+      name: tc.name,
+      arguments: tc.arguments,
+    })),
+    toolResults: entry.toolResults?.map((tr: any) => {
+      // Handle both MCPToolResult format (content as array, isError) and already-converted format
+      const contentText = Array.isArray(tr.content)
+        ? tr.content.map((c: any) => c.text || c).join("\n")
+        : String(tr.content || "")
+      const isError = tr.isError ?? !tr.success
+      return {
+        success: !isError,
+        content: contentText,
+        error: isError ? contentText : undefined,
+      }
+    }),
+    timestamp: entry.timestamp,
+  }))
+}
+
 async function runAgent(options: RunAgentOptions): Promise<{
   content: string
   conversationId: string
   conversationHistory: Array<{
     role: "user" | "assistant" | "tool"
     content: string
-    toolCalls?: any[]
-    toolResults?: any[]
+    toolCalls?: Array<{ name: string; arguments: any }>
+    toolResults?: Array<{ success: boolean; content: string; error?: string }>
+    timestamp?: number
   }>
 }> {
   const { prompt, conversationId: inputConversationId } = options
@@ -221,7 +264,10 @@ async function runAgent(options: RunAgentOptions): Promise<{
     // Mark session as completed
     agentSessionTracker.completeSession(sessionId, "Agent completed successfully")
 
-    return { content: agentResult.content, conversationId, conversationHistory: agentResult.conversationHistory }
+    // Format conversation history for API response (convert MCPToolResult to ToolResult format)
+    const formattedHistory = formatConversationHistoryForApi(agentResult.conversationHistory)
+
+    return { content: agentResult.content, conversationId, conversationHistory: formattedHistory }
   } catch (error) {
     // Mark session as errored
     const errorMessage = error instanceof Error ? error.message : "Unknown error"

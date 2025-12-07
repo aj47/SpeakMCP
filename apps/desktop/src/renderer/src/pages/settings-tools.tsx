@@ -123,7 +123,9 @@ export function Component() {
   }
 
   // Combined saving state for the guidelines save operation
+  // Also check if profile query is still loading to prevent saving before profile data is available
   const isSavingGuidelines = saveConfigMutation.isPending || updateProfileMutation.isPending
+  const isProfileLoading = currentProfileQuery.isLoading
 
   const saveAdditionalGuidelines = async () => {
     try {
@@ -381,14 +383,16 @@ DOMAIN-SPECIFIC RULES:
                       size="sm"
                       onClick={saveAdditionalGuidelines}
                       disabled={
-                        !hasUnsavedChanges || isSavingGuidelines
+                        !hasUnsavedChanges || isSavingGuidelines || isProfileLoading
                       }
                       className="gap-1"
                     >
                       <Save className="h-3 w-3" />
                       {isSavingGuidelines
                         ? "Saving..."
-                        : "Save Changes"}
+                        : isProfileLoading
+                          ? "Loading..."
+                          : "Save Changes"}
                     </Button>
                   </div>
                   {hasUnsavedChanges && (

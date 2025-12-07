@@ -281,7 +281,6 @@ export function listenToKeyboardEvents() {
   const tryStartMcpHoldIfEligible = () => {
     const config = configStore.get()
     if (
-      !config.mcpToolsEnabled ||
       config.mcpToolsShortcut !== "hold-ctrl-alt"
     ) {
       return
@@ -669,87 +668,85 @@ export function listenToKeyboardEvents() {
       }
 
       // Handle MCP tool calling shortcuts
-      if (config.mcpToolsEnabled) {
-        const effectiveMcpToolsShortcut = getEffectiveShortcut(
-          config.mcpToolsShortcut,
-          config.customMcpToolsShortcut,
-        )
+      const effectiveMcpToolsShortcut = getEffectiveShortcut(
+        config.mcpToolsShortcut,
+        config.customMcpToolsShortcut,
+      )
 
-        if (config.mcpToolsShortcut === "ctrl-alt-slash") {
-          if (e.data.key === "Slash" && isPressedCtrlKey && isPressedAltKey) {
+      if (config.mcpToolsShortcut === "ctrl-alt-slash") {
+        if (e.data.key === "Slash" && isPressedCtrlKey && isPressedAltKey) {
+          if (isDebugKeybinds()) {
+            logKeybinds("MCP tools triggered: Ctrl+Alt+/")
+          }
+          getWindowRendererHandlers("panel")?.startOrFinishMcpRecording.send()
+          return
+        }
+      }
+
+      // Handle custom MCP tools shortcut
+      if (config.mcpToolsShortcut === "custom" && effectiveMcpToolsShortcut) {
+        const matches = matchesKeyCombo(
+          e.data,
+          {
+            ctrl: isPressedCtrlKey,
+            shift: isPressedShiftKey,
+            alt: isPressedAltKey,
+            meta: isPressedMetaKey,
+          },
+          effectiveMcpToolsShortcut,
+        )
+        if (matches) {
+          const customMode = config.customMcpToolsShortcutMode || "hold"
+
+          if (customMode === "toggle") {
+            // Toggle mode: press once to start, press again to stop
             if (isDebugKeybinds()) {
-              logKeybinds("MCP tools triggered: Ctrl+Alt+/")
+              logKeybinds(
+                "MCP tools triggered: Custom hotkey (toggle mode)",
+                effectiveMcpToolsShortcut,
+              )
             }
             getWindowRendererHandlers("panel")?.startOrFinishMcpRecording.send()
             return
-          }
-        }
+          } else {
+            // Hold mode: start timer on key press, start recording after 800ms
+            if (isDebugKeybinds()) {
+              logKeybinds(
+                "MCP tools triggered: Custom hotkey (hold mode)",
+                effectiveMcpToolsShortcut,
+              )
+            }
 
-        // Handle custom MCP tools shortcut
-        if (config.mcpToolsShortcut === "custom" && effectiveMcpToolsShortcut) {
-          const matches = matchesKeyCombo(
-            e.data,
-            {
-              ctrl: isPressedCtrlKey,
-              shift: isPressedShiftKey,
-              alt: isPressedAltKey,
-              meta: isPressedMetaKey,
-            },
-            effectiveMcpToolsShortcut,
-          )
-          if (matches) {
-            const customMode = config.customMcpToolsShortcutMode || "hold"
-
-            if (customMode === "toggle") {
-              // Toggle mode: press once to start, press again to stop
-              if (isDebugKeybinds()) {
-                logKeybinds(
-                  "MCP tools triggered: Custom hotkey (toggle mode)",
-                  effectiveMcpToolsShortcut,
-                )
-              }
-              getWindowRendererHandlers("panel")?.startOrFinishMcpRecording.send()
-              return
-            } else {
-              // Hold mode: start timer on key press, start recording after 800ms
-              if (isDebugKeybinds()) {
-                logKeybinds(
-                  "MCP tools triggered: Custom hotkey (hold mode)",
-                  effectiveMcpToolsShortcut,
-                )
-              }
-
-              if (hasRecentKeyPress()) {
-                return
-              }
-
-              if (startCustomMcpTimer) {
-                return
-              }
-
-              // Cancel regular recording timer since MCP is prioritized
-              cancelRecordingTimer()
-              cancelCustomRecordingTimer()
-
-              startCustomMcpTimer = setTimeout(() => {
-                // Re-check if keys are still pressed
-                const stillMatches = matchesKeyCombo(
-                  e.data,
-                  {
-                    ctrl: isPressedCtrlKey,
-                    shift: isPressedShiftKey,
-                    alt: isPressedAltKey,
-                    meta: isPressedMetaKey,
-                  },
-                  effectiveMcpToolsShortcut,
-                )
-                if (!stillMatches) return
-
-                isHoldingCustomMcpKey = true
-                showPanelWindowAndStartMcpRecording()
-              }, 800)
+            if (hasRecentKeyPress()) {
               return
             }
+
+            if (startCustomMcpTimer) {
+              return
+            }
+
+            // Cancel regular recording timer since MCP is prioritized
+            cancelRecordingTimer()
+            cancelCustomRecordingTimer()
+
+            startCustomMcpTimer = setTimeout(() => {
+              // Re-check if keys are still pressed
+              const stillMatches = matchesKeyCombo(
+                e.data,
+                {
+                  ctrl: isPressedCtrlKey,
+                  shift: isPressedShiftKey,
+                  alt: isPressedAltKey,
+                  meta: isPressedMetaKey,
+                },
+                effectiveMcpToolsShortcut,
+              )
+              if (!stillMatches) return
+
+              isHoldingCustomMcpKey = true
+              showPanelWindowAndStartMcpRecording()
+            }, 800)
+            return
           }
         }
       }
@@ -933,7 +930,6 @@ export function listenToKeyboardEvents() {
         } else if (
           (e.data.key === "Alt" || e.data.key === "AltLeft" || e.data.key === "AltRight") &&
           isPressedCtrlKey &&
-          config.mcpToolsEnabled &&
           config.mcpToolsShortcut === "hold-ctrl-alt"
         ) {
           // Legacy path kept for clarity; unified by tryStartMcpHoldIfEligible()

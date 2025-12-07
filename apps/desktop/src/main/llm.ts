@@ -185,10 +185,6 @@ export async function processTranscriptWithTools(
 ): Promise<LLMToolCallResponse> {
   const config = configStore.get()
 
-  if (!config.mcpToolsEnabled) {
-    return { content: transcript }
-  }
-
   // Remove duplicates from available tools to prevent confusion
   const uniqueAvailableTools = availableTools.filter(
     (tool, index, self) =>
@@ -450,21 +446,6 @@ export async function processTranscriptWithAgentMode(
   sessionId?: string, // Session ID for progress routing and isolation
 ): Promise<AgentModeResponse> {
   const config = configStore.get()
-
-  if (!config.mcpToolsEnabled || !config.mcpAgentModeEnabled) {
-    const fallbackResponse = await processTranscriptWithTools(
-      transcript,
-      availableTools,
-    )
-    return {
-      content: fallbackResponse.content || "",
-      conversationHistory: [
-        { role: "user", content: transcript },
-        { role: "assistant", content: fallbackResponse.content || "" },
-      ],
-      totalIterations: 1,
-    }
-  }
 
   // Store IDs for use in progress updates
   const currentConversationId = conversationId

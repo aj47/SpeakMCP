@@ -22,8 +22,7 @@ const getConfig = () => {
     shortcut: isWindows ? "ctrl-slash" : "hold-ctrl",
 
     mcpToolsShortcut: "hold-ctrl-alt",
-    mcpToolsEnabled: true,
-    mcpAgentModeEnabled: true,
+    // Note: mcpToolsEnabled and mcpAgentModeEnabled are deprecated and always treated as true
     // Safety: optional approval prompt before each tool call (off by default)
     mcpRequireApprovalBeforeToolCall: false,
     mcpAutoPasteEnabled: false,

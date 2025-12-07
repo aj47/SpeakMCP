@@ -177,10 +177,6 @@ async function processWithAgentMode(
   const sessionId = existingSessionId || agentSessionTracker.startSession(conversationId, conversationTitle, startSnoozed)
 
   try {
-    if (!config.mcpToolsEnabled) {
-      throw new Error("MCP tools are not enabled")
-    }
-
     // Initialize MCP with progress feedback
     await initializeMcpWithProgress(config, sessionId)
 
@@ -191,9 +187,8 @@ async function processWithAgentMode(
     // Get available tools
     const availableTools = mcpService.getAvailableTools()
 
-    if (config.mcpAgentModeEnabled) {
-      // Use agent mode for iterative tool calling
-      const executeToolCall = async (toolCall: any, onProgress?: (message: string) => void): Promise<MCPToolResult> => {
+    // Use agent mode for iterative tool calling
+    const executeToolCall = async (toolCall: any, onProgress?: (message: string) => void): Promise<MCPToolResult> => {
         // Handle inline tool approval if enabled in config
         if (config.mcpRequireApprovalBeforeToolCall) {
           // Request approval and wait for user response via the UI
@@ -315,49 +310,10 @@ async function processWithAgentMode(
         sessionId, // Pass session ID for progress routing and isolation
       )
 
-      // Mark session as completed
-      agentSessionTracker.completeSession(sessionId, "Agent completed successfully")
+    // Mark session as completed
+    agentSessionTracker.completeSession(sessionId, "Agent completed successfully")
 
-      return agentResult.content
-    } else {
-      // Use single-shot tool calling
-      const result = await processTranscriptWithTools(text, availableTools)
-
-      if (result.toolCalls && result.toolCalls.length > 0) {
-        // Execute tool calls and get results
-        const toolResults: MCPToolResult[] = []
-
-        for (const toolCall of result.toolCalls) {
-          try {
-            const toolResult = await mcpService.executeToolCall(toolCall)
-            toolResults.push(toolResult)
-          } catch (error) {
-            toolResults.push({
-              content: [
-                {
-                  type: "text",
-                  text: `Error: ${error instanceof Error ? error.message : "Unknown error"}`,
-                },
-              ],
-              isError: true,
-            })
-          }
-        }
-
-        // Combine tool results into final response
-        const toolResultTexts = toolResults
-          .map((result) => result.content.map((item) => item.text).join("\n"))
-          .join("\n\n")
-
-        return result.content
-          ? `${result.content}\n\n${toolResultTexts}`
-          : toolResultTexts
-      } else {
-        // Mark session as completed for non-agent mode
-        agentSessionTracker.completeSession(sessionId, "Completed with tools")
-        return result.content || text
-      }
-    }
+    return agentResult.content
   } catch (error) {
     // Mark session as errored
     const errorMessage = error instanceof Error ? error.message : "Unknown error"
@@ -991,13 +947,6 @@ export const router = {
       fromTile?: boolean // When true, session runs in background (snoozed) - panel won't show
     }>()
     .action(async ({ input }) => {
-      const config = configStore.get()
-
-      if (!config.mcpToolsEnabled) {
-        // Fall back to regular text input processing
-        return router.createTextInput({ text: input.text })
-      }
-
       // Create or get conversation ID
       let conversationId = input.conversationId
       if (!conversationId) {
@@ -1055,14 +1004,15 @@ export const router = {
           }
 
           // Auto-paste if enabled
-          if (config.mcpAutoPasteEnabled && state.focusedAppBeforeRecording) {
+          const pasteConfig = configStore.get()
+          if (pasteConfig.mcpAutoPasteEnabled && state.focusedAppBeforeRecording) {
             setTimeout(async () => {
               try {
                 await writeText(finalResponse)
               } catch (error) {
                 // Ignore paste errors
               }
-            }, config.mcpAutoPasteDelay || 1000)
+            }, pasteConfig.mcpAutoPasteDelay || 1000)
           }
         })
         .catch((error) => {

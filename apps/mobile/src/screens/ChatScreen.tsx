@@ -209,6 +209,8 @@ export default function ChatScreen({ route, navigation }: any) {
     setDebugInfo(`Starting request to ${config.baseUrl}...`);
 
     const userMsg: ChatMessage = { role: 'user', content: text };
+    // Track the number of messages BEFORE this turn to avoid duplicates
+    const messageCountBeforeTurn = messages.length;
     setMessages((m) => [...m, userMsg, { role: 'assistant', content: '' }]);
     setResponding(true);
 
@@ -242,10 +244,24 @@ export default function ChatScreen({ route, navigation }: any) {
       if (response.conversationHistory && response.conversationHistory.length > 0) {
         console.log('[ChatScreen] Processing conversation history with', response.conversationHistory.length, 'messages');
 
-        // Build new messages from conversation history (excluding the user message we already added)
+        // Find where the current turn starts in the conversation history
+        // The history contains all messages, we only want the NEW ones from this turn
+        // Count user messages in history to find where current turn's messages begin
+        let userMsgCountInHistory = 0;
+        let currentTurnStartIndex = 0;
+        for (let i = 0; i < response.conversationHistory.length; i++) {
+          if (response.conversationHistory[i].role === 'user') {
+            userMsgCountInHistory++;
+            // The current turn starts after the last user message
+            currentTurnStartIndex = i;
+          }
+        }
+
+        // Build new messages only from the current turn (from user message onward)
         const newMessages: ChatMessage[] = [];
-        for (const historyMsg of response.conversationHistory) {
-          // Skip user messages (we already have them)
+        for (let i = currentTurnStartIndex; i < response.conversationHistory.length; i++) {
+          const historyMsg = response.conversationHistory[i];
+          // Skip the user message (we already have it)
           if (historyMsg.role === 'user') continue;
 
           // Add assistant or tool messages with their tool data
@@ -257,11 +273,12 @@ export default function ChatScreen({ route, navigation }: any) {
           });
         }
 
-        // Replace the placeholder assistant message with the full conversation history
+        // Replace only the placeholder with the new messages from this turn
+        // Keep all messages before the placeholder (including the user message we added)
         setMessages((m) => {
-          // Remove the placeholder assistant message
-          const withoutPlaceholder = m.slice(0, -1);
-          return [...withoutPlaceholder, ...newMessages];
+          // Keep messages up to and including the user message, remove the placeholder
+          const beforePlaceholder = m.slice(0, messageCountBeforeTurn + 1);
+          return [...beforePlaceholder, ...newMessages];
         });
       } else if (finalText) {
         // Fallback: just update the assistant message content

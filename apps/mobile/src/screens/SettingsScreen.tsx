@@ -165,6 +165,16 @@ export default function SettingsScreen({ navigation }: any) {
           />
         </View>
 
+        <View style={styles.row}>
+          <Text style={styles.label}>Text-to-Speech</Text>
+          <Switch
+            value={draft.ttsEnabled !== false}
+            onValueChange={(v) => setDraft({ ...draft, ttsEnabled: v })}
+            trackColor={{ false: theme.colors.muted, true: theme.colors.primary }}
+            thumbColor={draft.ttsEnabled !== false ? theme.colors.primaryForeground : theme.colors.background}
+          />
+        </View>
+
         <TouchableOpacity style={styles.primaryButton} onPress={onSave}>
           <Text style={styles.primaryButtonText}>Save & Start Chatting</Text>
         </TouchableOpacity>

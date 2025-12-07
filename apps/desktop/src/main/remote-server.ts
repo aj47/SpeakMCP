@@ -9,6 +9,7 @@ import { mcpService, MCPToolResult } from "./mcp-service"
 import { processTranscriptWithAgentMode } from "./llm"
 import { state, agentProcessManager } from "./state"
 import { conversationService } from "./conversation-service"
+import { AgentProgressUpdate } from "../shared/types"
 
 let server: FastifyInstance | null = null
 let lastError: string | undefined
@@ -98,6 +99,7 @@ function extractUserPrompt(body: any): string | null {
 interface RunAgentOptions {
   prompt: string
   conversationId?: string
+  onProgress?: (update: AgentProgressUpdate) => void
 }
 
 /**
@@ -153,7 +155,7 @@ async function runAgent(options: RunAgentOptions): Promise<{
     timestamp?: number
   }>
 }> {
-  const { prompt, conversationId: inputConversationId } = options
+  const { prompt, conversationId: inputConversationId, onProgress } = options
   const cfg = configStore.get()
 
   // Set agent mode state for process management - ensure clean state
@@ -259,6 +261,7 @@ async function runAgent(options: RunAgentOptions): Promise<{
       previousConversationHistory,
       conversationId,
       sessionId, // Pass session ID for progress routing
+      onProgress, // Pass progress callback for SSE streaming
     )
 
     // Mark session as completed
@@ -377,13 +380,67 @@ export async function startRemoteServer() {
 
       // Extract conversationId from request body (custom extension to OpenAI API)
       const conversationId = typeof body.conversation_id === "string" ? body.conversation_id : undefined
+      // Check if client wants SSE streaming
+      const isStreaming = body.stream === true
 
       // Debug logging
       console.log("[remote-server] ====== CHAT REQUEST ======")
       console.log("[remote-server] Received conversation_id:", conversationId || "NONE (new conversation)")
       console.log("[remote-server] Prompt:", prompt.substring(0, 100))
-      diagnosticsService.logInfo("remote-server", `Handling completion request${conversationId ? ` for conversation ${conversationId}` : ""}`)
+      console.log("[remote-server] Streaming:", isStreaming)
+      diagnosticsService.logInfo("remote-server", `Handling completion request${conversationId ? ` for conversation ${conversationId}` : ""}${isStreaming ? " (streaming)" : ""}`)
 
+      if (isStreaming) {
+        // SSE streaming mode
+        reply.raw.writeHead(200, {
+          "Content-Type": "text/event-stream",
+          "Cache-Control": "no-cache",
+          "Connection": "keep-alive",
+        })
+
+        // Helper to write SSE events
+        const writeSSE = (data: object) => {
+          reply.raw.write(`data: ${JSON.stringify(data)}\n\n`)
+        }
+
+        // Create progress callback that emits SSE events
+        const onProgress = (update: AgentProgressUpdate) => {
+          writeSSE({ type: "progress", data: update })
+        }
+
+        try {
+          const result = await runAgent({ prompt, conversationId, onProgress })
+
+          // Record as if user submitted a text input
+          recordHistory(result.content)
+
+          const model = resolveActiveModelId(configStore.get())
+
+          // Send final "done" event with full response data
+          writeSSE({
+            type: "done",
+            data: {
+              content: result.content,
+              conversation_id: result.conversationId,
+              conversation_history: result.conversationHistory,
+              model,
+            },
+          })
+        } catch (error: any) {
+          // Send error event
+          writeSSE({
+            type: "error",
+            data: { message: error?.message || "Internal Server Error" },
+          })
+        } finally {
+          reply.raw.end()
+        }
+
+        // Return reply to indicate we've handled the response
+        return reply
+      }
+
+      // Non-streaming mode (existing behavior)
       const result = await runAgent({ prompt, conversationId })
 
       // Record as if user submitted a text input

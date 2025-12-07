@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, useMemo } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -16,7 +16,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { EventEmitter } from 'expo-modules-core';
 import { useConfigContext, saveConfig } from '../store/config';
-import { OpenAIClient, ChatMessage } from '../lib/openaiClient';
+import { OpenAIClient, ChatMessage, AgentProgressUpdate, AgentProgressStep } from '../lib/openaiClient';
 import * as Speech from 'expo-speech';
 import { useHeaderHeight } from '@react-navigation/elements';
 import { useTheme } from '../ui/ThemeProvider';
@@ -195,6 +195,49 @@ export default function ChatScreen({ route, navigation }: any) {
 
   const convoRef = useRef<string | undefined>(undefined);
 
+  /**
+   * Convert agent progress steps to display messages in real-time
+   */
+  const convertProgressToMessages = useCallback((update: AgentProgressUpdate): ChatMessage[] => {
+    const messages: ChatMessage[] = [];
+
+    // Process conversation history from the progress update
+    if (update.conversationHistory && update.conversationHistory.length > 0) {
+      // Find the latest user message index to determine where current turn starts
+      let currentTurnStartIndex = 0;
+      for (let i = 0; i < update.conversationHistory.length; i++) {
+        if (update.conversationHistory[i].role === 'user') {
+          currentTurnStartIndex = i;
+        }
+      }
+
+      // Add messages from the current turn (skip the user message)
+      for (let i = currentTurnStartIndex + 1; i < update.conversationHistory.length; i++) {
+        const historyMsg = update.conversationHistory[i];
+        messages.push({
+          role: historyMsg.role === 'tool' ? 'assistant' : historyMsg.role,
+          content: historyMsg.content || '',
+          toolCalls: historyMsg.toolCalls,
+          toolResults: historyMsg.toolResults,
+        });
+      }
+    }
+
+    // If we have streaming content, add or update the last assistant message
+    if (update.streamingContent?.text) {
+      if (messages.length > 0 && messages[messages.length - 1].role === 'assistant') {
+        messages[messages.length - 1].content = update.streamingContent.text;
+      } else {
+        messages.push({
+          role: 'assistant',
+          content: update.streamingContent.text,
+        });
+      }
+    }
+
+    return messages;
+  }, []);
+
   const send = async (text: string) => {
     if (!text.trim()) return;
 
@@ -211,48 +254,63 @@ export default function ChatScreen({ route, navigation }: any) {
     const userMsg: ChatMessage = { role: 'user', content: text };
     // Track the number of messages BEFORE this turn to avoid duplicates
     const messageCountBeforeTurn = messages.length;
-    setMessages((m) => [...m, userMsg, { role: 'assistant', content: '' }]);
+    setMessages((m) => [...m, userMsg, { role: 'assistant', content: 'Assistant is thinking...' }]);
     setResponding(true);
 
     setInput('');
     try {
-      let full = '';
+      let streamingText = '';
       console.log('[ChatScreen] Starting chat request with', messages.length + 1, 'messages');
       setDebugInfo('Request sent, waiting for response...');
-      const response = await client.chat([...messages, userMsg], (tok) => {
-        full += tok;
-        console.log('[ChatScreen] Token received:', tok);
-        setDebugInfo(`Receiving tokens... (${full.length} chars so far)`);
+
+      // Handle real-time progress updates
+      const onProgress = (update: AgentProgressUpdate) => {
+        console.log('[ChatScreen] Progress update:', update.currentIteration, '/', update.maxIterations, 'steps:', update.steps?.length);
+        setDebugInfo(`Agent iteration ${update.currentIteration}/${update.maxIterations}`);
+
+        // Convert progress to messages and update UI in real-time
+        const progressMessages = convertProgressToMessages(update);
+        if (progressMessages.length > 0) {
+          setMessages((m) => {
+            // Keep messages up to and including the user message
+            const beforePlaceholder = m.slice(0, messageCountBeforeTurn + 1);
+            return [...beforePlaceholder, ...progressMessages];
+          });
+        }
+      };
+
+      // Handle streaming text tokens
+      const onToken = (tok: string) => {
+        streamingText += tok;
+        console.log('[ChatScreen] Token received, total:', streamingText.length);
+        setDebugInfo(`Receiving tokens... (${streamingText.length} chars so far)`);
 
         setMessages((m) => {
           const copy = [...m];
           // Update the last assistant message incrementally
           for (let i = copy.length - 1; i >= 0; i--) {
             if (copy[i].role === 'assistant') {
-              copy[i] = { ...copy[i], content: (copy[i].content || '') + tok };
+              copy[i] = { ...copy[i], content: streamingText };
               break;
             }
           }
           return copy;
         });
-      });
-      const finalText = response.content || full;
+      };
+
+      const response = await client.chat([...messages, userMsg], onToken, onProgress);
+      const finalText = response.content || streamingText;
       console.log('[ChatScreen] Chat completed, final text length:', finalText?.length || 0);
       setDebugInfo(`Completed! Received ${finalText?.length || 0} characters`);
 
       // Process conversation history to extract tool calls and results
       if (response.conversationHistory && response.conversationHistory.length > 0) {
-        console.log('[ChatScreen] Processing conversation history with', response.conversationHistory.length, 'messages');
+        console.log('[ChatScreen] Processing final conversation history with', response.conversationHistory.length, 'messages');
 
         // Find where the current turn starts in the conversation history
-        // The history contains all messages, we only want the NEW ones from this turn
-        // Count user messages in history to find where current turn's messages begin
-        let userMsgCountInHistory = 0;
         let currentTurnStartIndex = 0;
         for (let i = 0; i < response.conversationHistory.length; i++) {
           if (response.conversationHistory[i].role === 'user') {
-            userMsgCountInHistory++;
-            // The current turn starts after the last user message
             currentTurnStartIndex = i;
           }
         }
@@ -274,9 +332,7 @@ export default function ChatScreen({ route, navigation }: any) {
         }
 
         // Replace only the placeholder with the new messages from this turn
-        // Keep all messages before the placeholder (including the user message we added)
         setMessages((m) => {
-          // Keep messages up to and including the user message, remove the placeholder
           const beforePlaceholder = m.slice(0, messageCountBeforeTurn + 1);
           return [...beforePlaceholder, ...newMessages];
         });
@@ -294,7 +350,8 @@ export default function ChatScreen({ route, navigation }: any) {
         });
       }
 
-      if (finalText) {
+      // Only speak the final response if TTS is enabled (default: true for backward compat)
+      if (finalText && config.ttsEnabled !== false) {
         Speech.speak(finalText, { language: 'en-US' });
       }
     } catch (e: any) {

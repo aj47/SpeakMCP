@@ -43,7 +43,6 @@ assistant: {"toolCalls": [{"name": "execute_command", "arguments": {"command": "
 <example>
 user: what files are in src/?
 assistant: {"toolCalls": [{"name": "list_directory", "arguments": {"path": "src/"}}], "content": "", "needsMoreWork": true}
-[after tool returns: foo.c, bar.c, baz.c]
 assistant: {"content": "foo.c, bar.c, baz.c", "needsMoreWork": false}
 </example>`
 

@@ -736,6 +736,31 @@ export function Component() {
           <Control
             label={
               <ControlLabel
+                label="Max Iterations"
+                tooltip="Maximum number of iterations the agent can perform before stopping. Higher values allow more complex tasks but may take longer."
+              />
+            }
+            className="px-3"
+          >
+            <Input
+              id="mcp-max-iterations"
+              type="number"
+              min="1"
+              max="50"
+              step="1"
+              value={configQuery.data?.mcpMaxIterations ?? 10}
+              onChange={(e) =>
+                saveConfig({
+                  mcpMaxIterations: parseInt(e.target.value) || 1,
+                })
+              }
+              className="w-32"
+            />
+          </Control>
+
+          <Control
+            label={
+              <ControlLabel
                 label="Emergency Kill Switch"
                 tooltip="Provides a global hotkey to immediately stop agent mode and kill all agent-created processes"
               />

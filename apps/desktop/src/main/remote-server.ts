@@ -186,14 +186,7 @@ async function runAgent(options: RunAgentOptions): Promise<{
       // This matches tipc.ts processWithAgentMode behavior
       const messagesToConvert = updatedConversation.messages.slice(0, -1)
 
-      // Debug: Log the conversation history order
-      console.log("[remote-server] ====== CONVERSATION HISTORY ======")
-      console.log("[remote-server] Total messages in conversation:", updatedConversation.messages.length)
-      console.log("[remote-server] Messages to use as history (excluding current):", messagesToConvert.length)
-      messagesToConvert.forEach((msg, i) => {
-        console.log(`[remote-server] History[${i}]: ${msg.role} - "${msg.content.substring(0, 50)}..."`)
-      })
-      console.log("[remote-server] Current user message (will be added by LLM):", prompt.substring(0, 50))
+
 
       diagnosticsService.logInfo("remote-server", `Continuing conversation ${conversationId} with ${messagesToConvert.length} previous messages`)
 
@@ -387,11 +380,7 @@ export async function startRemoteServer() {
       // Check if client wants SSE streaming
       const isStreaming = body.stream === true
 
-      // Debug logging
-      console.log("[remote-server] ====== CHAT REQUEST ======")
-      console.log("[remote-server] Received conversation_id:", conversationId || "NONE (new conversation)")
-      console.log("[remote-server] Prompt:", prompt.substring(0, 100))
-      console.log("[remote-server] Streaming:", isStreaming)
+      console.log("[remote-server] Chat request:", { conversationId: conversationId || "new", promptLength: prompt.length, streaming: isStreaming })
       diagnosticsService.logInfo("remote-server", `Handling completion request${conversationId ? ` for conversation ${conversationId}` : ""}${isStreaming ? " (streaming)" : ""}`)
 
       if (isStreaming) {
@@ -458,10 +447,7 @@ export async function startRemoteServer() {
       // Return standard OpenAI response with conversation_id as custom field
       const response = toOpenAIChatResponse(result.content, model)
 
-      // Debug logging
-      console.log("[remote-server] ====== CHAT RESPONSE ======")
-      console.log("[remote-server] Returning conversation_id:", result.conversationId)
-      console.log("[remote-server] Response length:", result.content.length)
+      console.log("[remote-server] Chat response:", { conversationId: result.conversationId, responseLength: result.content.length })
 
       return reply.send({
         ...response,

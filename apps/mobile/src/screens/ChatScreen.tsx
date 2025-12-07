@@ -72,10 +72,8 @@ export default function ChatScreen({ route, navigation }: any) {
         '⚠️ Emergency Stop\n\nAre you sure you want to stop all agent sessions on the remote server? This will immediately terminate any running tasks.'
       );
       if (confirmed) {
-        console.log('[ChatScreen] Kill switch confirmed (web), calling API...');
         try {
           const result = await client.killSwitch();
-          console.log('[ChatScreen] Kill switch result:', result);
           if (result.success) {
             window.alert(result.message || 'All sessions stopped');
           } else {
@@ -99,10 +97,8 @@ export default function ChatScreen({ route, navigation }: any) {
           text: 'Stop All',
           style: 'destructive',
           onPress: async () => {
-            console.log('[ChatScreen] Kill switch confirmed, calling API...');
             try {
               const result = await client.killSwitch();
-              console.log('[ChatScreen] Kill switch result:', result);
               if (result.success) {
                 Alert.alert('Success', result.message || 'All sessions stopped');
               } else {
@@ -224,12 +220,6 @@ export default function ChatScreen({ route, navigation }: any) {
   const convertProgressToMessages = useCallback((update: AgentProgressUpdate): ChatMessage[] => {
     const messages: ChatMessage[] = [];
 
-    console.log('[convertProgress] Input:', {
-      stepsLen: update.steps?.length,
-      historyLen: update.conversationHistory?.length,
-      hasStreaming: !!update.streamingContent?.text,
-    });
-
     // First, try to use steps array (sent in progress events)
     if (update.steps && update.steps.length > 0) {
       // Group steps into messages - each thinking/tool_call/tool_result becomes part of the conversation
@@ -238,35 +228,25 @@ export default function ChatScreen({ route, navigation }: any) {
       let thinkingContent = '';
 
       for (const step of update.steps) {
-        console.log('[convertProgress] Step:', step.type, step.status, 'hasToolCall:', !!step.toolCall, 'hasToolResult:', !!step.toolResult);
         const stepContent = step.content || step.llmContent;
         if (step.type === 'thinking' && stepContent) {
           thinkingContent = stepContent;
         } else if (step.type === 'tool_call') {
           // Tool call step - extract both toolCall and toolResult if present
           if (step.toolCall) {
-            console.log('[convertProgress] Found tool call:', step.toolCall.name);
             currentToolCalls.push(step.toolCall);
           }
           // Some tool_call steps also have toolResult when completed
           if (step.toolResult) {
-            console.log('[convertProgress] Found tool result in tool_call step, success:', step.toolResult.success);
             currentToolResults.push(step.toolResult);
           }
         } else if (step.type === 'tool_result' && step.toolResult) {
-          console.log('[convertProgress] Found tool result:', step.toolResult.success);
           currentToolResults.push(step.toolResult);
         } else if (step.type === 'completion' && stepContent) {
           // Final completion content
           thinkingContent = stepContent;
         }
       }
-
-      console.log('[convertProgress] Extracted:', {
-        toolCalls: currentToolCalls.length,
-        toolResults: currentToolResults.length,
-        hasThinking: !!thinkingContent,
-      });
 
       // Create a message showing current agent activity
       if (currentToolCalls.length > 0 || currentToolResults.length > 0 || thinkingContent) {
@@ -281,7 +261,6 @@ export default function ChatScreen({ route, navigation }: any) {
 
     // Also process conversation history if available (more complete data)
     if (update.conversationHistory && update.conversationHistory.length > 0) {
-      console.log('[convertProgress] Has conversationHistory with', update.conversationHistory.length, 'messages');
       // Find the latest user message index to determine where current turn starts
       let currentTurnStartIndex = 0;
       for (let i = 0; i < update.conversationHistory.length; i++) {
@@ -300,9 +279,6 @@ export default function ChatScreen({ route, navigation }: any) {
         // Add messages from the current turn (skip the user message)
         for (let i = currentTurnStartIndex + 1; i < update.conversationHistory.length; i++) {
           const historyMsg = update.conversationHistory[i];
-          console.log('[convertProgress] History msg:', historyMsg.role,
-            'toolCalls:', JSON.stringify(historyMsg.toolCalls),
-            'toolResults:', JSON.stringify(historyMsg.toolResults?.map(r => ({ success: r.success, contentLen: r.content?.length }))));
           messages.push({
             role: historyMsg.role === 'tool' ? 'assistant' : historyMsg.role,
             content: historyMsg.content || '',
@@ -310,8 +286,6 @@ export default function ChatScreen({ route, navigation }: any) {
             toolResults: historyMsg.toolResults,
           });
         }
-      } else {
-        console.log('[convertProgress] Keeping steps-based messages, conversationHistory only has user message');
       }
     }
 
@@ -327,7 +301,6 @@ export default function ChatScreen({ route, navigation }: any) {
       }
     }
 
-    console.log('[convertProgress] Output messages:', messages.length);
     return messages;
   }, []);
 
@@ -335,12 +308,6 @@ export default function ChatScreen({ route, navigation }: any) {
     if (!text.trim()) return;
 
     console.log('[ChatScreen] Sending message:', text);
-    console.log('[ChatScreen] Platform:', Platform.OS);
-    console.log('[ChatScreen] Current config:', {
-      baseUrl: config.baseUrl,
-      model: config.model,
-      apiKeyLength: config.apiKey?.length || 0
-    });
 
     setDebugInfo(`Starting request to ${config.baseUrl}...`);
 
@@ -358,34 +325,13 @@ export default function ChatScreen({ route, navigation }: any) {
 
       // Handle real-time progress updates
       const onProgress = (update: AgentProgressUpdate) => {
-        console.log('[ChatScreen] Progress update:', update.currentIteration, '/', update.maxIterations, 'steps:', update.steps?.length);
-
-        // Log tool call steps specifically
-        const toolCallSteps = update.steps?.filter(s => s.type === 'tool_call' && s.toolCall) || [];
-        if (toolCallSteps.length > 0) {
-          console.log('[ChatScreen] TOOL CALLS IN STEPS:', toolCallSteps.map(s => s.toolCall?.name).join(', '));
-        }
-
-        // Log conversation history tool calls
-        const historyToolCalls = update.conversationHistory?.filter(m => m.toolCalls && m.toolCalls.length > 0) || [];
-        if (historyToolCalls.length > 0) {
-          console.log('[ChatScreen] TOOL CALLS IN HISTORY:', historyToolCalls.flatMap(m => m.toolCalls?.map(tc => tc.name)).join(', '));
-        }
-
-        setDebugInfo(`Iteration ${update.currentIteration}/${update.maxIterations} | Steps: ${update.steps?.length || 0} | ToolCalls: ${toolCallSteps.length}`);
-
         // Convert progress to messages and update UI in real-time
         const progressMessages = convertProgressToMessages(update);
-        console.log('[ChatScreen] Converted to', progressMessages.length, 'messages');
-        for (const pm of progressMessages) {
-          console.log('[ChatScreen] Progress msg:', pm.role, 'content:', pm.content?.substring(0, 50), 'toolCalls:', pm.toolCalls?.length, 'toolResults:', pm.toolResults?.length);
-        }
         if (progressMessages.length > 0) {
           setMessages((m) => {
             // Keep messages up to and including the user message
             const beforePlaceholder = m.slice(0, messageCountBeforeTurn + 1);
             const newMessages = [...beforePlaceholder, ...progressMessages];
-            console.log('[ChatScreen] Setting messages: before=', beforePlaceholder.length, 'progress=', progressMessages.length, 'total=', newMessages.length);
             return newMessages;
           });
         }
@@ -394,8 +340,6 @@ export default function ChatScreen({ route, navigation }: any) {
       // Handle streaming text tokens
       const onToken = (tok: string) => {
         streamingText += tok;
-        console.log('[ChatScreen] Token received, total:', streamingText.length);
-        setDebugInfo(`Receiving tokens... (${streamingText.length} chars so far)`);
 
         setMessages((m) => {
           const copy = [...m];
@@ -412,12 +356,11 @@ export default function ChatScreen({ route, navigation }: any) {
 
       const response = await client.chat([...messages, userMsg], onToken, onProgress);
       const finalText = response.content || streamingText;
-      console.log('[ChatScreen] Chat completed, final text length:', finalText?.length || 0);
-      setDebugInfo(`Completed! Received ${finalText?.length || 0} characters`);
+      console.log('[ChatScreen] Chat completed');
+      setDebugInfo(`Completed!`);
 
       // Process conversation history to extract tool calls and results
       if (response.conversationHistory && response.conversationHistory.length > 0) {
-        console.log('[ChatScreen] Processing final conversation history with', response.conversationHistory.length, 'messages');
 
         // Find where the current turn starts in the conversation history
         let currentTurnStartIndex = 0;
@@ -486,30 +429,23 @@ export default function ChatScreen({ route, navigation }: any) {
 
   // Ensure Web Speech API recognizer exists and is wired
   const ensureWebRecognizer = () => {
-    console.log('[Voice] ensureWebRecognizer called, Platform.OS:', Platform.OS);
     if (Platform.OS !== 'web') return false;
     // @ts-ignore
     const SRClass = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    console.log('[Voice] SRClass available:', !!SRClass);
     if (!SRClass) {
       console.warn('[Voice] Web Speech API not available (use Chrome/Edge over HTTPS).');
       return false;
     }
     if (!webRecognitionRef.current) {
-      console.log('[Voice] Creating new web recognizer');
       const rec = new SRClass();
       rec.lang = 'en-US';
       rec.interimResults = true;
       rec.continuous = handsFreeRef.current;
-      rec.onstart = () => {
-        console.log('[Voice] Web recognition started');
-      };
+      rec.onstart = () => {};
       rec.onerror = (ev: any) => {
         console.error('[Voice] Web recognition error:', ev?.error || ev);
-        console.error('[Voice] Error event details:', JSON.stringify(ev, null, 2));
       };
       rec.onresult = (ev: any) => {
-        console.log('[Voice] Web recognition result received');
         let interim = '';
         let finalText = '';
         for (let i = ev.resultIndex; i < ev.results.length; i++) {
@@ -531,9 +467,7 @@ export default function ChatScreen({ route, navigation }: any) {
         }
       };
       rec.onend = () => {
-        console.log('[Voice] Web recognition ended');
         const finalText = (webFinalRef.current || '').trim() || (liveTranscriptRef.current || '').trim();
-        console.log('[Voice] Final text on end:', finalText);
         setListening(false);
         setLiveTranscript('');
         const willEdit = willCancelRef.current;
@@ -544,8 +478,6 @@ export default function ChatScreen({ route, navigation }: any) {
         webFinalRef.current = '';
       };
       webRecognitionRef.current = rec;
-    } else {
-      console.log('[Voice] Reusing existing web recognizer');
     }
     return true;
   };
@@ -553,14 +485,10 @@ export default function ChatScreen({ route, navigation }: any) {
   // Native 'end' event handled via lazy listener; web handled in ensureWebRecognizer onend
 
   const startRecording = async (e?: GestureResponderEvent) => {
-    console.log('[Voice] ========== startRecording called ==========');
-    console.log('[Voice] startingRef.current:', startingRef.current, 'listening:', listening);
     if (startingRef.current || listening) {
-      console.log('[Voice] Already starting or listening, returning early');
       return;
     }
     startingRef.current = true;
-    console.log('[Voice] Setting up recording, Platform.OS:', Platform.OS);
     try {
       setWillCancel(false);
       setLiveTranscript('');
@@ -570,24 +498,16 @@ export default function ChatScreen({ route, navigation }: any) {
 
       // Try native first via dynamic import (avoids Expo Go crash when module is unavailable)
       if (Platform.OS !== 'web') {
-        console.log('[Voice] Attempting native speech recognition...');
         try {
           const SR: any = await import('expo-speech-recognition');
-          console.log('[Voice] expo-speech-recognition imported:', !!SR);
-          console.log('[Voice] ExpoSpeechRecognitionModule:', !!SR?.ExpoSpeechRecognitionModule);
-          console.log('[Voice] start method:', !!SR?.ExpoSpeechRecognitionModule?.start);
           if (SR?.ExpoSpeechRecognitionModule?.start) {
             // Attach listeners
             if (!srEmitterRef.current) {
-              console.log('[Voice] Creating new EventEmitter for SR');
               srEmitterRef.current = new EventEmitter(SR.ExpoSpeechRecognitionModule);
             }
             cleanupNativeSubs();
-            console.log('[Voice] Setting up native listeners...');
             const subResult = srEmitterRef.current.addListener('result', (event: any) => {
-              console.log('[Voice] Native result event:', JSON.stringify(event));
               const t = event?.results?.[0]?.transcript ?? event?.text ?? event?.transcript ?? '';
-              console.log('[Voice] Extracted transcript:', t, 'isFinal:', event?.isFinal);
               if (t) setLiveTranscript(t);
               if (event?.isFinal && t) {
                 if (handsFreeRef.current) {
@@ -604,10 +524,8 @@ export default function ChatScreen({ route, navigation }: any) {
               console.error('[Voice] Native recognition error:', JSON.stringify(event));
             });
             const subEnd = srEmitterRef.current.addListener('end', () => {
-              console.log('[Voice] Native recognition ended');
               setListening(false);
               const finalText = (nativeFinalRef.current || liveTranscriptRef.current || '').trim();
-              console.log('[Voice] Final text on native end:', finalText);
               setLiveTranscript('');
               const willEdit = willCancelRef.current;
               if (!handsFreeRef.current && finalText) {
@@ -619,14 +537,10 @@ export default function ChatScreen({ route, navigation }: any) {
             srSubsRef.current.push(subResult, subError, subEnd);
 
             // Permissions flow
-            console.log('[Voice] Checking permissions...');
             try {
               const perm = await SR.ExpoSpeechRecognitionModule.getPermissionsAsync();
-              console.log('[Voice] Current permissions:', JSON.stringify(perm));
               if (!perm?.granted) {
-                console.log('[Voice] Requesting permissions...');
                 const req = await SR.ExpoSpeechRecognitionModule.requestPermissionsAsync();
-                console.log('[Voice] Permission request result:', JSON.stringify(req));
                 if (!req?.granted) {
                   console.warn('[Voice] microphone/speech permission not granted; aborting');
                   setListening(false);
@@ -639,14 +553,8 @@ export default function ChatScreen({ route, navigation }: any) {
             }
 
             // Start recognition
-            console.log('[Voice] Starting native recognition with options:', {
-              lang: 'en-US',
-              interimResults: true,
-              continuous: handsFreeRef.current
-            });
             try {
               SR.ExpoSpeechRecognitionModule.start({ lang: 'en-US', interimResults: true, continuous: handsFreeRef.current, volumeChangeEventOptions: { enabled: handsFreeRef.current, intervalMillis: 250 } });
-              console.log('[Voice] Native recognition start() called successfully');
             } catch (serr) {
               console.error('[Voice] Native start error:', serr);
               setListening(false);
@@ -657,7 +565,6 @@ export default function ChatScreen({ route, navigation }: any) {
         } catch (err) {
           const errorMsg = (err as any)?.message || String(err);
           console.warn('[Voice] Native SR unavailable (likely Expo Go):', errorMsg);
-          console.warn('[Voice] Full error:', err);
 
           // Show alert once per session if native module is missing
           if (!nativeSRUnavailableShownRef.current && errorMsg.includes('ExpoSpeechRecognition')) {
@@ -675,16 +582,13 @@ export default function ChatScreen({ route, navigation }: any) {
       }
 
       // Web fallback
-      console.log('[Voice] Attempting web fallback...');
       if (ensureWebRecognizer()) {
-        console.log('[Voice] Web recognizer ensured, starting...');
         try {
           webFinalRef.current = '';
           if (webRecognitionRef.current) {
             try { webRecognitionRef.current.continuous = handsFreeRef.current; } catch {}
           }
           webRecognitionRef.current?.start();
-          console.log('[Voice] Web recognizer start() called');
           startingRef.current = false;
         } catch (err) {
           console.error('[Voice] Web start error:', err);
@@ -692,7 +596,6 @@ export default function ChatScreen({ route, navigation }: any) {
           startingRef.current = false;
         }
       } else {
-        console.warn('[Voice] No web recognizer available');
         setListening(false);
         startingRef.current = false;
       }
@@ -704,30 +607,22 @@ export default function ChatScreen({ route, navigation }: any) {
   };
 
   const stopRecordingAndHandle = async () => {
-    console.log('[Voice] ========== stopRecordingAndHandle called ==========');
-    console.log('[Voice] stoppingRef.current:', stoppingRef.current);
     if (stoppingRef.current) {
-      console.log('[Voice] Already stopping, returning early');
       return;
     }
     stoppingRef.current = true;
     try {
       // If nothing is recording, ignore
       const hasWeb = Platform.OS === 'web' && webRecognitionRef.current;
-      console.log('[Voice] listening:', listening, 'hasWeb:', hasWeb);
       if (!listening && !hasWeb) {
-        console.log('[Voice] Nothing recording, returning');
         return;
       }
 
       if (Platform.OS !== 'web') {
-        console.log('[Voice] Stopping native recognition...');
         try {
           const SR: any = await import('expo-speech-recognition');
           if (SR?.ExpoSpeechRecognitionModule?.stop) {
-            console.log('[Voice] Calling native stop()');
             SR.ExpoSpeechRecognitionModule.stop();
-            console.log('[Voice] Native stop() called, finalization in end listener');
             // Finalization handled in 'end' listener
           }
         } catch (err) {
@@ -736,10 +631,8 @@ export default function ChatScreen({ route, navigation }: any) {
       }
 
       if (Platform.OS === 'web' && webRecognitionRef.current) {
-        console.log('[Voice] Stopping web recognition...');
         try {
           webRecognitionRef.current.stop();
-          console.log('[Voice] Web stop() called');
           // onend will finalize
         } catch (err) {
           console.error('[Voice] Web stop error:', err);
@@ -753,7 +646,6 @@ export default function ChatScreen({ route, navigation }: any) {
       startYRef.current = null;
       setWillCancel(false);
       stoppingRef.current = false;
-      console.log('[Voice] stopRecordingAndHandle finished');
     }
   };
 
@@ -942,16 +834,13 @@ export default function ChatScreen({ route, navigation }: any) {
               activeOpacity={0.7}
               delayPressIn={0}
               onPressIn={!handsFree ? (e: GestureResponderEvent) => {
-                console.log('[Voice] onPressIn triggered (hold mode), handsFree:', handsFree);
                 lastGrantTimeRef.current = Date.now();
                 if (!listening) startRecording(e);
               } : undefined}
               onPressOut={!handsFree ? () => {
-                console.log('[Voice] onPressOut triggered (hold mode)');
                 const now = Date.now();
                 const dt = now - lastGrantTimeRef.current;
                 const delay = Math.max(0, minHoldMs - dt);
-                console.log('[Voice] Hold duration:', dt, 'ms, delay before stop:', delay, 'ms');
                 if (delay > 0) {
                   setTimeout(() => { if (listening) stopRecordingAndHandle(); }, delay);
                 } else {
@@ -959,7 +848,6 @@ export default function ChatScreen({ route, navigation }: any) {
                 }
               } : undefined}
               onPress={handsFree ? () => {
-                console.log('[Voice] onPress triggered (hands-free mode), listening:', listening);
                 if (!listening) startRecording(); else stopRecordingAndHandle();
               } : undefined}
             >

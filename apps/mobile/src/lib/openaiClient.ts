@@ -98,10 +98,8 @@ export class OpenAIClient {
   /** Health check for the API */
   async health(): Promise<boolean> {
     const url = this.getUrl('/models');
-    console.log('[OpenAIClient] Health check:', url);
     try {
       const res = await fetch(url, { headers: this.authHeaders() });
-      console.log('[OpenAIClient] Health check response:', res.status, res.statusText);
       return res.ok;
     } catch (error) {
       console.error('[OpenAIClient] Health check error:', error);
@@ -129,8 +127,6 @@ export class OpenAIClient {
 
     console.log('[OpenAIClient] Starting chat request');
     console.log('[OpenAIClient] URL:', url);
-    console.log('[OpenAIClient] Model:', this.cfg.model);
-    console.log('[OpenAIClient] Messages count:', messages.length);
 
     try {
       // Try fetch with ReadableStream first (works in web environments)
@@ -171,7 +167,6 @@ export class OpenAIClient {
 
     // Check if we have a readable stream (web environment)
     if (res.body && typeof res.body.getReader === 'function') {
-      console.log('[OpenAIClient] Using ReadableStream for streaming');
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
@@ -225,7 +220,6 @@ export class OpenAIClient {
       }
     } else {
       // Fallback: no streaming support, parse entire response
-      console.log('[OpenAIClient] No ReadableStream support, falling back to full response parsing');
       const text = await res.text();
       const events = text.split(/\r?\n\r?\n/);
       for (const event of events) {
@@ -263,7 +257,6 @@ export class OpenAIClient {
 
     for (const line of lines) {
       if (line === '[DONE]' || line === '"[DONE]"') {
-        console.log('[OpenAIClient] Found DONE marker');
         continue;
       }
 
@@ -273,14 +266,6 @@ export class OpenAIClient {
         // Handle SpeakMCP-specific SSE event types
         if (obj.type === 'progress' && obj.data) {
           const update = obj.data as AgentProgressUpdate;
-          console.log('[OpenAIClient] Progress event:', update.currentIteration, '/', update.maxIterations, 'steps:', update.steps?.length);
-          if (update.steps && update.steps.length > 0) {
-            console.log('[OpenAIClient] Step types:', update.steps.map((s: AgentProgressStep) => `${s.type}:${s.status}`).join(', '));
-            const toolCallSteps = update.steps.filter((s: AgentProgressStep) => s.type === 'tool_call' && s.toolCall);
-            if (toolCallSteps.length > 0) {
-              console.log('[OpenAIClient] Tool calls:', toolCallSteps.map((s: AgentProgressStep) => s.toolCall?.name).join(', '));
-            }
-          }
           onProgress?.(update);
           if (update.streamingContent?.text) {
             onToken?.(update.streamingContent.text);
@@ -289,7 +274,6 @@ export class OpenAIClient {
         }
 
         if (obj.type === 'done' && obj.data) {
-          console.log('[OpenAIClient] Done event received');
           result = {
             content: obj.data.content || '',
             conversationId: obj.data.conversation_id,

@@ -277,8 +277,9 @@ export function ActiveAgentsSidebar() {
                 key={session.id}
                 onClick={() => {
                   if (session.conversationId) {
-                    logUI('[ActiveAgentsSidebar] Navigating to history for completed session:', session.conversationId)
-                    navigate(`/history/${session.conversationId}`)
+                    logUI('[ActiveAgentsSidebar] Navigating to sessions view for completed session:', session.conversationId)
+                    // Navigate to sessions page with the conversation ID - will show in Past Sessions
+                    navigate(`/${session.conversationId}`)
                   }
                 }}
                 className={cn(

@@ -132,7 +132,7 @@ DOMAIN-SPECIFIC RULES:
       <div className="space-y-6">
         <div className="space-y-4">
           <div className="space-y-2">
-            <h3 className="text-lg font-semibold">MCP Tool Calling</h3>
+            <h3 className="text-lg font-semibold">Profile</h3>
           </div>
 
           <div className="space-y-4">

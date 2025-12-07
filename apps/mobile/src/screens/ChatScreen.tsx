@@ -169,6 +169,9 @@ export default function ChatScreen({ route, navigation }: any) {
   const [liveTranscript, setLiveTranscript] = useState('');
   const [responding, setResponding] = useState(false);
   const [debugInfo, setDebugInfo] = useState<string>('');
+  const renderCountRef = useRef(0);
+  renderCountRef.current++;
+  console.log('[ChatScreen] Render #', renderCountRef.current, 'messages:', messages.length, 'toolCalls:', messages.filter(m => m.toolCalls?.length).length);
 
   const [willCancel, setWillCancel] = useState(false);
   const startYRef = useRef<number | null>(null);
@@ -278,7 +281,9 @@ export default function ChatScreen({ route, navigation }: any) {
       // Add messages from the current turn (skip the user message)
       for (let i = currentTurnStartIndex + 1; i < update.conversationHistory.length; i++) {
         const historyMsg = update.conversationHistory[i];
-        console.log('[convertProgress] History msg:', historyMsg.role, 'hasToolCalls:', !!historyMsg.toolCalls?.length, 'hasToolResults:', !!historyMsg.toolResults?.length);
+        console.log('[convertProgress] History msg:', historyMsg.role,
+          'toolCalls:', JSON.stringify(historyMsg.toolCalls),
+          'toolResults:', JSON.stringify(historyMsg.toolResults?.map(r => ({ success: r.success, contentLen: r.content?.length }))));
         messages.push({
           role: historyMsg.role === 'tool' ? 'assistant' : historyMsg.role,
           content: historyMsg.content || '',
@@ -332,19 +337,39 @@ export default function ChatScreen({ route, navigation }: any) {
       // Handle real-time progress updates
       const onProgress = (update: AgentProgressUpdate) => {
         console.log('[ChatScreen] Progress update:', update.currentIteration, '/', update.maxIterations, 'steps:', update.steps?.length);
-        console.log('[ChatScreen] Steps detail:', JSON.stringify(update.steps?.map(s => ({ type: s.type, status: s.status, hasToolCall: !!s.toolCall, hasToolResult: !!s.toolResult }))));
-        setDebugInfo(`Agent iteration ${update.currentIteration}/${update.maxIterations}`);
+
+        // Log tool call steps specifically
+        const toolCallSteps = update.steps?.filter(s => s.type === 'tool_call' && s.toolCall) || [];
+        if (toolCallSteps.length > 0) {
+          console.log('[ChatScreen] TOOL CALLS IN STEPS:', toolCallSteps.map(s => s.toolCall?.name).join(', '));
+        }
+
+        // Log conversation history tool calls
+        const historyToolCalls = update.conversationHistory?.filter(m => m.toolCalls && m.toolCalls.length > 0) || [];
+        if (historyToolCalls.length > 0) {
+          console.log('[ChatScreen] TOOL CALLS IN HISTORY:', historyToolCalls.flatMap(m => m.toolCalls?.map(tc => tc.name)).join(', '));
+        }
+
+        setDebugInfo(`Iteration ${update.currentIteration}/${update.maxIterations} | Steps: ${update.steps?.length || 0} | ToolCalls: ${toolCallSteps.length}`);
 
         // Convert progress to messages and update UI in real-time
         const progressMessages = convertProgressToMessages(update);
-        console.log('[ChatScreen] Converted to', progressMessages.length, 'messages:', JSON.stringify(progressMessages.map(m => ({ role: m.role, hasContent: !!m.content, toolCalls: m.toolCalls?.length, toolResults: m.toolResults?.length }))));
+        console.log('[ChatScreen] Converted to', progressMessages.length, 'messages');
+        for (const pm of progressMessages) {
+          console.log('[ChatScreen] Progress msg:', pm.role, 'content:', pm.content?.substring(0, 50), 'toolCalls:', pm.toolCalls?.length, 'toolResults:', pm.toolResults?.length);
+        }
         if (progressMessages.length > 0) {
-          setMessages((m) => {
-            // Keep messages up to and including the user message
-            const beforePlaceholder = m.slice(0, messageCountBeforeTurn + 1);
-            console.log('[ChatScreen] Setting messages:', beforePlaceholder.length, '+', progressMessages.length);
-            return [...beforePlaceholder, ...progressMessages];
-          });
+          // Use setTimeout to ensure state update happens in a separate tick
+          // This helps with React batching issues in async callbacks
+          setTimeout(() => {
+            setMessages((m) => {
+              // Keep messages up to and including the user message
+              const beforePlaceholder = m.slice(0, messageCountBeforeTurn + 1);
+              const newMessages = [...beforePlaceholder, ...progressMessages];
+              console.log('[ChatScreen] Setting messages: before=', beforePlaceholder.length, 'progress=', progressMessages.length, 'total=', newMessages.length);
+              return newMessages;
+            });
+          }, 0);
         }
       };
 

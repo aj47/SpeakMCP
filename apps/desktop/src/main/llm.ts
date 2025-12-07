@@ -1442,14 +1442,32 @@ Always use actual resource IDs from the conversation history or create new ones 
 
       // Check if this is an actionable request that should have executed tools
       const isActionableRequest = toolCapabilities.relevantTools.length > 0
+      const contentText = llmResponse.content || ""
+      const hasSubstantiveContent = contentText.trim().length >= 10 && !isToolCallPlaceholder(contentText)
+
+      // If no actionable tools and the response has substantive content,
+      // accept it as a direct response (e.g., simple Q&A, factual questions)
+      if (!isActionableRequest && hasSubstantiveContent) {
+        finalContent = contentText
+        addMessage("assistant", finalContent)
+        emit({
+          currentIteration: iteration,
+          maxIterations,
+          steps: progressSteps.slice(-3),
+          isComplete: true,
+          finalContent,
+          conversationHistory: formatConversationForProgress(conversationHistory),
+        })
+        break
+      }
 
       if (noOpCount >= 2 || (isActionableRequest && noOpCount >= 1)) {
-        // Add nudge to push the agent forward
-        addMessage("assistant", llmResponse.content || "")
+        // Add nudge to push the agent forward - require proper JSON format
+        addMessage("assistant", contentText)
 
         const nudgeMessage = isActionableRequest
-          ? "You have relevant tools available for this request. Please choose and call at least one tool to make progress, or if you truly cannot proceed, explicitly set needsMoreWork=false and provide a detailed explanation of why no action can be taken."
-          : "Please either take action using available tools or explicitly set needsMoreWork=false if the task is complete."
+          ? "You have relevant tools available for this request. Please respond with a valid JSON object: either call tools using the toolCalls array, or set needsMoreWork=false with a complete answer in the content field."
+          : "Please respond with a valid JSON object containing your answer in the content field and needsMoreWork=false if the task is complete."
 
         addMessage("user", nudgeMessage)
 

@@ -690,7 +690,7 @@ export function Component() {
             className="px-3"
           >
             <Switch
-              defaultChecked={configQuery.data?.mcpRequireApprovalBeforeToolCall ?? false}
+              checked={configQuery.data?.mcpRequireApprovalBeforeToolCall ?? false}
               onCheckedChange={(value) => {
                 saveConfig({
                   mcpRequireApprovalBeforeToolCall: value,

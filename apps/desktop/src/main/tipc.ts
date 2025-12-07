@@ -1990,20 +1990,27 @@ export const router = {
     return profileService.getCurrentProfile()
   }),
 
+  // Get the default system prompt for restore functionality
+  getDefaultSystemPrompt: t.procedure.action(async () => {
+    const { DEFAULT_SYSTEM_PROMPT } = await import("./system-prompts")
+    return DEFAULT_SYSTEM_PROMPT
+  }),
+
   createProfile: t.procedure
-    .input<{ name: string; guidelines: string }>()
+    .input<{ name: string; guidelines: string; systemPrompt?: string }>()
     .action(async ({ input }) => {
       const { profileService } = await import("./profile-service")
-      return profileService.createProfile(input.name, input.guidelines)
+      return profileService.createProfile(input.name, input.guidelines, input.systemPrompt)
     }),
 
   updateProfile: t.procedure
-    .input<{ id: string; name?: string; guidelines?: string }>()
+    .input<{ id: string; name?: string; guidelines?: string; systemPrompt?: string }>()
     .action(async ({ input }) => {
       const { profileService } = await import("./profile-service")
       const updates: any = {}
       if (input.name !== undefined) updates.name = input.name
       if (input.guidelines !== undefined) updates.guidelines = input.guidelines
+      if (input.systemPrompt !== undefined) updates.systemPrompt = input.systemPrompt
       return profileService.updateProfile(input.id, updates)
     }),
 
@@ -2021,12 +2028,14 @@ export const router = {
       const { mcpService } = await import("./mcp-service")
       const profile = profileService.setCurrentProfile(input.id)
 
-      // Update the config with the profile's guidelines and model config
+      // Update the config with the profile's guidelines, system prompt, and model config
       const config = configStore.get()
       const updatedConfig = {
         ...config,
         mcpToolsSystemPrompt: profile.guidelines,
         mcpCurrentProfileId: profile.id,
+        // Apply custom system prompt if it exists, otherwise clear it to use default
+        mcpCustomSystemPrompt: profile.systemPrompt || "",
         // Apply model config if it exists
         ...(profile.modelConfig?.mcpToolsProviderId && {
           mcpToolsProviderId: profile.modelConfig.mcpToolsProviderId,

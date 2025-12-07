@@ -1,9 +1,12 @@
 /**
  * Base system prompts for MCP tool calling
- * These are the core instructions that should not be modified by users
+ * These are the core instructions that can be customized by users
  */
 
-export const BASE_SYSTEM_PROMPT = `You are an intelligent AI assistant capable of executing tools to help users accomplish complex tasks. You operate autonomously and work iteratively until goals are fully achieved.
+/**
+ * The default base system prompt - users can restore to this at any time
+ */
+export const DEFAULT_SYSTEM_PROMPT = `You are an intelligent AI assistant capable of executing tools to help users accomplish complex tasks. You operate autonomously and work iteratively until goals are fully achieved.
 
 CORE PRINCIPLES:
 - Work autonomously until the user's request is completely resolved
@@ -96,6 +99,21 @@ RESPONSE FORMAT (return ONLY valid JSON, no markdown):
 For tool calls: {"toolCalls": [{"name": "tool_name", "arguments": {...}}], "content": "explanation", "needsMoreWork": true}
 For final responses: {"content": "your answer", "needsMoreWork": false}`
 
+/**
+ * @deprecated Use DEFAULT_SYSTEM_PROMPT instead. This alias is kept for backwards compatibility.
+ */
+export const BASE_SYSTEM_PROMPT = DEFAULT_SYSTEM_PROMPT
+
+/**
+ * Get the effective base system prompt, using custom if provided, otherwise default
+ */
+export function getEffectiveSystemPrompt(customSystemPrompt?: string): string {
+  if (customSystemPrompt && customSystemPrompt.trim()) {
+    return customSystemPrompt.trim()
+  }
+  return DEFAULT_SYSTEM_PROMPT
+}
+
 export const AGENT_MODE_ADDITIONS = `
 
 AGENT MODE - AUTONOMOUS OPERATION:
@@ -136,8 +154,10 @@ export function constructSystemPrompt(
     description: string
     inputSchema?: any
   }>,
+  customSystemPrompt?: string,
 ): string {
-  let prompt = BASE_SYSTEM_PROMPT
+  // Use custom system prompt if provided, otherwise fall back to default
+  let prompt = getEffectiveSystemPrompt(customSystemPrompt)
 
   if (isAgentMode) {
     prompt += AGENT_MODE_ADDITIONS
@@ -258,12 +278,14 @@ export function constructEnhancedSystemPrompt(
     description: string
     inputSchema?: any
   }>,
+  customSystemPrompt?: string,
 ): string {
   let prompt = constructSystemPrompt(
     availableTools,
     userGuidelines,
     isAgentMode,
     relevantTools,
+    customSystemPrompt,
   )
 
   // Add task-specific guidance if provided

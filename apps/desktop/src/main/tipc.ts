@@ -2006,7 +2006,19 @@ export const router = {
       const updates: any = {}
       if (input.name !== undefined) updates.name = input.name
       if (input.guidelines !== undefined) updates.guidelines = input.guidelines
-      return profileService.updateProfile(input.id, updates)
+      const updatedProfile = profileService.updateProfile(input.id, updates)
+
+      // If the updated profile is the current profile, sync guidelines to live config
+      const currentProfile = profileService.getCurrentProfile()
+      if (currentProfile && currentProfile.id === input.id && input.guidelines !== undefined) {
+        const config = configStore.get()
+        configStore.save({
+          ...config,
+          mcpToolsSystemPrompt: input.guidelines,
+        })
+      }
+
+      return updatedProfile
     }),
 
   deleteProfile: t.procedure

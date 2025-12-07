@@ -118,6 +118,8 @@ export function SidebarProfileSelector() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["profiles"] })
       queryClient.invalidateQueries({ queryKey: ["current-profile"] })
+      // Also invalidate config since backend syncs guidelines to mcpToolsSystemPrompt when editing current profile
+      queryClient.invalidateQueries({ queryKey: ["config"] })
       setIsEditDialogOpen(false)
       setEditingProfile(null)
       toast.success("Profile updated successfully")

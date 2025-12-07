@@ -56,6 +56,9 @@ export default function ChatScreen({ route, navigation }: any) {
     try { await saveConfig(nextCfg); } catch {}
   };
 
+  // Responding state - track if agent is processing (declared early for header use)
+  const [responding, setResponding] = useState(false);
+
   // Create client early so it's available for handleKillSwitch
   const client = new OpenAIClient({
     baseUrl: config.baseUrl,
@@ -118,6 +121,21 @@ export default function ChatScreen({ route, navigation }: any) {
     navigation?.setOptions?.({
       headerRight: () => (
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          {/* Animated spinner icon - shows while agent is processing */}
+          {responding && (
+            <View style={{ paddingHorizontal: 8, paddingVertical: 6 }}>
+              <View style={{
+                width: 28,
+                height: 28,
+                borderRadius: 14,
+                backgroundColor: theme.colors.primary,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}>
+                <ActivityIndicator size="small" color={theme.colors.primaryForeground} />
+              </View>
+            </View>
+          )}
           <TouchableOpacity
             onPress={handleKillSwitch}
             accessibilityRole="button"
@@ -160,14 +178,13 @@ export default function ChatScreen({ route, navigation }: any) {
         </View>
       ),
     });
-  }, [navigation, handsFree, handleKillSwitch]);
+  }, [navigation, handsFree, handleKillSwitch, responding, theme]);
 
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [listening, setListening] = useState(false);
   const [liveTranscript, setLiveTranscript] = useState('');
-  const [responding, setResponding] = useState(false);
   const [debugInfo, setDebugInfo] = useState<string>('');
 
   // Track expanded state for messages (by index)

@@ -1006,14 +1006,15 @@ export const router = {
           }
 
           // Auto-paste if enabled
-          if (config.mcpAutoPasteEnabled && state.focusedAppBeforeRecording) {
+          const pasteConfig = configStore.get()
+          if (pasteConfig.mcpAutoPasteEnabled && state.focusedAppBeforeRecording) {
             setTimeout(async () => {
               try {
                 await writeText(finalResponse)
               } catch (error) {
                 // Ignore paste errors
               }
-            }, config.mcpAutoPasteDelay || 1000)
+            }, pasteConfig.mcpAutoPasteDelay || 1000)
           }
         })
         .catch((error) => {

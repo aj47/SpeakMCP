@@ -95,12 +95,15 @@ export function SidebarProfileSelector() {
     mutationFn: async ({ name, guidelines }: { name: string; guidelines: string }) => {
       return await tipcClient.createProfile({ name, guidelines })
     },
-    onSuccess: () => {
+    onSuccess: (newProfile: Profile) => {
       queryClient.invalidateQueries({ queryKey: ["profiles"] })
+      queryClient.invalidateQueries({ queryKey: ["current-profile"] })
       setIsCreateDialogOpen(false)
       setNewProfileName("")
       setNewProfileGuidelines("")
-      toast.success("Profile created successfully")
+      toast.success(`Profile "${newProfile.name}" created successfully`)
+      // Automatically switch to the new profile
+      setCurrentProfileMutation.mutate(newProfile.id)
     },
     onError: (error: Error) => {
       toast.error(`Failed to create profile: ${error.message}`)
@@ -177,7 +180,7 @@ export function SidebarProfileSelector() {
       return
     }
     createProfileMutation.mutate({
-      name: newProfileName,
+      name: newProfileName.trim(),
       guidelines: newProfileGuidelines,
     })
   }
@@ -305,21 +308,21 @@ export function SidebarProfileSelector() {
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label htmlFor="profile-name">Profile Name</Label>
+              <Label htmlFor="sidebar-profile-name">Profile Name</Label>
               <Input
-                id="profile-name"
+                id="sidebar-profile-name"
                 value={newProfileName}
                 onChange={(e) => setNewProfileName(e.target.value)}
                 placeholder="e.g., My Custom Profile"
               />
             </div>
             <div>
-              <Label htmlFor="profile-guidelines">Guidelines</Label>
+              <Label htmlFor="sidebar-profile-guidelines">Guidelines (optional)</Label>
               <Textarea
-                id="profile-guidelines"
+                id="sidebar-profile-guidelines"
                 value={newProfileGuidelines}
                 onChange={(e) => setNewProfileGuidelines(e.target.value)}
-                rows={8}
+                rows={6}
                 className="font-mono text-sm"
                 placeholder="Enter custom guidelines..."
               />

@@ -365,6 +365,7 @@ export type Config = {
   customAgentKillSwitchHotkey?: string
 
   // MCP Tool Calling Configuration
+  /** @deprecated MCP tools are now always enabled. This field is kept for backwards compatibility but ignored. */
   mcpToolsEnabled?: boolean
   mcpToolsShortcut?: "hold-ctrl-alt" | "ctrl-alt-slash" | "custom"
   customMcpToolsShortcut?: string
@@ -375,6 +376,7 @@ export type Config = {
   mcpToolsGeminiModel?: string
   mcpToolsSystemPrompt?: string
   mcpCurrentProfileId?: string // Current active profile ID
+  /** @deprecated Agent mode is now always enabled. This field is kept for backwards compatibility but ignored. */
   mcpAgentModeEnabled?: boolean
   // When enabled, require manual user approval before each tool call executes
   mcpRequireApprovalBeforeToolCall?: boolean

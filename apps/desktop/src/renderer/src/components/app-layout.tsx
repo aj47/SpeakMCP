@@ -46,9 +46,9 @@ export const Component = () => {
       icon: "i-mingcute-brain-line",
     },
     {
-      text: "Agents",
+      text: "Profile",
       href: "/settings/tools",
-      icon: "i-mingcute-android-2-line",
+      icon: "i-mingcute-user-setting-line",
     },
     {
       text: "MCP Tools",

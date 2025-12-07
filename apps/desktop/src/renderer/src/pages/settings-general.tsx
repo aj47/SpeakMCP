@@ -404,7 +404,7 @@ export function Component() {
             </div>
           </Control>
 
-          <Control label={<ControlLabel label="Agent Mode" tooltip="Choose how to activate agent mode with MCP tool calling" />} className="px-3">
+          <Control label={<ControlLabel label="Agent Mode" tooltip="Choose how to activate agent mode for MCP tool calling" />} className="px-3">
             <div className="space-y-2">
               <Select
                 value={configQuery.data?.mcpToolsShortcut || "hold-ctrl-alt"}
@@ -710,6 +710,13 @@ export function Component() {
 
         {/* Agent Settings */}
         <ControlGroup title="Agent Settings">
+          <Control label={<ControlLabel label="Require Tool Approval" tooltip="Adds a confirmation dialog before any tool executes. Recommended for safety." />} className="px-3">
+            <Switch
+              checked={configQuery.data?.mcpRequireApprovalBeforeToolCall ?? false}
+              onCheckedChange={(value) => saveConfig({ mcpRequireApprovalBeforeToolCall: value })}
+            />
+          </Control>
+
           <Control label={<ControlLabel label="Max Iterations" tooltip="Maximum number of iterations the agent can perform before stopping. Higher values allow more complex tasks but may take longer." />} className="px-3">
             <Input
               type="number"

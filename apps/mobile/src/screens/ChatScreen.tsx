@@ -12,6 +12,7 @@ import {
   KeyboardAvoidingView,
   ActivityIndicator,
   Alert,
+  Pressable,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { EventEmitter } from 'expo-modules-core';
@@ -21,6 +22,9 @@ import * as Speech from 'expo-speech';
 import { useHeaderHeight } from '@react-navigation/elements';
 import { useTheme } from '../ui/ThemeProvider';
 import { spacing, radius, Theme } from '../ui/theme';
+
+// Threshold for collapsing long content
+const COLLAPSE_THRESHOLD = 200;
 
 export default function ChatScreen({ route, navigation }: any) {
   const insets = useSafeAreaInsets();
@@ -169,6 +173,12 @@ export default function ChatScreen({ route, navigation }: any) {
   const [liveTranscript, setLiveTranscript] = useState('');
   const [responding, setResponding] = useState(false);
   const [debugInfo, setDebugInfo] = useState<string>('');
+
+  // Track expanded state for messages (by index)
+  const [expandedMessages, setExpandedMessages] = useState<Record<number, boolean>>({});
+  const toggleMessageExpansion = useCallback((index: number) => {
+    setExpandedMessages(prev => ({ ...prev, [index]: !prev[index] }));
+  }, []);
 
   const [willCancel, setWillCancel] = useState(false);
   const startYRef = useRef<number | null>(null);
@@ -761,88 +771,143 @@ export default function ChatScreen({ route, navigation }: any) {
           keyboardShouldPersistTaps="handled"
           contentInsetAdjustmentBehavior="automatic"
         >
-          {messages.map((m, i) => (
-            <View key={i} style={[styles.msg, m.role === 'user' ? styles.user : styles.assistant]}>
-              <Text style={styles.role}>{m.role}</Text>
-              {m.role === 'assistant' && (!m.content || m.content.length === 0) && !m.toolCalls && !m.toolResults ? (
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <ActivityIndicator size="small" color={theme.colors.foreground} />
-                  <Text style={{ color: theme.colors.foreground }}>Assistant is thinking</Text>
-                </View>
-              ) : (
-                <>
-                  {m.content ? (
-                    <Text style={{ color: theme.colors.foreground }}>{m.content}</Text>
-                  ) : null}
+          {messages.map((m, i) => {
+            const hasExtras = (m.toolCalls?.length ?? 0) > 0 || (m.toolResults?.length ?? 0) > 0;
+            const shouldCollapse = (m.content?.length ?? 0) > COLLAPSE_THRESHOLD || hasExtras;
+            const isExpanded = expandedMessages[i] ?? false;
 
-                  {/* Tool Calls */}
-                  {m.toolCalls && m.toolCalls.length > 0 && (
-                    <View style={styles.toolSection}>
-                      <Text style={styles.toolSectionTitle}>Tool Calls ({m.toolCalls.length}):</Text>
-                      {m.toolCalls.map((toolCall, idx) => (
-                        <View key={idx} style={styles.toolCallCard}>
-                          <View style={styles.toolCallHeader}>
-                            <Text style={styles.toolName}>{toolCall.name}</Text>
-                            <Text style={styles.toolBadge}>Tool {idx + 1}</Text>
+            return (
+              <View key={i} style={[styles.msg, m.role === 'user' ? styles.user : styles.assistant]}>
+                {/* Header row with role and expand/collapse button */}
+                <View style={styles.messageHeader}>
+                  <Text style={styles.role}>{m.role}</Text>
+                  {(m.toolCalls?.length ?? 0) > 0 && (
+                    <View style={styles.toolBadgeSmall}>
+                      <Text style={styles.toolBadgeSmallText}>{m.toolCalls!.length} tool{m.toolCalls!.length > 1 ? 's' : ''}</Text>
+                    </View>
+                  )}
+                  {(m.toolResults?.length ?? 0) > 0 && (
+                    <View style={[styles.toolBadgeSmall, styles.resultBadgeSmall]}>
+                      <Text style={styles.toolBadgeSmallText}>{m.toolResults!.length} result{m.toolResults!.length > 1 ? 's' : ''}</Text>
+                    </View>
+                  )}
+                  {shouldCollapse && (
+                    <Pressable
+                      onPress={() => toggleMessageExpansion(i)}
+                      style={styles.expandButton}
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    >
+                      <Text style={styles.expandButtonText}>
+                        {isExpanded ? '▲ Collapse' : '▼ Expand'}
+                      </Text>
+                    </Pressable>
+                  )}
+                </View>
+
+                {m.role === 'assistant' && (!m.content || m.content.length === 0) && !m.toolCalls && !m.toolResults ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <ActivityIndicator size="small" color={theme.colors.foreground} />
+                    <Text style={{ color: theme.colors.foreground }}>Assistant is thinking</Text>
+                  </View>
+                ) : (
+                  <>
+                    {/* Content - truncate if not expanded and long */}
+                    {m.content ? (
+                      <Text
+                        style={{ color: theme.colors.foreground }}
+                        numberOfLines={!isExpanded && shouldCollapse ? 3 : undefined}
+                      >
+                        {m.content}
+                      </Text>
+                    ) : null}
+
+                    {/* Tool Calls - only show when expanded */}
+                    {isExpanded && m.toolCalls && m.toolCalls.length > 0 && (
+                      <View style={styles.toolSection}>
+                        <Text style={styles.toolSectionTitle}>Tool Calls ({m.toolCalls.length}):</Text>
+                        {m.toolCalls.map((toolCall, idx) => (
+                          <View key={idx} style={styles.toolCallCard}>
+                            <View style={styles.toolCallHeader}>
+                              <Text style={styles.toolName}>{toolCall.name}</Text>
+                              <Text style={styles.toolBadge}>Tool {idx + 1}</Text>
+                            </View>
+                            {toolCall.arguments && (
+                              <View style={styles.toolParams}>
+                                <Text style={styles.toolParamsLabel}>Parameters:</Text>
+                                <ScrollView horizontal style={styles.toolParamsScroll}>
+                                  <Text style={styles.toolParamsCode}>
+                                    {JSON.stringify(toolCall.arguments, null, 2)}
+                                  </Text>
+                                </ScrollView>
+                              </View>
+                            )}
                           </View>
-                          {toolCall.arguments && (
-                            <View style={styles.toolParams}>
-                              <Text style={styles.toolParamsLabel}>Parameters:</Text>
-                              <ScrollView horizontal style={styles.toolParamsScroll}>
-                                <Text style={styles.toolParamsCode}>
-                                  {JSON.stringify(toolCall.arguments, null, 2)}
+                        ))}
+                      </View>
+                    )}
+
+                    {/* Collapsed tool calls summary */}
+                    {!isExpanded && m.toolCalls && m.toolCalls.length > 0 && (
+                      <View style={styles.collapsedToolSummary}>
+                        <Text style={styles.collapsedToolText}>
+                          🔧 {m.toolCalls.map(tc => tc.name).join(', ')}
+                        </Text>
+                      </View>
+                    )}
+
+                    {/* Tool Results - only show when expanded */}
+                    {isExpanded && m.toolResults && m.toolResults.length > 0 && (
+                      <View style={styles.toolSection}>
+                        <Text style={styles.toolSectionTitle}>Tool Results ({m.toolResults.length}):</Text>
+                        {m.toolResults.map((result, idx) => (
+                          <View
+                            key={idx}
+                            style={[
+                              styles.toolResultCard,
+                              result.success ? styles.toolResultSuccess : styles.toolResultError
+                            ]}
+                          >
+                            <View style={styles.toolResultHeader}>
+                              <Text style={[
+                                styles.toolResultBadge,
+                                result.success ? styles.toolResultBadgeSuccess : styles.toolResultBadgeError
+                              ]}>
+                                {result.success ? '✅ Success' : '❌ Error'}
+                              </Text>
+                              <Text style={styles.toolResultIndex}>Result {idx + 1}</Text>
+                            </View>
+                            <View style={styles.toolResultContent}>
+                              <Text style={styles.toolResultLabel}>Content:</Text>
+                              <ScrollView horizontal style={styles.toolResultScroll}>
+                                <Text style={styles.toolResultCode}>
+                                  {result.content || 'No content returned'}
                                 </Text>
                               </ScrollView>
                             </View>
-                          )}
-                        </View>
-                      ))}
-                    </View>
-                  )}
+                            {result.error && (
+                              <View style={styles.toolResultErrorSection}>
+                                <Text style={styles.toolResultErrorLabel}>Error Details:</Text>
+                                <Text style={styles.toolResultErrorText}>{result.error}</Text>
+                              </View>
+                            )}
+                          </View>
+                        ))}
+                      </View>
+                    )}
 
-                  {/* Tool Results */}
-                  {m.toolResults && m.toolResults.length > 0 && (
-                    <View style={styles.toolSection}>
-                      <Text style={styles.toolSectionTitle}>Tool Results ({m.toolResults.length}):</Text>
-                      {m.toolResults.map((result, idx) => (
-                        <View
-                          key={idx}
-                          style={[
-                            styles.toolResultCard,
-                            result.success ? styles.toolResultSuccess : styles.toolResultError
-                          ]}
-                        >
-                          <View style={styles.toolResultHeader}>
-                            <Text style={[
-                              styles.toolResultBadge,
-                              result.success ? styles.toolResultBadgeSuccess : styles.toolResultBadgeError
-                            ]}>
-                              {result.success ? '✅ Success' : '❌ Error'}
-                            </Text>
-                            <Text style={styles.toolResultIndex}>Result {idx + 1}</Text>
-                          </View>
-                          <View style={styles.toolResultContent}>
-                            <Text style={styles.toolResultLabel}>Content:</Text>
-                            <ScrollView horizontal style={styles.toolResultScroll}>
-                              <Text style={styles.toolResultCode}>
-                                {result.content || 'No content returned'}
-                              </Text>
-                            </ScrollView>
-                          </View>
-                          {result.error && (
-                            <View style={styles.toolResultErrorSection}>
-                              <Text style={styles.toolResultErrorLabel}>Error Details:</Text>
-                              <Text style={styles.toolResultErrorText}>{result.error}</Text>
-                            </View>
-                          )}
-                        </View>
-                      ))}
-                    </View>
-                  )}
-                </>
-              )}
-            </View>
-          ))}
+                    {/* Collapsed tool results summary */}
+                    {!isExpanded && m.toolResults && m.toolResults.length > 0 && (
+                      <View style={styles.collapsedToolSummary}>
+                        <Text style={styles.collapsedToolText}>
+                          {m.toolResults.every(r => r.success) ? '✅' : '⚠️'} {m.toolResults.length} result{m.toolResults.length > 1 ? 's' : ''}
+                        </Text>
+                      </View>
+                    )}
+                  </>
+                )}
+              </View>
+            );
+          })}
           {debugInfo && (
             <View style={styles.debugInfo}>
               <Text style={styles.debugText}>{debugInfo}</Text>
@@ -945,6 +1010,46 @@ function createStyles(theme: Theme) {
     role: {
       ...theme.typography.caption,
       marginBottom: spacing.xs,
+    },
+    messageHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      flexWrap: 'wrap',
+      gap: spacing.xs,
+      marginBottom: spacing.xs,
+    },
+    toolBadgeSmall: {
+      backgroundColor: theme.colors.muted,
+      paddingHorizontal: spacing.xs,
+      paddingVertical: 2,
+      borderRadius: radius.sm,
+    },
+    resultBadgeSmall: {
+      backgroundColor: theme.colors.secondary,
+    },
+    toolBadgeSmallText: {
+      fontSize: 10,
+      color: theme.colors.mutedForeground,
+    },
+    expandButton: {
+      marginLeft: 'auto',
+      paddingHorizontal: spacing.sm,
+      paddingVertical: 2,
+    },
+    expandButtonText: {
+      fontSize: 11,
+      color: theme.colors.primary,
+      fontWeight: '500',
+    },
+    collapsedToolSummary: {
+      marginTop: spacing.xs,
+      paddingVertical: spacing.xs,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: theme.colors.border,
+    },
+    collapsedToolText: {
+      fontSize: 12,
+      color: theme.colors.mutedForeground,
     },
     inputRow: {
       flexDirection: 'row',

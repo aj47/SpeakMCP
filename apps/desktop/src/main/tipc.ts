@@ -1300,8 +1300,8 @@ export const router = {
       const next = input.config
       const merged = { ...(prev as any), ...(next as any) } as Config
 
-      // Persist config
-      configStore.save(next)
+      // Persist merged config (ensures partial updates don't lose existing settings)
+      configStore.save(merged)
 
       // Clear models cache if provider endpoints or API keys changed
       try {

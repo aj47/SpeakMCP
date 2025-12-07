@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from "react"
 import { useQueryClient, useQuery } from "@tanstack/react-query"
-import { useParams, useNavigate } from "react-router-dom"
+import { useParams } from "react-router-dom"
 import { tipcClient } from "@renderer/lib/tipc-client"
 import { useAgentStore } from "@renderer/stores"
 import { SessionGrid, SessionTileWrapper } from "@renderer/components/session-grid"
@@ -54,7 +54,6 @@ const LOAD_MORE_INCREMENT = 10
 
 export function Component() {
   const queryClient = useQueryClient()
-  const navigate = useNavigate()
   const { id: routeHistoryItemId } = useParams<{ id: string }>()
   const agentProgressById = useAgentStore((s) => s.agentProgressById)
   const focusedSessionId = useAgentStore((s) => s.focusedSessionId)
@@ -199,10 +198,11 @@ export function Component() {
         // It's a past session - create a new tile by setting pendingConversationId
         setPendingConversationId(routeHistoryItemId)
       }
-      // Clear the route param after handling
-      navigate("/", { replace: true })
+      // Clear the route param from URL without causing a remount
+      // Using window.history.replaceState instead of navigate() to avoid clearing local state
+      window.history.replaceState(null, "", "/")
     }
-  }, [routeHistoryItemId, agentProgressById, setFocusedSessionId, navigate])
+  }, [routeHistoryItemId, agentProgressById, setFocusedSessionId])
 
   // Load the pending conversation data when one is selected
   const pendingConversationQuery = useQuery({

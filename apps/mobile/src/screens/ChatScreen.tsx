@@ -169,9 +169,6 @@ export default function ChatScreen({ route, navigation }: any) {
   const [liveTranscript, setLiveTranscript] = useState('');
   const [responding, setResponding] = useState(false);
   const [debugInfo, setDebugInfo] = useState<string>('');
-  const renderCountRef = useRef(0);
-  renderCountRef.current++;
-  console.log('[ChatScreen] Render #', renderCountRef.current, 'messages:', messages.length, 'toolCalls:', messages.filter(m => m.toolCalls?.length).length);
 
   const [willCancel, setWillCancel] = useState(false);
   const startYRef = useRef<number | null>(null);

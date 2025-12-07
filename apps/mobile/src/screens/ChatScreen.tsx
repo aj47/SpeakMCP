@@ -235,11 +235,19 @@ export default function ChatScreen({ route, navigation }: any) {
         const stepContent = step.content || step.llmContent;
         if (step.type === 'thinking' && stepContent) {
           thinkingContent = stepContent;
-        } else if (step.type === 'tool_call' && step.toolCall) {
-          console.log('[convertProgress] Found tool call:', step.toolCall.name);
-          currentToolCalls.push(step.toolCall);
+        } else if (step.type === 'tool_call') {
+          // Tool call step - extract both toolCall and toolResult if present
+          if (step.toolCall) {
+            console.log('[convertProgress] Found tool call:', step.toolCall.name);
+            currentToolCalls.push(step.toolCall);
+          }
+          // Some tool_call steps also have toolResult when completed
+          if (step.toolResult) {
+            console.log('[convertProgress] Found tool result in tool_call step, success:', step.toolResult.success);
+            currentToolResults.push(step.toolResult);
+          }
         } else if (step.type === 'tool_result' && step.toolResult) {
-          console.log('[convertProgress] Found tool result, success:', step.toolResult.success);
+          console.log('[convertProgress] Found tool result:', step.toolResult.success);
           currentToolResults.push(step.toolResult);
         } else if (step.type === 'completion' && stepContent) {
           // Final completion content

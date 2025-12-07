@@ -197,6 +197,8 @@ export async function processTranscriptWithTools(
     uniqueAvailableTools,
     userGuidelines,
     false,
+    undefined, // relevantTools
+    config.mcpCustomSystemPrompt, // custom base system prompt
   )
 
   const messages = [
@@ -621,6 +623,7 @@ export async function processTranscriptWithAgentMode(
     agentModeGuidelines,
     true,
     toolCapabilities.relevantTools,
+    config.mcpCustomSystemPrompt, // custom base system prompt
   )
 
   // Generic context extraction from chat history - works with any MCP tool
@@ -793,6 +796,7 @@ export async function processTranscriptWithAgentMode(
       config.mcpToolsSystemPrompt,
       true,
       toolCapabilities.relevantTools,
+      config.mcpCustomSystemPrompt, // custom base system prompt
     )
 
     const postVerifySummaryMessages = [
@@ -1831,6 +1835,8 @@ Please try alternative approaches, break down the task into smaller steps, or pr
           uniqueAvailableTools,
           config.mcpToolsSystemPrompt,
           true, // isAgentMode
+          undefined, // relevantTools
+          config.mcpCustomSystemPrompt, // custom base system prompt
         )
 
         const summaryMessages = [
@@ -2086,6 +2092,8 @@ Please try alternative approaches, break down the task into smaller steps, or pr
           uniqueAvailableTools,
           config.mcpToolsSystemPrompt,
           true, // isAgentMode
+          undefined, // relevantTools
+          config.mcpCustomSystemPrompt, // custom base system prompt
         )
 
         const summaryMessages = [

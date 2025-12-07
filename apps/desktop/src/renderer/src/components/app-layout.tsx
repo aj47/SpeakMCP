@@ -20,16 +20,12 @@ export const Component = () => {
   const [settingsExpanded, setSettingsExpanded] = useState(true)
 
   // Primary navigation - always visible
+  // Note: History has been merged into the Sessions page
   const primaryNavLinks: NavLinkItem[] = [
     {
       text: "Sessions",
       href: "/",
       icon: "i-mingcute-grid-line",
-    },
-    {
-      text: "History",
-      href: "/history",
-      icon: "i-mingcute-message-3-line",
     },
   ]
 

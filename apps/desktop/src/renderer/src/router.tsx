@@ -7,17 +7,23 @@ export const router: ReturnType<typeof createBrowserRouter> =
       lazy: () => import("./components/app-layout"),
       children: [
         {
-          // Sessions dashboard is now the landing page
+          // Sessions dashboard is now the landing page (includes past sessions/history)
           path: "",
           lazy: () => import("./pages/sessions"),
         },
         {
+          // Deep link to specific session (active or past)
+          path: ":id",
+          lazy: () => import("./pages/sessions"),
+        },
+        {
+          // Legacy history routes - redirect to sessions
           path: "history",
-          lazy: () => import("./pages/history"),
+          lazy: () => import("./pages/sessions"),
         },
         {
           path: "history/:id",
-          lazy: () => import("./pages/history"),
+          lazy: () => import("./pages/sessions"),
         },
         {
           path: "settings",

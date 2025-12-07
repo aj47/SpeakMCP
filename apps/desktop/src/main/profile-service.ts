@@ -124,13 +124,14 @@ class ProfileService {
     return undefined
   }
 
-  createProfile(name: string, guidelines: string): Profile {
+  createProfile(name: string, guidelines: string, systemPrompt?: string): Profile {
     const newProfile: Profile = {
       id: randomUUID(),
       name,
       guidelines,
       createdAt: Date.now(),
       updatedAt: Date.now(),
+      ...(systemPrompt !== undefined && { systemPrompt }),
     }
 
     if (!this.profilesData) {
@@ -142,7 +143,7 @@ class ProfileService {
     return newProfile
   }
 
-  updateProfile(id: string, updates: Partial<Pick<Profile, "name" | "guidelines">>): Profile {
+  updateProfile(id: string, updates: Partial<Pick<Profile, "name" | "guidelines" | "systemPrompt">>): Profile {
     if (!this.profilesData) {
       this.loadProfiles()
     }
@@ -309,9 +310,14 @@ class ProfileService {
     }
 
     // Create a clean export without the id (will be regenerated on import)
-    const exportData = {
+    const exportData: { name: string; guidelines: string; systemPrompt?: string } = {
       name: profile.name,
       guidelines: profile.guidelines,
+    }
+
+    // Include systemPrompt if it exists
+    if (profile.systemPrompt) {
+      exportData.systemPrompt = profile.systemPrompt
     }
 
     return JSON.stringify(exportData, null, 2)
@@ -320,16 +326,26 @@ class ProfileService {
   importProfile(profileJson: string): Profile {
     try {
       const importData = JSON.parse(profileJson)
-      
+
       if (!importData.name || typeof importData.name !== "string") {
         throw new Error("Invalid profile data: missing or invalid name")
       }
 
-      if (!importData.guidelines || typeof importData.guidelines !== "string") {
-        throw new Error("Invalid profile data: missing or invalid guidelines")
+      // Guidelines can be empty string for imports (backwards compatible)
+      if (importData.guidelines !== undefined && typeof importData.guidelines !== "string") {
+        throw new Error("Invalid profile data: guidelines must be a string")
       }
 
-      return this.createProfile(importData.name, importData.guidelines)
+      // SystemPrompt is optional
+      if (importData.systemPrompt !== undefined && typeof importData.systemPrompt !== "string") {
+        throw new Error("Invalid profile data: systemPrompt must be a string")
+      }
+
+      return this.createProfile(
+        importData.name,
+        importData.guidelines || "",
+        importData.systemPrompt
+      )
     } catch (error) {
       throw new Error(`Failed to import profile: ${error instanceof Error ? error.message : String(error)}`)
     }

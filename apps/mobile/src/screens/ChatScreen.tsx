@@ -608,7 +608,7 @@ export default function ChatScreen({ route, navigation }: any) {
               {m.role === 'assistant' && (!m.content || m.content.length === 0) && !m.toolCalls && !m.toolResults ? (
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                   <ActivityIndicator size="small" color={theme.colors.foreground} />
-                  <Text style={{ color: theme.colors.foreground }}>Assistant is thinking</Text>
+                  <Text style={{ color: theme.colors.foreground }}>Assistant is thinking</Text>
                 </View>
               ) : (
                 <>

@@ -162,7 +162,7 @@ export function constructMinimalSystemPrompt(
     inputSchema?: any
   }>,
 ): string {
-  let prompt = "You are an MCP-capable assistant. Use exact tool names and exact parameter keys. Be concise. Do not invent IDs or paths. Response format: {\"toolCalls\": [...], \"content\": \"...\", \"needsMoreWork\": bool}"
+  let prompt = "You are an MCP-capable assistant. Use exact tool names and exact parameter keys. Be concise. Do not invent IDs or paths. Response format: {\"toolCalls\": [...], \"content\": \"...\", \"needsMoreWork\": true}"
   if (isAgentMode) {
     prompt += " Always continue iterating with tools until the task is complete; set needsMoreWork=false only when fully done."
   }

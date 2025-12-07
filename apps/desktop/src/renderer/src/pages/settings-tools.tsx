@@ -20,6 +20,7 @@ import {
   TooltipTrigger,
 } from "@renderer/components/ui/tooltip"
 import { Save, Info } from "lucide-react"
+import { toast } from "sonner"
 import { useState, useEffect } from "react"
 import { ProfileManager } from "@renderer/components/profile-manager"
 import { ProfileBadge } from "@renderer/components/profile-badge"
@@ -115,26 +116,32 @@ export function Component() {
     }
   }, [config.mcpToolsSystemPrompt])
 
-  const updateConfig = (updates: Partial<Config>) => {
+  const updateConfig = async (updates: Partial<Config>) => {
     const newConfig = { ...config, ...updates }
-    saveConfigMutation.mutate(newConfig)
+    await saveConfigMutation.mutateAsync(newConfig)
   }
 
+  const saveAdditionalGuidelines = async () => {
+    try {
+      // Save to config
+      await updateConfig({ mcpToolsSystemPrompt: additionalGuidelines })
 
+      // Also update the current profile's guidelines if it's a non-default profile
+      // This ensures the profile stays in sync with the saved guidelines
+      if (currentProfile && !currentProfile.isDefault) {
+        await updateProfileMutation.mutateAsync({
+          id: currentProfile.id,
+          guidelines: additionalGuidelines,
+        })
+      }
 
-  const saveAdditionalGuidelines = () => {
-    updateConfig({ mcpToolsSystemPrompt: additionalGuidelines })
-
-    // Also update the current profile's guidelines if it's a non-default profile
-    // This ensures the profile stays in sync with the saved guidelines
-    if (currentProfile && !currentProfile.isDefault) {
-      updateProfileMutation.mutate({
-        id: currentProfile.id,
-        guidelines: additionalGuidelines,
-      })
+      // Only clear unsaved changes if both operations succeeded
+      setHasUnsavedChanges(false)
+    } catch (error) {
+      // If profile update fails, keep hasUnsavedChanges true so user can retry
+      toast.error("Failed to save guidelines. Please try again.")
+      console.error("Failed to save guidelines:", error)
     }
-
-    setHasUnsavedChanges(false)
   }
 
   const revertChanges = () => {

@@ -116,15 +116,20 @@ export function Component() {
     }
   }, [config.mcpToolsSystemPrompt])
 
-  const updateConfig = async (updates: Partial<Config>) => {
+  // Fire-and-forget config update for toggles/switches (no await needed)
+  const updateConfig = (updates: Partial<Config>) => {
     const newConfig = { ...config, ...updates }
-    await saveConfigMutation.mutateAsync(newConfig)
+    saveConfigMutation.mutate(newConfig)
   }
+
+  // Combined saving state for the guidelines save operation
+  const isSavingGuidelines = saveConfigMutation.isPending || updateProfileMutation.isPending
 
   const saveAdditionalGuidelines = async () => {
     try {
       // Save to config
-      await updateConfig({ mcpToolsSystemPrompt: additionalGuidelines })
+      const newConfig = { ...config, mcpToolsSystemPrompt: additionalGuidelines }
+      await saveConfigMutation.mutateAsync(newConfig)
 
       // Also update the current profile's guidelines if it's a non-default profile
       // This ensures the profile stays in sync with the saved guidelines
@@ -138,7 +143,7 @@ export function Component() {
       // Only clear unsaved changes if both operations succeeded
       setHasUnsavedChanges(false)
     } catch (error) {
-      // If profile update fails, keep hasUnsavedChanges true so user can retry
+      // If either mutation fails, keep hasUnsavedChanges true so user can retry
       toast.error("Failed to save guidelines. Please try again.")
       console.error("Failed to save guidelines:", error)
     }
@@ -367,7 +372,7 @@ DOMAIN-SPECIFIC RULES:
                         variant="outline"
                         size="sm"
                         onClick={revertChanges}
-                        disabled={saveConfigMutation.isPending}
+                        disabled={isSavingGuidelines}
                       >
                         Revert Changes
                       </Button>
@@ -376,12 +381,12 @@ DOMAIN-SPECIFIC RULES:
                       size="sm"
                       onClick={saveAdditionalGuidelines}
                       disabled={
-                        !hasUnsavedChanges || saveConfigMutation.isPending
+                        !hasUnsavedChanges || isSavingGuidelines
                       }
                       className="gap-1"
                     >
                       <Save className="h-3 w-3" />
-                      {saveConfigMutation.isPending
+                      {isSavingGuidelines
                         ? "Saving..."
                         : "Save Changes"}
                     </Button>

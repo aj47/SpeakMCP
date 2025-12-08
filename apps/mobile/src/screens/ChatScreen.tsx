@@ -25,13 +25,22 @@ import { useConfigContext, saveConfig } from '../store/config';
 import { useSessionContext } from '../store/sessions';
 import { OpenAIClient, ChatMessage, AgentProgressUpdate, AgentProgressStep } from '../lib/openaiClient';
 import * as Speech from 'expo-speech';
-import { preprocessTextForTTS } from '@speakmcp/shared';
+import {
+  preprocessTextForTTS,
+  COLLAPSE_THRESHOLD,
+  shouldCollapseMessage,
+  formatToolCallsSummary,
+  formatToolResultsSummary,
+  getToolCallsBadgeText,
+  getToolResultsBadgeText,
+  getRoleDisplayConfig,
+  getExpandCollapseTextWithArrow,
+  getToolResultStatus,
+  formatToolArguments,
+} from '@speakmcp/shared';
 import { useHeaderHeight } from '@react-navigation/elements';
 import { useTheme } from '../ui/ThemeProvider';
 import { spacing, radius, Theme } from '../ui/theme';
-
-// Threshold for collapsing long content
-const COLLAPSE_THRESHOLD = 200;
 
 export default function ChatScreen({ route, navigation }: any) {
   const insets = useSafeAreaInsets();
@@ -929,23 +938,24 @@ export default function ChatScreen({ route, navigation }: any) {
           contentInsetAdjustmentBehavior="automatic"
         >
           {messages.map((m, i) => {
-            const hasExtras = (m.toolCalls?.length ?? 0) > 0 || (m.toolResults?.length ?? 0) > 0;
-            const shouldCollapse = (m.content?.length ?? 0) > COLLAPSE_THRESHOLD || hasExtras;
+            // Use shared utility for collapse logic
+            const shouldCollapse = shouldCollapseMessage({ role: m.role, content: m.content || '', toolCalls: m.toolCalls, toolResults: m.toolResults });
             const isExpanded = expandedMessages[i] ?? false;
+            const roleConfig = getRoleDisplayConfig(m.role);
 
             return (
               <View key={i} style={[styles.msg, m.role === 'user' ? styles.user : styles.assistant]}>
-                {/* Header row with role and expand/collapse button */}
+                {/* Header row with role icon/emoji and expand/collapse button */}
                 <View style={styles.messageHeader}>
-                  <Text style={styles.role}>{m.role}</Text>
+                  <Text style={styles.role}>{roleConfig.emoji} {roleConfig.name}</Text>
                   {(m.toolCalls?.length ?? 0) > 0 && (
                     <View style={styles.toolBadgeSmall}>
-                      <Text style={styles.toolBadgeSmallText}>{m.toolCalls!.length} tool{m.toolCalls!.length > 1 ? 's' : ''}</Text>
+                      <Text style={styles.toolBadgeSmallText}>{getToolCallsBadgeText(m.toolCalls!.length)}</Text>
                     </View>
                   )}
                   {(m.toolResults?.length ?? 0) > 0 && (
                     <View style={[styles.toolBadgeSmall, styles.resultBadgeSmall]}>
-                      <Text style={styles.toolBadgeSmallText}>{m.toolResults!.length} result{m.toolResults!.length > 1 ? 's' : ''}</Text>
+                      <Text style={styles.toolBadgeSmallText}>{getToolResultsBadgeText(m.toolResults!.length)}</Text>
                     </View>
                   )}
                   {shouldCollapse && (
@@ -955,7 +965,7 @@ export default function ChatScreen({ route, navigation }: any) {
                       hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                     >
                       <Text style={styles.expandButtonText}>
-                        {isExpanded ? '▲ Collapse' : '▼ Expand'}
+                        {getExpandCollapseTextWithArrow(isExpanded)}
                       </Text>
                     </Pressable>
                   )}
@@ -997,7 +1007,7 @@ export default function ChatScreen({ route, navigation }: any) {
                                 <Text style={styles.toolParamsLabel}>Parameters:</Text>
                                 <ScrollView horizontal style={styles.toolParamsScroll}>
                                   <Text style={styles.toolParamsCode}>
-                                    {JSON.stringify(toolCall.arguments, null, 2)}
+                                    {formatToolArguments(toolCall.arguments)}
                                   </Text>
                                 </ScrollView>
                               </View>
@@ -1007,11 +1017,11 @@ export default function ChatScreen({ route, navigation }: any) {
                       </View>
                     )}
 
-                    {/* Collapsed tool calls summary */}
+                    {/* Collapsed tool calls summary - use shared utility */}
                     {!isExpanded && m.toolCalls && m.toolCalls.length > 0 && (
                       <View style={styles.collapsedToolSummary}>
                         <Text style={styles.collapsedToolText}>
-                          🔧 {m.toolCalls.map(tc => tc.name).join(', ')}
+                          {formatToolCallsSummary(m.toolCalls)}
                         </Text>
                       </View>
                     )}
@@ -1020,47 +1030,50 @@ export default function ChatScreen({ route, navigation }: any) {
                     {isExpanded && m.toolResults && m.toolResults.length > 0 && (
                       <View style={styles.toolSection}>
                         <Text style={styles.toolSectionTitle}>Tool Results ({m.toolResults.length}):</Text>
-                        {m.toolResults.map((result, idx) => (
-                          <View
-                            key={idx}
-                            style={[
-                              styles.toolResultCard,
-                              result.success ? styles.toolResultSuccess : styles.toolResultError
-                            ]}
-                          >
-                            <View style={styles.toolResultHeader}>
-                              <Text style={[
-                                styles.toolResultBadge,
-                                result.success ? styles.toolResultBadgeSuccess : styles.toolResultBadgeError
-                              ]}>
-                                {result.success ? '✅ Success' : '❌ Error'}
-                              </Text>
-                              <Text style={styles.toolResultIndex}>Result {idx + 1}</Text>
-                            </View>
-                            <View style={styles.toolResultContent}>
-                              <Text style={styles.toolResultLabel}>Content:</Text>
-                              <ScrollView horizontal style={styles.toolResultScroll}>
-                                <Text style={styles.toolResultCode}>
-                                  {result.content || 'No content returned'}
+                        {m.toolResults.map((result, idx) => {
+                          const statusDisplay = getToolResultStatus(result.success);
+                          return (
+                            <View
+                              key={idx}
+                              style={[
+                                styles.toolResultCard,
+                                result.success ? styles.toolResultSuccess : styles.toolResultError
+                              ]}
+                            >
+                              <View style={styles.toolResultHeader}>
+                                <Text style={[
+                                  styles.toolResultBadge,
+                                  result.success ? styles.toolResultBadgeSuccess : styles.toolResultBadgeError
+                                ]}>
+                                  {statusDisplay.emoji} {statusDisplay.text}
                                 </Text>
-                              </ScrollView>
-                            </View>
-                            {result.error && (
-                              <View style={styles.toolResultErrorSection}>
-                                <Text style={styles.toolResultErrorLabel}>Error Details:</Text>
-                                <Text style={styles.toolResultErrorText}>{result.error}</Text>
+                                <Text style={styles.toolResultIndex}>Result {idx + 1}</Text>
                               </View>
-                            )}
-                          </View>
-                        ))}
+                              <View style={styles.toolResultContent}>
+                                <Text style={styles.toolResultLabel}>Content:</Text>
+                                <ScrollView horizontal style={styles.toolResultScroll}>
+                                  <Text style={styles.toolResultCode}>
+                                    {result.content || 'No content returned'}
+                                  </Text>
+                                </ScrollView>
+                              </View>
+                              {result.error && (
+                                <View style={styles.toolResultErrorSection}>
+                                  <Text style={styles.toolResultErrorLabel}>Error Details:</Text>
+                                  <Text style={styles.toolResultErrorText}>{result.error}</Text>
+                                </View>
+                              )}
+                            </View>
+                          );
+                        })}
                       </View>
                     )}
 
-                    {/* Collapsed tool results summary */}
+                    {/* Collapsed tool results summary - use shared utility */}
                     {!isExpanded && m.toolResults && m.toolResults.length > 0 && (
                       <View style={styles.collapsedToolSummary}>
                         <Text style={styles.collapsedToolText}>
-                          {m.toolResults.every(r => r.success) ? '✅' : '⚠️'} {m.toolResults.length} result{m.toolResults.length > 1 ? 's' : ''}
+                          {formatToolResultsSummary(m.toolResults)}
                         </Text>
                       </View>
                     )}

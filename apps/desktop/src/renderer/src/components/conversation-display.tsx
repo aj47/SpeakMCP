@@ -2,7 +2,7 @@ import React, { useState, useCallback } from "react"
 import { Card, CardContent } from "@renderer/components/ui/card"
 import { Badge } from "@renderer/components/ui/badge"
 import { ScrollArea } from "@renderer/components/ui/scroll-area"
-import { User, Bot, Wrench, ChevronDown, ChevronUp } from "lucide-react"
+import { User, Bot, Wrench, Settings, ChevronDown, ChevronUp } from "lucide-react"
 import { cn } from "@renderer/lib/utils"
 import { ConversationMessage } from "@shared/types"
 import { useAgentProgress, useIsAgentProcessing } from "@renderer/stores"
@@ -15,7 +15,16 @@ import dayjs from "dayjs"
 
 import { logExpand } from "@renderer/lib/debug"
 
-const COLLAPSE_THRESHOLD = 200
+// Import shared chat display utilities
+import {
+  COLLAPSE_THRESHOLD,
+  shouldCollapseMessage,
+  getRoleDisplayConfig,
+  getExpandCollapseText,
+  getToolResultStatus,
+  formatToolArguments,
+  type RoleDisplayConfig,
+} from "@speakmcp/shared"
 
 interface ConversationDisplayProps {
   messages: ConversationMessage[]
@@ -235,31 +244,29 @@ function ConversationMessageItem({
     })
   }
 
-  const getRoleIcon = (role: string) => {
-    switch (role) {
-      case "user":
-        return <User className="h-4 w-4" />
-      case "assistant":
-        return <Bot className="h-4 w-4" />
-      case "tool":
-        return <Wrench className="h-4 w-4" />
-      default:
-        return null
-    }
+  // Get role display config from shared utilities
+  const roleConfig = getRoleDisplayConfig(message.role)
 
+  // Map shared iconName to lucide-react components
+  const getRoleIcon = (config: RoleDisplayConfig) => {
+    const iconMap = {
+      User: <User className="h-4 w-4" />,
+      Bot: <Bot className="h-4 w-4" />,
+      Wrench: <Wrench className="h-4 w-4" />,
+      Settings: <Settings className="h-4 w-4" />,
+    }
+    return iconMap[config.iconName] || null
   }
 
-  const getRoleColor = (role: string) => {
-    switch (role) {
-      case "user":
-        return "bg-blue-500/10 text-blue-600 dark:text-blue-400"
-      case "assistant":
-        return "bg-green-500/10 text-green-600 dark:text-green-400"
-      case "tool":
-        return "bg-orange-500/10 text-orange-600 dark:text-orange-400"
-      default:
-        return "bg-gray-500/10 text-gray-600 dark:text-gray-400"
+  // Map shared colorScheme to Tailwind classes
+  const getRoleColor = (config: RoleDisplayConfig) => {
+    const colorMap = {
+      blue: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
+      green: "bg-green-500/10 text-green-600 dark:text-green-400",
+      orange: "bg-orange-500/10 text-orange-600 dark:text-orange-400",
+      gray: "bg-gray-500/10 text-gray-600 dark:text-gray-400",
     }
+    return colorMap[config.colorScheme] || colorMap.gray
   }
 
   const formatTimestamp = (timestamp: number) => {
@@ -280,8 +287,8 @@ function ConversationMessageItem({
     }
   }
 
-  const hasExtras = (message.toolCalls?.length ?? 0) > 0 || (message.toolResults?.length ?? 0) > 0
-  const shouldCollapse = message.content.length > COLLAPSE_THRESHOLD || hasExtras
+  // Use shared utility for collapse logic
+  const shouldCollapse = shouldCollapseMessage(message)
 
   return (
     <div
@@ -295,17 +302,17 @@ function ConversationMessageItem({
         <div
           className={cn(
             "flex h-8 w-8 items-center justify-center rounded-full",
-            getRoleColor(message.role),
+            getRoleColor(roleConfig),
           )}
         >
-          {getRoleIcon(message.role)}
+          {getRoleIcon(roleConfig)}
         </div>
       </div>
 
       <div className="min-w-0 flex-1">
         <div className="mb-1 flex items-center gap-2 flex-wrap">
           <Badge variant="secondary" className="text-xs capitalize">
-            {message.role}
+            {roleConfig.name}
           </Badge>
           <span className="modern-text-muted text-xs">
             {formatTimestamp(message.timestamp)}
@@ -339,7 +346,7 @@ function ConversationMessageItem({
               ) : (
                 <ChevronDown className="h-3 w-3" />
               )}
-              <span className="ml-1">{isExpanded ? "Collapse" : "Expand"}</span>
+              <span className="ml-1">{getExpandCollapseText(isExpanded)}</span>
             </button>
           )}
         </div>
@@ -410,7 +417,7 @@ function ConversationMessageItem({
                       Parameters:
                     </div>
                     <pre className="modern-panel rounded bg-muted/50 p-2 overflow-auto text-xs max-h-80 scrollbar-thin">
-                      {JSON.stringify(toolCall.arguments, null, 2)}
+                      {formatToolArguments(toolCall.arguments)}
                     </pre>
                   </div>
                 )}
@@ -422,56 +429,59 @@ function ConversationMessageItem({
         {message.toolResults && message.toolResults.length > 0 && (
           <div className="mt-3 space-y-2">
             <div className="modern-text-muted text-xs font-semibold">Tool Results ({message.toolResults.length}):</div>
-            {message.toolResults.map((result, index) => (
-              <div
-                key={index}
-                className={cn(
-                  "rounded-lg border p-3 text-xs",
-                  result.success
-                    ? "border-green-200 bg-green-50/50 text-green-700 dark:border-green-800 dark:bg-green-900/20 dark:text-green-300"
-                    : "border-red-200 bg-red-50/50 text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300",
-                )}
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <Badge
-                    variant={result.success ? "default" : "destructive"}
-                    className={cn(
-                      "text-xs",
-                      result.success
-                        ? "bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100"
-                        : "bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-100"
-                    )}
-                  >
-                    {result.success ? "✅ Success" : "❌ Error"}
-                  </Badge>
-                  <span className="text-muted-foreground text-xs">
-                    Result {index + 1}
-                  </span>
-                </div>
-
-                <div className="space-y-2">
-                  <div>
-                    <div className="text-xs font-medium text-muted-foreground mb-1">
-                      Content:
-                    </div>
-                    <pre className="modern-panel rounded bg-muted/30 p-2 overflow-auto text-xs whitespace-pre-wrap break-all max-h-80 scrollbar-thin">
-                      {result.content || "No content returned"}
-                    </pre>
+            {message.toolResults.map((result, index) => {
+              const statusDisplay = getToolResultStatus(result.success)
+              return (
+                <div
+                  key={index}
+                  className={cn(
+                    "rounded-lg border p-3 text-xs",
+                    result.success
+                      ? "border-green-200 bg-green-50/50 text-green-700 dark:border-green-800 dark:bg-green-900/20 dark:text-green-300"
+                      : "border-red-200 bg-red-50/50 text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300",
+                  )}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <Badge
+                      variant={result.success ? "default" : "destructive"}
+                      className={cn(
+                        "text-xs",
+                        result.success
+                          ? "bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100"
+                          : "bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-100"
+                      )}
+                    >
+                      {statusDisplay.emoji} {statusDisplay.text}
+                    </Badge>
+                    <span className="text-muted-foreground text-xs">
+                      Result {index + 1}
+                    </span>
                   </div>
 
-                  {result.error && (
+                  <div className="space-y-2">
                     <div>
-                      <div className="text-xs font-medium text-destructive mb-1">
-                        Error Details:
+                      <div className="text-xs font-medium text-muted-foreground mb-1">
+                        Content:
                       </div>
-                      <pre className="modern-panel rounded bg-destructive/10 p-2 overflow-auto text-xs whitespace-pre-wrap break-all max-h-60 scrollbar-thin">
-                        {result.error}
+                      <pre className="modern-panel rounded bg-muted/30 p-2 overflow-auto text-xs whitespace-pre-wrap break-all max-h-80 scrollbar-thin">
+                        {result.content || "No content returned"}
                       </pre>
                     </div>
-                  )}
+
+                    {result.error && (
+                      <div>
+                        <div className="text-xs font-medium text-destructive mb-1">
+                          Error Details:
+                        </div>
+                        <pre className="modern-panel rounded bg-destructive/10 p-2 overflow-auto text-xs whitespace-pre-wrap break-all max-h-60 scrollbar-thin">
+                          {result.error}
+                        </pre>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </div>
@@ -524,28 +534,25 @@ export function ConversationDisplayCompact({
   )
 }
 
+// Uses shared getRoleDisplayConfig for consistent role display
 function getRoleIconCompact(role: string) {
-  switch (role) {
-    case "user":
-      return <User className="h-3 w-3" />
-    case "assistant":
-      return <Bot className="h-3 w-3" />
-    case "tool":
-      return <Wrench className="h-3 w-3" />
-    default:
-      return null
+  const config = getRoleDisplayConfig(role)
+  const iconMap = {
+    User: <User className="h-3 w-3" />,
+    Bot: <Bot className="h-3 w-3" />,
+    Wrench: <Wrench className="h-3 w-3" />,
+    Settings: <Settings className="h-3 w-3" />,
   }
+  return iconMap[config.iconName] || null
 }
 
 function getRoleColorCompact(role: string) {
-  switch (role) {
-    case "user":
-      return "bg-blue-500/20 text-blue-600 dark:text-blue-400"
-    case "assistant":
-      return "bg-green-500/20 text-green-600 dark:text-green-400"
-    case "tool":
-      return "bg-orange-500/20 text-orange-600 dark:text-orange-400"
-    default:
-      return "bg-gray-500/20 text-gray-600 dark:text-gray-400"
+  const config = getRoleDisplayConfig(role)
+  const colorMap = {
+    blue: "bg-blue-500/20 text-blue-600 dark:text-blue-400",
+    green: "bg-green-500/20 text-green-600 dark:text-green-400",
+    orange: "bg-orange-500/20 text-orange-600 dark:text-orange-400",
+    gray: "bg-gray-500/20 text-gray-600 dark:text-gray-400",
   }
+  return colorMap[config.colorScheme] || colorMap.gray
 }

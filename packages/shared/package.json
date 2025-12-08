@@ -25,6 +25,11 @@
       "types": "./dist/tts-preprocessing.d.ts",
       "import": "./dist/tts-preprocessing.mjs",
       "require": "./dist/tts-preprocessing.js"
+    },
+    "./chat-display": {
+      "types": "./dist/chat-display.d.ts",
+      "import": "./dist/chat-display.mjs",
+      "require": "./dist/chat-display.js"
     }
   },
   "scripts": {

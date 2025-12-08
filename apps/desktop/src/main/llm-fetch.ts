@@ -1271,12 +1271,15 @@ async function makeLLMCallAttempt(
     }
     return { content: cleaned, needsMoreWork: true }
   }
+
   // For plain text responses without JSON structure, set needsMoreWork=undefined
   // rather than false. This allows the agent loop to decide whether the response
   // is acceptable or if it needs to nudge the LLM for a properly formatted response.
   // This prevents poor-quality plain text responses from being automatically accepted.
+  // Fix for https://github.com/aj47/SpeakMCP/issues/443 - agent loop will now
+  // always nudge for proper JSON format when needsMoreWork is undefined.
   if (isDebugLLM()) {
-    logLLM("✅ Returning plain text response (needsMoreWork=undefined - let agent decide)", {
+    logLLM("✅ Returning plain text response (needsMoreWork=undefined - agent will nudge for JSON)", {
       contentLength: (cleaned || content)?.length || 0
     })
   }

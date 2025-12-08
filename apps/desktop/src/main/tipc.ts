@@ -381,41 +381,52 @@ const saveRecordingsHitory = (history: RecordingHistoryItem[]) => {
 /**
  * Process queued messages for a conversation after the current session completes.
  * This function peeks at messages and only removes them after successful processing.
+ * Uses a per-conversation lock to prevent concurrent processing of the same queue.
  */
 async function processQueuedMessages(conversationId: string): Promise<void> {
   const { messageQueueService } = await import("./message-queue-service")
 
-  while (true) {
-    // Peek at the next message without removing it
-    const queuedMessage = messageQueueService.peek(conversationId)
-    if (!queuedMessage) {
-      return // No more messages in queue
+  // Try to acquire processing lock - if another processor is already running, skip
+  if (!messageQueueService.tryAcquireProcessingLock(conversationId)) {
+    return
+  }
+
+  try {
+    while (true) {
+      // Peek at the next message without removing it
+      const queuedMessage = messageQueueService.peek(conversationId)
+      if (!queuedMessage) {
+        return // No more messages in queue
+      }
+
+      logLLM(`[processQueuedMessages] Processing queued message ${queuedMessage.id} for ${conversationId}`)
+
+      try {
+        // Add the queued message to the conversation
+        await conversationService.addMessageToConversation(
+          conversationId,
+          queuedMessage.text,
+          "user",
+        )
+
+        // Process with agent mode
+        await processWithAgentMode(queuedMessage.text, conversationId, undefined, true)
+
+        // Only remove the message after successful processing
+        messageQueueService.markProcessed(conversationId, queuedMessage.id)
+
+        // Continue to check for more queued messages
+      } catch (error) {
+        logLLM(`[processQueuedMessages] Error processing queued message ${queuedMessage.id}:`, error)
+        // Remove the failed message so we don't get stuck in an infinite loop
+        // but log it so users know the message failed
+        messageQueueService.markProcessed(conversationId, queuedMessage.id)
+        // Continue to next message even if this one failed
+      }
     }
-
-    logLLM(`[processQueuedMessages] Processing queued message ${queuedMessage.id} for ${conversationId}`)
-
-    try {
-      // Add the queued message to the conversation
-      await conversationService.addMessageToConversation(
-        conversationId,
-        queuedMessage.text,
-        "user",
-      )
-
-      // Process with agent mode
-      await processWithAgentMode(queuedMessage.text, conversationId, undefined, true)
-
-      // Only remove the message after successful processing
-      messageQueueService.markProcessed(conversationId, queuedMessage.id)
-
-      // Continue to check for more queued messages
-    } catch (error) {
-      logLLM(`[processQueuedMessages] Error processing queued message ${queuedMessage.id}:`, error)
-      // Remove the failed message so we don't get stuck in an infinite loop
-      // but log it so users know the message failed
-      messageQueueService.markProcessed(conversationId, queuedMessage.id)
-      // Continue to next message even if this one failed
-    }
+  } finally {
+    // Always release the lock when done
+    messageQueueService.releaseProcessingLock(conversationId)
   }
 }
 

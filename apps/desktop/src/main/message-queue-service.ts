@@ -126,6 +126,23 @@ class MessageQueueService {
   }
 
   /**
+   * Update the text of a queued message
+   */
+  updateMessageText(conversationId: string, messageId: string, newText: string): boolean {
+    const queue = this.queues.get(conversationId)
+    if (!queue) return false
+
+    const message = queue.find((m) => m.id === messageId)
+    if (!message) return false
+
+    message.text = newText
+    logApp(`[MessageQueueService] Updated message ${messageId} text in ${conversationId}`)
+    this.emitQueueUpdate(conversationId)
+
+    return true
+  }
+
+  /**
    * Peek at the next pending message without removing it
    */
   peek(conversationId: string): QueuedMessage | null {

@@ -1,7 +1,7 @@
 import { QueuedMessage, MessageQueue } from "../shared/types"
 import { logApp } from "./debug"
 import { getRendererHandlers } from "@egoist/tipc/main"
-import { RendererHandlers } from "../shared/renderer-handlers"
+import { RendererHandlers } from "./renderer-handlers"
 import { WINDOWS } from "./window"
 
 /**

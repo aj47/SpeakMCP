@@ -3,7 +3,9 @@ import { NavigationContainer, DefaultTheme, DarkTheme } from '@react-navigation/
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import SettingsScreen from './src/screens/SettingsScreen';
 import ChatScreen from './src/screens/ChatScreen';
+import SessionListScreen from './src/screens/SessionListScreen';
 import { ConfigContext, useConfig, saveConfig } from './src/store/config';
+import { SessionContext, useSessions } from './src/store/sessions';
 import { View, ActivityIndicator, Image } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ThemeProvider, useTheme } from './src/ui/ThemeProvider';
@@ -38,6 +40,7 @@ function parseDeepLink(url: string | null) {
 function Navigation() {
   const { theme, isDark } = useTheme();
   const cfg = useConfig();
+  const sessionStore = useSessions();
 
   // Create navigation theme that matches our theme
   const navTheme = {
@@ -80,7 +83,7 @@ function Navigation() {
     return () => subscription.remove();
   }, [cfg.ready]);
 
-  if (!cfg.ready) {
+  if (!cfg.ready || !sessionStore.ready) {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.background }}>
         <ActivityIndicator color={theme.colors.foreground} />
@@ -90,52 +93,44 @@ function Navigation() {
 
   return (
     <ConfigContext.Provider value={cfg}>
-      <NavigationContainer theme={navTheme}>
-        <Stack.Navigator
-          initialRouteName="Settings"
-          screenOptions={{
-            headerTitleStyle: { ...theme.typography.h2 },
-            headerStyle: { backgroundColor: theme.colors.card },
-            headerTintColor: theme.colors.foreground,
-            contentStyle: { backgroundColor: theme.colors.background },
-            headerLeft: () => (
-              <Image
-                source={speakMCPIcon}
-                style={{ width: 28, height: 28, marginLeft: 12, marginRight: 8 }}
-                resizeMode="contain"
-              />
-            ),
-          }}
-        >
-          <Stack.Screen
-            name="Settings"
-            component={SettingsScreen}
-            options={{ title: 'SpeakMCP' }}
-          />
-          <Stack.Screen name="Chat" component={ChatScreen} />
-        </Stack.Navigator>
-      </NavigationContainer>
+      <SessionContext.Provider value={sessionStore}>
+        <NavigationContainer theme={navTheme}>
+          <Stack.Navigator
+            initialRouteName="Settings"
+            screenOptions={{
+              headerTitleStyle: { ...theme.typography.h2 },
+              headerStyle: { backgroundColor: theme.colors.card },
+              headerTintColor: theme.colors.foreground,
+              contentStyle: { backgroundColor: theme.colors.background },
+              headerLeft: () => (
+                <Image
+                  source={speakMCPIcon}
+                  style={{ width: 28, height: 28, marginLeft: 12, marginRight: 8 }}
+                  resizeMode="contain"
+                />
+              ),
+            }}
+          >
+            <Stack.Screen
+              name="Settings"
+              component={SettingsScreen}
+              options={{ title: 'SpeakMCP' }}
+            />
+            <Stack.Screen
+              name="Sessions"
+              component={SessionListScreen}
+              options={{ title: 'Chats' }}
+            />
+            <Stack.Screen name="Chat" component={ChatScreen} />
+          </Stack.Navigator>
+        </NavigationContainer>
+      </SessionContext.Provider>
     </ConfigContext.Provider>
   );
 }
 
 function Root() {
-  const cfg = useConfig();
-  const { theme } = useTheme();
-
-  if (!cfg.ready) {
-    return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.background }}>
-        <ActivityIndicator color={theme.colors.foreground} />
-      </View>
-    );
-  }
-
-  return (
-    <ConfigContext.Provider value={cfg}>
-      <Navigation />
-    </ConfigContext.Provider>
-  );
+  return <Navigation />;
 }
 
 function StatusBarWrapper() {

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { preprocessTextForTTS, validateTTSText } from './tts-preprocessing'
+// Import from shared package to match runtime behavior (tipc.ts imports from @speakmcp/shared)
+import { preprocessTextForTTS, validateTTSText } from '@speakmcp/shared'
 
 describe('TTS Preprocessing - Thinking Blocks', () => {
   it('should remove simple thinking blocks', () => {
@@ -137,15 +138,46 @@ describe('TTS Preprocessing - Integration', () => {
   it('should remove thinking blocks before other processing', () => {
     const input = 'Here is **bold text**. <think>This has `code` inside.</think> Final answer with https://example.com link.'
     const result = preprocessTextForTTS(input)
-    
+
     // Thinking block should be removed
     expect(result).not.toContain('This has')
     expect(result).not.toContain('code')
-    
+
     // Other processing should still work
     expect(result).toContain('bold text')
     expect(result).not.toContain('**')
     expect(result).not.toContain('https://')
+  })
+})
+
+describe('TTS Preprocessing - Placeholder Preservation', () => {
+  it('should preserve [code block] placeholder after cleanSymbols processing', () => {
+    const input = 'Here is some code:\n```javascript\nconst x = 1;\n```\nEnd of code.'
+    const result = preprocessTextForTTS(input)
+
+    expect(result).toContain('[code block]')
+  })
+
+  it('should preserve [web link] placeholder after cleanSymbols processing', () => {
+    const input = 'Check out https://example.com for more info.'
+    const result = preprocessTextForTTS(input)
+
+    expect(result).toContain('[web link]')
+  })
+
+  it('should preserve [email address] placeholder after cleanSymbols processing', () => {
+    const input = 'Contact us at support@example.com for help.'
+    const result = preprocessTextForTTS(input)
+
+    expect(result).toContain('[email address]')
+  })
+
+  it('should remove other bracketed content but keep TTS placeholders', () => {
+    const input = 'See https://example.com and [some technical note] for details.'
+    const result = preprocessTextForTTS(input)
+
+    expect(result).toContain('[web link]')
+    expect(result).not.toContain('[some technical note]')
   })
 })
 

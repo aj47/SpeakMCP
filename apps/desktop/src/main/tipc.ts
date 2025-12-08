@@ -353,7 +353,7 @@ import { diagnosticsService } from "./diagnostics"
 import { updateTrayIcon } from "./tray"
 import { isAccessibilityGranted } from "./utils"
 import { writeText, writeTextWithFocusRestore } from "./keyboard"
-import { preprocessTextForTTS, validateTTSText } from "./tts-preprocessing"
+import { preprocessTextForTTS, validateTTSText } from "@speakmcp/shared"
 
 
 const t = tipc.create()

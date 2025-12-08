@@ -113,6 +113,9 @@ const getConfig = () => {
     mcpVerifyContextMaxItems: 10,
     mcpVerifyRetryCount: 1,
 
+    // Parallel tool execution - when enabled, multiple tool calls from a single LLM response are executed concurrently
+    mcpParallelToolExecution: true,
+
 	    // Remote Server defaults
 	    remoteServerEnabled: false,
 	    remoteServerPort: 3210,

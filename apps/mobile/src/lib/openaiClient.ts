@@ -6,12 +6,27 @@ import type {
 } from '@speakmcp/shared';
 import { Platform } from 'react-native';
 import EventSource from 'react-native-sse';
+import {
+  ConnectionRecoveryManager,
+  ConnectionStatus,
+  RecoveryState,
+  isRetryableError,
+  delay,
+  DEFAULT_RECOVERY_CONFIG,
+  type ConnectionRecoveryConfig,
+} from './connectionRecovery';
 
 export type OpenAIConfig = {
   baseUrl: string;    // OpenAI-compatible API base URL e.g., https://api.openai.com/v1
   apiKey: string;
   model?: string; // model name for /v1/chat/completions
+  recoveryConfig?: Partial<ConnectionRecoveryConfig>;
 };
+
+/**
+ * Callback for connection status updates
+ */
+export type OnConnectionStatusChange = (state: RecoveryState) => void;
 
 export type ChatMessage = {
   id?: string;
@@ -71,6 +86,8 @@ export type OnProgressCallback = (update: AgentProgressUpdate) => void;
 export class OpenAIClient {
   private cfg: OpenAIConfig;
   private baseUrl: string;
+  private recoveryManager: ConnectionRecoveryManager | null = null;
+  private onConnectionStatusChange?: OnConnectionStatusChange;
 
   constructor(cfg: OpenAIConfig) {
     this.cfg = { ...cfg, baseUrl: cfg.baseUrl?.trim?.() ?? '' };
@@ -97,6 +114,28 @@ export class OpenAIClient {
     return `${this.baseUrl}${normalizedEndpoint}`;
   }
 
+  /**
+   * Set a callback for connection status updates
+   */
+  setConnectionStatusCallback(callback: OnConnectionStatusChange): void {
+    this.onConnectionStatusChange = callback;
+  }
+
+  /**
+   * Get current connection recovery state
+   */
+  getConnectionState(): RecoveryState | null {
+    return this.recoveryManager?.getState() ?? null;
+  }
+
+  /**
+   * Cleanup connection recovery resources
+   */
+  cleanup(): void {
+    this.recoveryManager?.cleanup();
+    this.recoveryManager = null;
+  }
+
   /** Health check for the API */
   async health(): Promise<boolean> {
     const url = this.getUrl('/models');
@@ -113,6 +152,7 @@ export class OpenAIClient {
    * POST OpenAI-compatible API: /v1/chat/completions
    * Supports SpeakMCP server SSE streaming with real-time agent progress updates.
    * Uses react-native-sse for native platforms (Android/iOS), fetch with ReadableStream for web.
+   * Now includes automatic connection recovery for mid-stream disconnections.
    *
    * @param messages - Chat messages to send
    * @param onToken - Optional callback for streaming text tokens (legacy, for text-only streaming)
@@ -131,23 +171,67 @@ export class OpenAIClient {
     console.log('[OpenAIClient] URL:', url);
     console.log('[OpenAIClient] Platform:', Platform.OS);
 
+    // Initialize recovery manager for this request
+    this.recoveryManager = new ConnectionRecoveryManager(
+      this.cfg.recoveryConfig,
+      this.onConnectionStatusChange
+    );
+
     try {
-      // Use react-native-sse for native platforms (Android/iOS) for real streaming
-      // Use fetch with ReadableStream for web
-      if (Platform.OS === 'android' || Platform.OS === 'ios') {
-        return await this.streamSSEWithEventSource(url, body, onToken, onProgress);
-      } else {
-        return await this.streamSSEWithFetch(url, body, onToken, onProgress);
+      return await this.chatWithRecovery(url, body, messages, onToken, onProgress);
+    } finally {
+      // Don't cleanup here - let the caller decide when to cleanup
+    }
+  }
+
+  /**
+   * Execute chat with automatic connection recovery
+   */
+  private async chatWithRecovery(
+    url: string,
+    body: object,
+    messages: ChatMessage[],
+    onToken?: (token: string) => void,
+    onProgress?: OnProgressCallback
+  ): Promise<ChatResponse> {
+    const recovery = this.recoveryManager!;
+    recovery.reset();
+
+    while (true) {
+      try {
+        // Use react-native-sse for native platforms (Android/iOS) for real streaming
+        // Use fetch with ReadableStream for web
+        let result: ChatResponse;
+        if (Platform.OS === 'android' || Platform.OS === 'ios') {
+          result = await this.streamSSEWithEventSource(url, body, onToken, onProgress);
+        } else {
+          result = await this.streamSSEWithFetch(url, body, onToken, onProgress);
+        }
+
+        recovery.markConnected();
+        return result;
+      } catch (error: any) {
+        console.error('[OpenAIClient] Chat request failed:', error);
+
+        // Check if this is a retryable error and we should retry
+        if (isRetryableError(error) && recovery.shouldRetry()) {
+          const delayMs = recovery.prepareRetry();
+          console.log(`[OpenAIClient] Retrying in ${delayMs}ms (attempt ${recovery.getState().retryCount})`);
+          await delay(delayMs);
+          continue;
+        }
+
+        // Non-retryable error or max retries reached
+        recovery.markFailed(error.message || 'Connection failed');
+        throw error;
       }
-    } catch (error) {
-      console.error('[OpenAIClient] Chat request failed:', error);
-      throw error;
     }
   }
 
   /**
    * Stream SSE using react-native-sse EventSource for true real-time streaming on native platforms.
    * This uses XMLHttpRequest internally which supports streaming on Android/iOS.
+   * Includes heartbeat monitoring for connection health.
    */
   private streamSSEWithEventSource(
     url: string,
@@ -159,6 +243,8 @@ export class OpenAIClient {
       let finalContent = '';
       let conversationId: string | undefined;
       let conversationHistory: ConversationHistoryMessage[] | undefined;
+      let hasResolved = false;
+      const recovery = this.recoveryManager;
 
       console.log('[OpenAIClient] Creating EventSource for SSE streaming');
 
@@ -172,12 +258,46 @@ export class OpenAIClient {
         pollingInterval: 0, // Disable reconnections - we handle one request at a time
       });
 
+      // Helper to safely close and cleanup
+      const cleanup = () => {
+        recovery?.stopHeartbeat();
+        try { es.close(); } catch {}
+      };
+
+      // Helper to resolve only once
+      const safeResolve = (result: ChatResponse) => {
+        if (!hasResolved) {
+          hasResolved = true;
+          cleanup();
+          resolve(result);
+        }
+      };
+
+      // Helper to reject only once
+      const safeReject = (error: Error) => {
+        if (!hasResolved) {
+          hasResolved = true;
+          cleanup();
+          reject(error);
+        }
+      };
+
       es.addEventListener('open', () => {
         console.log('[OpenAIClient] SSE connection opened');
+        recovery?.markConnected();
+
+        // Start heartbeat monitoring
+        recovery?.startHeartbeat(() => {
+          console.log('[OpenAIClient] Heartbeat missed, connection may be stale');
+          safeReject(new Error('Connection timeout: no data received'));
+        });
       });
 
       es.addEventListener('message', (event) => {
         if (!event.data) return;
+
+        // Record heartbeat on every message
+        recovery?.recordHeartbeat();
 
         const data = event.data;
 
@@ -216,8 +336,7 @@ export class OpenAIClient {
 
           if (obj.type === 'error' && obj.data) {
             console.error('[OpenAIClient] Error event:', obj.data.message);
-            es.close();
-            reject(new Error(obj.data.message || 'Server error'));
+            safeReject(new Error(obj.data.message || 'Server error'));
             return;
           }
 
@@ -235,26 +354,25 @@ export class OpenAIClient {
 
       es.addEventListener('error', (event) => {
         console.error('[OpenAIClient] SSE error:', event);
-        es.close();
+        recovery?.markDisconnected((event as any)?.message || 'SSE connection error');
 
         if (event.type === 'error') {
-          reject(new Error((event as any).message || 'SSE connection error'));
+          safeReject(new Error((event as any).message || 'SSE connection error'));
         } else {
-          reject(new Error('SSE connection failed'));
+          safeReject(new Error('SSE connection failed'));
         }
       });
 
       // 'done' event fires when server closes the connection (stream complete)
       es.addEventListener('done', () => {
         console.log('[OpenAIClient] SSE done (server closed), content length:', finalContent.length);
-        es.close();
-        resolve({ content: finalContent, conversationId, conversationHistory });
+        safeResolve({ content: finalContent, conversationId, conversationHistory });
       });
 
       // 'close' event fires when client closes the connection
       es.addEventListener('close', () => {
         console.log('[OpenAIClient] SSE connection closed, content length:', finalContent.length);
-        resolve({ content: finalContent, conversationId, conversationHistory });
+        safeResolve({ content: finalContent, conversationId, conversationHistory });
       });
     });
   }

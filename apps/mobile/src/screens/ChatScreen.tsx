@@ -23,7 +23,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { EventEmitter } from 'expo-modules-core';
 import { useConfigContext, saveConfig } from '../store/config';
 import { useSessionContext } from '../store/sessions';
-import { OpenAIClient, ChatMessage, AgentProgressUpdate, AgentProgressStep } from '../lib/openaiClient';
+import { OpenAIClient, ChatMessage, AgentProgressUpdate, AgentProgressStep, OnConnectionStatusChange } from '../lib/openaiClient';
+import { RecoveryState, formatConnectionStatus } from '../lib/connectionRecovery';
 import * as Speech from 'expo-speech';
 import { preprocessTextForTTS } from '@speakmcp/shared';
 import { useHeaderHeight } from '@react-navigation/elements';
@@ -67,12 +68,38 @@ export default function ChatScreen({ route, navigation }: any) {
   // Responding state - track if agent is processing (declared early for header use)
   const [responding, setResponding] = useState(false);
 
+  // Connection recovery state for displaying status to user
+  const [connectionState, setConnectionState] = useState<RecoveryState | null>(null);
+
   // Create client early so it's available for handleKillSwitch
-  const client = new OpenAIClient({
-    baseUrl: config.baseUrl,
-    apiKey: config.apiKey,
-    model: config.model,
-  });
+  const client = useMemo(() => {
+    const openAIClient = new OpenAIClient({
+      baseUrl: config.baseUrl,
+      apiKey: config.apiKey,
+      model: config.model,
+      recoveryConfig: {
+        maxRetries: 3,
+        initialDelayMs: 1000,
+        maxDelayMs: 10000,
+        heartbeatIntervalMs: 30000,
+      },
+    });
+
+    // Set up connection status callback
+    openAIClient.setConnectionStatusCallback((state) => {
+      setConnectionState(state);
+      console.log('[ChatScreen] Connection status:', formatConnectionStatus(state));
+    });
+
+    return openAIClient;
+  }, [config.baseUrl, config.apiKey, config.model]);
+
+  // Cleanup client on unmount
+  useEffect(() => {
+    return () => {
+      client.cleanup();
+    };
+  }, [client]);
 
   const handleKillSwitch = async () => {
     console.log('[ChatScreen] Kill switch button pressed');
@@ -534,12 +561,24 @@ export default function ChatScreen({ route, navigation }: any) {
         stack: e.stack,
         name: e.name
       });
-      setDebugInfo(`Error: ${e.message}`);
-      setMessages((m) => [...m, { role: 'assistant', content: `Error: ${e.message}` }]);
+
+      // Check if we have connection recovery info
+      const recoveryState = connectionState;
+      let errorMessage = e.message;
+
+      if (recoveryState?.status === 'failed') {
+        errorMessage = `Connection failed after ${recoveryState.retryCount} retries. ${recoveryState.lastError || ''}`;
+      } else if (recoveryState?.status === 'reconnecting') {
+        errorMessage = `Connection lost. Attempted ${recoveryState.retryCount} reconnections. ${e.message}`;
+      }
+
+      setDebugInfo(`Error: ${errorMessage}`);
+      setMessages((m) => [...m, { role: 'assistant', content: `Error: ${errorMessage}\n\nTip: Check your internet connection and try again.` }]);
     } finally {
       console.log('[ChatScreen] Chat request finished');
       setResponding(false);
-      setTimeout(() => setDebugInfo(''), 3000); // Clear debug info after 3 seconds
+      setConnectionState(null); // Clear connection state after request
+      setTimeout(() => setDebugInfo(''), 5000); // Clear debug info after 5 seconds (longer for errors)
     }
   };
 
@@ -1060,6 +1099,15 @@ export default function ChatScreen({ route, navigation }: any) {
               </View>
             );
           })}
+          {/* Connection recovery status banner */}
+          {connectionState && connectionState.status === 'reconnecting' && (
+            <View style={styles.connectionBanner}>
+              <ActivityIndicator size="small" color="#f59e0b" style={{ marginRight: spacing.sm }} />
+              <Text style={styles.connectionBannerText}>
+                {formatConnectionStatus(connectionState)}
+              </Text>
+            </View>
+          )}
           {debugInfo && (
             <View style={styles.debugInfo}>
               <Text style={styles.debugText}>{debugInfo}</Text>
@@ -1280,6 +1328,22 @@ function createStyles(theme: Theme) {
       fontSize: 12,
       color: theme.colors.mutedForeground,
       fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    },
+    connectionBanner: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: 'rgba(245, 158, 11, 0.15)',
+      padding: spacing.sm,
+      margin: spacing.sm,
+      borderRadius: radius.lg,
+      borderWidth: 1,
+      borderColor: 'rgba(245, 158, 11, 0.3)',
+    },
+    connectionBannerText: {
+      fontSize: 13,
+      color: '#f59e0b',
+      fontWeight: '500',
     },
     overlay: {
       position: 'absolute',

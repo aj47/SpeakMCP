@@ -5,7 +5,7 @@ import { tipcClient } from "@renderer/lib/tipc-client"
 import { useAgentStore } from "@renderer/stores"
 import { SessionGrid, SessionTileWrapper } from "@renderer/components/session-grid"
 import { AgentProgress } from "@renderer/components/agent-progress"
-import { MessageCircle, Mic, Plus, Calendar, Trash2, Search, ChevronDown, FolderOpen } from "lucide-react"
+import { MessageCircle, Mic, Plus, Calendar, Trash2, Search, ChevronDown, FolderOpen, CheckCircle2 } from "lucide-react"
 import { Button } from "@renderer/components/ui/button"
 import { Input } from "@renderer/components/ui/input"
 import { Card, CardContent } from "@renderer/components/ui/card"
@@ -383,6 +383,20 @@ export function Component() {
     }
   }
 
+  const handleClearInactiveSessions = async () => {
+    try {
+      await tipcClient.clearInactiveSessions()
+      toast.success("Inactive sessions cleared")
+    } catch (error) {
+      toast.error("Failed to clear inactive sessions")
+    }
+  }
+
+  // Count inactive (completed) sessions
+  const inactiveSessionCount = useMemo(() => {
+    return allProgressEntries.filter(([_, progress]) => progress?.isComplete).length
+  }, [allProgressEntries])
+
   return (
     <div className="flex h-full flex-col">
       {/* Main content area */}
@@ -392,6 +406,21 @@ export function Component() {
           <EmptyState onTextClick={handleTextClick} onVoiceClick={handleVoiceStart} />
         ) : (
           <>
+            {/* Header with clear inactive button */}
+            {inactiveSessionCount > 0 && (
+              <div className="px-4 py-2 flex items-center justify-end bg-muted/20 border-b">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleClearInactiveSessions}
+                  className="gap-2 text-muted-foreground hover:text-foreground"
+                  title="Clear all completed sessions from view (conversations are saved to history)"
+                >
+                  <CheckCircle2 className="h-4 w-4" />
+                  Clear {inactiveSessionCount} completed
+                </Button>
+              </div>
+            )}
             {/* Active sessions grid - includes pending continuation if any */}
             <SessionGrid sessionCount={allProgressEntries.length + (pendingProgress ? 1 : 0)}>
               {/* Pending continuation tile first */}

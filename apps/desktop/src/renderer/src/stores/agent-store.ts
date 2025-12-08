@@ -22,6 +22,7 @@ interface AgentState {
   updateSessionProgress: (update: AgentProgressUpdate) => void
   clearAllProgress: () => void
   clearSessionProgress: (sessionId: string) => void
+  clearInactiveSessions: () => void
   setFocusedSessionId: (sessionId: string | null) => void
   setScrollToSessionId: (sessionId: string | null) => void
   setSessionSnoozed: (sessionId: string, isSnoozed: boolean) => void
@@ -117,6 +118,37 @@ export const useAgentStore = create<AgentState>((set, get) => ({
       let newFocusedSessionId = state.focusedSessionId
       if (state.focusedSessionId === sessionId) {
         // Find next active (non-snoozed) session, preferring most recent
+        const candidates = Array.from(newMap.entries())
+          .filter(([_, p]) => !p.isSnoozed)
+          .sort((a, b) => {
+            const ta = a[1].conversationHistory?.[0]?.timestamp || 0
+            const tb = b[1].conversationHistory?.[0]?.timestamp || 0
+            return tb - ta
+          })
+        newFocusedSessionId = candidates[0]?.[0] || null
+      }
+
+      return {
+        agentProgressById: newMap,
+        focusedSessionId: newFocusedSessionId,
+      }
+    })
+  },
+
+  clearInactiveSessions: () => {
+    set((state) => {
+      const newMap = new Map<string, AgentProgressUpdate>()
+
+      // Keep only active (not complete) sessions
+      for (const [sessionId, progress] of state.agentProgressById.entries()) {
+        if (!progress.isComplete) {
+          newMap.set(sessionId, progress)
+        }
+      }
+
+      // If the focused session was cleared, move focus to next active session
+      let newFocusedSessionId = state.focusedSessionId
+      if (state.focusedSessionId && !newMap.has(state.focusedSessionId)) {
         const candidates = Array.from(newMap.entries())
           .filter(([_, p]) => !p.isSnoozed)
           .sort((a, b) => {

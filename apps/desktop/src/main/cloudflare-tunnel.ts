@@ -67,6 +67,17 @@ export async function startCloudflareTunnel(): Promise<{
 
       tunnelProcess = proc
 
+      // Helper to persist URL to config for easy reconnection
+      const persistTunnelUrl = (url: string) => {
+        try {
+          const currentConfig = configStore.get()
+          configStore.save({ ...currentConfig, cloudflareTunnelLastUrl: url })
+          diagnosticsService.logInfo("cloudflare-tunnel", `Persisted tunnel URL to config: ${url}`)
+        } catch (err) {
+          diagnosticsService.logError("cloudflare-tunnel", "Failed to persist tunnel URL to config", err)
+        }
+      }
+
       // Handle stdout - look for the tunnel URL
       proc.stdout?.on("data", (data: Buffer) => {
         const output = data.toString()
@@ -77,6 +88,7 @@ export async function startCloudflareTunnel(): Promise<{
           tunnelUrl = match[0]
           isStarting = false
           diagnosticsService.logInfo("cloudflare-tunnel", `Tunnel URL: ${tunnelUrl}`)
+          persistTunnelUrl(tunnelUrl)
           resolve({ success: true, url: tunnelUrl })
         }
       })
@@ -91,6 +103,7 @@ export async function startCloudflareTunnel(): Promise<{
           tunnelUrl = match[0]
           isStarting = false
           diagnosticsService.logInfo("cloudflare-tunnel", `Tunnel URL: ${tunnelUrl}`)
+          persistTunnelUrl(tunnelUrl)
           resolve({ success: true, url: tunnelUrl })
         }
       })

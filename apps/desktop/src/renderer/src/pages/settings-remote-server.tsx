@@ -388,6 +388,37 @@ export function Component() {
                     </div>
                   </div>
                 )}
+
+                {/* Show last known URL when tunnel is not running */}
+                {!tunnelStatus?.running && !tunnelStatus?.starting && cfg?.cloudflareTunnelLastUrl && (
+                  <Control label={<ControlLabel label="Last Known URL" tooltip="The URL from your previous tunnel session. Note: This URL is no longer active but can be used as a reference." />} className="px-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Input
+                        type="text"
+                        value={`${cfg.cloudflareTunnelLastUrl}/v1`}
+                        readOnly
+                        className="w-full sm:w-[360px] max-w-full min-w-0 font-mono text-xs opacity-70"
+                      />
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => navigator.clipboard.writeText(`${cfg.cloudflareTunnelLastUrl}/v1`)}
+                      >
+                        Copy
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => saveConfig({ cloudflareTunnelLastUrl: undefined })}
+                      >
+                        Clear
+                      </Button>
+                    </div>
+                    <div className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                      ⚠️ This URL is from a previous session and is no longer active. Start a new tunnel to get a fresh URL.
+                    </div>
+                  </Control>
+                )}
               </>
             )}
           </ControlGroup>

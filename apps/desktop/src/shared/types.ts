@@ -444,6 +444,8 @@ export type Config = {
 	  remoteServerApiKey?: string
 	  remoteServerLogLevel?: "error" | "info" | "debug"
 	  remoteServerCorsOrigins?: string[]
+	  // Cloudflare Tunnel - persist last known URL for easy reconnection
+	  cloudflareTunnelLastUrl?: string
 
   // Stream Status Watcher Configuration
   streamStatusWatcherEnabled?: boolean

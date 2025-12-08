@@ -28,7 +28,7 @@ import * as Speech from 'expo-speech';
 import { preprocessTextForTTS } from '@speakmcp/shared';
 import { useHeaderHeight } from '@react-navigation/elements';
 import { useTheme } from '../ui/ThemeProvider';
-import { spacing, radius, Theme } from '../ui/theme';
+import { spacing, radius, Theme, mobileTypography } from '../ui/theme';
 
 // Threshold for collapsing long content
 const COLLAPSE_THRESHOLD = 200;
@@ -913,9 +913,43 @@ export default function ChatScreen({ route, navigation }: any) {
       keyboardVerticalOffset={headerHeight}
     >
       <View style={{ flex: 1 }}>
+        {/* Press-anywhere overlay - tap empty area to start voice recording */}
+        {messages.length === 0 && !listening && !responding && (
+          <TouchableOpacity
+            style={styles.pressAnywhereContainer}
+            onPressIn={!handsFree ? (e: GestureResponderEvent) => {
+              lastGrantTimeRef.current = Date.now();
+              startRecording(e);
+            } : undefined}
+            onPressOut={!handsFree ? () => {
+              const now = Date.now();
+              const dt = now - lastGrantTimeRef.current;
+              const delay = Math.max(0, minHoldMs - dt);
+              if (delay > 0) {
+                setTimeout(() => { if (listening) stopRecordingAndHandle(); }, delay);
+              } else {
+                if (listening) stopRecordingAndHandle();
+              }
+            } : undefined}
+            onPress={handsFree ? () => {
+              if (!listening) startRecording(); else stopRecordingAndHandle();
+            } : undefined}
+            activeOpacity={0.95}
+          >
+            <View style={styles.pressAnywhereContent}>
+              <Text style={styles.pressAnywhereIcon}>🎤</Text>
+              <Text style={styles.pressAnywhereTitle}>
+                {handsFree ? 'Tap to Talk' : 'Press & Hold to Talk'}
+              </Text>
+              <Text style={styles.pressAnywhereSubtitle}>
+                Tap anywhere on this screen to start speaking
+              </Text>
+            </View>
+          </TouchableOpacity>
+        )}
         <ScrollView
           style={{ flex: 1, padding: spacing.lg, backgroundColor: theme.colors.background }}
-          contentContainerStyle={{ paddingBottom: insets.bottom }}
+          contentContainerStyle={{ paddingBottom: insets.bottom, flexGrow: messages.length === 0 ? 1 : undefined }}
           keyboardShouldPersistTaps="handled"
           contentInsetAdjustmentBehavior="automatic"
         >
@@ -953,20 +987,20 @@ export default function ChatScreen({ route, navigation }: any) {
                 </View>
 
                 {m.role === 'assistant' && (!m.content || m.content.length === 0) && !m.toolCalls && !m.toolResults ? (
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
                     <Image
                       source={isDark ? darkSpinner : lightSpinner}
-                      style={{ width: 20, height: 20 }}
+                      style={{ width: 24, height: 24 }}
                       resizeMode="contain"
                     />
-                    <Text style={{ color: theme.colors.foreground }}>Assistant is thinking</Text>
+                    <Text style={styles.messageContent}>Assistant is thinking</Text>
                   </View>
                 ) : (
                   <>
                     {/* Content - truncate if not expanded and long */}
                     {m.content ? (
                       <Text
-                        style={{ color: theme.colors.foreground }}
+                        style={styles.messageContent}
                         numberOfLines={!isExpanded && shouldCollapse ? 3 : undefined}
                       >
                         {m.content}
@@ -1159,6 +1193,10 @@ function createStyles(theme: Theme) {
       ...theme.typography.caption,
       marginBottom: spacing.xs,
     },
+    messageContent: {
+      ...mobileTypography.body,
+      color: theme.colors.foreground,
+    },
     messageHeader: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -1217,10 +1255,10 @@ function createStyles(theme: Theme) {
       borderRadius: radius.full,
     },
     mic: {
-      width: 64,
-      height: 64,
-      borderRadius: 32,
-      borderWidth: 2,
+      width: 80,
+      height: 80,
+      borderRadius: 40,
+      borderWidth: 3,
       borderColor: theme.colors.border,
       backgroundColor: theme.colors.card,
       alignItems: 'center',
@@ -1231,12 +1269,12 @@ function createStyles(theme: Theme) {
       borderColor: theme.colors.primary,
     },
     micText: {
-      fontSize: 24,
+      fontSize: 32,
     },
     micLabel: {
-      fontSize: 10,
+      fontSize: mobileTypography.caption.fontSize,
       color: theme.colors.mutedForeground,
-      marginTop: 2,
+      marginTop: 4,
     },
     micLabelOn: {
       color: theme.colors.primaryForeground,
@@ -1260,13 +1298,13 @@ function createStyles(theme: Theme) {
     },
     sendButton: {
       backgroundColor: theme.colors.primary,
-      paddingHorizontal: spacing.md,
-      paddingVertical: spacing.sm,
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.md,
       borderRadius: radius.lg,
     },
     sendButtonText: {
+      ...mobileTypography.label,
       color: theme.colors.primaryForeground,
-      fontWeight: '600',
     },
     debugInfo: {
       backgroundColor: theme.colors.muted,
@@ -1290,18 +1328,19 @@ function createStyles(theme: Theme) {
       padding: spacing.md,
     },
     overlayText: {
-      ...theme.typography.caption,
+      ...mobileTypography.label,
       backgroundColor: 'rgba(0,0,0,0.75)',
       color: '#FFFFFF',
-      paddingHorizontal: 12,
-      paddingVertical: 8,
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.md,
       borderRadius: radius.xl,
-      marginBottom: 6,
+      marginBottom: spacing.sm,
     },
     overlayTranscript: {
+      ...mobileTypography.body,
       backgroundColor: 'rgba(0,0,0,0.6)',
       color: '#FFFFFF',
-      padding: 10,
+      padding: spacing.md,
       borderRadius: radius.lg,
       maxWidth: '90%',
     },
@@ -1440,6 +1479,34 @@ function createStyles(theme: Theme) {
       backgroundColor: 'rgba(239, 68, 68, 0.1)',
       padding: spacing.sm,
       borderRadius: radius.sm,
+    },
+    // Press-anywhere interaction styles (inspired by Open Interpreter 01-app)
+    pressAnywhereContainer: {
+      ...StyleSheet.absoluteFillObject,
+      zIndex: 10,
+      backgroundColor: theme.colors.background,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    pressAnywhereContent: {
+      alignItems: 'center',
+      padding: spacing.xxl,
+    },
+    pressAnywhereIcon: {
+      fontSize: 72,
+      marginBottom: spacing.xl,
+    },
+    pressAnywhereTitle: {
+      ...mobileTypography.display,
+      color: theme.colors.foreground,
+      textAlign: 'center',
+      marginBottom: spacing.md,
+    },
+    pressAnywhereSubtitle: {
+      ...mobileTypography.body,
+      color: theme.colors.mutedForeground,
+      textAlign: 'center',
+      maxWidth: 280,
     },
   });
 }

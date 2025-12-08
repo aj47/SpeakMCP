@@ -39,14 +39,41 @@ const darkColors = {
 
 export type ThemeColors = typeof lightColors;
 
+/**
+ * Mobile-specific typography scale
+ *
+ * Uses larger font sizes than desktop for better mobile readability.
+ * Inspired by Open Interpreter 01-app's big font styling approach.
+ *
+ * Scale multiplier: ~1.25x larger than shared typography
+ */
+export const mobileTypography = {
+  // Display text - hero/title use
+  display: { fontSize: 36, lineHeight: 44, fontWeight: '700' as const },
+  // Large headings
+  h1: { fontSize: 30, lineHeight: 38, fontWeight: '600' as const },
+  // Section headings
+  h2: { fontSize: 24, lineHeight: 32, fontWeight: '600' as const },
+  // Body text - primary content
+  body: { fontSize: 20, lineHeight: 30, fontWeight: '400' as const },
+  // Muted body text
+  bodyMuted: { fontSize: 20, lineHeight: 30, fontWeight: '400' as const },
+  // Form labels and buttons
+  label: { fontSize: 18, lineHeight: 24, fontWeight: '500' as const },
+  // Small text, hints, timestamps
+  caption: { fontSize: 14, lineHeight: 20, fontWeight: '400' as const },
+} as const;
+
 // Typography - base styles without color (color added dynamically)
+// Using mobile-specific larger sizes for better readability
 export const typographyBase = {
-  h1: { fontSize: sharedTypography.h1.fontSize, lineHeight: sharedTypography.h1.lineHeight, fontWeight: sharedTypography.h1.fontWeight },
-  h2: { fontSize: sharedTypography.h2.fontSize, lineHeight: sharedTypography.h2.lineHeight, fontWeight: sharedTypography.h2.fontWeight },
-  body: { fontSize: sharedTypography.body.fontSize, lineHeight: sharedTypography.body.lineHeight },
-  bodyMuted: { fontSize: sharedTypography.body.fontSize, lineHeight: sharedTypography.body.lineHeight },
-  label: { fontSize: sharedTypography.label.fontSize, lineHeight: sharedTypography.label.lineHeight, fontWeight: sharedTypography.label.fontWeight },
-  caption: { fontSize: sharedTypography.caption.fontSize, lineHeight: sharedTypography.caption.lineHeight },
+  display: { fontSize: mobileTypography.display.fontSize, lineHeight: mobileTypography.display.lineHeight, fontWeight: mobileTypography.display.fontWeight },
+  h1: { fontSize: mobileTypography.h1.fontSize, lineHeight: mobileTypography.h1.lineHeight, fontWeight: mobileTypography.h1.fontWeight },
+  h2: { fontSize: mobileTypography.h2.fontSize, lineHeight: mobileTypography.h2.lineHeight, fontWeight: mobileTypography.h2.fontWeight },
+  body: { fontSize: mobileTypography.body.fontSize, lineHeight: mobileTypography.body.lineHeight },
+  bodyMuted: { fontSize: mobileTypography.bodyMuted.fontSize, lineHeight: mobileTypography.bodyMuted.lineHeight },
+  label: { fontSize: mobileTypography.label.fontSize, lineHeight: mobileTypography.label.lineHeight, fontWeight: mobileTypography.label.fontWeight },
+  caption: { fontSize: mobileTypography.caption.fontSize, lineHeight: mobileTypography.caption.lineHeight },
 } as const;
 
 // Create a theme object with colors for a specific color scheme
@@ -58,6 +85,7 @@ function createTheme(colorScheme: 'light' | 'dark') {
     spacing,
     radius,
     typography: {
+      display: { ...typographyBase.display, color: colors.foreground },
       h1: { ...typographyBase.h1, color: colors.foreground },
       h2: { ...typographyBase.h2, color: colors.foreground },
       body: { ...typographyBase.body, color: colors.foreground },
@@ -82,11 +110,11 @@ function createTheme(colorScheme: 'light' | 'dark') {
       borderWidth: 1,
       borderColor: colors.input,
       borderRadius: radius.lg,
-      paddingHorizontal: spacing.md,
-      paddingVertical: Platform.select({ ios: 10, android: 8, default: 10 }),
+      paddingHorizontal: spacing.lg,
+      paddingVertical: Platform.select({ ios: 14, android: 12, default: 14 }),
       backgroundColor: colors.background,
       color: colors.foreground,
-      fontSize: 16,
+      fontSize: mobileTypography.body.fontSize, // Use mobile body size for inputs
     },
     // Modern panel style matching SpeakMCP's .modern-panel
     modernPanel: {

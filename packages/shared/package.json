@@ -20,6 +20,11 @@
       "types": "./dist/types.d.ts",
       "import": "./dist/types.mjs",
       "require": "./dist/types.js"
+    },
+    "./tts-preprocessing": {
+      "types": "./dist/tts-preprocessing.d.ts",
+      "import": "./dist/tts-preprocessing.mjs",
+      "require": "./dist/tts-preprocessing.js"
     }
   },
   "scripts": {

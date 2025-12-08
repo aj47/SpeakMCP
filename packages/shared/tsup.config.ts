@@ -5,6 +5,7 @@ export default defineConfig({
     index: 'src/index.ts',
     colors: 'src/colors.ts',
     types: 'src/types.ts',
+    'tts-preprocessing': 'src/tts-preprocessing.ts',
   },
   format: ['cjs', 'esm'],
   dts: true,

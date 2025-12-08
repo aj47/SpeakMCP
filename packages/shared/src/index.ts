@@ -6,4 +6,5 @@
 
 export * from './colors';
 export * from './types';
+export * from './tts-preprocessing';
 

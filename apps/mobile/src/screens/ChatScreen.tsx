@@ -25,13 +25,18 @@ import { useConfigContext, saveConfig } from '../store/config';
 import { useSessionContext } from '../store/sessions';
 import { OpenAIClient, ChatMessage, AgentProgressUpdate, AgentProgressStep } from '../lib/openaiClient';
 import * as Speech from 'expo-speech';
-import { preprocessTextForTTS } from '@speakmcp/shared';
+import {
+  preprocessTextForTTS,
+  COLLAPSE_THRESHOLD,
+  COLLAPSED_LINES,
+  getRoleIcon,
+  shouldCollapseMessage,
+  getToolCallsSummary,
+  getToolResultsSummary,
+} from '@speakmcp/shared';
 import { useHeaderHeight } from '@react-navigation/elements';
 import { useTheme } from '../ui/ThemeProvider';
 import { spacing, radius, Theme } from '../ui/theme';
-
-// Threshold for collapsing long content
-const COLLAPSE_THRESHOLD = 200;
 
 export default function ChatScreen({ route, navigation }: any) {
   const insets = useSafeAreaInsets();
@@ -929,14 +934,15 @@ export default function ChatScreen({ route, navigation }: any) {
           contentInsetAdjustmentBehavior="automatic"
         >
           {messages.map((m, i) => {
-            const hasExtras = (m.toolCalls?.length ?? 0) > 0 || (m.toolResults?.length ?? 0) > 0;
-            const shouldCollapse = (m.content?.length ?? 0) > COLLAPSE_THRESHOLD || hasExtras;
+            const shouldCollapse = shouldCollapseMessage(m.content, m.toolCalls, m.toolResults);
             const isExpanded = expandedMessages[i] ?? false;
+            const roleIcon = getRoleIcon(m.role as 'user' | 'assistant' | 'tool');
 
             return (
               <View key={i} style={[styles.msg, m.role === 'user' ? styles.user : styles.assistant]}>
-                {/* Header row with role and expand/collapse button */}
+                {/* Header row with role icon and expand/collapse button */}
                 <View style={styles.messageHeader}>
+                  <Text style={styles.roleIcon}>{roleIcon}</Text>
                   <Text style={styles.role}>{m.role}</Text>
                   {(m.toolCalls?.length ?? 0) > 0 && (
                     <View style={styles.toolBadgeSmall}>
@@ -976,7 +982,7 @@ export default function ChatScreen({ route, navigation }: any) {
                     {m.content ? (
                       <Text
                         style={{ color: theme.colors.foreground }}
-                        numberOfLines={!isExpanded && shouldCollapse ? 3 : undefined}
+                        numberOfLines={!isExpanded && shouldCollapse ? COLLAPSED_LINES : undefined}
                       >
                         {m.content}
                       </Text>
@@ -1011,7 +1017,7 @@ export default function ChatScreen({ route, navigation }: any) {
                     {!isExpanded && m.toolCalls && m.toolCalls.length > 0 && (
                       <View style={styles.collapsedToolSummary}>
                         <Text style={styles.collapsedToolText}>
-                          🔧 {m.toolCalls.map(tc => tc.name).join(', ')}
+                          {getToolCallsSummary(m.toolCalls)}
                         </Text>
                       </View>
                     )}
@@ -1060,7 +1066,7 @@ export default function ChatScreen({ route, navigation }: any) {
                     {!isExpanded && m.toolResults && m.toolResults.length > 0 && (
                       <View style={styles.collapsedToolSummary}>
                         <Text style={styles.collapsedToolText}>
-                          {m.toolResults.every(r => r.success) ? '✅' : '⚠️'} {m.toolResults.length} result{m.toolResults.length > 1 ? 's' : ''}
+                          {getToolResultsSummary(m.toolResults)}
                         </Text>
                       </View>
                     )}
@@ -1166,7 +1172,12 @@ function createStyles(theme: Theme) {
     },
     role: {
       ...theme.typography.caption,
-      marginBottom: spacing.xs,
+      marginBottom: 0,
+      textTransform: 'capitalize',
+    },
+    roleIcon: {
+      fontSize: 14,
+      marginRight: 4,
     },
     messageHeader: {
       flexDirection: 'row',

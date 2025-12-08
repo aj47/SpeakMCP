@@ -11,11 +11,13 @@ import { MarkdownRenderer } from "@renderer/components/markdown-renderer"
 import { AudioPlayer } from "@renderer/components/audio-player"
 import { tipcClient } from "@renderer/lib/tipc-client"
 import { useConfigQuery } from "@renderer/lib/queries"
-import dayjs from "dayjs"
+import {
+  COLLAPSE_THRESHOLD,
+  formatRelativeTimestamp,
+  shouldCollapseMessage,
+} from "@speakmcp/shared"
 
 import { logExpand } from "@renderer/lib/debug"
-
-const COLLAPSE_THRESHOLD = 200
 
 interface ConversationDisplayProps {
   messages: ConversationMessage[]
@@ -262,26 +264,7 @@ function ConversationMessageItem({
     }
   }
 
-  const formatTimestamp = (timestamp: number) => {
-    const now = Date.now()
-    const diff = now - timestamp
-
-    if (diff < 60000) {
-      // Less than 1 minute
-      return "Just now"
-    } else if (diff < 3600000) {
-      // Less than 1 hour
-      return `${Math.floor(diff / 60000)}m ago`
-    } else if (diff < 86400000) {
-      // Less than 1 day
-      return dayjs(timestamp).format("HH:mm")
-    } else {
-      return dayjs(timestamp).format("MMM D, HH:mm")
-    }
-  }
-
-  const hasExtras = (message.toolCalls?.length ?? 0) > 0 || (message.toolResults?.length ?? 0) > 0
-  const shouldCollapse = message.content.length > COLLAPSE_THRESHOLD || hasExtras
+  const shouldCollapse = shouldCollapseMessage(message.content, message.toolCalls, message.toolResults)
 
   return (
     <div
@@ -308,7 +291,7 @@ function ConversationMessageItem({
             {message.role}
           </Badge>
           <span className="modern-text-muted text-xs">
-            {formatTimestamp(message.timestamp)}
+            {formatRelativeTimestamp(message.timestamp)}
           </span>
           {(message.toolCalls || message.toolResults) && (
             <>

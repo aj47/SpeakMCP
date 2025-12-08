@@ -15,18 +15,22 @@ export interface SessionStore {
   sessions: Session[];
   currentSessionId: string | null;
   ready: boolean;
-  
+
   // Session management
   createNewSession: () => Session;
   setCurrentSession: (id: string | null) => void;
   deleteSession: (id: string) => Promise<void>;
   clearAllSessions: () => Promise<void>;
-  
+
   // Message management
   addMessage: (role: 'user' | 'assistant', content: string, toolCalls?: any[], toolResults?: any[]) => Promise<void>;
   getCurrentSession: () => Session | null;
   getSessionList: () => SessionListItem[];
   setMessages: (messages: ChatMessage[]) => Promise<void>;
+
+  // Server conversation ID management (for continuing conversations with SpeakMCP server)
+  setServerConversationId: (serverConversationId: string) => Promise<void>;
+  getServerConversationId: () => string | undefined;
 }
 
 async function loadSessions(): Promise<Session[]> {
@@ -209,6 +213,30 @@ export function useSessions(): SessionStore {
     });
   }, [currentSessionId]);
 
+  // Set the server-side conversation ID for the current session (fixes #501)
+  const setServerConversationId = useCallback(async (serverConversationId: string) => {
+    if (!currentSessionId) return;
+
+    setSessions(prev => {
+      const updated = prev.map(session => {
+        if (session.id !== currentSessionId) return session;
+        return {
+          ...session,
+          serverConversationId,
+          updatedAt: Date.now(),
+        };
+      });
+      saveSessions(updated);
+      return updated;
+    });
+  }, [currentSessionId]);
+
+  // Get the server-side conversation ID for the current session
+  const getServerConversationId = useCallback((): string | undefined => {
+    const session = getCurrentSession();
+    return session?.serverConversationId;
+  }, [getCurrentSession]);
+
   return {
     sessions,
     currentSessionId,
@@ -221,6 +249,8 @@ export function useSessions(): SessionStore {
     getCurrentSession,
     getSessionList,
     setMessages,
+    setServerConversationId,
+    getServerConversationId,
   };
 }
 

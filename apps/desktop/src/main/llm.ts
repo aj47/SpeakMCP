@@ -15,6 +15,14 @@ import { isDebugLLM, logLLM, isDebugTools, logTools } from "./debug"
 import { shrinkMessagesForLLM } from "./context-budget"
 import { emitAgentProgress } from "./emit-agent-progress"
 import { agentSessionTracker } from "./agent-session-tracker"
+import {
+  orchestrateRefinement,
+  createRefinementState,
+  detectTaskType,
+  DEFAULT_REFINEMENT_CONFIG,
+  RefinementState,
+  RefinementConfig,
+} from "./agentic-refinement"
 
 /**
  * Use LLM to extract useful context from conversation history
@@ -1051,7 +1059,28 @@ Return ONLY JSON per schema.`,
 
   let verificationFailCount = 0 // Count consecutive verification failures to avoid loops
 
-  while (iteration < maxIterations) {
+  // Initialize Poetiq-inspired agentic refinement system
+  // This provides adaptive strategy selection, feedback analysis, and stagnation detection
+  const refinementConfig: RefinementConfig = {
+    ...DEFAULT_REFINEMENT_CONFIG,
+    verbose: isDebugLLM(),
+    adaptiveStrategy: config.mcpAdaptiveStrategy !== false, // Enable by default
+  }
+  const toolsForDetection = uniqueAvailableTools.map(t => ({ name: t.name, description: t.description }))
+  const detectedStrategy = detectTaskType(transcript, toolsForDetection)
+  let refinementState = createRefinementState(detectedStrategy)
+
+  // Log detected strategy for debugging
+  if (isDebugLLM()) {
+    logLLM(`[agentic-refinement] Task strategy detected: ${detectedStrategy.name}`)
+    logLLM(`[agentic-refinement] Strategy max iterations: ${detectedStrategy.maxIterations}`)
+    logLLM(`[agentic-refinement] Supports parallel: ${detectedStrategy.supportsParallel}`)
+  }
+
+  // Dynamically adjust max iterations based on strategy (use smaller of configured and strategy max)
+  const effectiveMaxIterations = Math.min(maxIterations, detectedStrategy.maxIterations + 2) // +2 for buffer
+
+  while (iteration < effectiveMaxIterations) {
     iteration++
     currentIterationRef = iteration // Update ref for retry progress callback
 
@@ -1111,6 +1140,12 @@ Return ONLY JSON per schema.`,
 
     // Use the base system prompt - let the LLM understand context from conversation history
     let contextAwarePrompt = systemPrompt
+
+    // Add strategy-specific prompt augmentation from refinement system
+    // This is a key Poetiq insight: adapt the prompting strategy to the task type
+    if (refinementState.currentStrategy && refinementState.currentStrategy.promptAugmentation) {
+      contextAwarePrompt += `\n\n${refinementState.currentStrategy.promptAugmentation}`
+    }
 
     // Add enhanced context instruction using LLM-based context extraction
     // Recalculate recent context each iteration to include newly added messages
@@ -1950,6 +1985,93 @@ Always use actual resource IDs from the conversation history or create new ones 
         isComplete: false,
         conversationHistory: formatConversationForProgress(conversationHistory),
       })
+    }
+
+    // ============================================================================
+    // POETIQ-INSPIRED AGENTIC REFINEMENT: Analyze feedback and guide next iteration
+    // ============================================================================
+    // This implements the key Poetiq insight: iterative refinement through
+    // Generate → Execute → Feedback → Analyze → Refine loop
+    if (toolResults.length > 0) {
+      const refinementResult = orchestrateRefinement(
+        transcript,
+        iteration,
+        toolCallsArray,
+        toolResults,
+        llmResponse.content || "",
+        toolsForDetection,
+        refinementState,
+        refinementConfig
+      )
+
+      // Update refinement state for next iteration
+      refinementState = refinementResult.updatedState
+
+      // Log refinement analysis
+      if (isDebugLLM()) {
+        logLLM(`[agentic-refinement] Iteration ${iteration} feedback:`, {
+          successScore: refinementResult.feedback.successScore,
+          madeProgress: refinementResult.feedback.madeProgress,
+          issueCount: refinementResult.feedback.issues.length,
+          decision: refinementResult.decision.action,
+          reason: refinementResult.decision.reason,
+        })
+      }
+
+      // Handle pivot or early stopping decisions
+      if (refinementResult.decision.action === "stop" && refinementState.bestResult) {
+        // Early stopping - use best result so far
+        if (isDebugLLM()) {
+          logLLM(`[agentic-refinement] Early stopping: ${refinementResult.decision.reason}`)
+        }
+
+        finalContent = refinementState.bestResult.content || llmResponse.content || "Task could not be completed with available strategies."
+        addMessage("assistant", finalContent)
+
+        // Add completion step
+        const earlyStopStep = createProgressStep(
+          "completion",
+          "Task reached refinement limit",
+          refinementResult.decision.reason,
+          "completed",
+        )
+        progressSteps.push(earlyStopStep)
+
+        emit({
+          currentIteration: iteration,
+          maxIterations: effectiveMaxIterations,
+          steps: progressSteps.slice(-3),
+          isComplete: true,
+          finalContent,
+          conversationHistory: formatConversationForProgress(conversationHistory),
+        })
+        break
+      }
+
+      if (refinementResult.decision.action === "pivot" && refinementResult.newStrategy) {
+        // Strategy pivot - add guidance for new approach
+        if (isDebugLLM()) {
+          logLLM(`[agentic-refinement] Pivoting to strategy: ${refinementResult.newStrategy.name}`)
+        }
+
+        // Add pivot notification to conversation
+        const pivotMessage = `Previous approach was not making sufficient progress. Trying a different strategy.
+
+${refinementResult.newStrategy.promptAugmentation}
+
+${refinementResult.refinementPrompt}`
+
+        conversationHistory.push({ role: "user", content: pivotMessage })
+      } else if (refinementResult.feedback.issues.length > 0 || refinementResult.feedback.suggestions.length > 0) {
+        // Add refinement guidance if there are issues or suggestions
+        if (refinementResult.refinementPrompt && refinementResult.feedback.successScore < 0.8) {
+          // Only add refinement prompt if success rate is not high
+          conversationHistory.push({
+            role: "user",
+            content: `Based on tool execution results:\n${refinementResult.refinementPrompt}`
+          })
+        }
+      }
     }
 
     // Enhanced completion detection with better error handling

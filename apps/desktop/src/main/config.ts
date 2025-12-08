@@ -116,6 +116,10 @@ const getConfig = () => {
     // Parallel tool execution - when enabled, multiple tool calls from a single LLM response are executed concurrently
     mcpParallelToolExecution: true,
 
+    // Adaptive strategy - Poetiq-inspired task detection and strategy selection
+    // When enabled, the agent detects task type and applies appropriate strategies
+    mcpAdaptiveStrategy: true,
+
 	    // Remote Server defaults
 	    remoteServerEnabled: false,
 	    remoteServerPort: 3210,

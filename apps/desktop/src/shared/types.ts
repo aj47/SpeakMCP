@@ -435,7 +435,9 @@ export type Config = {
   // Parallel Tool Execution Configuration
   mcpParallelToolExecution?: boolean
 
-
+  // Adaptive Strategy Configuration (Poetiq-inspired)
+  // When enabled, the agent detects task type and applies appropriate strategies
+  mcpAdaptiveStrategy?: boolean
 
 	  // Remote Server Configuration
 	  remoteServerEnabled?: boolean

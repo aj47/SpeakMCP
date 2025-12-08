@@ -52,6 +52,7 @@ export const useAgentStore = create<AgentState>((set, get) => ({
     set((state) => {
       const newMap = new Map(state.agentProgressById)
       const existingProgress = newMap.get(sessionId)
+      const isNewSession = !existingProgress
 
       // Merge with existing progress to preserve conversation history and steps
       // when they're not provided in the update (e.g., tool approval updates)
@@ -80,10 +81,14 @@ export const useAgentStore = create<AgentState>((set, get) => ({
 
       newMap.set(sessionId, mergedUpdate)
 
-      // Auto-focus this session if no session is currently focused
-      // AND it's not snoozed AND not complete
+      // Only auto-focus when a NEW session starts (not already in our map)
+      // This prevents unexpected jumps when switching between sessions:
+      // - If user snoozes session A, focusedSessionId becomes null
+      // - A progress update from running session B should NOT auto-steal focus
+      // - Only a genuinely new session should auto-focus
+      // Also requires: not snoozed AND not complete
       let newFocusedSessionId = state.focusedSessionId
-      if (!state.focusedSessionId && !mergedUpdate.isSnoozed && !mergedUpdate.isComplete) {
+      if (isNewSession && !state.focusedSessionId && !mergedUpdate.isSnoozed && !mergedUpdate.isComplete) {
         newFocusedSessionId = sessionId
       }
 

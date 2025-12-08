@@ -2344,6 +2344,13 @@ export const router = {
       const { messageQueueService } = await import("./message-queue-service")
       return messageQueueService.reorderQueue(input.conversationId, input.messageIds)
     }),
+
+  updateQueuedMessageText: t.procedure
+    .input<{ conversationId: string; messageId: string; text: string }>()
+    .action(async ({ input }) => {
+      const { messageQueueService } = await import("./message-queue-service")
+      return messageQueueService.updateMessageText(input.conversationId, input.messageId, input.text)
+    }),
 }
 
 // TTS Provider Implementation Functions

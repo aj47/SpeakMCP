@@ -51,8 +51,10 @@ export const useAgentStore = create<AgentState>((set, get) => ({
 
     set((state) => {
       const newMap = new Map(state.agentProgressById)
+      // Use Map.has() for explicit key presence check - more robust than falsy check
+      // since it correctly handles potential edge cases with stored values
+      const isNewSession = !newMap.has(sessionId)
       const existingProgress = newMap.get(sessionId)
-      const isNewSession = !existingProgress
 
       // Merge with existing progress to preserve conversation history and steps
       // when they're not provided in the update (e.g., tool approval updates)

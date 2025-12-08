@@ -93,14 +93,18 @@ export function Component() {
 
     // If we have a custom order, use it; otherwise sort by default
     if (sessionOrder.length > 0) {
-      // Sort by custom order, putting unknown sessions at the end
+      // Sort by custom order, putting unknown (new) sessions at the BEGINNING
+      // This ensures newly created sessions appear at the top immediately
       return entries.sort((a, b) => {
         const aIndex = sessionOrder.indexOf(a[0])
         const bIndex = sessionOrder.indexOf(b[0])
-        // If not in order list, put at end
-        if (aIndex === -1 && bIndex === -1) return 0
-        if (aIndex === -1) return 1
-        if (bIndex === -1) return -1
+        // New sessions (not in order list) should appear first (at top)
+        if (aIndex === -1 && bIndex === -1) {
+          // Both are new - sort by timestamp (newest first)
+          return (b[1]?.steps?.[0]?.timestamp ?? 0) - (a[1]?.steps?.[0]?.timestamp ?? 0)
+        }
+        if (aIndex === -1) return -1  // a is new, put it first
+        if (bIndex === -1) return 1   // b is new, put it first
         return aIndex - bIndex
       })
     }

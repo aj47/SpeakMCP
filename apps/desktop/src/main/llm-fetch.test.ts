@@ -242,3 +242,166 @@ describe('LLM Fetch Retry Logic', () => {
   })
 })
 
+describe('Continuation Phrase Detection (Issue #443)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    global.fetch = vi.fn()
+  })
+
+  it('should set needsMoreWork=true when response contains "Let me"', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        choices: [
+          {
+            message: {
+              content: 'Let me navigate to the correct directory and start the agent.',
+            },
+          },
+        ],
+      }),
+    })
+
+    const { makeLLMCallWithFetch } = await import('./llm-fetch')
+
+    const result = await makeLLMCallWithFetch(
+      [{ role: 'user', content: 'test' }],
+      'openai'
+    )
+
+    expect(result.content).toContain('Let me navigate')
+    expect(result.needsMoreWork).toBe(true)
+  })
+
+  it('should set needsMoreWork=true when response contains "I\'ll"', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        choices: [
+          {
+            message: {
+              content: "I'll check the file and fix the issue.",
+            },
+          },
+        ],
+      }),
+    })
+
+    const { makeLLMCallWithFetch } = await import('./llm-fetch')
+
+    const result = await makeLLMCallWithFetch(
+      [{ role: 'user', content: 'test' }],
+      'openai'
+    )
+
+    expect(result.content).toContain("I'll check")
+    expect(result.needsMoreWork).toBe(true)
+  })
+
+  it('should set needsMoreWork=true when response contains "I will"', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        choices: [
+          {
+            message: {
+              content: 'I will now proceed to update the configuration.',
+            },
+          },
+        ],
+      }),
+    })
+
+    const { makeLLMCallWithFetch } = await import('./llm-fetch')
+
+    const result = await makeLLMCallWithFetch(
+      [{ role: 'user', content: 'test' }],
+      'openai'
+    )
+
+    expect(result.content).toContain('I will now')
+    expect(result.needsMoreWork).toBe(true)
+  })
+
+  it('should set needsMoreWork=true when response contains "going to"', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        choices: [
+          {
+            message: {
+              content: "I'm going to run the tests now.",
+            },
+          },
+        ],
+      }),
+    })
+
+    const { makeLLMCallWithFetch } = await import('./llm-fetch')
+
+    const result = await makeLLMCallWithFetch(
+      [{ role: 'user', content: 'test' }],
+      'openai'
+    )
+
+    expect(result.content).toContain('going to')
+    expect(result.needsMoreWork).toBe(true)
+  })
+
+  it('should set needsMoreWork=undefined for plain text without continuation phrases', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        choices: [
+          {
+            message: {
+              content: 'The task has been completed successfully.',
+            },
+          },
+        ],
+      }),
+    })
+
+    const { makeLLMCallWithFetch } = await import('./llm-fetch')
+
+    const result = await makeLLMCallWithFetch(
+      [{ role: 'user', content: 'test' }],
+      'openai'
+    )
+
+    expect(result.content).toContain('completed successfully')
+    expect(result.needsMoreWork).toBeUndefined()
+  })
+
+  it('should set needsMoreWork=true when response contains "need to"', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        choices: [
+          {
+            message: {
+              content: 'I need to check the logs first.',
+            },
+          },
+        ],
+      }),
+    })
+
+    const { makeLLMCallWithFetch } = await import('./llm-fetch')
+
+    const result = await makeLLMCallWithFetch(
+      [{ role: 'user', content: 'test' }],
+      'openai'
+    )
+
+    expect(result.content).toContain('need to')
+    expect(result.needsMoreWork).toBe(true)
+  })
+})
+

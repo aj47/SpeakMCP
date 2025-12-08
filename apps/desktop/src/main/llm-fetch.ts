@@ -1271,9 +1271,42 @@ async function makeLLMCallAttempt(
     }
     return { content: cleaned, needsMoreWork: true }
   }
-  // For plain text responses without JSON structure, set needsMoreWork=undefined
-  // rather than false. This allows the agent loop to decide whether the response
-  // is acceptable or if it needs to nudge the LLM for a properly formatted response.
+
+  // Check for continuation phrases that indicate the LLM intends to continue working
+  // These phrases suggest the agent wants to take action but failed to return proper JSON
+  // Fixes issue #443: Agent stops prematurely when LLM returns plain text instead of structured JSON
+  const continuationPhrases = [
+    /\blet me\b/i,
+    /\bi'll\b/i,
+    /\bi will\b/i,
+    /\bnext[,\s]/i,
+    /\bnow i\b/i,
+    /\bfirst[,\s]/i,
+    /\bthen i\b/i,
+    /\bgoing to\b/i,
+    /\bproceed to\b/i,
+    /\bstart by\b/i,
+    /\bbegin by\b/i,
+    /\blet's\b/i,
+    /\bshould\s+(now|first|next)\b/i,
+    /\bneed to\b/i,
+    /\bwill now\b/i,
+  ]
+  const hasContinuationPhrase = continuationPhrases.some(pattern => pattern.test(cleaned || content || ""))
+
+  if (hasContinuationPhrase) {
+    if (isDebugLLM()) {
+      logLLM("✅ Returning plain text with continuation phrase (needsMoreWork=true)", {
+        contentLength: (cleaned || content)?.length || 0,
+        contentPreview: (cleaned || content || "").substring(0, 100)
+      })
+    }
+    return { content: cleaned || content, needsMoreWork: true }
+  }
+
+  // For plain text responses without JSON structure and no continuation phrases,
+  // set needsMoreWork=undefined. This allows the agent loop to decide whether
+  // the response is acceptable or if it needs to nudge the LLM for a properly formatted response.
   // This prevents poor-quality plain text responses from being automatically accepted.
   if (isDebugLLM()) {
     logLLM("✅ Returning plain text response (needsMoreWork=undefined - let agent decide)", {

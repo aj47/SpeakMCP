@@ -435,6 +435,9 @@ export type Config = {
   // Parallel Tool Execution Configuration
   mcpParallelToolExecution?: boolean
 
+  // Message Queue Configuration - when enabled, users can queue messages while agent is processing
+  mcpMessageQueueEnabled?: boolean
+
 
 
 	  // Remote Server Configuration

@@ -67,6 +67,7 @@ function Navigation() {
           ...cfg.config,
           ...(params.baseUrl && { baseUrl: params.baseUrl }),
           ...(params.apiKey && { apiKey: params.apiKey }),
+          ...(params.model && { model: params.model }),
         };
         cfg.setConfig(newConfig);
         await saveConfig(newConfig);

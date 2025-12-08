@@ -80,6 +80,7 @@ export default function SettingsScreen({ navigation }: any) {
         ...prev,
         ...(params.baseUrl && { baseUrl: params.baseUrl }),
         ...(params.apiKey && { apiKey: params.apiKey }),
+        ...(params.model && { model: params.model }),
       }));
       setShowScanner(false);
     } else {

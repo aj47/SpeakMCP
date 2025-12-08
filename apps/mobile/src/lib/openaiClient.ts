@@ -4,6 +4,8 @@ import type {
   ConversationHistoryMessage,
   ChatApiResponse
 } from '@speakmcp/shared';
+import { Platform } from 'react-native';
+import EventSource from 'react-native-sse';
 
 export type OpenAIConfig = {
   baseUrl: string;    // OpenAI-compatible API base URL e.g., https://api.openai.com/v1
@@ -110,7 +112,7 @@ export class OpenAIClient {
   /**
    * POST OpenAI-compatible API: /v1/chat/completions
    * Supports SpeakMCP server SSE streaming with real-time agent progress updates.
-   * Uses fetch with ReadableStream for web, XMLHttpRequest for native.
+   * Uses react-native-sse for native platforms (Android/iOS), fetch with ReadableStream for web.
    *
    * @param messages - Chat messages to send
    * @param onToken - Optional callback for streaming text tokens (legacy, for text-only streaming)
@@ -127,14 +129,134 @@ export class OpenAIClient {
 
     console.log('[OpenAIClient] Starting chat request');
     console.log('[OpenAIClient] URL:', url);
+    console.log('[OpenAIClient] Platform:', Platform.OS);
 
     try {
-      // Try fetch with ReadableStream first (works in web environments)
-      return await this.streamSSEWithFetch(url, body, onToken, onProgress);
+      // Use react-native-sse for native platforms (Android/iOS) for real streaming
+      // Use fetch with ReadableStream for web
+      if (Platform.OS === 'android' || Platform.OS === 'ios') {
+        return await this.streamSSEWithEventSource(url, body, onToken, onProgress);
+      } else {
+        return await this.streamSSEWithFetch(url, body, onToken, onProgress);
+      }
     } catch (error) {
       console.error('[OpenAIClient] Chat request failed:', error);
       throw error;
     }
+  }
+
+  /**
+   * Stream SSE using react-native-sse EventSource for true real-time streaming on native platforms.
+   * This uses XMLHttpRequest internally which supports streaming on Android/iOS.
+   */
+  private streamSSEWithEventSource(
+    url: string,
+    body: object,
+    onToken?: (token: string) => void,
+    onProgress?: OnProgressCallback
+  ): Promise<ChatResponse> {
+    return new Promise((resolve, reject) => {
+      let finalContent = '';
+      let conversationId: string | undefined;
+      let conversationHistory: ConversationHistoryMessage[] | undefined;
+
+      console.log('[OpenAIClient] Creating EventSource for SSE streaming');
+
+      // Use custom event type 'done' which is emitted by react-native-sse when server closes connection
+      const es = new EventSource<'done'>(url, {
+        headers: {
+          ...this.authHeaders(),
+        },
+        method: 'POST',
+        body: JSON.stringify(body),
+        pollingInterval: 0, // Disable reconnections - we handle one request at a time
+      });
+
+      es.addEventListener('open', () => {
+        console.log('[OpenAIClient] SSE connection opened');
+      });
+
+      es.addEventListener('message', (event) => {
+        if (!event.data) return;
+
+        const data = event.data;
+
+        // Handle [DONE] signal
+        if (data === '[DONE]' || data === '"[DONE]"') {
+          console.log('[OpenAIClient] Received [DONE] signal');
+          return;
+        }
+
+        try {
+          const obj = JSON.parse(data);
+
+          // Handle SpeakMCP-specific SSE event types
+          if (obj.type === 'progress' && obj.data) {
+            const update = obj.data as AgentProgressUpdate;
+            onProgress?.(update);
+            if (update.streamingContent?.text) {
+              onToken?.(update.streamingContent.text);
+            }
+            return;
+          }
+
+          if (obj.type === 'done' && obj.data) {
+            // For 'done' events, the content is complete - overwrite
+            if (obj.data.content !== undefined) {
+              finalContent = obj.data.content;
+            }
+            if (obj.data.conversation_id) {
+              conversationId = obj.data.conversation_id;
+            }
+            if (obj.data.conversation_history) {
+              conversationHistory = obj.data.conversation_history;
+            }
+            return;
+          }
+
+          if (obj.type === 'error' && obj.data) {
+            console.error('[OpenAIClient] Error event:', obj.data.message);
+            es.close();
+            reject(new Error(obj.data.message || 'Server error'));
+            return;
+          }
+
+          // Handle standard OpenAI streaming format (fallback)
+          const delta = obj?.choices?.[0]?.delta;
+          const token = delta?.content;
+          if (typeof token === 'string' && token.length > 0) {
+            onToken?.(token);
+            finalContent += token;
+          }
+        } catch {
+          // Ignore non-JSON data
+        }
+      });
+
+      es.addEventListener('error', (event) => {
+        console.error('[OpenAIClient] SSE error:', event);
+        es.close();
+
+        if (event.type === 'error') {
+          reject(new Error((event as any).message || 'SSE connection error'));
+        } else {
+          reject(new Error('SSE connection failed'));
+        }
+      });
+
+      // 'done' event fires when server closes the connection (stream complete)
+      es.addEventListener('done', () => {
+        console.log('[OpenAIClient] SSE done (server closed), content length:', finalContent.length);
+        es.close();
+        resolve({ content: finalContent, conversationId, conversationHistory });
+      });
+
+      // 'close' event fires when client closes the connection
+      es.addEventListener('close', () => {
+        console.log('[OpenAIClient] SSE connection closed, content length:', finalContent.length);
+        resolve({ content: finalContent, conversationId, conversationHistory });
+      });
+    });
   }
 
   /**

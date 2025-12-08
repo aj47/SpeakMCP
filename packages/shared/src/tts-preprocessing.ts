@@ -136,7 +136,8 @@ function cleanSymbols(text: string): string {
 function convertNumbers(text: string): string {
   text = text.replace(/v?(\d+)\.(\d+)\.(\d+)/g, "version $1 point $2 point $3")
   text = text.replace(/(\d+)\.(\d+)/g, "$1 point $2")
-  text = text.replace(/(\d{1,3}),(\d{3})/g, "$1 thousand $2")
+  // Remove commas from numbers - TTS engines pronounce large numbers naturally
+  text = text.replace(/(\d),(\d{3})/g, "$1$2")
   return text
 }
 

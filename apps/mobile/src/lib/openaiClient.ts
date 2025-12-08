@@ -6,11 +6,16 @@ import type {
 } from '@speakmcp/shared';
 import { Platform } from 'react-native';
 import EventSource from 'react-native-sse';
+import {
+  withRetry,
+  RetryConfig
+} from './networkUtils';
 
 export type OpenAIConfig = {
   baseUrl: string;    // OpenAI-compatible API base URL e.g., https://api.openai.com/v1
   apiKey: string;
   model?: string; // model name for /v1/chat/completions
+  retryConfig?: RetryConfig; // Optional retry configuration
 };
 
 export type ChatMessage = {
@@ -19,6 +24,13 @@ export type ChatMessage = {
   content?: string;
   toolCalls?: ToolCall[];
   toolResults?: ToolResult[];
+  /** Error state for failed messages - allows retry functionality */
+  error?: {
+    message: string;
+    isRetryable: boolean;
+    /** The original user message that triggered this failed response (for retry) */
+    originalUserMessage?: string;
+  };
 };
 
 /**
@@ -114,15 +126,22 @@ export class OpenAIClient {
    * Supports SpeakMCP server SSE streaming with real-time agent progress updates.
    * Uses react-native-sse for native platforms (Android/iOS), fetch with ReadableStream for web.
    *
+   * Includes retry logic for network failures that can occur when:
+   * - User switches to another app (backgrounding)
+   * - Network connectivity issues
+   * - Server temporary unavailability
+   *
    * @param messages - Chat messages to send
    * @param onToken - Optional callback for streaming text tokens (legacy, for text-only streaming)
    * @param onProgress - Optional callback for agent progress updates (tool calls, results, etc.)
+   * @param onRetry - Optional callback to notify when a retry is happening
    * @returns ChatResponse with content and conversation history
    */
   async chat(
     messages: ChatMessage[],
     onToken?: (token: string) => void,
-    onProgress?: OnProgressCallback
+    onProgress?: OnProgressCallback,
+    onRetry?: (attempt: number, error: Error) => void
   ): Promise<ChatResponse> {
     const url = this.getUrl('/chat/completions');
     const body = { model: this.cfg.model, messages, stream: true };
@@ -131,18 +150,25 @@ export class OpenAIClient {
     console.log('[OpenAIClient] URL:', url);
     console.log('[OpenAIClient] Platform:', Platform.OS);
 
-    try {
-      // Use react-native-sse for native platforms (Android/iOS) for real streaming
-      // Use fetch with ReadableStream for web
-      if (Platform.OS === 'android' || Platform.OS === 'ios') {
-        return await this.streamSSEWithEventSource(url, body, onToken, onProgress);
-      } else {
-        return await this.streamSSEWithFetch(url, body, onToken, onProgress);
-      }
-    } catch (error) {
-      console.error('[OpenAIClient] Chat request failed:', error);
-      throw error;
-    }
+    // Wrap the chat request with retry logic
+    return await withRetry(
+      async () => {
+        try {
+          // Use react-native-sse for native platforms (Android/iOS) for real streaming
+          // Use fetch with ReadableStream for web
+          if (Platform.OS === 'android' || Platform.OS === 'ios') {
+            return await this.streamSSEWithEventSource(url, body, onToken, onProgress);
+          } else {
+            return await this.streamSSEWithFetch(url, body, onToken, onProgress);
+          }
+        } catch (error) {
+          console.error('[OpenAIClient] Chat request failed:', error);
+          throw error;
+        }
+      },
+      this.cfg.retryConfig,
+      onRetry
+    );
   }
 
   /**

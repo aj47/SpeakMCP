@@ -14,6 +14,8 @@ import {
   Alert,
   Pressable,
   Image,
+  AppState,
+  AppStateStatus,
 } from 'react-native';
 
 // Animated spinner GIFs for processing state
@@ -24,6 +26,7 @@ import { EventEmitter } from 'expo-modules-core';
 import { useConfigContext, saveConfig } from '../store/config';
 import { useSessionContext } from '../store/sessions';
 import { OpenAIClient, ChatMessage, AgentProgressUpdate, AgentProgressStep } from '../lib/openaiClient';
+import { isRetryableError } from '../lib/networkUtils';
 import * as Speech from 'expo-speech';
 import { preprocessTextForTTS } from '@speakmcp/shared';
 import { useHeaderHeight } from '@react-navigation/elements';
@@ -209,6 +212,40 @@ export default function ChatScreen({ route, navigation }: any) {
   const [listening, setListening] = useState(false);
   const [liveTranscript, setLiveTranscript] = useState('');
   const [debugInfo, setDebugInfo] = useState<string>('');
+
+  // Track app state to detect backgrounding during requests
+  const appStateRef = useRef<AppStateStatus>(AppState.currentState);
+  const wasBackgroundedDuringRequestRef = useRef(false);
+
+  // Monitor app state changes to detect backgrounding during active requests
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
+      const wasActive = appStateRef.current === 'active';
+      const isBackground = nextAppState === 'background' || nextAppState === 'inactive';
+      const isReturning = appStateRef.current !== 'active' && nextAppState === 'active';
+
+      // Track if we went to background during an active request
+      if (wasActive && isBackground && responding) {
+        console.log('[ChatScreen] App went to background during active request');
+        wasBackgroundedDuringRequestRef.current = true;
+        setDebugInfo('App went to background - request may be interrupted');
+      }
+
+      // When returning from background, check if we had an active request
+      if (isReturning && wasBackgroundedDuringRequestRef.current) {
+        console.log('[ChatScreen] App returned from background after interruption');
+        // The retry logic in the API client will handle retrying
+        setDebugInfo('Returned from background - checking request status...');
+        wasBackgroundedDuringRequestRef.current = false;
+      }
+
+      appStateRef.current = nextAppState;
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [responding]);
 
   // Track the last loaded session ID to detect session changes
   const lastLoadedSessionIdRef = useRef<string | null>(null);
@@ -470,7 +507,25 @@ export default function ChatScreen({ route, navigation }: any) {
         });
       };
 
-      const response = await client.chat([...messages, userMsg], onToken, onProgress);
+      // Handle retry notifications - show user that we're retrying
+      const onRetry = (attempt: number, error: Error) => {
+        console.log(`[ChatScreen] Retry attempt ${attempt} after error:`, error.message);
+        setDebugInfo(`Retrying... (attempt ${attempt})`);
+
+        // Update the placeholder message to show retry status
+        setMessages((m) => {
+          const copy = [...m];
+          for (let i = copy.length - 1; i >= 0; i--) {
+            if (copy[i].role === 'assistant') {
+              copy[i] = { ...copy[i], content: `Retrying connection... (attempt ${attempt})` };
+              break;
+            }
+          }
+          return copy;
+        });
+      };
+
+      const response = await client.chat([...messages, userMsg], onToken, onProgress, onRetry);
       const finalText = response.content || streamingText;
       console.log('[ChatScreen] Chat completed');
       setDebugInfo(`Completed!`);
@@ -534,14 +589,71 @@ export default function ChatScreen({ route, navigation }: any) {
         stack: e.stack,
         name: e.name
       });
-      setDebugInfo(`Error: ${e.message}`);
-      setMessages((m) => [...m, { role: 'assistant', content: `Error: ${e.message}` }]);
+
+      const errorMessage = e.message || 'Unknown error';
+      const retryable = isRetryableError(e);
+
+      setDebugInfo(`Error: ${errorMessage}`);
+
+      // Replace the placeholder with an error message that includes retry capability
+      setMessages((m) => {
+        const beforePlaceholder = m.slice(0, messageCountBeforeTurn + 1);
+        const errorMsg: ChatMessage = {
+          role: 'assistant',
+          content: retryable
+            ? `Network error: ${errorMessage}\n\nThis may have occurred because the app was in the background. Tap "Retry" to try again.`
+            : `Error: ${errorMessage}`,
+          error: {
+            message: errorMessage,
+            isRetryable: retryable,
+            originalUserMessage: text,
+          },
+        };
+        return [...beforePlaceholder, errorMsg];
+      });
     } finally {
       console.log('[ChatScreen] Chat request finished');
       setResponding(false);
-      setTimeout(() => setDebugInfo(''), 3000); // Clear debug info after 3 seconds
+      setTimeout(() => setDebugInfo(''), 5000); // Clear debug info after 5 seconds
     }
   };
+
+  // We need a ref to send function for retryMessage callback
+  const sendRef = useRef(send);
+  useEffect(() => {
+    sendRef.current = send;
+  }, [send]);
+
+  /**
+   * Retry a failed message - removes the error message and re-sends the original user message
+   */
+  const retryMessage = useCallback((messageIndex: number) => {
+    const errorMessage = messages[messageIndex];
+    if (!errorMessage?.error?.originalUserMessage) {
+      console.warn('[ChatScreen] Cannot retry: no original message found');
+      return;
+    }
+
+    const originalText = errorMessage.error.originalUserMessage;
+
+    // Remove the error message and the user message before it
+    setMessages((m) => {
+      // Find the user message that preceded this error
+      const userMsgIndex = messageIndex - 1;
+      if (userMsgIndex >= 0 && m[userMsgIndex]?.role === 'user') {
+        // Remove both the user message and error message
+        return [...m.slice(0, userMsgIndex)];
+      }
+      // If we can't find the user message, just remove the error message
+      return [...m.slice(0, messageIndex)];
+    });
+
+    // Re-send the original message
+    // Use setTimeout to ensure state updates have propagated
+    setTimeout(() => {
+      sendRef.current(originalText);
+    }, 100);
+  }, [messages]);
 
   // Real-time speech results (web handled in ensureWebRecognizer; native listeners are attached on start)
 
@@ -1055,6 +1167,21 @@ export default function ChatScreen({ route, navigation }: any) {
                         </Text>
                       </View>
                     )}
+
+                    {/* Retry button for failed messages */}
+                    {m.error?.isRetryable && (
+                      <View style={styles.retryContainer}>
+                        <TouchableOpacity
+                          style={styles.retryButton}
+                          onPress={() => retryMessage(i)}
+                          disabled={responding}
+                        >
+                          <Text style={styles.retryButtonText}>
+                            {responding ? 'Please wait...' : '🔄 Retry'}
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
                   </>
                 )}
               </View>
@@ -1198,6 +1325,24 @@ function createStyles(theme: Theme) {
     collapsedToolText: {
       fontSize: 12,
       color: theme.colors.mutedForeground,
+    },
+    retryContainer: {
+      marginTop: spacing.md,
+      paddingTop: spacing.sm,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: theme.colors.border,
+    },
+    retryButton: {
+      backgroundColor: theme.colors.primary,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      borderRadius: radius.md,
+      alignSelf: 'flex-start',
+    },
+    retryButtonText: {
+      color: theme.colors.primaryForeground,
+      fontSize: 14,
+      fontWeight: '600',
     },
     inputRow: {
       flexDirection: 'row',

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { preprocessTextForTTS, validateTTSText } from './tts-preprocessing'
+// Import from shared package to match runtime behavior (tipc.ts imports from @speakmcp/shared)
+import { preprocessTextForTTS, validateTTSText } from '@speakmcp/shared'
 
 describe('TTS Preprocessing - Thinking Blocks', () => {
   it('should remove simple thinking blocks', () => {

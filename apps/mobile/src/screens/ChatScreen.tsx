@@ -271,6 +271,12 @@ export default function ChatScreen({ route, navigation }: any) {
   const lastGrantTimeRef = useRef(0);
   const minHoldMs = 200;
 
+  // Hands-free mode: debounce timeout for auto-submission
+  // This gives users more time to finish speaking before auto-submitting
+  const handsFreeDebounceMs = 1500; // 1.5 seconds delay after final result before auto-submit
+  const handsFreeDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingHandsFreeFinalRef = useRef<string>('');
+
   // Native SR event handling (lazy-loaded to avoid Expo Go crash)
   const srEmitterRef = useRef<any>(null);
   const srSubsRef = useRef<any[]>([]);
@@ -279,10 +285,13 @@ export default function ChatScreen({ route, navigation }: any) {
     srSubsRef.current.forEach((sub) => sub?.remove?.());
     srSubsRef.current = [];
   };
-  // Cleanup native subscriptions on unmount
+  // Cleanup native subscriptions and hands-free debounce on unmount
   useEffect(() => {
     return () => {
       cleanupNativeSubs();
+      if (handsFreeDebounceRef.current) {
+        clearTimeout(handsFreeDebounceRef.current);
+      }
     };
   }, []);
 
@@ -515,7 +524,8 @@ export default function ChatScreen({ route, navigation }: any) {
       const rec = new SRClass();
       rec.lang = 'en-US';
       rec.interimResults = true;
-      rec.continuous = handsFreeRef.current;
+      // Always use continuous mode to prevent premature endings on silence
+      rec.continuous = true;
       rec.onstart = () => {};
       rec.onerror = (ev: any) => {
         console.error('[Voice] Web recognition error:', ev?.error || ev);
@@ -532,23 +542,48 @@ export default function ChatScreen({ route, navigation }: any) {
         if (interim) setLiveTranscript(interim);
         if (finalText) {
           if (handsFreeRef.current) {
-            setLiveTranscript('');
-            webFinalRef.current = '';
-            const toSend = finalText.trim();
-            if (toSend) send(toSend);
+            // Hands-free mode: debounce auto-submission to give user more time
+            if (handsFreeDebounceRef.current) {
+              clearTimeout(handsFreeDebounceRef.current);
+            }
+            const final = finalText.trim();
+            if (final) {
+              // Accumulate final text
+              pendingHandsFreeFinalRef.current = pendingHandsFreeFinalRef.current
+                ? `${pendingHandsFreeFinalRef.current} ${final}`
+                : final;
+              // Set debounce timeout
+              handsFreeDebounceRef.current = setTimeout(() => {
+                const toSend = pendingHandsFreeFinalRef.current.trim();
+                pendingHandsFreeFinalRef.current = '';
+                webFinalRef.current = '';
+                setLiveTranscript('');
+                if (toSend) send(toSend);
+              }, handsFreeDebounceMs);
+            }
           } else {
+            // Hold-to-speak: accumulate, will send on button release
             webFinalRef.current += finalText;
           }
         }
       };
       rec.onend = () => {
-        const finalText = (webFinalRef.current || '').trim() || (liveTranscriptRef.current || '').trim();
+        // Clear any pending hands-free debounce and send accumulated text
+        if (handsFreeDebounceRef.current) {
+          clearTimeout(handsFreeDebounceRef.current);
+          handsFreeDebounceRef.current = null;
+        }
+        const finalText = (pendingHandsFreeFinalRef.current || webFinalRef.current || '').trim() || (liveTranscriptRef.current || '').trim();
+        pendingHandsFreeFinalRef.current = '';
         setListening(false);
         setLiveTranscript('');
         const willEdit = willCancelRef.current;
         if (!handsFreeRef.current && finalText) {
           if (willEdit) setInput((t) => (t ? `${t} ${finalText}` : finalText));
           else send(finalText);
+        } else if (handsFreeRef.current && finalText) {
+          // Send any accumulated hands-free text that was pending
+          send(finalText);
         }
         webFinalRef.current = '';
       };
@@ -569,6 +604,12 @@ export default function ChatScreen({ route, navigation }: any) {
       setLiveTranscript('');
       setListening(true);
       nativeFinalRef.current = '';
+      pendingHandsFreeFinalRef.current = '';
+      // Clear any pending hands-free debounce from previous session
+      if (handsFreeDebounceRef.current) {
+        clearTimeout(handsFreeDebounceRef.current);
+        handsFreeDebounceRef.current = null;
+      }
       if (e) startYRef.current = e.nativeEvent.pageY;
 
       // Try native first via dynamic import (avoids Expo Go crash when module is unavailable)
@@ -586,12 +627,31 @@ export default function ChatScreen({ route, navigation }: any) {
               if (t) setLiveTranscript(t);
               if (event?.isFinal && t) {
                 if (handsFreeRef.current) {
+                  // Hands-free mode: debounce auto-submission to give user more time
+                  // Clear any pending timeout and accumulate the final text
+                  if (handsFreeDebounceRef.current) {
+                    clearTimeout(handsFreeDebounceRef.current);
+                  }
                   const final = t.trim();
-                  nativeFinalRef.current = '';
-                  setLiveTranscript('');
-                  if (final) send(final);
+                  if (final) {
+                    // Accumulate final text (speech might come in chunks)
+                    pendingHandsFreeFinalRef.current = pendingHandsFreeFinalRef.current
+                      ? `${pendingHandsFreeFinalRef.current} ${final}`
+                      : final;
+                    // Set debounce timeout - only send after user stops speaking for handsFreeDebounceMs
+                    handsFreeDebounceRef.current = setTimeout(() => {
+                      const toSend = pendingHandsFreeFinalRef.current.trim();
+                      pendingHandsFreeFinalRef.current = '';
+                      nativeFinalRef.current = '';
+                      setLiveTranscript('');
+                      if (toSend) send(toSend);
+                    }, handsFreeDebounceMs);
+                  }
                 } else {
-                  nativeFinalRef.current = t;
+                  // Hold-to-speak: just accumulate, will send on button release
+                  nativeFinalRef.current = nativeFinalRef.current
+                    ? `${nativeFinalRef.current} ${t}`
+                    : t;
                 }
               }
             });
@@ -599,13 +659,23 @@ export default function ChatScreen({ route, navigation }: any) {
               console.error('[Voice] Native recognition error:', JSON.stringify(event));
             });
             const subEnd = srEmitterRef.current.addListener('end', () => {
+              // Clear any pending hands-free debounce
+              if (handsFreeDebounceRef.current) {
+                clearTimeout(handsFreeDebounceRef.current);
+                handsFreeDebounceRef.current = null;
+              }
               setListening(false);
-              const finalText = (nativeFinalRef.current || liveTranscriptRef.current || '').trim();
+              // Include pending hands-free text in finalText
+              const finalText = (pendingHandsFreeFinalRef.current || nativeFinalRef.current || liveTranscriptRef.current || '').trim();
+              pendingHandsFreeFinalRef.current = '';
               setLiveTranscript('');
               const willEdit = willCancelRef.current;
               if (!handsFreeRef.current && finalText) {
                 if (willEdit) setInput((t) => (t ? `${t} ${finalText}` : finalText));
                 else send(finalText);
+              } else if (handsFreeRef.current && finalText) {
+                // Send any accumulated hands-free text that was pending
+                send(finalText);
               }
               nativeFinalRef.current = '';
             });
@@ -628,8 +698,16 @@ export default function ChatScreen({ route, navigation }: any) {
             }
 
             // Start recognition
+            // Always use continuous: true so recognition doesn't auto-end on silence
+            // For hold-to-speak: user explicitly stops via button release
+            // For hands-free: we control when to send via debounce
             try {
-              SR.ExpoSpeechRecognitionModule.start({ lang: 'en-US', interimResults: true, continuous: handsFreeRef.current, volumeChangeEventOptions: { enabled: handsFreeRef.current, intervalMillis: 250 } });
+              SR.ExpoSpeechRecognitionModule.start({
+                lang: 'en-US',
+                interimResults: true,
+                continuous: true, // Always continuous to prevent premature endings
+                volumeChangeEventOptions: { enabled: handsFreeRef.current, intervalMillis: 250 }
+              });
             } catch (serr) {
               console.error('[Voice] Native start error:', serr);
               setListening(false);
@@ -660,8 +738,10 @@ export default function ChatScreen({ route, navigation }: any) {
       if (ensureWebRecognizer()) {
         try {
           webFinalRef.current = '';
+          pendingHandsFreeFinalRef.current = '';
           if (webRecognitionRef.current) {
-            try { webRecognitionRef.current.continuous = handsFreeRef.current; } catch {}
+            // Always continuous to prevent premature endings
+            try { webRecognitionRef.current.continuous = true; } catch {}
           }
           webRecognitionRef.current?.start();
           startingRef.current = false;

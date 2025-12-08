@@ -6,7 +6,7 @@ import ChatScreen from './src/screens/ChatScreen';
 import SessionListScreen from './src/screens/SessionListScreen';
 import { ConfigContext, useConfig, saveConfig } from './src/store/config';
 import { SessionContext, useSessions } from './src/store/sessions';
-import { View, ActivityIndicator, Image } from 'react-native';
+import { View, Image, Text, StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ThemeProvider, useTheme } from './src/ui/ThemeProvider';
 import * as Linking from 'expo-linking';
@@ -14,6 +14,10 @@ import { useEffect } from 'react';
 
 // SpeakMCP icon asset
 const speakMCPIcon = require('./assets/speakmcp-icon.png');
+
+// Animated spinner GIFs for loading state
+const darkSpinner = require('./assets/loading-spinner.gif');
+const lightSpinner = require('./assets/light-spinner.gif');
 
 const Stack = createNativeStackNavigator();
 
@@ -87,8 +91,15 @@ function Navigation() {
 
   if (!cfg.ready || !sessionStore.ready) {
     return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.background }}>
-        <ActivityIndicator color={theme.colors.foreground} />
+      <View style={[styles.loadingContainer, { backgroundColor: theme.colors.background }]}>
+        <Image
+          source={isDark ? darkSpinner : lightSpinner}
+          style={styles.spinner}
+          resizeMode="contain"
+        />
+        <Text style={[styles.loadingText, { color: theme.colors.mutedForeground }]}>
+          Loading...
+        </Text>
       </View>
     );
   }
@@ -139,6 +150,22 @@ function StatusBarWrapper() {
   const { isDark } = useTheme();
   return <StatusBar style={isDark ? 'light' : 'dark'} />;
 }
+
+const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  spinner: {
+    width: 48,
+    height: 48,
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+  },
+});
 
 export default function App() {
   return (

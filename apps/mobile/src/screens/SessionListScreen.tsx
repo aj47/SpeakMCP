@@ -5,19 +5,23 @@
  */
 
 import { useLayoutEffect, useMemo } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, Alert, Platform } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet, Alert, Platform, Image } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../ui/ThemeProvider';
 import { spacing, radius, Theme } from '../ui/theme';
 import { useSessionContext, SessionStore } from '../store/sessions';
 import { SessionListItem } from '../types/session';
 
+// Animated spinner GIFs for loading state
+const darkSpinner = require('../../assets/loading-spinner.gif');
+const lightSpinner = require('../../assets/light-spinner.gif');
+
 interface Props {
   navigation: any;
 }
 
 export default function SessionListScreen({ navigation }: Props) {
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
 
   // Add settings button to header
@@ -38,6 +42,20 @@ export default function SessionListScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
   const sessionStore = useSessionContext();
   const sessions = sessionStore.getSessionList();
+
+  // Show loading spinner while sessions are loading
+  if (!sessionStore.ready) {
+    return (
+      <View style={[styles.container, styles.loadingContainer]}>
+        <Image
+          source={isDark ? darkSpinner : lightSpinner}
+          style={styles.spinner}
+          resizeMode="contain"
+        />
+        <Text style={styles.loadingText}>Loading chats...</Text>
+      </View>
+    );
+  }
 
   const handleCreateSession = () => {
     sessionStore.createNewSession();
@@ -166,6 +184,19 @@ function createStyles(theme: Theme) {
     container: {
       flex: 1,
       backgroundColor: theme.colors.background,
+    },
+    loadingContainer: {
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    spinner: {
+      width: 48,
+      height: 48,
+    },
+    loadingText: {
+      ...theme.typography.body,
+      color: theme.colors.mutedForeground,
+      marginTop: spacing.md,
     },
     header: {
       flexDirection: 'row',

@@ -15,18 +15,21 @@ export interface SessionStore {
   sessions: Session[];
   currentSessionId: string | null;
   ready: boolean;
-  
+
   // Session management
   createNewSession: () => Session;
   setCurrentSession: (id: string | null) => void;
   deleteSession: (id: string) => Promise<void>;
   clearAllSessions: () => Promise<void>;
-  
+
   // Message management
   addMessage: (role: 'user' | 'assistant', content: string, toolCalls?: any[], toolResults?: any[]) => Promise<void>;
   getCurrentSession: () => Session | null;
   getSessionList: () => SessionListItem[];
   setMessages: (messages: ChatMessage[]) => Promise<void>;
+
+  // Server conversation ID management - for continuing conversations on the remote server
+  setServerConversationId: (conversationId: string) => Promise<void>;
 }
 
 async function loadSessions(): Promise<Session[]> {
@@ -209,6 +212,25 @@ export function useSessions(): SessionStore {
     });
   }, [currentSessionId]);
 
+  // Set the server-side conversation ID for the current session
+  // This enables follow-up messages to continue the same conversation on the server
+  const setServerConversationId = useCallback(async (conversationId: string) => {
+    if (!currentSessionId) return;
+
+    setSessions(prev => {
+      const updated = prev.map(session => {
+        if (session.id !== currentSessionId) return session;
+        return {
+          ...session,
+          serverConversationId: conversationId,
+          updatedAt: Date.now(),
+        };
+      });
+      saveSessions(updated);
+      return updated;
+    });
+  }, [currentSessionId]);
+
   return {
     sessions,
     currentSessionId,
@@ -221,6 +243,7 @@ export function useSessions(): SessionStore {
     getCurrentSession,
     getSessionList,
     setMessages,
+    setServerConversationId,
   };
 }
 

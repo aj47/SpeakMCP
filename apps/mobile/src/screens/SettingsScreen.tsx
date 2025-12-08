@@ -7,16 +7,17 @@ import { spacing, radius } from '../ui/theme';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Linking from 'expo-linking';
 
-function parseQRCode(data: string): { baseUrl?: string; apiKey?: string } | null {
+function parseQRCode(data: string): { baseUrl?: string; apiKey?: string; model?: string } | null {
   try {
     const parsed = Linking.parse(data);
-    // Handle speakmcp://config?baseUrl=...&apiKey=...
+    // Handle speakmcp://config?baseUrl=...&apiKey=...&model=...
     if (parsed.scheme === 'speakmcp' && (parsed.path === 'config' || parsed.hostname === 'config')) {
-      const { baseUrl, apiKey } = parsed.queryParams || {};
-      if (baseUrl || apiKey) {
+      const { baseUrl, apiKey, model } = parsed.queryParams || {};
+      if (baseUrl || apiKey || model) {
         return {
           baseUrl: typeof baseUrl === 'string' ? baseUrl : undefined,
           apiKey: typeof apiKey === 'string' ? apiKey : undefined,
+          model: typeof model === 'string' ? model : undefined,
         };
       }
     }

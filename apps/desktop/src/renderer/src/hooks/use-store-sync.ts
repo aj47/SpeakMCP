@@ -102,9 +102,9 @@ export function useStoreSync() {
   // Initial hydration of message queues on mount
   useEffect(() => {
     tipcClient.getAllMessageQueues().then((queues) => {
-      logUI('[useStoreSync] Initial message queue hydration:', Object.keys(queues).length, 'queues')
-      for (const [conversationId, queue] of Object.entries(queues)) {
-        updateMessageQueue(conversationId, queue)
+      logUI('[useStoreSync] Initial message queue hydration:', queues.length, 'queues')
+      for (const queue of queues) {
+        updateMessageQueue(queue.conversationId, queue.messages)
       }
     }).catch((error) => {
       logUI('[useStoreSync] Failed to hydrate message queues:', error)

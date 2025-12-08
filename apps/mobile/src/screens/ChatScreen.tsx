@@ -13,7 +13,12 @@ import {
   ActivityIndicator,
   Alert,
   Pressable,
+  Image,
 } from 'react-native';
+
+// Animated spinner GIFs for processing state
+const darkSpinner = require('../../assets/loading-spinner.gif');
+const lightSpinner = require('../../assets/light-spinner.gif');
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { EventEmitter } from 'expo-modules-core';
 import { useConfigContext, saveConfig } from '../store/config';
@@ -30,7 +35,7 @@ const COLLAPSE_THRESHOLD = 200;
 export default function ChatScreen({ route, navigation }: any) {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const { config, setConfig } = useConfigContext();
   const sessionStore = useSessionContext();
@@ -57,6 +62,9 @@ export default function ChatScreen({ route, navigation }: any) {
     setConfig(nextCfg);
     try { await saveConfig(nextCfg); } catch {}
   };
+
+  // Responding state - track if agent is processing (declared early for header use)
+  const [responding, setResponding] = useState(false);
 
   // Create client early so it's available for handleKillSwitch
   const client = new OpenAIClient({
@@ -132,6 +140,16 @@ export default function ChatScreen({ route, navigation }: any) {
       ),
       headerRight: () => (
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          {/* Animated spinner GIF - shows while agent is processing */}
+          {responding && (
+            <View style={{ paddingHorizontal: 8, paddingVertical: 6 }}>
+              <Image
+                source={isDark ? darkSpinner : lightSpinner}
+                style={{ width: 28, height: 28 }}
+                resizeMode="contain"
+              />
+            </View>
+          )}
           <TouchableOpacity
             onPress={handleKillSwitch}
             accessibilityRole="button"
@@ -182,14 +200,13 @@ export default function ChatScreen({ route, navigation }: any) {
         </View>
       ),
     });
-  }, [navigation, handsFree, handleKillSwitch, theme]);
+  }, [navigation, handsFree, handleKillSwitch, responding, theme, isDark]);
 
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [listening, setListening] = useState(false);
   const [liveTranscript, setLiveTranscript] = useState('');
-  const [responding, setResponding] = useState(false);
   const [debugInfo, setDebugInfo] = useState<string>('');
 
   // Load messages from current session on mount, or create a new session if none exists
@@ -756,7 +773,11 @@ export default function ChatScreen({ route, navigation }: any) {
 
                 {m.role === 'assistant' && (!m.content || m.content.length === 0) && !m.toolCalls && !m.toolResults ? (
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <ActivityIndicator size="small" color={theme.colors.foreground} />
+                    <Image
+                      source={isDark ? darkSpinner : lightSpinner}
+                      style={{ width: 20, height: 20 }}
+                      resizeMode="contain"
+                    />
                     <Text style={{ color: theme.colors.foreground }}>Assistant is thinking</Text>
                   </View>
                 ) : (

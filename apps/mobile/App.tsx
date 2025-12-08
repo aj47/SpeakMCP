@@ -12,6 +12,9 @@ import { ThemeProvider, useTheme } from './src/ui/ThemeProvider';
 import * as Linking from 'expo-linking';
 import { useEffect } from 'react';
 
+// SpeakMCP icon asset
+const speakMCPIcon = require('./assets/speakmcp-icon.png');
+
 const Stack = createNativeStackNavigator();
 
 function parseDeepLink(url: string | null) {
@@ -101,7 +104,7 @@ function Navigation() {
               contentStyle: { backgroundColor: theme.colors.background },
               headerLeft: () => (
                 <Image
-                  source={require('./assets/favicon.png')}
+                  source={speakMCPIcon}
                   style={{ width: 28, height: 28, marginLeft: 12, marginRight: 8 }}
                   resizeMode="contain"
                 />

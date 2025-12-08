@@ -5,11 +5,11 @@
     "scheme": "speakmcp",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/favicon.png",
+    "icon": "./assets/speakmcp-icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/splash-icon.png",
+      "image": "./assets/speakmcp-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
@@ -23,7 +23,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/favicon.png",
+        "foregroundImage": "./assets/speakmcp-icon.png",
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
@@ -35,7 +35,7 @@
       "package": "com.aj47.speakmcp"
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/speakmcp-icon.png"
     },
     "plugins": [
       "expo-speech-recognition",

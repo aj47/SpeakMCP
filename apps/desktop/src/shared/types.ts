@@ -449,4 +449,11 @@ export type Config = {
   streamStatusWatcherEnabled?: boolean
   streamStatusFilePath?: string
 
+  // WhatsApp Integration Configuration
+  whatsappEnabled?: boolean
+  whatsappPhoneNumberId?: string
+  whatsappAccessToken?: string
+  whatsappWebhookVerifyToken?: string
+  whatsappBusinessAccountId?: string
+
 }

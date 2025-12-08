@@ -350,10 +350,15 @@ export async function startRemoteServer() {
     strictPreflight: false, // Don't be strict about preflight requests
   })
 
-  // Auth hook (skip for OPTIONS preflight requests)
+  // Auth hook (skip for OPTIONS preflight requests and WhatsApp webhooks)
   fastify.addHook("onRequest", async (req, reply) => {
     // Skip auth for OPTIONS requests (CORS preflight)
     if (req.method === "OPTIONS") {
+      return
+    }
+
+    // Skip auth for WhatsApp webhook endpoints (they verify via webhook token)
+    if (req.url.startsWith("/webhook/whatsapp")) {
       return
     }
 
@@ -498,6 +503,118 @@ export async function startRemoteServer() {
         success: false,
         error: error?.message || "Emergency stop failed",
       })
+    }
+  })
+
+  // WhatsApp webhook verification (GET)
+  fastify.get("/webhook/whatsapp", async (req, reply) => {
+    const cfg = configStore.get()
+    if (!cfg.whatsappEnabled) {
+      return reply.code(404).send({ error: "WhatsApp integration not enabled" })
+    }
+
+    const query = req.query as Record<string, string>
+    const hubMode = query["hub.mode"]
+    const hubVerifyToken = query["hub.verify_token"]
+    const hubChallenge = query["hub.challenge"]
+
+    const { verifyWebhookToken } = await import("./whatsapp-handler")
+    const challenge = verifyWebhookToken(hubMode, hubVerifyToken, hubChallenge)
+
+    if (challenge) {
+      return reply.type("text/plain").send(challenge)
+    }
+
+    return reply.code(403).send({ error: "Verification failed" })
+  })
+
+  // WhatsApp webhook message handler (POST)
+  fastify.post("/webhook/whatsapp", async (req, reply) => {
+    const cfg = configStore.get()
+    if (!cfg.whatsappEnabled) {
+      return reply.code(404).send({ error: "WhatsApp integration not enabled" })
+    }
+
+    try {
+      const {
+        extractTextMessage,
+        sendWhatsAppMessage,
+        getConversationIdForPhone,
+        setConversationIdForPhone,
+        clearConversationForPhone,
+        WhatsAppWebhookPayload,
+      } = await import("./whatsapp-handler")
+
+      const payload = req.body as any
+
+      // Extract message from webhook payload
+      const messageData = extractTextMessage(payload)
+      if (!messageData) {
+        // Not a text message or no message, just acknowledge
+        return reply.send({ status: "ok" })
+      }
+
+      const { from, text, phoneNumberId } = messageData
+      diagnosticsService.logInfo("whatsapp-handler", `Received message from ${from}: ${text.substring(0, 50)}...`)
+
+      // Handle special commands
+      const lowerText = text.toLowerCase().trim()
+      if (lowerText === "clear" || lowerText === "reset" || lowerText === "/new") {
+        clearConversationForPhone(from)
+        await sendWhatsAppMessage(from, "✅ Conversation cleared. Send me a new message to start fresh!", phoneNumberId)
+        return reply.send({ status: "ok" })
+      }
+
+      // Get existing conversation ID for this phone number
+      const existingConversationId = getConversationIdForPhone(from)
+
+      // Run agent with the message
+      const result = await runAgent({
+        prompt: text,
+        conversationId: existingConversationId,
+      })
+
+      // Store conversation ID for future messages
+      setConversationIdForPhone(from, result.conversationId)
+
+      // Send response back to WhatsApp
+      // Split long messages (WhatsApp has a ~4096 char limit)
+      const maxLength = 4000
+      if (result.content.length <= maxLength) {
+        await sendWhatsAppMessage(from, result.content, phoneNumberId)
+      } else {
+        // Split into chunks
+        const chunks: string[] = []
+        let remaining = result.content
+        while (remaining.length > 0) {
+          if (remaining.length <= maxLength) {
+            chunks.push(remaining)
+            break
+          }
+          // Find a good break point (newline or space)
+          let breakPoint = remaining.lastIndexOf("\n", maxLength)
+          if (breakPoint === -1 || breakPoint < maxLength * 0.5) {
+            breakPoint = remaining.lastIndexOf(" ", maxLength)
+          }
+          if (breakPoint === -1) {
+            breakPoint = maxLength
+          }
+          chunks.push(remaining.substring(0, breakPoint))
+          remaining = remaining.substring(breakPoint).trim()
+        }
+
+        for (const chunk of chunks) {
+          await sendWhatsAppMessage(from, chunk, phoneNumberId)
+          // Small delay between messages to maintain order
+          await new Promise(resolve => setTimeout(resolve, 500))
+        }
+      }
+
+      return reply.send({ status: "ok" })
+    } catch (error: any) {
+      diagnosticsService.logError("whatsapp-handler", "Error processing webhook", error)
+      // Still return 200 to prevent WhatsApp from retrying
+      return reply.send({ status: "error", message: error?.message })
     }
   })
 

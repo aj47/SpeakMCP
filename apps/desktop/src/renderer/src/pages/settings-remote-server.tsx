@@ -392,6 +392,111 @@ export function Component() {
             )}
           </ControlGroup>
         )}
+
+        {/* WhatsApp Integration */}
+        {enabled && tunnelStatus?.isRunning && (
+          <ControlGroup
+            title="WhatsApp Integration"
+            endDescription={
+              <div className="break-words whitespace-normal">
+                Connect your WhatsApp Business account to chat with your SpeakMCP agent via WhatsApp. Requires a{" "}
+                <a
+                  href="https://developers.facebook.com/docs/whatsapp/cloud-api/get-started"
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  className="underline"
+                >
+                  Meta WhatsApp Business API
+                </a>{" "}
+                account.
+              </div>
+            }
+          >
+            <Control label="Enable WhatsApp" className="px-3">
+              <Switch
+                checked={cfg.whatsappEnabled ?? false}
+                onCheckedChange={(val) => saveConfig({ whatsappEnabled: val })}
+              />
+            </Control>
+
+            {cfg.whatsappEnabled && (
+              <>
+                <Control label={<ControlLabel label="Phone Number ID" tooltip="Your WhatsApp Business Phone Number ID from Meta Developer Dashboard" />} className="px-3">
+                  <Input
+                    type="text"
+                    placeholder="e.g., 123456789012345"
+                    value={cfg.whatsappPhoneNumberId || ""}
+                    onChange={(e) => saveConfig({ whatsappPhoneNumberId: e.target.value })}
+                  />
+                </Control>
+
+                <Control label={<ControlLabel label="Access Token" tooltip="Permanent access token from Meta Developer Dashboard (starts with EAA...)" />} className="px-3">
+                  <Input
+                    type="password"
+                    placeholder="Your WhatsApp access token"
+                    value={cfg.whatsappAccessToken || ""}
+                    onChange={(e) => saveConfig({ whatsappAccessToken: e.target.value })}
+                  />
+                </Control>
+
+                <Control label={<ControlLabel label="Webhook Verify Token" tooltip="A secret token you create for webhook verification" />} className="px-3">
+                  <div className="flex gap-2">
+                    <Input
+                      type="text"
+                      placeholder="Create a secret verify token"
+                      value={cfg.whatsappWebhookVerifyToken || ""}
+                      onChange={(e) => saveConfig({ whatsappWebhookVerifyToken: e.target.value })}
+                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        const token = Math.random().toString(36).substring(2) + Math.random().toString(36).substring(2)
+                        saveConfig({ whatsappWebhookVerifyToken: token })
+                      }}
+                    >
+                      Generate
+                    </Button>
+                  </div>
+                </Control>
+
+                <Control label={<ControlLabel label="Business Account ID" tooltip="Optional: Your WhatsApp Business Account ID" />} className="px-3">
+                  <Input
+                    type="text"
+                    placeholder="e.g., 123456789012345"
+                    value={cfg.whatsappBusinessAccountId || ""}
+                    onChange={(e) => saveConfig({ whatsappBusinessAccountId: e.target.value })}
+                  />
+                </Control>
+
+                {tunnelStatus?.url && (
+                  <Control label={<ControlLabel label="Webhook URL" tooltip="Copy this URL to your Meta Developer Dashboard webhook configuration" />} className="px-3">
+                    <div className="flex flex-col gap-2">
+                      <div className="flex gap-2 items-center">
+                        <code className="text-xs bg-muted px-2 py-1 rounded flex-1 break-all">
+                          {tunnelStatus.url}/webhook/whatsapp
+                        </code>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            navigator.clipboard.writeText(`${tunnelStatus.url}/webhook/whatsapp`)
+                          }}
+                        >
+                          Copy
+                        </Button>
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        Paste this URL in your Meta Developer Dashboard under WhatsApp → Configuration → Webhook URL.
+                        Subscribe to "messages" webhook field.
+                      </div>
+                    </div>
+                  </Control>
+                )}
+              </>
+            )}
+          </ControlGroup>
+        )}
       </div>
     </div>
   )

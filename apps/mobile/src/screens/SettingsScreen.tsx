@@ -7,16 +7,17 @@ import { spacing, radius } from '../ui/theme';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Linking from 'expo-linking';
 
-function parseQRCode(data: string): { baseUrl?: string; apiKey?: string } | null {
+function parseQRCode(data: string): { baseUrl?: string; apiKey?: string; model?: string } | null {
   try {
     const parsed = Linking.parse(data);
-    // Handle speakmcp://config?baseUrl=...&apiKey=...
+    // Handle speakmcp://config?baseUrl=...&apiKey=...&model=...
     if (parsed.scheme === 'speakmcp' && (parsed.path === 'config' || parsed.hostname === 'config')) {
-      const { baseUrl, apiKey } = parsed.queryParams || {};
-      if (baseUrl || apiKey) {
+      const { baseUrl, apiKey, model } = parsed.queryParams || {};
+      if (baseUrl || apiKey || model) {
         return {
           baseUrl: typeof baseUrl === 'string' ? baseUrl : undefined,
           apiKey: typeof apiKey === 'string' ? apiKey : undefined,
+          model: typeof model === 'string' ? model : undefined,
         };
       }
     }
@@ -79,6 +80,7 @@ export default function SettingsScreen({ navigation }: any) {
         ...prev,
         ...(params.baseUrl && { baseUrl: params.baseUrl }),
         ...(params.apiKey && { apiKey: params.apiKey }),
+        ...(params.model && { model: params.model }),
       }));
       setShowScanner(false);
     } else {
@@ -141,16 +143,6 @@ export default function SettingsScreen({ navigation }: any) {
           value={draft.baseUrl}
           onChangeText={(t) => setDraft({ ...draft, baseUrl: t })}
           placeholder='https://api.openai.com/v1'
-          placeholderTextColor={theme.colors.mutedForeground}
-          autoCapitalize='none'
-        />
-
-        <Text style={styles.label}>Model</Text>
-        <TextInput
-          style={styles.input}
-          value={draft.model}
-          onChangeText={(t) => setDraft({ ...draft, model: t })}
-          placeholder='gpt-4o-mini'
           placeholderTextColor={theme.colors.mutedForeground}
           autoCapitalize='none'
         />

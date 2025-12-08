@@ -209,11 +209,19 @@ export default function ChatScreen({ route, navigation }: any) {
   const [liveTranscript, setLiveTranscript] = useState('');
   const [debugInfo, setDebugInfo] = useState<string>('');
 
-  // Load messages from current session on mount, or create a new session if none exists
-  const sessionLoadedRef = useRef(false);
+  // Track the last loaded session ID to detect session changes
+  const lastLoadedSessionIdRef = useRef<string | null>(null);
+
+  // Load messages when currentSessionId changes (fixes #470 - session jumping issue)
+  // This effect runs whenever the currentSessionId changes, ensuring the correct
+  // session's messages are loaded when switching between sessions
   useEffect(() => {
-    if (sessionLoadedRef.current) return;
-    sessionLoadedRef.current = true;
+    const currentSessionId = sessionStore.currentSessionId;
+
+    // Skip if we've already loaded this session
+    if (lastLoadedSessionIdRef.current === currentSessionId) {
+      return;
+    }
 
     let currentSession = sessionStore.getCurrentSession();
 
@@ -222,8 +230,11 @@ export default function ChatScreen({ route, navigation }: any) {
       currentSession = sessionStore.createNewSession();
     }
 
-    // Load messages if session has any
-    if (currentSession && currentSession.messages.length > 0) {
+    // Update the last loaded session ID
+    lastLoadedSessionIdRef.current = currentSession.id;
+
+    // Load messages if session has any, otherwise clear messages for a new/empty session
+    if (currentSession.messages.length > 0) {
       // Convert session messages to ChatMessage format
       const chatMessages: ChatMessage[] = currentSession.messages.map(m => ({
         role: m.role,
@@ -232,18 +243,34 @@ export default function ChatScreen({ route, navigation }: any) {
         toolResults: m.toolResults,
       }));
       setMessages(chatMessages);
+    } else {
+      // Clear messages for new/empty sessions
+      setMessages([]);
     }
-  }, [sessionStore]);
+  }, [sessionStore.currentSessionId, sessionStore]);
 
-  // Save messages to session when they change
+  // Save messages to session when they change (but not during session switching)
   const prevMessagesLengthRef = useRef(0);
+  const prevSessionIdRef = useRef<string | null>(null);
   useEffect(() => {
+    const currentSessionId = sessionStore.currentSessionId;
+
+    // Don't save during session switches - only save when messages change within the same session
+    const isSessionSwitch = prevSessionIdRef.current !== null && prevSessionIdRef.current !== currentSessionId;
+    prevSessionIdRef.current = currentSessionId;
+
+    if (isSessionSwitch) {
+      // Reset the message count tracking for the new session
+      prevMessagesLengthRef.current = messages.length;
+      return;
+    }
+
     // Only save if messages have actually changed (not on initial load)
     if (messages.length > 0 && messages.length !== prevMessagesLengthRef.current) {
       sessionStore.setMessages(messages);
     }
     prevMessagesLengthRef.current = messages.length;
-  }, [messages, sessionStore]);
+  }, [messages, sessionStore, sessionStore.currentSessionId]);
 
   // Track expanded state for messages (by index)
   const [expandedMessages, setExpandedMessages] = useState<Record<number, boolean>>({});

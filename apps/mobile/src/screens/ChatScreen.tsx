@@ -436,7 +436,13 @@ export default function ChatScreen({ route, navigation }: any) {
     setInput('');
     try {
       let streamingText = '';
+
+      // Get the server conversation ID for continuing the conversation
+      const currentSession = sessionStore.getCurrentSession();
+      const serverConversationId = currentSession?.serverConversationId;
+
       console.log('[ChatScreen] Starting chat request with', messages.length + 1, 'messages');
+      console.log('[ChatScreen] Server conversation ID:', serverConversationId || 'new conversation');
       setDebugInfo('Request sent, waiting for response...');
 
       // Handle real-time progress updates
@@ -470,10 +476,19 @@ export default function ChatScreen({ route, navigation }: any) {
         });
       };
 
-      const response = await client.chat([...messages, userMsg], onToken, onProgress);
+      // Pass serverConversationId to continue existing conversation on the server
+      const response = await client.chat([...messages, userMsg], onToken, onProgress, serverConversationId);
       const finalText = response.content || streamingText;
       console.log('[ChatScreen] Chat completed');
+      console.log('[ChatScreen] Response conversation ID:', response.conversationId);
       setDebugInfo(`Completed!`);
+
+      // Save the server's conversation ID to the session for follow-up messages
+      // This ensures future messages in this chat continue the same conversation on the server
+      if (response.conversationId && response.conversationId !== serverConversationId) {
+        console.log('[ChatScreen] Saving new server conversation ID:', response.conversationId);
+        sessionStore.setServerConversationId(response.conversationId);
+      }
 
       // Process conversation history to extract tool calls and results
       if (response.conversationHistory && response.conversationHistory.length > 0) {

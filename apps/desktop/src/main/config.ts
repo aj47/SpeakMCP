@@ -116,6 +116,9 @@ const getConfig = () => {
     // Parallel tool execution - when enabled, multiple tool calls from a single LLM response are executed concurrently
     mcpParallelToolExecution: true,
 
+    // Message queue - when enabled, users can queue messages while agent is processing (enabled by default)
+    mcpMessageQueueEnabled: true,
+
 	    // Remote Server defaults
 	    remoteServerEnabled: false,
 	    remoteServerPort: 3210,

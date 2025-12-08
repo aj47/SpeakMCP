@@ -1271,6 +1271,22 @@ async function makeLLMCallAttempt(
     }
     return { content: cleaned, needsMoreWork: true }
   }
+
+  // Check for continuation phrases that indicate the LLM intends to continue working
+  // even though it didn't return proper JSON. This prevents premature termination
+  // when the LLM says things like "Let me..." or "I'll..." but fails to format as JSON.
+  // Fixes: https://github.com/aj47/SpeakMCP/issues/443
+  const continuationPhrases = /^(let me|i'll|i will|i'm going to|i am going to|next,|now,|first,|then,|allow me to|proceeding to|starting to|going to|about to)/i
+  const hasContinuationPhrase = continuationPhrases.test((cleaned || content || "").trim())
+  if (hasContinuationPhrase) {
+    if (isDebugLLM()) {
+      logLLM("✅ Returning plain text with continuation phrase (needsMoreWork=true)", {
+        contentPreview: (cleaned || content)?.substring(0, 100)
+      })
+    }
+    return { content: cleaned || content, needsMoreWork: true }
+  }
+
   // For plain text responses without JSON structure, set needsMoreWork=undefined
   // rather than false. This allows the agent loop to decide whether the response
   // is acceptable or if it needs to nudge the LLM for a properly formatted response.

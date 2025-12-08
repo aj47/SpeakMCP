@@ -18,7 +18,7 @@ export interface OAuthCallbackResult {
 export class OAuthDeepLinkHandler {
   private resolveCallback: ((result: OAuthCallbackResult) => void) | null = null
   private rejectCallback: ((error: Error) => void) | null = null
-  private timeout: NodeJS.Timeout | null = null
+  private timeout: ReturnType<typeof setTimeout> | null = null
   private isListening = false
   private secondInstanceHandler: ((event: Electron.Event, commandLine: string[]) => void) | null = null
 

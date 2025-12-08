@@ -23,7 +23,7 @@ export class OAuthCallbackServer {
   private redirectUri: string
   private resolveCallback: ((result: OAuthCallbackResult) => void) | null = null
   private rejectCallback: ((error: Error) => void) | null = null
-  private timeout: NodeJS.Timeout | null = null
+  private timeout: ReturnType<typeof setTimeout> | null = null
 
   constructor(port: number = 3000) {
     this.port = port

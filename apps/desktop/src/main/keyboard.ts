@@ -223,7 +223,7 @@ const hasRecentKeyPress = () => {
 
 export function listenToKeyboardEvents() {
   let isHoldingCtrlKey = false
-  let startRecordingTimer: NodeJS.Timeout | undefined
+  let startRecordingTimer: ReturnType<typeof setTimeout> | undefined
   let isPressedCtrlKey = false
   let isPressedShiftKey = false
   let isPressedAltKey = false
@@ -231,14 +231,14 @@ export function listenToKeyboardEvents() {
 
   // MCP tool calling state
   let isHoldingCtrlAltKey = false
-  let startMcpRecordingTimer: NodeJS.Timeout | undefined
+  let startMcpRecordingTimer: ReturnType<typeof setTimeout> | undefined
   let isPressedCtrlAltKey = false
 
   // Custom hold mode state
   let isHoldingCustomRecordingKey = false
-  let startCustomRecordingTimer: NodeJS.Timeout | undefined
+  let startCustomRecordingTimer: ReturnType<typeof setTimeout> | undefined
   let isHoldingCustomMcpKey = false
-  let startCustomMcpTimer: NodeJS.Timeout | undefined
+  let startCustomMcpTimer: ReturnType<typeof setTimeout> | undefined
 
   // Debug state tracking
   let lastLoggedConfig: any = null

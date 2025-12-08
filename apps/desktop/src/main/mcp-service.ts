@@ -91,7 +91,7 @@ export class MCPService {
   >()
 
   // Session cleanup interval
-  private sessionCleanupInterval: NodeJS.Timeout | null = null
+  private sessionCleanupInterval: ReturnType<typeof setInterval> | null = null
 
   constructor() {
     // Start resource cleanup interval (every 5 minutes)

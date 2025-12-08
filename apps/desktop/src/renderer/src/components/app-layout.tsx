@@ -56,6 +56,11 @@ export const Component = () => {
       href: "/settings/remote-server",
       icon: "i-mingcute-server-line",
     },
+    {
+      text: "Memory",
+      href: "/settings/memory",
+      icon: "i-mingcute-storage-line",
+    },
   ]
 
   useEffect(() => {

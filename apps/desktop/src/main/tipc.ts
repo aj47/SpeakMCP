@@ -2253,6 +2253,166 @@ export const router = {
     const { getCloudflareTunnelStatus } = await import("./cloudflare-tunnel")
     return getCloudflareTunnelStatus()
   }),
+
+  // ============================================
+  // LETTA MEMORY HANDLERS
+  // ============================================
+
+  /** Get memory status and configuration */
+  getMemoryStatus: t.procedure.action(async () => {
+    const { memoryService } = await import("./memory-service")
+    const stats = memoryService.getStats()
+    const isEnabled = memoryService.isEnabled()
+    const memory = memoryService.getMemory()
+
+    return {
+      enabled: isEnabled,
+      stats,
+      config: memory?.config,
+    }
+  }),
+
+  /** Enable or disable the memory system */
+  setMemoryEnabled: t.procedure
+    .input<{ enabled: boolean }>()
+    .action(async ({ input }) => {
+      const { memoryService } = await import("./memory-service")
+      memoryService.setEnabled(input.enabled)
+
+      // Also update config for persistence
+      const config = configStore.get()
+      configStore.save({ ...config, memoryEnabled: input.enabled })
+
+      return { success: true, enabled: input.enabled }
+    }),
+
+  /** Get all core memory blocks */
+  getCoreMemory: t.procedure.action(async () => {
+    const { memoryService } = await import("./memory-service")
+    return memoryService.getCoreMemory()
+  }),
+
+  /** Get a specific memory block */
+  getMemoryBlock: t.procedure
+    .input<{ label: string }>()
+    .action(async ({ input }) => {
+      const { memoryService } = await import("./memory-service")
+      return memoryService.getMemoryBlock(input.label) || null
+    }),
+
+  /** Update a memory block's content */
+  updateMemoryBlock: t.procedure
+    .input<{ label: string; value: string }>()
+    .action(async ({ input }) => {
+      const { memoryService } = await import("./memory-service")
+      const block = memoryService.getMemoryBlock(input.label)
+
+      if (!block) {
+        return { success: false, message: `Block '${input.label}' not found` }
+      }
+
+      // Use coreMemoryReplace with empty string for old content to replace entire block
+      // Or use a full replace approach
+      const result = memoryService.coreMemoryReplace(
+        input.label,
+        block.value,
+        input.value
+      )
+
+      // If block was empty, use append instead
+      if (!result.success && block.value === "") {
+        return memoryService.coreMemoryAppend(input.label, input.value)
+      }
+
+      return result
+    }),
+
+  /** Clear a memory block */
+  clearMemoryBlock: t.procedure
+    .input<{ label: string }>()
+    .action(async ({ input }) => {
+      const { memoryService } = await import("./memory-service")
+      return memoryService.coreMemoryClear(input.label)
+    }),
+
+  /** Get archival memory entries */
+  getArchivalMemory: t.procedure
+    .input<{ limit?: number; offset?: number }>()
+    .action(async ({ input }) => {
+      const { memoryService } = await import("./memory-service")
+      const all = memoryService.getArchivalMemory()
+      const limit = input.limit || 50
+      const offset = input.offset || 0
+      return {
+        entries: all.slice(offset, offset + limit),
+        total: all.length,
+      }
+    }),
+
+  /** Search archival memory */
+  searchArchivalMemory: t.procedure
+    .input<{ query: string; limit?: number }>()
+    .action(async ({ input }) => {
+      const { memoryService } = await import("./memory-service")
+      return memoryService.archivalMemorySearch(input.query, input.limit || 10)
+    }),
+
+  /** Delete an archival memory entry */
+  deleteArchivalMemory: t.procedure
+    .input<{ entryId: string }>()
+    .action(async ({ input }) => {
+      const { memoryService } = await import("./memory-service")
+      return memoryService.archivalMemoryDelete(input.entryId)
+    }),
+
+  /** Add a new archival memory entry */
+  addArchivalMemory: t.procedure
+    .input<{ content: string; tags?: string[]; importance?: number }>()
+    .action(async ({ input }) => {
+      const { memoryService } = await import("./memory-service")
+      return memoryService.archivalMemoryInsert(
+        input.content,
+        input.tags || [],
+        "user",
+        input.importance || 0.5
+      )
+    }),
+
+  /** Reset memory to defaults */
+  resetMemory: t.procedure.action(async () => {
+    const { memoryService } = await import("./memory-service")
+    memoryService.resetMemory()
+    return { success: true }
+  }),
+
+  /** Get memory statistics */
+  getMemoryStats: t.procedure.action(async () => {
+    const { memoryService } = await import("./memory-service")
+    return memoryService.getStats()
+  }),
+
+  /** Update memory configuration */
+  updateMemoryConfig: t.procedure
+    .input<{
+      autoSave?: boolean
+      includeInSystemPrompt?: boolean
+      maxArchivalMemories?: number
+    }>()
+    .action(async ({ input }) => {
+      const { memoryService } = await import("./memory-service")
+      memoryService.updateConfig(input)
+
+      // Also update main config for persistence
+      const config = configStore.get()
+      configStore.save({
+        ...config,
+        memoryAutoSave: input.autoSave ?? config.memoryAutoSave,
+        memoryIncludeInSystemPrompt: input.includeInSystemPrompt ?? config.memoryIncludeInSystemPrompt,
+        memoryMaxArchivalEntries: input.maxArchivalMemories ?? config.memoryMaxArchivalEntries,
+      })
+
+      return { success: true }
+    }),
 }
 
 // TTS Provider Implementation Functions

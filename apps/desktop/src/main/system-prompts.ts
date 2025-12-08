@@ -81,6 +81,35 @@ AGENT MODE: You can see tool results and make follow-up calls. Set needsMoreWork
 `
 
 /**
+ * Memory system instructions - added when memory is enabled
+ */
+export const MEMORY_INSTRUCTIONS = `
+MEMORY SYSTEM (MemGPT-style):
+You have access to a persistent memory system with two tiers:
+
+1. CORE MEMORY (always visible above):
+   - "persona": Your identity and working style - update as you learn
+   - "human": Information about the user - store their name, preferences
+   - "task_context": Current task state and goals
+
+2. ARCHIVAL MEMORY (searchable long-term storage):
+   - Use archival_memory_insert for facts that don't fit in core memory
+   - Use archival_memory_search to recall stored information
+
+MEMORY TOOLS:
+- core_memory_replace(label, old_content, new_content): Update memory by replacing exact text
+- core_memory_append(label, content): Add new information to a block
+- archival_memory_insert(content, tags?, importance?): Store in long-term memory
+- archival_memory_search(query, limit?): Search long-term memory
+
+WHEN TO UPDATE MEMORY:
+- Learn the user's name? → Update "human" block
+- Discover user preferences? → Update "human" block
+- Task context changes? → Update "task_context" block
+- Important fact to remember long-term? → Use archival_memory_insert
+`
+
+/**
  * Constructs the full system prompt by combining base prompt, tool information, and user guidelines
  */
 export function constructSystemPrompt(
@@ -97,12 +126,18 @@ export function constructSystemPrompt(
     inputSchema?: any
   }>,
   customSystemPrompt?: string,
+  memoryContext?: string,
 ): string {
   // Use custom system prompt if provided, otherwise fall back to default
   let prompt = getEffectiveSystemPrompt(customSystemPrompt)
 
   if (isAgentMode) {
     prompt += AGENT_MODE_ADDITIONS
+  }
+
+  // Add memory context if provided (from MemoryService)
+  if (memoryContext) {
+    prompt += "\n" + memoryContext
   }
 
   // Helper function to format tool information (simplified to reduce token usage)

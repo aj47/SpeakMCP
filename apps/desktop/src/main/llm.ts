@@ -11,6 +11,7 @@ import { makeStructuredContextExtraction, ContextExtractionResponse } from "./st
 import { makeLLMCallWithFetch, makeTextCompletionWithFetch, verifyCompletionWithFetch, RetryProgressCallback, makeLLMCallWithStreaming, StreamingCallback } from "./llm-fetch"
 import { constructSystemPrompt } from "./system-prompts"
 import { state, agentSessionStateManager } from "./state"
+import { memoryService } from "./memory-service"
 import { isDebugLLM, logLLM, isDebugTools, logTools } from "./debug"
 import { shrinkMessagesForLLM } from "./context-budget"
 import { emitAgentProgress } from "./emit-agent-progress"
@@ -191,6 +192,11 @@ export async function processTranscriptWithTools(
       index === self.findIndex((t) => t.name === tool.name),
   )
 
+  // Get memory context if enabled
+  const memoryContext = memoryService.isEnabled()
+    ? memoryService.formatCoreMemoryForPrompt()
+    : undefined
+
   // Construct system prompt using the new approach
   const userGuidelines = config.mcpToolsSystemPrompt
   const systemPrompt = constructSystemPrompt(
@@ -199,6 +205,7 @@ export async function processTranscriptWithTools(
     false,
     undefined, // relevantTools
     config.mcpCustomSystemPrompt, // custom base system prompt
+    memoryContext,
   )
 
   const messages = [
@@ -750,6 +757,11 @@ export async function processTranscriptWithAgentMode(
 - Build upon previous actions rather than starting from scratch`
   }
 
+  // Get memory context if enabled
+  const memoryContext = memoryService.isEnabled()
+    ? memoryService.formatCoreMemoryForPrompt()
+    : undefined
+
   // Construct system prompt using the new approach
   const systemPrompt = constructSystemPrompt(
     uniqueAvailableTools,
@@ -757,6 +769,7 @@ export async function processTranscriptWithAgentMode(
     true,
     toolCapabilities.relevantTools,
     config.mcpCustomSystemPrompt, // custom base system prompt
+    memoryContext,
   )
 
   // Generic context extraction from chat history - works with any MCP tool
@@ -930,6 +943,7 @@ export async function processTranscriptWithAgentMode(
       true,
       toolCapabilities.relevantTools,
       config.mcpCustomSystemPrompt, // custom base system prompt
+      memoryContext,
     )
 
     const postVerifySummaryMessages = [
@@ -2057,6 +2071,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
           true, // isAgentMode
           undefined, // relevantTools
           config.mcpCustomSystemPrompt, // custom base system prompt
+          memoryContext,
         )
 
         const summaryMessages = [
@@ -2314,6 +2329,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
           true, // isAgentMode
           undefined, // relevantTools
           config.mcpCustomSystemPrompt, // custom base system prompt
+          memoryContext,
         )
 
         const summaryMessages = [

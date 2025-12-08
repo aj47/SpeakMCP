@@ -22,7 +22,7 @@ import { OAuthClient } from "./oauth-client"
 import { oauthStorage } from "./oauth-storage"
 import { isDebugTools, logTools } from "./debug"
 import { dialog } from "electron"
-import { builtinTools, executeBuiltinTool, isBuiltinTool, BUILTIN_SERVER_NAME } from "./builtin-tools"
+import { builtinTools, getAllBuiltinTools, executeBuiltinTool, isBuiltinTool, BUILTIN_SERVER_NAME, MEMORY_SERVER_NAME } from "./builtin-tools"
 
 const accessAsync = promisify(access)
 
@@ -1468,8 +1468,8 @@ export class MCPService {
   }
 
   getAvailableTools(): MCPTool[] {
-    // Combine external MCP tools with built-in tools
-    const allTools = [...this.availableTools, ...builtinTools]
+    // Combine external MCP tools with built-in tools (including memory tools)
+    const allTools = [...this.availableTools, ...getAllBuiltinTools()]
     const enabledTools = allTools.filter(
       (tool) => !this.disabledTools.has(tool.name),
     )
@@ -1534,7 +1534,19 @@ export class MCPService {
       inputSchema: tool.inputSchema,
     }))
 
-    return [...externalTools, ...builtinToolsList]
+    // Add memory tools if enabled
+    const allBuiltinTools = getAllBuiltinTools()
+    const memoryToolsList = allBuiltinTools
+      .filter((tool) => tool.name.startsWith(`${MEMORY_SERVER_NAME}:`))
+      .map((tool) => ({
+        name: tool.name,
+        description: tool.description,
+        serverName: MEMORY_SERVER_NAME,
+        enabled: !this.disabledTools.has(tool.name),
+        inputSchema: tool.inputSchema,
+      }))
+
+    return [...externalTools, ...builtinToolsList, ...memoryToolsList]
   }
 
   getServerStatus(): Record<

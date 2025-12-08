@@ -449,4 +449,10 @@ export type Config = {
   streamStatusWatcherEnabled?: boolean
   streamStatusFilePath?: string
 
+  // Letta Memory Configuration
+  memoryEnabled?: boolean
+  memoryAutoSave?: boolean
+  memoryIncludeInSystemPrompt?: boolean
+  memoryMaxArchivalEntries?: number
+
 }

@@ -116,6 +116,12 @@ const getConfig = () => {
     // Parallel tool execution - when enabled, multiple tool calls from a single LLM response are executed concurrently
     mcpParallelToolExecution: true,
 
+    // Letta Memory defaults
+    memoryEnabled: true,
+    memoryAutoSave: true,
+    memoryIncludeInSystemPrompt: true,
+    memoryMaxArchivalEntries: 1000,
+
 	    // Remote Server defaults
 	    remoteServerEnabled: false,
 	    remoteServerPort: 3210,

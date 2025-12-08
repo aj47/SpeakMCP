@@ -14,6 +14,8 @@
 import { configStore } from "./config"
 import { profileService } from "./profile-service"
 import { mcpService, type MCPTool, type MCPToolResult } from "./mcp-service"
+import { memoryTools, executeMemoryTool, isMemoryTool, MEMORY_SERVER_NAME } from "./memory-tools"
+import { memoryService } from "./memory-service"
 
 // The virtual server name for built-in tools
 export const BUILTIN_SERVER_NAME = "speakmcp-settings"
@@ -383,7 +385,12 @@ export async function executeBuiltinTool(
   toolName: string,
   args: Record<string, unknown>
 ): Promise<MCPToolResult | null> {
-  // Check if this is a built-in tool
+  // Check if this is a memory tool first
+  if (isMemoryTool(toolName)) {
+    return executeMemoryTool(toolName, args)
+  }
+
+  // Check if this is a settings built-in tool
   if (!toolName.startsWith(`${BUILTIN_SERVER_NAME}:`)) {
     return null
   }
@@ -421,9 +428,26 @@ export async function executeBuiltinTool(
 }
 
 /**
- * Check if a tool name is a built-in tool
+ * Check if a tool name is a built-in tool (including memory tools)
  */
 export function isBuiltinTool(toolName: string): boolean {
-  return toolName.startsWith(`${BUILTIN_SERVER_NAME}:`)
+  return toolName.startsWith(`${BUILTIN_SERVER_NAME}:`) || isMemoryTool(toolName)
 }
+
+/**
+ * Get all built-in tools (settings + memory)
+ */
+export function getAllBuiltinTools(): MCPTool[] {
+  const tools: MCPTool[] = [...builtinTools]
+
+  // Add memory tools if enabled
+  if (memoryService.isEnabled()) {
+    tools.push(...memoryTools)
+  }
+
+  return tools
+}
+
+// Re-export memory tool utilities
+export { isMemoryTool, MEMORY_SERVER_NAME }
 

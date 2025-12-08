@@ -145,16 +145,6 @@ export default function SettingsScreen({ navigation }: any) {
           autoCapitalize='none'
         />
 
-        <Text style={styles.label}>Model</Text>
-        <TextInput
-          style={styles.input}
-          value={draft.model}
-          onChangeText={(t) => setDraft({ ...draft, model: t })}
-          placeholder='gpt-4o-mini'
-          placeholderTextColor={theme.colors.mutedForeground}
-          autoCapitalize='none'
-        />
-
         <View style={styles.row}>
           <Text style={styles.label}>Hands-free Voice Mode</Text>
           <Switch

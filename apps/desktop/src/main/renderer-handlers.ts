@@ -1,5 +1,5 @@
 import { UpdateDownloadedEvent } from "electron-updater"
-import { AgentProgressUpdate } from "../shared/types"
+import { AgentProgressUpdate, QueuedMessage } from "../shared/types"
 import type { AgentSession } from "./agent-session-tracker"
 
 export type RendererHandlers = {
@@ -29,6 +29,9 @@ export type RendererHandlers = {
 
   // Cross-window focus control for agent sessions
   focusAgentSession: (sessionId: string) => void
+
+  // Message Queue handlers
+  onMessageQueueUpdate: (data: { conversationId: string; queue: QueuedMessage[] }) => void
 
   updateAvailable: (e: UpdateDownloadedEvent) => void
   navigate: (url: string) => void

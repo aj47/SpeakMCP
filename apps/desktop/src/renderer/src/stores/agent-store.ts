@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { AgentProgressUpdate } from '@shared/types'
+import { AgentProgressUpdate, QueuedMessage } from '@shared/types'
 
 // View settings for the sessions dashboard
 export type SessionViewMode = 'grid' | 'list'
@@ -11,6 +11,9 @@ interface AgentState {
   agentProgressById: Map<string, AgentProgressUpdate>
   focusedSessionId: string | null
   scrollToSessionId: string | null // Triggers scroll to a session tile when set
+
+  // Message queue state - per conversation
+  messageQueuesByConversation: Map<string, QueuedMessage[]>
 
   // View settings for sessions dashboard
   viewMode: SessionViewMode
@@ -27,6 +30,10 @@ interface AgentState {
   setSessionSnoozed: (sessionId: string, isSnoozed: boolean) => void
   getAgentProgress: () => AgentProgressUpdate | null
 
+  // Message queue actions
+  updateMessageQueue: (conversationId: string, queue: QueuedMessage[]) => void
+  getMessageQueue: (conversationId: string) => QueuedMessage[]
+
   // View settings actions
   setViewMode: (mode: SessionViewMode) => void
   setFilter: (filter: SessionFilter) => void
@@ -39,6 +46,9 @@ export const useAgentStore = create<AgentState>((set, get) => ({
   agentProgressById: new Map(),
   focusedSessionId: null,
   scrollToSessionId: null,
+
+  // Message queue state
+  messageQueuesByConversation: new Map(),
 
   // View settings defaults
   viewMode: 'grid' as SessionViewMode,
@@ -159,6 +169,23 @@ export const useAgentStore = create<AgentState>((set, get) => ({
     return state.agentProgressById.get(state.focusedSessionId) ?? null
   },
 
+  // Message queue actions
+  updateMessageQueue: (conversationId: string, queue: QueuedMessage[]) => {
+    set((state) => {
+      const newMap = new Map(state.messageQueuesByConversation)
+      if (queue.length === 0) {
+        newMap.delete(conversationId)
+      } else {
+        newMap.set(conversationId, queue)
+      }
+      return { messageQueuesByConversation: newMap }
+    })
+  },
+
+  getMessageQueue: (conversationId: string) => {
+    return get().messageQueuesByConversation.get(conversationId) || []
+  },
+
   // View settings actions
   setViewMode: (mode: SessionViewMode) => {
     set({ viewMode: mode })
@@ -203,3 +230,9 @@ export const useIsAgentProcessing = () => {
   return !!agentProgress && !agentProgress.isComplete
 }
 
+// Hook to get message queue for a specific conversation
+export const useMessageQueue = (conversationId: string | undefined) => {
+  return useAgentStore((state) =>
+    conversationId ? state.messageQueuesByConversation.get(conversationId) || [] : []
+  )
+}

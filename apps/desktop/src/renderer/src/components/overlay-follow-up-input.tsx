@@ -4,6 +4,7 @@ import { Button } from "@renderer/components/ui/button"
 import { Send, Mic } from "lucide-react"
 import { useMutation } from "@tanstack/react-query"
 import { tipcClient } from "@renderer/lib/tipc-client"
+import { useConfigQuery } from "@renderer/lib/query-client"
 
 interface OverlayFollowUpInputProps {
   conversationId?: string
@@ -17,6 +18,7 @@ interface OverlayFollowUpInputProps {
 /**
  * Input component for continuing a conversation in the floating overlay panel.
  * Includes text input, submit button, and voice button for multiple input modalities.
+ * Supports message queuing when the agent is processing.
  */
 export function OverlayFollowUpInput({
   conversationId,
@@ -27,6 +29,10 @@ export function OverlayFollowUpInput({
 }: OverlayFollowUpInputProps) {
   const [text, setText] = useState("")
   const inputRef = useRef<HTMLInputElement>(null)
+  const { data: config } = useConfigQuery()
+
+  // Check if message queuing is enabled
+  const queueingEnabled = config?.mcpMessageQueueEnabled ?? true
 
   const sendMutation = useMutation({
     mutationFn: async (message: string) => {
@@ -34,7 +40,7 @@ export function OverlayFollowUpInput({
         // Start a new conversation if none exists
         await tipcClient.createMcpTextInput({ text: message })
       } else {
-        // Continue the existing conversation
+        // Continue the existing conversation (will be queued if session is active)
         await tipcClient.createMcpTextInput({
           text: message,
           conversationId,
@@ -50,7 +56,9 @@ export function OverlayFollowUpInput({
   const handleSubmit = (e?: React.FormEvent) => {
     e?.preventDefault()
     const trimmed = text.trim()
-    if (trimmed && !sendMutation.isPending && !isSessionActive) {
+    // Allow submit if queuing is enabled even when session is active
+    const canSubmit = queueingEnabled || !isSessionActive
+    if (trimmed && !sendMutation.isPending && canSubmit) {
       sendMutation.mutate(trimmed)
     }
   }
@@ -71,11 +79,20 @@ export function OverlayFollowUpInput({
     await tipcClient.triggerMcpRecording({ conversationId, sessionId: realSessionId })
   }
 
-  // Don't allow input while session is still active (agent is processing)
-  const isDisabled = sendMutation.isPending || isSessionActive
+  // Allow input if queuing is enabled, otherwise block while session is active
+  const isInputDisabled = sendMutation.isPending || (isSessionActive && !queueingEnabled)
+  const isSubmitDisabled = !text.trim() || sendMutation.isPending || (isSessionActive && !queueingEnabled)
+
+  // Determine placeholder text
+  const getPlaceholder = () => {
+    if (isSessionActive) {
+      return queueingEnabled ? "Queue message..." : "Waiting for agent..."
+    }
+    return "Continue conversation..."
+  }
 
   return (
-    <form 
+    <form
       onSubmit={handleSubmit}
       className={cn(
         "flex items-center gap-2 px-3 py-2 border-t bg-muted/30 backdrop-blur-sm",
@@ -89,21 +106,21 @@ export function OverlayFollowUpInput({
         value={text}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={handleKeyDown}
-        placeholder={isSessionActive ? "Waiting for agent..." : "Continue conversation..."}
+        placeholder={getPlaceholder()}
         className={cn(
           "flex-1 text-sm bg-transparent border-0 outline-none",
           "placeholder:text-muted-foreground/60",
           "focus:ring-0"
         )}
-        disabled={isDisabled}
+        disabled={isInputDisabled}
       />
       <Button
         type="submit"
         size="icon"
         variant="ghost"
         className="h-7 w-7 flex-shrink-0"
-        disabled={!text.trim() || isDisabled}
-        title="Send message"
+        disabled={isSubmitDisabled}
+        title={isSessionActive && queueingEnabled ? "Queue message" : "Send message"}
       >
         <Send className={cn(
           "h-3.5 w-3.5",
@@ -119,7 +136,7 @@ export function OverlayFollowUpInput({
           "hover:bg-red-100 dark:hover:bg-red-900/30",
           "hover:text-red-600 dark:hover:text-red-400"
         )}
-        disabled={isDisabled}
+        disabled={isInputDisabled}
         onClick={handleVoiceClick}
         title="Continue with voice"
       >

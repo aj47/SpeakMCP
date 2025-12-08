@@ -959,6 +959,10 @@ export const router = {
       fromTile?: boolean // When true, session runs in background (snoozed) - panel won't show
     }>()
     .action(async ({ input }) => {
+      // Check if message queuing is enabled
+      const queueConfig = configStore.get()
+      const queueingEnabled = queueConfig.mcpMessageQueueEnabled ?? true
+
       // Create or get conversation ID
       let conversationId = input.conversationId
       if (!conversationId) {
@@ -967,28 +971,39 @@ export const router = {
           "user",
         )
         conversationId = conversation.id
-      } else {
-        // Add user message to existing conversation
-        await conversationService.addMessageToConversation(
-          conversationId,
-          input.text,
-          "user",
-        )
       }
 
-      // Try to find and revive an existing session for this conversation
-      // This handles the case where user continues from history
+      // Try to find an existing active session for this conversation
       const { agentSessionTracker } = await import("./agent-session-tracker")
       let existingSessionId: string | undefined
       if (input.conversationId) {
         const foundSessionId = agentSessionTracker.findSessionByConversationId(input.conversationId)
         if (foundSessionId) {
+          const activeSession = agentSessionTracker.getActiveSession(foundSessionId)
+
+          // If session is actively processing and queuing is enabled, queue the message
+          if (activeSession && queueingEnabled) {
+            const { messageQueueService } = await import("./message-queue-service")
+            messageQueueService.enqueue(conversationId, input.text)
+            logApp(`[createMcpTextInput] Message queued for active session ${foundSessionId}`)
+            return { conversationId, queued: true }
+          }
+
           // Pass fromTile to reviveSession so it stays snoozed when continuing from a tile
           const revived = agentSessionTracker.reviveSession(foundSessionId, input.fromTile ?? false)
           if (revived) {
             existingSessionId = foundSessionId
           }
         }
+      }
+
+      // Add user message to conversation (only if not queued)
+      if (input.conversationId) {
+        await conversationService.addMessageToConversation(
+          conversationId,
+          input.text,
+          "user",
+        )
       }
 
       // Fire-and-forget: Start agent processing without blocking
@@ -1890,6 +1905,33 @@ export const router = {
   openConversationsFolder: t.procedure.action(async () => {
     await shell.openPath(conversationsFolder)
   }),
+
+  // Message Queue Management
+  getMessageQueue: t.procedure
+    .input<{ conversationId: string }>()
+    .action(async ({ input }) => {
+      const { messageQueueService } = await import("./message-queue-service")
+      return messageQueueService.getQueue(input.conversationId)
+    }),
+
+  getAllMessageQueues: t.procedure.action(async () => {
+    const { messageQueueService } = await import("./message-queue-service")
+    return messageQueueService.getAllQueues()
+  }),
+
+  removeFromMessageQueue: t.procedure
+    .input<{ conversationId: string; messageId: string }>()
+    .action(async ({ input }) => {
+      const { messageQueueService } = await import("./message-queue-service")
+      return messageQueueService.removeFromQueue(input.conversationId, input.messageId)
+    }),
+
+  clearMessageQueue: t.procedure
+    .input<{ conversationId: string }>()
+    .action(async ({ input }) => {
+      const { messageQueueService } = await import("./message-queue-service")
+      messageQueueService.clearQueue(input.conversationId)
+    }),
 
   // Panel resize endpoints
   getPanelSize: t.procedure.action(async () => {

@@ -13,7 +13,12 @@ import {
   ActivityIndicator,
   Alert,
   Pressable,
+  Image,
 } from 'react-native';
+
+// Animated spinner GIFs for processing state
+const darkSpinner = require('../../assets/loading-spinner.gif');
+const lightSpinner = require('../../assets/light-spinner.gif');
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { EventEmitter } from 'expo-modules-core';
 import { useConfigContext, saveConfig } from '../store/config';
@@ -29,7 +34,7 @@ const COLLAPSE_THRESHOLD = 200;
 export default function ChatScreen({ route, navigation }: any) {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const { config, setConfig } = useConfigContext();
   const handsFree = !!config.handsFree;
@@ -121,19 +126,14 @@ export default function ChatScreen({ route, navigation }: any) {
     navigation?.setOptions?.({
       headerRight: () => (
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          {/* Animated spinner icon - shows while agent is processing */}
+          {/* Animated spinner GIF - shows while agent is processing */}
           {responding && (
             <View style={{ paddingHorizontal: 8, paddingVertical: 6 }}>
-              <View style={{
-                width: 28,
-                height: 28,
-                borderRadius: 14,
-                backgroundColor: theme.colors.primary,
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}>
-                <ActivityIndicator size="small" color={theme.colors.primaryForeground} />
-              </View>
+              <Image
+                source={isDark ? darkSpinner : lightSpinner}
+                style={{ width: 28, height: 28 }}
+                resizeMode="contain"
+              />
             </View>
           )}
           <TouchableOpacity
@@ -178,7 +178,7 @@ export default function ChatScreen({ route, navigation }: any) {
         </View>
       ),
     });
-  }, [navigation, handsFree, handleKillSwitch, responding, theme]);
+  }, [navigation, handsFree, handleKillSwitch, responding, theme, isDark]);
 
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -715,7 +715,11 @@ export default function ChatScreen({ route, navigation }: any) {
 
                 {m.role === 'assistant' && (!m.content || m.content.length === 0) && !m.toolCalls && !m.toolResults ? (
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <ActivityIndicator size="small" color={theme.colors.foreground} />
+                    <Image
+                      source={isDark ? darkSpinner : lightSpinner}
+                      style={{ width: 20, height: 20 }}
+                      resizeMode="contain"
+                    />
                     <Text style={{ color: theme.colors.foreground }}>Assistant is thinking</Text>
                   </View>
                 ) : (

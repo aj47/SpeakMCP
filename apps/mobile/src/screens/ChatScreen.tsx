@@ -433,6 +433,15 @@ export default function ChatScreen({ route, navigation }: any) {
     setMessages((m) => [...m, userMsg, { role: 'assistant', content: 'Assistant is thinking...' }]);
     setResponding(true);
 
+    // Get the server-side conversation ID from the current session for follow-up messages
+    const currentSession = sessionStore.getCurrentSession();
+    const serverConversationId = currentSession?.serverConversationId;
+
+    console.log('[ChatScreen] Session info:', {
+      sessionId: currentSession?.id,
+      serverConversationId: serverConversationId || 'new'
+    });
+
     setInput('');
     try {
       let streamingText = '';
@@ -528,6 +537,13 @@ export default function ChatScreen({ route, navigation }: any) {
           }
           return copy;
         });
+      }
+
+      // Save the server conversation ID for follow-up messages
+      // This enables continuing the same conversation on subsequent requests
+      if (response.conversationId) {
+        console.log('[ChatScreen] Saving server conversation ID:', response.conversationId);
+        sessionStore.setServerConversationId(response.conversationId);
       }
 
       // Only speak the final response if TTS is enabled (default: true for backward compat)

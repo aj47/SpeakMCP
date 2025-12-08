@@ -13,6 +13,7 @@ export function useStoreSync() {
   const updateSessionProgress = useAgentStore((s) => s.updateSessionProgress)
   const clearAllProgress = useAgentStore((s) => s.clearAllProgress)
   const clearSessionProgress = useAgentStore((s) => s.clearSessionProgress)
+  const clearInactiveSessions = useAgentStore((s) => s.clearInactiveSessions)
   const setFocusedSessionId = useAgentStore((s) => s.setFocusedSessionId)
   const setScrollToSessionId = useAgentStore((s) => s.setScrollToSessionId)
   const markConversationCompleted = useConversationStore((s) => s.markConversationCompleted)
@@ -70,6 +71,17 @@ export function useStoreSync() {
     )
     return unlisten
   }, [clearSessionProgress])
+
+  // Listen for clear inactive sessions
+  useEffect(() => {
+    const unlisten = (rendererHandlers as any).clearInactiveSessions?.listen?.(
+      () => {
+        logUI('[useStoreSync] Clearing all inactive sessions')
+        clearInactiveSessions()
+      }
+    )
+    return unlisten
+  }, [clearInactiveSessions])
 
   // Cross-window: focus a specific agent session
   // When a new agent is spawned and focused, clear the scroll target so the

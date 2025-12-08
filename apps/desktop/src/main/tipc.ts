@@ -548,6 +548,24 @@ export const router = {
       return { success: true }
     }),
 
+  clearInactiveSessions: t.procedure.action(async () => {
+    const { agentSessionTracker } = await import("./agent-session-tracker")
+
+    // Clear completed sessions from the tracker
+    agentSessionTracker.clearCompletedSessions()
+
+    // Send to all windows so both main and panel can update their state
+    for (const [id, win] of WINDOWS.entries()) {
+      try {
+        getRendererHandlers<RendererHandlers>(win.webContents).clearInactiveSessions?.send()
+      } catch (e) {
+        logApp(`[tipc] clearInactiveSessions send to ${id} failed:`, e)
+      }
+    }
+
+    return { success: true }
+  }),
+
   closeAgentModeAndHidePanelWindow: t.procedure.action(async () => {
     closeAgentModeAndHidePanelWindow()
     return { success: true }

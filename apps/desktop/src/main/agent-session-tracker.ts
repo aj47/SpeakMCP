@@ -326,6 +326,16 @@ class AgentSessionTracker {
   clearAllSessions(): void {
     this.sessions.clear()
   }
+
+  /**
+   * Clear all completed/recent sessions (move to history)
+   * Active sessions are preserved
+   */
+  clearCompletedSessions(): void {
+    logApp(`[AgentSessionTracker] Clearing ${this.completedSessions.length} completed sessions`)
+    this.completedSessions = []
+    emitSessionUpdate()
+  }
 }
 
 export const agentSessionTracker = AgentSessionTracker.getInstance()

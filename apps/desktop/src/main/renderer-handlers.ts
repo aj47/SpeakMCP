@@ -23,6 +23,7 @@ export type RendererHandlers = {
   clearAgentProgress: () => void
   emergencyStopAgent: () => void
   clearAgentSessionProgress: (sessionId: string) => void
+  clearInactiveSessions: () => void
 
   // Agent Session tracking - push-based updates instead of polling
   agentSessionsUpdated: (data: { activeSessions: AgentSession[], recentSessions: AgentSession[] }) => void

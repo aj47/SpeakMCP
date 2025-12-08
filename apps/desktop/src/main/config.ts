@@ -78,6 +78,8 @@ const getConfig = () => {
     ttsRemoveCodeBlocks: true,
     ttsRemoveUrls: true,
     ttsConvertMarkdown: true,
+    // LLM-based TTS preprocessing (off by default - uses regex for fast/free processing)
+    ttsUseLLMPreprocessing: false,
     // OpenAI TTS defaults
     openaiTtsModel: "tts-1",
     openaiTtsVoice: "alloy",

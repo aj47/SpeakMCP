@@ -354,6 +354,7 @@ import { updateTrayIcon } from "./tray"
 import { isAccessibilityGranted } from "./utils"
 import { writeText, writeTextWithFocusRestore } from "./keyboard"
 import { preprocessTextForTTS, validateTTSText } from "@speakmcp/shared"
+import { preprocessTextForTTSWithLLM } from "./tts-llm-preprocessing"
 
 
 const t = tipc.create()
@@ -1769,17 +1770,34 @@ export const router = {
       const providerId = input.providerId || config.ttsProviderId || "openai"
 
       // Preprocess text for TTS
-      const preprocessingOptions = {
-        removeCodeBlocks: config.ttsRemoveCodeBlocks ?? true,
-        removeUrls: config.ttsRemoveUrls ?? true,
-        convertMarkdown: config.ttsConvertMarkdown ?? true,
+      let processedText = input.text
+
+      if (config.ttsPreprocessingEnabled !== false) {
+        // Use LLM-based preprocessing if enabled, otherwise fall back to regex
+        if (config.ttsUseLLMPreprocessing) {
+          try {
+            processedText = await preprocessTextForTTSWithLLM(input.text, config.ttsLLMPreprocessingProviderId)
+          } catch (error) {
+            // LLM preprocessing failed, the function already falls back to regex internally
+            // but log a warning for visibility
+            diagnosticsService.logWarning("tts", "LLM preprocessing failed, using regex fallback", error)
+            const preprocessingOptions = {
+              removeCodeBlocks: config.ttsRemoveCodeBlocks ?? true,
+              removeUrls: config.ttsRemoveUrls ?? true,
+              convertMarkdown: config.ttsConvertMarkdown ?? true,
+            }
+            processedText = preprocessTextForTTS(input.text, preprocessingOptions)
+          }
+        } else {
+          // Use regex-based preprocessing
+          const preprocessingOptions = {
+            removeCodeBlocks: config.ttsRemoveCodeBlocks ?? true,
+            removeUrls: config.ttsRemoveUrls ?? true,
+            convertMarkdown: config.ttsConvertMarkdown ?? true,
+          }
+          processedText = preprocessTextForTTS(input.text, preprocessingOptions)
+        }
       }
-
-      const processedText = config.ttsPreprocessingEnabled !== false
-        ? preprocessTextForTTS(input.text, preprocessingOptions)
-        : input.text
-
-
 
       // Validate processed text
       const validation = validateTTSText(processedText)

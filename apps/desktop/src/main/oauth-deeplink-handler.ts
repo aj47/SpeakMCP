@@ -107,7 +107,7 @@ export class OAuthDeepLinkHandler {
       const pathname = fullPath.replace(/^\/+/, '/')
 
       // Check if this is an OAuth callback
-      // Use case-insensitive comparison for cross-platform compatibility (Windows may normalize to uppercase)
+      // Use case-insensitive comparison defensively (WHATWG URL API normalizes to lowercase)
       const isOAuthProtocol = parsedUrl.protocol.toLowerCase() === 'speakmcp:'
       const isOAuthPath = pathname === '/oauth/callback'
 

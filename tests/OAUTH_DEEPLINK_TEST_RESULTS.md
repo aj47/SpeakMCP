@@ -17,7 +17,7 @@ This caused the original code to fail matching `/oauth/callback` because it was 
 ### Solution Implemented
 
 Updated `src/main/oauth-deeplink-handler.ts` to:
-1. Combine `host` and `pathname` to get the full path
+1. Combine `hostname` and `pathname` to get the full path
 2. Normalize the combined path by removing extra leading slashes
 3. Handle both URL formats (with and without authority)
 
@@ -29,8 +29,8 @@ const isOAuthPath = pathname === '/oauth/callback'
 
 // After (correct):
 let fullPath = parsedUrl.pathname
-if (parsedUrl.host) {
-  fullPath = `/${parsedUrl.host}${parsedUrl.pathname}`
+if (parsedUrl.hostname) {
+  fullPath = `/${parsedUrl.hostname}${parsedUrl.pathname}`
 }
 const pathname = fullPath.replace(/^\/+/, '/')
 const isOAuthPath = pathname === '/oauth/callback'

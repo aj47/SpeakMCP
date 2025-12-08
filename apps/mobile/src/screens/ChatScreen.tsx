@@ -298,6 +298,10 @@ export default function ChatScreen({ route, navigation }: any) {
   const lastGrantTimeRef = useRef(0);
   const minHoldMs = 200;
 
+  // Track if user has explicitly released the button (for hold-to-speak mode)
+  // This ensures we only submit on button release, not on voice breaks/pauses
+  const userReleasedButtonRef = useRef(false);
+
   // Hands-free mode: debounce timeout for auto-submission
   // This gives users more time to finish speaking before auto-submitting
   const handsFreeDebounceMs = 1500; // 1.5 seconds delay after final result before auto-submit
@@ -600,6 +604,33 @@ export default function ChatScreen({ route, navigation }: any) {
           clearTimeout(handsFreeDebounceRef.current);
           handsFreeDebounceRef.current = null;
         }
+
+        // For hold-to-speak mode: only submit if user explicitly released the button
+        // If the recognizer ended on its own (voice break/pause), restart it
+        if (!handsFreeRef.current && !userReleasedButtonRef.current && webRecognitionRef.current) {
+          // Speech recognizer ended prematurely (voice break/pause)
+          // Restart recognition to continue listening while user holds button
+          try {
+            webRecognitionRef.current.start();
+            // Keep listening state true and don't reset accumulated text
+            return;
+          } catch (restartErr) {
+            console.warn('[Voice] Failed to restart web recognition after voice break:', restartErr);
+            // On restart failure, stop gracefully without submitting
+            // This maintains the "only submit on button release" guarantee
+            setListening(false);
+            setLiveTranscript('');
+            // Place accumulated text in input field so user doesn't lose it
+            const accumulatedText = (webFinalRef.current || '').trim() || (liveTranscriptRef.current || '').trim();
+            if (accumulatedText) {
+              setInput((t) => (t ? `${t} ${accumulatedText}` : accumulatedText));
+            }
+            webFinalRef.current = '';
+            pendingHandsFreeFinalRef.current = '';
+            return;
+          }
+        }
+
         const finalText = (pendingHandsFreeFinalRef.current || webFinalRef.current || '').trim() || (liveTranscriptRef.current || '').trim();
         pendingHandsFreeFinalRef.current = '';
         setListening(false);
@@ -632,6 +663,8 @@ export default function ChatScreen({ route, navigation }: any) {
       setListening(true);
       nativeFinalRef.current = '';
       pendingHandsFreeFinalRef.current = '';
+      // Reset user-released flag for hold-to-speak mode
+      userReleasedButtonRef.current = false;
       // Clear any pending hands-free debounce from previous session
       if (handsFreeDebounceRef.current) {
         clearTimeout(handsFreeDebounceRef.current);
@@ -685,12 +718,47 @@ export default function ChatScreen({ route, navigation }: any) {
             const subError = srEmitterRef.current.addListener('error', (event: any) => {
               console.error('[Voice] Native recognition error:', JSON.stringify(event));
             });
-            const subEnd = srEmitterRef.current.addListener('end', () => {
+            const subEnd = srEmitterRef.current.addListener('end', async () => {
               // Clear any pending hands-free debounce
               if (handsFreeDebounceRef.current) {
                 clearTimeout(handsFreeDebounceRef.current);
                 handsFreeDebounceRef.current = null;
               }
+
+              // For hold-to-speak mode: only submit if user explicitly released the button
+              // If the recognizer ended on its own (voice break/pause), restart it
+              if (!handsFreeRef.current && !userReleasedButtonRef.current) {
+                // Speech recognizer ended prematurely (voice break/pause)
+                // Restart recognition to continue listening while user holds button
+                try {
+                  const SR: any = await import('expo-speech-recognition');
+                  if (SR?.ExpoSpeechRecognitionModule?.start) {
+                    SR.ExpoSpeechRecognitionModule.start({
+                      lang: 'en-US',
+                      interimResults: true,
+                      continuous: true,
+                      volumeChangeEventOptions: { enabled: false, intervalMillis: 250 }
+                    });
+                    // Keep listening state true and don't reset accumulated text
+                    return;
+                  }
+                } catch (restartErr) {
+                  console.warn('[Voice] Failed to restart recognition after voice break:', restartErr);
+                  // On restart failure, stop gracefully without submitting
+                  // This maintains the "only submit on button release" guarantee
+                  setListening(false);
+                  setLiveTranscript('');
+                  // Place accumulated text in input field so user doesn't lose it
+                  const accumulatedText = (nativeFinalRef.current || '').trim() || (liveTranscriptRef.current || '').trim();
+                  if (accumulatedText) {
+                    setInput((t) => (t ? `${t} ${accumulatedText}` : accumulatedText));
+                  }
+                  nativeFinalRef.current = '';
+                  pendingHandsFreeFinalRef.current = '';
+                  return;
+                }
+              }
+
               setListening(false);
               // Include pending hands-free text in finalText
               const finalText = (pendingHandsFreeFinalRef.current || nativeFinalRef.current || liveTranscriptRef.current || '').trim();
@@ -793,6 +861,9 @@ export default function ChatScreen({ route, navigation }: any) {
       return;
     }
     stoppingRef.current = true;
+    // Mark that user explicitly released the button (for hold-to-speak mode)
+    // This ensures the 'end' event handler knows to submit the message
+    userReleasedButtonRef.current = true;
     try {
       // If nothing is recording, ignore
       const hasWeb = Platform.OS === 'web' && webRecognitionRef.current;

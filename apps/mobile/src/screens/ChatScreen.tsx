@@ -25,6 +25,7 @@ import { useConfigContext, saveConfig } from '../store/config';
 import { useSessionContext } from '../store/sessions';
 import { OpenAIClient, ChatMessage, AgentProgressUpdate, AgentProgressStep } from '../lib/openaiClient';
 import * as Speech from 'expo-speech';
+import { preprocessTextForTTS } from '@speakmcp/shared';
 import { useHeaderHeight } from '@react-navigation/elements';
 import { useTheme } from '../ui/ThemeProvider';
 import { spacing, radius, Theme } from '../ui/theme';
@@ -518,7 +519,9 @@ export default function ChatScreen({ route, navigation }: any) {
 
       // Only speak the final response if TTS is enabled (default: true for backward compat)
       if (finalText && config.ttsEnabled !== false) {
-        Speech.speak(finalText, { language: 'en-US' });
+        // Preprocess text for natural TTS output (same as desktop app)
+        const processedText = preprocessTextForTTS(finalText);
+        Speech.speak(processedText, { language: 'en-US' });
       }
     } catch (e: any) {
       console.error('[ChatScreen] Chat error:', e);

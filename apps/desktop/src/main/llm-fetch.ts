@@ -1276,7 +1276,11 @@ async function makeLLMCallAttempt(
   // even though it didn't return proper JSON. This prevents premature termination
   // when the LLM says things like "Let me..." or "I'll..." but fails to format as JSON.
   // Fixes: https://github.com/aj47/SpeakMCP/issues/443
-  const continuationPhrases = /^(let me|i'll|i will|i'm going to|i am going to|next,|now,|first,|then,|allow me to|proceeding to|starting to|going to|about to)/i
+  // Note: Uses (?:^|[.!?]\s*) to detect phrases at start OR after sentence endings
+  // (e.g., "Slot 4 didn't start properly. Let me navigate it...")
+  // Note: Uses ['''] character class to match both ASCII and curly apostrophes
+  // since LLMs often output curly quotes like "I'll" instead of "I'll"
+  const continuationPhrases = /(?:^|[.!?]\s*)(let me|i[''']ll|i will|i[''']m going to|i am going to|next,|now,|first,|then,|allow me to|proceeding to|starting to|going to|about to)/i
   const hasContinuationPhrase = continuationPhrases.test((cleaned || content || "").trim())
   if (hasContinuationPhrase) {
     if (isDebugLLM()) {

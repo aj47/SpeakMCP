@@ -1,0 +1,50 @@
+{
+  "expo": {
+    "name": "SpeakMCP",
+    "slug": "speakmcp-mobile",
+    "scheme": "speakmcp",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/speakmcp-icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/speakmcp-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "This app uses the microphone for voice input.",
+        "NSSpeechRecognitionUsageDescription": "This app uses speech recognition to transcribe your voice.",
+        "NSCameraUsageDescription": "This app uses the camera to scan QR codes for configuration."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/speakmcp-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "RECORD_AUDIO",
+        "CAMERA"
+      ],
+      "package": "com.aj47.speakmcp"
+    },
+    "web": {
+      "favicon": "./assets/speakmcp-icon.png"
+    },
+    "plugins": [
+      "expo-speech-recognition",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow $(PRODUCT_NAME) to access your camera to scan QR codes."
+        }
+      ]
+    ]
+  }
+}

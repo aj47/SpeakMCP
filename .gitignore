@@ -6,6 +6,7 @@ out
 out-test
 .DS_Store
 *.log*
+logs.txt
 target/
 bin/
 
@@ -26,3 +27,23 @@ backend/.wrangler
 *.DS_Store*
 .augment
 augment.mjs
+
+# Mobile specific
+.expo/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+web-build/
+
+# Turborepo / build cache
+.turbo
+
+# Swift Package Manager build directory
+macos-audio-tap/ScreenCaptureAudio/.build/
+
+# Android build artifacts
+apps/mobile/android/app/debug.keystore
+apps/mobile/android/app/.cxx/

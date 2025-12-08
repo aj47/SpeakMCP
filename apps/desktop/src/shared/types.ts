@@ -1,0 +1,452 @@
+import type { CHAT_PROVIDER_ID, STT_PROVIDER_ID, TTS_PROVIDER_ID, OPENAI_COMPATIBLE_PRESET_ID } from "."
+import type { ToolCall, ToolResult } from '@speakmcp/shared'
+
+// Re-export shared types for convenience
+export type { ToolCall, ToolResult, BaseChatMessage, ConversationHistoryMessage, ChatApiResponse } from '@speakmcp/shared'
+
+export type RecordingHistoryItem = {
+  id: string
+  createdAt: number
+  duration: number
+  transcript: string
+}
+
+// MCP Server Configuration Types
+export type MCPTransportType = "stdio" | "websocket" | "streamableHttp"
+
+// OAuth 2.1 Configuration Types
+export interface OAuthClientMetadata {
+  client_name: string
+  redirect_uris: string[]
+  grant_types: string[]
+  response_types: string[]
+  scope?: string
+  token_endpoint_auth_method?: string
+}
+
+export interface OAuthTokens {
+  access_token: string
+  token_type: string
+  expires_in?: number
+  refresh_token?: string
+  scope?: string
+  expires_at?: number // Calculated expiration timestamp
+}
+
+export interface OAuthServerMetadata {
+  issuer: string
+  authorization_endpoint: string
+  token_endpoint: string
+  registration_endpoint?: string
+  jwks_uri?: string
+  scopes_supported?: string[]
+  response_types_supported?: string[]
+  grant_types_supported?: string[]
+  token_endpoint_auth_methods_supported?: string[]
+  code_challenge_methods_supported?: string[]
+}
+
+export interface OAuthConfig {
+  // Server metadata (discovered or manually configured)
+  serverMetadata?: OAuthServerMetadata
+
+  // Client registration info (from dynamic registration or manual config)
+  clientId?: string
+  clientSecret?: string
+  clientMetadata?: OAuthClientMetadata
+
+  // Stored tokens
+  tokens?: OAuthTokens
+
+  // Configuration options
+  scope?: string
+  useDiscovery?: boolean // Whether to use .well-known/oauth-authorization-server
+  useDynamicRegistration?: boolean // Whether to use RFC7591 dynamic client registration
+
+  // Pending authorization state (used during OAuth flow)
+  pendingAuth?: {
+    codeVerifier: string
+    state: string
+  }
+}
+
+export interface MCPServerConfig {
+  // Transport configuration
+  transport?: MCPTransportType // defaults to "stdio" for backward compatibility
+
+  // For stdio transport (local command-based servers)
+  command?: string
+  args?: string[]
+  env?: Record<string, string>
+
+  // For remote transports (websocket/streamableHttp)
+  url?: string
+
+  // Custom HTTP headers for streamableHttp transport
+  headers?: Record<string, string>
+
+  // OAuth configuration for protected servers
+  oauth?: OAuthConfig
+
+  // Common configuration
+  timeout?: number
+  disabled?: boolean
+}
+
+export interface MCPConfig {
+  mcpServers: Record<string, MCPServerConfig>
+}
+
+// Server log entry interface
+export interface ServerLogEntry {
+  timestamp: number
+  message: string
+}
+
+// Agent Mode Progress Tracking Types
+export interface AgentProgressStep {
+  id: string
+  type: "thinking" | "tool_call" | "tool_result" | "completion" | "tool_approval"
+  title: string
+  description?: string
+  status: "pending" | "in_progress" | "completed" | "error" | "awaiting_approval"
+  timestamp: number
+  llmContent?: string // Store actual LLM response content for thinking steps
+  toolCall?: ToolCall
+  toolResult?: ToolResult
+  // For tool approval requests
+  approvalRequest?: {
+    approvalId: string
+    toolName: string
+    arguments: any
+  }
+}
+
+export interface AgentProgressUpdate {
+  sessionId: string // Unique session identifier for progress routing
+  conversationId?: string // Optional conversation ID for linking to conversation history
+  conversationTitle?: string // Title of the conversation/session for display in tabs
+  currentIteration: number
+  maxIterations: number
+  steps: AgentProgressStep[]
+  isComplete: boolean
+  isSnoozed?: boolean // When true, session runs in background without stealing focus
+  finalContent?: string
+  conversationHistory?: Array<{
+    role: "user" | "assistant" | "tool"
+    content: string
+    toolCalls?: ToolCall[]
+    toolResults?: ToolResult[]
+    timestamp?: number
+  }>
+  /**
+   * Index into conversationHistory where this agent session's messages begin.
+   * Entries before this index belong to previous sessions in the same conversation.
+   */
+  sessionStartIndex?: number
+  // Pending tool approval request - when set, UI should show approve/deny buttons
+  pendingToolApproval?: {
+    approvalId: string
+    toolName: string
+    arguments: any
+  }
+  // Retry status - when set, UI should show retry banner with countdown
+  retryInfo?: {
+    isRetrying: boolean
+    attempt: number
+    maxAttempts?: number  // undefined for rate limits (infinite retries)
+    delaySeconds: number
+    reason: string  // e.g., "Rate limit exceeded", "Network error"
+    startedAt: number  // timestamp for countdown calculation
+  }
+  // Streaming content - partial LLM response as it's being generated
+  streamingContent?: {
+    text: string // The accumulated text so far
+    isStreaming: boolean // True while streaming is in progress
+  }
+}
+
+// Conversation Types
+export interface ConversationMessage {
+  id: string
+  role: "user" | "assistant" | "tool"
+  content: string
+  timestamp: number
+  toolCalls?: ToolCall[]
+  toolResults?: ToolResult[]
+}
+
+export interface ConversationMetadata {
+  id: string
+  title: string
+  createdAt: number
+  updatedAt: number
+  messageCount: number
+  lastMessage?: string
+  tags?: string[]
+}
+
+export interface Conversation {
+  id: string
+  title: string
+  createdAt: number
+  updatedAt: number
+  messages: ConversationMessage[]
+  metadata?: {
+    totalTokens?: number
+    model?: string
+    provider?: string
+    agentMode?: boolean
+  }
+}
+
+export interface ConversationHistoryItem {
+  id: string
+  title: string
+  createdAt: number
+  updatedAt: number
+  messageCount: number
+  lastMessage: string
+  preview: string
+}
+
+// Profile MCP Server Configuration - stores which servers are enabled/disabled per profile
+export type ProfileMcpServerConfig = {
+  // Server names that are disabled for this profile
+  // Servers not in this list are enabled by default
+  disabledServers?: string[]
+  // Tool names that are disabled for this profile
+  disabledTools?: string[]
+}
+
+// Profile Model Configuration - stores model/provider selection per profile
+export type ProfileModelConfig = {
+  // Chat provider for MCP tools (openai, groq, gemini)
+  mcpToolsProviderId?: "openai" | "groq" | "gemini"
+  // Model names per provider
+  mcpToolsOpenaiModel?: string
+  mcpToolsGroqModel?: string
+  mcpToolsGeminiModel?: string
+  // Model preset ID (for OpenAI-compatible presets)
+  currentModelPresetId?: string
+}
+
+// Profile Management Types
+export type Profile = {
+  id: string
+  name: string
+  guidelines: string
+  createdAt: number
+  updatedAt: number
+  isDefault?: boolean
+  // Per-profile MCP server configuration
+  mcpServerConfig?: ProfileMcpServerConfig
+  // Per-profile model/provider configuration
+  modelConfig?: ProfileModelConfig
+  // Custom system prompt (base prompt for agent) - if empty/undefined, uses default
+  systemPrompt?: string
+}
+
+export type ProfilesData = {
+  profiles: Profile[]
+  currentProfileId?: string
+}
+
+// Model Preset Types - allows per-preset API keys and model preferences
+export interface ModelPreset {
+  id: string
+  name: string
+  baseUrl: string
+  apiKey: string
+  isBuiltIn?: boolean // true for presets derived from OPENAI_COMPATIBLE_PRESETS
+  createdAt?: number
+  updatedAt?: number
+  // Model preferences - when set, these will be applied when switching to this preset
+  mcpToolsModel?: string // Model to use for agent/MCP tools
+  transcriptProcessingModel?: string // Model to use for transcript post-processing
+}
+
+export type Config = {
+  shortcut?: "hold-ctrl" | "ctrl-slash" | "custom"
+  customShortcut?: string
+  customShortcutMode?: "hold" | "toggle" // Mode for custom recording shortcut
+  hideDockIcon?: boolean
+  launchAtLogin?: boolean
+
+
+  // Toggle Voice Dictation Configuration
+  toggleVoiceDictationEnabled?: boolean
+  toggleVoiceDictationHotkey?: "fn" | "f1" | "f2" | "f3" | "f4" | "f5" | "f6" | "f7" | "f8" | "f9" | "f10" | "f11" | "f12" | "custom"
+  customToggleVoiceDictationHotkey?: string
+
+  // Theme Configuration
+  themePreference?: "system" | "light" | "dark"
+
+  sttProviderId?: STT_PROVIDER_ID
+
+  openaiApiKey?: string
+  openaiBaseUrl?: string
+  openaiCompatiblePreset?: OPENAI_COMPATIBLE_PRESET_ID
+
+  // Model Presets - allows per-preset API keys
+  modelPresets?: ModelPreset[]
+  currentModelPresetId?: string // ID of the currently active preset
+
+  groqApiKey?: string
+  groqBaseUrl?: string
+  groqSttPrompt?: string
+
+  geminiApiKey?: string
+  geminiBaseUrl?: string
+
+  // Speech-to-Text Language Configuration
+  sttLanguage?: string
+  openaiSttLanguage?: string
+  groqSttLanguage?: string
+
+  // Text-to-Speech Configuration
+  ttsEnabled?: boolean
+  ttsAutoPlay?: boolean
+  ttsProviderId?: TTS_PROVIDER_ID
+
+  // OpenAI TTS Configuration
+  openaiTtsModel?: "tts-1" | "tts-1-hd"
+  openaiTtsVoice?: "alloy" | "echo" | "fable" | "onyx" | "nova" | "shimmer"
+  openaiTtsSpeed?: number // 0.25 to 4.0
+  openaiTtsResponseFormat?: "mp3" | "opus" | "aac" | "flac" | "wav" | "pcm"
+
+  // Groq TTS Configuration
+  groqTtsModel?: "playai-tts" | "playai-tts-arabic"
+  groqTtsVoice?: string // Will be populated with available voices
+
+  // Gemini TTS Configuration
+  geminiTtsModel?: "gemini-2.5-flash-preview-tts" | "gemini-2.5-pro-preview-tts"
+  geminiTtsVoice?: string // Will be populated with available voices
+  geminiTtsLanguage?: string // Language code for TTS
+
+  // TTS Text Preprocessing Configuration
+  ttsPreprocessingEnabled?: boolean
+  ttsRemoveCodeBlocks?: boolean
+  ttsRemoveUrls?: boolean
+  ttsConvertMarkdown?: boolean
+
+  transcriptPostProcessingEnabled?: boolean
+  transcriptPostProcessingProviderId?: CHAT_PROVIDER_ID
+  transcriptPostProcessingPrompt?: string
+  transcriptPostProcessingOpenaiModel?: string
+  transcriptPostProcessingGroqModel?: string
+  transcriptPostProcessingGeminiModel?: string
+
+  // Text Input Configuration
+  textInputEnabled?: boolean
+  textInputShortcut?: "ctrl-t" | "ctrl-shift-t" | "alt-t" | "custom"
+  customTextInputShortcut?: string
+
+  // Settings Window Hotkey Configuration
+  settingsHotkeyEnabled?: boolean
+  settingsHotkey?: "ctrl-shift-s" | "ctrl-comma" | "ctrl-shift-comma" | "custom"
+  customSettingsHotkey?: string
+
+  // Agent Kill Switch Configuration
+  agentKillSwitchEnabled?: boolean
+  agentKillSwitchHotkey?:
+    | "ctrl-shift-escape"
+    | "ctrl-alt-q"
+    | "ctrl-shift-q"
+    | "custom"
+  customAgentKillSwitchHotkey?: string
+
+  // MCP Tool Calling Configuration
+  /** @deprecated MCP tools are now always enabled. This field is kept for backwards compatibility but ignored. */
+  mcpToolsEnabled?: boolean
+  mcpToolsShortcut?: "hold-ctrl-alt" | "ctrl-alt-slash" | "custom"
+  customMcpToolsShortcut?: string
+  customMcpToolsShortcutMode?: "hold" | "toggle" // Mode for custom MCP tools shortcut
+  mcpToolsProviderId?: CHAT_PROVIDER_ID
+  mcpToolsOpenaiModel?: string
+  mcpToolsGroqModel?: string
+  mcpToolsGeminiModel?: string
+  mcpToolsSystemPrompt?: string
+  mcpCustomSystemPrompt?: string // Custom base system prompt - overrides default when set
+  mcpCurrentProfileId?: string // Current active profile ID
+  /** @deprecated Agent mode is now always enabled. This field is kept for backwards compatibility but ignored. */
+  mcpAgentModeEnabled?: boolean
+  // When enabled, require manual user approval before each tool call executes
+  mcpRequireApprovalBeforeToolCall?: boolean
+  mcpAutoPasteEnabled?: boolean
+  mcpAutoPasteDelay?: number
+  mcpMaxIterations?: number
+
+  // MCP Server Configuration
+  mcpConfig?: MCPConfig
+
+  // Persisted MCP runtime state: servers the user explicitly stopped (do not auto-start)
+  mcpRuntimeDisabledServers?: string[]
+
+  // Persisted MCP tool state: tools the user explicitly disabled
+  mcpDisabledTools?: string[]
+
+  // Conversation Configuration
+  conversationsEnabled?: boolean
+  maxConversationsToKeep?: number
+  autoSaveConversations?: boolean
+
+  // Panel Position Configuration
+  panelPosition?:
+    | "top-left"
+    | "top-center"
+    | "top-right"
+    | "bottom-left"
+    | "bottom-center"
+    | "bottom-right"
+    | "custom"
+  panelCustomPosition?: { x: number; y: number }
+  panelDragEnabled?: boolean
+  panelCustomSize?: { width: number; height: number }
+  // Mode-specific panel sizes for persistence
+  panelNormalModeSize?: { width: number; height: number }
+  panelAgentModeSize?: { width: number; height: number }
+  panelTextInputModeSize?: { width: number; height: number }
+
+  // API Retry Configuration
+  apiRetryCount?: number // Number of retry attempts (default: 3)
+  apiRetryBaseDelay?: number // Base delay in milliseconds (default: 1000)
+  apiRetryMaxDelay?: number // Maximum delay in milliseconds (default: 30000)
+
+  // Context Reduction Configuration
+  mcpContextReductionEnabled?: boolean
+  mcpContextTargetRatio?: number
+  mcpContextLastNMessages?: number
+  mcpContextSummarizeCharThreshold?: number
+  mcpMaxContextTokensOverride?: number
+
+  // Tool Response Processing Configuration
+  mcpToolResponseProcessingEnabled?: boolean
+  mcpToolResponseLargeThreshold?: number
+  mcpToolResponseCriticalThreshold?: number
+  mcpToolResponseChunkSize?: number
+  mcpToolResponseProgressUpdates?: boolean
+
+  // Completion Verification Configuration
+  mcpVerifyCompletionEnabled?: boolean
+  mcpVerifyContextMaxItems?: number
+  mcpVerifyRetryCount?: number
+
+  // Parallel Tool Execution Configuration
+  mcpParallelToolExecution?: boolean
+
+
+
+	  // Remote Server Configuration
+	  remoteServerEnabled?: boolean
+	  remoteServerPort?: number
+	  remoteServerBindAddress?: "127.0.0.1" | "0.0.0.0"
+	  remoteServerApiKey?: string
+	  remoteServerLogLevel?: "error" | "info" | "debug"
+	  remoteServerCorsOrigins?: string[]
+
+  // Stream Status Watcher Configuration
+  streamStatusWatcherEnabled?: boolean
+  streamStatusFilePath?: string
+
+}

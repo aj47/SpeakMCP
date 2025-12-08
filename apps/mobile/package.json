@@ -1,0 +1,38 @@
+{
+  "name": "@speakmcp/mobile",
+  "version": "1.0.0",
+  "main": "index.ts",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "web": "expo start --web"
+  },
+  "dependencies": {
+    "@react-native-async-storage/async-storage": "2.2.0",
+    "@react-navigation/elements": "^2.8.0",
+    "@react-navigation/native": "^7.1.17",
+    "@react-navigation/native-stack": "^7.3.26",
+    "@speakmcp/shared": "workspace:^",
+    "expo": "~54.0.6",
+    "expo-camera": "^17.0.9",
+    "expo-linking": "^8.0.9",
+    "expo-speech": "~14.0.7",
+    "expo-speech-recognition": "^2.1.2",
+    "expo-status-bar": "~3.0.8",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "react-native": "0.81.4",
+    "react-native-safe-area-context": "~5.6.0",
+    "react-native-screens": "~4.16.0",
+    "react-native-sse": "^1.2.1",
+    "react-native-web": "^0.21.0"
+  },
+  "devDependencies": {
+    "@react-native-community/cli": "^20.0.2",
+    "@types/react": "~19.1.0",
+    "@types/react-native": "^0.73.0",
+    "typescript": "~5.9.2"
+  },
+  "private": true
+}

@@ -380,35 +380,40 @@ const saveRecordingsHitory = (history: RecordingHistoryItem[]) => {
 
 /**
  * Process queued messages for a conversation after the current session completes.
- * This function dequeues and processes messages one at a time.
+ * This function peeks at messages and only removes them after successful processing.
  */
 async function processQueuedMessages(conversationId: string): Promise<void> {
   const { messageQueueService } = await import("./message-queue-service")
 
-  // Check if there are queued messages
-  const queuedMessage = messageQueueService.dequeue(conversationId)
+  // Peek at the next message without removing it
+  const queuedMessage = messageQueueService.peek(conversationId)
   if (!queuedMessage) {
     return // No more messages in queue
   }
 
   logLLM(`[processQueuedMessages] Processing queued message ${queuedMessage.id} for ${conversationId}`)
 
-  // Add the queued message to the conversation
-  await conversationService.addMessageToConversation(
-    conversationId,
-    queuedMessage.text,
-    "user",
-  )
-
-  // Process with agent mode
-  // This will recursively call processQueuedMessages when it completes
   try {
+    // Add the queued message to the conversation
+    await conversationService.addMessageToConversation(
+      conversationId,
+      queuedMessage.text,
+      "user",
+    )
+
+    // Process with agent mode
     await processWithAgentMode(queuedMessage.text, conversationId, undefined, true)
+
+    // Only remove the message after successful processing
+    messageQueueService.markProcessed(conversationId, queuedMessage.id)
 
     // After this message is processed, check for more queued messages
     await processQueuedMessages(conversationId)
   } catch (error) {
     logLLM(`[processQueuedMessages] Error processing queued message ${queuedMessage.id}:`, error)
+    // Remove the failed message so we don't get stuck in an infinite loop
+    // but log it so users know the message failed
+    messageQueueService.markProcessed(conversationId, queuedMessage.id)
     // Continue to next message even if this one failed
     await processQueuedMessages(conversationId)
   }
@@ -1079,14 +1084,15 @@ export const router = {
               }
             }, pasteConfig.mcpAutoPasteDelay || 1000)
           }
-
-          // Process queued messages after this session completes
-          processQueuedMessages(conversationId!).catch((err) => {
-            logLLM("[createMcpTextInput] Error processing queued messages:", err)
-          })
         })
         .catch((error) => {
           logLLM("[createMcpTextInput] Agent processing error:", error)
+        })
+        .finally(() => {
+          // Process queued messages after this session completes (success or error)
+          processQueuedMessages(conversationId!).catch((err) => {
+            logLLM("[createMcpTextInput] Error processing queued messages:", err)
+          })
         })
 
       // Return immediately with conversation ID

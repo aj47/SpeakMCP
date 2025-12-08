@@ -95,7 +95,17 @@ class MessageQueueService {
   }
 
   /**
+   * Peek at the next pending message without removing it
+   */
+  peek(conversationId: string): QueuedMessage | null {
+    const queue = this.queues.get(conversationId)
+    if (!queue || queue.length === 0) return null
+    return queue[0]
+  }
+
+  /**
    * Get and remove the next pending message from the queue
+   * @deprecated Use peek() + markProcessed() for safer message handling
    */
   dequeue(conversationId: string): QueuedMessage | null {
     const queue = this.queues.get(conversationId)
@@ -103,11 +113,32 @@ class MessageQueueService {
 
     const message = queue.shift()!
     message.status = "processing"
-    
+
     logApp(`[MessageQueueService] Dequeued message ${message.id} from ${conversationId}`)
     this.emitQueueUpdate(conversationId)
-    
+
     return message
+  }
+
+  /**
+   * Mark the first message in the queue as successfully processed and remove it
+   * Call this after successful processing to avoid losing messages on failure
+   */
+  markProcessed(conversationId: string, messageId: string): boolean {
+    const queue = this.queues.get(conversationId)
+    if (!queue || queue.length === 0) return false
+
+    // Verify the message at the front is the one we expect
+    if (queue[0]?.id !== messageId) {
+      logApp(`[MessageQueueService] Warning: markProcessed called for ${messageId} but front is ${queue[0]?.id}`)
+      return false
+    }
+
+    queue.shift()
+    logApp(`[MessageQueueService] Marked message ${messageId} as processed for ${conversationId}`)
+    this.emitQueueUpdate(conversationId)
+
+    return true
   }
 
   /**

@@ -14,6 +14,8 @@ import {
   Alert,
   Pressable,
   Image,
+  NativeSyntheticEvent,
+  NativeScrollEvent,
 } from 'react-native';
 
 // Animated spinner GIFs for processing state
@@ -278,6 +280,45 @@ export default function ChatScreen({ route, navigation }: any) {
   const toggleMessageExpansion = useCallback((index: number) => {
     setExpandedMessages(prev => ({ ...prev, [index]: !prev[index] }));
   }, []);
+
+  // Scroll-to-bottom functionality
+  const scrollViewRef = useRef<ScrollView>(null);
+  const [showScrollToBottom, setShowScrollToBottom] = useState(false);
+  const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
+  const lastContentHeightRef = useRef(0);
+
+  const handleScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
+    const isAtBottom = layoutMeasurement.height + contentOffset.y >= contentSize.height - 50;
+
+    // Show scroll-to-bottom button when not at bottom
+    setShowScrollToBottom(!isAtBottom);
+
+    // Resume auto-scroll if user scrolled to bottom
+    if (isAtBottom && !shouldAutoScroll) {
+      setShouldAutoScroll(true);
+    }
+    // Disable auto-scroll if user scrolled up
+    else if (!isAtBottom && shouldAutoScroll && contentOffset.y > 0) {
+      setShouldAutoScroll(false);
+    }
+  }, [shouldAutoScroll]);
+
+  const scrollToBottom = useCallback(() => {
+    scrollViewRef.current?.scrollToEnd({ animated: true });
+    setShouldAutoScroll(true);
+    setShowScrollToBottom(false);
+  }, []);
+
+  // Auto-scroll when new messages arrive
+  useEffect(() => {
+    if (shouldAutoScroll && messages.length > 0) {
+      // Use setTimeout to ensure content has rendered
+      setTimeout(() => {
+        scrollViewRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+    }
+  }, [messages.length, shouldAutoScroll, responding]);
 
   const [willCancel, setWillCancel] = useState(false);
   const startYRef = useRef<number | null>(null);
@@ -914,20 +955,38 @@ export default function ChatScreen({ route, navigation }: any) {
     >
       <View style={{ flex: 1 }}>
         <ScrollView
+          ref={scrollViewRef}
           style={{ flex: 1, padding: spacing.lg, backgroundColor: theme.colors.background }}
-          contentContainerStyle={{ paddingBottom: insets.bottom }}
+          contentContainerStyle={{ paddingBottom: insets.bottom + 60 }}
           keyboardShouldPersistTaps="handled"
           contentInsetAdjustmentBehavior="automatic"
+          onScroll={handleScroll}
+          scrollEventThrottle={16}
         >
           {messages.map((m, i) => {
             const hasExtras = (m.toolCalls?.length ?? 0) > 0 || (m.toolResults?.length ?? 0) > 0;
             const shouldCollapse = (m.content?.length ?? 0) > COLLAPSE_THRESHOLD || hasExtras;
             const isExpanded = expandedMessages[i] ?? false;
 
+            // Get role icon based on message role
+            const getRoleIcon = () => {
+              switch (m.role) {
+                case 'user': return '👤';
+                case 'assistant': return '🤖';
+                case 'system': return '⚙️';
+                default: return '💬';
+              }
+            };
+
             return (
-              <View key={i} style={[styles.msg, m.role === 'user' ? styles.user : styles.assistant]}>
-                {/* Header row with role and expand/collapse button */}
+              <Pressable
+                key={i}
+                style={[styles.msg, m.role === 'user' ? styles.user : styles.assistant]}
+                onPress={shouldCollapse ? () => toggleMessageExpansion(i) : undefined}
+              >
+                {/* Header row with role icon, role label, and badges - entire row is clickable */}
                 <View style={styles.messageHeader}>
+                  <Text style={styles.roleIcon}>{getRoleIcon()}</Text>
                   <Text style={styles.role}>{m.role}</Text>
                   {(m.toolCalls?.length ?? 0) > 0 && (
                     <View style={styles.toolBadgeSmall}>
@@ -940,15 +999,11 @@ export default function ChatScreen({ route, navigation }: any) {
                     </View>
                   )}
                   {shouldCollapse && (
-                    <Pressable
-                      onPress={() => toggleMessageExpansion(i)}
-                      style={styles.expandButton}
-                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                    >
-                      <Text style={styles.expandButtonText}>
-                        {isExpanded ? '▲ Collapse' : '▼ Expand'}
+                    <View style={styles.expandIndicator}>
+                      <Text style={styles.expandIndicatorText}>
+                        {isExpanded ? '▲' : '▼'}
                       </Text>
-                    </Pressable>
+                    </View>
                   )}
                 </View>
 
@@ -1057,7 +1112,7 @@ export default function ChatScreen({ route, navigation }: any) {
                     )}
                   </>
                 )}
-              </View>
+              </Pressable>
             );
           })}
           {debugInfo && (
@@ -1066,6 +1121,18 @@ export default function ChatScreen({ route, navigation }: any) {
             </View>
           )}
         </ScrollView>
+
+        {/* Scroll to bottom button */}
+        {showScrollToBottom && (
+          <TouchableOpacity
+            style={[styles.scrollToBottomButton, { bottom: 80 + insets.bottom }]}
+            onPress={scrollToBottom}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.scrollToBottomText}>↓</Text>
+          </TouchableOpacity>
+        )}
+
         {listening && (
           <View style={[styles.overlay, { bottom: 72 + insets.bottom }]} pointerEvents="none">
             <Text style={styles.overlayText}>
@@ -1155,9 +1222,13 @@ function createStyles(theme: Theme) {
       borderColor: theme.colors.border,
       alignSelf: 'flex-start',
     },
+    roleIcon: {
+      fontSize: 14,
+      marginRight: 2,
+    },
     role: {
       ...theme.typography.caption,
-      marginBottom: spacing.xs,
+      textTransform: 'capitalize',
     },
     messageHeader: {
       flexDirection: 'row',
@@ -1178,6 +1249,16 @@ function createStyles(theme: Theme) {
     toolBadgeSmallText: {
       fontSize: 10,
       color: theme.colors.mutedForeground,
+    },
+    expandIndicator: {
+      marginLeft: 'auto',
+      paddingHorizontal: spacing.sm,
+      paddingVertical: 2,
+    },
+    expandIndicatorText: {
+      fontSize: 12,
+      color: theme.colors.primary,
+      fontWeight: '500',
     },
     expandButton: {
       marginLeft: 'auto',
@@ -1280,6 +1361,27 @@ function createStyles(theme: Theme) {
       fontSize: 12,
       color: theme.colors.mutedForeground,
       fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    },
+    // Scroll to bottom button
+    scrollToBottomButton: {
+      position: 'absolute',
+      right: spacing.md,
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: theme.colors.primary,
+      alignItems: 'center',
+      justifyContent: 'center',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.25,
+      shadowRadius: 4,
+      elevation: 5,
+    },
+    scrollToBottomText: {
+      fontSize: 20,
+      color: theme.colors.primaryForeground,
+      fontWeight: 'bold',
     },
     overlay: {
       position: 'absolute',

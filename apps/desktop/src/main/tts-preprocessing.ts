@@ -185,8 +185,9 @@ function cleanSymbols(text: string): string {
   
   // Clean up brackets and parentheses content that might be technical
   text = text.replace(/\([^)]*\)/g, "")
-  text = text.replace(/\[[^\]]*\]/g, "")
-  
+  // Remove brackets but preserve TTS placeholders like [code block], [web link], [email address]
+  text = text.replace(/\[(?!code block\]|web link\]|email address\])[^\]]*\]/g, "")
+
   return text
 }
 

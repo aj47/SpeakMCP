@@ -1275,9 +1275,11 @@ async function makeLLMCallAttempt(
   // Check for continuation phrases that indicate the LLM intends to continue working
   // These phrases suggest the agent wants to take action but failed to return proper JSON
   // Fixes issue #443: Agent stops prematurely when LLM returns plain text instead of structured JSON
+  // Note: We use ['\u2019] character class to match both straight (') and curly (') apostrophes
+  // since LLMs often produce typographic/curly quotes (U+2019 = RIGHT SINGLE QUOTATION MARK)
   const continuationPhrases = [
     /\blet me\b/i,
-    /\bi'll\b/i,
+    /\bi['\u2019]ll\b/i,
     /\bi will\b/i,
     /\bnext[,\s]/i,
     /\bnow i\b/i,
@@ -1287,7 +1289,7 @@ async function makeLLMCallAttempt(
     /\bproceed to\b/i,
     /\bstart by\b/i,
     /\bbegin by\b/i,
-    /\blet's\b/i,
+    /\blet['\u2019]s\b/i,
     /\bshould\s+(now|first|next)\b/i,
     /\bneed to\b/i,
     /\bwill now\b/i,

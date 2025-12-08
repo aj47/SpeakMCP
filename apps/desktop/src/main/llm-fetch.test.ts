@@ -403,5 +403,59 @@ describe('Continuation Phrase Detection (Issue #443)', () => {
     expect(result.content).toContain('need to')
     expect(result.needsMoreWork).toBe(true)
   })
+
+  it("should set needsMoreWork=true when response contains curly apostrophe I\u2019ll", async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        choices: [
+          {
+            message: {
+              // Using curly apostrophe (') U+2019 instead of straight apostrophe (')
+              content: "I\u2019ll check the file and fix the issue.",
+            },
+          },
+        ],
+      }),
+    })
+
+    const { makeLLMCallWithFetch } = await import('./llm-fetch')
+
+    const result = await makeLLMCallWithFetch(
+      [{ role: 'user', content: 'test' }],
+      'openai'
+    )
+
+    expect(result.content).toContain("I\u2019ll")
+    expect(result.needsMoreWork).toBe(true)
+  })
+
+  it("should set needsMoreWork=true when response contains curly apostrophe let\u2019s", async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        choices: [
+          {
+            message: {
+              // Using curly apostrophe (') U+2019 instead of straight apostrophe (')
+              content: "Let\u2019s start by running the tests.",
+            },
+          },
+        ],
+      }),
+    })
+
+    const { makeLLMCallWithFetch } = await import('./llm-fetch')
+
+    const result = await makeLLMCallWithFetch(
+      [{ role: 'user', content: 'test' }],
+      'openai'
+    )
+
+    expect(result.content).toContain("Let\u2019s")
+    expect(result.needsMoreWork).toBe(true)
+  })
 })
 

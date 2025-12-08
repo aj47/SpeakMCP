@@ -1579,40 +1579,21 @@ Always use actual resource IDs from the conversation history or create new ones 
     }
 
     // Handle no-op iterations (no tool calls and no explicit completion)
+    // Fix for https://github.com/aj47/SpeakMCP/issues/443:
+    // Only terminate when needsMoreWork is EXPLICITLY false, not when undefined.
+    // When LLM returns plain text without JSON structure, needsMoreWork will be undefined,
+    // and we should nudge for proper JSON format rather than accepting it as final.
     if (!hasToolCalls && !explicitlyComplete) {
       noOpCount++
 
       // Check if this is an actionable request that should have executed tools
       const isActionableRequest = toolCapabilities.relevantTools.length > 0
       const contentText = llmResponse.content || ""
-      const hasSubstantiveContent = contentText.trim().length >= 1 && !isToolCallPlaceholder(contentText)
 
-      // If no actionable tools and the response has substantive content,
-      // accept it as a direct response (e.g., simple Q&A, factual questions)
-      if (!isActionableRequest && hasSubstantiveContent) {
-        finalContent = contentText
-        addMessage("assistant", finalContent)
-
-        // Add completion step for UI consistency with other completion paths
-        const completionStep = createProgressStep(
-          "completion",
-          "Task completed",
-          "Question answered directly",
-          "completed",
-        )
-        progressSteps.push(completionStep)
-
-        emit({
-          currentIteration: iteration,
-          maxIterations,
-          steps: progressSteps.slice(-3),
-          isComplete: true,
-          finalContent,
-          conversationHistory: formatConversationForProgress(conversationHistory),
-        })
-        break
-      }
-
+      // Always nudge for proper JSON format when needsMoreWork is not explicitly set.
+      // For actionable requests (with relevant tools), nudge immediately.
+      // For non-actionable requests (simple Q&A), allow 1 no-op before nudging,
+      // giving the LLM a chance to self-correct, but don't auto-accept plain text.
       if (noOpCount >= 2 || (isActionableRequest && noOpCount >= 1)) {
         // Add nudge to push the agent forward - require proper JSON format
         // Only add assistant message if non-empty to avoid blank entries

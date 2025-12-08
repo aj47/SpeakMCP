@@ -1272,32 +1272,14 @@ async function makeLLMCallAttempt(
     return { content: cleaned, needsMoreWork: true }
   }
 
-  // Check for continuation phrases that indicate the LLM intends to continue working
-  // even though it didn't return proper JSON. This prevents premature termination
-  // when the LLM says things like "Let me..." or "I'll..." but fails to format as JSON.
-  // Fixes: https://github.com/aj47/SpeakMCP/issues/443
-  // Note: Uses (?:^|[.!?\n]\s*) to detect phrases at start, after sentence endings,
-  // or after newlines (LLMs often start new lines without punctuation)
-  // Note: Uses ["\u201C']* to allow optional opening quotes (straight ", curly ", or ')
-  // Note: Uses ['\u2019] to match both ASCII apostrophe (') and curly apostrophe (')
-  // since LLMs often output curly quotes like "I'll" instead of "I'll"
-  const continuationPhrases = /(?:^|[.!?\n]\s*)["\u201C']*(let me|i['\u2019]ll|i will|i['\u2019]m going to|i am going to|next,|now,|first,|then,|allow me to|proceeding to|starting to|going to|about to)/i
-  const hasContinuationPhrase = continuationPhrases.test((cleaned || content || "").trim())
-  if (hasContinuationPhrase) {
-    if (isDebugLLM()) {
-      logLLM("✅ Returning plain text with continuation phrase (needsMoreWork=true)", {
-        contentPreview: (cleaned || content)?.substring(0, 100)
-      })
-    }
-    return { content: cleaned || content, needsMoreWork: true }
-  }
-
   // For plain text responses without JSON structure, set needsMoreWork=undefined
   // rather than false. This allows the agent loop to decide whether the response
   // is acceptable or if it needs to nudge the LLM for a properly formatted response.
   // This prevents poor-quality plain text responses from being automatically accepted.
+  // Fix for https://github.com/aj47/SpeakMCP/issues/443 - agent loop will now
+  // always nudge for proper JSON format when needsMoreWork is undefined.
   if (isDebugLLM()) {
-    logLLM("✅ Returning plain text response (needsMoreWork=undefined - let agent decide)", {
+    logLLM("✅ Returning plain text response (needsMoreWork=undefined - agent will nudge for JSON)", {
       contentLength: (cleaned || content)?.length || 0
     })
   }

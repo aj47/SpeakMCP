@@ -1,0 +1,172 @@
+import { QueuedMessage, MessageQueue } from "../shared/types"
+import { logApp } from "./debug"
+import { getRendererHandlers } from "@egoist/tipc/main"
+import { RendererHandlers } from "../shared/renderer-handlers"
+import { WINDOWS } from "./window"
+
+/**
+ * Service for managing message queues per conversation.
+ * When message queuing is enabled, users can submit messages while an agent session is active.
+ * These messages are queued and processed sequentially after the current session completes.
+ */
+class MessageQueueService {
+  private static instance: MessageQueueService | null = null
+  private queues: Map<string, QueuedMessage[]> = new Map()
+
+  static getInstance(): MessageQueueService {
+    if (!MessageQueueService.instance) {
+      MessageQueueService.instance = new MessageQueueService()
+    }
+    return MessageQueueService.instance
+  }
+
+  private constructor() {}
+
+  private generateMessageId(): string {
+    return `qmsg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+  }
+
+  /**
+   * Add a message to the queue for a conversation
+   */
+  enqueue(conversationId: string, text: string): QueuedMessage {
+    const message: QueuedMessage = {
+      id: this.generateMessageId(),
+      conversationId,
+      text,
+      createdAt: Date.now(),
+      status: "pending",
+    }
+
+    const queue = this.queues.get(conversationId) || []
+    queue.push(message)
+    this.queues.set(conversationId, queue)
+
+    logApp(`[MessageQueueService] Enqueued message for ${conversationId}: ${message.id}`)
+    this.emitQueueUpdate(conversationId)
+    
+    return message
+  }
+
+  /**
+   * Get all queued messages for a conversation
+   */
+  getQueue(conversationId: string): QueuedMessage[] {
+    return this.queues.get(conversationId) || []
+  }
+
+  /**
+   * Get all queues (for debugging/UI purposes)
+   */
+  getAllQueues(): MessageQueue[] {
+    const result: MessageQueue[] = []
+    this.queues.forEach((messages, conversationId) => {
+      if (messages.length > 0) {
+        result.push({ conversationId, messages })
+      }
+    })
+    return result
+  }
+
+  /**
+   * Remove a specific message from the queue
+   */
+  removeFromQueue(conversationId: string, messageId: string): boolean {
+    const queue = this.queues.get(conversationId)
+    if (!queue) return false
+
+    const index = queue.findIndex((m) => m.id === messageId)
+    if (index === -1) return false
+
+    queue.splice(index, 1)
+    logApp(`[MessageQueueService] Removed message ${messageId} from ${conversationId}`)
+    this.emitQueueUpdate(conversationId)
+    
+    return true
+  }
+
+  /**
+   * Clear all messages in a conversation's queue
+   */
+  clearQueue(conversationId: string): void {
+    this.queues.delete(conversationId)
+    logApp(`[MessageQueueService] Cleared queue for ${conversationId}`)
+    this.emitQueueUpdate(conversationId)
+  }
+
+  /**
+   * Get and remove the next pending message from the queue
+   */
+  dequeue(conversationId: string): QueuedMessage | null {
+    const queue = this.queues.get(conversationId)
+    if (!queue || queue.length === 0) return null
+
+    const message = queue.shift()!
+    message.status = "processing"
+    
+    logApp(`[MessageQueueService] Dequeued message ${message.id} from ${conversationId}`)
+    this.emitQueueUpdate(conversationId)
+    
+    return message
+  }
+
+  /**
+   * Reorder messages in the queue
+   */
+  reorderQueue(conversationId: string, messageIds: string[]): boolean {
+    const queue = this.queues.get(conversationId)
+    if (!queue) return false
+
+    // Create a map for quick lookup
+    const messageMap = new Map(queue.map((m) => [m.id, m]))
+    
+    // Rebuild queue in new order
+    const newQueue: QueuedMessage[] = []
+    for (const id of messageIds) {
+      const message = messageMap.get(id)
+      if (message) {
+        newQueue.push(message)
+        messageMap.delete(id)
+      }
+    }
+    
+    // Add any remaining messages that weren't in the new order
+    messageMap.forEach((m) => newQueue.push(m))
+    
+    this.queues.set(conversationId, newQueue)
+    logApp(`[MessageQueueService] Reordered queue for ${conversationId}`)
+    this.emitQueueUpdate(conversationId)
+    
+    return true
+  }
+
+  /**
+   * Check if a conversation has queued messages
+   */
+  hasQueuedMessages(conversationId: string): boolean {
+    const queue = this.queues.get(conversationId)
+    return !!queue && queue.length > 0
+  }
+
+  /**
+   * Emit queue update to renderer
+   */
+  private emitQueueUpdate(conversationId: string): void {
+    const main = WINDOWS.get("main")
+    const panel = WINDOWS.get("panel")
+    
+    const queue = this.getQueue(conversationId)
+    
+    ;[main, panel].forEach((win) => {
+      if (win) {
+        getRendererHandlers<RendererHandlers>(win.webContents).onMessageQueueUpdate.send({
+          conversationId,
+          queue,
+        })
+      }
+    })
+  }
+}
+
+export const messageQueueService = MessageQueueService.getInstance()
+

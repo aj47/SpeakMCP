@@ -166,6 +166,20 @@ export interface AgentProgressUpdate {
   }
 }
 
+// Message Queue Types
+export interface QueuedMessage {
+  id: string
+  conversationId: string
+  text: string
+  createdAt: number
+  status: "pending" | "processing" | "cancelled"
+}
+
+export interface MessageQueue {
+  conversationId: string
+  messages: QueuedMessage[]
+}
+
 // Conversation Types
 export interface ConversationMessage {
   id: string

@@ -103,6 +103,41 @@ export interface ServerLogEntry {
   message: string
 }
 
+// MDAP (Massively Decomposed Agentic Processes) Progress Types
+export interface MDAPVotingProgress {
+  leadingAnswer?: string
+  leadMargin: number
+  totalSamples: number
+  targetMargin: number
+  uniqueAnswers: number
+}
+
+export interface MDAPSubtaskProgress {
+  index: number
+  description: string
+  status: "pending" | "voting" | "completed" | "failed"
+  votingProgress?: MDAPVotingProgress
+  winningAnswer?: string
+}
+
+export interface MDAPProgressUpdate {
+  sessionId: string
+  taskDescription: string
+  totalSubtasks: number
+  completedSubtasks: number
+  currentSubtask?: MDAPSubtaskProgress
+  stateChain: string[]
+  isComplete: boolean
+  finalResult?: string
+  error?: string
+  statistics: {
+    totalLLMCalls: number
+    totalRedFlags: number
+    totalVotes: number
+    elapsedMs: number
+  }
+}
+
 // Agent Mode Progress Tracking Types
 export interface AgentProgressStep {
   id: string
@@ -435,7 +470,16 @@ export type Config = {
   // Parallel Tool Execution Configuration
   mcpParallelToolExecution?: boolean
 
-
+  // MDAP (Massively Decomposed Agentic Processes) Configuration
+  // Based on the MAKER framework for high-reliability task execution
+  mdapEnabled?: boolean // Enable MDAP mode for suitable tasks
+  mdapAutoDetect?: boolean // Automatically detect if task is suitable for MDAP
+  mdapKThreshold?: number // Voting k-threshold (default: 3)
+  mdapMaxSamplesPerSubtask?: number // Max voting samples per subtask (default: 20)
+  mdapMaxSubtasks?: number // Max subtasks in decomposition (default: 100)
+  mdapParallelMicroagents?: number // Parallel microagent calls (default: 3)
+  mdapMaxResponseTokens?: number // Red-flag threshold for response length (default: 700)
+  mdapEnableFormatValidation?: boolean // Enable format validation red-flagging
 
 	  // Remote Server Configuration
 	  remoteServerEnabled?: boolean

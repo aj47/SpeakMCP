@@ -2253,6 +2253,129 @@ export const router = {
     const { getCloudflareTunnelStatus } = await import("./cloudflare-tunnel")
     return getCloudflareTunnelStatus()
   }),
+
+  // MDAP (Massively Decomposed Agentic Processes) handlers
+  // Based on the MAKER framework for high-reliability task execution
+  executeMdapTask: t.procedure
+    .input<{
+      task: string
+      conversationId?: string
+      sessionId?: string
+    }>()
+    .action(async ({ input }) => {
+      const { executeMDAP, shouldUseMDAP } = await import("./mdap")
+      const config = configStore.get()
+
+      // Check if MDAP should be used
+      const mdapConfig = {
+        kThreshold: config.mdapKThreshold || 3,
+        maxSamplesPerSubtask: config.mdapMaxSamplesPerSubtask || 20,
+        maxSubtasks: config.mdapMaxSubtasks || 100,
+        parallelMicroagents: config.mdapParallelMicroagents || 3,
+        maxResponseTokens: config.mdapMaxResponseTokens || 700,
+        enableFormatValidation: config.mdapEnableFormatValidation !== false,
+        enableDebugLogging: false,
+        saveIntermediateResults: false,
+      }
+
+      // Execute MDAP with progress updates
+      const result = await executeMDAP(
+        input.task,
+        mdapConfig,
+        async (progressUpdate) => {
+          // Emit progress to all windows
+          for (const [id, win] of WINDOWS.entries()) {
+            try {
+              getRendererHandlers<RendererHandlers>(win.webContents).mdapProgressUpdated?.send(progressUpdate)
+            } catch (e) {
+              logApp(`[tipc] mdapProgressUpdated send to ${id} failed:`, e)
+            }
+          }
+        },
+        input.sessionId
+      )
+
+      return {
+        success: result.success,
+        result: result.result,
+        statistics: {
+          totalLLMCalls: result.state.totalLLMCalls,
+          totalVotes: result.state.totalVotes,
+          totalRedFlags: result.state.totalRedFlags,
+          totalSubtasks: result.state.subtasks.length,
+          completedSubtasks: result.state.completedSubtasks,
+          elapsedMs: (result.state.endTime || Date.now()) - result.state.startTime,
+        },
+        error: result.state.error,
+      }
+    }),
+
+  checkMdapSuitability: t.procedure
+    .input<{ task: string }>()
+    .action(async ({ input }) => {
+      const { shouldUseMDAP, isTaskSuitableForMDAP } = await import("./mdap")
+
+      const config = configStore.get()
+      const suitability = isTaskSuitableForMDAP(input.task)
+      const recommendation = shouldUseMDAP(input.task)
+
+      return {
+        suitable: suitability.suitable,
+        reason: suitability.reason,
+        recommended: config.mdapEnabled && recommendation.recommended,
+        recommendationReason: recommendation.reason,
+      }
+    }),
+
+  getActiveMdapSessions: t.procedure.action(async () => {
+    const { getActiveMDAPSessions } = await import("./mdap")
+    return getActiveMDAPSessions().map(session => ({
+      sessionId: session.sessionId,
+      taskDescription: session.taskDescription,
+      totalSubtasks: session.subtasks.length,
+      completedSubtasks: session.completedSubtasks,
+      isComplete: session.isComplete,
+      error: session.error,
+    }))
+  }),
+
+  stopMdapSession: t.procedure
+    .input<{ sessionId: string }>()
+    .action(async ({ input }) => {
+      const { stopMDAPSession } = await import("./mdap")
+      return { success: stopMDAPSession(input.sessionId) }
+    }),
+
+  getMdapSessionState: t.procedure
+    .input<{ sessionId: string }>()
+    .action(async ({ input }) => {
+      const { getMDAPSessionState } = await import("./mdap")
+      const state = getMDAPSessionState(input.sessionId)
+      if (!state) {
+        return null
+      }
+      return {
+        sessionId: state.sessionId,
+        taskDescription: state.taskDescription,
+        subtasks: state.subtasks.map(st => ({
+          id: st.id,
+          index: st.index,
+          description: st.description,
+        })),
+        currentSubtaskIndex: state.currentSubtaskIndex,
+        completedSubtasks: state.completedSubtasks,
+        stateChain: state.stateChain,
+        isComplete: state.isComplete,
+        finalResult: state.finalResult,
+        error: state.error,
+        statistics: {
+          totalLLMCalls: state.totalLLMCalls,
+          totalVotes: state.totalVotes,
+          totalRedFlags: state.totalRedFlags,
+          elapsedMs: (state.endTime || Date.now()) - state.startTime,
+        },
+      }
+    }),
 }
 
 // TTS Provider Implementation Functions

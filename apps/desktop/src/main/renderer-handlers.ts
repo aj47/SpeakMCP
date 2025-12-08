@@ -1,5 +1,5 @@
 import { UpdateDownloadedEvent } from "electron-updater"
-import { AgentProgressUpdate } from "../shared/types"
+import { AgentProgressUpdate, MDAPProgressUpdate } from "../shared/types"
 import type { AgentSession } from "./agent-session-tracker"
 
 export type RendererHandlers = {
@@ -30,6 +30,9 @@ export type RendererHandlers = {
 
   // Cross-window focus control for agent sessions
   focusAgentSession: (sessionId: string) => void
+
+  // MDAP (Massively Decomposed Agentic Processes) handlers
+  mdapProgressUpdated: (update: MDAPProgressUpdate) => void
 
   updateAvailable: (e: UpdateDownloadedEvent) => void
   navigate: (url: string) => void

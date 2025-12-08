@@ -56,6 +56,11 @@ export const Component = () => {
       href: "/settings/remote-server",
       icon: "i-mingcute-server-line",
     },
+    {
+      text: "MDAP",
+      href: "/settings/mdap",
+      icon: "i-mingcute-flowchart-line",
+    },
   ]
 
   useEffect(() => {

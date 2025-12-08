@@ -65,7 +65,7 @@ window.electron.ipcRenderer.invoke('getConfig')
 window.electron.ipcRenderer.invoke('saveConfig', { config: { /* partial config */ } })
 ```
 
-> **Note**: These procedure names are defined in `apps/desktop/src/main/tipc.ts`. The renderer code uses the `tipcClient` wrapper for type safety, but direct `invoke()` calls work for debugging.
+> **Note**: These procedure names are defined in `apps/desktop/src/main/tipc.ts`. While the renderer code uses the `tipcClient` wrapper for type safety, direct `invoke()` calls work because TIPC's `registerIpcMain(router)` internally calls `ipcMain.handle(name, ...)` for each procedure in the router (see `@egoist/tipc/dist/main.js`).
 
 ---
 

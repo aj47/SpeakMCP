@@ -924,14 +924,23 @@ export default function ChatScreen({ route, navigation }: any) {
             const shouldCollapse = (m.content?.length ?? 0) > COLLAPSE_THRESHOLD || hasExtras;
             // Find if this is the last assistant message with content (the "final response")
             // to expand it by default for better mobile UX
+            // Use length-based checks to avoid false positives from empty arrays (which are truthy)
             const isLastAssistantWithContent = (() => {
               if (m.role !== 'assistant') return false;
-              if (!m.content && !m.toolCalls && !m.toolResults) return false;
+              const hasContent = (m.content?.length ?? 0) > 0;
+              const hasToolCalls = (m.toolCalls?.length ?? 0) > 0;
+              const hasToolResults = (m.toolResults?.length ?? 0) > 0;
+              if (!hasContent && !hasToolCalls && !hasToolResults) return false;
               // Check if there's any assistant message after this one with content
               for (let j = i + 1; j < messages.length; j++) {
                 const nextMsg = messages[j];
-                if (nextMsg.role === 'assistant' && (nextMsg.content || nextMsg.toolCalls || nextMsg.toolResults)) {
-                  return false;
+                if (nextMsg.role === 'assistant') {
+                  const nextHasContent = (nextMsg.content?.length ?? 0) > 0;
+                  const nextHasToolCalls = (nextMsg.toolCalls?.length ?? 0) > 0;
+                  const nextHasToolResults = (nextMsg.toolResults?.length ?? 0) > 0;
+                  if (nextHasContent || nextHasToolCalls || nextHasToolResults) {
+                    return false;
+                  }
                 }
               }
               return true;

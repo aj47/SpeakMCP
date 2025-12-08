@@ -15,8 +15,9 @@ export function useStoreSync() {
   const clearSessionProgress = useAgentStore((s) => s.clearSessionProgress)
   const setFocusedSessionId = useAgentStore((s) => s.setFocusedSessionId)
   const setScrollToSessionId = useAgentStore((s) => s.setScrollToSessionId)
+  const updateMessageQueue = useAgentStore((s) => s.updateMessageQueue)
   const markConversationCompleted = useConversationStore((s) => s.markConversationCompleted)
-  
+
   const saveConversationMutation = useSaveConversationMutation()
 
   // Listen for agent progress updates
@@ -86,6 +87,17 @@ export function useStoreSync() {
     )
     return unlisten
   }, [setFocusedSessionId, setScrollToSessionId])
+
+  // Listen for message queue updates
+  useEffect(() => {
+    const unlisten = (rendererHandlers as any).onMessageQueueUpdate?.listen?.(
+      (data: { conversationId: string; queue: any[] }) => {
+        logUI('[useStoreSync] Message queue update:', data.conversationId, data.queue.length)
+        updateMessageQueue(data.conversationId, data.queue)
+      }
+    )
+    return unlisten
+  }, [updateMessageQueue])
 
   // Helper to save conversation history
   async function saveCompleteConversationHistory(

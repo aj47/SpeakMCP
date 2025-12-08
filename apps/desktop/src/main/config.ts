@@ -123,6 +123,8 @@ const getConfig = () => {
 	    remoteServerLogLevel: "info",
 	    remoteServerCorsOrigins: ["*"],
 
+    // Welcome/Tutorial Tab - shown by default on first install
+    hideWelcomeTab: false,
 
   }
 

@@ -1,11 +1,12 @@
 import { rendererHandlers } from "@renderer/lib/tipc-client"
 import { cn } from "@renderer/lib/utils"
-import { useEffect, useState } from "react"
+import { useEffect, useState, useMemo } from "react"
 import { NavLink, Outlet, useNavigate, useLocation } from "react-router-dom"
 import { LoadingSpinner } from "@renderer/components/ui/loading-spinner"
 import { SettingsDragBar } from "@renderer/components/settings-drag-bar"
 import { ActiveAgentsSidebar } from "@renderer/components/active-agents-sidebar"
 import { SidebarProfileSelector } from "@renderer/components/sidebar-profile-selector"
+import { useConfigQuery } from "@renderer/lib/query-client"
 
 type NavLinkItem = {
   text: string
@@ -16,6 +17,7 @@ type NavLinkItem = {
 export const Component = () => {
   const navigate = useNavigate()
   const location = useLocation()
+  const configQuery = useConfigQuery()
   // Settings dropdown is expanded by default for better discoverability
   const [settingsExpanded, setSettingsExpanded] = useState(true)
 
@@ -29,34 +31,50 @@ export const Component = () => {
     },
   ]
 
-  // Settings navigation - collapsible
-  const settingsNavLinks: NavLinkItem[] = [
-    {
-      text: "General",
-      href: "/settings",
-      icon: "i-mingcute-settings-3-line",
-    },
-    {
-      text: "Models",
-      href: "/settings/models",
-      icon: "i-mingcute-brain-line",
-    },
-    {
-      text: "Profile",
-      href: "/settings/tools",
-      icon: "i-mingcute-user-setting-line",
-    },
-    {
-      text: "MCP Tools",
-      href: "/settings/mcp-tools",
-      icon: "i-mingcute-tool-line",
-    },
-    {
-      text: "Remote Server",
-      href: "/settings/remote-server",
-      icon: "i-mingcute-server-line",
-    },
-  ]
+  // Settings navigation - collapsible, with conditional Welcome tab
+  const settingsNavLinks: NavLinkItem[] = useMemo(() => {
+    const links: NavLinkItem[] = []
+
+    // Add Welcome tab as first item if not hidden
+    if (!configQuery.data?.hideWelcomeTab) {
+      links.push({
+        text: "Welcome",
+        href: "/settings/welcome",
+        icon: "i-mingcute-celebrate-line",
+      })
+    }
+
+    // Add all other settings tabs
+    links.push(
+      {
+        text: "General",
+        href: "/settings",
+        icon: "i-mingcute-settings-3-line",
+      },
+      {
+        text: "Models",
+        href: "/settings/models",
+        icon: "i-mingcute-brain-line",
+      },
+      {
+        text: "Profile",
+        href: "/settings/tools",
+        icon: "i-mingcute-user-setting-line",
+      },
+      {
+        text: "MCP Tools",
+        href: "/settings/mcp-tools",
+        icon: "i-mingcute-tool-line",
+      },
+      {
+        text: "Remote Server",
+        href: "/settings/remote-server",
+        icon: "i-mingcute-server-line",
+      },
+    )
+
+    return links
+  }, [configQuery.data?.hideWelcomeTab])
 
   useEffect(() => {
     return rendererHandlers.navigate.listen((url) => {

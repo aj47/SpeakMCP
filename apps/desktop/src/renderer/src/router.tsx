@@ -30,6 +30,10 @@ export const router: ReturnType<typeof createBrowserRouter> =
           lazy: () => import("./pages/settings-general"),
         },
         {
+          path: "settings/welcome",
+          lazy: () => import("./pages/settings-welcome"),
+        },
+        {
           path: "settings/general",
           lazy: () => import("./pages/settings-general"),
         },

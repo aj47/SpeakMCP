@@ -449,4 +449,7 @@ export type Config = {
   streamStatusWatcherEnabled?: boolean
   streamStatusFilePath?: string
 
+  // Welcome/Tutorial Tab Configuration
+  hideWelcomeTab?: boolean
+
 }

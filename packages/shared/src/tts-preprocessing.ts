@@ -137,7 +137,8 @@ function convertNumbers(text: string): string {
   text = text.replace(/v?(\d+)\.(\d+)\.(\d+)/g, "version $1 point $2 point $3")
   text = text.replace(/(\d+)\.(\d+)/g, "$1 point $2")
   // Remove commas from numbers - TTS engines pronounce large numbers naturally
-  text = text.replace(/(\d),(\d{3})/g, "$1$2")
+  // Use lookahead to match any comma between digits (handles 1,234,567,890 etc.)
+  text = text.replace(/(\d),(?=\d)/g, "$1")
   return text
 }
 

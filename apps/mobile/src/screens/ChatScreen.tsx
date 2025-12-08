@@ -589,6 +589,18 @@ export default function ChatScreen({ route, navigation }: any) {
             return;
           } catch (restartErr) {
             console.warn('[Voice] Failed to restart web recognition after voice break:', restartErr);
+            // On restart failure, stop gracefully without submitting
+            // This maintains the "only submit on button release" guarantee
+            setListening(false);
+            setLiveTranscript('');
+            // Place accumulated text in input field so user doesn't lose it
+            const accumulatedText = (webFinalRef.current || '').trim() || (liveTranscriptRef.current || '').trim();
+            if (accumulatedText) {
+              setInput((t) => (t ? `${t} ${accumulatedText}` : accumulatedText));
+            }
+            webFinalRef.current = '';
+            pendingHandsFreeFinalRef.current = '';
+            return;
           }
         }
 
@@ -705,6 +717,18 @@ export default function ChatScreen({ route, navigation }: any) {
                   }
                 } catch (restartErr) {
                   console.warn('[Voice] Failed to restart recognition after voice break:', restartErr);
+                  // On restart failure, stop gracefully without submitting
+                  // This maintains the "only submit on button release" guarantee
+                  setListening(false);
+                  setLiveTranscript('');
+                  // Place accumulated text in input field so user doesn't lose it
+                  const accumulatedText = (nativeFinalRef.current || '').trim() || (liveTranscriptRef.current || '').trim();
+                  if (accumulatedText) {
+                    setInput((t) => (t ? `${t} ${accumulatedText}` : accumulatedText));
+                  }
+                  nativeFinalRef.current = '';
+                  pendingHandsFreeFinalRef.current = '';
+                  return;
                 }
               }
 

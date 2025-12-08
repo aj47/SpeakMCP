@@ -12,6 +12,8 @@ import { WINDOWS } from "./window"
 class MessageQueueService {
   private static instance: MessageQueueService | null = null
   private queues: Map<string, QueuedMessage[]> = new Map()
+  // Track which conversations are currently being processed to prevent concurrent processing
+  private processingConversations: Set<string> = new Set()
 
   static getInstance(): MessageQueueService {
     if (!MessageQueueService.instance) {
@@ -21,6 +23,35 @@ class MessageQueueService {
   }
 
   private constructor() {}
+
+  /**
+   * Try to acquire a processing lock for a conversation.
+   * Returns true if lock acquired, false if already being processed.
+   */
+  tryAcquireProcessingLock(conversationId: string): boolean {
+    if (this.processingConversations.has(conversationId)) {
+      logApp(`[MessageQueueService] Already processing queue for ${conversationId}, skipping`)
+      return false
+    }
+    this.processingConversations.add(conversationId)
+    logApp(`[MessageQueueService] Acquired processing lock for ${conversationId}`)
+    return true
+  }
+
+  /**
+   * Release the processing lock for a conversation.
+   */
+  releaseProcessingLock(conversationId: string): void {
+    this.processingConversations.delete(conversationId)
+    logApp(`[MessageQueueService] Released processing lock for ${conversationId}`)
+  }
+
+  /**
+   * Check if a conversation is currently being processed.
+   */
+  isProcessing(conversationId: string): boolean {
+    return this.processingConversations.has(conversationId)
+  }
 
   private generateMessageId(): string {
     return `qmsg_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`

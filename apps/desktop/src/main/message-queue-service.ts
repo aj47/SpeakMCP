@@ -169,20 +169,26 @@ class MessageQueueService {
   }
 
   /**
-   * Mark the first message in the queue as successfully processed and remove it
+   * Mark a message as successfully processed and remove it from the queue
+   * Finds the message by ID regardless of position (handles queue reordering during processing)
    * Call this after successful processing to avoid losing messages on failure
    */
   markProcessed(conversationId: string, messageId: string): boolean {
     const queue = this.queues.get(conversationId)
     if (!queue || queue.length === 0) return false
 
-    // Verify the message at the front is the one we expect
-    if (queue[0]?.id !== messageId) {
-      logApp(`[MessageQueueService] Warning: markProcessed called for ${messageId} but front is ${queue[0]?.id}`)
+    // Find the message by ID (may not be at front if queue was reordered during processing)
+    const index = queue.findIndex((m) => m.id === messageId)
+    if (index === -1) {
+      logApp(`[MessageQueueService] Warning: markProcessed called for ${messageId} but message not found in queue`)
       return false
     }
 
-    queue.shift()
+    if (index !== 0) {
+      logApp(`[MessageQueueService] Message ${messageId} was at position ${index} (queue was reordered during processing)`)
+    }
+
+    queue.splice(index, 1)
     logApp(`[MessageQueueService] Marked message ${messageId} as processed for ${conversationId}`)
     this.emitQueueUpdate(conversationId)
 
@@ -233,15 +239,26 @@ class MessageQueueService {
   private emitQueueUpdate(conversationId: string): void {
     const main = WINDOWS.get("main")
     const panel = WINDOWS.get("panel")
-    
+
     const queue = this.getQueue(conversationId)
-    
+
     ;[main, panel].forEach((win) => {
       if (win) {
-        getRendererHandlers<RendererHandlers>(win.webContents).onMessageQueueUpdate.send({
-          conversationId,
-          queue,
-        })
+        try {
+          const handlers = getRendererHandlers<RendererHandlers>(win.webContents)
+          if (handlers?.onMessageQueueUpdate) {
+            try {
+              handlers.onMessageQueueUpdate.send({
+                conversationId,
+                queue,
+              })
+            } catch (error) {
+              logApp("Failed to send queue update:", error)
+            }
+          }
+        } catch (error) {
+          logApp("Failed to get renderer handlers for queue update:", error)
+        }
       }
     })
   }

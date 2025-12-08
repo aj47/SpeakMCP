@@ -922,7 +922,21 @@ export default function ChatScreen({ route, navigation }: any) {
           {messages.map((m, i) => {
             const hasExtras = (m.toolCalls?.length ?? 0) > 0 || (m.toolResults?.length ?? 0) > 0;
             const shouldCollapse = (m.content?.length ?? 0) > COLLAPSE_THRESHOLD || hasExtras;
-            const isExpanded = expandedMessages[i] ?? false;
+            // Find if this is the last assistant message with content (the "final response")
+            // to expand it by default for better mobile UX
+            const isLastAssistantWithContent = (() => {
+              if (m.role !== 'assistant') return false;
+              if (!m.content && !m.toolCalls && !m.toolResults) return false;
+              // Check if there's any assistant message after this one with content
+              for (let j = i + 1; j < messages.length; j++) {
+                const nextMsg = messages[j];
+                if (nextMsg.role === 'assistant' && (nextMsg.content || nextMsg.toolCalls || nextMsg.toolResults)) {
+                  return false;
+                }
+              }
+              return true;
+            })();
+            const isExpanded = expandedMessages[i] ?? isLastAssistantWithContent;
 
             return (
               <View key={i} style={[styles.msg, m.role === 'user' ? styles.user : styles.assistant]}>

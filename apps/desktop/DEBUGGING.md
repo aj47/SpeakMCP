@@ -46,13 +46,13 @@ You should see: `DevTools listening on ws://127.0.0.1:9222/devtools/browser/...`
 
 #### IPC Methods
 
-Access via `window.electron.ipcRenderer.invoke()` in DevTools console:
+The app uses [@egoist/tipc](https://github.com/egoist/tipc) for type-safe IPC. In the DevTools console, you can invoke TIPC procedures directly:
 
 ```javascript
 // Agent sessions
 window.electron.ipcRenderer.invoke('createMcpTextInput', { text: 'Hello' })
 window.electron.ipcRenderer.invoke('getAgentSessions')
-window.electron.ipcRenderer.invoke('stopAgentSession', { sessionId })
+window.electron.ipcRenderer.invoke('stopAgentSession', { sessionId: 'your-session-id' })
 window.electron.ipcRenderer.invoke('emergencyStopAgent')
 
 // Panel control
@@ -62,8 +62,10 @@ window.electron.ipcRenderer.invoke('hidePanelWindow')
 
 // Configuration
 window.electron.ipcRenderer.invoke('getConfig')
-window.electron.ipcRenderer.invoke('updateConfig', { ...options })
+window.electron.ipcRenderer.invoke('saveConfig', { config: { /* partial config */ } })
 ```
+
+> **Note**: These procedure names are defined in `apps/desktop/src/main/tipc.ts`. The renderer code uses the `tipcClient` wrapper for type safety, but direct `invoke()` calls work for debugging.
 
 ---
 

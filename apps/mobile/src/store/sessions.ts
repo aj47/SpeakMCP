@@ -28,8 +28,9 @@ export interface SessionStore {
   getSessionList: () => SessionListItem[];
   setMessages: (messages: ChatMessage[]) => Promise<void>;
 
-  // Server conversation ID management - for continuing conversations on the remote server
-  setServerConversationId: (conversationId: string) => Promise<void>;
+  // Server conversation ID management (for continuing conversations with SpeakMCP server)
+  setServerConversationId: (serverConversationId: string) => Promise<void>;
+  getServerConversationId: () => string | undefined;
 }
 
 async function loadSessions(): Promise<Session[]> {
@@ -212,9 +213,8 @@ export function useSessions(): SessionStore {
     });
   }, [currentSessionId]);
 
-  // Set the server-side conversation ID for the current session
-  // This enables follow-up messages to continue the same conversation on the server
-  const setServerConversationId = useCallback(async (conversationId: string) => {
+  // Set the server-side conversation ID for the current session (fixes #501)
+  const setServerConversationId = useCallback(async (serverConversationId: string) => {
     if (!currentSessionId) return;
 
     setSessions(prev => {
@@ -222,7 +222,7 @@ export function useSessions(): SessionStore {
         if (session.id !== currentSessionId) return session;
         return {
           ...session,
-          serverConversationId: conversationId,
+          serverConversationId,
           updatedAt: Date.now(),
         };
       });
@@ -230,6 +230,12 @@ export function useSessions(): SessionStore {
       return updated;
     });
   }, [currentSessionId]);
+
+  // Get the server-side conversation ID for the current session
+  const getServerConversationId = useCallback((): string | undefined => {
+    const session = getCurrentSession();
+    return session?.serverConversationId;
+  }, [getCurrentSession]);
 
   return {
     sessions,
@@ -244,6 +250,7 @@ export function useSessions(): SessionStore {
     getSessionList,
     setMessages,
     setServerConversationId,
+    getServerConversationId,
   };
 }
 

@@ -25,6 +25,11 @@ TOOL USAGE:
 - Try tools before refusing—only refuse after genuine attempts fail
 - If browser tools are available and the task involves web services, use them proactively
 
+PARALLEL EXECUTION:
+- When multiple tool calls are independent (don't depend on each other's results), batch them together in a single response
+- Examples: reading multiple files, searching multiple sources, checking multiple endpoints
+- Only sequence tool calls when later calls depend on earlier results
+
 WHEN TO ASK: Multiple valid approaches exist, sensitive/destructive operations, or ambiguous intent
 WHEN TO ACT: Request is clear and tools can accomplish it directly
 
@@ -44,6 +49,11 @@ assistant: {"toolCalls": [{"name": "execute_command", "arguments": {"command": "
 user: what files are in src/?
 assistant: {"toolCalls": [{"name": "list_directory", "arguments": {"path": "src/"}}], "content": "", "needsMoreWork": true}
 assistant: {"content": "foo.c, bar.c, baz.c", "needsMoreWork": false}
+</example>
+
+<example>
+user: read both config.json and package.json
+assistant: {"toolCalls": [{"name": "read_file", "arguments": {"path": "config.json"}}, {"name": "read_file", "arguments": {"path": "package.json"}}], "content": "", "needsMoreWork": true}
 </example>`
 
 /**
@@ -161,7 +171,7 @@ export function constructMinimalSystemPrompt(
     inputSchema?: any
   }>,
 ): string {
-  let prompt = "You are an MCP-capable assistant. Use exact tool names and exact parameter keys. Be concise. Do not invent IDs or paths. Response format: {\"toolCalls\": [...], \"content\": \"...\", \"needsMoreWork\": true}"
+  let prompt = "You are an MCP-capable assistant. Use exact tool names and exact parameter keys. Be concise. Do not invent IDs or paths. Batch independent tool calls in one response. Response format: {\"toolCalls\": [...], \"content\": \"...\", \"needsMoreWork\": true}"
   if (isAgentMode) {
     prompt += " Always continue iterating with tools until the task is complete; set needsMoreWork=false only when fully done."
   }

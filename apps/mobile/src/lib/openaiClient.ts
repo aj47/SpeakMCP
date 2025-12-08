@@ -117,7 +117,7 @@ export class OpenAIClient {
    * @param messages - Chat messages to send
    * @param onToken - Optional callback for streaming text tokens (legacy, for text-only streaming)
    * @param onProgress - Optional callback for agent progress updates (tool calls, results, etc.)
-   * @param conversationId - Optional conversation ID to continue an existing conversation on the server
+   * @param conversationId - Optional server-side conversation ID for continuing existing conversations
    * @returns ChatResponse with content and conversation history
    */
   async chat(
@@ -128,7 +128,8 @@ export class OpenAIClient {
   ): Promise<ChatResponse> {
     const url = this.getUrl('/chat/completions');
     const body: Record<string, any> = { model: this.cfg.model, messages, stream: true };
-    // Include conversation_id if provided to continue an existing server-side conversation
+
+    // Include conversation_id to continue existing server-side conversation (fixes #501)
     if (conversationId) {
       body.conversation_id = conversationId;
     }

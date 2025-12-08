@@ -14,6 +14,7 @@ export function useStoreSync() {
   const clearAllProgress = useAgentStore((s) => s.clearAllProgress)
   const clearSessionProgress = useAgentStore((s) => s.clearSessionProgress)
   const setFocusedSessionId = useAgentStore((s) => s.setFocusedSessionId)
+  const setScrollToSessionId = useAgentStore((s) => s.setScrollToSessionId)
   const markConversationCompleted = useConversationStore((s) => s.markConversationCompleted)
   
   const saveConversationMutation = useSaveConversationMutation()
@@ -71,15 +72,20 @@ export function useStoreSync() {
   }, [clearSessionProgress])
 
   // Cross-window: focus a specific agent session
+  // When a new agent is spawned and focused, clear the scroll target so the
+  // sessions page doesn't scroll to a previously selected session
   useEffect(() => {
     const unlisten = (rendererHandlers as any).focusAgentSession?.listen?.(
       (sessionId: string) => {
         logUI('[useStoreSync] External focusAgentSession received:', sessionId)
         setFocusedSessionId(sessionId)
+        // Clear any pending scroll target to avoid scrolling to a stale session
+        // when a new agent is spawned (fixes #448)
+        setScrollToSessionId(null)
       }
     )
     return unlisten
-  }, [setFocusedSessionId])
+  }, [setFocusedSessionId, setScrollToSessionId])
 
   // Helper to save conversation history
   async function saveCompleteConversationHistory(

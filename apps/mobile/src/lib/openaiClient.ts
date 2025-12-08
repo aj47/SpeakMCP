@@ -6,11 +6,21 @@ import type {
 } from '@speakmcp/shared';
 import { Platform } from 'react-native';
 import EventSource from 'react-native-sse';
+import {
+  withRetry,
+  isRetryableError,
+  getConnectionMonitor,
+  waitForConnection,
+  setStreamingState,
+  clearStreamingState,
+  RetryConfig,
+} from './networkUtils';
 
 export type OpenAIConfig = {
   baseUrl: string;    // OpenAI-compatible API base URL e.g., https://api.openai.com/v1
   apiKey: string;
   model?: string; // model name for /v1/chat/completions
+  retryConfig?: RetryConfig; // Optional retry configuration
 };
 
 export type ChatMessage = {
@@ -19,6 +29,11 @@ export type ChatMessage = {
   content?: string;
   toolCalls?: ToolCall[];
   toolResults?: ToolResult[];
+  error?: {
+    message: string;
+    isRetryable: boolean;
+    originalUserMessage?: string;
+  };
 };
 
 /**
@@ -113,25 +128,51 @@ export class OpenAIClient {
    * POST OpenAI-compatible API: /v1/chat/completions
    * Supports SpeakMCP server SSE streaming with real-time agent progress updates.
    * Uses react-native-sse for native platforms (Android/iOS), fetch with ReadableStream for web.
+   * Includes automatic retry logic for connection failures.
    *
    * @param messages - Chat messages to send
    * @param onToken - Optional callback for streaming text tokens (legacy, for text-only streaming)
    * @param onProgress - Optional callback for agent progress updates (tool calls, results, etc.)
+   * @param onRetry - Optional callback for retry attempts (provides retry count and error)
    * @returns ChatResponse with content and conversation history
    */
   async chat(
     messages: ChatMessage[],
     onToken?: (token: string) => void,
-    onProgress?: OnProgressCallback
+    onProgress?: OnProgressCallback,
+    onRetry?: (attempt: number, error: Error) => void
   ): Promise<ChatResponse> {
     const url = this.getUrl('/chat/completions');
     const body = { model: this.cfg.model, messages, stream: true };
 
-    console.log('[OpenAIClient] Starting chat request');
+    // Generate a unique ID for this request (for tracking streaming state)
+    const requestId = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+    const userMessage = messages.filter(m => m.role === 'user').pop()?.content || '';
+
+    console.log('[OpenAIClient] Starting chat request', requestId);
     console.log('[OpenAIClient] URL:', url);
     console.log('[OpenAIClient] Platform:', Platform.OS);
 
-    try {
+    // Track streaming state for potential recovery
+    setStreamingState({
+      messageId: requestId,
+      userMessage,
+      partialContent: '',
+      startedAt: Date.now(),
+      lastUpdateAt: Date.now(),
+    });
+
+    const executeRequest = async (): Promise<ChatResponse> => {
+      // Check if connection is healthy before attempting
+      const monitor = getConnectionMonitor();
+      if (!monitor.isHealthy()) {
+        console.log('[OpenAIClient] Waiting for healthy connection...');
+        const connected = await waitForConnection(15000);
+        if (!connected) {
+          throw new Error('Connection not available');
+        }
+      }
+
       // Use react-native-sse for native platforms (Android/iOS) for real streaming
       // Use fetch with ReadableStream for web
       if (Platform.OS === 'android' || Platform.OS === 'ios') {
@@ -139,8 +180,20 @@ export class OpenAIClient {
       } else {
         return await this.streamSSEWithFetch(url, body, onToken, onProgress);
       }
+    };
+
+    try {
+      const result = await withRetry(
+        executeRequest,
+        this.cfg.retryConfig || { maxRetries: 3, baseDelayMs: 1000, maxDelayMs: 10000 },
+        onRetry
+      );
+      // Clear streaming state on success
+      clearStreamingState(requestId);
+      return result;
     } catch (error) {
-      console.error('[OpenAIClient] Chat request failed:', error);
+      console.error('[OpenAIClient] Chat request failed after retries:', error);
+      // Keep streaming state for potential manual retry
       throw error;
     }
   }

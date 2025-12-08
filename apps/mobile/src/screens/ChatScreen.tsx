@@ -29,6 +29,7 @@ import { preprocessTextForTTS } from '@speakmcp/shared';
 import { useHeaderHeight } from '@react-navigation/elements';
 import { useTheme } from '../ui/ThemeProvider';
 import { spacing, radius, Theme } from '../ui/theme';
+import { getConnectionMonitor, isRetryableError, ConnectionState } from '../lib/networkUtils';
 
 // Threshold for collapsing long content
 const COLLAPSE_THRESHOLD = 200;
@@ -209,6 +210,23 @@ export default function ChatScreen({ route, navigation }: any) {
   const [listening, setListening] = useState(false);
   const [liveTranscript, setLiveTranscript] = useState('');
   const [debugInfo, setDebugInfo] = useState<string>('');
+
+  // Connection state for recovery UI
+  const [connectionState, setConnectionState] = useState<ConnectionState>({
+    isConnected: true,
+    isInternetReachable: null,
+    appState: 'active',
+  });
+  const [retryingMessageId, setRetryingMessageId] = useState<string | null>(null);
+
+  // Subscribe to connection state changes
+  useEffect(() => {
+    const monitor = getConnectionMonitor();
+    const unsubscribe = monitor.subscribe((state) => {
+      setConnectionState(state);
+    });
+    return unsubscribe;
+  }, []);
 
   // Track the last loaded session ID to detect session changes
   const lastLoadedSessionIdRef = useRef<string | null>(null);
@@ -420,17 +438,28 @@ export default function ChatScreen({ route, navigation }: any) {
     return messages;
   }, []);
 
-  const send = async (text: string) => {
+  const send = async (text: string, isRetry: boolean = false) => {
     if (!text.trim()) return;
 
-    console.log('[ChatScreen] Sending message:', text);
+    console.log('[ChatScreen] Sending message:', text, isRetry ? '(retry)' : '');
 
     setDebugInfo(`Starting request to ${config.baseUrl}...`);
 
     const userMsg: ChatMessage = { role: 'user', content: text };
     // Track the number of messages BEFORE this turn to avoid duplicates
-    const messageCountBeforeTurn = messages.length;
-    setMessages((m) => [...m, userMsg, { role: 'assistant', content: 'Assistant is thinking...' }]);
+    const messageCountBeforeTurn = isRetry
+      ? messages.findIndex(m => m.error?.originalUserMessage === text)
+      : messages.length;
+
+    if (!isRetry) {
+      setMessages((m) => [...m, userMsg, { role: 'assistant', content: 'Assistant is thinking...' }]);
+    } else {
+      // Remove the error message and add thinking placeholder
+      setMessages((m) => {
+        const filtered = m.filter(msg => msg.error?.originalUserMessage !== text);
+        return [...filtered, { role: 'assistant', content: 'Retrying...' }];
+      });
+    }
     setResponding(true);
 
     setInput('');
@@ -470,10 +499,17 @@ export default function ChatScreen({ route, navigation }: any) {
         });
       };
 
-      const response = await client.chat([...messages, userMsg], onToken, onProgress);
+      // Handle retry notifications
+      const onRetry = (attempt: number, error: Error) => {
+        console.log(`[ChatScreen] Retrying... attempt ${attempt}`);
+        setDebugInfo(`Connection interrupted. Retrying (${attempt}/3)...`);
+      };
+
+      const response = await client.chat([...messages, userMsg], onToken, onProgress, onRetry);
       const finalText = response.content || streamingText;
       console.log('[ChatScreen] Chat completed');
       setDebugInfo(`Completed!`);
+      setRetryingMessageId(null);
 
       // Process conversation history to extract tool calls and results
       if (response.conversationHistory && response.conversationHistory.length > 0) {
@@ -534,14 +570,48 @@ export default function ChatScreen({ route, navigation }: any) {
         stack: e.stack,
         name: e.name
       });
-      setDebugInfo(`Error: ${e.message}`);
-      setMessages((m) => [...m, { role: 'assistant', content: `Error: ${e.message}` }]);
+
+      const isConnectionError = isRetryableError(e);
+      const errorMessage = isConnectionError
+        ? 'Connection lost. The request failed after multiple retries.'
+        : `Error: ${e.message}`;
+
+      setDebugInfo(errorMessage);
+
+      // Create error message with retry capability
+      const errorMsg: ChatMessage = {
+        role: 'assistant',
+        content: errorMessage,
+        error: {
+          message: e.message,
+          isRetryable: isConnectionError,
+          originalUserMessage: text,
+        },
+      };
+
+      setMessages((m) => {
+        // Replace the thinking/error placeholder with the error message
+        const copy = [...m];
+        for (let i = copy.length - 1; i >= 0; i--) {
+          if (copy[i].role === 'assistant' && (copy[i].content === 'Assistant is thinking...' || copy[i].content === 'Retrying...')) {
+            copy[i] = errorMsg;
+            return copy;
+          }
+        }
+        return [...m, errorMsg];
+      });
     } finally {
       console.log('[ChatScreen] Chat request finished');
       setResponding(false);
       setTimeout(() => setDebugInfo(''), 3000); // Clear debug info after 3 seconds
     }
   };
+
+  // Retry a failed message
+  const retryMessage = useCallback((originalUserMessage: string) => {
+    setRetryingMessageId(originalUserMessage);
+    send(originalUserMessage, true);
+  }, [send]);
 
   // Real-time speech results (web handled in ensureWebRecognizer; native listeners are attached on start)
 
@@ -913,6 +983,21 @@ export default function ChatScreen({ route, navigation }: any) {
       keyboardVerticalOffset={headerHeight}
     >
       <View style={{ flex: 1 }}>
+        {/* Connection status banner */}
+        {!connectionState.isConnected && (
+          <View style={styles.connectionBanner}>
+            <Text style={styles.connectionBannerText}>
+              📡 No internet connection. Messages will be sent when reconnected.
+            </Text>
+          </View>
+        )}
+        {connectionState.isConnected && connectionState.isInternetReachable === false && (
+          <View style={[styles.connectionBanner, styles.connectionBannerWarning]}>
+            <Text style={styles.connectionBannerText}>
+              ⚠️ Internet may be unreachable. Some requests may fail.
+            </Text>
+          </View>
+        )}
         <ScrollView
           style={{ flex: 1, padding: spacing.lg, backgroundColor: theme.colors.background }}
           contentContainerStyle={{ paddingBottom: insets.bottom }}
@@ -1054,6 +1139,19 @@ export default function ChatScreen({ route, navigation }: any) {
                           {m.toolResults.every(r => r.success) ? '✅' : '⚠️'} {m.toolResults.length} result{m.toolResults.length > 1 ? 's' : ''}
                         </Text>
                       </View>
+                    )}
+
+                    {/* Retry button for failed messages */}
+                    {m.error?.isRetryable && m.error.originalUserMessage && (
+                      <TouchableOpacity
+                        style={styles.retryButton}
+                        onPress={() => retryMessage(m.error!.originalUserMessage!)}
+                        disabled={responding}
+                      >
+                        <Text style={styles.retryButtonText}>
+                          {retryingMessageId === m.error.originalUserMessage ? '⏳ Retrying...' : '🔄 Retry'}
+                        </Text>
+                      </TouchableOpacity>
                     )}
                   </>
                 )}
@@ -1440,6 +1538,38 @@ function createStyles(theme: Theme) {
       backgroundColor: 'rgba(239, 68, 68, 0.1)',
       padding: spacing.sm,
       borderRadius: radius.sm,
+    },
+    // Connection banner styles
+    connectionBanner: {
+      backgroundColor: theme.colors.danger,
+      paddingVertical: spacing.sm,
+      paddingHorizontal: spacing.md,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    connectionBannerWarning: {
+      backgroundColor: '#f59e0b',
+    },
+    connectionBannerText: {
+      color: '#ffffff',
+      fontSize: 13,
+      fontWeight: '500',
+      textAlign: 'center',
+    },
+    // Retry button styles
+    retryButton: {
+      marginTop: spacing.sm,
+      backgroundColor: theme.colors.primary,
+      paddingVertical: spacing.sm,
+      paddingHorizontal: spacing.md,
+      borderRadius: radius.md,
+      alignSelf: 'flex-start',
+    },
+    retryButtonText: {
+      color: '#ffffff',
+      fontSize: 13,
+      fontWeight: '600',
     },
   });
 }

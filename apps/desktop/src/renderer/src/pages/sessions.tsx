@@ -120,8 +120,18 @@ export function Component() {
     const newIds = currentIds.filter(id => !sessionOrder.includes(id))
 
     if (newIds.length > 0) {
-      // Add new sessions to the beginning of the order
-      setSessionOrder(prev => [...newIds, ...prev.filter(id => currentIds.includes(id))])
+      // Sort new sessions by timestamp (most recent first) before prepending
+      // This ensures correct order when multiple sessions appear at once (e.g., on page load)
+      const sortedNewIds = [...newIds].sort((a, b) => {
+        const progressA = agentProgressById.get(a)
+        const progressB = agentProgressById.get(b)
+        // Use first step timestamp, or fall back to 0
+        const timestampA = progressA?.steps?.[0]?.timestamp ?? 0
+        const timestampB = progressB?.steps?.[0]?.timestamp ?? 0
+        return timestampB - timestampA // Descending (newest first)
+      })
+      // Add new sessions to the beginning of the order (newest first)
+      setSessionOrder(prev => [...sortedNewIds, ...prev.filter(id => currentIds.includes(id))])
     } else {
       // Remove sessions that no longer exist
       const validOrder = sessionOrder.filter(id => currentIds.includes(id))

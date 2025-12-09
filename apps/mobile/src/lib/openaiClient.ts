@@ -88,6 +88,8 @@ export class OpenAIClient {
   private baseUrl: string;
   private recoveryManager: ConnectionRecoveryManager | null = null;
   private onConnectionStatusChange?: OnConnectionStatusChange;
+  private activeEventSource: EventSource | null = null;
+  private activeAbortController: AbortController | null = null;
 
   constructor(cfg: OpenAIConfig) {
     this.cfg = { ...cfg, baseUrl: cfg.baseUrl?.trim?.() ?? '' };
@@ -132,6 +134,15 @@ export class OpenAIClient {
    * Cleanup connection recovery resources
    */
   cleanup(): void {
+    // Abort any in-flight fetch requests
+    this.activeAbortController?.abort();
+    this.activeAbortController = null;
+
+    // Close any active EventSource connections
+    this.activeEventSource?.close();
+    this.activeEventSource = null;
+
+    // Cleanup recovery manager
     this.recoveryManager?.cleanup();
     this.recoveryManager = null;
   }
@@ -260,11 +271,13 @@ export class OpenAIClient {
         body: JSON.stringify(body),
         pollingInterval: 0, // Disable reconnections - we handle one request at a time
       });
+      this.activeEventSource = es;
 
       // Helper to safely close and cleanup
       const cleanup = () => {
         recovery?.stopHeartbeat();
         try { es.close(); } catch {}
+        this.activeEventSource = null;
       };
 
       // Helper to resolve only once
@@ -393,6 +406,7 @@ export class OpenAIClient {
   ): Promise<ChatResponse> {
     const recovery = this.recoveryManager;
     const abortController = new AbortController();
+    this.activeAbortController = abortController;
     let heartbeatAborted = false;
 
     // Start heartbeat monitoring - abort fetch if connection stalls
@@ -521,6 +535,7 @@ export class OpenAIClient {
       throw error;
     } finally {
       recovery?.stopHeartbeat();
+      this.activeAbortController = null;
     }
   }
 

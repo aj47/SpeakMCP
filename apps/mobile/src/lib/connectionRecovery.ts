@@ -67,6 +67,7 @@ export function isRetryableError(error: Error | string): boolean {
     'aborted',
     'sse connection',
     'fetch failed',
+    'failed to fetch',
     'network request failed',
     'unable to resolve host',
     'socket',

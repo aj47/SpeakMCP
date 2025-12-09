@@ -17,7 +17,6 @@ import { ProfileBadge } from "@renderer/components/profile-badge"
 
 import { Config } from "@shared/types"
 
-// Helper component for labels with tooltips
 const LabelWithTooltip = ({
   htmlFor,
   children,
@@ -70,7 +69,6 @@ export function Component() {
     },
   })
 
-  // Fetch current profile to sync guidelines with profile
   const currentProfileQuery = useQuery({
     queryKey: ["current-profile"],
     queryFn: async () => {
@@ -78,7 +76,6 @@ export function Component() {
     },
   })
 
-  // Mutation to update profile (guidelines and/or systemPrompt)
   const updateProfileMutation = useMutation({
     mutationFn: async ({ id, guidelines, systemPrompt }: { id: string; guidelines?: string; systemPrompt?: string }) => {
       return await tipcClient.updateProfile({ id, guidelines, systemPrompt })
@@ -89,13 +86,12 @@ export function Component() {
     },
   })
 
-  // Fetch the default system prompt for restore functionality
   const defaultSystemPromptQuery = useQuery({
     queryKey: ["default-system-prompt"],
     queryFn: async () => {
       return await tipcClient.getDefaultSystemPrompt()
     },
-    staleTime: Infinity, // This never changes during runtime
+    staleTime: Infinity,
   })
 
   const config = configQuery.data || {}

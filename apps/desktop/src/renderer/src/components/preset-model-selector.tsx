@@ -47,7 +47,6 @@ export function PresetModelSelector({
     setError(null)
 
     try {
-      // Fetch models using the preset's specific base URL and API key
       const result = await tipcClient.fetchModelsForPreset({
         baseUrl,
         apiKey,
@@ -61,7 +60,6 @@ export function PresetModelSelector({
     }
   }
 
-  // Fetch models when baseUrl or apiKey changes
   useEffect(() => {
     if (baseUrl && apiKey) {
       fetchModels()

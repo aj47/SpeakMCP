@@ -25,9 +25,8 @@ export async function loadConfig(): Promise<AppConfig> {
   try {
     const parsed = JSON.parse(raw);
     return { ...DEFAULTS, ...parsed } as AppConfig;
-  } catch {
-    return DEFAULTS;
-  }
+  } catch {}
+  return DEFAULTS;
 }
 
 export async function saveConfig(cfg: AppConfig) {

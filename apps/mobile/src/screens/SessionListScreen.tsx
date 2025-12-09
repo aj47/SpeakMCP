@@ -6,7 +6,6 @@ import { spacing, radius, Theme } from '../ui/theme';
 import { useSessionContext, SessionStore } from '../store/sessions';
 import { SessionListItem } from '../types/session';
 
-// Animated spinner GIFs for loading state
 const darkSpinner = require('../../assets/loading-spinner.gif');
 const lightSpinner = require('../../assets/light-spinner.gif');
 
@@ -18,7 +17,6 @@ export default function SessionListScreen({ navigation }: Props) {
   const { theme, isDark } = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
 
-  // Add settings button to header
   useLayoutEffect(() => {
     navigation?.setOptions?.({
       headerRight: () => (
@@ -37,7 +35,6 @@ export default function SessionListScreen({ navigation }: Props) {
   const sessionStore = useSessionContext();
   const sessions = sessionStore.getSessionList();
 
-  // Show loading spinner while sessions are loading
   if (!sessionStore.ready) {
     return (
       <View style={[styles.container, styles.loadingContainer]}>
@@ -172,7 +169,6 @@ export default function SessionListScreen({ navigation }: Props) {
   );
 }
 
-// Create dynamic styles based on theme
 function createStyles(theme: Theme) {
   return StyleSheet.create({
     container: {

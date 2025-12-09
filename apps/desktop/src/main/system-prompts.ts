@@ -1,17 +1,3 @@
-/**
- * Base system prompts for MCP tool calling
- * These are the core instructions that can be customized by users
- */
-
-/**
- * The default base system prompt - users can restore to this at any time
- *
- * Design principles:
- * - Minimal redundancy: each concept stated once
- * - Essential instructions only: no generic advice LLMs already know
- * - Correct examples: no hallucinated facts
- * - Relevant examples: demonstrate actual JSON tool call format
- */
 export const DEFAULT_SYSTEM_PROMPT = `You are an autonomous AI assistant that uses tools to complete tasks. Work iteratively until goals are fully achieved.
 
 RESPONSE FORMAT (return ONLY valid JSON, no markdown):
@@ -56,14 +42,8 @@ user: read both config.json and package.json
 assistant: {"toolCalls": [{"name": "read_file", "arguments": {"path": "config.json"}}, {"name": "read_file", "arguments": {"path": "package.json"}}], "content": "", "needsMoreWork": true}
 </example>`
 
-/**
- * @deprecated Use DEFAULT_SYSTEM_PROMPT instead. This alias is kept for backwards compatibility.
- */
 export const BASE_SYSTEM_PROMPT = DEFAULT_SYSTEM_PROMPT
 
-/**
- * Get the effective base system prompt, using custom if provided, otherwise default
- */
 export function getEffectiveSystemPrompt(customSystemPrompt?: string): string {
   if (customSystemPrompt && customSystemPrompt.trim()) {
     return customSystemPrompt.trim()
@@ -71,18 +51,11 @@ export function getEffectiveSystemPrompt(customSystemPrompt?: string): string {
   return DEFAULT_SYSTEM_PROMPT
 }
 
-/**
- * Agent mode additions - minimal content that isn't already in DEFAULT_SYSTEM_PROMPT
- * Only includes the unique needsMoreWork guidance and iterative capability note
- */
 export const AGENT_MODE_ADDITIONS = `
 
 AGENT MODE: You can see tool results and make follow-up calls. Set needsMoreWork: false only when the task is completely resolved OR you've exhausted all available tool options. If a tool fails, try alternative approaches.
 `
 
-/**
- * Constructs the full system prompt by combining base prompt, tool information, and user guidelines
- */
 export function constructSystemPrompt(
   availableTools: Array<{
     name: string
@@ -98,14 +71,12 @@ export function constructSystemPrompt(
   }>,
   customSystemPrompt?: string,
 ): string {
-  // Use custom system prompt if provided, otherwise fall back to default
   let prompt = getEffectiveSystemPrompt(customSystemPrompt)
 
   if (isAgentMode) {
     prompt += AGENT_MODE_ADDITIONS
   }
 
-  // Helper function to format tool information (simplified to reduce token usage)
   const formatToolInfo = (
     tools: Array<{ name: string; description: string; inputSchema?: any }>,
   ) => {
@@ -119,7 +90,6 @@ export function constructSystemPrompt(
               const required = tool.inputSchema.required?.includes(key)
                 ? " (required)"
                 : ""
-              // Use the actual schema type without hardcoded fixes
               return `${key}: ${type}${required}`
             })
             .join(", ")
@@ -132,11 +102,9 @@ export function constructSystemPrompt(
       .join("\n")
   }
 
-  // Add available tools
   if (availableTools.length > 0) {
     prompt += `\n\nAVAILABLE TOOLS:\n${formatToolInfo(availableTools)}`
 
-    // Add relevant tools section if provided and different from all tools
     if (
       relevantTools &&
       relevantTools.length > 0 &&

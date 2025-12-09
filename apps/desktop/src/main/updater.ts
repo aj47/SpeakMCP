@@ -8,9 +8,6 @@ electronUpdater.autoUpdater.fullChangelog = true
 electronUpdater.autoUpdater.autoDownload = false
 electronUpdater.autoUpdater.autoInstallOnAppQuit = true
 
-// Uncomment the following line to test auto-updates in development
-// electronUpdater.autoUpdater.forceDevUpdateConfig = import.meta.env.DEV
-
 if (import.meta.env.PROD) {
   electronUpdater.autoUpdater.setFeedURL({
     provider: "github",
@@ -39,26 +36,17 @@ export function init() {
         window.webContents,
       ).updateAvailable.send(e)
     }
-    // Menu.setApplicationMenu(createAppMenu('downloaded'))
   })
 
   electronUpdater.autoUpdater.addListener("update-not-available", () => {
     updateInfo = null
     enableMenuItem()
-    // const window = windows.get('updater')
-    // window?.close()
   })
 
   let hasSetDownloaing = false
   electronUpdater.autoUpdater.addListener("download-progress", (_info) => {
-    // const window = windows.get('updater')
-    // if (window) {
-    //   window.webContents.send('download-progress', info)
-    // }
-
     if (!hasSetDownloaing) {
       hasSetDownloaing = true
-      // Menu.setApplicationMenu(createAppMenu('downloading'))
     }
   })
 }
@@ -74,7 +62,6 @@ export async function checkForUpdatesMenuItem(_menuItem: MenuItem) {
   const checkResult = await checkForUpdatesAndDownload().catch(() => null)
 
   if (checkResult && checkResult.updateInfo) {
-    // nothing
   } else {
     await dialog.showMessageBox({
       title: "No updates available",

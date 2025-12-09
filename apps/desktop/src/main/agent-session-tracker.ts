@@ -40,9 +40,8 @@ async function emitSessionUpdate() {
       try {
         const handlers = getRendererHandlers<RendererHandlers>(mainWindow.webContents)
         handlers.agentSessionsUpdated?.send(data)
-      } catch (e) {
-        // Window might not be ready yet
-      }
+      } catch (e) {}
+
     }
 
     // Emit to panel window
@@ -51,13 +50,11 @@ async function emitSessionUpdate() {
       try {
         const handlers = getRendererHandlers<RendererHandlers>(panelWindow.webContents)
         handlers.agentSessionsUpdated?.send(data)
-      } catch (e) {
-        // Window might not be ready yet
-      }
+      } catch (e) {}
+
     }
-  } catch (e) {
-    // Silently fail - this is a best-effort notification
-  }
+  } catch (e) {}
+
 }
 
 class AgentSessionTracker {

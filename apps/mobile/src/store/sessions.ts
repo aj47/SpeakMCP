@@ -33,9 +33,8 @@ async function loadSessions(): Promise<Session[]> {
     const raw = await AsyncStorage.getItem(SESSIONS_KEY);
     if (!raw) return [];
     return JSON.parse(raw);
-  } catch {
-    return [];
-  }
+  } catch {}
+  return [];
 }
 
 async function saveSessions(sessions: Session[]): Promise<void> {
@@ -45,9 +44,8 @@ async function saveSessions(sessions: Session[]): Promise<void> {
 async function loadCurrentSessionId(): Promise<string | null> {
   try {
     return await AsyncStorage.getItem(CURRENT_SESSION_KEY);
-  } catch {
-    return null;
-  }
+  } catch {}
+  return null;
 }
 
 async function saveCurrentSessionId(id: string | null): Promise<void> {

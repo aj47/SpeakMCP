@@ -18,8 +18,6 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
 
   endConversation: () => set({ currentConversationId: null }),
 
-  // Clear current conversation if it matches the completed one
-  // No longer stores lastCompletedConversationId to prevent message leaking
   markConversationCompleted: (conversationId) => set((state) => ({
     currentConversationId: state.currentConversationId === conversationId ? null : state.currentConversationId,
   })),

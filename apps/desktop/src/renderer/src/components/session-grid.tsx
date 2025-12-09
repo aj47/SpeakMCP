@@ -9,10 +9,6 @@ interface SessionGridProps {
   className?: string
 }
 
-/**
- * Flexible layout manager for sessions.
- * Uses flex-wrap to allow tiles to flow and be resized individually.
- */
 export function SessionGrid({ children, sessionCount, className }: SessionGridProps) {
   return (
     <div
@@ -31,9 +27,7 @@ interface SessionTileWrapperProps {
   sessionId: string
   index: number
   className?: string
-  // Collapse state
   isCollapsed?: boolean
-  // Drag and drop callbacks
   onDragStart?: (sessionId: string, index: number) => void
   onDragOver?: (index: number) => void
   onDragEnd?: () => void
@@ -41,9 +35,6 @@ interface SessionTileWrapperProps {
   isDragging?: boolean
 }
 
-/**
- * Wrapper for individual session tiles with resizable width/height and drag support.
- */
 export function SessionTileWrapper({
   children,
   sessionId,
@@ -68,11 +59,9 @@ export function SessionTileWrapper({
   } = useResizable({
     initialWidth: TILE_DIMENSIONS.width.default,
     initialHeight: TILE_DIMENSIONS.height.default,
-    // Use a shared storage key so all session tiles remember the same size
     storageKey: "session-tile",
   })
 
-  // Drag handlers
   const handleDragStart = (e: React.DragEvent) => {
     e.dataTransfer.effectAllowed = "move"
     e.dataTransfer.setData("text/plain", sessionId)

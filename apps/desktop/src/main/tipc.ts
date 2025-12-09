@@ -54,23 +54,17 @@ import { state, agentProcessManager, suppressPanelAutoShow, isPanelAutoShowSuppr
 import { startRemoteServer, stopRemoteServer, restartRemoteServer } from "./remote-server"
 import { emitAgentProgress } from "./emit-agent-progress"
 
-// Helper function to initialize MCP with progress feedback
 async function initializeMcpWithProgress(config: Config, sessionId: string): Promise<void> {
-  // Import agentSessionStateManager to check for stop signals during MCP initialization
   const { agentSessionStateManager } = await import("./state")
 
-  // Helper to check if we should stop (session-specific or global)
   const shouldStop = () => agentSessionStateManager.shouldStopSession(sessionId)
 
-  // Check if already stopped before starting
   if (shouldStop()) {
     return
   }
 
-  // Check if MCP is initializing and emit progress updates
   const initStatus = mcpService.getInitializationStatus()
 
-  // Emit initial progress showing MCP initialization
   await emitAgentProgress({
     sessionId,
     currentIteration: 0,
@@ -90,10 +84,7 @@ async function initializeMcpWithProgress(config: Config, sessionId: string): Pro
     isComplete: false,
   })
 
-  // Poll for initialization progress updates
-  // Check for stop signal in each iteration to allow killswitch to interrupt
   const progressInterval = setInterval(async () => {
-    // Check for killswitch signal - stop polling if triggered
     if (shouldStop()) {
       clearInterval(progressInterval)
       return
@@ -122,23 +113,18 @@ async function initializeMcpWithProgress(config: Config, sessionId: string): Pro
     } else {
       clearInterval(progressInterval)
     }
-  }, 500) // Update every 500ms
+  }, 500)
 
   try {
-    // Initialize MCP service if not already done
-    // This will wait for initialization to complete if it's in progress
     await mcpService.initialize()
   } finally {
-    // Clear the interval when initialization completes or fails
     clearInterval(progressInterval)
   }
 
-  // Check for killswitch before emitting completion
   if (shouldStop()) {
     return
   }
 
-  // Emit completion of MCP initialization
   await emitAgentProgress({
     sessionId,
     currentIteration: 0,

@@ -16,7 +16,6 @@ import {
   Image,
 } from 'react-native';
 
-// Animated spinner GIFs for processing state
 const darkSpinner = require('../../assets/loading-spinner.gif');
 const lightSpinner = require('../../assets/light-spinner.gif');
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -71,13 +70,9 @@ export default function ChatScreen({ route, navigation }: any) {
     try { await saveConfig(nextCfg); } catch {}
   };
 
-  // Responding state - track if agent is processing (declared early for header use)
   const [responding, setResponding] = useState(false);
-
-  // Connection recovery state for displaying status to user
   const [connectionState, setConnectionState] = useState<RecoveryState | null>(null);
 
-  // Create client early so it's available for handleKillSwitch
   const client = useMemo(() => {
     const openAIClient = new OpenAIClient({
       baseUrl: config.baseUrl,
@@ -91,7 +86,6 @@ export default function ChatScreen({ route, navigation }: any) {
       },
     });
 
-    // Set up connection status callback
     openAIClient.setConnectionStatusCallback((state) => {
       setConnectionState(state);
       console.log('[ChatScreen] Connection status:', formatConnectionStatus(state));
@@ -100,7 +94,6 @@ export default function ChatScreen({ route, navigation }: any) {
     return openAIClient;
   }, [config.baseUrl, config.apiKey, config.model]);
 
-  // Cleanup client on unmount
   useEffect(() => {
     return () => {
       client.cleanup();
@@ -110,7 +103,6 @@ export default function ChatScreen({ route, navigation }: any) {
   const handleKillSwitch = async () => {
     console.log('[ChatScreen] Kill switch button pressed');
 
-    // Alert.alert doesn't work on web, use window.confirm for web platform
     if (Platform.OS === 'web') {
       const confirmed = window.confirm(
         '⚠️ Emergency Stop\n\nAre you sure you want to stop all agent sessions on the remote server? This will immediately terminate any running tasks.'
@@ -131,7 +123,6 @@ export default function ChatScreen({ route, navigation }: any) {
       return;
     }
 
-    // Native platforms use Alert.alert
     Alert.alert(
       '⚠️ Emergency Stop',
       'Are you sure you want to stop all agent sessions on the remote server? This will immediately terminate any running tasks.',
@@ -174,7 +165,6 @@ export default function ChatScreen({ route, navigation }: any) {
       ),
       headerRight: () => (
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          {/* Animated spinner GIF - shows while agent is processing */}
           {responding && (
             <View style={{ paddingHorizontal: 8, paddingVertical: 6 }}>
               <Image
@@ -274,7 +264,6 @@ export default function ChatScreen({ route, navigation }: any) {
     }
   }, [sessionStore.currentSessionId, sessionStore]);
 
-  // Save messages to session when they change
   const prevMessagesLengthRef = useRef(0);
   const prevSessionIdRef = useRef<string | null>(null);
   useEffect(() => {
@@ -955,7 +944,6 @@ export default function ChatScreen({ route, navigation }: any) {
                   </View>
                 ) : (
                   <>
-                    {/* Content - render markdown when expanded, plain text preview when collapsed */}
                     {m.content ? (
                       isExpanded || !shouldCollapse ? (
                         <MarkdownRenderer content={m.content} />
@@ -969,7 +957,6 @@ export default function ChatScreen({ route, navigation }: any) {
                       )
                     ) : null}
 
-                    {/* Collapsed tool preview - shows parameter preview like desktop */}
                     {!isExpanded && m.toolCalls && m.toolCalls.length > 0 && (
                       <View style={styles.collapsedToolSummary}>
                         {toolPreview && (
@@ -980,7 +967,6 @@ export default function ChatScreen({ route, navigation }: any) {
                       </View>
                     )}
 
-                    {/* Tool Calls - only show when expanded */}
                     {isExpanded && m.toolCalls && m.toolCalls.length > 0 && (
                       <View style={styles.toolSection}>
                         <Text style={styles.toolSectionTitle}>Tool Calls ({m.toolCalls.length}):</Text>
@@ -1005,7 +991,6 @@ export default function ChatScreen({ route, navigation }: any) {
                       </View>
                     )}
 
-                    {/* Tool Results - only show when expanded */}
                     {isExpanded && m.toolResults && m.toolResults.length > 0 && (
                       <View style={styles.toolSection}>
                         <Text style={styles.toolSectionTitle}>Tool Results ({m.toolResults.length}):</Text>
@@ -1045,7 +1030,6 @@ export default function ChatScreen({ route, navigation }: any) {
                       </View>
                     )}
 
-                    {/* Collapsed tool results summary */}
                     {!isExpanded && m.toolResults && m.toolResults.length > 0 && (
                       <View style={styles.collapsedResultsSummary}>
                         <Text style={[
@@ -1062,7 +1046,6 @@ export default function ChatScreen({ route, navigation }: any) {
               </Pressable>
             );
           })}
-          {/* Connection recovery status banner */}
           {connectionState && connectionState.status === 'reconnecting' && (
             <View style={styles.connectionBanner}>
               <ActivityIndicator size="small" color="#f59e0b" style={{ marginRight: spacing.sm }} />
@@ -1090,7 +1073,6 @@ export default function ChatScreen({ route, navigation }: any) {
           </View>
         )}
         <View style={[styles.inputRow, { paddingBottom: 12 + insets.bottom }]}>
-          {/* TTS Toggle Button */}
           <TouchableOpacity
             style={[styles.ttsToggle, ttsEnabled && styles.ttsToggleOn]}
             onPress={toggleTts}
@@ -1098,7 +1080,6 @@ export default function ChatScreen({ route, navigation }: any) {
           >
             <Text style={styles.ttsToggleText}>{ttsEnabled ? '🔊' : '🔇'}</Text>
           </TouchableOpacity>
-          {/* Large Mic Button */}
           <View style={styles.micWrapper}>
             <TouchableOpacity
               style={[styles.mic, listening && styles.micOn]}
@@ -1147,7 +1128,6 @@ export default function ChatScreen({ route, navigation }: any) {
   );
 }
 
-// Create dynamic styles based on theme
 function createStyles(theme: Theme) {
   return StyleSheet.create({
     msg: {

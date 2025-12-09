@@ -31,7 +31,6 @@ export function AgentProcessingView({
     return null
   }
 
-  // Kill switch handler for loading state
   const handleKillSwitch = async () => {
     if (isKilling) return
 
@@ -72,7 +71,6 @@ export function AgentProcessingView({
         </div>
       ) : (
         <div className="relative flex h-full w-full flex-col items-center justify-center gap-4">
-          {/* Killswitch button in top-right corner */}
           <div className="absolute right-2 top-2">
             <Button
               variant="ghost"
@@ -86,7 +84,6 @@ export function AgentProcessingView({
             </Button>
           </div>
 
-          {/* Spinner and loading text */}
           <Spinner />
           <span className="text-sm text-muted-foreground">Processing...</span>
 

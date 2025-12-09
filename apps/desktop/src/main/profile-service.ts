@@ -11,7 +11,6 @@ export const profilesPath = path.join(
   "profiles.json"
 )
 
-// Default profiles that come with the app
 const DEFAULT_PROFILES: Profile[] = [
   {
     id: "default",
@@ -41,7 +40,6 @@ class ProfileService {
       logApp("Error loading profiles:", error)
     }
 
-    // Return default profiles if file doesn't exist or there's an error
     this.profilesData = {
       profiles: DEFAULT_PROFILES,
       currentProfileId: "default",
@@ -114,7 +112,6 @@ class ProfileService {
       throw new Error(`Profile with id ${id} not found`)
     }
 
-    // Don't allow updating default profiles
     if (profile.isDefault) {
       throw new Error("Cannot update default profiles")
     }
@@ -141,12 +138,10 @@ class ProfileService {
       return false
     }
 
-    // Don't allow deleting default profiles
     if (profile.isDefault) {
       throw new Error("Cannot delete default profiles")
     }
 
-    // If deleting the current profile, switch to default
     if (this.profilesData!.currentProfileId === id) {
       this.profilesData!.currentProfileId = "default"
     }

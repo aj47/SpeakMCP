@@ -7,7 +7,6 @@ import {
 } from "electron"
 import path from "path"
 import { getRendererHandlers } from "@egoist/tipc/main"
-// Removed dependency on @egoist/electron-panel-window
 import { RendererHandlers } from "./renderer-handlers"
 import { logApp, logUI } from "./debug"
 import { configStore } from "./config"
@@ -32,7 +31,6 @@ function createBaseWindow({
   showWhenReady?: boolean
   windowOptions?: BrowserWindowConstructorOptions
 }) {
-  // Create the browser window.
   const win = new BrowserWindow({
     width: 900,
     height: 670,
@@ -51,10 +49,8 @@ function createBaseWindow({
 
   WINDOWS.set(id, win)
 
-  // Setup console logger to capture renderer console messages
   setupConsoleLogger(win, id)
 
-  // Lightweight window lifecycle logging to diagnose unexpected hides/closes
   const _label = id.toUpperCase()
   win.on("show", () => logUI(`[WINDOW ${_label}] show`))
   win.on("hide", () => logUI(`[WINDOW ${_label}] hide`))
@@ -145,9 +141,8 @@ export function showMainWindow(url?: string) {
   }
 }
 
-// Waveform visualization constants (from panel.tsx)
 const VISUALIZER_BUFFER_LENGTH = 70
-const WAVEFORM_BAR_WIDTH = 2 // 0.5 (w-0.5) = 2px in Tailwind
+const WAVEFORM_BAR_WIDTH = 2
 const WAVEFORM_GAP = 2 // gap-0.5 = 2px in Tailwind
 const WAVEFORM_PADDING = 32 // px-4 = 16px on each side
 

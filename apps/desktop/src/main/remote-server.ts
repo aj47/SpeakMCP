@@ -47,7 +47,6 @@ function toOpenAIChatResponse(content: string, model: string) {
 function normalizeContent(content: any): string | null {
   if (!content) return null
   if (typeof content === "string") return content
-  // OpenAI content parts array style
   if (Array.isArray(content)) {
     const parts = content
       .map((p) => {
@@ -71,7 +70,6 @@ function extractUserPrompt(body: any): string | null {
   try {
     if (!body || typeof body !== "object") return null
 
-    // Prefer last user message
     if (Array.isArray(body.messages)) {
       for (let i = body.messages.length - 1; i >= 0; i--) {
         const msg = body.messages[i]
@@ -83,7 +81,6 @@ function extractUserPrompt(body: any): string | null {
       }
     }
 
-    // Fallback: prompt or input
     const prompt = normalizeContent(body.prompt)
     if (prompt && prompt.trim()) return prompt.trim()
 
@@ -102,10 +99,6 @@ interface RunAgentOptions {
   onProgress?: (update: AgentProgressUpdate) => void
 }
 
-/**
- * Format conversation history from internal MCP format to API-friendly format.
- * Converts MCPToolResult (content as array, isError) to ToolResult (content as string, success).
- */
 function formatConversationHistoryForApi(
   history: Array<{
     role: "user" | "assistant" | "tool"
@@ -129,7 +122,6 @@ function formatConversationHistoryForApi(
       arguments: tc.arguments,
     })),
     toolResults: entry.toolResults?.map((tr: any) => {
-      // Handle both MCPToolResult format (content as array, isError) and already-converted format
       const contentText = Array.isArray(tr.content)
         ? tr.content.map((c: any) => c.text || c).join("\n")
         : String(tr.content || "")

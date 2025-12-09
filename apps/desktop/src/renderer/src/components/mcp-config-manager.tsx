@@ -74,7 +74,6 @@ function ServerDialog({ server, onSave, onCancel }: ServerDialogProps) {
   const [transport, setTransport] = useState<MCPTransportType>(
     server?.config.transport || "stdio",
   )
-  // Combine command and args into a single field
   const [fullCommand, setFullCommand] = useState(() => {
     if (server?.config.command) {
       const cmd = server.config.command

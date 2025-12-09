@@ -1,6 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from "react"
 
-// Shared tile dimension constants
 export const TILE_DIMENSIONS = {
   width: {
     default: 320,
@@ -14,7 +13,6 @@ export const TILE_DIMENSIONS = {
   },
 } as const
 
-// localStorage key prefix for persisted dimensions
 const STORAGE_KEY_PREFIX = "speakmcp-resizable-"
 
 export interface UseResizableOptions {

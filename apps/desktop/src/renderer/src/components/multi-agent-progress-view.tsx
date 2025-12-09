@@ -14,10 +14,6 @@ interface MultiAgentProgressViewProps {
   showBackgroundSpinner?: boolean
 }
 
-/**
- * Component for displaying multiple agent progress panels with tabs.
- * Shows all active agent sessions and allows switching between them.
- */
 export function MultiAgentProgressView({
   className,
   variant = "overlay",
@@ -28,39 +24,31 @@ export function MultiAgentProgressView({
   const focusedSessionId = useAgentStore((s) => s.focusedSessionId)
   const setFocusedSessionId = useAgentStore((s) => s.setFocusedSessionId)
 
-  // Get all active sessions (non-snoozed)
   const activeSessions = useMemo(() => {
     return Array.from(agentProgressById?.entries() ?? [])
       .filter(([_, progress]) => progress && !progress.isSnoozed)
       .sort((a, b) => {
-        // Sort by start time (newer first)
         const timeA = a[1].conversationHistory?.[0]?.timestamp || 0
         const timeB = b[1].conversationHistory?.[0]?.timestamp || 0
         return timeB - timeA
       })
   }, [agentProgressById])
 
-  // If no active sessions, return null
   if (activeSessions.length === 0) {
     return null
   }
 
-  // Determine which session to display: prefer focused if active; otherwise first active
   const displaySessionId = (
     focusedSessionId && agentProgressById?.get(focusedSessionId) && !agentProgressById.get(focusedSessionId)!.isSnoozed
   ) ? focusedSessionId : (activeSessions[0]?.[0] || null)
 
   const focusedProgress = displaySessionId ? agentProgressById?.get(displaySessionId) : undefined
 
-  // Helper to get session title
   const getSessionTitle = (progress: AgentProgressUpdate): string => {
-    // Use conversationTitle from progress update if available
     if (progress.conversationTitle) {
       return progress.conversationTitle
     }
 
-    // Fallback: Use sessionStartIndex to find the first user message of THIS session
-    // (not from previous sessions in the same conversation)
     const startIndex = typeof progress.sessionStartIndex === "number" ? progress.sessionStartIndex : 0
     const sessionHistory = progress.conversationHistory?.slice(startIndex) || []
     const userMessage = sessionHistory.find(m => m.role === "user")
@@ -72,7 +60,6 @@ export function MultiAgentProgressView({
     return `Session ${progress.sessionId.substring(0, 8)}`
   }
 
-  // Handle hiding the entire panel (all sessions continue running in background)
   const handleHidePanel = async () => {
     await tipcClient.hidePanelWindow({})
   }

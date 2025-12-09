@@ -37,7 +37,6 @@ export function AudioPlayer({
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const audioUrlRef = useRef<string | null>(null)
 
-  // Create audio URL when audioData changes
   useEffect(() => {
     if (audioData) {
       if (audioUrlRef.current) {
@@ -64,7 +63,6 @@ export function AudioPlayer({
     }
   }, [audioData])
 
-  // Audio event handlers - set up whenever audio element or hasAudio changes
   useEffect(() => {
     const audio = audioRef.current
     if (!audio || !hasAudio) return undefined

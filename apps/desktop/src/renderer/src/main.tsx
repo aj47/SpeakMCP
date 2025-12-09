@@ -8,8 +8,6 @@ import { QueryClientProvider } from "@tanstack/react-query"
 import { queryClient } from "./lib/query-client"
 import { initDebugFlags } from "./lib/debug"
 
-// Initialize debug flags from main process (fire-and-forget)
-// This syncs CLI flags like --debug-ui to the renderer
 initDebugFlags()
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
@@ -21,7 +19,6 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
 )
 
 document.addEventListener("contextmenu", (e) => {
-  // Check if the context menu event was already handled by a specific component
   if (e.defaultPrevented) {
     return
   }

@@ -33,7 +33,6 @@ const formatKeyCombo = (keyState: KeyState): string => {
     keyState.key !== "Alt" &&
     keyState.key !== "Meta"
   ) {
-    // Format special keys
     let displayKey = keyState.key
     if (keyState.key === " ") displayKey = "Space"
     else if (keyState.key === "ArrowUp") displayKey = "↑"

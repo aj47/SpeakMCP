@@ -24,19 +24,13 @@ import { startRemoteServer } from "./remote-server"
 
 registerServeSchema()
 
-// This method will be called when Electron has finished
-// initialization and is ready to create browser windows.
-// Some APIs can only be used after this event occurs.
 app.whenReady().then(() => {
-  // Initialize debug flags from CLI/env early
   initDebugFlags(process.argv)
   logApp("SpeakMCP starting up...")
 
-  // Initialize deep link handling after app is ready
   initializeDeepLinkHandling()
   logApp("Deep link handling initialized")
 
-  // Set app user model id for windows
   electronApp.setAppUserModelId(process.env.APP_ID)
 
   const accessibilityGranted = isAccessibilityGranted()
@@ -50,7 +44,6 @@ app.whenReady().then(() => {
 
   registerServeProtocol()
 
-	  // Apply login item setting based on user config (production only; dev would launch bare Electron)
 	  try {
 	    if ((process.env.NODE_ENV === "production" || !process.env.ELECTRON_RENDERER_URL) && process.platform !== "linux") {
 	      const cfg = configStore.get()
@@ -59,9 +52,8 @@ app.whenReady().then(() => {
 	        openAsHidden: true,
 	      })
 	    }
-	  } catch (_) {
-	    // Ignore errors; login item settings are best-effort
-	  }
+	  } catch (_) {}
+
 
   logApp("Serve protocol registered")
 
@@ -82,24 +74,20 @@ app.whenReady().then(() => {
   initTray()
   logApp("System tray initialized")
 
-  // Initialize MCP service on app startup
   mcpService
     .initialize()
     .then(() => {
       logApp("MCP service initialized successfully")
     })
     .catch((error) => {
-      // Always log to diagnostics so failures are captured for health checks
       diagnosticsService.logError(
         "mcp-service",
         "Failed to initialize MCP service on startup",
         error
       )
-      // Also log to console if debug mode is enabled
       logApp("Failed to initialize MCP service on startup:", error)
     })
 
-	  // Start Remote Server if enabled
 	  try {
 	    const cfg = configStore.get()
 	    if (cfg.remoteServerEnabled) {
@@ -111,16 +99,12 @@ app.whenReady().then(() => {
 	          ),
 	        )
 	    }
-	  } catch (_e) {
-	    // best-effort only
-	  }
+	  } catch (_e) {}
+
 
 
   import("./updater").then((res) => res.init()).catch(console.error)
 
-  // Default open or close DevTools by F12 in development
-  // and ignore CommandOrControl + R in production.
-  // see https://github.com/alex8088/electron-toolkit/tree/master/packages/utils
   app.on("browser-window-created", (_, window) => {
     optimizer.watchWindowShortcuts(window)
   })
@@ -142,14 +126,8 @@ app.whenReady().then(() => {
   })
 })
 
-// Quit when all windows are closed, except on macOS. There, it's common
-// for applications and their menu bar to stay active until the user quits
-// explicitly with Cmd + Q.
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {
     app.quit()
   }
 })
-
-// In this file you can include the rest of your app"s specific main process
-// code. You can also put them in separate files and require them here.

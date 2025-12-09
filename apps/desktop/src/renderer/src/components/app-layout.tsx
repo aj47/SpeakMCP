@@ -16,11 +16,8 @@ type NavLinkItem = {
 export const Component = () => {
   const navigate = useNavigate()
   const location = useLocation()
-  // Settings dropdown is expanded by default for better discoverability
   const [settingsExpanded, setSettingsExpanded] = useState(true)
 
-  // Primary navigation - always visible
-  // Note: History has been merged into the Sessions page
   const primaryNavLinks: NavLinkItem[] = [
     {
       text: "Sessions",
@@ -29,7 +26,6 @@ export const Component = () => {
     },
   ]
 
-  // Settings navigation - collapsible
   const settingsNavLinks: NavLinkItem[] = [
     {
       text: "General",
@@ -64,7 +60,6 @@ export const Component = () => {
     })
   }, [])
 
-  // Helper component for rendering nav links
   const renderNavLink = (link: NavLinkItem) => (
     <NavLink
       key={link.text}
@@ -72,7 +67,6 @@ export const Component = () => {
       role="button"
       draggable={false}
       className={({ isActive: _isActive }) => {
-        // For exact matching, check if the current location exactly matches the link href
         const isExactMatch = location.pathname === link.href
         return cn(
           "flex h-7 items-center gap-2 rounded-md px-2 font-medium transition-all duration-200",

@@ -5,7 +5,6 @@ import { recordingsFolder } from "./config"
 
 const rendererDir = path.join(__dirname, "../renderer")
 
-// See https://cs.chromium.org/chromium/src/net/base/net_error_list.h
 const FILE_NOT_FOUND = -6
 
 const getPath = async (path_: string) => {

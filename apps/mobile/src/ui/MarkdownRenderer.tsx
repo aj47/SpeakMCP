@@ -13,7 +13,6 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
 }) => {
   const { theme, isDark } = useTheme();
 
-  // Create dynamic styles based on theme
   const markdownStyles = StyleSheet.create({
     body: {
       color: theme.colors.foreground,

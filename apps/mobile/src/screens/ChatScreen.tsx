@@ -29,7 +29,6 @@ import * as Speech from 'expo-speech';
 import {
   preprocessTextForTTS,
   COLLAPSED_LINES,
-  getRoleIcon,
   shouldCollapseMessage,
   getToolResultsSummary,
   formatToolArguments,
@@ -893,7 +892,6 @@ export default function ChatScreen({ route, navigation }: any) {
           {messages.map((m, i) => {
             const shouldCollapse = shouldCollapseMessage(m.content, m.toolCalls, m.toolResults);
             const isExpanded = expandedMessages[i] ?? false;
-            const roleIcon = getRoleIcon(m.role as 'user' | 'assistant' | 'tool');
 
             const hasToolResults = (m.toolResults?.length ?? 0) > 0;
             const allSuccess = hasToolResults && m.toolResults!.every(r => r.success);
@@ -903,6 +901,9 @@ export default function ChatScreen({ route, navigation }: any) {
             const toolPreview = !isExpanded && m.toolCalls && m.toolCalls.length > 0 && m.toolCalls[0]?.arguments
               ? formatArgumentsPreview(m.toolCalls[0].arguments)
               : null;
+
+            // Show header only if there are tool calls (need badges/expand button)
+            const showHeader = (m.toolCalls?.length ?? 0) > 0;
 
             return (
               <Pressable
@@ -914,10 +915,9 @@ export default function ChatScreen({ route, navigation }: any) {
                   shouldCollapse && !isExpanded && pressed && styles.msgPressed,
                 ]}
               >
-                <View style={styles.messageHeader}>
-                  <Text style={styles.roleIcon}>{roleIcon}</Text>
-                  <Text style={styles.role}>{m.role}</Text>
-                  {(m.toolCalls?.length ?? 0) > 0 && (
+                {/* Only show header for messages with tool calls */}
+                {showHeader && (
+                  <View style={styles.messageHeader}>
                     <View style={[
                       styles.toolBadgeSmall,
                       isPending && styles.toolBadgePending,
@@ -934,24 +934,32 @@ export default function ChatScreen({ route, navigation }: any) {
                         {m.toolCalls!.map(tc => tc.name).join(', ')}
                       </Text>
                     </View>
-                  )}
-                  {shouldCollapse && (
-                    <View style={styles.expandButton}>
-                      <Text style={styles.expandButtonText}>
-                        {isExpanded ? '▲' : '▼'}
-                      </Text>
-                    </View>
-                  )}
-                </View>
+                    {shouldCollapse && (
+                      <View style={styles.expandButton}>
+                        <Text style={styles.expandButtonText}>
+                          {isExpanded ? '▲' : '▼'}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                )}
+
+                {/* Subtle expand indicator for collapsible text-only messages */}
+                {shouldCollapse && !showHeader && (
+                  <View style={styles.expandIndicator}>
+                    <Text style={styles.expandIndicatorText}>
+                      {isExpanded ? '▲' : '▼'}
+                    </Text>
+                  </View>
+                )}
 
                 {m.role === 'assistant' && (!m.content || m.content.length === 0) && !m.toolCalls && !m.toolResults ? (
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <View style={styles.thinkingContainer}>
                     <Image
                       source={isDark ? darkSpinner : lightSpinner}
-                      style={{ width: 20, height: 20 }}
+                      style={styles.thinkingSpinner}
                       resizeMode="contain"
                     />
-                    <Text style={{ color: theme.colors.foreground }}>Assistant is thinking</Text>
                   </View>
                 ) : (
                   <>
@@ -1169,21 +1177,32 @@ function createStyles(theme: Theme) {
       borderColor: theme.colors.border,
       alignSelf: 'flex-start',
     },
-    role: {
-      ...theme.typography.caption,
-      marginBottom: 0,
-      textTransform: 'capitalize',
-    },
-    roleIcon: {
-      fontSize: 14,
-      marginRight: 4,
-    },
     messageHeader: {
       flexDirection: 'row',
       alignItems: 'center',
       flexWrap: 'wrap',
       gap: spacing.xs,
-      marginBottom: spacing.xs,
+      marginBottom: spacing.sm,
+    },
+    expandIndicator: {
+      position: 'absolute',
+      top: spacing.sm,
+      right: spacing.sm,
+      opacity: 0.5,
+    },
+    expandIndicatorText: {
+      fontSize: 10,
+      color: theme.colors.mutedForeground,
+    },
+    thinkingContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: spacing.sm,
+    },
+    thinkingSpinner: {
+      width: 24,
+      height: 24,
     },
     toolBadgeSmall: {
       backgroundColor: theme.colors.muted,

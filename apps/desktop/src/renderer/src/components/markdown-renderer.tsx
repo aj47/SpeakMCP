@@ -11,7 +11,6 @@ import { logExpand } from "@renderer/lib/debug"
 interface MarkdownRendererProps {
   content: string
   className?: string
-  // Optional controls for <think> sections expansion persistence
   getThinkKey?: (content: string, index: number) => string
   isThinkExpanded?: (key: string) => boolean
   onToggleThink?: (key: string) => void
@@ -20,7 +19,6 @@ interface MarkdownRendererProps {
 interface ThinkSectionProps {
   content: string
   defaultCollapsed?: boolean
-  // Controlled mode (optional)
   isCollapsed?: boolean
   onToggle?: () => void
 }
@@ -40,7 +38,6 @@ const ThinkSection: React.FC<ThinkSectionProps> = ({
     } else {
       const prev = internalCollapsed
       setInternalCollapsed(!prev)
-      // Only log in uncontrolled mode so we don't duplicate logs when parent controls the state
       logExpand("ThinkSection", "toggle", { fromCollapsed: prev, toCollapsed: !prev })
     }
   }

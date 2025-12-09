@@ -6,7 +6,7 @@ const MIN_DECIBELS = -45
 const calculateRMS = (data: Uint8Array) => {
   let sumSquares = 0
   for (let i = 0; i < data.length; i++) {
-    const normalizedValue = (data[i] - 128) / 128 // Normalize the data
+    const normalizedValue = (data[i] - 128) / 128
     sumSquares += normalizedValue * normalizedValue
   }
   return Math.sqrt(sumSquares / data.length)
@@ -14,10 +14,8 @@ const calculateRMS = (data: Uint8Array) => {
 
 const normalizeRMS = (rms: number) => {
   rms = rms * 10
-  const exp = 1.5 // Adjust exponent value; values greater than 1 expand larger numbers more and compress smaller numbers more
+  const exp = 1.5
   const scaledRMS = Math.pow(rms, exp)
-
-  // Scale between 0.01 (1%) and 1.0 (100%)
   return Math.min(1.0, Math.max(0.01, scaledRMS))
 }
 
@@ -58,7 +56,6 @@ export class Recorder extends EventEmitter<{
         analyser.getByteTimeDomainData(timeDomainData)
         analyser.getByteFrequencyData(domainData)
 
-        // Calculate RMS level from time domain data
         const rmsLevel = calculateRMS(timeDomainData)
         const rms = normalizeRMS(rmsLevel)
 

@@ -22,9 +22,6 @@ export interface Position {
 
 const PANEL_MARGIN = 10
 
-/**
- * Calculate panel position based on the configured position setting
- */
 export function calculatePanelPosition(
   size: PanelSize,
   _mode: "normal" | "agent" | "textInput" = "normal",
@@ -32,12 +29,10 @@ export function calculatePanelPosition(
   const config = configStore.get()
   const position = config.panelPosition || "top-right"
 
-  // If custom position is set and we have custom coordinates, use them
   if (position === "custom" && config.panelCustomPosition) {
     return config.panelCustomPosition
   }
 
-  // Get the screen where the cursor is currently located
   const currentScreen = screen.getDisplayNearestPoint(
     screen.getCursorScreenPoint(),
   )
@@ -46,9 +41,6 @@ export function calculatePanelPosition(
   return calculatePositionForPreset(position, screenSize, size)
 }
 
-/**
- * Calculate position for a specific preset position
- */
 export function calculatePositionForPreset(
   position: PanelPosition,
   screenSize: { x: number; y: number; width: number; height: number },
@@ -101,7 +93,6 @@ export function calculatePositionForPreset(
 
     case "custom":
     default:
-      // Fallback to top-right if custom position is not available
       return {
         x: Math.floor(screenSize.x + (screenSize.width - size.width) - margin),
         y: screenSize.y + margin,
@@ -109,9 +100,6 @@ export function calculatePositionForPreset(
   }
 }
 
-/**
- * Save custom position to config
- */
 export function saveCustomPosition(position: Position): void {
   const config = configStore.get()
   configStore.save({
@@ -121,9 +109,6 @@ export function saveCustomPosition(position: Position): void {
   })
 }
 
-/**
- * Update panel position setting
- */
 export function updatePanelPosition(position: PanelPosition): void {
   const config = configStore.get()
   configStore.save({
@@ -132,9 +117,6 @@ export function updatePanelPosition(position: PanelPosition): void {
   })
 }
 
-/**
- * Check if position is within screen bounds and adjust if necessary
- */
 export function constrainPositionToScreen(
   position: Position,
   size: PanelSize,
@@ -149,7 +131,6 @@ export function constrainPositionToScreen(
 
   const constrainedPosition = { ...position }
 
-  // Ensure the panel doesn't go off the left or right edge
   constrainedPosition.x = Math.max(
     screenSize.x,
     Math.min(
@@ -158,7 +139,6 @@ export function constrainPositionToScreen(
     ),
   )
 
-  // Ensure the panel doesn't go off the top or bottom edge
   constrainedPosition.y = Math.max(
     screenSize.y,
     Math.min(

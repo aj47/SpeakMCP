@@ -3,7 +3,6 @@ import { z } from "zod"
 import { configStore } from "./config"
 import { logLLM } from "./debug"
 
-// Define the schema for LLM tool call responses
 const LLMToolCallSchema = z.object({
   toolCalls: z
     .array(
@@ -19,7 +18,6 @@ const LLMToolCallSchema = z.object({
 
 export type LLMToolCallResponse = z.infer<typeof LLMToolCallSchema>
 
-// Define the JSON schema for OpenAI structured output
 const toolCallResponseSchema: OpenAI.ResponseFormatJSONSchema["json_schema"] = {
   name: "LLMToolCallResponse",
   description:
@@ -61,7 +59,6 @@ const toolCallResponseSchema: OpenAI.ResponseFormatJSONSchema["json_schema"] = {
   strict: true,
 }
 
-// Context extraction schema
 const ContextExtractionSchema = z.object({
   contextSummary: z.string(),
   resources: z.array(
@@ -121,9 +118,6 @@ const contextExtractionSchema: OpenAI.ResponseFormatJSONSchema["json_schema"] =
     strict: true,
   }
 
-/**
- * Create an OpenAI client instance based on the current configuration
- */
 function createOpenAIClient(providerId?: string): OpenAI {
   const config = configStore.get()
   const chatProviderId = providerId || config.mcpToolsProviderId || "openai"

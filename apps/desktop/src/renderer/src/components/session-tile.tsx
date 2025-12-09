@@ -49,10 +49,6 @@ interface SessionTileProps {
   className?: string
 }
 
-/**
- * Rich session tile component displaying full conversation with internal scroll.
- * Shows status indicator, title, conversation history, tool executions, and action buttons.
- */
 export function SessionTile({
   session,
   progress,

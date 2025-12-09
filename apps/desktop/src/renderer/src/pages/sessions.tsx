@@ -48,7 +48,6 @@ function EmptyState({ onTextClick, onVoiceClick }: { onTextClick: () => void; on
   )
 }
 
-// Initial items to show in past sessions, and how many to load more at a time
 const INITIAL_PAST_SESSIONS = 10
 const LOAD_MORE_INCREMENT = 10
 
@@ -61,17 +60,10 @@ export function Component() {
   const scrollToSessionId = useAgentStore((s) => s.scrollToSessionId)
   const setScrollToSessionId = useAgentStore((s) => s.setScrollToSessionId)
 
-  // Custom ordering state - persists session order across re-renders
   const [sessionOrder, setSessionOrder] = useState<string[]>([])
-
-  // Drag state
   const [draggedSessionId, setDraggedSessionId] = useState<string | null>(null)
   const [dragTargetIndex, setDragTargetIndex] = useState<number | null>(null)
-
-  // Collapsed state per session
   const [collapsedSessions, setCollapsedSessions] = useState<Record<string, boolean>>({})
-
-  // Past sessions (history) state
   const [pastSessionsExpanded, setPastSessionsExpanded] = useState(true)
   const [pastSessionsCount, setPastSessionsCount] = useState(INITIAL_PAST_SESSIONS)
   const [searchQuery, setSearchQuery] = useState("")
@@ -79,22 +71,17 @@ export function Component() {
   const deleteConversationMutation = useDeleteConversationMutation()
   const deleteAllConversationsMutation = useDeleteAllConversationsMutation()
 
-  // Reference for scrolling to focused session
   const sessionRefs = useRef<Record<string, HTMLDivElement | null>>({})
 
   const handleCollapsedChange = useCallback((sessionId: string, collapsed: boolean) => {
     setCollapsedSessions(prev => ({ ...prev, [sessionId]: collapsed }))
   }, [])
 
-  // Get all sessions from the progress store - this is the single source of truth
   const allProgressEntries = React.useMemo(() => {
     const entries = Array.from(agentProgressById.entries())
       .filter(([_, progress]) => progress !== null)
 
-    // If we have a custom order, use it; otherwise sort by default
     if (sessionOrder.length > 0) {
-      // Sort by custom order, putting unknown (new) sessions at the BEGINNING
-      // This ensures newly created sessions appear at the top immediately
       return entries.sort((a, b) => {
         const aIndex = sessionOrder.indexOf(a[0])
         const bIndex = sessionOrder.indexOf(b[0])

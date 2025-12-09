@@ -153,10 +153,7 @@ export class OpenAIClient {
       this.onConnectionStatusChange
     );
 
-    try {
-      return await this.chatWithRecovery(url, body, onToken, onProgress);
-    } finally {
-    }
+    return await this.chatWithRecovery(url, body, onToken, onProgress);
   }
 
   private async chatWithRecovery(
@@ -305,8 +302,7 @@ export class OpenAIClient {
             onToken?.(token);
             finalContent += token;
           }
-        } catch {
-        }
+        } catch {}
       });
 
       es.addEventListener('error', (event) => {
@@ -507,8 +503,7 @@ export class OpenAIClient {
           onToken?.(token);
           result = { ...result, content: (result?.content || '') + token };
         }
-      } catch {
-      }
+      } catch {}
     }
 
     return result;

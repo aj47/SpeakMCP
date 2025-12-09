@@ -7,7 +7,6 @@ import { useStoreSync } from "./hooks/use-store-sync"
 
 const Updater = lazy(() => import("./components/updater"))
 
-// Component to initialize store synchronization
 function StoreInitializer({ children }: { children: React.ReactNode }) {
   useStoreSync()
   return <>{children}</>

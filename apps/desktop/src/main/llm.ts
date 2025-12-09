@@ -160,12 +160,9 @@ export async function postProcessTranscript(transcript: string) {
 
   let prompt = config.transcriptPostProcessingPrompt
 
-  // Check if the prompt contains the {transcript} placeholder
   if (prompt.includes("{transcript}")) {
-    // Replace all occurrences of the placeholder with the actual transcript
     prompt = prompt.replaceAll("{transcript}", transcript)
   } else {
-    // If no placeholder is found, append the transcript to the prompt
     prompt = prompt + "\n\n" + transcript
   }
 
@@ -185,20 +182,18 @@ export async function processTranscriptWithTools(
 ): Promise<LLMToolCallResponse> {
   const config = configStore.get()
 
-  // Remove duplicates from available tools to prevent confusion
   const uniqueAvailableTools = availableTools.filter(
     (tool, index, self) =>
       index === self.findIndex((t) => t.name === tool.name),
   )
 
-  // Construct system prompt using the new approach
   const userGuidelines = config.mcpToolsSystemPrompt
   const systemPrompt = constructSystemPrompt(
     uniqueAvailableTools,
     userGuidelines,
     false,
-    undefined, // relevantTools
-    config.mcpCustomSystemPrompt, // custom base system prompt
+    undefined,
+    config.mcpCustomSystemPrompt,
   )
 
   const messages = [
@@ -212,7 +207,6 @@ export async function processTranscriptWithTools(
     },
   ]
 
-  // Apply context budget management before LLM call
   const { messages: shrunkMessages } = await shrinkMessagesForLLM({
     messages,
     availableTools: uniqueAvailableTools,
@@ -240,7 +234,6 @@ export interface AgentModeResponse {
   totalIterations: number
 }
 
-// Helper function to create progress steps
 function createProgressStep(
   type: AgentProgressStep["type"],
   title: string,

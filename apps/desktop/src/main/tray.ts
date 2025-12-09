@@ -30,7 +30,6 @@ const buildMenu = (tray: Tray) =>
         }
         state.isRecording = true
         tray.setImage(stopIcon)
-        // fromButtonClick=true since tray menu click is a button-like action
         showPanelWindowAndStartRecording(true)
       },
     },

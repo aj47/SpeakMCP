@@ -1,11 +1,3 @@
-/**
- * Secure OAuth Token Storage for Electron
- *
- * Provides secure storage for OAuth tokens and client credentials
- * using Electron's safeStorage API when available, with fallback
- * to encrypted file storage.
- */
-
 import { app, safeStorage } from "electron"
 import path from "path"
 import fs from "fs"
@@ -30,9 +22,6 @@ export class OAuthStorage {
     this.initializeEncryption()
   }
 
-  /**
-   * Initialize encryption key for fallback storage
-   */
   private initializeEncryption(): void {
     try {
       if (fs.existsSync(ENCRYPTION_KEY_FILE)) {
@@ -43,13 +32,10 @@ export class OAuthStorage {
         fs.writeFileSync(ENCRYPTION_KEY_FILE, this.encryptionKey, { mode: 0o600 })
       }
     } catch (error) {
-      this.encryptionKey = crypto.randomBytes(32) // Use in-memory key as fallback
+      this.encryptionKey = crypto.randomBytes(32)
     }
   }
 
-  /**
-   * Encrypt data using Electron's safeStorage or fallback encryption
-   */
   private encryptData(data: string): string {
     if (safeStorage.isEncryptionAvailable()) {
       const encrypted = safeStorage.encryptString(data)
@@ -58,7 +44,6 @@ export class OAuthStorage {
         data: encrypted.toString('base64'),
       })
     } else {
-      // Fallback to AES encryption
       const iv = crypto.randomBytes(16)
       const cipher = crypto.createCipher('aes-256-gcm', this.encryptionKey!)
       let encrypted = cipher.update(data, 'utf8', 'hex')
@@ -74,9 +59,6 @@ export class OAuthStorage {
     }
   }
 
-  /**
-   * Decrypt data using appropriate method
-   */
   private decryptData(encryptedData: string): string {
     try {
       const parsed = JSON.parse(encryptedData)
@@ -98,9 +80,6 @@ export class OAuthStorage {
     }
   }
 
-  /**
-   * Load all stored OAuth configurations
-   */
   async loadAll(): Promise<StoredOAuthData> {
     try {
       if (!fs.existsSync(OAUTH_STORAGE_FILE)) {
@@ -115,9 +94,6 @@ export class OAuthStorage {
     }
   }
 
-  /**
-   * Save all OAuth configurations
-   */
   async saveAll(data: StoredOAuthData): Promise<void> {
     try {
       fs.mkdirSync(dataFolder, { recursive: true })
@@ -129,18 +105,12 @@ export class OAuthStorage {
     }
   }
 
-  /**
-   * Load OAuth configuration for a specific server
-   */
   async load(serverUrl: string): Promise<OAuthConfig | null> {
     const allData = await this.loadAll()
     const serverData = allData[serverUrl]
     return serverData ? serverData.config : null
   }
 
-  /**
-   * Save OAuth configuration for a specific server
-   */
   async save(serverUrl: string, config: OAuthConfig): Promise<void> {
     const allData = await this.loadAll()
     allData[serverUrl] = {

@@ -12,10 +12,7 @@ import { ThemeProvider, useTheme } from './src/ui/ThemeProvider';
 import * as Linking from 'expo-linking';
 import { useEffect } from 'react';
 
-// SpeakMCP icon asset
 const speakMCPIcon = require('./assets/speakmcp-icon.png');
-
-// Animated spinner GIFs for loading state
 const darkSpinner = require('./assets/loading-spinner.gif');
 const lightSpinner = require('./assets/light-spinner.gif');
 

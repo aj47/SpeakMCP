@@ -42,7 +42,6 @@ export default function SettingsScreen({ navigation }: any) {
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
 
-  // Create dynamic styles based on current theme
   const styles = useMemo(() => createStyles(theme), [theme]);
 
   useEffect(() => {
@@ -99,7 +98,6 @@ export default function SettingsScreen({ navigation }: any) {
       >
         <Text style={styles.h1}>Settings</Text>
 
-        {/* Theme Selector */}
         <Text style={styles.sectionTitle}>Appearance</Text>
         <View style={styles.themeSelector}>
           {THEME_OPTIONS.map((option) => (
@@ -195,7 +193,6 @@ export default function SettingsScreen({ navigation }: any) {
   );
 }
 
-// Create dynamic styles based on theme
 function createStyles(theme: ReturnType<typeof useTheme>['theme']) {
   return StyleSheet.create({
     container: {

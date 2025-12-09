@@ -39,14 +39,12 @@ export function ModelSelector({
   const searchInputRef = useRef<HTMLInputElement>(null)
 
   const configQuery = useConfigQuery()
-  // Get current preset ID for OpenAI provider so query invalidates when preset changes
   const currentPresetId = providerId === "openai"
     ? configQuery.data?.currentModelPresetId || DEFAULT_MODEL_PRESET_ID
     : undefined
 
   const modelsQuery = useAvailableModelsQuery(providerId, !!providerId, currentPresetId)
 
-  // Log component renders
   useEffect(() => {
     logRender('ModelSelector', 'mount/update', {
       providerId,
@@ -66,15 +64,13 @@ export function ModelSelector({
     }
   }
 
-  // Auto-select first model if no value is set and models are available
   useEffect(() => {
     if (!value && modelsQuery.data && modelsQuery.data.length > 0) {
       logUI('[ModelSelector] Auto-selecting first model:', modelsQuery.data[0].id)
       onValueChange(modelsQuery.data[0].id)
     }
-  }, [value, modelsQuery.data]) // Remove onValueChange from dependencies to prevent infinite loops
+  }, [value, modelsQuery.data])
 
-  // Clear search when dropdown closes and manage focus
   useEffect(() => {
     if (!isOpen) {
       logStateChange('ModelSelector', 'isOpen', true, false)
@@ -83,7 +79,6 @@ export function ModelSelector({
     } else {
       logStateChange('ModelSelector', 'isOpen', false, true)
       logUI('[ModelSelector] Dropdown opened, focusing search input')
-      // Focus the search input when dropdown opens
       requestAnimationFrame(() => {
         if (searchInputRef.current) {
           searchInputRef.current.focus()

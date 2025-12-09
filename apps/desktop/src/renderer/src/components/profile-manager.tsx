@@ -42,7 +42,6 @@ export function ProfileManager({
   const [newProfileName, setNewProfileName] = useState("")
   const [newProfileGuidelines, setNewProfileGuidelines] = useState("")
 
-  // Fetch profiles
   const profilesQuery = useQuery({
     queryKey: ["profiles"],
     queryFn: async () => {
@@ -50,7 +49,6 @@ export function ProfileManager({
     },
   })
 
-  // Fetch current profile
   const currentProfileQuery = useQuery({
     queryKey: ["current-profile"],
     queryFn: async () => {
@@ -61,7 +59,6 @@ export function ProfileManager({
   const profiles = profilesQuery.data || []
   const currentProfile = currentProfileQuery.data
 
-  // Create profile mutation
   const createProfileMutation = useMutation({
     mutationFn: async ({ name, guidelines }: { name: string; guidelines: string }) => {
       return await tipcClient.createProfile({ name, guidelines })

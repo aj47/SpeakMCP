@@ -19,11 +19,8 @@ const modelsCache = new Map<
   string,
   { models: ModelInfo[]; timestamp: number }
 >()
-const CACHE_DURATION = 5 * 60 * 1000 // 5 minutes
+const CACHE_DURATION = 5 * 60 * 1000
 
-/**
- * Fetch available models from OpenAI API or OpenRouter
- */
 async function fetchOpenAIModels(
   baseUrl?: string,
   apiKey?: string,
@@ -40,7 +37,6 @@ async function fetchOpenAIModels(
   const isGenericOpenAICompatible =
     !isOpenRouter && !isCerebras && !!baseUrl && !baseUrl.includes("api.openai.com")
 
-  // Log the request details for debugging
   diagnosticsService.logInfo(
     "models-service",
     `Fetching models from: ${url}`,
@@ -60,7 +56,6 @@ async function fetchOpenAIModels(
     },
   })
 
-  // Log response details
   diagnosticsService.logInfo(
     "models-service",
     `Models API response: ${response.status} ${response.statusText}`,
@@ -89,7 +84,6 @@ async function fetchOpenAIModels(
 
   const data: ModelsResponse = await response.json()
 
-  // Log the raw response data
   diagnosticsService.logInfo(
     "models-service",
     `Models API response data`,
@@ -101,25 +95,19 @@ async function fetchOpenAIModels(
     },
   )
 
-  // Different filtering logic for OpenRouter, native OpenAI, Cerebras, and generic OpenAI-compatible
   let filteredModels = data.data
 
   if (isOpenRouter) {
-    // For OpenRouter, show all models but filter out some problematic ones
     filteredModels = data.data.filter(
       (model) =>
-        // Filter out fine-tuned models and some problematic model types
         !model.id.includes(":ft-") &&
         !model.id.includes("instruct-beta") &&
         !model.id.includes("preview") &&
-        // Keep most models but filter out some edge cases
         model.id.length > 0,
     )
   } else if (isCerebras) {
-    // For Cerebras, show all available models (they're all valid)
     filteredModels = data.data.filter(
       (model) =>
-        // Basic validation - just ensure the model has an ID
         model.id && model.id.length > 0,
     )
 
@@ -133,17 +121,13 @@ async function fetchOpenAIModels(
       },
     )
   } else if (isNativeOpenAI) {
-    // For native OpenAI, use the original restrictive filtering
     filteredModels = data.data.filter(
       (model) =>
-        // Filter out fine-tuned models and deprecated models
         !model.id.includes(":") &&
         !model.id.includes("instruct") &&
         (model.id.includes("gpt") || model.id.includes("o1")),
     )
   } else if (isGenericOpenAICompatible) {
-    // For generic OpenAI-compatible providers (custom base URLs), be permissive:
-    // just ensure the model has a non-empty ID
     filteredModels = data.data.filter(
       (model) => model.id && model.id.length > 0,
     )

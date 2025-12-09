@@ -1,10 +1,3 @@
-/**
- * OAuth Deep Link Handler for Electron
- *
- * Handles OAuth callbacks via custom URL scheme (speakmcp://)
- * instead of localhost HTTP server for better native app experience.
- */
-
 import { app } from "electron"
 import { URL } from "url"
 
@@ -22,28 +15,20 @@ export class OAuthDeepLinkHandler {
   private isListening = false
   private secondInstanceHandler: ((event: Electron.Event, commandLine: string[]) => void) | null = null
 
-  /**
-   * Wait for OAuth callback via deep link
-   */
   async waitForCallback(timeoutMs: number = 300000): Promise<OAuthCallbackResult> {
     return new Promise((resolve, reject) => {
       this.resolveCallback = resolve
       this.rejectCallback = reject
 
-      // Set up timeout
       this.timeout = setTimeout(() => {
         this.cleanup()
         reject(new Error('OAuth callback timeout'))
       }, timeoutMs)
 
-      // Start listening for deep link events
       this.startListening()
     })
   }
 
-  /**
-   * Start listening for deep link events
-   */
   private startListening(): void {
     if (this.isListening) {
       return
@@ -51,19 +36,15 @@ export class OAuthDeepLinkHandler {
 
     this.isListening = true
 
-    // Handle deep link when app is already running
     app.on('open-url', this.handleDeepLink)
 
-    // Handle deep link when app is launched by the URL (macOS)
     if (process.platform === 'darwin') {
       app.on('will-finish-launching', () => {
         app.on('open-url', this.handleDeepLink)
       })
     }
 
-    // Handle deep link on Windows/Linux via command line arguments
     if (process.platform === 'win32' || process.platform === 'linux') {
-      // Check if app was launched with a deep link
       const args = process.argv
       for (const arg of args) {
         if (arg.startsWith('speakmcp://')) {
@@ -72,7 +53,6 @@ export class OAuthDeepLinkHandler {
         }
       }
 
-      // Listen for second instance (when app is already running)
       this.secondInstanceHandler = (_event: Electron.Event, commandLine: string[]) => {
         for (const arg of commandLine) {
           if (arg.startsWith('speakmcp://')) {
@@ -85,9 +65,6 @@ export class OAuthDeepLinkHandler {
     }
   }
 
-  /**
-   * Handle deep link URL
-   */
   private handleDeepLink = (event: Electron.Event | null, url: string): void => {
     if (event) {
       event.preventDefault()
@@ -96,18 +73,12 @@ export class OAuthDeepLinkHandler {
     try {
       const parsedUrl = new URL(url)
 
-      // Normalize pathname - custom protocols parse URLs differently:
-      // - speakmcp://oauth/callback parses as hostname="oauth", pathname="/callback"
-      // - speakmcp:/oauth/callback parses as hostname="", pathname="/oauth/callback"
-      // We need to combine hostname and pathname to get the full path
       let fullPath = parsedUrl.pathname
       if (parsedUrl.hostname) {
         fullPath = `/${parsedUrl.hostname}${parsedUrl.pathname}`
       }
       const pathname = fullPath.replace(/^\/+/, '/')
 
-      // Check if this is an OAuth callback
-      // Use case-insensitive comparison defensively (WHATWG URL API normalizes to lowercase)
       const isOAuthProtocol = parsedUrl.protocol.toLowerCase() === 'speakmcp:'
       const isOAuthPath = pathname === '/oauth/callback'
 
@@ -124,13 +95,10 @@ export class OAuthDeepLinkHandler {
           error_description: errorDescription || undefined,
         }
 
-        // If there's an active callback waiting, resolve it
         if (this.resolveCallback) {
           this.cleanup()
           this.resolveCallback(result)
         } else {
-          // No active callback waiting - this means the OAuth flow was initiated
-          // but not through completeAuthorizationFlow. We need to handle it automatically.
           this.handleAutomaticOAuthCompletion(result)
         }
       }
@@ -143,9 +111,6 @@ export class OAuthDeepLinkHandler {
     }
   }
 
-  /**
-   * Handle OAuth callback when no active listener is waiting
-   */
   private async handleAutomaticOAuthCompletion(result: OAuthCallbackResult): Promise<void> {
     try {
       if (result.error || !result.code || !result.state) {

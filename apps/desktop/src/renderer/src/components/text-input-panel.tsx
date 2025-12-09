@@ -26,25 +26,20 @@ export const TextInputPanel = forwardRef<TextInputPanelRef, TextInputPanelProps>
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const { isDark } = useTheme()
 
-  // Expose focus method to parent
   useImperativeHandle(ref, () => ({
     focus: () => {
       textareaRef.current?.focus()
     }
   }))
 
-  // Auto-focus when component mounts - with retry for Windows
   useEffect(() => {
     if (textareaRef.current && !isProcessing) {
-      // Try to focus immediately
       textareaRef.current.focus()
 
-      // Retry after a short delay to ensure window is ready (especially on Windows)
       const timer1 = setTimeout(() => {
         textareaRef.current?.focus()
       }, 50)
 
-      // Additional retry for Windows where focus can be delayed
       const timer2 = setTimeout(() => {
         textareaRef.current?.focus()
       }, 150)
@@ -65,20 +60,16 @@ export const TextInputPanel = forwardRef<TextInputPanelRef, TextInputPanelProps>
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    // Allow zoom shortcuts to pass through (Cmd/Ctrl + Plus/Minus/0)
     const isModifierPressed = e.metaKey || e.ctrlKey;
 
-    // Zoom in: Cmd/Ctrl + Plus/Equals (with or without Shift)
     if (isModifierPressed && (e.key === '=' || e.key === 'Equal' || e.key === '+')) {
       return;
     }
 
-    // Zoom out: Cmd/Ctrl + Minus
     if (isModifierPressed && e.key === '-') {
       return;
     }
 
-    // Zoom reset: Cmd/Ctrl + 0
     if (isModifierPressed && e.key === '0') {
       return;
     }
@@ -90,7 +81,6 @@ export const TextInputPanel = forwardRef<TextInputPanelRef, TextInputPanelProps>
       e.preventDefault()
       onCancel()
     }
-    // Shift+Enter allows new lines (default textarea behavior)
   }
 
   if (isProcessing && agentProgress) {

@@ -70,11 +70,9 @@ export class MCPService {
     currentServer?: string
   } = { current: 0, total: 0 }
 
-  // Server logs storage with circular buffer (max 1000 entries per server)
   private serverLogs: Map<string, ServerLogEntry[]> = new Map()
   private readonly MAX_LOG_ENTRIES = 1000
 
-  // Track runtime server states - separate from config disabled flag
   private runtimeDisabledServers: Set<string> = new Set()
   private initializedServers: Set<string> = new Set()
   private hasBeenInitialized = false
@@ -89,11 +87,9 @@ export class MCPService {
     }
   >()
 
-  // Session cleanup interval
   private sessionCleanupInterval: ReturnType<typeof setInterval> | null = null
 
   constructor() {
-    // Start resource cleanup interval (every 5 minutes)
     this.sessionCleanupInterval = setInterval(
       () => {
         this.cleanupInactiveResources()
@@ -101,7 +97,6 @@ export class MCPService {
       5 * 60 * 1000,
     )
 
-    // Seed runtime disabled servers from persisted config so we respect user choices across sessions
     try {
       const config = configStore.get()
       const persistedServers = config?.mcpRuntimeDisabledServers
@@ -111,16 +106,14 @@ export class MCPService {
         }
       }
 
-      // Seed disabled tools from persisted config
       const persistedTools = config?.mcpDisabledTools
       if (Array.isArray(persistedTools)) {
         for (const toolName of persistedTools) {
           this.disabledTools.add(toolName)
         }
       }
-    } catch (e) {
-      // Ignore persistence loading errors
-    }
+    } catch (e) {}
+
   }
 
   trackResource(
@@ -177,7 +170,6 @@ export class MCPService {
     if (!result.isError && result.content[0]?.text) {
       const text = result.content[0].text
 
-      // Simple pattern matching for common resource types
       const resourcePatterns = [
         {
           pattern: /(?:Session|session)\s+(?:ID|id):\s*([a-f0-9-]+)/i,

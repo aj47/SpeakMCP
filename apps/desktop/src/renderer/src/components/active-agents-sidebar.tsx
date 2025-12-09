@@ -29,7 +29,6 @@ interface AgentSessionsResponse {
 const STORAGE_KEY = 'active-agents-sidebar-expanded'
 
 export function ActiveAgentsSidebar() {
-  // Load initial expand state from localStorage, default to true
   const [isExpanded, setIsExpanded] = useState(() => {
     const stored = localStorage.getItem(STORAGE_KEY)
     const initial = stored !== null ? stored === 'true' : true
@@ -49,13 +48,10 @@ export function ActiveAgentsSidebar() {
     queryFn: async () => {
       return await tipcClient.getAgentSessions()
     },
-    // No polling - we'll use push-based updates via rendererHandlers
   })
 
-  // Listen for push-based session updates from main process
   useEffect(() => {
     const unlisten = rendererHandlers.agentSessionsUpdated.listen((updatedData) => {
-      // Invalidate the query to trigger a refetch with the new data
       refetch()
     })
     return unlisten
@@ -67,7 +63,6 @@ export function ActiveAgentsSidebar() {
   const hasRecentSessions = recentSessions.length > 0
   const hasAnySessions = hasActiveSessions || hasRecentSessions
 
-  // Persist expand state to localStorage whenever it changes
   useEffect(() => {
     logStateChange('ActiveAgentsSidebar', 'isExpanded', !isExpanded, isExpanded)
     logExpand("ActiveAgentsSidebar", "write", { key: STORAGE_KEY, value: isExpanded })

@@ -37,7 +37,6 @@ export function ThemeProvider({ children, initialMode = 'system' }: ThemeProvide
   const [themeMode, setThemeModeState] = useState<ThemeMode>(initialMode);
   const [isLoaded, setIsLoaded] = useState(false);
 
-  // Load saved theme preference on mount
   useEffect(() => {
     AsyncStorage.getItem(THEME_STORAGE_KEY)
       .then((stored) => {
@@ -45,9 +44,7 @@ export function ThemeProvider({ children, initialMode = 'system' }: ThemeProvide
           setThemeModeState(stored as ThemeMode);
         }
       })
-      .catch(() => {
-        // Ignore storage errors
-      })
+      .catch(() => {})
       .finally(() => {
         setIsLoaded(true);
       });
@@ -63,9 +60,7 @@ export function ThemeProvider({ children, initialMode = 'system' }: ThemeProvide
 
   const setThemeMode = useCallback((mode: ThemeMode) => {
     setThemeModeState(mode);
-    AsyncStorage.setItem(THEME_STORAGE_KEY, mode).catch(() => {
-      // Ignore storage errors
-    });
+    AsyncStorage.setItem(THEME_STORAGE_KEY, mode).catch(() => {});
   }, []);
 
   const toggleTheme = useCallback(() => {

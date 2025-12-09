@@ -85,7 +85,6 @@ export function useStoreSync() {
     return unlisten
   }, [setFocusedSessionId, setScrollToSessionId])
 
-  // Helper to save conversation history
   async function saveCompleteConversationHistory(
     conversationId: string,
     conversationHistory: Array<{

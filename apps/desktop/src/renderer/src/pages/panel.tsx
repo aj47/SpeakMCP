@@ -35,13 +35,9 @@ export function Component() {
   const mcpModeRef = useRef(false)
   const recordingRef = useRef(false)
   const textInputPanelRef = useRef<TextInputPanelRef>(null)
-  // Store conversationId and sessionId passed from mic button clicks for continuing conversations
   const mcpConversationIdRef = useRef<string | undefined>(undefined)
   const mcpSessionIdRef = useRef<string | undefined>(undefined)
-  // Track if recording was initiated from a tile (sessions view) - if so, don't show floating panel
   const fromTileRef = useRef<boolean>(false)
-  // Track if recording was initiated from a UI button click (not keyboard shortcut)
-  // When true, show "Enter" as submit hint instead of "Release keys"
   const [fromButtonClick, setFromButtonClick] = useState(false)
   const { isDark } = useTheme()
   const lastRequestedModeRef = useRef<"normal" | "agent" | "textInput">("normal")
@@ -52,29 +48,21 @@ export function Component() {
   }
 
 
-  // Agent state from Zustand
   const agentProgress = useAgentProgress()
   const focusedSessionId = useAgentStore((s) => s.focusedSessionId)
   const agentProgressById = useAgentStore((s) => s.agentProgressById)
 
-  // Conversation state from Zustand
   const currentConversationId = useConversationStore((s) => s.currentConversationId)
   const setCurrentConversationId = useConversationStore((s) => s.setCurrentConversationId)
-  // NOTE: continueConversation is intentionally NOT used here.
-  // New sessions should NOT automatically set currentConversationId - that causes session pollution.
-  // continueConversation should only be called from explicit user actions (e.g., history "Continue" button).
   const endConversation = useConversationStore((s) => s.endConversation)
 
-  // Query for current conversation data
   const conversationQuery = useConversationQuery(currentConversationId)
   const currentConversation = conversationQuery.data ?? null
   const isConversationActive = !!currentConversation
 
-  // Mutations for conversation management
   const createConversationMutation = useCreateConversationMutation()
   const addMessageMutation = useAddMessageToConversationMutation()
 
-  // Helper function to start a new conversation
   const startNewConversation = async (message: string, role: "user" | "assistant") => {
     const result = await createConversationMutation.mutateAsync({ firstMessage: message, role })
     if (result?.id) {
@@ -83,7 +71,6 @@ export function Component() {
     return result
   }
 
-  // Helper function to add a message to the current conversation
   const addMessage = async (content: string, role: "user" | "assistant") => {
     if (!currentConversationId) return
     await addMessageMutation.mutateAsync({
@@ -93,8 +80,6 @@ export function Component() {
     })
   }
 
-  // Count truly active sessions (not complete, not snoozed) for mode switching
-  // Completed sessions should not prevent the panel from switching back to normal mode for voice dictation
   const activeSessionCount = Array.from(agentProgressById?.values() ?? [])
     .filter(progress => progress && !progress.isSnoozed && !progress.isComplete).length
 
@@ -115,7 +100,6 @@ export function Component() {
     return entry || null
   }, [agentProgress, agentProgressById])
 
-  // Debug: Log when agentProgress changes in Panel
   useEffect(() => {
     logUI('[Panel] agentProgress changed:', {
       hasProgress: !!agentProgress,
@@ -128,7 +112,6 @@ export function Component() {
     })
   }, [agentProgress, focusedSessionId, agentProgressById.size, activeSessionCount, hasMultipleSessions])
 
-  // Debug: Log when recording state changes
   useEffect(() => {
     logUI('[Panel] recording state changed:', {
       recording,
@@ -139,23 +122,18 @@ export function Component() {
     })
   }, [recording, anyActiveNonSnoozed, anyVisibleSessions, showTextInput, mcpMode])
 
-  // Config for drag functionality and shortcuts
   const configQuery = useConfigQuery()
   const isDragEnabled = (configQuery.data as any)?.panelDragEnabled ?? true
 
-  // Get the submit shortcut display text based on current mode, config, and trigger source
   const getSubmitShortcutText = useMemo(() => {
     const config = configQuery.data
     if (!config) return "Enter"
 
-    // If recording was triggered by a UI button click, always show "Enter" as the submit hint
-    // because there are no keys being held that the user needs to release
     if (fromButtonClick) {
       return "Enter"
     }
 
     if (mcpMode) {
-      // MCP mode uses mcpToolsShortcut
       const shortcut = config.mcpToolsShortcut
       if (shortcut === "hold-ctrl-alt") {
         return "Release keys"
@@ -165,7 +143,6 @@ export function Component() {
         return formatKeyComboForDisplay(config.customMcpToolsShortcut)
       }
     } else {
-      // Normal dictation mode uses shortcut
       const shortcut = config.shortcut
       if (shortcut === "hold-ctrl") {
         return "Release Ctrl"
@@ -182,17 +159,12 @@ export function Component() {
     return "Enter"
   }, [configQuery.data, mcpMode, fromButtonClick])
 
-  // Handle submit button click during recording
   const handleSubmitRecording = () => {
     if (!recording) return
     isConfirmedRef.current = true
     recorderRef.current?.stopRecording()
   }
 
-  // Handle Enter key press to submit recording when triggered from UI button click
-  // Note: This is a fallback for when the panel has focus. The primary Enter key handling
-  // is done via the global keyboard hook in keyboard.ts since the panel is shown with
-  // showInactive() and doesn't receive keyboard focus.
   useEffect(() => {
     if (!recording || !fromButtonClick) return undefined
 

@@ -1,11 +1,3 @@
-/**
- * OAuth 2.1 Client Implementation for MCP Servers
- *
- * Implements OAuth 2.1 with PKCE, dynamic client registration (RFC7591),
- * and authorization server metadata discovery (RFC8414) for secure
- * authentication with MCP servers.
- */
-
 import { shell } from "electron"
 import crypto from "crypto"
 import { OAuthConfig, OAuthTokens, OAuthServerMetadata, OAuthClientMetadata } from "@shared/types"
@@ -36,9 +28,6 @@ export class OAuthClient {
     }
   }
 
-  /**
-   * Discover OAuth server metadata using RFC8414
-   */
   async discoverServerMetadata(): Promise<OAuthServerMetadata> {
     if (this.config.serverMetadata) {
       return this.config.serverMetadata
@@ -51,7 +40,7 @@ export class OAuthClient {
       const response = await fetch(metadataUrl, {
         headers: {
           'Accept': 'application/json',
-          'MCP-Protocol-Version': '2025-03-26', // As per MCP spec
+          'MCP-Protocol-Version': '2025-03-26',
         },
       })
 
@@ -61,7 +50,6 @@ export class OAuthClient {
 
       const metadata = await response.json() as OAuthServerMetadata
 
-      // Validate required fields
       if (!metadata.authorization_endpoint || !metadata.token_endpoint) {
         throw new Error('Invalid server metadata: missing required endpoints')
       }
@@ -69,7 +57,6 @@ export class OAuthClient {
       this.config.serverMetadata = metadata
       return metadata
     } catch (error) {
-      // Fallback to default endpoints as per MCP spec
       const fallbackMetadata: OAuthServerMetadata = {
         issuer: `${url.protocol}//${url.host}`,
         authorization_endpoint: `${url.protocol}//${url.host}/authorize`,
@@ -87,11 +74,7 @@ export class OAuthClient {
     }
   }
 
-  /**
-   * Register OAuth client dynamically using RFC7591
-   */
   async registerClient(): Promise<{ clientId: string; clientSecret?: string }> {
-    // If we already have a client ID, use it consistently
     if (this.config.clientId) {
       return {
         clientId: this.config.clientId,
@@ -105,7 +88,6 @@ export class OAuthClient {
       throw new Error('Dynamic client registration not supported by server')
     }
 
-    // Always determine redirect URI based on current environment, ignoring stored config
     const isDevelopment = process.env.NODE_ENV === 'development' || !!process.env.ELECTRON_RENDERER_URL
     const redirectUri = isDevelopment ? 'http://localhost:3000/callback' : 'speakmcp://oauth/callback'
 
@@ -115,8 +97,7 @@ export class OAuthClient {
       grant_types: ['authorization_code', 'refresh_token'],
       response_types: ['code'],
       scope: this.config.scope || 'user',
-      token_endpoint_auth_method: 'none', // Public client
-      // Don't merge stored clientMetadata to ensure we use the correct redirect URI for current environment
+      token_endpoint_auth_method: 'none',
       ...(this.config.clientMetadata && {
         client_name: this.config.clientMetadata.client_name || 'SpeakMCP',
         grant_types: this.config.clientMetadata.grant_types || ['authorization_code', 'refresh_token'],
@@ -146,7 +127,6 @@ export class OAuthClient {
       this.config.clientSecret = registrationResponse.client_secret
       this.config.clientMetadata = clientMetadata
 
-      // Ensure client configuration is saved
       await this.saveClientConfig()
 
       return {

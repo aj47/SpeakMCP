@@ -1,6 +1,5 @@
 import { ChildProcess } from "child_process"
 
-// Per-session agent state
 interface AgentSessionState {
   sessionId: string
   shouldStop: boolean
@@ -9,7 +8,6 @@ interface AgentSessionState {
   processes: Set<ChildProcess>
 }
 
-// Pending tool approval request
 interface PendingToolApproval {
   approvalId: string
   sessionId: string
@@ -22,35 +20,23 @@ export const state = {
   isRecording: false,
   isTextInputActive: false,
   focusedAppBeforeRecording: null as string | null,
-  // Toggle voice dictation state
   isToggleRecordingActive: false,
-  // Track if recording was triggered from UI button click (vs keyboard shortcut)
-  // Used to enable Enter key submission via global keyboard hook
   isRecordingFromButtonClick: false,
-  // Track if recording is MCP mode (vs regular dictation)
   isRecordingMcpMode: false,
-  // Agent mode state - legacy global flags (kept for backward compatibility)
   isAgentModeActive: false,
   agentProcesses: new Set<ChildProcess>(),
   shouldStopAgent: false,
   agentIterationCount: 0,
-  // Track in-flight LLM abort controllers - legacy global (kept for backward compatibility)
   llmAbortControllers: new Set<AbortController>(),
-  // Per-session agent state (new approach for multi-session support)
   agentSessions: new Map<string, AgentSessionState>(),
-  // Prevent auto-showing panel for a short cooldown after hide
   panelAutoShowSuppressedUntil: 0,
-  // Pending tool approval requests
   pendingToolApprovals: new Map<string, PendingToolApproval>(),
 }
 
-// Process management for agent mode
 export const agentProcessManager = {
-  // Register a process created during agent mode
   registerProcess(process: ChildProcess) {
     state.agentProcesses.add(process)
 
-    // Clean up when process exits
     process.on("exit", (_code, _signal) => {
       state.agentProcesses.delete(process)
     })
@@ -60,7 +46,6 @@ export const agentProcessManager = {
     })
   },
 
-  // Kill all agent processes gracefully
   async killAllProcesses(): Promise<void> {
     const processes = Array.from(state.agentProcesses)
     const killPromises: Promise<void>[] = []
@@ -73,16 +58,14 @@ export const agentProcessManager = {
             return
           }
 
-          // Try graceful shutdown first
           process.kill("SIGTERM")
 
-          // Force kill after timeout
           const forceKillTimeout = setTimeout(() => {
             if (!process.killed && process.exitCode === null) {
               process.kill("SIGKILL")
             }
             resolve()
-          }, 3000) // 3 second timeout
+          }, 3000)
 
           process.on("exit", () => {
             clearTimeout(forceKillTimeout)
@@ -96,21 +79,17 @@ export const agentProcessManager = {
     state.agentProcesses.clear()
   },
 
-  // Emergency stop - immediately kill all processes
   emergencyStop(): void {
     for (const process of state.agentProcesses) {
       try {
         if (!process.killed && process.exitCode === null) {
           process.kill("SIGKILL")
         }
-      } catch (error) {
-        // Ignore errors during emergency stop
-      }
+      } catch (error) {}
     }
     state.agentProcesses.clear()
   },
 
-  // Get count of active processes
   getActiveProcessCount(): number {
     return state.agentProcesses.size
   },
@@ -124,8 +103,6 @@ export function isPanelAutoShowSuppressed(): boolean {
   return Date.now() < state.panelAutoShowSuppressedUntil
 }
 
-
-// Abort management for LLM HTTP requests
 export const llmRequestAbortManager = {
   register(controller: AbortController) {
     state.llmAbortControllers.add(controller)
@@ -137,18 +114,13 @@ export const llmRequestAbortManager = {
     for (const controller of state.llmAbortControllers) {
       try {
         controller.abort()
-      } catch (_e) {
-        // ignore
-      }
+      } catch (_e) {}
     }
     state.llmAbortControllers.clear()
   },
 }
 
-// Per-session agent state management
-export const agentSessionStateManager = {
-  // Create a new session state
-  createSession(sessionId: string): void {
+export const agentSessionStateManager = {  createSession(sessionId: string): void {
     if (!state.agentSessions.has(sessionId)) {
       state.agentSessions.set(sessionId, {
         sessionId,

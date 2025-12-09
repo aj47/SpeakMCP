@@ -6,7 +6,6 @@ import {
 } from "@tanstack/react-query"
 import { tipcClient } from "./tipc-client"
 
-// Set up focus manager for refetching on window focus
 focusManager.setEventListener((handleFocus) => {
   const handler = () => handleFocus()
   window.addEventListener("focus", handler)
@@ -15,7 +14,6 @@ focusManager.setEventListener((handleFocus) => {
   }
 })
 
-// QueryClient instance
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -86,7 +84,6 @@ export const useAvailableModelsQuery = (
   presetId?: string,
 ) =>
   useQuery({
-    // Include presetId in query key for OpenAI provider so changing presets triggers refetch
     queryKey: providerId === "openai" && presetId
       ? ["available-models", providerId, presetId]
       : ["available-models", providerId],
@@ -94,13 +91,9 @@ export const useAvailableModelsQuery = (
       return tipcClient.fetchAvailableModels({ providerId })
     },
     enabled: enabled && !!providerId,
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: 5 * 60 * 1000,
     retry: 1,
   })
-
-// ============================================================================
-// Mutation Hooks
-// ============================================================================
 
 export const useSaveConversationMutation = () =>
   useMutation({

@@ -1,11 +1,3 @@
-/**
- * OAuth Callback Server for Electron
- *
- * Provides a temporary HTTP server to handle OAuth callbacks
- * during the authorization flow. This server runs locally
- * and captures the authorization code from the redirect.
- */
-
 import { createServer, Server, IncomingMessage, ServerResponse } from "http"
 import { URL } from "url"
 import { BrowserWindow } from "electron"
@@ -30,22 +22,17 @@ export class OAuthCallbackServer {
     this.redirectUri = `http://localhost:${port}/callback`
   }
 
-  /**
-   * Start the callback server and wait for it to be ready
-   */
   async startServer(): Promise<void> {
     return new Promise((resolve, reject) => {
       if (this.server) {
-        resolve() // Already started
+        resolve()
         return
       }
 
-      // Create HTTP server
       this.server = createServer((req, res) => {
         this.handleRequest(req, res)
       })
 
-      // Start listening
       this.server.listen(this.port, 'localhost', () => {
         resolve()
       })
@@ -57,15 +44,11 @@ export class OAuthCallbackServer {
     })
   }
 
-  /**
-   * Wait for OAuth callback (server must be started first)
-   */
   async waitForCallback(timeoutMs: number = 300000): Promise<OAuthCallbackResult> {
     return new Promise((resolve, reject) => {
       this.resolveCallback = resolve
       this.rejectCallback = reject
 
-      // Set up timeout
       this.timeout = setTimeout(() => {
         this.cleanup()
         reject(new Error('OAuth callback timeout'))
@@ -73,9 +56,6 @@ export class OAuthCallbackServer {
     })
   }
 
-  /**
-   * Handle incoming HTTP requests
-   */
   private handleRequest(req: IncomingMessage, res: ServerResponse): void {
     try {
       const url = new URL(req.url || '', `http://localhost:${this.port}`)
@@ -93,9 +73,6 @@ export class OAuthCallbackServer {
     }
   }
 
-  /**
-   * Handle OAuth callback request
-   */
   private handleOAuthCallback(url: URL, res: ServerResponse): void {
     const code = url.searchParams.get('code')
     const state = url.searchParams.get('state')

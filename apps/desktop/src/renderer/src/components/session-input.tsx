@@ -11,16 +11,10 @@ interface SessionInputProps {
   isRecording?: boolean
   isProcessing?: boolean
   className?: string
-  /** Controlled prop to show/hide text input from parent */
   showTextInput?: boolean
-  /** Callback when text input visibility changes */
   onShowTextInputChange?: (show: boolean) => void
 }
 
-/**
- * Unified session input component with text input and voice recording buttons.
- * Located at the top of the sessions dashboard for starting new agent sessions.
- */
 export function SessionInput({
   onTextSubmit,
   onVoiceStart,
@@ -32,7 +26,6 @@ export function SessionInput({
 }: SessionInputProps) {
   const [internalShowTextInput, setInternalShowTextInput] = useState(false)
 
-  // Use controlled prop if provided, otherwise use internal state
   const showTextInput = controlledShowTextInput ?? internalShowTextInput
   const setShowTextInput = (show: boolean) => {
     setInternalShowTextInput(show)
@@ -62,7 +55,6 @@ export function SessionInput({
 
   const handleShowTextInput = () => {
     setShowTextInput(true)
-    // Focus textarea after render
     setTimeout(() => textareaRef.current?.focus(), 50)
   }
 

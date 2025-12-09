@@ -1,24 +1,20 @@
 import { create } from 'zustand'
 import { AgentProgressUpdate } from '@shared/types'
 
-// View settings for the sessions dashboard
 export type SessionViewMode = 'grid' | 'list'
 export type SessionFilter = 'all' | 'active' | 'completed' | 'error'
 export type SessionSortBy = 'recent' | 'oldest' | 'status'
 
 interface AgentState {
-  // State
   agentProgressById: Map<string, AgentProgressUpdate>
   focusedSessionId: string | null
-  scrollToSessionId: string | null // Triggers scroll to a session tile when set
+  scrollToSessionId: string | null
 
-  // View settings for sessions dashboard
   viewMode: SessionViewMode
   filter: SessionFilter
   sortBy: SessionSortBy
   pinnedSessionIds: Set<string>
 
-  // Actions
   updateSessionProgress: (update: AgentProgressUpdate) => void
   clearAllProgress: () => void
   clearSessionProgress: (sessionId: string) => void
@@ -28,7 +24,6 @@ interface AgentState {
   setSessionSnoozed: (sessionId: string, isSnoozed: boolean) => void
   getAgentProgress: () => AgentProgressUpdate | null
 
-  // View settings actions
   setViewMode: (mode: SessionViewMode) => void
   setFilter: (filter: SessionFilter) => void
   setSortBy: (sortBy: SessionSortBy) => void
@@ -41,7 +36,6 @@ export const useAgentStore = create<AgentState>((set, get) => ({
   focusedSessionId: null,
   scrollToSessionId: null,
 
-  // View settings defaults
   viewMode: 'grid' as SessionViewMode,
   filter: 'all' as SessionFilter,
   sortBy: 'recent' as SessionSortBy,
@@ -55,8 +49,6 @@ export const useAgentStore = create<AgentState>((set, get) => ({
       const isNewSession = !newMap.has(sessionId)
       const existingProgress = newMap.get(sessionId)
 
-      // Merge with existing progress to preserve conversation history and steps
-      // when they're not provided in the update (e.g., tool approval updates)
       let mergedUpdate = update
       if (existingProgress) {
         const hasEmptyHistory = !update.conversationHistory || update.conversationHistory.length === 0

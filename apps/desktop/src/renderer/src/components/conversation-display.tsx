@@ -37,9 +37,6 @@ export function ConversationDisplay({
   const agentProgress = useAgentProgress()
   const isAgentProcessing = useIsAgentProcessing()
 
-
-
-  // Persistent expansion state for messages and <think> sections
   const [expandedMessages, setExpandedMessages] = useState<Record<string, boolean>>({})
   const [expandedThinks, setExpandedThinks] = useState<Record<string, boolean>>({})
 
@@ -81,7 +78,6 @@ export function ConversationDisplay({
   }
 
   if (isFullHeight) {
-    // For full height, use direct overflow-y-auto approach like agent-progress
     return (
       <Card
         className={cn(
@@ -91,7 +87,7 @@ export function ConversationDisplay({
       >
         <div
           className="flex-1 space-y-4 overflow-y-auto scroll-smooth p-4"
-          style={{ minHeight: 0 }} // Important for flex child to shrink
+          style={{ minHeight: 0 }}
         >
           {messages.map((message, index) => (
             <ConversationMessageItem

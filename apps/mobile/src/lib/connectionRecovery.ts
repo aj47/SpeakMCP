@@ -143,7 +143,7 @@ export class ConnectionRecoveryManager {
       error,
     });
     
-    this.onStatusChange?.(this.state);
+    this.onStatusChange?.({ ...this.state });
   }
 
   getState(): RecoveryState {
@@ -168,10 +168,10 @@ export class ConnectionRecoveryManager {
       // Only check heartbeat when app is active
       if (!this.state.isAppActive) return;
 
-      if (timeSinceLastHeartbeat > this.config.heartbeatIntervalMs * 1.5) {
+      if (timeSinceLastHeartbeat > this.config.connectionTimeoutMs) {
         console.log('[ConnectionRecovery] Heartbeat missed:', {
           timeSinceLastHeartbeat,
-          threshold: this.config.heartbeatIntervalMs * 1.5,
+          threshold: this.config.connectionTimeoutMs,
         });
         onHeartbeatMissed();
       }

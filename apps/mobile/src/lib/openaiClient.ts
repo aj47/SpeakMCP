@@ -171,6 +171,9 @@ export class OpenAIClient {
     console.log('[OpenAIClient] URL:', url);
     console.log('[OpenAIClient] Platform:', Platform.OS);
 
+    // Cleanup any existing recovery manager before creating a new one
+    this.recoveryManager?.cleanup();
+
     // Initialize recovery manager for this request
     this.recoveryManager = new ConnectionRecoveryManager(
       this.cfg.recoveryConfig,

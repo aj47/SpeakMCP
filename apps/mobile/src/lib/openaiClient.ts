@@ -380,6 +380,7 @@ export class OpenAIClient {
   /**
    * Stream SSE using fetch with ReadableStream for true real-time streaming.
    * This works in web environments where response.body is a ReadableStream.
+   * Includes timeout/abort mechanism and heartbeat monitoring for stale connection detection.
    */
   private async streamSSEWithFetch(
     url: string,
@@ -387,50 +388,113 @@ export class OpenAIClient {
     onToken?: (token: string) => void,
     onProgress?: OnProgressCallback
   ): Promise<ChatResponse> {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: this.authHeaders(),
-      body: JSON.stringify(body),
+    const recovery = this.recoveryManager;
+    const abortController = new AbortController();
+    let heartbeatAborted = false;
+
+    // Start heartbeat monitoring - abort fetch if connection stalls
+    recovery?.startHeartbeat(() => {
+      console.log('[OpenAIClient] Web heartbeat missed, aborting stalled stream');
+      heartbeatAborted = true;
+      abortController.abort();
     });
 
-    console.log('[OpenAIClient] Response status:', res.status, res.statusText);
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: this.authHeaders(),
+        body: JSON.stringify(body),
+        signal: abortController.signal,
+      });
 
-    if (!res.ok) {
-      const text = await res.text().catch(() => '');
-      console.error('[OpenAIClient] Error response body:', text);
-      throw new Error(`Chat failed: ${res.status} ${text}`);
-    }
+      console.log('[OpenAIClient] Response status:', res.status, res.statusText);
 
-    let finalContent = '';
-    let conversationId: string | undefined;
-    let conversationHistory: ConversationHistoryMessage[] | undefined;
+      if (!res.ok) {
+        const text = await res.text().catch(() => '');
+        console.error('[OpenAIClient] Error response body:', text);
+        throw new Error(`Chat failed: ${res.status} ${text}`);
+      }
 
-    // Check if we have a readable stream (web environment)
-    if (res.body && typeof res.body.getReader === 'function') {
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
+      // Mark connected once we get a successful response
+      recovery?.markConnected();
+      recovery?.recordHeartbeat();
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+      let finalContent = '';
+      let conversationId: string | undefined;
+      let conversationHistory: ConversationHistoryMessage[] | undefined;
 
-        const chunk = decoder.decode(value, { stream: true });
-        buffer += chunk;
+      // Check if we have a readable stream (web environment)
+      if (res.body && typeof res.body.getReader === 'function') {
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
 
-        // Process complete SSE events
-        const events = buffer.split(/\r?\n\r?\n/);
-        buffer = events.pop() || ''; // Keep incomplete event in buffer
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
 
+            // Record heartbeat on each chunk received
+            recovery?.recordHeartbeat();
+
+            const chunk = decoder.decode(value, { stream: true });
+            buffer += chunk;
+
+            // Process complete SSE events
+            const events = buffer.split(/\r?\n\r?\n/);
+            buffer = events.pop() || ''; // Keep incomplete event in buffer
+
+            for (const event of events) {
+              const result = this.processSSEEvent(event, onToken, onProgress);
+              if (result) {
+                // For 'done' events, the content is complete - overwrite
+                // For streaming tokens, accumulate
+                if (result.content !== undefined) {
+                  // Check if this is streaming delta content (OpenAI format) vs complete content (SpeakMCP done event)
+                  // If conversationHistory is present, it's a complete response - overwrite
+                  // Otherwise, accumulate tokens
+                  if (result.conversationHistory) {
+                    finalContent = result.content;
+                  } else {
+                    finalContent += result.content;
+                  }
+                }
+                if (result.conversationId) conversationId = result.conversationId;
+                if (result.conversationHistory) conversationHistory = result.conversationHistory;
+              }
+            }
+          }
+        } catch (readError: any) {
+          // Re-throw with appropriate error message for heartbeat timeout
+          if (heartbeatAborted || readError.name === 'AbortError') {
+            throw new Error('Connection timeout: no data received');
+          }
+          throw readError;
+        }
+
+        // Process any remaining buffer
+        if (buffer.trim()) {
+          const result = this.processSSEEvent(buffer, onToken, onProgress);
+          if (result) {
+            if (result.content !== undefined) {
+              if (result.conversationHistory) {
+                finalContent = result.content;
+              } else {
+                finalContent += result.content;
+              }
+            }
+            if (result.conversationId) conversationId = result.conversationId;
+            if (result.conversationHistory) conversationHistory = result.conversationHistory;
+          }
+        }
+      } else {
+        // Fallback: no streaming support, parse entire response
+        const text = await res.text();
+        const events = text.split(/\r?\n\r?\n/);
         for (const event of events) {
           const result = this.processSSEEvent(event, onToken, onProgress);
           if (result) {
-            // For 'done' events, the content is complete - overwrite
-            // For streaming tokens, accumulate
             if (result.content !== undefined) {
-              // Check if this is streaming delta content (OpenAI format) vs complete content (SpeakMCP done event)
-              // If conversationHistory is present, it's a complete response - overwrite
-              // Otherwise, accumulate tokens
               if (result.conversationHistory) {
                 finalContent = result.content;
               } else {
@@ -443,43 +507,18 @@ export class OpenAIClient {
         }
       }
 
-      // Process any remaining buffer
-      if (buffer.trim()) {
-        const result = this.processSSEEvent(buffer, onToken, onProgress);
-        if (result) {
-          if (result.content !== undefined) {
-            if (result.conversationHistory) {
-              finalContent = result.content;
-            } else {
-              finalContent += result.content;
-            }
-          }
-          if (result.conversationId) conversationId = result.conversationId;
-          if (result.conversationHistory) conversationHistory = result.conversationHistory;
-        }
+      console.log('[OpenAIClient] SSE complete, content length:', finalContent.length);
+      return { content: finalContent, conversationId, conversationHistory };
+    } catch (error: any) {
+      // Convert abort errors to timeout errors for proper retry handling
+      if (heartbeatAborted || error.name === 'AbortError') {
+        recovery?.markDisconnected('Connection timeout: no data received');
+        throw new Error('Connection timeout: no data received');
       }
-    } else {
-      // Fallback: no streaming support, parse entire response
-      const text = await res.text();
-      const events = text.split(/\r?\n\r?\n/);
-      for (const event of events) {
-        const result = this.processSSEEvent(event, onToken, onProgress);
-        if (result) {
-          if (result.content !== undefined) {
-            if (result.conversationHistory) {
-              finalContent = result.content;
-            } else {
-              finalContent += result.content;
-            }
-          }
-          if (result.conversationId) conversationId = result.conversationId;
-          if (result.conversationHistory) conversationHistory = result.conversationHistory;
-        }
-      }
+      throw error;
+    } finally {
+      recovery?.stopHeartbeat();
     }
-
-    console.log('[OpenAIClient] SSE complete, content length:', finalContent.length);
-    return { content: finalContent, conversationId, conversationHistory };
   }
 
   /**

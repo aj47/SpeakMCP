@@ -31,6 +31,7 @@ export type ChatMessage = {
   content?: string;
   toolCalls?: ToolCall[];
   toolResults?: ToolResult[];
+  isThinking?: boolean;
 };
 
 export type ChatResponse = ChatApiResponse;

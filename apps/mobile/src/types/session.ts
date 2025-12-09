@@ -7,6 +7,7 @@ export interface ChatMessage {
   timestamp: number;
   toolCalls?: ToolCall[];
   toolResults?: ToolResult[];
+  isThinking?: boolean;
 }
 
 // Re-export shared types for convenience

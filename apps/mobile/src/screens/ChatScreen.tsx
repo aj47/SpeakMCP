@@ -424,7 +424,7 @@ export default function ChatScreen({ route, navigation }: any) {
 
     const userMsg: ChatMessage = { role: 'user', content: text };
     const messageCountBeforeTurn = messages.length;
-    setMessages((m) => [...m, userMsg, { role: 'assistant', content: '' }]);
+    setMessages((m) => [...m, userMsg, { role: 'assistant', content: '', isThinking: true }]);
     setResponding(true);
 
     const currentSession = sessionStore.getCurrentSession();
@@ -461,7 +461,7 @@ export default function ChatScreen({ route, navigation }: any) {
           const copy = [...m];
           for (let i = copy.length - 1; i >= 0; i--) {
             if (copy[i].role === 'assistant') {
-              copy[i] = { ...copy[i], content: streamingText };
+              copy[i] = { ...copy[i], content: streamingText, isThinking: false };
               break;
             }
           }
@@ -520,7 +520,7 @@ export default function ChatScreen({ route, navigation }: any) {
           const copy = [...m];
           for (let i = copy.length - 1; i >= 0; i--) {
             if (copy[i].role === 'assistant') {
-              copy[i] = { ...copy[i], content: finalText };
+              copy[i] = { ...copy[i], content: finalText, isThinking: false };
               break;
             }
           }
@@ -557,7 +557,18 @@ export default function ChatScreen({ route, navigation }: any) {
       }
 
       setDebugInfo(`Error: ${errorMessage}`);
-      setMessages((m) => [...m, { role: 'assistant', content: `Error: ${errorMessage}\n\nTip: Check your internet connection and try again.` }]);
+      setMessages((m) => {
+        const copy = [...m];
+        // Remove the thinking placeholder and add error message
+        for (let i = copy.length - 1; i >= 0; i--) {
+          if (copy[i].role === 'assistant' && copy[i].isThinking) {
+            copy[i] = { ...copy[i], content: `Error: ${errorMessage}\n\nTip: Check your internet connection and try again.`, isThinking: false };
+            return copy;
+          }
+        }
+        // If no thinking placeholder found, just add the error message
+        return [...m, { role: 'assistant', content: `Error: ${errorMessage}\n\nTip: Check your internet connection and try again.` }];
+      });
     } finally {
       console.log('[ChatScreen] Chat request finished');
       setResponding(false);
@@ -905,6 +916,13 @@ export default function ChatScreen({ route, navigation }: any) {
             // Show header only if there are tool calls (need badges/expand button)
             const showHeader = (m.toolCalls?.length ?? 0) > 0;
 
+            // Accessibility props for collapsible messages
+            const accessibilityProps = shouldCollapse ? {
+              accessibilityRole: 'button' as const,
+              accessibilityLabel: `${m.role === 'user' ? 'User' : 'Assistant'} message${m.toolCalls?.length ? ` with ${m.toolCalls.length} tool call${m.toolCalls.length > 1 ? 's' : ''}` : ''}`,
+              accessibilityHint: isExpanded ? 'Double tap to collapse message' : 'Double tap to expand message',
+            } : {};
+
             return (
               <Pressable
                 key={i}
@@ -914,6 +932,7 @@ export default function ChatScreen({ route, navigation }: any) {
                   m.role === 'user' ? styles.user : styles.assistant,
                   shouldCollapse && !isExpanded && pressed && styles.msgPressed,
                 ]}
+                {...accessibilityProps}
               >
                 {/* Only show header for messages with tool calls */}
                 {showHeader && (
@@ -953,13 +972,14 @@ export default function ChatScreen({ route, navigation }: any) {
                   </View>
                 )}
 
-                {m.role === 'assistant' && (!m.content || m.content.length === 0) && !m.toolCalls && !m.toolResults ? (
+                {m.role === 'assistant' && m.isThinking ? (
                   <View style={styles.thinkingContainer}>
                     <Image
                       source={isDark ? darkSpinner : lightSpinner}
                       style={styles.thinkingSpinner}
                       resizeMode="contain"
                       accessible={true}
+                      accessibilityRole="progressbar"
                       accessibilityLabel="Assistant is thinking"
                     />
                   </View>

@@ -34,10 +34,12 @@ import {
   getToolResultsSummary,
   getExpandCollapseText,
   formatToolArguments,
+  formatArgumentsPreview,
 } from '@speakmcp/shared';
 import { useHeaderHeight } from '@react-navigation/elements';
 import { useTheme } from '../ui/ThemeProvider';
 import { spacing, radius, Theme } from '../ui/theme';
+import { MarkdownRenderer } from '../ui/MarkdownRenderer';
 
 export default function ChatScreen({ route, navigation }: any) {
   const insets = useSafeAreaInsets();
@@ -953,32 +955,56 @@ export default function ChatScreen({ route, navigation }: any) {
             const isExpanded = expandedMessages[i] ?? false;
             const roleIcon = getRoleIcon(m.role as 'user' | 'assistant' | 'tool');
 
+            // Get status for tool results
+            const hasToolResults = (m.toolResults?.length ?? 0) > 0;
+            const allSuccess = hasToolResults && m.toolResults!.every(r => r.success);
+            const hasErrors = hasToolResults && m.toolResults!.some(r => !r.success);
+            const isPending = (m.toolCalls?.length ?? 0) > 0 && !hasToolResults;
+
+            // Generate preview for collapsed tool calls
+            const toolPreview = !isExpanded && m.toolCalls && m.toolCalls.length > 0 && m.toolCalls[0]?.arguments
+              ? formatArgumentsPreview(m.toolCalls[0].arguments)
+              : null;
+
             return (
-              <View key={i} style={[styles.msg, m.role === 'user' ? styles.user : styles.assistant]}>
+              <Pressable
+                key={i}
+                onPress={() => shouldCollapse && toggleMessageExpansion(i)}
+                style={({ pressed }) => [
+                  styles.msg,
+                  m.role === 'user' ? styles.user : styles.assistant,
+                  shouldCollapse && !isExpanded && pressed && styles.msgPressed,
+                ]}
+              >
                 {/* Header row with role icon and expand/collapse button */}
                 <View style={styles.messageHeader}>
                   <Text style={styles.roleIcon}>{roleIcon}</Text>
                   <Text style={styles.role}>{m.role}</Text>
+                  {/* Tool count badge with status */}
                   {(m.toolCalls?.length ?? 0) > 0 && (
-                    <View style={styles.toolBadgeSmall}>
-                      <Text style={styles.toolBadgeSmallText}>{m.toolCalls!.length} tool{m.toolCalls!.length > 1 ? 's' : ''}</Text>
-                    </View>
-                  )}
-                  {(m.toolResults?.length ?? 0) > 0 && (
-                    <View style={[styles.toolBadgeSmall, styles.resultBadgeSmall]}>
-                      <Text style={styles.toolBadgeSmallText}>{m.toolResults!.length} result{m.toolResults!.length > 1 ? 's' : ''}</Text>
+                    <View style={[
+                      styles.toolBadgeSmall,
+                      isPending && styles.toolBadgePending,
+                      allSuccess && styles.toolBadgeSuccess,
+                      hasErrors && styles.toolBadgeError,
+                    ]}>
+                      <Text style={[
+                        styles.toolBadgeSmallText,
+                        isPending && styles.toolBadgePendingText,
+                        allSuccess && styles.toolBadgeSuccessText,
+                        hasErrors && styles.toolBadgeErrorText,
+                      ]}>
+                        {isPending ? '⏳ ' : allSuccess ? '✓ ' : hasErrors ? '✗ ' : ''}
+                        {m.toolCalls!.map(tc => tc.name).join(', ')}
+                      </Text>
                     </View>
                   )}
                   {shouldCollapse && (
-                    <Pressable
-                      onPress={() => toggleMessageExpansion(i)}
-                      style={styles.expandButton}
-                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                    >
+                    <View style={styles.expandButton}>
                       <Text style={styles.expandButtonText}>
-                        {isExpanded ? '▲ ' : '▼ '}{getExpandCollapseText(isExpanded)}
+                        {isExpanded ? '▲' : '▼'}
                       </Text>
-                    </Pressable>
+                    </View>
                   )}
                 </View>
 
@@ -993,15 +1019,30 @@ export default function ChatScreen({ route, navigation }: any) {
                   </View>
                 ) : (
                   <>
-                    {/* Content - truncate if not expanded and long */}
+                    {/* Content - render markdown when expanded, plain text preview when collapsed */}
                     {m.content ? (
-                      <Text
-                        style={{ color: theme.colors.foreground }}
-                        numberOfLines={!isExpanded && shouldCollapse ? COLLAPSED_LINES : undefined}
-                      >
-                        {m.content}
-                      </Text>
+                      isExpanded || !shouldCollapse ? (
+                        <MarkdownRenderer content={m.content} />
+                      ) : (
+                        <Text
+                          style={{ color: theme.colors.foreground }}
+                          numberOfLines={COLLAPSED_LINES}
+                        >
+                          {m.content}
+                        </Text>
+                      )
                     ) : null}
+
+                    {/* Collapsed tool preview - shows parameter preview like desktop */}
+                    {!isExpanded && m.toolCalls && m.toolCalls.length > 0 && (
+                      <View style={styles.collapsedToolSummary}>
+                        {toolPreview && (
+                          <Text style={styles.collapsedToolPreview} numberOfLines={1}>
+                            {toolPreview}
+                          </Text>
+                        )}
+                      </View>
+                    )}
 
                     {/* Tool Calls - only show when expanded */}
                     {isExpanded && m.toolCalls && m.toolCalls.length > 0 && (
@@ -1025,15 +1066,6 @@ export default function ChatScreen({ route, navigation }: any) {
                             )}
                           </View>
                         ))}
-                      </View>
-                    )}
-
-                    {/* Collapsed tool calls summary */}
-                    {!isExpanded && m.toolCalls && m.toolCalls.length > 0 && (
-                      <View style={styles.collapsedToolSummary}>
-                        <Text style={styles.collapsedToolText}>
-                          {getToolCallsSummary(m.toolCalls)}
-                        </Text>
                       </View>
                     )}
 
@@ -1079,15 +1111,19 @@ export default function ChatScreen({ route, navigation }: any) {
 
                     {/* Collapsed tool results summary */}
                     {!isExpanded && m.toolResults && m.toolResults.length > 0 && (
-                      <View style={styles.collapsedToolSummary}>
-                        <Text style={styles.collapsedToolText}>
+                      <View style={styles.collapsedResultsSummary}>
+                        <Text style={[
+                          styles.collapsedToolText,
+                          allSuccess && styles.collapsedToolTextSuccess,
+                          hasErrors && styles.collapsedToolTextError,
+                        ]}>
                           {getToolResultsSummary(m.toolResults)}
                         </Text>
                       </View>
                     )}
                   </>
                 )}
-              </View>
+              </Pressable>
             );
           })}
           {debugInfo && (
@@ -1175,6 +1211,9 @@ function createStyles(theme: Theme) {
       marginBottom: spacing.sm,
       maxWidth: '85%',
     },
+    msgPressed: {
+      opacity: 0.8,
+    },
     user: {
       backgroundColor: theme.colors.secondary,
       alignSelf: 'flex-end',
@@ -1203,36 +1242,77 @@ function createStyles(theme: Theme) {
     },
     toolBadgeSmall: {
       backgroundColor: theme.colors.muted,
-      paddingHorizontal: spacing.xs,
-      paddingVertical: 2,
-      borderRadius: radius.sm,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: 3,
+      borderRadius: radius.md,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      flexShrink: 1,
+    },
+    toolBadgePending: {
+      backgroundColor: 'rgba(59, 130, 246, 0.1)',
+      borderColor: 'rgba(59, 130, 246, 0.3)',
+    },
+    toolBadgeSuccess: {
+      backgroundColor: 'rgba(34, 197, 94, 0.1)',
+      borderColor: 'rgba(34, 197, 94, 0.3)',
+    },
+    toolBadgeError: {
+      backgroundColor: 'rgba(239, 68, 68, 0.1)',
+      borderColor: 'rgba(239, 68, 68, 0.3)',
     },
     resultBadgeSmall: {
       backgroundColor: theme.colors.secondary,
     },
     toolBadgeSmallText: {
-      fontSize: 10,
+      fontSize: 11,
       color: theme.colors.mutedForeground,
+      fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+      fontWeight: '600',
+    },
+    toolBadgePendingText: {
+      color: 'rgb(59, 130, 246)',
+    },
+    toolBadgeSuccessText: {
+      color: 'rgb(34, 197, 94)',
+    },
+    toolBadgeErrorText: {
+      color: 'rgb(239, 68, 68)',
     },
     expandButton: {
       marginLeft: 'auto',
       paddingHorizontal: spacing.sm,
-      paddingVertical: 2,
+      paddingVertical: 4,
     },
     expandButtonText: {
-      fontSize: 11,
+      fontSize: 12,
       color: theme.colors.primary,
-      fontWeight: '500',
+      fontWeight: '600',
     },
     collapsedToolSummary: {
       marginTop: spacing.xs,
-      paddingVertical: spacing.xs,
+    },
+    collapsedResultsSummary: {
+      marginTop: spacing.xs,
+      paddingTop: spacing.xs,
       borderTopWidth: StyleSheet.hairlineWidth,
       borderTopColor: theme.colors.border,
+    },
+    collapsedToolPreview: {
+      fontSize: 11,
+      color: theme.colors.mutedForeground,
+      fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+      opacity: 0.7,
     },
     collapsedToolText: {
       fontSize: 12,
       color: theme.colors.mutedForeground,
+    },
+    collapsedToolTextSuccess: {
+      color: 'rgb(34, 197, 94)',
+    },
+    collapsedToolTextError: {
+      color: 'rgb(239, 68, 68)',
     },
     inputRow: {
       flexDirection: 'row',

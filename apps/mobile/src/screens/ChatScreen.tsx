@@ -376,6 +376,7 @@ export default function ChatScreen({ route, navigation }: any) {
           content: thinkingContent || '',
           toolCalls: currentToolCalls.length > 0 ? currentToolCalls : undefined,
           toolResults: currentToolResults.length > 0 ? currentToolResults : undefined,
+          isThinking: currentToolCalls.length === 0 && currentToolResults.length === 0 ? undefined : false,
         });
       }
     }
@@ -399,6 +400,7 @@ export default function ChatScreen({ route, navigation }: any) {
             content: historyMsg.content || '',
             toolCalls: historyMsg.toolCalls,
             toolResults: historyMsg.toolResults,
+            isThinking: historyMsg.toolCalls || historyMsg.toolResults ? false : undefined,
           });
         }
       }

@@ -373,7 +373,7 @@ export default function ChatScreen({ route, navigation }: any) {
       if (currentToolCalls.length > 0 || currentToolResults.length > 0 || thinkingContent) {
         messages.push({
           role: 'assistant',
-          content: thinkingContent || (currentToolCalls.length > 0 ? 'Executing tools...' : ''),
+          content: thinkingContent || '',
           toolCalls: currentToolCalls.length > 0 ? currentToolCalls : undefined,
           toolResults: currentToolResults.length > 0 ? currentToolResults : undefined,
         });

@@ -131,6 +131,19 @@ export class OpenAIClient {
     }
   }
 
+  /**
+   * Sanitize messages to remove UI-only fields before sending to the server.
+   * This prevents UI state like `isThinking` or `id` from leaking to the backend.
+   */
+  private sanitizeMessage(message: ChatMessage): object {
+    return {
+      role: message.role,
+      content: message.content,
+      toolCalls: message.toolCalls,
+      toolResults: message.toolResults,
+    };
+  }
+
   async chat(
     messages: ChatMessage[],
     onToken?: (token: string) => void,
@@ -138,7 +151,11 @@ export class OpenAIClient {
     conversationId?: string
   ): Promise<ChatResponse> {
     const url = this.getUrl('/chat/completions');
-    const body: Record<string, any> = { model: this.cfg.model, messages, stream: true };
+    const body: Record<string, any> = {
+      model: this.cfg.model,
+      messages: messages.map(m => this.sanitizeMessage(m)),
+      stream: true
+    };
 
     if (conversationId) {
       body.conversation_id = conversationId;

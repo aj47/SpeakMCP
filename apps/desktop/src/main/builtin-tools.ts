@@ -1,12 +1,13 @@
 /**
  * Built-in MCP Tools for SpeakMCP Settings Management
- * 
+ *
  * These tools are registered as a virtual "speakmcp-settings" server and provide
  * functionality for managing SpeakMCP settings directly from the LLM:
  * - List MCP servers and their status
  * - Enable/disable MCP servers
  * - List and switch profiles
- * 
+ * - Agent lifecycle management (kill switch)
+ *
  * Unlike external MCP servers, these tools run directly in the main process
  * and have direct access to the app's services.
  */
@@ -14,6 +15,9 @@
 import { configStore } from "./config"
 import { profileService } from "./profile-service"
 import { mcpService, type MCPTool, type MCPToolResult } from "./mcp-service"
+import { agentSessionTracker } from "./agent-session-tracker"
+import { agentSessionStateManager } from "./state"
+import { emergencyStopAll } from "./emergency-stop"
 
 // The virtual server name for built-in tools
 export const BUILTIN_SERVER_NAME = "speakmcp-settings"
@@ -73,6 +77,38 @@ export const builtinTools: MCPTool[] = [
   {
     name: `${BUILTIN_SERVER_NAME}:get_current_profile`,
     description: "Get the currently active profile with its full guidelines",
+    inputSchema: {
+      type: "object",
+      properties: {},
+      required: [],
+    },
+  },
+  {
+    name: `${BUILTIN_SERVER_NAME}:list_running_agents`,
+    description: "List all currently running agent sessions with their status, iteration count, and activity. Useful for monitoring active agents before terminating them.",
+    inputSchema: {
+      type: "object",
+      properties: {},
+      required: [],
+    },
+  },
+  {
+    name: `${BUILTIN_SERVER_NAME}:kill_agent`,
+    description: "Terminate a specific agent session by its session ID. This will abort any in-flight LLM requests, kill spawned processes, and stop the agent immediately.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        sessionId: {
+          type: "string",
+          description: "The session ID of the agent to terminate (get this from list_running_agents)",
+        },
+      },
+      required: ["sessionId"],
+    },
+  },
+  {
+    name: `${BUILTIN_SERVER_NAME}:kill_all_agents`,
+    description: "Emergency stop ALL running agent sessions. This will abort all in-flight LLM requests, kill all spawned processes, and stop all agents immediately. Use with caution.",
     inputSchema: {
       type: "object",
       properties: {},
@@ -365,6 +401,151 @@ const toolHandlers: Record<string, ToolHandler> = {
               createdAt: currentProfile.createdAt,
               updatedAt: currentProfile.updatedAt,
             },
+          }, null, 2),
+        },
+      ],
+      isError: false,
+    }
+  },
+
+  list_running_agents: async (): Promise<MCPToolResult> => {
+    const activeSessions = agentSessionTracker.getActiveSessions()
+
+    if (activeSessions.length === 0) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({
+              agents: [],
+              count: 0,
+              message: "No agents currently running",
+            }, null, 2),
+          },
+        ],
+        isError: false,
+      }
+    }
+
+    const agents = activeSessions.map((session) => ({
+      sessionId: session.id,
+      conversationId: session.conversationId,
+      title: session.conversationTitle,
+      status: session.status,
+      currentIteration: session.currentIteration,
+      maxIterations: session.maxIterations,
+      lastActivity: session.lastActivity,
+      startTime: session.startTime,
+      isSnoozed: session.isSnoozed,
+      // Calculate runtime in seconds
+      runtimeSeconds: Math.floor((Date.now() - session.startTime) / 1000),
+    }))
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            agents,
+            count: agents.length,
+          }, null, 2),
+        },
+      ],
+      isError: false,
+    }
+  },
+
+  kill_agent: async (args: Record<string, unknown>): Promise<MCPToolResult> => {
+    const sessionId = args.sessionId as string
+
+    if (!sessionId) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({
+              success: false,
+              error: "sessionId is required",
+            }),
+          },
+        ],
+        isError: true,
+      }
+    }
+
+    // Check if session exists
+    const session = agentSessionTracker.getSession(sessionId)
+    if (!session) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({
+              success: false,
+              error: `Agent session not found: ${sessionId}`,
+            }),
+          },
+        ],
+        isError: true,
+      }
+    }
+
+    // Stop the session in the state manager (aborts LLM requests, kills processes)
+    agentSessionStateManager.stopSession(sessionId)
+
+    // Mark the session as stopped in the tracker
+    agentSessionTracker.stopSession(sessionId)
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            success: true,
+            sessionId,
+            message: `Agent session ${sessionId} (${session.conversationTitle}) has been terminated`,
+          }, null, 2),
+        },
+      ],
+      isError: false,
+    }
+  },
+
+  kill_all_agents: async (): Promise<MCPToolResult> => {
+    const activeSessions = agentSessionTracker.getActiveSessions()
+    const sessionCount = activeSessions.length
+
+    if (sessionCount === 0) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({
+              success: true,
+              message: "No agents were running",
+              sessionsTerminated: 0,
+              processesKilled: 0,
+            }, null, 2),
+          },
+        ],
+        isError: false,
+      }
+    }
+
+    // Perform emergency stop
+    const { before, after } = await emergencyStopAll()
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            success: true,
+            message: `Emergency stop completed: ${sessionCount} agent session(s) terminated`,
+            sessionsTerminated: sessionCount,
+            processesKilled: before - after,
+            processesBeforeStop: before,
+            processesAfterStop: after,
           }, null, 2),
         },
       ],

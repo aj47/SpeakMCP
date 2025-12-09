@@ -424,7 +424,7 @@ export default function ChatScreen({ route, navigation }: any) {
 
     const userMsg: ChatMessage = { role: 'user', content: text };
     const messageCountBeforeTurn = messages.length;
-    setMessages((m) => [...m, userMsg, { role: 'assistant', content: 'Assistant is thinking...' }]);
+    setMessages((m) => [...m, userMsg, { role: 'assistant', content: '' }]);
     setResponding(true);
 
     const currentSession = sessionStore.getCurrentSession();

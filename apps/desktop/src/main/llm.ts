@@ -1462,9 +1462,9 @@ Always use actual resource IDs from the conversation history or create new ones 
       const assistantContent = llmResponse.content || ""
 
       finalContent = assistantContent
-      if (finalContent.trim().length > 0) {
-        addMessage("assistant", finalContent)
-      }
+      // Note: Don't add message here - it will be added in the post-verify section
+      // to avoid duplicate messages (the post-verify section handles all cases:
+      // summary success, summary failure, and skip summary)
 
       // Optional verification before completing
       // Track if we should skip post-verify summary

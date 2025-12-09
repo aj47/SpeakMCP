@@ -209,6 +209,7 @@ export class OpenAIClient {
 
           if (obj.type === 'done' && obj.data) {
             // For 'done' events, the content is complete - overwrite
+            console.log('[OpenAIClient] Received done event, data keys:', Object.keys(obj.data));
             if (obj.data.content !== undefined) {
               finalContent = obj.data.content;
             }
@@ -217,6 +218,9 @@ export class OpenAIClient {
             }
             if (obj.data.conversation_history) {
               conversationHistory = obj.data.conversation_history;
+              console.log('[OpenAIClient] conversation_history received:', conversationHistory?.length || 0, 'messages');
+            } else {
+              console.log('[OpenAIClient] WARNING: No conversation_history in done event');
             }
             return;
           }

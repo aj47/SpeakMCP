@@ -1462,9 +1462,9 @@ Always use actual resource IDs from the conversation history or create new ones 
       const assistantContent = llmResponse.content || ""
 
       finalContent = assistantContent
-      if (finalContent.trim().length > 0) {
-        addMessage("assistant", finalContent)
-      }
+      // Note: Don't add message here - it will be added in the post-verify section
+      // to avoid duplicate messages (the post-verify section handles all cases:
+      // summary success, summary failure, and skip summary)
 
       // Optional verification before completing
       // Track if we should skip post-verify summary
@@ -1549,9 +1549,19 @@ Always use actual resource IDs from the conversation history or create new ones 
           try {
             const result = await generatePostVerifySummary(finalContent)
             finalContent = result.content
-            addMessage("assistant", finalContent)
+            if (finalContent.trim().length > 0) {
+              addMessage("assistant", finalContent)
+            }
           } catch (e) {
-            // If summary generation fails, proceed with existing finalContent
+            // If summary generation fails, still add the existing finalContent to history
+            if (finalContent.trim().length > 0) {
+              addMessage("assistant", finalContent)
+            }
+          }
+        } else {
+          // Even when skipping post-verify summary, ensure the final content is in history
+          if (finalContent.trim().length > 0) {
+            addMessage("assistant", finalContent)
           }
         }
 
@@ -2239,9 +2249,21 @@ Please try alternative approaches, break down the task into smaller steps, or pr
               break
             }
             finalContent = result.content
-            conversationHistory.push({ role: "assistant", content: finalContent })
+            if (finalContent.trim().length > 0) {
+              conversationHistory.push({ role: "assistant", content: finalContent })
+            }
           } catch (e) {
-            // If summary generation fails, proceed with existing finalContent
+            // If summary generation fails, still add the existing finalContent to history
+            // so the mobile client has the complete conversation
+            if (finalContent.trim().length > 0) {
+              conversationHistory.push({ role: "assistant", content: finalContent })
+            }
+          }
+        } else {
+          // Even when skipping post-verify summary, ensure the final content is in history
+          // This prevents intermediate messages from disappearing on mobile
+          if (finalContent.trim().length > 0) {
+            conversationHistory.push({ role: "assistant", content: finalContent })
           }
         }
 

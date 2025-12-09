@@ -25,13 +25,19 @@ import { useConfigContext, saveConfig } from '../store/config';
 import { useSessionContext } from '../store/sessions';
 import { OpenAIClient, ChatMessage, AgentProgressUpdate, AgentProgressStep } from '../lib/openaiClient';
 import * as Speech from 'expo-speech';
-import { preprocessTextForTTS } from '@speakmcp/shared';
+import {
+  preprocessTextForTTS,
+  COLLAPSED_LINES,
+  getRoleIcon,
+  shouldCollapseMessage,
+  getToolResultsSummary,
+  formatToolArguments,
+  formatArgumentsPreview,
+} from '@speakmcp/shared';
 import { useHeaderHeight } from '@react-navigation/elements';
 import { useTheme } from '../ui/ThemeProvider';
 import { spacing, radius, Theme } from '../ui/theme';
-
-// Threshold for collapsing long content
-const COLLAPSE_THRESHOLD = 200;
+import { MarkdownRenderer } from '../ui/MarkdownRenderer';
 
 export default function ChatScreen({ route, navigation }: any) {
   const insets = useSafeAreaInsets();
@@ -335,6 +341,7 @@ export default function ChatScreen({ route, navigation }: any) {
    */
   const convertProgressToMessages = useCallback((update: AgentProgressUpdate): ChatMessage[] => {
     const messages: ChatMessage[] = [];
+    console.log('[convertProgressToMessages] Processing update, steps:', update.steps?.length || 0, 'history:', update.conversationHistory?.length || 0, 'isComplete:', update.isComplete);
 
     // First, try to use steps array (sent in progress events)
     if (update.steps && update.steps.length > 0) {
@@ -495,6 +502,8 @@ export default function ChatScreen({ route, navigation }: any) {
 
       // Process conversation history to extract tool calls and results
       if (response.conversationHistory && response.conversationHistory.length > 0) {
+        console.log('[ChatScreen] Processing final conversationHistory:', response.conversationHistory.length, 'messages');
+        console.log('[ChatScreen] ConversationHistory roles:', response.conversationHistory.map(m => m.role).join(', '));
 
         // Find where the current turn starts in the conversation history
         let currentTurnStartIndex = 0;
@@ -503,6 +512,7 @@ export default function ChatScreen({ route, navigation }: any) {
             currentTurnStartIndex = i;
           }
         }
+        console.log('[ChatScreen] currentTurnStartIndex:', currentTurnStartIndex);
 
         // Build new messages only from the current turn (from user message onward)
         const newMessages: ChatMessage[] = [];
@@ -519,14 +529,22 @@ export default function ChatScreen({ route, navigation }: any) {
             toolResults: historyMsg.toolResults,
           });
         }
+        console.log('[ChatScreen] newMessages count:', newMessages.length);
+        console.log('[ChatScreen] newMessages roles:', newMessages.map(m => `${m.role}(toolCalls:${m.toolCalls?.length || 0},toolResults:${m.toolResults?.length || 0})`).join(', '));
+        console.log('[ChatScreen] messageCountBeforeTurn:', messageCountBeforeTurn);
 
         // Replace only the placeholder with the new messages from this turn
         setMessages((m) => {
+          console.log('[ChatScreen] Current messages before update:', m.length);
           const beforePlaceholder = m.slice(0, messageCountBeforeTurn + 1);
-          return [...beforePlaceholder, ...newMessages];
+          console.log('[ChatScreen] beforePlaceholder count:', beforePlaceholder.length);
+          const result = [...beforePlaceholder, ...newMessages];
+          console.log('[ChatScreen] Final messages count:', result.length);
+          return result;
         });
       } else if (finalText) {
         // Fallback: just update the assistant message content
+        console.log('[ChatScreen] FALLBACK: No conversationHistory, using finalText only. response.conversationHistory:', response.conversationHistory);
         setMessages((m) => {
           const copy = [...m];
           for (let i = copy.length - 1; i >= 0; i--) {
@@ -537,6 +555,8 @@ export default function ChatScreen({ route, navigation }: any) {
           }
           return copy;
         });
+      } else {
+        console.log('[ChatScreen] WARNING: No conversationHistory and no finalText!');
       }
 
       // Save the server conversation ID for follow-up messages
@@ -945,35 +965,60 @@ export default function ChatScreen({ route, navigation }: any) {
           contentInsetAdjustmentBehavior="automatic"
         >
           {messages.map((m, i) => {
-            const hasExtras = (m.toolCalls?.length ?? 0) > 0 || (m.toolResults?.length ?? 0) > 0;
-            const shouldCollapse = (m.content?.length ?? 0) > COLLAPSE_THRESHOLD || hasExtras;
+            const shouldCollapse = shouldCollapseMessage(m.content, m.toolCalls, m.toolResults);
             const isExpanded = expandedMessages[i] ?? false;
+            const roleIcon = getRoleIcon(m.role as 'user' | 'assistant' | 'tool');
+
+            // Get status for tool results
+            const hasToolResults = (m.toolResults?.length ?? 0) > 0;
+            const allSuccess = hasToolResults && m.toolResults!.every(r => r.success);
+            const hasErrors = hasToolResults && m.toolResults!.some(r => !r.success);
+            const isPending = (m.toolCalls?.length ?? 0) > 0 && !hasToolResults;
+
+            // Generate preview for collapsed tool calls
+            const toolPreview = !isExpanded && m.toolCalls && m.toolCalls.length > 0 && m.toolCalls[0]?.arguments
+              ? formatArgumentsPreview(m.toolCalls[0].arguments)
+              : null;
 
             return (
-              <View key={i} style={[styles.msg, m.role === 'user' ? styles.user : styles.assistant]}>
-                {/* Header row with role and expand/collapse button */}
+              <Pressable
+                key={i}
+                onPress={() => shouldCollapse && toggleMessageExpansion(i)}
+                style={({ pressed }) => [
+                  styles.msg,
+                  m.role === 'user' ? styles.user : styles.assistant,
+                  shouldCollapse && !isExpanded && pressed && styles.msgPressed,
+                ]}
+              >
+                {/* Header row with role icon and expand/collapse button */}
                 <View style={styles.messageHeader}>
+                  <Text style={styles.roleIcon}>{roleIcon}</Text>
                   <Text style={styles.role}>{m.role}</Text>
+                  {/* Tool count badge with status */}
                   {(m.toolCalls?.length ?? 0) > 0 && (
-                    <View style={styles.toolBadgeSmall}>
-                      <Text style={styles.toolBadgeSmallText}>{m.toolCalls!.length} tool{m.toolCalls!.length > 1 ? 's' : ''}</Text>
-                    </View>
-                  )}
-                  {(m.toolResults?.length ?? 0) > 0 && (
-                    <View style={[styles.toolBadgeSmall, styles.resultBadgeSmall]}>
-                      <Text style={styles.toolBadgeSmallText}>{m.toolResults!.length} result{m.toolResults!.length > 1 ? 's' : ''}</Text>
+                    <View style={[
+                      styles.toolBadgeSmall,
+                      isPending && styles.toolBadgePending,
+                      allSuccess && styles.toolBadgeSuccess,
+                      hasErrors && styles.toolBadgeError,
+                    ]}>
+                      <Text style={[
+                        styles.toolBadgeSmallText,
+                        isPending && styles.toolBadgePendingText,
+                        allSuccess && styles.toolBadgeSuccessText,
+                        hasErrors && styles.toolBadgeErrorText,
+                      ]}>
+                        {isPending ? '⏳ ' : allSuccess ? '✓ ' : hasErrors ? '✗ ' : ''}
+                        {m.toolCalls!.map(tc => tc.name).join(', ')}
+                      </Text>
                     </View>
                   )}
                   {shouldCollapse && (
-                    <Pressable
-                      onPress={() => toggleMessageExpansion(i)}
-                      style={styles.expandButton}
-                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                    >
+                    <View style={styles.expandButton}>
                       <Text style={styles.expandButtonText}>
-                        {isExpanded ? '▲ Collapse' : '▼ Expand'}
+                        {isExpanded ? '▲' : '▼'}
                       </Text>
-                    </Pressable>
+                    </View>
                   )}
                 </View>
 
@@ -988,15 +1033,30 @@ export default function ChatScreen({ route, navigation }: any) {
                   </View>
                 ) : (
                   <>
-                    {/* Content - truncate if not expanded and long */}
+                    {/* Content - render markdown when expanded, plain text preview when collapsed */}
                     {m.content ? (
-                      <Text
-                        style={{ color: theme.colors.foreground }}
-                        numberOfLines={!isExpanded && shouldCollapse ? 3 : undefined}
-                      >
-                        {m.content}
-                      </Text>
+                      isExpanded || !shouldCollapse ? (
+                        <MarkdownRenderer content={m.content} />
+                      ) : (
+                        <Text
+                          style={{ color: theme.colors.foreground }}
+                          numberOfLines={COLLAPSED_LINES}
+                        >
+                          {m.content}
+                        </Text>
+                      )
                     ) : null}
+
+                    {/* Collapsed tool preview - shows parameter preview like desktop */}
+                    {!isExpanded && m.toolCalls && m.toolCalls.length > 0 && (
+                      <View style={styles.collapsedToolSummary}>
+                        {toolPreview && (
+                          <Text style={styles.collapsedToolPreview} numberOfLines={1}>
+                            {toolPreview}
+                          </Text>
+                        )}
+                      </View>
+                    )}
 
                     {/* Tool Calls - only show when expanded */}
                     {isExpanded && m.toolCalls && m.toolCalls.length > 0 && (
@@ -1011,24 +1071,15 @@ export default function ChatScreen({ route, navigation }: any) {
                             {toolCall.arguments && (
                               <View style={styles.toolParams}>
                                 <Text style={styles.toolParamsLabel}>Parameters:</Text>
-                                <ScrollView horizontal style={styles.toolParamsScroll}>
+                                <ScrollView style={styles.toolParamsScroll} nestedScrollEnabled>
                                   <Text style={styles.toolParamsCode}>
-                                    {JSON.stringify(toolCall.arguments, null, 2)}
+                                    {formatToolArguments(toolCall.arguments)}
                                   </Text>
                                 </ScrollView>
                               </View>
                             )}
                           </View>
                         ))}
-                      </View>
-                    )}
-
-                    {/* Collapsed tool calls summary */}
-                    {!isExpanded && m.toolCalls && m.toolCalls.length > 0 && (
-                      <View style={styles.collapsedToolSummary}>
-                        <Text style={styles.collapsedToolText}>
-                          🔧 {m.toolCalls.map(tc => tc.name).join(', ')}
-                        </Text>
                       </View>
                     )}
 
@@ -1055,7 +1106,7 @@ export default function ChatScreen({ route, navigation }: any) {
                             </View>
                             <View style={styles.toolResultContent}>
                               <Text style={styles.toolResultLabel}>Content:</Text>
-                              <ScrollView horizontal style={styles.toolResultScroll}>
+                              <ScrollView style={styles.toolResultScroll} nestedScrollEnabled>
                                 <Text style={styles.toolResultCode}>
                                   {result.content || 'No content returned'}
                                 </Text>
@@ -1074,15 +1125,19 @@ export default function ChatScreen({ route, navigation }: any) {
 
                     {/* Collapsed tool results summary */}
                     {!isExpanded && m.toolResults && m.toolResults.length > 0 && (
-                      <View style={styles.collapsedToolSummary}>
-                        <Text style={styles.collapsedToolText}>
-                          {m.toolResults.every(r => r.success) ? '✅' : '⚠️'} {m.toolResults.length} result{m.toolResults.length > 1 ? 's' : ''}
+                      <View style={styles.collapsedResultsSummary}>
+                        <Text style={[
+                          styles.collapsedToolText,
+                          allSuccess && styles.collapsedToolTextSuccess,
+                          hasErrors && styles.collapsedToolTextError,
+                        ]}>
+                          {getToolResultsSummary(m.toolResults)}
                         </Text>
                       </View>
                     )}
                   </>
                 )}
-              </View>
+              </Pressable>
             );
           })}
           {debugInfo && (
@@ -1170,6 +1225,9 @@ function createStyles(theme: Theme) {
       marginBottom: spacing.sm,
       maxWidth: '85%',
     },
+    msgPressed: {
+      opacity: 0.8,
+    },
     user: {
       backgroundColor: theme.colors.secondary,
       alignSelf: 'flex-end',
@@ -1182,7 +1240,12 @@ function createStyles(theme: Theme) {
     },
     role: {
       ...theme.typography.caption,
-      marginBottom: spacing.xs,
+      marginBottom: 0,
+      textTransform: 'capitalize',
+    },
+    roleIcon: {
+      fontSize: 14,
+      marginRight: 4,
     },
     messageHeader: {
       flexDirection: 'row',
@@ -1193,36 +1256,77 @@ function createStyles(theme: Theme) {
     },
     toolBadgeSmall: {
       backgroundColor: theme.colors.muted,
-      paddingHorizontal: spacing.xs,
-      paddingVertical: 2,
-      borderRadius: radius.sm,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: 3,
+      borderRadius: radius.md,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      flexShrink: 1,
+    },
+    toolBadgePending: {
+      backgroundColor: 'rgba(59, 130, 246, 0.1)',
+      borderColor: 'rgba(59, 130, 246, 0.3)',
+    },
+    toolBadgeSuccess: {
+      backgroundColor: 'rgba(34, 197, 94, 0.1)',
+      borderColor: 'rgba(34, 197, 94, 0.3)',
+    },
+    toolBadgeError: {
+      backgroundColor: 'rgba(239, 68, 68, 0.1)',
+      borderColor: 'rgba(239, 68, 68, 0.3)',
     },
     resultBadgeSmall: {
       backgroundColor: theme.colors.secondary,
     },
     toolBadgeSmallText: {
-      fontSize: 10,
+      fontSize: 11,
       color: theme.colors.mutedForeground,
+      fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+      fontWeight: '600',
+    },
+    toolBadgePendingText: {
+      color: 'rgb(59, 130, 246)',
+    },
+    toolBadgeSuccessText: {
+      color: 'rgb(34, 197, 94)',
+    },
+    toolBadgeErrorText: {
+      color: 'rgb(239, 68, 68)',
     },
     expandButton: {
       marginLeft: 'auto',
       paddingHorizontal: spacing.sm,
-      paddingVertical: 2,
+      paddingVertical: 4,
     },
     expandButtonText: {
-      fontSize: 11,
+      fontSize: 12,
       color: theme.colors.primary,
-      fontWeight: '500',
+      fontWeight: '600',
     },
     collapsedToolSummary: {
       marginTop: spacing.xs,
-      paddingVertical: spacing.xs,
+    },
+    collapsedResultsSummary: {
+      marginTop: spacing.xs,
+      paddingTop: spacing.xs,
       borderTopWidth: StyleSheet.hairlineWidth,
       borderTopColor: theme.colors.border,
+    },
+    collapsedToolPreview: {
+      fontSize: 11,
+      color: theme.colors.mutedForeground,
+      fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+      opacity: 0.7,
     },
     collapsedToolText: {
       fontSize: 12,
       color: theme.colors.mutedForeground,
+    },
+    collapsedToolTextSuccess: {
+      color: 'rgb(34, 197, 94)',
+    },
+    collapsedToolTextError: {
+      color: 'rgb(239, 68, 68)',
     },
     inputRow: {
       flexDirection: 'row',
@@ -1380,7 +1484,9 @@ function createStyles(theme: Theme) {
       marginBottom: 4,
     },
     toolParamsScroll: {
-      maxHeight: 120,
+      maxHeight: 200,
+      borderRadius: radius.sm,
+      overflow: 'hidden',
     },
     toolParamsCode: {
       fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
@@ -1439,7 +1545,9 @@ function createStyles(theme: Theme) {
       marginBottom: 4,
     },
     toolResultScroll: {
-      maxHeight: 120,
+      maxHeight: 200,
+      borderRadius: radius.sm,
+      overflow: 'hidden',
     },
     toolResultCode: {
       fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',

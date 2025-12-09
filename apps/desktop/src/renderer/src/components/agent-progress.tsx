@@ -14,6 +14,7 @@ import { logUI, logExpand } from "@renderer/lib/debug"
 import { TileFollowUpInput } from "./tile-follow-up-input"
 import { OverlayFollowUpInput } from "./overlay-follow-up-input"
 import { useResizable, TILE_DIMENSIONS } from "@renderer/hooks/use-resizable"
+import { getToolResultsSummary } from "@speakmcp/shared"
 
 interface AgentProgressProps {
   progress: AgentProgressUpdate | null
@@ -435,13 +436,26 @@ const ToolExecutionBubble: React.FC<{
   }
 
 
-  // Generate preview for collapsed state
-  const collapsedPreview = (() => {
+  // Generate preview for collapsed state - prioritize showing results when available
+  const collapsedInputPreview = (() => {
     if (isExpanded) return null
     // Create a summary of the first tool call's parameters
     const firstCall = execution.calls[0]
     if (!firstCall?.arguments) return null
     return formatArgumentsPreview(firstCall.arguments)
+  })()
+
+  // Generate result summary for collapsed state
+  const collapsedResultSummary = (() => {
+    if (isExpanded || isPending) return null
+    if (execution.results.length === 0) return null
+    // Convert to the expected ToolResult format
+    const toolResults = execution.results.map(r => ({
+      success: r.success,
+      content: r.content,
+      error: r.error,
+    }))
+    return getToolResultsSummary(toolResults)
   })()
 
   return (
@@ -487,10 +501,14 @@ const ToolExecutionBubble: React.FC<{
         </div>
       </div>
 
-      {/* Collapsed preview of parameters */}
-      {!isExpanded && collapsedPreview && (
-        <div className="px-1 pb-1 text-[10px] opacity-70 font-mono truncate" title={collapsedPreview}>
-          {collapsedPreview}
+      {/* Collapsed preview - show result summary when available, otherwise show input parameters */}
+      {!isExpanded && (collapsedResultSummary || collapsedInputPreview) && (
+        <div className="px-1 pb-1 text-[10px] opacity-80 truncate" title={collapsedResultSummary || collapsedInputPreview || ''}>
+          {collapsedResultSummary ? (
+            <span className="font-medium">{collapsedResultSummary}</span>
+          ) : (
+            <span className="font-mono opacity-70">{collapsedInputPreview}</span>
+          )}
         </div>
       )}
 

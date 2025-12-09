@@ -192,7 +192,7 @@ export class OpenAIClient {
     );
 
     try {
-      return await this.chatWithRecovery(url, body, messages, onToken, onProgress);
+      return await this.chatWithRecovery(url, body, onToken, onProgress);
     } finally {
       // Don't cleanup here - let the caller decide when to cleanup
     }
@@ -204,7 +204,6 @@ export class OpenAIClient {
   private async chatWithRecovery(
     url: string,
     body: object,
-    messages: ChatMessage[],
     onToken?: (token: string) => void,
     onProgress?: OnProgressCallback
   ): Promise<ChatResponse> {
@@ -385,10 +384,10 @@ export class OpenAIClient {
         safeResolve({ content: finalContent, conversationId, conversationHistory });
       });
 
-      // 'close' event fires when client closes the connection
+      // 'close' event fires when client closes the connection (cancellation)
       es.addEventListener('close', () => {
-        console.log('[OpenAIClient] SSE connection closed, content length:', finalContent.length);
-        safeResolve({ content: finalContent, conversationId, conversationHistory });
+        console.log('[OpenAIClient] SSE connection closed by client, content length:', finalContent.length);
+        safeReject(new Error('Connection cancelled'));
       });
     });
   }

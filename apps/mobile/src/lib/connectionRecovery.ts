@@ -90,7 +90,6 @@ export class ConnectionRecoveryManager {
   private onStatusChange?: OnStatusChange;
   private appStateSubscription: ReturnType<typeof AppState.addEventListener> | null = null;
   private heartbeatTimer: NodeJS.Timeout | null = null;
-  private abortController: AbortController | null = null;
   private lastHeartbeat: number = Date.now();
 
   constructor(
@@ -149,11 +148,6 @@ export class ConnectionRecoveryManager {
 
   getState(): RecoveryState {
     return { ...this.state };
-  }
-
-  getAbortSignal(): AbortSignal {
-    this.abortController = new AbortController();
-    return this.abortController.signal;
   }
 
   /**
@@ -246,15 +240,6 @@ export class ConnectionRecoveryManager {
     this.state.retryCount = 0;
     this.state.lastError = undefined;
     this.updateStatus('connecting');
-    this.abortController?.abort();
-    this.abortController = null;
-  }
-
-  /**
-   * Abort any ongoing connection
-   */
-  abort(): void {
-    this.abortController?.abort();
   }
 
   /**
@@ -262,7 +247,6 @@ export class ConnectionRecoveryManager {
    */
   cleanup(): void {
     this.stopHeartbeat();
-    this.abort();
     this.appStateSubscription?.remove();
     this.appStateSubscription = null;
   }

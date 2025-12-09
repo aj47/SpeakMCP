@@ -535,6 +535,9 @@ const toolHandlers: Record<string, ToolHandler> = {
       }
     }
 
+    // Cancel any pending tool approvals to prevent sessions from hanging
+    toolApprovalManager.cancelAllApprovals()
+
     // Perform emergency stop
     const { before, after } = await emergencyStopAll()
 

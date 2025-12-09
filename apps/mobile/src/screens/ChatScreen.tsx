@@ -341,6 +341,7 @@ export default function ChatScreen({ route, navigation }: any) {
    */
   const convertProgressToMessages = useCallback((update: AgentProgressUpdate): ChatMessage[] => {
     const messages: ChatMessage[] = [];
+    console.log('[convertProgressToMessages] Processing update, steps:', update.steps?.length || 0, 'history:', update.conversationHistory?.length || 0, 'isComplete:', update.isComplete);
 
     // First, try to use steps array (sent in progress events)
     if (update.steps && update.steps.length > 0) {
@@ -492,6 +493,8 @@ export default function ChatScreen({ route, navigation }: any) {
 
       // Process conversation history to extract tool calls and results
       if (response.conversationHistory && response.conversationHistory.length > 0) {
+        console.log('[ChatScreen] Processing final conversationHistory:', response.conversationHistory.length, 'messages');
+        console.log('[ChatScreen] ConversationHistory roles:', response.conversationHistory.map(m => m.role).join(', '));
 
         // Find where the current turn starts in the conversation history
         let currentTurnStartIndex = 0;
@@ -500,6 +503,7 @@ export default function ChatScreen({ route, navigation }: any) {
             currentTurnStartIndex = i;
           }
         }
+        console.log('[ChatScreen] currentTurnStartIndex:', currentTurnStartIndex);
 
         // Build new messages only from the current turn (from user message onward)
         const newMessages: ChatMessage[] = [];
@@ -516,14 +520,22 @@ export default function ChatScreen({ route, navigation }: any) {
             toolResults: historyMsg.toolResults,
           });
         }
+        console.log('[ChatScreen] newMessages count:', newMessages.length);
+        console.log('[ChatScreen] newMessages roles:', newMessages.map(m => `${m.role}(toolCalls:${m.toolCalls?.length || 0},toolResults:${m.toolResults?.length || 0})`).join(', '));
+        console.log('[ChatScreen] messageCountBeforeTurn:', messageCountBeforeTurn);
 
         // Replace only the placeholder with the new messages from this turn
         setMessages((m) => {
+          console.log('[ChatScreen] Current messages before update:', m.length);
           const beforePlaceholder = m.slice(0, messageCountBeforeTurn + 1);
-          return [...beforePlaceholder, ...newMessages];
+          console.log('[ChatScreen] beforePlaceholder count:', beforePlaceholder.length);
+          const result = [...beforePlaceholder, ...newMessages];
+          console.log('[ChatScreen] Final messages count:', result.length);
+          return result;
         });
       } else if (finalText) {
         // Fallback: just update the assistant message content
+        console.log('[ChatScreen] FALLBACK: No conversationHistory, using finalText only. response.conversationHistory:', response.conversationHistory);
         setMessages((m) => {
           const copy = [...m];
           for (let i = copy.length - 1; i >= 0; i--) {
@@ -534,6 +546,8 @@ export default function ChatScreen({ route, navigation }: any) {
           }
           return copy;
         });
+      } else {
+        console.log('[ChatScreen] WARNING: No conversationHistory and no finalText!');
       }
 
       // Only speak the final response if TTS is enabled (default: true for backward compat)
@@ -1002,7 +1016,7 @@ export default function ChatScreen({ route, navigation }: any) {
                             {toolCall.arguments && (
                               <View style={styles.toolParams}>
                                 <Text style={styles.toolParamsLabel}>Parameters:</Text>
-                                <ScrollView horizontal style={styles.toolParamsScroll}>
+                                <ScrollView style={styles.toolParamsScroll} nestedScrollEnabled>
                                   <Text style={styles.toolParamsCode}>
                                     {formatToolArguments(toolCall.arguments)}
                                   </Text>
@@ -1046,7 +1060,7 @@ export default function ChatScreen({ route, navigation }: any) {
                             </View>
                             <View style={styles.toolResultContent}>
                               <Text style={styles.toolResultLabel}>Content:</Text>
-                              <ScrollView horizontal style={styles.toolResultScroll}>
+                              <ScrollView style={styles.toolResultScroll} nestedScrollEnabled>
                                 <Text style={styles.toolResultCode}>
                                   {result.content || 'No content returned'}
                                 </Text>
@@ -1376,7 +1390,9 @@ function createStyles(theme: Theme) {
       marginBottom: 4,
     },
     toolParamsScroll: {
-      maxHeight: 120,
+      maxHeight: 200,
+      borderRadius: radius.sm,
+      overflow: 'hidden',
     },
     toolParamsCode: {
       fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
@@ -1435,7 +1451,9 @@ function createStyles(theme: Theme) {
       marginBottom: 4,
     },
     toolResultScroll: {
-      maxHeight: 120,
+      maxHeight: 200,
+      borderRadius: radius.sm,
+      overflow: 'hidden',
     },
     toolResultCode: {
       fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',

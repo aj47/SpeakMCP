@@ -137,3 +137,146 @@ export function messageHasToolExtras(message: BaseChatMessage): boolean {
  */
 export const COLLAPSED_LINES = 3;
 
+// ============================================================================
+// Expand/Collapse Text Helpers
+// ============================================================================
+
+/** UI text for expand button */
+export const EXPAND_TEXT = 'Expand';
+
+/** UI text for collapse button */
+export const COLLAPSE_TEXT = 'Collapse';
+
+/**
+ * Get the appropriate expand/collapse text based on current state
+ * @param isExpanded Whether the content is currently expanded
+ * @returns The text to display on the toggle button
+ */
+export function getExpandCollapseText(isExpanded: boolean): string {
+  return isExpanded ? COLLAPSE_TEXT : EXPAND_TEXT;
+}
+
+// ============================================================================
+// Tool Argument Formatting
+// ============================================================================
+
+/**
+ * Format tool arguments as pretty-printed JSON
+ * @param args Tool call arguments object
+ * @returns Formatted JSON string with 2-space indentation
+ */
+export function formatToolArguments(args: unknown): string {
+  if (!args) return '';
+  try {
+    return JSON.stringify(args, null, 2);
+  } catch {
+    return String(args);
+  }
+}
+
+// ============================================================================
+// Tool Result Status Formatting
+// ============================================================================
+
+/**
+ * Status display info for tool results
+ */
+export interface ToolResultStatus {
+  icon: string;
+  label: string;
+}
+
+/**
+ * Get display info for a tool result's success/error status
+ * @param success Whether the tool execution was successful
+ * @returns Object with icon emoji and label text
+ */
+export function getToolResultStatusDisplay(success: boolean): ToolResultStatus {
+  return success
+    ? { icon: '✅', label: 'Success' }
+    : { icon: '❌', label: 'Error' };
+}
+
+// ============================================================================
+// Pluralization Helpers
+// ============================================================================
+
+/**
+ * Simple pluralization helper
+ * @param count The number of items
+ * @param singular The singular form of the word
+ * @param plural Optional plural form (defaults to singular + 's')
+ * @returns The appropriate singular or plural form
+ */
+export function pluralize(count: number, singular: string, plural?: string): string {
+  return count === 1 ? singular : (plural ?? singular + 's');
+}
+
+/**
+ * Get formatted badge text for tool counts
+ * @param count Number of tools
+ * @param type Type of tool item ('call' or 'result')
+ * @returns Formatted string like "1 tool call" or "2 results"
+ */
+export function getToolBadgeText(count: number, type: 'call' | 'result'): string {
+  if (type === 'call') {
+    return `${count} tool ${pluralize(count, 'call')}`;
+  }
+  return `${count} ${pluralize(count, 'result')}`;
+}
+
+// ============================================================================
+// Unified Role Config
+// ============================================================================
+
+/**
+ * Role configuration with icon, label, and color classes
+ */
+export interface RoleConfig {
+  icon: string;
+  label: string;
+  /** Tailwind classes for background and text color */
+  colorClass: string;
+  /** Tailwind classes for compact/badge variant */
+  colorClassCompact: string;
+}
+
+/**
+ * Unified configuration for all chat message roles
+ * Includes icons, labels, and color schemes for consistent styling
+ */
+export const ROLE_CONFIG: Record<MessageRole | 'default', RoleConfig> = {
+  user: {
+    icon: '👤',
+    label: 'User',
+    colorClass: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
+    colorClassCompact: 'bg-blue-500/20 text-blue-600 dark:text-blue-400',
+  },
+  assistant: {
+    icon: '🤖',
+    label: 'Assistant',
+    colorClass: 'bg-green-500/10 text-green-600 dark:text-green-400',
+    colorClassCompact: 'bg-green-500/20 text-green-600 dark:text-green-400',
+  },
+  tool: {
+    icon: '🔧',
+    label: 'Tool',
+    colorClass: 'bg-orange-500/10 text-orange-600 dark:text-orange-400',
+    colorClassCompact: 'bg-orange-500/20 text-orange-600 dark:text-orange-400',
+  },
+  default: {
+    icon: '💬',
+    label: 'Unknown',
+    colorClass: 'bg-gray-500/10 text-gray-600 dark:text-gray-400',
+    colorClassCompact: 'bg-gray-500/20 text-gray-600 dark:text-gray-400',
+  },
+};
+
+/**
+ * Get role configuration with fallback to default
+ * @param role The message role
+ * @returns Role configuration object
+ */
+export function getRoleConfig(role: string): RoleConfig {
+  return ROLE_CONFIG[role as MessageRole] ?? ROLE_CONFIG.default;
+}

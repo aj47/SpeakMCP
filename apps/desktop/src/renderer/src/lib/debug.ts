@@ -83,7 +83,6 @@ function ts(): string {
 }
 
 
-// Safely stringify values for single-line logs captured by main console logger
 function safeStringify(value: any): string {
   try {
     return JSON.stringify(value)
@@ -96,14 +95,9 @@ function safeStringify(value: any): string {
   }
 }
 
-/**
- * Log UI-related debug information
- * Includes focus events, re-renders, state changes, etc.
- */
 export function logUI(...args: any[]) {
   if (!isDebugUI()) return
 
-  // Deep clone objects to avoid "[Object]" in console
   const clonedArgs = args.map(arg => {
     if (typeof arg === 'object' && arg !== null) {
       try {

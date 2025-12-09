@@ -1,8 +1,3 @@
-/**
- * Session Store for Mobile App
- * Manages chat sessions with persistence using AsyncStorage
- */
-
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { Session, SessionListItem, generateSessionId, generateMessageId, generateSessionTitle, sessionToListItem } from '../types/session';

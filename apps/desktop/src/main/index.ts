@@ -53,7 +53,7 @@ app.whenReady().then(() => {
 	  // Apply login item setting based on user config (production only; dev would launch bare Electron)
 	  try {
 	    if ((process.env.NODE_ENV === "production" || !process.env.ELECTRON_RENDERER_URL) && process.platform !== "linux") {
-	      const cfg = configStore.get() as any
+	      const cfg = configStore.get()
 	      app.setLoginItemSettings({
 	        openAtLogin: !!cfg.launchAtLogin,
 	        openAsHidden: true,

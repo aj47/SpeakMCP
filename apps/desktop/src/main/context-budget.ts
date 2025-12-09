@@ -57,7 +57,7 @@ async function fetchGroqContextWindow(model: string): Promise<number | undefined
 }
 
 async function getMaxContextTokens(providerId: string, model: string): Promise<number> {
-  const cfg = configStore.get() as any
+  const cfg = configStore.get()
   const override = cfg.mcpMaxContextTokensOverride
   if (override && typeof override === "number" && override > 0) return override
 
@@ -82,7 +82,7 @@ function estimateTokensFromMessages(messages: LLMMessage[]): number {
 }
 
 function getProviderAndModel(): { providerId: string; model: string } {
-  const config = configStore.get() as any
+  const config = configStore.get()
   const providerId = config.mcpToolsProviderId || "openai"
   let model = "gpt-4o-mini"
   if (providerId === "openai") {
@@ -164,7 +164,7 @@ export interface ShrinkOptions {
 }
 
 export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<{ messages: LLMMessage[]; appliedStrategies: string[]; estTokensBefore: number; estTokensAfter: number }>{
-  const config = configStore.get() as any
+  const config = configStore.get()
   const applied: string[] = []
 
   const enabled = config.mcpContextReductionEnabled ?? true

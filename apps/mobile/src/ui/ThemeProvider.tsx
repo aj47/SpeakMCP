@@ -1,9 +1,3 @@
-/**
- * Theme Provider for SpeakMCPMobile
- * 
- * Provides reactive theme context similar to SpeakMCP's ThemeProvider.
- * Supports light, dark, and system (auto) modes.
- */
 import React, { createContext, useContext, useEffect, useState, ReactNode, useCallback } from 'react';
 import { Appearance, ColorSchemeName, useColorScheme } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';

@@ -1,13 +1,3 @@
-/**
- * Markdown renderer component for mobile app
- * Provides nice formatting for assistant responses including:
- * - Headers, bold, italic, strikethrough
- * - Code blocks with syntax highlighting
- * - Lists (ordered and unordered)
- * - Links
- * - Tables
- */
-
 import React from 'react';
 import { Platform, StyleSheet } from 'react-native';
 import Markdown from 'react-native-markdown-display';

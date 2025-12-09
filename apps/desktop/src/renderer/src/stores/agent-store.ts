@@ -52,8 +52,6 @@ export const useAgentStore = create<AgentState>((set, get) => ({
 
     set((state) => {
       const newMap = new Map(state.agentProgressById)
-      // Use Map.has() for explicit key presence check - more robust than falsy check
-      // since it correctly handles potential edge cases with stored values
       const isNewSession = !newMap.has(sessionId)
       const existingProgress = newMap.get(sessionId)
 
@@ -61,20 +59,16 @@ export const useAgentStore = create<AgentState>((set, get) => ({
       // when they're not provided in the update (e.g., tool approval updates)
       let mergedUpdate = update
       if (existingProgress) {
-        // Check if this is a partial update (empty conversationHistory or steps)
         const hasEmptyHistory = !update.conversationHistory || update.conversationHistory.length === 0
         const hasEmptySteps = !update.steps || update.steps.length === 0
 
-        // If either is empty, merge with existing data to preserve state
         if (hasEmptyHistory || hasEmptySteps) {
           mergedUpdate = {
             ...existingProgress,
             ...update,
-            // Preserve existing conversation history if the update has empty/missing history
             conversationHistory: hasEmptyHistory
               ? existingProgress.conversationHistory
               : update.conversationHistory,
-            // Preserve existing steps if the update has empty steps
             steps: hasEmptySteps
               ? existingProgress.steps
               : update.steps,
@@ -84,12 +78,7 @@ export const useAgentStore = create<AgentState>((set, get) => ({
 
       newMap.set(sessionId, mergedUpdate)
 
-      // Only auto-focus when a NEW session starts (not already in our map)
-      // This prevents unexpected jumps when switching between sessions:
-      // - If user snoozes session A, focusedSessionId becomes null
-      // - A progress update from running session B should NOT auto-steal focus
-      // - Only a genuinely new session should auto-focus
-      // Also requires: not snoozed AND not complete
+      // Only auto-focus new sessions that aren't snoozed or complete
       let newFocusedSessionId = state.focusedSessionId
       if (isNewSession && !state.focusedSessionId && !mergedUpdate.isSnoozed && !mergedUpdate.isComplete) {
         newFocusedSessionId = sessionId

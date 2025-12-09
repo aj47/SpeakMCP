@@ -13,13 +13,10 @@ export function parseShellCommand(commandString: string): { command: string; arg
   for (let i = 0; i < trimmed.length; i++) {
     const char = trimmed[i]
 
-    // Handle escape sequences (only in double quotes for specific characters)
     if (escaped) {
-      // In double quotes, only " and \ are escape characters
       if (char === '"' || char === "\\") {
         current += char
       } else {
-        // Not an escape sequence, keep the backslash
         current += "\\" + char
       }
       escaped = false
@@ -31,7 +28,6 @@ export function parseShellCommand(commandString: string): { command: string; arg
       continue
     }
 
-    // Handle quotes
     if (char === "'" && !inDoubleQuote) {
       inSingleQuote = !inSingleQuote
       continue
@@ -42,7 +38,6 @@ export function parseShellCommand(commandString: string): { command: string; arg
       continue
     }
 
-    // Handle spaces (word boundaries)
     if (char === " " && !inSingleQuote && !inDoubleQuote) {
       if (current) {
         parts.push(current)
@@ -51,16 +46,13 @@ export function parseShellCommand(commandString: string): { command: string; arg
       continue
     }
 
-    // Regular character
     current += char
   }
 
-  // Add the last part if any
   if (current) {
     parts.push(current)
   }
 
-  // Return command and args
   if (parts.length === 0) {
     return { command: "", args: [] }
   }

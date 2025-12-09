@@ -18,42 +18,25 @@ export const TILE_DIMENSIONS = {
 const STORAGE_KEY_PREFIX = "speakmcp-resizable-"
 
 export interface UseResizableOptions {
-  /** Initial width */
   initialWidth?: number
-  /** Initial height */
   initialHeight?: number
-  /** Minimum width */
   minWidth?: number
-  /** Maximum width */
   maxWidth?: number
-  /** Minimum height */
   minHeight?: number
-  /** Maximum height */
   maxHeight?: number
-  /** Callback when resize starts */
   onResizeStart?: () => void
-  /** Callback when resize ends */
   onResizeEnd?: (size: { width: number; height: number }) => void
-  /** Storage key for persisting dimensions to localStorage. If provided, dimensions will be saved and restored. */
   storageKey?: string
 }
 
 export interface UseResizableReturn {
-  /** Current width */
   width: number
-  /** Current height */
   height: number
-  /** Whether currently resizing */
   isResizing: boolean
-  /** Handler for horizontal (right edge) resize */
   handleWidthResizeStart: (e: React.MouseEvent) => void
-  /** Handler for vertical (bottom edge) resize */
   handleHeightResizeStart: (e: React.MouseEvent) => void
-  /** Handler for corner (both dimensions) resize */
   handleCornerResizeStart: (e: React.MouseEvent) => void
-  /** Reset to initial dimensions */
   reset: () => void
-  /** Set dimensions programmatically */
   setSize: (size: { width?: number; height?: number }) => void
 }
 

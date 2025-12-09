@@ -16,7 +16,7 @@ import { configStore } from "./config"
 import { profileService } from "./profile-service"
 import { mcpService, type MCPTool, type MCPToolResult } from "./mcp-service"
 import { agentSessionTracker } from "./agent-session-tracker"
-import { agentSessionStateManager } from "./state"
+import { agentSessionStateManager, toolApprovalManager } from "./state"
 import { emergencyStopAll } from "./emergency-stop"
 
 // The virtual server name for built-in tools
@@ -492,6 +492,9 @@ const toolHandlers: Record<string, ToolHandler> = {
 
     // Stop the session in the state manager (aborts LLM requests, kills processes)
     agentSessionStateManager.stopSession(sessionId)
+
+    // Cancel any pending tool approvals for this session so executeToolCall doesn't hang
+    toolApprovalManager.cancelSessionApprovals(sessionId)
 
     // Mark the session as stopped in the tracker
     agentSessionTracker.stopSession(sessionId)

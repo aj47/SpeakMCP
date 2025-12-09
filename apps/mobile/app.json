@@ -15,6 +15,7 @@
     },
     "ios": {
       "supportsTablet": true,
+      "bundleIdentifier": "com.aj47.speakmcp",
       "infoPlist": {
         "NSMicrophoneUsageDescription": "This app uses the microphone for voice input.",
         "NSSpeechRecognitionUsageDescription": "This app uses speech recognition to transcribe your voice.",

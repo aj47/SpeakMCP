@@ -959,6 +959,8 @@ export default function ChatScreen({ route, navigation }: any) {
                       source={isDark ? darkSpinner : lightSpinner}
                       style={styles.thinkingSpinner}
                       resizeMode="contain"
+                      accessible={true}
+                      accessibilityLabel="Assistant is thinking"
                     />
                   </View>
                 ) : (

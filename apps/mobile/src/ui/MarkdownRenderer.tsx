@@ -16,13 +16,10 @@ import { spacing, radius } from './theme';
 
 interface MarkdownRendererProps {
   content: string;
-  /** Number of lines to show when collapsed (undefined = show all) */
-  numberOfLines?: number;
 }
 
-export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ 
+export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
   content,
-  numberOfLines,
 }) => {
   const { theme, isDark } = useTheme();
 

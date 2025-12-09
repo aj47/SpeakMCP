@@ -30,9 +30,7 @@ import {
   COLLAPSED_LINES,
   getRoleIcon,
   shouldCollapseMessage,
-  getToolCallsSummary,
   getToolResultsSummary,
-  getExpandCollapseText,
   formatToolArguments,
   formatArgumentsPreview,
 } from '@speakmcp/shared';

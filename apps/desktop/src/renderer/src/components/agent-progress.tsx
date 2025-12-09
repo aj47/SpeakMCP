@@ -1367,6 +1367,23 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
     }
   }, [variant, isComplete])
 
+  // Auto-expand final assistant message when agent completes
+  useEffect(() => {
+    if (isComplete && lastAssistantDisplayIndex >= 0) {
+      const finalAssistantItem = displayItems[lastAssistantDisplayIndex]
+      if (finalAssistantItem && finalAssistantItem.kind === "message") {
+        const itemKey = finalAssistantItem.id
+        // Only auto-expand if user hasn't explicitly toggled it yet
+        if (!(itemKey in expandedItems)) {
+          setExpandedItems(prev => ({
+            ...prev,
+            [itemKey]: true,
+          }))
+        }
+      }
+    }
+  }, [isComplete, lastAssistantDisplayIndex, displayItems, expandedItems])
+
   // Handle scroll events to detect user interaction
   const handleScroll = () => {
     const scrollContainer = scrollContainerRef.current

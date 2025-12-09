@@ -1,10 +1,3 @@
-/**
- * OAuth MCP Server Examples
- * 
- * Pre-configured examples for popular OAuth-enabled MCP servers
- * to help users get started quickly with OAuth authentication.
- */
-
 import { MCPServerConfig } from "./types"
 
 export interface OAuthMCPExample {
@@ -40,16 +33,10 @@ export const OAUTH_MCP_EXAMPLES: Record<string, OAuthMCPExample> = {
   },
 }
 
-/**
- * Get OAuth example by key
- */
 export function getOAuthExample(key: string): OAuthMCPExample | undefined {
   return OAUTH_MCP_EXAMPLES[key]
 }
 
-/**
- * Get all OAuth example keys
- */
 export function getOAuthExampleKeys(): string[] {
   return Object.keys(OAUTH_MCP_EXAMPLES)
 }

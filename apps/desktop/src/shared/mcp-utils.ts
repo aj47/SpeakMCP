@@ -1,10 +1,5 @@
 import { MCPConfig, MCPServerConfig, MCPTransportType } from "./types"
 
-/**
- * Determine transport type when it isn't explicitly set.
- * Infers websocket for ws/wss URLs, streamableHttp for http/https URLs,
- * and falls back to stdio when no URL is present.
- */
 export function inferTransportType(config: MCPServerConfig): MCPTransportType {
   if (config.transport) return config.transport
   if (!config.url) return "stdio"
@@ -13,9 +8,6 @@ export function inferTransportType(config: MCPServerConfig): MCPTransportType {
   return "streamableHttp"
 }
 
-/**
- * Ensure a server config has an explicit transport.
- */
 export function normalizeMcpServerConfig(config: MCPServerConfig): {
   normalized: MCPServerConfig
   changed: boolean
@@ -26,9 +18,6 @@ export function normalizeMcpServerConfig(config: MCPServerConfig): {
   return { normalized: { ...config, transport: inferredTransport }, changed: true }
 }
 
-/**
- * Normalize all MCP server configs by inferring transports when missing.
- */
 export function normalizeMcpConfig(mcpConfig: MCPConfig): {
   normalized: MCPConfig
   changed: boolean

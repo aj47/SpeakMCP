@@ -101,7 +101,6 @@ export class Recorder extends EventEmitter<{
       this.emit("record-start")
       const stopAnalysing = this.analyseAudio(stream)
       this.once("destroy", stopAnalysing)
-      // playSound("begin_record")
     }
 
     mediaRecorder.ondataavailable = (event) => {

@@ -1,10 +1,3 @@
-/**
- * OAuth Server Configuration Component
- *
- * Provides UI for configuring OAuth settings for MCP servers,
- * managing authentication flows, and displaying connection status.
- */
-
 import React, { useState, useEffect } from "react"
 import { Button } from "@renderer/components/ui/button"
 import { Input } from "@renderer/components/ui/input"

@@ -9,7 +9,7 @@
  */
 export interface ToolCall {
   name: string;
-  arguments: any;
+  arguments: Record<string, unknown>;
 }
 
 /**

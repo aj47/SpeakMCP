@@ -1,31 +1,7 @@
-/**
- * Console Logger for Renderer Processes
- *
- * Captures console messages from all renderer windows (main, panel, setup)
- * and pipes them to the main process console with [DEBUG][UI] prefix
- * when --debug-ui flag is enabled.
- *
- * This module provides two approaches:
- * 1. setupConsoleLogger: Uses Electron's built-in 'console-message' event
- *    - Simpler, more reliable
- *    - Captures all console output automatically
- *    - Limited formatting control
- *
- * 2. injectConsoleForwarder: Injects JavaScript to intercept console methods
- *    - More detailed control over formatting
- *    - Can capture console.log arguments separately
- *    - Requires IPC setup in preload
- *    - Currently not used, but available for future enhancements
- */
-
 import type { BrowserWindow } from "electron"
 import { isDebugUI, logUI } from "./debug"
 
 type ConsoleLevel = "log" | "warn" | "error" | "info" | "debug"
-
-
-
-
 
 
 
@@ -94,74 +70,6 @@ export function setupConsoleLoggersForAllWindows(windows: Map<string, BrowserWin
 
   windows.forEach((win, id) => {
     setupConsoleLogger(win, id)
-  })
-}
-
-/**
- * Alternative: Execute script in renderer to forward console messages via IPC
- * This captures more detailed console.log calls with arguments
- */
-export function injectConsoleForwarder(win: BrowserWindow, windowId: string) {
-  if (!isDebugUI()) {
-    return
-  }
-
-  // Wait for the window to finish loading
-  win.webContents.once("did-finish-load", () => {
-    // Inject a script that intercepts console methods and forwards to main process
-    win.webContents.executeJavaScript(`
-      (function() {
-        const windowId = '${windowId.toUpperCase()}';
-        const originalConsole = {
-          log: console.log,
-          warn: console.warn,
-          error: console.error,
-          info: console.info,
-          debug: console.debug
-        };
-
-        function formatArg(arg) {
-          if (typeof arg === 'string') return arg;
-          if (typeof arg === 'object' && arg !== null) {
-            try {
-              return JSON.stringify(arg);
-            } catch {
-              return String(arg);
-            }
-          }
-          return String(arg);
-        }
-
-        function createInterceptor(level, original) {
-          return function(...args) {
-            // Call original console method
-            original.apply(console, args);
-
-            // Format and send to main process via IPC
-            const message = args.map(formatArg).join(' ');
-
-            // Use window.electron.ipcRenderer if available (from preload)
-            if (window.electron && window.electron.ipcRenderer) {
-              window.electron.ipcRenderer.send('console-message-from-renderer', {
-                windowId,
-                level,
-                message,
-                timestamp: new Date().toISOString()
-              });
-            }
-          };
-        }
-
-        // Intercept all console methods
-        console.log = createInterceptor('log', originalConsole.log);
-        console.warn = createInterceptor('warn', originalConsole.warn);
-        console.error = createInterceptor('error', originalConsole.error);
-        console.info = createInterceptor('info', originalConsole.info);
-        console.debug = createInterceptor('debug', originalConsole.debug);
-      })();
-    `).catch((err) => {
-      console.error(`Failed to inject console forwarder for ${windowId}:`, err)
-    })
   })
 }
 

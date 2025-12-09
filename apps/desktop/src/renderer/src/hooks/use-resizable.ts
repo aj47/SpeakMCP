@@ -57,9 +57,6 @@ export interface UseResizableReturn {
   setSize: (size: { width?: number; height?: number }) => void
 }
 
-/**
- * Load persisted dimensions from localStorage
- */
 function loadPersistedSize(storageKey: string): { width?: number; height?: number } | null {
   try {
     const stored = localStorage.getItem(STORAGE_KEY_PREFIX + storageKey)
@@ -70,27 +67,17 @@ function loadPersistedSize(storageKey: string): { width?: number; height?: numbe
       }
     }
   } catch {
-    // Ignore parsing errors
+    return null
   }
   return null
 }
 
-/**
- * Save dimensions to localStorage
- */
 function savePersistedSize(storageKey: string, size: { width: number; height: number }): void {
   try {
     localStorage.setItem(STORAGE_KEY_PREFIX + storageKey, JSON.stringify(size))
-  } catch {
-    // Ignore storage errors (e.g., quota exceeded)
-  }
+  } catch {}
 }
 
-/**
- * Hook for making elements resizable via mouse drag.
- * Supports width-only, height-only, and corner (both) resize.
- * If storageKey is provided, dimensions are persisted to localStorage.
- */
 export function useResizable(options: UseResizableOptions = {}): UseResizableReturn {
   const {
     initialWidth = TILE_DIMENSIONS.width.default,
@@ -104,7 +91,6 @@ export function useResizable(options: UseResizableOptions = {}): UseResizableRet
     storageKey,
   } = options
 
-  // Load initial dimensions from localStorage if storageKey is provided
   const getInitialDimensions = useCallback(() => {
     if (storageKey) {
       const persisted = loadPersistedSize(storageKey)
@@ -123,13 +109,11 @@ export function useResizable(options: UseResizableOptions = {}): UseResizableRet
   const [height, setHeight] = useState(initial.height)
   const [isResizing, setIsResizing] = useState(false)
 
-  // Use ref to track resize type for cleanup
   const resizeTypeRef = useRef<"width" | "height" | "corner" | null>(null)
 
   const clampWidth = useCallback((w: number) => Math.min(maxWidth, Math.max(minWidth, w)), [minWidth, maxWidth])
   const clampHeight = useCallback((h: number) => Math.min(maxHeight, Math.max(minHeight, h)), [minHeight, maxHeight])
 
-  // Persist dimensions when storageKey changes or on initial load
   const storageKeyRef = useRef(storageKey)
   useEffect(() => {
     if (storageKey && storageKey !== storageKeyRef.current) {
@@ -151,7 +135,6 @@ export function useResizable(options: UseResizableOptions = {}): UseResizableRet
 
     const startX = e.clientX
     const startWidth = width
-    // Track last computed width to avoid using non-standard window.event
     let lastWidth = startWidth
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
@@ -166,7 +149,6 @@ export function useResizable(options: UseResizableOptions = {}): UseResizableRet
       document.removeEventListener("mousemove", handleMouseMove)
       document.removeEventListener("mouseup", handleMouseUp)
       const finalSize = { width: lastWidth, height }
-      // Persist to localStorage if storageKey is provided
       if (storageKey) {
         savePersistedSize(storageKey, finalSize)
       }
@@ -186,7 +168,6 @@ export function useResizable(options: UseResizableOptions = {}): UseResizableRet
 
     const startY = e.clientY
     const startHeight = height
-    // Track last computed height to avoid using non-standard window.event
     let lastHeight = startHeight
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
@@ -201,7 +182,6 @@ export function useResizable(options: UseResizableOptions = {}): UseResizableRet
       document.removeEventListener("mousemove", handleMouseMove)
       document.removeEventListener("mouseup", handleMouseUp)
       const finalSize = { width, height: lastHeight }
-      // Persist to localStorage if storageKey is provided
       if (storageKey) {
         savePersistedSize(storageKey, finalSize)
       }
@@ -223,7 +203,6 @@ export function useResizable(options: UseResizableOptions = {}): UseResizableRet
     const startY = e.clientY
     const startWidth = width
     const startHeight = height
-    // Track last computed dimensions to report correct final size
     let lastWidth = startWidth
     let lastHeight = startHeight
 
@@ -242,7 +221,6 @@ export function useResizable(options: UseResizableOptions = {}): UseResizableRet
       document.removeEventListener("mousemove", handleMouseMove)
       document.removeEventListener("mouseup", handleMouseUp)
       const finalSize = { width: lastWidth, height: lastHeight }
-      // Persist to localStorage if storageKey is provided
       if (storageKey) {
         savePersistedSize(storageKey, finalSize)
       }
@@ -256,13 +234,10 @@ export function useResizable(options: UseResizableOptions = {}): UseResizableRet
   const reset = useCallback(() => {
     setWidth(initialWidth)
     setHeight(initialHeight)
-    // Clear persisted size when resetting
     if (storageKey) {
       try {
         localStorage.removeItem(STORAGE_KEY_PREFIX + storageKey)
-      } catch {
-        // Ignore storage errors
-      }
+      } catch {}
     }
   }, [initialWidth, initialHeight, storageKey])
 
@@ -271,7 +246,6 @@ export function useResizable(options: UseResizableOptions = {}): UseResizableRet
     const newHeight = size.height !== undefined ? clampHeight(size.height) : height
     if (size.width !== undefined) setWidth(newWidth)
     if (size.height !== undefined) setHeight(newHeight)
-    // Persist programmatic size changes too
     if (storageKey) {
       savePersistedSize(storageKey, { width: newWidth, height: newHeight })
     }

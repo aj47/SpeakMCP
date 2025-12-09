@@ -40,22 +40,18 @@ export function AudioPlayer({
   // Create audio URL when audioData changes
   useEffect(() => {
     if (audioData) {
-      // Clean up previous URL
       if (audioUrlRef.current) {
         URL.revokeObjectURL(audioUrlRef.current)
       }
 
-      // Create new URL
       const blob = new Blob([audioData], { type: "audio/wav" })
       audioUrlRef.current = URL.createObjectURL(blob)
       setHasAudio(true)
-      setHasAutoPlayed(false) // Reset auto-play flag for new audio
-      setWasStopped(false) // Reset stopped flag for new audio
+      setHasAutoPlayed(false)
+      setWasStopped(false)
 
-      // Create audio element and reset playing state
       if (audioRef.current) {
         audioRef.current.src = audioUrlRef.current
-        // Reset playing state when new audio is loaded
         setIsPlaying(false)
         setCurrentTime(0)
       }
@@ -99,7 +95,6 @@ export function AudioPlayer({
       setIsPlaying(false)
     }
 
-    // Add event listeners
     audio.addEventListener("loadedmetadata", handleLoadedMetadata)
     audio.addEventListener("timeupdate", handleTimeUpdate)
     audio.addEventListener("ended", handleEnded)
@@ -107,7 +102,6 @@ export function AudioPlayer({
     audio.addEventListener("pause", handlePause)
     audio.addEventListener("error", handleError)
 
-    // Sync initial state with audio element
     if (audio.src && !audio.paused) {
       setIsPlaying(true)
     } else {
@@ -122,23 +116,20 @@ export function AudioPlayer({
       audio.removeEventListener("pause", handlePause)
       audio.removeEventListener("error", handleError)
     }
-  }, [hasAudio, audioData]) // Include audioData to ensure listeners are reset when new audio loads
+  }, [hasAudio, audioData])
 
-  // Register audio element with TTS manager for emergency stop
   useEffect(() => {
     const audio = audioRef.current
     if (!audio) return undefined
 
-    // Register audio element
     const unregisterAudio = ttsManager.registerAudio(audio)
 
-    // Register stop callback - prevents auto-play after emergency stop
     const unregisterCallback = ttsManager.registerStopCallback(() => {
       if (audio) {
         audio.pause()
         audio.currentTime = 0
         setIsPlaying(false)
-        setWasStopped(true) // Prevent auto-play from triggering after stop
+        setWasStopped(true)
       }
     })
 
@@ -148,7 +139,6 @@ export function AudioPlayer({
     }
   }, [audioRef.current])
 
-  // Auto-play effect - blocked if emergency stop was triggered
   useEffect(() => {
     if (autoPlay && hasAudio && audioRef.current && !isPlaying && !hasAutoPlayed && !wasStopped) {
       console.log("[AudioPlayer] Auto-playing audio")
@@ -162,11 +152,9 @@ export function AudioPlayer({
   const handlePlayPause = async () => {
     if (!hasAudio && onGenerateAudio && !isGenerating && !error) {
       try {
-        const generatedAudio = await onGenerateAudio()
-        // audioData will be updated via props, which will trigger useEffect
+        await onGenerateAudio()
         return
       } catch (error) {
-        // Error handling is done in the parent component
         return
       }
     }
@@ -175,14 +163,11 @@ export function AudioPlayer({
       try {
         if (isPlaying) {
           audioRef.current.pause()
-          // State will be updated by the 'pause' event listener
         } else {
           await audioRef.current.play()
-          // State will be updated by the 'play' event listener
         }
       } catch (playError) {
         console.error("[AudioPlayer] Playback failed:", playError)
-        // Reset state on playback failure
         setIsPlaying(false)
       }
     }

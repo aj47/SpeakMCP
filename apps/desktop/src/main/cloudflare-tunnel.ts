@@ -123,11 +123,11 @@ export async function startCloudflareTunnel(): Promise<{
           resolve({ success: false, error: tunnelError })
         }
       }, 30000)
-    } catch (err: any) {
+    } catch (err) {
       isStarting = false
-      tunnelError = err.message || String(err)
+      tunnelError = err instanceof Error ? err.message : String(err)
       diagnosticsService.logError("cloudflare-tunnel", "Failed to start tunnel", err)
-      resolve({ success: false, error: tunnelError || undefined })
+      resolve({ success: false, error: tunnelError })
     }
   })
 }

@@ -14,7 +14,7 @@ import { logUI, logExpand } from "@renderer/lib/debug"
 import { TileFollowUpInput } from "./tile-follow-up-input"
 import { OverlayFollowUpInput } from "./overlay-follow-up-input"
 import { useResizable, TILE_DIMENSIONS } from "@renderer/hooks/use-resizable"
-import { getToolResultsSummary, generateToolResultPreview } from "@speakmcp/shared"
+import { getToolResultsSummary } from "@speakmcp/shared"
 
 interface AgentProgressProps {
   progress: AgentProgressUpdate | null

@@ -1,7 +1,3 @@
-/**
- * Hook to synchronize Zustand stores with renderer event handlers.
- * Call this once at the app root to set up listeners.
- */
 import { useEffect } from 'react'
 import { rendererHandlers, tipcClient } from '@renderer/lib/tipc-client'
 import { useAgentStore, useConversationStore } from '@renderer/stores'
@@ -17,10 +13,8 @@ export function useStoreSync() {
   const setFocusedSessionId = useAgentStore((s) => s.setFocusedSessionId)
   const setScrollToSessionId = useAgentStore((s) => s.setScrollToSessionId)
   const markConversationCompleted = useConversationStore((s) => s.markConversationCompleted)
-  
   const saveConversationMutation = useSaveConversationMutation()
 
-  // Listen for agent progress updates
   useEffect(() => {
     const unlisten = rendererHandlers.agentProgressUpdate.listen(
       (update: AgentProgressUpdate) => {
@@ -52,7 +46,6 @@ export function useStoreSync() {
     return unlisten
   }, [updateSessionProgress, markConversationCompleted])
 
-  // Listen for agent progress clear (all)
   useEffect(() => {
     const unlisten = rendererHandlers.clearAgentProgress.listen(() => {
       logUI('[useStoreSync] Clearing all agent progress')
@@ -61,7 +54,6 @@ export function useStoreSync() {
     return unlisten
   }, [clearAllProgress])
 
-  // Listen for session-scoped progress clear
   useEffect(() => {
     const unlisten = (rendererHandlers as any).clearAgentSessionProgress?.listen?.(
       (sessionId: string) => {
@@ -72,7 +64,6 @@ export function useStoreSync() {
     return unlisten
   }, [clearSessionProgress])
 
-  // Listen for clear inactive sessions
   useEffect(() => {
     const unlisten = (rendererHandlers as any).clearInactiveSessions?.listen?.(
       () => {
@@ -83,9 +74,6 @@ export function useStoreSync() {
     return unlisten
   }, [clearInactiveSessions])
 
-  // Cross-window: focus a specific agent session
-  // When a new agent is spawned and focused, clear the scroll target so the
-  // sessions page doesn't scroll to a previously selected session
   useEffect(() => {
     const unlisten = (rendererHandlers as any).focusAgentSession?.listen?.(
       (sessionId: string) => {
@@ -135,7 +123,7 @@ export function useStoreSync() {
         conversation: updatedConversation,
       })
     } catch (error) {
-      // Silently handle error
+      console.error('Failed to save conversation history:', error)
     }
   }
 }

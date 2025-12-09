@@ -153,11 +153,10 @@ function extractJsonPreview(data: unknown): string {
     const len = data.length;
     if (len === 0) return 'empty list';
 
-    // Try to get a meaningful summary from array items
     const firstItem = data[0];
     if (typeof firstItem === 'object' && firstItem !== null) {
-      // Look for common identifying fields
-      const name = (firstItem as any).name || (firstItem as any).title || (firstItem as any).path || (firstItem as any).filename;
+      const item = firstItem as Record<string, unknown>;
+      const name = item.name || item.title || item.path || item.filename;
       if (name) {
         return len === 1 ? truncatePreview(String(name), 30) : `${len} items: ${truncatePreview(String(name), 20)}...`;
       }

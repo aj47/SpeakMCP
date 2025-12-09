@@ -172,7 +172,7 @@ export const writeTextWithFocusRestore = async (text: string) => {
   }
 }
 
-const parseEvents = (data: any): RdevEvent[] => {
+const parseEvents = (data: Buffer | string): RdevEvent[] => {
   try {
     const eventStr = String(data).trim()
     if (!eventStr) return []
@@ -241,7 +241,7 @@ export function listenToKeyboardEvents() {
   let startCustomMcpTimer: ReturnType<typeof setTimeout> | undefined
 
   // Debug state tracking
-  let lastLoggedConfig: any = null
+  let lastLoggedConfig: string | null = null
   let configChangeCount = 0
 
   if (process.env.IS_MAC) {

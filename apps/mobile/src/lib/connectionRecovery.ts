@@ -1,9 +1,3 @@
-/**
- * Connection Recovery Module for Mobile App
- * Handles automatic reconnection with exponential backoff for streaming connections.
- * Implements heartbeat/ping mechanism and provides user-friendly status updates.
- */
-
 import { AppState, AppStateStatus } from 'react-native';
 
 export type ConnectionStatus = 
@@ -38,9 +32,6 @@ export type RecoveryState = {
 
 export type OnStatusChange = (state: RecoveryState) => void;
 
-/**
- * Calculate exponential backoff delay with jitter
- */
 export function calculateBackoff(
   attempt: number,
   initialDelayMs: number,
@@ -53,9 +44,6 @@ export function calculateBackoff(
   return Math.min(jitter, maxDelayMs);
 }
 
-/**
- * Check if an error is retryable (network-related)
- */
 export function isRetryableError(error: Error | string): boolean {
   const message = typeof error === 'string' ? error : error.message;
   const lowered = message.toLowerCase();
@@ -93,9 +81,6 @@ export function isRetryableError(error: Error | string): boolean {
   return retryablePatterns.some(pattern => lowered.includes(pattern));
 }
 
-/**
- * ConnectionRecoveryManager handles automatic reconnection logic
- */
 export class ConnectionRecoveryManager {
   private config: ConnectionRecoveryConfig;
   private state: RecoveryState;
@@ -162,9 +147,6 @@ export class ConnectionRecoveryManager {
     return { ...this.state };
   }
 
-  /**
-   * Start heartbeat monitoring for the connection
-   */
   startHeartbeat(onHeartbeatMissed: () => void): void {
     this.stopHeartbeat();
     this.lastHeartbeat = Date.now();
@@ -185,16 +167,10 @@ export class ConnectionRecoveryManager {
     }, this.config.heartbeatIntervalMs);
   }
 
-  /**
-   * Record a heartbeat (call when data is received)
-   */
   recordHeartbeat(): void {
     this.lastHeartbeat = Date.now();
   }
 
-  /**
-   * Stop heartbeat monitoring
-   */
   stopHeartbeat(): void {
     if (this.heartbeatTimer) {
       clearInterval(this.heartbeatTimer);
@@ -202,32 +178,20 @@ export class ConnectionRecoveryManager {
     }
   }
 
-  /**
-   * Mark connection as established
-   */
   markConnected(): void {
     this.state.retryCount = 0;
     this.state.lastError = undefined;
     this.updateStatus('connected');
   }
 
-  /**
-   * Mark connection as disconnected
-   */
   markDisconnected(error?: string): void {
     this.updateStatus('disconnected', error);
   }
 
-  /**
-   * Check if we should retry the connection
-   */
   shouldRetry(): boolean {
     return this.state.retryCount < this.config.maxRetries && this.state.isAppActive;
   }
 
-  /**
-   * Increment retry count and get the delay before next retry
-   */
   prepareRetry(): number {
     this.state.retryCount++;
     this.updateStatus('reconnecting');
@@ -238,25 +202,16 @@ export class ConnectionRecoveryManager {
     );
   }
 
-  /**
-   * Mark the connection as failed (no more retries)
-   */
   markFailed(error: string): void {
     this.updateStatus('failed', error);
   }
 
-  /**
-   * Reset the recovery state for a new connection attempt
-   */
   reset(): void {
     this.state.retryCount = 0;
     this.state.lastError = undefined;
     this.updateStatus('connecting');
   }
 
-  /**
-   * Clean up resources
-   */
   cleanup(): void {
     this.stopHeartbeat();
     this.appStateSubscription?.remove();
@@ -264,16 +219,10 @@ export class ConnectionRecoveryManager {
   }
 }
 
-/**
- * Create a delay promise
- */
 export function delay(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-/**
- * Format connection status for display
- */
 export function formatConnectionStatus(state: RecoveryState): string {
   switch (state.status) {
     case 'connected':

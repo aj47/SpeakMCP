@@ -1,7 +1,3 @@
-/**
- * Utility functions for handling keyboard shortcuts and key combinations
- */
-
 export interface ParsedKeyCombo {
   ctrl: boolean
   shift: boolean
@@ -10,10 +6,6 @@ export interface ParsedKeyCombo {
   key: string
 }
 
-/**
- * Parse a key combination string into its components
- * @param combo - Key combination string like "ctrl-shift-t" or "alt-space"
- */
 export function parseKeyCombo(combo: string): ParsedKeyCombo {
   if (!combo) {
     return { ctrl: false, shift: false, alt: false, meta: false, key: "" }
@@ -52,11 +44,6 @@ export function parseKeyCombo(combo: string): ParsedKeyCombo {
   return result
 }
 
-/**
- * Check if a key event matches a key combination
- * @param event - Keyboard event data from the Rust binary
- * @param combo - Key combination string to match against
- */
 export function matchesKeyCombo(
   event: { key: string },
   modifiers: { ctrl: boolean; shift: boolean; alt: boolean; meta?: boolean },
@@ -127,10 +114,6 @@ export function matchesKeyCombo(
   return matches
 }
 
-/**
- * Convert a key combination to a human-readable display format
- * @param combo - Key combination string like "ctrl-shift-t"
- */
 export function formatKeyComboForDisplay(combo: string): string {
   if (!combo) return ""
 
@@ -185,10 +168,6 @@ export function formatKeyComboForDisplay(combo: string): string {
   return parts.join(" + ")
 }
 
-/**
- * Validate if a key combination is valid and safe to use
- * @param combo - Key combination string to validate
- */
 export function validateKeyCombo(combo: string): {
   valid: boolean
   error?: string
@@ -235,11 +214,6 @@ export function validateKeyCombo(combo: string): {
   return { valid: true }
 }
 
-/**
- * Get the effective shortcut value, handling custom shortcuts
- * @param shortcutType - The shortcut type value (e.g., "ctrl-t", "custom")
- * @param customShortcut - The custom shortcut value if type is "custom"
- */
 export function getEffectiveShortcut(
   shortcutType: string | undefined,
   customShortcut: string | undefined,

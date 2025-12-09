@@ -105,21 +105,17 @@ export class ConversationService {
 
 
   async saveConversation(conversation: Conversation): Promise<void> {
-    try {
-      this.ensureConversationsFolder()
-      const conversationPath = this.getConversationPath(conversation.id)
+    this.ensureConversationsFolder()
+    const conversationPath = this.getConversationPath(conversation.id)
 
-      // Update the updatedAt timestamp
-      conversation.updatedAt = Date.now()
+    // Update the updatedAt timestamp
+    conversation.updatedAt = Date.now()
 
-      // Save conversation to file
-      fs.writeFileSync(conversationPath, JSON.stringify(conversation, null, 2))
+    // Save conversation to file
+    fs.writeFileSync(conversationPath, JSON.stringify(conversation, null, 2))
 
-      // Update the index
-      this.updateConversationIndex(conversation)
-    } catch (error) {
-      throw error
-    }
+    // Update the index
+    this.updateConversationIndex(conversation)
   }
 
   async loadConversation(conversationId: string): Promise<Conversation | null> {
@@ -161,24 +157,20 @@ export class ConversationService {
   }
 
   async deleteConversation(conversationId: string): Promise<void> {
-    try {
-      const conversationPath = this.getConversationPath(conversationId)
+    const conversationPath = this.getConversationPath(conversationId)
 
-      // Delete conversation file
-      if (fs.existsSync(conversationPath)) {
-        fs.unlinkSync(conversationPath)
-      }
+    // Delete conversation file
+    if (fs.existsSync(conversationPath)) {
+      fs.unlinkSync(conversationPath)
+    }
 
-      // Update index
-      const indexPath = this.getConversationIndexPath()
-      if (fs.existsSync(indexPath)) {
-        const indexData = fs.readFileSync(indexPath, "utf8")
-        let index: ConversationHistoryItem[] = JSON.parse(indexData)
-        index = index.filter((item) => item.id !== conversationId)
-        fs.writeFileSync(indexPath, JSON.stringify(index, null, 2))
-      }
-    } catch (error) {
-      throw error
+    // Update index
+    const indexPath = this.getConversationIndexPath()
+    if (fs.existsSync(indexPath)) {
+      const indexData = fs.readFileSync(indexPath, "utf8")
+      let index: ConversationHistoryItem[] = JSON.parse(indexData)
+      index = index.filter((item) => item.id !== conversationId)
+      fs.writeFileSync(indexPath, JSON.stringify(index, null, 2))
     }
   }
 
@@ -250,14 +242,10 @@ export class ConversationService {
   }
 
   async deleteAllConversations(): Promise<void> {
-    try {
-      if (fs.existsSync(conversationsFolder)) {
-        fs.rmSync(conversationsFolder, { recursive: true, force: true })
-      }
-      this.ensureConversationsFolder()
-    } catch (error) {
-      throw error
+    if (fs.existsSync(conversationsFolder)) {
+      fs.rmSync(conversationsFolder, { recursive: true, force: true })
     }
+    this.ensureConversationsFolder()
   }
 }
 

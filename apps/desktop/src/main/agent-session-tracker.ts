@@ -73,9 +73,7 @@ class AgentSessionTracker {
     return AgentSessionTracker.instance
   }
 
-  private constructor() {
-    // Private constructor for singleton
-  }
+  private constructor() {}
 
   /**
    * Start tracking a new agent session

@@ -200,8 +200,6 @@ function ConversationMessageItem({
       setAudioData(result.audio)
       return result.audio
     } catch (error) {
-
-      // Set user-friendly error message
       let errorMessage = "Failed to generate audio"
       if (error instanceof Error) {
         if (error.message.includes("API key")) {

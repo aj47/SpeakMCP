@@ -16,10 +16,6 @@ interface AgentProcessingViewProps {
   showBackgroundSpinner?: boolean
 }
 
-/**
- * Unified component for displaying agent processing state.
- * Used by both text input and voice input modes to show consistent progress.
- */
 export function AgentProcessingView({
   agentProgress,
   isProcessing,
@@ -37,16 +33,12 @@ export function AgentProcessingView({
 
   // Kill switch handler for loading state
   const handleKillSwitch = async () => {
-    if (isKilling) return // Prevent double-clicks
+    if (isKilling) return
 
     setIsKilling(true)
     try {
       if (agentProgress?.sessionId) {
-        // Stop only the focused session; let final progress update clean up UI
         await tipcClient.stopAgentSession({ sessionId: agentProgress.sessionId })
-      } else {
-        // No session progress yet (e.g., submitting input). Defer to parent to control UI.
-        // Intentionally no global clear here to avoid wiping other sessions.
       }
       setShowKillConfirmation(false)
     } catch (error) {

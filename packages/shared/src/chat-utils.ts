@@ -84,14 +84,188 @@ export function getToolCallsSummary(toolCalls: ToolCall[]): string {
 /**
  * Generate a summary of tool results for collapsed view
  * @param toolResults Array of tool results
- * @returns A formatted string showing result status
+ * @returns A formatted string showing result status and key information
  */
 export function getToolResultsSummary(toolResults: ToolResult[]): string {
   if (!toolResults || toolResults.length === 0) return '';
   const allSuccess = toolResults.every(r => r.success);
   const icon = allSuccess ? '✅' : '⚠️';
   const count = toolResults.length;
+
+  // For single result, try to extract a meaningful preview
+  if (count === 1) {
+    const preview = generateToolResultPreview(toolResults[0]);
+    if (preview) {
+      return `${icon} ${preview}`;
+    }
+  }
+
+  // For multiple results, show count and combined previews
+  const previews = toolResults
+    .map(r => generateToolResultPreview(r))
+    .filter(Boolean)
+    .slice(0, 2); // Show up to 2 previews
+
+  if (previews.length > 0) {
+    const suffix = count > previews.length ? ` (+${count - previews.length} more)` : '';
+    return `${icon} ${previews.join(', ')}${suffix}`;
+  }
+
   return `${icon} ${count} result${count > 1 ? 's' : ''}`;
+}
+
+/**
+ * Generate a preview string for a single tool result.
+ * Tries to extract meaningful information from the content.
+ * @param result Tool result to preview
+ * @returns A short preview string or empty string if no meaningful preview
+ */
+export function generateToolResultPreview(result: ToolResult): string {
+  if (!result) return '';
+
+  // Handle errors
+  if (!result.success) {
+    const errorText = result.error || result.content || 'Error';
+    return truncatePreview(errorText, 40);
+  }
+
+  const content = result.content || '';
+  if (!content) return '';
+
+  // Try to parse as JSON for structured data
+  try {
+    const parsed = JSON.parse(content);
+    return extractJsonPreview(parsed);
+  } catch {
+    // Not JSON, treat as plain text
+    return extractTextPreview(content);
+  }
+}
+
+/**
+ * Extract a preview from a parsed JSON object
+ */
+function extractJsonPreview(data: unknown): string {
+  if (data === null || data === undefined) return '';
+
+  // Handle arrays
+  if (Array.isArray(data)) {
+    const len = data.length;
+    if (len === 0) return 'empty list';
+
+    // Try to get a meaningful summary from array items
+    const firstItem = data[0];
+    if (typeof firstItem === 'object' && firstItem !== null) {
+      // Look for common identifying fields
+      const name = (firstItem as any).name || (firstItem as any).title || (firstItem as any).path || (firstItem as any).filename;
+      if (name) {
+        return len === 1 ? truncatePreview(String(name), 30) : `${len} items: ${truncatePreview(String(name), 20)}...`;
+      }
+    }
+    return `${len} item${len > 1 ? 's' : ''}`;
+  }
+
+  // Handle objects
+  if (typeof data === 'object') {
+    const obj = data as Record<string, unknown>;
+
+    // Look for common result patterns
+    if ('success' in obj && typeof obj.success === 'boolean') {
+      // Result object with success indicator
+      if ('message' in obj && typeof obj.message === 'string') {
+        return truncatePreview(obj.message, 50);
+      }
+      if ('result' in obj) {
+        return extractJsonPreview(obj.result);
+      }
+    }
+
+    // Look for file operation results
+    if ('path' in obj || 'file' in obj || 'filename' in obj) {
+      const path = obj.path || obj.file || obj.filename;
+      return truncatePreview(String(path), 40);
+    }
+
+    // Look for content results
+    if ('content' in obj && typeof obj.content === 'string') {
+      return truncatePreview(obj.content, 50);
+    }
+
+    // Look for data results
+    if ('data' in obj) {
+      return extractJsonPreview(obj.data);
+    }
+
+    // Look for count results
+    if ('count' in obj && typeof obj.count === 'number') {
+      return `${obj.count} item${obj.count !== 1 ? 's' : ''}`;
+    }
+
+    // Look for items/results arrays
+    if ('items' in obj && Array.isArray(obj.items)) {
+      return extractJsonPreview(obj.items);
+    }
+    if ('results' in obj && Array.isArray(obj.results)) {
+      return extractJsonPreview(obj.results);
+    }
+
+    // Fallback: show first key-value pair
+    const keys = Object.keys(obj);
+    if (keys.length > 0) {
+      const firstKey = keys[0];
+      const firstValue = obj[firstKey];
+      if (typeof firstValue === 'string' || typeof firstValue === 'number' || typeof firstValue === 'boolean') {
+        return `${firstKey}: ${truncatePreview(String(firstValue), 30)}`;
+      }
+      return `${keys.length} field${keys.length > 1 ? 's' : ''}`;
+    }
+  }
+
+  // Handle primitives
+  if (typeof data === 'string') {
+    return truncatePreview(data, 50);
+  }
+  if (typeof data === 'number' || typeof data === 'boolean') {
+    return String(data);
+  }
+
+  return '';
+}
+
+/**
+ * Extract a preview from plain text content
+ */
+function extractTextPreview(content: string): string {
+  if (!content) return '';
+
+  // Clean up the content
+  const cleaned = content.trim();
+
+  // If it's a very short message, return it directly
+  if (cleaned.length <= 50) {
+    return cleaned.replace(/\n/g, ' ').trim();
+  }
+
+  // Try to get the first meaningful line
+  const lines = cleaned.split('\n').filter(l => l.trim());
+  if (lines.length > 0) {
+    const firstLine = lines[0].trim();
+    // Skip common prefixes like "Successfully", "Done:", etc.
+    const cleanedLine = firstLine.replace(/^(successfully|done|completed|created|updated|deleted|read|wrote|found|error:?)\s*/i, '');
+    return truncatePreview(cleanedLine || firstLine, 50);
+  }
+
+  return truncatePreview(cleaned, 50);
+}
+
+/**
+ * Truncate a string to a maximum length with ellipsis
+ */
+function truncatePreview(text: string, maxLength: number): string {
+  if (!text) return '';
+  const cleaned = text.replace(/\n/g, ' ').trim();
+  if (cleaned.length <= maxLength) return cleaned;
+  return cleaned.slice(0, maxLength - 3) + '...';
 }
 
 /**

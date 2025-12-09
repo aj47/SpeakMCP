@@ -27,12 +27,13 @@ import { OpenAIClient, ChatMessage, AgentProgressUpdate, AgentProgressStep } fro
 import * as Speech from 'expo-speech';
 import {
   preprocessTextForTTS,
-  COLLAPSE_THRESHOLD,
   COLLAPSED_LINES,
   getRoleIcon,
   shouldCollapseMessage,
   getToolCallsSummary,
   getToolResultsSummary,
+  getExpandCollapseText,
+  formatToolArguments,
 } from '@speakmcp/shared';
 import { useHeaderHeight } from '@react-navigation/elements';
 import { useTheme } from '../ui/ThemeProvider';
@@ -961,7 +962,7 @@ export default function ChatScreen({ route, navigation }: any) {
                       hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                     >
                       <Text style={styles.expandButtonText}>
-                        {isExpanded ? '▲ Collapse' : '▼ Expand'}
+                        {isExpanded ? '▲ ' : '▼ '}{getExpandCollapseText(isExpanded)}
                       </Text>
                     </Pressable>
                   )}
@@ -1003,7 +1004,7 @@ export default function ChatScreen({ route, navigation }: any) {
                                 <Text style={styles.toolParamsLabel}>Parameters:</Text>
                                 <ScrollView horizontal style={styles.toolParamsScroll}>
                                   <Text style={styles.toolParamsCode}>
-                                    {JSON.stringify(toolCall.arguments, null, 2)}
+                                    {formatToolArguments(toolCall.arguments)}
                                   </Text>
                                 </ScrollView>
                               </View>

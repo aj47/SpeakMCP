@@ -12,9 +12,12 @@ import { AudioPlayer } from "@renderer/components/audio-player"
 import { tipcClient } from "@renderer/lib/tipc-client"
 import { useConfigQuery } from "@renderer/lib/queries"
 import {
-  COLLAPSE_THRESHOLD,
   formatRelativeTimestamp,
   shouldCollapseMessage,
+  getExpandCollapseText,
+  formatToolArguments,
+  getToolBadgeText,
+  getRoleConfig,
 } from "@speakmcp/shared"
 
 import { logExpand } from "@renderer/lib/debug"
@@ -251,18 +254,7 @@ function ConversationMessageItem({
 
   }
 
-  const getRoleColor = (role: string) => {
-    switch (role) {
-      case "user":
-        return "bg-blue-500/10 text-blue-600 dark:text-blue-400"
-      case "assistant":
-        return "bg-green-500/10 text-green-600 dark:text-green-400"
-      case "tool":
-        return "bg-orange-500/10 text-orange-600 dark:text-orange-400"
-      default:
-        return "bg-gray-500/10 text-gray-600 dark:text-gray-400"
-    }
-  }
+  const roleConfig = getRoleConfig(message.role)
 
   const shouldCollapse = shouldCollapseMessage(message.content, message.toolCalls, message.toolResults)
 
@@ -278,7 +270,7 @@ function ConversationMessageItem({
         <div
           className={cn(
             "flex h-8 w-8 items-center justify-center rounded-full",
-            getRoleColor(message.role),
+            roleConfig.colorClass,
           )}
         >
           {getRoleIcon(message.role)}
@@ -299,12 +291,12 @@ function ConversationMessageItem({
               <div className="flex items-center gap-1">
                 {message.toolCalls && message.toolCalls.length > 0 && (
                   <Badge variant="outline" className="text-xs">
-                    {message.toolCalls.length} tool call{message.toolCalls.length > 1 ? 's' : ''}
+                    {getToolBadgeText(message.toolCalls.length, 'call')}
                   </Badge>
                 )}
                 {message.toolResults && message.toolResults.length > 0 && (
                   <Badge variant="outline" className="text-xs">
-                    {message.toolResults.length} result{message.toolResults.length > 1 ? 's' : ''}
+                    {getToolBadgeText(message.toolResults.length, 'result')}
                   </Badge>
                 )}
               </div>
@@ -322,7 +314,7 @@ function ConversationMessageItem({
               ) : (
                 <ChevronDown className="h-3 w-3" />
               )}
-              <span className="ml-1">{isExpanded ? "Collapse" : "Expand"}</span>
+              <span className="ml-1">{getExpandCollapseText(isExpanded)}</span>
             </button>
           )}
         </div>
@@ -393,7 +385,7 @@ function ConversationMessageItem({
                       Parameters:
                     </div>
                     <pre className="modern-panel rounded bg-muted/50 p-2 overflow-auto text-xs max-h-80 scrollbar-thin">
-                      {JSON.stringify(toolCall.arguments, null, 2)}
+                      {formatToolArguments(toolCall.arguments)}
                     </pre>
                   </div>
                 )}

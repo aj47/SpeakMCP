@@ -96,6 +96,9 @@ function Navigation() {
           source={isDark ? darkSpinner : lightSpinner}
           style={styles.spinner}
           resizeMode="contain"
+          accessible={true}
+          accessibilityRole="progressbar"
+          accessibilityLabel="Loading application"
         />
         <Text style={[styles.loadingText, { color: theme.colors.mutedForeground }]}>
           Loading...
@@ -120,6 +123,9 @@ function Navigation() {
                   source={speakMCPIcon}
                   style={{ width: 28, height: 28, marginLeft: 12, marginRight: 8 }}
                   resizeMode="contain"
+                  accessible={true}
+                  accessibilityRole="image"
+                  accessibilityLabel="SpeakMCP logo"
                 />
               ),
             }}

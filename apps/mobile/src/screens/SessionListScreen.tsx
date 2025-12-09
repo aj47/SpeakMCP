@@ -45,6 +45,9 @@ export default function SessionListScreen({ navigation }: Props) {
           source={isDark ? darkSpinner : lightSpinner}
           style={styles.spinner}
           resizeMode="contain"
+          accessible={true}
+          accessibilityRole="progressbar"
+          accessibilityLabel="Loading chats"
         />
         <Text style={styles.loadingText}>Loading chats...</Text>
       </View>

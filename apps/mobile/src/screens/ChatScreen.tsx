@@ -1098,7 +1098,14 @@ export default function ChatScreen({ route, navigation }: any) {
           {/* Connection recovery status banner */}
           {connectionState && connectionState.status === 'reconnecting' && (
             <View style={styles.connectionBanner}>
-              <ActivityIndicator size="small" color="#f59e0b" style={{ marginRight: spacing.sm }} />
+              <ActivityIndicator
+                size="small"
+                color="#f59e0b"
+                style={{ marginRight: spacing.sm }}
+                accessible={true}
+                accessibilityRole="progressbar"
+                accessibilityLabel="Reconnecting"
+              />
               <Text style={styles.connectionBannerText}>
                 {formatConnectionStatus(connectionState)}
               </Text>
@@ -1128,6 +1135,9 @@ export default function ChatScreen({ route, navigation }: any) {
             style={[styles.ttsToggle, ttsEnabled && styles.ttsToggleOn]}
             onPress={toggleTts}
             activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel={`Text-to-speech ${ttsEnabled ? 'enabled' : 'disabled'}`}
+            accessibilityHint="Double tap to toggle text-to-speech"
           >
             <Text style={styles.ttsToggleText}>{ttsEnabled ? '🔊' : '🔇'}</Text>
           </TouchableOpacity>
@@ -1137,6 +1147,9 @@ export default function ChatScreen({ route, navigation }: any) {
               style={[styles.mic, listening && styles.micOn]}
               activeOpacity={0.7}
               delayPressIn={0}
+              accessibilityRole="button"
+              accessibilityLabel={listening ? 'Stop recording' : (handsFree ? 'Start recording' : 'Hold to record')}
+              accessibilityHint={handsFree ? 'Double tap to toggle recording' : 'Press and hold to record voice input'}
               onPressIn={!handsFree ? (e: GestureResponderEvent) => {
                 lastGrantTimeRef.current = Date.now();
                 if (!listening) startRecording(e);

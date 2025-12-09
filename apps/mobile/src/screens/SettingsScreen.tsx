@@ -110,6 +110,9 @@ export default function SettingsScreen({ navigation }: any) {
                 themeMode === option.value && styles.themeOptionActive,
               ]}
               onPress={() => setThemeMode(option.value)}
+              accessibilityRole="button"
+              accessibilityLabel={`${option.label} theme`}
+              accessibilityState={{ selected: themeMode === option.value }}
             >
               <Text style={[
                 styles.themeOptionText,

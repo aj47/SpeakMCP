@@ -243,33 +243,25 @@ export default function ChatScreen({ route, navigation }: any) {
   const [liveTranscript, setLiveTranscript] = useState('');
   const [debugInfo, setDebugInfo] = useState<string>('');
 
-  // Track the last loaded session ID to detect session changes
   const lastLoadedSessionIdRef = useRef<string | null>(null);
 
-  // Load messages when currentSessionId changes (fixes #470 - session jumping issue)
-  // This effect runs whenever the currentSessionId changes, ensuring the correct
-  // session's messages are loaded when switching between sessions
+  // Load messages when currentSessionId changes (fixes #470)
   useEffect(() => {
     const currentSessionId = sessionStore.currentSessionId;
 
-    // Skip if we've already loaded this session
     if (lastLoadedSessionIdRef.current === currentSessionId) {
       return;
     }
 
     let currentSession = sessionStore.getCurrentSession();
 
-    // If no current session, create one
     if (!currentSession) {
       currentSession = sessionStore.createNewSession();
     }
 
-    // Update the last loaded session ID
     lastLoadedSessionIdRef.current = currentSession.id;
 
-    // Load messages if session has any, otherwise clear messages for a new/empty session
     if (currentSession.messages.length > 0) {
-      // Convert session messages to ChatMessage format
       const chatMessages: ChatMessage[] = currentSession.messages.map(m => ({
         role: m.role,
         content: m.content,
@@ -278,35 +270,30 @@ export default function ChatScreen({ route, navigation }: any) {
       }));
       setMessages(chatMessages);
     } else {
-      // Clear messages for new/empty sessions
       setMessages([]);
     }
   }, [sessionStore.currentSessionId, sessionStore]);
 
-  // Save messages to session when they change (but not during session switching)
+  // Save messages to session when they change
   const prevMessagesLengthRef = useRef(0);
   const prevSessionIdRef = useRef<string | null>(null);
   useEffect(() => {
     const currentSessionId = sessionStore.currentSessionId;
 
-    // Don't save during session switches - only save when messages change within the same session
     const isSessionSwitch = prevSessionIdRef.current !== null && prevSessionIdRef.current !== currentSessionId;
     prevSessionIdRef.current = currentSessionId;
 
     if (isSessionSwitch) {
-      // Reset the message count tracking for the new session
       prevMessagesLengthRef.current = messages.length;
       return;
     }
 
-    // Only save if messages have actually changed (not on initial load)
     if (messages.length > 0 && messages.length !== prevMessagesLengthRef.current) {
       sessionStore.setMessages(messages);
     }
     prevMessagesLengthRef.current = messages.length;
   }, [messages, sessionStore, sessionStore.currentSessionId]);
 
-  // Track expanded state for messages (by index)
   const [expandedMessages, setExpandedMessages] = useState<Record<number, boolean>>({});
   const toggleMessageExpansion = useCallback((index: number) => {
     setExpandedMessages(prev => ({ ...prev, [index]: !prev[index] }));
@@ -315,10 +302,8 @@ export default function ChatScreen({ route, navigation }: any) {
   const [willCancel, setWillCancel] = useState(false);
   const startYRef = useRef<number | null>(null);
 
-  // Track if native speech recognition is unavailable (shown once per session)
   const nativeSRUnavailableShownRef = useRef(false);
 
-  // Web fallback state/refs
   const webRecognitionRef = useRef<any>(null);
   const webFinalRef = useRef<string>('');
   const liveTranscriptRef = useRef<string>('');
@@ -326,23 +311,17 @@ export default function ChatScreen({ route, navigation }: any) {
   useEffect(() => { liveTranscriptRef.current = liveTranscript; }, [liveTranscript]);
   useEffect(() => { willCancelRef.current = willCancel; }, [willCancel]);
 
-  // Debounce/guard and timing refs for voice interaction
   const startingRef = useRef(false);
   const stoppingRef = useRef(false);
   const lastGrantTimeRef = useRef(0);
   const minHoldMs = 200;
 
-  // Track if user has explicitly released the button (for hold-to-speak mode)
-  // This ensures we only submit on button release, not on voice breaks/pauses
   const userReleasedButtonRef = useRef(false);
 
-  // Hands-free mode: debounce timeout for auto-submission
-  // This gives users more time to finish speaking before auto-submitting
-  const handsFreeDebounceMs = 1500; // 1.5 seconds delay after final result before auto-submit
+  const handsFreeDebounceMs = 1500;
   const handsFreeDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingHandsFreeFinalRef = useRef<string>('');
 
-  // Native SR event handling (lazy-loaded to avoid Expo Go crash)
   const srEmitterRef = useRef<any>(null);
   const srSubsRef = useRef<any[]>([]);
   const nativeFinalRef = useRef<string>('');
@@ -350,7 +329,6 @@ export default function ChatScreen({ route, navigation }: any) {
     srSubsRef.current.forEach((sub) => sub?.remove?.());
     srSubsRef.current = [];
   };
-  // Cleanup native subscriptions and hands-free debounce on unmount
   useEffect(() => {
     return () => {
       cleanupNativeSubs();
@@ -363,16 +341,11 @@ export default function ChatScreen({ route, navigation }: any) {
 
   const convoRef = useRef<string | undefined>(undefined);
 
-  /**
-   * Convert agent progress steps to display messages in real-time
-   */
   const convertProgressToMessages = useCallback((update: AgentProgressUpdate): ChatMessage[] => {
     const messages: ChatMessage[] = [];
     console.log('[convertProgressToMessages] Processing update, steps:', update.steps?.length || 0, 'history:', update.conversationHistory?.length || 0, 'isComplete:', update.isComplete);
 
-    // First, try to use steps array (sent in progress events)
     if (update.steps && update.steps.length > 0) {
-      // Group steps into messages - each thinking/tool_call/tool_result becomes part of the conversation
       let currentToolCalls: any[] = [];
       let currentToolResults: any[] = [];
       let thinkingContent = '';
@@ -382,23 +355,19 @@ export default function ChatScreen({ route, navigation }: any) {
         if (step.type === 'thinking' && stepContent) {
           thinkingContent = stepContent;
         } else if (step.type === 'tool_call') {
-          // Tool call step - extract both toolCall and toolResult if present
           if (step.toolCall) {
             currentToolCalls.push(step.toolCall);
           }
-          // Some tool_call steps also have toolResult when completed
           if (step.toolResult) {
             currentToolResults.push(step.toolResult);
           }
         } else if (step.type === 'tool_result' && step.toolResult) {
           currentToolResults.push(step.toolResult);
         } else if (step.type === 'completion' && stepContent) {
-          // Final completion content
           thinkingContent = stepContent;
         }
       }
 
-      // Create a message showing current agent activity
       if (currentToolCalls.length > 0 || currentToolResults.length > 0 || thinkingContent) {
         messages.push({
           role: 'assistant',
@@ -409,9 +378,7 @@ export default function ChatScreen({ route, navigation }: any) {
       }
     }
 
-    // Also process conversation history if available (more complete data)
     if (update.conversationHistory && update.conversationHistory.length > 0) {
-      // Find the latest user message index to determine where current turn starts
       let currentTurnStartIndex = 0;
       for (let i = 0; i < update.conversationHistory.length; i++) {
         if (update.conversationHistory[i].role === 'user') {
@@ -419,14 +386,10 @@ export default function ChatScreen({ route, navigation }: any) {
         }
       }
 
-      // Only use conversation history if it has messages beyond the user message
-      // Otherwise, keep the steps-based messages which have real-time tool call data
       const hasAssistantMessages = currentTurnStartIndex + 1 < update.conversationHistory.length;
       if (hasAssistantMessages) {
-        // Clear steps-based messages and use conversation history instead
         messages.length = 0;
 
-        // Add messages from the current turn (skip the user message)
         for (let i = currentTurnStartIndex + 1; i < update.conversationHistory.length; i++) {
           const historyMsg = update.conversationHistory[i];
           messages.push({
@@ -439,7 +402,6 @@ export default function ChatScreen({ route, navigation }: any) {
       }
     }
 
-    // If we have streaming content, add or update the last assistant message
     if (update.streamingContent?.text) {
       if (messages.length > 0 && messages[messages.length - 1].role === 'assistant') {
         messages[messages.length - 1].content = update.streamingContent.text;
@@ -462,12 +424,10 @@ export default function ChatScreen({ route, navigation }: any) {
     setDebugInfo(`Starting request to ${config.baseUrl}...`);
 
     const userMsg: ChatMessage = { role: 'user', content: text };
-    // Track the number of messages BEFORE this turn to avoid duplicates
     const messageCountBeforeTurn = messages.length;
     setMessages((m) => [...m, userMsg, { role: 'assistant', content: 'Assistant is thinking...' }]);
     setResponding(true);
 
-    // Get the server-side conversation ID from the current session for follow-up messages
     const currentSession = sessionStore.getCurrentSession();
     const serverConversationId = currentSession?.serverConversationId;
 
@@ -480,18 +440,14 @@ export default function ChatScreen({ route, navigation }: any) {
     try {
       let streamingText = '';
 
-      // Get server conversation ID for continuing existing conversations (fixes #501)
       const serverConversationId = sessionStore.getServerConversationId();
       console.log('[ChatScreen] Starting chat request with', messages.length + 1, 'messages, conversationId:', serverConversationId || 'new');
       setDebugInfo('Request sent, waiting for response...');
 
-      // Handle real-time progress updates
       const onProgress = (update: AgentProgressUpdate) => {
-        // Convert progress to messages and update UI in real-time
         const progressMessages = convertProgressToMessages(update);
         if (progressMessages.length > 0) {
           setMessages((m) => {
-            // Keep messages up to and including the user message
             const beforePlaceholder = m.slice(0, messageCountBeforeTurn + 1);
             const newMessages = [...beforePlaceholder, ...progressMessages];
             return newMessages;
@@ -499,13 +455,11 @@ export default function ChatScreen({ route, navigation }: any) {
         }
       };
 
-      // Handle streaming text tokens
       const onToken = (tok: string) => {
         streamingText += tok;
 
         setMessages((m) => {
           const copy = [...m];
-          // Update the last assistant message incrementally
           for (let i = copy.length - 1; i >= 0; i--) {
             if (copy[i].role === 'assistant') {
               copy[i] = { ...copy[i], content: streamingText };
@@ -516,23 +470,19 @@ export default function ChatScreen({ route, navigation }: any) {
         });
       };
 
-      // Pass serverConversationId to continue the same conversation on the server (fixes #501)
       const response = await client.chat([...messages, userMsg], onToken, onProgress, serverConversationId);
       const finalText = response.content || streamingText;
       console.log('[ChatScreen] Chat completed, conversationId:', response.conversationId);
       setDebugInfo(`Completed!`);
 
-      // Store the server conversation ID for follow-up messages (fixes #501)
       if (response.conversationId) {
         await sessionStore.setServerConversationId(response.conversationId);
       }
 
-      // Process conversation history to extract tool calls and results
       if (response.conversationHistory && response.conversationHistory.length > 0) {
         console.log('[ChatScreen] Processing final conversationHistory:', response.conversationHistory.length, 'messages');
         console.log('[ChatScreen] ConversationHistory roles:', response.conversationHistory.map(m => m.role).join(', '));
 
-        // Find where the current turn starts in the conversation history
         let currentTurnStartIndex = 0;
         for (let i = 0; i < response.conversationHistory.length; i++) {
           if (response.conversationHistory[i].role === 'user') {
@@ -541,14 +491,11 @@ export default function ChatScreen({ route, navigation }: any) {
         }
         console.log('[ChatScreen] currentTurnStartIndex:', currentTurnStartIndex);
 
-        // Build new messages only from the current turn (from user message onward)
         const newMessages: ChatMessage[] = [];
         for (let i = currentTurnStartIndex; i < response.conversationHistory.length; i++) {
           const historyMsg = response.conversationHistory[i];
-          // Skip the user message (we already have it)
           if (historyMsg.role === 'user') continue;
 
-          // Add assistant or tool messages with their tool data
           newMessages.push({
             role: historyMsg.role === 'tool' ? 'assistant' : historyMsg.role,
             content: historyMsg.content || '',
@@ -560,7 +507,6 @@ export default function ChatScreen({ route, navigation }: any) {
         console.log('[ChatScreen] newMessages roles:', newMessages.map(m => `${m.role}(toolCalls:${m.toolCalls?.length || 0},toolResults:${m.toolResults?.length || 0})`).join(', '));
         console.log('[ChatScreen] messageCountBeforeTurn:', messageCountBeforeTurn);
 
-        // Replace only the placeholder with the new messages from this turn
         setMessages((m) => {
           console.log('[ChatScreen] Current messages before update:', m.length);
           const beforePlaceholder = m.slice(0, messageCountBeforeTurn + 1);
@@ -570,7 +516,6 @@ export default function ChatScreen({ route, navigation }: any) {
           return result;
         });
       } else if (finalText) {
-        // Fallback: just update the assistant message content
         console.log('[ChatScreen] FALLBACK: No conversationHistory, using finalText only. response.conversationHistory:', response.conversationHistory);
         setMessages((m) => {
           const copy = [...m];
@@ -586,16 +531,12 @@ export default function ChatScreen({ route, navigation }: any) {
         console.log('[ChatScreen] WARNING: No conversationHistory and no finalText!');
       }
 
-      // Save the server conversation ID for follow-up messages
-      // This enables continuing the same conversation on subsequent requests
       if (response.conversationId) {
         console.log('[ChatScreen] Saving server conversation ID:', response.conversationId);
         sessionStore.setServerConversationId(response.conversationId);
       }
 
-      // Only speak the final response if TTS is enabled (default: true for backward compat)
       if (finalText && config.ttsEnabled !== false) {
-        // Preprocess text for natural TTS output (same as desktop app)
         const processedText = preprocessTextForTTS(finalText);
         Speech.speak(processedText, { language: 'en-US' });
       }
@@ -607,7 +548,6 @@ export default function ChatScreen({ route, navigation }: any) {
         name: e.name
       });
 
-      // Check if we have connection recovery info
       const recoveryState = connectionState;
       let errorMessage = e.message;
 
@@ -622,14 +562,11 @@ export default function ChatScreen({ route, navigation }: any) {
     } finally {
       console.log('[ChatScreen] Chat request finished');
       setResponding(false);
-      setConnectionState(null); // Clear connection state after request
-      setTimeout(() => setDebugInfo(''), 5000); // Clear debug info after 5 seconds (longer for errors)
+      setConnectionState(null);
+      setTimeout(() => setDebugInfo(''), 5000);
     }
   };
 
-  // Real-time speech results (web handled in ensureWebRecognizer; native listeners are attached on start)
-
-  // Ensure Web Speech API recognizer exists and is wired
   const ensureWebRecognizer = () => {
     if (Platform.OS !== 'web') return false;
     // @ts-ignore
@@ -642,7 +579,6 @@ export default function ChatScreen({ route, navigation }: any) {
       const rec = new SRClass();
       rec.lang = 'en-US';
       rec.interimResults = true;
-      // Always use continuous mode to prevent premature endings on silence
       rec.continuous = true;
       rec.onstart = () => {};
       rec.onerror = (ev: any) => {
@@ -660,17 +596,14 @@ export default function ChatScreen({ route, navigation }: any) {
         if (interim) setLiveTranscript(interim);
         if (finalText) {
           if (handsFreeRef.current) {
-            // Hands-free mode: debounce auto-submission to give user more time
             if (handsFreeDebounceRef.current) {
               clearTimeout(handsFreeDebounceRef.current);
             }
             const final = finalText.trim();
             if (final) {
-              // Accumulate final text
               pendingHandsFreeFinalRef.current = pendingHandsFreeFinalRef.current
                 ? `${pendingHandsFreeFinalRef.current} ${final}`
                 : final;
-              // Set debounce timeout
               handsFreeDebounceRef.current = setTimeout(() => {
                 const toSend = pendingHandsFreeFinalRef.current.trim();
                 pendingHandsFreeFinalRef.current = '';
@@ -680,34 +613,24 @@ export default function ChatScreen({ route, navigation }: any) {
               }, handsFreeDebounceMs);
             }
           } else {
-            // Hold-to-speak: accumulate, will send on button release
             webFinalRef.current += finalText;
           }
         }
       };
       rec.onend = () => {
-        // Clear any pending hands-free debounce and send accumulated text
         if (handsFreeDebounceRef.current) {
           clearTimeout(handsFreeDebounceRef.current);
           handsFreeDebounceRef.current = null;
         }
 
-        // For hold-to-speak mode: only submit if user explicitly released the button
-        // If the recognizer ended on its own (voice break/pause), restart it
         if (!handsFreeRef.current && !userReleasedButtonRef.current && webRecognitionRef.current) {
-          // Speech recognizer ended prematurely (voice break/pause)
-          // Restart recognition to continue listening while user holds button
           try {
             webRecognitionRef.current.start();
-            // Keep listening state true and don't reset accumulated text
             return;
           } catch (restartErr) {
             console.warn('[Voice] Failed to restart web recognition after voice break:', restartErr);
-            // On restart failure, stop gracefully without submitting
-            // This maintains the "only submit on button release" guarantee
             setListening(false);
             setLiveTranscript('');
-            // Place accumulated text in input field so user doesn't lose it
             const accumulatedText = (webFinalRef.current || '').trim() || (liveTranscriptRef.current || '').trim();
             if (accumulatedText) {
               setInput((t) => (t ? `${t} ${accumulatedText}` : accumulatedText));
@@ -727,7 +650,6 @@ export default function ChatScreen({ route, navigation }: any) {
           if (willEdit) setInput((t) => (t ? `${t} ${finalText}` : finalText));
           else send(finalText);
         } else if (handsFreeRef.current && finalText) {
-          // Send any accumulated hands-free text that was pending
           send(finalText);
         }
         webFinalRef.current = '';
@@ -736,8 +658,6 @@ export default function ChatScreen({ route, navigation }: any) {
     }
     return true;
   };
-
-  // Native 'end' event handled via lazy listener; web handled in ensureWebRecognizer onend
 
   const startRecording = async (e?: GestureResponderEvent) => {
     if (startingRef.current || listening) {
@@ -750,21 +670,17 @@ export default function ChatScreen({ route, navigation }: any) {
       setListening(true);
       nativeFinalRef.current = '';
       pendingHandsFreeFinalRef.current = '';
-      // Reset user-released flag for hold-to-speak mode
       userReleasedButtonRef.current = false;
-      // Clear any pending hands-free debounce from previous session
       if (handsFreeDebounceRef.current) {
         clearTimeout(handsFreeDebounceRef.current);
         handsFreeDebounceRef.current = null;
       }
       if (e) startYRef.current = e.nativeEvent.pageY;
 
-      // Try native first via dynamic import (avoids Expo Go crash when module is unavailable)
       if (Platform.OS !== 'web') {
         try {
           const SR: any = await import('expo-speech-recognition');
           if (SR?.ExpoSpeechRecognitionModule?.start) {
-            // Attach listeners
             if (!srEmitterRef.current) {
               srEmitterRef.current = new EventEmitter(SR.ExpoSpeechRecognitionModule);
             }
@@ -774,18 +690,14 @@ export default function ChatScreen({ route, navigation }: any) {
               if (t) setLiveTranscript(t);
               if (event?.isFinal && t) {
                 if (handsFreeRef.current) {
-                  // Hands-free mode: debounce auto-submission to give user more time
-                  // Clear any pending timeout and accumulate the final text
                   if (handsFreeDebounceRef.current) {
                     clearTimeout(handsFreeDebounceRef.current);
                   }
                   const final = t.trim();
                   if (final) {
-                    // Accumulate final text (speech might come in chunks)
                     pendingHandsFreeFinalRef.current = pendingHandsFreeFinalRef.current
                       ? `${pendingHandsFreeFinalRef.current} ${final}`
                       : final;
-                    // Set debounce timeout - only send after user stops speaking for handsFreeDebounceMs
                     handsFreeDebounceRef.current = setTimeout(() => {
                       const toSend = pendingHandsFreeFinalRef.current.trim();
                       pendingHandsFreeFinalRef.current = '';
@@ -795,7 +707,6 @@ export default function ChatScreen({ route, navigation }: any) {
                     }, handsFreeDebounceMs);
                   }
                 } else {
-                  // Hold-to-speak: just accumulate, will send on button release
                   nativeFinalRef.current = nativeFinalRef.current
                     ? `${nativeFinalRef.current} ${t}`
                     : t;
@@ -806,17 +717,12 @@ export default function ChatScreen({ route, navigation }: any) {
               console.error('[Voice] Native recognition error:', JSON.stringify(event));
             });
             const subEnd = srEmitterRef.current.addListener('end', async () => {
-              // Clear any pending hands-free debounce
               if (handsFreeDebounceRef.current) {
                 clearTimeout(handsFreeDebounceRef.current);
                 handsFreeDebounceRef.current = null;
               }
 
-              // For hold-to-speak mode: only submit if user explicitly released the button
-              // If the recognizer ended on its own (voice break/pause), restart it
               if (!handsFreeRef.current && !userReleasedButtonRef.current) {
-                // Speech recognizer ended prematurely (voice break/pause)
-                // Restart recognition to continue listening while user holds button
                 try {
                   const SR: any = await import('expo-speech-recognition');
                   if (SR?.ExpoSpeechRecognitionModule?.start) {
@@ -826,16 +732,12 @@ export default function ChatScreen({ route, navigation }: any) {
                       continuous: true,
                       volumeChangeEventOptions: { enabled: false, intervalMillis: 250 }
                     });
-                    // Keep listening state true and don't reset accumulated text
                     return;
                   }
                 } catch (restartErr) {
                   console.warn('[Voice] Failed to restart recognition after voice break:', restartErr);
-                  // On restart failure, stop gracefully without submitting
-                  // This maintains the "only submit on button release" guarantee
                   setListening(false);
                   setLiveTranscript('');
-                  // Place accumulated text in input field so user doesn't lose it
                   const accumulatedText = (nativeFinalRef.current || '').trim() || (liveTranscriptRef.current || '').trim();
                   if (accumulatedText) {
                     setInput((t) => (t ? `${t} ${accumulatedText}` : accumulatedText));
@@ -847,7 +749,6 @@ export default function ChatScreen({ route, navigation }: any) {
               }
 
               setListening(false);
-              // Include pending hands-free text in finalText
               const finalText = (pendingHandsFreeFinalRef.current || nativeFinalRef.current || liveTranscriptRef.current || '').trim();
               pendingHandsFreeFinalRef.current = '';
               setLiveTranscript('');
@@ -856,14 +757,12 @@ export default function ChatScreen({ route, navigation }: any) {
                 if (willEdit) setInput((t) => (t ? `${t} ${finalText}` : finalText));
                 else send(finalText);
               } else if (handsFreeRef.current && finalText) {
-                // Send any accumulated hands-free text that was pending
                 send(finalText);
               }
               nativeFinalRef.current = '';
             });
             srSubsRef.current.push(subResult, subError, subEnd);
 
-            // Permissions flow
             try {
               const perm = await SR.ExpoSpeechRecognitionModule.getPermissionsAsync();
               if (!perm?.granted) {
@@ -879,15 +778,11 @@ export default function ChatScreen({ route, navigation }: any) {
               console.error('[Voice] Permission check/request failed:', perr);
             }
 
-            // Start recognition
-            // Always use continuous: true so recognition doesn't auto-end on silence
-            // For hold-to-speak: user explicitly stops via button release
-            // For hands-free: we control when to send via debounce
             try {
               SR.ExpoSpeechRecognitionModule.start({
                 lang: 'en-US',
                 interimResults: true,
-                continuous: true, // Always continuous to prevent premature endings
+                continuous: true,
                 volumeChangeEventOptions: { enabled: handsFreeRef.current, intervalMillis: 250 }
               });
             } catch (serr) {
@@ -901,7 +796,6 @@ export default function ChatScreen({ route, navigation }: any) {
           const errorMsg = (err as any)?.message || String(err);
           console.warn('[Voice] Native SR unavailable (likely Expo Go):', errorMsg);
 
-          // Show alert once per session if native module is missing
           if (!nativeSRUnavailableShownRef.current && errorMsg.includes('ExpoSpeechRecognition')) {
             nativeSRUnavailableShownRef.current = true;
             setListening(false);
@@ -916,13 +810,11 @@ export default function ChatScreen({ route, navigation }: any) {
         }
       }
 
-      // Web fallback
       if (ensureWebRecognizer()) {
         try {
           webFinalRef.current = '';
           pendingHandsFreeFinalRef.current = '';
           if (webRecognitionRef.current) {
-            // Always continuous to prevent premature endings
             try { webRecognitionRef.current.continuous = true; } catch {}
           }
           webRecognitionRef.current?.start();
@@ -948,11 +840,8 @@ export default function ChatScreen({ route, navigation }: any) {
       return;
     }
     stoppingRef.current = true;
-    // Mark that user explicitly released the button (for hold-to-speak mode)
-    // This ensures the 'end' event handler knows to submit the message
     userReleasedButtonRef.current = true;
     try {
-      // If nothing is recording, ignore
       const hasWeb = Platform.OS === 'web' && webRecognitionRef.current;
       if (!listening && !hasWeb) {
         return;
@@ -963,7 +852,6 @@ export default function ChatScreen({ route, navigation }: any) {
           const SR: any = await import('expo-speech-recognition');
           if (SR?.ExpoSpeechRecognitionModule?.stop) {
             SR.ExpoSpeechRecognitionModule.stop();
-            // Finalization handled in 'end' listener
           }
         } catch (err) {
           console.warn('[Voice] Native stop unavailable (likely Expo Go):', (err as any)?.message || err);
@@ -973,7 +861,6 @@ export default function ChatScreen({ route, navigation }: any) {
       if (Platform.OS === 'web' && webRecognitionRef.current) {
         try {
           webRecognitionRef.current.stop();
-          // onend will finalize
         } catch (err) {
           console.error('[Voice] Web stop error:', err);
           setListening(false);
@@ -1008,13 +895,11 @@ export default function ChatScreen({ route, navigation }: any) {
             const isExpanded = expandedMessages[i] ?? false;
             const roleIcon = getRoleIcon(m.role as 'user' | 'assistant' | 'tool');
 
-            // Get status for tool results
             const hasToolResults = (m.toolResults?.length ?? 0) > 0;
             const allSuccess = hasToolResults && m.toolResults!.every(r => r.success);
             const hasErrors = hasToolResults && m.toolResults!.some(r => !r.success);
             const isPending = (m.toolCalls?.length ?? 0) > 0 && !hasToolResults;
 
-            // Generate preview for collapsed tool calls
             const toolPreview = !isExpanded && m.toolCalls && m.toolCalls.length > 0 && m.toolCalls[0]?.arguments
               ? formatArgumentsPreview(m.toolCalls[0].arguments)
               : null;
@@ -1029,11 +914,9 @@ export default function ChatScreen({ route, navigation }: any) {
                   shouldCollapse && !isExpanded && pressed && styles.msgPressed,
                 ]}
               >
-                {/* Header row with role icon and expand/collapse button */}
                 <View style={styles.messageHeader}>
                   <Text style={styles.roleIcon}>{roleIcon}</Text>
                   <Text style={styles.role}>{m.role}</Text>
-                  {/* Tool count badge with status */}
                   {(m.toolCalls?.length ?? 0) > 0 && (
                     <View style={[
                       styles.toolBadgeSmall,

@@ -92,7 +92,6 @@ export function getToolResultsSummary(toolResults: ToolResult[]): string {
   const icon = allSuccess ? '✅' : '⚠️';
   const count = toolResults.length;
 
-  // For single result, try to extract a meaningful preview
   if (count === 1) {
     const preview = generateToolResultPreview(toolResults[0]);
     if (preview) {
@@ -100,11 +99,10 @@ export function getToolResultsSummary(toolResults: ToolResult[]): string {
     }
   }
 
-  // For multiple results, show count and combined previews
   const previews = toolResults
     .map(r => generateToolResultPreview(r))
     .filter(Boolean)
-    .slice(0, 2); // Show up to 2 previews
+    .slice(0, 2);
 
   if (previews.length > 0) {
     const suffix = count > previews.length ? ` (+${count - previews.length} more)` : '';
@@ -116,14 +114,12 @@ export function getToolResultsSummary(toolResults: ToolResult[]): string {
 
 /**
  * Generate a preview string for a single tool result.
- * Tries to extract meaningful information from the content.
  * @param result Tool result to preview
  * @returns A short preview string or empty string if no meaningful preview
  */
 export function generateToolResultPreview(result: ToolResult): string {
   if (!result) return '';
 
-  // Handle errors
   if (!result.success) {
     const errorText = result.error || result.content || 'Error';
     return truncatePreview(errorText, 40);
@@ -132,12 +128,10 @@ export function generateToolResultPreview(result: ToolResult): string {
   const content = result.content || '';
   if (!content) return '';
 
-  // Try to parse as JSON for structured data
   try {
     const parsed = JSON.parse(content);
     return extractJsonPreview(parsed);
   } catch {
-    // Not JSON, treat as plain text
     return extractTextPreview(content);
   }
 }
@@ -148,7 +142,6 @@ export function generateToolResultPreview(result: ToolResult): string {
 function extractJsonPreview(data: unknown): string {
   if (data === null || data === undefined) return '';
 
-  // Handle arrays
   if (Array.isArray(data)) {
     const len = data.length;
     if (len === 0) return 'empty list';
@@ -156,7 +149,6 @@ function extractJsonPreview(data: unknown): string {
     const firstItem = data[0];
     if (typeof firstItem === 'object' && firstItem !== null) {
       const item = firstItem as Record<string, unknown>;
-      // Helper to safely extract string values
       const getString = (value: unknown): string | null => {
         return typeof value === 'string' ? value : null;
       };
@@ -168,13 +160,10 @@ function extractJsonPreview(data: unknown): string {
     return `${len} item${len > 1 ? 's' : ''}`;
   }
 
-  // Handle objects
   if (typeof data === 'object') {
     const obj = data as Record<string, unknown>;
 
-    // Look for common result patterns
     if ('success' in obj && typeof obj.success === 'boolean') {
-      // Result object with success indicator
       if ('message' in obj && typeof obj.message === 'string') {
         return truncatePreview(obj.message, 50);
       }
@@ -183,28 +172,23 @@ function extractJsonPreview(data: unknown): string {
       }
     }
 
-    // Look for file operation results
     if ('path' in obj || 'file' in obj || 'filename' in obj) {
       const path = obj.path || obj.file || obj.filename;
       return truncatePreview(String(path), 40);
     }
 
-    // Look for content results
     if ('content' in obj && typeof obj.content === 'string') {
       return truncatePreview(obj.content, 50);
     }
 
-    // Look for data results
     if ('data' in obj) {
       return extractJsonPreview(obj.data);
     }
 
-    // Look for count results
     if ('count' in obj && typeof obj.count === 'number') {
       return `${obj.count} item${obj.count !== 1 ? 's' : ''}`;
     }
 
-    // Look for items/results arrays
     if ('items' in obj && Array.isArray(obj.items)) {
       return extractJsonPreview(obj.items);
     }
@@ -212,7 +196,6 @@ function extractJsonPreview(data: unknown): string {
       return extractJsonPreview(obj.results);
     }
 
-    // Fallback: show first key-value pair
     const keys = Object.keys(obj);
     if (keys.length > 0) {
       const firstKey = keys[0];
@@ -224,7 +207,6 @@ function extractJsonPreview(data: unknown): string {
     }
   }
 
-  // Handle primitives
   if (typeof data === 'string') {
     return truncatePreview(data, 50);
   }
@@ -241,19 +223,15 @@ function extractJsonPreview(data: unknown): string {
 function extractTextPreview(content: string): string {
   if (!content) return '';
 
-  // Clean up the content
   const cleaned = content.trim();
 
-  // If it's a very short message, return it directly
   if (cleaned.length <= 50) {
     return cleaned.replace(/\n/g, ' ').trim();
   }
 
-  // Try to get the first meaningful line
   const lines = cleaned.split('\n').filter(l => l.trim());
   if (lines.length > 0) {
     const firstLine = lines[0].trim();
-    // Skip common prefixes like "Successfully", "Done:", etc.
     const cleanedLine = firstLine.replace(/^(successfully|done|completed|created|updated|deleted|read|wrote|found|error:?)\s*/i, '');
     return truncatePreview(cleanedLine || firstLine, 50);
   }
@@ -362,7 +340,6 @@ export function formatArgumentsPreview(args: unknown): string {
   const entries = Object.entries(args as Record<string, unknown>);
   if (entries.length === 0) return '';
 
-  // Take first 3 key parameters
   const preview = entries.slice(0, 3).map(([key, value]) => {
     let displayValue: string;
     if (typeof value === 'string') {

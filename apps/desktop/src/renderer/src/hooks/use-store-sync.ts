@@ -55,7 +55,7 @@ export function useStoreSync() {
   }, [clearAllProgress])
 
   useEffect(() => {
-    const unlisten = (rendererHandlers as any).clearAgentSessionProgress?.listen?.(
+    const unlisten = rendererHandlers.clearAgentSessionProgress.listen(
       (sessionId: string) => {
         logUI('[useStoreSync] Clearing agent progress for session:', sessionId)
         clearSessionProgress(sessionId)
@@ -65,7 +65,7 @@ export function useStoreSync() {
   }, [clearSessionProgress])
 
   useEffect(() => {
-    const unlisten = (rendererHandlers as any).clearInactiveSessions?.listen?.(
+    const unlisten = rendererHandlers.clearInactiveSessions.listen(
       () => {
         logUI('[useStoreSync] Clearing all inactive sessions')
         clearInactiveSessions()
@@ -75,12 +75,10 @@ export function useStoreSync() {
   }, [clearInactiveSessions])
 
   useEffect(() => {
-    const unlisten = (rendererHandlers as any).focusAgentSession?.listen?.(
+    const unlisten = rendererHandlers.focusAgentSession.listen(
       (sessionId: string) => {
         logUI('[useStoreSync] External focusAgentSession received:', sessionId)
         setFocusedSessionId(sessionId)
-        // Clear any pending scroll target to avoid scrolling to a stale session
-        // when a new agent is spawned (fixes #448)
         setScrollToSessionId(null)
       }
     )

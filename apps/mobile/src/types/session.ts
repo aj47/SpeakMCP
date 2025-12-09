@@ -1,8 +1,3 @@
-/**
- * Session and Chat Types for Mobile App
- * Uses shared types from @speakmcp/shared for consistency with desktop
- */
-
 import type { ToolCall, ToolResult } from '@speakmcp/shared';
 
 export interface ChatMessage {

@@ -81,7 +81,9 @@ export class ConversationService {
 
       // Save updated index
       fs.writeFileSync(indexPath, JSON.stringify(index, null, 2))
-    } catch (error) {}
+    } catch (error) {
+      // Index update is best-effort; conversation is already saved
+    }
   }
 
   private generatePreview(messages: ConversationMessage[]): string {

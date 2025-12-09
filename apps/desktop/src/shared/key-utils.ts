@@ -53,25 +53,19 @@ export function matchesKeyCombo(
 
   const parsed = parseKeyCombo(combo)
 
-  // Check modifiers
   if (parsed.ctrl !== modifiers.ctrl) return false
   if (parsed.shift !== modifiers.shift) return false
   if (parsed.alt !== modifiers.alt) return false
   if (parsed.meta !== (modifiers.meta || false)) return false
 
-  // Check the main key
   if (!parsed.key) return false
 
-  // Convert event key to our internal format
   let eventKey = event.key.toLowerCase()
 
-  // Handle special key mappings from Rust rdev format
   if (eventKey.startsWith("key")) {
-    // Convert "KeyT" to "t", "KeyA" to "a", etc.
     eventKey = eventKey.substring(3).toLowerCase()
   }
 
-  // Handle special keys
   const keyMappings: Record<string, string> = {
     slash: "/",
     comma: ",",
@@ -106,12 +100,10 @@ export function matchesKeyCombo(
     function: "fn",
   }
 
-  // Apply key mappings
   const normalizedEventKey = keyMappings[eventKey] || eventKey
   const normalizedComboKey = keyMappings[parsed.key] || parsed.key
 
-  const matches = normalizedEventKey === normalizedComboKey
-  return matches
+  return normalizedEventKey === normalizedComboKey
 }
 
 export function formatKeyComboForDisplay(combo: string): string {
@@ -128,7 +120,6 @@ export function formatKeyComboForDisplay(combo: string): string {
   if (parsed.key) {
     let displayKey = parsed.key
 
-    // Format special keys for display
     const displayMappings: Record<string, string> = {
       " ": "Space",
       "/": "/",
@@ -178,7 +169,6 @@ export function validateKeyCombo(combo: string): {
 
   const parsed = parseKeyCombo(combo)
 
-  // Must have at least one modifier or be a function key (including Fn)
   const hasModifier = parsed.ctrl || parsed.shift || parsed.alt || parsed.meta
   const isFunctionKey = parsed.key && (parsed.key.match(/^f\d+$/) || parsed.key === "fn")
 
@@ -190,12 +180,10 @@ export function validateKeyCombo(combo: string): {
     }
   }
 
-  // Must have a main key
   if (!parsed.key) {
     return { valid: false, error: "Key combination must include a main key" }
   }
 
-  // Check for potentially dangerous combinations
   const dangerousCombos = [
     "ctrl-alt-delete", // System shortcut
     "ctrl-shift-escape", // Task manager (but we allow this for kill switch)

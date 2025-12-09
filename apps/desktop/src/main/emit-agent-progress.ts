@@ -1,11 +1,3 @@
-/**
- * Shared utility for emitting agent progress updates to renderer windows.
- * 
- * This module consolidates the emitAgentProgress function that was previously
- * duplicated in tipc.ts and llm.ts, ensuring consistent behavior across
- * the application.
- */
-
 import { getRendererHandlers } from "@egoist/tipc/main"
 import { WINDOWS, showPanelWindow, resizePanelForAgentMode } from "./window"
 import { RendererHandlers } from "./renderer-handlers"
@@ -14,24 +6,8 @@ import { isPanelAutoShowSuppressed, agentSessionStateManager } from "./state"
 import { agentSessionTracker } from "./agent-session-tracker"
 import { logApp } from "./debug"
 
-/**
- * Emit agent progress updates to the renderer.
- *
- * This function handles:
- * - Checking if the session has been stopped by killswitch (skips update if so)
- * - Sending updates to the main window (if visible) for live progress visualization
- * - Checking if the panel window is available
- * - Auto-showing the panel for non-snoozed sessions (unless suppressed)
- * - Resizing the panel for agent mode before showing
- * - Sending updates to both panel and main windows
- *
- * @param update - The agent progress update to emit
- */
 export async function emitAgentProgress(update: AgentProgressUpdate): Promise<void> {
-  // Check if this session has been stopped by killswitch - skip emitting if so
-  // This prevents progress updates from being sent after emergency stop is triggered
-  // EXCEPTION: Always allow final completion updates (isComplete: true) through so the
-  // "Agent stopped" message from stopAgentSession can reach the UI
+  // Skip updates for stopped sessions, except final completion updates
   if (update.sessionId && !update.isComplete) {
     const shouldStop = agentSessionStateManager.shouldStopSession(update.sessionId)
     if (shouldStop) {
@@ -42,8 +18,7 @@ export async function emitAgentProgress(update: AgentProgressUpdate): Promise<vo
 
   logApp(`[emitAgentProgress] Called for session ${update.sessionId}, isSnoozed: ${update.isSnoozed}`)
 
-  // Always send updates to main window if it's open for live progress visualization
-  // This is done first to ensure main window updates even if panel is unavailable
+  // Send updates to main window if visible
   const main = WINDOWS.get("main")
   if (main && main.isVisible()) {
     try {
@@ -69,19 +44,14 @@ export async function emitAgentProgress(update: AgentProgressUpdate): Promise<vo
 
   logApp(`[emitAgentProgress] Panel visible: ${panel.isVisible()}`)
 
-  // Only show the panel window if it's not visible AND the session is not snoozed
   if (!panel.isVisible() && update.sessionId) {
-    // Check if this session is snoozed before showing the panel
     const isSnoozed = agentSessionTracker.isSessionSnoozed(update.sessionId)
-
     logApp(`[emitAgentProgress] Panel not visible. Session ${update.sessionId} snoozed check: ${isSnoozed}`)
 
     if (isPanelAutoShowSuppressed()) {
       logApp(`[emitAgentProgress] Panel auto-show suppressed; NOT showing panel for session ${update.sessionId}`)
     } else if (!isSnoozed) {
-      // Only show panel for non-snoozed sessions
       logApp(`[emitAgentProgress] Showing panel for non-snoozed session ${update.sessionId}`)
-      // Set panel mode to agent before showing to ensure correct sizing
       resizePanelForAgentMode()
       showPanelWindow()
     } else {
@@ -98,7 +68,6 @@ export async function emitAgentProgress(update: AgentProgressUpdate): Promise<vo
       return
     }
 
-    // Add a small delay to ensure UI updates are processed
     setTimeout(() => {
       try {
         handlers.agentProgressUpdate.send(update)

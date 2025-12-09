@@ -1,9 +1,3 @@
-/**
- * Session List Screen
- * Displays all chat sessions and allows creating/selecting/deleting sessions
- * Adapted from SpeakMCP/src/renderer/src/pages/sessions.tsx patterns
- */
-
 import { useLayoutEffect, useMemo } from 'react';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, Alert, Platform, Image } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';

@@ -179,10 +179,9 @@ const getSavedPanelSize = () => {
 
   logApp(`[window.ts] getSavedPanelSize - checking config...`)
 
-  // Helper to validate and cap saved sizes to reasonable maximums
   const validateSize = (savedSize: { width: number; height: number }) => {
-    const maxWidth = 3000 // Maximum reasonable width
-    const maxHeight = 2000 // Maximum reasonable height
+    const maxWidth = 3000
+    const maxHeight = 2000
     const minWidth = 200
     const minHeight = 100
 
@@ -199,13 +198,11 @@ const getSavedPanelSize = () => {
     return savedSize
   }
 
-  // Use panelCustomSize as the unified size for all modes
   if (config.panelCustomSize) {
     logApp(`[window.ts] Found saved panel size:`, config.panelCustomSize)
     return validateSize(config.panelCustomSize)
   }
 
-  // Return default size
   logApp(`[window.ts] No saved panel size, using default:`, panelWindowSize)
   return panelWindowSize
 }

@@ -1,6 +1,3 @@
-// Language support for speech-to-text recognition
-// Based on ISO 639-1 language codes
-
 export interface LanguageOption {
   code: string
   name: string
@@ -49,7 +46,6 @@ export const SUPPORTED_LANGUAGES: LanguageOption[] = [
   { code: "mt", name: "Maltese", nativeName: "Malti" },
 ]
 
-// ISO 639-1 language codes that are supported by OpenAI Whisper
 export const OPENAI_WHISPER_SUPPORTED_LANGUAGES = [
   "en", "es", "fr", "de", "it", "pt", "ru", "ja", "ko", "zh",
   "ar", "hi", "tr", "nl", "sv", "no", "da", "fi", "pl", "uk",
@@ -57,7 +53,6 @@ export const OPENAI_WHISPER_SUPPORTED_LANGUAGES = [
   "bg", "hr", "sr", "sl", "et", "lv", "lt", "mt"
 ]
 
-// ISO 639-1 language codes that are supported by Groq Whisper
 export const GROQ_WHISPER_SUPPORTED_LANGUAGES = [
   "en", "es", "fr", "de", "it", "pt", "ru", "ja", "ko", "zh",
   "ar", "hi", "tr", "nl", "sv", "no", "da", "fi", "pl", "uk",
@@ -75,13 +70,11 @@ export const getLanguageNativeName = (code: string): string => {
   return language ? language.nativeName : code
 }
 
-// Validate ISO 639-1 language code
 export const isValidLanguageCode = (code: string): boolean => {
   if (code === "auto") return true
   return SUPPORTED_LANGUAGES.some(lang => lang.code === code)
 }
 
-// Validate language code for specific providers
 export const isValidLanguageForProvider = (code: string, provider: string): boolean => {
   if (code === "auto") return true
 
@@ -95,7 +88,6 @@ export const isValidLanguageForProvider = (code: string, provider: string): bool
   }
 }
 
-// Get language code for API calls with provider-specific validation
 export const getApiLanguageCode = (language: string, provider?: string): string | undefined => {
   if (language === "auto" || !language) {
     return undefined
@@ -108,7 +100,6 @@ export const getApiLanguageCode = (language: string, provider?: string): string 
   return isValidLanguageCode(language) ? language : undefined
 }
 
-// Get supported languages for a specific provider
 export const getSupportedLanguagesForProvider = (provider: string): LanguageOption[] => {
   switch (provider) {
     case "openai":

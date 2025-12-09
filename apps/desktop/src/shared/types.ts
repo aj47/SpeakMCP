@@ -1,7 +1,6 @@
 import type { CHAT_PROVIDER_ID, STT_PROVIDER_ID, TTS_PROVIDER_ID, OPENAI_COMPATIBLE_PRESET_ID } from "."
 import type { ToolCall, ToolResult } from '@speakmcp/shared'
 
-// Re-export shared types for convenience
 export type { ToolCall, ToolResult, BaseChatMessage, ConversationHistoryMessage, ChatApiResponse } from '@speakmcp/shared'
 
 export type RecordingHistoryItem = {
@@ -97,7 +96,6 @@ export interface MCPConfig {
   mcpServers: Record<string, MCPServerConfig>
 }
 
-// Server log entry interface
 export interface ServerLogEntry {
   timestamp: number
   message: string
@@ -111,10 +109,9 @@ export interface AgentProgressStep {
   description?: string
   status: "pending" | "in_progress" | "completed" | "error" | "awaiting_approval"
   timestamp: number
-  llmContent?: string // Store actual LLM response content for thinking steps
+  llmContent?: string
   toolCall?: ToolCall
   toolResult?: ToolResult
-  // For tool approval requests
   approvalRequest?: {
     approvalId: string
     toolName: string
@@ -123,14 +120,14 @@ export interface AgentProgressStep {
 }
 
 export interface AgentProgressUpdate {
-  sessionId: string // Unique session identifier for progress routing
-  conversationId?: string // Optional conversation ID for linking to conversation history
-  conversationTitle?: string // Title of the conversation/session for display in tabs
+  sessionId: string
+  conversationId?: string
+  conversationTitle?: string
   currentIteration: number
   maxIterations: number
   steps: AgentProgressStep[]
   isComplete: boolean
-  isSnoozed?: boolean // When true, session runs in background without stealing focus
+  isSnoozed?: boolean
   finalContent?: string
   conversationHistory?: Array<{
     role: "user" | "assistant" | "tool"
@@ -139,30 +136,23 @@ export interface AgentProgressUpdate {
     toolResults?: ToolResult[]
     timestamp?: number
   }>
-  /**
-   * Index into conversationHistory where this agent session's messages begin.
-   * Entries before this index belong to previous sessions in the same conversation.
-   */
   sessionStartIndex?: number
-  // Pending tool approval request - when set, UI should show approve/deny buttons
   pendingToolApproval?: {
     approvalId: string
     toolName: string
     arguments: any
   }
-  // Retry status - when set, UI should show retry banner with countdown
   retryInfo?: {
     isRetrying: boolean
     attempt: number
-    maxAttempts?: number  // undefined for rate limits (infinite retries)
+    maxAttempts?: number
     delaySeconds: number
-    reason: string  // e.g., "Rate limit exceeded", "Network error"
-    startedAt: number  // timestamp for countdown calculation
+    reason: string
+    startedAt: number
   }
-  // Streaming content - partial LLM response as it's being generated
   streamingContent?: {
-    text: string // The accumulated text so far
-    isStreaming: boolean // True while streaming is in progress
+    text: string
+    isStreaming: boolean
   }
 }
 
@@ -210,24 +200,16 @@ export interface ConversationHistoryItem {
   preview: string
 }
 
-// Profile MCP Server Configuration - stores which servers are enabled/disabled per profile
 export type ProfileMcpServerConfig = {
-  // Server names that are disabled for this profile
-  // Servers not in this list are enabled by default
   disabledServers?: string[]
-  // Tool names that are disabled for this profile
   disabledTools?: string[]
 }
 
-// Profile Model Configuration - stores model/provider selection per profile
 export type ProfileModelConfig = {
-  // Chat provider for MCP tools (openai, groq, gemini)
   mcpToolsProviderId?: "openai" | "groq" | "gemini"
-  // Model names per provider
   mcpToolsOpenaiModel?: string
   mcpToolsGroqModel?: string
   mcpToolsGeminiModel?: string
-  // Model preset ID (for OpenAI-compatible presets)
   currentModelPresetId?: string
 }
 
@@ -239,11 +221,8 @@ export type Profile = {
   createdAt: number
   updatedAt: number
   isDefault?: boolean
-  // Per-profile MCP server configuration
   mcpServerConfig?: ProfileMcpServerConfig
-  // Per-profile model/provider configuration
   modelConfig?: ProfileModelConfig
-  // Custom system prompt (base prompt for agent) - if empty/undefined, uses default
   systemPrompt?: string
 }
 
@@ -252,18 +231,16 @@ export type ProfilesData = {
   currentProfileId?: string
 }
 
-// Model Preset Types - allows per-preset API keys and model preferences
 export interface ModelPreset {
   id: string
   name: string
   baseUrl: string
   apiKey: string
-  isBuiltIn?: boolean // true for presets derived from OPENAI_COMPATIBLE_PRESETS
+  isBuiltIn?: boolean
   createdAt?: number
   updatedAt?: number
-  // Model preferences - when set, these will be applied when switching to this preset
-  mcpToolsModel?: string // Model to use for agent/MCP tools
-  transcriptProcessingModel?: string // Model to use for transcript post-processing
+  mcpToolsModel?: string
+  transcriptProcessingModel?: string
 }
 
 export type Config = {
@@ -288,9 +265,8 @@ export type Config = {
   openaiBaseUrl?: string
   openaiCompatiblePreset?: OPENAI_COMPATIBLE_PRESET_ID
 
-  // Model Presets - allows per-preset API keys
   modelPresets?: ModelPreset[]
-  currentModelPresetId?: string // ID of the currently active preset
+  currentModelPresetId?: string
 
   groqApiKey?: string
   groqBaseUrl?: string
@@ -317,12 +293,12 @@ export type Config = {
 
   // Groq TTS Configuration
   groqTtsModel?: "playai-tts" | "playai-tts-arabic"
-  groqTtsVoice?: string // Will be populated with available voices
+  groqTtsVoice?: string
 
   // Gemini TTS Configuration
   geminiTtsModel?: "gemini-2.5-flash-preview-tts" | "gemini-2.5-pro-preview-tts"
-  geminiTtsVoice?: string // Will be populated with available voices
-  geminiTtsLanguage?: string // Language code for TTS
+  geminiTtsVoice?: string
+  geminiTtsLanguage?: string
 
   // TTS Text Preprocessing Configuration
   ttsPreprocessingEnabled?: boolean
@@ -367,11 +343,10 @@ export type Config = {
   mcpToolsGroqModel?: string
   mcpToolsGeminiModel?: string
   mcpToolsSystemPrompt?: string
-  mcpCustomSystemPrompt?: string // Custom base system prompt - overrides default when set
-  mcpCurrentProfileId?: string // Current active profile ID
+  mcpCustomSystemPrompt?: string
+  mcpCurrentProfileId?: string
   /** @deprecated Agent mode is now always enabled. This field is kept for backwards compatibility but ignored. */
   mcpAgentModeEnabled?: boolean
-  // When enabled, require manual user approval before each tool call executes
   mcpRequireApprovalBeforeToolCall?: boolean
   mcpAutoPasteEnabled?: boolean
   mcpAutoPasteDelay?: number
@@ -380,10 +355,8 @@ export type Config = {
   // MCP Server Configuration
   mcpConfig?: MCPConfig
 
-  // Persisted MCP runtime state: servers the user explicitly stopped (do not auto-start)
   mcpRuntimeDisabledServers?: string[]
 
-  // Persisted MCP tool state: tools the user explicitly disabled
   mcpDisabledTools?: string[]
 
   // Conversation Configuration
@@ -403,15 +376,14 @@ export type Config = {
   panelCustomPosition?: { x: number; y: number }
   panelDragEnabled?: boolean
   panelCustomSize?: { width: number; height: number }
-  // Mode-specific panel sizes for persistence
   panelNormalModeSize?: { width: number; height: number }
   panelAgentModeSize?: { width: number; height: number }
   panelTextInputModeSize?: { width: number; height: number }
 
   // API Retry Configuration
-  apiRetryCount?: number // Number of retry attempts (default: 3)
-  apiRetryBaseDelay?: number // Base delay in milliseconds (default: 1000)
-  apiRetryMaxDelay?: number // Maximum delay in milliseconds (default: 30000)
+  apiRetryCount?: number
+  apiRetryBaseDelay?: number
+  apiRetryMaxDelay?: number
 
   // Context Reduction Configuration
   mcpContextReductionEnabled?: boolean

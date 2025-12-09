@@ -79,7 +79,6 @@ export class MCPService {
   private initializedServers: Set<string> = new Set()
   private hasBeenInitialized = false
 
-  // Simplified tracking - let LLM handle context extraction
   private activeResources = new Map<
     string,
     {
@@ -124,10 +123,6 @@ export class MCPService {
     }
   }
 
-  /**
-   * Simple resource tracking for basic functionality
-   * The LLM-based context extraction handles the complex logic
-   */
   trackResource(
     serverId: string,
     resourceId: string,
@@ -142,9 +137,6 @@ export class MCPService {
     })
   }
 
-  /**
-   * Update resource activity (simplified)
-   */
   updateResourceActivity(
     serverId: string,
     resourceId: string,
@@ -157,9 +149,6 @@ export class MCPService {
     }
   }
 
-  /**
-   * Clean up old resources (simplified)
-   */
   private cleanupInactiveResources(): void {
     const thirtyMinutesAgo = Date.now() - 30 * 60 * 1000
     let cleanedCount = 0
@@ -172,9 +161,6 @@ export class MCPService {
     }
   }
 
-  /**
-   * Simple method to get tracked resources (for debugging)
-   */
   getTrackedResources(): Array<{
     serverId: string
     resourceId: string
@@ -184,9 +170,6 @@ export class MCPService {
     return Array.from(this.activeResources.values())
   }
 
-  /**
-   * Simple resource tracking from tool results (LLM handles the complex logic)
-   */
   private trackResourceFromResult(
     serverName: string,
     result: MCPToolResult,
@@ -262,13 +245,8 @@ export class MCPService {
           return
         }
 
-    // Get servers that should be initialized:
-    // 1. Not disabled in config AND
-    // 2. Not runtime-disabled by user (persisted) AND
-    // 3. If this is not the first initialization in-session, not already initialized
     const serversToInitialize = Object.entries(mcpConfig.mcpServers).filter(
       ([serverName, serverConfig]) => {
-        // Skip if disabled in config
         if ((serverConfig as MCPServerConfig).disabled) {
           if (isDebugTools()) {
             logTools(`Skipping server ${serverName} - disabled in config`)
@@ -276,7 +254,6 @@ export class MCPService {
           return false
         }
 
-        // Always respect user runtime-disabled preference (persisted across sessions)
         if (this.runtimeDisabledServers.has(serverName)) {
           if (isDebugTools()) {
             logTools(`Skipping server ${serverName} - runtime disabled by user`)
@@ -284,12 +261,10 @@ export class MCPService {
           return false
         }
 
-        // On first initialization, initialize all eligible servers
         if (!this.hasBeenInitialized) {
           return true
         }
 
-        // On subsequent calls (like agent mode), only initialize if not already initialized
         const alreadyInitialized = this.initializedServers.has(serverName)
         if (isDebugTools() && alreadyInitialized) {
           logTools(`Skipping server ${serverName} - already initialized`)

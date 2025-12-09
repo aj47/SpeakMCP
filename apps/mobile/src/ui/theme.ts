@@ -1,9 +1,3 @@
-/**
- * SpeakMCPMobile Design Tokens
- *
- * Uses shared design tokens from @speakmcp/shared for consistency
- * with the desktop app (shadcn/ui "new-york" style, "neutral" base).
- */
 import { Platform, Appearance } from 'react-native';
 import {
   lightColors as sharedLightColors,

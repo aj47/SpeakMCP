@@ -156,9 +156,13 @@ function extractJsonPreview(data: unknown): string {
     const firstItem = data[0];
     if (typeof firstItem === 'object' && firstItem !== null) {
       const item = firstItem as Record<string, unknown>;
-      const name = item.name || item.title || item.path || item.filename;
+      // Helper to safely extract string values
+      const getString = (value: unknown): string | null => {
+        return typeof value === 'string' ? value : null;
+      };
+      const name = getString(item.name) || getString(item.title) || getString(item.path) || getString(item.filename);
       if (name) {
-        return len === 1 ? truncatePreview(String(name), 30) : `${len} items: ${truncatePreview(String(name), 20)}...`;
+        return len === 1 ? truncatePreview(name, 30) : `${len} items: ${truncatePreview(name, 20)}...`;
       }
     }
     return `${len} item${len > 1 ? 's' : ''}`;

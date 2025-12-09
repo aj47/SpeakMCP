@@ -180,6 +180,9 @@ export default function ChatScreen({ route, navigation }: any) {
                 source={isDark ? darkSpinner : lightSpinner}
                 style={{ width: 28, height: 28 }}
                 resizeMode="contain"
+                accessible={true}
+                accessibilityRole="progressbar"
+                accessibilityLabel="Processing"
               />
             </View>
           )}

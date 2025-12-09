@@ -59,7 +59,19 @@ export function calculateBackoff(
 export function isRetryableError(error: Error | string): boolean {
   const message = typeof error === 'string' ? error : error.message;
   const lowered = message.toLowerCase();
-  
+
+  // Non-retryable patterns - user-initiated cancellations should not trigger retry
+  const nonRetryablePatterns = [
+    'cancelled',
+    'canceled',
+    'user abort',
+    'abortcontroller',
+  ];
+
+  if (nonRetryablePatterns.some(pattern => lowered.includes(pattern))) {
+    return false;
+  }
+
   const retryablePatterns = [
     'network',
     'timeout',
@@ -77,7 +89,7 @@ export function isRetryableError(error: Error | string): boolean {
     'enetunreach',
     'internet',
   ];
-  
+
   return retryablePatterns.some(pattern => lowered.includes(pattern));
 }
 

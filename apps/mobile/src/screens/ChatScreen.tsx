@@ -975,7 +975,7 @@ export default function ChatScreen({ route, navigation }: any) {
                   </View>
                 )}
 
-                {m.role === 'assistant' && m.isThinking ? (
+                {m.role === 'assistant' && m.isThinking && !m.toolCalls && !m.toolResults ? (
                   <View style={styles.thinkingContainer}>
                     <Image
                       source={isDark ? darkSpinner : lightSpinner}

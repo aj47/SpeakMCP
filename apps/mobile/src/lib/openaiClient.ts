@@ -445,6 +445,9 @@ export class OpenAIClient {
             // Handle SSE error events
             if (result.error) {
               recovery?.markDisconnected(result.error.message);
+              // Abort the XHR to avoid leaving a lingering in-flight stream
+              xhr.abort();
+              this.activeXhr = null;
               safeReject(result.error);
               return;
             }
@@ -468,6 +471,7 @@ export class OpenAIClient {
           if (result) {
             // Handle SSE error events
             if (result.error) {
+              this.activeXhr = null;
               recovery?.markDisconnected(result.error.message);
               safeReject(result.error);
               return;

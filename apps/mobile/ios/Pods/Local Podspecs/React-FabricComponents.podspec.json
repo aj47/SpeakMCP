@@ -1,0 +1,139 @@
+{
+  "name": "React-FabricComponents",
+  "version": "0.81.4",
+  "summary": "Fabric Components for React Native.",
+  "homepage": "https://reactnative.dev/",
+  "license": "MIT",
+  "authors": "Meta Platforms, Inc. and its affiliates",
+  "platforms": {
+    "ios": "15.1"
+  },
+  "source": {
+    "git": "https://github.com/facebook/react-native.git",
+    "tag": "v0.81.4"
+  },
+  "source_files": "",
+  "pod_target_xcconfig": {
+    "CLANG_CXX_LANGUAGE_STANDARD": "c++20",
+    "DEFINES_MODULE": "YES",
+    "HEADER_SEARCH_PATHS": "\"$(PODS_TARGET_SRCROOT)/ReactCommon\" \"$(PODS_ROOT)/Headers/Private/Yoga\" \"$(PODS_TARGET_SRCROOT)\" \"${PODS_ROOT}/React-RCTFBReactNativeSpec\" \"${PODS_ROOT}/React-rendererdebug\" \"${PODS_ROOT}/React-graphics\" \"${PODS_ROOT}/React-graphics/react/renderer/graphics/platform/ios\" \"${PODS_ROOT}/React-Fabric\" \"${PODS_ROOT}/React-Fabric/react/renderer/components/scrollview/platform/cxx\" \"${PODS_ROOT}/React-Fabric/react/renderer/components/view/platform/cxx\" \"${PODS_ROOT}/React-Fabric/react/renderer/imagemanager/platform/ios\""
+  },
+  "dependencies": {
+    "React-jsiexecutor": [],
+    "RCTRequired": [],
+    "RCTTypeSafety": [],
+    "ReactCommon/turbomodule/core": [],
+    "React-jsi": [],
+    "React-logger": [],
+    "React-Core": [],
+    "React-debug": [],
+    "React-featureflags": [],
+    "React-utils": [],
+    "React-runtimescheduler": [],
+    "React-cxxreact": [],
+    "Yoga": [],
+    "React-RCTFBReactNativeSpec": [],
+    "React-rendererdebug": [],
+    "React-graphics": [],
+    "React-Fabric": [],
+    "hermes-engine": [],
+    "ReactNativeDependencies": [],
+    "React-Core-prebuilt": []
+  },
+  "subspecs": [
+    {
+      "name": "components",
+      "subspecs": [
+        {
+          "name": "inputaccessory",
+          "source_files": "react/renderer/components/inputaccessory/**/*.h",
+          "exclude_files": "react/renderer/components/inputaccessory/tests",
+          "header_dir": "react/renderer/components/inputaccessory"
+        },
+        {
+          "name": "modal",
+          "source_files": "react/renderer/components/modal/*.h",
+          "exclude_files": "react/renderer/components/modal/tests",
+          "header_dir": "react/renderer/components/modal"
+        },
+        {
+          "name": "safeareaview",
+          "source_files": "react/renderer/components/safeareaview/**/*.h",
+          "exclude_files": "react/renderer/components/safeareaview/tests",
+          "header_dir": "react/renderer/components/safeareaview"
+        },
+        {
+          "name": "scrollview",
+          "source_files": [
+            "react/renderer/components/scrollview/*.h",
+            "react/renderer/components/scrollview/platform/cxx/**/*.h"
+          ],
+          "exclude_files": "react/renderer/components/scrollview/tests",
+          "header_dir": "react/renderer/components/scrollview"
+        },
+        {
+          "name": "text",
+          "source_files": [
+            "react/renderer/components/text/*.h",
+            "react/renderer/components/text/platform/cxx/**/*.h"
+          ],
+          "header_dir": "react/renderer/components/text"
+        },
+        {
+          "name": "iostextinput",
+          "source_files": [
+            "react/renderer/components/textinput/*.h",
+            "react/renderer/components/textinput/platform/ios/**/*.h"
+          ],
+          "header_dir": "react/renderer/components/iostextinput"
+        },
+        {
+          "name": "switch",
+          "source_files": [
+            "react/renderer/components/switch/iosswitch/**/*.h"
+          ],
+          "exclude_files": "react/renderer/components/switch/iosswitch/**/MacOS*.{m,mm,cpp,h}",
+          "header_dir": "react/renderer/components/switch/"
+        },
+        {
+          "name": "textinput",
+          "source_files": "react/renderer/components/textinput/**/*.h",
+          "header_dir": "react/renderer/components/textinput"
+        },
+        {
+          "name": "unimplementedview",
+          "source_files": "react/renderer/components/unimplementedview/**/*.h",
+          "exclude_files": "react/renderer/components/unimplementedview/tests",
+          "header_dir": "react/renderer/components/unimplementedview"
+        },
+        {
+          "name": "virtualview",
+          "source_files": "react/renderer/components/virtualview/**/*.{m,mm,cpp,h}",
+          "exclude_files": "react/renderer/components/virtualview/tests",
+          "header_dir": "react/renderer/components/virtualview"
+        },
+        {
+          "name": "rncore",
+          "source_files": "react/renderer/components/rncore/**/*.h",
+          "header_dir": "react/renderer/components/rncore"
+        }
+      ]
+    },
+    {
+      "name": "textlayoutmanager",
+      "dependencies": {
+        "React-Fabric": []
+      },
+      "source_files": [
+        "react/renderer/textlayoutmanager/platform/ios/**/*.h",
+        "react/renderer/textlayoutmanager/*.{h}"
+      ],
+      "exclude_files": [
+        "react/renderer/textlayoutmanager/tests",
+        "react/renderer/textlayoutmanager/platform/android",
+        "react/renderer/textlayoutmanager/platform/cxx"
+      ],
+      "header_dir": "react/renderer/textlayoutmanager"
+    }
+  ]
+}

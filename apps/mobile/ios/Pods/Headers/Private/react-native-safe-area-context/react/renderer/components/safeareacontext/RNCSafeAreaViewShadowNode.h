@@ -1,0 +1,1 @@
+../../../../../../../../../../../node_modules/.pnpm/react-native-safe-area-context@5.6.2_react-native@0.81.4_@babel+core@7.28.5_@react-native-com_cxpz5s4bauanw56hvvz4dvgipm/node_modules/react-native-safe-area-context/common/cpp/react/renderer/components/safeareacontext/RNCSafeAreaViewShadowNode.h

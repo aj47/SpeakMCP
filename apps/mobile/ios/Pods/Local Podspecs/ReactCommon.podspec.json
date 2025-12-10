@@ -1,0 +1,86 @@
+{
+  "name": "ReactCommon",
+  "module_name": "ReactCommon",
+  "version": "0.81.4",
+  "summary": "-",
+  "homepage": "https://reactnative.dev/",
+  "license": "MIT",
+  "authors": "Meta Platforms, Inc. and its affiliates",
+  "platforms": {
+    "ios": "15.1"
+  },
+  "source": {
+    "git": "https://github.com/facebook/react-native.git",
+    "tag": "v0.81.4"
+  },
+  "header_dir": "ReactCommon",
+  "pod_target_xcconfig": {
+    "HEADER_SEARCH_PATHS": "\"$(PODS_ROOT)/Headers/Private/React-Core\"",
+    "USE_HEADERMAP": "YES",
+    "DEFINES_MODULE": "YES",
+    "CLANG_CXX_LANGUAGE_STANDARD": "c++20",
+    "GCC_WARN_PEDANTIC": "YES"
+  },
+  "dependencies": {
+    "ReactNativeDependencies": [],
+    "React-Core-prebuilt": []
+  },
+  "subspecs": [
+    {
+      "name": "turbomodule",
+      "dependencies": {
+        "React-callinvoker": [
+          "0.81.4"
+        ],
+        "React-perflogger": [
+          "0.81.4"
+        ],
+        "React-cxxreact": [
+          "0.81.4"
+        ],
+        "React-jsi": [
+          "0.81.4"
+        ],
+        "React-logger": [
+          "0.81.4"
+        ],
+        "hermes-engine": []
+      },
+      "subspecs": [
+        {
+          "name": "bridging",
+          "dependencies": {
+            "React-jsi": [
+              "0.81.4"
+            ],
+            "hermes-engine": []
+          },
+          "source_files": "react/bridging/**/*.h",
+          "exclude_files": "react/bridging/tests",
+          "header_dir": "react/bridging",
+          "pod_target_xcconfig": {
+            "HEADER_SEARCH_PATHS": "\"$(PODS_TARGET_SRCROOT)/ReactCommon\""
+          }
+        },
+        {
+          "name": "core",
+          "source_files": "react/nativemodule/core/ReactCommon/**/*.h",
+          "pod_target_xcconfig": {
+            "HEADER_SEARCH_PATHS": "\"$(PODS_TARGET_SRCROOT)/ReactCommon\" \"$(PODS_CONFIGURATION_BUILD_DIR)/React-debug/React_debug.framework/Headers\" \"$(PODS_CONFIGURATION_BUILD_DIR)/React-debug/React_featureflags.framework/Headers\" \"$(PODS_CONFIGURATION_BUILD_DIR)/React-utils/React_utils.framework/Headers\""
+          },
+          "dependencies": {
+            "React-debug": [
+              "0.81.4"
+            ],
+            "React-featureflags": [
+              "0.81.4"
+            ],
+            "React-utils": [
+              "0.81.4"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

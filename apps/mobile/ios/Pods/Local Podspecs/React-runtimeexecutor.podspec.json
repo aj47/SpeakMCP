@@ -1,0 +1,37 @@
+{
+  "name": "React-runtimeexecutor",
+  "module_name": "React_runtimeexecutor",
+  "version": "0.81.4",
+  "summary": "-",
+  "homepage": "https://reactnative.dev/",
+  "license": "MIT",
+  "authors": "Meta Platforms, Inc. and its affiliates",
+  "platforms": {
+    "ios": "15.1"
+  },
+  "source": {
+    "git": "https://github.com/facebook/react-native.git",
+    "tag": "v0.81.4"
+  },
+  "source_files": [
+    "ReactCommon/*.h",
+    "platform/ios/**/*.h"
+  ],
+  "header_dir": "ReactCommon",
+  "pod_target_xcconfig": {
+    "USE_HEADERMAP": "NO",
+    "CLANG_CXX_LANGUAGE_STANDARD": "c++20",
+    "HEADER_SEARCH_PATHS": "\"$(PODS_TARGET_SRCROOT)\" \"${PODS_ROOT}/React-featureflags\" \"${PODS_ROOT}/React-debug\" \"${PODS_ROOT}/React-utils\" \"${PODS_ROOT}/React-utils/react/utils/platform/ios\"",
+    "DEFINES_MODULE": "YES"
+  },
+  "dependencies": {
+    "ReactNativeDependencies": [],
+    "React-Core-prebuilt": [],
+    "React-jsi": [
+      "0.81.4"
+    ],
+    "React-featureflags": [],
+    "React-debug": [],
+    "React-utils": []
+  }
+}

@@ -1,0 +1,1 @@
+../../../../React-Core-prebuilt/React.xcframework/Headers/React_logger/react_native_log.h

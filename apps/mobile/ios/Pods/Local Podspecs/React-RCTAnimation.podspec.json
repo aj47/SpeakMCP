@@ -1,0 +1,43 @@
+{
+  "name": "React-RCTAnimation",
+  "version": "0.81.4",
+  "summary": "A native driver for the Animated API.",
+  "homepage": "https://reactnative.dev/",
+  "license": "MIT",
+  "authors": "Meta Platforms, Inc. and its affiliates",
+  "platforms": {
+    "ios": "15.1"
+  },
+  "compiler_flags": "-Wno-nullability-completeness",
+  "source": {
+    "git": "https://github.com/facebook/react-native.git",
+    "tag": "v0.81.4"
+  },
+  "source_files": "**/*.h",
+  "preserve_paths": [
+    "package.json",
+    "LICENSE",
+    "LICENSE-docs"
+  ],
+  "header_dir": "RCTAnimation",
+  "pod_target_xcconfig": {
+    "USE_HEADERMAP": "YES",
+    "CLANG_CXX_LANGUAGE_STANDARD": "c++20",
+    "HEADER_SEARCH_PATHS": "\"${PODS_ROOT}/Headers/Public/ReactCodegen/react/renderer/components\" \"${PODS_ROOT}/React-RCTFBReactNativeSpec\" \"${PODS_ROOT}/ReactCommon\" \"${PODS_ROOT}/ReactCommon/react/nativemodule/core\" \"${PODS_ROOT}/React-NativeModulesApple\" \"${PODS_ROOT}/React-featureflags\""
+  },
+  "frameworks": [
+    "UIKit",
+    "QuartzCore"
+  ],
+  "dependencies": {
+    "RCTTypeSafety": [],
+    "React-jsi": [],
+    "React-Core/RCTAnimationHeaders": [],
+    "React-RCTFBReactNativeSpec": [],
+    "ReactCommon": [],
+    "React-NativeModulesApple": [],
+    "React-featureflags": [],
+    "ReactNativeDependencies": [],
+    "React-Core-prebuilt": []
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "name": "ExpoFont",
+  "version": "14.0.9",
+  "summary": "Load fonts at runtime and use them in React Native components.",
+  "description": "Load fonts at runtime and use them in React Native components.",
+  "license": "MIT",
+  "authors": "650 Industries, Inc.",
+  "homepage": "https://docs.expo.dev/versions/latest/sdk/font/",
+  "platforms": {
+    "ios": "15.1",
+    "osx": "11.0",
+    "tvos": "15.1"
+  },
+  "swift_versions": "5.9",
+  "source": {
+    "git": "https://github.com/expo/expo.git"
+  },
+  "static_framework": true,
+  "dependencies": {
+    "ExpoModulesCore": []
+  },
+  "pod_target_xcconfig": {
+    "DEFINES_MODULE": "YES"
+  },
+  "source_files": "**/*.{h,m,swift}",
+  "swift_version": "5.9"
+}

@@ -1,0 +1,39 @@
+{
+  "name": "React-jsiexecutor",
+  "version": "0.81.4",
+  "summary": "-",
+  "homepage": "https://reactnative.dev/",
+  "license": "MIT",
+  "authors": "Meta Platforms, Inc. and its affiliates",
+  "platforms": {
+    "ios": "15.1"
+  },
+  "source": {
+    "git": "https://github.com/facebook/react-native.git",
+    "tag": "v0.81.4"
+  },
+  "source_files": "jsireact/*.h",
+  "pod_target_xcconfig": {
+    "CLANG_CXX_LANGUAGE_STANDARD": "c++20",
+    "HEADER_SEARCH_PATHS": "\"${PODS_ROOT}/React-runtimeexecutor\" \"${PODS_ROOT}/React-runtimeexecutor/platform/ios\" \"${PODS_ROOT}/React-jsinspector\" \"${PODS_ROOT}/React-jsinspectorcdp\" \"${PODS_ROOT}/React-jsinspectortracing\""
+  },
+  "header_dir": "jsireact",
+  "dependencies": {
+    "React-cxxreact": [
+      "0.81.4"
+    ],
+    "React-jsi": [
+      "0.81.4"
+    ],
+    "React-perflogger": [
+      "0.81.4"
+    ],
+    "React-runtimeexecutor": [],
+    "React-jsinspector": [],
+    "React-jsinspectorcdp": [],
+    "React-jsinspectortracing": [],
+    "hermes-engine": [],
+    "ReactNativeDependencies": [],
+    "React-Core-prebuilt": []
+  }
+}

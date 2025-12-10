@@ -1,0 +1,6 @@
+module ExpoSpeech {
+  umbrella header "ExpoSpeech-umbrella.h"
+
+  export *
+  module * { export * }
+}

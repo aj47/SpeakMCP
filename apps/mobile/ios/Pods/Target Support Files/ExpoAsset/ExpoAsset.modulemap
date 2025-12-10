@@ -1,0 +1,6 @@
+module ExpoAsset {
+  umbrella header "ExpoAsset-umbrella.h"
+
+  export *
+  module * { export * }
+}

@@ -1,0 +1,69 @@
+{
+  "name": "React-RCTFabric",
+  "version": "0.81.4",
+  "summary": "RCTFabric for React Native.",
+  "homepage": "https://reactnative.dev/",
+  "license": "MIT",
+  "authors": "Meta Platforms, Inc. and its affiliates",
+  "platforms": {
+    "ios": "15.1"
+  },
+  "source": {
+    "git": "https://github.com/facebook/react-native.git",
+    "tag": "v0.81.4"
+  },
+  "source_files": "Fabric/**/*.{h}",
+  "compiler_flags": "-DRCT_NEW_ARCH_ENABLED=1",
+  "exclude_files": [
+    "**/tests/*",
+    "**/android/*",
+    " -DRCT_NEW_ARCH_ENABLED=1"
+  ],
+  "header_dir": "React",
+  "module_name": "RCTFabric",
+  "weak_frameworks": "JavaScriptCore",
+  "frameworks": "MobileCoreServices",
+  "pod_target_xcconfig": {
+    "HEADER_SEARCH_PATHS": "\"$(PODS_TARGET_SRCROOT)/ReactCommon\" \"$(PODS_ROOT)/Headers/Private/React-Core\" \"$(PODS_ROOT)/Headers/Private/Yoga\" \"$(PODS_ROOT)/Headers/Public/ReactCodegen\" \"${PODS_ROOT}/React-FabricImage\" \"${PODS_ROOT}/React-Fabric\" \"${PODS_ROOT}/React-Fabric/react/renderer/components/scrollview/platform/cxx\" \"${PODS_ROOT}/React-Fabric/react/renderer/components/view/platform/cxx\" \"${PODS_ROOT}/React-Fabric/react/renderer/imagemanager/platform/ios\" \"${PODS_ROOT}/React-FabricComponents\" \"${PODS_ROOT}/React-FabricComponents/react/renderer/textlayoutmanager/platform/ios\" \"${PODS_ROOT}/React-FabricComponents/react/renderer/components/scrollview/platform/cxx\" \"${PODS_ROOT}/React-FabricComponents/react/renderer/components/text/platform/cxx\" \"${PODS_ROOT}/React-FabricComponents/react/renderer/components/textinput/platform/ios\" \"${PODS_ROOT}/React-FabricComponents/react/renderer/components/switch/iosswitch\" \"${PODS_ROOT}/React-graphics\" \"${PODS_ROOT}/React-graphics/react/renderer/graphics/platform/ios\" \"${PODS_ROOT}/React-ImageManager\" \"${PODS_ROOT}/React-featureflags\" \"${PODS_ROOT}/React-debug\" \"${PODS_ROOT}/React-utils\" \"${PODS_ROOT}/React-utils/react/utils/platform/ios\" \"${PODS_ROOT}/React-performancetimeline\" \"${PODS_ROOT}/React-rendererdebug\" \"${PODS_ROOT}/React-rendererconsistency\" \"${PODS_ROOT}/React-runtimeexecutor\" \"${PODS_ROOT}/React-runtimeexecutor/platform/ios\" \"${PODS_ROOT}/React-runtimescheduler\" \"${PODS_ROOT}/React-RCTAnimation\" \"${PODS_ROOT}/React-jsinspector\" \"${PODS_ROOT}/React-jsinspectorcdp\" \"${PODS_ROOT}/React-jsinspectornetwork\" \"${PODS_ROOT}/React-jsinspectortracing\" \"${PODS_ROOT}/React-renderercss\" \"${PODS_ROOT}/React-RCTFBReactNativeSpec\"",
+    "OTHER_CFLAGS": "$(inherited)  -DRCT_NEW_ARCH_ENABLED=1",
+    "CLANG_CXX_LANGUAGE_STANDARD": "c++20"
+  },
+  "dependencies": {
+    "React-Core": [],
+    "React-RCTImage": [],
+    "Yoga": [],
+    "React-RCTText": [],
+    "React-jsi": [],
+    "React-FabricImage": [],
+    "React-Fabric": [],
+    "React-FabricComponents": [],
+    "React-graphics": [],
+    "React-ImageManager": [],
+    "React-featureflags": [],
+    "React-debug": [],
+    "React-utils": [],
+    "React-performancetimeline": [],
+    "React-rendererdebug": [],
+    "React-rendererconsistency": [],
+    "React-runtimeexecutor": [],
+    "React-runtimescheduler": [],
+    "React-RCTAnimation": [],
+    "React-jsinspector": [],
+    "React-jsinspectorcdp": [],
+    "React-jsinspectornetwork": [],
+    "React-jsinspectortracing": [],
+    "React-renderercss": [],
+    "React-RCTFBReactNativeSpec": [],
+    "hermes-engine": [],
+    "ReactNativeDependencies": [],
+    "React-Core-prebuilt": []
+  },
+  "testspecs": [
+    {
+      "name": "Tests",
+      "test_type": "unit",
+      "source_files": "",
+      "frameworks": "XCTest"
+    }
+  ]
+}

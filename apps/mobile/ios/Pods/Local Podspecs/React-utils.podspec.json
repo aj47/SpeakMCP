@@ -1,0 +1,36 @@
+{
+  "name": "React-utils",
+  "version": "0.81.4",
+  "summary": "-",
+  "homepage": "https://reactnative.dev/",
+  "license": "MIT",
+  "authors": "Meta Platforms, Inc. and its affiliates",
+  "platforms": {
+    "ios": "15.1"
+  },
+  "source": {
+    "git": "https://github.com/facebook/react-native.git",
+    "tag": "v0.81.4"
+  },
+  "source_files": [
+    "*.h",
+    "platform/ios/**/*.h"
+  ],
+  "header_dir": "react/utils",
+  "exclude_files": "tests",
+  "pod_target_xcconfig": {
+    "USE_HEADERMAP": "NO",
+    "CLANG_CXX_LANGUAGE_STANDARD": "c++20",
+    "HEADER_SEARCH_PATHS": "\"$(PODS_TARGET_SRCROOT)/../../\" \"${PODS_ROOT}/React-debug\"",
+    "DEFINES_MODULE": "YES"
+  },
+  "dependencies": {
+    "React-jsi": [
+      "0.81.4"
+    ],
+    "hermes-engine": [],
+    "ReactNativeDependencies": [],
+    "React-Core-prebuilt": [],
+    "React-debug": []
+  }
+}

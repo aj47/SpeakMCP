@@ -1,0 +1,41 @@
+{
+  "name": "React-RCTRuntime",
+  "version": "0.81.4",
+  "summary": "RCTRuntime for React Native.",
+  "homepage": "https://reactnative.dev/",
+  "license": "MIT",
+  "authors": "Meta Platforms, Inc. and its affiliates",
+  "platforms": {
+    "ios": "15.1"
+  },
+  "source": {
+    "git": "https://github.com/facebook/react-native.git",
+    "tag": "v0.81.4"
+  },
+  "source_files": "*.h",
+  "compiler_flags": "-DRCT_NEW_ARCH_ENABLED=1",
+  "header_dir": "React",
+  "module_name": "RCTRuntime",
+  "pod_target_xcconfig": {
+    "OTHER_CFLAGS": "$(inherited)  -DRCT_NEW_ARCH_ENABLED=1",
+    "DEFINES_MODULE": "YES",
+    "CLANG_CXX_LANGUAGE_STANDARD": "c++20",
+    "HEADER_SEARCH_PATHS": "\"${PODS_ROOT}/React-runtimeexecutor\" \"${PODS_ROOT}/React-runtimeexecutor/platform/ios\" \"${PODS_ROOT}/React-jsitooling\" \"${PODS_ROOT}/React-jsinspector\" \"${PODS_ROOT}/React-jsinspectorcdp\" \"${PODS_ROOT}/React-jsinspectortracing\" \"${PODS_ROOT}/React-RuntimeCore\" \"${PODS_ROOT}/React-RuntimeApple\" \"${PODS_ROOT}/React-RuntimeHermes\""
+  },
+  "dependencies": {
+    "React-Core": [],
+    "React-jsi": [],
+    "React-runtimeexecutor": [],
+    "React-jsitooling": [],
+    "React-jsinspector": [],
+    "React-jsinspectorcdp": [],
+    "React-jsinspectortracing": [],
+    "React-RuntimeCore": [],
+    "React-RuntimeApple": [],
+    "hermes-engine": [],
+    "React-RuntimeHermes": [],
+    "ReactNativeDependencies": [],
+    "React-Core-prebuilt": []
+  },
+  "exclude_files": "RCTJscInstanceFactory.{h,mm}"
+}

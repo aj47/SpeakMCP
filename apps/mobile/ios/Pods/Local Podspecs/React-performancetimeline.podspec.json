@@ -1,0 +1,30 @@
+{
+  "name": "React-performancetimeline",
+  "version": "0.81.4",
+  "summary": "React performance timeline utilities",
+  "homepage": "https://reactnative.dev/",
+  "license": "MIT",
+  "authors": "Meta Platforms, Inc. and its affiliates",
+  "platforms": {
+    "ios": "15.1"
+  },
+  "source": {
+    "git": "https://github.com/facebook/react-native.git",
+    "tag": "v0.81.4"
+  },
+  "source_files": "**/*.h",
+  "header_dir": "react/performance/timeline",
+  "exclude_files": "tests",
+  "pod_target_xcconfig": {
+    "CLANG_CXX_LANGUAGE_STANDARD": "c++20",
+    "HEADER_SEARCH_PATHS": "\"${PODS_ROOT}/React-jsinspectortracing\""
+  },
+  "dependencies": {
+    "React-featureflags": [],
+    "React-jsinspectortracing": [],
+    "React-timing": [],
+    "React-perflogger": [],
+    "ReactNativeDependencies": [],
+    "React-Core-prebuilt": []
+  }
+}

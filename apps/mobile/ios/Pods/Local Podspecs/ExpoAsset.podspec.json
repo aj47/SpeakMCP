@@ -1,0 +1,28 @@
+{
+  "name": "ExpoAsset",
+  "version": "12.0.10",
+  "summary": "An Expo universal module to download assets and pass them into other APIs",
+  "description": "An Expo universal module to download assets and pass them into other APIs",
+  "license": "MIT",
+  "authors": "650 Industries, Inc.",
+  "homepage": "https://docs.expo.dev/versions/latest/sdk/asset/",
+  "platforms": {
+    "ios": "15.1",
+    "osx": "11.0",
+    "tvos": "15.1"
+  },
+  "swift_versions": "5.9",
+  "source": {
+    "git": "https://github.com/expo/expo.git"
+  },
+  "static_framework": true,
+  "dependencies": {
+    "ExpoModulesCore": []
+  },
+  "pod_target_xcconfig": {
+    "DEFINES_MODULE": "YES",
+    "SWIFT_COMPILATION_MODE": "wholemodule"
+  },
+  "source_files": "**/*.{h,m,swift}",
+  "swift_version": "5.9"
+}

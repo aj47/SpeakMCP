@@ -1,0 +1,26 @@
+{
+  "name": "ExpoLinking",
+  "version": "8.0.9",
+  "summary": "Create and open deep links universally",
+  "description": "Create and open deep links universally",
+  "license": "MIT",
+  "authors": "650 Industries, Inc.",
+  "homepage": "https://docs.expo.dev/versions/latest/sdk/linking",
+  "platforms": {
+    "ios": "15.1",
+    "tvos": "15.1",
+    "osx": "11.0"
+  },
+  "source": {
+    "git": "https://github.com/expo/expo.git"
+  },
+  "static_framework": true,
+  "dependencies": {
+    "ExpoModulesCore": []
+  },
+  "pod_target_xcconfig": {
+    "DEFINES_MODULE": "YES",
+    "SWIFT_COMPILATION_MODE": "wholemodule"
+  },
+  "source_files": "**/*.{h,m,mm,swift,hpp,cpp}"
+}

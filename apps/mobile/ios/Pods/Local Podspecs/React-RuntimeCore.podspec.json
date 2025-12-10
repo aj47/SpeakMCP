@@ -1,0 +1,47 @@
+{
+  "name": "React-RuntimeCore",
+  "version": "0.81.4",
+  "summary": "The React Native Runtime.",
+  "homepage": "https://reactnative.dev/",
+  "license": "MIT",
+  "authors": "Meta Platforms, Inc. and its affiliates",
+  "platforms": {
+    "ios": "15.1"
+  },
+  "source": {
+    "git": "https://github.com/facebook/react-native.git",
+    "tag": "v0.81.4"
+  },
+  "source_files": [
+    "*.h",
+    "nativeviewconfig/*.h"
+  ],
+  "exclude_files": [
+    "iostests/*",
+    "tests/**/*.{cpp,h}"
+  ],
+  "header_dir": "react/runtime",
+  "pod_target_xcconfig": {
+    "HEADER_SEARCH_PATHS": "\"$(PODS_ROOT)/Headers/Private/React-Core\" \"${PODS_TARGET_SRCROOT}/../..\" \"${PODS_ROOT}/React-runtimeexecutor\" \"${PODS_ROOT}/React-runtimeexecutor/platform/ios\" \"${PODS_ROOT}/React-Fabric\" \"${PODS_ROOT}/React-jsitooling\"",
+    "USE_HEADERMAP": "YES",
+    "CLANG_CXX_LANGUAGE_STANDARD": "c++20",
+    "GCC_WARN_PEDANTIC": "YES"
+  },
+  "dependencies": {
+    "React-jsiexecutor": [],
+    "React-cxxreact": [],
+    "React-runtimeexecutor": [],
+    "React-jsi": [],
+    "React-jserrorhandler": [],
+    "React-performancetimeline": [],
+    "React-runtimescheduler": [],
+    "React-utils": [],
+    "React-featureflags": [],
+    "React-Fabric": [],
+    "hermes-engine": [],
+    "ReactNativeDependencies": [],
+    "React-Core-prebuilt": [],
+    "React-jsinspector": [],
+    "React-jsitooling": []
+  }
+}

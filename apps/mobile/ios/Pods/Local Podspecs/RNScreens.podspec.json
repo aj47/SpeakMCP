@@ -1,0 +1,74 @@
+{
+  "name": "RNScreens",
+  "version": "4.16.0",
+  "summary": "Native navigation primitives for your React Native app.",
+  "description": "RNScreens - first incomplete navigation solution for your React Native app",
+  "homepage": "https://github.com/software-mansion/react-native-screens",
+  "license": "MIT",
+  "authors": {
+    "author": "author@domain.cn"
+  },
+  "platforms": {
+    "ios": "15.1",
+    "tvos": "15.1",
+    "visionos": "1.0"
+  },
+  "source": {
+    "git": "https://github.com/software-mansion/react-native-screens.git",
+    "tag": "4.16.0"
+  },
+  "source_files": [
+    "ios/**/*.{h,m,mm,cpp,swift}"
+  ],
+  "project_header_files": "ios/bridging/Swift-Bridging.h",
+  "requires_arc": true,
+  "exclude_files": "ios/gamma/**/*.{h,m,mm,cpp,swift}",
+  "pod_target_xcconfig": {
+    "OTHER_CPLUSPLUSFLAGS": "$(inherited)  -DRCT_NEW_ARCH_ENABLED=1 ",
+    "HEADER_SEARCH_PATHS": "\"$(PODS_ROOT)/Headers/Private/Yoga\"",
+    "CLANG_CXX_LANGUAGE_STANDARD": "c++20",
+    "OTHER_SWIFT_FLAGS": "$(inherited) -DRCT_NEW_ARCH_ENABLED"
+  },
+  "compiler_flags": "-DRCT_NEW_ARCH_ENABLED=1",
+  "dependencies": {
+    "React-Core": [],
+    "React-RCTFabric": [],
+    "ReactCodegen": [],
+    "RCTRequired": [],
+    "RCTTypeSafety": [],
+    "ReactCommon/turbomodule/bridging": [],
+    "ReactCommon/turbomodule/core": [],
+    "React-NativeModulesApple": [],
+    "Yoga": [],
+    "React-Fabric": [],
+    "React-graphics": [],
+    "React-utils": [],
+    "React-featureflags": [],
+    "React-debug": [],
+    "React-ImageManager": [],
+    "React-rendererdebug": [],
+    "React-jsi": [],
+    "React-renderercss": [],
+    "hermes-engine": [],
+    "ReactNativeDependencies": [],
+    "React-Core-prebuilt": [],
+    "React-RCTImage": []
+  },
+  "subspecs": [
+    {
+      "name": "common",
+      "source_files": [
+        "common/cpp/**/*.{cpp,h}",
+        "cpp/**/*.{cpp,h}"
+      ],
+      "project_header_files": [
+        "common/cpp/**/*.h",
+        "cpp/**/*.h"
+      ],
+      "header_dir": "rnscreens",
+      "pod_target_xcconfig": {
+        "HEADER_SEARCH_PATHS": "\"$(PODS_TARGET_SRCROOT)/common/cpp\""
+      }
+    }
+  ]
+}

@@ -1,0 +1,52 @@
+{
+  "name": "RNCAsyncStorage",
+  "version": "2.2.0",
+  "summary": "Asynchronous, persistent, key-value storage system for React Native.",
+  "license": "MIT",
+  "authors": "Krzysztof Borowy <contact@kborowy.com>",
+  "homepage": "https://github.com/react-native-async-storage/async-storage#readme",
+  "source": {
+    "git": "https://github.com/react-native-async-storage/async-storage.git",
+    "tag": "v2.2.0"
+  },
+  "source_files": "ios/**/*.{h,m,mm}",
+  "resource_bundles": {
+    "RNCAsyncStorage_resources": "ios/PrivacyInfo.xcprivacy"
+  },
+  "pod_target_xcconfig": {
+    "HEADER_SEARCH_PATHS": "\"$(PODS_ROOT)/boost\" \"$(PODS_ROOT)/boost-for-react-native\" \"$(PODS_ROOT)/RCT-Folly\" \"$(PODS_ROOT)/Headers/Private/Yoga\"",
+    "CLANG_CXX_LANGUAGE_STANDARD": "c++20",
+    "OTHER_CPLUSPLUSFLAGS": "$(inherited) -DRCT_NEW_ARCH_ENABLED=1 ",
+    "OTHER_SWIFT_FLAGS": "$(inherited) -DRCT_NEW_ARCH_ENABLED"
+  },
+  "platforms": {
+    "ios": "13.4",
+    "tvos": "11.0",
+    "osx": "10.15",
+    "visionos": "1.0"
+  },
+  "compiler_flags": "-DFOLLY_NO_CONFIG -DFOLLY_MOBILE=1 -DFOLLY_USE_LIBCPP=1 -Wno-comma -Wno-shorten-64-to-32 -DRCT_NEW_ARCH_ENABLED=1  -DRCT_NEW_ARCH_ENABLED=1",
+  "dependencies": {
+    "React-Core": [],
+    "React-RCTFabric": [],
+    "ReactCodegen": [],
+    "RCTRequired": [],
+    "RCTTypeSafety": [],
+    "ReactCommon/turbomodule/bridging": [],
+    "ReactCommon/turbomodule/core": [],
+    "React-NativeModulesApple": [],
+    "Yoga": [],
+    "React-Fabric": [],
+    "React-graphics": [],
+    "React-utils": [],
+    "React-featureflags": [],
+    "React-debug": [],
+    "React-ImageManager": [],
+    "React-rendererdebug": [],
+    "React-jsi": [],
+    "React-renderercss": [],
+    "hermes-engine": [],
+    "ReactNativeDependencies": [],
+    "React-Core-prebuilt": []
+  }
+}

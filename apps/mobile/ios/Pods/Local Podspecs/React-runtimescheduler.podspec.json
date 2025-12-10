@@ -1,0 +1,39 @@
+{
+  "name": "React-runtimescheduler",
+  "version": "0.81.4",
+  "summary": "-",
+  "homepage": "https://reactnative.dev/",
+  "license": "MIT",
+  "authors": "Meta Platforms, Inc. and its affiliates",
+  "platforms": {
+    "ios": "15.1"
+  },
+  "source": {
+    "git": "https://github.com/facebook/react-native.git",
+    "tag": "v0.81.4"
+  },
+  "source_files": "**/*.h",
+  "header_dir": "react/renderer/runtimescheduler",
+  "exclude_files": "tests",
+  "pod_target_xcconfig": {
+    "CLANG_CXX_LANGUAGE_STANDARD": "c++20",
+    "HEADER_SEARCH_PATHS": "\"${PODS_ROOT}/React-runtimeexecutor\" \"${PODS_ROOT}/React-runtimeexecutor/platform/ios\" \"${PODS_ROOT}/React-debug\" \"${PODS_ROOT}/React-jsinspectortracing\""
+  },
+  "dependencies": {
+    "React-runtimeexecutor": [],
+    "React-callinvoker": [],
+    "React-cxxreact": [],
+    "React-rendererdebug": [],
+    "React-utils": [],
+    "React-featureflags": [],
+    "React-timing": [],
+    "React-jsi": [],
+    "React-performancetimeline": [],
+    "React-rendererconsistency": [],
+    "React-debug": [],
+    "React-jsinspectortracing": [],
+    "hermes-engine": [],
+    "ReactNativeDependencies": [],
+    "React-Core-prebuilt": []
+  }
+}

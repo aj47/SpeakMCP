@@ -1,0 +1,1 @@
+../../../../ReactNativeDependencies/Headers/folly/Singleton-inl.h

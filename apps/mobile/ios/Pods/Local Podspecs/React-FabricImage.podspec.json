@@ -1,0 +1,47 @@
+{
+  "name": "React-FabricImage",
+  "version": "0.81.4",
+  "summary": "Image Component for Fabric for React Native.",
+  "homepage": "https://reactnative.dev/",
+  "license": "MIT",
+  "authors": "Meta Platforms, Inc. and its affiliates",
+  "platforms": {
+    "ios": "15.1"
+  },
+  "source": {
+    "git": "https://github.com/facebook/react-native.git",
+    "tag": "v0.81.4"
+  },
+  "source_files": "react/renderer/components/image/**/*.h",
+  "exclude_files": "react/renderer/components/image/tests",
+  "header_dir": "react/renderer/components/image",
+  "pod_target_xcconfig": {
+    "USE_HEADERMAP": "YES",
+    "CLANG_CXX_LANGUAGE_STANDARD": "c++20",
+    "HEADER_SEARCH_PATHS": "\"$(PODS_TARGET_SRCROOT)/ReactCommon\" \"$(PODS_ROOT)/Headers/Private/Yoga\" \"${PODS_ROOT}/React-ImageManager\" \"${PODS_ROOT}/React-ImageManager/react/renderer/components/view/platform/cxx\" \"${PODS_ROOT}/React-ImageManager/react/renderer/imagemanager/platform/ios\" \"${PODS_ROOT}/ReactCommon\" \"${PODS_ROOT}/React-graphics\" \"${PODS_ROOT}/React-graphics/react/renderer/graphics/platform/ios\" \"${PODS_ROOT}/React-Fabric\" \"${PODS_ROOT}/React-Fabric/react/renderer/components/view/platform/cxx\" \"${PODS_ROOT}/React-Fabric/react/renderer/imagemanager/platform/ios\" \"${PODS_ROOT}/React-rendererdebug\""
+  },
+  "dependencies": {
+    "React-jsiexecutor": [
+      "0.81.4"
+    ],
+    "RCTRequired": [
+      "0.81.4"
+    ],
+    "RCTTypeSafety": [
+      "0.81.4"
+    ],
+    "React-jsi": [],
+    "React-logger": [],
+    "React-featureflags": [],
+    "React-utils": [],
+    "Yoga": [],
+    "React-ImageManager": [],
+    "ReactCommon": [],
+    "React-graphics": [],
+    "React-Fabric": [],
+    "React-rendererdebug": [],
+    "hermes-engine": [],
+    "ReactNativeDependencies": [],
+    "React-Core-prebuilt": []
+  }
+}

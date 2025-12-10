@@ -1,0 +1,1 @@
+../../../../ReactNativeDependencies/Headers/SocketRocket/NSURLRequest+SRWebSocket.h

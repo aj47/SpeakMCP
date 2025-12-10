@@ -1,0 +1,48 @@
+{
+  "name": "React-RuntimeApple",
+  "version": "0.81.4",
+  "summary": "The React Native Runtime.",
+  "homepage": "https://reactnative.dev/",
+  "license": "MIT",
+  "authors": "Meta Platforms, Inc. and its affiliates",
+  "platforms": {
+    "ios": "15.1"
+  },
+  "source": {
+    "git": "https://github.com/facebook/react-native.git",
+    "tag": "v0.81.4"
+  },
+  "source_files": "ReactCommon/*.{h}",
+  "header_dir": "ReactCommon",
+  "pod_target_xcconfig": {
+    "HEADER_SEARCH_PATHS": "$(PODS_ROOT)/Headers/Private/React-Core $(PODS_TARGET_SRCROOT)/../../../.. $(PODS_TARGET_SRCROOT)/../../../../.. \"${PODS_ROOT}/React-runtimeexecutor\" \"${PODS_ROOT}/React-runtimeexecutor/platform/ios\" \"${PODS_ROOT}/React-jsitooling\" \"${PODS_ROOT}/React-RCTFBReactNativeSpec\" \"${PODS_ROOT}/React-utils\" \"${PODS_ROOT}/React-utils/react/utils/platform/ios\" \"${PODS_ROOT}/React-RuntimeHermes\"",
+    "USE_HEADERMAP": "YES",
+    "CLANG_CXX_LANGUAGE_STANDARD": "c++20",
+    "GCC_WARN_PEDANTIC": "YES"
+  },
+  "dependencies": {
+    "React-jsiexecutor": [],
+    "React-cxxreact": [],
+    "React-callinvoker": [],
+    "React-runtimeexecutor": [],
+    "React-runtimescheduler": [],
+    "React-jsi": [],
+    "React-Core/Default": [],
+    "React-CoreModules": [],
+    "React-NativeModulesApple": [],
+    "React-RCTFabric": [],
+    "React-RuntimeCore": [],
+    "React-Mapbuffer": [],
+    "React-jserrorhandler": [],
+    "React-jsinspector": [],
+    "React-featureflags": [],
+    "React-jsitooling": [],
+    "React-RCTFBReactNativeSpec": [],
+    "React-utils": [],
+    "hermes-engine": [],
+    "React-RuntimeHermes": [],
+    "ReactNativeDependencies": [],
+    "React-Core-prebuilt": []
+  },
+  "exclude_files": "ReactCommon/RCTJscInstance.{mm,h}"
+}

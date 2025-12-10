@@ -1,0 +1,32 @@
+{
+  "name": "ExpoFileSystem",
+  "version": "19.0.19",
+  "summary": "Provides access to the local file system on the device.",
+  "description": "Provides access to the local file system on the device.",
+  "license": "MIT",
+  "authors": "650 Industries, Inc.",
+  "homepage": "https://docs.expo.dev/versions/latest/sdk/filesystem/",
+  "platforms": {
+    "ios": "15.1",
+    "osx": "11.0",
+    "tvos": "15.1"
+  },
+  "swift_versions": "5.9",
+  "source": {
+    "git": "https://github.com/expo/expo.git"
+  },
+  "static_framework": true,
+  "dependencies": {
+    "ExpoModulesCore": []
+  },
+  "pod_target_xcconfig": {
+    "DEFINES_MODULE": "YES"
+  },
+  "resource_bundles": {
+    "ExpoFileSystem_privacy": [
+      "PrivacyInfo.xcprivacy"
+    ]
+  },
+  "source_files": "**/*.{h,m,swift}",
+  "swift_version": "5.9"
+}

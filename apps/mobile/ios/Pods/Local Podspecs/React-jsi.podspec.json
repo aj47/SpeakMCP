@@ -1,0 +1,35 @@
+{
+  "name": "React-jsi",
+  "version": "0.81.4",
+  "summary": "JavaScript Interface layer for React Native",
+  "homepage": "https://reactnative.dev/",
+  "license": "MIT",
+  "authors": "Meta Platforms, Inc. and its affiliates",
+  "platforms": {
+    "ios": "15.1"
+  },
+  "source": {
+    "git": "https://github.com/facebook/react-native.git",
+    "tag": "v0.81.4"
+  },
+  "header_dir": "jsi",
+  "pod_target_xcconfig": {
+    "CLANG_CXX_LANGUAGE_STANDARD": "c++20",
+    "DEFINES_MODULE": "YES",
+    "HEADER_SEARCH_PATHS": [
+      "$(PODS_ROOT)/ReactNativeDependencies"
+    ]
+  },
+  "source_files": "**/*.h",
+  "dependencies": {
+    "hermes-engine": [],
+    "ReactNativeDependencies": [],
+    "React-Core-prebuilt": []
+  },
+  "exclude_files": [
+    "jsi/jsilib-posix.cpp",
+    "jsi/jsilib-windows.cpp",
+    "**/test/*",
+    "jsi/jsi.cpp"
+  ]
+}

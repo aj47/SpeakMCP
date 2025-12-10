@@ -1,0 +1,70 @@
+{
+  "name": "react-native-safe-area-context",
+  "version": "5.6.2",
+  "summary": "A flexible way to handle safe area, also works on Android and web.",
+  "license": "MIT",
+  "authors": "Janic Duplessis <janicduplessis@gmail.com>",
+  "homepage": "https://github.com/AppAndFlow/react-native-safe-area-context#readme",
+  "platforms": {
+    "ios": "12.4",
+    "osx": "10.15",
+    "tvos": "12.4",
+    "visionos": "1.0"
+  },
+  "source": {
+    "git": "https://github.com/AppAndFlow/react-native-safe-area-context.git",
+    "tag": "v5.6.2"
+  },
+  "source_files": "ios/**/*.{h,m,mm}",
+  "exclude_files": "ios/Fabric",
+  "dependencies": {
+    "React-Core": [],
+    "React-RCTFabric": [],
+    "ReactCodegen": [],
+    "RCTRequired": [],
+    "RCTTypeSafety": [],
+    "ReactCommon/turbomodule/bridging": [],
+    "ReactCommon/turbomodule/core": [],
+    "React-NativeModulesApple": [],
+    "Yoga": [],
+    "React-Fabric": [],
+    "React-graphics": [],
+    "React-utils": [],
+    "React-featureflags": [],
+    "React-debug": [],
+    "React-ImageManager": [],
+    "React-rendererdebug": [],
+    "React-jsi": [],
+    "React-renderercss": [],
+    "hermes-engine": [],
+    "ReactNativeDependencies": [],
+    "React-Core-prebuilt": []
+  },
+  "compiler_flags": "-DRCT_NEW_ARCH_ENABLED=1",
+  "pod_target_xcconfig": {
+    "HEADER_SEARCH_PATHS": "\"$(PODS_ROOT)/Headers/Private/Yoga\"",
+    "CLANG_CXX_LANGUAGE_STANDARD": "c++20",
+    "OTHER_CPLUSPLUSFLAGS": "$(inherited) -DRCT_NEW_ARCH_ENABLED=1 ",
+    "OTHER_SWIFT_FLAGS": "$(inherited) -DRCT_NEW_ARCH_ENABLED"
+  },
+  "subspecs": [
+    {
+      "name": "common",
+      "source_files": "common/cpp/**/*.{cpp,h}",
+      "header_dir": "react/renderer/components/safeareacontext",
+      "pod_target_xcconfig": {
+        "HEADER_SEARCH_PATHS": "\"$(PODS_TARGET_SRCROOT)/common/cpp\""
+      }
+    },
+    {
+      "name": "fabric",
+      "dependencies": {
+        "react-native-safe-area-context/common": []
+      },
+      "source_files": "ios/Fabric/**/*.{h,m,mm}",
+      "pod_target_xcconfig": {
+        "HEADER_SEARCH_PATHS": "\"$(PODS_TARGET_SRCROOT)/common/cpp\""
+      }
+    }
+  ]
+}

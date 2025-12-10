@@ -1,0 +1,37 @@
+{
+  "name": "React-jsinspector",
+  "version": "0.81.4",
+  "summary": "React Native subsystem for modern debugging over the Chrome DevTools Protocol (CDP)",
+  "homepage": "https://reactnative.dev/",
+  "license": "MIT",
+  "authors": "Meta Platforms, Inc. and its affiliates",
+  "platforms": {
+    "ios": "15.1"
+  },
+  "source": {
+    "git": "https://github.com/facebook/react-native.git",
+    "tag": "v0.81.4"
+  },
+  "source_files": "*.h",
+  "header_dir": "jsinspector-modern",
+  "pod_target_xcconfig": {
+    "HEADER_SEARCH_PATHS": "\"${PODS_ROOT}/React-oscompat\" \"${PODS_ROOT}/React-runtimeexecutor\" \"${PODS_ROOT}/React-runtimeexecutor/platform/ios\" \"${PODS_ROOT}/React-jsinspectorcdp\" \"${PODS_ROOT}/React-jsinspectornetwork\" \"${PODS_ROOT}/React-jsinspectortracing\"",
+    "CLANG_CXX_LANGUAGE_STANDARD": "c++20",
+    "DEFINES_MODULE": "YES"
+  },
+  "dependencies": {
+    "React-oscompat": [],
+    "React-featureflags": [],
+    "React-runtimeexecutor": [],
+    "React-jsi": [],
+    "React-jsinspectorcdp": [],
+    "React-jsinspectornetwork": [],
+    "React-jsinspectortracing": [],
+    "React-perflogger": [
+      "0.81.4"
+    ],
+    "hermes-engine": [],
+    "ReactNativeDependencies": [],
+    "React-Core-prebuilt": []
+  }
+}

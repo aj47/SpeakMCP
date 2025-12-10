@@ -1,0 +1,42 @@
+{
+  "name": "React-RCTBlob",
+  "version": "0.81.4",
+  "summary": "An API for displaying iOS action sheets and share sheets.",
+  "homepage": "https://reactnative.dev/",
+  "license": "MIT",
+  "authors": "Meta Platforms, Inc. and its affiliates",
+  "platforms": {
+    "ios": "15.1"
+  },
+  "compiler_flags": "-Wno-nullability-completeness",
+  "source": {
+    "git": "https://github.com/facebook/react-native.git",
+    "tag": "v0.81.4"
+  },
+  "source_files": "**/*.h",
+  "preserve_paths": [
+    "package.json",
+    "LICENSE",
+    "LICENSE-docs"
+  ],
+  "header_dir": "RCTBlob",
+  "pod_target_xcconfig": {
+    "USE_HEADERMAP": "YES",
+    "CLANG_CXX_LANGUAGE_STANDARD": "c++20",
+    "HEADER_SEARCH_PATHS": "\"${PODS_ROOT}/Headers/Public/ReactCodegen/react/renderer/components\" \"${PODS_ROOT}/React-RCTFBReactNativeSpec\" \"${PODS_ROOT}/React-NativeModulesApple\" \"${PODS_ROOT}/React-jsinspector\" \"${PODS_ROOT}/React-jsinspectorcdp\" \"${PODS_ROOT}/ReactCommon\" \"${PODS_ROOT}/ReactCommon/react/nativemodule/core\""
+  },
+  "dependencies": {
+    "React-jsi": [],
+    "React-Core/RCTBlobHeaders": [],
+    "React-Core/RCTWebSocket": [],
+    "React-RCTNetwork": [],
+    "React-RCTFBReactNativeSpec": [],
+    "React-NativeModulesApple": [],
+    "React-jsinspector": [],
+    "React-jsinspectorcdp": [],
+    "ReactCommon": [],
+    "hermes-engine": [],
+    "ReactNativeDependencies": [],
+    "React-Core-prebuilt": []
+  }
+}

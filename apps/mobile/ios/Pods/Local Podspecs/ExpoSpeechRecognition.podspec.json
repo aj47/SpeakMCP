@@ -1,0 +1,27 @@
+{
+  "name": "ExpoSpeechRecognition",
+  "version": "2.1.5",
+  "summary": "Speech Recognition for React Native Expo projects",
+  "description": "Speech Recognition for React Native Expo projects",
+  "license": "MIT",
+  "authors": "jamsch (https://github.com/jamsch)",
+  "homepage": "https://github.com/jamsch/expo-speech-recognition#readme",
+  "platforms": {
+    "ios": "13.4",
+    "tvos": "13.4"
+  },
+  "swift_versions": "5.4",
+  "source": {
+    "git": "https://github.com/jamsch/expo-speech-recognition"
+  },
+  "static_framework": true,
+  "dependencies": {
+    "ExpoModulesCore": []
+  },
+  "pod_target_xcconfig": {
+    "DEFINES_MODULE": "YES",
+    "SWIFT_COMPILATION_MODE": "wholemodule"
+  },
+  "source_files": "**/*.{h,m,swift}",
+  "swift_version": "5.4"
+}

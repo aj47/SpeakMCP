@@ -1,0 +1,40 @@
+{
+  "name": "EXConstants",
+  "version": "18.0.10",
+  "summary": "Provides system information that remains constant throughout the lifetime of your app.",
+  "description": "Provides system information that remains constant throughout the lifetime of your app.",
+  "license": "MIT",
+  "authors": "650 Industries, Inc.",
+  "homepage": "https://docs.expo.dev/versions/latest/sdk/constants/",
+  "platforms": {
+    "ios": "15.1",
+    "osx": "11.0",
+    "tvos": "15.1"
+  },
+  "swift_versions": "5.9",
+  "source": {
+    "git": "https://github.com/expo/expo.git"
+  },
+  "static_framework": true,
+  "dependencies": {
+    "ExpoModulesCore": []
+  },
+  "pod_target_xcconfig": {
+    "DEFINES_MODULE": "YES",
+    "SWIFT_COMPILATION_MODE": "wholemodule"
+  },
+  "source_files": "**/*.{h,m,swift}",
+  "script_phases": {
+    "name": "Generate app.config for prebuilt Constants.manifest",
+    "script": "bash -l -c \"$PODS_TARGET_SRCROOT/../scripts/get-app-config-ios.sh\"",
+    "execution_position": "before_compile",
+    "always_out_of_date": "1"
+  },
+  "resource_bundles": {
+    "EXConstants": [],
+    "ExpoConstants_privacy": [
+      "PrivacyInfo.xcprivacy"
+    ]
+  },
+  "swift_version": "5.9"
+}

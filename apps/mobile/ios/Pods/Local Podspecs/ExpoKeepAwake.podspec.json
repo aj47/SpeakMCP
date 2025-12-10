@@ -1,0 +1,28 @@
+{
+  "name": "ExpoKeepAwake",
+  "version": "15.0.7",
+  "summary": "Provides a React component that prevents the screen sleeping when rendered. It also exposes static methods to control the behavior imperatively.",
+  "description": "Provides a React component that prevents the screen sleeping when rendered. It also exposes static methods to control the behavior imperatively.",
+  "license": "MIT",
+  "authors": "650 Industries, Inc.",
+  "homepage": "https://docs.expo.dev/versions/latest/sdk/keep-awake/",
+  "platforms": {
+    "ios": "15.1",
+    "osx": "11.0",
+    "tvos": "15.1"
+  },
+  "swift_versions": "5.9",
+  "source": {
+    "git": "https://github.com/expo/expo.git"
+  },
+  "static_framework": true,
+  "dependencies": {
+    "ExpoModulesCore": []
+  },
+  "pod_target_xcconfig": {
+    "DEFINES_MODULE": "YES",
+    "SWIFT_COMPILATION_MODE": "wholemodule"
+  },
+  "source_files": "**/*.{h,m,swift}",
+  "swift_version": "5.9"
+}

@@ -1,0 +1,170 @@
+{
+  "name": "React-Core",
+  "version": "0.81.4",
+  "summary": "The core of React Native.",
+  "homepage": "https://reactnative.dev/",
+  "license": "MIT",
+  "authors": "Meta Platforms, Inc. and its affiliates",
+  "platforms": {
+    "ios": "15.1"
+  },
+  "source": {
+    "git": "https://github.com/facebook/react-native.git",
+    "tag": "v0.81.4"
+  },
+  "resource_bundles": {
+    "React-Core_privacy": "React/Resources/PrivacyInfo.xcprivacy"
+  },
+  "compiler_flags": "-DUSE_HERMES=1",
+  "header_dir": "React",
+  "weak_frameworks": "JavaScriptCore",
+  "pod_target_xcconfig": {
+    "HEADER_SEARCH_PATHS": "$(PODS_TARGET_SRCROOT)/ReactCommon ${PODS_ROOT}/Headers/Public/FlipperKit $(PODS_ROOT)/Headers/Public/ReactCommon $(PODS_ROOT)/Headers/Public/React-hermes $(PODS_ROOT)/Headers/Public/hermes-engine \"${PODS_ROOT}/React-runtimeexecutor\" \"${PODS_ROOT}/React-runtimeexecutor/platform/ios\" \"${PODS_ROOT}/React-jsinspector\" \"${PODS_ROOT}/React-jsinspectorcdp\" \"${PODS_ROOT}/React-jsitooling\" \"${PODS_ROOT}/React-utils\" \"${PODS_ROOT}/React-utils/react/utils/platform/ios\" \"${PODS_ROOT}/RCTDeprecation\"",
+    "DEFINES_MODULE": "YES",
+    "GCC_PREPROCESSOR_DEFINITIONS": "RCT_METRO_PORT=${RCT_METRO_PORT}",
+    "CLANG_CXX_LANGUAGE_STANDARD": "c++20",
+    "FRAMEWORK_SEARCH_PATHS": "\"$(PODS_CONFIGURATION_BUILD_DIR)/React-hermes\""
+  },
+  "user_target_xcconfig": {
+    "HEADER_SEARCH_PATHS": "\"$(PODS_ROOT)/Headers/Private/React-Core\""
+  },
+  "default_subspecs": "Default",
+  "dependencies": {
+    "React-cxxreact": [],
+    "React-perflogger": [],
+    "React-jsi": [],
+    "React-jsiexecutor": [],
+    "React-featureflags": [],
+    "React-runtimescheduler": [],
+    "Yoga": [],
+    "React-hermes": [],
+    "React-runtimeexecutor": [],
+    "React-jsinspector": [],
+    "React-jsinspectorcdp": [],
+    "React-jsitooling": [],
+    "React-utils": [],
+    "RCTDeprecation": [],
+    "hermes-engine": [],
+    "ReactNativeDependencies": [],
+    "React-Core-prebuilt": []
+  },
+  "subspecs": [
+    {
+      "name": "Default",
+      "source_files": "React/**/*.h",
+      "exclude_files": [
+        "React/CoreModules/**/*",
+        "React/DevSupport/**/*",
+        "React/Fabric/**/*",
+        "React/FBReactNativeSpec/**/*",
+        "React/Tests/**/*",
+        "React/Inspector/**/*",
+        "React/Runtime/**/*",
+        "React/CxxBridge/JSCExecutorFactory.{h,mm}"
+      ],
+      "private_header_files": "React/Cxx*/*.h"
+    },
+    {
+      "name": "DevSupport",
+      "source_files": [
+        "React/DevSupport/*.h",
+        "React/Inspector/*.h"
+      ],
+      "dependencies": {
+        "React-Core/Default": [
+          "0.81.4"
+        ],
+        "React-Core/RCTWebSocket": [
+          "0.81.4"
+        ]
+      },
+      "private_header_files": "React/Inspector/RCTCxx*.h"
+    },
+    {
+      "name": "RCTWebSocket",
+      "source_files": "Libraries/WebSocket/*.h",
+      "dependencies": {
+        "React-Core/Default": [
+          "0.81.4"
+        ]
+      }
+    },
+    {
+      "name": "CoreModulesHeaders",
+      "source_files": "React/CoreModules/**/*.h",
+      "dependencies": {
+        "React-Core/Default": []
+      }
+    },
+    {
+      "name": "RCTActionSheetHeaders",
+      "source_files": "Libraries/ActionSheetIOS/*.h",
+      "dependencies": {
+        "React-Core/Default": []
+      }
+    },
+    {
+      "name": "RCTAnimationHeaders",
+      "source_files": "Libraries/NativeAnimation/{Drivers/*,Nodes/*,*}.{h}",
+      "dependencies": {
+        "React-Core/Default": []
+      }
+    },
+    {
+      "name": "RCTBlobHeaders",
+      "source_files": "Libraries/Blob/{RCTBlobManager,RCTFileReaderModule}.h",
+      "dependencies": {
+        "React-Core/Default": []
+      }
+    },
+    {
+      "name": "RCTImageHeaders",
+      "source_files": "Libraries/Image/*.h",
+      "dependencies": {
+        "React-Core/Default": []
+      }
+    },
+    {
+      "name": "RCTLinkingHeaders",
+      "source_files": "Libraries/LinkingIOS/*.h",
+      "dependencies": {
+        "React-Core/Default": []
+      }
+    },
+    {
+      "name": "RCTNetworkHeaders",
+      "source_files": "Libraries/Network/*.h",
+      "dependencies": {
+        "React-Core/Default": []
+      }
+    },
+    {
+      "name": "RCTPushNotificationHeaders",
+      "source_files": "Libraries/PushNotificationIOS/*.h",
+      "dependencies": {
+        "React-Core/Default": []
+      }
+    },
+    {
+      "name": "RCTSettingsHeaders",
+      "source_files": "Libraries/Settings/*.h",
+      "dependencies": {
+        "React-Core/Default": []
+      }
+    },
+    {
+      "name": "RCTTextHeaders",
+      "source_files": "Libraries/Text/**/*.h",
+      "dependencies": {
+        "React-Core/Default": []
+      }
+    },
+    {
+      "name": "RCTVibrationHeaders",
+      "source_files": "Libraries/Vibration/*.h",
+      "dependencies": {
+        "React-Core/Default": []
+      }
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+module ExpoFont {
+  umbrella header "ExpoFont-umbrella.h"
+
+  export *
+  module * { export * }
+}

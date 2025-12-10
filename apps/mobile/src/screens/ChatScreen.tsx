@@ -435,7 +435,7 @@ export default function ChatScreen({ route, navigation }: any) {
     setResponding(true);
 
     const currentSession = sessionStore.getCurrentSession();
-    const serverConversationId = currentSession?.serverConversationId;
+    const serverConversationId = sessionStore.getServerConversationId();
 
     console.log('[ChatScreen] Session info:', {
       sessionId: currentSession?.id,
@@ -445,8 +445,6 @@ export default function ChatScreen({ route, navigation }: any) {
     setInput('');
     try {
       let streamingText = '';
-
-      const serverConversationId = sessionStore.getServerConversationId();
       console.log('[ChatScreen] Starting chat request with', messages.length + 1, 'messages, conversationId:', serverConversationId || 'new');
       setDebugInfo('Request sent, waiting for response...');
 

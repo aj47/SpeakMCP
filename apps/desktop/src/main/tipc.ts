@@ -1775,19 +1775,7 @@ export const router = {
       if (config.ttsPreprocessingEnabled !== false) {
         // Use LLM-based preprocessing if enabled, otherwise fall back to regex
         if (config.ttsUseLLMPreprocessing) {
-          try {
-            processedText = await preprocessTextForTTSWithLLM(input.text, config.ttsLLMPreprocessingProviderId)
-          } catch (error) {
-            // LLM preprocessing failed, the function already falls back to regex internally
-            // but log a warning for visibility
-            diagnosticsService.logWarning("tts", "LLM preprocessing failed, using regex fallback", error)
-            const preprocessingOptions = {
-              removeCodeBlocks: config.ttsRemoveCodeBlocks ?? true,
-              removeUrls: config.ttsRemoveUrls ?? true,
-              convertMarkdown: config.ttsConvertMarkdown ?? true,
-            }
-            processedText = preprocessTextForTTS(input.text, preprocessingOptions)
-          }
+          processedText = await preprocessTextForTTSWithLLM(input.text, config.ttsLLMPreprocessingProviderId)
         } else {
           // Use regex-based preprocessing
           const preprocessingOptions = {

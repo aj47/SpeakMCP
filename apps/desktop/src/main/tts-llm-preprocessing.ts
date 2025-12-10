@@ -67,9 +67,14 @@ export async function preprocessTextForTTSWithLLM(
       "LLM preprocessing failed, falling back to regex",
       error
     )
-    
-    // Fall back to regex-based preprocessing
-    return regexPreprocessTextForTTS(text)
+
+    // Fall back to regex-based preprocessing with user-configured options
+    const preprocessingOptions = {
+      removeCodeBlocks: config.ttsRemoveCodeBlocks ?? true,
+      removeUrls: config.ttsRemoveUrls ?? true,
+      convertMarkdown: config.ttsConvertMarkdown ?? true,
+    }
+    return regexPreprocessTextForTTS(text, preprocessingOptions)
   }
 }
 

@@ -454,8 +454,14 @@ export default function ChatScreen({ route, navigation }: any) {
         if (progressMessages.length > 0) {
           setMessages((m) => {
             const beforePlaceholder = m.slice(0, messageCountBeforeTurn + 1);
-            const newMessages = [...beforePlaceholder, ...progressMessages];
-            return newMessages;
+            // Preserve isThinking flag if there's no actual content yet
+            const newMessages = progressMessages.map(msg => {
+              if (msg.role === 'assistant' && !msg.content && !msg.toolCalls && !msg.toolResults) {
+                return { ...msg, isThinking: true };
+              }
+              return msg;
+            });
+            return [...beforePlaceholder, ...newMessages];
           });
         }
       };

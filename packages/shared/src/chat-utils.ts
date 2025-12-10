@@ -16,7 +16,7 @@ export const COLLAPSE_THRESHOLD = 200;
 /**
  * Role type for chat messages
  */
-export type MessageRole = 'user' | 'assistant' | 'tool';
+export type MessageRole = 'user' | 'assistant' | 'tool' | 'system';
 
 /**
  * Get the emoji icon for a message role
@@ -31,6 +31,8 @@ export function getRoleIcon(role: MessageRole): string {
       return '🤖';
     case 'tool':
       return '🔧';
+    case 'system':
+      return '⚙️';
     default:
       return '💬';
   }
@@ -49,6 +51,8 @@ export function getRoleLabel(role: MessageRole): string {
       return 'Assistant';
     case 'tool':
       return 'Tool';
+    case 'system':
+      return 'System';
     default:
       return 'Unknown';
   }
@@ -447,6 +451,12 @@ export const ROLE_CONFIG: Record<MessageRole | 'default', RoleConfig> = {
     label: 'Tool',
     colorClass: 'bg-orange-500/10 text-orange-600 dark:text-orange-400',
     colorClassCompact: 'bg-orange-500/20 text-orange-600 dark:text-orange-400',
+  },
+  system: {
+    icon: '⚙️',
+    label: 'System',
+    colorClass: 'bg-purple-500/10 text-purple-600 dark:text-purple-400',
+    colorClassCompact: 'bg-purple-500/20 text-purple-600 dark:text-purple-400',
   },
   default: {
     icon: '💬',

@@ -893,6 +893,8 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true)
   const lastMessageCountRef = useRef(0)
   const lastContentLengthRef = useRef(0)
+  const lastDisplayItemsCountRef = useRef(0)
+  const lastSessionIdRef = useRef<string | undefined>(undefined)
   const [showKillConfirmation, setShowKillConfirmation] = useState(false)
   const [isKilling, setIsKilling] = useState(false)
   const { isDark } = useTheme()
@@ -1307,8 +1309,20 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
     return -1
   })()
 
+  // Reset auto-scroll tracking refs when session changes
+  // This prevents stale high-water marks from blocking auto-scroll after a clear/new session
+  useEffect(() => {
+    if (progress?.sessionId !== lastSessionIdRef.current) {
+      lastSessionIdRef.current = progress?.sessionId
+      lastMessageCountRef.current = 0
+      lastContentLengthRef.current = 0
+      lastDisplayItemsCountRef.current = 0
+      // Also reset auto-scroll state for new sessions
+      setShouldAutoScroll(true)
+    }
+  }, [progress?.sessionId])
 
-  // Improved auto-scroll logic
+  // Improved auto-scroll logic - tracks displayItems for comprehensive change detection
   useEffect(() => {
     const scrollContainer = scrollContainerRef.current
     if (!scrollContainer) return
@@ -1323,13 +1337,28 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
       0,
     ) + (progress.streamingContent?.text?.length ?? 0)
 
-    // Check if new messages were added or content changed (streaming)
+    // Check if new messages were added, content changed (streaming), or displayItems changed
+    // displayItems includes tool executions, tool approvals, retry status, and streaming content
     const hasNewMessages = messages.length > lastMessageCountRef.current
     const hasContentChanged = totalContentLength > lastContentLengthRef.current
+    const hasNewDisplayItems = displayItems.length > lastDisplayItemsCountRef.current
 
-    if (hasNewMessages || hasContentChanged) {
+    // Also detect when counts decrease (e.g., streaming item removed) and reset refs
+    // This ensures auto-scroll works correctly when items are removed and new ones added
+    const hasMessagesDecreased = messages.length < lastMessageCountRef.current
+    const hasDisplayItemsDecreased = displayItems.length < lastDisplayItemsCountRef.current
+
+    if (hasMessagesDecreased || hasDisplayItemsDecreased) {
+      // Reset refs when counts decrease to avoid high-water mark issues
       lastMessageCountRef.current = messages.length
       lastContentLengthRef.current = totalContentLength
+      lastDisplayItemsCountRef.current = displayItems.length
+    }
+
+    if (hasNewMessages || hasContentChanged || hasNewDisplayItems) {
+      lastMessageCountRef.current = messages.length
+      lastContentLengthRef.current = totalContentLength
+      lastDisplayItemsCountRef.current = displayItems.length
 
       // Only auto-scroll if we should (user hasn't manually scrolled up)
       if (shouldAutoScroll) {
@@ -1339,9 +1368,9 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
         })
       }
     }
-  }, [messages.length, shouldAutoScroll, messages, progress.streamingContent?.text])
+  }, [messages.length, shouldAutoScroll, messages, progress.streamingContent?.text, displayItems.length, displayItems])
 
-  // Initial scroll to bottom on mount and when first message appears
+  // Initial scroll to bottom on mount and when first display item appears
   useEffect(() => {
     const scrollContainer = scrollContainerRef.current
     if (!scrollContainer) return
@@ -1357,7 +1386,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
         requestAnimationFrame(scrollToBottom)
       }, delay)
     })
-  }, [messages.length > 0])
+  }, [displayItems.length > 0])
 
   // Make panel focusable when agent completes (overlay variant only)
   // This enables the continue conversation input to receive focus and be interactable

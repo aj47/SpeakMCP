@@ -440,6 +440,12 @@ export class OpenAIClient {
 
           const result = this.processSSEEvent(event, onToken, onProgress);
           if (result) {
+            // Handle SSE error events
+            if (result.error) {
+              recovery?.markDisconnected(result.error.message);
+              safeReject(result.error);
+              return;
+            }
             if (result.content !== undefined) {
               if (result.conversationHistory) {
                 finalContent = result.content;
@@ -458,6 +464,12 @@ export class OpenAIClient {
         if (buffer.trim()) {
           const result = this.processSSEEvent(buffer, onToken, onProgress);
           if (result) {
+            // Handle SSE error events
+            if (result.error) {
+              recovery?.markDisconnected(result.error.message);
+              safeReject(result.error);
+              return;
+            }
             if (result.content !== undefined) {
               if (result.conversationHistory) {
                 finalContent = result.content;
@@ -485,20 +497,26 @@ export class OpenAIClient {
 
       xhr.onerror = () => {
         this.activeXhr = null;
+        const errorMsg = 'Network error during streaming';
         console.error('[OpenAIClient] XHR network error');
-        safeReject(new Error('Network error during streaming'));
+        recovery?.markDisconnected(errorMsg);
+        safeReject(new Error(errorMsg));
       };
 
       xhr.ontimeout = () => {
         this.activeXhr = null;
+        const errorMsg = 'Request timeout';
         console.error('[OpenAIClient] XHR timeout');
-        safeReject(new Error('Request timeout'));
+        recovery?.markDisconnected(errorMsg);
+        safeReject(new Error(errorMsg));
       };
 
       xhr.onabort = () => {
         this.activeXhr = null;
+        const errorMsg = 'Request aborted';
         console.log('[OpenAIClient] XHR aborted');
-        safeReject(new Error('Request aborted'));
+        recovery?.markDisconnected(errorMsg);
+        safeReject(new Error(errorMsg));
       };
 
       // Send the request
@@ -567,6 +585,11 @@ export class OpenAIClient {
             for (const event of events) {
               const result = this.processSSEEvent(event, onToken, onProgress);
               if (result) {
+                // Handle SSE error events
+                if (result.error) {
+                  recovery?.markDisconnected(result.error.message);
+                  throw result.error;
+                }
                 if (result.content !== undefined) {
                   if (result.conversationHistory) {
                     finalContent = result.content;
@@ -589,6 +612,11 @@ export class OpenAIClient {
         if (buffer.trim()) {
           const result = this.processSSEEvent(buffer, onToken, onProgress);
           if (result) {
+            // Handle SSE error events
+            if (result.error) {
+              recovery?.markDisconnected(result.error.message);
+              throw result.error;
+            }
             if (result.content !== undefined) {
               if (result.conversationHistory) {
                 finalContent = result.content;
@@ -606,6 +634,11 @@ export class OpenAIClient {
         for (const event of events) {
           const result = this.processSSEEvent(event, onToken, onProgress);
           if (result) {
+            // Handle SSE error events
+            if (result.error) {
+              recovery?.markDisconnected(result.error.message);
+              throw result.error;
+            }
             if (result.content !== undefined) {
               if (result.conversationHistory) {
                 finalContent = result.content;
@@ -637,11 +670,11 @@ export class OpenAIClient {
     event: string,
     onToken?: (token: string) => void,
     onProgress?: OnProgressCallback
-  ): { content?: string; conversationId?: string; conversationHistory?: ConversationHistoryMessage[] } | null {
+  ): { content?: string; conversationId?: string; conversationHistory?: ConversationHistoryMessage[]; error?: Error } | null {
     if (!event.trim()) return null;
 
     const lines = event.split(/\r?\n/).map(l => l.replace(/^data:\s?/, '').trim()).filter(Boolean);
-    let result: { content?: string; conversationId?: string; conversationHistory?: ConversationHistoryMessage[] } | null = null;
+    let result: { content?: string; conversationId?: string; conversationHistory?: ConversationHistoryMessage[]; error?: Error } | null = null;
 
     for (const line of lines) {
       if (line === '[DONE]' || line === '"[DONE]"') {
@@ -672,7 +705,8 @@ export class OpenAIClient {
 
         if (obj.type === 'error' && obj.data) {
           console.error('[OpenAIClient] Error event:', obj.data.message);
-          throw new Error(obj.data.message || 'Server error');
+          // Return error in result so callers can handle it
+          return { error: new Error(obj.data.message || 'Server error') };
         }
 
         const delta = obj?.choices?.[0]?.delta;

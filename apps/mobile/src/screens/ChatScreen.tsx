@@ -28,6 +28,7 @@ import {
   preprocessTextForTTS,
   COLLAPSED_LINES,
   getRoleIcon,
+  getRoleLabel,
   shouldCollapseMessage,
   getToolResultsSummary,
   formatToolArguments,
@@ -882,6 +883,7 @@ export default function ChatScreen({ route, navigation }: any) {
             const shouldCollapse = shouldCollapseMessage(m.content, m.toolCalls, m.toolResults);
             const isExpanded = expandedMessages[i] ?? false;
             const roleIcon = getRoleIcon(m.role as 'user' | 'assistant' | 'tool');
+            const roleLabel = getRoleLabel(m.role as 'user' | 'assistant' | 'tool');
 
             const hasToolResults = (m.toolResults?.length ?? 0) > 0;
             const allSuccess = hasToolResults && m.toolResults!.every(r => r.success);
@@ -903,7 +905,9 @@ export default function ChatScreen({ route, navigation }: any) {
                 ]}
               >
                 <View style={styles.messageHeader}>
-                  <Text style={styles.roleIcon}>{roleIcon}</Text>
+                  <Text style={styles.roleIcon} accessibilityLabel={roleLabel}>
+                    {roleIcon}
+                  </Text>
                   {(m.toolCalls?.length ?? 0) > 0 && (
                     <View style={[
                       styles.toolBadgeSmall,

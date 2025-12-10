@@ -596,15 +596,12 @@ export default function ChatScreen({ route, navigation }: any) {
       setMessages((m) => [...m, { role: 'assistant', content: `Error: ${errorMessage}\n\nTip: Check your internet connection and try again.` }]);
     } finally {
       console.log('[ChatScreen] Chat request finished');
-      // Guard: only reset responding/connection state if still on the same session
-      // This prevents an in-flight request from a previous session from flipping state for a new session
-      if (sessionStore.currentSessionId === requestSessionId) {
-        setResponding(false);
-        setConnectionState(null);
-        setTimeout(() => setDebugInfo(''), 5000);
-      } else {
-        console.log('[ChatScreen] Session changed during request, skipping finally state resets');
-      }
+      // Always reset UI states (responding, connectionState, debugInfo) when request completes
+      // These are view-level states that should not persist across sessions
+      // Note: Message updates ARE guarded (see guards above) to prevent cross-session mixing
+      setResponding(false);
+      setConnectionState(null);
+      setTimeout(() => setDebugInfo(''), 5000);
     }
   };
 

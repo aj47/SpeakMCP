@@ -214,6 +214,16 @@ export default function ChatScreen({ route, navigation }: any) {
             </View>
           </TouchableOpacity>
           <TouchableOpacity
+            onPress={() => {
+              sessionStore.createNewSession();
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Start new chat"
+            style={{ paddingHorizontal: 8, paddingVertical: 6 }}
+          >
+            <Text style={{ fontSize: 18, color: theme.colors.foreground }}>✏️</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
             onPress={() => navigation.navigate('Settings')}
             accessibilityRole="button"
             accessibilityLabel="Settings"
@@ -224,7 +234,7 @@ export default function ChatScreen({ route, navigation }: any) {
         </View>
       ),
     });
-  }, [navigation, handsFree, handleKillSwitch, responding, theme, isDark]);
+  }, [navigation, handsFree, handleKillSwitch, responding, theme, isDark, sessionStore]);
 
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);

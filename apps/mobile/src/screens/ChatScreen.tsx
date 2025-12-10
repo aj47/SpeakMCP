@@ -21,7 +21,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { EventEmitter } from 'expo-modules-core';
 import { useConfigContext, saveConfig } from '../store/config';
 import { useSessionContext } from '../store/sessions';
-import { OpenAIClient, ChatMessage, AgentProgressUpdate, AgentProgressStep, OnConnectionStatusChange } from '../lib/openaiClient';
+import { OpenAIClient, ChatMessage, AgentProgressUpdate } from '../lib/openaiClient';
 import { RecoveryState, formatConnectionStatus } from '../lib/connectionRecovery';
 import * as Speech from 'expo-speech';
 import {

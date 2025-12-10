@@ -37,6 +37,7 @@ augment.mjs
 *.mobileprovision
 *.orig.*
 web-build/
+*.ipa
 
 # Turborepo / build cache
 .turbo

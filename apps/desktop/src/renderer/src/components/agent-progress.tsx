@@ -1374,12 +1374,17 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
       if (finalAssistantItem && finalAssistantItem.kind === "message") {
         const itemKey = finalAssistantItem.id
         // Only auto-expand if user hasn't explicitly toggled it yet
-        if (!(itemKey in expandedItems)) {
-          setExpandedItems(prev => ({
+        // Using functional update to access current state and avoid stale closure
+        setExpandedItems(prev => {
+          if (itemKey in prev) {
+            // User has already toggled this item, don't override their choice
+            return prev
+          }
+          return {
             ...prev,
             [itemKey]: true,
-          }))
-        }
+          }
+        })
       }
     }
   }, [isComplete, lastAssistantDisplayIndex, displayItems])

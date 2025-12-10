@@ -211,13 +211,28 @@ export class OpenAIClient {
 
       console.log('[OpenAIClient] Creating EventSource for SSE streaming');
 
+      // Android-specific SSE configuration:
+      // - Accept-Encoding: identity prevents gzip compression which breaks SSE streaming on Android
+      //   (Android's OkHttp sends gzip by default, causing the response to be buffered instead of streamed)
+      // - timeout: 0 disables the library's internal timeout (we handle timeouts via heartbeat)
+      // - timeoutBeforeConnection: reduced for faster initial connection
+      // - debug: enabled for better error logging during development
+      const isAndroid = Platform.OS === 'android';
       const es = new EventSource<'done'>(url, {
         headers: {
           ...this.authHeaders(),
+          // Prevent gzip compression on Android which breaks SSE streaming
+          ...(isAndroid && { 'Accept-Encoding': 'identity' }),
         },
         method: 'POST',
         body: JSON.stringify(body),
         pollingInterval: 0,
+        // Disable internal timeout - we use heartbeat-based timeout instead
+        timeout: 0,
+        // Reduce initial connection delay for faster startup
+        timeoutBeforeConnection: isAndroid ? 100 : 500,
+        // Enable debug logging for troubleshooting
+        debug: __DEV__,
       });
       this.activeEventSource = es;
 
@@ -310,11 +325,23 @@ export class OpenAIClient {
       });
 
       es.addEventListener('error', (event) => {
-        console.error('[OpenAIClient] SSE error:', event);
-        recovery?.markDisconnected((event as any)?.message || 'SSE connection error');
+        // Extract detailed error information for debugging
+        const errorEvent = event as any;
+        const errorDetails = {
+          type: errorEvent?.type,
+          message: errorEvent?.message,
+          xhrStatus: errorEvent?.xhrStatus,
+          xhrState: errorEvent?.xhrState,
+          platform: Platform.OS,
+        };
+        console.error('[OpenAIClient] SSE error:', JSON.stringify(errorDetails, null, 2));
+
+        const errorMessage = errorEvent?.message ||
+          (errorEvent?.xhrStatus ? `HTTP ${errorEvent.xhrStatus}` : 'SSE connection error');
+        recovery?.markDisconnected(errorMessage);
 
         if (event.type === 'error') {
-          safeReject(new Error((event as any).message || 'SSE connection error'));
+          safeReject(new Error(errorMessage));
         } else {
           safeReject(new Error('SSE connection failed'));
         }
@@ -362,6 +389,8 @@ export class OpenAIClient {
       xhr.setRequestHeader('Authorization', `Bearer ${this.cfg.apiKey}`);
       xhr.setRequestHeader('Accept', 'text/event-stream');
       xhr.setRequestHeader('Cache-Control', 'no-cache');
+      // Prevent gzip compression which can cause buffering issues with SSE streaming
+      xhr.setRequestHeader('Accept-Encoding', 'identity');
 
       const safeResolve = (result: ChatResponse) => {
         if (!hasResolved) {

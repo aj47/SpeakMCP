@@ -73,6 +73,10 @@ export default function ChatScreen({ route, navigation }: any) {
   const [responding, setResponding] = useState(false);
   const [connectionState, setConnectionState] = useState<RecoveryState | null>(null);
 
+  // Track the current active request to prevent cross-request state clobbering
+  // Each request gets a unique ID; only the currently active request can reset UI states
+  const activeRequestIdRef = useRef<number>(0);
+
   const client = useMemo(() => {
     const openAIClient = new OpenAIClient({
       baseUrl: config.baseUrl,
@@ -149,6 +153,17 @@ export default function ChatScreen({ route, navigation }: any) {
     );
   };
 
+  const handleNewChat = useCallback(() => {
+    // Reset all UI states unconditionally when creating a new chat
+    // This ensures the new session starts with a clean slate, even if
+    // an old request is still in-flight (its callbacks will be ignored
+    // via the session/request guards)
+    setResponding(false);
+    setConnectionState(null);
+    setDebugInfo('');
+    sessionStore.createNewSession();
+  }, [sessionStore]);
+
   useLayoutEffect(() => {
     navigation?.setOptions?.({
       headerLeft: () => (
@@ -174,6 +189,14 @@ export default function ChatScreen({ route, navigation }: any) {
               />
             </View>
           )}
+          <TouchableOpacity
+            onPress={handleNewChat}
+            accessibilityRole="button"
+            accessibilityLabel="Start new chat"
+            style={{ paddingHorizontal: 8, paddingVertical: 6 }}
+          >
+            <Text style={{ fontSize: 18, color: theme.colors.foreground }}>✚</Text>
+          </TouchableOpacity>
           <TouchableOpacity
             onPress={handleKillSwitch}
             accessibilityRole="button"
@@ -234,7 +257,7 @@ export default function ChatScreen({ route, navigation }: any) {
         </View>
       ),
     });
-  }, [navigation, handsFree, handleKillSwitch, responding, theme, isDark, sessionStore]);
+  }, [navigation, handsFree, handleKillSwitch, handleNewChat, responding, theme, isDark, sessionStore]);
 
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -427,15 +450,25 @@ export default function ChatScreen({ route, navigation }: any) {
     setMessages((m) => [...m, userMsg, { role: 'assistant', content: 'Assistant is thinking...' }]);
     setResponding(true);
 
+    // Generate a unique request ID and mark this request as the active one
+    // This prevents cross-request race conditions on view-level state
+    const thisRequestId = Date.now();
+    activeRequestIdRef.current = thisRequestId;
+
     const currentSession = sessionStore.getCurrentSession();
     const serverConversationId = currentSession?.serverConversationId;
 
     console.log('[ChatScreen] Session info:', {
       sessionId: currentSession?.id,
-      serverConversationId: serverConversationId || 'new'
+      serverConversationId: serverConversationId || 'new',
+      requestId: thisRequestId
     });
 
     setInput('');
+
+    // Capture the session ID at request start to guard against session changes
+    const requestSessionId = sessionStore.currentSessionId;
+
     try {
       let streamingText = '';
 
@@ -444,6 +477,17 @@ export default function ChatScreen({ route, navigation }: any) {
       setDebugInfo('Request sent, waiting for response...');
 
       const onProgress = (update: AgentProgressUpdate) => {
+        // Guard: skip update if session has changed since request started
+        if (sessionStore.currentSessionId !== requestSessionId) {
+          console.log('[ChatScreen] Session changed, skipping onProgress update');
+          return;
+        }
+        // Guard: skip update if this request is no longer the active one
+        // This prevents concurrent sends within the same session from interleaving updates
+        if (activeRequestIdRef.current !== thisRequestId) {
+          console.log('[ChatScreen] Request superseded, skipping onProgress update');
+          return;
+        }
         const progressMessages = convertProgressToMessages(update);
         if (progressMessages.length > 0) {
           setMessages((m) => {
@@ -455,6 +499,17 @@ export default function ChatScreen({ route, navigation }: any) {
       };
 
       const onToken = (tok: string) => {
+        // Guard: skip update if session has changed since request started
+        if (sessionStore.currentSessionId !== requestSessionId) {
+          console.log('[ChatScreen] Session changed, skipping onToken update');
+          return;
+        }
+        // Guard: skip update if this request is no longer the active one
+        // This prevents concurrent sends within the same session from interleaving updates
+        if (activeRequestIdRef.current !== thisRequestId) {
+          console.log('[ChatScreen] Request superseded, skipping onToken update');
+          return;
+        }
         streamingText += tok;
 
         setMessages((m) => {
@@ -473,6 +528,22 @@ export default function ChatScreen({ route, navigation }: any) {
       const finalText = response.content || streamingText;
       console.log('[ChatScreen] Chat completed, conversationId:', response.conversationId);
       setDebugInfo(`Completed!`);
+
+      // Guard: skip final updates if session has changed since request started
+      if (sessionStore.currentSessionId !== requestSessionId) {
+        console.log('[ChatScreen] Session changed during request, skipping final message updates');
+        return;
+      }
+
+      // Guard: skip final updates if this request is no longer the active one
+      // This prevents older, superseded requests from clobbering messages when multiple sends occur within the same session
+      if (activeRequestIdRef.current !== thisRequestId) {
+        console.log('[ChatScreen] Request superseded, skipping final message updates', {
+          thisRequestId,
+          activeRequestId: activeRequestIdRef.current
+        });
+        return;
+      }
 
       if (response.conversationId) {
         await sessionStore.setServerConversationId(response.conversationId);
@@ -547,6 +618,12 @@ export default function ChatScreen({ route, navigation }: any) {
         name: e.name
       });
 
+      // Guard: skip error message if session has changed since request started
+      if (sessionStore.currentSessionId !== requestSessionId) {
+        console.log('[ChatScreen] Session changed during request, skipping error message');
+        return;
+      }
+
       const recoveryState = connectionState;
       let errorMessage = e.message;
 
@@ -559,10 +636,28 @@ export default function ChatScreen({ route, navigation }: any) {
       setDebugInfo(`Error: ${errorMessage}`);
       setMessages((m) => [...m, { role: 'assistant', content: `Error: ${errorMessage}\n\nTip: Check your internet connection and try again.` }]);
     } finally {
-      console.log('[ChatScreen] Chat request finished');
-      setResponding(false);
-      setConnectionState(null);
-      setTimeout(() => setDebugInfo(''), 5000);
+      console.log('[ChatScreen] Chat request finished, requestId:', thisRequestId);
+      // Only reset UI states if this request is still the active one
+      // This prevents an old request from clobbering state if a new request started
+      // (e.g., user switched sessions and started a new chat mid-request)
+      if (activeRequestIdRef.current === thisRequestId) {
+        setResponding(false);
+        setConnectionState(null);
+        // Guard the setTimeout callback: only clear debugInfo if this request
+        // is still the active one when the timeout fires. This prevents an
+        // old request's delayed clear from wiping debug info for a newer request.
+        const capturedRequestId = thisRequestId;
+        setTimeout(() => {
+          if (activeRequestIdRef.current === capturedRequestId) {
+            setDebugInfo('');
+          }
+        }, 5000);
+      } else {
+        console.log('[ChatScreen] Skipping finally state resets: newer request is active', {
+          thisRequestId,
+          activeRequestId: activeRequestIdRef.current
+        });
+      }
     }
   };
 

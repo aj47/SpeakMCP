@@ -4,18 +4,28 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { Button } from "@renderer/components/ui/button"
 import { Label } from "@renderer/components/ui/label"
 import { Textarea } from "@renderer/components/ui/textarea"
+import { Input } from "@renderer/components/ui/input"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@renderer/components/ui/dialog"
+
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@renderer/components/ui/tooltip"
-import { Save, Info, ChevronDown, RotateCcw } from "lucide-react"
+import { Save, Info, ChevronDown, RotateCcw, Plus } from "lucide-react"
 import { toast } from "sonner"
 import { useState, useEffect } from "react"
 import { ProfileBadge } from "@renderer/components/profile-badge"
 
-import { Config } from "@shared/types"
+import { Config, Profile } from "@shared/types"
 
 const LabelWithTooltip = ({
   htmlFor,
@@ -106,6 +116,44 @@ export function Component() {
   const [customSystemPrompt, setCustomSystemPrompt] = useState("")
   const [hasUnsavedSystemPromptChanges, setHasUnsavedSystemPromptChanges] = useState(false)
   const [isSystemPromptOpen, setIsSystemPromptOpen] = useState(false)
+
+  // Create profile dialog
+  const [isCreateProfileOpen, setIsCreateProfileOpen] = useState(false)
+  const [newProfileName, setNewProfileName] = useState("")
+  const [newProfileGuidelines, setNewProfileGuidelines] = useState("")
+
+  const setCurrentProfileMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return await tipcClient.setCurrentProfile({ id })
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["config"] })
+      queryClient.invalidateQueries({ queryKey: ["profiles"] })
+      queryClient.invalidateQueries({ queryKey: ["current-profile"] })
+    },
+  })
+
+  const createProfileMutation = useMutation({
+    mutationFn: async ({ name, guidelines }: { name: string; guidelines: string }) => {
+      return await tipcClient.createProfile({ name, guidelines })
+    },
+    onSuccess: (profile: Profile) => {
+      queryClient.invalidateQueries({ queryKey: ["profiles"] })
+      queryClient.invalidateQueries({ queryKey: ["current-profile"] })
+
+      setIsCreateProfileOpen(false)
+      setNewProfileName("")
+      setNewProfileGuidelines("")
+
+      toast.success(`Profile "${profile.name}" created`)
+      setCurrentProfileMutation.mutate(profile.id)
+    },
+    onError: (error) => {
+      const message = error instanceof Error ? error.message : String(error)
+      toast.error(`Failed to create profile: ${message}`)
+    },
+  })
+
 
   // Initialize local state when config loads
   useEffect(() => {
@@ -217,6 +265,24 @@ export function Component() {
     setHasUnsavedSystemPromptChanges(false)
   }
 
+  const handleCreateProfile = () => {
+    if (createProfileMutation.isPending) {
+      return
+    }
+
+    const name = newProfileName.trim()
+    if (!name) {
+      toast.error("Profile name is required")
+      return
+    }
+
+    createProfileMutation.mutate({
+      name,
+      guidelines: newProfileGuidelines,
+    })
+  }
+
+
   const defaultAdditionalGuidelines = `CUSTOM GUIDELINES:
 - Prioritize user privacy and security
 - Provide clear explanations of actions taken
@@ -232,8 +298,17 @@ DOMAIN-SPECIFIC RULES:
 
       <div className="space-y-6">
         <div className="space-y-4">
-          <div className="space-y-2">
+          <div className="flex items-center justify-between">
             <h3 className="text-lg font-semibold">Agent Settings</h3>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1"
+              onClick={() => setIsCreateProfileOpen(true)}
+            >
+              <Plus className="h-4 w-4" />
+              Create Profile
+            </Button>
           </div>
 
           <div className="space-y-4">
@@ -370,6 +445,68 @@ DOMAIN-SPECIFIC RULES:
             </div>
           </div>
         </div>
+
+        <Dialog
+          open={isCreateProfileOpen}
+          onOpenChange={(open) => {
+            setIsCreateProfileOpen(open)
+
+            if (!open) {
+              setNewProfileName("")
+              setNewProfileGuidelines("")
+            }
+          }}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Create Profile</DialogTitle>
+              <DialogDescription>
+                Create a new profile to save a different set of agent settings.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="new-profile-name">Name</Label>
+                <Input
+                  id="new-profile-name"
+                  value={newProfileName}
+                  onChange={(e) => setNewProfileName(e.target.value)}
+                  placeholder="e.g. Work, Personal, Coding"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="new-profile-guidelines">Guidelines (optional)</Label>
+                <Textarea
+                  id="new-profile-guidelines"
+                  value={newProfileGuidelines}
+                  onChange={(e) => setNewProfileGuidelines(e.target.value)}
+                  placeholder="Optional additional guidelines for this profile"
+                  rows={6}
+                />
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsCreateProfileOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                onClick={handleCreateProfile}
+                disabled={!newProfileName.trim() || createProfileMutation.isPending}
+              >
+                {createProfileMutation.isPending ? "Creating..." : "Create Profile"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
       </div>
     </div>
   )

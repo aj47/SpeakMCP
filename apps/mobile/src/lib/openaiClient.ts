@@ -747,7 +747,8 @@ export class OpenAIClient {
         const token = delta?.content;
         if (typeof token === 'string' && token.length > 0) {
           onToken?.(token);
-          result = { ...result, content: (result?.content || '') + token };
+          // Initialize result if null to avoid "Cannot spread null" error on first token
+          result = { ...(result || {}), content: (result?.content || '') + token };
         }
       } catch {}
     }

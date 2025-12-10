@@ -902,7 +902,7 @@ export default function ChatScreen({ route, navigation }: any) {
                 accessibilityRole={shouldCollapse ? 'button' : undefined}
                 accessibilityHint={
                   shouldCollapse
-                    ? (isExpanded ? 'Double tap to collapse message' : 'Double tap to expand message')
+                    ? (isExpanded ? 'Collapse message' : 'Expand message')
                     : undefined
                 }
                 accessibilityState={shouldCollapse ? { expanded: isExpanded } : undefined}

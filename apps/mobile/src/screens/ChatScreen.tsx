@@ -237,16 +237,6 @@ export default function ChatScreen({ route, navigation }: any) {
             </View>
           </TouchableOpacity>
           <TouchableOpacity
-            onPress={() => {
-              sessionStore.createNewSession();
-            }}
-            accessibilityRole="button"
-            accessibilityLabel="Start new chat"
-            style={{ paddingHorizontal: 8, paddingVertical: 6 }}
-          >
-            <Text style={{ fontSize: 18, color: theme.colors.foreground }}>✏️</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
             onPress={() => navigation.navigate('Settings')}
             accessibilityRole="button"
             accessibilityLabel="Settings"

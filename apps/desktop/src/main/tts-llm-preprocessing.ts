@@ -5,7 +5,8 @@
  */
 
 import { makeTextCompletionWithFetch } from "./llm-fetch"
-import { configStore, Config } from "./config"
+import { configStore } from "./config"
+import { Config } from "@shared/types"
 import { diagnosticsService } from "./diagnostics"
 import { preprocessTextForTTS as regexPreprocessTextForTTS } from "@speakmcp/shared"
 
@@ -69,7 +70,7 @@ export async function preprocessTextForTTSWithLLM(
     
     // If we got a result, return it
     if (result && result.trim().length > 0) {
-      diagnosticsService.logDebug("tts-llm-preprocessing", "LLM preprocessing succeeded", {
+      diagnosticsService.logInfo("tts-llm-preprocessing", "LLM preprocessing succeeded", {
         inputLength: text.length,
         outputLength: result.length,
         provider: llmProviderId

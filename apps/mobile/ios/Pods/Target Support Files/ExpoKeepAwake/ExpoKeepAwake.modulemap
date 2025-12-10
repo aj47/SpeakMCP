@@ -1,6 +1,0 @@
-module ExpoKeepAwake {
-  umbrella header "ExpoKeepAwake-umbrella.h"
-
-  export *
-  module * { export * }
-}

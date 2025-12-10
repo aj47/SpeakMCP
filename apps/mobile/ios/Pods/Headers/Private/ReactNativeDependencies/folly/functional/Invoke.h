@@ -1,1 +1,0 @@
-../../../../../ReactNativeDependencies/Headers/folly/functional/Invoke.h

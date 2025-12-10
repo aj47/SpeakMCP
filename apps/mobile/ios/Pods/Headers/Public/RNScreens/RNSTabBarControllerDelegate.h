@@ -1,1 +1,0 @@
-../../../../../../../node_modules/.pnpm/react-native-screens@4.16.0_react-native@0.81.4_@babel+core@7.28.5_@react-native-community+cl_ojugxejtiwzzi4q2rch3syguee/node_modules/react-native-screens/ios/bottom-tabs/RNSTabBarControllerDelegate.h

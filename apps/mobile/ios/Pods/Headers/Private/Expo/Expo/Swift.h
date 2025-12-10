@@ -1,1 +1,0 @@
-../../../../../../../../node_modules/.pnpm/expo@54.0.26_@babel+core@7.28.5_react-native@0.81.4_@babel+core@7.28.5_@react-native-communit_4yim3lhhfmjzwpjmzzsztjy6s4/node_modules/expo/ios/Swift.h

@@ -1,1 +1,0 @@
-../../../../../../../node_modules/.pnpm/expo-constants@18.0.10_expo@54.0.26_@babel+core@7.28.5_react-native@0.81.4_@babel+core@7.28.5_7fxizatehbkx4gjsrfvcwjwnoa/node_modules/expo-constants/ios/EXConstantsService.h

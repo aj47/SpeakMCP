@@ -1,6 +1,0 @@
-module Pods_SpeakMCP {
-  umbrella header "Pods-SpeakMCP-umbrella.h"
-
-  export *
-  module * { export * }
-}

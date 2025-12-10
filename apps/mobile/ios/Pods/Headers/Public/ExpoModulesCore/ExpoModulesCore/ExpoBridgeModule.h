@@ -1,1 +1,0 @@
-../../../../../../../../node_modules/.pnpm/expo-modules-core@3.0.27_react-native@0.81.4_@babel+core@7.28.5_@react-native-community+cli@2_5n7so3x3spu4fjx675febvh3ha/node_modules/expo-modules-core/ios/Core/ExpoBridgeModule.h

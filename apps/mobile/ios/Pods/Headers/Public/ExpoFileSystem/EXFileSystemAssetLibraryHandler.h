@@ -1,1 +1,0 @@
-../../../../../../../node_modules/.pnpm/expo-file-system@19.0.19_expo@54.0.26_@babel+core@7.28.5_react-native@0.81.4_@babel+core@7.28_6n3bf62zwgex752e5dgo325ovy/node_modules/expo-file-system/ios/Legacy/EXFileSystemAssetLibraryHandler.h

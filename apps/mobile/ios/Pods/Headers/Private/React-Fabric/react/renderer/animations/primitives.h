@@ -1,1 +1,0 @@
-../../../../../../../../../../node_modules/.pnpm/react-native@0.81.4_@babel+core@7.28.5_@react-native-community+cli@20.0.2_typescript@5.9.3__@_abfo756ciwoposge7dya2mmjti/node_modules/react-native/ReactCommon/react/renderer/animations/primitives.h

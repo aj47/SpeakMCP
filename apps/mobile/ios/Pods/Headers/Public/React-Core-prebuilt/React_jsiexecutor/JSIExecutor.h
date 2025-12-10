@@ -1,1 +1,0 @@
-../../../../React-Core-prebuilt/React.xcframework/Headers/React_jsiexecutor/JSIExecutor.h

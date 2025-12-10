@@ -1,1 +1,0 @@
-../../../../ReactNativeDependencies/Headers/folly/small_vector.h

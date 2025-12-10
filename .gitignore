@@ -47,3 +47,9 @@ macos-audio-tap/ScreenCaptureAudio/.build/
 # Android build artifacts
 apps/mobile/android/app/debug.keystore
 apps/mobile/android/app/.cxx/
+
+# iOS build artifacts
+apps/mobile/ios/Pods/
+apps/mobile/ios/.xcode.env.local
+apps/mobile/ios/build/
+*.ipa

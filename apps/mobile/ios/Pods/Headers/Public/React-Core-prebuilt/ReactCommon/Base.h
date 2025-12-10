@@ -1,1 +1,0 @@
-../../../../React-Core-prebuilt/React.xcframework/Headers/ReactCommon/Base.h

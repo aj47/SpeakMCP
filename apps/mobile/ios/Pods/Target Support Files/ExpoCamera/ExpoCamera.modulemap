@@ -1,6 +1,0 @@
-module ExpoCamera {
-  umbrella header "ExpoCamera-umbrella.h"
-
-  export *
-  module * { export * }
-}

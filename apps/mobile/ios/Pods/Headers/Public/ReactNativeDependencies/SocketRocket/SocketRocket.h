@@ -1,1 +1,0 @@
-../../../../ReactNativeDependencies/Headers/SocketRocket/SocketRocket.h

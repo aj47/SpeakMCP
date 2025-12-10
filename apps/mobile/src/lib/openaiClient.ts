@@ -168,7 +168,11 @@ export class OpenAIClient {
     while (true) {
       try {
         let result: ChatResponse;
-        if (Platform.OS === 'android' || Platform.OS === 'ios') {
+        if (Platform.OS === 'android') {
+          // Android: Use XMLHttpRequest-based streaming due to known react-native-sse issues
+          // See: https://github.com/binaryminds/react-native-sse/issues/61
+          result = await this.streamSSEWithXHR(url, body, onToken, onProgress);
+        } else if (Platform.OS === 'ios') {
           result = await this.streamSSEWithEventSource(url, body, onToken, onProgress);
         } else {
           result = await this.streamSSEWithFetch(url, body, onToken, onProgress);
@@ -325,6 +329,122 @@ export class OpenAIClient {
         console.log('[OpenAIClient] SSE connection closed by client, content length:', finalContent.length);
         safeReject(new Error('Connection cancelled'));
       });
+    });
+  }
+
+  /**
+   * Android-specific SSE streaming using XMLHttpRequest.
+   * This is a workaround for known issues with react-native-sse on Android:
+   * - https://github.com/binaryminds/react-native-sse/issues/61
+   * - https://github.com/binaryminds/react-native-sse/issues/74
+   */
+  private streamSSEWithXHR(
+    url: string,
+    body: object,
+    onToken?: (token: string) => void,
+    onProgress?: OnProgressCallback
+  ): Promise<ChatResponse> {
+    return new Promise((resolve, reject) => {
+      let finalContent = '';
+      let conversationId: string | undefined;
+      let conversationHistory: ConversationHistoryMessage[] | undefined;
+      let hasResolved = false;
+      let processedLength = 0;
+      const recovery = this.recoveryManager;
+
+      console.log('[OpenAIClient] Creating XMLHttpRequest for Android SSE streaming');
+
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', url, true);
+
+      // Set headers
+      xhr.setRequestHeader('Content-Type', 'application/json');
+      xhr.setRequestHeader('Authorization', `Bearer ${this.cfg.apiKey}`);
+      xhr.setRequestHeader('Accept', 'text/event-stream');
+      xhr.setRequestHeader('Cache-Control', 'no-cache');
+
+      const safeResolve = (result: ChatResponse) => {
+        if (!hasResolved) {
+          hasResolved = true;
+          recovery?.stopHeartbeat();
+          resolve(result);
+        }
+      };
+
+      const safeReject = (error: Error) => {
+        if (!hasResolved) {
+          hasResolved = true;
+          recovery?.stopHeartbeat();
+          reject(error);
+        }
+      };
+
+      recovery?.startHeartbeat(() => {
+        console.log('[OpenAIClient] XHR heartbeat missed, aborting stalled stream');
+        xhr.abort();
+        safeReject(new Error('Connection stalled - no data received'));
+      });
+
+      xhr.onprogress = () => {
+        recovery?.recordHeartbeat();
+
+        // Process new data since last progress event
+        const newData = xhr.responseText.substring(processedLength);
+        processedLength = xhr.responseText.length;
+
+        if (!newData) return;
+
+        // Split into SSE events
+        const events = newData.split(/\r?\n\r?\n/);
+
+        for (const event of events) {
+          if (!event.trim()) continue;
+
+          const result = this.processSSEEvent(event, onToken, onProgress);
+          if (result) {
+            if (result.content !== undefined) {
+              if (result.conversationHistory) {
+                finalContent = result.content;
+              } else {
+                finalContent += result.content;
+              }
+            }
+            if (result.conversationId) conversationId = result.conversationId;
+            if (result.conversationHistory) conversationHistory = result.conversationHistory;
+          }
+        }
+      };
+
+      xhr.onload = () => {
+        console.log('[OpenAIClient] XHR completed, status:', xhr.status, 'content length:', finalContent.length);
+
+        if (xhr.status >= 200 && xhr.status < 300) {
+          recovery?.markConnected();
+          safeResolve({ content: finalContent, conversationId, conversationHistory });
+        } else {
+          const errorMsg = `Chat failed: ${xhr.status} ${xhr.statusText}`;
+          console.error('[OpenAIClient] XHR error:', errorMsg);
+          safeReject(new Error(errorMsg));
+        }
+      };
+
+      xhr.onerror = () => {
+        console.error('[OpenAIClient] XHR network error');
+        safeReject(new Error('Network error during streaming'));
+      };
+
+      xhr.ontimeout = () => {
+        console.error('[OpenAIClient] XHR timeout');
+        safeReject(new Error('Request timeout'));
+      };
+
+      xhr.onabort = () => {
+        console.log('[OpenAIClient] XHR aborted');
+        safeReject(new Error('Request aborted'));
+      };
+
+      // Send the request
+      xhr.send(JSON.stringify(body));
     });
   }
 

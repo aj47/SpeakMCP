@@ -472,6 +472,12 @@ export default function ChatScreen({ route, navigation }: any) {
           console.log('[ChatScreen] Session changed, skipping onProgress update');
           return;
         }
+        // Guard: skip update if this request is no longer the active one
+        // This prevents concurrent sends within the same session from interleaving updates
+        if (activeRequestIdRef.current !== thisRequestId) {
+          console.log('[ChatScreen] Request superseded, skipping onProgress update');
+          return;
+        }
         const progressMessages = convertProgressToMessages(update);
         if (progressMessages.length > 0) {
           setMessages((m) => {
@@ -486,6 +492,12 @@ export default function ChatScreen({ route, navigation }: any) {
         // Guard: skip update if session has changed since request started
         if (sessionStore.currentSessionId !== requestSessionId) {
           console.log('[ChatScreen] Session changed, skipping onToken update');
+          return;
+        }
+        // Guard: skip update if this request is no longer the active one
+        // This prevents concurrent sends within the same session from interleaving updates
+        if (activeRequestIdRef.current !== thisRequestId) {
+          console.log('[ChatScreen] Request superseded, skipping onToken update');
           return;
         }
         streamingText += tok;

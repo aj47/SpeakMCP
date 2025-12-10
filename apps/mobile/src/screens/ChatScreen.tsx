@@ -154,14 +154,15 @@ export default function ChatScreen({ route, navigation }: any) {
   };
 
   const handleNewChat = useCallback(() => {
-    // Guard: prevent creating new chat while a request is in progress
-    // This prevents race conditions where prior request callbacks could update the new chat
-    if (responding) {
-      console.log('[ChatScreen] handleNewChat blocked: request in progress');
-      return;
-    }
+    // Reset all UI states unconditionally when creating a new chat
+    // This ensures the new session starts with a clean slate, even if
+    // an old request is still in-flight (its callbacks will be ignored
+    // via the session/request guards)
+    setResponding(false);
+    setConnectionState(null);
+    setDebugInfo('');
     sessionStore.createNewSession();
-  }, [sessionStore, responding]);
+  }, [sessionStore]);
 
   useLayoutEffect(() => {
     navigation?.setOptions?.({
@@ -190,11 +191,9 @@ export default function ChatScreen({ route, navigation }: any) {
           )}
           <TouchableOpacity
             onPress={handleNewChat}
-            disabled={responding}
             accessibilityRole="button"
             accessibilityLabel="Start new chat"
-            accessibilityState={{ disabled: responding }}
-            style={{ paddingHorizontal: 8, paddingVertical: 6, opacity: responding ? 0.4 : 1 }}
+            style={{ paddingHorizontal: 8, paddingVertical: 6 }}
           >
             <Text style={{ fontSize: 18, color: theme.colors.foreground }}>✚</Text>
           </TouchableOpacity>
@@ -612,7 +611,15 @@ export default function ChatScreen({ route, navigation }: any) {
       if (activeRequestIdRef.current === thisRequestId) {
         setResponding(false);
         setConnectionState(null);
-        setTimeout(() => setDebugInfo(''), 5000);
+        // Guard the setTimeout callback: only clear debugInfo if this request
+        // is still the active one when the timeout fires. This prevents an
+        // old request's delayed clear from wiping debug info for a newer request.
+        const capturedRequestId = thisRequestId;
+        setTimeout(() => {
+          if (activeRequestIdRef.current === capturedRequestId) {
+            setDebugInfo('');
+          }
+        }, 5000);
       } else {
         console.log('[ChatScreen] Skipping finally state resets: newer request is active', {
           thisRequestId,

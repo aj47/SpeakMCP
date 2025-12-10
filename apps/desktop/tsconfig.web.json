@@ -36,19 +36,6 @@
       ],
       "@shared/*": [
         "src/shared/*"
-      ],
-
-      // Force React typings to come from the desktop app's local @types/react (React 18).
-      // Without this, TypeScript can resolve workspace deps via pnpm's realpath under the
-      // monorepo root and accidentally pull in @types/react@19 from there.
-      "react": [
-        "./node_modules/@types/react/index.d.ts"
-      ],
-      "react/jsx-runtime": [
-        "./node_modules/@types/react/jsx-runtime.d.ts"
-      ],
-      "react/jsx-dev-runtime": [
-        "./node_modules/@types/react/jsx-dev-runtime.d.ts"
       ]
     }
   }

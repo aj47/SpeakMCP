@@ -1,0 +1,27 @@
+{
+  "extends": "./tsconfig.web.json",
+  "compilerOptions": {
+    "paths": {
+      "@renderer/*": [
+        "src/renderer/src/*"
+      ],
+      "~/*": [
+        "src/renderer/src/*"
+      ],
+      "@shared/*": [
+        "src/shared/*"
+      ],
+
+      "react": [
+        "./node_modules/@types/react/index.d.ts"
+      ],
+      "react/jsx-runtime": [
+        "./node_modules/@types/react/jsx-runtime.d.ts"
+      ],
+      "react/jsx-dev-runtime": [
+        "./node_modules/@types/react/jsx-dev-runtime.d.ts"
+      ]
+    }
+  }
+}
+

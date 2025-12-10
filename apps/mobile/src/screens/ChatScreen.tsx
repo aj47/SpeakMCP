@@ -440,6 +440,10 @@ export default function ChatScreen({ route, navigation }: any) {
     });
 
     setInput('');
+
+    // Capture the session ID at request start to guard against session changes
+    const requestSessionId = sessionStore.currentSessionId;
+
     try {
       let streamingText = '';
 
@@ -448,6 +452,11 @@ export default function ChatScreen({ route, navigation }: any) {
       setDebugInfo('Request sent, waiting for response...');
 
       const onProgress = (update: AgentProgressUpdate) => {
+        // Guard: skip update if session has changed since request started
+        if (sessionStore.currentSessionId !== requestSessionId) {
+          console.log('[ChatScreen] Session changed, skipping onProgress update');
+          return;
+        }
         const progressMessages = convertProgressToMessages(update);
         if (progressMessages.length > 0) {
           setMessages((m) => {
@@ -459,6 +468,11 @@ export default function ChatScreen({ route, navigation }: any) {
       };
 
       const onToken = (tok: string) => {
+        // Guard: skip update if session has changed since request started
+        if (sessionStore.currentSessionId !== requestSessionId) {
+          console.log('[ChatScreen] Session changed, skipping onToken update');
+          return;
+        }
         streamingText += tok;
 
         setMessages((m) => {
@@ -477,6 +491,12 @@ export default function ChatScreen({ route, navigation }: any) {
       const finalText = response.content || streamingText;
       console.log('[ChatScreen] Chat completed, conversationId:', response.conversationId);
       setDebugInfo(`Completed!`);
+
+      // Guard: skip final updates if session has changed since request started
+      if (sessionStore.currentSessionId !== requestSessionId) {
+        console.log('[ChatScreen] Session changed during request, skipping final message updates');
+        return;
+      }
 
       if (response.conversationId) {
         await sessionStore.setServerConversationId(response.conversationId);
@@ -550,6 +570,12 @@ export default function ChatScreen({ route, navigation }: any) {
         stack: e.stack,
         name: e.name
       });
+
+      // Guard: skip error message if session has changed since request started
+      if (sessionStore.currentSessionId !== requestSessionId) {
+        console.log('[ChatScreen] Session changed during request, skipping error message');
+        return;
+      }
 
       const recoveryState = connectionState;
       let errorMessage = e.message;

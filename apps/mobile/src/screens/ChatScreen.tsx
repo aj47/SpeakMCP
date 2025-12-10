@@ -897,7 +897,15 @@ export default function ChatScreen({ route, navigation }: any) {
             return (
               <Pressable
                 key={i}
-                onPress={() => shouldCollapse && toggleMessageExpansion(i)}
+                disabled={!shouldCollapse}
+                onPress={shouldCollapse ? () => toggleMessageExpansion(i) : undefined}
+                accessibilityRole={shouldCollapse ? 'button' : undefined}
+                accessibilityHint={
+                  shouldCollapse
+                    ? (isExpanded ? 'Double tap to collapse message' : 'Double tap to expand message')
+                    : undefined
+                }
+                accessibilityState={shouldCollapse ? { expanded: isExpanded } : undefined}
                 style={({ pressed }) => [
                   styles.msg,
                   m.role === 'user' ? styles.user : styles.assistant,

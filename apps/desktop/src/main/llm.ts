@@ -874,9 +874,27 @@ export async function processTranscriptWithAgentMode(
   }
 
   // Helper to map conversation history to LLM messages format (filters empty content)
+  // IMPORTANT: Preserve tool-call-only assistant turns so summaries can reference what tools ran.
   const mapConversationToMessages = (
     addSummaryPrompt: boolean = false
   ): Array<{ role: "user" | "assistant"; content: string }> => {
+    const formatToolCalls = (toolCalls: MCPToolCall[]): string => {
+      const maxArgsLength = 500
+      const lines = toolCalls.map((tc) => {
+        let args = ""
+        try {
+          args = tc.arguments === undefined ? "" : JSON.stringify(tc.arguments)
+        } catch {
+          args = String(tc.arguments)
+        }
+        if (args.length > maxArgsLength) {
+          args = args.slice(0, maxArgsLength) + "…"
+        }
+        return `- ${tc.name}(${args})`
+      })
+      return `Tool calls:\n${lines.join("\n")}`
+    }
+
     const mapped = conversationHistory
       .map((entry) => {
         if (entry.role === "tool") {
@@ -884,8 +902,25 @@ export async function processTranscriptWithAgentMode(
           if (!text) return null
           return { role: "user" as const, content: `Tool execution results:\n${entry.content}` }
         }
-        const content = (entry.content || "").trim()
-        if (!content) return null
+
+        const toolCallsText =
+          entry.role === "assistant" && entry.toolCalls && entry.toolCalls.length > 0
+            ? formatToolCalls(entry.toolCalls)
+            : ""
+
+        let content = (entry.content || "").trim()
+
+        // If assistant had tool calls but no textual content, keep the turn for summarization.
+        if (!content) {
+          if (toolCallsText) {
+            content = `[Calling tools]\n${toolCallsText}`
+          } else {
+            return null
+          }
+        } else if (toolCallsText) {
+          content = `${content}\n\n${toolCallsText}`
+        }
+
         return { role: entry.role as "user" | "assistant", content }
       })
       .filter(Boolean) as Array<{ role: "user" | "assistant"; content: string }>

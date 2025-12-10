@@ -150,8 +150,14 @@ export default function ChatScreen({ route, navigation }: any) {
   };
 
   const handleNewChat = useCallback(() => {
+    // Guard: prevent creating new chat while a request is in progress
+    // This prevents race conditions where prior request callbacks could update the new chat
+    if (responding) {
+      console.log('[ChatScreen] handleNewChat blocked: request in progress');
+      return;
+    }
     sessionStore.createNewSession();
-  }, [sessionStore]);
+  }, [sessionStore, responding]);
 
   useLayoutEffect(() => {
     navigation?.setOptions?.({

@@ -905,7 +905,6 @@ export default function ChatScreen({ route, navigation }: any) {
               >
                 <View style={styles.messageHeader}>
                   <Text style={styles.roleIcon}>{roleIcon}</Text>
-                  <Text style={styles.role}>{m.role}</Text>
                   {(m.toolCalls?.length ?? 0) > 0 && (
                     <View style={[
                       styles.toolBadgeSmall,

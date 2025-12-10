@@ -314,8 +314,10 @@ export class OpenAIClient {
           }
 
           if (obj.type === 'error' && obj.data) {
-            console.error('[OpenAIClient] Error event:', obj.data.message);
-            safeReject(new Error(obj.data.message || 'Server error'));
+            const errorMessage = obj.data.message || 'Server error';
+            console.error('[OpenAIClient] Error event:', errorMessage);
+            recovery?.markDisconnected(errorMessage);
+            safeReject(new Error(errorMessage));
             return;
           }
 
@@ -512,6 +514,7 @@ export class OpenAIClient {
         } else {
           const errorMsg = `Chat failed: ${xhr.status} ${xhr.statusText}`;
           console.error('[OpenAIClient] XHR error:', errorMsg);
+          recovery?.markDisconnected(errorMsg);
           safeReject(new Error(errorMsg));
         }
       };

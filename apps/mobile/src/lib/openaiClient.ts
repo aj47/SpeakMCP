@@ -382,6 +382,8 @@ export class OpenAIClient {
       let hasResolved = false;
       let processedLength = 0;
       let buffer = ''; // Buffer for incomplete SSE events across progress calls
+      let hasReceivedData = false; // Track if we've received first data for markConnected
+      let abortReason: string | null = null; // Track abort reason to preserve original error
       const recovery = this.recoveryManager;
 
       console.log('[OpenAIClient] Creating XMLHttpRequest for Android SSE streaming');
@@ -390,9 +392,11 @@ export class OpenAIClient {
       this.activeXhr = xhr;
       xhr.open('POST', url, true);
 
-      // Set headers
-      xhr.setRequestHeader('Content-Type', 'application/json');
-      xhr.setRequestHeader('Authorization', `Bearer ${this.cfg.apiKey}`);
+      // Set headers using authHeaders() for consistency with fetch/EventSource paths
+      const headers = this.authHeaders();
+      Object.entries(headers).forEach(([key, value]) => {
+        xhr.setRequestHeader(key, value);
+      });
       xhr.setRequestHeader('Accept', 'text/event-stream');
       xhr.setRequestHeader('Cache-Control', 'no-cache');
       // Prevent gzip compression which can cause buffering issues with SSE streaming
@@ -424,6 +428,12 @@ export class OpenAIClient {
       xhr.onprogress = () => {
         recovery?.recordHeartbeat();
 
+        // Mark connected on first progress event to align with fetch/EventSource behavior
+        if (!hasReceivedData) {
+          hasReceivedData = true;
+          recovery?.markConnected();
+        }
+
         // Process new data since last progress event
         const newData = xhr.responseText.substring(processedLength);
         processedLength = xhr.responseText.length;
@@ -444,6 +454,7 @@ export class OpenAIClient {
           if (result) {
             // Handle SSE error events
             if (result.error) {
+              abortReason = result.error.message; // Preserve error reason before abort
               recovery?.markDisconnected(result.error.message);
               // Abort the XHR to avoid leaving a lingering in-flight stream
               xhr.abort();
@@ -452,14 +463,16 @@ export class OpenAIClient {
               return;
             }
             if (result.content !== undefined) {
-              if (result.conversationHistory) {
+              // Use !== undefined instead of truthy check for conversationHistory
+              // to correctly handle empty arrays (which should still replace finalContent)
+              if (result.conversationHistory !== undefined) {
                 finalContent = result.content;
               } else {
                 finalContent += result.content;
               }
             }
             if (result.conversationId) conversationId = result.conversationId;
-            if (result.conversationHistory) conversationHistory = result.conversationHistory;
+            if (result.conversationHistory !== undefined) conversationHistory = result.conversationHistory;
           }
         }
       };
@@ -477,14 +490,16 @@ export class OpenAIClient {
               return;
             }
             if (result.content !== undefined) {
-              if (result.conversationHistory) {
+              // Use !== undefined instead of truthy check for conversationHistory
+              // to correctly handle empty arrays (which should still replace finalContent)
+              if (result.conversationHistory !== undefined) {
                 finalContent = result.content;
               } else {
                 finalContent += result.content;
               }
             }
             if (result.conversationId) conversationId = result.conversationId;
-            if (result.conversationHistory) conversationHistory = result.conversationHistory;
+            if (result.conversationHistory !== undefined) conversationHistory = result.conversationHistory;
           }
         }
 
@@ -519,11 +534,14 @@ export class OpenAIClient {
 
       xhr.onabort = () => {
         this.activeXhr = null;
-        // Use 'cancelled' instead of 'aborted' to prevent unintended retries
-        // 'aborted' matches retryable patterns in isRetryableError, while 'cancelled' is non-retryable
-        const errorMsg = 'Request cancelled';
-        console.log('[OpenAIClient] XHR cancelled');
-        recovery?.markDisconnected(errorMsg);
+        // Preserve the original abort reason if it was set (e.g., from SSE error detection)
+        // Otherwise use 'Request cancelled' (non-retryable, since 'cancelled' is in nonRetryablePatterns)
+        const errorMsg = abortReason || 'Request cancelled';
+        console.log('[OpenAIClient] XHR cancelled, reason:', errorMsg);
+        // Only mark disconnected if not already done (abortReason being set means we already did)
+        if (!abortReason) {
+          recovery?.markDisconnected(errorMsg);
+        }
         safeReject(new Error(errorMsg));
       };
 
@@ -599,14 +617,15 @@ export class OpenAIClient {
                   throw result.error;
                 }
                 if (result.content !== undefined) {
-                  if (result.conversationHistory) {
+                  // Use !== undefined for conversationHistory to correctly handle empty arrays
+                  if (result.conversationHistory !== undefined) {
                     finalContent = result.content;
                   } else {
                     finalContent += result.content;
                   }
                 }
                 if (result.conversationId) conversationId = result.conversationId;
-                if (result.conversationHistory) conversationHistory = result.conversationHistory;
+                if (result.conversationHistory !== undefined) conversationHistory = result.conversationHistory;
               }
             }
           }
@@ -626,14 +645,15 @@ export class OpenAIClient {
               throw result.error;
             }
             if (result.content !== undefined) {
-              if (result.conversationHistory) {
+              // Use !== undefined for conversationHistory to correctly handle empty arrays
+              if (result.conversationHistory !== undefined) {
                 finalContent = result.content;
               } else {
                 finalContent += result.content;
               }
             }
             if (result.conversationId) conversationId = result.conversationId;
-            if (result.conversationHistory) conversationHistory = result.conversationHistory;
+            if (result.conversationHistory !== undefined) conversationHistory = result.conversationHistory;
           }
         }
       } else {
@@ -648,14 +668,15 @@ export class OpenAIClient {
               throw result.error;
             }
             if (result.content !== undefined) {
-              if (result.conversationHistory) {
+              // Use !== undefined for conversationHistory to correctly handle empty arrays
+              if (result.conversationHistory !== undefined) {
                 finalContent = result.content;
               } else {
                 finalContent += result.content;
               }
             }
             if (result.conversationId) conversationId = result.conversationId;
-            if (result.conversationHistory) conversationHistory = result.conversationHistory;
+            if (result.conversationHistory !== undefined) conversationHistory = result.conversationHistory;
           }
         }
       }

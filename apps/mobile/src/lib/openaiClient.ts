@@ -50,6 +50,14 @@ export interface AgentProgressUpdate {
     text: string;
     isStreaming: boolean;
   };
+  retryInfo?: {
+    isRetrying: boolean;
+    attempt: number;
+    maxAttempts?: number;
+    delaySeconds: number;
+    reason: string;
+    startedAt: number;
+  };
 }
 
 export interface AgentProgressStep {

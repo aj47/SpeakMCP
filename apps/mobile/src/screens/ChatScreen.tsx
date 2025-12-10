@@ -38,6 +38,7 @@ import { useHeaderHeight } from '@react-navigation/elements';
 import { useTheme } from '../ui/ThemeProvider';
 import { spacing, radius, Theme } from '../ui/theme';
 import { MarkdownRenderer } from '../ui/MarkdownRenderer';
+import { AgentProgressBanner } from '../components/AgentProgressBanner';
 
 export default function ChatScreen({ route, navigation }: any) {
   const insets = useSafeAreaInsets();
@@ -255,6 +256,20 @@ export default function ChatScreen({ route, navigation }: any) {
   const [listening, setListening] = useState(false);
   const [liveTranscript, setLiveTranscript] = useState('');
   const [debugInfo, setDebugInfo] = useState<string>('');
+
+  // Agent progress state for streaming content and retry status
+  const [streamingContent, setStreamingContent] = useState<{
+    text: string;
+    isStreaming: boolean;
+  } | null>(null);
+  const [retryInfo, setRetryInfo] = useState<{
+    isRetrying: boolean;
+    attempt: number;
+    maxAttempts?: number;
+    delaySeconds: number;
+    reason: string;
+    startedAt: number;
+  } | null>(null);
 
   const lastLoadedSessionIdRef = useRef<string | null>(null);
 
@@ -478,6 +493,21 @@ export default function ChatScreen({ route, navigation }: any) {
           console.log('[ChatScreen] Request superseded, skipping onProgress update');
           return;
         }
+
+        // Update streaming content state for AgentProgressBanner
+        if (update.streamingContent) {
+          setStreamingContent(update.streamingContent);
+        } else {
+          setStreamingContent(null);
+        }
+
+        // Update retry info state for AgentProgressBanner
+        if (update.retryInfo) {
+          setRetryInfo(update.retryInfo);
+        } else {
+          setRetryInfo(null);
+        }
+
         const progressMessages = convertProgressToMessages(update);
         if (progressMessages.length > 0) {
           setMessages((m) => {
@@ -633,6 +663,9 @@ export default function ChatScreen({ route, navigation }: any) {
       if (activeRequestIdRef.current === thisRequestId) {
         setResponding(false);
         setConnectionState(null);
+        // Clear agent progress states
+        setStreamingContent(null);
+        setRetryInfo(null);
         // Guard the setTimeout callback: only clear debugInfo if this request
         // is still the active one when the timeout fires. This prevents an
         // old request's delayed clear from wiping debug info for a newer request.
@@ -1151,6 +1184,13 @@ export default function ChatScreen({ route, navigation }: any) {
               </Pressable>
             );
           })}
+          {/* Agent Progress Banner - shows streaming content and retry status */}
+          {(streamingContent || retryInfo) && (
+            <AgentProgressBanner
+              streamingContent={streamingContent ?? undefined}
+              retryInfo={retryInfo ?? undefined}
+            />
+          )}
           {connectionState && connectionState.status === 'reconnecting' && (
             <View style={styles.connectionBanner}>
               <ActivityIndicator size="small" color="#f59e0b" style={{ marginRight: spacing.sm }} />

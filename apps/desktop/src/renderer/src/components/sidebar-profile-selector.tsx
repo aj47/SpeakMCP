@@ -1,4 +1,6 @@
 import { useState } from "react"
+import { useNavigate } from "react-router-dom"
+
 import { tipcClient } from "@renderer/lib/tipc-client"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { Profile } from "@shared/types"
@@ -33,6 +35,8 @@ import { Textarea } from "./ui/textarea"
 
 export function SidebarProfileSelector() {
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
+
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
@@ -263,6 +267,12 @@ export function SidebarProfileSelector() {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => navigate("/settings/tools")}>
+              <Settings className="h-4 w-4" />
+              Profile Settings
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+
             <DropdownMenuItem
               onClick={handleEditClick}
               disabled={!currentProfile || currentProfile.isDefault}

@@ -76,6 +76,7 @@ export class OpenAIClient {
   private onConnectionStatusChange?: OnConnectionStatusChange;
   private activeEventSource: EventSource | null = null;
   private activeAbortController: AbortController | null = null;
+  private activeXhr: XMLHttpRequest | null = null;
 
   constructor(cfg: OpenAIConfig) {
     this.cfg = { ...cfg, baseUrl: cfg.baseUrl?.trim?.() ?? '' };
@@ -115,6 +116,8 @@ export class OpenAIClient {
     this.activeAbortController = null;
     this.activeEventSource?.close();
     this.activeEventSource = null;
+    this.activeXhr?.abort();
+    this.activeXhr = null;
     this.recoveryManager?.cleanup();
     this.recoveryManager = null;
   }
@@ -377,11 +380,13 @@ export class OpenAIClient {
       let conversationHistory: ConversationHistoryMessage[] | undefined;
       let hasResolved = false;
       let processedLength = 0;
+      let buffer = ''; // Buffer for incomplete SSE events across progress calls
       const recovery = this.recoveryManager;
 
       console.log('[OpenAIClient] Creating XMLHttpRequest for Android SSE streaming');
 
       const xhr = new XMLHttpRequest();
+      this.activeXhr = xhr;
       xhr.open('POST', url, true);
 
       // Set headers
@@ -423,8 +428,12 @@ export class OpenAIClient {
 
         if (!newData) return;
 
-        // Split into SSE events
-        const events = newData.split(/\r?\n\r?\n/);
+        // Prepend any buffered partial event from the previous progress call
+        buffer += newData;
+
+        // Split into SSE events and keep the last (potentially incomplete) segment
+        const events = buffer.split(/\r?\n\r?\n/);
+        buffer = events.pop() || ''; // Save the last segment as it may be incomplete
 
         for (const event of events) {
           if (!event.trim()) continue;
@@ -445,6 +454,23 @@ export class OpenAIClient {
       };
 
       xhr.onload = () => {
+        // Process any remaining buffered content
+        if (buffer.trim()) {
+          const result = this.processSSEEvent(buffer, onToken, onProgress);
+          if (result) {
+            if (result.content !== undefined) {
+              if (result.conversationHistory) {
+                finalContent = result.content;
+              } else {
+                finalContent += result.content;
+              }
+            }
+            if (result.conversationId) conversationId = result.conversationId;
+            if (result.conversationHistory) conversationHistory = result.conversationHistory;
+          }
+        }
+
+        this.activeXhr = null;
         console.log('[OpenAIClient] XHR completed, status:', xhr.status, 'content length:', finalContent.length);
 
         if (xhr.status >= 200 && xhr.status < 300) {
@@ -458,16 +484,19 @@ export class OpenAIClient {
       };
 
       xhr.onerror = () => {
+        this.activeXhr = null;
         console.error('[OpenAIClient] XHR network error');
         safeReject(new Error('Network error during streaming'));
       };
 
       xhr.ontimeout = () => {
+        this.activeXhr = null;
         console.error('[OpenAIClient] XHR timeout');
         safeReject(new Error('Request timeout'));
       };
 
       xhr.onabort = () => {
+        this.activeXhr = null;
         console.log('[OpenAIClient] XHR aborted');
         safeReject(new Error('Request aborted'));
       };

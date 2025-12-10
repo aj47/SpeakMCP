@@ -267,6 +267,7 @@ export class OpenAIClient {
 
         recovery?.startHeartbeat(() => {
           console.log('[OpenAIClient] Heartbeat missed, connection may be stale');
+          recovery?.markDisconnected('Connection timeout: no data received');
           safeReject(new Error('Connection timeout: no data received'));
         });
       });

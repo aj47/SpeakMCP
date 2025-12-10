@@ -25,6 +25,13 @@ export type OpenAIConfig = {
 
 export type OnConnectionStatusChange = (state: RecoveryState) => void;
 
+/**
+ * Chat message type that may include UI-only fields.
+ *
+ * Note: UI-only fields (e.g., `id`, `isThinking`) are automatically stripped
+ * before API calls via the sanitizeMessage() method to prevent them from
+ * leaking to the backend.
+ */
 export type ChatMessage = {
   id?: string;
   role: 'system' | 'user' | 'assistant';

@@ -1382,7 +1382,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
         }
       }
     }
-  }, [isComplete, lastAssistantDisplayIndex, displayItems, expandedItems])
+  }, [isComplete, lastAssistantDisplayIndex, displayItems])
 
   // Handle scroll events to detect user interaction
   const handleScroll = () => {

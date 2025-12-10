@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react"
 import { cn } from "@renderer/lib/utils"
-import { AgentProgressUpdate } from "../../../shared/types"
+import { AgentProgressUpdate, EnhancedErrorInfo } from "../../../shared/types"
 import { ChevronDown, ChevronUp, ChevronRight, X, AlertTriangle, Minimize2, Shield, Check, XCircle, Loader2, Clock, Copy, CheckCheck, GripHorizontal, Activity, Moon, Maximize2, RefreshCw } from "lucide-react"
 import { MarkdownRenderer } from "@renderer/components/markdown-renderer"
 import { Button } from "./ui/button"
@@ -69,6 +69,7 @@ type DisplayItem =
       text: string
       isStreaming: boolean
     } }
+  | { kind: "enhanced_error"; id: string; data: EnhancedErrorInfo }
 
 
 // Compact message component for space efficiency
@@ -841,6 +842,189 @@ const RetryStatusBanner: React.FC<{
   )
 }
 
+// Enhanced Error Banner - shows detailed error information with troubleshooting hints and actions
+const EnhancedErrorBanner: React.FC<{
+  errorInfo: {
+    title: string
+    message: string
+    errorType: "network" | "auth" | "rate_limit" | "server" | "config" | "unknown"
+    statusCode?: number
+    endpoint?: string
+    retryCount?: number
+    lastAttemptAt?: number
+    troubleshootingHints?: string[]
+    technicalDetails?: string
+    isRetryable?: boolean
+  }
+  onRetry?: () => void
+  onOpenSettings?: () => void
+}> = ({ errorInfo, onRetry, onOpenSettings }) => {
+  const [showDetails, setShowDetails] = useState(false)
+  const [isCopied, setIsCopied] = useState(false)
+
+  const handleCopyDetails = async () => {
+    const details = [
+      `Error: ${errorInfo.title}`,
+      `Message: ${errorInfo.message}`,
+      `Type: ${errorInfo.errorType}`,
+      errorInfo.statusCode ? `Status Code: ${errorInfo.statusCode}` : null,
+      errorInfo.endpoint ? `Endpoint: ${errorInfo.endpoint}` : null,
+      errorInfo.retryCount ? `Retry Attempts: ${errorInfo.retryCount}` : null,
+      errorInfo.lastAttemptAt ? `Last Attempt: ${new Date(errorInfo.lastAttemptAt).toLocaleString()}` : null,
+      errorInfo.technicalDetails ? `\nTechnical Details:\n${errorInfo.technicalDetails}` : null,
+    ].filter(Boolean).join('\n')
+
+    try {
+      await navigator.clipboard.writeText(details)
+      setIsCopied(true)
+      setTimeout(() => setIsCopied(false), 2000)
+    } catch (err) {
+      console.error("Failed to copy error details:", err)
+    }
+  }
+
+  const getErrorIcon = () => {
+    switch (errorInfo.errorType) {
+      case "network":
+        return "🌐"
+      case "auth":
+        return "🔐"
+      case "rate_limit":
+        return "⏱️"
+      case "server":
+        return "🖥️"
+      case "config":
+        return "⚙️"
+      default:
+        return "❌"
+    }
+  }
+
+  const timeSinceLastAttempt = errorInfo.lastAttemptAt
+    ? Math.floor((Date.now() - errorInfo.lastAttemptAt) / 1000)
+    : null
+
+  return (
+    <div className="rounded-lg border border-red-300 dark:border-red-700 bg-red-50/50 dark:bg-red-950/30 overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center gap-2 px-3 py-2 bg-red-100/50 dark:bg-red-900/30 border-b border-red-200 dark:border-red-800">
+        <span className="text-base">{getErrorIcon()}</span>
+        <span className="text-xs font-medium text-red-800 dark:text-red-200 flex-1">
+          {errorInfo.title}
+        </span>
+        {errorInfo.statusCode && (
+          <Badge variant="outline" className="text-[10px] border-red-300 dark:border-red-700 text-red-700 dark:text-red-300">
+            HTTP {errorInfo.statusCode}
+          </Badge>
+        )}
+      </div>
+
+      {/* Content */}
+      <div className="px-3 py-2 space-y-2">
+        {/* Error Message */}
+        <p className="text-xs text-red-700 dark:text-red-300">
+          {errorInfo.message}
+        </p>
+
+        {/* Retry info */}
+        {(errorInfo.retryCount || timeSinceLastAttempt !== null) && (
+          <div className="flex items-center gap-3 text-[10px] text-red-600 dark:text-red-400">
+            {errorInfo.retryCount && errorInfo.retryCount > 0 && (
+              <span>Attempts: {errorInfo.retryCount}</span>
+            )}
+            {timeSinceLastAttempt !== null && (
+              <span>Last attempt: {timeSinceLastAttempt < 60 ? `${timeSinceLastAttempt}s ago` : `${Math.floor(timeSinceLastAttempt / 60)}m ago`}</span>
+            )}
+          </div>
+        )}
+
+        {/* Troubleshooting Hints */}
+        {errorInfo.troubleshootingHints && errorInfo.troubleshootingHints.length > 0 && (
+          <div className="rounded-md bg-red-100/50 dark:bg-red-900/20 p-2">
+            <div className="flex items-center gap-1.5 mb-1.5">
+              <span className="text-xs">💡</span>
+              <span className="text-[10px] font-medium text-red-800 dark:text-red-200">Troubleshooting</span>
+            </div>
+            <ul className="space-y-1">
+              {errorInfo.troubleshootingHints.map((hint, index) => (
+                <li key={index} className="text-[10px] text-red-700 dark:text-red-300 flex items-start gap-1.5">
+                  <span className="text-red-400 dark:text-red-500 mt-0.5">•</span>
+                  <span>{hint}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* Action Buttons */}
+        <div className="flex items-center gap-2 pt-1">
+          {errorInfo.isRetryable && onRetry && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onRetry}
+              className="h-6 text-[10px] px-2 border-red-300 dark:border-red-700 text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/30"
+            >
+              <RefreshCw className="h-3 w-3 mr-1" />
+              Retry
+            </Button>
+          )}
+          {onOpenSettings && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onOpenSettings}
+              className="h-6 text-[10px] px-2 border-red-300 dark:border-red-700 text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/30"
+            >
+              Open Settings
+            </Button>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleCopyDetails}
+            className="h-6 text-[10px] px-2 border-red-300 dark:border-red-700 text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/30"
+          >
+            {isCopied ? (
+              <>
+                <CheckCheck className="h-3 w-3 mr-1" />
+                Copied
+              </>
+            ) : (
+              <>
+                <Copy className="h-3 w-3 mr-1" />
+                Copy Details
+              </>
+            )}
+          </Button>
+        </div>
+
+        {/* Expandable Technical Details */}
+        {errorInfo.technicalDetails && (
+          <div className="pt-1">
+            <button
+              onClick={() => setShowDetails(!showDetails)}
+              className="flex items-center gap-1 text-[10px] text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-200 transition-colors"
+            >
+              {showDetails ? (
+                <ChevronDown className="h-3 w-3" />
+              ) : (
+                <ChevronRight className="h-3 w-3" />
+              )}
+              Technical Details
+            </button>
+            {showDetails && (
+              <pre className="mt-1.5 rounded bg-red-100/50 dark:bg-red-900/30 p-2 overflow-auto text-[10px] text-red-800 dark:text-red-200 whitespace-pre-wrap break-all max-h-32 scrollbar-thin">
+                {errorInfo.technicalDetails}
+              </pre>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // Streaming Content Bubble - shows real-time LLM response as it's being generated
 const StreamingContentBubble: React.FC<{
   streamingContent: {
@@ -1316,6 +1500,18 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
     })
   }
 
+  // Add enhanced error display if present (from session-level errorInfo or step-level errorInfo)
+  const sessionErrorInfo = progress.errorInfo
+  const stepErrorInfo = progress.steps?.find(s => s.status === "error" && s.errorInfo)?.errorInfo
+  const errorInfoToShow = sessionErrorInfo || stepErrorInfo
+  if (errorInfoToShow && isComplete) {
+    displayItems.push({
+      kind: "enhanced_error",
+      id: `error-${errorInfoToShow.lastAttemptAt || Date.now()}`,
+      data: errorInfoToShow,
+    })
+  }
+
   // Determine the last assistant message among display items (by position, not timestamp)
   const lastAssistantDisplayIndex = (() => {
     for (let i = displayItems.length - 1; i >= 0; i--) {
@@ -1616,6 +1812,14 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
                         return <RetryStatusBanner key={itemKey} retryInfo={item.data} />
                       } else if (item.kind === "streaming") {
                         return <StreamingContentBubble key={itemKey} streamingContent={item.data} />
+                      } else if (item.kind === "enhanced_error") {
+                        return (
+                          <EnhancedErrorBanner
+                            key={itemKey}
+                            errorInfo={item.data}
+                            onOpenSettings={() => tipcClient.openSettingsWindow({})}
+                          />
+                        )
                       } else {
                         return (
                           <ToolExecutionBubble
@@ -1806,6 +2010,14 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
                     <StreamingContentBubble
                       key={itemKey}
                       streamingContent={item.data}
+                    />
+                  )
+                } else if (item.kind === "enhanced_error") {
+                  return (
+                    <EnhancedErrorBanner
+                      key={itemKey}
+                      errorInfo={item.data}
+                      onOpenSettings={() => tipcClient.openSettingsWindow({})}
                     />
                   )
                 } else {

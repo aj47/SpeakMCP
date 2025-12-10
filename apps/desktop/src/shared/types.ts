@@ -101,6 +101,30 @@ export interface ServerLogEntry {
   message: string
 }
 
+// Enhanced Error Information for better user feedback
+export interface EnhancedErrorInfo {
+  /** User-friendly error title */
+  title: string
+  /** User-friendly error message */
+  message: string
+  /** Error type for categorization */
+  errorType: "network" | "auth" | "rate_limit" | "server" | "config" | "unknown"
+  /** HTTP status code if applicable */
+  statusCode?: number
+  /** API endpoint that failed */
+  endpoint?: string
+  /** Number of retry attempts made */
+  retryCount?: number
+  /** Timestamp of last attempt */
+  lastAttemptAt?: number
+  /** Troubleshooting hints based on error type */
+  troubleshootingHints?: string[]
+  /** Technical details for debugging (expandable) */
+  technicalDetails?: string
+  /** Whether the error is retryable */
+  isRetryable?: boolean
+}
+
 // Agent Mode Progress Tracking Types
 export interface AgentProgressStep {
   id: string
@@ -117,6 +141,8 @@ export interface AgentProgressStep {
     toolName: string
     arguments: any
   }
+  /** Enhanced error information for better user feedback */
+  errorInfo?: EnhancedErrorInfo
 }
 
 export interface AgentProgressUpdate {
@@ -154,6 +180,8 @@ export interface AgentProgressUpdate {
     text: string
     isStreaming: boolean
   }
+  /** Enhanced error information for the session (when isComplete && has error) */
+  errorInfo?: EnhancedErrorInfo
 }
 
 // Conversation Types

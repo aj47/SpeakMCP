@@ -306,6 +306,15 @@ async function processWithAgentMode(
     const errorMessage = error instanceof Error ? error.message : "Unknown error"
     agentSessionTracker.errorSession(sessionId, errorMessage)
 
+    // Build enhanced error info for better UI display
+    const { HttpError, createNetworkErrorInfo } = await import("./llm-fetch")
+    let errorInfo
+    if (error instanceof HttpError) {
+      errorInfo = error.enhancedInfo
+    } else if (error instanceof Error) {
+      errorInfo = createNetworkErrorInfo(error)
+    }
+
     // Emit error progress update to the UI so users see the error message
     const { emitAgentProgress } = await import("./emit-agent-progress")
     await emitAgentProgress({
@@ -317,17 +326,19 @@ async function processWithAgentMode(
       steps: [{
         id: `error_${Date.now()}`,
         type: "thinking",
-        title: "Error",
-        description: errorMessage,
+        title: errorInfo?.title || "Error",
+        description: errorInfo?.message || errorMessage,
         status: "error",
         timestamp: Date.now(),
+        errorInfo,
       }],
       isComplete: true,
-      finalContent: `Error: ${errorMessage}`,
+      finalContent: `Error: ${errorInfo?.message || errorMessage}`,
       conversationHistory: [
         { role: "user", content: text, timestamp: Date.now() },
-        { role: "assistant", content: `Error: ${errorMessage}`, timestamp: Date.now() }
+        { role: "assistant", content: `Error: ${errorInfo?.message || errorMessage}`, timestamp: Date.now() }
       ],
+      errorInfo,
     })
 
     throw error
@@ -1255,6 +1266,22 @@ export const router = {
         // Handle transcription or conversation creation errors
         logLLM("[createMcpRecording] Transcription error:", error)
 
+        // Build enhanced error info for transcription errors
+        const { HttpError, createNetworkErrorInfo } = await import("./llm-fetch")
+        let errorInfo
+        if (error instanceof HttpError) {
+          errorInfo = error.enhancedInfo
+        } else if (error instanceof Error) {
+          errorInfo = createNetworkErrorInfo(error)
+          // Override with transcription-specific info
+          errorInfo.title = "Transcription Failed"
+          errorInfo.troubleshootingHints = [
+            "Check your internet connection",
+            "Verify your transcription API key is configured",
+            "Try recording again with clearer audio",
+          ]
+        }
+
         // Clean up the session and emit error state
         await emitAgentProgress({
           sessionId,
@@ -1264,16 +1291,18 @@ export const router = {
           steps: [{
             id: `transcribe_error_${Date.now()}`,
             type: "completion",
-            title: "Transcription failed",
-            description: error instanceof Error ? error.message : "Unknown transcription error",
+            title: errorInfo?.title || "Transcription failed",
+            description: errorInfo?.message || (error instanceof Error ? error.message : "Unknown transcription error"),
             status: "error",
             timestamp: Date.now(),
+            errorInfo,
           }],
           isComplete: true,
           isSnoozed: false,
           conversationTitle: "Transcription Error",
           conversationHistory: [],
-          finalContent: `Transcription failed: ${error instanceof Error ? error.message : "Unknown error"}`,
+          finalContent: `Transcription failed: ${errorInfo?.message || (error instanceof Error ? error.message : "Unknown error")}`,
+          errorInfo,
         })
 
         // Mark the session as errored to clean up the UI

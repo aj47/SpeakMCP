@@ -236,34 +236,54 @@ function extractJsonObject(str: string): any | null {
   return null
 }
 
+import { EnhancedErrorInfo } from "../shared/types"
+
 /**
- * Enhanced error class for HTTP errors with status code and retry information
+ * Enhanced error class for HTTP errors with status code, retry information, and structured error context
  */
-class HttpError extends Error {
+export class HttpError extends Error {
+  public enhancedInfo: EnhancedErrorInfo
+
   constructor(
     public status: number,
     public statusText: string,
     public responseText: string,
-
     public retryAfter?: number,
+    public endpoint?: string,
+    public retryCount?: number,
   ) {
-    super(HttpError.createUserFriendlyMessage(status, statusText, responseText, retryAfter))
+    const info = HttpError.createEnhancedErrorInfo(status, statusText, responseText, retryAfter, endpoint, retryCount)
+    super(info.message)
     this.name = 'HttpError'
+    this.enhancedInfo = info
   }
 
   /**
-   * Create user-friendly error messages for different HTTP status codes
+   * Create enhanced error information with user-friendly messages and troubleshooting hints
    */
-  private static createUserFriendlyMessage(
+  static createEnhancedErrorInfo(
     status: number,
     statusText: string,
     responseText: string,
-    retryAfter?: number
-  ): string {
+    retryAfter?: number,
+    endpoint?: string,
+    retryCount?: number,
+  ): EnhancedErrorInfo {
+    const baseInfo: EnhancedErrorInfo = {
+      title: "API Error",
+      message: "",
+      errorType: "unknown",
+      statusCode: status,
+      endpoint,
+      retryCount,
+      lastAttemptAt: Date.now(),
+      troubleshootingHints: [],
+      technicalDetails: `HTTP ${status} ${statusText}\n${responseText}`,
+      isRetryable: false,
+    }
+
     switch (status) {
       case 400: {
-        // Bad Request - often caused by invalid model names or malformed requests
-        // Try to extract specific error message from response
         let errorDetail = ''
         try {
           const errorJson = JSON.parse(responseText)
@@ -274,56 +294,278 @@ class HttpError extends Error {
           errorDetail = responseText
         }
 
-        // Check if it's a model-related error
         const lowerDetail = errorDetail.toLowerCase()
         if (lowerDetail.includes('model') || lowerDetail.includes('does not exist') || lowerDetail.includes('not found')) {
-          return `Invalid model name. The specified model does not exist or is not available. Please check your model settings and ensure the model name is correct. Error details: ${errorDetail}`
+          return {
+            ...baseInfo,
+            title: "Invalid Model",
+            message: "The specified model does not exist or is not available.",
+            errorType: "config",
+            troubleshootingHints: [
+              "Check your model name in Settings → LLM Configuration",
+              "Verify the model is available for your API provider",
+              "Try using a different model like 'gpt-4o-mini' or 'llama-3.3-70b-versatile'",
+            ],
+            technicalDetails: `Model Error: ${errorDetail}\n\nHTTP ${status} ${statusText}`,
+          }
         }
 
-        return `Bad request. The API rejected the request. ${errorDetail ? `Error details: ${errorDetail}` : 'Please check your configuration.'}`
+        return {
+          ...baseInfo,
+          title: "Bad Request",
+          message: errorDetail || "The API rejected the request due to invalid parameters.",
+          errorType: "config",
+          troubleshootingHints: [
+            "Check your API configuration in Settings",
+            "Verify your request parameters are correct",
+            "Try with a simpler prompt",
+          ],
+        }
       }
 
       case 429:
-        const waitTime = retryAfter ? `${retryAfter} seconds` : 'a moment'
-        return `Rate limit exceeded. The API is temporarily unavailable due to too many requests. We'll automatically retry after waiting ${waitTime}. You don't need to do anything - just wait for the request to complete.`
+        return {
+          ...baseInfo,
+          title: "Rate Limit Exceeded",
+          message: `Too many requests. ${retryAfter ? `Retry after ${retryAfter} seconds.` : 'Please wait a moment.'}`,
+          errorType: "rate_limit",
+          troubleshootingHints: [
+            "Wait for the automatic retry to complete",
+            "Consider upgrading your API plan for higher limits",
+            "Reduce the frequency of requests",
+          ],
+          isRetryable: true,
+        }
 
       case 401:
-        return 'Authentication failed. Please check your API key configuration.'
+        return {
+          ...baseInfo,
+          title: "Authentication Failed",
+          message: "Your API key is invalid or has expired.",
+          errorType: "auth",
+          troubleshootingHints: [
+            "Check your API key in Settings → LLM Configuration",
+            "Verify the API key hasn't expired",
+            "Generate a new API key from your provider's dashboard",
+          ],
+        }
 
       case 403:
-        return 'Access forbidden. Your API key may not have permission to access this resource.'
+        return {
+          ...baseInfo,
+          title: "Access Forbidden",
+          message: "Your API key doesn't have permission to access this resource.",
+          errorType: "auth",
+          troubleshootingHints: [
+            "Check if your API key has the required permissions",
+            "Verify your account has access to the requested model",
+            "Contact your API provider for access",
+          ],
+        }
 
       case 404:
-        return 'API endpoint not found. Please check your base URL configuration.'
+        return {
+          ...baseInfo,
+          title: "Endpoint Not Found",
+          message: "The API endpoint could not be found.",
+          errorType: "config",
+          troubleshootingHints: [
+            "Check your Base URL in Settings → LLM Configuration",
+            "Verify the API endpoint is correct for your provider",
+            "Ensure the service is available in your region",
+          ],
+        }
 
       case 408:
-        return 'Request timeout. The API took too long to respond.'
+        return {
+          ...baseInfo,
+          title: "Request Timeout",
+          message: "The API took too long to respond.",
+          errorType: "network",
+          troubleshootingHints: [
+            "Check your internet connection",
+            "Try again in a few moments",
+            "The API service may be experiencing high load",
+          ],
+          isRetryable: true,
+        }
 
       case 500:
-        return 'Internal server error. The API service is experiencing issues.'
+        return {
+          ...baseInfo,
+          title: "Server Error",
+          message: "The API service is experiencing internal issues.",
+          errorType: "server",
+          troubleshootingHints: [
+            "This is a temporary issue with the API provider",
+            "Wait a few minutes and try again",
+            "Check the provider's status page for outages",
+          ],
+          isRetryable: true,
+        }
 
       case 502:
-        return 'Bad gateway. There may be a temporary issue with the API service.'
+        return {
+          ...baseInfo,
+          title: "Bad Gateway",
+          message: "There's a temporary issue with the API service.",
+          errorType: "server",
+          troubleshootingHints: [
+            "This is usually a temporary network issue",
+            "Wait a few moments and try again",
+            "Check your internet connection",
+          ],
+          isRetryable: true,
+        }
 
       case 503:
-        return 'Service unavailable. The API service is temporarily down for maintenance.'
+        return {
+          ...baseInfo,
+          title: "Service Unavailable",
+          message: "The API service is temporarily down for maintenance.",
+          errorType: "server",
+          troubleshootingHints: [
+            "The service is undergoing maintenance",
+            "Check the provider's status page",
+            "Try again in a few minutes",
+          ],
+          isRetryable: true,
+        }
 
       case 504:
-        return 'Gateway timeout. The API service is not responding.'
+        return {
+          ...baseInfo,
+          title: "Gateway Timeout",
+          message: "The API service is not responding.",
+          errorType: "server",
+          troubleshootingHints: [
+            "The API service may be overloaded",
+            "Check your internet connection",
+            "Try again in a few moments",
+          ],
+          isRetryable: true,
+        }
 
-      default:
-        // For other errors, try to extract meaningful information from the response
+      default: {
+        let errorMessage = `HTTP ${status}: ${responseText || statusText}`
         try {
           const errorJson = JSON.parse(responseText)
           if (errorJson.error?.message) {
-            return `API Error: ${errorJson.error.message}`
+            errorMessage = errorJson.error.message
           }
         } catch (e) {
           // If response is not JSON, use the raw response
         }
 
-        return `HTTP ${status}: ${responseText || statusText}`
+        return {
+          ...baseInfo,
+          title: `HTTP ${status} Error`,
+          message: errorMessage,
+          errorType: status >= 500 ? "server" : "unknown",
+          troubleshootingHints: [
+            "Check your API configuration",
+            "Try again in a few moments",
+            "Contact support if the issue persists",
+          ],
+          isRetryable: status >= 500,
+        }
+      }
     }
+  }
+}
+
+/**
+ * Create enhanced error info for network errors (non-HTTP errors)
+ */
+export function createNetworkErrorInfo(
+  error: Error,
+  endpoint?: string,
+  retryCount?: number,
+): EnhancedErrorInfo {
+  const message = error.message.toLowerCase()
+
+  if (message.includes('abort')) {
+    return {
+      title: "Request Cancelled",
+      message: "The request was cancelled.",
+      errorType: "unknown",
+      endpoint,
+      retryCount,
+      lastAttemptAt: Date.now(),
+      troubleshootingHints: [],
+      technicalDetails: error.message,
+      isRetryable: false,
+    }
+  }
+
+  if (message.includes('timeout')) {
+    return {
+      title: "Connection Timeout",
+      message: "The connection to the API timed out.",
+      errorType: "network",
+      endpoint,
+      retryCount,
+      lastAttemptAt: Date.now(),
+      troubleshootingHints: [
+        "Check your internet connection",
+        "The API service may be slow or overloaded",
+        "Try again in a few moments",
+      ],
+      technicalDetails: error.message,
+      isRetryable: true,
+    }
+  }
+
+  if (message.includes('econnrefused') || message.includes('connection refused')) {
+    return {
+      title: "Connection Refused",
+      message: "Could not connect to the API server.",
+      errorType: "network",
+      endpoint,
+      retryCount,
+      lastAttemptAt: Date.now(),
+      troubleshootingHints: [
+        "Check your internet connection",
+        "Verify the API endpoint is correct",
+        "The service may be temporarily unavailable",
+      ],
+      technicalDetails: error.message,
+      isRetryable: true,
+    }
+  }
+
+  if (message.includes('network') || message.includes('fetch')) {
+    return {
+      title: "Network Error",
+      message: "A network error occurred while connecting to the API.",
+      errorType: "network",
+      endpoint,
+      retryCount,
+      lastAttemptAt: Date.now(),
+      troubleshootingHints: [
+        "Check your internet connection",
+        "Try disabling VPN or proxy if enabled",
+        "The API service may be temporarily unavailable",
+      ],
+      technicalDetails: error.message,
+      isRetryable: true,
+    }
+  }
+
+  return {
+    title: "Unexpected Error",
+    message: error.message || "An unexpected error occurred.",
+    errorType: "unknown",
+    endpoint,
+    retryCount,
+    lastAttemptAt: Date.now(),
+    troubleshootingHints: [
+      "Try again in a few moments",
+      "Check your configuration",
+      "Contact support if the issue persists",
+    ],
+    technicalDetails: error.stack || error.message,
+    isRetryable: false,
   }
 }
 

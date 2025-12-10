@@ -119,9 +119,12 @@ describe('Agent completion summary context', () => {
 
     expect(combined).toContain('Tool calls:')
     expect(combined).toContain('- toolA(')
-    expect(combined).toContain('{"foo":"bar"}')
+    expect(combined).toContain('args keys: foo')
+    expect(combined).toContain('values redacted')
+    expect(combined).not.toContain('{"foo":"bar"}')
     expect(combined).toContain('- toolB(')
-    expect(combined).toContain('{"baz":1}')
+    expect(combined).toContain('args keys: baz')
+    expect(combined).not.toContain('{"baz":1}')
   })
 })
 

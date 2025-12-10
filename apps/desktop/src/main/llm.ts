@@ -879,18 +879,32 @@ export async function processTranscriptWithAgentMode(
     addSummaryPrompt: boolean = false
   ): Array<{ role: "user" | "assistant"; content: string }> => {
     const formatToolCalls = (toolCalls: MCPToolCall[]): string => {
-      const maxArgsLength = 500
+      // Avoid serializing raw argument values into prompts; arguments may contain sensitive data.
+      const maxKeys = 12
+      const isSensitiveKey = (key: string) =>
+        /(token|secret|password|api[-_]?key|authorization|cookie|bearer|private[_-]?key)/i.test(key)
+
+      const formatArgsPreview = (args: unknown): string => {
+        if (args === undefined) return ""
+        if (args === null) return "null"
+        if (Array.isArray(args)) {
+          return `args: [${args.length} items] (values redacted)`
+        }
+        if (typeof args === "object") {
+          const keys = Object.keys(args as Record<string, unknown>)
+          if (keys.length === 0) return "args: {}"
+          const shown = keys
+            .slice(0, maxKeys)
+            .map((k) => (isSensitiveKey(k) ? "<redacted_key>" : k))
+          const more = keys.length > maxKeys ? `, …+${keys.length - maxKeys}` : ""
+          return `args keys: ${shown.join(", ")}${more} (values redacted)`
+        }
+        return "args: <value redacted>"
+      }
+
       const lines = toolCalls.map((tc) => {
-        let args = ""
-        try {
-          args = tc.arguments === undefined ? "" : JSON.stringify(tc.arguments)
-        } catch {
-          args = String(tc.arguments)
-        }
-        if (args.length > maxArgsLength) {
-          args = args.slice(0, maxArgsLength) + "…"
-        }
-        return `- ${tc.name}(${args})`
+        const argsPreview = formatArgsPreview(tc.arguments)
+        return argsPreview ? `- ${tc.name}(${argsPreview})` : `- ${tc.name}()`
       })
       return `Tool calls:\n${lines.join("\n")}`
     }

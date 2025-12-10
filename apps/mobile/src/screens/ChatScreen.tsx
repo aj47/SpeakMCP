@@ -180,9 +180,11 @@ export default function ChatScreen({ route, navigation }: any) {
           )}
           <TouchableOpacity
             onPress={handleNewChat}
+            disabled={responding}
             accessibilityRole="button"
             accessibilityLabel="Start new chat"
-            style={{ paddingHorizontal: 8, paddingVertical: 6 }}
+            accessibilityState={{ disabled: responding }}
+            style={{ paddingHorizontal: 8, paddingVertical: 6, opacity: responding ? 0.4 : 1 }}
           >
             <Text style={{ fontSize: 18, color: theme.colors.foreground }}>✚</Text>
           </TouchableOpacity>

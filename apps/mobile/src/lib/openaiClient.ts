@@ -76,6 +76,7 @@ export class OpenAIClient {
   private onConnectionStatusChange?: OnConnectionStatusChange;
   private activeEventSource: EventSource | null = null;
   private activeAbortController: AbortController | null = null;
+  private activeXhr: XMLHttpRequest | null = null;
 
   constructor(cfg: OpenAIConfig) {
     this.cfg = { ...cfg, baseUrl: cfg.baseUrl?.trim?.() ?? '' };
@@ -115,6 +116,8 @@ export class OpenAIClient {
     this.activeAbortController = null;
     this.activeEventSource?.close();
     this.activeEventSource = null;
+    this.activeXhr?.abort();
+    this.activeXhr = null;
     this.recoveryManager?.cleanup();
     this.recoveryManager = null;
   }
@@ -168,7 +171,11 @@ export class OpenAIClient {
     while (true) {
       try {
         let result: ChatResponse;
-        if (Platform.OS === 'android' || Platform.OS === 'ios') {
+        if (Platform.OS === 'android') {
+          // Android: Use XMLHttpRequest-based streaming due to known react-native-sse issues
+          // See: https://github.com/binaryminds/react-native-sse/issues/61
+          result = await this.streamSSEWithXHR(url, body, onToken, onProgress);
+        } else if (Platform.OS === 'ios') {
           result = await this.streamSSEWithEventSource(url, body, onToken, onProgress);
         } else {
           result = await this.streamSSEWithFetch(url, body, onToken, onProgress);
@@ -207,13 +214,28 @@ export class OpenAIClient {
 
       console.log('[OpenAIClient] Creating EventSource for SSE streaming');
 
+      // Android-specific SSE configuration:
+      // - Accept-Encoding: identity prevents gzip compression which breaks SSE streaming on Android
+      //   (Android's OkHttp sends gzip by default, causing the response to be buffered instead of streamed)
+      // - timeout: 0 disables the library's internal timeout (we handle timeouts via heartbeat)
+      // - timeoutBeforeConnection: reduced for faster initial connection
+      // - debug: enabled for better error logging during development
+      const isAndroid = Platform.OS === 'android';
       const es = new EventSource<'done'>(url, {
         headers: {
           ...this.authHeaders(),
+          // Prevent gzip compression on Android which breaks SSE streaming
+          ...(isAndroid && { 'Accept-Encoding': 'identity' }),
         },
         method: 'POST',
         body: JSON.stringify(body),
         pollingInterval: 0,
+        // Disable internal timeout - we use heartbeat-based timeout instead
+        timeout: 0,
+        // Reduce initial connection delay for faster startup
+        timeoutBeforeConnection: isAndroid ? 100 : 500,
+        // Enable debug logging for troubleshooting
+        debug: __DEV__,
       });
       this.activeEventSource = es;
 
@@ -245,6 +267,7 @@ export class OpenAIClient {
 
         recovery?.startHeartbeat(() => {
           console.log('[OpenAIClient] Heartbeat missed, connection may be stale');
+          recovery?.markDisconnected('Connection timeout: no data received');
           safeReject(new Error('Connection timeout: no data received'));
         });
       });
@@ -291,8 +314,10 @@ export class OpenAIClient {
           }
 
           if (obj.type === 'error' && obj.data) {
-            console.error('[OpenAIClient] Error event:', obj.data.message);
-            safeReject(new Error(obj.data.message || 'Server error'));
+            const errorMessage = obj.data.message || 'Server error';
+            console.error('[OpenAIClient] Error event:', errorMessage);
+            recovery?.markDisconnected(errorMessage);
+            safeReject(new Error(errorMessage));
             return;
           }
 
@@ -306,11 +331,23 @@ export class OpenAIClient {
       });
 
       es.addEventListener('error', (event) => {
-        console.error('[OpenAIClient] SSE error:', event);
-        recovery?.markDisconnected((event as any)?.message || 'SSE connection error');
+        // Extract detailed error information for debugging
+        const errorEvent = event as any;
+        const errorDetails = {
+          type: errorEvent?.type,
+          message: errorEvent?.message,
+          xhrStatus: errorEvent?.xhrStatus,
+          xhrState: errorEvent?.xhrState,
+          platform: Platform.OS,
+        };
+        console.error('[OpenAIClient] SSE error:', JSON.stringify(errorDetails, null, 2));
+
+        const errorMessage = errorEvent?.message ||
+          (errorEvent?.xhrStatus ? `HTTP ${errorEvent.xhrStatus}` : 'SSE connection error');
+        recovery?.markDisconnected(errorMessage);
 
         if (event.type === 'error') {
-          safeReject(new Error((event as any).message || 'SSE connection error'));
+          safeReject(new Error(errorMessage));
         } else {
           safeReject(new Error('SSE connection failed'));
         }
@@ -325,6 +362,196 @@ export class OpenAIClient {
         console.log('[OpenAIClient] SSE connection closed by client, content length:', finalContent.length);
         safeReject(new Error('Connection cancelled'));
       });
+    });
+  }
+
+  /**
+   * Android-specific SSE streaming using XMLHttpRequest.
+   * This is a workaround for known issues with react-native-sse on Android:
+   * - https://github.com/binaryminds/react-native-sse/issues/61
+   * - https://github.com/binaryminds/react-native-sse/issues/74
+   */
+  private streamSSEWithXHR(
+    url: string,
+    body: object,
+    onToken?: (token: string) => void,
+    onProgress?: OnProgressCallback
+  ): Promise<ChatResponse> {
+    return new Promise((resolve, reject) => {
+      let finalContent = '';
+      let conversationId: string | undefined;
+      let conversationHistory: ConversationHistoryMessage[] | undefined;
+      let hasResolved = false;
+      let processedLength = 0;
+      let buffer = ''; // Buffer for incomplete SSE events across progress calls
+      let hasReceivedData = false; // Track if we've received first data for markConnected
+      let abortReason: string | null = null; // Track abort reason to preserve original error
+      const recovery = this.recoveryManager;
+
+      console.log('[OpenAIClient] Creating XMLHttpRequest for Android SSE streaming');
+
+      const xhr = new XMLHttpRequest();
+      this.activeXhr = xhr;
+      xhr.open('POST', url, true);
+
+      // Set headers using authHeaders() for consistency with fetch/EventSource paths
+      const headers = this.authHeaders();
+      Object.entries(headers).forEach(([key, value]) => {
+        xhr.setRequestHeader(key, value);
+      });
+      xhr.setRequestHeader('Accept', 'text/event-stream');
+      xhr.setRequestHeader('Cache-Control', 'no-cache');
+      // Prevent gzip compression which can cause buffering issues with SSE streaming
+      xhr.setRequestHeader('Accept-Encoding', 'identity');
+
+      const safeResolve = (result: ChatResponse) => {
+        if (!hasResolved) {
+          hasResolved = true;
+          recovery?.stopHeartbeat();
+          resolve(result);
+        }
+      };
+
+      const safeReject = (error: Error) => {
+        if (!hasResolved) {
+          hasResolved = true;
+          recovery?.stopHeartbeat();
+          reject(error);
+        }
+      };
+
+      recovery?.startHeartbeat(() => {
+        console.log('[OpenAIClient] XHR heartbeat missed, aborting stalled stream');
+        // Set abortReason before abort to preserve original error in onabort handler
+        abortReason = 'Connection timeout: no data received';
+        recovery?.markDisconnected(abortReason);
+        xhr.abort();
+        safeReject(new Error('Connection stalled - no data received'));
+      });
+
+      xhr.onprogress = () => {
+        recovery?.recordHeartbeat();
+
+        // Mark connected on first progress event to align with fetch/EventSource behavior
+        if (!hasReceivedData) {
+          hasReceivedData = true;
+          recovery?.markConnected();
+        }
+
+        // Process new data since last progress event
+        const newData = xhr.responseText.substring(processedLength);
+        processedLength = xhr.responseText.length;
+
+        if (!newData) return;
+
+        // Prepend any buffered partial event from the previous progress call
+        buffer += newData;
+
+        // Split into SSE events and keep the last (potentially incomplete) segment
+        const events = buffer.split(/\r?\n\r?\n/);
+        buffer = events.pop() || ''; // Save the last segment as it may be incomplete
+
+        for (const event of events) {
+          if (!event.trim()) continue;
+
+          const result = this.processSSEEvent(event, onToken, onProgress);
+          if (result) {
+            // Handle SSE error events
+            if (result.error) {
+              abortReason = result.error.message; // Preserve error reason before abort
+              recovery?.markDisconnected(result.error.message);
+              // Abort the XHR to avoid leaving a lingering in-flight stream
+              xhr.abort();
+              this.activeXhr = null;
+              safeReject(result.error);
+              return;
+            }
+            if (result.content !== undefined) {
+              // Use !== undefined instead of truthy check for conversationHistory
+              // to correctly handle empty arrays (which should still replace finalContent)
+              if (result.conversationHistory !== undefined) {
+                finalContent = result.content;
+              } else {
+                finalContent += result.content;
+              }
+            }
+            if (result.conversationId) conversationId = result.conversationId;
+            if (result.conversationHistory !== undefined) conversationHistory = result.conversationHistory;
+          }
+        }
+      };
+
+      xhr.onload = () => {
+        // Process any remaining buffered content
+        if (buffer.trim()) {
+          const result = this.processSSEEvent(buffer, onToken, onProgress);
+          if (result) {
+            // Handle SSE error events
+            if (result.error) {
+              this.activeXhr = null;
+              recovery?.markDisconnected(result.error.message);
+              safeReject(result.error);
+              return;
+            }
+            if (result.content !== undefined) {
+              // Use !== undefined instead of truthy check for conversationHistory
+              // to correctly handle empty arrays (which should still replace finalContent)
+              if (result.conversationHistory !== undefined) {
+                finalContent = result.content;
+              } else {
+                finalContent += result.content;
+              }
+            }
+            if (result.conversationId) conversationId = result.conversationId;
+            if (result.conversationHistory !== undefined) conversationHistory = result.conversationHistory;
+          }
+        }
+
+        this.activeXhr = null;
+        console.log('[OpenAIClient] XHR completed, status:', xhr.status, 'content length:', finalContent.length);
+
+        if (xhr.status >= 200 && xhr.status < 300) {
+          recovery?.markConnected();
+          safeResolve({ content: finalContent, conversationId, conversationHistory });
+        } else {
+          const errorMsg = `Chat failed: ${xhr.status} ${xhr.statusText}`;
+          console.error('[OpenAIClient] XHR error:', errorMsg);
+          recovery?.markDisconnected(errorMsg);
+          safeReject(new Error(errorMsg));
+        }
+      };
+
+      xhr.onerror = () => {
+        this.activeXhr = null;
+        const errorMsg = 'Network error during streaming';
+        console.error('[OpenAIClient] XHR network error');
+        recovery?.markDisconnected(errorMsg);
+        safeReject(new Error(errorMsg));
+      };
+
+      xhr.ontimeout = () => {
+        this.activeXhr = null;
+        const errorMsg = 'Request timeout';
+        console.error('[OpenAIClient] XHR timeout');
+        recovery?.markDisconnected(errorMsg);
+        safeReject(new Error(errorMsg));
+      };
+
+      xhr.onabort = () => {
+        this.activeXhr = null;
+        // Preserve the original abort reason if it was set (e.g., from SSE error detection)
+        // Otherwise use 'Request cancelled' (non-retryable, since 'cancelled' is in nonRetryablePatterns)
+        const errorMsg = abortReason || 'Request cancelled';
+        console.log('[OpenAIClient] XHR cancelled, reason:', errorMsg);
+        // Only mark disconnected if not already done (abortReason being set means we already did)
+        if (!abortReason) {
+          recovery?.markDisconnected(errorMsg);
+        }
+        safeReject(new Error(errorMsg));
+      };
+
+      // Send the request
+      xhr.send(JSON.stringify(body));
     });
   }
 
@@ -389,15 +616,21 @@ export class OpenAIClient {
             for (const event of events) {
               const result = this.processSSEEvent(event, onToken, onProgress);
               if (result) {
+                // Handle SSE error events
+                if (result.error) {
+                  recovery?.markDisconnected(result.error.message);
+                  throw result.error;
+                }
                 if (result.content !== undefined) {
-                  if (result.conversationHistory) {
+                  // Use !== undefined for conversationHistory to correctly handle empty arrays
+                  if (result.conversationHistory !== undefined) {
                     finalContent = result.content;
                   } else {
                     finalContent += result.content;
                   }
                 }
                 if (result.conversationId) conversationId = result.conversationId;
-                if (result.conversationHistory) conversationHistory = result.conversationHistory;
+                if (result.conversationHistory !== undefined) conversationHistory = result.conversationHistory;
               }
             }
           }
@@ -411,15 +644,21 @@ export class OpenAIClient {
         if (buffer.trim()) {
           const result = this.processSSEEvent(buffer, onToken, onProgress);
           if (result) {
+            // Handle SSE error events
+            if (result.error) {
+              recovery?.markDisconnected(result.error.message);
+              throw result.error;
+            }
             if (result.content !== undefined) {
-              if (result.conversationHistory) {
+              // Use !== undefined for conversationHistory to correctly handle empty arrays
+              if (result.conversationHistory !== undefined) {
                 finalContent = result.content;
               } else {
                 finalContent += result.content;
               }
             }
             if (result.conversationId) conversationId = result.conversationId;
-            if (result.conversationHistory) conversationHistory = result.conversationHistory;
+            if (result.conversationHistory !== undefined) conversationHistory = result.conversationHistory;
           }
         }
       } else {
@@ -428,15 +667,21 @@ export class OpenAIClient {
         for (const event of events) {
           const result = this.processSSEEvent(event, onToken, onProgress);
           if (result) {
+            // Handle SSE error events
+            if (result.error) {
+              recovery?.markDisconnected(result.error.message);
+              throw result.error;
+            }
             if (result.content !== undefined) {
-              if (result.conversationHistory) {
+              // Use !== undefined for conversationHistory to correctly handle empty arrays
+              if (result.conversationHistory !== undefined) {
                 finalContent = result.content;
               } else {
                 finalContent += result.content;
               }
             }
             if (result.conversationId) conversationId = result.conversationId;
-            if (result.conversationHistory) conversationHistory = result.conversationHistory;
+            if (result.conversationHistory !== undefined) conversationHistory = result.conversationHistory;
           }
         }
       }
@@ -459,11 +704,11 @@ export class OpenAIClient {
     event: string,
     onToken?: (token: string) => void,
     onProgress?: OnProgressCallback
-  ): { content?: string; conversationId?: string; conversationHistory?: ConversationHistoryMessage[] } | null {
+  ): { content?: string; conversationId?: string; conversationHistory?: ConversationHistoryMessage[]; error?: Error } | null {
     if (!event.trim()) return null;
 
     const lines = event.split(/\r?\n/).map(l => l.replace(/^data:\s?/, '').trim()).filter(Boolean);
-    let result: { content?: string; conversationId?: string; conversationHistory?: ConversationHistoryMessage[] } | null = null;
+    let result: { content?: string; conversationId?: string; conversationHistory?: ConversationHistoryMessage[]; error?: Error } | null = null;
 
     for (const line of lines) {
       if (line === '[DONE]' || line === '"[DONE]"') {
@@ -494,14 +739,16 @@ export class OpenAIClient {
 
         if (obj.type === 'error' && obj.data) {
           console.error('[OpenAIClient] Error event:', obj.data.message);
-          throw new Error(obj.data.message || 'Server error');
+          // Return error in result so callers can handle it
+          return { error: new Error(obj.data.message || 'Server error') };
         }
 
         const delta = obj?.choices?.[0]?.delta;
         const token = delta?.content;
         if (typeof token === 'string' && token.length > 0) {
           onToken?.(token);
-          result = { ...result, content: (result?.content || '') + token };
+          // Initialize result if null to avoid "Cannot spread null" error on first token
+          result = { ...(result || {}), content: (result?.content || '') + token };
         }
       } catch {}
     }

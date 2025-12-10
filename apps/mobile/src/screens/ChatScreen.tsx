@@ -3,7 +3,6 @@ import {
   View,
   Text,
   TextInput,
-  Button,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
@@ -22,13 +21,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { EventEmitter } from 'expo-modules-core';
 import { useConfigContext, saveConfig } from '../store/config';
 import { useSessionContext } from '../store/sessions';
-import { OpenAIClient, ChatMessage, AgentProgressUpdate, AgentProgressStep, OnConnectionStatusChange } from '../lib/openaiClient';
+import { OpenAIClient, ChatMessage, AgentProgressUpdate } from '../lib/openaiClient';
 import { RecoveryState, formatConnectionStatus } from '../lib/connectionRecovery';
 import * as Speech from 'expo-speech';
 import {
   preprocessTextForTTS,
   COLLAPSED_LINES,
   getRoleIcon,
+  getRoleLabel,
   shouldCollapseMessage,
   getToolResultsSummary,
   formatToolArguments,
@@ -883,6 +883,7 @@ export default function ChatScreen({ route, navigation }: any) {
             const shouldCollapse = shouldCollapseMessage(m.content, m.toolCalls, m.toolResults);
             const isExpanded = expandedMessages[i] ?? false;
             const roleIcon = getRoleIcon(m.role as 'user' | 'assistant' | 'tool');
+            const roleLabel = getRoleLabel(m.role as 'user' | 'assistant' | 'tool');
 
             const hasToolResults = (m.toolResults?.length ?? 0) > 0;
             const allSuccess = hasToolResults && m.toolResults!.every(r => r.success);
@@ -896,7 +897,15 @@ export default function ChatScreen({ route, navigation }: any) {
             return (
               <Pressable
                 key={i}
-                onPress={() => shouldCollapse && toggleMessageExpansion(i)}
+                disabled={!shouldCollapse}
+                onPress={shouldCollapse ? () => toggleMessageExpansion(i) : undefined}
+                accessibilityRole={shouldCollapse ? 'button' : undefined}
+                accessibilityHint={
+                  shouldCollapse
+                    ? (isExpanded ? 'Collapse message' : 'Expand message')
+                    : undefined
+                }
+                accessibilityState={shouldCollapse ? { expanded: isExpanded } : undefined}
                 style={({ pressed }) => [
                   styles.msg,
                   m.role === 'user' ? styles.user : styles.assistant,
@@ -904,8 +913,9 @@ export default function ChatScreen({ route, navigation }: any) {
                 ]}
               >
                 <View style={styles.messageHeader}>
-                  <Text style={styles.roleIcon}>{roleIcon}</Text>
-                  <Text style={styles.role}>{m.role}</Text>
+                  <Text style={styles.roleIcon} accessibilityLabel={roleLabel}>
+                    {roleIcon}
+                  </Text>
                   {(m.toolCalls?.length ?? 0) > 0 && (
                     <View style={[
                       styles.toolBadgeSmall,
@@ -1149,11 +1159,6 @@ function createStyles(theme: Theme) {
       borderColor: theme.colors.border,
       alignSelf: 'flex-start',
     },
-    role: {
-      ...theme.typography.caption,
-      marginBottom: 0,
-      textTransform: 'capitalize',
-    },
     roleIcon: {
       fontSize: 14,
       marginRight: 4,
@@ -1185,9 +1190,6 @@ function createStyles(theme: Theme) {
     toolBadgeError: {
       backgroundColor: 'rgba(239, 68, 68, 0.1)',
       borderColor: 'rgba(239, 68, 68, 0.3)',
-    },
-    resultBadgeSmall: {
-      backgroundColor: theme.colors.secondary,
     },
     toolBadgeSmallText: {
       fontSize: 11,

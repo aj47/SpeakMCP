@@ -980,6 +980,9 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
     })
 
     try {
+      // Update local store first so UI reflects the change immediately
+      setSessionSnoozed(progress.sessionId, true)
+      // Snooze the session in backend
       await tipcClient.snoozeAgentSession({ sessionId: progress.sessionId })
       // Unfocus this session so the overlay hides
       setFocusedSessionId(null)

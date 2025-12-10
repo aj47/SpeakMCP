@@ -73,6 +73,10 @@ export default function ChatScreen({ route, navigation }: any) {
   const [responding, setResponding] = useState(false);
   const [connectionState, setConnectionState] = useState<RecoveryState | null>(null);
 
+  // Track the current active request to prevent cross-request state clobbering
+  // Each request gets a unique ID; only the currently active request can reset UI states
+  const activeRequestIdRef = useRef<number>(0);
+
   const client = useMemo(() => {
     const openAIClient = new OpenAIClient({
       baseUrl: config.baseUrl,
@@ -437,12 +441,18 @@ export default function ChatScreen({ route, navigation }: any) {
     setMessages((m) => [...m, userMsg, { role: 'assistant', content: 'Assistant is thinking...' }]);
     setResponding(true);
 
+    // Generate a unique request ID and mark this request as the active one
+    // This prevents cross-request race conditions on view-level state
+    const thisRequestId = Date.now();
+    activeRequestIdRef.current = thisRequestId;
+
     const currentSession = sessionStore.getCurrentSession();
     const serverConversationId = currentSession?.serverConversationId;
 
     console.log('[ChatScreen] Session info:', {
       sessionId: currentSession?.id,
-      serverConversationId: serverConversationId || 'new'
+      serverConversationId: serverConversationId || 'new',
+      requestId: thisRequestId
     });
 
     setInput('');
@@ -595,13 +605,20 @@ export default function ChatScreen({ route, navigation }: any) {
       setDebugInfo(`Error: ${errorMessage}`);
       setMessages((m) => [...m, { role: 'assistant', content: `Error: ${errorMessage}\n\nTip: Check your internet connection and try again.` }]);
     } finally {
-      console.log('[ChatScreen] Chat request finished');
-      // Always reset UI states (responding, connectionState, debugInfo) when request completes
-      // These are view-level states that should not persist across sessions
-      // Note: Message updates ARE guarded (see guards above) to prevent cross-session mixing
-      setResponding(false);
-      setConnectionState(null);
-      setTimeout(() => setDebugInfo(''), 5000);
+      console.log('[ChatScreen] Chat request finished, requestId:', thisRequestId);
+      // Only reset UI states if this request is still the active one
+      // This prevents an old request from clobbering state if a new request started
+      // (e.g., user switched sessions and started a new chat mid-request)
+      if (activeRequestIdRef.current === thisRequestId) {
+        setResponding(false);
+        setConnectionState(null);
+        setTimeout(() => setDebugInfo(''), 5000);
+      } else {
+        console.log('[ChatScreen] Skipping finally state resets: newer request is active', {
+          thisRequestId,
+          activeRequestId: activeRequestIdRef.current
+        });
+      }
     }
   };
 

@@ -161,6 +161,8 @@ export function ActiveAgentsSidebar() {
         logUI('[ActiveAgentsSidebar] Session snoozed, unfocused, and panel hidden')
       }
     } catch (error) {
+      // Rollback local state on error to keep UI and backend in sync
+      setSessionSnoozed(sessionId, isSnoozed) // Restore to original state
       console.error("Failed to toggle snooze:", error)
     }
   }

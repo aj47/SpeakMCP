@@ -990,6 +990,9 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
       await tipcClient.hidePanelWindow({})
       logUI('🔴 [AgentProgress OVERLAY] Session snoozed, unfocused, and panel hidden')
     } catch (error) {
+      // Rollback local state on error to keep UI and backend in sync
+      setSessionSnoozed(progress.sessionId, false)
+      logUI('🔴 [AgentProgress OVERLAY] Failed to snooze, rolled back local state')
       console.error("Failed to snooze session:", error)
     }
   }
@@ -1486,16 +1489,22 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
               <Button variant="ghost" size="icon" className="h-6 w-6" onClick={async (e) => {
                 e.stopPropagation()
                 if (!progress?.sessionId) return
-                // Update local store first so panel shows content immediately
-                setSessionSnoozed(progress.sessionId, false)
-                // Focus this session in state
-                setFocusedSessionId(progress.sessionId)
-                // Unsnooze the session in backend
-                await tipcClient.unsnoozeAgentSession({ sessionId: progress.sessionId })
-                await tipcClient.focusAgentSession({ sessionId: progress.sessionId })
-                // Show the floating panel with this session
-                await tipcClient.setPanelMode({ mode: "agent" })
-                await tipcClient.showPanelWindow({})
+                try {
+                  // Update local store first so panel shows content immediately
+                  setSessionSnoozed(progress.sessionId, false)
+                  // Focus this session in state
+                  setFocusedSessionId(progress.sessionId)
+                  // Unsnooze the session in backend
+                  await tipcClient.unsnoozeAgentSession({ sessionId: progress.sessionId })
+                  await tipcClient.focusAgentSession({ sessionId: progress.sessionId })
+                  // Show the floating panel with this session
+                  await tipcClient.setPanelMode({ mode: "agent" })
+                  await tipcClient.showPanelWindow({})
+                } catch (error) {
+                  // Rollback local state on error to keep UI and backend in sync
+                  setSessionSnoozed(progress.sessionId, true)
+                  console.error("Failed to unsnooze session:", error)
+                }
               }} title="Maximize - show in floating panel">
                 <Maximize2 className="h-3 w-3" />
               </Button>

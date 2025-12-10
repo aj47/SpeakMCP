@@ -415,6 +415,7 @@ export class OpenAIClient {
 
       recovery?.startHeartbeat(() => {
         console.log('[OpenAIClient] XHR heartbeat missed, aborting stalled stream');
+        recovery?.markDisconnected('Connection timeout: no data received');
         xhr.abort();
         safeReject(new Error('Connection stalled - no data received'));
       });
@@ -513,8 +514,10 @@ export class OpenAIClient {
 
       xhr.onabort = () => {
         this.activeXhr = null;
-        const errorMsg = 'Request aborted';
-        console.log('[OpenAIClient] XHR aborted');
+        // Use 'cancelled' instead of 'aborted' to prevent unintended retries
+        // 'aborted' matches retryable patterns in isRetryableError, while 'cancelled' is non-retryable
+        const errorMsg = 'Request cancelled';
+        console.log('[OpenAIClient] XHR cancelled');
         recovery?.markDisconnected(errorMsg);
         safeReject(new Error(errorMsg));
       };

@@ -5,24 +5,43 @@
  */
 
 import { makeTextCompletionWithFetch } from "./llm-fetch"
-import { configStore } from "./config"
+import { configStore, Config } from "./config"
 import { diagnosticsService } from "./diagnostics"
 import { preprocessTextForTTS as regexPreprocessTextForTTS } from "@speakmcp/shared"
 
-const TTS_PREPROCESSING_PROMPT = `Convert this AI response to natural spoken text.
-- Remove code blocks and replace with brief description if relevant
-- Remove URLs but mention if a link was shared
-- Convert markdown formatting to natural speech
-- Expand abbreviations and acronyms appropriately (e.g., "Dr." → "Doctor", "API" → "A P I")
-- Convert technical symbols to spoken words (e.g., "&&" → "and", "=>" → "arrow")
-- Remove or describe any content that wouldn't make sense when spoken aloud
-- Keep the core meaning but optimize for listening
-- Do NOT add any commentary, just output the converted text
+/**
+ * Builds a dynamic TTS preprocessing prompt based on user config settings.
+ * Respects ttsRemoveCodeBlocks, ttsRemoveUrls, and ttsConvertMarkdown settings.
+ */
+function buildTTSPreprocessingPrompt(config: Config): string {
+  const instructions: string[] = []
+
+  // Only add instructions for enabled options
+  if (config.ttsRemoveCodeBlocks ?? true) {
+    instructions.push("- Remove code blocks and replace with brief description if relevant")
+  }
+  if (config.ttsRemoveUrls ?? true) {
+    instructions.push("- Remove URLs but mention if a link was shared")
+  }
+  if (config.ttsConvertMarkdown ?? true) {
+    instructions.push("- Convert markdown formatting to natural speech")
+  }
+
+  // Always include these LLM-specific enhancements (the main value of LLM preprocessing)
+  instructions.push("- Expand abbreviations and acronyms appropriately (e.g., \"Dr.\" → \"Doctor\", \"API\" → \"A P I\")")
+  instructions.push("- Convert technical symbols to spoken words (e.g., \"&&\" → \"and\", \"=>\" → \"arrow\")")
+  instructions.push("- Remove or describe any content that wouldn't make sense when spoken aloud")
+  instructions.push("- Keep the core meaning but optimize for listening")
+  instructions.push("- Do NOT add any commentary, just output the converted text")
+
+  return `Convert this AI response to natural spoken text.
+${instructions.join("\n")}
 
 Only output the converted text, nothing else.
 
 Text to convert:
 `
+}
 
 /**
  * Preprocesses text for TTS using an LLM for more natural speech output.
@@ -42,9 +61,9 @@ export async function preprocessTextForTTSWithLLM(
   const llmProviderId = providerId || config.ttsLLMPreprocessingProviderId || config.transcriptPostProcessingProviderId || "openai"
   
   try {
-    // Build the prompt with the text to convert
-    const prompt = TTS_PREPROCESSING_PROMPT + text
-    
+    // Build the dynamic prompt based on user config, then append the text
+    const prompt = buildTTSPreprocessingPrompt(config) + text
+
     // Make the LLM call
     const result = await makeTextCompletionWithFetch(prompt, llmProviderId)
     

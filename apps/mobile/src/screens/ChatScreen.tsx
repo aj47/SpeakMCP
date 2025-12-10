@@ -34,6 +34,7 @@ import {
   formatToolArguments,
   formatArgumentsPreview,
   getRoleLabel,
+  getRoleConfig,
 } from '@speakmcp/shared';
 import { useHeaderHeight } from '@react-navigation/elements';
 import { useTheme } from '../ui/ThemeProvider';
@@ -931,7 +932,7 @@ export default function ChatScreen({ route, navigation }: any) {
             // Accessibility props for collapsible messages
             const accessibilityProps = shouldCollapse ? {
               accessibilityRole: 'button' as const,
-              accessibilityLabel: `${getRoleLabel(m.role)} message${m.toolCalls?.length ? ` with ${m.toolCalls.length} tool call${m.toolCalls.length > 1 ? 's' : ''}` : ''}`,
+              accessibilityLabel: `${getRoleConfig(m.role).label} message${m.toolCalls?.length ? ` with ${m.toolCalls.length} tool call${m.toolCalls.length > 1 ? 's' : ''}` : ''}`,
               accessibilityHint: isExpanded ? 'Double tap to collapse message' : 'Double tap to expand message',
             } : {};
 
@@ -992,7 +993,7 @@ export default function ChatScreen({ route, navigation }: any) {
                       resizeMode="contain"
                       accessible={true}
                       accessibilityRole="progressbar"
-                      accessibilityLabel="Assistant is thinking"
+                      accessibilityLabel={`${getRoleConfig(m.role).label} is thinking`}
                     />
                   </View>
                 ) : (

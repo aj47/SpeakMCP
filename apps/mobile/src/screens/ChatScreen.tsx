@@ -149,6 +149,10 @@ export default function ChatScreen({ route, navigation }: any) {
     );
   };
 
+  const handleNewChat = useCallback(() => {
+    sessionStore.createNewSession();
+  }, [sessionStore]);
+
   useLayoutEffect(() => {
     navigation?.setOptions?.({
       headerLeft: () => (
@@ -174,6 +178,14 @@ export default function ChatScreen({ route, navigation }: any) {
               />
             </View>
           )}
+          <TouchableOpacity
+            onPress={handleNewChat}
+            accessibilityRole="button"
+            accessibilityLabel="Start new chat"
+            style={{ paddingHorizontal: 8, paddingVertical: 6 }}
+          >
+            <Text style={{ fontSize: 18, color: theme.colors.foreground }}>✚</Text>
+          </TouchableOpacity>
           <TouchableOpacity
             onPress={handleKillSwitch}
             accessibilityRole="button"
@@ -224,7 +236,7 @@ export default function ChatScreen({ route, navigation }: any) {
         </View>
       ),
     });
-  }, [navigation, handsFree, handleKillSwitch, responding, theme, isDark]);
+  }, [navigation, handsFree, handleKillSwitch, handleNewChat, responding, theme, isDark]);
 
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);

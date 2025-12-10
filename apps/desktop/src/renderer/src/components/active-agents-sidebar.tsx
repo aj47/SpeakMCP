@@ -122,20 +122,30 @@ export function ActiveAgentsSidebar() {
       focusedSessionId,
       allSessions: activeSessions.map(s => ({ id: s.id, snoozed: s.isSnoozed }))
     })
-    try {
-      if (isSnoozed) {
-        // Unsnoozing: restore the session to foreground
-        logUI('[ActiveAgentsSidebar] Unsnoozing session')
 
-        // Update local store first so panel shows content immediately
-        setSessionSnoozed(sessionId, false)
+    if (isSnoozed) {
+      // Unsnoozing: restore the session to foreground
+      logUI('[ActiveAgentsSidebar] Unsnoozing session')
 
-        // Focus the session
-        setFocusedSessionId(sessionId)
+      // Update local store first so panel shows content immediately
+      setSessionSnoozed(sessionId, false)
 
+      // Focus the session
+      setFocusedSessionId(sessionId)
+
+      try {
         // Unsnooze the session in backend
         await tipcClient.unsnoozeAgentSession({ sessionId })
+      } catch (error) {
+        // Rollback local state only when the API call fails to keep UI and backend in sync
+        setSessionSnoozed(sessionId, true)
+        setFocusedSessionId(null)
+        console.error("Failed to unsnooze session:", error)
+        return
+      }
 
+      // UI updates after successful API call - don't rollback if these fail
+      try {
         // Ensure the panel's own ConversationContext focuses the same session
         await tipcClient.focusAgentSession({ sessionId })
 
@@ -146,12 +156,27 @@ export function ActiveAgentsSidebar() {
         await tipcClient.showPanelWindow({})
 
         logUI('[ActiveAgentsSidebar] Session unsnoozed, focused, panel shown and resized')
-      } else {
-        // Snoozing: move session to background
-        logUI('[ActiveAgentsSidebar] Snoozing session')
-        // Update local store first
-        setSessionSnoozed(sessionId, true)
+      } catch (error) {
+        // Log UI errors but don't rollback - the backend state is already updated
+        console.error("Failed to update UI after unsnooze:", error)
+      }
+    } else {
+      // Snoozing: move session to background
+      logUI('[ActiveAgentsSidebar] Snoozing session')
+      // Update local store first
+      setSessionSnoozed(sessionId, true)
+
+      try {
         await tipcClient.snoozeAgentSession({ sessionId })
+      } catch (error) {
+        // Rollback local state only when the API call fails to keep UI and backend in sync
+        setSessionSnoozed(sessionId, false)
+        console.error("Failed to snooze session:", error)
+        return
+      }
+
+      // UI updates after successful API call - don't rollback if these fail
+      try {
         // Unfocus if this was the focused session
         if (focusedSessionId === sessionId) {
           setFocusedSessionId(null)
@@ -159,9 +184,10 @@ export function ActiveAgentsSidebar() {
         // Hide the panel window
         await tipcClient.hidePanelWindow({})
         logUI('[ActiveAgentsSidebar] Session snoozed, unfocused, and panel hidden')
+      } catch (error) {
+        // Log UI errors but don't rollback - the backend state is already updated
+        console.error("Failed to update UI after snooze:", error)
       }
-    } catch (error) {
-      console.error("Failed to toggle snooze:", error)
     }
   }
 

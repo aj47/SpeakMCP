@@ -422,7 +422,9 @@ export class OpenAIClient {
 
       recovery?.startHeartbeat(() => {
         console.log('[OpenAIClient] XHR heartbeat missed, aborting stalled stream');
-        recovery?.markDisconnected('Connection timeout: no data received');
+        // Set abortReason before abort to preserve original error in onabort handler
+        abortReason = 'Connection timeout: no data received';
+        recovery?.markDisconnected(abortReason);
         xhr.abort();
         safeReject(new Error('Connection stalled - no data received'));
       });

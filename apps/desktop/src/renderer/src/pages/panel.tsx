@@ -481,6 +481,11 @@ export function Component() {
       textInputMutation.reset()
       mcpTextInputMutation.reset()
 
+      // Clear any existing conversation ID to ensure a fresh conversation is started
+      // This prevents the bug where previous session messages are included when
+      // submitting a new message via the text input keybind
+      endConversation()
+
       // Show text input and focus
       setShowTextInput(true)
       // Panel window is already shown by the keyboard handler
@@ -491,7 +496,7 @@ export function Component() {
     })
 
     return unlisten
-  }, [])
+  }, [endConversation])
 
   useEffect(() => {
     const unlisten = rendererHandlers.hideTextInput.listen(() => {
@@ -540,6 +545,15 @@ export function Component() {
       // Track if recording was triggered via UI button click vs keyboard shortcut
       // When true, we show "Enter" as the submit hint instead of "Release keys"
       setFromButtonClick(data?.fromButtonClick ?? false)
+
+      // If recording is NOT from a tile and no explicit conversationId was passed,
+      // clear any existing conversation ID to ensure a fresh conversation is started.
+      // This prevents the bug where previous session messages are included when
+      // submitting a new message via the agent mode keybind.
+      if (!data?.fromTile && !data?.conversationId) {
+        endConversation()
+      }
+
       setMcpMode(true)
       mcpModeRef.current = true
       // Mode sizing is now applied in main before show; avoid duplicate calls here
@@ -548,7 +562,7 @@ export function Component() {
     })
 
     return unlisten
-  }, [])
+  }, [endConversation])
 
   useEffect(() => {
     const unlisten = rendererHandlers.finishMcpRecording.listen(() => {

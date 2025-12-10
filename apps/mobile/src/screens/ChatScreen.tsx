@@ -3,7 +3,6 @@ import {
   View,
   Text,
   TextInput,
-  Button,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
@@ -33,7 +32,6 @@ import {
   getToolResultsSummary,
   formatToolArguments,
   formatArgumentsPreview,
-  getRoleLabel,
   getRoleConfig,
 } from '@speakmcp/shared';
 import { useHeaderHeight } from '@react-navigation/elements';
@@ -352,33 +350,49 @@ export default function ChatScreen({ route, navigation }: any) {
     if (update.steps && update.steps.length > 0) {
       let currentToolCalls: any[] = [];
       let currentToolResults: any[] = [];
-      let thinkingContent = '';
+      let assistantContent = '';
+      let hasThinkingStep = false;
 
       for (const step of update.steps) {
         const stepContent = step.content || step.llmContent;
-        if (step.type === 'thinking' && stepContent) {
-          thinkingContent = stepContent;
-        } else if (step.type === 'tool_call') {
+
+        if (step.type === 'thinking') {
+          // Keep spinner-only UI during processing; do not render interim thinking text.
+          hasThinkingStep = true;
+          continue;
+        }
+
+        if (step.type === 'tool_call') {
           if (step.toolCall) {
             currentToolCalls.push(step.toolCall);
           }
           if (step.toolResult) {
             currentToolResults.push(step.toolResult);
           }
-        } else if (step.type === 'tool_result' && step.toolResult) {
+          continue;
+        }
+
+        if (step.type === 'tool_result' && step.toolResult) {
           currentToolResults.push(step.toolResult);
-        } else if (step.type === 'completion' && stepContent) {
-          thinkingContent = stepContent;
+          continue;
+        }
+
+        if ((step.type === 'response' || step.type === 'completion') && stepContent) {
+          assistantContent = stepContent;
         }
       }
 
-      if (currentToolCalls.length > 0 || currentToolResults.length > 0 || thinkingContent) {
+      const toolCalls = currentToolCalls.length > 0 ? currentToolCalls : undefined;
+      const toolResults = currentToolResults.length > 0 ? currentToolResults : undefined;
+      const hasTools = (toolCalls?.length ?? 0) > 0 || (toolResults?.length ?? 0) > 0;
+
+      if (hasTools || assistantContent || hasThinkingStep) {
         messages.push({
           role: 'assistant',
-          content: thinkingContent || '',
-          toolCalls: currentToolCalls.length > 0 ? currentToolCalls : undefined,
-          toolResults: currentToolResults.length > 0 ? currentToolResults : undefined,
-          isThinking: currentToolCalls.length === 0 && currentToolResults.length === 0 ? undefined : false,
+          content: assistantContent || '',
+          toolCalls,
+          toolResults,
+          isThinking: hasTools ? false : (!assistantContent && hasThinkingStep ? true : undefined),
         });
       }
     }
@@ -411,10 +425,12 @@ export default function ChatScreen({ route, navigation }: any) {
     if (update.streamingContent?.text) {
       if (messages.length > 0 && messages[messages.length - 1].role === 'assistant') {
         messages[messages.length - 1].content = update.streamingContent.text;
+        messages[messages.length - 1].isThinking = false;
       } else {
         messages.push({
           role: 'assistant',
           content: update.streamingContent.text,
+          isThinking: false,
         });
       }
     }
@@ -455,7 +471,7 @@ export default function ChatScreen({ route, navigation }: any) {
             const beforePlaceholder = m.slice(0, messageCountBeforeTurn + 1);
             // Preserve isThinking flag if there's no actual content yet
             const newMessages = progressMessages.map(msg => {
-              if (msg.role === 'assistant' && !msg.content && !msg.toolCalls && !msg.toolResults) {
+              if (msg.role === 'assistant' && !msg.content && !(msg.toolCalls?.length) && !(msg.toolResults?.length)) {
                 return { ...msg, isThinking: true };
               }
               return msg;
@@ -538,7 +554,25 @@ export default function ChatScreen({ route, navigation }: any) {
           return copy;
         });
       } else {
-        console.log('[ChatScreen] WARNING: No conversationHistory and no finalText!');
+        console.warn('[ChatScreen] Empty response: No conversationHistory and no finalText!');
+        setDebugInfo('Warning: Empty response from server');
+        setMessages((m) => {
+          const copy = [...m];
+          for (let i = copy.length - 1; i >= 0; i--) {
+            const msg = copy[i];
+            if (
+              msg.role === 'assistant' &&
+              msg.isThinking &&
+              (!msg.content || msg.content.length === 0) &&
+              !(msg.toolCalls?.length) &&
+              !(msg.toolResults?.length)
+            ) {
+              copy.splice(i, 1);
+              return copy;
+            }
+          }
+          return copy;
+        });
       }
 
       if (response.conversationId) {
@@ -984,7 +1018,7 @@ export default function ChatScreen({ route, navigation }: any) {
                   </View>
                 )}
 
-                {m.role === 'assistant' && m.isThinking && !m.toolCalls && !m.toolResults ? (
+                {m.role === 'assistant' && m.isThinking && (!m.content || m.content.length === 0) && !(m.toolCalls?.length) && !(m.toolResults?.length) ? (
                   <View style={styles.thinkingContainer}>
                     <Image
                       source={isDark ? darkSpinner : lightSpinner}

@@ -525,6 +525,16 @@ export default function ChatScreen({ route, navigation }: any) {
         return;
       }
 
+      // Guard: skip final updates if this request is no longer the active one
+      // This prevents older, superseded requests from clobbering messages when multiple sends occur within the same session
+      if (activeRequestIdRef.current !== thisRequestId) {
+        console.log('[ChatScreen] Request superseded, skipping final message updates', {
+          thisRequestId,
+          activeRequestId: activeRequestIdRef.current
+        });
+        return;
+      }
+
       if (response.conversationId) {
         await sessionStore.setServerConversationId(response.conversationId);
       }

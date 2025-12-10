@@ -8,11 +8,9 @@ import { Platform } from 'react-native';
 import EventSource from 'react-native-sse';
 import {
   ConnectionRecoveryManager,
-  ConnectionStatus,
   RecoveryState,
   isRetryableError,
   delay,
-  DEFAULT_RECOVERY_CONFIG,
   type ConnectionRecoveryConfig,
 } from './connectionRecovery';
 
@@ -34,7 +32,7 @@ export type OnConnectionStatusChange = (state: RecoveryState) => void;
  */
 export type ChatMessage = {
   id?: string;
-  role: 'system' | 'user' | 'assistant';
+  role: 'system' | 'user' | 'assistant' | 'tool';
   content?: string;
   toolCalls?: ToolCall[];
   toolResults?: ToolResult[];

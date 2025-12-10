@@ -18,7 +18,7 @@ export interface SessionStore {
   clearAllSessions: () => Promise<void>;
 
   // Message management
-  addMessage: (role: 'user' | 'assistant', content: string, toolCalls?: any[], toolResults?: any[]) => Promise<void>;
+  addMessage: (role: ChatMessage['role'], content: string, toolCalls?: ChatMessage['toolCalls'], toolResults?: ChatMessage['toolResults']) => Promise<void>;
   getCurrentSession: () => Session | null;
   getSessionList: () => SessionListItem[];
   setMessages: (messages: ChatMessage[]) => Promise<void>;
@@ -131,10 +131,10 @@ export function useSessions(): SessionStore {
   }, [sessions]);
 
   const addMessage = useCallback(async (
-    role: 'user' | 'assistant',
+    role: ChatMessage['role'],
     content: string,
-    toolCalls?: any[],
-    toolResults?: any[]
+    toolCalls?: ChatMessage['toolCalls'],
+    toolResults?: ChatMessage['toolResults']
   ) => {
     if (!currentSessionId) return;
 
@@ -182,7 +182,7 @@ export function useSessions(): SessionStore {
         // Convert ChatMessage to session format
         const sessionMessages = messages.map((m, idx) => ({
           id: generateMessageId(),
-          role: m.role as 'system' | 'user' | 'assistant',
+          role: m.role,
           content: m.content || '',
           timestamp: now + idx,
           toolCalls: m.toolCalls,

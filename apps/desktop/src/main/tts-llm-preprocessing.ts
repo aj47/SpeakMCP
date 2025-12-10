@@ -120,7 +120,8 @@ export function isLLMPreprocessingAvailable(): boolean {
     case "gemini":
       return !!config.geminiApiKey
     default:
-      return !!config.openaiApiKey
+      // For unknown providers, return false rather than assuming OpenAI availability
+      return false
   }
 }
 

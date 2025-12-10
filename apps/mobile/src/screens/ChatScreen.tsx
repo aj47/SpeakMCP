@@ -3,7 +3,6 @@ import {
   View,
   Text,
   TextInput,
-  Button,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
@@ -1148,11 +1147,6 @@ function createStyles(theme: Theme) {
       borderColor: theme.colors.border,
       alignSelf: 'flex-start',
     },
-    role: {
-      ...theme.typography.caption,
-      marginBottom: 0,
-      textTransform: 'capitalize',
-    },
     roleIcon: {
       fontSize: 14,
       marginRight: 4,
@@ -1184,9 +1178,6 @@ function createStyles(theme: Theme) {
     toolBadgeError: {
       backgroundColor: 'rgba(239, 68, 68, 0.1)',
       borderColor: 'rgba(239, 68, 68, 0.3)',
-    },
-    resultBadgeSmall: {
-      backgroundColor: theme.colors.secondary,
     },
     toolBadgeSmallText: {
       fontSize: 11,

@@ -409,13 +409,21 @@ export type Config = {
 
 
 
-	  // Remote Server Configuration
-	  remoteServerEnabled?: boolean
-	  remoteServerPort?: number
-	  remoteServerBindAddress?: "127.0.0.1" | "0.0.0.0"
-	  remoteServerApiKey?: string
-	  remoteServerLogLevel?: "error" | "info" | "debug"
-	  remoteServerCorsOrigins?: string[]
+  // Remote Server Configuration
+  remoteServerEnabled?: boolean
+  remoteServerPort?: number
+  remoteServerBindAddress?: "127.0.0.1" | "0.0.0.0"
+  remoteServerApiKey?: string
+  remoteServerLogLevel?: "error" | "info" | "debug"
+  remoteServerCorsOrigins?: string[]
+
+  // WhatsApp (Twilio) Integration
+  whatsappEnabled?: boolean
+  whatsappWebhookSecret?: string
+  whatsappTwilioAccountSid?: string
+  whatsappTwilioAuthToken?: string
+  whatsappTwilioFrom?: string
+  whatsappTwilioMaxMessageLength?: number
 
   // Stream Status Watcher Configuration
   streamStatusWatcherEnabled?: boolean

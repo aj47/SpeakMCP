@@ -78,6 +78,14 @@ export function Component() {
     ? `http://${cfg.remoteServerBindAddress}:${cfg.remoteServerPort}/v1`
     : undefined
 
+  const localWebhookUrl = baseUrl && cfg.whatsappWebhookSecret
+    ? `${baseUrl}/whatsapp/webhook?token=${encodeURIComponent(cfg.whatsappWebhookSecret)}`
+    : undefined
+
+  const publicWebhookUrl = tunnelStatus?.url && cfg.whatsappWebhookSecret
+    ? `${tunnelStatus.url}/v1/whatsapp/webhook?token=${encodeURIComponent(cfg.whatsappWebhookSecret)}`
+    : undefined
+
   return (
     <div className="modern-panel h-full overflow-y-auto overflow-x-hidden px-6 py-4">
       <div className="grid gap-4">
@@ -248,6 +256,165 @@ export function Component() {
             </>
           )}
         </ControlGroup>
+
+        {enabled && (
+          <ControlGroup
+            title="WhatsApp (Twilio)"
+            endDescription={(
+              <div className="break-words whitespace-normal">
+                Receive WhatsApp messages via Twilio and send agent replies back. Requires a publicly reachable Remote Server URL (Cloudflare Tunnel recommended).
+              </div>
+            )}
+          >
+            <Control label="Enable WhatsApp Integration" className="px-3">
+              <Switch
+                checked={cfg.whatsappEnabled ?? false}
+                onCheckedChange={(value) => saveConfig({ whatsappEnabled: value })}
+              />
+            </Control>
+
+            {cfg.whatsappEnabled && (
+              <>
+                <Control
+                  label={<ControlLabel label="Webhook Secret" tooltip="Shared secret to protect the webhook endpoint. Include as ?token=... or X-SpeakMCP-Webhook-Secret header." />}
+                  className="px-3"
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Input
+                      type="password"
+                      value={cfg.whatsappWebhookSecret || ""}
+                      onChange={(e) => saveConfig({ whatsappWebhookSecret: e.currentTarget.value })}
+                      placeholder="(auto-generated when enabled)"
+                      className="w-full sm:w-[360px] max-w-full min-w-0"
+                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => cfg.whatsappWebhookSecret && navigator.clipboard.writeText(cfg.whatsappWebhookSecret)}
+                    >
+                      Copy
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => {
+                        const bytes = new Uint8Array(32)
+                        window.crypto.getRandomValues(bytes)
+                        const hex = Array.from(bytes).map(b => b.toString(16).padStart(2, "0")).join("")
+                        saveConfig({ whatsappWebhookSecret: hex })
+                      }}
+                    >
+                      Regenerate
+                    </Button>
+                  </div>
+                </Control>
+
+                {localWebhookUrl && (
+                  <Control
+                    label={<ControlLabel label="Webhook URL (Local)" tooltip="Only reachable if your machine is accessible at this address. For Twilio, use a public URL (Cloudflare Tunnel below)." />}
+                    className="px-3"
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Input
+                        type="text"
+                        value={localWebhookUrl}
+                        readOnly
+                        className="w-full sm:w-[520px] max-w-full min-w-0 font-mono text-xs"
+                      />
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => navigator.clipboard.writeText(localWebhookUrl)}
+                      >
+                        Copy
+                      </Button>
+                    </div>
+                    {cfg.remoteServerBindAddress === "127.0.0.1" && (
+                      <div className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                        This URL is localhost-only. Twilio will not be able to reach it.
+                      </div>
+                    )}
+                  </Control>
+                )}
+
+                {publicWebhookUrl && (
+                  <Control
+                    label={<ControlLabel label="Webhook URL (Cloudflare Tunnel)" tooltip="Use this URL in your Twilio WhatsApp webhook configuration. Note: Quick Tunnel URL changes when restarted." />}
+                    className="px-3"
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Input
+                        type="text"
+                        value={publicWebhookUrl}
+                        readOnly
+                        className="w-full sm:w-[520px] max-w-full min-w-0 font-mono text-xs"
+                      />
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => navigator.clipboard.writeText(publicWebhookUrl)}
+                      >
+                        Copy
+                      </Button>
+                    </div>
+                  </Control>
+                )}
+
+                <Control label={<ControlLabel label="Twilio Account SID" tooltip="From your Twilio console" />} className="px-3">
+                  <Input
+                    type="text"
+                    value={cfg.whatsappTwilioAccountSid || ""}
+                    onChange={(e) => saveConfig({ whatsappTwilioAccountSid: e.currentTarget.value })}
+                    className="w-full sm:w-[360px] max-w-full min-w-0"
+                  />
+                </Control>
+
+                <Control label={<ControlLabel label="Twilio Auth Token" tooltip="Stored locally in your config" />} className="px-3">
+                  <Input
+                    type="password"
+                    value={cfg.whatsappTwilioAuthToken || ""}
+                    onChange={(e) => saveConfig({ whatsappTwilioAuthToken: e.currentTarget.value })}
+                    className="w-full sm:w-[360px] max-w-full min-w-0"
+                  />
+                </Control>
+
+                <Control
+                  label={<ControlLabel label="Twilio From (WhatsApp)" tooltip="Your Twilio WhatsApp-enabled sender, e.g. whatsapp:+14155552671" />}
+                  className="px-3"
+                >
+                  <Input
+                    type="text"
+                    value={cfg.whatsappTwilioFrom || ""}
+                    onChange={(e) => saveConfig({ whatsappTwilioFrom: e.currentTarget.value })}
+                    placeholder="whatsapp:+14155552671"
+                    className="w-full sm:w-[360px] max-w-full min-w-0"
+                  />
+                </Control>
+
+                <Control
+                  label={<ControlLabel label="Max Message Length" tooltip="Long replies are split into multiple WhatsApp messages" />}
+                  className="px-3"
+                >
+                  <Input
+                    type="number"
+                    min={100}
+                    max={4096}
+                    value={cfg.whatsappTwilioMaxMessageLength ?? 1500}
+                    onChange={(e) =>
+                      saveConfig({ whatsappTwilioMaxMessageLength: parseInt(e.currentTarget.value || "1500", 10) })
+                    }
+                    className="w-36"
+                  />
+                </Control>
+
+                <div className="px-3 pb-2 text-xs text-muted-foreground">
+                  Send <span className="font-mono">/new</span> or <span className="font-mono">/reset</span> to start a fresh conversation.
+                </div>
+              </>
+            )}
+          </ControlGroup>
+        )}
+
 
         {/* Cloudflare Tunnel Section - only show when remote server is enabled */}
         {enabled && (

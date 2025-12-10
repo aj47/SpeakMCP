@@ -11,6 +11,13 @@ import { state, agentProcessManager } from "./state"
 import { conversationService } from "./conversation-service"
 import { AgentProgressUpdate } from "../shared/types"
 
+import {
+  clearConversationForWhatsAppSender,
+  getConversationIdForWhatsAppSender,
+  setConversationIdForWhatsAppSender,
+} from "./whatsapp-conversation-store"
+import { sendTwilioWhatsAppMessages } from "./whatsapp-twilio"
+
 let server: FastifyInstance | null = null
 let lastError: string | undefined
 
@@ -313,6 +320,14 @@ export async function startRemoteServer() {
     configStore.save({ ...cfg, remoteServerApiKey: key })
   }
 
+
+  if (cfg.whatsappEnabled && !cfg.whatsappWebhookSecret) {
+    // Generate webhook secret on first enable (used to protect the unauthenticated webhook route)
+    const secret = crypto.randomBytes(32).toString("hex")
+    configStore.save({ ...configStore.get(), whatsappWebhookSecret: secret })
+  }
+
+
   if (server) {
     diagnosticsService.logInfo(
       "remote-server",
@@ -335,17 +350,40 @@ export async function startRemoteServer() {
     // This is needed because credentials: true doesn't work with literal "*"
     origin: corsOrigins.includes("*") ? true : corsOrigins,
     methods: ["GET", "POST", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-SpeakMCP-Webhook-Secret"],
     credentials: true,
     maxAge: 86400, // Cache preflight for 24 hours
     preflight: true, // Enable preflight pass-through
     strictPreflight: false, // Don't be strict about preflight requests
   })
 
-  // Auth hook (skip for OPTIONS preflight requests)
+
+  // Parse Twilio-style webhooks (application/x-www-form-urlencoded)
+  fastify.addContentTypeParser(
+    "application/x-www-form-urlencoded",
+    { parseAs: "string" },
+    (_req, body, done) => {
+      try {
+        const params = new URLSearchParams(body as string)
+        const parsed: Record<string, string> = {}
+        for (const [key, value] of params.entries()) parsed[key] = value
+        done(null, parsed)
+      } catch (err) {
+        done(err as any, undefined)
+      }
+    },
+  )
+
+
+  // Auth hook (skip for OPTIONS preflight requests and the WhatsApp webhook)
   fastify.addHook("onRequest", async (req, reply) => {
     // Skip auth for OPTIONS requests (CORS preflight)
     if (req.method === "OPTIONS") {
+      return
+    }
+
+    // The WhatsApp webhook is secured by a separate shared secret.
+    if ((req.url || "").startsWith("/v1/whatsapp/webhook")) {
       return
     }
 
@@ -359,6 +397,94 @@ export async function startRemoteServer() {
   })
 
   // Routes
+
+
+  fastify.post("/v1/whatsapp/webhook", async (req, reply) => {
+    const current = configStore.get()
+    if (!current.whatsappEnabled) {
+      return reply.code(404).send({ error: "Not Found" })
+    }
+
+    const query = (req.query || {}) as any
+    const headerSecret = req.headers["x-speakmcp-webhook-secret"]
+    const providedSecret =
+      (typeof query.token === "string" && query.token) ||
+      (typeof headerSecret === "string" && headerSecret) ||
+      (Array.isArray(headerSecret) ? headerSecret[0] : undefined)
+
+    if (!current.whatsappWebhookSecret || providedSecret !== current.whatsappWebhookSecret) {
+      return reply.code(401).send({ error: "Unauthorized" })
+    }
+
+    const body = (req.body || {}) as any
+    const from = String(body.From || body.from || "").trim()
+    const text = String(body.Body || body.body || "").trim()
+
+    if (!from) {
+      return reply.code(400).send({ error: "Missing From" })
+    }
+
+    // Acknowledge immediately to avoid Twilio retries/timeouts.
+    void (async () => {
+      try {
+        const cfg = configStore.get()
+        const accountSid = cfg.whatsappTwilioAccountSid
+        const authToken = cfg.whatsappTwilioAuthToken
+        const twilioFrom = cfg.whatsappTwilioFrom
+        const maxMessageLength = cfg.whatsappTwilioMaxMessageLength || 1500
+
+        if (!accountSid || !authToken || !twilioFrom) {
+          diagnosticsService.logWarning(
+            "remote-server",
+            "WhatsApp webhook received but Twilio credentials are not configured",
+          )
+          return
+        }
+
+        if (!text) {
+          return
+        }
+
+        const isReset = /^\/(new|reset)\b/i.test(text)
+        if (isReset) {
+          clearConversationForWhatsAppSender(from)
+          await sendTwilioWhatsAppMessages({
+            accountSid,
+            authToken,
+            from: twilioFrom,
+            to: from,
+            body: "✅ Started a new conversation.",
+            maxMessageLength,
+          })
+          return
+        }
+
+        const existingConversationId = getConversationIdForWhatsAppSender(from)
+        const result = await runAgent({
+          prompt: text,
+          conversationId: existingConversationId,
+        })
+
+        setConversationIdForWhatsAppSender(from, result.conversationId)
+
+        await sendTwilioWhatsAppMessages({
+          accountSid,
+          authToken,
+          from: twilioFrom,
+          to: from,
+          body: result.content,
+          maxMessageLength,
+        })
+      } catch (err) {
+        diagnosticsService.logError("remote-server", "WhatsApp webhook processing failed", {
+          message: (err as Error)?.message || String(err),
+        })
+      }
+    })()
+
+    return reply.header("Content-Type", "text/xml").send("<Response></Response>")
+  })
+
   fastify.post("/v1/chat/completions", async (req, reply) => {
     try {
       const body = req.body as any

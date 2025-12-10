@@ -116,13 +116,16 @@ const getConfig = () => {
     // Parallel tool execution - when enabled, multiple tool calls from a single LLM response are executed concurrently
     mcpParallelToolExecution: true,
 
-	    // Remote Server defaults
-	    remoteServerEnabled: false,
-	    remoteServerPort: 3210,
-	    remoteServerBindAddress: "127.0.0.1",
-	    remoteServerLogLevel: "info",
-	    remoteServerCorsOrigins: ["*"],
+    // Remote Server defaults
+    remoteServerEnabled: false,
+    remoteServerPort: 3210,
+    remoteServerBindAddress: "127.0.0.1",
+    remoteServerLogLevel: "info",
+    remoteServerCorsOrigins: ["*"],
 
+    // WhatsApp (Twilio) defaults
+    whatsappEnabled: false,
+    whatsappTwilioMaxMessageLength: 1500,
 
   }
 

@@ -8,6 +8,7 @@ import { ConfigContext, useConfig, saveConfig } from './src/store/config';
 import { SessionContext, useSessions } from './src/store/sessions';
 import { View, Image, Text, StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { ThemeProvider, useTheme } from './src/ui/ThemeProvider';
 import * as Linking from 'expo-linking';
 import { useEffect } from 'react';
@@ -167,10 +168,12 @@ const styles = StyleSheet.create({
 export default function App() {
   return (
     <SafeAreaProvider>
-      <ThemeProvider>
-        <StatusBarWrapper />
-        <Root />
-      </ThemeProvider>
+      <KeyboardProvider>
+        <ThemeProvider>
+          <StatusBarWrapper />
+          <Root />
+        </ThemeProvider>
+      </KeyboardProvider>
     </SafeAreaProvider>
   );
 }

@@ -8,12 +8,12 @@ import {
   TouchableOpacity,
   GestureResponderEvent,
   Platform,
-  KeyboardAvoidingView,
   ActivityIndicator,
   Alert,
   Pressable,
   Image,
 } from 'react-native';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 
 const darkSpinner = require('../../assets/loading-spinner.gif');
 const lightSpinner = require('../../assets/light-spinner.gif');
@@ -964,7 +964,7 @@ export default function ChatScreen({ route, navigation }: any) {
   return (
     <KeyboardAvoidingView
       style={{ flex: 1, backgroundColor: theme.colors.background }}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior="padding"
       keyboardVerticalOffset={headerHeight}
     >
       <View style={{ flex: 1 }}>

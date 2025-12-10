@@ -932,6 +932,7 @@ export default function ChatScreen({ route, navigation }: any) {
               accessibilityRole: 'button' as const,
               accessibilityLabel: `${getRoleConfig(m.role).label} message${m.toolCalls?.length ? ` with ${m.toolCalls.length} tool call${m.toolCalls.length > 1 ? 's' : ''}` : ''}`,
               accessibilityHint: isExpanded ? 'Double tap to collapse message' : 'Double tap to expand message',
+              accessibilityState: { expanded: isExpanded },
             } : {};
 
             return (

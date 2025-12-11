@@ -546,15 +546,18 @@ export const emergencyStopAgentMode = async () => {
     logApp("Error during emergency stop:", error)
   }
 
-  // Close panel immediately without resizing; next show will apply correct mode
+  // Keep panel open after emergency stop so user can:
+  // 1. See the stopped state and any error messages
+  // 2. Send follow-up messages to continue the conversation
+  // 3. Have more granular control to steer the agent when things go wrong
+  // The panel will show the "Stopped" state and the follow-up input remains active
   if (win) {
-    // Suppress auto-show for a short cooldown so background progress doesn't re-open the panel
+    // Suppress auto-show briefly to avoid immediate reopen from any trailing progress
     suppressPanelAutoShow(1000)
-    // Hide immediately for emergency stop - no delay to prevent race conditions
-    // with any in-flight progress updates
-    if (win.isVisible()) {
-      win.hide()
-    }
+    // Make panel focusable so user can interact with the follow-up input
+    try {
+      win.setFocusable(true)
+    } catch {}
   }
 }
 

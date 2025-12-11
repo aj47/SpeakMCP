@@ -1,4 +1,5 @@
-import { agentProcessManager, llmRequestAbortManager, state, agentSessionStateManager } from "./state"
+import { agentProcessManager, llmRequestAbortManager, state, agentSessionStateManager, toolApprovalManager } from "./state"
+import { emitAgentProgress } from "./emit-agent-progress"
 
 /**
  * Centralized emergency stop: abort LLM requests, kill tracked child processes,
@@ -13,11 +14,38 @@ export async function emergencyStopAll(): Promise<{ before: number; after: numbe
   // Signal all sessions to stop ASAP (both new session-based and legacy global)
   agentSessionStateManager.stopAllSessions()
 
-  // Mark all active agent sessions as stopped in the tracker
+  // Mark all active agent sessions as stopped in the tracker and emit progress updates
   try {
     const { agentSessionTracker } = await import("./agent-session-tracker")
     const activeSessions = agentSessionTracker.getActiveSessions()
     for (const session of activeSessions) {
+      // Cancel any pending tool approvals for this session
+      toolApprovalManager.cancelSessionApprovals(session.id)
+
+      // Emit a final progress update so the UI shows "Stopped" state
+      // This allows users to see the stopped state and send follow-up messages
+      await emitAgentProgress({
+        sessionId: session.id,
+        conversationId: session.conversationId,
+        conversationTitle: session.conversationTitle,
+        currentIteration: 0,
+        maxIterations: 0,
+        steps: [
+          {
+            id: `stop_${Date.now()}`,
+            type: "completion",
+            title: "Agent stopped",
+            description: "Agent mode was stopped by emergency kill switch",
+            status: "error",
+            timestamp: Date.now(),
+          },
+        ],
+        isComplete: true,
+        finalContent: "(Agent mode was stopped by emergency kill switch)",
+        conversationHistory: [],
+      })
+
+      // Mark the session as stopped in the tracker
       agentSessionTracker.stopSession(session.id)
     }
   } catch {

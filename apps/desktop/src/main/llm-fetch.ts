@@ -237,6 +237,32 @@ function extractJsonObject(str: string): any | null {
 }
 
 /**
+ * Parse Retry-After header value which can be either delta-seconds or HTTP-date
+ * Returns the delay in seconds, or undefined if parsing fails
+ */
+function parseRetryAfter(headerValue: string): number | undefined {
+  // Try delta-seconds format first
+  const seconds = parseInt(headerValue, 10)
+  if (!isNaN(seconds) && seconds >= 0) {
+    return seconds
+  }
+
+  // Try HTTP-date format
+  const date = new Date(headerValue)
+  if (!isNaN(date.getTime())) {
+    const delayMs = date.getTime() - Date.now()
+    // Only return positive delays
+    if (delayMs > 0) {
+      return Math.ceil(delayMs / 1000)
+    }
+    // If date is in the past, return 0 (retry immediately)
+    return 0
+  }
+
+  return undefined
+}
+
+/**
  * Enhanced error class for HTTP errors with status code and retry information
  */
 export class HttpError extends Error {
@@ -924,14 +950,8 @@ async function makeAPICallAttempt(
       }
 
       // Extract Retry-After header for rate limiting
-      let retryAfter: number | undefined
       const retryAfterHeader = response.headers.get('retry-after')
-      if (retryAfterHeader) {
-        const parsed = parseInt(retryAfterHeader, 10)
-        if (!isNaN(parsed)) {
-          retryAfter = parsed
-        }
-      }
+      const retryAfter = retryAfterHeader ? parseRetryAfter(retryAfterHeader) : undefined
 
       const endpoint = `${baseURL}/chat/completions`
 
@@ -1285,14 +1305,8 @@ async function makeGeminiCall(
       const errorText = await response.text()
 
       // Extract Retry-After header for rate limiting
-      let retryAfter: number | undefined
       const retryAfterHeader = response.headers.get('retry-after')
-      if (retryAfterHeader) {
-        const parsed = parseInt(retryAfterHeader, 10)
-        if (!isNaN(parsed)) {
-          retryAfter = parsed
-        }
-      }
+      const retryAfter = retryAfterHeader ? parseRetryAfter(retryAfterHeader) : undefined
 
       if (isDebugLLM()) {
         logLLM("Gemini HTTP Error", {

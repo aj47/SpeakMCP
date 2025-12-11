@@ -950,9 +950,12 @@ const EnhancedErrorBubble: React.FC<{
         handleCopyDetails()
         break
       case 'check_connection':
-        // TODO: Implement connection check functionality
-        // For now, this is a placeholder - could trigger a network connectivity test
-        console.log('Check connection action triggered')
+        // Basic network connectivity check using browser API
+        if (navigator.onLine) {
+          alert('Your device appears to be connected to the internet. The issue may be with the API server or your API configuration.')
+        } else {
+          alert('Your device appears to be offline. Please check your internet connection.')
+        }
         break
       default:
         console.warn(`Unknown quick action: ${action}`)
@@ -977,9 +980,11 @@ const EnhancedErrorBubble: React.FC<{
         <p className="text-xs text-red-900 dark:text-red-100">
           {errorInfo.message}
         </p>
-        {errorInfo.retryAttempts && (
+        {(errorInfo.retryAttempts || errorInfo.maxRetryAttempts) && (
           <p className="text-xs text-red-600 dark:text-red-400 mt-1">
-            Failed after {errorInfo.retryAttempts} attempt{errorInfo.retryAttempts > 1 ? 's' : ''}
+            {errorInfo.retryAttempts
+              ? `Failed after ${errorInfo.retryAttempts} attempt${errorInfo.retryAttempts > 1 ? 's' : ''}`
+              : `Max retries: ${errorInfo.maxRetryAttempts}`}
             {getTimeAgo() && ` • Last attempt: ${getTimeAgo()}`}
           </p>
         )}
@@ -1044,7 +1049,13 @@ const EnhancedErrorBubble: React.FC<{
             <div className="mt-2 p-2 bg-red-100/50 dark:bg-red-900/30 rounded text-xs font-mono text-red-800 dark:text-red-200 whitespace-pre-wrap break-all">
               {errorInfo.statusCode && <div>Status: {errorInfo.statusCode}</div>}
               {errorInfo.endpoint && <div>Endpoint: {errorInfo.endpoint}</div>}
-              {errorInfo.retryAttempts && <div>Attempts: {errorInfo.retryAttempts}{errorInfo.maxRetryAttempts ? ` / ${errorInfo.maxRetryAttempts}` : ''}</div>}
+              {(errorInfo.retryAttempts || errorInfo.maxRetryAttempts) && (
+                <div>
+                  {errorInfo.retryAttempts
+                    ? `Attempts: ${errorInfo.retryAttempts}${errorInfo.maxRetryAttempts ? ` / ${errorInfo.maxRetryAttempts}` : ''}`
+                    : `Max retries: ${errorInfo.maxRetryAttempts}`}
+                </div>
+              )}
               {errorInfo.technicalDetails && <div className="mt-1 border-t border-red-200 dark:border-red-700 pt-1">{errorInfo.technicalDetails}</div>}
             </div>
           )}

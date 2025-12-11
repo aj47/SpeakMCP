@@ -909,9 +909,9 @@ const EnhancedErrorBubble: React.FC<{
   const getTimeAgo = () => {
     if (!errorInfo.lastAttemptAt) return null
     const seconds = Math.floor((Date.now() - errorInfo.lastAttemptAt) / 1000)
-    if (seconds < 60) return `${seconds} seconds ago`
+    if (seconds < 60) return `${seconds} second${seconds !== 1 ? 's' : ''} ago`
     const minutes = Math.floor(seconds / 60)
-    return `${minutes} minute${minutes > 1 ? 's' : ''} ago`
+    return `${minutes} minute${minutes !== 1 ? 's' : ''} ago`
   }
 
   // Copy error details to clipboard

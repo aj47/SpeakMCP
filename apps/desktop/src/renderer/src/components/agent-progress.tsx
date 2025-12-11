@@ -921,7 +921,7 @@ const EnhancedErrorBubble: React.FC<{
       `Message: ${errorInfo.message}`,
       errorInfo.statusCode ? `Status Code: ${errorInfo.statusCode}` : null,
       errorInfo.endpoint ? `Endpoint: ${errorInfo.endpoint}` : null,
-      errorInfo.retryAttempts ? `Attempts: ${errorInfo.retryAttempts}` : null,
+      errorInfo.retryAttempts != null ? `Attempts: ${errorInfo.retryAttempts}` : null,
       errorInfo.technicalDetails ? `\nTechnical Details:\n${errorInfo.technicalDetails}` : null,
     ].filter(Boolean).join('\n')
 
@@ -980,10 +980,10 @@ const EnhancedErrorBubble: React.FC<{
         <p className="text-xs text-red-900 dark:text-red-100">
           {errorInfo.message}
         </p>
-        {(errorInfo.retryAttempts || errorInfo.maxRetryAttempts) && (
+        {(errorInfo.retryAttempts != null || errorInfo.maxRetryAttempts != null) && (
           <p className="text-xs text-red-600 dark:text-red-400 mt-1">
-            {errorInfo.retryAttempts
-              ? `Failed after ${errorInfo.retryAttempts} attempt${errorInfo.retryAttempts > 1 ? 's' : ''}`
+            {errorInfo.retryAttempts != null
+              ? `Failed after ${errorInfo.retryAttempts} attempt${errorInfo.retryAttempts !== 1 ? 's' : ''}`
               : `Max retries: ${errorInfo.maxRetryAttempts}`}
             {getTimeAgo() && ` • Last attempt: ${getTimeAgo()}`}
           </p>
@@ -1049,10 +1049,10 @@ const EnhancedErrorBubble: React.FC<{
             <div className="mt-2 p-2 bg-red-100/50 dark:bg-red-900/30 rounded text-xs font-mono text-red-800 dark:text-red-200 whitespace-pre-wrap break-all">
               {errorInfo.statusCode && <div>Status: {errorInfo.statusCode}</div>}
               {errorInfo.endpoint && <div>Endpoint: {errorInfo.endpoint}</div>}
-              {(errorInfo.retryAttempts || errorInfo.maxRetryAttempts) && (
+              {(errorInfo.retryAttempts != null || errorInfo.maxRetryAttempts != null) && (
                 <div>
-                  {errorInfo.retryAttempts
-                    ? `Attempts: ${errorInfo.retryAttempts}${errorInfo.maxRetryAttempts ? ` / ${errorInfo.maxRetryAttempts}` : ''}`
+                  {errorInfo.retryAttempts != null
+                    ? `Attempts: ${errorInfo.retryAttempts}${errorInfo.maxRetryAttempts != null ? ` / ${errorInfo.maxRetryAttempts}` : ''}`
                     : `Max retries: ${errorInfo.maxRetryAttempts}`}
                 </div>
               )}

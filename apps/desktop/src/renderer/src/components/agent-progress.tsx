@@ -949,6 +949,14 @@ const EnhancedErrorBubble: React.FC<{
       case 'copy_details':
         handleCopyDetails()
         break
+      case 'check_connection':
+        // TODO: Implement connection check functionality
+        // For now, this is a placeholder - could trigger a network connectivity test
+        console.log('Check connection action triggered')
+        break
+      default:
+        console.warn(`Unknown quick action: ${action}`)
+        break
     }
   }
 

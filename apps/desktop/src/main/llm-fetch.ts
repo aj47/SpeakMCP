@@ -923,6 +923,18 @@ async function makeAPICallAttempt(
         })
       }
 
+      // Extract Retry-After header for rate limiting
+      let retryAfter: number | undefined
+      const retryAfterHeader = response.headers.get('retry-after')
+      if (retryAfterHeader) {
+        const parsed = parseInt(retryAfterHeader, 10)
+        if (!isNaN(parsed)) {
+          retryAfter = parsed
+        }
+      }
+
+      const endpoint = `${baseURL}/chat/completions`
+
       // Check if this is a structured output related error
       // Only treat 4xx client errors as potential structured output errors
       // Server errors (5xx) should always be treated as retryable HTTP errors
@@ -948,7 +960,7 @@ async function makeAPICallAttempt(
         throw error
       }
 
-      throw new HttpError(response.status, response.statusText, errorText)
+      throw new HttpError(response.status, response.statusText, errorText, retryAfter, endpoint)
     }
 
     const data = await response.json()
@@ -1291,7 +1303,7 @@ async function makeGeminiCall(
         })
       }
 
-      throw new HttpError(response.status, response.statusText, errorText, retryAfter)
+      throw new HttpError(response.status, response.statusText, errorText, retryAfter, `${baseURL}/v1beta/models/${model}:generateContent`)
     }
 
     const data = await response.json()

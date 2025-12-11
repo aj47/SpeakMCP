@@ -45,6 +45,17 @@ describe('LLM Fetch Retry Logic', () => {
     global.fetch = vi.fn()
   })
 
+  // Helper to create mock headers
+  const createMockHeaders = (retryAfter?: string) => ({
+    get: (name: string) => {
+      if (name.toLowerCase() === 'retry-after' && retryAfter) {
+        return retryAfter
+      }
+      return null
+    },
+    entries: () => [],
+  })
+
   it('should treat 524 Gateway Timeout as retryable HttpError', async () => {
     // Mock a 524 response
     const mockResponse = {
@@ -53,6 +64,7 @@ describe('LLM Fetch Retry Logic', () => {
       statusText: 'Gateway Timeout',
       text: async () => '<html><body>Cloudflare 524 Gateway Timeout</body></html>',
       json: async () => ({}),
+      headers: createMockHeaders(),
     }
 
     let callCount = 0
@@ -65,6 +77,7 @@ describe('LLM Fetch Retry Logic', () => {
       return Promise.resolve({
         ok: true,
         status: 200,
+        headers: createMockHeaders(),
         json: async () => ({
           choices: [
             {
@@ -99,6 +112,7 @@ describe('LLM Fetch Retry Logic', () => {
       text: async () =>
         '<html><body>Cloudflare 524 Gateway Timeout. Expected JSON response.</body></html>',
       json: async () => ({}),
+      headers: createMockHeaders(),
     }
 
     let callCount = 0
@@ -111,6 +125,7 @@ describe('LLM Fetch Retry Logic', () => {
       return Promise.resolve({
         ok: true,
         status: 200,
+        headers: createMockHeaders(),
         json: async () => ({
           choices: [
             {
@@ -144,6 +159,7 @@ describe('LLM Fetch Retry Logic', () => {
       text: async () =>
         'Invalid request: json_schema is not supported for this model',
       json: async () => ({}),
+      headers: createMockHeaders(),
     }
 
     global.fetch = vi.fn().mockResolvedValue(mockResponse)
@@ -166,6 +182,7 @@ describe('LLM Fetch Retry Logic', () => {
       statusText: 'Bad Gateway',
       text: async () => 'Bad Gateway',
       json: async () => ({}),
+      headers: createMockHeaders(),
     }
 
     let callCount = 0
@@ -177,6 +194,7 @@ describe('LLM Fetch Retry Logic', () => {
       return Promise.resolve({
         ok: true,
         status: 200,
+        headers: createMockHeaders(),
         json: async () => ({
           choices: [
             {
@@ -207,6 +225,7 @@ describe('LLM Fetch Retry Logic', () => {
       statusText: 'Service Unavailable',
       text: async () => 'Service Unavailable',
       json: async () => ({}),
+      headers: createMockHeaders(),
     }
 
     let callCount = 0
@@ -218,6 +237,7 @@ describe('LLM Fetch Retry Logic', () => {
       return Promise.resolve({
         ok: true,
         status: 200,
+        headers: createMockHeaders(),
         json: async () => ({
           choices: [
             {

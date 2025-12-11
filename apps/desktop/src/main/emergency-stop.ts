@@ -24,6 +24,9 @@ export async function emergencyStopAll(): Promise<{ before: number; after: numbe
 
       // Emit a final progress update so the UI shows "Stopped" state
       // This allows users to see the stopped state and send follow-up messages
+      // Note: pendingToolApproval is explicitly set to undefined to clear any stale
+      // approval bubble from the UI since updateSessionProgress preserves fields not
+      // present in the update (spreads existing state)
       await emitAgentProgress({
         sessionId: session.id,
         conversationId: session.conversationId,
@@ -43,6 +46,7 @@ export async function emergencyStopAll(): Promise<{ before: number; after: numbe
         isComplete: true,
         finalContent: "(Agent mode was stopped by emergency kill switch)",
         conversationHistory: [],
+        pendingToolApproval: undefined,
       })
 
       // Mark the session as stopped in the tracker

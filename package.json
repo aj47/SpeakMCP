@@ -4,6 +4,7 @@
   "private": true,
   "description": "SpeakMCP monorepo - AI-powered dictation with MCP integration",
   "scripts": {
+    "predev": "pnpm --filter @speakmcp/shared build",
     "dev": "pnpm --filter @speakmcp/desktop dev",
     "dev:mobile": "pnpm --filter @speakmcp/mobile start",
     "build": "pnpm --filter @speakmcp/shared build && pnpm --filter @speakmcp/desktop build",

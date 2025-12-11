@@ -439,7 +439,8 @@ export class HttpError extends Error {
       }
 
       case 429:
-        const waitTime = retryAfter ? `${retryAfter} seconds` : 'a moment'
+        // Use != null to properly handle retryAfter=0 (retry immediately)
+        const waitTime = retryAfter != null ? (retryAfter === 0 ? 'immediately' : `${retryAfter} seconds`) : 'a moment'
         return `Rate limit exceeded. The API is temporarily unavailable due to too many requests. We'll automatically retry after waiting ${waitTime}. You don't need to do anything - just wait for the request to complete.`
 
       case 401:
@@ -707,8 +708,8 @@ async function apiCallWithRetry<T>(
       if (error instanceof HttpError && error.status === 429) {
         let delay = calculateBackoffDelay(attempt, baseDelay, maxDelay)
 
-        // Use Retry-After header if provided
-        if (error.retryAfter) {
+        // Use Retry-After header if provided (use != null to handle retryAfter=0 which means retry immediately)
+        if (error.retryAfter != null) {
           delay = error.retryAfter * 1000 // Convert seconds to milliseconds
           // Cap the retry-after delay to prevent extremely long waits
           delay = Math.min(delay, maxDelay)

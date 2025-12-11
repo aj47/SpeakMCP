@@ -2,6 +2,18 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { WebSocketClientTransport } from "@modelcontextprotocol/sdk/client/websocket.js"
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js"
+import {
+  CreateMessageRequestSchema,
+  ElicitRequestSchema,
+  ElicitationCompleteNotificationSchema,
+} from "@modelcontextprotocol/sdk/types.js"
+import type {
+  CreateMessageRequest,
+  CreateMessageResult,
+  ElicitRequest,
+  ElicitResult,
+  ClientCapabilities,
+} from "@modelcontextprotocol/sdk/types.js"
 import { configStore } from "./config"
 import {
   MCPConfig,
@@ -10,6 +22,8 @@ import {
   Config,
   ServerLogEntry,
 } from "../shared/types"
+import { requestElicitation, handleElicitationComplete, cancelAllElicitations } from "./mcp-elicitation"
+import { requestSampling, cancelAllSamplingRequests } from "./mcp-sampling"
 import { inferTransportType, normalizeMcpConfig } from "../shared/mcp-utils"
 import { spawn } from "child_process"
 import { promisify } from "util"
@@ -114,6 +128,109 @@ export class MCPService {
       }
     } catch (e) {}
 
+  }
+
+  /**
+   * Get the client capabilities to declare during initialization.
+   * This enables elicitation (form and URL mode) and sampling support.
+   */
+  private getClientCapabilities(): ClientCapabilities {
+    return {
+      // Enable elicitation support (form and URL mode)
+      elicitation: {},
+      // Enable sampling support (servers can request LLM completions)
+      sampling: {},
+      // Enable roots support (servers can list file system roots)
+      roots: {
+        listChanged: true,
+      },
+    }
+  }
+
+  /**
+   * Set up request handlers for a connected client.
+   * These handlers process incoming requests from MCP servers.
+   */
+  private setupClientRequestHandlers(client: Client, serverName: string): void {
+    // Handle elicitation requests from server
+    client.setRequestHandler(ElicitRequestSchema, async (request) => {
+      diagnosticsService.logInfo(
+        "mcp-service",
+        `Received elicitation request from ${serverName}: ${request.params?.message || "no message"}`
+      )
+
+      const params = request.params
+      const requestId = `elicit_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+
+      if (params.mode === "url") {
+        // URL mode elicitation
+        const result = await requestElicitation({
+          mode: "url",
+          serverName,
+          message: params.message,
+          url: params.url,
+          elicitationId: params.elicitationId,
+          requestId,
+        })
+        return result as ElicitResult
+      } else {
+        // Form mode elicitation (default)
+        const result = await requestElicitation({
+          mode: "form",
+          serverName,
+          message: params.message,
+          requestedSchema: params.requestedSchema as any,
+          requestId,
+        })
+        return result as ElicitResult
+      }
+    })
+
+    // Handle sampling requests from server (server wants to use our LLM)
+    client.setRequestHandler(CreateMessageRequestSchema, async (request) => {
+      diagnosticsService.logInfo(
+        "mcp-service",
+        `Received sampling request from ${serverName}: ${request.params?.messages?.length || 0} messages`
+      )
+
+      const params = request.params
+      const requestId = `sample_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+
+      const result = await requestSampling({
+        serverName,
+        requestId,
+        messages: params.messages as any,
+        systemPrompt: params.systemPrompt,
+        maxTokens: params.maxTokens,
+        temperature: params.temperature,
+        modelPreferences: params.modelPreferences as any,
+      })
+
+      if (!result.approved) {
+        // User declined the sampling request
+        throw new Error("Sampling request was declined by user")
+      }
+
+      // Return the sampling result in MCP format
+      return {
+        role: "assistant",
+        content: result.content || { type: "text", text: "" },
+        model: result.model || "unknown",
+        stopReason: result.stopReason,
+      } as CreateMessageResult
+    })
+
+    // Handle elicitation complete notifications (for URL mode)
+    client.setNotificationHandler(ElicitationCompleteNotificationSchema, (notification) => {
+      const elicitationId = notification.params?.elicitationId
+      if (elicitationId) {
+        diagnosticsService.logInfo(
+          "mcp-service",
+          `Received elicitation complete notification from ${serverName}: ${elicitationId}`
+        )
+        handleElicitationComplete(elicitationId)
+      }
+    })
   }
 
   trackResource(
@@ -414,9 +531,12 @@ export class MCPService {
             version: "1.0.0",
           },
           {
-            capabilities: {},
+            capabilities: this.getClientCapabilities(),
           },
         )
+
+        // Set up request handlers for elicitation and sampling
+        this.setupClientRequestHandlers(client, serverName)
 
         // Connect to the server with timeout
         const connectPromise = client.connect(transport)
@@ -459,9 +579,12 @@ export class MCPService {
                 version: "1.0.0",
               },
               {
-                capabilities: {},
+                capabilities: this.getClientCapabilities(),
               },
             )
+
+            // Set up request handlers for elicitation and sampling
+            this.setupClientRequestHandlers(client, serverName)
 
             // Retry connection with OAuth
             const retryConnectPromise = client.connect(transport)
@@ -561,6 +684,10 @@ export class MCPService {
     this.transports.delete(serverName)
     this.clients.delete(serverName)
     this.initializedServers.delete(serverName)
+
+    // Cancel any pending elicitation/sampling requests for this server
+    cancelAllElicitations(serverName)
+    cancelAllSamplingRequests(serverName)
 
     // Close the transport (which will terminate the process for stdio)
     if (transport) {
@@ -1720,7 +1847,7 @@ export class MCPService {
           version: "1.0.0",
         },
         {
-          capabilities: {},
+          capabilities: this.getClientCapabilities(),
         },
       )
 

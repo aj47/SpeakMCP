@@ -1,5 +1,5 @@
 import { UpdateDownloadedEvent } from "electron-updater"
-import { AgentProgressUpdate } from "../shared/types"
+import { AgentProgressUpdate, ElicitationRequest, SamplingRequest } from "../shared/types"
 import type { AgentSession } from "./agent-session-tracker"
 
 export type RendererHandlers = {
@@ -28,4 +28,11 @@ export type RendererHandlers = {
 
   updateAvailable: (e: UpdateDownloadedEvent) => void
   navigate: (url: string) => void
+
+  // MCP Elicitation handlers (Protocol 2025-11-25)
+  "mcp:elicitation-request": (request: ElicitationRequest) => void
+  "mcp:elicitation-complete": (data: { elicitationId: string; requestId: string }) => void
+
+  // MCP Sampling handlers (Protocol 2025-11-25)
+  "mcp:sampling-request": (request: SamplingRequest) => void
 }

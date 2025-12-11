@@ -2239,6 +2239,32 @@ export const router = {
     const { getCloudflareTunnelStatus } = await import("./cloudflare-tunnel")
     return getCloudflareTunnelStatus()
   }),
+
+  // MCP Elicitation handlers (Protocol 2025-11-25)
+  resolveElicitation: t.procedure
+    .input<{
+      requestId: string
+      action: "accept" | "decline" | "cancel"
+      content?: Record<string, string | number | boolean | string[]>
+    }>()
+    .action(async ({ input }) => {
+      const { resolveElicitation } = await import("./mcp-elicitation")
+      return resolveElicitation(input.requestId, {
+        action: input.action,
+        content: input.content,
+      })
+    }),
+
+  // MCP Sampling handlers (Protocol 2025-11-25)
+  resolveSampling: t.procedure
+    .input<{
+      requestId: string
+      approved: boolean
+    }>()
+    .action(async ({ input }) => {
+      const { resolveSampling } = await import("./mcp-sampling")
+      return resolveSampling(input.requestId, input.approved)
+    }),
 }
 
 // TTS Provider Implementation Functions

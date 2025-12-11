@@ -885,6 +885,7 @@ const EnhancedErrorBubble: React.FC<{
 }> = ({ errorInfo, onRetry, onOpenSettings }) => {
   const [showDetails, setShowDetails] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [copyFailed, setCopyFailed] = useState(false)
 
   // Get icon based on error type
   const getErrorIcon = () => {
@@ -924,9 +925,16 @@ const EnhancedErrorBubble: React.FC<{
       errorInfo.technicalDetails ? `\nTechnical Details:\n${errorInfo.technicalDetails}` : null,
     ].filter(Boolean).join('\n')
 
-    await navigator.clipboard.writeText(details)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+    try {
+      await navigator.clipboard.writeText(details)
+      setCopied(true)
+      setCopyFailed(false)
+      setTimeout(() => setCopied(false), 2000)
+    } catch (err) {
+      console.error('Failed to copy to clipboard:', err)
+      setCopyFailed(true)
+      setTimeout(() => setCopyFailed(false), 2000)
+    }
   }
 
   // Handle quick action clicks
@@ -1008,7 +1016,7 @@ const EnhancedErrorBubble: React.FC<{
               {action.action === 'retry' && <RefreshCw className="h-3 w-3 mr-1" />}
               {action.action === 'open_settings' && <Settings className="h-3 w-3 mr-1" />}
               {action.action === 'copy_details' && (copied ? <CheckCheck className="h-3 w-3 mr-1" /> : <Copy className="h-3 w-3 mr-1" />)}
-              {action.action === 'copy_details' && copied ? 'Copied!' : action.label}
+              {action.action === 'copy_details' && copied ? 'Copied!' : action.action === 'copy_details' && copyFailed ? 'Copy failed' : action.label}
             </Button>
           ))}
         </div>

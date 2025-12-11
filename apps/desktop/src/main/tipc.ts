@@ -309,7 +309,9 @@ async function processWithAgentMode(
     // Create enhanced error info for better UI display
     const { createEnhancedErrorInfo } = await import("./llm-fetch")
     const errorInfo = createEnhancedErrorInfo(error, {
-      retryAttempts: config.apiRetryCount,
+      // Note: We only pass maxRetryAttempts here since we don't have access to the actual
+      // retry count at this catch block. The actual attempt count may be less if the error
+      // occurred before exhausting all retries.
       maxRetryAttempts: config.apiRetryCount,
     })
 

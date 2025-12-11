@@ -306,6 +306,13 @@ async function processWithAgentMode(
     const errorMessage = error instanceof Error ? error.message : "Unknown error"
     agentSessionTracker.errorSession(sessionId, errorMessage)
 
+    // Create enhanced error info for better UI display
+    const { createEnhancedErrorInfo } = await import("./llm-fetch")
+    const errorInfo = createEnhancedErrorInfo(error, {
+      retryAttempts: config.apiRetryCount,
+      maxRetryAttempts: config.apiRetryCount,
+    })
+
     // Emit error progress update to the UI so users see the error message
     const { emitAgentProgress } = await import("./emit-agent-progress")
     await emitAgentProgress({
@@ -317,8 +324,8 @@ async function processWithAgentMode(
       steps: [{
         id: `error_${Date.now()}`,
         type: "thinking",
-        title: "Error",
-        description: errorMessage,
+        title: errorInfo.title,
+        description: errorInfo.message,
         status: "error",
         timestamp: Date.now(),
       }],
@@ -328,6 +335,7 @@ async function processWithAgentMode(
         { role: "user", content: text, timestamp: Date.now() },
         { role: "assistant", content: `Error: ${errorMessage}`, timestamp: Date.now() }
       ],
+      errorInfo,
     })
 
     throw error
@@ -1255,6 +1263,10 @@ export const router = {
         // Handle transcription or conversation creation errors
         logLLM("[createMcpRecording] Transcription error:", error)
 
+        // Create enhanced error info for better UI display
+        const { createEnhancedErrorInfo } = await import("./llm-fetch")
+        const errorInfo = createEnhancedErrorInfo(error)
+
         // Clean up the session and emit error state
         await emitAgentProgress({
           sessionId,
@@ -1264,8 +1276,8 @@ export const router = {
           steps: [{
             id: `transcribe_error_${Date.now()}`,
             type: "completion",
-            title: "Transcription failed",
-            description: error instanceof Error ? error.message : "Unknown transcription error",
+            title: errorInfo.title,
+            description: errorInfo.message,
             status: "error",
             timestamp: Date.now(),
           }],
@@ -1274,6 +1286,7 @@ export const router = {
           conversationTitle: "Transcription Error",
           conversationHistory: [],
           finalContent: `Transcription failed: ${error instanceof Error ? error.message : "Unknown error"}`,
+          errorInfo,
         })
 
         // Mark the session as errored to clean up the UI

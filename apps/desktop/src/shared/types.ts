@@ -154,6 +154,39 @@ export interface AgentProgressUpdate {
     text: string
     isStreaming: boolean
   }
+  /** Enhanced error information for better UI display */
+  errorInfo?: EnhancedErrorInfo
+}
+
+/**
+ * Enhanced error information for displaying actionable error messages in the UI
+ */
+export interface EnhancedErrorInfo {
+  /** Error type category for UI styling and icon selection */
+  type: 'network' | 'auth' | 'rate_limit' | 'server' | 'config' | 'unknown'
+  /** User-friendly error title */
+  title: string
+  /** User-friendly error message */
+  message: string
+  /** HTTP status code if applicable */
+  statusCode?: number
+  /** API endpoint that failed */
+  endpoint?: string
+  /** Number of retry attempts made */
+  retryAttempts?: number
+  /** Maximum retry attempts configured */
+  maxRetryAttempts?: number
+  /** Timestamp of the last attempt */
+  lastAttemptAt?: number
+  /** Technical error details for debugging */
+  technicalDetails?: string
+  /** Troubleshooting suggestions */
+  troubleshootingHints?: string[]
+  /** Available quick actions */
+  quickActions?: Array<{
+    label: string
+    action: 'retry' | 'open_settings' | 'copy_details' | 'check_connection'
+  }>
 }
 
 // Conversation Types

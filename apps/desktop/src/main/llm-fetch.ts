@@ -239,16 +239,145 @@ function extractJsonObject(str: string): any | null {
 /**
  * Enhanced error class for HTTP errors with status code and retry information
  */
-class HttpError extends Error {
+export class HttpError extends Error {
   constructor(
     public status: number,
     public statusText: string,
     public responseText: string,
-
     public retryAfter?: number,
+    public endpoint?: string,
   ) {
     super(HttpError.createUserFriendlyMessage(status, statusText, responseText, retryAfter))
     this.name = 'HttpError'
+  }
+
+  /**
+   * Get the error type category for UI display
+   */
+  getErrorType(): 'network' | 'auth' | 'rate_limit' | 'server' | 'config' | 'unknown' {
+    switch (this.status) {
+      case 401:
+      case 403:
+        return 'auth'
+      case 429:
+        return 'rate_limit'
+      case 400:
+      case 404:
+        return 'config'
+      case 500:
+      case 502:
+      case 503:
+      case 504:
+      case 408:
+        return 'server'
+      default:
+        return 'unknown'
+    }
+  }
+
+  /**
+   * Get the error title for UI display
+   */
+  getErrorTitle(): string {
+    switch (this.status) {
+      case 400:
+        return 'Invalid Request'
+      case 401:
+        return 'Authentication Failed'
+      case 403:
+        return 'Access Denied'
+      case 404:
+        return 'Endpoint Not Found'
+      case 408:
+        return 'Request Timeout'
+      case 429:
+        return 'Rate Limit Exceeded'
+      case 500:
+        return 'Server Error'
+      case 502:
+        return 'Bad Gateway'
+      case 503:
+        return 'Service Unavailable'
+      case 504:
+        return 'Gateway Timeout'
+      default:
+        return `HTTP ${this.status} Error`
+    }
+  }
+
+  /**
+   * Get troubleshooting hints based on error type
+   */
+  getTroubleshootingHints(): string[] {
+    switch (this.status) {
+      case 401:
+        return [
+          'Check that your API key is correctly configured in settings',
+          'Verify the API key has not expired or been revoked',
+          'Ensure you are using the correct API key for this provider'
+        ]
+      case 403:
+        return [
+          'Your API key may not have permission for this operation',
+          'Check if your account has access to the requested model',
+          'Verify your API subscription tier includes this feature'
+        ]
+      case 404:
+        return [
+          'Verify the API base URL is correct in settings',
+          'Check if the model name is spelled correctly',
+          'The API endpoint may have changed - check provider documentation'
+        ]
+      case 408:
+      case 504:
+        return [
+          'The API is taking too long to respond',
+          'Try again in a few moments',
+          'Consider using a smaller request or simpler prompt'
+        ]
+      case 429:
+        return [
+          'You have exceeded the API rate limit',
+          'Wait a moment before trying again',
+          'Consider upgrading your API plan for higher limits'
+        ]
+      case 500:
+      case 502:
+      case 503:
+        return [
+          'The API service is experiencing issues',
+          'This is usually temporary - try again in a few moments',
+          'Check the provider status page for outages'
+        ]
+      default:
+        return [
+          'Check your internet connection',
+          'Verify your API configuration in settings',
+          'Try again in a few moments'
+        ]
+    }
+  }
+
+  /**
+   * Get available quick actions for this error type
+   */
+  getQuickActions(): Array<{ label: string; action: 'retry' | 'open_settings' | 'copy_details' | 'check_connection' }> {
+    const actions: Array<{ label: string; action: 'retry' | 'open_settings' | 'copy_details' | 'check_connection' }> = []
+
+    // Always allow retry for server errors and rate limits
+    if (this.status >= 500 || this.status === 429 || this.status === 408) {
+      actions.push({ label: 'Retry', action: 'retry' })
+    }
+
+    // Suggest settings for auth and config errors
+    if (this.status === 401 || this.status === 403 || this.status === 404 || this.status === 400) {
+      actions.push({ label: 'Open Settings', action: 'open_settings' })
+    }
+
+    // Always allow copying details
+    actions.push({ label: 'Copy Details', action: 'copy_details' })
+
+    return actions
   }
 
   /**
@@ -324,6 +453,104 @@ class HttpError extends Error {
 
         return `HTTP ${status}: ${responseText || statusText}`
     }
+  }
+}
+
+/**
+ * Create enhanced error info from an error for UI display
+ */
+export function createEnhancedErrorInfo(
+  error: unknown,
+  context?: {
+    endpoint?: string
+    retryAttempts?: number
+    maxRetryAttempts?: number
+  }
+): import('../shared/types').EnhancedErrorInfo {
+  if (error instanceof HttpError) {
+    return {
+      type: error.getErrorType(),
+      title: error.getErrorTitle(),
+      message: error.message,
+      statusCode: error.status,
+      endpoint: error.endpoint || context?.endpoint,
+      retryAttempts: context?.retryAttempts,
+      maxRetryAttempts: context?.maxRetryAttempts,
+      lastAttemptAt: Date.now(),
+      technicalDetails: `HTTP ${error.status} ${error.statusText}\n${error.responseText}`,
+      troubleshootingHints: error.getTroubleshootingHints(),
+      quickActions: error.getQuickActions(),
+    }
+  }
+
+  // Handle network errors
+  if (error instanceof Error) {
+    const message = error.message.toLowerCase()
+    const isNetworkError = message.includes('network') ||
+                          message.includes('fetch') ||
+                          message.includes('connection') ||
+                          message.includes('econnrefused') ||
+                          message.includes('enotfound')
+
+    if (isNetworkError) {
+      return {
+        type: 'network',
+        title: 'Connection Failed',
+        message: "Couldn't connect to the API. Please check your internet connection.",
+        endpoint: context?.endpoint,
+        retryAttempts: context?.retryAttempts,
+        maxRetryAttempts: context?.maxRetryAttempts,
+        lastAttemptAt: Date.now(),
+        technicalDetails: error.message,
+        troubleshootingHints: [
+          'Check your internet connection',
+          'Verify the API endpoint is correct in settings',
+          'The service may be temporarily unavailable'
+        ],
+        quickActions: [
+          { label: 'Retry', action: 'retry' },
+          { label: 'Open Settings', action: 'open_settings' },
+          { label: 'Copy Details', action: 'copy_details' }
+        ],
+      }
+    }
+
+    // Generic error
+    return {
+      type: 'unknown',
+      title: 'Error',
+      message: error.message,
+      retryAttempts: context?.retryAttempts,
+      maxRetryAttempts: context?.maxRetryAttempts,
+      lastAttemptAt: Date.now(),
+      technicalDetails: error.stack || error.message,
+      troubleshootingHints: [
+        'Try again in a few moments',
+        'Check your configuration in settings',
+        'If the problem persists, check the logs for more details'
+      ],
+      quickActions: [
+        { label: 'Retry', action: 'retry' },
+        { label: 'Copy Details', action: 'copy_details' }
+      ],
+    }
+  }
+
+  // Unknown error type
+  return {
+    type: 'unknown',
+    title: 'Unknown Error',
+    message: String(error),
+    lastAttemptAt: Date.now(),
+    technicalDetails: String(error),
+    troubleshootingHints: [
+      'Try again in a few moments',
+      'If the problem persists, check the logs for more details'
+    ],
+    quickActions: [
+      { label: 'Retry', action: 'retry' },
+      { label: 'Copy Details', action: 'copy_details' }
+    ],
   }
 }
 

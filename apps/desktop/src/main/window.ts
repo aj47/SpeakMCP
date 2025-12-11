@@ -555,9 +555,7 @@ export const emergencyStopAgentMode = async () => {
     // Suppress auto-show briefly to avoid immediate reopen from any trailing progress
     suppressPanelAutoShow(1000)
     // Make panel focusable so user can interact with the follow-up input
-    try {
-      win.setFocusable(true)
-    } catch {}
+    setPanelFocusable(true)
   }
 }
 

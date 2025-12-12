@@ -1,13 +1,18 @@
-import React from 'react';
-import { Platform, StyleSheet, View } from 'react-native';
-import Markdown from 'react-native-markdown-display';
+import React, { useMemo } from 'react';
+import { Platform, StyleSheet, Text } from 'react-native';
+import Markdown, { RenderRules } from 'react-native-markdown-display';
 import { useTheme } from './ThemeProvider';
 import { spacing, radius } from './theme';
 
 interface MarkdownRendererProps {
   content: string;
   onLinkPress?: (url: string) => boolean;
-  onTouchStart?: () => void;
+  /**
+   * Called early in the touch lifecycle when a link is pressed.
+   * Used by hands-free mode to mark link touches as interactive
+   * before the ScrollView's handleTouchEnd fires.
+   */
+  onLinkTouchStart?: () => void;
 }
 
 /**
@@ -15,14 +20,14 @@ interface MarkdownRendererProps {
  * Inspired by Open Interpreter 01-app styling with big fonts
  * for better readability and accessibility on mobile
  *
- * The onTouchStart callback is triggered early in the touch lifecycle
- * to allow parent components to detect touches on markdown content
- * before the link's onPress fires (useful for hands-free mode).
+ * For hands-free mode: onLinkTouchStart is called via onPressIn on links,
+ * ensuring the parent component knows a link was touched before onPress fires.
+ * This prevents tap-anywhere voice recording from triggering on link taps.
  */
 export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
   content,
   onLinkPress,
-  onTouchStart,
+  onLinkTouchStart,
 }) => {
   const { theme, isDark } = useTheme();
 
@@ -155,19 +160,26 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
     },
   });
 
+  // Custom link rendering rule to support onPressIn for early touch detection
+  // This ensures link taps are marked as interactive before handleTouchEnd fires
+  // in hands-free mode, preventing voice recording from toggling when tapping links
+  const customRules: RenderRules = useMemo(() => ({
+    link: (node, children, _parent, styles) => (
+      <Text
+        key={node.key}
+        style={styles.link}
+        onPressIn={onLinkTouchStart}
+        onPress={() => onLinkPress?.(node.attributes.href)}
+      >
+        {children}
+      </Text>
+    ),
+  }), [onLinkPress, onLinkTouchStart]);
+
   return (
-    <View
-      onStartShouldSetResponderCapture={() => {
-        // Call onTouchStart early in touch lifecycle to mark as interactive
-        // This runs before onPress, allowing parent to know a touch started here
-        onTouchStart?.();
-        return false; // Don't actually capture - let children handle their own events
-      }}
-    >
-      <Markdown style={markdownStyles} onLinkPress={onLinkPress}>
-        {content}
-      </Markdown>
-    </View>
+    <Markdown style={markdownStyles} rules={customRules}>
+      {content}
+    </Markdown>
   );
 };
 

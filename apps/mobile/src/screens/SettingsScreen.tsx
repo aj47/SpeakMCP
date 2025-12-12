@@ -72,6 +72,12 @@ export default function SettingsScreen({ navigation }: any) {
     const hasCustomUrl = normalizedDraft.baseUrl && normalizedDraft.baseUrl !== 'https://api.openai.com/v1';
     const hasApiKey = normalizedDraft.apiKey && normalizedDraft.apiKey.trim().length > 0;
 
+    // Require API key when using a custom server URL
+    if (hasCustomUrl && !hasApiKey) {
+      setConnectionError('API Key is required when using a custom server URL');
+      return;
+    }
+
     // Only check connection if we have both a custom URL and API key
     // Or if we have an API key with the default URL
     if (hasApiKey && normalizedDraft.baseUrl) {

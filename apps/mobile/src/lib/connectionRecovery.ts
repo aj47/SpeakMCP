@@ -256,6 +256,9 @@ export async function checkServerConnection(
     return { success: false, error: 'API Key is required' };
   }
 
+  // Trim the API key for use in requests
+  const trimmedApiKey = apiKey.trim();
+
   // Normalize the base URL
   let normalizedUrl = baseUrl.trim();
   if (!normalizedUrl.startsWith('http://') && !normalizedUrl.startsWith('https://')) {
@@ -276,7 +279,7 @@ export async function checkServerConnection(
     const response = await fetch(modelsUrl, {
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${apiKey}`,
+        'Authorization': `Bearer ${trimmedApiKey}`,
         'Content-Type': 'application/json',
       },
       signal: controller.signal,

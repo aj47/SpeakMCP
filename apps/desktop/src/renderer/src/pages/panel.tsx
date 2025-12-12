@@ -341,11 +341,8 @@ export function Component() {
       })
     },
     onSuccess(result) {
-      setShowTextInput(false)
-      // Ensure main process knows text input is no longer active (prevents textInput positioning)
-      tipcClient.clearTextInputState({})
-
       // Check if the message was blocked due to active session
+      // IMPORTANT: Do this BEFORE closing text input so user doesn't lose their draft
       if (result && 'blocked' in result && result.blocked) {
         tipcClient.displayError({
           title: 'Message Not Sent',
@@ -354,6 +351,11 @@ export function Component() {
         })
         return
       }
+
+      // Only close text input if message was NOT blocked
+      setShowTextInput(false)
+      // Ensure main process knows text input is no longer active (prevents textInput positioning)
+      tipcClient.clearTextInputState({})
       // Don't hide panel on success - agent mode will handle this and keep panel visible
       // The panel needs to stay visible for agent mode progress updates
     },

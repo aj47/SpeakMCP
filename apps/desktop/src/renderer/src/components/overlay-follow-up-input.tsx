@@ -96,7 +96,7 @@ export function OverlayFollowUpInput({
         value={text}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={handleKeyDown}
-        placeholder={isSessionActive ? "Agent is processing..." : "Continue conversation..."}
+        placeholder={isSessionActive ? "Type to queue..." : "Continue conversation..."}
         className={cn(
           "flex-1 text-sm bg-transparent border-0 outline-none",
           "placeholder:text-muted-foreground/60",

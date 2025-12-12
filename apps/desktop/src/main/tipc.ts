@@ -164,8 +164,9 @@ async function processWithAgentMode(
   // Start tracking this agent session (or reuse existing one)
   // Wrap in try-catch to ensure reservation is released even if session start fails
   let sessionId: string
+  // Define conversationTitle outside try block so it's accessible in catch block for error reporting
+  const conversationTitle = text.length > 50 ? text.substring(0, 50) + "..." : text
   try {
-    const conversationTitle = text.length > 50 ? text.substring(0, 50) + "..." : text
     // When creating a new session from keybind/UI, start unsnoozed so panel shows immediately
     sessionId = existingSessionId || agentSessionTracker.startSession(conversationId, conversationTitle, startSnoozed)
   } finally {

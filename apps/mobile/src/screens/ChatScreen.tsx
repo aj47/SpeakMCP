@@ -13,6 +13,8 @@ import {
   Alert,
   Pressable,
   Image,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
 } from 'react-native';
 
 const darkSpinner = require('../../assets/loading-spinner.gif');
@@ -255,6 +257,45 @@ export default function ChatScreen({ route, navigation }: any) {
   const [listening, setListening] = useState(false);
   const [liveTranscript, setLiveTranscript] = useState('');
   const [debugInfo, setDebugInfo] = useState<string>('');
+
+  // Auto-scroll state and ref for mobile chat
+  const scrollViewRef = useRef<ScrollView>(null);
+  const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
+
+  // Handle scroll events to detect when user scrolls away from bottom
+  const handleScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
+    // Consider "at bottom" if within 50 pixels of the bottom
+    const isAtBottom = layoutMeasurement.height + contentOffset.y >= contentSize.height - 50;
+
+    if (isAtBottom && !shouldAutoScroll) {
+      // User scrolled back to bottom, resume auto-scroll
+      setShouldAutoScroll(true);
+    } else if (!isAtBottom && shouldAutoScroll) {
+      // User scrolled up, pause auto-scroll
+      setShouldAutoScroll(false);
+    }
+  }, [shouldAutoScroll]);
+
+  // Scroll to bottom when messages change and auto-scroll is enabled
+  useEffect(() => {
+    if (shouldAutoScroll && scrollViewRef.current) {
+      // Use a small delay to ensure content has rendered
+      const timeoutId = setTimeout(() => {
+        scrollViewRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [messages, shouldAutoScroll]);
+
+  // Reset auto-scroll when session changes
+  useEffect(() => {
+    setShouldAutoScroll(true);
+    // Scroll to bottom when switching sessions
+    setTimeout(() => {
+      scrollViewRef.current?.scrollToEnd({ animated: false });
+    }, 100);
+  }, [sessionStore.currentSessionId]);
 
   const lastLoadedSessionIdRef = useRef<string | null>(null);
 
@@ -969,10 +1010,13 @@ export default function ChatScreen({ route, navigation }: any) {
     >
       <View style={{ flex: 1 }}>
         <ScrollView
+          ref={scrollViewRef}
           style={{ flex: 1, padding: spacing.lg, backgroundColor: theme.colors.background }}
           contentContainerStyle={{ paddingBottom: insets.bottom }}
           keyboardShouldPersistTaps="handled"
           contentInsetAdjustmentBehavior="automatic"
+          onScroll={handleScroll}
+          scrollEventThrottle={16}
         >
           {messages.map((m, i) => {
             const shouldCollapse = shouldCollapseMessage(m.content, m.toolCalls, m.toolResults);

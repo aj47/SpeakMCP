@@ -62,15 +62,21 @@ export default function SettingsScreen({ navigation }: any) {
     let normalizedDraft = {
       ...draft,
       baseUrl: draft.baseUrl?.trim?.() ?? '',
+      apiKey: draft.apiKey?.trim?.() ?? '',
     };
 
     // Clear any previous error
     setConnectionError(null);
 
+    // Default to OpenAI URL if baseUrl is empty to prevent OpenAIClient from throwing
+    if (!normalizedDraft.baseUrl) {
+      normalizedDraft.baseUrl = 'https://api.openai.com/v1';
+    }
+
     // Check if we have a base URL to validate
     // If using default OpenAI URL with no API key, allow pass-through (might be using built-in key)
     const hasCustomUrl = normalizedDraft.baseUrl && normalizedDraft.baseUrl !== 'https://api.openai.com/v1';
-    const hasApiKey = normalizedDraft.apiKey && normalizedDraft.apiKey.trim().length > 0;
+    const hasApiKey = normalizedDraft.apiKey && normalizedDraft.apiKey.length > 0;
 
     // Require API key when using a custom server URL
     if (hasCustomUrl && !hasApiKey) {

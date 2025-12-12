@@ -110,6 +110,11 @@ export function SessionFollowUpInput({
   // Allow input when queue is enabled, even if session is active
   const isDisabled = isPending || (isSessionActive && (!isQueueEnabled || !conversationId))
   const willQueue = isSessionActive && isQueueEnabled && conversationId
+  // Voice is intentionally disabled during active sessions (unlike text which queues):
+  // - Voice requires showing the panel for waveform feedback during recording
+  // - Transcription involves network latency before the message is ready
+  // - Users actively engage during recording, so disabling prevents accidental overlap
+  const isVoiceDisabled = isPending || isSessionActive
 
   const getPlaceholder = () => {
     if (isSessionActive) {
@@ -181,7 +186,7 @@ export function SessionFollowUpInput({
           "hover:bg-red-100 dark:hover:bg-red-900/30",
           "hover:text-red-600 dark:hover:text-red-400"
         )}
-        disabled={isPending || isSessionActive}
+        disabled={isVoiceDisabled}
         onClick={handleVoiceClick}
         title={isSessionActive ? "Wait for session to complete" : "Continue with voice"}
       >

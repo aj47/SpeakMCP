@@ -102,29 +102,35 @@ export function useSessions(): SessionStore {
       updatedAt: now,
       messages: [],
     };
-    // Use ref to get latest sessions to avoid stale closures
-    const currentSessions = sessionsRef.current;
-    // Filter out any sessions that are currently being deleted to avoid race conditions
-    const cleanedPrev = currentSessions.filter(s => !deletingSessionIds.has(s.id));
-    const updated = [newSession, ...cleanedPrev];
 
-    // Update state immediately
-    setSessions(updated);
-    setCurrentSessionIdState(newSession.id);
+    // Use functional update to ensure we have the latest state and don't drop concurrent updates
+    setSessions(prev => {
+      // Filter out any sessions that are currently being deleted to avoid race conditions
+      const cleanedPrev = prev.filter(s => !deletingSessionIds.has(s.id));
+      const updated = [newSession, ...cleanedPrev];
 
-    // Queue async saves to prevent interleaving with other operations
-    queueSave(async () => {
-      await saveSessions(updated);
-      await saveCurrentSessionId(newSession.id);
+      // Queue async saves to prevent interleaving with other operations
+      // Note: We save inside the functional update to capture the exact state we're setting
+      queueSave(async () => {
+        await saveSessions(updated);
+        await saveCurrentSessionId(newSession.id);
+      });
+
+      return updated;
     });
+    setCurrentSessionIdState(newSession.id);
 
     return newSession;
   }, [deletingSessionIds, queueSave]);
 
   const setCurrentSession = useCallback((id: string | null) => {
     setCurrentSessionIdState(id);
-    saveCurrentSessionId(id);
-  }, []);
+    // Queue the async save to prevent interleaving with deleteSession's queued saves
+    // This ensures that if a delete is in progress, the new selection won't be overwritten
+    queueSave(async () => {
+      await saveCurrentSessionId(id);
+    });
+  }, [queueSave]);
 
   const deleteSession = useCallback(async (id: string) => {
     // Mark session as being deleted to prevent race conditions

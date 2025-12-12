@@ -1311,6 +1311,9 @@ export default function ChatScreen({ route, navigation }: any) {
               scrollViewRef.current?.scrollToEnd({ animated: true });
             }}
             activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Scroll to bottom"
+            accessibilityHint="Scrolls to the latest messages"
           >
             <Text style={styles.scrollToBottomText}>↓</Text>
           </TouchableOpacity>

@@ -13,6 +13,8 @@ import {
   Alert,
   Pressable,
   Image,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
 } from 'react-native';
 
 const darkSpinner = require('../../assets/loading-spinner.gif');
@@ -255,6 +257,107 @@ export default function ChatScreen({ route, navigation }: any) {
   const [listening, setListening] = useState(false);
   const [liveTranscript, setLiveTranscript] = useState('');
   const [debugInfo, setDebugInfo] = useState<string>('');
+
+  // Auto-scroll state and ref for mobile chat
+  const scrollViewRef = useRef<ScrollView>(null);
+  const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
+  // Track pending scroll to avoid clearing timeout on rapid message updates
+  const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isScrollPendingRef = useRef(false);
+  // Ref to track current auto-scroll state for use in timeout callbacks
+  const shouldAutoScrollRef = useRef(true);
+  // Track if user is actively dragging to distinguish from programmatic scrolls
+  const isUserDraggingRef = useRef(false);
+  // Track drag end timeout to prevent flaky behavior with rapid re-drags
+  const dragEndTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Keep ref in sync with state
+  useEffect(() => {
+    shouldAutoScrollRef.current = shouldAutoScroll;
+    // Cancel any pending scroll when user disables auto-scroll
+    if (!shouldAutoScroll && scrollTimeoutRef.current) {
+      clearTimeout(scrollTimeoutRef.current);
+      scrollTimeoutRef.current = null;
+      isScrollPendingRef.current = false;
+    }
+  }, [shouldAutoScroll]);
+
+  // Handle user starting to drag the scroll view
+  const handleScrollBeginDrag = useCallback(() => {
+    // Clear any pending drag end timeout from previous drag
+    if (dragEndTimeoutRef.current) {
+      clearTimeout(dragEndTimeoutRef.current);
+      dragEndTimeoutRef.current = null;
+    }
+    isUserDraggingRef.current = true;
+  }, []);
+
+  // Handle user ending drag - keep flag active briefly for momentum scroll
+  const handleScrollEndDrag = useCallback(() => {
+    // Clear any existing drag end timeout before scheduling a new one
+    if (dragEndTimeoutRef.current) {
+      clearTimeout(dragEndTimeoutRef.current);
+    }
+    // Clear the flag after a short delay to account for momentum scrolling
+    dragEndTimeoutRef.current = setTimeout(() => {
+      isUserDraggingRef.current = false;
+      dragEndTimeoutRef.current = null;
+    }, 150);
+  }, []);
+
+  // Handle scroll events to detect when user scrolls away from bottom
+  const handleScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
+    // Consider "at bottom" if within 50 pixels of the bottom
+    const isAtBottom = layoutMeasurement.height + contentOffset.y >= contentSize.height - 50;
+
+    if (isAtBottom && !shouldAutoScroll) {
+      // User scrolled back to bottom, resume auto-scroll
+      setShouldAutoScroll(true);
+    } else if (!isAtBottom && shouldAutoScroll && isUserDraggingRef.current) {
+      // Only pause auto-scroll when user is actively dragging (not programmatic scroll)
+      setShouldAutoScroll(false);
+    }
+  }, [shouldAutoScroll]);
+
+  // Scroll to bottom when messages change and auto-scroll is enabled
+  // Uses a pending flag to avoid clearing timeout during rapid streaming updates
+  useEffect(() => {
+    if (shouldAutoScroll && scrollViewRef.current && !isScrollPendingRef.current) {
+      isScrollPendingRef.current = true;
+      // Use a small delay to ensure content has rendered
+      scrollTimeoutRef.current = setTimeout(() => {
+        // Double-check auto-scroll is still enabled before scrolling
+        // This guards against race conditions where user scrolled up during the delay
+        if (shouldAutoScrollRef.current) {
+          scrollViewRef.current?.scrollToEnd({ animated: true });
+        }
+        isScrollPendingRef.current = false;
+      }, 100);
+    }
+  }, [messages, shouldAutoScroll]);
+
+  // Cleanup timeouts on unmount
+  useEffect(() => {
+    return () => {
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+      }
+      if (dragEndTimeoutRef.current) {
+        clearTimeout(dragEndTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Reset auto-scroll when session changes
+  useEffect(() => {
+    setShouldAutoScroll(true);
+    // Scroll to bottom when switching sessions
+    const timeoutId = setTimeout(() => {
+      scrollViewRef.current?.scrollToEnd({ animated: false });
+    }, 100);
+    return () => clearTimeout(timeoutId);
+  }, [sessionStore.currentSessionId]);
 
   const lastLoadedSessionIdRef = useRef<string | null>(null);
 
@@ -969,10 +1072,15 @@ export default function ChatScreen({ route, navigation }: any) {
     >
       <View style={{ flex: 1 }}>
         <ScrollView
+          ref={scrollViewRef}
           style={{ flex: 1, padding: spacing.lg, backgroundColor: theme.colors.background }}
           contentContainerStyle={{ paddingBottom: insets.bottom }}
           keyboardShouldPersistTaps="handled"
           contentInsetAdjustmentBehavior="automatic"
+          onScroll={handleScroll}
+          onScrollBeginDrag={handleScrollBeginDrag}
+          onScrollEndDrag={handleScrollEndDrag}
+          scrollEventThrottle={16}
         >
           {messages.map((m, i) => {
             const shouldCollapse = shouldCollapseMessage(m.content, m.toolCalls, m.toolResults);

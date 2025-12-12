@@ -1111,9 +1111,32 @@ export default function ChatScreen({ route, navigation }: any) {
   }, []);
 
   // Handle link presses in markdown content - mark as interactive and open URL
+  // Validates URL schemes for security (only http, https, mailto allowed)
   const handleMarkdownLinkPress = useCallback((url: string) => {
     markInteractivePress();
-    Linking.openURL(url);
+
+    // Validate URL scheme - only allow safe web-related schemes
+    const allowedSchemes = ['http:', 'https:', 'mailto:'];
+    try {
+      const urlObj = new URL(url);
+      if (!allowedSchemes.some(scheme => urlObj.protocol === scheme)) {
+        console.warn(`Blocked URL with unsupported scheme: ${urlObj.protocol}`);
+        Alert.alert('Cannot Open Link', 'This type of link is not supported.');
+        return false;
+      }
+    } catch {
+      // Invalid URL format
+      console.warn(`Invalid URL format: ${url}`);
+      Alert.alert('Cannot Open Link', 'The link format is invalid.');
+      return false;
+    }
+
+    // Open URL with error handling
+    Linking.openURL(url).catch((error) => {
+      console.error('Failed to open URL:', error);
+      Alert.alert('Cannot Open Link', 'Unable to open the link. Please try again.');
+    });
+
     return false; // Return false to prevent default handling since we handled it
   }, [markInteractivePress]);
 
@@ -1270,7 +1293,7 @@ export default function ChatScreen({ route, navigation }: any) {
                   <>
                     {m.content ? (
                       isExpanded || !shouldCollapse ? (
-                        <MarkdownRenderer content={m.content} onLinkPress={handleMarkdownLinkPress} />
+                        <MarkdownRenderer content={m.content} onLinkPress={handleMarkdownLinkPress} onTouchStart={markInteractivePress} />
                       ) : (
                         <Text
                           style={{ color: theme.colors.foreground }}

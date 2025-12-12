@@ -1,5 +1,5 @@
 import React from 'react';
-import { Platform, StyleSheet } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 import Markdown from 'react-native-markdown-display';
 import { useTheme } from './ThemeProvider';
 import { spacing, radius } from './theme';
@@ -7,16 +7,22 @@ import { spacing, radius } from './theme';
 interface MarkdownRendererProps {
   content: string;
   onLinkPress?: (url: string) => boolean;
+  onTouchStart?: () => void;
 }
 
 /**
  * MarkdownRenderer with large fonts for voice-first UI
  * Inspired by Open Interpreter 01-app styling with big fonts
  * for better readability and accessibility on mobile
+ *
+ * The onTouchStart callback is triggered early in the touch lifecycle
+ * to allow parent components to detect touches on markdown content
+ * before the link's onPress fires (useful for hands-free mode).
  */
 export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
   content,
   onLinkPress,
+  onTouchStart,
 }) => {
   const { theme, isDark } = useTheme();
 
@@ -150,9 +156,18 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
   });
 
   return (
-    <Markdown style={markdownStyles} onLinkPress={onLinkPress}>
-      {content}
-    </Markdown>
+    <View
+      onStartShouldSetResponderCapture={() => {
+        // Call onTouchStart early in touch lifecycle to mark as interactive
+        // This runs before onPress, allowing parent to know a touch started here
+        onTouchStart?.();
+        return false; // Don't actually capture - let children handle their own events
+      }}
+    >
+      <Markdown style={markdownStyles} onLinkPress={onLinkPress}>
+        {content}
+      </Markdown>
+    </View>
   );
 };
 

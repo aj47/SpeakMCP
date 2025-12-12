@@ -255,6 +255,28 @@ class AgentSessionTracker {
   }
 
   /**
+   * Check if a session is currently actively processing
+   * Returns true if the session exists in active sessions and has "active" status
+   */
+  isSessionActivelyProcessing(sessionId: string): boolean {
+    const session = this.sessions.get(sessionId)
+    return session?.status === "active"
+  }
+
+  /**
+   * Check if there's an active session processing for a given conversation
+   * Returns true if any active session is linked to this conversationId
+   */
+  hasActiveSessionForConversation(conversationId: string): boolean {
+    for (const session of this.sessions.values()) {
+      if (session.conversationId === conversationId && session.status === "active") {
+        return true
+      }
+    }
+    return false
+  }
+
+  /**
    * Find a session by conversationId (active or completed)
    * Returns the session ID if found, undefined otherwise
    */

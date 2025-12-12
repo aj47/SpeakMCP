@@ -32,16 +32,20 @@ export function OverlayFollowUpInput({
     mutationFn: async (message: string) => {
       if (!conversationId) {
         // Start a new conversation if none exists
-        await tipcClient.createMcpTextInput({ text: message })
+        return await tipcClient.createMcpTextInput({ text: message })
       } else {
         // Continue the existing conversation
-        await tipcClient.createMcpTextInput({
+        return await tipcClient.createMcpTextInput({
           text: message,
           conversationId,
         })
       }
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
+      // Don't clear input if message was blocked due to active session
+      if (result && 'blocked' in result && result.blocked) {
+        return
+      }
       setText("")
       onMessageSent?.()
     },
@@ -50,7 +54,7 @@ export function OverlayFollowUpInput({
   const handleSubmit = (e?: React.FormEvent) => {
     e?.preventDefault()
     const trimmed = text.trim()
-    // Allow sending when session is active - backend will queue the message
+    // Allow sending - backend will block if session is already processing
     if (trimmed && !sendMutation.isPending) {
       sendMutation.mutate(trimmed)
     }
@@ -72,7 +76,7 @@ export function OverlayFollowUpInput({
     await tipcClient.triggerMcpRecording({ conversationId, sessionId: realSessionId })
   }
 
-  // Allow typing even while session is active - messages will be queued
+  // Allow typing even while session is active - backend blocks duplicate processing
   const isDisabled = sendMutation.isPending
 
   return (
@@ -90,7 +94,7 @@ export function OverlayFollowUpInput({
         value={text}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={handleKeyDown}
-        placeholder={isSessionActive ? "Type to queue message..." : "Continue conversation..."}
+        placeholder={isSessionActive ? "Agent is processing..." : "Continue conversation..."}
         className={cn(
           "flex-1 text-sm bg-transparent border-0 outline-none",
           "placeholder:text-muted-foreground/60",

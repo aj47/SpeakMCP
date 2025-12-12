@@ -32,18 +32,22 @@ export function TileFollowUpInput({
       if (!conversationId) {
         // Start a new conversation if none exists
         // Mark as fromTile so the floating panel doesn't show - session continues in the tile
-        await tipcClient.createMcpTextInput({ text: message, fromTile: true })
+        return await tipcClient.createMcpTextInput({ text: message, fromTile: true })
       } else {
         // Continue the existing conversation
         // Mark as fromTile so the floating panel doesn't show - session continues in the tile
-        await tipcClient.createMcpTextInput({
+        return await tipcClient.createMcpTextInput({
           text: message,
           conversationId,
           fromTile: true,
         })
       }
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
+      // Don't clear input if message was blocked due to active session
+      if (result && 'blocked' in result && result.blocked) {
+        return
+      }
       setText("")
       onMessageSent?.()
     },
@@ -52,7 +56,7 @@ export function TileFollowUpInput({
   const handleSubmit = (e?: React.FormEvent) => {
     e?.preventDefault()
     const trimmed = text.trim()
-    // Allow sending when session is active - backend will queue the message
+    // Allow sending - backend will block if session is already processing
     if (trimmed && !sendMutation.isPending) {
       sendMutation.mutate(trimmed)
     }
@@ -75,7 +79,7 @@ export function TileFollowUpInput({
     await tipcClient.triggerMcpRecording({ conversationId, sessionId: realSessionId, fromTile: true })
   }
 
-  // Allow typing even while session is active - messages will be queued
+  // Allow typing even while session is active - backend blocks duplicate processing
   const isDisabled = sendMutation.isPending
 
   return (
@@ -93,7 +97,7 @@ export function TileFollowUpInput({
         value={text}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={handleKeyDown}
-        placeholder={isSessionActive ? "Type to queue message..." : "Continue conversation..."}
+        placeholder={isSessionActive ? "Agent is processing..." : "Continue conversation..."}
         className={cn(
           "flex-1 text-sm bg-transparent border-0 outline-none",
           "placeholder:text-muted-foreground/60",

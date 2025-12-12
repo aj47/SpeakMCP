@@ -963,6 +963,18 @@ export const router = {
       fromTile?: boolean // When true, session runs in background (snoozed) - panel won't show
     }>()
     .action(async ({ input }) => {
+      const { agentSessionTracker } = await import("./agent-session-tracker")
+
+      // Check if there's already an active session processing for this conversation
+      // This prevents race conditions where overlapping processWithAgentMode calls
+      // could interfere with each other via cleanupSession
+      if (input.conversationId && agentSessionTracker.hasActiveSessionForConversation(input.conversationId)) {
+        logLLM("[createMcpTextInput] Blocked: session already processing for conversation", input.conversationId)
+        // Return the existing conversationId so the UI knows the message wasn't processed
+        // The user's message was NOT added to the conversation to avoid duplicate processing
+        return { conversationId: input.conversationId, blocked: true }
+      }
+
       // Create or get conversation ID
       let conversationId = input.conversationId
       if (!conversationId) {
@@ -982,7 +994,6 @@ export const router = {
 
       // Try to find and revive an existing session for this conversation
       // This handles the case where user continues from history
-      const { agentSessionTracker } = await import("./agent-session-tracker")
       let existingSessionId: string | undefined
       if (input.conversationId) {
         const foundSessionId = agentSessionTracker.findSessionByConversationId(input.conversationId)
@@ -996,7 +1007,7 @@ export const router = {
       }
 
       // Fire-and-forget: Start agent processing without blocking
-      // This allows multiple sessions to run concurrently
+      // This allows multiple sessions to run concurrently (for DIFFERENT conversations)
       // Pass existingSessionId to reuse the session if found
       // When fromTile=true, start snoozed so the floating panel doesn't appear
       processWithAgentMode(input.text, conversationId, existingSessionId, input.fromTile ?? false)

@@ -123,6 +123,8 @@ const getConfig = () => {
 	    remoteServerLogLevel: "info",
 	    remoteServerCorsOrigins: ["*"],
 
+	    // WhatsApp Integration defaults
+	    whatsappEnabled: false,
 
   }
 

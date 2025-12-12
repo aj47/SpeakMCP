@@ -1112,13 +1112,7 @@ export default function ChatScreen({ route, navigation }: any) {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={headerHeight}
     >
-      <Pressable
-        style={{ flex: 1 }}
-        onPress={handlePressAnywhere}
-        disabled={!handsFree}
-        accessibilityLabel={handsFree ? (listening ? 'Tap anywhere to stop recording' : 'Tap anywhere to start recording') : undefined}
-        accessibilityRole={handsFree ? 'button' : undefined}
-      >
+      <View style={{ flex: 1 }}>
         <ScrollView
           ref={scrollViewRef}
           style={{ flex: 1, padding: spacing.lg, backgroundColor: theme.colors.background }}
@@ -1344,6 +1338,17 @@ export default function ChatScreen({ route, navigation }: any) {
               <Text style={styles.debugText}>{debugInfo}</Text>
             </View>
           )}
+          {/* Tap-anywhere zone for hands-free voice interaction
+              This Pressable only captures taps in the empty space of the ScrollView.
+              Nested interactive elements (message bubbles, expand/collapse) handle their own events first. */}
+          {handsFree && (
+            <Pressable
+              style={styles.tapAnywhereZone}
+              onPress={handlePressAnywhere}
+              accessibilityLabel={listening ? 'Tap to stop recording' : 'Tap to start recording'}
+              accessibilityRole="button"
+            />
+          )}
         </ScrollView>
         {/* Scroll to bottom button - appears when user scrolls up */}
         {!shouldAutoScroll && (
@@ -1424,7 +1429,7 @@ export default function ChatScreen({ route, navigation }: any) {
             <Text style={styles.sendButtonText}>Send</Text>
           </TouchableOpacity>
         </View>
-      </Pressable>
+      </View>
     </KeyboardAvoidingView>
   );
 }
@@ -1813,6 +1818,12 @@ function createStyles(theme: Theme) {
       backgroundColor: 'rgba(239, 68, 68, 0.1)',
       padding: spacing.sm,
       borderRadius: radius.sm,
+    },
+    // Tap-anywhere zone for hands-free voice interaction
+    // Fills remaining space in ScrollView to catch taps on empty areas
+    tapAnywhereZone: {
+      flexGrow: 1,
+      minHeight: 100,
     },
   });
 }

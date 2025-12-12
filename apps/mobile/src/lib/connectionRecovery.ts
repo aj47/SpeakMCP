@@ -261,9 +261,20 @@ export async function checkServerConnection(
 
   // Normalize the base URL
   let normalizedUrl = baseUrl.trim();
-  if (!normalizedUrl.startsWith('http://') && !normalizedUrl.startsWith('https://')) {
-    normalizedUrl = `https://${normalizedUrl}`;
+
+  // Check if scheme is already provided
+  const hasScheme = normalizedUrl.startsWith('http://') || normalizedUrl.startsWith('https://');
+
+  // Determine if this is a local address (localhost, 127.x.x.x, 192.168.x.x, 10.x.x.x, etc.)
+  const isLocalAddress = /^(localhost|127\.|192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[01])\.)/i.test(
+    normalizedUrl.replace(/^https?:\/\//, '')
+  );
+
+  if (!hasScheme) {
+    // Default to http:// for local addresses, https:// for external
+    normalizedUrl = isLocalAddress ? `http://${normalizedUrl}` : `https://${normalizedUrl}`;
   }
+
   // Remove trailing slash
   normalizedUrl = normalizedUrl.replace(/\/+$/, '');
 
@@ -322,14 +333,13 @@ export async function checkServerConnection(
     }
 
     if (response.status === 404) {
-      // 404 might mean the endpoint doesn't exist but the server is reachable
-      // This could be a valid SpeakMCP desktop server that doesn't have /models
-      // Let's consider this as a success for connectivity purposes
+      // 404 indicates the /models endpoint doesn't exist at this URL
+      // This usually means the base URL is incorrect (e.g., missing /v1)
       return {
-        success: true,
+        success: false,
+        error: 'Endpoint not found. Please check your base URL (e.g., should end with /v1).',
         statusCode: response.status,
         responseTime,
-        normalizedUrl,
       };
     }
 

@@ -78,6 +78,12 @@ export default function SettingsScreen({ navigation }: any) {
       return;
     }
 
+    // Validate: if API key is set, base URL must also be set
+    if (hasApiKey && !normalizedDraft.baseUrl) {
+      setConnectionError('Base URL is required when an API key is provided');
+      return;
+    }
+
     // Only check connection if we have both a custom URL and API key
     // Or if we have an API key with the default URL
     if (hasApiKey && normalizedDraft.baseUrl) {

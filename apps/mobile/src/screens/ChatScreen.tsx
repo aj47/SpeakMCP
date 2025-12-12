@@ -15,6 +15,7 @@ import {
   Image,
   NativeScrollEvent,
   NativeSyntheticEvent,
+  Linking,
 } from 'react-native';
 
 const darkSpinner = require('../../assets/loading-spinner.gif');
@@ -1097,15 +1098,38 @@ export default function ChatScreen({ route, navigation }: any) {
   // Inspired by Open Interpreter 01-app - tap anywhere to start/stop recording
   // Track touch start position to distinguish taps from scrolls
   const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
+  // Track if an interactive element was pressed to avoid triggering voice on button taps
+  const interactiveElementPressedRef = useRef(false);
+
+  // Called by interactive elements (Pressable, TouchableOpacity) to signal they handled the touch
+  const markInteractivePress = useCallback(() => {
+    interactiveElementPressedRef.current = true;
+  }, []);
+
+  // Handle link presses in markdown content - mark as interactive and open URL
+  const handleMarkdownLinkPress = useCallback((url: string) => {
+    markInteractivePress();
+    Linking.openURL(url);
+    return false; // Return false to prevent default handling since we handled it
+  }, [markInteractivePress]);
 
   const handleTouchStart = useCallback((e: GestureResponderEvent) => {
     if (!handsFree) return;
+    // Reset interactive element flag at start of new touch
+    interactiveElementPressedRef.current = false;
     const touch = e.nativeEvent;
     touchStartRef.current = { x: touch.pageX, y: touch.pageY, time: Date.now() };
   }, [handsFree]);
 
   const handleTouchEnd = useCallback((e: GestureResponderEvent) => {
     if (!handsFree || !touchStartRef.current) return;
+
+    // If an interactive element (button, link, etc.) handled this touch, don't trigger voice
+    if (interactiveElementPressedRef.current) {
+      touchStartRef.current = null;
+      interactiveElementPressedRef.current = false;
+      return;
+    }
 
     const touch = e.nativeEvent;
     const start = touchStartRef.current;
@@ -1176,6 +1200,7 @@ export default function ChatScreen({ route, navigation }: any) {
               >
                 {/* Clickable header for expand/collapse */}
                 <Pressable
+                  onPressIn={shouldCollapse ? markInteractivePress : undefined}
                   onPress={shouldCollapse ? () => toggleMessageExpansion(i) : undefined}
                   disabled={!shouldCollapse}
                   accessibilityRole={shouldCollapse ? 'button' : undefined}
@@ -1234,7 +1259,7 @@ export default function ChatScreen({ route, navigation }: any) {
                   <>
                     {m.content ? (
                       isExpanded || !shouldCollapse ? (
-                        <MarkdownRenderer content={m.content} />
+                        <MarkdownRenderer content={m.content} onLinkPress={handleMarkdownLinkPress} />
                       ) : (
                         <Text
                           style={{ color: theme.colors.foreground }}

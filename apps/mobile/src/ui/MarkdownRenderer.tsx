@@ -6,6 +6,7 @@ import { spacing, radius } from './theme';
 
 interface MarkdownRendererProps {
   content: string;
+  onLinkPress?: (url: string) => boolean;
 }
 
 /**
@@ -15,6 +16,7 @@ interface MarkdownRendererProps {
  */
 export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
   content,
+  onLinkPress,
 }) => {
   const { theme, isDark } = useTheme();
 
@@ -148,7 +150,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
   });
 
   return (
-    <Markdown style={markdownStyles}>
+    <Markdown style={markdownStyles} onLinkPress={onLinkPress}>
       {content}
     </Markdown>
   );

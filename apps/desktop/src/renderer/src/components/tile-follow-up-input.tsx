@@ -99,7 +99,7 @@ export function TileFollowUpInput({
         value={text}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={handleKeyDown}
-        placeholder={isSessionActive ? "Type to queue..." : "Continue conversation..."}
+        placeholder={isSessionActive ? "Processing... type to draft" : "Continue conversation..."}
         className={cn(
           "flex-1 text-sm bg-transparent border-0 outline-none",
           "placeholder:text-muted-foreground/60",

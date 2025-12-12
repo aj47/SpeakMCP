@@ -2386,6 +2386,11 @@ export const router = {
       messageQueueService.clearQueue(input.conversationId)
     }),
 
+  clearAllMessageQueues: t.procedure.action(async () => {
+    const { messageQueueService } = await import("./message-queue-service")
+    messageQueueService.clearAllQueues()
+  }),
+
   updateQueuedMessageText: t.procedure
     .input<{ conversationId: string; messageId: string; text: string }>()
     .action(async ({ input }) => {

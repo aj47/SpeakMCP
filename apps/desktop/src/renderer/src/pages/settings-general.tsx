@@ -731,8 +731,14 @@ export function Component() {
 
           <Control label={<ControlLabel label="Message Queue" tooltip="When enabled, messages sent while an agent is processing will be queued and processed automatically when the current task completes." />} className="px-3">
             <Switch
-              checked={configQuery.data?.mcpMessageQueueEnabled ?? true}
-              onCheckedChange={(value) => saveConfig({ mcpMessageQueueEnabled: value })}
+              checked={configQuery.data?.mcpMessageQueueEnabled ?? false}
+              onCheckedChange={async (value) => {
+                saveConfig({ mcpMessageQueueEnabled: value })
+                if (!value) {
+                  // Clear all message queues when feature is disabled to prevent stuck messages
+                  await tipcClient.clearAllMessageQueues()
+                }
+              }}
             />
           </Control>
 

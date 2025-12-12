@@ -60,6 +60,13 @@ class MessageQueueService {
     logApp(`[MessageQueue] Cleared ${count} messages for conversation ${conversationId}`)
   }
 
+  clearAllQueues(): void {
+    const totalMessages = Array.from(this.queues.values()).reduce((sum, q) => sum + q.length, 0)
+    const queueCount = this.queues.size
+    this.queues.clear()
+    logApp(`[MessageQueue] Cleared all queues: ${totalMessages} messages across ${queueCount} conversations`)
+  }
+
   /**
    * Peek at the next message without removing it.
    * Use this before processing to avoid data loss if processing fails.

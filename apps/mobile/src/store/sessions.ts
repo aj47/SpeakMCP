@@ -108,17 +108,17 @@ export function useSessions(): SessionStore {
       // Filter out any sessions that are currently being deleted to avoid race conditions
       const cleanedPrev = prev.filter(s => !deletingSessionIds.has(s.id));
       const updated = [newSession, ...cleanedPrev];
-
-      // Queue async saves to prevent interleaving with other operations
-      // Note: We save inside the functional update to capture the exact state we're setting
-      queueSave(async () => {
-        await saveSessions(updated);
-        await saveCurrentSessionId(newSession.id);
-      });
-
       return updated;
     });
     setCurrentSessionIdState(newSession.id);
+
+    // Queue async saves OUTSIDE setSessions to ensure it's synchronously queued
+    // The sessionsRef will be updated by useEffect after React processes the state change
+    // By the time this queued operation runs, sessionsRef.current will have the new sessions
+    queueSave(async () => {
+      await saveSessions(sessionsRef.current);
+      await saveCurrentSessionId(newSession.id);
+    });
 
     return newSession;
   }, [deletingSessionIds, queueSave]);
@@ -146,28 +146,33 @@ export function useSessions(): SessionStore {
     }
 
     // Use functional update to avoid race conditions with rapid deletes
-    // The save is queued INSIDE the functional update to ensure we capture the exact state
     setSessions(prev => {
       const updated = prev.filter(s => s.id !== id);
-
-      // Queue save with the exact sessions array we're setting
-      // This ensures rapid deletes don't race - each save uses its own captured state
-      queueSave(async () => {
-        await saveSessions(updated);
-        // Re-check currentSessionIdRef at save time to avoid overwriting newly selected session
-        // Only clear persisted ID if user hasn't switched to a different session
-        // This fixes the race where user switches sessions while delete is in-flight
-        const currentIdAtSaveTime = currentSessionIdRef.current;
-        if (currentIdAtSaveTime === null || currentIdAtSaveTime === id) {
-          await saveCurrentSessionId(null);
-        }
-      });
-
       return updated;
     });
 
+    // Queue save OUTSIDE setSessions to ensure it's synchronously queued before we await
+    // This fixes the timing issue where React may batch the setSessions call and delay
+    // executing the functional updater, which would mean queueSave inside setSessions
+    // might not be called before we chain our await onto the queue.
+    //
+    // The sessionsRef will be updated by useEffect after React processes the state change.
+    // Since all saves are serialized through the queue, by the time this operation runs,
+    // sessionsRef.current will have the updated (filtered) sessions.
+    queueSave(async () => {
+      await saveSessions(sessionsRef.current);
+      // Re-check currentSessionIdRef at save time to avoid overwriting newly selected session
+      // Only clear persisted ID if user hasn't switched to a different session
+      // This fixes the race where user switches sessions while delete is in-flight
+      const currentIdAtSaveTime = currentSessionIdRef.current;
+      if (currentIdAtSaveTime === null || currentIdAtSaveTime === id) {
+        await saveCurrentSessionId(null);
+      }
+    });
+
     // Wait for the queued save to complete before removing from deleting set
-    // We do this by adding another operation to the queue
+    // Since queueSave is now called synchronously above, this await will correctly
+    // wait for the delete save operation to complete
     try {
       await new Promise<void>((resolve, reject) => {
         saveQueueRef.current = saveQueueRef.current.then(resolve).catch(reject);

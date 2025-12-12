@@ -266,6 +266,8 @@ export default function ChatScreen({ route, navigation }: any) {
   const isScrollPendingRef = useRef(false);
   // Ref to track current auto-scroll state for use in timeout callbacks
   const shouldAutoScrollRef = useRef(true);
+  // Track if user is actively dragging to distinguish from programmatic scrolls
+  const isUserDraggingRef = useRef(false);
 
   // Keep ref in sync with state
   useEffect(() => {
@@ -278,6 +280,19 @@ export default function ChatScreen({ route, navigation }: any) {
     }
   }, [shouldAutoScroll]);
 
+  // Handle user starting to drag the scroll view
+  const handleScrollBeginDrag = useCallback(() => {
+    isUserDraggingRef.current = true;
+  }, []);
+
+  // Handle user ending drag - keep flag active briefly for momentum scroll
+  const handleScrollEndDrag = useCallback(() => {
+    // Clear the flag after a short delay to account for momentum scrolling
+    setTimeout(() => {
+      isUserDraggingRef.current = false;
+    }, 150);
+  }, []);
+
   // Handle scroll events to detect when user scrolls away from bottom
   const handleScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
@@ -287,8 +302,8 @@ export default function ChatScreen({ route, navigation }: any) {
     if (isAtBottom && !shouldAutoScroll) {
       // User scrolled back to bottom, resume auto-scroll
       setShouldAutoScroll(true);
-    } else if (!isAtBottom && shouldAutoScroll) {
-      // User scrolled up, pause auto-scroll
+    } else if (!isAtBottom && shouldAutoScroll && isUserDraggingRef.current) {
+      // Only pause auto-scroll when user is actively dragging (not programmatic scroll)
       setShouldAutoScroll(false);
     }
   }, [shouldAutoScroll]);
@@ -1048,6 +1063,8 @@ export default function ChatScreen({ route, navigation }: any) {
           keyboardShouldPersistTaps="handled"
           contentInsetAdjustmentBehavior="automatic"
           onScroll={handleScroll}
+          onScrollBeginDrag={handleScrollBeginDrag}
+          onScrollEndDrag={handleScrollEndDrag}
           scrollEventThrottle={16}
         >
           {messages.map((m, i) => {

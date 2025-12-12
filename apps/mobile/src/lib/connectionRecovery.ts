@@ -228,6 +228,7 @@ export type ConnectionCheckResult = {
   error?: string;
   statusCode?: number;
   responseTime?: number;
+  normalizedUrl?: string;
 };
 
 /**
@@ -294,6 +295,7 @@ export async function checkServerConnection(
         success: true,
         statusCode: response.status,
         responseTime,
+        normalizedUrl,
       };
     }
 
@@ -324,6 +326,7 @@ export async function checkServerConnection(
         success: true,
         statusCode: response.status,
         responseTime,
+        normalizedUrl,
       };
     }
 

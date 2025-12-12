@@ -59,7 +59,7 @@ export default function SettingsScreen({ navigation }: any) {
   }, [draft.baseUrl, draft.apiKey]);
 
   const onSave = async () => {
-    const normalizedDraft = {
+    let normalizedDraft = {
       ...draft,
       baseUrl: draft.baseUrl?.trim?.() ?? '',
     };
@@ -88,6 +88,15 @@ export default function SettingsScreen({ navigation }: any) {
           setConnectionError(result.error || 'Connection failed');
           setIsCheckingConnection(false);
           return; // Don't proceed if connection fails
+        }
+
+        // Use the normalized URL from the connection check so the saved config
+        // matches what was actually verified (includes scheme, no trailing slashes)
+        if (result.normalizedUrl) {
+          normalizedDraft = {
+            ...normalizedDraft,
+            baseUrl: result.normalizedUrl,
+          };
         }
 
         console.log('[Settings] Connection check successful:', result);

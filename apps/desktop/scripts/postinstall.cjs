@@ -72,7 +72,7 @@ async function main() {
     if (isWindows) {
       console.error('  2. Run: pnpm.cmd -C apps/desktop exec electron-builder install-app-deps');
     } else {
-      console.error('  2. Run: npx electron-builder install-app-deps');
+      console.error('  2. Run: pnpm -C apps/desktop exec electron-builder install-app-deps');
     }
     console.error('');
     // Exit with error code to signal failure

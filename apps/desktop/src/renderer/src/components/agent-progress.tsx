@@ -166,9 +166,15 @@ const CompactMessage: React.FC<{
   const shouldShowTTS = message.role === "assistant" && isComplete && isLast && configQuery.data?.ttsEnabled
 
   // Auto-play TTS when assistant message completes (but NOT if agent was stopped by kill switch)
-  // IMPORTANT: Only auto-play in "overlay" variant to prevent double TTS playback when both
-  // the main window (tile variant) and panel window (overlay variant) are open.
-  // The overlay/panel window is the primary interaction point, so TTS plays there.
+  //
+  // TTS AUTO-PLAY STRATEGY (fixes #557 - double TTS playback):
+  // - Only auto-play in "overlay" variant (panel window) to prevent double playback
+  // - The panel window is the primary interaction point for agent sessions
+  // - When a non-snoozed session is active, the panel window is automatically shown
+  // - Snoozed sessions don't show the panel, and intentionally don't auto-play TTS
+  //   (they run silently in background - user can unsnooze to see/hear them)
+  // - The "default" variant (main window ConversationDisplay) and "tile" variant (session tiles)
+  //   never auto-play TTS - they are for viewing/managing, not primary interaction
   useEffect(() => {
     // Only auto-generate and play TTS in overlay variant to prevent double playback
     const shouldAutoPlay = variant === "overlay"

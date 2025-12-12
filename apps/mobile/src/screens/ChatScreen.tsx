@@ -13,6 +13,8 @@ import {
   Alert,
   Pressable,
   Image,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
 } from 'react-native';
 
 const darkSpinner = require('../../assets/loading-spinner.gif');
@@ -255,6 +257,108 @@ export default function ChatScreen({ route, navigation }: any) {
   const [listening, setListening] = useState(false);
   const [liveTranscript, setLiveTranscript] = useState('');
   const [debugInfo, setDebugInfo] = useState<string>('');
+  const [expandedMessages, setExpandedMessages] = useState<Record<number, boolean>>({});
+
+  // Auto-scroll state and ref for mobile chat
+  const scrollViewRef = useRef<ScrollView>(null);
+  const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
+  // Track scroll timeout for debouncing rapid message updates
+  const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Ref to track current auto-scroll state for use in timeout callbacks
+  const shouldAutoScrollRef = useRef(true);
+  // Track if user is actively dragging to distinguish from programmatic scrolls
+  const isUserDraggingRef = useRef(false);
+  // Track drag end timeout to prevent flaky behavior with rapid re-drags
+  const dragEndTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Keep ref in sync with state
+  useEffect(() => {
+    shouldAutoScrollRef.current = shouldAutoScroll;
+    // Cancel any pending scroll when user disables auto-scroll
+    if (!shouldAutoScroll && scrollTimeoutRef.current) {
+      clearTimeout(scrollTimeoutRef.current);
+      scrollTimeoutRef.current = null;
+    }
+  }, [shouldAutoScroll]);
+
+  // Handle user starting to drag the scroll view
+  const handleScrollBeginDrag = useCallback(() => {
+    // Clear any pending drag end timeout from previous drag
+    if (dragEndTimeoutRef.current) {
+      clearTimeout(dragEndTimeoutRef.current);
+      dragEndTimeoutRef.current = null;
+    }
+    isUserDraggingRef.current = true;
+  }, []);
+
+  // Handle user ending drag - keep flag active briefly for momentum scroll
+  const handleScrollEndDrag = useCallback(() => {
+    // Clear any existing drag end timeout before scheduling a new one
+    if (dragEndTimeoutRef.current) {
+      clearTimeout(dragEndTimeoutRef.current);
+    }
+    // Clear the flag after a short delay to account for momentum scrolling
+    dragEndTimeoutRef.current = setTimeout(() => {
+      isUserDraggingRef.current = false;
+      dragEndTimeoutRef.current = null;
+    }, 150);
+  }, []);
+
+  // Handle scroll events to detect when user scrolls away from bottom
+  const handleScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
+    // Consider "at bottom" if within 50 pixels of the bottom
+    const isAtBottom = layoutMeasurement.height + contentOffset.y >= contentSize.height - 50;
+
+    if (isAtBottom && !shouldAutoScroll) {
+      // User scrolled back to bottom, resume auto-scroll
+      setShouldAutoScroll(true);
+    } else if (!isAtBottom && shouldAutoScroll && isUserDraggingRef.current) {
+      // Only pause auto-scroll when user is actively dragging (not programmatic scroll)
+      setShouldAutoScroll(false);
+    }
+  }, [shouldAutoScroll]);
+
+  // Scroll to bottom when messages change and auto-scroll is enabled
+  // Uses debouncing to handle rapid streaming updates efficiently
+  useEffect(() => {
+    if (shouldAutoScroll && scrollViewRef.current) {
+      // Clear any pending scroll timeout to debounce rapid updates
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+      }
+
+      // Schedule a new scroll with a short delay to batch rapid updates
+      scrollTimeoutRef.current = setTimeout(() => {
+        // Double-check auto-scroll is still enabled before scrolling
+        if (shouldAutoScrollRef.current && scrollViewRef.current) {
+          scrollViewRef.current.scrollToEnd({ animated: true });
+        }
+      }, 50);
+    }
+  }, [messages, shouldAutoScroll]);
+
+  // Cleanup timeouts on unmount
+  useEffect(() => {
+    return () => {
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+      }
+      if (dragEndTimeoutRef.current) {
+        clearTimeout(dragEndTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Reset auto-scroll when session changes
+  useEffect(() => {
+    setShouldAutoScroll(true);
+    // Scroll to bottom when switching sessions
+    const timeoutId = setTimeout(() => {
+      scrollViewRef.current?.scrollToEnd({ animated: false });
+    }, 100);
+    return () => clearTimeout(timeoutId);
+  }, [sessionStore.currentSessionId]);
 
   const lastLoadedSessionIdRef = useRef<string | null>(null);
 
@@ -294,7 +398,22 @@ export default function ChatScreen({ route, navigation }: any) {
 
     currentSession = sessionStore.createNewSession();
     lastLoadedSessionIdRef.current = currentSession.id;
-    setMessages([]);
+
+    // Reset expandedMessages on session switch to ensure consistent "final response expanded"
+    // behavior per chat and prevent stale entries from affecting the new session
+    setExpandedMessages({});
+
+    if (currentSession.messages.length > 0) {
+      const chatMessages: ChatMessage[] = currentSession.messages.map(m => ({
+        role: m.role,
+        content: m.content,
+        toolCalls: m.toolCalls,
+        toolResults: m.toolResults,
+      }));
+      setMessages(chatMessages);
+    } else {
+      setMessages([]);
+    }
   }, [sessionStore.currentSessionId, sessionStore, sessionStore.deletingSessionIds.size]);
 
   const prevMessagesLengthRef = useRef(0);
@@ -322,10 +441,34 @@ export default function ChatScreen({ route, navigation }: any) {
     prevMessagesLengthRef.current = messages.length;
   }, [messages, sessionStore, sessionStore.currentSessionId, sessionStore.deletingSessionIds]);
 
-  const [expandedMessages, setExpandedMessages] = useState<Record<number, boolean>>({});
   const toggleMessageExpansion = useCallback((index: number) => {
     setExpandedMessages(prev => ({ ...prev, [index]: !prev[index] }));
   }, []);
+
+  // Auto-expand only the final assistant message (the last one in the conversation)
+  // Tool call messages (intermediate assistant messages with tool calls) should be collapsed by default
+  // When a new message arrives, collapse previous assistant messages with tool calls
+  useEffect(() => {
+    const lastAssistantIndex = messages.reduce((lastIdx, m, i) =>
+      m.role === 'assistant' ? i : lastIdx, -1);
+
+    if (lastAssistantIndex >= 0) {
+      setExpandedMessages(prev => {
+        const updated = { ...prev };
+        // Collapse all previous assistant messages that have tool calls/results
+        // Only the final assistant message should remain expanded
+        messages.forEach((m, i) => {
+          if (i < lastAssistantIndex && m.role === 'assistant' &&
+              ((m.toolCalls?.length ?? 0) > 0 || (m.toolResults?.length ?? 0) > 0)) {
+            updated[i] = false;
+          }
+        });
+        // Expand the last assistant message
+        updated[lastAssistantIndex] = true;
+        return updated;
+      });
+    }
+  }, [messages]);
 
   const [willCancel, setWillCancel] = useState(false);
   const startYRef = useRef<number | null>(null);
@@ -985,45 +1128,61 @@ export default function ChatScreen({ route, navigation }: any) {
     >
       <View style={{ flex: 1 }}>
         <ScrollView
+          ref={scrollViewRef}
           style={{ flex: 1, padding: spacing.lg, backgroundColor: theme.colors.background }}
           contentContainerStyle={{ paddingBottom: insets.bottom }}
           keyboardShouldPersistTaps="handled"
           contentInsetAdjustmentBehavior="automatic"
+          onScroll={handleScroll}
+          onScrollBeginDrag={handleScrollBeginDrag}
+          onScrollEndDrag={handleScrollEndDrag}
+          scrollEventThrottle={16}
         >
           {messages.map((m, i) => {
             const shouldCollapse = shouldCollapseMessage(m.content, m.toolCalls, m.toolResults);
+            // expandedMessages is auto-updated via useEffect to expand the last assistant message
+            // and persist the expansion state so it doesn't collapse when new messages arrive
             const isExpanded = expandedMessages[i] ?? false;
             const roleIcon = getRoleIcon(m.role as 'user' | 'assistant' | 'tool');
             const roleLabel = getRoleLabel(m.role as 'user' | 'assistant' | 'tool');
 
-            const hasToolResults = (m.toolResults?.length ?? 0) > 0;
+            const toolCallCount = m.toolCalls?.length ?? 0;
+            const toolResultCount = m.toolResults?.length ?? 0;
+            const hasToolResults = toolResultCount > 0;
             const allSuccess = hasToolResults && m.toolResults!.every(r => r.success);
             const hasErrors = hasToolResults && m.toolResults!.some(r => !r.success);
-            const isPending = (m.toolCalls?.length ?? 0) > 0 && !hasToolResults;
+            // isPending is true when there are more tool calls than results (including partial completion)
+            const isPending = toolCallCount > 0 && toolCallCount > toolResultCount;
 
             const toolPreview = !isExpanded && m.toolCalls && m.toolCalls.length > 0 && m.toolCalls[0]?.arguments
               ? formatArgumentsPreview(m.toolCalls[0].arguments)
               : null;
 
             return (
-              <Pressable
+              <View
                 key={i}
-                disabled={!shouldCollapse}
-                onPress={shouldCollapse ? () => toggleMessageExpansion(i) : undefined}
-                accessibilityRole={shouldCollapse ? 'button' : undefined}
-                accessibilityHint={
-                  shouldCollapse
-                    ? (isExpanded ? 'Collapse message' : 'Expand message')
-                    : undefined
-                }
-                accessibilityState={shouldCollapse ? { expanded: isExpanded } : undefined}
-                style={({ pressed }) => [
+                style={[
                   styles.msg,
                   m.role === 'user' ? styles.user : styles.assistant,
-                  shouldCollapse && !isExpanded && pressed && styles.msgPressed,
                 ]}
               >
-                <View style={styles.messageHeader}>
+                {/* Clickable header for expand/collapse */}
+                <Pressable
+                  onPress={shouldCollapse ? () => toggleMessageExpansion(i) : undefined}
+                  disabled={!shouldCollapse}
+                  accessibilityRole={shouldCollapse ? 'button' : undefined}
+                  accessibilityHint={
+                    shouldCollapse
+                      ? (isExpanded ? 'Collapse message' : 'Expand message')
+                      : undefined
+                  }
+                  accessibilityState={shouldCollapse ? { expanded: isExpanded } : undefined}
+                  style={({ pressed }) => [
+                    styles.messageHeader,
+                    shouldCollapse && styles.messageHeaderClickable,
+                    shouldCollapse && pressed && styles.messageHeaderPressed,
+                  ]}
+                >
                   <Text style={styles.roleIcon} accessibilityLabel={roleLabel}>
                     {roleIcon}
                   </Text>
@@ -1052,7 +1211,7 @@ export default function ChatScreen({ route, navigation }: any) {
                       </Text>
                     </View>
                   )}
-                </View>
+                </Pressable>
 
                 {m.role === 'assistant' && (!m.content || m.content.length === 0) && !m.toolCalls && !m.toolResults ? (
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -1078,93 +1237,106 @@ export default function ChatScreen({ route, navigation }: any) {
                       )
                     ) : null}
 
-                    {!isExpanded && m.toolCalls && m.toolCalls.length > 0 && (
-                      <View style={styles.collapsedToolSummary}>
-                        {toolPreview && (
-                          <Text style={styles.collapsedToolPreview} numberOfLines={1}>
-                            {toolPreview}
-                          </Text>
-                        )}
-                      </View>
-                    )}
-
-                    {isExpanded && m.toolCalls && m.toolCalls.length > 0 && (
-                      <View style={styles.toolSection}>
-                        <Text style={styles.toolSectionTitle}>Tool Calls ({m.toolCalls.length}):</Text>
-                        {m.toolCalls.map((toolCall, idx) => (
-                          <View key={idx} style={styles.toolCallCard}>
-                            <View style={styles.toolCallHeader}>
-                              <Text style={styles.toolName}>{toolCall.name}</Text>
-                              <Text style={styles.toolBadge}>Tool {idx + 1}</Text>
-                            </View>
-                            {toolCall.arguments && (
-                              <View style={styles.toolParams}>
-                                <Text style={styles.toolParamsLabel}>Parameters:</Text>
-                                <ScrollView style={styles.toolParamsScroll} nestedScrollEnabled>
-                                  <Text style={styles.toolParamsCode}>
-                                    {formatToolArguments(toolCall.arguments)}
-                                  </Text>
-                                </ScrollView>
-                              </View>
-                            )}
-                          </View>
-                        ))}
-                      </View>
-                    )}
-
-                    {isExpanded && m.toolResults && m.toolResults.length > 0 && (
-                      <View style={styles.toolSection}>
-                        <Text style={styles.toolSectionTitle}>Tool Results ({m.toolResults.length}):</Text>
-                        {m.toolResults.map((result, idx) => (
-                          <View
-                            key={idx}
-                            style={[
-                              styles.toolResultCard,
-                              result.success ? styles.toolResultSuccess : styles.toolResultError
-                            ]}
-                          >
-                            <View style={styles.toolResultHeader}>
-                              <Text style={[
-                                styles.toolResultBadge,
-                                result.success ? styles.toolResultBadgeSuccess : styles.toolResultBadgeError
-                              ]}>
-                                {result.success ? '✅ Success' : '❌ Error'}
+                    {/* Unified Tool Execution Display - show when there are toolCalls OR toolResults */}
+                    {((m.toolCalls?.length ?? 0) > 0 || (m.toolResults?.length ?? 0) > 0) && (
+                      <View style={[
+                        styles.toolExecutionCard,
+                        isPending && styles.toolExecutionPending,
+                        allSuccess && styles.toolExecutionSuccess,
+                        hasErrors && styles.toolExecutionError,
+                      ]}>
+                        {/* Collapsed view - show preview */}
+                        {!isExpanded && (
+                          <View style={styles.toolExecutionCollapsed}>
+                            {toolPreview && (
+                              <Text style={styles.collapsedToolPreview} numberOfLines={1}>
+                                {toolPreview}
                               </Text>
-                              <Text style={styles.toolResultIndex}>Result {idx + 1}</Text>
-                            </View>
-                            <View style={styles.toolResultContent}>
-                              <Text style={styles.toolResultLabel}>Content:</Text>
-                              <ScrollView style={styles.toolResultScroll} nestedScrollEnabled>
-                                <Text style={styles.toolResultCode}>
-                                  {result.content || 'No content returned'}
-                                </Text>
-                              </ScrollView>
-                            </View>
-                            {result.error && (
-                              <View style={styles.toolResultErrorSection}>
-                                <Text style={styles.toolResultErrorLabel}>Error Details:</Text>
-                                <Text style={styles.toolResultErrorText}>{result.error}</Text>
-                              </View>
+                            )}
+                            {hasToolResults && (
+                              <Text style={[
+                                styles.collapsedToolText,
+                                allSuccess && styles.collapsedToolTextSuccess,
+                                hasErrors && styles.collapsedToolTextError,
+                              ]}>
+                                {getToolResultsSummary(m.toolResults!)}
+                              </Text>
                             )}
                           </View>
-                        ))}
-                      </View>
-                    )}
+                        )}
 
-                    {!isExpanded && m.toolResults && m.toolResults.length > 0 && (
-                      <View style={styles.collapsedResultsSummary}>
-                        <Text style={[
-                          styles.collapsedToolText,
-                          allSuccess && styles.collapsedToolTextSuccess,
-                          hasErrors && styles.collapsedToolTextError,
-                        ]}>
-                          {getToolResultsSummary(m.toolResults)}
-                        </Text>
+                        {/* Expanded view - show full details */}
+                        {isExpanded && (
+                          <>
+                            {/* Call Parameters Section - only show if there are toolCalls */}
+                            {(m.toolCalls?.length ?? 0) > 0 && (
+                              <View style={styles.toolParamsSection}>
+                                <Text style={styles.toolParamsSectionTitle}>Call Parameters</Text>
+                                {m.toolCalls!.map((toolCall, idx) => (
+                                  <View key={idx} style={styles.toolCallCard}>
+                                    <Text style={styles.toolName}>{toolCall.name}</Text>
+                                    {toolCall.arguments && (
+                                      <ScrollView style={styles.toolParamsScroll} nestedScrollEnabled>
+                                        <Text style={styles.toolParamsCode}>
+                                          {formatToolArguments(toolCall.arguments)}
+                                        </Text>
+                                      </ScrollView>
+                                    )}
+                                  </View>
+                                ))}
+                              </View>
+                            )}
+
+                            {/* Response Section */}
+                            <View style={[
+                              styles.toolResponseSection,
+                              isPending && styles.toolResponsePending,
+                              allSuccess && styles.toolResponseSuccess,
+                              hasErrors && styles.toolResponseError,
+                            ]}>
+                              <Text style={styles.toolResponseSectionTitle}>Response</Text>
+                              {/* Show any received results first, even if more are pending */}
+                              {(m.toolResults ?? []).map((result, idx) => (
+                                <View key={idx} style={styles.toolResultItem}>
+                                  <View style={styles.toolResultHeader}>
+                                    <Text style={[
+                                      styles.toolResultBadge,
+                                      result.success ? styles.toolResultBadgeSuccess : styles.toolResultBadgeError
+                                    ]}>
+                                      {result.success ? '✅ Success' : '❌ Error'}
+                                    </Text>
+                                  </View>
+                                  <ScrollView style={styles.toolResultScroll} nestedScrollEnabled>
+                                    <Text style={styles.toolResultCode}>
+                                      {result.content || 'No content returned'}
+                                    </Text>
+                                  </ScrollView>
+                                  {result.error && (
+                                    <View style={styles.toolResultErrorSection}>
+                                      <Text style={styles.toolResultErrorLabel}>Error:</Text>
+                                      <Text style={styles.toolResultErrorText}>{result.error}</Text>
+                                    </View>
+                                  )}
+                                </View>
+                              ))}
+                              {/* Show waiting indicator if more tool calls are pending */}
+                              {isPending && (
+                                <Text style={styles.toolResponsePendingText}>
+                                  ⏳ Waiting for {toolCallCount - toolResultCount} more response{toolCallCount - toolResultCount > 1 ? 's' : ''}...
+                                </Text>
+                              )}
+                              {/* Show message if no results yet at all */}
+                              {toolResultCount === 0 && !isPending && (
+                                <Text style={styles.toolResponsePendingText}>No responses received</Text>
+                              )}
+                            </View>
+                          </>
+                        )}
                       </View>
                     )}
                   </>
                 )}
-              </Pressable>
+              </View>
             );
           })}
           {connectionState && connectionState.status === 'reconnecting' && (
@@ -1181,6 +1353,22 @@ export default function ChatScreen({ route, navigation }: any) {
             </View>
           )}
         </ScrollView>
+        {/* Scroll to bottom button - appears when user scrolls up */}
+        {!shouldAutoScroll && (
+          <TouchableOpacity
+            style={[styles.scrollToBottomButton, { bottom: 80 + insets.bottom }]}
+            onPress={() => {
+              setShouldAutoScroll(true);
+              scrollViewRef.current?.scrollToEnd({ animated: true });
+            }}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Scroll to bottom"
+            accessibilityHint="Scrolls to the latest messages"
+          >
+            <Text style={styles.scrollToBottomText}>↓</Text>
+          </TouchableOpacity>
+        )}
         {listening && (
           <View style={[styles.overlay, { bottom: 72 + insets.bottom }]} pointerEvents="none">
             <Text style={styles.overlayText}>
@@ -1257,9 +1445,6 @@ function createStyles(theme: Theme) {
       marginBottom: spacing.sm,
       maxWidth: '85%',
     },
-    msgPressed: {
-      opacity: 0.8,
-    },
     user: {
       backgroundColor: theme.colors.secondary,
       alignSelf: 'flex-end',
@@ -1280,6 +1465,16 @@ function createStyles(theme: Theme) {
       flexWrap: 'wrap',
       gap: spacing.xs,
       marginBottom: spacing.xs,
+      paddingVertical: spacing.xs,
+      marginHorizontal: -spacing.xs,
+      paddingHorizontal: spacing.xs,
+      borderRadius: radius.sm,
+    },
+    messageHeaderClickable: {
+      // Visual hint that header is clickable
+    },
+    messageHeaderPressed: {
+      backgroundColor: theme.colors.muted,
     },
     toolBadgeSmall: {
       backgroundColor: theme.colors.muted,
@@ -1327,20 +1522,12 @@ function createStyles(theme: Theme) {
       color: theme.colors.primary,
       fontWeight: '600',
     },
-    collapsedToolSummary: {
-      marginTop: spacing.xs,
-    },
-    collapsedResultsSummary: {
-      marginTop: spacing.xs,
-      paddingTop: spacing.xs,
-      borderTopWidth: StyleSheet.hairlineWidth,
-      borderTopColor: theme.colors.border,
-    },
     collapsedToolPreview: {
       fontSize: 11,
       color: theme.colors.mutedForeground,
       fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
       opacity: 0.7,
+      marginBottom: spacing.xs,
     },
     collapsedToolText: {
       fontSize: 12,
@@ -1450,6 +1637,26 @@ function createStyles(theme: Theme) {
       color: '#f59e0b',
       fontWeight: '500',
     },
+    scrollToBottomButton: {
+      position: 'absolute',
+      right: spacing.lg,
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: theme.colors.primary,
+      alignItems: 'center',
+      justifyContent: 'center',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.25,
+      shadowRadius: 4,
+      elevation: 5,
+    },
+    scrollToBottomText: {
+      fontSize: 20,
+      color: theme.colors.primaryForeground,
+      fontWeight: '600',
+    },
     overlay: {
       position: 'absolute',
       left: 0,
@@ -1474,87 +1681,99 @@ function createStyles(theme: Theme) {
       borderRadius: radius.lg,
       maxWidth: '90%',
     },
-    // Tool calls and results styles
-    toolSection: {
-      marginTop: spacing.md,
+    // Unified Tool Execution Card styles
+    toolExecutionCard: {
+      marginTop: spacing.sm,
+      borderRadius: radius.lg,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      overflow: 'hidden',
     },
-    toolSectionTitle: {
-      fontSize: 12,
+    toolExecutionPending: {
+      borderColor: 'rgba(59, 130, 246, 0.4)',
+      backgroundColor: 'rgba(59, 130, 246, 0.05)',
+    },
+    toolExecutionSuccess: {
+      borderColor: 'rgba(34, 197, 94, 0.4)',
+      backgroundColor: 'rgba(34, 197, 94, 0.05)',
+    },
+    toolExecutionError: {
+      borderColor: 'rgba(239, 68, 68, 0.4)',
+      backgroundColor: 'rgba(239, 68, 68, 0.05)',
+    },
+    toolExecutionCollapsed: {
+      padding: spacing.sm,
+    },
+    toolParamsSection: {
+      padding: spacing.sm,
+      backgroundColor: 'rgba(59, 130, 246, 0.08)',
+      borderBottomWidth: 1,
+      borderBottomColor: 'rgba(59, 130, 246, 0.2)',
+    },
+    toolParamsSectionTitle: {
+      fontSize: 11,
       fontWeight: '600',
-      color: theme.colors.mutedForeground,
+      color: 'rgb(59, 130, 246)',
       marginBottom: spacing.sm,
     },
     toolCallCard: {
       backgroundColor: theme.colors.muted,
-      borderRadius: radius.lg,
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-      padding: spacing.md,
-      marginBottom: spacing.sm,
-    },
-    toolCallHeader: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      marginBottom: spacing.sm,
+      borderRadius: radius.md,
+      padding: spacing.sm,
+      marginBottom: spacing.xs,
     },
     toolName: {
       fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
       fontWeight: '600',
       color: theme.colors.primary,
-      fontSize: 13,
-    },
-    toolBadge: {
-      fontSize: 10,
-      color: theme.colors.mutedForeground,
-      backgroundColor: theme.colors.background,
-      paddingHorizontal: 8,
-      paddingVertical: 2,
-      borderRadius: radius.sm,
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-    },
-    toolParams: {
-      marginTop: spacing.xs,
-    },
-    toolParamsLabel: {
-      fontSize: 11,
-      fontWeight: '500',
-      color: theme.colors.mutedForeground,
-      marginBottom: 4,
+      fontSize: 12,
+      marginBottom: spacing.xs,
     },
     toolParamsScroll: {
-      maxHeight: 200,
+      maxHeight: 150,
       borderRadius: radius.sm,
       overflow: 'hidden',
     },
     toolParamsCode: {
       fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-      fontSize: 11,
+      fontSize: 10,
       color: theme.colors.foreground,
       backgroundColor: theme.colors.background,
       padding: spacing.sm,
       borderRadius: radius.sm,
     },
-    toolResultCard: {
-      borderRadius: radius.lg,
-      borderWidth: 1,
-      padding: spacing.md,
+    toolResponseSection: {
+      padding: spacing.sm,
+    },
+    toolResponsePending: {
+      backgroundColor: 'rgba(59, 130, 246, 0.05)',
+    },
+    toolResponseSuccess: {
+      backgroundColor: 'rgba(34, 197, 94, 0.05)',
+    },
+    toolResponseError: {
+      backgroundColor: 'rgba(239, 68, 68, 0.05)',
+    },
+    toolResponseSectionTitle: {
+      fontSize: 11,
+      fontWeight: '600',
+      color: theme.colors.mutedForeground,
       marginBottom: spacing.sm,
     },
-    toolResultSuccess: {
-      backgroundColor: 'rgba(34, 197, 94, 0.1)',
-      borderColor: 'rgba(34, 197, 94, 0.3)',
+    toolResponsePendingText: {
+      fontSize: 11,
+      fontStyle: 'italic',
+      color: theme.colors.mutedForeground,
+      textAlign: 'center',
+      paddingVertical: spacing.sm,
     },
-    toolResultError: {
-      backgroundColor: 'rgba(239, 68, 68, 0.1)',
-      borderColor: 'rgba(239, 68, 68, 0.3)',
+    toolResultItem: {
+      marginBottom: spacing.sm,
     },
     toolResultHeader: {
       flexDirection: 'row',
-      justifyContent: 'space-between',
       alignItems: 'center',
-      marginBottom: spacing.sm,
+      marginBottom: spacing.xs,
     },
     toolResultBadge: {
       fontSize: 11,
@@ -1571,44 +1790,31 @@ function createStyles(theme: Theme) {
       backgroundColor: 'rgba(239, 68, 68, 0.2)',
       color: '#ef4444',
     },
-    toolResultIndex: {
-      fontSize: 10,
-      color: theme.colors.mutedForeground,
-    },
-    toolResultContent: {
-      marginTop: spacing.xs,
-    },
-    toolResultLabel: {
-      fontSize: 11,
-      fontWeight: '500',
-      color: theme.colors.mutedForeground,
-      marginBottom: 4,
-    },
     toolResultScroll: {
-      maxHeight: 200,
+      maxHeight: 150,
       borderRadius: radius.sm,
       overflow: 'hidden',
     },
     toolResultCode: {
       fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-      fontSize: 11,
+      fontSize: 10,
       color: theme.colors.foreground,
-      backgroundColor: theme.colors.background,
+      backgroundColor: theme.colors.muted,
       padding: spacing.sm,
       borderRadius: radius.sm,
     },
     toolResultErrorSection: {
-      marginTop: spacing.sm,
+      marginTop: spacing.xs,
     },
     toolResultErrorLabel: {
-      fontSize: 11,
+      fontSize: 10,
       fontWeight: '500',
       color: '#ef4444',
-      marginBottom: 4,
+      marginBottom: 2,
     },
     toolResultErrorText: {
       fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-      fontSize: 11,
+      fontSize: 10,
       color: '#ef4444',
       backgroundColor: 'rgba(239, 68, 68, 0.1)',
       padding: spacing.sm,

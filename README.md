@@ -132,6 +132,20 @@ rm -rf node_modules
 pnpm install
 ```
 
+**Windows: "not a valid Win32 application" during postinstall:**
+
+If you see this error when running `pnpm install`:
+```
+%1 is not a valid Win32 application
+```
+
+This is caused by electron-builder attempting to execute `pnpm.cjs` directly. Try the manual workaround:
+
+```powershell
+pnpm install --ignore-scripts
+pnpm.cmd -C apps/desktop exec electron-builder install-app-deps
+```
+
 **Node version mismatch:**
 
 This project works best with Node.js 18-20. Check your version:

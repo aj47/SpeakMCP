@@ -1254,32 +1254,39 @@ export default function ChatScreen({ route, navigation }: any) {
                               hasErrors && styles.toolResponseError,
                             ]}>
                               <Text style={styles.toolResponseSectionTitle}>Response</Text>
-                              {isPending ? (
-                                <Text style={styles.toolResponsePendingText}>Waiting for response...</Text>
-                              ) : (
-                                (m.toolResults ?? []).map((result, idx) => (
-                                  <View key={idx} style={styles.toolResultItem}>
-                                    <View style={styles.toolResultHeader}>
-                                      <Text style={[
-                                        styles.toolResultBadge,
-                                        result.success ? styles.toolResultBadgeSuccess : styles.toolResultBadgeError
-                                      ]}>
-                                        {result.success ? '✅ Success' : '❌ Error'}
-                                      </Text>
-                                    </View>
-                                    <ScrollView style={styles.toolResultScroll} nestedScrollEnabled>
-                                      <Text style={styles.toolResultCode}>
-                                        {result.content || 'No content returned'}
-                                      </Text>
-                                    </ScrollView>
-                                    {result.error && (
-                                      <View style={styles.toolResultErrorSection}>
-                                        <Text style={styles.toolResultErrorLabel}>Error:</Text>
-                                        <Text style={styles.toolResultErrorText}>{result.error}</Text>
-                                      </View>
-                                    )}
+                              {/* Show any received results first, even if more are pending */}
+                              {(m.toolResults ?? []).map((result, idx) => (
+                                <View key={idx} style={styles.toolResultItem}>
+                                  <View style={styles.toolResultHeader}>
+                                    <Text style={[
+                                      styles.toolResultBadge,
+                                      result.success ? styles.toolResultBadgeSuccess : styles.toolResultBadgeError
+                                    ]}>
+                                      {result.success ? '✅ Success' : '❌ Error'}
+                                    </Text>
                                   </View>
-                                ))
+                                  <ScrollView style={styles.toolResultScroll} nestedScrollEnabled>
+                                    <Text style={styles.toolResultCode}>
+                                      {result.content || 'No content returned'}
+                                    </Text>
+                                  </ScrollView>
+                                  {result.error && (
+                                    <View style={styles.toolResultErrorSection}>
+                                      <Text style={styles.toolResultErrorLabel}>Error:</Text>
+                                      <Text style={styles.toolResultErrorText}>{result.error}</Text>
+                                    </View>
+                                  )}
+                                </View>
+                              ))}
+                              {/* Show waiting indicator if more tool calls are pending */}
+                              {isPending && (
+                                <Text style={styles.toolResponsePendingText}>
+                                  ⏳ Waiting for {toolCallCount - toolResultCount} more response{toolCallCount - toolResultCount > 1 ? 's' : ''}...
+                                </Text>
+                              )}
+                              {/* Show message if no results yet at all */}
+                              {toolResultCount === 0 && !isPending && (
+                                <Text style={styles.toolResponsePendingText}>No responses received</Text>
                               )}
                             </View>
                           </>

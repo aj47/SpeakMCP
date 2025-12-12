@@ -418,14 +418,28 @@ export default function ChatScreen({ route, navigation }: any) {
     setExpandedMessages(prev => ({ ...prev, [index]: !prev[index] }));
   }, []);
 
-  // Auto-expand the last assistant message and persist the expansion state
-  // This ensures that when a new message arrives, the previously expanded message stays expanded
+  // Auto-expand only the final assistant message (the last one in the conversation)
+  // Tool call messages (intermediate assistant messages with tool calls) should be collapsed by default
+  // When a new message arrives, collapse previous assistant messages with tool calls
   useEffect(() => {
     const lastAssistantIndex = messages.reduce((lastIdx, m, i) =>
       m.role === 'assistant' ? i : lastIdx, -1);
 
-    if (lastAssistantIndex >= 0 && expandedMessages[lastAssistantIndex] === undefined) {
-      setExpandedMessages(prev => ({ ...prev, [lastAssistantIndex]: true }));
+    if (lastAssistantIndex >= 0) {
+      setExpandedMessages(prev => {
+        const updated = { ...prev };
+        // Collapse all previous assistant messages that have tool calls/results
+        // Only the final assistant message should remain expanded
+        messages.forEach((m, i) => {
+          if (i < lastAssistantIndex && m.role === 'assistant' &&
+              ((m.toolCalls?.length ?? 0) > 0 || (m.toolResults?.length ?? 0) > 0)) {
+            updated[i] = false;
+          }
+        });
+        // Expand the last assistant message
+        updated[lastAssistantIndex] = true;
+        return updated;
+      });
     }
   }, [messages]);
 

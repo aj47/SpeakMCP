@@ -136,16 +136,19 @@ export function useSessions(): SessionStore {
     // Mark session as being deleted to prevent race conditions
     setDeletingSessionIds(prev => new Set(prev).add(id));
 
-    // Get current sessions from ref to avoid stale closure
-    const currentSessions = sessionsRef.current;
-    const updated = currentSessions.filter(s => s.id !== id);
-
-    // Check if we're deleting the current session BEFORE any awaits
-    // to avoid stale closure issues if user switches sessions during delete
+    // Track if we need to clear the current session
+    // We check at capture time for immediate UI update, but re-check at save time for storage
     const wasCurrentSession = currentSessionIdRef.current === id;
 
-    // Update state first
-    setSessions(updated);
+    // Use functional update to avoid race conditions with rapid deletes
+    // This ensures each delete sees the latest state, not stale sessionsRef data
+    let updatedSessions: Session[] = [];
+    setSessions(prev => {
+      updatedSessions = prev.filter(s => s.id !== id);
+      return updatedSessions;
+    });
+
+    // Update current session state immediately for responsive UI
     if (wasCurrentSession) {
       setCurrentSessionIdState(null);
     }
@@ -155,9 +158,13 @@ export function useSessions(): SessionStore {
       await new Promise<void>((resolve, reject) => {
         saveQueueRef.current = saveQueueRef.current
           .then(async () => {
-            await saveSessions(updated);
-            if (wasCurrentSession) {
-              await saveCurrentSessionId(null);
+            // Use sessionsRef.current to get the most up-to-date sessions after all state updates
+            // This ensures we save the correct state even with rapid concurrent operations
+            await saveSessions(sessionsRef.current);
+            // Re-check currentSessionIdRef at save time to avoid overwriting newly selected session
+            // If user selected a new session while delete was queued, don't write null
+            if (currentSessionIdRef.current === null || currentSessionIdRef.current === id) {
+              await saveCurrentSessionId(currentSessionIdRef.current === id ? null : currentSessionIdRef.current);
             }
             resolve();
           })

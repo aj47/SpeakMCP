@@ -57,6 +57,9 @@ class MessageQueueService {
     if (index === -1) return false
 
     queue.splice(index, 1)
+    if (queue.length === 0) {
+      this.queues.delete(conversationId)
+    }
     logApp(`[MessageQueue] Removed message ${messageId} from conversation ${conversationId}`)
     return true
   }
@@ -73,6 +76,9 @@ class MessageQueueService {
     if (!queue || queue.length === 0) return undefined
 
     const message = queue.shift()
+    if (queue.length === 0) {
+      this.queues.delete(conversationId)
+    }
     if (message) {
       logApp(`[MessageQueue] Popped message ${message.id} from conversation ${conversationId}`)
     }

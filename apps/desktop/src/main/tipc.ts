@@ -350,6 +350,26 @@ async function processWithAgentMode(
       ],
     })
 
+    // Check for queued messages and process the next one (even on error)
+    if (conversationId && config.mcpMessageQueueEnabled) {
+      const { messageQueueService } = await import("./message-queue-service")
+      const nextMessage = messageQueueService.popNextMessage(conversationId)
+      if (nextMessage) {
+        logApp(`[processWithAgentMode] Processing queued message after error: ${nextMessage.id}`)
+        // Add the queued message to the conversation
+        await conversationService.addMessageToConversation(
+          conversationId,
+          nextMessage.text,
+          "user",
+        )
+        // Process the queued message (fire-and-forget, will handle its own queue processing)
+        processWithAgentMode(nextMessage.text, conversationId, undefined, true)
+          .catch((queueError) => {
+            logLLM("[processWithAgentMode] Queued message processing error:", queueError)
+          })
+      }
+    }
+
     throw error
   } finally {
 

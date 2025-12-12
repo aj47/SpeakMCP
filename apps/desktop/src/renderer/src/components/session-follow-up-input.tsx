@@ -1,0 +1,198 @@
+import React, { useState, useRef } from "react"
+import { cn } from "@renderer/lib/utils"
+import { Button } from "@renderer/components/ui/button"
+import { Send, Mic, ListPlus } from "lucide-react"
+import { useMutation, useQueryClient } from "@tanstack/react-query"
+import { tipcClient } from "@renderer/lib/tipc-client"
+import { useConfigQuery } from "@renderer/lib/queries"
+
+interface SessionFollowUpInputProps {
+  conversationId?: string
+  sessionId?: string
+  isSessionActive?: boolean
+  className?: string
+  /** Variant controls sizing and styling */
+  variant?: "tile" | "overlay"
+  /** Called when a message is successfully sent */
+  onMessageSent?: () => void
+  /** Called when a message is queued */
+  onMessageQueued?: () => void
+}
+
+/**
+ * Unified input component for continuing a conversation within a session.
+ * Supports both tile and overlay variants with consistent queue functionality.
+ * When session is active and message queue is enabled, messages are queued instead of blocked.
+ */
+export function SessionFollowUpInput({
+  conversationId,
+  sessionId,
+  isSessionActive = false,
+  className,
+  variant = "tile",
+  onMessageSent,
+  onMessageQueued,
+}: SessionFollowUpInputProps) {
+  const [text, setText] = useState("")
+  const inputRef = useRef<HTMLInputElement>(null)
+  const queryClient = useQueryClient()
+  const configQuery = useConfigQuery()
+  // Default to false while loading to prevent queueing before config is known
+  const isQueueEnabled = configQuery.data?.mcpMessageQueueEnabled ?? false
+
+  // Determine if we're using tile variant for fromTile flag
+  const isTile = variant === "tile"
+
+  const sendMutation = useMutation({
+    mutationFn: async (message: string) => {
+      if (!conversationId) {
+        // Start a new conversation if none exists
+        await tipcClient.createMcpTextInput({ text: message, fromTile: isTile })
+      } else {
+        // Continue the existing conversation
+        await tipcClient.createMcpTextInput({
+          text: message,
+          conversationId,
+          fromTile: isTile,
+        })
+      }
+    },
+    onSuccess: () => {
+      setText("")
+      onMessageSent?.()
+    },
+  })
+
+  const queueMutation = useMutation({
+    mutationFn: async (message: string) => {
+      if (!conversationId) {
+        throw new Error("Cannot queue message without a conversation")
+      }
+      await tipcClient.queueMessage({ conversationId, text: message })
+    },
+    onSuccess: () => {
+      setText("")
+      // Invalidate the message queue query to refresh the UI
+      queryClient.invalidateQueries({ queryKey: ["messageQueue", conversationId] })
+      onMessageQueued?.()
+    },
+  })
+
+  const handleSubmit = (e?: React.FormEvent) => {
+    e?.preventDefault()
+    const trimmed = text.trim()
+    if (!trimmed || sendMutation.isPending || queueMutation.isPending) return
+
+    if (isSessionActive && isQueueEnabled && conversationId) {
+      // Queue the message when session is active
+      queueMutation.mutate(trimmed)
+    } else if (!isSessionActive) {
+      // Send directly when session is not active
+      sendMutation.mutate(trimmed)
+    }
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault()
+      handleSubmit()
+    }
+  }
+
+  const handleVoiceClick = async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    // Don't pass fake "pending-*" sessionIds - let the backend find the real session by conversationId
+    const realSessionId = sessionId?.startsWith('pending-') ? undefined : sessionId
+    await tipcClient.triggerMcpRecording({ conversationId, sessionId: realSessionId, fromTile: isTile })
+  }
+
+  const isPending = sendMutation.isPending || queueMutation.isPending
+  // Allow input when queue is enabled, even if session is active
+  const isDisabled = isPending || (isSessionActive && (!isQueueEnabled || !conversationId))
+  const willQueue = isSessionActive && isQueueEnabled && conversationId
+  // Voice is intentionally disabled during active sessions (unlike text which queues):
+  // - Voice requires showing the panel for waveform feedback during recording
+  // - Transcription involves network latency before the message is ready
+  // - Users actively engage during recording, so disabling prevents accidental overlap
+  const isVoiceDisabled = isPending || isSessionActive
+
+  const getPlaceholder = () => {
+    if (isSessionActive) {
+      if (isQueueEnabled && conversationId) {
+        return "Type to queue message..."
+      }
+      return "Waiting for agent..."
+    }
+    return "Continue conversation..."
+  }
+
+  // Variant-specific styles
+  const isOverlay = variant === "overlay"
+  const containerStyles = isOverlay
+    ? "flex items-center gap-2 px-3 py-2 border-t bg-muted/30 backdrop-blur-sm"
+    : "flex items-center gap-2 px-2 py-1.5 border-t bg-muted/20"
+  const buttonSize = isOverlay ? "h-7 w-7" : "h-6 w-6"
+  const iconSize = isOverlay ? "h-3.5 w-3.5" : "h-3 w-3"
+
+  return (
+    <form
+      onSubmit={handleSubmit}
+      className={cn(
+        containerStyles,
+        willQueue && "bg-amber-50/30 dark:bg-amber-950/20",
+        className
+      )}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <input
+        ref={inputRef}
+        type="text"
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={handleKeyDown}
+        placeholder={getPlaceholder()}
+        className={cn(
+          "flex-1 text-sm bg-transparent border-0 outline-none",
+          "placeholder:text-muted-foreground/60",
+          "focus:ring-0"
+        )}
+        disabled={isDisabled}
+      />
+      <Button
+        type="submit"
+        size="icon"
+        variant="ghost"
+        className={cn(
+          buttonSize,
+          "flex-shrink-0",
+          willQueue && "text-amber-600 dark:text-amber-400"
+        )}
+        disabled={!text.trim() || isDisabled}
+        title={willQueue ? "Queue message" : "Send follow-up message"}
+      >
+        {willQueue ? (
+          <ListPlus className={cn(iconSize, queueMutation.isPending && "animate-pulse")} />
+        ) : (
+          <Send className={cn(iconSize, sendMutation.isPending && "animate-pulse")} />
+        )}
+      </Button>
+      <Button
+        type="button"
+        size="icon"
+        variant="ghost"
+        className={cn(
+          buttonSize,
+          "flex-shrink-0",
+          "hover:bg-red-100 dark:hover:bg-red-900/30",
+          "hover:text-red-600 dark:hover:text-red-400"
+        )}
+        disabled={isVoiceDisabled}
+        onClick={handleVoiceClick}
+        title={isSessionActive ? "Wait for session to complete" : "Continue with voice"}
+      >
+        <Mic className={iconSize} />
+      </Button>
+    </form>
+  )
+}
+

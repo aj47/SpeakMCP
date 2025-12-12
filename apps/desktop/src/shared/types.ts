@@ -156,6 +156,19 @@ export interface AgentProgressUpdate {
   }
 }
 
+// Message Queue Types
+export interface QueuedMessage {
+  id: string
+  conversationId: string
+  text: string
+  queuedAt: number
+}
+
+export interface MessageQueue {
+  conversationId: string
+  messages: QueuedMessage[]
+}
+
 // Conversation Types
 export interface ConversationMessage {
   id: string
@@ -406,6 +419,9 @@ export type Config = {
 
   // Parallel Tool Execution Configuration
   mcpParallelToolExecution?: boolean
+
+  // Message Queue Configuration
+  mcpMessageQueueEnabled?: boolean
 
 
 

@@ -11,8 +11,8 @@ import { AudioPlayer } from "@renderer/components/audio-player"
 import { useConfigQuery } from "@renderer/lib/queries"
 import { useTheme } from "@renderer/contexts/theme-context"
 import { logUI, logExpand } from "@renderer/lib/debug"
-import { TileFollowUpInput } from "./tile-follow-up-input"
-import { OverlayFollowUpInput } from "./overlay-follow-up-input"
+import { SessionFollowUpInput } from "./session-follow-up-input"
+import { MessageQueuePanel } from "./message-queue-panel"
 import { useResizable, TILE_DIMENSIONS } from "@renderer/hooks/use-resizable"
 import { getToolResultsSummary } from "@speakmcp/shared"
 
@@ -1698,11 +1698,20 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
           </>
         )}
 
+        {/* Message queue panel - shows queued messages when session is active */}
+        {progress.conversationId && !isComplete && (
+          <MessageQueuePanel
+            conversationId={progress.conversationId}
+            className="flex-shrink-0"
+          />
+        )}
+
         {/* Follow-up input - always visible for quick continuation */}
-        <TileFollowUpInput
+        <SessionFollowUpInput
           conversationId={progress.conversationId}
           sessionId={progress.sessionId}
           isSessionActive={!isComplete}
+          variant="tile"
           className="flex-shrink-0"
           onMessageSent={onFollowUpSent}
         />
@@ -1880,11 +1889,20 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
 
       </div>
 
+      {/* Message queue panel - shows queued messages when session is active */}
+      {progress.conversationId && !isComplete && (
+        <MessageQueuePanel
+          conversationId={progress.conversationId}
+          className="flex-shrink-0"
+        />
+      )}
+
       {/* Follow-up input - for continuing conversation in the floating panel */}
-      <OverlayFollowUpInput
+      <SessionFollowUpInput
         conversationId={progress.conversationId}
         sessionId={progress.sessionId}
         isSessionActive={!isComplete}
+        variant="overlay"
         className="flex-shrink-0"
       />
 

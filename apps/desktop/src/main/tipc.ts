@@ -300,6 +300,46 @@ async function processWithAgentMode(
     // Mark session as completed
     agentSessionTracker.completeSession(sessionId, "Agent completed successfully")
 
+    // Check for queued messages and process the next one
+    // Wrapped in try-catch to prevent queue processing errors from affecting the original outcome
+    // Uses peek-then-remove pattern to avoid losing messages if addMessageToConversation fails
+    if (conversationId && config.mcpMessageQueueEnabled) {
+      try {
+        const { messageQueueService } = await import("./message-queue-service")
+        const nextMessage = messageQueueService.peekNextMessage(conversationId)
+        if (nextMessage) {
+          // Verify message is still queued BEFORE persisting to conversation
+          // This prevents orphan messages if user cleared queue during peek
+          const stillQueued = messageQueueService.getQueue(conversationId).some(m => m.id === nextMessage.id)
+          if (!stillQueued) {
+            logApp(`[processWithAgentMode] Queued message ${nextMessage.id} was removed before processing, skipping`)
+          } else {
+            logApp(`[processWithAgentMode] Processing queued message: ${nextMessage.id}`)
+            // Add the queued message to the conversation
+            await conversationService.addMessageToConversation(
+              conversationId,
+              nextMessage.text,
+              "user",
+            )
+            // Only remove from queue after successful persistence
+            messageQueueService.removeMessage(conversationId, nextMessage.id)
+            // Revive the session before processing next queued message
+            // Since completeSession() removed it from active sessions, we need to revive it
+            // so subsequent session updates work correctly
+            agentSessionTracker.reviveSession(sessionId, true) // Start snoozed to run in background
+            // Process the queued message (fire-and-forget, will handle its own queue processing)
+            // Pass sessionId to reuse the existing session instead of creating a new one
+            processWithAgentMode(nextMessage.text, conversationId, sessionId, true)
+              .catch((error) => {
+                logLLM("[processWithAgentMode] Queued message processing error:", error)
+              })
+          }
+        }
+      } catch (queueError) {
+        logApp("[processWithAgentMode] Error processing queued message after success:", queueError)
+      }
+    }
+
     return agentResult.content
   } catch (error) {
     // Mark session as errored
@@ -329,6 +369,46 @@ async function processWithAgentMode(
         { role: "assistant", content: `Error: ${errorMessage}`, timestamp: Date.now() }
       ],
     })
+
+    // Check for queued messages and process the next one (even on error)
+    // Wrapped in try-catch to prevent queue processing errors from masking the original error
+    // Uses peek-then-remove pattern to avoid losing messages if addMessageToConversation fails
+    if (conversationId && config.mcpMessageQueueEnabled) {
+      try {
+        const { messageQueueService } = await import("./message-queue-service")
+        const nextMessage = messageQueueService.peekNextMessage(conversationId)
+        if (nextMessage) {
+          // Verify message is still queued BEFORE persisting to conversation
+          // This prevents orphan messages if user cleared queue during peek
+          const stillQueued = messageQueueService.getQueue(conversationId).some(m => m.id === nextMessage.id)
+          if (!stillQueued) {
+            logApp(`[processWithAgentMode] Queued message ${nextMessage.id} was removed before processing, skipping`)
+          } else {
+            logApp(`[processWithAgentMode] Processing queued message after error: ${nextMessage.id}`)
+            // Add the queued message to the conversation
+            await conversationService.addMessageToConversation(
+              conversationId,
+              nextMessage.text,
+              "user",
+            )
+            // Only remove from queue after successful persistence
+            messageQueueService.removeMessage(conversationId, nextMessage.id)
+            // Revive the session before processing next queued message
+            // Since errorSession() removed it from active sessions, we need to revive it
+            // so subsequent session updates work correctly
+            agentSessionTracker.reviveSession(sessionId, true) // Start snoozed to run in background
+            // Process the queued message (fire-and-forget, will handle its own queue processing)
+            // Pass sessionId to reuse the existing session instead of creating a new one
+            processWithAgentMode(nextMessage.text, conversationId, sessionId, true)
+              .catch((queueError) => {
+                logLLM("[processWithAgentMode] Queued message processing error:", queueError)
+              })
+          }
+        }
+      } catch (queueError) {
+        logApp("[processWithAgentMode] Error processing queued message after error:", queueError)
+      }
+    }
 
     throw error
   } finally {
@@ -2264,6 +2344,51 @@ export const router = {
     .action(async ({ input }) => {
       const { resolveSampling } = await import("./mcp-sampling")
       return resolveSampling(input.requestId, input.approved)
+    }),
+
+  // Message Queue Management
+  getMessageQueue: t.procedure
+    .input<{ conversationId: string }>()
+    .action(async ({ input }) => {
+      const { messageQueueService } = await import("./message-queue-service")
+      return messageQueueService.getQueue(input.conversationId)
+    }),
+
+  getAllMessageQueues: t.procedure.action(async () => {
+    const { messageQueueService } = await import("./message-queue-service")
+    return messageQueueService.getAllQueues()
+  }),
+
+  queueMessage: t.procedure
+    .input<{ conversationId: string; text: string }>()
+    .action(async ({ input }) => {
+      const config = configStore.get()
+      if (!config.mcpMessageQueueEnabled) {
+        throw new Error("Message queue feature is disabled")
+      }
+      const { messageQueueService } = await import("./message-queue-service")
+      return messageQueueService.queueMessage(input.conversationId, input.text)
+    }),
+
+  removeQueuedMessage: t.procedure
+    .input<{ conversationId: string; messageId: string }>()
+    .action(async ({ input }) => {
+      const { messageQueueService } = await import("./message-queue-service")
+      return messageQueueService.removeMessage(input.conversationId, input.messageId)
+    }),
+
+  clearMessageQueue: t.procedure
+    .input<{ conversationId: string }>()
+    .action(async ({ input }) => {
+      const { messageQueueService } = await import("./message-queue-service")
+      messageQueueService.clearQueue(input.conversationId)
+    }),
+
+  updateQueuedMessageText: t.procedure
+    .input<{ conversationId: string; messageId: string; text: string }>()
+    .action(async ({ input }) => {
+      const { messageQueueService } = await import("./message-queue-service")
+      return messageQueueService.updateMessageText(input.conversationId, input.messageId, input.text)
     }),
 }
 

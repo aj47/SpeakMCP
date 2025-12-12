@@ -219,7 +219,12 @@ async function runAgent(options: RunAgentOptions): Promise<{
   if (inputConversationId) {
     const foundSessionId = agentSessionTracker.findSessionByConversationId(inputConversationId)
     if (foundSessionId) {
-      const revived = agentSessionTracker.reviveSession(foundSessionId, startSnoozed)
+      // Check if session is already active - if so, preserve its current snooze state
+      // This prevents unexpectedly hiding the progress UI for a session the user is watching
+      const existingSession = agentSessionTracker.getSession(foundSessionId)
+      const isAlreadyActive = existingSession && existingSession.status === "active"
+      const snoozeForRevive = isAlreadyActive ? existingSession.isSnoozed ?? false : startSnoozed
+      const revived = agentSessionTracker.reviveSession(foundSessionId, snoozeForRevive)
       if (revived) {
         existingSessionId = foundSessionId
         diagnosticsService.logInfo("remote-server", `Revived existing session ${existingSessionId}`)

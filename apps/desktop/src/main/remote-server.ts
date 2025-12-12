@@ -212,12 +212,16 @@ async function runAgent(options: RunAgentOptions): Promise<{
   }
 
   // Try to find and revive an existing session for this conversation (matching tipc.ts)
+  // Note: We use `conversationId` (which may be newly created) instead of `inputConversationId`
+  // to ensure we find sessions for both existing and newly created conversations.
+  // This fixes a bug where inputConversationId pointed to a non-existent conversation,
+  // causing session lookup to fail and creating duplicate sessions.
   const { agentSessionTracker } = await import("./agent-session-tracker")
   // Start snoozed unless remoteServerAutoShowPanel is enabled (affects both new and revived sessions)
   const startSnoozed = !cfg.remoteServerAutoShowPanel
   let existingSessionId: string | undefined
-  if (inputConversationId) {
-    const foundSessionId = agentSessionTracker.findSessionByConversationId(inputConversationId)
+  if (conversationId) {
+    const foundSessionId = agentSessionTracker.findSessionByConversationId(conversationId)
     if (foundSessionId) {
       // Check if session is already active - if so, preserve its current snooze state
       // This prevents unexpectedly hiding the progress UI for a session the user is watching

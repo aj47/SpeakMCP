@@ -1098,10 +1098,14 @@ export default function ChatScreen({ route, navigation }: any) {
   // Inspired by Open Interpreter 01-app - tap anywhere to start/stop recording
   // Track touch start position to distinguish taps from scrolls
   const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
-  // Track if an interactive element was pressed to avoid triggering voice on button taps
+  // Track if an interactive element was pressed to avoid triggering voice on button taps.
+  // This mechanism ensures that taps on nested interactive children (e.g., message expand/collapse,
+  // markdown links) don't accidentally start/stop voice recording in hands-free mode.
   const interactiveElementPressedRef = useRef(false);
 
-  // Called by interactive elements (Pressable, TouchableOpacity) to signal they handled the touch
+  // Called by interactive elements (Pressable, TouchableOpacity) to signal they handled the touch.
+  // Usage: Add onPressIn={markInteractivePress} to any interactive element inside the ScrollView
+  // to prevent the touch-anywhere voice recording from triggering on that element.
   const markInteractivePress = useCallback(() => {
     interactiveElementPressedRef.current = true;
   }, []);
@@ -1113,6 +1117,11 @@ export default function ChatScreen({ route, navigation }: any) {
     return false; // Return false to prevent default handling since we handled it
   }, [markInteractivePress]);
 
+  // Touch handlers for "tap anywhere" voice interaction in hands-free mode.
+  // These handlers distinguish between:
+  // 1. Quick taps (< 10px movement, < 300ms) → toggle voice recording
+  // 2. Scroll gestures (> 10px movement) → allow normal scrolling
+  // 3. Interactive element taps → skip voice recording (via markInteractivePress mechanism)
   const handleTouchStart = useCallback((e: GestureResponderEvent) => {
     if (!handsFree) return;
     // Reset interactive element flag at start of new touch
@@ -1124,7 +1133,8 @@ export default function ChatScreen({ route, navigation }: any) {
   const handleTouchEnd = useCallback((e: GestureResponderEvent) => {
     if (!handsFree || !touchStartRef.current) return;
 
-    // If an interactive element (button, link, etc.) handled this touch, don't trigger voice
+    // If an interactive element (button, link, expand/collapse header, etc.) handled this touch,
+    // don't trigger voice recording. The element signals this via markInteractivePress().
     if (interactiveElementPressedRef.current) {
       touchStartRef.current = null;
       interactiveElementPressedRef.current = false;
@@ -1139,6 +1149,7 @@ export default function ChatScreen({ route, navigation }: any) {
 
     // Only trigger if this was a quick tap (not a scroll gesture)
     // Threshold: less than 10px movement and less than 300ms
+    // This allows normal scrolling and nested ScrollView interaction without triggering voice
     if (dx < 10 && dy < 10 && dt < 300) {
       if (!listening) {
         startRecording();

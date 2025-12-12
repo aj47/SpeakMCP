@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { Session, SessionListItem, generateSessionId, generateMessageId, generateSessionTitle, sessionToListItem } from '../types/session';
 import { ChatMessage } from '../lib/openaiClient';
 
@@ -10,6 +10,8 @@ export interface SessionStore {
   sessions: Session[];
   currentSessionId: string | null;
   ready: boolean;
+  /** Set of session IDs that are currently being deleted (prevents race conditions) */
+  deletingSessionIds: Set<string>;
 
   // Session management
   createNewSession: () => Session;
@@ -60,6 +62,11 @@ export function useSessions(): SessionStore {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [currentSessionId, setCurrentSessionIdState] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
+  // Track sessions being deleted to prevent race conditions (fixes #571)
+  const [deletingSessionIds, setDeletingSessionIds] = useState<Set<string>>(new Set());
+  // Use ref to ensure we always have the latest sessions for async operations
+  const sessionsRef = useRef<Session[]>(sessions);
+  useEffect(() => { sessionsRef.current = sessions; }, [sessions]);
 
   // Load sessions on mount
   useEffect(() => {
@@ -84,14 +91,16 @@ export function useSessions(): SessionStore {
       messages: [],
     };
     setSessions(prev => {
-      const updated = [newSession, ...prev];
+      // Filter out any sessions that are currently being deleted to avoid race conditions
+      const cleanedPrev = prev.filter(s => !deletingSessionIds.has(s.id));
+      const updated = [newSession, ...cleanedPrev];
       saveSessions(updated);
       return updated;
     });
     setCurrentSessionIdState(newSession.id);
     saveCurrentSessionId(newSession.id);
     return newSession;
-  }, []);
+  }, [deletingSessionIds]);
 
   const setCurrentSession = useCallback((id: string | null) => {
     setCurrentSessionIdState(id);
@@ -99,24 +108,49 @@ export function useSessions(): SessionStore {
   }, []);
 
   const deleteSession = useCallback(async (id: string) => {
-    setSessions(prev => {
-      const updated = prev.filter(s => s.id !== id);
-      saveSessions(updated);
-      return updated;
-    });
-    if (currentSessionId === id) {
-      setCurrentSessionIdState(null);
-      await saveCurrentSessionId(null);
+    // Mark session as being deleted to prevent race conditions
+    setDeletingSessionIds(prev => new Set(prev).add(id));
+
+    // Get current sessions from ref to avoid stale closure
+    const currentSessions = sessionsRef.current;
+    const updated = currentSessions.filter(s => s.id !== id);
+
+    // Update state first
+    setSessions(updated);
+
+    // Then await the async storage operations
+    try {
+      await saveSessions(updated);
+      // If we're deleting the current session, clear it
+      if (currentSessionId === id) {
+        setCurrentSessionIdState(null);
+        await saveCurrentSessionId(null);
+      }
+    } finally {
+      // Remove from deleting set after save completes
+      setDeletingSessionIds(prev => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
     }
   }, [currentSessionId]);
 
   const clearAllSessions = useCallback(async () => {
+    // Mark all sessions as being deleted
+    const allIds = new Set(sessionsRef.current.map(s => s.id));
+    setDeletingSessionIds(allIds);
+
     setSessions([]);
     setCurrentSessionIdState(null);
-    await Promise.all([
-      saveSessions([]),
-      saveCurrentSessionId(null),
-    ]);
+    try {
+      await Promise.all([
+        saveSessions([]),
+        saveCurrentSessionId(null),
+      ]);
+    } finally {
+      setDeletingSessionIds(new Set());
+    }
   }, []);
 
   const getCurrentSession = useCallback((): Session | null => {
@@ -234,6 +268,7 @@ export function useSessions(): SessionStore {
     sessions,
     currentSessionId,
     ready,
+    deletingSessionIds,
     createNewSession,
     setCurrentSession,
     deleteSession,

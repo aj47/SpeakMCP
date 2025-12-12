@@ -729,6 +729,13 @@ export function Component() {
             />
           </Control>
 
+          <Control label={<ControlLabel label="Message Queue" tooltip="When enabled, messages sent while an agent is processing will be queued and processed automatically when the current task completes." />} className="px-3">
+            <Switch
+              checked={configQuery.data?.mcpMessageQueueEnabled ?? true}
+              onCheckedChange={(value) => saveConfig({ mcpMessageQueueEnabled: value })}
+            />
+          </Control>
+
           <Control label={<ControlLabel label="Emergency Kill Switch" tooltip="Provides a global hotkey to immediately stop agent mode and kill all agent-created processes" />} className="px-3">
             <div className="space-y-3">
               <div className="flex items-center gap-2">

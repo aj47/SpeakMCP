@@ -13,6 +13,7 @@ import { useTheme } from "@renderer/contexts/theme-context"
 import { logUI, logExpand } from "@renderer/lib/debug"
 import { TileFollowUpInput } from "./tile-follow-up-input"
 import { OverlayFollowUpInput } from "./overlay-follow-up-input"
+import { MessageQueuePanel } from "./message-queue-panel"
 import { useResizable, TILE_DIMENSIONS } from "@renderer/hooks/use-resizable"
 import { getToolResultsSummary } from "@speakmcp/shared"
 
@@ -1696,6 +1697,14 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
               )}
             </div>
           </>
+        )}
+
+        {/* Message queue panel - shows queued messages when session is active */}
+        {progress.conversationId && !isComplete && (
+          <MessageQueuePanel
+            conversationId={progress.conversationId}
+            className="flex-shrink-0"
+          />
         )}
 
         {/* Follow-up input - always visible for quick continuation */}

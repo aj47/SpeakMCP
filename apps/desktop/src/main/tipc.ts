@@ -300,6 +300,26 @@ async function processWithAgentMode(
     // Mark session as completed
     agentSessionTracker.completeSession(sessionId, "Agent completed successfully")
 
+    // Check for queued messages and process the next one
+    if (conversationId && config.mcpMessageQueueEnabled) {
+      const { messageQueueService } = await import("./message-queue-service")
+      const nextMessage = messageQueueService.popNextMessage(conversationId)
+      if (nextMessage) {
+        logApp(`[processWithAgentMode] Processing queued message: ${nextMessage.id}`)
+        // Add the queued message to the conversation
+        await conversationService.addMessageToConversation(
+          conversationId,
+          nextMessage.text,
+          "user",
+        )
+        // Process the queued message (fire-and-forget, will handle its own queue processing)
+        processWithAgentMode(nextMessage.text, conversationId, undefined, true)
+          .catch((error) => {
+            logLLM("[processWithAgentMode] Queued message processing error:", error)
+          })
+      }
+    }
+
     return agentResult.content
   } catch (error) {
     // Mark session as errored
@@ -2264,6 +2284,47 @@ export const router = {
     .action(async ({ input }) => {
       const { resolveSampling } = await import("./mcp-sampling")
       return resolveSampling(input.requestId, input.approved)
+    }),
+
+  // Message Queue Management
+  getMessageQueue: t.procedure
+    .input<{ conversationId: string }>()
+    .action(async ({ input }) => {
+      const { messageQueueService } = await import("./message-queue-service")
+      return messageQueueService.getQueue(input.conversationId)
+    }),
+
+  getAllMessageQueues: t.procedure.action(async () => {
+    const { messageQueueService } = await import("./message-queue-service")
+    return messageQueueService.getAllQueues()
+  }),
+
+  queueMessage: t.procedure
+    .input<{ conversationId: string; text: string }>()
+    .action(async ({ input }) => {
+      const { messageQueueService } = await import("./message-queue-service")
+      return messageQueueService.queueMessage(input.conversationId, input.text)
+    }),
+
+  removeQueuedMessage: t.procedure
+    .input<{ conversationId: string; messageId: string }>()
+    .action(async ({ input }) => {
+      const { messageQueueService } = await import("./message-queue-service")
+      return messageQueueService.removeMessage(input.conversationId, input.messageId)
+    }),
+
+  clearMessageQueue: t.procedure
+    .input<{ conversationId: string }>()
+    .action(async ({ input }) => {
+      const { messageQueueService } = await import("./message-queue-service")
+      messageQueueService.clearQueue(input.conversationId)
+    }),
+
+  updateQueuedMessageText: t.procedure
+    .input<{ conversationId: string; messageId: string; text: string }>()
+    .action(async ({ input }) => {
+      const { messageQueueService } = await import("./message-queue-service")
+      return messageQueueService.updateMessageText(input.conversationId, input.messageId, input.text)
     }),
 }
 

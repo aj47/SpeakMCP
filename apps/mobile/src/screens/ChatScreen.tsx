@@ -976,7 +976,11 @@ export default function ChatScreen({ route, navigation }: any) {
         >
           {messages.map((m, i) => {
             const shouldCollapse = shouldCollapseMessage(m.content, m.toolCalls, m.toolResults);
-            const isExpanded = expandedMessages[i] ?? false;
+            // Check if this is the last assistant message (final response)
+            const isLastAssistantMessage = m.role === 'assistant' &&
+              !messages.slice(i + 1).some(msg => msg.role === 'assistant');
+            // On mobile, expand the final response by default for better UX
+            const isExpanded = expandedMessages[i] ?? isLastAssistantMessage;
             const roleIcon = getRoleIcon(m.role as 'user' | 'assistant' | 'tool');
             const roleLabel = getRoleLabel(m.role as 'user' | 'assistant' | 'tool');
 

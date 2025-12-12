@@ -882,7 +882,8 @@ const EnhancedErrorBubble: React.FC<{
   errorInfo: EnhancedErrorInfo
   onRetry?: () => void
   onOpenSettings?: () => void
-}> = ({ errorInfo, onRetry, onOpenSettings }) => {
+  canRetry?: boolean // Whether retry is available (e.g., there's a retryable user message)
+}> = ({ errorInfo, onRetry, onOpenSettings, canRetry = true }) => {
   const [showDetails, setShowDetails] = useState(false)
   const [copied, setCopied] = useState(false)
   const [copyFailed, setCopyFailed] = useState(false)
@@ -1013,7 +1014,10 @@ const EnhancedErrorBubble: React.FC<{
       {/* Quick Actions */}
       {errorInfo.quickActions && errorInfo.quickActions.length > 0 && (
         <div className="px-3 py-2 flex flex-wrap gap-2 border-b border-red-200 dark:border-red-800">
-          {errorInfo.quickActions.map((action, index) => (
+          {errorInfo.quickActions
+            // Filter out retry action when canRetry is false to avoid showing a non-functional button
+            .filter(action => action.action !== 'retry' || canRetry)
+            .map((action, index) => (
             <Button
               key={index}
               variant="outline"
@@ -1815,13 +1819,15 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
                       } else if (item.kind === "streaming") {
                         return <StreamingContentBubble key={itemKey} streamingContent={item.data} />
                       } else if (item.kind === "enhanced_error") {
+                        // Check if retry is possible (there must be a user message to retry)
+                        const lastUserMessage = progress.conversationHistory?.findLast(m => m.role === 'user')
+                        const canRetry = !!lastUserMessage
                         return (
                           <EnhancedErrorBubble
                             key={itemKey}
                             errorInfo={item.data}
                             onRetry={() => {
                               // Trigger a retry by re-sending the last user message
-                              const lastUserMessage = progress.conversationHistory?.findLast(m => m.role === 'user')
                               if (lastUserMessage) {
                                 tipcClient.processWithAgentMode.mutate({
                                   text: lastUserMessage.content,
@@ -1832,6 +1838,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
                             onOpenSettings={() => {
                               tipcClient.openSettingsWindow.mutate()
                             }}
+                            canRetry={canRetry}
                           />
                         )
                       } else {
@@ -2027,13 +2034,15 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
                     />
                   )
                 } else if (item.kind === "enhanced_error") {
+                  // Check if retry is possible (there must be a user message to retry)
+                  const lastUserMessage = progress.conversationHistory?.findLast(m => m.role === 'user')
+                  const canRetry = !!lastUserMessage
                   return (
                     <EnhancedErrorBubble
                       key={itemKey}
                       errorInfo={item.data}
                       onRetry={() => {
                         // Trigger a retry by re-sending the last user message
-                        const lastUserMessage = progress.conversationHistory?.findLast(m => m.role === 'user')
                         if (lastUserMessage) {
                           tipcClient.processWithAgentMode.mutate({
                             text: lastUserMessage.content,
@@ -2044,6 +2053,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
                       onOpenSettings={() => {
                         tipcClient.openSettingsWindow.mutate()
                       }}
+                      canRetry={canRetry}
                     />
                   )
                 } else {

@@ -268,6 +268,8 @@ export default function ChatScreen({ route, navigation }: any) {
   const shouldAutoScrollRef = useRef(true);
   // Track if user is actively dragging to distinguish from programmatic scrolls
   const isUserDraggingRef = useRef(false);
+  // Track drag end timeout to prevent flaky behavior with rapid re-drags
+  const dragEndTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Keep ref in sync with state
   useEffect(() => {
@@ -282,14 +284,24 @@ export default function ChatScreen({ route, navigation }: any) {
 
   // Handle user starting to drag the scroll view
   const handleScrollBeginDrag = useCallback(() => {
+    // Clear any pending drag end timeout from previous drag
+    if (dragEndTimeoutRef.current) {
+      clearTimeout(dragEndTimeoutRef.current);
+      dragEndTimeoutRef.current = null;
+    }
     isUserDraggingRef.current = true;
   }, []);
 
   // Handle user ending drag - keep flag active briefly for momentum scroll
   const handleScrollEndDrag = useCallback(() => {
+    // Clear any existing drag end timeout before scheduling a new one
+    if (dragEndTimeoutRef.current) {
+      clearTimeout(dragEndTimeoutRef.current);
+    }
     // Clear the flag after a short delay to account for momentum scrolling
-    setTimeout(() => {
+    dragEndTimeoutRef.current = setTimeout(() => {
       isUserDraggingRef.current = false;
+      dragEndTimeoutRef.current = null;
     }, 150);
   }, []);
 
@@ -325,11 +337,14 @@ export default function ChatScreen({ route, navigation }: any) {
     }
   }, [messages, shouldAutoScroll]);
 
-  // Cleanup scroll timeout on unmount
+  // Cleanup timeouts on unmount
   useEffect(() => {
     return () => {
       if (scrollTimeoutRef.current) {
         clearTimeout(scrollTimeoutRef.current);
+      }
+      if (dragEndTimeoutRef.current) {
+        clearTimeout(dragEndTimeoutRef.current);
       }
     };
   }, []);

@@ -372,10 +372,31 @@ export default function ChatScreen({ route, navigation }: any) {
 
     let currentSession = sessionStore.getCurrentSession();
 
-    if (!currentSession) {
-      currentSession = sessionStore.createNewSession();
+    // If we have an existing session, always load its messages regardless of deletions
+    if (currentSession) {
+      lastLoadedSessionIdRef.current = currentSession.id;
+
+      if (currentSession.messages.length > 0) {
+        const chatMessages: ChatMessage[] = currentSession.messages.map(m => ({
+          role: m.role,
+          content: m.content,
+          toolCalls: m.toolCalls,
+          toolResults: m.toolResults,
+        }));
+        setMessages(chatMessages);
+      } else {
+        setMessages([]);
+      }
+      return;
     }
 
+    // No current session - only auto-create if no deletions are in progress (fixes #571)
+    // This prevents race conditions where a new session is created before the deletion completes
+    if (sessionStore.deletingSessionIds.size > 0) {
+      return;
+    }
+
+    currentSession = sessionStore.createNewSession();
     lastLoadedSessionIdRef.current = currentSession.id;
 
     // Reset expandedMessages on session switch to ensure consistent "final response expanded"
@@ -393,12 +414,18 @@ export default function ChatScreen({ route, navigation }: any) {
     } else {
       setMessages([]);
     }
-  }, [sessionStore.currentSessionId, sessionStore]);
+  }, [sessionStore.currentSessionId, sessionStore, sessionStore.deletingSessionIds.size]);
 
   const prevMessagesLengthRef = useRef(0);
   const prevSessionIdRef = useRef<string | null>(null);
   useEffect(() => {
     const currentSessionId = sessionStore.currentSessionId;
+
+    // Don't save messages if the current session is being deleted (fixes #571)
+    // Only skip if the current session is in the deleting set, not for any deletion
+    if (currentSessionId && sessionStore.deletingSessionIds.has(currentSessionId)) {
+      return;
+    }
 
     const isSessionSwitch = prevSessionIdRef.current !== null && prevSessionIdRef.current !== currentSessionId;
     prevSessionIdRef.current = currentSessionId;
@@ -412,7 +439,7 @@ export default function ChatScreen({ route, navigation }: any) {
       sessionStore.setMessages(messages);
     }
     prevMessagesLengthRef.current = messages.length;
-  }, [messages, sessionStore, sessionStore.currentSessionId]);
+  }, [messages, sessionStore, sessionStore.currentSessionId, sessionStore.deletingSessionIds]);
 
   const toggleMessageExpansion = useCallback((index: number) => {
     setExpandedMessages(prev => ({ ...prev, [index]: !prev[index] }));

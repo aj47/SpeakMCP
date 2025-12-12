@@ -323,11 +323,16 @@ async function processWithAgentMode(
 
           logApp(`[processWithAgentMode] Processing queued message: ${nextMessage.id}`)
           // Add the queued message to the conversation
-          await conversationService.addMessageToConversation(
+          const addedConversation = await conversationService.addMessageToConversation(
             conversationId,
             nextMessage.text,
             "user",
           )
+          // Check if persistence succeeded (returns null on failure)
+          if (!addedConversation) {
+            logApp(`[processWithAgentMode] Failed to persist queued message ${nextMessage.id}, keeping in queue`)
+            break // Stop processing to avoid losing messages
+          }
           // Only remove from queue after successful persistence
           // Check return value to prevent duplicate processing if removal fails (race condition)
           const removed = messageQueueService.removeMessage(conversationId, nextMessage.id)
@@ -408,11 +413,16 @@ async function processWithAgentMode(
 
           logApp(`[processWithAgentMode] Processing queued message after error: ${nextMessage.id}`)
           // Add the queued message to the conversation
-          await conversationService.addMessageToConversation(
+          const addedConversation = await conversationService.addMessageToConversation(
             conversationId,
             nextMessage.text,
             "user",
           )
+          // Check if persistence succeeded (returns null on failure)
+          if (!addedConversation) {
+            logApp(`[processWithAgentMode] Failed to persist queued message ${nextMessage.id}, keeping in queue`)
+            break // Stop processing to avoid losing messages
+          }
           // Only remove from queue after successful persistence
           // Check return value to prevent duplicate processing if removal fails (race condition)
           const removed = messageQueueService.removeMessage(conversationId, nextMessage.id)

@@ -136,11 +136,12 @@ export function useSessions(): SessionStore {
     // Mark session as being deleted to prevent race conditions
     setDeletingSessionIds(prev => new Set(prev).add(id));
 
-    // Track if we need to clear the current session (for immediate UI update)
-    const wasCurrentSession = currentSessionIdRef.current === id;
+    // Check if we're deleting the current session for immediate UI update
+    // Note: We check BEFORE updating state, then re-check at save time to avoid stale closure
+    const isCurrentSession = currentSessionIdRef.current === id;
 
     // Update current session state immediately for responsive UI
-    if (wasCurrentSession) {
+    if (isCurrentSession) {
       setCurrentSessionIdState(null);
     }
 
@@ -154,9 +155,10 @@ export function useSessions(): SessionStore {
       queueSave(async () => {
         await saveSessions(updated);
         // Re-check currentSessionIdRef at save time to avoid overwriting newly selected session
-        // Only clear if the current selection is still the deleted session or null
-        const currentId = currentSessionIdRef.current;
-        if (currentId === id || (wasCurrentSession && currentId === null)) {
+        // Only clear persisted ID if user hasn't switched to a different session
+        // This fixes the race where user switches sessions while delete is in-flight
+        const currentIdAtSaveTime = currentSessionIdRef.current;
+        if (currentIdAtSaveTime === null || currentIdAtSaveTime === id) {
           await saveCurrentSessionId(null);
         }
       });

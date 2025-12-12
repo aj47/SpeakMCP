@@ -301,22 +301,27 @@ async function processWithAgentMode(
     agentSessionTracker.completeSession(sessionId, "Agent completed successfully")
 
     // Check for queued messages and process the next one
+    // Wrapped in try-catch to prevent queue processing errors from affecting the original outcome
     if (conversationId && config.mcpMessageQueueEnabled) {
-      const { messageQueueService } = await import("./message-queue-service")
-      const nextMessage = messageQueueService.popNextMessage(conversationId)
-      if (nextMessage) {
-        logApp(`[processWithAgentMode] Processing queued message: ${nextMessage.id}`)
-        // Add the queued message to the conversation
-        await conversationService.addMessageToConversation(
-          conversationId,
-          nextMessage.text,
-          "user",
-        )
-        // Process the queued message (fire-and-forget, will handle its own queue processing)
-        processWithAgentMode(nextMessage.text, conversationId, undefined, true)
-          .catch((error) => {
-            logLLM("[processWithAgentMode] Queued message processing error:", error)
-          })
+      try {
+        const { messageQueueService } = await import("./message-queue-service")
+        const nextMessage = messageQueueService.popNextMessage(conversationId)
+        if (nextMessage) {
+          logApp(`[processWithAgentMode] Processing queued message: ${nextMessage.id}`)
+          // Add the queued message to the conversation
+          await conversationService.addMessageToConversation(
+            conversationId,
+            nextMessage.text,
+            "user",
+          )
+          // Process the queued message (fire-and-forget, will handle its own queue processing)
+          processWithAgentMode(nextMessage.text, conversationId, undefined, true)
+            .catch((error) => {
+              logLLM("[processWithAgentMode] Queued message processing error:", error)
+            })
+        }
+      } catch (queueError) {
+        logApp("[processWithAgentMode] Error processing queued message after success:", queueError)
       }
     }
 
@@ -351,22 +356,27 @@ async function processWithAgentMode(
     })
 
     // Check for queued messages and process the next one (even on error)
+    // Wrapped in try-catch to prevent queue processing errors from masking the original error
     if (conversationId && config.mcpMessageQueueEnabled) {
-      const { messageQueueService } = await import("./message-queue-service")
-      const nextMessage = messageQueueService.popNextMessage(conversationId)
-      if (nextMessage) {
-        logApp(`[processWithAgentMode] Processing queued message after error: ${nextMessage.id}`)
-        // Add the queued message to the conversation
-        await conversationService.addMessageToConversation(
-          conversationId,
-          nextMessage.text,
-          "user",
-        )
-        // Process the queued message (fire-and-forget, will handle its own queue processing)
-        processWithAgentMode(nextMessage.text, conversationId, undefined, true)
-          .catch((queueError) => {
-            logLLM("[processWithAgentMode] Queued message processing error:", queueError)
-          })
+      try {
+        const { messageQueueService } = await import("./message-queue-service")
+        const nextMessage = messageQueueService.popNextMessage(conversationId)
+        if (nextMessage) {
+          logApp(`[processWithAgentMode] Processing queued message after error: ${nextMessage.id}`)
+          // Add the queued message to the conversation
+          await conversationService.addMessageToConversation(
+            conversationId,
+            nextMessage.text,
+            "user",
+          )
+          // Process the queued message (fire-and-forget, will handle its own queue processing)
+          processWithAgentMode(nextMessage.text, conversationId, undefined, true)
+            .catch((queueError) => {
+              logLLM("[processWithAgentMode] Queued message processing error:", queueError)
+            })
+        }
+      } catch (queueError) {
+        logApp("[processWithAgentMode] Error processing queued message after error:", queueError)
       }
     }
 

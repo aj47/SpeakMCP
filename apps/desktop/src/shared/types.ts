@@ -421,6 +421,7 @@ export type Config = {
 	  remoteServerApiKey?: string
 	  remoteServerLogLevel?: "error" | "info" | "debug"
 	  remoteServerCorsOrigins?: string[]
+	  remoteServerAutoShowPanel?: boolean // Auto-show floating panel when receiving remote messages
 
   // Stream Status Watcher Configuration
   streamStatusWatcherEnabled?: boolean

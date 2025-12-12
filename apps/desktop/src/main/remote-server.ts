@@ -213,11 +213,18 @@ async function runAgent(options: RunAgentOptions): Promise<{
 
   // Try to find and revive an existing session for this conversation (matching tipc.ts)
   const { agentSessionTracker } = await import("./agent-session-tracker")
+  // Start snoozed unless remoteServerAutoShowPanel is enabled (affects both new and revived sessions)
+  const startSnoozed = !cfg.remoteServerAutoShowPanel
   let existingSessionId: string | undefined
   if (inputConversationId) {
     const foundSessionId = agentSessionTracker.findSessionByConversationId(inputConversationId)
     if (foundSessionId) {
-      const revived = agentSessionTracker.reviveSession(foundSessionId)
+      // Check if session is already active - if so, preserve its current snooze state
+      // This prevents unexpectedly hiding the progress UI for a session the user is watching
+      const existingSession = agentSessionTracker.getSession(foundSessionId)
+      const isAlreadyActive = existingSession && existingSession.status === "active"
+      const snoozeForRevive = isAlreadyActive ? existingSession.isSnoozed ?? false : startSnoozed
+      const revived = agentSessionTracker.reviveSession(foundSessionId, snoozeForRevive)
       if (revived) {
         existingSessionId = foundSessionId
         diagnosticsService.logInfo("remote-server", `Revived existing session ${existingSessionId}`)
@@ -227,7 +234,7 @@ async function runAgent(options: RunAgentOptions): Promise<{
 
   // Start or reuse agent session
   const conversationTitle = prompt.length > 50 ? prompt.substring(0, 50) + "..." : prompt
-  const sessionId = existingSessionId || agentSessionTracker.startSession(conversationId, conversationTitle)
+  const sessionId = existingSessionId || agentSessionTracker.startSession(conversationId, conversationTitle, startSnoozed)
 
   try {
     await mcpService.initialize()

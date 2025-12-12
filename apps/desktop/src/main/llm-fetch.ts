@@ -295,6 +295,13 @@ export class HttpError extends Error {
       case 503:
       case 504:
       case 408:
+      case 520:  // Cloudflare: Web server returned an unknown error
+      case 521:  // Cloudflare: Web server is down
+      case 522:  // Cloudflare: Connection timed out
+      case 523:  // Cloudflare: Origin is unreachable
+      case 524:  // Cloudflare: A timeout occurred
+      case 525:  // Cloudflare: SSL handshake failed
+      case 526:  // Cloudflare: Invalid SSL certificate
         return 'server'
       default:
         return 'unknown'
@@ -326,6 +333,20 @@ export class HttpError extends Error {
         return 'Service Unavailable'
       case 504:
         return 'Gateway Timeout'
+      case 520:
+        return 'Unknown Server Error'
+      case 521:
+        return 'Server Down'
+      case 522:
+        return 'Connection Timed Out'
+      case 523:
+        return 'Origin Unreachable'
+      case 524:
+        return 'Connection Timeout'
+      case 525:
+        return 'SSL Handshake Failed'
+      case 526:
+        return 'Invalid SSL Certificate'
       default:
         return `HTTP ${this.status} Error`
     }
@@ -374,6 +395,23 @@ export class HttpError extends Error {
           'The API service is experiencing issues',
           'This is usually temporary - try again in a few moments',
           'Check the provider status page for outages'
+        ]
+      case 520:
+      case 521:
+      case 522:
+      case 523:
+      case 524:
+        return [
+          'The API server or proxy is experiencing connectivity issues',
+          'This is usually temporary - try again in a few moments',
+          'The service may be under high load or maintenance'
+        ]
+      case 525:
+      case 526:
+        return [
+          'There was a security certificate issue with the API server',
+          'This may indicate a server configuration problem',
+          'Try again later or check if the API provider has reported issues'
         ]
       default:
         return [

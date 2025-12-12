@@ -380,6 +380,11 @@ export type Config = {
   panelAgentModeSize?: { width: number; height: number }
   panelTextInputModeSize?: { width: number; height: number }
 
+  // Floating Panel Auto-Show Configuration
+  // When false, the floating panel will not automatically appear during agent sessions
+  // Users can still manually access the panel via hotkeys, tray menu, or UI
+  floatingPanelAutoShow?: boolean
+
   // API Retry Configuration
   apiRetryCount?: number
   apiRetryBaseDelay?: number

@@ -705,6 +705,16 @@ export function Component() {
             />
           </Control>
 
+          <Control label={<ControlLabel label="Auto-Show Floating Panel" tooltip="When enabled, the floating panel automatically appears during agent sessions. When disabled, the panel only appears when manually triggered via hotkeys or menu. You can still access agent progress in the main window." />} className="px-3">
+            <Switch
+              checked={configQuery.data?.floatingPanelAutoShow !== false}
+              onCheckedChange={(value) => {
+                saveConfig({
+                  floatingPanelAutoShow: value,
+                })
+              }}
+            />
+          </Control>
 
         </ControlGroup>
 

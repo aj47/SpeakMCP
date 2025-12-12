@@ -14,6 +14,7 @@ interface TextInputPanelProps {
 
 export interface TextInputPanelRef {
   focus: () => void
+  clearText: () => void
 }
 
 export const TextInputPanel = forwardRef<TextInputPanelRef, TextInputPanelProps>(({
@@ -29,6 +30,9 @@ export const TextInputPanel = forwardRef<TextInputPanelRef, TextInputPanelProps>
   useImperativeHandle(ref, () => ({
     focus: () => {
       textareaRef.current?.focus()
+    },
+    clearText: () => {
+      setText("")
     }
   }))
 
@@ -55,7 +59,8 @@ export const TextInputPanel = forwardRef<TextInputPanelRef, TextInputPanelProps>
   const handleSubmit = () => {
     if (text.trim() && !isProcessing) {
       onSubmit(text.trim())
-      setText("")
+      // Don't clear text here - let parent call clearText() after successful submission
+      // This preserves the draft if the message is blocked
     }
   }
 

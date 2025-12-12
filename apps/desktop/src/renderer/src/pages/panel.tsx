@@ -341,6 +341,8 @@ export function Component() {
         return
       }
 
+      // Clear the text input now that submission was successful (not blocked)
+      textInputPanelRef.current?.clearText()
       // Only close text input if message was NOT blocked
       setShowTextInput(false)
       // Ensure main process knows text input is no longer active (prevents textInput positioning)

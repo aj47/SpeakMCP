@@ -223,6 +223,185 @@ export function delay(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+export type ConnectionCheckResult = {
+  success: boolean;
+  error?: string;
+  statusCode?: number;
+  responseTime?: number;
+};
+
+/**
+ * Check connectivity to a remote server by making a test request.
+ * This is used to verify the connection before allowing users to proceed from settings.
+ *
+ * @param baseUrl - The API base URL to check (e.g., https://api.openai.com/v1)
+ * @param apiKey - The API key to use for authentication
+ * @param timeoutMs - Timeout in milliseconds (default: 10000)
+ * @returns ConnectionCheckResult with success status and optional error
+ */
+export async function checkServerConnection(
+  baseUrl: string,
+  apiKey: string,
+  timeoutMs: number = 10000
+): Promise<ConnectionCheckResult> {
+  const startTime = Date.now();
+
+  // Validate inputs
+  if (!baseUrl || !baseUrl.trim()) {
+    return { success: false, error: 'Base URL is required' };
+  }
+
+  if (!apiKey || !apiKey.trim()) {
+    return { success: false, error: 'API Key is required' };
+  }
+
+  // Normalize the base URL
+  let normalizedUrl = baseUrl.trim();
+  if (!normalizedUrl.startsWith('http://') && !normalizedUrl.startsWith('https://')) {
+    normalizedUrl = `https://${normalizedUrl}`;
+  }
+  // Remove trailing slash
+  normalizedUrl = normalizedUrl.replace(/\/+$/, '');
+
+  // Try the /models endpoint first (OpenAI-compatible)
+  const modelsUrl = `${normalizedUrl}/models`;
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    console.log('[ConnectionCheck] Checking connection to:', modelsUrl);
+
+    const response = await fetch(modelsUrl, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+    const responseTime = Date.now() - startTime;
+
+    console.log('[ConnectionCheck] Response:', {
+      status: response.status,
+      responseTime,
+    });
+
+    if (response.ok) {
+      return {
+        success: true,
+        statusCode: response.status,
+        responseTime,
+      };
+    }
+
+    // Handle specific error codes
+    if (response.status === 401) {
+      return {
+        success: false,
+        error: 'Invalid API key. Please check your credentials.',
+        statusCode: response.status,
+        responseTime,
+      };
+    }
+
+    if (response.status === 403) {
+      return {
+        success: false,
+        error: 'Access forbidden. Your API key may not have the required permissions.',
+        statusCode: response.status,
+        responseTime,
+      };
+    }
+
+    if (response.status === 404) {
+      // 404 might mean the endpoint doesn't exist but the server is reachable
+      // This could be a valid SpeakMCP desktop server that doesn't have /models
+      // Let's consider this as a success for connectivity purposes
+      return {
+        success: true,
+        statusCode: response.status,
+        responseTime,
+      };
+    }
+
+    if (response.status >= 500) {
+      return {
+        success: false,
+        error: `Server error (${response.status}). The server may be temporarily unavailable.`,
+        statusCode: response.status,
+        responseTime,
+      };
+    }
+
+    // Try to get error message from response body
+    let errorMessage = `Server returned status ${response.status}`;
+    try {
+      const errorBody = await response.json();
+      if (errorBody?.error?.message) {
+        errorMessage = errorBody.error.message;
+      }
+    } catch {
+      // Ignore JSON parsing errors
+    }
+
+    return {
+      success: false,
+      error: errorMessage,
+      statusCode: response.status,
+      responseTime,
+    };
+  } catch (error: any) {
+    clearTimeout(timeoutId);
+    const responseTime = Date.now() - startTime;
+
+    console.error('[ConnectionCheck] Error:', error);
+
+    if (error.name === 'AbortError') {
+      return {
+        success: false,
+        error: 'Connection timed out. Please check your network and server URL.',
+        responseTime,
+      };
+    }
+
+    // Parse common network errors
+    const errorMessage = error.message?.toLowerCase() || '';
+
+    if (errorMessage.includes('network') || errorMessage.includes('failed to fetch')) {
+      return {
+        success: false,
+        error: 'Network error. Please check your internet connection.',
+        responseTime,
+      };
+    }
+
+    if (errorMessage.includes('unable to resolve host') || errorMessage.includes('dns')) {
+      return {
+        success: false,
+        error: 'Could not resolve server address. Please check the URL.',
+        responseTime,
+      };
+    }
+
+    if (errorMessage.includes('connection refused') || errorMessage.includes('econnrefused')) {
+      return {
+        success: false,
+        error: 'Connection refused. Is the server running?',
+        responseTime,
+      };
+    }
+
+    return {
+      success: false,
+      error: error.message || 'Unknown connection error',
+      responseTime,
+    };
+  }
+}
+
 export function formatConnectionStatus(state: RecoveryState): string {
   switch (state.status) {
     case 'connected':

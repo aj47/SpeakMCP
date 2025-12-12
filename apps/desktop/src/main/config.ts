@@ -64,6 +64,8 @@ const getConfig = () => {
     panelNormalModeSize: undefined,
     panelAgentModeSize: undefined,
     panelTextInputModeSize: undefined,
+    // Floating panel auto-show - when true, panel auto-shows during agent sessions
+    floatingPanelAutoShow: true,
     // Theme preference defaults
     themePreference: "system",
 

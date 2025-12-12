@@ -4,6 +4,7 @@ import { RendererHandlers } from "./renderer-handlers"
 import { AgentProgressUpdate } from "../shared/types"
 import { isPanelAutoShowSuppressed, agentSessionStateManager } from "./state"
 import { agentSessionTracker } from "./agent-session-tracker"
+import { configStore } from "./config"
 import { logApp } from "./debug"
 
 export async function emitAgentProgress(update: AgentProgressUpdate): Promise<void> {
@@ -44,11 +45,17 @@ export async function emitAgentProgress(update: AgentProgressUpdate): Promise<vo
 
   logApp(`[emitAgentProgress] Panel visible: ${panel.isVisible()}`)
 
+  // Check if floating panel auto-show is globally disabled in settings
+  const config = configStore.get()
+  const floatingPanelAutoShowEnabled = config.floatingPanelAutoShow !== false
+
   if (!panel.isVisible() && update.sessionId) {
     const isSnoozed = agentSessionTracker.isSessionSnoozed(update.sessionId)
-    logApp(`[emitAgentProgress] Panel not visible. Session ${update.sessionId} snoozed check: ${isSnoozed}`)
+    logApp(`[emitAgentProgress] Panel not visible. Session ${update.sessionId} snoozed check: ${isSnoozed}, floatingPanelAutoShow: ${floatingPanelAutoShowEnabled}`)
 
-    if (isPanelAutoShowSuppressed()) {
+    if (!floatingPanelAutoShowEnabled) {
+      logApp(`[emitAgentProgress] Floating panel auto-show disabled in settings; NOT showing panel for session ${update.sessionId}`)
+    } else if (isPanelAutoShowSuppressed()) {
       logApp(`[emitAgentProgress] Panel auto-show suppressed; NOT showing panel for session ${update.sessionId}`)
     } else if (!isSnoozed) {
       logApp(`[emitAgentProgress] Showing panel for non-snoozed session ${update.sessionId}`)

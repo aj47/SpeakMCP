@@ -161,24 +161,53 @@ export class OpenAIClient {
 
   private async chatWithRecovery(
     url: string,
-    body: object,
+    body: Record<string, any>,
     onToken?: (token: string) => void,
     onProgress?: OnProgressCallback
   ): Promise<ChatResponse> {
     const recovery = this.recoveryManager!;
     recovery.reset();
 
+    // Track conversationId received during streaming to preserve it across retries.
+    // This prevents duplicate sessions when retrying after a partial success
+    // (server created session, but network failed before client received full response).
+    let lastReceivedConversationId: string | undefined;
+
+    // Wrap onProgress to capture conversationId from progress updates
+    const wrappedOnProgress: OnProgressCallback | undefined = onProgress
+      ? (update) => {
+          // Capture conversationId from progress updates if available
+          if (update.conversationId && !lastReceivedConversationId) {
+            lastReceivedConversationId = update.conversationId;
+            console.log('[OpenAIClient] Captured conversationId from progress:', lastReceivedConversationId);
+          }
+          onProgress(update);
+        }
+      : undefined;
+
     while (true) {
+      // Update body with conversationId if we received one from a previous attempt.
+      // This ensures retries continue the same conversation instead of creating a new one.
+      if (lastReceivedConversationId && !body.conversation_id) {
+        body.conversation_id = lastReceivedConversationId;
+        console.log('[OpenAIClient] Using preserved conversationId for retry:', lastReceivedConversationId);
+      }
+
       try {
         let result: ChatResponse;
         if (Platform.OS === 'android') {
           // Android: Use XMLHttpRequest-based streaming due to known react-native-sse issues
           // See: https://github.com/binaryminds/react-native-sse/issues/61
-          result = await this.streamSSEWithXHR(url, body, onToken, onProgress);
+          result = await this.streamSSEWithXHR(url, body, onToken, wrappedOnProgress);
         } else if (Platform.OS === 'ios') {
-          result = await this.streamSSEWithEventSource(url, body, onToken, onProgress);
+          result = await this.streamSSEWithEventSource(url, body, onToken, wrappedOnProgress);
         } else {
-          result = await this.streamSSEWithFetch(url, body, onToken, onProgress);
+          result = await this.streamSSEWithFetch(url, body, onToken, wrappedOnProgress);
+        }
+
+        // Capture conversationId from successful result for completeness
+        if (result.conversationId && !lastReceivedConversationId) {
+          lastReceivedConversationId = result.conversationId;
         }
 
         recovery.markConnected();

@@ -266,15 +266,15 @@ export default function ChatScreen({ route, navigation }: any) {
       return;
     }
 
-    // Don't auto-create session if a deletion is in progress (fixes #571)
-    // This prevents race conditions where a new session is created before the deletion completes
-    if (sessionStore.deletingSessionIds.size > 0) {
-      return;
-    }
-
     let currentSession = sessionStore.getCurrentSession();
 
     if (!currentSession) {
+      // Only guard auto-creation when a deletion is in progress (fixes #571)
+      // This prevents race conditions where a new session is created before the deletion completes
+      // But we don't skip loading messages for existing sessions (addresses PR review comment)
+      if (sessionStore.deletingSessionIds.size > 0) {
+        return;
+      }
       currentSession = sessionStore.createNewSession();
     }
 
@@ -298,8 +298,9 @@ export default function ChatScreen({ route, navigation }: any) {
   useEffect(() => {
     const currentSessionId = sessionStore.currentSessionId;
 
-    // Don't save messages if a deletion is in progress (fixes #571)
-    if (sessionStore.deletingSessionIds.size > 0) {
+    // Don't save messages if the current session is being deleted (fixes #571)
+    // Only skip if the current session is in the deleting set, not for any deletion
+    if (currentSessionId && sessionStore.deletingSessionIds.has(currentSessionId)) {
       return;
     }
 
@@ -315,7 +316,7 @@ export default function ChatScreen({ route, navigation }: any) {
       sessionStore.setMessages(messages);
     }
     prevMessagesLengthRef.current = messages.length;
-  }, [messages, sessionStore, sessionStore.currentSessionId, sessionStore.deletingSessionIds.size]);
+  }, [messages, sessionStore, sessionStore.currentSessionId, sessionStore.deletingSessionIds]);
 
   const [expandedMessages, setExpandedMessages] = useState<Record<number, boolean>>({});
   const toggleMessageExpansion = useCallback((index: number) => {

@@ -1193,8 +1193,8 @@ export default function ChatScreen({ route, navigation }: any) {
                       )
                     ) : null}
 
-                    {/* Unified Tool Execution Display */}
-                    {(m.toolCalls?.length ?? 0) > 0 && (
+                    {/* Unified Tool Execution Display - show when there are toolCalls OR toolResults */}
+                    {((m.toolCalls?.length ?? 0) > 0 || (m.toolResults?.length ?? 0) > 0) && (
                       <View style={[
                         styles.toolExecutionCard,
                         isPending && styles.toolExecutionPending,
@@ -1224,22 +1224,24 @@ export default function ChatScreen({ route, navigation }: any) {
                         {/* Expanded view - show full details */}
                         {isExpanded && (
                           <>
-                            {/* Call Parameters Section */}
-                            <View style={styles.toolParamsSection}>
-                              <Text style={styles.toolParamsSectionTitle}>Call Parameters</Text>
-                              {m.toolCalls!.map((toolCall, idx) => (
-                                <View key={idx} style={styles.toolCallCard}>
-                                  <Text style={styles.toolName}>{toolCall.name}</Text>
-                                  {toolCall.arguments && (
-                                    <ScrollView style={styles.toolParamsScroll} nestedScrollEnabled>
-                                      <Text style={styles.toolParamsCode}>
-                                        {formatToolArguments(toolCall.arguments)}
-                                      </Text>
-                                    </ScrollView>
-                                  )}
-                                </View>
-                              ))}
-                            </View>
+                            {/* Call Parameters Section - only show if there are toolCalls */}
+                            {(m.toolCalls?.length ?? 0) > 0 && (
+                              <View style={styles.toolParamsSection}>
+                                <Text style={styles.toolParamsSectionTitle}>Call Parameters</Text>
+                                {m.toolCalls!.map((toolCall, idx) => (
+                                  <View key={idx} style={styles.toolCallCard}>
+                                    <Text style={styles.toolName}>{toolCall.name}</Text>
+                                    {toolCall.arguments && (
+                                      <ScrollView style={styles.toolParamsScroll} nestedScrollEnabled>
+                                        <Text style={styles.toolParamsCode}>
+                                          {formatToolArguments(toolCall.arguments)}
+                                        </Text>
+                                      </ScrollView>
+                                    )}
+                                  </View>
+                                ))}
+                              </View>
+                            )}
 
                             {/* Response Section */}
                             <View style={[
@@ -1252,7 +1254,7 @@ export default function ChatScreen({ route, navigation }: any) {
                               {isPending ? (
                                 <Text style={styles.toolResponsePendingText}>Waiting for response...</Text>
                               ) : (
-                                m.toolResults!.map((result, idx) => (
+                                (m.toolResults ?? []).map((result, idx) => (
                                   <View key={idx} style={styles.toolResultItem}>
                                     <View style={styles.toolResultHeader}>
                                       <Text style={[

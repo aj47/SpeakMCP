@@ -105,24 +105,28 @@ export function useSessions(): SessionStore {
       messages: [],
     };
 
-    // Use functional update to ensure we have the latest state and don't drop concurrent updates
-    // We capture the exact sessions array and update refs synchronously to ensure queued saves
-    // always use the correct state (fixes PR review comment about stale refs)
-    let sessionsToSave: Session[] = [];
+    // Compute the new sessions array BEFORE setSessions to guarantee the value we save
+    // is exactly what we intend to set (fixes PR review: avoids React updater timing race)
+    const currentSessions = sessionsRef.current;
+    const cleanedPrev = currentSessions.filter(s => !deletingSessionIds.has(s.id));
+    const sessionsToSave = [newSession, ...cleanedPrev];
+
+    // Update ref synchronously so any subsequent operations see the new state immediately
+    sessionsRef.current = sessionsToSave;
+
+    // Use functional update for state to ensure React's reconciliation works correctly
+    // The functional update also serves as a safeguard against stale closures in edge cases
     setSessions(prev => {
-      // Filter out any sessions that are currently being deleted to avoid race conditions
-      const cleanedPrev = prev.filter(s => !deletingSessionIds.has(s.id));
-      const updated = [newSession, ...cleanedPrev];
-      // Update ref synchronously so queued saves see the new state immediately
-      sessionsRef.current = updated;
-      sessionsToSave = updated;
-      return updated;
+      // Re-filter to handle any edge case where state diverged from ref
+      const freshCleanedPrev = prev.filter(s => !deletingSessionIds.has(s.id));
+      return [newSession, ...freshCleanedPrev];
     });
+
     setCurrentSessionIdState(newSession.id);
     // Update currentSessionId ref synchronously as well
     currentSessionIdRef.current = newSession.id;
 
-    // Queue async saves with the exact sessions array we're setting
+    // Queue async saves with the pre-computed sessions array (guaranteed correct value)
     queueSave(async () => {
       await saveSessions(sessionsToSave);
       await saveCurrentSessionId(newSession.id);
@@ -156,20 +160,18 @@ export function useSessions(): SessionStore {
       currentSessionIdRef.current = null;
     }
 
-    // Use functional update to avoid race conditions with rapid deletes
-    // We capture the exact sessions array and update refs synchronously to ensure queued saves
-    // always use the correct state (fixes PR review comment about stale refs)
-    let sessionsToSave: Session[] = [];
-    setSessions(prev => {
-      const updated = prev.filter(s => s.id !== id);
-      // Update ref synchronously so queued saves see the new state immediately
-      sessionsRef.current = updated;
-      sessionsToSave = updated;
-      return updated;
-    });
+    // Compute the new sessions array BEFORE setSessions to guarantee the value we save
+    // is exactly what we intend to set (fixes PR review: avoids React updater timing race)
+    const currentSessions = sessionsRef.current;
+    const sessionsToSave = currentSessions.filter(s => s.id !== id);
 
-    // Queue save with the exact sessions array we're setting
-    // This ensures we save exactly what was set, not a potentially stale ref value
+    // Update ref synchronously so any subsequent operations see the new state immediately
+    sessionsRef.current = sessionsToSave;
+
+    // Use functional update for state to ensure React's reconciliation works correctly
+    setSessions(prev => prev.filter(s => s.id !== id));
+
+    // Queue save with the pre-computed sessions array (guaranteed correct value)
     queueSave(async () => {
       await saveSessions(sessionsToSave);
       // Re-check currentSessionIdRef at save time to avoid overwriting newly selected session

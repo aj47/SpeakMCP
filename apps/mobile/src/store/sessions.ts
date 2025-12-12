@@ -246,93 +246,175 @@ export function useSessions(): SessionStore {
   ) => {
     if (!currentSessionId) return;
 
-    setSessions(prev => {
-      const updated = prev.map(session => {
-        if (session.id !== currentSessionId) return session;
+    // Compute the new sessions array BEFORE setSessions to guarantee the value we save
+    // is exactly what we intend to set (same pattern as createNewSession/deleteSession)
+    const currentSessions = sessionsRef.current;
+    const targetSessionId = currentSessionId;
+    const sessionsToSave = currentSessions.map(session => {
+      if (session.id !== targetSessionId) return session;
 
-        const now = Date.now();
-        const newMessage = {
-          id: generateMessageId(),
-          role,
-          content,
-          timestamp: now,
-          toolCalls,
-          toolResults,
-        };
+      const now = Date.now();
+      const newMessage = {
+        id: generateMessageId(),
+        role,
+        content,
+        timestamp: now,
+        toolCalls,
+        toolResults,
+      };
 
-        // Update title if this is the first user message
-        let title = session.title;
-        if (role === 'user' && session.messages.length === 0) {
-          title = generateSessionTitle(content);
-        }
+      // Update title if this is the first user message
+      let title = session.title;
+      if (role === 'user' && session.messages.length === 0) {
+        title = generateSessionTitle(content);
+      }
 
-        return {
-          ...session,
-          title,
-          updatedAt: now,
-          messages: [...session.messages, newMessage],
-        };
-      });
-      saveSessions(updated);
-      return updated;
+      return {
+        ...session,
+        title,
+        updatedAt: now,
+        messages: [...session.messages, newMessage],
+      };
     });
-  }, [currentSessionId]);
+
+    // Update ref synchronously so any subsequent operations see the new state immediately
+    sessionsRef.current = sessionsToSave;
+
+    // Use functional update for state to ensure React's reconciliation works correctly
+    setSessions(prev => prev.map(session => {
+      if (session.id !== targetSessionId) return session;
+
+      const now = Date.now();
+      const newMessage = {
+        id: generateMessageId(),
+        role,
+        content,
+        timestamp: now,
+        toolCalls,
+        toolResults,
+      };
+
+      let title = session.title;
+      if (role === 'user' && session.messages.length === 0) {
+        title = generateSessionTitle(content);
+      }
+
+      return {
+        ...session,
+        title,
+        updatedAt: now,
+        messages: [...session.messages, newMessage],
+      };
+    }));
+
+    // Queue async save with the pre-computed sessions array (serialized with other operations)
+    queueSave(async () => {
+      await saveSessions(sessionsToSave);
+    });
+  }, [currentSessionId, queueSave]);
 
   // Set messages directly (for updating from chat responses)
   const setMessages = useCallback(async (messages: ChatMessage[]) => {
     if (!currentSessionId) return;
 
-    setSessions(prev => {
-      const updated = prev.map(session => {
-        if (session.id !== currentSessionId) return session;
+    // Compute the new sessions array BEFORE setSessions to guarantee the value we save
+    // is exactly what we intend to set (same pattern as createNewSession/deleteSession)
+    const currentSessions = sessionsRef.current;
+    const targetSessionId = currentSessionId;
+    const now = Date.now();
 
-        const now = Date.now();
-        // Convert ChatMessage to session format
-        const sessionMessages = messages.map((m, idx) => ({
-          id: generateMessageId(),
-          role: m.role as 'system' | 'user' | 'assistant',
-          content: m.content || '',
-          timestamp: now + idx,
-          toolCalls: m.toolCalls,
-          toolResults: m.toolResults,
-        }));
+    // Pre-compute session messages for consistency
+    const sessionMessages = messages.map((m, idx) => ({
+      id: generateMessageId(),
+      role: m.role as 'system' | 'user' | 'assistant',
+      content: m.content || '',
+      timestamp: now + idx,
+      toolCalls: m.toolCalls,
+      toolResults: m.toolResults,
+    }));
 
-        // Update title from first user message if needed
-        let title = session.title;
-        const firstUserMsg = messages.find(m => m.role === 'user');
-        if (title === 'New Chat' && firstUserMsg?.content) {
-          title = generateSessionTitle(firstUserMsg.content);
-        }
+    const firstUserMsg = messages.find(m => m.role === 'user');
 
-        return {
-          ...session,
-          title,
-          updatedAt: now,
-          messages: sessionMessages,
-        };
-      });
-      saveSessions(updated);
-      return updated;
+    const sessionsToSave = currentSessions.map(session => {
+      if (session.id !== targetSessionId) return session;
+
+      // Update title from first user message if needed
+      let title = session.title;
+      if (title === 'New Chat' && firstUserMsg?.content) {
+        title = generateSessionTitle(firstUserMsg.content);
+      }
+
+      return {
+        ...session,
+        title,
+        updatedAt: now,
+        messages: sessionMessages,
+      };
     });
-  }, [currentSessionId]);
+
+    // Update ref synchronously so any subsequent operations see the new state immediately
+    sessionsRef.current = sessionsToSave;
+
+    // Use functional update for state to ensure React's reconciliation works correctly
+    setSessions(prev => prev.map(session => {
+      if (session.id !== targetSessionId) return session;
+
+      let title = session.title;
+      if (title === 'New Chat' && firstUserMsg?.content) {
+        title = generateSessionTitle(firstUserMsg.content);
+      }
+
+      return {
+        ...session,
+        title,
+        updatedAt: now,
+        messages: sessionMessages,
+      };
+    }));
+
+    // Queue async save with the pre-computed sessions array (serialized with other operations)
+    queueSave(async () => {
+      await saveSessions(sessionsToSave);
+    });
+  }, [currentSessionId, queueSave]);
 
   // Set the server-side conversation ID for the current session (fixes #501)
   const setServerConversationId = useCallback(async (serverConversationId: string) => {
     if (!currentSessionId) return;
 
-    setSessions(prev => {
-      const updated = prev.map(session => {
-        if (session.id !== currentSessionId) return session;
-        return {
-          ...session,
-          serverConversationId,
-          updatedAt: Date.now(),
-        };
-      });
-      saveSessions(updated);
-      return updated;
+    // Compute the new sessions array BEFORE setSessions to guarantee the value we save
+    // is exactly what we intend to set (same pattern as createNewSession/deleteSession)
+    const currentSessions = sessionsRef.current;
+    const targetSessionId = currentSessionId;
+    const now = Date.now();
+
+    const sessionsToSave = currentSessions.map(session => {
+      if (session.id !== targetSessionId) return session;
+      return {
+        ...session,
+        serverConversationId,
+        updatedAt: now,
+      };
     });
-  }, [currentSessionId]);
+
+    // Update ref synchronously so any subsequent operations see the new state immediately
+    sessionsRef.current = sessionsToSave;
+
+    // Use functional update for state to ensure React's reconciliation works correctly
+    setSessions(prev => prev.map(session => {
+      if (session.id !== targetSessionId) return session;
+      return {
+        ...session,
+        serverConversationId,
+        updatedAt: now,
+      };
+    }));
+
+    // Queue async save with the pre-computed sessions array (serialized with other operations)
+    queueSave(async () => {
+      await saveSessions(sessionsToSave);
+    });
+  }, [currentSessionId, queueSave]);
 
   // Get the server-side conversation ID for the current session
   const getServerConversationId = useCallback((): string | undefined => {

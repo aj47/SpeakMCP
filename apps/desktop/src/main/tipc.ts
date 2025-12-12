@@ -2332,6 +2332,10 @@ export const router = {
   queueMessage: t.procedure
     .input<{ conversationId: string; text: string }>()
     .action(async ({ input }) => {
+      const config = configStore.get()
+      if (!config.mcpMessageQueueEnabled) {
+        throw new Error("Message queue feature is disabled")
+      }
       const { messageQueueService } = await import("./message-queue-service")
       return messageQueueService.queueMessage(input.conversationId, input.text)
     }),

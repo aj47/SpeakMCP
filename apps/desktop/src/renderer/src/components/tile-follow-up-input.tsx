@@ -33,7 +33,8 @@ export function TileFollowUpInput({
   const inputRef = useRef<HTMLInputElement>(null)
   const queryClient = useQueryClient()
   const configQuery = useConfigQuery()
-  const isQueueEnabled = configQuery.data?.mcpMessageQueueEnabled ?? true
+  // Default to false while loading to prevent queueing before config is known
+  const isQueueEnabled = configQuery.data?.mcpMessageQueueEnabled ?? false
 
   const sendMutation = useMutation({
     mutationFn: async (message: string) => {

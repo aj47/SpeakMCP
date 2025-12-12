@@ -136,39 +136,39 @@ export function useSessions(): SessionStore {
     // Mark session as being deleted to prevent race conditions
     setDeletingSessionIds(prev => new Set(prev).add(id));
 
-    // Track if we need to clear the current session
-    // We check at capture time for immediate UI update, but re-check at save time for storage
+    // Track if we need to clear the current session (for immediate UI update)
     const wasCurrentSession = currentSessionIdRef.current === id;
-
-    // Use functional update to avoid race conditions with rapid deletes
-    // This ensures each delete sees the latest state, not stale sessionsRef data
-    let updatedSessions: Session[] = [];
-    setSessions(prev => {
-      updatedSessions = prev.filter(s => s.id !== id);
-      return updatedSessions;
-    });
 
     // Update current session state immediately for responsive UI
     if (wasCurrentSession) {
       setCurrentSessionIdState(null);
     }
 
-    // Then await the async storage operations (queued to prevent interleaving)
+    // Use functional update to avoid race conditions with rapid deletes
+    // The save is queued INSIDE the functional update to ensure we capture the exact state
+    setSessions(prev => {
+      const updated = prev.filter(s => s.id !== id);
+
+      // Queue save with the exact sessions array we're setting
+      // This ensures rapid deletes don't race - each save uses its own captured state
+      queueSave(async () => {
+        await saveSessions(updated);
+        // Re-check currentSessionIdRef at save time to avoid overwriting newly selected session
+        // Only clear if the current selection is still the deleted session or null
+        const currentId = currentSessionIdRef.current;
+        if (currentId === id || (wasCurrentSession && currentId === null)) {
+          await saveCurrentSessionId(null);
+        }
+      });
+
+      return updated;
+    });
+
+    // Wait for the queued save to complete before removing from deleting set
+    // We do this by adding another operation to the queue
     try {
       await new Promise<void>((resolve, reject) => {
-        saveQueueRef.current = saveQueueRef.current
-          .then(async () => {
-            // Use sessionsRef.current to get the most up-to-date sessions after all state updates
-            // This ensures we save the correct state even with rapid concurrent operations
-            await saveSessions(sessionsRef.current);
-            // Re-check currentSessionIdRef at save time to avoid overwriting newly selected session
-            // If user selected a new session while delete was queued, don't write null
-            if (currentSessionIdRef.current === null || currentSessionIdRef.current === id) {
-              await saveCurrentSessionId(currentSessionIdRef.current === id ? null : currentSessionIdRef.current);
-            }
-            resolve();
-          })
-          .catch(reject);
+        saveQueueRef.current = saveQueueRef.current.then(resolve).catch(reject);
       });
     } finally {
       // Remove from deleting set after save completes
@@ -178,7 +178,7 @@ export function useSessions(): SessionStore {
         return next;
       });
     }
-  }, []);
+  }, [queueSave]);
 
   const clearAllSessions = useCallback(async () => {
     // Mark all sessions as being deleted
@@ -189,22 +189,22 @@ export function useSessions(): SessionStore {
     setCurrentSessionIdState(null);
 
     // Queue async saves to prevent interleaving
+    queueSave(async () => {
+      await Promise.all([
+        saveSessions([]),
+        saveCurrentSessionId(null),
+      ]);
+    });
+
+    // Wait for the queued save to complete before clearing the deleting set
     try {
       await new Promise<void>((resolve, reject) => {
-        saveQueueRef.current = saveQueueRef.current
-          .then(async () => {
-            await Promise.all([
-              saveSessions([]),
-              saveCurrentSessionId(null),
-            ]);
-            resolve();
-          })
-          .catch(reject);
+        saveQueueRef.current = saveQueueRef.current.then(resolve).catch(reject);
       });
     } finally {
       setDeletingSessionIds(new Set());
     }
-  }, []);
+  }, [queueSave]);
 
   const getCurrentSession = useCallback((): Session | null => {
     if (!currentSessionId) return null;

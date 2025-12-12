@@ -181,9 +181,9 @@ export function SessionFollowUpInput({
           "hover:bg-red-100 dark:hover:bg-red-900/30",
           "hover:text-red-600 dark:hover:text-red-400"
         )}
-        disabled={isDisabled}
+        disabled={isPending || isSessionActive}
         onClick={handleVoiceClick}
-        title="Continue with voice"
+        title={isSessionActive ? "Wait for session to complete" : "Continue with voice"}
       >
         <Mic className={iconSize} />
       </Button>

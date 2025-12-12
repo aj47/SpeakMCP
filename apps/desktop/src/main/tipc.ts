@@ -315,13 +315,19 @@ async function processWithAgentMode(
             nextMessage.text,
             "user",
           )
-          // Only remove from queue after successful persistence
-          messageQueueService.removeMessage(conversationId, nextMessage.id)
-          // Process the queued message (fire-and-forget, will handle its own queue processing)
-          processWithAgentMode(nextMessage.text, conversationId, undefined, true)
-            .catch((error) => {
-              logLLM("[processWithAgentMode] Queued message processing error:", error)
-            })
+          // Re-check that message is still in queue before removing (user may have cleared it during await)
+          const stillQueued = messageQueueService.getQueue(conversationId).some(m => m.id === nextMessage.id)
+          if (!stillQueued) {
+            logApp(`[processWithAgentMode] Queued message ${nextMessage.id} was removed during processing, skipping`)
+          } else {
+            // Only remove from queue after successful persistence
+            messageQueueService.removeMessage(conversationId, nextMessage.id)
+            // Process the queued message (fire-and-forget, will handle its own queue processing)
+            processWithAgentMode(nextMessage.text, conversationId, undefined, true)
+              .catch((error) => {
+                logLLM("[processWithAgentMode] Queued message processing error:", error)
+              })
+          }
         }
       } catch (queueError) {
         logApp("[processWithAgentMode] Error processing queued message after success:", queueError)
@@ -373,13 +379,19 @@ async function processWithAgentMode(
             nextMessage.text,
             "user",
           )
-          // Only remove from queue after successful persistence
-          messageQueueService.removeMessage(conversationId, nextMessage.id)
-          // Process the queued message (fire-and-forget, will handle its own queue processing)
-          processWithAgentMode(nextMessage.text, conversationId, undefined, true)
-            .catch((queueError) => {
-              logLLM("[processWithAgentMode] Queued message processing error:", queueError)
-            })
+          // Re-check that message is still in queue before removing (user may have cleared it during await)
+          const stillQueued = messageQueueService.getQueue(conversationId).some(m => m.id === nextMessage.id)
+          if (!stillQueued) {
+            logApp(`[processWithAgentMode] Queued message ${nextMessage.id} was removed during processing, skipping`)
+          } else {
+            // Only remove from queue after successful persistence
+            messageQueueService.removeMessage(conversationId, nextMessage.id)
+            // Process the queued message (fire-and-forget, will handle its own queue processing)
+            processWithAgentMode(nextMessage.text, conversationId, undefined, true)
+              .catch((queueError) => {
+                logLLM("[processWithAgentMode] Queued message processing error:", queueError)
+              })
+          }
         }
       } catch (queueError) {
         logApp("[processWithAgentMode] Error processing queued message after error:", queueError)

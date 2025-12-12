@@ -1,16 +1,5 @@
 import { logApp } from "./debug"
-
-export interface QueuedMessage {
-  id: string
-  conversationId: string
-  text: string
-  queuedAt: number
-}
-
-export interface MessageQueue {
-  conversationId: string
-  messages: QueuedMessage[]
-}
+import type { QueuedMessage, MessageQueue } from "@shared/types"
 
 class MessageQueueService {
   private queues: Map<string, QueuedMessage[]> = new Map()

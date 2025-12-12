@@ -89,6 +89,11 @@ export function useSessions(): SessionStore {
         loadSessions(),
         loadCurrentSessionId(),
       ]);
+      // Update refs synchronously BEFORE setting state to prevent stale refs
+      // This fixes the race condition where createNewSession could read empty sessionsRef.current
+      // if called immediately after mount (before the useEffect that syncs refs from state runs)
+      sessionsRef.current = loadedSessions;
+      currentSessionIdRef.current = loadedCurrentId;
       setSessions(loadedSessions);
       setCurrentSessionIdState(loadedCurrentId);
       setReady(true);

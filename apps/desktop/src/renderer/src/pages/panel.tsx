@@ -331,10 +331,20 @@ export function Component() {
         message: error.message,
       })
     },
-    onSuccess() {
+    onSuccess(result) {
       setShowTextInput(false)
       // Ensure main process knows text input is no longer active (prevents textInput positioning)
       tipcClient.clearTextInputState({})
+
+      // Check if the message was blocked due to active session
+      if (result && 'blocked' in result && result.blocked) {
+        tipcClient.displayError({
+          title: 'Message Not Sent',
+          message:
+            'Please wait for the current agent task to complete before sending another message.',
+        })
+        return
+      }
       // Don't hide panel on success - agent mode will handle this and keep panel visible
       // The panel needs to stay visible for agent mode progress updates
     },

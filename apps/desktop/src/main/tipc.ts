@@ -1068,6 +1068,17 @@ export const router = {
       // Emit initial loading progress immediately BEFORE transcription
       // This ensures users see feedback during the (potentially long) STT call
       const { agentSessionTracker } = await import("./agent-session-tracker")
+
+      // Check if there's already an active session processing for this conversation
+      // This prevents race conditions where overlapping processWithAgentMode calls
+      // could interfere with each other via cleanupSession
+      if (input.conversationId && agentSessionTracker.hasActiveSessionForConversation(input.conversationId)) {
+        logLLM("[createMcpRecording] Blocked: session already processing for conversation", input.conversationId)
+        // Return the existing conversationId so the UI knows the message wasn't processed
+        // The user's message was NOT added to the conversation to avoid duplicate processing
+        return { conversationId: input.conversationId, blocked: true }
+      }
+
       const tempConversationId = input.conversationId || `temp_${Date.now()}`
 
       // If sessionId is provided, try to revive that session.

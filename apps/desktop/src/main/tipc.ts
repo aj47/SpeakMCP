@@ -307,40 +307,48 @@ async function processWithAgentMode(
     if (conversationId && configStore.get().mcpMessageQueueEnabled) {
       try {
         const { messageQueueService } = await import("./message-queue-service")
-        const nextMessage = messageQueueService.peekNextMessage(conversationId)
-        if (nextMessage) {
+        // Loop to find a valid queued message to process
+        // This handles the case where messages were removed by user while we were running
+        let nextMessage = messageQueueService.peekNextMessage(conversationId)
+        while (nextMessage) {
           // Best-effort check if message is still queued BEFORE persisting
           // Note: There's still a small TOCTOU window after this check, but this
           // reduces the risk of processing messages the user has already removed
-          const stillQueued = messageQueueService.getQueue(conversationId).some(m => m.id === nextMessage.id)
+          const stillQueued = messageQueueService.getQueue(conversationId).some(m => m.id === nextMessage!.id)
           if (!stillQueued) {
-            logApp(`[processWithAgentMode] Queued message ${nextMessage.id} was removed before processing, skipping`)
-          } else {
-            logApp(`[processWithAgentMode] Processing queued message: ${nextMessage.id}`)
-            // Add the queued message to the conversation
-            await conversationService.addMessageToConversation(
-              conversationId,
-              nextMessage.text,
-              "user",
-            )
-            // Only remove from queue after successful persistence
-            // Check return value to prevent duplicate processing if removal fails (race condition)
-            const removed = messageQueueService.removeMessage(conversationId, nextMessage.id)
-            if (!removed) {
-              logApp(`[processWithAgentMode] Failed to remove queued message ${nextMessage.id}, skipping to prevent duplicates`)
-              return agentResult.content
-            }
-            // Revive the session before processing next queued message
-            // Since completeSession() removed it from active sessions, we need to revive it
-            // so subsequent session updates work correctly
-            agentSessionTracker.reviveSession(sessionId, true) // Start snoozed to run in background
-            // Process the queued message (fire-and-forget, will handle its own queue processing)
-            // Pass sessionId to reuse the existing session instead of creating a new one
-            processWithAgentMode(nextMessage.text, conversationId, sessionId, true)
-              .catch((error) => {
-                logLLM("[processWithAgentMode] Queued message processing error:", error)
-              })
+            logApp(`[processWithAgentMode] Queued message ${nextMessage.id} was removed before processing, trying next`)
+            nextMessage = messageQueueService.peekNextMessage(conversationId)
+            continue
           }
+
+          logApp(`[processWithAgentMode] Processing queued message: ${nextMessage.id}`)
+          // Add the queued message to the conversation
+          await conversationService.addMessageToConversation(
+            conversationId,
+            nextMessage.text,
+            "user",
+          )
+          // Only remove from queue after successful persistence
+          // Check return value to prevent duplicate processing if removal fails (race condition)
+          const removed = messageQueueService.removeMessage(conversationId, nextMessage.id)
+          if (!removed) {
+            // Message was removed by user between persistence and removal - this is OK
+            // The message is already persisted, just try the next one
+            logApp(`[processWithAgentMode] Message ${nextMessage.id} was removed during processing, trying next`)
+            nextMessage = messageQueueService.peekNextMessage(conversationId)
+            continue
+          }
+          // Revive the session before processing next queued message
+          // Since completeSession() removed it from active sessions, we need to revive it
+          // so subsequent session updates work correctly
+          agentSessionTracker.reviveSession(sessionId, true) // Start snoozed to run in background
+          // Process the queued message (fire-and-forget, will handle its own queue processing)
+          // Pass sessionId to reuse the existing session instead of creating a new one
+          processWithAgentMode(nextMessage.text, conversationId, sessionId, true)
+            .catch((error) => {
+              logLLM("[processWithAgentMode] Queued message processing error:", error)
+            })
+          break // Successfully started processing, exit loop
         }
       } catch (queueError) {
         logApp("[processWithAgentMode] Error processing queued message after success:", queueError)
@@ -384,40 +392,48 @@ async function processWithAgentMode(
     if (conversationId && configStore.get().mcpMessageQueueEnabled) {
       try {
         const { messageQueueService } = await import("./message-queue-service")
-        const nextMessage = messageQueueService.peekNextMessage(conversationId)
-        if (nextMessage) {
+        // Loop to find a valid queued message to process
+        // This handles the case where messages were removed by user while we were running
+        let nextMessage = messageQueueService.peekNextMessage(conversationId)
+        while (nextMessage) {
           // Best-effort check if message is still queued BEFORE persisting
           // Note: There's still a small TOCTOU window after this check, but this
           // reduces the risk of processing messages the user has already removed
-          const stillQueued = messageQueueService.getQueue(conversationId).some(m => m.id === nextMessage.id)
+          const stillQueued = messageQueueService.getQueue(conversationId).some(m => m.id === nextMessage!.id)
           if (!stillQueued) {
-            logApp(`[processWithAgentMode] Queued message ${nextMessage.id} was removed before processing, skipping`)
-          } else {
-            logApp(`[processWithAgentMode] Processing queued message after error: ${nextMessage.id}`)
-            // Add the queued message to the conversation
-            await conversationService.addMessageToConversation(
-              conversationId,
-              nextMessage.text,
-              "user",
-            )
-            // Only remove from queue after successful persistence
-            // Check return value to prevent duplicate processing if removal fails (race condition)
-            const removed = messageQueueService.removeMessage(conversationId, nextMessage.id)
-            if (!removed) {
-              logApp(`[processWithAgentMode] Failed to remove queued message ${nextMessage.id} after error, skipping to prevent duplicates`)
-              throw error
-            }
-            // Revive the session before processing next queued message
-            // Since errorSession() removed it from active sessions, we need to revive it
-            // so subsequent session updates work correctly
-            agentSessionTracker.reviveSession(sessionId, true) // Start snoozed to run in background
-            // Process the queued message (fire-and-forget, will handle its own queue processing)
-            // Pass sessionId to reuse the existing session instead of creating a new one
-            processWithAgentMode(nextMessage.text, conversationId, sessionId, true)
-              .catch((queueError) => {
-                logLLM("[processWithAgentMode] Queued message processing error:", queueError)
-              })
+            logApp(`[processWithAgentMode] Queued message ${nextMessage.id} was removed before processing, trying next`)
+            nextMessage = messageQueueService.peekNextMessage(conversationId)
+            continue
           }
+
+          logApp(`[processWithAgentMode] Processing queued message after error: ${nextMessage.id}`)
+          // Add the queued message to the conversation
+          await conversationService.addMessageToConversation(
+            conversationId,
+            nextMessage.text,
+            "user",
+          )
+          // Only remove from queue after successful persistence
+          // Check return value to prevent duplicate processing if removal fails (race condition)
+          const removed = messageQueueService.removeMessage(conversationId, nextMessage.id)
+          if (!removed) {
+            // Message was removed by user between persistence and removal - this is OK
+            // The message is already persisted, just try the next one
+            logApp(`[processWithAgentMode] Message ${nextMessage.id} was removed during processing, trying next`)
+            nextMessage = messageQueueService.peekNextMessage(conversationId)
+            continue
+          }
+          // Revive the session before processing next queued message
+          // Since errorSession() removed it from active sessions, we need to revive it
+          // so subsequent session updates work correctly
+          agentSessionTracker.reviveSession(sessionId, true) // Start snoozed to run in background
+          // Process the queued message (fire-and-forget, will handle its own queue processing)
+          // Pass sessionId to reuse the existing session instead of creating a new one
+          processWithAgentMode(nextMessage.text, conversationId, sessionId, true)
+            .catch((queueError) => {
+              logLLM("[processWithAgentMode] Queued message processing error:", queueError)
+            })
+          break // Successfully started processing, exit loop
         }
       } catch (queueError) {
         logApp("[processWithAgentMode] Error processing queued message after error:", queueError)

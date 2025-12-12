@@ -1105,10 +1105,13 @@ export default function ChatScreen({ route, navigation }: any) {
             const roleIcon = getRoleIcon(m.role as 'user' | 'assistant' | 'tool');
             const roleLabel = getRoleLabel(m.role as 'user' | 'assistant' | 'tool');
 
-            const hasToolResults = (m.toolResults?.length ?? 0) > 0;
+            const toolCallCount = m.toolCalls?.length ?? 0;
+            const toolResultCount = m.toolResults?.length ?? 0;
+            const hasToolResults = toolResultCount > 0;
             const allSuccess = hasToolResults && m.toolResults!.every(r => r.success);
             const hasErrors = hasToolResults && m.toolResults!.some(r => !r.success);
-            const isPending = (m.toolCalls?.length ?? 0) > 0 && !hasToolResults;
+            // isPending is true when there are more tool calls than results (including partial completion)
+            const isPending = toolCallCount > 0 && toolCallCount > toolResultCount;
 
             const toolPreview = !isExpanded && m.toolCalls && m.toolCalls.length > 0 && m.toolCalls[0]?.arguments
               ? formatArgumentsPreview(m.toolCalls[0].arguments)

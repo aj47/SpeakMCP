@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Linking, Platform, StyleSheet, Text } from 'react-native';
+import { Alert, Linking, Platform, StyleSheet, Text } from 'react-native';
 import Markdown, { RenderRules } from 'react-native-markdown-display';
 import { useTheme } from './ThemeProvider';
 import { spacing, radius } from './theme';
@@ -174,7 +174,12 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
           if (onLinkPress) {
             onLinkPress(url);
           } else {
-            Linking.openURL(url);
+            // Fallback when onLinkPress is not provided
+            // Add error handling to prevent unhandled rejections
+            Linking.openURL(url).catch((error) => {
+              console.error('Failed to open URL:', error);
+              Alert.alert('Cannot Open Link', 'Unable to open the link. Please try again.');
+            });
           }
         }}
       >

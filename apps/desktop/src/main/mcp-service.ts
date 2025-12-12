@@ -496,6 +496,13 @@ export class MCPService {
       })
     }
 
+    // Remove any existing tools from this server to prevent duplicates
+    // This handles cases where initializeServer is called multiple times
+    // (e.g., reconnection, OAuth retry, profile switch)
+    this.availableTools = this.availableTools.filter(
+      (tool) => !tool.name.startsWith(`${serverName}:`),
+    )
+
     try {
       const transportType = inferTransportType(serverConfig)
 

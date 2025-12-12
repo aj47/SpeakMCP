@@ -257,6 +257,7 @@ export default function ChatScreen({ route, navigation }: any) {
   const [listening, setListening] = useState(false);
   const [liveTranscript, setLiveTranscript] = useState('');
   const [debugInfo, setDebugInfo] = useState<string>('');
+  const [expandedMessages, setExpandedMessages] = useState<Record<number, boolean>>({});
 
   // Auto-scroll state and ref for mobile chat
   const scrollViewRef = useRef<ScrollView>(null);
@@ -377,6 +378,10 @@ export default function ChatScreen({ route, navigation }: any) {
 
     lastLoadedSessionIdRef.current = currentSession.id;
 
+    // Reset expandedMessages on session switch to ensure consistent "final response expanded"
+    // behavior per chat and prevent stale entries from affecting the new session
+    setExpandedMessages({});
+
     if (currentSession.messages.length > 0) {
       const chatMessages: ChatMessage[] = currentSession.messages.map(m => ({
         role: m.role,
@@ -409,10 +414,20 @@ export default function ChatScreen({ route, navigation }: any) {
     prevMessagesLengthRef.current = messages.length;
   }, [messages, sessionStore, sessionStore.currentSessionId]);
 
-  const [expandedMessages, setExpandedMessages] = useState<Record<number, boolean>>({});
   const toggleMessageExpansion = useCallback((index: number) => {
     setExpandedMessages(prev => ({ ...prev, [index]: !prev[index] }));
   }, []);
+
+  // Auto-expand the last assistant message and persist the expansion state
+  // This ensures that when a new message arrives, the previously expanded message stays expanded
+  useEffect(() => {
+    const lastAssistantIndex = messages.reduce((lastIdx, m, i) =>
+      m.role === 'assistant' ? i : lastIdx, -1);
+
+    if (lastAssistantIndex >= 0 && expandedMessages[lastAssistantIndex] === undefined) {
+      setExpandedMessages(prev => ({ ...prev, [lastAssistantIndex]: true }));
+    }
+  }, [messages]);
 
   const [willCancel, setWillCancel] = useState(false);
   const startYRef = useRef<number | null>(null);
@@ -1084,6 +1099,8 @@ export default function ChatScreen({ route, navigation }: any) {
         >
           {messages.map((m, i) => {
             const shouldCollapse = shouldCollapseMessage(m.content, m.toolCalls, m.toolResults);
+            // expandedMessages is auto-updated via useEffect to expand the last assistant message
+            // and persist the expansion state so it doesn't collapse when new messages arrive
             const isExpanded = expandedMessages[i] ?? false;
             const roleIcon = getRoleIcon(m.role as 'user' | 'assistant' | 'tool');
             const roleLabel = getRoleLabel(m.role as 'user' | 'assistant' | 'tool');

@@ -382,6 +382,7 @@ class AgentSessionTracker {
    */
   clearAllSessions(): void {
     this.sessions.clear()
+    this.pendingConversations.clear()
   }
 
   /**

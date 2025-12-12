@@ -972,10 +972,13 @@ export const router = {
     .action(async ({ input }) => {
       const { agentSessionTracker } = await import("./agent-session-tracker")
 
+      // Track whether we made a reservation so we can release it on error
+      const madeReservation = input.conversationId ? agentSessionTracker.reserveConversation(input.conversationId) : false
+
       // Use reserveConversation for atomic check-and-reserve to prevent race conditions
       // This prevents two near-simultaneous calls from both passing the active check
       // before either has registered their session
-      if (input.conversationId && !agentSessionTracker.reserveConversation(input.conversationId)) {
+      if (input.conversationId && !madeReservation) {
         logLLM("[createMcpTextInput] Blocked: session already processing or pending for conversation", input.conversationId)
         // Return the existing conversationId so the UI knows the message wasn't processed
         // The user's message was NOT added to the conversation to avoid duplicate processing
@@ -1059,8 +1062,9 @@ export const router = {
         // Progress updates will be sent via emitAgentProgress
         return { conversationId }
       } catch (error) {
-        // Release the conversation reservation since processing failed
-        if (input.conversationId) {
+        // Release the conversation reservation since processing failed before processWithAgentMode started
+        if (madeReservation && input.conversationId) {
+          logLLM("[createMcpTextInput] Error before agent processing, releasing reservation:", error)
           agentSessionTracker.releaseConversationReservation(input.conversationId)
         }
         throw error
@@ -1085,10 +1089,13 @@ export const router = {
       // This ensures users see feedback during the (potentially long) STT call
       const { agentSessionTracker } = await import("./agent-session-tracker")
 
+      // Track whether we made a reservation so we can release it on error
+      const madeReservation = input.conversationId ? agentSessionTracker.reserveConversation(input.conversationId) : false
+
       // Use reserveConversation for atomic check-and-reserve to prevent race conditions
       // This prevents two near-simultaneous calls from both passing the active check
       // before either has registered their session
-      if (input.conversationId && !agentSessionTracker.reserveConversation(input.conversationId)) {
+      if (input.conversationId && !madeReservation) {
         logLLM("[createMcpRecording] Blocked: session already processing or pending for conversation", input.conversationId)
         // Return the existing conversationId so the UI knows the message wasn't processed
         // The user's message was NOT added to the conversation to avoid duplicate processing
@@ -1294,8 +1301,8 @@ export const router = {
         // Handle transcription or conversation creation errors
         logLLM("[createMcpRecording] Transcription error:", error)
 
-        // Release the conversation reservation since processing failed
-        if (input.conversationId) {
+        // Release the conversation reservation since processing failed before processWithAgentMode started
+        if (madeReservation && input.conversationId) {
           agentSessionTracker.releaseConversationReservation(input.conversationId)
         }
 

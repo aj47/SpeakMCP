@@ -311,6 +311,17 @@ export default function ChatScreen({ route, navigation }: any) {
     setExpandedMessages(prev => ({ ...prev, [index]: !prev[index] }));
   }, []);
 
+  // Auto-expand the last assistant message and persist the expansion state
+  // This ensures that when a new message arrives, the previously expanded message stays expanded
+  useEffect(() => {
+    const lastAssistantIndex = messages.reduce((lastIdx, m, i) =>
+      m.role === 'assistant' ? i : lastIdx, -1);
+
+    if (lastAssistantIndex >= 0 && expandedMessages[lastAssistantIndex] === undefined) {
+      setExpandedMessages(prev => ({ ...prev, [lastAssistantIndex]: true }));
+    }
+  }, [messages]);
+
   const [willCancel, setWillCancel] = useState(false);
   const startYRef = useRef<number | null>(null);
 
@@ -976,11 +987,9 @@ export default function ChatScreen({ route, navigation }: any) {
         >
           {messages.map((m, i) => {
             const shouldCollapse = shouldCollapseMessage(m.content, m.toolCalls, m.toolResults);
-            // Check if this is the last assistant message (final response)
-            const isLastAssistantMessage = m.role === 'assistant' &&
-              !messages.slice(i + 1).some(msg => msg.role === 'assistant');
-            // On mobile, expand the final response by default for better UX
-            const isExpanded = expandedMessages[i] ?? isLastAssistantMessage;
+            // expandedMessages is auto-updated via useEffect to expand the last assistant message
+            // and persist the expansion state so it doesn't collapse when new messages arrive
+            const isExpanded = expandedMessages[i] ?? false;
             const roleIcon = getRoleIcon(m.role as 'user' | 'assistant' | 'tool');
             const roleLabel = getRoleLabel(m.role as 'user' | 'assistant' | 'tool');
 

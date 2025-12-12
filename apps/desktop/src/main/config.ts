@@ -117,7 +117,7 @@ const getConfig = () => {
     mcpParallelToolExecution: true,
 
     // Message queue - when enabled, users can queue messages while agent is processing
-    mcpMessageQueueEnabled: true,
+    mcpMessageQueueEnabled: false,
 
 	    // Remote Server defaults
 	    remoteServerEnabled: false,

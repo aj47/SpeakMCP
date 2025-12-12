@@ -309,8 +309,9 @@ async function processWithAgentMode(
         const { messageQueueService } = await import("./message-queue-service")
         const nextMessage = messageQueueService.peekNextMessage(conversationId)
         if (nextMessage) {
-          // Verify message is still queued BEFORE persisting to conversation
-          // This prevents orphan messages if user cleared queue during peek
+          // Best-effort check if message is still queued BEFORE persisting
+          // Note: There's still a small TOCTOU window after this check, but this
+          // reduces the risk of processing messages the user has already removed
           const stillQueued = messageQueueService.getQueue(conversationId).some(m => m.id === nextMessage.id)
           if (!stillQueued) {
             logApp(`[processWithAgentMode] Queued message ${nextMessage.id} was removed before processing, skipping`)
@@ -385,8 +386,9 @@ async function processWithAgentMode(
         const { messageQueueService } = await import("./message-queue-service")
         const nextMessage = messageQueueService.peekNextMessage(conversationId)
         if (nextMessage) {
-          // Verify message is still queued BEFORE persisting to conversation
-          // This prevents orphan messages if user cleared queue during peek
+          // Best-effort check if message is still queued BEFORE persisting
+          // Note: There's still a small TOCTOU window after this check, but this
+          // reduces the risk of processing messages the user has already removed
           const stillQueued = messageQueueService.getQueue(conversationId).some(m => m.id === nextMessage.id)
           if (!stillQueued) {
             logApp(`[processWithAgentMode] Queued message ${nextMessage.id} was removed before processing, skipping`)

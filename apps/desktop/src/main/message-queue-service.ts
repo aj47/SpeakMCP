@@ -25,7 +25,7 @@ class MessageQueueService {
   }
 
   getQueue(conversationId: string): QueuedMessage[] {
-    return this.queues.get(conversationId) ?? []
+    return [...(this.queues.get(conversationId) ?? [])]
   }
 
   getAllQueues(): MessageQueue[] {

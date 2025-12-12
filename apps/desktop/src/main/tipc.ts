@@ -308,18 +308,19 @@ async function processWithAgentMode(
         const { messageQueueService } = await import("./message-queue-service")
         const nextMessage = messageQueueService.peekNextMessage(conversationId)
         if (nextMessage) {
-          logApp(`[processWithAgentMode] Processing queued message: ${nextMessage.id}`)
-          // Add the queued message to the conversation first
-          await conversationService.addMessageToConversation(
-            conversationId,
-            nextMessage.text,
-            "user",
-          )
-          // Re-check that message is still in queue before removing (user may have cleared it during await)
+          // Verify message is still queued BEFORE persisting to conversation
+          // This prevents orphan messages if user cleared queue during peek
           const stillQueued = messageQueueService.getQueue(conversationId).some(m => m.id === nextMessage.id)
           if (!stillQueued) {
-            logApp(`[processWithAgentMode] Queued message ${nextMessage.id} was removed during processing, skipping`)
+            logApp(`[processWithAgentMode] Queued message ${nextMessage.id} was removed before processing, skipping`)
           } else {
+            logApp(`[processWithAgentMode] Processing queued message: ${nextMessage.id}`)
+            // Add the queued message to the conversation
+            await conversationService.addMessageToConversation(
+              conversationId,
+              nextMessage.text,
+              "user",
+            )
             // Only remove from queue after successful persistence
             messageQueueService.removeMessage(conversationId, nextMessage.id)
             // Revive the session before processing next queued message
@@ -377,18 +378,19 @@ async function processWithAgentMode(
         const { messageQueueService } = await import("./message-queue-service")
         const nextMessage = messageQueueService.peekNextMessage(conversationId)
         if (nextMessage) {
-          logApp(`[processWithAgentMode] Processing queued message after error: ${nextMessage.id}`)
-          // Add the queued message to the conversation first
-          await conversationService.addMessageToConversation(
-            conversationId,
-            nextMessage.text,
-            "user",
-          )
-          // Re-check that message is still in queue before removing (user may have cleared it during await)
+          // Verify message is still queued BEFORE persisting to conversation
+          // This prevents orphan messages if user cleared queue during peek
           const stillQueued = messageQueueService.getQueue(conversationId).some(m => m.id === nextMessage.id)
           if (!stillQueued) {
-            logApp(`[processWithAgentMode] Queued message ${nextMessage.id} was removed during processing, skipping`)
+            logApp(`[processWithAgentMode] Queued message ${nextMessage.id} was removed before processing, skipping`)
           } else {
+            logApp(`[processWithAgentMode] Processing queued message after error: ${nextMessage.id}`)
+            // Add the queued message to the conversation
+            await conversationService.addMessageToConversation(
+              conversationId,
+              nextMessage.text,
+              "user",
+            )
             // Only remove from queue after successful persistence
             messageQueueService.removeMessage(conversationId, nextMessage.id)
             // Revive the session before processing next queued message

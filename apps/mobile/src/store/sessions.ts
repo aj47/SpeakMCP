@@ -251,22 +251,23 @@ export function useSessions(): SessionStore {
   ) => {
     if (!currentSessionId) return;
 
+    // Create the message ONCE to ensure consistency between persisted and React state
+    const now = Date.now();
+    const newMessage = {
+      id: generateMessageId(),
+      role,
+      content,
+      timestamp: now,
+      toolCalls,
+      toolResults,
+    };
+
     // Compute the new sessions array BEFORE setSessions to guarantee the value we save
     // is exactly what we intend to set (same pattern as createNewSession/deleteSession)
     const currentSessions = sessionsRef.current;
     const targetSessionId = currentSessionId;
     const sessionsToSave = currentSessions.map(session => {
       if (session.id !== targetSessionId) return session;
-
-      const now = Date.now();
-      const newMessage = {
-        id: generateMessageId(),
-        role,
-        content,
-        timestamp: now,
-        toolCalls,
-        toolResults,
-      };
 
       // Update title if this is the first user message
       let title = session.title;
@@ -285,32 +286,8 @@ export function useSessions(): SessionStore {
     // Update ref synchronously so any subsequent operations see the new state immediately
     sessionsRef.current = sessionsToSave;
 
-    // Use functional update for state to ensure React's reconciliation works correctly
-    setSessions(prev => prev.map(session => {
-      if (session.id !== targetSessionId) return session;
-
-      const now = Date.now();
-      const newMessage = {
-        id: generateMessageId(),
-        role,
-        content,
-        timestamp: now,
-        toolCalls,
-        toolResults,
-      };
-
-      let title = session.title;
-      if (role === 'user' && session.messages.length === 0) {
-        title = generateSessionTitle(content);
-      }
-
-      return {
-        ...session,
-        title,
-        updatedAt: now,
-        messages: [...session.messages, newMessage],
-      };
-    }));
+    // Set state to the pre-computed sessions array to ensure React state matches persisted state
+    setSessions(sessionsToSave);
 
     // Queue async save with the pre-computed sessions array (serialized with other operations)
     queueSave(async () => {
@@ -360,22 +337,9 @@ export function useSessions(): SessionStore {
     // Update ref synchronously so any subsequent operations see the new state immediately
     sessionsRef.current = sessionsToSave;
 
-    // Use functional update for state to ensure React's reconciliation works correctly
-    setSessions(prev => prev.map(session => {
-      if (session.id !== targetSessionId) return session;
-
-      let title = session.title;
-      if (title === 'New Chat' && firstUserMsg?.content) {
-        title = generateSessionTitle(firstUserMsg.content);
-      }
-
-      return {
-        ...session,
-        title,
-        updatedAt: now,
-        messages: sessionMessages,
-      };
-    }));
+    // Use functional update for state - return the pre-computed sessionsToSave directly
+    // to guarantee state matches what we're saving (same pattern as addMessage)
+    setSessions(() => sessionsToSave);
 
     // Queue async save with the pre-computed sessions array (serialized with other operations)
     queueSave(async () => {
@@ -405,15 +369,9 @@ export function useSessions(): SessionStore {
     // Update ref synchronously so any subsequent operations see the new state immediately
     sessionsRef.current = sessionsToSave;
 
-    // Use functional update for state to ensure React's reconciliation works correctly
-    setSessions(prev => prev.map(session => {
-      if (session.id !== targetSessionId) return session;
-      return {
-        ...session,
-        serverConversationId,
-        updatedAt: now,
-      };
-    }));
+    // Use functional update for state - return the pre-computed sessionsToSave directly
+    // to guarantee state matches what we're saving (same pattern as addMessage)
+    setSessions(() => sessionsToSave);
 
     // Queue async save with the pre-computed sessions array (serialized with other operations)
     queueSave(async () => {

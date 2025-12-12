@@ -268,29 +268,33 @@ export default function ChatScreen({ route, navigation }: any) {
 
     let currentSession = sessionStore.getCurrentSession();
 
-    if (!currentSession) {
-      // Only guard auto-creation when a deletion is in progress (fixes #571)
-      // This prevents race conditions where a new session is created before the deletion completes
-      // But we don't skip loading messages for existing sessions (addresses PR review comment)
-      if (sessionStore.deletingSessionIds.size > 0) {
-        return;
+    // If we have an existing session, always load its messages regardless of deletions
+    if (currentSession) {
+      lastLoadedSessionIdRef.current = currentSession.id;
+
+      if (currentSession.messages.length > 0) {
+        const chatMessages: ChatMessage[] = currentSession.messages.map(m => ({
+          role: m.role,
+          content: m.content,
+          toolCalls: m.toolCalls,
+          toolResults: m.toolResults,
+        }));
+        setMessages(chatMessages);
+      } else {
+        setMessages([]);
       }
-      currentSession = sessionStore.createNewSession();
+      return;
     }
 
+    // No current session - only auto-create if no deletions are in progress (fixes #571)
+    // This prevents race conditions where a new session is created before the deletion completes
+    if (sessionStore.deletingSessionIds.size > 0) {
+      return;
+    }
+
+    currentSession = sessionStore.createNewSession();
     lastLoadedSessionIdRef.current = currentSession.id;
-
-    if (currentSession.messages.length > 0) {
-      const chatMessages: ChatMessage[] = currentSession.messages.map(m => ({
-        role: m.role,
-        content: m.content,
-        toolCalls: m.toolCalls,
-        toolResults: m.toolResults,
-      }));
-      setMessages(chatMessages);
-    } else {
-      setMessages([]);
-    }
+    setMessages([]);
   }, [sessionStore.currentSessionId, sessionStore, sessionStore.deletingSessionIds.size]);
 
   const prevMessagesLengthRef = useRef(0);

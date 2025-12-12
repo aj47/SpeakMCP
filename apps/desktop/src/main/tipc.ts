@@ -303,7 +303,8 @@ async function processWithAgentMode(
     // Check for queued messages and process the next one
     // Wrapped in try-catch to prevent queue processing errors from affecting the original outcome
     // Uses peek-then-remove pattern to avoid losing messages if addMessageToConversation fails
-    if (conversationId && config.mcpMessageQueueEnabled) {
+    // Re-read config to respect toggle changes during the run
+    if (conversationId && configStore.get().mcpMessageQueueEnabled) {
       try {
         const { messageQueueService } = await import("./message-queue-service")
         const nextMessage = messageQueueService.peekNextMessage(conversationId)
@@ -373,7 +374,8 @@ async function processWithAgentMode(
     // Check for queued messages and process the next one (even on error)
     // Wrapped in try-catch to prevent queue processing errors from masking the original error
     // Uses peek-then-remove pattern to avoid losing messages if addMessageToConversation fails
-    if (conversationId && config.mcpMessageQueueEnabled) {
+    // Re-read config to respect toggle changes during the run
+    if (conversationId && configStore.get().mcpMessageQueueEnabled) {
       try {
         const { messageQueueService } = await import("./message-queue-service")
         const nextMessage = messageQueueService.peekNextMessage(conversationId)

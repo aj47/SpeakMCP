@@ -255,6 +255,7 @@ export default function ChatScreen({ route, navigation }: any) {
   const [listening, setListening] = useState(false);
   const [liveTranscript, setLiveTranscript] = useState('');
   const [debugInfo, setDebugInfo] = useState<string>('');
+  const [expandedMessages, setExpandedMessages] = useState<Record<number, boolean>>({});
 
   const lastLoadedSessionIdRef = useRef<string | null>(null);
 
@@ -273,6 +274,10 @@ export default function ChatScreen({ route, navigation }: any) {
     }
 
     lastLoadedSessionIdRef.current = currentSession.id;
+
+    // Reset expandedMessages on session switch to ensure consistent "final response expanded"
+    // behavior per chat and prevent stale entries from affecting the new session
+    setExpandedMessages({});
 
     if (currentSession.messages.length > 0) {
       const chatMessages: ChatMessage[] = currentSession.messages.map(m => ({
@@ -306,7 +311,6 @@ export default function ChatScreen({ route, navigation }: any) {
     prevMessagesLengthRef.current = messages.length;
   }, [messages, sessionStore, sessionStore.currentSessionId]);
 
-  const [expandedMessages, setExpandedMessages] = useState<Record<number, boolean>>({});
   const toggleMessageExpansion = useCallback((index: number) => {
     setExpandedMessages(prev => ({ ...prev, [index]: !prev[index] }));
   }, []);

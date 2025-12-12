@@ -1,11 +1,12 @@
 import { useEffect, useState, useMemo } from 'react';
-import { View, Text, TextInput, Switch, StyleSheet, ScrollView, Modal, TouchableOpacity, Platform, Pressable } from 'react-native';
+import { View, Text, TextInput, Switch, StyleSheet, ScrollView, Modal, TouchableOpacity, Platform, Pressable, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppConfig, saveConfig, useConfigContext } from '../store/config';
 import { useTheme, ThemeMode } from '../ui/ThemeProvider';
 import { spacing, radius } from '../ui/theme';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Linking from 'expo-linking';
+import { checkServerConnection, ConnectionCheckResult } from '../lib/connectionRecovery';
 
 function parseQRCode(data: string): { baseUrl?: string; apiKey?: string; model?: string } | null {
   try {
@@ -41,6 +42,8 @@ export default function SettingsScreen({ navigation }: any) {
   const [showScanner, setShowScanner] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
+  const [isCheckingConnection, setIsCheckingConnection] = useState(false);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
 
   const styles = useMemo(() => createStyles(theme), [theme]);
 
@@ -48,11 +51,84 @@ export default function SettingsScreen({ navigation }: any) {
     setDraft(config);
   }, [ready]);
 
+  // Clear connection error when draft changes
+  useEffect(() => {
+    if (connectionError) {
+      setConnectionError(null);
+    }
+  }, [draft.baseUrl, draft.apiKey]);
+
   const onSave = async () => {
-    const normalizedDraft = {
+    let normalizedDraft = {
       ...draft,
       baseUrl: draft.baseUrl?.trim?.() ?? '',
+      apiKey: draft.apiKey?.trim?.() ?? '',
     };
+
+    // Clear any previous error
+    setConnectionError(null);
+
+    // Default to OpenAI URL if baseUrl is empty to prevent OpenAIClient from throwing
+    if (!normalizedDraft.baseUrl) {
+      normalizedDraft.baseUrl = 'https://api.openai.com/v1';
+    }
+
+    // Check if we have a base URL to validate
+    // If using default OpenAI URL with no API key, allow pass-through (might be using built-in key)
+    const hasCustomUrl = normalizedDraft.baseUrl && normalizedDraft.baseUrl !== 'https://api.openai.com/v1';
+    const hasApiKey = normalizedDraft.apiKey && normalizedDraft.apiKey.length > 0;
+
+    // Require API key when using a custom server URL
+    if (hasCustomUrl && !hasApiKey) {
+      setConnectionError('API Key is required when using a custom server URL');
+      return;
+    }
+
+    // Validate: if API key is set, base URL must also be set
+    if (hasApiKey && !normalizedDraft.baseUrl) {
+      setConnectionError('Base URL is required when an API key is provided');
+      return;
+    }
+
+    // Only check connection if we have both a custom URL and API key
+    // Or if we have an API key with the default URL
+    if (hasApiKey && normalizedDraft.baseUrl) {
+      setIsCheckingConnection(true);
+
+      try {
+        const result = await checkServerConnection(
+          normalizedDraft.baseUrl,
+          normalizedDraft.apiKey,
+          10000 // 10 second timeout
+        );
+
+        if (!result.success) {
+          setConnectionError(result.error || 'Connection failed');
+          setIsCheckingConnection(false);
+          return; // Don't proceed if connection fails
+        }
+
+        // Use the normalized URL from the connection check so the saved config
+        // matches what was actually verified (includes scheme, no trailing slashes)
+        if (result.normalizedUrl) {
+          normalizedDraft = {
+            ...normalizedDraft,
+            baseUrl: result.normalizedUrl,
+          };
+        }
+
+        console.log('[Settings] Connection check successful:', result);
+      } catch (error: any) {
+        console.error('[Settings] Connection check error:', error);
+        setConnectionError(error.message || 'Connection check failed');
+        setIsCheckingConnection(false);
+        return;
+      }
+
+      setIsCheckingConnection(false);
+    }
+
+    // Connection successful or no validation needed, proceed
     setConfig(normalizedDraft);
     await saveConfig(normalizedDraft);
     navigation.navigate('Sessions');
@@ -165,8 +241,25 @@ export default function SettingsScreen({ navigation }: any) {
           />
         </View>
 
-        <TouchableOpacity style={styles.primaryButton} onPress={onSave}>
-          <Text style={styles.primaryButtonText}>Save & Start Chatting</Text>
+        {connectionError && (
+          <View style={styles.errorContainer}>
+            <Text style={styles.errorText}>⚠️ {connectionError}</Text>
+          </View>
+        )}
+
+        <TouchableOpacity
+          style={[styles.primaryButton, isCheckingConnection && styles.primaryButtonDisabled]}
+          onPress={onSave}
+          disabled={isCheckingConnection}
+        >
+          {isCheckingConnection ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator color={theme.colors.primaryForeground} size="small" />
+              <Text style={styles.primaryButtonText}>  Checking connection...</Text>
+            </View>
+          ) : (
+            <Text style={styles.primaryButtonText}>Save & Start Chatting</Text>
+          )}
         </TouchableOpacity>
       </ScrollView>
 
@@ -272,10 +365,31 @@ function createStyles(theme: ReturnType<typeof useTheme>['theme']) {
       alignItems: 'center',
       marginTop: spacing.lg,
     },
+    primaryButtonDisabled: {
+      opacity: 0.7,
+    },
     primaryButtonText: {
       color: theme.colors.primaryForeground,
       fontSize: 16,
       fontWeight: '600',
+    },
+    loadingContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    errorContainer: {
+      backgroundColor: theme.colors.destructive + '20',
+      borderWidth: 1,
+      borderColor: theme.colors.destructive,
+      borderRadius: radius.md,
+      padding: spacing.md,
+      marginTop: spacing.md,
+    },
+    errorText: {
+      color: theme.colors.destructive,
+      fontSize: 14,
+      textAlign: 'center',
     },
     scannerContainer: {
       flex: 1,

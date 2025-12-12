@@ -206,7 +206,7 @@ export function SessionTile({
         <>
           {/* Conversation content - scrollable */}
           <ScrollArea className="flex-1 min-h-0">
-            <div className="p-3 space-y-3">
+            <div className="p-3 space-y-3" onClick={(e) => e.stopPropagation()}>
               {messages.length === 0 ? (
                 <div className="text-center text-muted-foreground text-sm py-4">
                   {isActive ? "Starting..." : "No messages"}

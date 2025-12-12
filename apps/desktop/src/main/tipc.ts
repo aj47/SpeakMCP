@@ -158,16 +158,23 @@ async function processWithAgentMode(
 
   // Agent mode state is managed per-session via agentSessionStateManager
 
-  // Start tracking this agent session (or reuse existing one)
+  // Import the tracker first (this should never fail for a local module)
   const { agentSessionTracker } = await import("./agent-session-tracker")
-  let conversationTitle = text.length > 50 ? text.substring(0, 50) + "..." : text
-  // When creating a new session from keybind/UI, start unsnoozed so panel shows immediately
-  const sessionId = existingSessionId || agentSessionTracker.startSession(conversationId, conversationTitle, startSnoozed)
 
-  // Release the reservation now that the session is registered
-  // This allows the hasActiveSessionForConversation check to work properly for subsequent calls
-  if (reservedConversationId) {
-    agentSessionTracker.releaseConversationReservation(reservedConversationId)
+  // Start tracking this agent session (or reuse existing one)
+  // Wrap in try-catch to ensure reservation is released even if session start fails
+  let sessionId: string
+  try {
+    const conversationTitle = text.length > 50 ? text.substring(0, 50) + "..." : text
+    // When creating a new session from keybind/UI, start unsnoozed so panel shows immediately
+    sessionId = existingSessionId || agentSessionTracker.startSession(conversationId, conversationTitle, startSnoozed)
+  } finally {
+    // Release the reservation now that we've attempted session registration
+    // This allows the hasActiveSessionForConversation check to work properly for subsequent calls
+    // Released in finally to ensure cleanup even if startSession throws
+    if (reservedConversationId) {
+      agentSessionTracker.releaseConversationReservation(reservedConversationId)
+    }
   }
 
   try {

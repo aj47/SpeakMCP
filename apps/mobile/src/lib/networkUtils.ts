@@ -45,6 +45,7 @@ export function isRetryableError(error: unknown): boolean {
       'network error',
       'failed to fetch',
       'aborted',
+      'aborterror',
       'timeout',
       'socket hang up',
       'econnreset',
@@ -114,7 +115,8 @@ export function createAppStateAwareAbortController(): {
 export async function withRetry<T>(
   operation: (signal?: AbortSignal) => Promise<T>,
   config: RetryConfig = {},
-  onRetry?: (attempt: number, error: Error) => void
+  onRetry?: (attempt: number, error: Error) => void,
+  signal?: AbortSignal
 ): Promise<T> {
   const { maxRetries, baseDelayMs, maxDelayMs } = {
     ...DEFAULT_RETRY_CONFIG,
@@ -125,7 +127,7 @@ export async function withRetry<T>(
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
-      return await operation();
+      return await operation(signal);
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
       

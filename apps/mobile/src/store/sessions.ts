@@ -65,6 +65,8 @@ export function useSessions(): SessionStore {
   // Track sessions being deleted to prevent race conditions (fixes #571)
   const [deletingSessionIds, setDeletingSessionIds] = useState<Set<string>>(new Set());
   // Use ref to ensure we always have the latest sessions for async operations
+  // NOTE: We update these refs synchronously in our callbacks, not just in useEffect,
+  // to ensure queued async saves always see the correct state (fixes PR review comment)
   const sessionsRef = useRef<Session[]>(sessions);
   useEffect(() => { sessionsRef.current = sessions; }, [sessions]);
   // Use ref for currentSessionId to avoid stale closure issues after awaits
@@ -104,19 +106,25 @@ export function useSessions(): SessionStore {
     };
 
     // Use functional update to ensure we have the latest state and don't drop concurrent updates
+    // We capture the exact sessions array and update refs synchronously to ensure queued saves
+    // always use the correct state (fixes PR review comment about stale refs)
+    let sessionsToSave: Session[] = [];
     setSessions(prev => {
       // Filter out any sessions that are currently being deleted to avoid race conditions
       const cleanedPrev = prev.filter(s => !deletingSessionIds.has(s.id));
       const updated = [newSession, ...cleanedPrev];
+      // Update ref synchronously so queued saves see the new state immediately
+      sessionsRef.current = updated;
+      sessionsToSave = updated;
       return updated;
     });
     setCurrentSessionIdState(newSession.id);
+    // Update currentSessionId ref synchronously as well
+    currentSessionIdRef.current = newSession.id;
 
-    // Queue async saves OUTSIDE setSessions to ensure it's synchronously queued
-    // The sessionsRef will be updated by useEffect after React processes the state change
-    // By the time this queued operation runs, sessionsRef.current will have the new sessions
+    // Queue async saves with the exact sessions array we're setting
     queueSave(async () => {
-      await saveSessions(sessionsRef.current);
+      await saveSessions(sessionsToSave);
       await saveCurrentSessionId(newSession.id);
     });
 
@@ -125,6 +133,8 @@ export function useSessions(): SessionStore {
 
   const setCurrentSession = useCallback((id: string | null) => {
     setCurrentSessionIdState(id);
+    // Update ref synchronously so queued saves see the new value immediately
+    currentSessionIdRef.current = id;
     // Queue the async save to prevent interleaving with deleteSession's queued saves
     // This ensures that if a delete is in progress, the new selection won't be overwritten
     queueSave(async () => {
@@ -137,30 +147,31 @@ export function useSessions(): SessionStore {
     setDeletingSessionIds(prev => new Set(prev).add(id));
 
     // Check if we're deleting the current session for immediate UI update
-    // Note: We check BEFORE updating state, then re-check at save time to avoid stale closure
     const isCurrentSession = currentSessionIdRef.current === id;
 
     // Update current session state immediately for responsive UI
     if (isCurrentSession) {
       setCurrentSessionIdState(null);
+      // Update ref synchronously so queued saves see the new value immediately
+      currentSessionIdRef.current = null;
     }
 
     // Use functional update to avoid race conditions with rapid deletes
+    // We capture the exact sessions array and update refs synchronously to ensure queued saves
+    // always use the correct state (fixes PR review comment about stale refs)
+    let sessionsToSave: Session[] = [];
     setSessions(prev => {
       const updated = prev.filter(s => s.id !== id);
+      // Update ref synchronously so queued saves see the new state immediately
+      sessionsRef.current = updated;
+      sessionsToSave = updated;
       return updated;
     });
 
-    // Queue save OUTSIDE setSessions to ensure it's synchronously queued before we await
-    // This fixes the timing issue where React may batch the setSessions call and delay
-    // executing the functional updater, which would mean queueSave inside setSessions
-    // might not be called before we chain our await onto the queue.
-    //
-    // The sessionsRef will be updated by useEffect after React processes the state change.
-    // Since all saves are serialized through the queue, by the time this operation runs,
-    // sessionsRef.current will have the updated (filtered) sessions.
+    // Queue save with the exact sessions array we're setting
+    // This ensures we save exactly what was set, not a potentially stale ref value
     queueSave(async () => {
-      await saveSessions(sessionsRef.current);
+      await saveSessions(sessionsToSave);
       // Re-check currentSessionIdRef at save time to avoid overwriting newly selected session
       // Only clear persisted ID if user hasn't switched to a different session
       // This fixes the race where user switches sessions while delete is in-flight
@@ -194,8 +205,11 @@ export function useSessions(): SessionStore {
 
     setSessions([]);
     setCurrentSessionIdState(null);
+    // Update refs synchronously so queued saves see the new values immediately
+    sessionsRef.current = [];
+    currentSessionIdRef.current = null;
 
-    // Queue async saves to prevent interleaving
+    // Queue async saves to prevent interleaving - save empty array directly (no ref needed)
     queueSave(async () => {
       await Promise.all([
         saveSessions([]),

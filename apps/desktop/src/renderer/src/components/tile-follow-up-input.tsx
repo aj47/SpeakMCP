@@ -52,7 +52,8 @@ export function TileFollowUpInput({
   const handleSubmit = (e?: React.FormEvent) => {
     e?.preventDefault()
     const trimmed = text.trim()
-    if (trimmed && !sendMutation.isPending && !isSessionActive) {
+    // Allow sending when session is active - backend will queue the message
+    if (trimmed && !sendMutation.isPending) {
       sendMutation.mutate(trimmed)
     }
   }
@@ -74,8 +75,8 @@ export function TileFollowUpInput({
     await tipcClient.triggerMcpRecording({ conversationId, sessionId: realSessionId, fromTile: true })
   }
 
-  // Don't allow input while session is still active (agent is processing)
-  const isDisabled = sendMutation.isPending || isSessionActive
+  // Allow typing even while session is active - messages will be queued
+  const isDisabled = sendMutation.isPending
 
   return (
     <form
@@ -92,7 +93,7 @@ export function TileFollowUpInput({
         value={text}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={handleKeyDown}
-        placeholder={isSessionActive ? "Waiting for agent..." : "Continue conversation..."}
+        placeholder={isSessionActive ? "Type to queue message..." : "Continue conversation..."}
         className={cn(
           "flex-1 text-sm bg-transparent border-0 outline-none",
           "placeholder:text-muted-foreground/60",

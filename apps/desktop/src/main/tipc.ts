@@ -323,7 +323,12 @@ async function processWithAgentMode(
               "user",
             )
             // Only remove from queue after successful persistence
-            messageQueueService.removeMessage(conversationId, nextMessage.id)
+            // Check return value to prevent duplicate processing if removal fails (race condition)
+            const removed = messageQueueService.removeMessage(conversationId, nextMessage.id)
+            if (!removed) {
+              logApp(`[processWithAgentMode] Failed to remove queued message ${nextMessage.id}, skipping to prevent duplicates`)
+              return agentResult.content
+            }
             // Revive the session before processing next queued message
             // Since completeSession() removed it from active sessions, we need to revive it
             // so subsequent session updates work correctly
@@ -394,7 +399,12 @@ async function processWithAgentMode(
               "user",
             )
             // Only remove from queue after successful persistence
-            messageQueueService.removeMessage(conversationId, nextMessage.id)
+            // Check return value to prevent duplicate processing if removal fails (race condition)
+            const removed = messageQueueService.removeMessage(conversationId, nextMessage.id)
+            if (!removed) {
+              logApp(`[processWithAgentMode] Failed to remove queued message ${nextMessage.id} after error, skipping to prevent duplicates`)
+              throw error
+            }
             // Revive the session before processing next queued message
             // Since errorSession() removed it from active sessions, we need to revive it
             // so subsequent session updates work correctly

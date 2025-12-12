@@ -6,9 +6,8 @@
  * of using pnpm.cmd, which causes "not a valid Win32 application" errors.
  * 
  * This script works around the issue by:
- * - On Windows: Using npx to invoke electron-builder which properly handles
- *   the package manager execution
- * - On other platforms: Running electron-builder install-app-deps directly
+ * - Using npx on all platforms to invoke electron-builder
+ * - On Windows: Spawning with shell:true to properly resolve .cmd files
  * 
  * Issue: https://github.com/aj47/SpeakMCP/issues/581
  */
@@ -67,7 +66,7 @@ async function main() {
     console.error('[postinstall] You can try the manual workaround:');
     console.error('  1. Run: pnpm install --ignore-scripts');
     if (isWindows) {
-      console.error('  2. Run: pnpm.cmd exec electron-builder install-app-deps');
+      console.error('  2. Run: pnpm.cmd -C apps/desktop exec electron-builder install-app-deps');
     } else {
       console.error('  2. Run: npx electron-builder install-app-deps');
     }

@@ -5,6 +5,7 @@ import {
   spacing,
   radius,
   typography as sharedTypography,
+  typographyLarge as sharedTypographyLarge,
 } from '@speakmcp/shared';
 
 // Re-export shared tokens
@@ -43,6 +44,17 @@ export const typographyBase = {
   caption: { fontSize: sharedTypography.caption.fontSize, lineHeight: sharedTypography.caption.lineHeight },
 } as const;
 
+// Large typography for voice-first UI (inspired by Open Interpreter 01-app)
+export const typographyLargeBase = {
+  h1: { fontSize: sharedTypographyLarge.h1.fontSize, lineHeight: sharedTypographyLarge.h1.lineHeight, fontWeight: sharedTypographyLarge.h1.fontWeight },
+  h2: { fontSize: sharedTypographyLarge.h2.fontSize, lineHeight: sharedTypographyLarge.h2.lineHeight, fontWeight: sharedTypographyLarge.h2.fontWeight },
+  body: { fontSize: sharedTypographyLarge.body.fontSize, lineHeight: sharedTypographyLarge.body.lineHeight },
+  bodyLarge: { fontSize: sharedTypographyLarge.bodyLarge.fontSize, lineHeight: sharedTypographyLarge.bodyLarge.lineHeight },
+  bodyMuted: { fontSize: sharedTypographyLarge.body.fontSize, lineHeight: sharedTypographyLarge.body.lineHeight },
+  label: { fontSize: sharedTypographyLarge.label.fontSize, lineHeight: sharedTypographyLarge.label.lineHeight, fontWeight: sharedTypographyLarge.label.fontWeight },
+  caption: { fontSize: sharedTypographyLarge.caption.fontSize, lineHeight: sharedTypographyLarge.caption.lineHeight },
+} as const;
+
 // Create a theme object with colors for a specific color scheme
 function createTheme(colorScheme: 'light' | 'dark') {
   const colors = colorScheme === 'dark' ? darkColors : lightColors;
@@ -58,6 +70,16 @@ function createTheme(colorScheme: 'light' | 'dark') {
       bodyMuted: { ...typographyBase.bodyMuted, color: colors.mutedForeground },
       label: { ...typographyBase.label, color: colors.foreground },
       caption: { ...typographyBase.caption, color: colors.mutedForeground },
+    },
+    // Large typography for voice-first UI (inspired by Open Interpreter 01-app)
+    typographyLarge: {
+      h1: { ...typographyLargeBase.h1, color: colors.foreground },
+      h2: { ...typographyLargeBase.h2, color: colors.foreground },
+      body: { ...typographyLargeBase.body, color: colors.foreground },
+      bodyLarge: { ...typographyLargeBase.bodyLarge, color: colors.foreground },
+      bodyMuted: { ...typographyLargeBase.bodyMuted, color: colors.mutedForeground },
+      label: { ...typographyLargeBase.label, color: colors.foreground },
+      caption: { ...typographyLargeBase.caption, color: colors.mutedForeground },
     },
     hairline: Platform.select({ ios: 0.5, default: 1 }) as number,
     card: {
@@ -80,7 +102,7 @@ function createTheme(colorScheme: 'light' | 'dark') {
       paddingVertical: Platform.select({ ios: 10, android: 8, default: 10 }),
       backgroundColor: colors.background,
       color: colors.foreground,
-      fontSize: 16,
+      fontSize: 18,  // Slightly larger input font for voice-first UI
     },
     // Modern panel style matching SpeakMCP's .modern-panel
     modernPanel: {

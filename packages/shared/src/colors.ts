@@ -117,3 +117,17 @@ export const typography = {
   caption: { fontSize: 12, lineHeight: 16, fontWeight: '400' as const },
 } as const;
 
+/**
+ * Large typography scale for mobile voice-first UI
+ * Inspired by Open Interpreter 01-app styling with big fonts
+ * for better readability and accessibility
+ */
+export const typographyLarge = {
+  h1: { fontSize: 32, lineHeight: 40, fontWeight: '600' as const },
+  h2: { fontSize: 26, lineHeight: 34, fontWeight: '600' as const },
+  body: { fontSize: 22, lineHeight: 30, fontWeight: '400' as const },
+  bodyLarge: { fontSize: 28, lineHeight: 36, fontWeight: '400' as const },
+  label: { fontSize: 18, lineHeight: 24, fontWeight: '500' as const },
+  caption: { fontSize: 14, lineHeight: 20, fontWeight: '400' as const },
+} as const;
+

@@ -8,34 +8,40 @@ interface MarkdownRendererProps {
   content: string;
 }
 
+/**
+ * MarkdownRenderer with large fonts for voice-first UI
+ * Inspired by Open Interpreter 01-app styling with big fonts
+ * for better readability and accessibility on mobile
+ */
 export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
   content,
 }) => {
   const { theme, isDark } = useTheme();
 
+  // Use large typography from theme for voice-first UI
   const markdownStyles = StyleSheet.create({
     body: {
       color: theme.colors.foreground,
-      fontSize: 14,
-      lineHeight: 20,
+      fontSize: theme.typographyLarge.body.fontSize,
+      lineHeight: theme.typographyLarge.body.lineHeight,
     },
     heading1: {
       color: theme.colors.foreground,
-      fontSize: 20,
+      fontSize: theme.typographyLarge.h1.fontSize,
       fontWeight: '700',
       marginTop: spacing.md,
       marginBottom: spacing.sm,
     },
     heading2: {
       color: theme.colors.foreground,
-      fontSize: 18,
+      fontSize: theme.typographyLarge.h2.fontSize,
       fontWeight: '600',
       marginTop: spacing.md,
       marginBottom: spacing.sm,
     },
     heading3: {
       color: theme.colors.foreground,
-      fontSize: 16,
+      fontSize: theme.typographyLarge.label.fontSize,
       fontWeight: '600',
       marginTop: spacing.sm,
       marginBottom: spacing.xs,
@@ -43,7 +49,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
     paragraph: {
       color: theme.colors.foreground,
       marginBottom: spacing.sm,
-      lineHeight: 22,
+      lineHeight: theme.typographyLarge.body.lineHeight,
     },
     strong: {
       fontWeight: '700',
@@ -75,17 +81,17 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
       backgroundColor: theme.colors.muted,
       color: theme.colors.primary,
       fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-      fontSize: 13,
-      paddingHorizontal: 4,
-      paddingVertical: 1,
+      fontSize: theme.typographyLarge.caption.fontSize,
+      paddingHorizontal: 6,
+      paddingVertical: 2,
       borderRadius: radius.sm,
     },
     code_block: {
       backgroundColor: theme.colors.muted,
       color: theme.colors.foreground,
       fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-      fontSize: 12,
-      padding: spacing.sm,
+      fontSize: theme.typographyLarge.caption.fontSize,
+      padding: spacing.md,
       borderRadius: radius.md,
       marginBottom: spacing.sm,
       overflow: 'hidden',
@@ -94,8 +100,8 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
       backgroundColor: theme.colors.muted,
       color: theme.colors.foreground,
       fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-      fontSize: 12,
-      padding: spacing.sm,
+      fontSize: theme.typographyLarge.caption.fontSize,
+      padding: spacing.md,
       borderRadius: radius.md,
       marginBottom: spacing.sm,
       overflow: 'hidden',

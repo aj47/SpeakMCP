@@ -1093,17 +1093,36 @@ export default function ChatScreen({ route, navigation }: any) {
   };
 
 
+  // Press-anywhere interaction handler for voice-first UI
+  // Inspired by Open Interpreter 01-app - tap anywhere to start/stop recording
+  const handlePressAnywhere = useCallback(() => {
+    // Only trigger if hands-free mode is enabled
+    if (!handsFree) return;
+
+    if (!listening) {
+      startRecording();
+    } else {
+      stopRecordingAndHandle();
+    }
+  }, [handsFree, listening, startRecording, stopRecordingAndHandle]);
+
   return (
     <KeyboardAvoidingView
       style={{ flex: 1, backgroundColor: theme.colors.background }}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={headerHeight}
     >
-      <View style={{ flex: 1 }}>
+      <Pressable
+        style={{ flex: 1 }}
+        onPress={handlePressAnywhere}
+        disabled={!handsFree}
+        accessibilityLabel={handsFree ? (listening ? 'Tap anywhere to stop recording' : 'Tap anywhere to start recording') : undefined}
+        accessibilityRole={handsFree ? 'button' : undefined}
+      >
         <ScrollView
           ref={scrollViewRef}
           style={{ flex: 1, padding: spacing.lg, backgroundColor: theme.colors.background }}
-          contentContainerStyle={{ paddingBottom: insets.bottom }}
+          contentContainerStyle={{ paddingBottom: insets.bottom, flexGrow: 1 }}
           keyboardShouldPersistTaps="handled"
           contentInsetAdjustmentBehavior="automatic"
           onScroll={handleScroll}
@@ -1343,12 +1362,12 @@ export default function ChatScreen({ route, navigation }: any) {
           </TouchableOpacity>
         )}
         {listening && (
-          <View style={[styles.overlay, { bottom: 72 + insets.bottom }]} pointerEvents="none">
+          <View style={[styles.overlay, { bottom: 88 + insets.bottom }]} pointerEvents="none">
             <Text style={styles.overlayText}>
-              {handsFree ? 'Listening...' : (willCancel ? 'Release to edit' : 'Release to send')}
+              {handsFree ? 'Listening... (tap anywhere to stop)' : (willCancel ? 'Release to edit' : 'Release to send')}
             </Text>
             {!!liveTranscript && (
-              <Text style={styles.overlayTranscript} numberOfLines={2}>
+              <Text style={styles.overlayTranscript} numberOfLines={3}>
                 {liveTranscript}
               </Text>
             )}
@@ -1397,7 +1416,7 @@ export default function ChatScreen({ route, navigation }: any) {
             style={styles.input}
             value={input}
             onChangeText={setInput}
-            placeholder={handsFree ? (listening ? 'Listening…' : 'Type or tap mic') : (listening ? 'Listening…' : 'Type or hold mic')}
+            placeholder={handsFree ? (listening ? 'Listening…' : 'Type or tap anywhere') : (listening ? 'Listening…' : 'Type or hold mic')}
             placeholderTextColor={theme.colors.mutedForeground}
             multiline
           />
@@ -1405,7 +1424,7 @@ export default function ChatScreen({ route, navigation }: any) {
             <Text style={styles.sendButtonText}>Send</Text>
           </TouchableOpacity>
         </View>
-      </View>
+      </Pressable>
     </KeyboardAvoidingView>
   );
 }
@@ -1413,10 +1432,10 @@ export default function ChatScreen({ route, navigation }: any) {
 function createStyles(theme: Theme) {
   return StyleSheet.create({
     msg: {
-      padding: spacing.md,
+      padding: spacing.lg,  // Larger padding for voice-first UI
       borderRadius: radius.xl,
-      marginBottom: spacing.sm,
-      maxWidth: '85%',
+      marginBottom: spacing.md,  // More spacing between messages
+      maxWidth: '90%',  // Wider messages for better readability
     },
     user: {
       backgroundColor: theme.colors.secondary,
@@ -1429,8 +1448,8 @@ function createStyles(theme: Theme) {
       alignSelf: 'flex-start',
     },
     roleIcon: {
-      fontSize: 14,
-      marginRight: 4,
+      fontSize: theme.typographyLarge.label.fontSize,  // Larger role icons
+      marginRight: spacing.sm,
     },
     messageHeader: {
       flexDirection: 'row',
@@ -1471,7 +1490,7 @@ function createStyles(theme: Theme) {
       borderColor: 'rgba(239, 68, 68, 0.3)',
     },
     toolBadgeSmallText: {
-      fontSize: 11,
+      fontSize: theme.typographyLarge.caption.fontSize,  // Larger tool badge text
       color: theme.colors.mutedForeground,
       fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
       fontWeight: '600',
@@ -1487,16 +1506,16 @@ function createStyles(theme: Theme) {
     },
     expandButton: {
       marginLeft: 'auto',
-      paddingHorizontal: spacing.sm,
-      paddingVertical: 4,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
     },
     expandButtonText: {
-      fontSize: 12,
+      fontSize: theme.typographyLarge.caption.fontSize,
       color: theme.colors.primary,
       fontWeight: '600',
     },
     collapsedToolPreview: {
-      fontSize: 11,
+      fontSize: theme.typographyLarge.caption.fontSize,
       color: theme.colors.mutedForeground,
       fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
       opacity: 0.7,
@@ -1530,9 +1549,9 @@ function createStyles(theme: Theme) {
       borderRadius: radius.full,
     },
     mic: {
-      width: 64,
-      height: 64,
-      borderRadius: 32,
+      width: 72,  // Larger mic button for voice-first UI
+      height: 72,
+      borderRadius: 36,
       borderWidth: 2,
       borderColor: theme.colors.border,
       backgroundColor: theme.colors.card,
@@ -1544,20 +1563,20 @@ function createStyles(theme: Theme) {
       borderColor: theme.colors.primary,
     },
     micText: {
-      fontSize: 24,
+      fontSize: 28,  // Larger mic icon
     },
     micLabel: {
-      fontSize: 10,
+      fontSize: theme.typographyLarge.caption.fontSize,
       color: theme.colors.mutedForeground,
-      marginTop: 2,
+      marginTop: 4,
     },
     micLabelOn: {
       color: theme.colors.primaryForeground,
     },
     ttsToggle: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
+      width: 48,  // Larger TTS toggle
+      height: 48,
+      borderRadius: 24,
       borderWidth: 1,
       borderColor: theme.colors.border,
       backgroundColor: theme.colors.muted,
@@ -1569,17 +1588,18 @@ function createStyles(theme: Theme) {
       borderColor: theme.colors.primary,
     },
     ttsToggleText: {
-      fontSize: 18,
+      fontSize: 22,  // Larger TTS icon
     },
     sendButton: {
       backgroundColor: theme.colors.primary,
-      paddingHorizontal: spacing.md,
-      paddingVertical: spacing.sm,
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.md,
       borderRadius: radius.lg,
     },
     sendButtonText: {
       color: theme.colors.primaryForeground,
       fontWeight: '600',
+      fontSize: theme.typographyLarge.label.fontSize,
     },
     debugInfo: {
       backgroundColor: theme.colors.muted,
@@ -1634,23 +1654,24 @@ function createStyles(theme: Theme) {
       position: 'absolute',
       left: 0,
       right: 0,
-      bottom: 72,
+      bottom: 88,  // Adjusted for larger input area
       alignItems: 'center',
-      padding: spacing.md,
+      padding: spacing.lg,
     },
     overlayText: {
-      ...theme.typography.caption,
+      ...theme.typographyLarge.label,  // Larger overlay text
       backgroundColor: 'rgba(0,0,0,0.75)',
       color: '#FFFFFF',
-      paddingHorizontal: 12,
-      paddingVertical: 8,
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.md,
       borderRadius: radius.xl,
-      marginBottom: 6,
+      marginBottom: spacing.sm,
     },
     overlayTranscript: {
+      ...theme.typographyLarge.body,  // Larger transcript text
       backgroundColor: 'rgba(0,0,0,0.6)',
       color: '#FFFFFF',
-      padding: 10,
+      padding: spacing.md,
       borderRadius: radius.lg,
       maxWidth: '90%',
     },
@@ -1678,13 +1699,13 @@ function createStyles(theme: Theme) {
       padding: spacing.sm,
     },
     toolParamsSection: {
-      padding: spacing.sm,
+      padding: spacing.md,
       backgroundColor: 'rgba(59, 130, 246, 0.08)',
       borderBottomWidth: 1,
       borderBottomColor: 'rgba(59, 130, 246, 0.2)',
     },
     toolParamsSectionTitle: {
-      fontSize: 11,
+      fontSize: theme.typographyLarge.caption.fontSize,
       fontWeight: '600',
       color: 'rgb(59, 130, 246)',
       marginBottom: spacing.sm,
@@ -1692,8 +1713,8 @@ function createStyles(theme: Theme) {
     toolCallCard: {
       backgroundColor: theme.colors.muted,
       borderRadius: radius.md,
-      padding: spacing.sm,
-      marginBottom: spacing.xs,
+      padding: spacing.md,
+      marginBottom: spacing.sm,
     },
     toolName: {
       fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',

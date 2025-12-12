@@ -1112,6 +1112,10 @@ export default function ChatScreen({ route, navigation }: any) {
 
   // Handle link presses in markdown content - mark as interactive and open URL
   // Validates URL schemes for security (only http, https, mailto allowed)
+  // NOTE: While this also calls markInteractivePress(), the early touch detection actually
+  // happens via the onTouchStart prop passed to MarkdownRenderer, which uses
+  // onStartShouldSetResponderCapture to fire before onPress. This ensures link taps
+  // are marked as interactive before handleTouchEnd runs.
   const handleMarkdownLinkPress = useCallback((url: string) => {
     markInteractivePress();
 

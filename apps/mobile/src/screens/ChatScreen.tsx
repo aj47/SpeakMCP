@@ -1095,15 +1095,35 @@ export default function ChatScreen({ route, navigation }: any) {
 
   // Press-anywhere interaction handler for voice-first UI
   // Inspired by Open Interpreter 01-app - tap anywhere to start/stop recording
-  const handlePressAnywhere = useCallback(() => {
-    // Only trigger if hands-free mode is enabled
-    if (!handsFree) return;
+  // Track touch start position to distinguish taps from scrolls
+  const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
 
-    if (!listening) {
-      startRecording();
-    } else {
-      stopRecordingAndHandle();
+  const handleTouchStart = useCallback((e: GestureResponderEvent) => {
+    if (!handsFree) return;
+    const touch = e.nativeEvent;
+    touchStartRef.current = { x: touch.pageX, y: touch.pageY, time: Date.now() };
+  }, [handsFree]);
+
+  const handleTouchEnd = useCallback((e: GestureResponderEvent) => {
+    if (!handsFree || !touchStartRef.current) return;
+
+    const touch = e.nativeEvent;
+    const start = touchStartRef.current;
+    const dx = Math.abs(touch.pageX - start.x);
+    const dy = Math.abs(touch.pageY - start.y);
+    const dt = Date.now() - start.time;
+
+    // Only trigger if this was a quick tap (not a scroll gesture)
+    // Threshold: less than 10px movement and less than 300ms
+    if (dx < 10 && dy < 10 && dt < 300) {
+      if (!listening) {
+        startRecording();
+      } else {
+        stopRecordingAndHandle();
+      }
     }
+
+    touchStartRef.current = null;
   }, [handsFree, listening, startRecording, stopRecordingAndHandle]);
 
   return (
@@ -1123,6 +1143,8 @@ export default function ChatScreen({ route, navigation }: any) {
           onScrollBeginDrag={handleScrollBeginDrag}
           onScrollEndDrag={handleScrollEndDrag}
           scrollEventThrottle={16}
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
         >
           {messages.map((m, i) => {
             const shouldCollapse = shouldCollapseMessage(m.content, m.toolCalls, m.toolResults);
@@ -1337,17 +1359,6 @@ export default function ChatScreen({ route, navigation }: any) {
             <View style={styles.debugInfo}>
               <Text style={styles.debugText}>{debugInfo}</Text>
             </View>
-          )}
-          {/* Tap-anywhere zone for hands-free voice interaction
-              This Pressable only captures taps in the empty space of the ScrollView.
-              Nested interactive elements (message bubbles, expand/collapse) handle their own events first. */}
-          {handsFree && (
-            <Pressable
-              style={styles.tapAnywhereZone}
-              onPress={handlePressAnywhere}
-              accessibilityLabel={listening ? 'Tap to stop recording' : 'Tap to start recording'}
-              accessibilityRole="button"
-            />
           )}
         </ScrollView>
         {/* Scroll to bottom button - appears when user scrolls up */}
@@ -1818,12 +1829,6 @@ function createStyles(theme: Theme) {
       backgroundColor: 'rgba(239, 68, 68, 0.1)',
       padding: spacing.sm,
       borderRadius: radius.sm,
-    },
-    // Tap-anywhere zone for hands-free voice interaction
-    // Fills remaining space in ScrollView to catch taps on empty areas
-    tapAnywhereZone: {
-      flexGrow: 1,
-      minHeight: 100,
     },
   });
 }

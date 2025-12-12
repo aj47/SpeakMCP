@@ -264,6 +264,19 @@ export default function ChatScreen({ route, navigation }: any) {
   // Track pending scroll to avoid clearing timeout on rapid message updates
   const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isScrollPendingRef = useRef(false);
+  // Ref to track current auto-scroll state for use in timeout callbacks
+  const shouldAutoScrollRef = useRef(true);
+
+  // Keep ref in sync with state
+  useEffect(() => {
+    shouldAutoScrollRef.current = shouldAutoScroll;
+    // Cancel any pending scroll when user disables auto-scroll
+    if (!shouldAutoScroll && scrollTimeoutRef.current) {
+      clearTimeout(scrollTimeoutRef.current);
+      scrollTimeoutRef.current = null;
+      isScrollPendingRef.current = false;
+    }
+  }, [shouldAutoScroll]);
 
   // Handle scroll events to detect when user scrolls away from bottom
   const handleScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -287,7 +300,11 @@ export default function ChatScreen({ route, navigation }: any) {
       isScrollPendingRef.current = true;
       // Use a small delay to ensure content has rendered
       scrollTimeoutRef.current = setTimeout(() => {
-        scrollViewRef.current?.scrollToEnd({ animated: true });
+        // Double-check auto-scroll is still enabled before scrolling
+        // This guards against race conditions where user scrolled up during the delay
+        if (shouldAutoScrollRef.current) {
+          scrollViewRef.current?.scrollToEnd({ animated: true });
+        }
         isScrollPendingRef.current = false;
       }, 100);
     }

@@ -298,8 +298,16 @@ export function Component() {
     await tipcClient.triggerMcpRecording({})
   }
 
-  const handleFocusSession = (sessionId: string) => {
+  const handleFocusSession = async (sessionId: string) => {
     setFocusedSessionId(sessionId)
+    // Also show the panel window with this session focused
+    try {
+      await tipcClient.focusAgentSession({ sessionId })
+      await tipcClient.setPanelMode({ mode: "agent" })
+      await tipcClient.showPanelWindow({})
+    } catch (error) {
+      console.error("Failed to show panel window:", error)
+    }
   }
 
   const handleDismissSession = async (sessionId: string) => {

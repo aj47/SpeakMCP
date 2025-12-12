@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react"
 import { cn } from "@renderer/lib/utils"
 import { AgentProgressUpdate } from "../../../shared/types"
-import { ChevronDown, ChevronUp, ChevronRight, X, AlertTriangle, Minimize2, Shield, Check, XCircle, Loader2, Clock, Copy, CheckCheck, GripHorizontal, Activity, Moon, Maximize2, RefreshCw } from "lucide-react"
+import { ChevronDown, ChevronUp, ChevronRight, X, AlertTriangle, Minimize2, Shield, Check, XCircle, Loader2, Clock, Copy, CheckCheck, GripHorizontal, Activity, Moon, Maximize2, RefreshCw, ExternalLink } from "lucide-react"
 import { MarkdownRenderer } from "@renderer/components/markdown-renderer"
 import { Button } from "./ui/button"
 import { Badge } from "./ui/badge"
@@ -88,7 +88,9 @@ const CompactMessage: React.FC<{
   wasStopped?: boolean
   isExpanded: boolean
   onToggleExpand: () => void
-}> = ({ message, isLast, isComplete, hasErrors, wasStopped = false, isExpanded, onToggleExpand }) => {
+  /** Variant controls TTS auto-play - only 'overlay' variant auto-plays TTS to prevent double playback */
+  variant?: "default" | "overlay" | "tile"
+}> = ({ message, isLast, isComplete, hasErrors, wasStopped = false, isExpanded, onToggleExpand, variant = "default" }) => {
   const [audioData, setAudioData] = useState<ArrayBuffer | null>(null)
   const [isGeneratingAudio, setIsGeneratingAudio] = useState(false)
   const [ttsError, setTtsError] = useState<string | null>(null)
@@ -164,13 +166,18 @@ const CompactMessage: React.FC<{
   const shouldShowTTS = message.role === "assistant" && isComplete && isLast && configQuery.data?.ttsEnabled
 
   // Auto-play TTS when assistant message completes (but NOT if agent was stopped by kill switch)
+  // IMPORTANT: Only auto-play in "overlay" variant to prevent double TTS playback when both
+  // the main window (tile variant) and panel window (overlay variant) are open.
+  // The overlay/panel window is the primary interaction point, so TTS plays there.
   useEffect(() => {
-    if (shouldShowTTS && configQuery.data?.ttsAutoPlay && !audioData && !isGeneratingAudio && !ttsError && !wasStopped) {
+    // Only auto-generate and play TTS in overlay variant to prevent double playback
+    const shouldAutoPlay = variant === "overlay"
+    if (shouldAutoPlay && shouldShowTTS && configQuery.data?.ttsAutoPlay && !audioData && !isGeneratingAudio && !ttsError && !wasStopped) {
       generateAudio().catch((error) => {
         // Error is already handled in generateAudio function
       })
     }
-  }, [shouldShowTTS, configQuery.data?.ttsAutoPlay, audioData, isGeneratingAudio, ttsError, wasStopped])
+  }, [shouldShowTTS, configQuery.data?.ttsAutoPlay, audioData, isGeneratingAudio, ttsError, wasStopped, variant])
 
   const getRoleStyle = () => {
     switch (message.role) {
@@ -1524,6 +1531,22 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
                 <Minimize2 className="h-3 w-3" />
               </Button>
             )}
+            {/* Show in panel button - for active sessions that are not snoozed */}
+            {!isComplete && !isSnoozed && (
+              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={async (e) => {
+                e.stopPropagation()
+                if (!progress?.sessionId) return
+                try {
+                  await tipcClient.focusAgentSession({ sessionId: progress.sessionId })
+                  await tipcClient.setPanelMode({ mode: "agent" })
+                  await tipcClient.showPanelWindow({})
+                } catch (error) {
+                  console.error("Failed to show panel window:", error)
+                }
+              }} title="Show in floating panel">
+                <ExternalLink className="h-3 w-3" />
+              </Button>
+            )}
             {isSnoozed && (
               <Button variant="ghost" size="icon" className="h-6 w-6" onClick={async (e) => {
                 e.stopPropagation()
@@ -1564,6 +1587,22 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
                 <X className="h-3 w-3" />
               </Button>
             )}
+            {/* Show in panel button for completed sessions */}
+            {isComplete && (
+              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={async (e) => {
+                e.stopPropagation()
+                if (!progress?.sessionId) return
+                try {
+                  await tipcClient.focusAgentSession({ sessionId: progress.sessionId })
+                  await tipcClient.setPanelMode({ mode: "agent" })
+                  await tipcClient.showPanelWindow({})
+                } catch (error) {
+                  console.error("Failed to show panel window:", error)
+                }
+              }} title="Show in floating panel">
+                <ExternalLink className="h-3 w-3" />
+              </Button>
+            )}
             {onDismiss && (
               <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); onDismiss(); }} title="Dismiss">
                 <X className="h-3 w-3" />
@@ -1600,6 +1639,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
                             wasStopped={wasStopped}
                             isExpanded={isExpanded}
                             onToggleExpand={() => toggleItemExpansion(itemKey)}
+                            variant="tile"
                           />
                         )
                       } else if (item.kind === "tool_approval") {
@@ -1782,6 +1822,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
                       wasStopped={wasStopped}
                       isExpanded={isExpanded}
                       onToggleExpand={() => toggleItemExpansion(itemKey)}
+                      variant="overlay"
                     />
                   )
                 } else if (item.kind === "tool_approval") {

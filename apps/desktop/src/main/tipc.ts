@@ -323,7 +323,8 @@ async function processWithAgentMode(
             // Only remove from queue after successful persistence
             messageQueueService.removeMessage(conversationId, nextMessage.id)
             // Process the queued message (fire-and-forget, will handle its own queue processing)
-            processWithAgentMode(nextMessage.text, conversationId, undefined, true)
+            // Pass sessionId to reuse the existing session instead of creating a new one
+            processWithAgentMode(nextMessage.text, conversationId, sessionId, true)
               .catch((error) => {
                 logLLM("[processWithAgentMode] Queued message processing error:", error)
               })
@@ -387,7 +388,8 @@ async function processWithAgentMode(
             // Only remove from queue after successful persistence
             messageQueueService.removeMessage(conversationId, nextMessage.id)
             // Process the queued message (fire-and-forget, will handle its own queue processing)
-            processWithAgentMode(nextMessage.text, conversationId, undefined, true)
+            // Pass sessionId to reuse the existing session instead of creating a new one
+            processWithAgentMode(nextMessage.text, conversationId, sessionId, true)
               .catch((queueError) => {
                 logLLM("[processWithAgentMode] Queued message processing error:", queueError)
               })

@@ -6,11 +6,13 @@ import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { tipcClient } from "@renderer/lib/tipc-client"
 import { useConfigQuery } from "@renderer/lib/queries"
 
-interface TileFollowUpInputProps {
+interface SessionFollowUpInputProps {
   conversationId?: string
   sessionId?: string
   isSessionActive?: boolean
   className?: string
+  /** Variant controls sizing and styling */
+  variant?: "tile" | "overlay"
   /** Called when a message is successfully sent */
   onMessageSent?: () => void
   /** Called when a message is queued */
@@ -18,17 +20,19 @@ interface TileFollowUpInputProps {
 }
 
 /**
- * Compact text input for continuing a conversation within a session tile.
+ * Unified input component for continuing a conversation within a session.
+ * Supports both tile and overlay variants with consistent queue functionality.
  * When session is active and message queue is enabled, messages are queued instead of blocked.
  */
-export function TileFollowUpInput({
+export function SessionFollowUpInput({
   conversationId,
   sessionId,
   isSessionActive = false,
   className,
+  variant = "tile",
   onMessageSent,
   onMessageQueued,
-}: TileFollowUpInputProps) {
+}: SessionFollowUpInputProps) {
   const [text, setText] = useState("")
   const inputRef = useRef<HTMLInputElement>(null)
   const queryClient = useQueryClient()
@@ -36,19 +40,20 @@ export function TileFollowUpInput({
   // Default to false while loading to prevent queueing before config is known
   const isQueueEnabled = configQuery.data?.mcpMessageQueueEnabled ?? false
 
+  // Determine if we're using tile variant for fromTile flag
+  const isTile = variant === "tile"
+
   const sendMutation = useMutation({
     mutationFn: async (message: string) => {
       if (!conversationId) {
         // Start a new conversation if none exists
-        // Mark as fromTile so the floating panel doesn't show - session continues in the tile
-        await tipcClient.createMcpTextInput({ text: message, fromTile: true })
+        await tipcClient.createMcpTextInput({ text: message, fromTile: isTile })
       } else {
         // Continue the existing conversation
-        // Mark as fromTile so the floating panel doesn't show - session continues in the tile
         await tipcClient.createMcpTextInput({
           text: message,
           conversationId,
-          fromTile: true,
+          fromTile: isTile,
         })
       }
     },
@@ -96,12 +101,9 @@ export function TileFollowUpInput({
 
   const handleVoiceClick = async (e: React.MouseEvent) => {
     e.stopPropagation()
-    // Pass conversationId and sessionId directly through IPC to continue in the same session
-    // This is more reliable than using Zustand store which has timing issues
     // Don't pass fake "pending-*" sessionIds - let the backend find the real session by conversationId
-    // Mark as fromTile so the floating panel doesn't show - session continues in the tile
     const realSessionId = sessionId?.startsWith('pending-') ? undefined : sessionId
-    await tipcClient.triggerMcpRecording({ conversationId, sessionId: realSessionId, fromTile: true })
+    await tipcClient.triggerMcpRecording({ conversationId, sessionId: realSessionId, fromTile: isTile })
   }
 
   const isPending = sendMutation.isPending || queueMutation.isPending
@@ -119,11 +121,19 @@ export function TileFollowUpInput({
     return "Continue conversation..."
   }
 
+  // Variant-specific styles
+  const isOverlay = variant === "overlay"
+  const containerStyles = isOverlay
+    ? "flex items-center gap-2 px-3 py-2 border-t bg-muted/30 backdrop-blur-sm"
+    : "flex items-center gap-2 px-2 py-1.5 border-t bg-muted/20"
+  const buttonSize = isOverlay ? "h-7 w-7" : "h-6 w-6"
+  const iconSize = isOverlay ? "h-3.5 w-3.5" : "h-3 w-3"
+
   return (
     <form
       onSubmit={handleSubmit}
       className={cn(
-        "flex items-center gap-2 px-2 py-1.5 border-t bg-muted/20",
+        containerStyles,
         willQueue && "bg-amber-50/30 dark:bg-amber-950/20",
         className
       )}
@@ -148,22 +158,17 @@ export function TileFollowUpInput({
         size="icon"
         variant="ghost"
         className={cn(
-          "h-6 w-6 flex-shrink-0",
+          buttonSize,
+          "flex-shrink-0",
           willQueue && "text-amber-600 dark:text-amber-400"
         )}
         disabled={!text.trim() || isDisabled}
         title={willQueue ? "Queue message" : "Send follow-up message"}
       >
         {willQueue ? (
-          <ListPlus className={cn(
-            "h-3 w-3",
-            queueMutation.isPending && "animate-pulse"
-          )} />
+          <ListPlus className={cn(iconSize, queueMutation.isPending && "animate-pulse")} />
         ) : (
-          <Send className={cn(
-            "h-3 w-3",
-            sendMutation.isPending && "animate-pulse"
-          )} />
+          <Send className={cn(iconSize, sendMutation.isPending && "animate-pulse")} />
         )}
       </Button>
       <Button
@@ -171,7 +176,8 @@ export function TileFollowUpInput({
         size="icon"
         variant="ghost"
         className={cn(
-          "h-6 w-6 flex-shrink-0",
+          buttonSize,
+          "flex-shrink-0",
           "hover:bg-red-100 dark:hover:bg-red-900/30",
           "hover:text-red-600 dark:hover:text-red-400"
         )}
@@ -179,7 +185,7 @@ export function TileFollowUpInput({
         onClick={handleVoiceClick}
         title="Continue with voice"
       >
-        <Mic className="h-3 w-3" />
+        <Mic className={iconSize} />
       </Button>
     </form>
   )

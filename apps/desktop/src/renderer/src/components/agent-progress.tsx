@@ -1822,7 +1822,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
                       wasStopped={wasStopped}
                       isExpanded={isExpanded}
                       onToggleExpand={() => toggleItemExpansion(itemKey)}
-                      variant="overlay"
+                      variant={variant}
                     />
                   )
                 } else if (item.kind === "tool_approval") {

@@ -302,18 +302,21 @@ async function processWithAgentMode(
 
     // Check for queued messages and process the next one
     // Wrapped in try-catch to prevent queue processing errors from affecting the original outcome
+    // Uses peek-then-remove pattern to avoid losing messages if addMessageToConversation fails
     if (conversationId && config.mcpMessageQueueEnabled) {
       try {
         const { messageQueueService } = await import("./message-queue-service")
-        const nextMessage = messageQueueService.popNextMessage(conversationId)
+        const nextMessage = messageQueueService.peekNextMessage(conversationId)
         if (nextMessage) {
           logApp(`[processWithAgentMode] Processing queued message: ${nextMessage.id}`)
-          // Add the queued message to the conversation
+          // Add the queued message to the conversation first
           await conversationService.addMessageToConversation(
             conversationId,
             nextMessage.text,
             "user",
           )
+          // Only remove from queue after successful persistence
+          messageQueueService.removeMessage(conversationId, nextMessage.id)
           // Process the queued message (fire-and-forget, will handle its own queue processing)
           processWithAgentMode(nextMessage.text, conversationId, undefined, true)
             .catch((error) => {
@@ -357,18 +360,21 @@ async function processWithAgentMode(
 
     // Check for queued messages and process the next one (even on error)
     // Wrapped in try-catch to prevent queue processing errors from masking the original error
+    // Uses peek-then-remove pattern to avoid losing messages if addMessageToConversation fails
     if (conversationId && config.mcpMessageQueueEnabled) {
       try {
         const { messageQueueService } = await import("./message-queue-service")
-        const nextMessage = messageQueueService.popNextMessage(conversationId)
+        const nextMessage = messageQueueService.peekNextMessage(conversationId)
         if (nextMessage) {
           logApp(`[processWithAgentMode] Processing queued message after error: ${nextMessage.id}`)
-          // Add the queued message to the conversation
+          // Add the queued message to the conversation first
           await conversationService.addMessageToConversation(
             conversationId,
             nextMessage.text,
             "user",
           )
+          // Only remove from queue after successful persistence
+          messageQueueService.removeMessage(conversationId, nextMessage.id)
           // Process the queued message (fire-and-forget, will handle its own queue processing)
           processWithAgentMode(nextMessage.text, conversationId, undefined, true)
             .catch((queueError) => {

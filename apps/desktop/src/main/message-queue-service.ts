@@ -71,6 +71,20 @@ class MessageQueueService {
     logApp(`[MessageQueue] Cleared ${count} messages for conversation ${conversationId}`)
   }
 
+  /**
+   * Peek at the next message without removing it.
+   * Use this before processing to avoid data loss if processing fails.
+   */
+  peekNextMessage(conversationId: string): QueuedMessage | undefined {
+    const queue = this.queues.get(conversationId)
+    if (!queue || queue.length === 0) return undefined
+    return queue[0]
+  }
+
+  /**
+   * Remove and return the next message from the queue.
+   * Prefer using peekNextMessage() + removeMessage() for safer processing.
+   */
   popNextMessage(conversationId: string): QueuedMessage | undefined {
     const queue = this.queues.get(conversationId)
     if (!queue || queue.length === 0) return undefined

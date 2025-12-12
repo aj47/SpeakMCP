@@ -108,6 +108,15 @@ export function Component() {
 
           {enabled && (
             <>
+              <Control label={<ControlLabel label="Auto-Show Panel" tooltip="Automatically show the floating panel when receiving messages from remote clients" />} className="px-3">
+                <Switch
+                  checked={cfg.remoteServerAutoShowPanel ?? false}
+                  onCheckedChange={(value) => {
+                    saveConfig({ remoteServerAutoShowPanel: value })
+                  }}
+                />
+              </Control>
+
               <Control label={<ControlLabel label="Port" tooltip="HTTP port to listen on" />} className="px-3">
                 <Input
                   type="number"

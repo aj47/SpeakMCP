@@ -122,6 +122,7 @@ const getConfig = () => {
 	    remoteServerBindAddress: "127.0.0.1",
 	    remoteServerLogLevel: "info",
 	    remoteServerCorsOrigins: ["*"],
+	    remoteServerAutoShowPanel: false, // Don't auto-show panel by default for remote sessions
 
 
   }

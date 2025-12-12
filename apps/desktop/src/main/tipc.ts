@@ -334,14 +334,12 @@ async function processWithAgentMode(
             break // Stop processing to avoid losing messages
           }
           // Only remove from queue after successful persistence
-          // Check return value to prevent duplicate processing if removal fails (race condition)
+          // Note: Even if removal fails (user removed it during processing), we still process
+          // the message since it's already been persisted to the conversation. Leaving a
+          // persisted user message without a response would be confusing.
           const removed = messageQueueService.removeMessage(conversationId, nextMessage.id)
           if (!removed) {
-            // Message was removed by user between persistence and removal - this is OK
-            // The message is already persisted, just try the next one
-            logApp(`[processWithAgentMode] Message ${nextMessage.id} was removed during processing, trying next`)
-            nextMessage = messageQueueService.peekNextMessage(conversationId)
-            continue
+            logApp(`[processWithAgentMode] Message ${nextMessage.id} was removed from queue during processing, but already persisted - processing anyway`)
           }
           // Revive the session before processing next queued message
           // Since completeSession() removed it from active sessions, we need to revive it
@@ -424,14 +422,12 @@ async function processWithAgentMode(
             break // Stop processing to avoid losing messages
           }
           // Only remove from queue after successful persistence
-          // Check return value to prevent duplicate processing if removal fails (race condition)
+          // Note: Even if removal fails (user removed it during processing), we still process
+          // the message since it's already been persisted to the conversation. Leaving a
+          // persisted user message without a response would be confusing.
           const removed = messageQueueService.removeMessage(conversationId, nextMessage.id)
           if (!removed) {
-            // Message was removed by user between persistence and removal - this is OK
-            // The message is already persisted, just try the next one
-            logApp(`[processWithAgentMode] Message ${nextMessage.id} was removed during processing, trying next`)
-            nextMessage = messageQueueService.peekNextMessage(conversationId)
-            continue
+            logApp(`[processWithAgentMode] Message ${nextMessage.id} was removed from queue during processing, but already persisted - processing anyway`)
           }
           // Revive the session before processing next queued message
           // Since errorSession() removed it from active sessions, we need to revive it

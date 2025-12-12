@@ -322,6 +322,10 @@ async function processWithAgentMode(
           } else {
             // Only remove from queue after successful persistence
             messageQueueService.removeMessage(conversationId, nextMessage.id)
+            // Revive the session before processing next queued message
+            // Since completeSession() removed it from active sessions, we need to revive it
+            // so subsequent session updates work correctly
+            agentSessionTracker.reviveSession(sessionId, true) // Start snoozed to run in background
             // Process the queued message (fire-and-forget, will handle its own queue processing)
             // Pass sessionId to reuse the existing session instead of creating a new one
             processWithAgentMode(nextMessage.text, conversationId, sessionId, true)
@@ -387,6 +391,10 @@ async function processWithAgentMode(
           } else {
             // Only remove from queue after successful persistence
             messageQueueService.removeMessage(conversationId, nextMessage.id)
+            // Revive the session before processing next queued message
+            // Since errorSession() removed it from active sessions, we need to revive it
+            // so subsequent session updates work correctly
+            agentSessionTracker.reviveSession(sessionId, true) // Start snoozed to run in background
             // Process the queued message (fire-and-forget, will handle its own queue processing)
             // Pass sessionId to reuse the existing session instead of creating a new one
             processWithAgentMode(nextMessage.text, conversationId, sessionId, true)

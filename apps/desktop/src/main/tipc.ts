@@ -149,6 +149,7 @@ async function processWithAgentMode(
   conversationId?: string,
   existingSessionId?: string, // Optional: reuse existing session instead of creating new one
   startSnoozed: boolean = false, // Whether to start session snoozed (default: false to show panel)
+  reservedConversationId?: string, // Optional: conversation ID that was reserved and needs to be released
 ): Promise<string> {
   const config = configStore.get()
 
@@ -162,6 +163,12 @@ async function processWithAgentMode(
   let conversationTitle = text.length > 50 ? text.substring(0, 50) + "..." : text
   // When creating a new session from keybind/UI, start unsnoozed so panel shows immediately
   const sessionId = existingSessionId || agentSessionTracker.startSession(conversationId, conversationTitle, startSnoozed)
+
+  // Release the reservation now that the session is registered
+  // This allows the hasActiveSessionForConversation check to work properly for subsequent calls
+  if (reservedConversationId) {
+    agentSessionTracker.releaseConversationReservation(reservedConversationId)
+  }
 
   try {
     // Initialize MCP with progress feedback
@@ -965,11 +972,11 @@ export const router = {
     .action(async ({ input }) => {
       const { agentSessionTracker } = await import("./agent-session-tracker")
 
-      // Check if there's already an active session processing for this conversation
-      // This prevents race conditions where overlapping processWithAgentMode calls
-      // could interfere with each other via cleanupSession
-      if (input.conversationId && agentSessionTracker.hasActiveSessionForConversation(input.conversationId)) {
-        logLLM("[createMcpTextInput] Blocked: session already processing for conversation", input.conversationId)
+      // Use reserveConversation for atomic check-and-reserve to prevent race conditions
+      // This prevents two near-simultaneous calls from both passing the active check
+      // before either has registered their session
+      if (input.conversationId && !agentSessionTracker.reserveConversation(input.conversationId)) {
+        logLLM("[createMcpTextInput] Blocked: session already processing or pending for conversation", input.conversationId)
         // Return the existing conversationId so the UI knows the message wasn't processed
         // The user's message was NOT added to the conversation to avoid duplicate processing
         return { conversationId: input.conversationId, blocked: true }
@@ -1010,7 +1017,8 @@ export const router = {
       // This allows multiple sessions to run concurrently (for DIFFERENT conversations)
       // Pass existingSessionId to reuse the session if found
       // When fromTile=true, start snoozed so the floating panel doesn't appear
-      processWithAgentMode(input.text, conversationId, existingSessionId, input.fromTile ?? false)
+      // Pass reserved conversation ID so processWithAgentMode can release it after session registration
+      processWithAgentMode(input.text, conversationId, existingSessionId, input.fromTile ?? false, input.conversationId)
         .then((finalResponse) => {
           // Save to history after completion
           const history = getRecordingHistory()
@@ -1069,11 +1077,11 @@ export const router = {
       // This ensures users see feedback during the (potentially long) STT call
       const { agentSessionTracker } = await import("./agent-session-tracker")
 
-      // Check if there's already an active session processing for this conversation
-      // This prevents race conditions where overlapping processWithAgentMode calls
-      // could interfere with each other via cleanupSession
-      if (input.conversationId && agentSessionTracker.hasActiveSessionForConversation(input.conversationId)) {
-        logLLM("[createMcpRecording] Blocked: session already processing for conversation", input.conversationId)
+      // Use reserveConversation for atomic check-and-reserve to prevent race conditions
+      // This prevents two near-simultaneous calls from both passing the active check
+      // before either has registered their session
+      if (input.conversationId && !agentSessionTracker.reserveConversation(input.conversationId)) {
+        logLLM("[createMcpRecording] Blocked: session already processing or pending for conversation", input.conversationId)
         // Return the existing conversationId so the UI knows the message wasn't processed
         // The user's message was NOT added to the conversation to avoid duplicate processing
         return { conversationId: input.conversationId, blocked: true }
@@ -1246,7 +1254,8 @@ export const router = {
         // Fire-and-forget: Start agent processing without blocking
         // This allows multiple sessions to run concurrently
         // Pass the sessionId to avoid creating a duplicate session
-        processWithAgentMode(transcript, conversationId, sessionId)
+        // Pass reserved conversation ID so processWithAgentMode can release it after session registration
+        processWithAgentMode(transcript, conversationId, sessionId, false, input.conversationId)
         .then((finalResponse) => {
           // Save to history after completion
           const history = getRecordingHistory()
@@ -1276,6 +1285,11 @@ export const router = {
       } catch (error) {
         // Handle transcription or conversation creation errors
         logLLM("[createMcpRecording] Transcription error:", error)
+
+        // Release the conversation reservation since processing failed
+        if (input.conversationId) {
+          agentSessionTracker.releaseConversationReservation(input.conversationId)
+        }
 
         // Clean up the session and emit error state
         await emitAgentProgress({

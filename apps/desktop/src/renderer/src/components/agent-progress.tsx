@@ -1506,6 +1506,10 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
   if (variant === "tile") {
     const hasPendingApproval = !!progress.pendingToolApproval
     const isSnoozed = progress.isSnoozed
+    // Check if this is a real session (not a synthetic pending tile)
+    // Synthetic pending tiles have sessionId like "pending-..." and calling focusAgentSession
+    // with these IDs would fail. Only show panel-related buttons for real sessions.
+    const isRealSession = progress?.sessionId && !progress.sessionId.startsWith("pending-")
 
     return (
       <div
@@ -1538,7 +1542,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
               </Button>
             )}
             {/* Show in panel button - for active sessions that are not snoozed */}
-            {!isComplete && !isSnoozed && (
+            {!isComplete && !isSnoozed && isRealSession && (
               <Button variant="ghost" size="icon" className="h-6 w-6" onClick={async (e) => {
                 e.stopPropagation()
                 if (!progress?.sessionId) return
@@ -1593,8 +1597,8 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
                 <X className="h-3 w-3" />
               </Button>
             )}
-            {/* Show in panel button for completed sessions */}
-            {isComplete && (
+            {/* Show in panel button for completed sessions (not for synthetic pending tiles) */}
+            {isComplete && isRealSession && (
               <Button variant="ghost" size="icon" className="h-6 w-6" onClick={async (e) => {
                 e.stopPropagation()
                 if (!progress?.sessionId) return

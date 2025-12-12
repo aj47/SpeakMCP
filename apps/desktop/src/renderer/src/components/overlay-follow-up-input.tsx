@@ -4,6 +4,7 @@ import { Button } from "@renderer/components/ui/button"
 import { Send, Mic } from "lucide-react"
 import { useMutation } from "@tanstack/react-query"
 import { tipcClient } from "@renderer/lib/tipc-client"
+import { toast } from "sonner"
 
 interface OverlayFollowUpInputProps {
   conversationId?: string
@@ -44,6 +45,7 @@ export function OverlayFollowUpInput({
     onSuccess: (result) => {
       // Don't clear input if message was blocked due to active session
       if (result && 'blocked' in result && result.blocked) {
+        toast.warning("Please wait for the current task to complete")
         return
       }
       setText("")

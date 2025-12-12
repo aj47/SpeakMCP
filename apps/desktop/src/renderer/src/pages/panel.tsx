@@ -273,7 +273,16 @@ export function Component() {
         message: error.message,
       })
     },
-    onSuccess() {
+    onSuccess(result) {
+      // Check if the voice submission was blocked due to active session
+      if (result && 'blocked' in result && result.blocked) {
+        tipcClient.displayError({
+          title: 'Voice Message Not Sent',
+          message:
+            'Please wait for the current agent task to complete before recording another message.',
+        })
+        return
+      }
       // Don't clear progress or hide panel on success - agent mode will handle this
       // The panel needs to stay visible for agent mode progress updates
       // (unless recording was from a tile, which already hid the panel in mutationFn)

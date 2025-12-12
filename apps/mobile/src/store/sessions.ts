@@ -67,6 +67,18 @@ export function useSessions(): SessionStore {
   // Use ref to ensure we always have the latest sessions for async operations
   const sessionsRef = useRef<Session[]>(sessions);
   useEffect(() => { sessionsRef.current = sessions; }, [sessions]);
+  // Use ref for currentSessionId to avoid stale closure issues after awaits
+  const currentSessionIdRef = useRef<string | null>(currentSessionId);
+  useEffect(() => { currentSessionIdRef.current = currentSessionId; }, [currentSessionId]);
+  // Serialize async storage writes to prevent interleaving (fixes PR review comment)
+  const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
+
+  // Helper to queue async save operations to prevent interleaving
+  const queueSave = useCallback((saveOperation: () => Promise<void>): void => {
+    saveQueueRef.current = saveQueueRef.current
+      .then(saveOperation)
+      .catch(err => console.error('[sessions] Save operation failed:', err));
+  }, []);
 
   // Load sessions on mount
   useEffect(() => {
@@ -90,17 +102,24 @@ export function useSessions(): SessionStore {
       updatedAt: now,
       messages: [],
     };
-    setSessions(prev => {
-      // Filter out any sessions that are currently being deleted to avoid race conditions
-      const cleanedPrev = prev.filter(s => !deletingSessionIds.has(s.id));
-      const updated = [newSession, ...cleanedPrev];
-      saveSessions(updated);
-      return updated;
-    });
+    // Use ref to get latest sessions to avoid stale closures
+    const currentSessions = sessionsRef.current;
+    // Filter out any sessions that are currently being deleted to avoid race conditions
+    const cleanedPrev = currentSessions.filter(s => !deletingSessionIds.has(s.id));
+    const updated = [newSession, ...cleanedPrev];
+
+    // Update state immediately
+    setSessions(updated);
     setCurrentSessionIdState(newSession.id);
-    saveCurrentSessionId(newSession.id);
+
+    // Queue async saves to prevent interleaving with other operations
+    queueSave(async () => {
+      await saveSessions(updated);
+      await saveCurrentSessionId(newSession.id);
+    });
+
     return newSession;
-  }, [deletingSessionIds]);
+  }, [deletingSessionIds, queueSave]);
 
   const setCurrentSession = useCallback((id: string | null) => {
     setCurrentSessionIdState(id);
@@ -115,17 +134,29 @@ export function useSessions(): SessionStore {
     const currentSessions = sessionsRef.current;
     const updated = currentSessions.filter(s => s.id !== id);
 
+    // Check if we're deleting the current session BEFORE any awaits
+    // to avoid stale closure issues if user switches sessions during delete
+    const wasCurrentSession = currentSessionIdRef.current === id;
+
     // Update state first
     setSessions(updated);
+    if (wasCurrentSession) {
+      setCurrentSessionIdState(null);
+    }
 
-    // Then await the async storage operations
+    // Then await the async storage operations (queued to prevent interleaving)
     try {
-      await saveSessions(updated);
-      // If we're deleting the current session, clear it
-      if (currentSessionId === id) {
-        setCurrentSessionIdState(null);
-        await saveCurrentSessionId(null);
-      }
+      await new Promise<void>((resolve, reject) => {
+        saveQueueRef.current = saveQueueRef.current
+          .then(async () => {
+            await saveSessions(updated);
+            if (wasCurrentSession) {
+              await saveCurrentSessionId(null);
+            }
+            resolve();
+          })
+          .catch(reject);
+      });
     } finally {
       // Remove from deleting set after save completes
       setDeletingSessionIds(prev => {
@@ -134,7 +165,7 @@ export function useSessions(): SessionStore {
         return next;
       });
     }
-  }, [currentSessionId]);
+  }, []);
 
   const clearAllSessions = useCallback(async () => {
     // Mark all sessions as being deleted
@@ -143,11 +174,20 @@ export function useSessions(): SessionStore {
 
     setSessions([]);
     setCurrentSessionIdState(null);
+
+    // Queue async saves to prevent interleaving
     try {
-      await Promise.all([
-        saveSessions([]),
-        saveCurrentSessionId(null),
-      ]);
+      await new Promise<void>((resolve, reject) => {
+        saveQueueRef.current = saveQueueRef.current
+          .then(async () => {
+            await Promise.all([
+              saveSessions([]),
+              saveCurrentSessionId(null),
+            ]);
+            resolve();
+          })
+          .catch(reject);
+      });
     } finally {
       setDeletingSessionIds(new Set());
     }

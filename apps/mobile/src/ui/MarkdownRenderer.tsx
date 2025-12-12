@@ -1,12 +1,12 @@
 import React, { useMemo } from 'react';
-import { Platform, StyleSheet, Text } from 'react-native';
+import { Linking, Platform, StyleSheet, Text } from 'react-native';
 import Markdown, { RenderRules } from 'react-native-markdown-display';
 import { useTheme } from './ThemeProvider';
 import { spacing, radius } from './theme';
 
 interface MarkdownRendererProps {
   content: string;
-  onLinkPress?: (url: string) => boolean;
+  onLinkPress?: (url: string) => void;
   /**
    * Called early in the touch lifecycle when a link is pressed.
    * Used by hands-free mode to mark link touches as interactive
@@ -169,7 +169,14 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
         key={node.key}
         style={styles.link}
         onPressIn={onLinkTouchStart}
-        onPress={() => onLinkPress?.(node.attributes.href)}
+        onPress={() => {
+          const url = node.attributes.href;
+          if (onLinkPress) {
+            onLinkPress(url);
+          } else {
+            Linking.openURL(url);
+          }
+        }}
       >
         {children}
       </Text>

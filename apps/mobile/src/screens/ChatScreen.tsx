@@ -1115,7 +1115,7 @@ export default function ChatScreen({ route, navigation }: any) {
   // NOTE: The onLinkTouchStart prop passed to MarkdownRenderer calls markInteractivePress()
   // via onPressIn (before onPress), ensuring link taps are marked as interactive before
   // handleTouchEnd runs. The markInteractivePress() call here is a backup for safety.
-  const handleMarkdownLinkPress = useCallback((url: string) => {
+  const handleMarkdownLinkPress = useCallback((url: string): void => {
     markInteractivePress();
 
     // Validate URL scheme - only allow safe web-related schemes
@@ -1125,13 +1125,13 @@ export default function ChatScreen({ route, navigation }: any) {
       if (!allowedSchemes.some(scheme => urlObj.protocol === scheme)) {
         console.warn(`Blocked URL with unsupported scheme: ${urlObj.protocol}`);
         Alert.alert('Cannot Open Link', 'This type of link is not supported.');
-        return false;
+        return;
       }
     } catch {
       // Invalid URL format
       console.warn(`Invalid URL format: ${url}`);
       Alert.alert('Cannot Open Link', 'The link format is invalid.');
-      return false;
+      return;
     }
 
     // Open URL with error handling
@@ -1139,8 +1139,6 @@ export default function ChatScreen({ route, navigation }: any) {
       console.error('Failed to open URL:', error);
       Alert.alert('Cannot Open Link', 'Unable to open the link. Please try again.');
     });
-
-    return false; // Return false to prevent default handling since we handled it
   }, [markInteractivePress]);
 
   // Touch handlers for "tap anywhere" voice interaction in hands-free mode.

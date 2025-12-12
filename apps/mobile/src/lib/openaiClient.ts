@@ -188,9 +188,14 @@ export class OpenAIClient {
     while (true) {
       // Update body with conversationId if we received one from a previous attempt.
       // This ensures retries continue the same conversation instead of creating a new one.
-      if (lastReceivedConversationId && !body.conversation_id) {
+      // We always use the server-provided conversationId over any original value because:
+      // 1. If body.conversation_id was empty, we need to set it
+      // 2. If body.conversation_id was stale (server created a new one), we need to update it
+      if (lastReceivedConversationId) {
+        if (body.conversation_id !== lastReceivedConversationId) {
+          console.log('[OpenAIClient] Updating conversationId for retry:', body.conversation_id || '(empty)', '->', lastReceivedConversationId);
+        }
         body.conversation_id = lastReceivedConversationId;
-        console.log('[OpenAIClient] Using preserved conversationId for retry:', lastReceivedConversationId);
       }
 
       try {

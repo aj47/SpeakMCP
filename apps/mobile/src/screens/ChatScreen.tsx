@@ -292,9 +292,10 @@ export default function ChatScreen({ route, navigation }: any) {
   useEffect(() => {
     setShouldAutoScroll(true);
     // Scroll to bottom when switching sessions
-    setTimeout(() => {
+    const timeoutId = setTimeout(() => {
       scrollViewRef.current?.scrollToEnd({ animated: false });
     }, 100);
+    return () => clearTimeout(timeoutId);
   }, [sessionStore.currentSessionId]);
 
   const lastLoadedSessionIdRef = useRef<string | null>(null);

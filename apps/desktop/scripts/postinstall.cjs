@@ -54,10 +54,14 @@ async function main() {
     // Use npx on all platforms to find electron-builder from node_modules
     // On Windows, this also avoids the issue where electron-builder tries
     // to execute pnpm.cjs directly instead of pnpm.cmd
+    //
+    // The --no flag prevents npx from prompting to install if electron-builder
+    // is not found locally, avoiding interactive prompts or non-deterministic
+    // installs in CI/production environments
     if (isWindows) {
       console.log('[postinstall] Windows detected, using npx with shell...');
     }
-    await execCommand('npx', ['electron-builder', 'install-app-deps']);
+    await execCommand('npx', ['--no', 'electron-builder', 'install-app-deps']);
 
     console.log('[postinstall] Native dependencies installed successfully!');
   } catch (error) {

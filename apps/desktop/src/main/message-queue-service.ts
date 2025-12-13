@@ -144,6 +144,13 @@ class MessageQueueService {
       return false
     }
 
+    // Prevent editing messages that have already been added to conversation history
+    // to maintain consistency between history and what gets processed on retry
+    if (message.addedToHistory) {
+      logApp(`[MessageQueueService] Cannot update message ${messageId} text - already added to conversation history`)
+      return false
+    }
+
     message.text = newText
     // Reset failed messages to pending status so they can be retried
     if (message.status === "failed") {

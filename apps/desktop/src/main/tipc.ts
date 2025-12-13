@@ -2443,7 +2443,7 @@ export const router = {
     .input<{ conversationId: string }>()
     .action(async ({ input }) => {
       const { messageQueueService } = await import("./message-queue-service")
-      messageQueueService.clearQueue(input.conversationId)
+      return messageQueueService.clearQueue(input.conversationId)
     }),
 
   reorderMessageQueue: t.procedure

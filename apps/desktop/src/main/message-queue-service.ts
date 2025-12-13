@@ -100,7 +100,8 @@ class MessageQueueService {
   }
 
   /**
-   * Remove a specific message from the queue
+   * Remove a specific message from the queue.
+   * Cannot remove a message that is currently being processed.
    */
   removeFromQueue(conversationId: string, messageId: string): boolean {
     const queue = this.queues.get(conversationId)
@@ -108,6 +109,12 @@ class MessageQueueService {
 
     const index = queue.findIndex((m) => m.id === messageId)
     if (index === -1) return false
+
+    // Don't allow removing a message that's currently processing
+    if (queue[index].status === "processing") {
+      logApp(`[MessageQueueService] Cannot remove message ${messageId} - currently processing`)
+      return false
+    }
 
     queue.splice(index, 1)
     if (queue.length === 0) {
@@ -120,12 +127,23 @@ class MessageQueueService {
   }
 
   /**
-   * Clear all messages in a conversation's queue
+   * Clear all messages in a conversation's queue.
+   * Cannot clear if any message is currently being processed.
    */
-  clearQueue(conversationId: string): void {
+  clearQueue(conversationId: string): boolean {
+    const queue = this.queues.get(conversationId)
+    if (!queue) return true // Nothing to clear
+
+    // Don't clear if there's a message currently processing
+    if (queue.some((m) => m.status === "processing")) {
+      logApp(`[MessageQueueService] Cannot clear queue for ${conversationId} - message is processing`)
+      return false
+    }
+
     this.queues.delete(conversationId)
     logApp(`[MessageQueueService] Cleared queue for ${conversationId}`)
     this.emitQueueUpdate(conversationId)
+    return true
   }
 
   /**

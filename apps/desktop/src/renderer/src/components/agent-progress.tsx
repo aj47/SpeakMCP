@@ -948,9 +948,15 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
   const agentProgressById = useAgentStore((s) => s.agentProgressById)
 
   // Helper to toggle expansion state for a specific item
-  const toggleItemExpansion = (itemKey: string) => {
+  // Uses defaultExpanded fallback for items that haven't been explicitly toggled yet
+  // (like tool executions which default to expanded)
+  // By deriving the current state from prev inside the setter, this is resilient to
+  // batched updates (e.g., double-clicks will correctly round-trip)
+  const toggleItemExpansion = (itemKey: string, defaultExpanded: boolean) => {
     setExpandedItems(prev => {
-      const from = !!prev[itemKey]
+      // Use prev[itemKey] if it exists (item was explicitly toggled before),
+      // otherwise use the default expanded state for this item type
+      const from = itemKey in prev ? prev[itemKey] : defaultExpanded
       const to = !from
       logExpand("AgentProgress", "toggle", { itemKey, from, to })
       return {
@@ -1635,7 +1641,12 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
                   <div className="space-y-1 p-2">
                     {displayItems.map((item, index) => {
                       const itemKey = item.id
-                      const isExpanded = expandedItems[itemKey] ?? false
+                      // Tool executions should be expanded by default so users can see what tools were called
+                      // unless user has explicitly toggled them (itemKey exists in expandedItems)
+                      const isToolExecution = item.kind === "tool_execution"
+                      const isExpanded = itemKey in expandedItems
+                        ? expandedItems[itemKey]
+                        : isToolExecution // Tool executions expanded by default
                       const isLastAssistant = item.kind === "message" && item.data.role === "assistant" && index === lastAssistantDisplayIndex
 
                       if (item.kind === "message") {
@@ -1648,7 +1659,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
                             hasErrors={hasErrors}
                             wasStopped={wasStopped}
                             isExpanded={isExpanded}
-                            onToggleExpand={() => toggleItemExpansion(itemKey)}
+                            onToggleExpand={() => toggleItemExpansion(itemKey, isExpanded)}
                             variant="tile"
                           />
                         )
@@ -1672,7 +1683,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
                             key={itemKey}
                             execution={item.data}
                             isExpanded={isExpanded}
-                            onToggleExpand={() => toggleItemExpansion(itemKey)}
+                            onToggleExpand={() => toggleItemExpansion(itemKey, isExpanded)}
                           />
                         )
                       }
@@ -1815,11 +1826,13 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
                   : `exec-${(item as any).data?.id || (item as any).data?.timestamp}`)
 
                 // Final assistant message should be expanded by default when agent is complete
+                // Tool executions should be expanded by default so users can see what tools were called
                 // unless user has explicitly toggled it (itemKey exists in expandedItems)
                 const isFinalAssistantMessage = item.kind === "message" && index === lastAssistantDisplayIndex && isComplete
+                const isToolExecution = item.kind === "tool_execution"
                 const isExpanded = itemKey in expandedItems
                   ? expandedItems[itemKey]
-                  : isFinalAssistantMessage
+                  : (isFinalAssistantMessage || isToolExecution)
 
                 if (item.kind === "message") {
                   return (
@@ -1831,7 +1844,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
                       hasErrors={hasErrors}
                       wasStopped={wasStopped}
                       isExpanded={isExpanded}
-                      onToggleExpand={() => toggleItemExpansion(itemKey)}
+                      onToggleExpand={() => toggleItemExpansion(itemKey, isExpanded)}
                       variant={variant}
                     />
                   )
@@ -1865,7 +1878,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
                       key={itemKey}
                       execution={item.data}
                       isExpanded={isExpanded}
-                      onToggleExpand={() => toggleItemExpansion(itemKey)}
+                      onToggleExpand={() => toggleItemExpansion(itemKey, isExpanded)}
                     />
                   )
                 }

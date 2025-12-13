@@ -681,7 +681,8 @@ export default function ChatScreen({ route, navigation }: any) {
 
       const onProgress = (update: AgentProgressUpdate) => {
         // Guard: skip update if session has changed since request started
-        if (sessionStore.currentSessionId !== requestSessionId) {
+        // Use currentSessionIdRef.current to avoid stale closure issue (useSessions returns new object each render)
+        if (currentSessionIdRef.current !== requestSessionId) {
           console.log('[ChatScreen] Session changed, skipping onProgress update');
           return;
         }
@@ -703,7 +704,8 @@ export default function ChatScreen({ route, navigation }: any) {
 
       const onToken = (tok: string) => {
         // Guard: skip update if session has changed since request started
-        if (sessionStore.currentSessionId !== requestSessionId) {
+        // Use currentSessionIdRef.current to avoid stale closure issue (useSessions returns new object each render)
+        if (currentSessionIdRef.current !== requestSessionId) {
           console.log('[ChatScreen] Session changed, skipping onToken update');
           return;
         }
@@ -733,7 +735,8 @@ export default function ChatScreen({ route, navigation }: any) {
       setDebugInfo(`Completed!`);
 
       // Guard: skip final updates if session has changed since request started
-      if (sessionStore.currentSessionId !== requestSessionId) {
+      // Use currentSessionIdRef.current to avoid stale closure issue (useSessions returns new object each render)
+      if (currentSessionIdRef.current !== requestSessionId) {
         console.log('[ChatScreen] Session changed during request, skipping final message updates');
         return;
       }

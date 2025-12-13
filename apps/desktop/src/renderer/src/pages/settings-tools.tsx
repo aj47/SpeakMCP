@@ -13,6 +13,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@renderer/components/ui/dialog"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@renderer/components/ui/select"
 
 import {
   Tooltip,
@@ -86,6 +93,16 @@ export function Component() {
     },
   })
 
+  // Fetch all profiles for the dropdown
+  const profilesQuery = useQuery({
+    queryKey: ["profiles"],
+    queryFn: async () => {
+      return await tipcClient.getProfiles()
+    },
+  })
+
+  const profiles = profilesQuery.data || []
+
   const updateProfileMutation = useMutation({
     mutationFn: async ({ id, guidelines, systemPrompt }: { id: string; guidelines?: string; systemPrompt?: string }) => {
       return await tipcClient.updateProfile({ id, guidelines, systemPrompt })
@@ -126,10 +143,16 @@ export function Component() {
     mutationFn: async (id: string) => {
       return await tipcClient.setCurrentProfile({ id })
     },
-    onSuccess: () => {
+    onSuccess: (newProfile: Profile) => {
       queryClient.invalidateQueries({ queryKey: ["config"] })
       queryClient.invalidateQueries({ queryKey: ["profiles"] })
       queryClient.invalidateQueries({ queryKey: ["current-profile"] })
+      queryClient.invalidateQueries({ queryKey: ["mcp-server-status"] })
+      queryClient.invalidateQueries({ queryKey: ["mcp-initialization-status"] })
+      toast.success(`Switched to "${newProfile.name}"`)
+    },
+    onError: (error: Error) => {
+      toast.error(`Failed to switch profile: ${error.message}`)
     },
   })
 
@@ -309,6 +332,31 @@ DOMAIN-SPECIFIC RULES:
               <Plus className="h-4 w-4" />
               Create Profile
             </Button>
+          </div>
+
+          {/* Profile Selector Dropdown */}
+          <div className="space-y-2">
+            <Label>Active Profile</Label>
+            <Select
+              value={currentProfile?.id || ""}
+              onValueChange={(value) => setCurrentProfileMutation.mutate(value)}
+              disabled={setCurrentProfileMutation.isPending}
+            >
+              <SelectTrigger className="w-full max-w-xs">
+                <SelectValue placeholder="Select a profile" />
+              </SelectTrigger>
+              <SelectContent>
+                {profiles.map((profile) => (
+                  <SelectItem key={profile.id} value={profile.id}>
+                    {profile.name}
+                    {profile.isDefault && " (Default)"}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Switch between profiles to use different agent configurations.
+            </p>
           </div>
 
           <div className="space-y-4">

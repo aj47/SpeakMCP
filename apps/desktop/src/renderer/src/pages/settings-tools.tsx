@@ -139,6 +139,9 @@ export function Component() {
   const [newProfileName, setNewProfileName] = useState("")
   const [newProfileGuidelines, setNewProfileGuidelines] = useState("")
 
+  // Pending profile switch for confirmation dialog
+  const [pendingProfileSwitch, setPendingProfileSwitch] = useState<string | null>(null)
+
   const setCurrentProfileMutation = useMutation({
     mutationFn: async (id: string) => {
       return await tipcClient.setCurrentProfile({ id })
@@ -202,11 +205,11 @@ export function Component() {
 
   // Combined saving state for the guidelines save operation
   // Also check if profile query is still loading to prevent saving before profile data is available
-  const isSavingGuidelines = saveConfigMutation.isPending || updateProfileMutation.isPending
+  const isSavingGuidelines = saveConfigMutation.isPending || updateProfileMutation.isPending || setCurrentProfileMutation.isPending
   const isProfileLoading = currentProfileQuery.isLoading
 
   // Combined saving state for the system prompt save operation
-  const isSavingSystemPrompt = saveConfigMutation.isPending || updateProfileMutation.isPending
+  const isSavingSystemPrompt = saveConfigMutation.isPending || updateProfileMutation.isPending || setCurrentProfileMutation.isPending
 
   // Check if currently using default system prompt (compare against the actual default)
   const isUsingDefaultSystemPrompt = customSystemPrompt.trim() === defaultSystemPrompt.trim()
@@ -305,6 +308,27 @@ export function Component() {
     })
   }
 
+  const handleProfileChange = (newProfileId: string) => {
+    // Check if there are unsaved changes
+    if (hasUnsavedChanges || hasUnsavedSystemPromptChanges) {
+      // Store the pending profile switch and show confirmation
+      setPendingProfileSwitch(newProfileId)
+    } else {
+      // No unsaved changes, switch immediately
+      setCurrentProfileMutation.mutate(newProfileId)
+    }
+  }
+
+  const confirmProfileSwitch = () => {
+    if (pendingProfileSwitch) {
+      setCurrentProfileMutation.mutate(pendingProfileSwitch)
+      setPendingProfileSwitch(null)
+    }
+  }
+
+  const cancelProfileSwitch = () => {
+    setPendingProfileSwitch(null)
+  }
 
   const defaultAdditionalGuidelines = `CUSTOM GUIDELINES:
 - Prioritize user privacy and security
@@ -339,7 +363,7 @@ DOMAIN-SPECIFIC RULES:
             <Label>Active Profile</Label>
             <Select
               value={currentProfile?.id || ""}
-              onValueChange={(value) => setCurrentProfileMutation.mutate(value)}
+              onValueChange={handleProfileChange}
               disabled={setCurrentProfileMutation.isPending}
             >
               <SelectTrigger className="w-full max-w-xs">
@@ -550,6 +574,41 @@ DOMAIN-SPECIFIC RULES:
                 disabled={!newProfileName.trim() || createProfileMutation.isPending}
               >
                 {createProfileMutation.isPending ? "Creating..." : "Create Profile"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Unsaved Changes Confirmation Dialog */}
+        <Dialog
+          open={pendingProfileSwitch !== null}
+          onOpenChange={(open) => {
+            if (!open) {
+              setPendingProfileSwitch(null)
+            }
+          }}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Unsaved Changes</DialogTitle>
+              <DialogDescription>
+                You have unsaved changes that will be lost if you switch profiles. Do you want to continue?
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={cancelProfileSwitch}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={confirmProfileSwitch}
+              >
+                Discard Changes
               </Button>
             </DialogFooter>
           </DialogContent>

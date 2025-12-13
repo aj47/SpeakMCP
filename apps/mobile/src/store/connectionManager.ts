@@ -32,6 +32,10 @@ export interface ConnectionManagerContextValue {
   updateClientConfig: (config: OpenAIConfig) => void;
   /** Subscribe to connection status changes for a session. Returns unsubscribe function. */
   subscribeToConnectionStatus: (sessionId: string, callback: OnConnectionStatusChange) => () => void;
+  /** Set the latest request ID for a session (for per-session request tracking) */
+  setLatestRequestId: (sessionId: string, requestId: number) => void;
+  /** Get the latest request ID for a session */
+  getLatestRequestId: (sessionId: string) => number;
 }
 
 export const ConnectionManagerContext = createContext<ConnectionManagerContextValue | null>(null);
@@ -115,6 +119,8 @@ export function useConnectionManagerProvider(clientConfig: OpenAIConfig): Connec
     updateClientConfig: (config: OpenAIConfig) => manager.updateClientConfig(config),
     subscribeToConnectionStatus: (sessionId: string, callback: OnConnectionStatusChange) =>
       manager.subscribeToConnectionStatus(sessionId, callback),
+    setLatestRequestId: (sessionId: string, requestId: number) => manager.setLatestRequestId(sessionId, requestId),
+    getLatestRequestId: (sessionId: string) => manager.getLatestRequestId(sessionId),
   }), [manager]);
 
   return contextValue;

@@ -20,6 +20,8 @@ export interface SessionConnection {
   lastAccessedAt: number;
   activeRequestCount: number;
   connectionState: RecoveryState | null;
+  /** The ID of the latest request for this session (for preventing cross-session clobbering) */
+  latestRequestId: number;
 }
 
 export interface SessionConnectionManagerConfig {
@@ -88,6 +90,7 @@ export class SessionConnectionManager {
       lastAccessedAt: Date.now(),
       activeRequestCount: 0,
       connectionState: null,
+      latestRequestId: 0,
     };
 
     // Set up connection status callback that notifies both internal state and subscribers
@@ -214,6 +217,27 @@ export class SessionConnectionManager {
    */
   getConnectionState(sessionId: string): RecoveryState | null {
     return this.connections.get(sessionId)?.connectionState ?? null;
+  }
+
+  /**
+   * Set the latest request ID for a session.
+   * This is used to track which request is the most recent for a given session,
+   * preventing cross-session sends from incorrectly marking requests as superseded.
+   * (Fixes PR review comment #13)
+   */
+  setLatestRequestId(sessionId: string, requestId: number): void {
+    const connection = this.connections.get(sessionId);
+    if (connection) {
+      connection.latestRequestId = requestId;
+    }
+  }
+
+  /**
+   * Get the latest request ID for a session.
+   * Returns 0 if no connection exists for the session.
+   */
+  getLatestRequestId(sessionId: string): number {
+    return this.connections.get(sessionId)?.latestRequestId ?? 0;
   }
 
   /**

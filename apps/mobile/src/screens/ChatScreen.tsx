@@ -648,9 +648,11 @@ export default function ChatScreen({ route, navigation }: any) {
     setMessages((m) => [...m, userMsg, { role: 'assistant', content: 'Assistant is thinking...' }]);
     setResponding(true);
 
-    // Generate a unique request ID and mark this request as the active one
+    // Generate a unique request ID for this request
     // This prevents cross-request race conditions on view-level state
     const thisRequestId = Date.now();
+    // Note: We keep activeRequestIdRef for backward compatibility and view-level state,
+    // but the primary "superseded" check now uses per-session tracking (PR review fix #13)
     activeRequestIdRef.current = thisRequestId;
 
     const currentSession = sessionStore.getCurrentSession();
@@ -667,8 +669,11 @@ export default function ChatScreen({ route, navigation }: any) {
     // Capture the session ID at request start to guard against session changes
     const requestSessionId = sessionStore.currentSessionId;
 
-    // Increment active request count in the connection manager
+    // Mark this request as the latest for this session in the connection manager
+    // and increment active request count
+    // This enables per-session request tracking to prevent cross-session superseding (PR review fix #13)
     if (requestSessionId) {
+      connectionManager.setLatestRequestId(requestSessionId, thisRequestId);
       connectionManager.incrementActiveRequests(requestSessionId);
     }
 
@@ -686,10 +691,10 @@ export default function ChatScreen({ route, navigation }: any) {
           console.log('[ChatScreen] Session changed, skipping onProgress update');
           return;
         }
-        // Guard: skip update if this request is no longer the active one
-        // This prevents concurrent sends within the same session from interleaving updates
-        if (activeRequestIdRef.current !== thisRequestId) {
-          console.log('[ChatScreen] Request superseded, skipping onProgress update');
+        // Guard: skip update if this request is no longer the latest one for this session
+        // Uses per-session tracking to prevent cross-session sends from incorrectly superseding (PR review fix #13)
+        if (requestSessionId && connectionManager.getLatestRequestId(requestSessionId) !== thisRequestId) {
+          console.log('[ChatScreen] Request superseded within same session, skipping onProgress update');
           return;
         }
         const progressMessages = convertProgressToMessages(update);
@@ -709,10 +714,10 @@ export default function ChatScreen({ route, navigation }: any) {
           console.log('[ChatScreen] Session changed, skipping onToken update');
           return;
         }
-        // Guard: skip update if this request is no longer the active one
-        // This prevents concurrent sends within the same session from interleaving updates
-        if (activeRequestIdRef.current !== thisRequestId) {
-          console.log('[ChatScreen] Request superseded, skipping onToken update');
+        // Guard: skip update if this request is no longer the latest one for this session
+        // Uses per-session tracking to prevent cross-session sends from incorrectly superseding (PR review fix #13)
+        if (requestSessionId && connectionManager.getLatestRequestId(requestSessionId) !== thisRequestId) {
+          console.log('[ChatScreen] Request superseded within same session, skipping onToken update');
           return;
         }
         streamingText += tok;
@@ -742,13 +747,17 @@ export default function ChatScreen({ route, navigation }: any) {
         setDebugInfo(`Completed!`);
       }
 
-      // Guard: skip final updates if this request is no longer the active one (within same session)
+      // Guard: skip final updates if this request is no longer the latest one for this session
       // This prevents older, superseded requests from clobbering messages when multiple sends occur within the same session
+      // Uses per-session tracking to prevent cross-session sends from incorrectly superseding (PR review fix #13)
       // Note: This guard only applies when session hasn't changed - if session changed, we still want to persist
-      if (!sessionChanged && activeRequestIdRef.current !== thisRequestId) {
-        console.log('[ChatScreen] Request superseded, skipping final message updates', {
+      const isLatestForSession = requestSessionId
+        ? connectionManager.getLatestRequestId(requestSessionId) === thisRequestId
+        : true;
+      if (!sessionChanged && !isLatestForSession) {
+        console.log('[ChatScreen] Request superseded within same session, skipping final message updates', {
           thisRequestId,
-          activeRequestId: activeRequestIdRef.current
+          latestRequestId: requestSessionId ? connectionManager.getLatestRequestId(requestSessionId) : 'no-session'
         });
         return;
       }
@@ -875,33 +884,37 @@ export default function ChatScreen({ route, navigation }: any) {
       }
 
       // Only reset UI states if:
-      // 1. This request is still the active one (prevents old requests from clobbering newer ones)
+      // 1. This request is still the latest one for its session (per-session tracking, PR review fix #13)
       // 2. We're still on the same session (prevents background completions from affecting other sessions)
-      // This addresses PR review comment #10
-      const isCurrentRequest = activeRequestIdRef.current === thisRequestId;
+      // This addresses PR review comments #10 and #13
+      const isLatestForThisSession = requestSessionId
+        ? connectionManager.getLatestRequestId(requestSessionId) === thisRequestId
+        : true;
       const isCurrentSession = currentSessionIdRef.current === requestSessionId;
 
-      if (isCurrentRequest && isCurrentSession) {
+      if (isLatestForThisSession && isCurrentSession) {
         setResponding(false);
         setConnectionState(null);
         // Guard the setTimeout callback: only clear debugInfo if this request
-        // is still the active one when the timeout fires. This prevents an
+        // is still the latest one when the timeout fires. This prevents an
         // old request's delayed clear from wiping debug info for a newer request.
         const capturedRequestId = thisRequestId;
         const capturedSessionId = requestSessionId;
         setTimeout(() => {
-          if (activeRequestIdRef.current === capturedRequestId &&
-              currentSessionIdRef.current === capturedSessionId) {
+          const stillLatest = capturedSessionId
+            ? connectionManager.getLatestRequestId(capturedSessionId) === capturedRequestId
+            : true;
+          if (stillLatest && currentSessionIdRef.current === capturedSessionId) {
             setDebugInfo('');
           }
         }, 5000);
       } else {
         console.log('[ChatScreen] Skipping finally state resets:', {
           thisRequestId,
-          activeRequestId: activeRequestIdRef.current,
+          latestRequestId: requestSessionId ? connectionManager.getLatestRequestId(requestSessionId) : 'no-session',
           requestSessionId,
           currentSessionId: currentSessionIdRef.current,
-          reason: !isCurrentRequest ? 'newer request is active' : 'session changed'
+          reason: !isLatestForThisSession ? 'newer request is active for this session' : 'session changed'
         });
       }
     }

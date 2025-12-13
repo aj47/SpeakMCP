@@ -10,6 +10,7 @@ import {
   ConnectionRecoveryManager,
   ConnectionStatus,
   RecoveryState,
+  StreamingCheckpoint,
   isRetryableError,
   delay,
   DEFAULT_RECOVERY_CONFIG,
@@ -36,6 +37,7 @@ export type ChatMessage = {
 export type ChatResponse = ChatApiResponse;
 
 export type { ToolCall, ToolResult, ConversationHistoryMessage } from '@speakmcp/shared';
+export type { StreamingCheckpoint } from './connectionRecovery';
 
 export interface AgentProgressUpdate {
   sessionId: string;
@@ -111,6 +113,36 @@ export class OpenAIClient {
     return this.recoveryManager?.getState() ?? null;
   }
 
+  /**
+   * Check if there's recoverable partial content from a failed request.
+   * This can be used to show partial responses to the user even when the request failed.
+   */
+  hasRecoverableContent(): boolean {
+    return this.recoveryManager?.hasRecoverableContent() ?? false;
+  }
+
+  /**
+   * Get the partial content from a failed request.
+   * Returns undefined if no partial content is available.
+   */
+  getPartialContent(): string | undefined {
+    return this.recoveryManager?.getPartialContent();
+  }
+
+  /**
+   * Get the conversation ID from a failed request for retry purposes.
+   */
+  getRecoveryConversationId(): string | undefined {
+    return this.recoveryManager?.getRecoveryConversationId();
+  }
+
+  /**
+   * Get the current streaming checkpoint (for debugging/monitoring).
+   */
+  getStreamingCheckpoint(): StreamingCheckpoint | null {
+    return this.recoveryManager?.getCheckpoint() ?? null;
+  }
+
   cleanup(): void {
     this.activeAbortController?.abort();
     this.activeAbortController = null;
@@ -168,18 +200,52 @@ export class OpenAIClient {
     const recovery = this.recoveryManager!;
     recovery.reset();
 
+    // Initialize checkpoint for tracking streaming progress
+    recovery.initCheckpoint();
+
     // Track conversationId received during streaming to preserve it across retries.
     // This prevents duplicate sessions when retrying after a partial success
     // (server created session, but network failed before client received full response).
     let lastReceivedConversationId: string | undefined;
 
-    // Wrap onProgress to capture conversationId from progress updates
+    // Track accumulated content for checkpoint updates
+    let accumulatedContent = '';
+
+    // Wrap onToken to update checkpoint with streaming content
+    const wrappedOnToken: ((token: string) => void) | undefined = onToken
+      ? (token) => {
+          // Handle both delta tokens and full-text updates.
+          // When called via onProgress with streamingContent.text, token contains the full accumulated text.
+          // When called via SSE delta events, token contains just the new delta.
+          // Detect full-text updates: if token starts with current accumulatedContent and is longer,
+          // or if token equals accumulatedContent (duplicate call), use replacement instead of append.
+          if (token.startsWith(accumulatedContent)) {
+            // Full-text update: replace instead of append
+            accumulatedContent = token;
+          } else {
+            // Delta token: append
+            accumulatedContent += token;
+          }
+          recovery.updateCheckpoint(accumulatedContent, lastReceivedConversationId);
+          onToken(token);
+        }
+      : undefined;
+
+    // Wrap onProgress to capture conversationId and update checkpoint
     const wrappedOnProgress: OnProgressCallback | undefined = onProgress
       ? (update) => {
           // Capture conversationId from progress updates if available
           if (update.conversationId && !lastReceivedConversationId) {
             lastReceivedConversationId = update.conversationId;
             console.log('[OpenAIClient] Captured conversationId from progress:', lastReceivedConversationId);
+            // Update checkpoint when conversationId becomes available, even without content.
+            // This ensures conversationId is preserved if the stream fails before any tokens arrive.
+            recovery.updateCheckpoint(accumulatedContent, lastReceivedConversationId);
+          }
+          // Update checkpoint with streaming content from progress
+          if (update.streamingContent?.text) {
+            accumulatedContent = update.streamingContent.text;
+            recovery.updateCheckpoint(accumulatedContent, lastReceivedConversationId);
           }
           onProgress(update);
         }
@@ -203,11 +269,11 @@ export class OpenAIClient {
         if (Platform.OS === 'android') {
           // Android: Use XMLHttpRequest-based streaming due to known react-native-sse issues
           // See: https://github.com/binaryminds/react-native-sse/issues/61
-          result = await this.streamSSEWithXHR(url, body, onToken, wrappedOnProgress);
+          result = await this.streamSSEWithXHR(url, body, wrappedOnToken, wrappedOnProgress);
         } else if (Platform.OS === 'ios') {
-          result = await this.streamSSEWithEventSource(url, body, onToken, wrappedOnProgress);
+          result = await this.streamSSEWithEventSource(url, body, wrappedOnToken, wrappedOnProgress);
         } else {
-          result = await this.streamSSEWithFetch(url, body, onToken, wrappedOnProgress);
+          result = await this.streamSSEWithFetch(url, body, wrappedOnToken, wrappedOnProgress);
         }
 
         // Capture conversationId from successful result for completeness
@@ -216,13 +282,22 @@ export class OpenAIClient {
         }
 
         recovery.markConnected();
+        recovery.clearCheckpoint(); // Clear checkpoint on success
         return result;
       } catch (error: any) {
         console.error('[OpenAIClient] Chat request failed:', error);
+        const checkpoint = recovery.getCheckpoint();
+        console.log('[OpenAIClient] Checkpoint at failure:', checkpoint ? {
+          contentLength: checkpoint.content?.length ?? 0,
+          hasConversationId: !!checkpoint.conversationId,
+          lastUpdateTime: checkpoint.lastUpdateTime
+        } : null);
 
         if (isRetryableError(error) && recovery.shouldRetry()) {
           const delayMs = recovery.prepareRetry();
           console.log(`[OpenAIClient] Retrying in ${delayMs}ms (attempt ${recovery.getState().retryCount})`);
+          // Reset accumulated content for retry - server will provide full history
+          accumulatedContent = '';
           await delay(delayMs);
           continue;
         }

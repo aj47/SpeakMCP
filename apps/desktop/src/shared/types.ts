@@ -305,6 +305,9 @@ export type Config = {
   ttsRemoveCodeBlocks?: boolean
   ttsRemoveUrls?: boolean
   ttsConvertMarkdown?: boolean
+  // LLM-based TTS Preprocessing (for more natural speech output)
+  ttsUseLLMPreprocessing?: boolean
+  ttsLLMPreprocessingProviderId?: CHAT_PROVIDER_ID
 
   transcriptPostProcessingEnabled?: boolean
   transcriptPostProcessingProviderId?: CHAT_PROVIDER_ID

@@ -651,6 +651,17 @@ export function Component() {
                       }}
                     />
                   </Control>
+
+                  <Control label={<ControlLabel label="Use AI for TTS Preprocessing" tooltip="Use an LLM to intelligently convert text to natural speech. More robust handling of abbreviations, acronyms, and context-dependent pronunciation. Adds ~1-2 seconds latency. Falls back to regex if disabled or unavailable." />} className="px-3">
+                    <Switch
+                      defaultChecked={configQuery.data.ttsUseLLMPreprocessing ?? false}
+                      onCheckedChange={(value) => {
+                        saveConfig({
+                          ttsUseLLMPreprocessing: value,
+                        })
+                      }}
+                    />
+                  </Control>
                 </>
               )}
             </>

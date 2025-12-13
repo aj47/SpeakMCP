@@ -389,12 +389,17 @@ async function processQueuedMessages(conversationId: string): Promise<void> {
       logLLM(`[processQueuedMessages] Processing queued message ${queuedMessage.id} for ${conversationId}`)
 
       try {
-        // Add the queued message to the conversation
-        await conversationService.addMessageToConversation(
-          conversationId,
-          queuedMessage.text,
-          "user",
-        )
+        // Only add to conversation history if not already added (prevents duplicates on retry)
+        if (!queuedMessage.addedToHistory) {
+          // Add the queued message to the conversation
+          await conversationService.addMessageToConversation(
+            conversationId,
+            queuedMessage.text,
+            "user",
+          )
+          // Mark as added to history so retries don't duplicate
+          messageQueueService.markAddedToHistory(conversationId, queuedMessage.id)
+        }
 
         // Process with agent mode
         await processWithAgentMode(queuedMessage.text, conversationId, undefined, true)
@@ -2444,7 +2449,35 @@ export const router = {
     .input<{ conversationId: string; messageId: string; text: string }>()
     .action(async ({ input }) => {
       const { messageQueueService } = await import("./message-queue-service")
-      return messageQueueService.updateMessageText(input.conversationId, input.messageId, input.text)
+
+      // Check if this was a failed message before updating
+      const queue = messageQueueService.getQueue(input.conversationId)
+      const message = queue.find((m) => m.id === input.messageId)
+      const wasFailed = message?.status === "failed"
+
+      const success = messageQueueService.updateMessageText(input.conversationId, input.messageId, input.text)
+      if (!success) return false
+
+      // If this was a failed message that's now reset to pending,
+      // check if conversation is idle and trigger queue processing
+      if (wasFailed) {
+        const { agentSessionTracker } = await import("./agent-session-tracker")
+        const activeSessionId = agentSessionTracker.findSessionByConversationId(input.conversationId)
+        if (activeSessionId) {
+          const session = agentSessionTracker.getSession(activeSessionId)
+          if (session && session.status === "active") {
+            // Session is active, queue will be processed when it completes
+            return true
+          }
+        }
+
+        // Conversation is idle, trigger queue processing
+        processQueuedMessages(input.conversationId).catch((err) => {
+          logLLM("[updateQueuedMessageText] Error processing queued messages:", err)
+        })
+      }
+
+      return true
     }),
 
   retryQueuedMessage: t.procedure

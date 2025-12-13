@@ -164,6 +164,7 @@ export interface QueuedMessage {
   createdAt: number
   status: "pending" | "processing" | "cancelled" | "failed"
   errorMessage?: string
+  addedToHistory?: boolean
 }
 
 export interface MessageQueue {

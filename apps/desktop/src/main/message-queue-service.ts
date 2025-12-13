@@ -213,6 +213,23 @@ class MessageQueueService {
   }
 
   /**
+   * Mark a message as having been added to conversation history.
+   * This prevents duplicates when retrying failed messages.
+   */
+  markAddedToHistory(conversationId: string, messageId: string): boolean {
+    const queue = this.queues.get(conversationId)
+    if (!queue) return false
+
+    const message = queue.find((m) => m.id === messageId)
+    if (!message) return false
+
+    message.addedToHistory = true
+    logApp(`[MessageQueueService] Marked message ${messageId} as added to history in ${conversationId}`)
+    // Note: No need to emit queue update - this is an internal tracking flag
+    return true
+  }
+
+  /**
    * Reorder messages in the queue
    */
   reorderQueue(conversationId: string, messageIds: string[]): boolean {

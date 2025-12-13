@@ -107,7 +107,11 @@ export default function ChatScreen({ route, navigation }: any) {
   useEffect(() => {
     const currentSessionId = sessionStore.currentSessionId;
     if (!currentSessionId) {
+      // Reset both connection state and responding state when there's no session
+      // This prevents the UI from being stuck in "responding" state if the session
+      // is deleted/cleared while ChatScreen remains mounted (PR review fix #15)
       setConnectionState(null);
+      setResponding(false);
       return;
     }
 

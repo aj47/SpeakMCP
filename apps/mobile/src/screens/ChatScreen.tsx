@@ -800,12 +800,20 @@ export default function ChatScreen({ route, navigation }: any) {
         console.log('[ChatScreen] messageCountBeforeTurn:', messageCountBeforeTurn);
 
         if (sessionChanged && requestSessionId) {
-          // Persist to the original session without updating UI state
-          console.log('[ChatScreen] Persisting completed response to background session:', requestSessionId);
-          // Build the final messages array: messages before this turn + user message + new assistant messages
-          const messagesBeforeTurn = messages.slice(0, messageCountBeforeTurn);
-          const finalMessages = [...messagesBeforeTurn, userMsg, ...newMessages];
-          await sessionStore.setMessagesForSession(requestSessionId, finalMessages);
+          // Only persist to background session if this is still the latest request for that session
+          // This prevents an older request from overwriting newer history (PR review fix #14)
+          if (isLatestForSession) {
+            console.log('[ChatScreen] Persisting completed response to background session:', requestSessionId);
+            // Build the final messages array: messages before this turn + user message + new assistant messages
+            const messagesBeforeTurn = messages.slice(0, messageCountBeforeTurn);
+            const finalMessages = [...messagesBeforeTurn, userMsg, ...newMessages];
+            await sessionStore.setMessagesForSession(requestSessionId, finalMessages);
+          } else {
+            console.log('[ChatScreen] Skipping background persistence - request superseded within session:', {
+              thisRequestId,
+              latestRequestId: connectionManager.getLatestRequestId(requestSessionId)
+            });
+          }
         } else {
           // Normal case: update UI state (persistence happens via useEffect)
           setMessages((m) => {
@@ -820,11 +828,19 @@ export default function ChatScreen({ route, navigation }: any) {
       } else if (finalText) {
         console.log('[ChatScreen] FALLBACK: No conversationHistory, using finalText only. response.conversationHistory:', response.conversationHistory);
         if (sessionChanged && requestSessionId) {
-          // Persist to the original session without updating UI state
-          console.log('[ChatScreen] Persisting fallback response to background session:', requestSessionId);
-          const messagesBeforeTurn = messages.slice(0, messageCountBeforeTurn);
-          const finalMessages = [...messagesBeforeTurn, userMsg, { role: 'assistant' as const, content: finalText }];
-          await sessionStore.setMessagesForSession(requestSessionId, finalMessages);
+          // Only persist to background session if this is still the latest request for that session
+          // This prevents an older request from overwriting newer history (PR review fix #14)
+          if (isLatestForSession) {
+            console.log('[ChatScreen] Persisting fallback response to background session:', requestSessionId);
+            const messagesBeforeTurn = messages.slice(0, messageCountBeforeTurn);
+            const finalMessages = [...messagesBeforeTurn, userMsg, { role: 'assistant' as const, content: finalText }];
+            await sessionStore.setMessagesForSession(requestSessionId, finalMessages);
+          } else {
+            console.log('[ChatScreen] Skipping fallback background persistence - request superseded within session:', {
+              thisRequestId,
+              latestRequestId: connectionManager.getLatestRequestId(requestSessionId)
+            });
+          }
         } else {
           // Normal case: update UI state
           setMessages((m) => {

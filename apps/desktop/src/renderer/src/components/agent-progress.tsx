@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react"
 import { cn } from "@renderer/lib/utils"
 import { AgentProgressUpdate, EnhancedErrorInfo } from "../../../shared/types"
-import { ChevronDown, ChevronUp, ChevronRight, X, AlertTriangle, Minimize2, Shield, Check, XCircle, Loader2, Clock, Copy, CheckCheck, GripHorizontal, Activity, Moon, Maximize2, RefreshCw, Wifi, WifiOff, Key, Server, Settings, Lightbulb } from "lucide-react"
+import { ChevronDown, ChevronUp, ChevronRight, X, AlertTriangle, Minimize2, Shield, Check, XCircle, Loader2, Clock, Copy, CheckCheck, GripHorizontal, Activity, Moon, Maximize2, RefreshCw, Settings } from "lucide-react"
 import { MarkdownRenderer } from "@renderer/components/markdown-renderer"
 import { Button } from "./ui/button"
 import { Badge } from "./ui/badge"
@@ -877,194 +877,87 @@ const StreamingContentBubble: React.FC<{
   )
 }
 
-// Enhanced Error Bubble - shows detailed error information with troubleshooting hints
+// Simple Error Bubble - shows error message with status code and action buttons
 const EnhancedErrorBubble: React.FC<{
   errorInfo: EnhancedErrorInfo
   onRetry?: () => void
   onOpenSettings?: () => void
-  canRetry?: boolean // Whether retry is available (e.g., there's a retryable user message)
+  canRetry?: boolean
 }> = ({ errorInfo, onRetry, onOpenSettings, canRetry = true }) => {
-  const [showDetails, setShowDetails] = useState(false)
   const [copied, setCopied] = useState(false)
-  const [copyFailed, setCopyFailed] = useState(false)
 
-  // Get icon based on error type
-  const getErrorIcon = () => {
-    switch (errorInfo.type) {
-      case 'network':
-        return <WifiOff className="h-5 w-5" />
-      case 'auth':
-        return <Key className="h-5 w-5" />
-      case 'rate_limit':
-        return <Clock className="h-5 w-5" />
-      case 'server':
-        return <Server className="h-5 w-5" />
-      case 'config':
-        return <Settings className="h-5 w-5" />
-      default:
-        return <XCircle className="h-5 w-5" />
-    }
-  }
-
-  // Format time ago
-  const getTimeAgo = () => {
-    if (!errorInfo.lastAttemptAt) return null
-    const seconds = Math.floor((Date.now() - errorInfo.lastAttemptAt) / 1000)
-    if (seconds < 60) return `${seconds} second${seconds !== 1 ? 's' : ''} ago`
-    const minutes = Math.floor(seconds / 60)
-    return `${minutes} minute${minutes !== 1 ? 's' : ''} ago`
-  }
-
-  // Copy error details to clipboard
-  const handleCopyDetails = async () => {
+  const handleCopy = async () => {
     const details = [
-      `Error: ${errorInfo.title}`,
-      `Message: ${errorInfo.message}`,
-      errorInfo.statusCode ? `Status Code: ${errorInfo.statusCode}` : null,
+      errorInfo.statusCode ? `Error ${errorInfo.statusCode}` : 'Error',
+      errorInfo.message,
       errorInfo.endpoint ? `Endpoint: ${errorInfo.endpoint}` : null,
-      errorInfo.retryAttempts != null ? `Attempts: ${errorInfo.retryAttempts}` : null,
-      errorInfo.technicalDetails ? `\nTechnical Details:\n${errorInfo.technicalDetails}` : null,
     ].filter(Boolean).join('\n')
 
     try {
       await navigator.clipboard.writeText(details)
       setCopied(true)
-      setCopyFailed(false)
       setTimeout(() => setCopied(false), 2000)
     } catch (err) {
-      console.error('Failed to copy to clipboard:', err)
-      setCopyFailed(true)
-      setTimeout(() => setCopyFailed(false), 2000)
-    }
-  }
-
-  // Handle quick action clicks
-  const handleAction = (action: string) => {
-    switch (action) {
-      case 'retry':
-        onRetry?.()
-        break
-      case 'open_settings':
-        onOpenSettings?.()
-        break
-      case 'copy_details':
-        handleCopyDetails()
-        break
-      case 'check_connection':
-        // Basic network connectivity check using browser API
-        if (navigator.onLine) {
-          alert('Your device appears to be connected to the internet. The issue may be with the API server or your API configuration.')
-        } else {
-          alert('Your device appears to be offline. Please check your internet connection.')
-        }
-        break
-      default:
-        console.warn(`Unknown quick action: ${action}`)
-        break
+      console.error('Failed to copy:', err)
     }
   }
 
   return (
     <div className="rounded-lg border border-red-300 dark:border-red-700 bg-red-50/50 dark:bg-red-950/30 overflow-hidden">
-      {/* Header */}
+      {/* Header with status code */}
       <div className="flex items-center gap-2 px-3 py-2 bg-red-100/50 dark:bg-red-900/30 border-b border-red-200 dark:border-red-800">
-        <div className="text-red-600 dark:text-red-400">
-          {getErrorIcon()}
-        </div>
+        <XCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
         <span className="text-sm font-medium text-red-800 dark:text-red-200">
-          {errorInfo.title}
+          {errorInfo.statusCode ? `Error ${errorInfo.statusCode}` : 'Error'}
         </span>
       </div>
 
       {/* Message */}
-      <div className="px-3 py-2 border-b border-red-200 dark:border-red-800">
+      <div className="px-3 py-2">
         <p className="text-xs text-red-900 dark:text-red-100">
           {errorInfo.message}
         </p>
-        {(errorInfo.retryAttempts != null || errorInfo.maxRetryAttempts != null) && (
-          <p className="text-xs text-red-600 dark:text-red-400 mt-1">
-            {errorInfo.retryAttempts != null
-              ? `Failed after ${errorInfo.retryAttempts} attempt${errorInfo.retryAttempts !== 1 ? 's' : ''}`
-              : `Max retries: ${errorInfo.maxRetryAttempts}`}
-            {getTimeAgo() && ` • Last attempt: ${getTimeAgo()}`}
+        {errorInfo.endpoint && (
+          <p className="text-xs text-red-600/70 dark:text-red-400/70 mt-1 truncate">
+            {errorInfo.endpoint}
           </p>
         )}
       </div>
 
-      {/* Troubleshooting Hints */}
-      {errorInfo.troubleshootingHints && errorInfo.troubleshootingHints.length > 0 && (
-        <div className="px-3 py-2 border-b border-red-200 dark:border-red-800 bg-amber-50/50 dark:bg-amber-950/20">
-          <div className="flex items-center gap-1.5 mb-1.5">
-            <Lightbulb className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
-            <span className="text-xs font-medium text-amber-800 dark:text-amber-200">
-              Troubleshooting
-            </span>
-          </div>
-          <ul className="space-y-1">
-            {errorInfo.troubleshootingHints.map((hint, index) => (
-              <li key={index} className="text-xs text-amber-900 dark:text-amber-100 flex items-start gap-1.5">
-                <span className="text-amber-500 mt-0.5">•</span>
-                <span>{hint}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {/* Quick Actions */}
-      {errorInfo.quickActions && errorInfo.quickActions.length > 0 && (
-        <div className="px-3 py-2 flex flex-wrap gap-2 border-b border-red-200 dark:border-red-800">
-          {errorInfo.quickActions
-            // Filter out retry action when canRetry is false to avoid showing a non-functional button
-            .filter(action => action.action !== 'retry' || canRetry)
-            .map((action, index) => (
-            <Button
-              key={index}
-              variant="outline"
-              size="sm"
-              className={cn(
-                "h-7 text-xs",
-                action.action === 'retry' && "border-green-300 text-green-700 hover:bg-green-50 dark:border-green-700 dark:text-green-300 dark:hover:bg-green-950",
-                action.action === 'open_settings' && "border-blue-300 text-blue-700 hover:bg-blue-50 dark:border-blue-700 dark:text-blue-300 dark:hover:bg-blue-950",
-                action.action === 'copy_details' && "border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-950"
-              )}
-              onClick={() => handleAction(action.action)}
-            >
-              {action.action === 'retry' && <RefreshCw className="h-3 w-3 mr-1" />}
-              {action.action === 'open_settings' && <Settings className="h-3 w-3 mr-1" />}
-              {action.action === 'copy_details' && (copied ? <CheckCheck className="h-3 w-3 mr-1" /> : <Copy className="h-3 w-3 mr-1" />)}
-              {action.action === 'copy_details' && copied ? 'Copied!' : action.action === 'copy_details' && copyFailed ? 'Copy failed' : action.label}
-            </Button>
-          ))}
-        </div>
-      )}
-
-      {/* Technical Details (Expandable) */}
-      {errorInfo.technicalDetails && (
-        <div className="px-3 py-2">
-          <button
-            onClick={() => setShowDetails(!showDetails)}
-            className="flex items-center gap-1 text-xs text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-200 transition-colors"
+      {/* Action buttons */}
+      <div className="px-3 py-2 flex gap-2 border-t border-red-200 dark:border-red-800">
+        {canRetry && onRetry && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 text-xs border-green-300 text-green-700 hover:bg-green-50 dark:border-green-700 dark:text-green-300 dark:hover:bg-green-950"
+            onClick={onRetry}
           >
-            {showDetails ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-            Technical Details
-          </button>
-          {showDetails && (
-            <div className="mt-2 p-2 bg-red-100/50 dark:bg-red-900/30 rounded text-xs font-mono text-red-800 dark:text-red-200 whitespace-pre-wrap break-all">
-              {errorInfo.statusCode && <div>Status: {errorInfo.statusCode}</div>}
-              {errorInfo.endpoint && <div>Endpoint: {errorInfo.endpoint}</div>}
-              {(errorInfo.retryAttempts != null || errorInfo.maxRetryAttempts != null) && (
-                <div>
-                  {errorInfo.retryAttempts != null
-                    ? `Attempts: ${errorInfo.retryAttempts}${errorInfo.maxRetryAttempts != null ? ` / ${errorInfo.maxRetryAttempts}` : ''}`
-                    : `Max retries: ${errorInfo.maxRetryAttempts}`}
-                </div>
-              )}
-              {errorInfo.technicalDetails && <div className="mt-1 border-t border-red-200 dark:border-red-700 pt-1">{errorInfo.technicalDetails}</div>}
-            </div>
-          )}
-        </div>
-      )}
+            <RefreshCw className="h-3 w-3 mr-1" />
+            Retry
+          </Button>
+        )}
+        {onOpenSettings && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 text-xs border-blue-300 text-blue-700 hover:bg-blue-50 dark:border-blue-700 dark:text-blue-300 dark:hover:bg-blue-950"
+            onClick={onOpenSettings}
+          >
+            <Settings className="h-3 w-3 mr-1" />
+            Settings
+          </Button>
+        )}
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-7 text-xs border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-950"
+          onClick={handleCopy}
+        >
+          {copied ? <CheckCheck className="h-3 w-3 mr-1" /> : <Copy className="h-3 w-3 mr-1" />}
+          {copied ? 'Copied!' : 'Copy'}
+        </Button>
+      </div>
     </div>
   )
 }
@@ -1513,7 +1406,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
   if (progress.errorInfo) {
     displayItems.push({
       kind: "enhanced_error",
-      id: `error-${progress.errorInfo.lastAttemptAt || Date.now()}`,
+      id: `error-${Date.now()}`,
       data: progress.errorInfo,
     })
   }
@@ -1829,14 +1722,14 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
                             onRetry={() => {
                               // Trigger a retry by re-sending the last user message
                               if (lastUserMessage) {
-                                tipcClient.processWithAgentMode.mutate({
+                                tipcClient.createMcpTextInput({
                                   text: lastUserMessage.content,
                                   conversationId: progress.conversationId,
                                 })
                               }
                             }}
                             onOpenSettings={() => {
-                              tipcClient.openSettingsWindow.mutate()
+                              tipcClient.showMainWindow({ url: '/settings' })
                             }}
                             canRetry={canRetry}
                           />
@@ -2044,14 +1937,14 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
                       onRetry={() => {
                         // Trigger a retry by re-sending the last user message
                         if (lastUserMessage) {
-                          tipcClient.processWithAgentMode.mutate({
+                          tipcClient.createMcpTextInput({
                             text: lastUserMessage.content,
                             conversationId: progress.conversationId,
                           })
                         }
                       }}
                       onOpenSettings={() => {
-                        tipcClient.openSettingsWindow.mutate()
+                        tipcClient.showMainWindow({ url: '/settings' })
                       }}
                       canRetry={canRetry}
                     />

@@ -308,12 +308,7 @@ async function processWithAgentMode(
 
     // Create enhanced error info for better UI display
     const { createEnhancedErrorInfo } = await import("./llm-fetch")
-    const errorInfo = createEnhancedErrorInfo(error, {
-      // Note: We only pass maxRetryAttempts here since we don't have access to the actual
-      // retry count at this catch block. The actual attempt count may be less if the error
-      // occurred before exhausting all retries.
-      maxRetryAttempts: config.apiRetryCount,
-    })
+    const errorInfo = createEnhancedErrorInfo(error)
 
     // Emit error progress update to the UI so users see the error message
     const { emitAgentProgress } = await import("./emit-agent-progress")
@@ -326,7 +321,7 @@ async function processWithAgentMode(
       steps: [{
         id: `error_${Date.now()}`,
         type: "thinking",
-        title: errorInfo.title,
+        title: errorInfo.statusCode ? `Error ${errorInfo.statusCode}` : "Error",
         description: errorInfo.message,
         status: "error",
         timestamp: Date.now(),
@@ -1278,7 +1273,7 @@ export const router = {
           steps: [{
             id: `transcribe_error_${Date.now()}`,
             type: "completion",
-            title: errorInfo.title,
+            title: errorInfo.statusCode ? `Error ${errorInfo.statusCode}` : "Error",
             description: errorInfo.message,
             status: "error",
             timestamp: Date.now(),

@@ -111,7 +111,7 @@ function QueuedMessageItem({
       className={cn(
         "px-3 py-2 group",
         isFailed ? "bg-destructive/10 hover:bg-destructive/15" :
-        isProcessing ? "bg-primary/10" : "hover:bg-muted/50",
+        isProcessing ? "bg-amber-100/50 dark:bg-amber-900/20" : "hover:bg-amber-100/30 dark:hover:bg-amber-900/10",
         "transition-colors"
       )}
     >
@@ -181,7 +181,7 @@ function QueuedMessageItem({
               <span className={cn(
                 "text-xs",
                 isFailed ? "text-destructive/70" :
-                isProcessing ? "text-primary/70" : "text-muted-foreground"
+                isProcessing ? "text-amber-600 dark:text-amber-400" : "text-amber-600/70 dark:text-amber-400/70"
               )}>
                 {formatTime(message.createdAt)} • {isFailed ? "Failed - blocking queue" : isProcessing ? "Processing..." : "Queued"}
               </span>
@@ -281,15 +281,19 @@ export function MessageQueuePanel({
 
   if (compact) {
     return (
-      <div className={cn("flex items-center gap-2 px-2 py-1 text-xs", className)}>
-        <Clock className="h-3 w-3 text-muted-foreground" />
-        <span className="text-muted-foreground">
+      <div className={cn(
+        "flex items-center gap-2 px-2 py-1.5 text-xs rounded-md",
+        "bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800",
+        className
+      )}>
+        <Clock className="h-3 w-3 text-amber-600 dark:text-amber-400" />
+        <span className="text-amber-700 dark:text-amber-300">
           {messages.length} queued message{messages.length > 1 ? "s" : ""}
         </span>
         <Button
           variant="ghost"
           size="icon"
-          className="h-4 w-4 ml-auto"
+          className="h-4 w-4 ml-auto text-amber-600 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-200"
           onClick={() => clearMutation.mutate()}
           disabled={clearMutation.isPending || hasProcessingMessage}
           title={hasProcessingMessage ? "Cannot clear while processing" : "Clear queue"}
@@ -303,22 +307,23 @@ export function MessageQueuePanel({
   return (
     <div
       className={cn(
-        "rounded-md border bg-muted/30 overflow-hidden",
+        "rounded-md border overflow-hidden",
+        "border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-950/30",
         className
       )}
     >
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 border-b bg-muted/50">
+      <div className="flex items-center justify-between px-3 py-2 border-b border-amber-200 dark:border-amber-800 bg-amber-100/50 dark:bg-amber-900/30">
         <div className="flex items-center gap-2">
-          <Clock className="h-4 w-4 text-muted-foreground" />
-          <span className="text-sm font-medium">
+          <Clock className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+          <span className="text-sm font-medium text-amber-800 dark:text-amber-200">
             Queued Messages ({messages.length})
           </span>
         </div>
         <Button
           variant="ghost"
           size="sm"
-          className="h-6 text-xs"
+          className="h-6 text-xs text-amber-700 dark:text-amber-300 hover:text-amber-900 dark:hover:text-amber-100 hover:bg-amber-200/50 dark:hover:bg-amber-800/50"
           onClick={() => clearMutation.mutate()}
           disabled={clearMutation.isPending || hasProcessingMessage}
           title={hasProcessingMessage ? "Cannot clear while processing" : undefined}

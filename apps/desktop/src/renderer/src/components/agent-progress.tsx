@@ -6,13 +6,14 @@ import { MarkdownRenderer } from "@renderer/components/markdown-renderer"
 import { Button } from "./ui/button"
 import { Badge } from "./ui/badge"
 import { tipcClient } from "@renderer/lib/tipc-client"
-import { useAgentStore, useConversationStore } from "@renderer/stores"
+import { useAgentStore, useConversationStore, useMessageQueue } from "@renderer/stores"
 import { AudioPlayer } from "@renderer/components/audio-player"
 import { useConfigQuery } from "@renderer/lib/queries"
 import { useTheme } from "@renderer/contexts/theme-context"
 import { logUI, logExpand } from "@renderer/lib/debug"
 import { TileFollowUpInput } from "./tile-follow-up-input"
 import { OverlayFollowUpInput } from "./overlay-follow-up-input"
+import { MessageQueuePanel } from "@renderer/components/message-queue-panel"
 import { useResizable, TILE_DIMENSIONS } from "@renderer/hooks/use-resizable"
 import { getToolResultsSummary } from "@speakmcp/shared"
 
@@ -946,6 +947,10 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
   const setFocusedSessionId = useAgentStore((s) => s.setFocusedSessionId)
   const setSessionSnoozed = useAgentStore((s) => s.setSessionSnoozed)
   const agentProgressById = useAgentStore((s) => s.agentProgressById)
+
+  // Get queued messages for this conversation (used in overlay variant)
+  const queuedMessages = useMessageQueue(progress?.conversationId)
+  const hasQueuedMessages = queuedMessages.length > 0
 
   // Helper to toggle expansion state for a specific item
   // Uses defaultExpanded fallback for items that haven't been explicitly toggled yet
@@ -1892,6 +1897,17 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
         </div>
 
       </div>
+
+      {/* Message Queue Panel - shows queued messages in overlay */}
+      {hasQueuedMessages && progress.conversationId && (
+        <div className="px-3 py-2 border-t flex-shrink-0">
+          <MessageQueuePanel
+            conversationId={progress.conversationId}
+            messages={queuedMessages}
+            compact={false}
+          />
+        </div>
+      )}
 
       {/* Follow-up input - for continuing conversation in the floating panel */}
       <OverlayFollowUpInput

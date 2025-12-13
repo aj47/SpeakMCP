@@ -66,11 +66,19 @@ interface ServerDialogProps {
   server?: { name: string; config: MCPServerConfig }
   onSave: (name: string, config: MCPServerConfig) => void
   onCancel: () => void
+  // Import functionality props (only needed for Add mode, not Edit mode)
+  onImportFromFile?: () => Promise<void>
+  // Returns true on success, false on failure (to preserve user input on errors)
+  onImportFromText?: (text: string) => Promise<boolean>
+  // Used to trigger state reset when dialog opens/closes (for Add mode where server prop doesn't change)
+  isOpen?: boolean
 }
 
-function ServerDialog({ server, onSave, onCancel }: ServerDialogProps) {
+function ServerDialog({ server, onSave, onCancel, onImportFromFile, onImportFromText, isOpen }: ServerDialogProps) {
   const [name, setName] = useState(server?.name || "")
-  const [activeTab, setActiveTab] = useState<'manual' | 'examples'>('manual')
+  const [activeTab, setActiveTab] = useState<'manual' | 'file' | 'paste' | 'examples'>('manual')
+  const [jsonInputText, setJsonInputText] = useState("")
+  const [isValidatingJson, setIsValidatingJson] = useState(false)
   const [transport, setTransport] = useState<MCPTransportType>(
     server?.config.transport || "stdio",
   )
@@ -111,6 +119,7 @@ function ServerDialog({ server, onSave, onCancel }: ServerDialogProps) {
   useEffect(() => {
     setName(server?.name || "")
     setActiveTab('manual')
+    setJsonInputText("")  // Clear pasted JSON to prevent data/secrets from persisting across dialog close/open
     setTransport(server?.config.transport || "stdio")
 
     // Combine command and args for editing, or reset to empty
@@ -142,6 +151,29 @@ function ServerDialog({ server, onSave, onCancel }: ServerDialogProps) {
     )
     setOAuthConfig(server?.config.oauth || {})
   }, [server])
+
+  // Reset all form state when dialog opens or closes (for Add mode where server prop stays undefined)
+  // This ensures sensitive data (JSON, env vars, headers, OAuth secrets) is cleared after Cancel/close
+  // and prevents stale values from flashing when the dialog reopens
+  useEffect(() => {
+    if (!server) {
+      // Only reset for Add mode (server is undefined)
+      // Edit mode is handled by the server dependency useEffect above
+      setName("")
+      setActiveTab('manual')
+      setJsonInputText("")
+      setIsValidatingJson(false) // Reset validation state to prevent UI getting stuck
+      setTransport("stdio")
+      setFullCommand("")
+      setUrl("")
+      setEnv("")
+      setTimeout("")
+      setSelectedExample("")
+      setDisabled(false)
+      setHeaders("")
+      setOAuthConfig({})
+    }
+  }, [isOpen, server])
 
   const handleSave = () => {
     if (!name.trim()) {
@@ -246,6 +278,29 @@ function ServerDialog({ server, onSave, onCancel }: ServerDialogProps) {
           >
             Manual
           </Button>
+          {/* Only show import tabs when adding a new server (not editing) */}
+          {!server && onImportFromFile && (
+            <Button
+              variant={activeTab === 'file' ? 'default' : 'outline'}
+              onClick={() => setActiveTab('file')}
+              className="flex-1"
+              size="sm"
+            >
+              <Upload className="mr-1 h-3 w-3" />
+              From File
+            </Button>
+          )}
+          {!server && onImportFromText && (
+            <Button
+              variant={activeTab === 'paste' ? 'default' : 'outline'}
+              onClick={() => setActiveTab('paste')}
+              className="flex-1"
+              size="sm"
+            >
+              <FileText className="mr-1 h-3 w-3" />
+              Paste JSON
+            </Button>
+          )}
           <Button
             variant={activeTab === 'examples' ? 'default' : 'outline'}
             onClick={() => setActiveTab('examples')}
@@ -472,6 +527,93 @@ function ServerDialog({ server, onSave, onCancel }: ServerDialogProps) {
           </div>
         )}
 
+        {/* From File Tab */}
+        {activeTab === 'file' && onImportFromFile && (
+          <div className="space-y-4">
+            <div className="border-2 border-dashed border-border rounded-lg p-8 text-center">
+              <Upload className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+              <h3 className="text-lg font-medium mb-2">Import from JSON file</h3>
+              <p className="text-sm text-muted-foreground mb-4">
+                Select a JSON file containing MCP server configurations
+              </p>
+              <Button onClick={async () => {
+                await onImportFromFile()
+              }}>
+                Choose File
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Paste JSON Tab */}
+        {activeTab === 'paste' && onImportFromText && (
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="json-text-dialog">Paste JSON Configuration</Label>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    try {
+                      const formatted = JSON.stringify(JSON.parse(jsonInputText), null, 2)
+                      setJsonInputText(formatted)
+                    } catch {
+                      // Ignore formatting errors
+                    }
+                  }}
+                  disabled={!jsonInputText.trim()}
+                >
+                  Format
+                </Button>
+              </div>
+              <Textarea
+                id="json-text-dialog"
+                value={jsonInputText}
+                onChange={(e) => setJsonInputText(e.target.value)}
+                placeholder='{
+  "mcpServers": {
+    "server-name": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-name"]
+    }
+  }
+}'
+                rows={12}
+                className="font-mono text-sm whitespace-pre"
+              />
+              <p className="text-xs text-muted-foreground">
+                Paste valid JSON configuration. New servers will be merged. Duplicate names will be replaced by imported versions.
+              </p>
+            </div>
+            <Button
+              onClick={async () => {
+                setIsValidatingJson(true)
+                try {
+                  const success = await onImportFromText(jsonInputText)
+                  // Only clear input on successful import to preserve user input on errors
+                  if (success) {
+                    setJsonInputText("")
+                  }
+                } finally {
+                  setIsValidatingJson(false)
+                }
+              }}
+              disabled={isValidatingJson || !jsonInputText.trim()}
+              className="w-full"
+            >
+              {isValidatingJson ? (
+                <>
+                  <Spinner className="mr-2 h-4 w-4" />
+                  Validating...
+                </>
+              ) : (
+                "Import Configuration"
+              )}
+            </Button>
+          </div>
+        )}
+
         {/* Examples Tab */}
         {activeTab === 'examples' && (
           <div className="space-y-4">
@@ -591,7 +733,11 @@ function ServerDialog({ server, onSave, onCancel }: ServerDialogProps) {
         <Button variant="outline" onClick={onCancel}>
           Cancel
         </Button>
-        <Button onClick={handleSave}>{server ? "Update" : "Add"} Server</Button>
+        {/* Only show Add/Update Server button on manual and examples tabs */}
+        {/* File and paste tabs have their own action buttons */}
+        {(activeTab === 'manual' || activeTab === 'examples') && (
+          <Button onClick={handleSave}>{server ? "Update" : "Add"} Server</Button>
+        )}
       </DialogFooter>
     </DialogContent>
   )
@@ -678,10 +824,6 @@ export function MCPConfigManager({
   } | null>(null)
   const [showAddDialog, setShowAddDialog] = useState(false)
   const [showExamples, setShowExamples] = useState(false)
-  const [showImportDialog, setShowImportDialog] = useState(false)
-  const [importTab, setImportTab] = useState<'file' | 'text' | 'examples'>('file')
-  const [jsonInputText, setJsonInputText] = useState("")
-  const [isValidatingJson, setIsValidatingJson] = useState(false)
   const [serverStatus, setServerStatus] = useState<
     Record<
       string,
@@ -835,7 +977,7 @@ export function MCPConfigManager({
     try {
       const importedConfig = await tipcClient.loadMcpConfigFile({})
       if (importedConfig) {
-        // Merge new servers with existing ones
+        // Add imported servers to config (duplicates will be replaced by imported versions)
         const newConfig = {
           ...config,
           mcpServers: {
@@ -844,7 +986,7 @@ export function MCPConfigManager({
           },
         }
         onConfigChange(newConfig)
-        setShowImportDialog(false)
+        setShowAddDialog(false)
         toast.success(`Successfully imported ${Object.keys(importedConfig.mcpServers).length} server(s)`)
       }
     } catch (error) {
@@ -873,18 +1015,17 @@ export function MCPConfigManager({
     }
   }
 
-  const handleImportFromText = async () => {
+  const handleImportFromText = async (text: string): Promise<boolean> => {
     try {
-      setIsValidatingJson(true)
-
-      // Format the JSON before validation for better readability
-      const formattedJson = formatJsonPreview(jsonInputText)
-      setJsonInputText(formattedJson)
+      // Format JSON for consistency before validation (falls back to original text if parsing fails)
+      // Note: formatJsonPreview returns the original text on parse errors, actual validation
+      // is performed by validateMcpConfigText which will catch any JSON syntax errors
+      const formattedJson = formatJsonPreview(text)
 
       const importedConfig = await tipcClient.validateMcpConfigText({ text: formattedJson })
 
       if (importedConfig) {
-        // Merge new servers with existing ones instead of overwriting
+        // Add imported servers to config (duplicates will be replaced by imported versions)
         const newConfig = {
           ...config,
           mcpServers: {
@@ -893,14 +1034,14 @@ export function MCPConfigManager({
           },
         }
         onConfigChange(newConfig)
-        setShowImportDialog(false)
-        setJsonInputText("")
-        toast.success(`Successfully imported ${Object.keys(importedConfig.mcpServers).length} new server(s)`)
+        setShowAddDialog(false)
+        toast.success(`Successfully imported ${Object.keys(importedConfig.mcpServers).length} server(s)`)
+        return true
       }
+      return false
     } catch (error) {
       toast.error(`Invalid JSON: ${error instanceof Error ? error.message : String(error)}`)
-    } finally {
-      setIsValidatingJson(false)
+      return false
     }
   }
 
@@ -1021,10 +1162,6 @@ export function MCPConfigManager({
           <h3 className="text-lg font-medium">MCP Server Configuration</h3>
         </div>
         <div className="flex flex-wrap justify-start gap-2 sm:justify-end">
-          <Button variant="outline" size="sm" onClick={() => setShowImportDialog(true)}>
-            <Upload className="mr-2 h-4 w-4" />
-            Import
-          </Button>
           <Button variant="outline" size="sm" onClick={handleExportConfig}>
             <Download className="mr-2 h-4 w-4" />
             Export
@@ -1039,6 +1176,9 @@ export function MCPConfigManager({
             <ServerDialog
               onSave={handleAddServer}
               onCancel={() => setShowAddDialog(false)}
+              onImportFromFile={handleImportConfigFromFile}
+              onImportFromText={handleImportFromText}
+              isOpen={showAddDialog}
             />
           </Dialog>
         </div>
@@ -1331,174 +1471,6 @@ export function MCPConfigManager({
           />
         </Dialog>
       )}
-
-      {/* Unified Import Dialog */}
-      <Dialog open={showImportDialog} onOpenChange={setShowImportDialog}>
-        <DialogContent className="max-w-4xl max-h-[80vh]">
-          <DialogHeader>
-            <DialogTitle>Import MCP Configuration</DialogTitle>
-            <DialogDescription>
-              Choose how you want to import MCP server configurations
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="w-full">
-            <div className="flex space-x-1 mb-4">
-              <Button
-                variant={importTab === 'file' ? 'default' : 'outline'}
-                onClick={() => setImportTab('file')}
-                className="flex-1"
-              >
-                <Upload className="mr-2 h-4 w-4" />
-                From File
-              </Button>
-              <Button
-                variant={importTab === 'text' ? 'default' : 'outline'}
-                onClick={() => setImportTab('text')}
-                className="flex-1"
-              >
-                <FileText className="mr-2 h-4 w-4" />
-                Paste Text
-              </Button>
-              <Button
-                variant={importTab === 'examples' ? 'default' : 'outline'}
-                onClick={() => setImportTab('examples')}
-                className="flex-1"
-              >
-                <BookOpen className="mr-2 h-4 w-4" />
-                Examples
-              </Button>
-            </div>
-
-            {/* File Import Tab */}
-            {importTab === 'file' && (
-              <div className="space-y-4">
-                <div className="border-2 border-dashed border-border rounded-lg p-8 text-center">
-                  <Upload className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-                  <h3 className="text-lg font-medium mb-2">Import from JSON file</h3>
-                  <p className="text-sm text-muted-foreground mb-4">
-                    Select a JSON file containing MCP server configurations
-                  </p>
-                  <Button onClick={handleImportConfigFromFile}>
-                    Choose File
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            {/* Text Import Tab */}
-            {importTab === 'text' && (
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="json-text">Paste JSON Configuration</Label>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        try {
-                          const formatted = JSON.stringify(JSON.parse(jsonInputText), null, 2)
-                          setJsonInputText(formatted)
-                        } catch {
-                          // Ignore formatting errors
-                        }
-                      }}
-                      disabled={!jsonInputText.trim()}
-                    >
-                      Format
-                    </Button>
-                  </div>
-                  <Textarea
-                    id="json-text"
-                    value={jsonInputText}
-                    onChange={(e) => setJsonInputText(e.target.value)}
-                    placeholder='{
-  "mcpServers": {
-    "server-name": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-name"]
-    }
-  }
-}'
-                    rows={15}
-                    className="font-mono text-sm whitespace-pre"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Paste valid JSON configuration. New servers will be merged with existing ones.
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {/* Examples Tab */}
-            {importTab === 'examples' && (
-              <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
-                <div className="grid gap-4">
-                  {Object.values(MCP_EXAMPLES).map((example, index) => (
-                    <Card key={index} className="p-4">
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <h4 className="font-medium mb-2">{example.name}</h4>
-                          <pre className="bg-muted p-3 rounded-md text-sm overflow-x-auto">
-                            <code>{JSON.stringify(example.config, null, 2)}</code>
-                          </pre>
-                        </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            const newConfig = {
-                              ...config,
-                              mcpServers: {
-                                ...config.mcpServers,
-                                [example.name]: example.config,
-                              },
-                            }
-                            onConfigChange(newConfig)
-                            setShowImportDialog(false)
-                            setJsonInputText("")
-                            toast.success(`Added ${example.name} server`)
-                          }}
-                        >
-                          Add
-                        </Button>
-                      </div>
-                    </Card>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setShowImportDialog(false)
-                setJsonInputText("")
-                setImportTab('file')
-              }}
-            >
-              Cancel
-            </Button>
-            {importTab === 'text' && (
-              <Button
-                onClick={handleImportFromText}
-                disabled={isValidatingJson || !jsonInputText.trim()}
-              >
-                {isValidatingJson ? (
-                  <>
-                    <Spinner className="mr-2 h-4 w-4" />
-                    Validating...
-                  </>
-                ) : (
-                  "Import Configuration"
-                )}
-              </Button>
-            )}
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }

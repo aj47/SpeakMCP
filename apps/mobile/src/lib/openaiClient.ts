@@ -227,6 +227,9 @@ export class OpenAIClient {
           if (update.conversationId && !lastReceivedConversationId) {
             lastReceivedConversationId = update.conversationId;
             console.log('[OpenAIClient] Captured conversationId from progress:', lastReceivedConversationId);
+            // Update checkpoint when conversationId becomes available, even without content.
+            // This ensures conversationId is preserved if the stream fails before any tokens arrive.
+            recovery.updateCheckpoint(accumulatedContent, lastReceivedConversationId);
           }
           // Update checkpoint with streaming content from progress
           if (update.streamingContent?.text) {

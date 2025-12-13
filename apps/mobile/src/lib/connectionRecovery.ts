@@ -223,10 +223,15 @@ export class ConnectionRecoveryManager {
   }
 
   markFailed(error: string): void {
-    // Preserve partial content in state when marking as failed
-    if (this.checkpoint?.content) {
-      this.state.partialContent = this.checkpoint.content;
-      this.state.conversationId = this.checkpoint.conversationId;
+    // Preserve conversationId even when content is empty so manual retry can resume the same conversation.
+    // This handles cases where the server sent a conversationId but the stream failed before any text arrived.
+    if (this.checkpoint) {
+      if (this.checkpoint.content) {
+        this.state.partialContent = this.checkpoint.content;
+      }
+      if (this.checkpoint.conversationId) {
+        this.state.conversationId = this.checkpoint.conversationId;
+      }
     }
     this.updateStatus('failed', error);
   }

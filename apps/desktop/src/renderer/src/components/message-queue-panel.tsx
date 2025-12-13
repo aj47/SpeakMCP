@@ -78,6 +78,7 @@ function QueuedMessageItem({
   const isLongMessage = message.text.length > 100
   const isFailed = message.status === "failed"
   const isProcessing = message.status === "processing"
+  const isAddedToHistory = message.addedToHistory === true
 
   // Mutation to retry a failed message by resetting its status to pending
   const retryMutation = useMutation({
@@ -209,12 +210,14 @@ function QueuedMessageItem({
                   <RefreshCw className={cn("h-3 w-3", retryMutation.isPending && "animate-spin")} />
                 </Button>
               )}
+              {/* Disable edit for messages already added to conversation history to prevent inconsistency */}
               <Button
                 variant="ghost"
                 size="icon"
                 className="h-6 w-6"
                 onClick={() => setIsEditing(true)}
-                title="Edit message"
+                disabled={isAddedToHistory}
+                title={isAddedToHistory ? "Cannot edit - already added to conversation" : "Edit message"}
               >
                 <Pencil className="h-3 w-3" />
               </Button>

@@ -557,7 +557,7 @@ function ServerDialog({ server, onSave, onCancel, onImportFromFile, onImportFrom
                 className="font-mono text-sm whitespace-pre"
               />
               <p className="text-xs text-muted-foreground">
-                Paste valid JSON configuration. New servers will be merged with existing ones.
+                Paste valid JSON configuration. New servers will be merged. Duplicate names will be replaced by imported versions.
               </p>
             </div>
             <Button

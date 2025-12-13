@@ -948,12 +948,17 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
   const agentProgressById = useAgentStore((s) => s.agentProgressById)
 
   // Helper to toggle expansion state for a specific item
-  // Accepts currentExpanded to handle items that default to expanded (like tool executions)
-  // when they haven't been explicitly toggled yet
-  const toggleItemExpansion = (itemKey: string, currentExpanded: boolean) => {
+  // Uses defaultExpanded fallback for items that haven't been explicitly toggled yet
+  // (like tool executions which default to expanded)
+  // By deriving the current state from prev inside the setter, this is resilient to
+  // batched updates (e.g., double-clicks will correctly round-trip)
+  const toggleItemExpansion = (itemKey: string, defaultExpanded: boolean) => {
     setExpandedItems(prev => {
-      const to = !currentExpanded
-      logExpand("AgentProgress", "toggle", { itemKey, from: currentExpanded, to })
+      // Use prev[itemKey] if it exists (item was explicitly toggled before),
+      // otherwise use the default expanded state for this item type
+      const from = itemKey in prev ? prev[itemKey] : defaultExpanded
+      const to = !from
+      logExpand("AgentProgress", "toggle", { itemKey, from, to })
       return {
         ...prev,
         [itemKey]: to,

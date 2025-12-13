@@ -206,11 +206,21 @@ export type ProfileMcpServerConfig = {
 }
 
 export type ProfileModelConfig = {
+  // Agent/MCP Tools settings
   mcpToolsProviderId?: "openai" | "groq" | "gemini"
   mcpToolsOpenaiModel?: string
   mcpToolsGroqModel?: string
   mcpToolsGeminiModel?: string
   currentModelPresetId?: string
+  // STT Provider settings
+  sttProviderId?: "openai" | "groq"
+  // Transcript Post-Processing settings
+  transcriptPostProcessingProviderId?: "openai" | "groq" | "gemini"
+  transcriptPostProcessingOpenaiModel?: string
+  transcriptPostProcessingGroqModel?: string
+  transcriptPostProcessingGeminiModel?: string
+  // TTS Provider settings
+  ttsProviderId?: "openai" | "groq" | "gemini"
 }
 
 // Profile Management Types

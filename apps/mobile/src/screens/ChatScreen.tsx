@@ -302,6 +302,9 @@ export default function ChatScreen({ route, navigation }: any) {
 
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  // Keep a ref to messages to avoid stale closures in setTimeout callbacks (PR review fix)
+  const messagesRef = useRef<ChatMessage[]>(messages);
+  useEffect(() => { messagesRef.current = messages; }, [messages]);
   const [input, setInput] = useState('');
   const [listening, setListening] = useState(false);
   const [liveTranscript, setLiveTranscript] = useState('');
@@ -993,7 +996,9 @@ export default function ChatScreen({ route, navigation }: any) {
     setDebugInfo(`Processing queued message...`);
 
     const userMsg: ChatMessage = { role: 'user', content: text };
-    const messageCountBeforeTurn = messages.length;
+    // Use ref to get latest messages to avoid stale closure when called via setTimeout (PR review fix)
+    const currentMessages = messagesRef.current;
+    const messageCountBeforeTurn = currentMessages.length;
     setMessages((m) => [...m, userMsg, { role: 'assistant', content: 'Assistant is thinking...' }]);
     setResponding(true);
 
@@ -1036,7 +1041,7 @@ export default function ChatScreen({ route, navigation }: any) {
         });
       };
 
-      const response = await client.chat([...messages, userMsg], onToken, onProgress, serverConversationId);
+      const response = await client.chat([...currentMessages, userMsg], onToken, onProgress, serverConversationId);
       const finalText = response.content || streamingText;
 
       if (sessionStore.currentSessionId !== requestSessionId) return;

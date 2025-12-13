@@ -4,6 +4,7 @@ import fs from "fs"
 import { Profile, ProfilesData, ProfileMcpServerConfig, ProfileModelConfig } from "@shared/types"
 import { randomUUID } from "crypto"
 import { logApp } from "./debug"
+import { configStore } from "./config"
 
 export const profilesPath = path.join(
   app.getPath("appData"),
@@ -84,6 +85,11 @@ class ProfileService {
   }
 
   createProfile(name: string, guidelines: string, systemPrompt?: string): Profile {
+    // Get all configured MCP server names to disable them by default
+    const config = configStore.get()
+    const mcpConfig = config.mcpConfig
+    const allServerNames = Object.keys(mcpConfig?.mcpServers || {})
+
     const newProfile: Profile = {
       id: randomUUID(),
       name,
@@ -91,6 +97,12 @@ class ProfileService {
       createdAt: Date.now(),
       updatedAt: Date.now(),
       ...(systemPrompt !== undefined && { systemPrompt }),
+      // New profiles have all MCPs disabled by default
+      // Users can enable specific MCPs as needed
+      mcpServerConfig: {
+        disabledServers: allServerNames,
+        disabledTools: [],
+      },
     }
 
     if (!this.profilesData) {

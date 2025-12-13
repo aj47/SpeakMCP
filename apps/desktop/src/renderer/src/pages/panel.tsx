@@ -11,7 +11,7 @@ import { TextInputPanel, TextInputPanelRef } from "@renderer/components/text-inp
 import { PanelResizeWrapper } from "@renderer/components/panel-resize-wrapper"
 import { logUI } from "@renderer/lib/debug"
 import { useAgentStore, useAgentProgress, useConversationStore } from "@renderer/stores"
-import { useConversationQuery, useCreateConversationMutation, useAddMessageToConversationMutation } from "@renderer/lib/queries"
+import { useConversationQuery, useCreateConversationMutation } from "@renderer/lib/queries"
 import { PanelDragBar } from "@renderer/components/panel-drag-bar"
 import { useConfigQuery } from "@renderer/lib/query-client"
 import { useTheme } from "@renderer/contexts/theme-context"
@@ -61,7 +61,6 @@ export function Component() {
   const isConversationActive = !!currentConversation
 
   const createConversationMutation = useCreateConversationMutation()
-  const addMessageMutation = useAddMessageToConversationMutation()
 
   const startNewConversation = async (message: string, role: "user" | "assistant") => {
     const result = await createConversationMutation.mutateAsync({ firstMessage: message, role })
@@ -69,15 +68,6 @@ export function Component() {
       setCurrentConversationId(result.id)
     }
     return result
-  }
-
-  const addMessage = async (content: string, role: "user" | "assistant") => {
-    if (!currentConversationId) return
-    await addMessageMutation.mutateAsync({
-      conversationId: currentConversationId,
-      content,
-      role,
-    })
   }
 
   const activeSessionCount = Array.from(agentProgressById?.values() ?? [])
@@ -237,10 +227,9 @@ export function Component() {
         tipcClient.hidePanelWindow({})
       }
 
-      // If we have a transcript, start a conversation with it
-      if (transcript && !isConversationActive) {
-        await startNewConversation(transcript, "user")
-      }
+      // NOTE: We do NOT pre-emptively call startNewConversation here.
+      // The createMcpRecording backend call handles conversation creation and message saving.
+      // This prevents duplicate messages and ensures the message isn't saved if the request is blocked.
 
       const result = await tipcClient.createMcpRecording({
         recording: arrayBuffer,
@@ -273,7 +262,16 @@ export function Component() {
         message: error.message,
       })
     },
-    onSuccess() {
+    onSuccess(result) {
+      // Check if the voice submission was blocked due to active session
+      if (result && 'blocked' in result && result.blocked) {
+        tipcClient.displayError({
+          title: 'Voice Message Not Sent',
+          message:
+            'Please wait for the current agent task to complete before recording another message.',
+        })
+        return
+      }
       // Don't clear progress or hide panel on success - agent mode will handle this
       // The panel needs to stay visible for agent mode progress updates
       // (unless recording was from a tile, which already hid the panel in mutationFn)
@@ -331,7 +329,21 @@ export function Component() {
         message: error.message,
       })
     },
-    onSuccess() {
+    onSuccess(result) {
+      // Check if the message was blocked due to active session
+      // IMPORTANT: Do this BEFORE closing text input so user doesn't lose their draft
+      if (result && 'blocked' in result && result.blocked) {
+        tipcClient.displayError({
+          title: 'Message Not Sent',
+          message:
+            'Please wait for the current agent task to complete before sending another message.',
+        })
+        return
+      }
+
+      // Clear the text input now that submission was successful (not blocked)
+      textInputPanelRef.current?.clearText()
+      // Only close text input if message was NOT blocked
       setShowTextInput(false)
       // Ensure main process knows text input is no longer active (prevents textInput positioning)
       tipcClient.clearTextInputState({})
@@ -511,17 +523,10 @@ export function Component() {
     // from history, currentConversationId will be set. Otherwise it's null for new inputs.
     const conversationIdForMcp = currentConversationId
 
-    // Start new conversation or add to existing one
-    if (!isConversationActive) {
-      await startNewConversation(text, "user")
-    } else {
-      await addMessage(text, "user")
-    }
-
-    // Hide the text input immediately and show processing/overlay
-    setShowTextInput(false)
-    // Ensure main process no longer treats panel as textInput mode
-    tipcClient.clearTextInputState({})
+    // NOTE: We do NOT pre-emptively call startNewConversation or addMessage here.
+    // The createMcpTextInput backend call handles conversation creation and message saving.
+    // This prevents duplicate messages and ensures the message isn't saved if the request is blocked.
+    // The text input and processing state are managed by mcpTextInputMutation.onSuccess/onError.
 
     // Always use MCP processing
     mcpTextInputMutation.mutate({
@@ -638,9 +643,8 @@ export function Component() {
   }, [anyActiveNonSnoozed, textInputMutation.isPending, mcpTextInputMutation.isPending, showTextInput])
 
   // Note: We don't need to hide text input when agentProgress changes because:
-  // 1. handleTextSubmit already hides it immediately on submit (line 375)
-  // 2. mcpTextInputMutation.onSuccess/onError also hide it (lines 194, 204)
-  // 3. Hiding on ANY agentProgress change would close text input when background
+  // 1. mcpTextInputMutation.onSuccess (only if not blocked) and onError handle hiding the text input
+  // 2. Hiding on ANY agentProgress change would close text input when background
   //    sessions get updates, which breaks the UX when user is typing
 
   // Debug: Log overlay visibility conditions

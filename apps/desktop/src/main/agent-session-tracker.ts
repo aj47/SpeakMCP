@@ -61,6 +61,9 @@ class AgentSessionTracker {
   private static instance: AgentSessionTracker | null = null
   private sessions: Map<string, AgentSession> = new Map()
   private completedSessions: AgentSession[] = []
+  // Tracks conversations that are about to start a session but haven't registered yet
+  // This prevents race conditions where two near-simultaneous calls both pass the active check
+  private pendingConversations: Set<string> = new Set()
 
 
   static getInstance(): AgentSessionTracker {
@@ -255,6 +258,65 @@ class AgentSessionTracker {
   }
 
   /**
+   * Check if a session is currently actively processing
+   * Returns true if the session exists in active sessions and has "active" status
+   */
+  isSessionActivelyProcessing(sessionId: string): boolean {
+    const session = this.sessions.get(sessionId)
+    return session?.status === "active"
+  }
+
+  /**
+   * Reserve a conversation for processing.
+   * This should be called BEFORE checking hasActiveSessionForConversation to prevent race conditions.
+   * @returns true if successfully reserved (not already active or pending), false otherwise
+   */
+  reserveConversation(conversationId: string): boolean {
+    // Check if already active or pending
+    if (this.pendingConversations.has(conversationId)) {
+      logApp(`[AgentSessionTracker] Conversation ${conversationId} is already pending`)
+      return false
+    }
+    if (this.hasActiveSessionForConversation(conversationId)) {
+      logApp(`[AgentSessionTracker] Conversation ${conversationId} already has an active session`)
+      return false
+    }
+    // Reserve it
+    this.pendingConversations.add(conversationId)
+    logApp(`[AgentSessionTracker] Reserved conversation: ${conversationId}`)
+    return true
+  }
+
+  /**
+   * Release a pending conversation reservation.
+   * This should be called after the session is registered or if processing fails.
+   */
+  releaseConversationReservation(conversationId: string): void {
+    this.pendingConversations.delete(conversationId)
+    logApp(`[AgentSessionTracker] Released reservation for conversation: ${conversationId}`)
+  }
+
+  /**
+   * Check if there's an active session processing for a given conversation
+   * Returns true if any active session is linked to this conversationId
+   */
+  hasActiveSessionForConversation(conversationId: string): boolean {
+    for (const session of this.sessions.values()) {
+      if (session.conversationId === conversationId && session.status === "active") {
+        return true
+      }
+    }
+    return false
+  }
+
+  /**
+   * Check if a conversation is pending (reserved but session not yet registered)
+   */
+  isConversationPending(conversationId: string): boolean {
+    return this.pendingConversations.has(conversationId)
+  }
+
+  /**
    * Find a session by conversationId (active or completed)
    * Returns the session ID if found, undefined otherwise
    */
@@ -320,6 +382,7 @@ class AgentSessionTracker {
    */
   clearAllSessions(): void {
     this.sessions.clear()
+    this.pendingConversations.clear()
   }
 
   /**

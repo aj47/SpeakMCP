@@ -4,6 +4,7 @@ import { Button } from "@renderer/components/ui/button"
 import { Send, Mic } from "lucide-react"
 import { useMutation } from "@tanstack/react-query"
 import { tipcClient } from "@renderer/lib/tipc-client"
+import { toast } from "sonner"
 
 interface TileFollowUpInputProps {
   conversationId?: string
@@ -32,18 +33,23 @@ export function TileFollowUpInput({
       if (!conversationId) {
         // Start a new conversation if none exists
         // Mark as fromTile so the floating panel doesn't show - session continues in the tile
-        await tipcClient.createMcpTextInput({ text: message, fromTile: true })
+        return await tipcClient.createMcpTextInput({ text: message, fromTile: true })
       } else {
         // Continue the existing conversation
         // Mark as fromTile so the floating panel doesn't show - session continues in the tile
-        await tipcClient.createMcpTextInput({
+        return await tipcClient.createMcpTextInput({
           text: message,
           conversationId,
           fromTile: true,
         })
       }
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
+      // Don't clear input if message was blocked due to active session
+      if (result && 'blocked' in result && result.blocked) {
+        toast.warning("Please wait for the current task to complete")
+        return
+      }
       setText("")
       onMessageSent?.()
     },
@@ -52,7 +58,8 @@ export function TileFollowUpInput({
   const handleSubmit = (e?: React.FormEvent) => {
     e?.preventDefault()
     const trimmed = text.trim()
-    if (trimmed && !sendMutation.isPending && !isSessionActive) {
+    // Allow sending - backend will block if session is already processing
+    if (trimmed && !sendMutation.isPending) {
       sendMutation.mutate(trimmed)
     }
   }
@@ -74,8 +81,8 @@ export function TileFollowUpInput({
     await tipcClient.triggerMcpRecording({ conversationId, sessionId: realSessionId, fromTile: true })
   }
 
-  // Don't allow input while session is still active (agent is processing)
-  const isDisabled = sendMutation.isPending || isSessionActive
+  // Allow typing even while session is active - backend blocks duplicate processing
+  const isDisabled = sendMutation.isPending
 
   return (
     <form
@@ -92,7 +99,7 @@ export function TileFollowUpInput({
         value={text}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={handleKeyDown}
-        placeholder={isSessionActive ? "Waiting for agent..." : "Continue conversation..."}
+        placeholder={isSessionActive ? "Agent working... (draft a message)" : "Continue conversation..."}
         className={cn(
           "flex-1 text-sm bg-transparent border-0 outline-none",
           "placeholder:text-muted-foreground/60",

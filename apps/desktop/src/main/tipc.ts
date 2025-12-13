@@ -149,6 +149,7 @@ async function processWithAgentMode(
   conversationId?: string,
   existingSessionId?: string, // Optional: reuse existing session instead of creating new one
   startSnoozed: boolean = false, // Whether to start session snoozed (default: false to show panel)
+  reservedConversationId?: string, // Optional: conversation ID that was reserved and needs to be released
 ): Promise<string> {
   const config = configStore.get()
 
@@ -157,11 +158,25 @@ async function processWithAgentMode(
 
   // Agent mode state is managed per-session via agentSessionStateManager
 
-  // Start tracking this agent session (or reuse existing one)
+  // Import the tracker first (this should never fail for a local module)
   const { agentSessionTracker } = await import("./agent-session-tracker")
-  let conversationTitle = text.length > 50 ? text.substring(0, 50) + "..." : text
-  // When creating a new session from keybind/UI, start unsnoozed so panel shows immediately
-  const sessionId = existingSessionId || agentSessionTracker.startSession(conversationId, conversationTitle, startSnoozed)
+
+  // Start tracking this agent session (or reuse existing one)
+  // Wrap in try-catch to ensure reservation is released even if session start fails
+  let sessionId: string
+  // Define conversationTitle outside try block so it's accessible in catch block for error reporting
+  const conversationTitle = text.length > 50 ? text.substring(0, 50) + "..." : text
+  try {
+    // When creating a new session from keybind/UI, start unsnoozed so panel shows immediately
+    sessionId = existingSessionId || agentSessionTracker.startSession(conversationId, conversationTitle, startSnoozed)
+  } finally {
+    // Release the reservation now that we've attempted session registration
+    // This allows the hasActiveSessionForConversation check to work properly for subsequent calls
+    // Released in finally to ensure cleanup even if startSession throws
+    if (reservedConversationId) {
+      agentSessionTracker.releaseConversationReservation(reservedConversationId)
+    }
+  }
 
   try {
     // Initialize MCP with progress feedback
@@ -964,81 +979,105 @@ export const router = {
       fromTile?: boolean // When true, session runs in background (snoozed) - panel won't show
     }>()
     .action(async ({ input }) => {
-      // Create or get conversation ID
-      let conversationId = input.conversationId
-      if (!conversationId) {
-        const conversation = await conversationService.createConversation(
-          input.text,
-          "user",
-        )
-        conversationId = conversation.id
-      } else {
-        // Add user message to existing conversation
-        await conversationService.addMessageToConversation(
-          conversationId,
-          input.text,
-          "user",
-        )
+      const { agentSessionTracker } = await import("./agent-session-tracker")
+
+      // Track whether we made a reservation so we can release it on error
+      const madeReservation = input.conversationId ? agentSessionTracker.reserveConversation(input.conversationId) : false
+
+      // Use reserveConversation for atomic check-and-reserve to prevent race conditions
+      // This prevents two near-simultaneous calls from both passing the active check
+      // before either has registered their session
+      if (input.conversationId && !madeReservation) {
+        logLLM("[createMcpTextInput] Blocked: session already processing or pending for conversation", input.conversationId)
+        // Return the existing conversationId so the UI knows the message wasn't processed
+        // The user's message was NOT added to the conversation to avoid duplicate processing
+        return { conversationId: input.conversationId, blocked: true }
       }
 
-      // Try to find and revive an existing session for this conversation
-      // This handles the case where user continues from history
-      const { agentSessionTracker } = await import("./agent-session-tracker")
-      let existingSessionId: string | undefined
-      if (input.conversationId) {
-        const foundSessionId = agentSessionTracker.findSessionByConversationId(input.conversationId)
-        if (foundSessionId) {
-          // Pass fromTile to reviveSession so it stays snoozed when continuing from a tile
-          const revived = agentSessionTracker.reviveSession(foundSessionId, input.fromTile ?? false)
-          if (revived) {
-            existingSessionId = foundSessionId
+      try {
+        // Create or get conversation ID
+        let conversationId = input.conversationId
+        if (!conversationId) {
+          const conversation = await conversationService.createConversation(
+            input.text,
+            "user",
+          )
+          conversationId = conversation.id
+        } else {
+          // Add user message to existing conversation
+          await conversationService.addMessageToConversation(
+            conversationId,
+            input.text,
+            "user",
+          )
+        }
+
+        // Try to find and revive an existing session for this conversation
+        // This handles the case where user continues from history
+        let existingSessionId: string | undefined
+        if (input.conversationId) {
+          const foundSessionId = agentSessionTracker.findSessionByConversationId(input.conversationId)
+          if (foundSessionId) {
+            // Pass fromTile to reviveSession so it stays snoozed when continuing from a tile
+            const revived = agentSessionTracker.reviveSession(foundSessionId, input.fromTile ?? false)
+            if (revived) {
+              existingSessionId = foundSessionId
+            }
           }
         }
+
+        // Fire-and-forget: Start agent processing without blocking
+        // This allows multiple sessions to run concurrently (for DIFFERENT conversations)
+        // Pass existingSessionId to reuse the session if found
+        // When fromTile=true, start snoozed so the floating panel doesn't appear
+        // Pass reserved conversation ID so processWithAgentMode can release it after session registration
+        processWithAgentMode(input.text, conversationId, existingSessionId, input.fromTile ?? false, input.conversationId)
+          .then((finalResponse) => {
+            // Save to history after completion
+            const history = getRecordingHistory()
+            const item: RecordingHistoryItem = {
+              id: Date.now().toString(),
+              createdAt: Date.now(),
+              duration: 0, // Text input has no duration
+              transcript: finalResponse,
+            }
+            history.push(item)
+            saveRecordingsHitory(history)
+
+            const main = WINDOWS.get("main")
+            if (main) {
+              getRendererHandlers<RendererHandlers>(
+                main.webContents,
+              ).refreshRecordingHistory.send()
+            }
+
+            // Auto-paste if enabled
+            const pasteConfig = configStore.get()
+            if (pasteConfig.mcpAutoPasteEnabled && state.focusedAppBeforeRecording) {
+              setTimeout(async () => {
+                try {
+                  await writeText(finalResponse)
+                } catch (error) {
+                  // Ignore paste errors
+                }
+              }, pasteConfig.mcpAutoPasteDelay || 1000)
+            }
+          })
+          .catch((error) => {
+            logLLM("[createMcpTextInput] Agent processing error:", error)
+          })
+
+        // Return immediately with conversation ID
+        // Progress updates will be sent via emitAgentProgress
+        return { conversationId }
+      } catch (error) {
+        // Release the conversation reservation since processing failed before processWithAgentMode started
+        if (madeReservation && input.conversationId) {
+          logLLM("[createMcpTextInput] Error before agent processing, releasing reservation:", error)
+          agentSessionTracker.releaseConversationReservation(input.conversationId)
+        }
+        throw error
       }
-
-      // Fire-and-forget: Start agent processing without blocking
-      // This allows multiple sessions to run concurrently
-      // Pass existingSessionId to reuse the session if found
-      // When fromTile=true, start snoozed so the floating panel doesn't appear
-      processWithAgentMode(input.text, conversationId, existingSessionId, input.fromTile ?? false)
-        .then((finalResponse) => {
-          // Save to history after completion
-          const history = getRecordingHistory()
-          const item: RecordingHistoryItem = {
-            id: Date.now().toString(),
-            createdAt: Date.now(),
-            duration: 0, // Text input has no duration
-            transcript: finalResponse,
-          }
-          history.push(item)
-          saveRecordingsHitory(history)
-
-          const main = WINDOWS.get("main")
-          if (main) {
-            getRendererHandlers<RendererHandlers>(
-              main.webContents,
-            ).refreshRecordingHistory.send()
-          }
-
-          // Auto-paste if enabled
-          const pasteConfig = configStore.get()
-          if (pasteConfig.mcpAutoPasteEnabled && state.focusedAppBeforeRecording) {
-            setTimeout(async () => {
-              try {
-                await writeText(finalResponse)
-              } catch (error) {
-                // Ignore paste errors
-              }
-            }, pasteConfig.mcpAutoPasteDelay || 1000)
-          }
-        })
-        .catch((error) => {
-          logLLM("[createMcpTextInput] Agent processing error:", error)
-        })
-
-      // Return immediately with conversation ID
-      // Progress updates will be sent via emitAgentProgress
-      return { conversationId }
     }),
 
   createMcpRecording: t.procedure
@@ -1058,56 +1097,70 @@ export const router = {
       // Emit initial loading progress immediately BEFORE transcription
       // This ensures users see feedback during the (potentially long) STT call
       const { agentSessionTracker } = await import("./agent-session-tracker")
-      const tempConversationId = input.conversationId || `temp_${Date.now()}`
 
-      // If sessionId is provided, try to revive that session.
-      // Otherwise, if conversationId is provided, try to find and revive a session for that conversation.
-      // This handles the case where user continues from history (only conversationId is set).
-      // When fromTile=true, sessions start snoozed so the floating panel doesn't appear.
-      const startSnoozed = input.fromTile ?? false
-      let sessionId: string
-      if (input.sessionId) {
-        // Try to revive the existing session by ID
-        // Pass startSnoozed so session stays snoozed when continuing from a tile
-        const revived = agentSessionTracker.reviveSession(input.sessionId, startSnoozed)
-        if (revived) {
-          sessionId = input.sessionId
-          // Update the session title while transcribing
-          agentSessionTracker.updateSession(sessionId, {
-            conversationTitle: "Transcribing...",
-            lastActivity: "Transcribing audio...",
-          })
-        } else {
-          // Session not found, create a new one
-          sessionId = agentSessionTracker.startSession(tempConversationId, "Transcribing...", startSnoozed)
-        }
-      } else if (input.conversationId) {
-        // No sessionId but have conversationId - try to find existing session for this conversation
-        const existingSessionId = agentSessionTracker.findSessionByConversationId(input.conversationId)
-        if (existingSessionId) {
+      // Track whether we made a reservation so we can release it on error
+      const madeReservation = input.conversationId ? agentSessionTracker.reserveConversation(input.conversationId) : false
+
+      // Use reserveConversation for atomic check-and-reserve to prevent race conditions
+      // This prevents two near-simultaneous calls from both passing the active check
+      // before either has registered their session
+      if (input.conversationId && !madeReservation) {
+        logLLM("[createMcpRecording] Blocked: session already processing or pending for conversation", input.conversationId)
+        // Return the existing conversationId so the UI knows the message wasn't processed
+        // The user's message was NOT added to the conversation to avoid duplicate processing
+        return { conversationId: input.conversationId, blocked: true }
+      }
+
+      // Declare variables outside try block so they're accessible in catch
+      const tempConversationId = input.conversationId || `temp_${Date.now()}`
+      let sessionId: string | undefined
+
+      try {
+        // If sessionId is provided, try to revive that session.
+        // Otherwise, if conversationId is provided, try to find and revive a session for that conversation.
+        // This handles the case where user continues from history (only conversationId is set).
+        // When fromTile=true, sessions start snoozed so the floating panel doesn't appear.
+        const startSnoozed = input.fromTile ?? false
+        if (input.sessionId) {
+          // Try to revive the existing session by ID
           // Pass startSnoozed so session stays snoozed when continuing from a tile
-          const revived = agentSessionTracker.reviveSession(existingSessionId, startSnoozed)
+          const revived = agentSessionTracker.reviveSession(input.sessionId, startSnoozed)
           if (revived) {
-            sessionId = existingSessionId
+            sessionId = input.sessionId
             // Update the session title while transcribing
             agentSessionTracker.updateSession(sessionId, {
               conversationTitle: "Transcribing...",
               lastActivity: "Transcribing audio...",
             })
           } else {
-            // Revive failed, create new session
+            // Session not found, create a new one
+            sessionId = agentSessionTracker.startSession(tempConversationId, "Transcribing...", startSnoozed)
+          }
+        } else if (input.conversationId) {
+          // No sessionId but have conversationId - try to find existing session for this conversation
+          const existingSessionId = agentSessionTracker.findSessionByConversationId(input.conversationId)
+          if (existingSessionId) {
+            // Pass startSnoozed so session stays snoozed when continuing from a tile
+            const revived = agentSessionTracker.reviveSession(existingSessionId, startSnoozed)
+            if (revived) {
+              sessionId = existingSessionId
+              // Update the session title while transcribing
+              agentSessionTracker.updateSession(sessionId, {
+                conversationTitle: "Transcribing...",
+                lastActivity: "Transcribing audio...",
+              })
+            } else {
+              // Revive failed, create new session
+              sessionId = agentSessionTracker.startSession(tempConversationId, "Transcribing...", startSnoozed)
+            }
+          } else {
+            // No existing session for this conversation, create new
             sessionId = agentSessionTracker.startSession(tempConversationId, "Transcribing...", startSnoozed)
           }
         } else {
-          // No existing session for this conversation, create new
+          // No sessionId or conversationId provided, create a new session
           sessionId = agentSessionTracker.startSession(tempConversationId, "Transcribing...", startSnoozed)
         }
-      } else {
-        // No sessionId or conversationId provided, create a new session
-        sessionId = agentSessionTracker.startSession(tempConversationId, "Transcribing...", startSnoozed)
-      }
-
-      try {
         // Emit initial "initializing" progress update
         await emitAgentProgress({
           sessionId,
@@ -1225,7 +1278,8 @@ export const router = {
         // Fire-and-forget: Start agent processing without blocking
         // This allows multiple sessions to run concurrently
         // Pass the sessionId to avoid creating a duplicate session
-        processWithAgentMode(transcript, conversationId, sessionId)
+        // Pass reserved conversation ID so processWithAgentMode can release it after session registration
+        processWithAgentMode(transcript, conversationId, sessionId, false, input.conversationId)
         .then((finalResponse) => {
           // Save to history after completion
           const history = getRecordingHistory()
@@ -1256,29 +1310,36 @@ export const router = {
         // Handle transcription or conversation creation errors
         logLLM("[createMcpRecording] Transcription error:", error)
 
-        // Clean up the session and emit error state
-        await emitAgentProgress({
-          sessionId,
-          conversationId: tempConversationId,
-          currentIteration: 1,
-          maxIterations: 1,
-          steps: [{
-            id: `transcribe_error_${Date.now()}`,
-            type: "completion",
-            title: "Transcription failed",
-            description: error instanceof Error ? error.message : "Unknown transcription error",
-            status: "error",
-            timestamp: Date.now(),
-          }],
-          isComplete: true,
-          isSnoozed: false,
-          conversationTitle: "Transcription Error",
-          conversationHistory: [],
-          finalContent: `Transcription failed: ${error instanceof Error ? error.message : "Unknown error"}`,
-        })
+        // Release the conversation reservation since processing failed before processWithAgentMode started
+        if (madeReservation && input.conversationId) {
+          agentSessionTracker.releaseConversationReservation(input.conversationId)
+        }
 
-        // Mark the session as errored to clean up the UI
-        agentSessionTracker.errorSession(sessionId, error instanceof Error ? error.message : "Transcription failed")
+        // Clean up the session and emit error state (only if sessionId was created)
+        if (sessionId) {
+          await emitAgentProgress({
+            sessionId,
+            conversationId: tempConversationId,
+            currentIteration: 1,
+            maxIterations: 1,
+            steps: [{
+              id: `transcribe_error_${Date.now()}`,
+              type: "completion",
+              title: "Transcription failed",
+              description: error instanceof Error ? error.message : "Unknown transcription error",
+              status: "error",
+              timestamp: Date.now(),
+            }],
+            isComplete: true,
+            isSnoozed: false,
+            conversationTitle: "Transcription Error",
+            conversationHistory: [],
+            finalContent: `Transcription failed: ${error instanceof Error ? error.message : "Unknown error"}`,
+          })
+
+          // Mark the session as errored to clean up the UI
+          agentSessionTracker.errorSession(sessionId, error instanceof Error ? error.message : "Transcription failed")
+        }
 
         // Re-throw the error so the caller knows transcription failed
         throw error

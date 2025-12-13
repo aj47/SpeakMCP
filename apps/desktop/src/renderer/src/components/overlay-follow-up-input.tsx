@@ -34,6 +34,20 @@ export function OverlayFollowUpInput({
   // to allow users to type. The backend will handle queuing appropriately.
   const isQueueEnabled = configQuery.data?.mcpMessageQueueEnabled ?? true
 
+  // Make panel focusable when user wants to interact with the input
+  // The panel is non-focusable by default in agent mode to avoid stealing focus
+  const handleInputInteraction = async () => {
+    try {
+      await tipcClient.setPanelFocusable({ focusable: true })
+      // After making focusable, focus the input
+      setTimeout(() => {
+        inputRef.current?.focus()
+      }, 50)
+    } catch (e) {
+      // Ignore errors - input might still work
+    }
+  }
+
   const sendMutation = useMutation({
     mutationFn: async (message: string) => {
       if (!conversationId) {
@@ -110,6 +124,8 @@ export function OverlayFollowUpInput({
         value={text}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={handleKeyDown}
+        onClick={handleInputInteraction}
+        onFocus={handleInputInteraction}
         placeholder={getPlaceholder()}
         className={cn(
           "flex-1 text-sm bg-transparent border-0 outline-none",

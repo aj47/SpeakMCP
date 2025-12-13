@@ -13,6 +13,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@renderer/components/ui/dialog"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@renderer/components/ui/select"
 
 import {
   Tooltip,
@@ -86,6 +93,16 @@ export function Component() {
     },
   })
 
+  // Fetch all profiles for the dropdown
+  const profilesQuery = useQuery({
+    queryKey: ["profiles"],
+    queryFn: async () => {
+      return await tipcClient.getProfiles()
+    },
+  })
+
+  const profiles = profilesQuery.data || []
+
   const updateProfileMutation = useMutation({
     mutationFn: async ({ id, guidelines, systemPrompt }: { id: string; guidelines?: string; systemPrompt?: string }) => {
       return await tipcClient.updateProfile({ id, guidelines, systemPrompt })
@@ -122,14 +139,23 @@ export function Component() {
   const [newProfileName, setNewProfileName] = useState("")
   const [newProfileGuidelines, setNewProfileGuidelines] = useState("")
 
+  // Pending profile switch for confirmation dialog
+  const [pendingProfileSwitch, setPendingProfileSwitch] = useState<string | null>(null)
+
   const setCurrentProfileMutation = useMutation({
     mutationFn: async (id: string) => {
       return await tipcClient.setCurrentProfile({ id })
     },
-    onSuccess: () => {
+    onSuccess: (newProfile: Profile) => {
       queryClient.invalidateQueries({ queryKey: ["config"] })
       queryClient.invalidateQueries({ queryKey: ["profiles"] })
       queryClient.invalidateQueries({ queryKey: ["current-profile"] })
+      queryClient.invalidateQueries({ queryKey: ["mcp-server-status"] })
+      queryClient.invalidateQueries({ queryKey: ["mcp-initialization-status"] })
+      toast.success(`Switched to "${newProfile.name}"`)
+    },
+    onError: (error: Error) => {
+      toast.error(`Failed to switch profile: ${error.message}`)
     },
   })
 
@@ -179,11 +205,11 @@ export function Component() {
 
   // Combined saving state for the guidelines save operation
   // Also check if profile query is still loading to prevent saving before profile data is available
-  const isSavingGuidelines = saveConfigMutation.isPending || updateProfileMutation.isPending
+  const isSavingGuidelines = saveConfigMutation.isPending || updateProfileMutation.isPending || setCurrentProfileMutation.isPending
   const isProfileLoading = currentProfileQuery.isLoading
 
   // Combined saving state for the system prompt save operation
-  const isSavingSystemPrompt = saveConfigMutation.isPending || updateProfileMutation.isPending
+  const isSavingSystemPrompt = saveConfigMutation.isPending || updateProfileMutation.isPending || setCurrentProfileMutation.isPending
 
   // Check if currently using default system prompt (compare against the actual default)
   const isUsingDefaultSystemPrompt = customSystemPrompt.trim() === defaultSystemPrompt.trim()
@@ -282,6 +308,27 @@ export function Component() {
     })
   }
 
+  const handleProfileChange = (newProfileId: string) => {
+    // Check if there are unsaved changes
+    if (hasUnsavedChanges || hasUnsavedSystemPromptChanges) {
+      // Store the pending profile switch and show confirmation
+      setPendingProfileSwitch(newProfileId)
+    } else {
+      // No unsaved changes, switch immediately
+      setCurrentProfileMutation.mutate(newProfileId)
+    }
+  }
+
+  const confirmProfileSwitch = () => {
+    if (pendingProfileSwitch) {
+      setCurrentProfileMutation.mutate(pendingProfileSwitch)
+      setPendingProfileSwitch(null)
+    }
+  }
+
+  const cancelProfileSwitch = () => {
+    setPendingProfileSwitch(null)
+  }
 
   const defaultAdditionalGuidelines = `CUSTOM GUIDELINES:
 - Prioritize user privacy and security
@@ -309,6 +356,31 @@ DOMAIN-SPECIFIC RULES:
               <Plus className="h-4 w-4" />
               Create Profile
             </Button>
+          </div>
+
+          {/* Profile Selector Dropdown */}
+          <div className="space-y-2">
+            <Label>Active Profile</Label>
+            <Select
+              value={currentProfile?.id || ""}
+              onValueChange={handleProfileChange}
+              disabled={setCurrentProfileMutation.isPending}
+            >
+              <SelectTrigger className="w-full max-w-xs">
+                <SelectValue placeholder="Select a profile" />
+              </SelectTrigger>
+              <SelectContent>
+                {profiles.map((profile) => (
+                  <SelectItem key={profile.id} value={profile.id}>
+                    {profile.name}
+                    {profile.isDefault && " (Default)"}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Switch between profiles to use different agent configurations.
+            </p>
           </div>
 
           <div className="space-y-4">
@@ -502,6 +574,41 @@ DOMAIN-SPECIFIC RULES:
                 disabled={!newProfileName.trim() || createProfileMutation.isPending}
               >
                 {createProfileMutation.isPending ? "Creating..." : "Create Profile"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Unsaved Changes Confirmation Dialog */}
+        <Dialog
+          open={pendingProfileSwitch !== null}
+          onOpenChange={(open) => {
+            if (!open) {
+              setPendingProfileSwitch(null)
+            }
+          }}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Unsaved Changes</DialogTitle>
+              <DialogDescription>
+                You have unsaved changes that will be lost if you switch profiles. Do you want to continue?
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={cancelProfileSwitch}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={confirmProfileSwitch}
+              >
+                Discard Changes
               </Button>
             </DialogFooter>
           </DialogContent>

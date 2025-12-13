@@ -338,6 +338,9 @@ export class HttpError extends Error {
       case 504:
         return 'Gateway timeout. The API service is not responding.'
 
+      case 524:
+        return 'Connection timeout. Cloudflare reported a timeout connecting to the origin server. The API service may be overloaded or experiencing issues.'
+
       default:
         // For other errors, try to extract meaningful information from the response
         try {

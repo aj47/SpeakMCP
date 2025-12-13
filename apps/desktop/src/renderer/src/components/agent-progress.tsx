@@ -1406,7 +1406,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
   if (progress.errorInfo) {
     displayItems.push({
       kind: "enhanced_error",
-      id: `error-${Date.now()}`,
+      id: `error-${progress.sessionId || 'current'}`,
       data: progress.errorInfo,
     })
   }

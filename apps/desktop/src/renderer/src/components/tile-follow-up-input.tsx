@@ -83,9 +83,13 @@ export function TileFollowUpInput({
     await tipcClient.triggerMcpRecording({ conversationId, sessionId: realSessionId, fromTile: true })
   }
 
-  // When queue is enabled, allow input even when session is active
+  // When queue is enabled, allow TEXT input even when session is active
   // When queue is disabled, don't allow input while session is active
   const isDisabled = sendMutation.isPending || (isSessionActive && !isQueueEnabled)
+
+  // Voice recording cannot be queued, so always disable voice button when session is active
+  // This prevents concurrent processing issues from voice recordings during active sessions
+  const isVoiceDisabled = sendMutation.isPending || isSessionActive
 
   // Show appropriate placeholder based on state
   const getPlaceholder = () => {
@@ -143,9 +147,9 @@ export function TileFollowUpInput({
           "hover:bg-red-100 dark:hover:bg-red-900/30",
           "hover:text-red-600 dark:hover:text-red-400"
         )}
-        disabled={isDisabled}
+        disabled={isVoiceDisabled}
         onClick={handleVoiceClick}
-        title="Continue with voice"
+        title={isSessionActive ? "Voice unavailable while agent is processing" : "Continue with voice"}
       >
         <Mic className="h-3 w-3" />
       </Button>

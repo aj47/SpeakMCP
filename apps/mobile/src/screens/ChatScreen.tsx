@@ -81,6 +81,13 @@ export default function ChatScreen({ route, navigation }: any) {
   // Each request gets a unique ID; only the currently active request can reset UI states
   const activeRequestIdRef = useRef<number>(0);
 
+  // Stable ref for current session ID to avoid stale closures in callbacks
+  // This fixes the issue where useSessions() returns a new object each render
+  const currentSessionIdRef = useRef<string | null>(sessionStore.currentSessionId);
+  useEffect(() => {
+    currentSessionIdRef.current = sessionStore.currentSessionId;
+  }, [sessionStore.currentSessionId]);
+
   // Get or create a connection for the current session using the connection manager
   // This preserves connections when switching between sessions (fixes #608)
   const getSessionClient = useCallback(() => {
@@ -90,32 +97,49 @@ export default function ChatScreen({ route, navigation }: any) {
       return null;
     }
     const connection = connectionManager.getOrCreateConnection(currentSessionId);
-    // Set up connection status callback for this session
-    connection.client.setConnectionStatusCallback((state) => {
-      // Only update UI if this is still the current session
-      if (sessionStore.currentSessionId === currentSessionId) {
-        setConnectionState(state);
-        console.log('[ChatScreen] Connection status:', formatConnectionStatus(state));
-      }
-    });
+    // Note: Connection status callback is set up via subscribeToConnectionStatus in useEffect below
+    // This avoids overwriting the SessionConnectionManager's internal callback (PR review fix)
     return connection.client;
   }, [connectionManager, sessionStore.currentSessionId]);
 
-  // Restore connection state when switching sessions
+  // Subscribe to connection status changes for the current session
+  // Uses subscribeToConnectionStatus to avoid overwriting the internal callback in SessionConnectionManager
   useEffect(() => {
     const currentSessionId = sessionStore.currentSessionId;
-    if (currentSessionId) {
-      // Check if there's an existing connection with state
-      const existingState = connectionManager.getConnectionState(currentSessionId);
-      if (existingState) {
-        setConnectionState(existingState);
-      } else {
-        setConnectionState(null);
-      }
-      // Check if there's an active request for this session
-      const isActive = connectionManager.isConnectionActive(currentSessionId);
-      setResponding(isActive);
+    if (!currentSessionId) {
+      setConnectionState(null);
+      return;
     }
+
+    // Restore existing connection state when switching sessions
+    const existingState = connectionManager.getConnectionState(currentSessionId);
+    if (existingState) {
+      setConnectionState(existingState);
+    } else {
+      setConnectionState(null);
+    }
+
+    // Check if there's an active request for this session
+    const isActive = connectionManager.isConnectionActive(currentSessionId);
+    setResponding(isActive);
+
+    // Ensure connection exists for subscription
+    connectionManager.getOrCreateConnection(currentSessionId);
+
+    // Subscribe to connection status changes for this session
+    // The callback uses currentSessionIdRef to always check against the latest session ID
+    const unsubscribe = connectionManager.subscribeToConnectionStatus(
+      currentSessionId,
+      (state) => {
+        // Only update UI if this is still the current session (using ref for latest value)
+        if (currentSessionIdRef.current === currentSessionId) {
+          setConnectionState(state);
+          console.log('[ChatScreen] Connection status:', formatConnectionStatus(state));
+        }
+      }
+    );
+
+    return unsubscribe;
   }, [sessionStore.currentSessionId, connectionManager]);
 
   const handleKillSwitch = async () => {

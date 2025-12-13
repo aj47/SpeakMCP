@@ -9,7 +9,7 @@
 
 import { createContext, useContext, useEffect, useMemo, useRef } from 'react';
 import { SessionConnectionManager, SessionConnectionManagerConfig } from '../lib/sessionConnectionManager';
-import { OpenAIConfig } from '../lib/openaiClient';
+import { OpenAIConfig, OnConnectionStatusChange } from '../lib/openaiClient';
 import { RecoveryState } from '../lib/connectionRecovery';
 
 export interface ConnectionManagerContextValue {
@@ -28,6 +28,8 @@ export interface ConnectionManagerContextValue {
   removeConnection: (sessionId: string) => void;
   /** Update client config (recreates connections) */
   updateClientConfig: (config: OpenAIConfig) => void;
+  /** Subscribe to connection status changes for a session. Returns unsubscribe function. */
+  subscribeToConnectionStatus: (sessionId: string, callback: OnConnectionStatusChange) => () => void;
 }
 
 export const ConnectionManagerContext = createContext<ConnectionManagerContextValue | null>(null);
@@ -100,6 +102,8 @@ export function useConnectionManagerProvider(clientConfig: OpenAIConfig): Connec
     getConnectionState: (sessionId: string) => manager.getConnectionState(sessionId),
     removeConnection: (sessionId: string) => manager.removeConnection(sessionId),
     updateClientConfig: (config: OpenAIConfig) => manager.updateClientConfig(config),
+    subscribeToConnectionStatus: (sessionId: string, callback: OnConnectionStatusChange) =>
+      manager.subscribeToConnectionStatus(sessionId, callback),
   }), [manager]);
 
   return contextValue;

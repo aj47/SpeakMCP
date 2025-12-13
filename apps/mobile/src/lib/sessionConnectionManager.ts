@@ -38,6 +38,8 @@ export class SessionConnectionManager {
   private maxConnections: number;
   private clientConfig: OpenAIConfig;
   private globalConnectionStatusCallback?: OnConnectionStatusChange;
+  /** Per-session callback subscriptions for UI components */
+  private sessionCallbacks: Map<string, Set<OnConnectionStatusChange>> = new Map();
 
   constructor(config: SessionConnectionManagerConfig) {
     this.maxConnections = config.maxConnections ?? 3;
@@ -82,14 +84,60 @@ export class SessionConnectionManager {
       connectionState: null,
     };
 
-    // Set up connection status callback
+    // Set up connection status callback that notifies both internal state and subscribers
     client.setConnectionStatusCallback((state) => {
       connection!.connectionState = state;
       this.globalConnectionStatusCallback?.(state);
+      // Notify all session-specific subscribers
+      this.notifySessionSubscribers(sessionId, state);
     });
 
     this.connections.set(sessionId, connection);
     return connection;
+  }
+
+  /**
+   * Subscribe to connection status changes for a specific session.
+   * This allows UI components to receive updates without overwriting the internal callback.
+   * Returns an unsubscribe function.
+   */
+  subscribeToConnectionStatus(
+    sessionId: string,
+    callback: OnConnectionStatusChange
+  ): () => void {
+    let callbacks = this.sessionCallbacks.get(sessionId);
+    if (!callbacks) {
+      callbacks = new Set();
+      this.sessionCallbacks.set(sessionId, callbacks);
+    }
+    callbacks.add(callback);
+
+    // Return unsubscribe function
+    return () => {
+      const cbs = this.sessionCallbacks.get(sessionId);
+      if (cbs) {
+        cbs.delete(callback);
+        if (cbs.size === 0) {
+          this.sessionCallbacks.delete(sessionId);
+        }
+      }
+    };
+  }
+
+  /**
+   * Notify all subscribers for a specific session
+   */
+  private notifySessionSubscribers(sessionId: string, state: RecoveryState): void {
+    const callbacks = this.sessionCallbacks.get(sessionId);
+    if (callbacks) {
+      for (const callback of callbacks) {
+        try {
+          callback(state);
+        } catch (error) {
+          console.error('[SessionConnectionManager] Subscriber callback error:', error);
+        }
+      }
+    }
   }
 
   /**
@@ -137,6 +185,8 @@ export class SessionConnectionManager {
       connection.client.cleanup();
       this.connections.delete(sessionId);
     }
+    // Also clean up any session-specific callbacks
+    this.sessionCallbacks.delete(sessionId);
   }
 
   /**

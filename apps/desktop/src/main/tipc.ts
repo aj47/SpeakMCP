@@ -395,11 +395,16 @@ async function processQueuedMessages(conversationId: string): Promise<void> {
         // Only add to conversation history if not already added (prevents duplicates on retry)
         if (!queuedMessage.addedToHistory) {
           // Add the queued message to the conversation
-          await conversationService.addMessageToConversation(
+          const addResult = await conversationService.addMessageToConversation(
             conversationId,
             queuedMessage.text,
             "user",
           )
+          // If adding to history failed (conversation not found/IO error), treat as failure
+          // Don't continue processing since the message wasn't recorded
+          if (!addResult) {
+            throw new Error("Failed to add message to conversation history")
+          }
           // Mark as added to history so retries don't duplicate
           messageQueueService.markAddedToHistory(conversationId, queuedMessage.id)
         }

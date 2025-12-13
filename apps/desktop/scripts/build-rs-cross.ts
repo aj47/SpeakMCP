@@ -68,6 +68,14 @@ if (!existsSync(srcBinary)) {
 try {
   const fs = await import("fs/promises")
   await fs.copyFile(srcBinary, destBinary)
+
+  // On non-Windows platforms, ensure the binary has executable permissions
+  // fs.copyFile doesn't preserve permissions, so we need to set them explicitly
+  if (!isWindows) {
+    await fs.chmod(destBinary, 0o755)
+    console.log(`   Set executable permissions on: ${destBinary}`)
+  }
+
   console.log(`✅ Copied binary to: ${destBinary}`)
 } catch (error) {
   console.error("❌ Failed to copy binary:", error)

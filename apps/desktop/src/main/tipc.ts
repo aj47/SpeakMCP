@@ -2090,7 +2090,8 @@ export const router = {
       mcpService.applyProfileMcpConfig(
         profile.mcpServerConfig?.disabledServers ?? [],
         profile.mcpServerConfig?.disabledTools ?? [],
-        profile.mcpServerConfig?.allServersDisabledByDefault ?? false
+        profile.mcpServerConfig?.allServersDisabledByDefault ?? false,
+        profile.mcpServerConfig?.enabledServers ?? []
       )
 
       return profile
@@ -2121,18 +2122,20 @@ export const router = {
       return profileService.saveCurrentMcpStateToProfile(
         input.profileId,
         currentState.disabledServers,
-        currentState.disabledTools
+        currentState.disabledTools,
+        currentState.enabledServers
       )
     }),
 
   // Update profile MCP server configuration
   updateProfileMcpConfig: t.procedure
-    .input<{ profileId: string; disabledServers?: string[]; disabledTools?: string[] }>()
+    .input<{ profileId: string; disabledServers?: string[]; disabledTools?: string[]; enabledServers?: string[] }>()
     .action(async ({ input }) => {
       const { profileService } = await import("./profile-service")
       return profileService.updateProfileMcpConfig(input.profileId, {
         disabledServers: input.disabledServers,
         disabledTools: input.disabledTools,
+        enabledServers: input.enabledServers,
       })
     }),
 

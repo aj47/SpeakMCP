@@ -217,6 +217,7 @@ class ProfileService {
       ...(mcpServerConfig.disabledServers !== undefined && { disabledServers: mcpServerConfig.disabledServers }),
       ...(mcpServerConfig.disabledTools !== undefined && { disabledTools: mcpServerConfig.disabledTools }),
       ...(mcpServerConfig.allServersDisabledByDefault !== undefined && { allServersDisabledByDefault: mcpServerConfig.allServersDisabledByDefault }),
+      ...(mcpServerConfig.enabledServers !== undefined && { enabledServers: mcpServerConfig.enabledServers }),
     }
 
     const updatedProfile = {
@@ -235,10 +236,11 @@ class ProfileService {
    * Save current MCP state to a profile
    * This allows saving the current enabled/disabled server state to a profile
    */
-  saveCurrentMcpStateToProfile(id: string, disabledServers: string[], disabledTools: string[]): Profile {
+  saveCurrentMcpStateToProfile(id: string, disabledServers: string[], disabledTools: string[], enabledServers?: string[]): Profile {
     return this.updateProfileMcpConfig(id, {
       disabledServers,
       disabledTools,
+      ...(enabledServers !== undefined && { enabledServers }),
     })
   }
 

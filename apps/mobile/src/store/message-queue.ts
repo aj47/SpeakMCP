@@ -55,10 +55,17 @@ export interface MessageQueueStore {
 export function useMessageQueue(): MessageQueueStore {
   const [queues, setQueues] = useState<Map<string, QueuedMessage[]>>(new Map());
   const queuesRef = useRef<Map<string, QueuedMessage[]>>(queues);
-  
-  // Keep ref in sync
-  queuesRef.current = queues;
-  
+
+  // Wrapper that updates both state AND ref synchronously, so subsequent reads
+  // within the same tick see the updated value (fixes stale state issue)
+  const updateQueues = useCallback((updater: (prev: Map<string, QueuedMessage[]>) => Map<string, QueuedMessage[]>) => {
+    setQueues(prev => {
+      const newValue = updater(prev);
+      queuesRef.current = newValue;  // Sync ref immediately
+      return newValue;
+    });
+  }, []);
+
   const enqueue = useCallback((conversationId: string, text: string): QueuedMessage => {
     const message: QueuedMessage = {
       id: generateMessageId(),
@@ -67,17 +74,17 @@ export function useMessageQueue(): MessageQueueStore {
       createdAt: Date.now(),
       status: 'pending',
     };
-    
-    setQueues(prev => {
+
+    updateQueues(prev => {
       const newMap = new Map(prev);
       const queue = [...(prev.get(conversationId) || []), message];
       newMap.set(conversationId, queue);
       return newMap;
     });
-    
+
     console.log('[MessageQueue] Enqueued message:', message.id);
     return message;
-  }, []);
+  }, [updateQueues]);
   
   const getQueue = useCallback((conversationId: string): QueuedMessage[] => {
     return queuesRef.current.get(conversationId) || [];
@@ -95,7 +102,7 @@ export function useMessageQueue(): MessageQueueStore {
     if (queue[index].status === 'processing') return false;
 
     // Removal will succeed - perform the state update
-    setQueues(prev => {
+    updateQueues(prev => {
       const currentQueue = prev.get(conversationId);
       if (!currentQueue) return prev;
 
@@ -111,23 +118,23 @@ export function useMessageQueue(): MessageQueueStore {
 
     console.log('[MessageQueue] Removed message:', messageId);
     return true;
-  }, []);
-  
+  }, [updateQueues]);
+
   const clearQueue = useCallback((conversationId: string): void => {
-    setQueues(prev => {
+    updateQueues(prev => {
       const queue = prev.get(conversationId);
       if (!queue) return prev;
-      
+
       // Don't clear if there's a processing message
       if (queue.some(m => m.status === 'processing')) return prev;
-      
+
       const newMap = new Map(prev);
       newMap.delete(conversationId);
       return newMap;
     });
     console.log('[MessageQueue] Cleared queue for:', conversationId);
-  }, []);
-  
+  }, [updateQueues]);
+
   const updateText = useCallback((conversationId: string, messageId: string, text: string): boolean => {
     // Check synchronously using ref to determine if update will succeed
     const queue = queuesRef.current.get(conversationId);
@@ -141,7 +148,7 @@ export function useMessageQueue(): MessageQueueStore {
     if (msg.status === 'processing' || msg.addedToHistory) return false;
 
     // Update will succeed - perform the state update
-    setQueues(prev => {
+    updateQueues(prev => {
       const currentQueue = prev.get(conversationId);
       if (!currentQueue) return prev;
 
@@ -156,7 +163,7 @@ export function useMessageQueue(): MessageQueueStore {
     });
 
     return true;
-  }, []);
+  }, [updateQueues]);
   
   const peek = useCallback((conversationId: string): QueuedMessage | null => {
     const queue = queuesRef.current.get(conversationId);
@@ -175,7 +182,7 @@ export function useMessageQueue(): MessageQueueStore {
     if (index === -1) return false;
 
     // Mark will succeed - perform the state update
-    setQueues(prev => {
+    updateQueues(prev => {
       const currentQueue = prev.get(conversationId);
       if (!currentQueue) return prev;
 
@@ -190,7 +197,7 @@ export function useMessageQueue(): MessageQueueStore {
     });
 
     return true;
-  }, []);
+  }, [updateQueues]);
 
   const markProcessed = useCallback((conversationId: string, messageId: string): boolean => {
     // Check synchronously using ref to determine if marking will succeed
@@ -201,7 +208,7 @@ export function useMessageQueue(): MessageQueueStore {
     if (index === -1) return false;
 
     // Mark will succeed - perform the state update
-    setQueues(prev => {
+    updateQueues(prev => {
       const currentQueue = prev.get(conversationId);
       if (!currentQueue) return prev;
 
@@ -217,7 +224,7 @@ export function useMessageQueue(): MessageQueueStore {
 
     console.log('[MessageQueue] Marked processed:', messageId);
     return true;
-  }, []);
+  }, [updateQueues]);
 
   const markFailed = useCallback((conversationId: string, messageId: string, errorMessage: string): boolean => {
     // Check synchronously using ref to determine if marking will succeed
@@ -228,7 +235,7 @@ export function useMessageQueue(): MessageQueueStore {
     if (index === -1) return false;
 
     // Mark will succeed - perform the state update
-    setQueues(prev => {
+    updateQueues(prev => {
       const currentQueue = prev.get(conversationId);
       if (!currentQueue) return prev;
 
@@ -244,7 +251,7 @@ export function useMessageQueue(): MessageQueueStore {
 
     console.log('[MessageQueue] Marked failed:', messageId, errorMessage);
     return true;
-  }, []);
+  }, [updateQueues]);
 
   const resetToPending = useCallback((conversationId: string, messageId: string): boolean => {
     // Check synchronously using ref to determine if reset will succeed
@@ -255,7 +262,7 @@ export function useMessageQueue(): MessageQueueStore {
     if (index === -1) return false;
 
     // Reset will succeed - perform the state update
-    setQueues(prev => {
+    updateQueues(prev => {
       const currentQueue = prev.get(conversationId);
       if (!currentQueue) return prev;
 
@@ -271,7 +278,7 @@ export function useMessageQueue(): MessageQueueStore {
 
     console.log('[MessageQueue] Reset to pending:', messageId);
     return true;
-  }, []);
+  }, [updateQueues]);
 
   const hasQueuedMessages = useCallback((conversationId: string): boolean => {
     const queue = queuesRef.current.get(conversationId);

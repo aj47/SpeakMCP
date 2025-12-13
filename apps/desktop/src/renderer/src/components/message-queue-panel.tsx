@@ -174,7 +174,7 @@ function QueuedMessageItem({
                 isFailed ? "text-destructive/70" :
                 isProcessing ? "text-primary/70" : "text-muted-foreground"
               )}>
-                {formatTime(message.createdAt)} • {isFailed ? "Failed" : isProcessing ? "Processing..." : "Queued"}
+                {formatTime(message.createdAt)} • {isFailed ? "Failed - blocking queue" : isProcessing ? "Processing..." : "Queued"}
               </span>
               {isLongMessage && (
                 <Button

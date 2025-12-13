@@ -166,13 +166,17 @@ class MessageQueueService {
   }
 
   /**
-   * Peek at the next pending message without removing it
+   * Peek at the next message to process.
+   * Returns the first message only if it's pending - enforces strict FIFO ordering.
+   * Failed/cancelled messages at the head of the queue block processing until handled.
    */
   peek(conversationId: string): QueuedMessage | null {
     const queue = this.queues.get(conversationId)
     if (!queue || queue.length === 0) return null
-    // Return the first pending message, skipping processing/failed/cancelled items
-    return queue.find((m) => m.status === "pending") || null
+    // Strict FIFO: only return first item if it's pending
+    // Failed/cancelled messages block the queue until user handles them (retry or remove)
+    const firstMessage = queue[0]
+    return firstMessage.status === "pending" ? firstMessage : null
   }
 
   /**
@@ -256,6 +260,30 @@ class MessageQueueService {
     message.addedToHistory = true
     logApp(`[MessageQueueService] Marked message ${messageId} as added to history in ${conversationId}`)
     // Note: No need to emit queue update - this is an internal tracking flag
+    return true
+  }
+
+  /**
+   * Reset a failed message to pending status for retry.
+   * Unlike updateMessageText, this only changes status and works for addedToHistory messages.
+   */
+  resetToPending(conversationId: string, messageId: string): boolean {
+    const queue = this.queues.get(conversationId)
+    if (!queue) return false
+
+    const message = queue.find((m) => m.id === messageId)
+    if (!message) return false
+
+    if (message.status !== "failed") {
+      logApp(`[MessageQueueService] Cannot reset message ${messageId} - not in failed status (current: ${message.status})`)
+      return false
+    }
+
+    message.status = "pending"
+    delete message.errorMessage
+    logApp(`[MessageQueueService] Reset message ${messageId} to pending for retry in ${conversationId}`)
+    this.emitQueueUpdate(conversationId)
+
     return true
   }
 

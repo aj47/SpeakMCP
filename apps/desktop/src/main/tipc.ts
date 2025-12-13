@@ -2489,13 +2489,9 @@ export const router = {
       const { messageQueueService } = await import("./message-queue-service")
       const { agentSessionTracker } = await import("./agent-session-tracker")
 
-      // Reset the message to pending status
-      const queue = messageQueueService.getQueue(input.conversationId)
-      const message = queue.find((m) => m.id === input.messageId)
-      if (!message) return false
-
-      // Use updateMessageText to reset failed message to pending
-      const success = messageQueueService.updateMessageText(input.conversationId, input.messageId, message.text)
+      // Use resetToPending to reset failed message status without modifying text
+      // This works even for addedToHistory messages since we're not changing the text
+      const success = messageQueueService.resetToPending(input.conversationId, input.messageId)
       if (!success) return false
 
       // Check if conversation is idle (no active session)

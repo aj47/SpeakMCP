@@ -1044,8 +1044,17 @@ export default function ChatScreen({ route, navigation }: any) {
       const response = await client.chat([...currentMessages, userMsg], onToken, onProgress, serverConversationId);
       const finalText = response.content || streamingText;
 
-      if (sessionStore.currentSessionId !== requestSessionId) return;
-      if (activeRequestIdRef.current !== thisRequestId) return;
+      // Early exit guards - finalize queue status before returning to prevent stuck 'processing' items
+      if (sessionStore.currentSessionId !== requestSessionId) {
+        // Session changed - mark as failed so user can retry in correct session
+        messageQueue.markFailed(currentConversationId, queuedMsg.id, 'Session changed during processing');
+        return;
+      }
+      if (activeRequestIdRef.current !== thisRequestId) {
+        // Request superseded - mark as failed so user can retry
+        messageQueue.markFailed(currentConversationId, queuedMsg.id, 'Request superseded');
+        return;
+      }
 
       if (response.conversationId) {
         await sessionStore.setServerConversationId(response.conversationId);

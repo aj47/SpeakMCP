@@ -365,6 +365,58 @@ const saveRecordingsHitory = (history: RecordingHistoryItem[]) => {
   )
 }
 
+/**
+ * Process queued messages for a conversation after the current session completes.
+ * This function peeks at messages and only removes them after successful processing.
+ * Uses a per-conversation lock to prevent concurrent processing of the same queue.
+ */
+async function processQueuedMessages(conversationId: string): Promise<void> {
+  const { messageQueueService } = await import("./message-queue-service")
+
+  // Try to acquire processing lock - if another processor is already running, skip
+  if (!messageQueueService.tryAcquireProcessingLock(conversationId)) {
+    return
+  }
+
+  try {
+    while (true) {
+      // Peek at the next message without removing it
+      const queuedMessage = messageQueueService.peek(conversationId)
+      if (!queuedMessage) {
+        return // No more messages in queue
+      }
+
+      logLLM(`[processQueuedMessages] Processing queued message ${queuedMessage.id} for ${conversationId}`)
+
+      try {
+        // Add the queued message to the conversation
+        await conversationService.addMessageToConversation(
+          conversationId,
+          queuedMessage.text,
+          "user",
+        )
+
+        // Process with agent mode
+        await processWithAgentMode(queuedMessage.text, conversationId, undefined, true)
+
+        // Only remove the message after successful processing
+        messageQueueService.markProcessed(conversationId, queuedMessage.id)
+
+        // Continue to check for more queued messages
+      } catch (error) {
+        logLLM(`[processQueuedMessages] Error processing queued message ${queuedMessage.id}:`, error)
+        // Remove the failed message so we don't get stuck in an infinite loop
+        // but log it so users know the message failed
+        messageQueueService.markProcessed(conversationId, queuedMessage.id)
+        // Continue to next message even if this one failed
+      }
+    }
+  } finally {
+    // Always release the lock when done
+    messageQueueService.releaseProcessingLock(conversationId)
+  }
+}
+
 export const router = {
   restartApp: t.procedure.action(async () => {
     app.relaunch()
@@ -964,6 +1016,10 @@ export const router = {
       fromTile?: boolean // When true, session runs in background (snoozed) - panel won't show
     }>()
     .action(async ({ input }) => {
+      const config = configStore.get()
+      const { agentSessionTracker } = await import("./agent-session-tracker")
+      const { messageQueueService } = await import("./message-queue-service")
+
       // Create or get conversation ID
       let conversationId = input.conversationId
       if (!conversationId) {
@@ -973,6 +1029,20 @@ export const router = {
         )
         conversationId = conversation.id
       } else {
+        // Check if message queuing is enabled and there's an active session
+        if (config.mcpMessageQueueEnabled !== false) {
+          const activeSessionId = agentSessionTracker.findSessionByConversationId(conversationId)
+          if (activeSessionId) {
+            const session = agentSessionTracker.getSession(activeSessionId)
+            if (session && session.status === "active") {
+              // Queue the message instead of starting a new session
+              const queuedMessage = messageQueueService.enqueue(conversationId, input.text)
+              logApp(`[createMcpTextInput] Queued message ${queuedMessage.id} for active session ${activeSessionId}`)
+              return { conversationId, queued: true, queuedMessageId: queuedMessage.id }
+            }
+          }
+        }
+
         // Add user message to existing conversation
         await conversationService.addMessageToConversation(
           conversationId,
@@ -983,7 +1053,6 @@ export const router = {
 
       // Try to find and revive an existing session for this conversation
       // This handles the case where user continues from history
-      const { agentSessionTracker } = await import("./agent-session-tracker")
       let existingSessionId: string | undefined
       if (input.conversationId) {
         const foundSessionId = agentSessionTracker.findSessionByConversationId(input.conversationId)
@@ -1034,6 +1103,12 @@ export const router = {
         })
         .catch((error) => {
           logLLM("[createMcpTextInput] Agent processing error:", error)
+        })
+        .finally(() => {
+          // Process queued messages after this session completes (success or error)
+          processQueuedMessages(conversationId!).catch((err) => {
+            logLLM("[createMcpTextInput] Error processing queued messages:", err)
+          })
         })
 
       // Return immediately with conversation ID
@@ -2322,6 +2397,47 @@ export const router = {
     .action(async ({ input }) => {
       const { resolveSampling } = await import("./mcp-sampling")
       return resolveSampling(input.requestId, input.approved)
+    }),
+
+  // Message Queue endpoints
+  getMessageQueue: t.procedure
+    .input<{ conversationId: string }>()
+    .action(async ({ input }) => {
+      const { messageQueueService } = await import("./message-queue-service")
+      return messageQueueService.getQueue(input.conversationId)
+    }),
+
+  getAllMessageQueues: t.procedure.action(async () => {
+    const { messageQueueService } = await import("./message-queue-service")
+    return messageQueueService.getAllQueues()
+  }),
+
+  removeFromMessageQueue: t.procedure
+    .input<{ conversationId: string; messageId: string }>()
+    .action(async ({ input }) => {
+      const { messageQueueService } = await import("./message-queue-service")
+      return messageQueueService.removeFromQueue(input.conversationId, input.messageId)
+    }),
+
+  clearMessageQueue: t.procedure
+    .input<{ conversationId: string }>()
+    .action(async ({ input }) => {
+      const { messageQueueService } = await import("./message-queue-service")
+      messageQueueService.clearQueue(input.conversationId)
+    }),
+
+  reorderMessageQueue: t.procedure
+    .input<{ conversationId: string; messageIds: string[] }>()
+    .action(async ({ input }) => {
+      const { messageQueueService } = await import("./message-queue-service")
+      return messageQueueService.reorderQueue(input.conversationId, input.messageIds)
+    }),
+
+  updateQueuedMessageText: t.procedure
+    .input<{ conversationId: string; messageId: string; text: string }>()
+    .action(async ({ input }) => {
+      const { messageQueueService } = await import("./message-queue-service")
+      return messageQueueService.updateMessageText(input.conversationId, input.messageId, input.text)
     }),
 }
 

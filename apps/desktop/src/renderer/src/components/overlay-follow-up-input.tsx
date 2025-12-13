@@ -4,6 +4,7 @@ import { Button } from "@renderer/components/ui/button"
 import { Send, Mic } from "lucide-react"
 import { useMutation } from "@tanstack/react-query"
 import { tipcClient } from "@renderer/lib/tipc-client"
+import { useConfigQuery } from "@renderer/lib/queries"
 
 interface OverlayFollowUpInputProps {
   conversationId?: string
@@ -27,6 +28,10 @@ export function OverlayFollowUpInput({
 }: OverlayFollowUpInputProps) {
   const [text, setText] = useState("")
   const inputRef = useRef<HTMLInputElement>(null)
+  const configQuery = useConfigQuery()
+
+  // Message queuing is enabled by default
+  const isQueueEnabled = configQuery.data?.mcpMessageQueueEnabled ?? true
 
   const sendMutation = useMutation({
     mutationFn: async (message: string) => {
@@ -50,7 +55,10 @@ export function OverlayFollowUpInput({
   const handleSubmit = (e?: React.FormEvent) => {
     e?.preventDefault()
     const trimmed = text.trim()
-    if (trimmed && !sendMutation.isPending && !isSessionActive) {
+    // Allow submission if:
+    // 1. Not already pending
+    // 2. Either session is not active OR queue is enabled
+    if (trimmed && !sendMutation.isPending && (!isSessionActive || isQueueEnabled)) {
       sendMutation.mutate(trimmed)
     }
   }
@@ -71,8 +79,20 @@ export function OverlayFollowUpInput({
     await tipcClient.triggerMcpRecording({ conversationId, sessionId: realSessionId })
   }
 
-  // Don't allow input while session is still active (agent is processing)
-  const isDisabled = sendMutation.isPending || isSessionActive
+  // When queue is enabled, allow input even when session is active
+  // When queue is disabled, don't allow input while session is active
+  const isDisabled = sendMutation.isPending || (isSessionActive && !isQueueEnabled)
+
+  // Show appropriate placeholder based on state
+  const getPlaceholder = () => {
+    if (isSessionActive && isQueueEnabled) {
+      return "Queue message..."
+    }
+    if (isSessionActive) {
+      return "Waiting for agent..."
+    }
+    return "Continue conversation..."
+  }
 
   return (
     <form 
@@ -89,7 +109,7 @@ export function OverlayFollowUpInput({
         value={text}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={handleKeyDown}
-        placeholder={isSessionActive ? "Waiting for agent..." : "Continue conversation..."}
+        placeholder={getPlaceholder()}
         className={cn(
           "flex-1 text-sm bg-transparent border-0 outline-none",
           "placeholder:text-muted-foreground/60",
@@ -103,7 +123,7 @@ export function OverlayFollowUpInput({
         variant="ghost"
         className="h-7 w-7 flex-shrink-0"
         disabled={!text.trim() || isDisabled}
-        title="Send message"
+        title={isSessionActive && isQueueEnabled ? "Queue message" : "Send message"}
       >
         <Send className={cn(
           "h-3.5 w-3.5",

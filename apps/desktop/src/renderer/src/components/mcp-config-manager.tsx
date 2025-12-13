@@ -1335,8 +1335,12 @@ export function MCPConfigManager({
                     </>
                   )}
                 </div>
-                {/* Action buttons - stop propagation so clicks don't toggle expansion */}
-                <div className="flex shrink-0 items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                {/* Action buttons - stop propagation so clicks/keys don't toggle expansion */}
+                <div
+                  className="flex shrink-0 items-center gap-1"
+                  onClick={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => e.stopPropagation()}
+                >
                   {!serverConfig.disabled && (
                     <>
                       {serverStatus[name]?.runtimeEnabled === false ? (

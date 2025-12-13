@@ -302,13 +302,14 @@ async function processWithAgentMode(
 
     return agentResult.content
   } catch (error) {
-    // Mark session as errored
-    const errorMessage = error instanceof Error ? error.message : "Unknown error"
-    agentSessionTracker.errorSession(sessionId, errorMessage)
-
     // Create enhanced error info for better UI display
+    // Do this first so we can use errorInfo.message consistently
     const { createEnhancedErrorInfo } = await import("./llm-fetch")
     const errorInfo = createEnhancedErrorInfo(error)
+
+    // Mark session as errored - use errorInfo.message to ensure consistency
+    // between stored error and displayed error
+    agentSessionTracker.errorSession(sessionId, errorInfo.message)
 
     // Emit error progress update to the UI so users see the error message
     const { emitAgentProgress } = await import("./emit-agent-progress")
@@ -327,10 +328,10 @@ async function processWithAgentMode(
         timestamp: Date.now(),
       }],
       isComplete: true,
-      finalContent: `Error: ${errorMessage}`,
+      finalContent: `Error: ${errorInfo.message}`,
       conversationHistory: [
         { role: "user", content: text, timestamp: Date.now() },
-        { role: "assistant", content: `Error: ${errorMessage}`, timestamp: Date.now() }
+        { role: "assistant", content: `Error: ${errorInfo.message}`, timestamp: Date.now() }
       ],
       errorInfo,
     })
@@ -1261,6 +1262,7 @@ export const router = {
         logLLM("[createMcpRecording] Transcription error:", error)
 
         // Create enhanced error info for better UI display
+        // Do this first so we can use errorInfo.message consistently
         const { createEnhancedErrorInfo } = await import("./llm-fetch")
         const errorInfo = createEnhancedErrorInfo(error)
 
@@ -1282,12 +1284,13 @@ export const router = {
           isSnoozed: false,
           conversationTitle: "Transcription Error",
           conversationHistory: [],
-          finalContent: `Transcription failed: ${error instanceof Error ? error.message : "Unknown error"}`,
+          finalContent: `Transcription failed: ${errorInfo.message}`,
           errorInfo,
         })
 
         // Mark the session as errored to clean up the UI
-        agentSessionTracker.errorSession(sessionId, error instanceof Error ? error.message : "Transcription failed")
+        // Use errorInfo.message for consistency with displayed error
+        agentSessionTracker.errorSession(sessionId, errorInfo.message)
 
         // Re-throw the error so the caller knows transcription failed
         throw error

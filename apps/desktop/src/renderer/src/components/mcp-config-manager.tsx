@@ -50,6 +50,12 @@ import {
   ChevronsUpDown,
   Terminal,
   Trash,
+  Search,
+  Eye,
+  EyeOff,
+  Power,
+  PowerOff,
+  Wrench,
 } from "lucide-react"
 import { Spinner } from "@renderer/components/ui/spinner"
 import { MCPConfig, MCPServerConfig, MCPTransportType, OAuthConfig, ServerLogEntry } from "@shared/types"
@@ -58,6 +64,14 @@ import { toast } from "sonner"
 import { OAuthServerConfig } from "./OAuthServerConfig"
 import { OAUTH_MCP_EXAMPLES, getOAuthExample } from "@shared/oauth-examples"
 import { parseShellCommand } from "@shared/shell-parse"
+
+interface DetailedTool {
+  name: string
+  description: string
+  serverName: string
+  enabled: boolean
+  inputSchema: any
+}
 
 interface MCPConfigManagerProps {
   config: MCPConfig
@@ -846,6 +860,14 @@ export function MCPConfigManager({
   const [serverLogs, setServerLogs] = useState<Record<string, ServerLogEntry[]>>({})
   const [expandedLogs, setExpandedLogs] = useState<Set<string>>(new Set())
   const [expandedServers, setExpandedServers] = useState<Set<string>>(new Set())
+  // Tool management state
+  const [tools, setTools] = useState<DetailedTool[]>([])
+  const [toolSearchQuery, setToolSearchQuery] = useState("")
+  const [showDisabledTools, setShowDisabledTools] = useState(true)
+  const [expandedTools, setExpandedTools] = useState<Set<string>>(new Set())
+
+  // Define servers early so it can be used in hooks below
+  const servers = config.mcpServers || {}
 
   // Prune stale entries from expandedServers when servers change
   useEffect(() => {
@@ -877,8 +899,6 @@ export function MCPConfigManager({
       console.error('Failed to load OAuth status:', error)
     }
   }
-
-  const servers = config.mcpServers || {}
 
   // Fetch logs for expanded servers
   const fetchLogsForServer = async (serverName: string) => {
@@ -914,6 +934,150 @@ export function MCPConfigManager({
 
     return () => clearInterval(interval)
   }, [servers, expandedLogs])
+
+  // Fetch tools periodically
+  useEffect(() => {
+    const fetchTools = async () => {
+      try {
+        const toolList = await tipcClient.getMcpDetailedToolList({})
+        setTools(toolList as DetailedTool[])
+      } catch (error) {}
+    }
+
+    fetchTools()
+    const interval = setInterval(fetchTools, 5000) // Update every 5 seconds
+
+    return () => clearInterval(interval)
+  }, [])
+
+  // Group tools by server
+  const toolsByServer = tools.reduce(
+    (acc, tool) => {
+      if (!acc[tool.serverName]) {
+        acc[tool.serverName] = []
+      }
+      acc[tool.serverName].push(tool)
+      return acc
+    },
+    {} as Record<string, DetailedTool[]>,
+  )
+
+  // Filter tools for a specific server
+  const getFilteredToolsForServer = (serverName: string) => {
+    const serverTools = toolsByServer[serverName] || []
+    return serverTools.filter((tool) => {
+      const matchesSearch =
+        tool.name.toLowerCase().includes(toolSearchQuery.toLowerCase()) ||
+        tool.description.toLowerCase().includes(toolSearchQuery.toLowerCase())
+      const matchesVisibility = showDisabledTools || tool.enabled
+      return matchesSearch && matchesVisibility
+    })
+  }
+
+  const handleToolToggle = async (toolName: string, enabled: boolean) => {
+    try {
+      // Update local state immediately for better UX
+      setTools((prevTools) =>
+        prevTools.map((tool) =>
+          tool.name === toolName ? { ...tool, enabled } : tool,
+        ),
+      )
+
+      // Call the backend API
+      const result = await tipcClient.setMcpToolEnabled({ toolName, enabled })
+
+      if ((result as any).success) {
+        toast.success(`Tool ${toolName} ${enabled ? "enabled" : "disabled"}`)
+      } else {
+        // Revert local state if backend call failed
+        setTools((prevTools) =>
+          prevTools.map((tool) =>
+            tool.name === toolName ? { ...tool, enabled: !enabled } : tool,
+          ),
+        )
+        toast.error(
+          `Failed to ${enabled ? "enable" : "disable"} tool ${toolName}`,
+        )
+      }
+    } catch (error: any) {
+      // Revert local state on error
+      setTools((prevTools) =>
+        prevTools.map((tool) =>
+          tool.name === toolName ? { ...tool, enabled: !enabled } : tool,
+        ),
+      )
+      toast.error(`Error toggling tool: ${error.message}`)
+    }
+  }
+
+  const handleToggleAllToolsForServer = async (serverName: string, enable: boolean) => {
+    const serverTools = tools.filter((tool) => tool.serverName === serverName)
+    if (serverTools.length === 0) return
+
+    // Update local state immediately for better UX
+    const updatedTools = tools.map((tool) => {
+      if (tool.serverName === serverName) {
+        return { ...tool, enabled: enable }
+      }
+      return tool
+    })
+    setTools(updatedTools)
+
+    // Track promises for all backend calls
+    const promises = serverTools.map((tool) =>
+      tipcClient.setMcpToolEnabled({ toolName: tool.name, enabled: enable }),
+    )
+
+    try {
+      const results = await Promise.allSettled(promises)
+      const successful = results.filter((r) => r.status === "fulfilled").length
+      const failed = results.length - successful
+
+      if (failed === 0) {
+        toast.success(
+          `All ${serverTools.length} tools for ${serverName} ${enable ? "enabled" : "disabled"}`,
+        )
+      } else {
+        // Revert local state for failed calls
+        const failedTools = serverTools.filter(
+          (_, index) => results[index].status === "rejected",
+        )
+        const revertedTools = tools.map((tool) => {
+          if (tool.serverName === serverName && failedTools.includes(tool)) {
+            return { ...tool, enabled: !enable }
+          }
+          return tool
+        })
+        setTools(revertedTools)
+
+        toast.warning(
+          `${successful}/${serverTools.length} tools ${enable ? "enabled" : "disabled"} for ${serverName} (${failed} failed)`,
+        )
+      }
+    } catch (error: any) {
+      // Revert all tools on error
+      const revertedTools = tools.map((tool) => {
+        if (tool.serverName === serverName) {
+          return { ...tool, enabled: !enable }
+        }
+        return tool
+      })
+      setTools(revertedTools)
+      toast.error(`Error toggling tools for ${serverName}: ${error.message}`)
+    }
+  }
+
+  const toggleToolsExpansion = (serverName: string) => {
+    setExpandedTools(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(serverName)) {
+        newSet.delete(serverName)
+      } else {
+        newSet.add(serverName)
+      }
+      return newSet
+    })
+  }
 
   const handleAddServer = async (name: string, serverConfig: MCPServerConfig) => {
     const newConfig = {
@@ -1245,25 +1409,51 @@ export function MCPConfigManager({
         </Card>
       )}
 
-      {/* Expand/Collapse All button - only show when there are servers */}
-      {Object.entries(servers).length > 0 && (() => {
-        const serverKeys = Object.keys(servers)
-        const expandedCount = serverKeys.filter(key => expandedServers.has(key)).length
-        const allExpanded = expandedCount >= serverKeys.length
-        return (
-          <div className="flex justify-end">
+      {/* Tool Search and Filter Controls */}
+      {Object.entries(servers).length > 0 && (
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-1 items-center gap-3">
+            <div className="relative flex-1 max-w-sm">
+              <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search tools..."
+                value={toolSearchQuery}
+                onChange={(e) => setToolSearchQuery(e.target.value)}
+                className="pl-8 h-9"
+              />
+            </div>
             <Button
-              variant="ghost"
+              variant="outline"
               size="sm"
-              onClick={() => toggleAllServers(!allExpanded)}
-              className="text-muted-foreground"
+              onClick={() => setShowDisabledTools(!showDisabledTools)}
+              className="shrink-0"
             >
-              <ChevronsUpDown className="mr-2 h-4 w-4" />
-              {allExpanded ? "Collapse All" : "Expand All"}
+              {showDisabledTools ? (
+                <EyeOff className="mr-2 h-4 w-4" />
+              ) : (
+                <Eye className="mr-2 h-4 w-4" />
+              )}
+              {showDisabledTools ? "Hide Disabled" : "Show All"}
             </Button>
           </div>
-        )
-      })()}
+          {(() => {
+            const serverKeys = Object.keys(servers)
+            const expandedCount = serverKeys.filter(key => expandedServers.has(key)).length
+            const allExpanded = expandedCount >= serverKeys.length
+            return (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => toggleAllServers(!allExpanded)}
+                className="text-muted-foreground shrink-0"
+              >
+                <ChevronsUpDown className="mr-2 h-4 w-4" />
+                {allExpanded ? "Collapse All" : "Expand All"}
+              </Button>
+            )
+          })()}
+        </div>
+      )}
 
       <div className="grid gap-2">
         {Object.entries(servers).length === 0 ? (
@@ -1536,6 +1726,126 @@ export function MCPConfigManager({
                               <div className="text-gray-500 text-center py-4">
                                 No logs available
                               </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </CardContent>
+                  )}
+
+                  {/* Tools Section */}
+                  {serverStatus[name]?.connected && (
+                    <CardContent className="pt-0 border-t">
+                      <div className="space-y-2 py-2">
+                        <div className="flex items-center justify-between">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => toggleToolsExpansion(name)}
+                            className="flex items-center gap-2 -ml-2"
+                          >
+                            <Wrench className="h-4 w-4" />
+                            <span>Tools</span>
+                            <Badge variant="secondary" className="text-xs">
+                              {(toolsByServer[name] || []).filter((t) => t.enabled).length}/
+                              {(toolsByServer[name] || []).length}
+                            </Badge>
+                            {expandedTools.has(name) ? (
+                              <ChevronUp className="h-4 w-4" />
+                            ) : (
+                              <ChevronDown className="h-4 w-4" />
+                            )}
+                          </Button>
+                          {expandedTools.has(name) && (toolsByServer[name]?.length > 0) && (
+                            <div className="flex items-center gap-1">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleToggleAllToolsForServer(name, true)}
+                                className="h-7 px-2 text-xs"
+                              >
+                                <Power className="mr-1 h-3 w-3" />
+                                All ON
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleToggleAllToolsForServer(name, false)}
+                                className="h-7 px-2 text-xs"
+                              >
+                                <PowerOff className="mr-1 h-3 w-3" />
+                                All OFF
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+
+                        {expandedTools.has(name) && (
+                          <div className="space-y-2">
+                            {getFilteredToolsForServer(name).length === 0 ? (
+                              <div className="text-sm text-muted-foreground text-center py-4">
+                                {(toolsByServer[name] || []).length === 0
+                                  ? "No tools available"
+                                  : "No tools match your search"}
+                              </div>
+                            ) : (
+                              getFilteredToolsForServer(name).map((tool) => (
+                                <div
+                                  key={tool.name}
+                                  className="flex items-center justify-between rounded-lg border p-3"
+                                >
+                                  <div className="min-w-0 flex-1">
+                                    <div className="mb-1 flex items-center gap-2">
+                                      <h4 className="truncate text-sm font-medium">
+                                        {tool.name.includes(":")
+                                          ? tool.name.split(":").slice(1).join(":")
+                                          : tool.name}
+                                      </h4>
+                                      {!tool.enabled && (
+                                        <Badge variant="outline" className="text-xs">
+                                          Disabled
+                                        </Badge>
+                                      )}
+                                    </div>
+                                    <p className="line-clamp-2 text-xs text-muted-foreground">
+                                      {tool.description}
+                                    </p>
+                                  </div>
+                                  <div className="ml-4 flex items-center gap-2">
+                                    <Dialog>
+                                      <DialogTrigger asChild>
+                                        <Button variant="ghost" size="sm">
+                                          <Eye className="h-4 w-4" />
+                                        </Button>
+                                      </DialogTrigger>
+                                      <DialogContent className="max-w-2xl">
+                                        <DialogHeader>
+                                          <DialogTitle>{tool.name}</DialogTitle>
+                                          <DialogDescription>
+                                            {tool.description}
+                                          </DialogDescription>
+                                        </DialogHeader>
+                                        <div className="space-y-4">
+                                          <div>
+                                            <Label className="text-sm font-medium">
+                                              Input Schema
+                                            </Label>
+                                            <pre className="mt-2 max-h-64 overflow-auto rounded-md bg-muted p-3 text-xs">
+                                              {JSON.stringify(tool.inputSchema, null, 2)}
+                                            </pre>
+                                          </div>
+                                        </div>
+                                      </DialogContent>
+                                    </Dialog>
+                                    <Switch
+                                      checked={tool.enabled}
+                                      onCheckedChange={(enabled) =>
+                                        handleToolToggle(tool.name, enabled)
+                                      }
+                                    />
+                                  </div>
+                                </div>
+                              ))
                             )}
                           </div>
                         )}

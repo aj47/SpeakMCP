@@ -51,13 +51,23 @@ if (-not $vsInstalled) {
     Write-Host "   If build fails, install from: https://visualstudio.microsoft.com/downloads/#build-tools-for-visual-studio-2022" -ForegroundColor Yellow
 }
 
-# Create resources/bin directory if it doesn't exist
-Write-Host "[INFO] Creating resources/bin directory..." -ForegroundColor Yellow
-if (!(Test-Path "resources/bin")) {
-    New-Item -ItemType Directory -Path "resources/bin" -Force | Out-Null
-    Write-Host "[OK] Created resources/bin directory" -ForegroundColor Green
-} else {
-    Write-Host "[OK] resources/bin directory exists" -ForegroundColor Green
+# Create required directories if they don't exist
+# These directories are needed for the build process
+Write-Host "[INFO] Ensuring required directories exist..." -ForegroundColor Yellow
+
+$requiredDirs = @(
+    "resources/bin",
+    "dist",
+    "dist-installer"
+)
+
+foreach ($dir in $requiredDirs) {
+    if (!(Test-Path $dir)) {
+        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+        Write-Host "[OK] Created $dir directory" -ForegroundColor Green
+    } else {
+        Write-Host "[OK] $dir directory exists" -ForegroundColor Green
+    }
 }
 
 # Change to Rust project directory

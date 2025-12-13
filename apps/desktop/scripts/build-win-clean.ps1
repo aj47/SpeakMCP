@@ -90,21 +90,44 @@ function Remove-DistDirectory {
     return $false
 }
 
+# Function to ensure required directories exist
+function Ensure-BuildDirectories {
+    Write-Host "[SETUP] Ensuring build directories exist..." -ForegroundColor Yellow
+
+    $directories = @(
+        "dist",
+        "dist-installer",
+        "resources/bin"
+    )
+
+    foreach ($dir in $directories) {
+        if (!(Test-Path $dir)) {
+            New-Item -ItemType Directory -Path $dir -Force | Out-Null
+            Write-Host "[SETUP] Created directory: $dir" -ForegroundColor Green
+        } else {
+            Write-Host "[SETUP] Directory exists: $dir" -ForegroundColor Green
+        }
+    }
+}
+
 # Main build process
 try {
     # Step 1: Stop any running processes
     Stop-SpeakMCPProcesses
-    
+
     # Step 2: Clean dist directory
     $cleanSuccess = Remove-DistDirectory
     if (-not $cleanSuccess) {
         Write-Host "[ERROR] Could not clean dist directory. Build may fail." -ForegroundColor Red
         Write-Host "[INFO] Continuing anyway..." -ForegroundColor Yellow
     }
-    
-    # Step 3: Run the build
+
+    # Step 3: Ensure required directories exist
+    Ensure-BuildDirectories
+
+    # Step 4: Run the build
     Write-Host "[BUILD] Starting electron build..." -ForegroundColor Green
-    
+
     if ($SkipTypes) {
         Write-Host "[BUILD] Running build with type checking skipped..." -ForegroundColor Yellow
         & pnpm run build:win:skip-types

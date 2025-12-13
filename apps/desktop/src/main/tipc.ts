@@ -388,6 +388,9 @@ async function processQueuedMessages(conversationId: string): Promise<void> {
 
       logLLM(`[processQueuedMessages] Processing queued message ${queuedMessage.id} for ${conversationId}`)
 
+      // Mark as processing to prevent UI from editing/removing while we're working on it
+      messageQueueService.markProcessing(conversationId, queuedMessage.id)
+
       try {
         // Only add to conversation history if not already added (prevents duplicates on retry)
         if (!queuedMessage.addedToHistory) {

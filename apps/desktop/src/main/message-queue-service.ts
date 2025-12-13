@@ -159,8 +159,26 @@ class MessageQueueService {
   peek(conversationId: string): QueuedMessage | null {
     const queue = this.queues.get(conversationId)
     if (!queue || queue.length === 0) return null
-    // Return the first pending message, skipping failed/cancelled items
+    // Return the first pending message, skipping processing/failed/cancelled items
     return queue.find((m) => m.status === "pending") || null
+  }
+
+  /**
+   * Mark a message as currently being processed.
+   * This prevents UI actions (edit/remove) from affecting the message while processing.
+   */
+  markProcessing(conversationId: string, messageId: string): boolean {
+    const queue = this.queues.get(conversationId)
+    if (!queue) return false
+
+    const message = queue.find((m) => m.id === messageId)
+    if (!message) return false
+
+    message.status = "processing"
+    logApp(`[MessageQueueService] Marked message ${messageId} as processing in ${conversationId}`)
+    this.emitQueueUpdate(conversationId)
+
+    return true
   }
 
   /**

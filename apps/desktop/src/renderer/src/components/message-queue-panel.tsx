@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react"
 import { cn } from "@renderer/lib/utils"
-import { X, Clock, Trash2, Pencil, Check, ChevronDown, ChevronUp, AlertCircle, RefreshCw } from "lucide-react"
+import { X, Clock, Trash2, Pencil, Check, ChevronDown, ChevronUp, AlertCircle, RefreshCw, Loader2 } from "lucide-react"
 import { Button } from "@renderer/components/ui/button"
 import { QueuedMessage } from "@shared/types"
 import { useMutation } from "@tanstack/react-query"
@@ -77,6 +77,7 @@ function QueuedMessageItem({
 
   const isLongMessage = message.text.length > 100
   const isFailed = message.status === "failed"
+  const isProcessing = message.status === "processing"
 
   // Mutation to retry a failed message by resetting its status to pending
   const retryMutation = useMutation({
@@ -93,7 +94,8 @@ function QueuedMessageItem({
     <div
       className={cn(
         "px-3 py-2 group",
-        isFailed ? "bg-destructive/10 hover:bg-destructive/15" : "hover:bg-muted/50",
+        isFailed ? "bg-destructive/10 hover:bg-destructive/15" :
+        isProcessing ? "bg-primary/10" : "hover:bg-muted/50",
         "transition-colors"
       )}
     >
@@ -140,11 +142,15 @@ function QueuedMessageItem({
           {isFailed && (
             <AlertCircle className="h-4 w-4 text-destructive flex-shrink-0 mt-0.5" />
           )}
+          {isProcessing && (
+            <Loader2 className="h-4 w-4 text-primary flex-shrink-0 mt-0.5 animate-spin" />
+          )}
           <div className="flex-1 min-w-0">
             <p
               className={cn(
                 "text-sm",
                 isFailed && "text-destructive",
+                isProcessing && "text-primary",
                 !isExpanded && isLongMessage && "line-clamp-2"
               )}
             >
@@ -158,9 +164,10 @@ function QueuedMessageItem({
             <div className="flex items-center gap-2 mt-1">
               <span className={cn(
                 "text-xs",
-                isFailed ? "text-destructive/70" : "text-muted-foreground"
+                isFailed ? "text-destructive/70" :
+                isProcessing ? "text-primary/70" : "text-muted-foreground"
               )}>
-                {formatTime(message.createdAt)} • {isFailed ? "Failed" : `#${index + 1} in queue`}
+                {formatTime(message.createdAt)} • {isFailed ? "Failed" : isProcessing ? "Processing..." : `#${index + 1} in queue`}
               </span>
               {isLongMessage && (
                 <Button
@@ -184,42 +191,45 @@ function QueuedMessageItem({
               )}
             </div>
           </div>
-          <div className={cn(
-            "flex items-center gap-1 flex-shrink-0 transition-opacity",
-            isFailed ? "opacity-100" : "opacity-0 group-hover:opacity-100"
-          )}>
-            {isFailed && (
+          {/* Hide action buttons when processing */}
+          {!isProcessing && (
+            <div className={cn(
+              "flex items-center gap-1 flex-shrink-0 transition-opacity",
+              isFailed ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+            )}>
+              {isFailed && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6"
+                  onClick={() => retryMutation.mutate()}
+                  disabled={retryMutation.isPending}
+                  title="Retry message"
+                >
+                  <RefreshCw className={cn("h-3 w-3", retryMutation.isPending && "animate-spin")} />
+                </Button>
+              )}
               <Button
                 variant="ghost"
                 size="icon"
                 className="h-6 w-6"
-                onClick={() => retryMutation.mutate()}
-                disabled={retryMutation.isPending}
-                title="Retry message"
+                onClick={() => setIsEditing(true)}
+                title="Edit message"
               >
-                <RefreshCw className={cn("h-3 w-3", retryMutation.isPending && "animate-spin")} />
+                <Pencil className="h-3 w-3" />
               </Button>
-            )}
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6"
-              onClick={() => setIsEditing(true)}
-              title="Edit message"
-            >
-              <Pencil className="h-3 w-3" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6"
-              onClick={() => removeMutation.mutate()}
-              disabled={removeMutation.isPending}
-              title="Remove from queue"
-            >
-              <X className="h-3 w-3" />
-            </Button>
-          </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6"
+                onClick={() => removeMutation.mutate()}
+                disabled={removeMutation.isPending}
+                title="Remove from queue"
+              >
+                <X className="h-3 w-3" />
+              </Button>
+            </div>
+          )}
         </div>
       )}
     </div>

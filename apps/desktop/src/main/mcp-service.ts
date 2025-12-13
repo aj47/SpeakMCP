@@ -148,9 +148,26 @@ export class MCPService {
           const enabledServers = new Set(mcpServerConfig.enabledServers || [])
 
           // Any server NOT in enabledServers should be disabled
+          let stateChanged = false
           for (const serverName of allServerNames) {
-            if (!enabledServers.has(serverName)) {
+            if (!enabledServers.has(serverName) && !this.runtimeDisabledServers.has(serverName)) {
               this.runtimeDisabledServers.add(serverName)
+              stateChanged = true
+            }
+          }
+
+          // Persist the updated runtimeDisabledServers to configStore
+          // This ensures status/reporting paths (e.g., list_mcp_servers, getDetailedToolList)
+          // that read from configStore stay in sync with actual runtime state
+          if (stateChanged) {
+            try {
+              const updatedConfig: Config = {
+                ...config,
+                mcpRuntimeDisabledServers: Array.from(this.runtimeDisabledServers),
+              }
+              configStore.save(updatedConfig)
+            } catch (persistError) {
+              // Ignore persistence errors; runtime state will still be respected in-session
             }
           }
         }

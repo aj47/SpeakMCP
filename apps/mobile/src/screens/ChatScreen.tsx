@@ -517,11 +517,16 @@ export default function ChatScreen({ route, navigation }: any) {
         streamingText = '';
 
         // Update the placeholder message to show retry status
+        // Clear toolCalls and toolResults to avoid showing stale tool badges from failed attempt
         setMessages((m) => {
           const copy = [...m];
           for (let i = copy.length - 1; i >= 0; i--) {
             if (copy[i].role === 'assistant') {
-              copy[i] = { ...copy[i], content: `Retrying connection... (attempt ${attempt})` };
+              copy[i] = {
+                role: 'assistant',
+                content: `Retrying connection... (attempt ${attempt})`,
+                // Intentionally not spreading previous fields to clear stale toolCalls/toolResults
+              };
               break;
             }
           }

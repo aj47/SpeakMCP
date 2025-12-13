@@ -139,6 +139,11 @@ class MessageQueueService {
     const message = queue.find((m) => m.id === messageId)
     if (!message) return false
 
+    if (message.status === "processing") {
+      logApp(`[MessageQueueService] Cannot update message ${messageId} text while it is processing`)
+      return false
+    }
+
     message.text = newText
     // Reset failed messages to pending status so they can be retried
     if (message.status === "failed") {

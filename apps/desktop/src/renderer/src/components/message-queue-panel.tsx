@@ -36,6 +36,14 @@ function QueuedMessageItem({
     }
   }, [message.text, isEditing])
 
+  // Exit edit mode when the message starts processing to prevent editing text that no longer matches what's being processed
+  useEffect(() => {
+    if (message.status === 'processing') {
+      setIsEditing(false)
+      setEditText(message.text)
+    }
+  }, [message.status, message.text])
+
   const removeMutation = useMutation({
     mutationFn: async () => {
       await tipcClient.removeFromMessageQueue({ conversationId, messageId: message.id })

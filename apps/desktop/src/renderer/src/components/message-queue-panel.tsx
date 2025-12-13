@@ -50,14 +50,23 @@ function QueuedMessageItem({
 
   const updateMutation = useMutation({
     mutationFn: async (newText: string) => {
-      await tipcClient.updateQueuedMessageText({
+      const success = await tipcClient.updateQueuedMessageText({
         conversationId,
         messageId: message.id,
         text: newText,
       })
+      // Throw if backend rejected the update (e.g., message is processing or already added to history)
+      if (!success) {
+        throw new Error("Failed to update message")
+      }
+      return success
     },
     onSuccess: () => {
       setIsEditing(false)
+    },
+    onError: () => {
+      // Restore original text on failure
+      setEditText(message.text)
     },
   })
 

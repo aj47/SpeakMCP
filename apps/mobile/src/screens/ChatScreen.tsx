@@ -981,6 +981,15 @@ export default function ChatScreen({ route, navigation }: any) {
 
     console.log('[ChatScreen] Processing queued message:', queuedMsg.id, text);
 
+    // Get client from connection manager (preserves connections across session switches)
+    const client = getSessionClient();
+    if (!client) {
+      console.error('[ChatScreen] No client available for processing queued message');
+      messageQueue.markFailed(currentConversationId, queuedMsg.id, 'No session available');
+      setDebugInfo('Error: No session available');
+      return;
+    }
+
     setDebugInfo(`Processing queued message...`);
 
     const userMsg: ChatMessage = { role: 'user', content: text };
@@ -1687,7 +1696,20 @@ export default function ChatScreen({ route, navigation }: any) {
               messages={queuedMessages}
               onRemove={(messageId) => messageQueue.removeFromQueue(currentConversationId, messageId)}
               onUpdate={(messageId, text) => messageQueue.updateText(currentConversationId, messageId, text)}
-              onRetry={(messageId) => messageQueue.resetToPending(currentConversationId, messageId)}
+              onRetry={(messageId) => {
+                messageQueue.resetToPending(currentConversationId, messageId);
+                // If not already processing, trigger queue processing
+                if (!responding) {
+                  const nextMessage = messageQueue.peek(currentConversationId);
+                  if (nextMessage) {
+                    console.log('[ChatScreen] onRetry: Processing queue while idle, next message:', nextMessage.id);
+                    messageQueue.markProcessing(currentConversationId, nextMessage.id);
+                    setTimeout(() => {
+                      processQueuedMessage(nextMessage);
+                    }, 100);
+                  }
+                }
+              }}
               onClear={() => messageQueue.clearQueue(currentConversationId)}
             />
           </View>

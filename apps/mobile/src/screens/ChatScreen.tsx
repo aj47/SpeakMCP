@@ -617,13 +617,24 @@ export default function ChatScreen({ route, navigation }: any) {
           if (historyMsg.role === 'tool' && messages.length > 0) {
             const lastMessage = messages[messages.length - 1];
             if (lastMessage.role === 'assistant' && lastMessage.toolCalls && lastMessage.toolCalls.length > 0) {
-              // Merge toolResults into the existing assistant message
-              lastMessage.toolResults = [
-                ...(lastMessage.toolResults || []),
-                ...(historyMsg.toolResults || []),
-              ];
-              // Skip adding this as a separate message
-              continue;
+              const hasToolResults = historyMsg.toolResults && historyMsg.toolResults.length > 0;
+              const hasContent = historyMsg.content && historyMsg.content.trim().length > 0;
+
+              if (hasToolResults) {
+                // Merge toolResults into the existing assistant message
+                lastMessage.toolResults = [
+                  ...(lastMessage.toolResults || []),
+                  ...historyMsg.toolResults,
+                ];
+                // Also preserve any content from the tool message (e.g., error messages)
+                if (hasContent) {
+                  lastMessage.content = (lastMessage.content || '') +
+                    (lastMessage.content ? '\n' : '') + historyMsg.content;
+                }
+                // Skip adding this as a separate message only when we merged results
+                continue;
+              }
+              // If tool message has content but no toolResults, fall through to add it as a message
             }
           }
 
@@ -819,13 +830,24 @@ export default function ChatScreen({ route, navigation }: any) {
           if (historyMsg.role === 'tool' && newMessages.length > 0) {
             const lastMessage = newMessages[newMessages.length - 1];
             if (lastMessage.role === 'assistant' && lastMessage.toolCalls && lastMessage.toolCalls.length > 0) {
-              // Merge toolResults into the existing assistant message
-              lastMessage.toolResults = [
-                ...(lastMessage.toolResults || []),
-                ...(historyMsg.toolResults || []),
-              ];
-              // Skip adding this as a separate message
-              continue;
+              const hasToolResults = historyMsg.toolResults && historyMsg.toolResults.length > 0;
+              const hasContent = historyMsg.content && historyMsg.content.trim().length > 0;
+
+              if (hasToolResults) {
+                // Merge toolResults into the existing assistant message
+                lastMessage.toolResults = [
+                  ...(lastMessage.toolResults || []),
+                  ...historyMsg.toolResults,
+                ];
+                // Also preserve any content from the tool message (e.g., error messages)
+                if (hasContent) {
+                  lastMessage.content = (lastMessage.content || '') +
+                    (lastMessage.content ? '\n' : '') + historyMsg.content;
+                }
+                // Skip adding this as a separate message only when we merged results
+                continue;
+              }
+              // If tool message has content but no toolResults, fall through to add it as a message
             }
           }
 

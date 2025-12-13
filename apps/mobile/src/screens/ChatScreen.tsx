@@ -874,25 +874,34 @@ export default function ChatScreen({ route, navigation }: any) {
         connectionManager.decrementActiveRequests(requestSessionId);
       }
 
-      // Only reset UI states if this request is still the active one
-      // This prevents an old request from clobbering state if a new request started
-      // (e.g., user switched sessions and started a new chat mid-request)
-      if (activeRequestIdRef.current === thisRequestId) {
+      // Only reset UI states if:
+      // 1. This request is still the active one (prevents old requests from clobbering newer ones)
+      // 2. We're still on the same session (prevents background completions from affecting other sessions)
+      // This addresses PR review comment #10
+      const isCurrentRequest = activeRequestIdRef.current === thisRequestId;
+      const isCurrentSession = currentSessionIdRef.current === requestSessionId;
+
+      if (isCurrentRequest && isCurrentSession) {
         setResponding(false);
         setConnectionState(null);
         // Guard the setTimeout callback: only clear debugInfo if this request
         // is still the active one when the timeout fires. This prevents an
         // old request's delayed clear from wiping debug info for a newer request.
         const capturedRequestId = thisRequestId;
+        const capturedSessionId = requestSessionId;
         setTimeout(() => {
-          if (activeRequestIdRef.current === capturedRequestId) {
+          if (activeRequestIdRef.current === capturedRequestId &&
+              currentSessionIdRef.current === capturedSessionId) {
             setDebugInfo('');
           }
         }, 5000);
       } else {
-        console.log('[ChatScreen] Skipping finally state resets: newer request is active', {
+        console.log('[ChatScreen] Skipping finally state resets:', {
           thisRequestId,
-          activeRequestId: activeRequestIdRef.current
+          activeRequestId: activeRequestIdRef.current,
+          requestSessionId,
+          currentSessionId: currentSessionIdRef.current,
+          reason: !isCurrentRequest ? 'newer request is active' : 'session changed'
         });
       }
     }

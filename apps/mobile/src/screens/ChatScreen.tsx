@@ -596,6 +596,8 @@ export default function ChatScreen({ route, navigation }: any) {
       setDebugInfo(`Error: ${errorMessage}`);
 
       // Replace the placeholder with an error message that includes retry capability
+      // messageCountBeforeTurn is the count before we added user message + placeholder
+      // m.slice(0, messageCountBeforeTurn + 1) keeps all messages including the user message but excludes the placeholder
       setMessages((m) => {
         const beforePlaceholder = m.slice(0, messageCountBeforeTurn + 1);
         const errorMsg: ChatMessage = {
@@ -631,6 +633,12 @@ export default function ChatScreen({ route, navigation }: any) {
     const errorMessage = messages[messageIndex];
     if (!errorMessage?.error?.originalUserMessage) {
       console.warn('[ChatScreen] Cannot retry: no original message found');
+      return;
+    }
+
+    // Only allow retrying the latest failed message to prevent losing subsequent conversation turns
+    if (messageIndex !== messages.length - 1) {
+      console.warn('[ChatScreen] Cannot retry: only the most recent failed message can be retried');
       return;
     }
 

@@ -29,8 +29,11 @@ export function TileFollowUpInput({
   const inputRef = useRef<HTMLInputElement>(null)
   const configQuery = useConfigQuery()
 
-  // Message queuing is enabled by default
-  const isQueueEnabled = configQuery.data?.mcpMessageQueueEnabled ?? true
+  // Message queuing is enabled by default, but we need the config to be loaded
+  // to know the user's preference. If config is still loading, treat as disabled
+  // to prevent race condition where disabled users can briefly submit.
+  const isConfigLoaded = configQuery.isSuccess
+  const isQueueEnabled = isConfigLoaded ? (configQuery.data?.mcpMessageQueueEnabled ?? true) : false
 
   const sendMutation = useMutation({
     mutationFn: async (message: string) => {

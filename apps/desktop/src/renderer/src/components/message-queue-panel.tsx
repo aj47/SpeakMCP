@@ -1,6 +1,6 @@
 import React, { useState } from "react"
 import { cn } from "@renderer/lib/utils"
-import { X, Clock, Trash2, Pencil, Check, ChevronDown, ChevronUp } from "lucide-react"
+import { X, Clock, Trash2, Pencil, Check, ChevronDown, ChevronUp, AlertCircle, RefreshCw } from "lucide-react"
 import { Button } from "@renderer/components/ui/button"
 import { QueuedMessage } from "@shared/types"
 import { useMutation } from "@tanstack/react-query"
@@ -69,12 +69,26 @@ function QueuedMessageItem({
   }
 
   const isLongMessage = message.text.length > 100
+  const isFailed = message.status === "failed"
+
+  // Mutation to retry a failed message by resetting its status to pending
+  const retryMutation = useMutation({
+    mutationFn: async () => {
+      // Reset the status to pending by updating the message text (triggers status reset on backend)
+      await tipcClient.updateQueuedMessageText({
+        conversationId,
+        messageId: message.id,
+        text: message.text,
+      })
+    },
+  })
 
   return (
     <div
       className={cn(
         "px-3 py-2 group",
-        "hover:bg-muted/50 transition-colors"
+        isFailed ? "bg-destructive/10 hover:bg-destructive/15" : "hover:bg-muted/50",
+        "transition-colors"
       )}
     >
       {isEditing ? (
@@ -117,18 +131,30 @@ function QueuedMessageItem({
       ) : (
         // View mode
         <div className="flex items-start gap-2">
+          {isFailed && (
+            <AlertCircle className="h-4 w-4 text-destructive flex-shrink-0 mt-0.5" />
+          )}
           <div className="flex-1 min-w-0">
             <p
               className={cn(
                 "text-sm",
+                isFailed && "text-destructive",
                 !isExpanded && isLongMessage && "line-clamp-2"
               )}
             >
               {message.text}
             </p>
+            {isFailed && message.errorMessage && (
+              <p className="text-xs text-destructive/80 mt-1">
+                Error: {message.errorMessage}
+              </p>
+            )}
             <div className="flex items-center gap-2 mt-1">
-              <span className="text-xs text-muted-foreground">
-                {formatTime(message.createdAt)} • #{index + 1} in queue
+              <span className={cn(
+                "text-xs",
+                isFailed ? "text-destructive/70" : "text-muted-foreground"
+              )}>
+                {formatTime(message.createdAt)} • {isFailed ? "Failed" : `#${index + 1} in queue`}
               </span>
               {isLongMessage && (
                 <Button
@@ -152,7 +178,22 @@ function QueuedMessageItem({
               )}
             </div>
           </div>
-          <div className="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className={cn(
+            "flex items-center gap-1 flex-shrink-0 transition-opacity",
+            isFailed ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+          )}>
+            {isFailed && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6"
+                onClick={() => retryMutation.mutate()}
+                disabled={retryMutation.isPending}
+                title="Retry message"
+              >
+                <RefreshCw className={cn("h-3 w-3", retryMutation.isPending && "animate-spin")} />
+              </Button>
+            )}
             <Button
               variant="ghost"
               size="icon"

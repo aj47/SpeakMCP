@@ -162,7 +162,8 @@ export interface QueuedMessage {
   conversationId: string
   text: string
   createdAt: number
-  status: "pending" | "processing" | "cancelled"
+  status: "pending" | "processing" | "cancelled" | "failed"
+  errorMessage?: string
 }
 
 export interface MessageQueue {

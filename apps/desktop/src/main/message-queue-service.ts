@@ -110,9 +110,12 @@ class MessageQueueService {
     if (index === -1) return false
 
     queue.splice(index, 1)
+    if (queue.length === 0) {
+      this.queues.delete(conversationId)
+    }
     logApp(`[MessageQueueService] Removed message ${messageId} from ${conversationId}`)
     this.emitQueueUpdate(conversationId)
-    
+
     return true
   }
 
@@ -126,7 +129,8 @@ class MessageQueueService {
   }
 
   /**
-   * Update the text of a queued message
+   * Update the text of a queued message.
+   * If the message was in failed status, resets it to pending for retry.
    */
   updateMessageText(conversationId: string, messageId: string, newText: string): boolean {
     const queue = this.queues.get(conversationId)
@@ -136,7 +140,14 @@ class MessageQueueService {
     if (!message) return false
 
     message.text = newText
-    logApp(`[MessageQueueService] Updated message ${messageId} text in ${conversationId}`)
+    // Reset failed messages to pending status so they can be retried
+    if (message.status === "failed") {
+      message.status = "pending"
+      delete message.errorMessage
+      logApp(`[MessageQueueService] Reset failed message ${messageId} to pending in ${conversationId}`)
+    } else {
+      logApp(`[MessageQueueService] Updated message ${messageId} text in ${conversationId}`)
+    }
     this.emitQueueUpdate(conversationId)
 
     return true
@@ -170,7 +181,31 @@ class MessageQueueService {
     }
 
     queue.splice(index, 1)
+    if (queue.length === 0) {
+      this.queues.delete(conversationId)
+    }
     logApp(`[MessageQueueService] Marked message ${messageId} as processed for ${conversationId}`)
+    this.emitQueueUpdate(conversationId)
+
+    return true
+  }
+
+  /**
+   * Mark a message as failed with an error message
+   */
+  markFailed(conversationId: string, messageId: string, errorMessage: string): boolean {
+    const queue = this.queues.get(conversationId)
+    if (!queue || queue.length === 0) return false
+
+    const message = queue.find((m) => m.id === messageId)
+    if (!message) {
+      logApp(`[MessageQueueService] Warning: markFailed called for ${messageId} but message not found in queue`)
+      return false
+    }
+
+    message.status = "failed"
+    message.errorMessage = errorMessage
+    logApp(`[MessageQueueService] Marked message ${messageId} as failed for ${conversationId}: ${errorMessage}`)
     this.emitQueueUpdate(conversationId)
 
     return true

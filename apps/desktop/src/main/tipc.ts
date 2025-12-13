@@ -405,10 +405,11 @@ async function processQueuedMessages(conversationId: string): Promise<void> {
         // Continue to check for more queued messages
       } catch (error) {
         logLLM(`[processQueuedMessages] Error processing queued message ${queuedMessage.id}:`, error)
-        // Remove the failed message so we don't get stuck in an infinite loop
-        // but log it so users know the message failed
-        messageQueueService.markProcessed(conversationId, queuedMessage.id)
-        // Continue to next message even if this one failed
+        // Mark the message as failed so users can see it in the UI
+        const errorMessage = error instanceof Error ? error.message : "Unknown error"
+        messageQueueService.markFailed(conversationId, queuedMessage.id, errorMessage)
+        // Stop processing - user needs to handle the failed message
+        break
       }
     }
   } finally {

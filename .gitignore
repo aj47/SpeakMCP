@@ -42,6 +42,9 @@ web-build/
 # Turborepo / build cache
 .turbo
 
+# TypeScript build info
+*.tsbuildinfo
+
 # Swift Package Manager build directory
 macos-audio-tap/ScreenCaptureAudio/.build/
 

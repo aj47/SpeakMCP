@@ -1569,8 +1569,18 @@ export class MCPService {
   }
 
   getAvailableTools(): MCPTool[] {
+    // Filter out tools from runtime-disabled servers
+    // This ensures that when switching profiles, tools from disabled servers
+    // are immediately unavailable even before the async stopServer completes
+    const enabledExternalTools = this.availableTools.filter((tool) => {
+      const serverName = tool.name.includes(":")
+        ? tool.name.split(":")[0]
+        : "unknown"
+      return !this.runtimeDisabledServers.has(serverName)
+    })
+
     // Combine external MCP tools with built-in tools
-    const allTools = [...this.availableTools, ...builtinTools]
+    const allTools = [...enabledExternalTools, ...builtinTools]
     const enabledTools = allTools.filter(
       (tool) => !this.disabledTools.has(tool.name),
     )
@@ -2359,6 +2369,21 @@ export class MCPService {
       // Check if this is a server-prefixed tool
       if (toolCall.name.includes(":")) {
         const [serverName, toolName] = toolCall.name.split(":", 2)
+
+        // Guard against executing tools from runtime-disabled servers
+        // This prevents profile pollution during profile switches
+        if (this.runtimeDisabledServers.has(serverName)) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Tool ${toolCall.name} is unavailable: server "${serverName}" is currently disabled.`,
+              },
+            ],
+            isError: true,
+          }
+        }
+
         const result = await this.executeServerTool(
           serverName,
           toolName,
@@ -2374,7 +2399,12 @@ export class MCPService {
 
       // Try to find a matching tool without prefix (fallback for LLM inconsistencies)
       // Include both external and built-in tools in the search
-      const allTools = [...this.availableTools, ...builtinTools]
+      // Filter out tools from runtime-disabled servers to prevent profile pollution
+      const enabledExternalTools = this.availableTools.filter((tool) => {
+        const sName = tool.name.includes(":") ? tool.name.split(":")[0] : "unknown"
+        return !this.runtimeDisabledServers.has(sName)
+      })
+      const allTools = [...enabledExternalTools, ...builtinTools]
       const matchingTool = allTools.find((tool) => {
         if (tool.name.includes(":")) {
           const [, toolName] = tool.name.split(":", 2)

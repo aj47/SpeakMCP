@@ -269,12 +269,24 @@ export class ConnectionRecoveryManager {
   /**
    * Update the checkpoint with new streaming content.
    * Call this whenever new content is received during streaming.
+   *
+   * To prevent losing partial content from earlier attempts during flaky-network scenarios,
+   * this method only updates the content field if:
+   * 1. The new content is non-empty, OR
+   * 2. The checkpoint has no existing content (e.g., at the start of a request)
+   *
+   * This ensures that if a later retry fails before any tokens arrive, we don't
+   * overwrite the partial response captured from an earlier attempt.
    */
   updateCheckpoint(content: string, conversationId?: string): void {
     if (!this.checkpoint) {
       this.initCheckpoint();
     }
-    this.checkpoint!.content = content;
+    // Only update content if new content is non-empty or checkpoint has no content yet.
+    // This preserves partial content from earlier attempts when retries fail early.
+    if (content || !this.checkpoint!.content) {
+      this.checkpoint!.content = content;
+    }
     this.checkpoint!.lastUpdateTime = Date.now();
     this.checkpoint!.progressCount++;
     if (conversationId) {

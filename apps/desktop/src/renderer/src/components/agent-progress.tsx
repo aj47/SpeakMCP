@@ -948,11 +948,12 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
   const agentProgressById = useAgentStore((s) => s.agentProgressById)
 
   // Helper to toggle expansion state for a specific item
-  const toggleItemExpansion = (itemKey: string) => {
+  // Accepts currentExpanded to handle items that default to expanded (like tool executions)
+  // when they haven't been explicitly toggled yet
+  const toggleItemExpansion = (itemKey: string, currentExpanded: boolean) => {
     setExpandedItems(prev => {
-      const from = !!prev[itemKey]
-      const to = !from
-      logExpand("AgentProgress", "toggle", { itemKey, from, to })
+      const to = !currentExpanded
+      logExpand("AgentProgress", "toggle", { itemKey, from: currentExpanded, to })
       return {
         ...prev,
         [itemKey]: to,
@@ -1653,7 +1654,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
                             hasErrors={hasErrors}
                             wasStopped={wasStopped}
                             isExpanded={isExpanded}
-                            onToggleExpand={() => toggleItemExpansion(itemKey)}
+                            onToggleExpand={() => toggleItemExpansion(itemKey, isExpanded)}
                             variant="tile"
                           />
                         )
@@ -1677,7 +1678,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
                             key={itemKey}
                             execution={item.data}
                             isExpanded={isExpanded}
-                            onToggleExpand={() => toggleItemExpansion(itemKey)}
+                            onToggleExpand={() => toggleItemExpansion(itemKey, isExpanded)}
                           />
                         )
                       }
@@ -1838,7 +1839,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
                       hasErrors={hasErrors}
                       wasStopped={wasStopped}
                       isExpanded={isExpanded}
-                      onToggleExpand={() => toggleItemExpansion(itemKey)}
+                      onToggleExpand={() => toggleItemExpansion(itemKey, isExpanded)}
                       variant={variant}
                     />
                   )
@@ -1872,7 +1873,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
                       key={itemKey}
                       execution={item.data}
                       isExpanded={isExpanded}
-                      onToggleExpand={() => toggleItemExpansion(itemKey)}
+                      onToggleExpand={() => toggleItemExpansion(itemKey, isExpanded)}
                     />
                   )
                 }

@@ -258,6 +258,8 @@ export default function ChatScreen({ route, navigation }: any) {
   const [liveTranscript, setLiveTranscript] = useState('');
   const [debugInfo, setDebugInfo] = useState<string>('');
   const [expandedMessages, setExpandedMessages] = useState<Record<number, boolean>>({});
+  // Track the last failed message for retry functionality
+  const [lastFailedMessage, setLastFailedMessage] = useState<string | null>(null);
 
   // Auto-scroll state and ref for mobile chat
   const scrollViewRef = useRef<ScrollView>(null);
@@ -593,6 +595,8 @@ export default function ChatScreen({ route, navigation }: any) {
     console.log('[ChatScreen] Sending message:', text);
 
     setDebugInfo(`Starting request to ${config.baseUrl}...`);
+    // Clear any previous failed message when starting a new send
+    setLastFailedMessage(null);
 
     const userMsg: ChatMessage = { role: 'user', content: text };
     const messageCountBeforeTurn = messages.length;
@@ -782,8 +786,20 @@ export default function ChatScreen({ route, navigation }: any) {
         errorMessage = `Connection lost. Attempted ${recoveryState.retryCount} reconnections. ${e.message}`;
       }
 
+      // Save the failed message for retry
+      setLastFailedMessage(text);
+
+      // Check if there's partial content we can show
+      const partialContent = client.getPartialContent();
+      const hasPartialContent = partialContent && partialContent.length > 0;
+
       setDebugInfo(`Error: ${errorMessage}`);
-      setMessages((m) => [...m, { role: 'assistant', content: `Error: ${errorMessage}\n\nTip: Check your internet connection and try again.` }]);
+      setMessages((m) => {
+        const errorContent = hasPartialContent
+          ? `${partialContent}\n\n---\n⚠️ Connection lost. Partial response shown above.\n\nError: ${errorMessage}`
+          : `Error: ${errorMessage}\n\nTip: Check your internet connection and tap "Retry" to try again.`;
+        return [...m, { role: 'assistant', content: errorContent }];
+      });
     } finally {
       console.log('[ChatScreen] Chat request finished, requestId:', thisRequestId);
       // Only reset UI states if this request is still the active one
@@ -1381,6 +1397,59 @@ export default function ChatScreen({ route, navigation }: any) {
             )}
           </View>
         )}
+        {/* Connection status banner - shows when reconnecting */}
+        {connectionState && connectionState.status === 'reconnecting' && (
+          <View style={[styles.connectionBanner, styles.connectionBannerReconnecting]}>
+            <View style={styles.connectionBannerContent}>
+              <Text style={styles.connectionBannerIcon}>🔄</Text>
+              <View style={styles.connectionBannerTextContainer}>
+                <Text style={styles.connectionBannerText}>
+                  Reconnecting... (attempt {connectionState.retryCount})
+                </Text>
+                {connectionState.lastError && (
+                  <Text style={styles.connectionBannerSubtext} numberOfLines={1}>
+                    {connectionState.lastError}
+                  </Text>
+                )}
+              </View>
+            </View>
+          </View>
+        )}
+        {/* Retry banner - shows when there's a failed message that can be retried */}
+        {lastFailedMessage && !responding && (
+          <View style={[styles.connectionBanner, styles.connectionBannerFailed]}>
+            <View style={styles.connectionBannerContent}>
+              <Text style={styles.connectionBannerIcon}>⚠️</Text>
+              <View style={styles.connectionBannerTextContainer}>
+                <Text style={styles.connectionBannerText}>Message failed to send</Text>
+                <Text style={styles.connectionBannerSubtext} numberOfLines={1}>
+                  Tap retry to try again
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={styles.retryButton}
+                onPress={() => {
+                  const messageToRetry = lastFailedMessage;
+                  setLastFailedMessage(null);
+                  // Remove the last error message before retrying
+                  setMessages((m) => {
+                    // Remove the last assistant message (error) and user message
+                    const newMessages = [...m];
+                    if (newMessages.length >= 2) {
+                      newMessages.pop(); // Remove error message
+                      newMessages.pop(); // Remove user message
+                    }
+                    return newMessages;
+                  });
+                  send(messageToRetry);
+                }}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.retryButtonText}>Retry</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
         <View style={[styles.inputRow, { paddingBottom: 12 + insets.bottom }]}>
           <TouchableOpacity
             style={[styles.ttsToggle, ttsEnabled && styles.ttsToggleOn]}
@@ -1622,20 +1691,53 @@ function createStyles(theme: Theme) {
       fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
     },
     connectionBanner: {
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      marginHorizontal: spacing.md,
+      marginBottom: spacing.sm,
+      borderRadius: radius.md,
+      borderWidth: 1,
+    },
+    connectionBannerReconnecting: {
+      backgroundColor: 'rgba(59, 130, 246, 0.1)',
+      borderColor: 'rgba(59, 130, 246, 0.3)',
+    },
+    connectionBannerFailed: {
+      backgroundColor: 'rgba(239, 68, 68, 0.1)',
+      borderColor: 'rgba(239, 68, 68, 0.3)',
+    },
+    connectionBannerContent: {
       flexDirection: 'row',
       alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: 'rgba(245, 158, 11, 0.15)',
-      padding: spacing.sm,
-      margin: spacing.sm,
-      borderRadius: radius.lg,
-      borderWidth: 1,
-      borderColor: 'rgba(245, 158, 11, 0.3)',
+    },
+    connectionBannerIcon: {
+      fontSize: 16,
+      marginRight: spacing.sm,
+    },
+    connectionBannerTextContainer: {
+      flex: 1,
     },
     connectionBannerText: {
       fontSize: 13,
-      color: '#f59e0b',
       fontWeight: '500',
+      color: theme.colors.foreground,
+    },
+    connectionBannerSubtext: {
+      fontSize: 11,
+      color: theme.colors.mutedForeground,
+      marginTop: 2,
+    },
+    retryButton: {
+      backgroundColor: theme.colors.primary,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      borderRadius: radius.md,
+      marginLeft: spacing.sm,
+    },
+    retryButtonText: {
+      color: theme.colors.primaryForeground,
+      fontSize: 13,
+      fontWeight: '600',
     },
     scrollToBottomButton: {
       position: 'absolute',

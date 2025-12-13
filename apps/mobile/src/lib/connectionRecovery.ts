@@ -28,6 +28,25 @@ export type RecoveryState = {
   retryCount: number;
   lastError?: string;
   isAppActive: boolean;
+  /** Partial content received before connection was lost (for message recovery) */
+  partialContent?: string;
+  /** Conversation ID for resuming after reconnection */
+  conversationId?: string;
+};
+
+/**
+ * Checkpoint for tracking streaming progress during a request.
+ * Used to recover partial responses when network fails mid-stream.
+ */
+export type StreamingCheckpoint = {
+  /** Partial content accumulated so far */
+  content: string;
+  /** Conversation ID from server (if received) */
+  conversationId?: string;
+  /** Timestamp of last received data */
+  lastUpdateTime: number;
+  /** Number of progress updates received */
+  progressCount: number;
 };
 
 export type OnStatusChange = (state: RecoveryState) => void;
@@ -88,6 +107,7 @@ export class ConnectionRecoveryManager {
   private appStateSubscription: ReturnType<typeof AppState.addEventListener> | null = null;
   private heartbeatTimer: NodeJS.Timeout | null = null;
   private lastHeartbeat: number = Date.now();
+  private checkpoint: StreamingCheckpoint | null = null;
 
   constructor(
     config: Partial<ConnectionRecoveryConfig> = {},
@@ -100,7 +120,7 @@ export class ConnectionRecoveryManager {
       retryCount: 0,
       isAppActive: AppState.currentState === 'active',
     };
-    
+
     this.setupAppStateListener();
   }
 
@@ -203,12 +223,20 @@ export class ConnectionRecoveryManager {
   }
 
   markFailed(error: string): void {
+    // Preserve partial content in state when marking as failed
+    if (this.checkpoint?.content) {
+      this.state.partialContent = this.checkpoint.content;
+      this.state.conversationId = this.checkpoint.conversationId;
+    }
     this.updateStatus('failed', error);
   }
 
   reset(): void {
     this.state.retryCount = 0;
     this.state.lastError = undefined;
+    this.state.partialContent = undefined;
+    this.state.conversationId = undefined;
+    this.checkpoint = null;
     this.updateStatus('connecting');
   }
 
@@ -216,6 +244,75 @@ export class ConnectionRecoveryManager {
     this.stopHeartbeat();
     this.appStateSubscription?.remove();
     this.appStateSubscription = null;
+    this.checkpoint = null;
+  }
+
+  // Checkpoint management for message recovery
+
+  /**
+   * Initialize a new streaming checkpoint at the start of a request.
+   */
+  initCheckpoint(): void {
+    this.checkpoint = {
+      content: '',
+      conversationId: undefined,
+      lastUpdateTime: Date.now(),
+      progressCount: 0,
+    };
+  }
+
+  /**
+   * Update the checkpoint with new streaming content.
+   * Call this whenever new content is received during streaming.
+   */
+  updateCheckpoint(content: string, conversationId?: string): void {
+    if (!this.checkpoint) {
+      this.initCheckpoint();
+    }
+    this.checkpoint!.content = content;
+    this.checkpoint!.lastUpdateTime = Date.now();
+    this.checkpoint!.progressCount++;
+    if (conversationId) {
+      this.checkpoint!.conversationId = conversationId;
+    }
+  }
+
+  /**
+   * Get the current checkpoint data.
+   * Returns null if no checkpoint exists.
+   */
+  getCheckpoint(): StreamingCheckpoint | null {
+    return this.checkpoint ? { ...this.checkpoint } : null;
+  }
+
+  /**
+   * Clear the checkpoint (call after successful completion).
+   */
+  clearCheckpoint(): void {
+    this.checkpoint = null;
+    this.state.partialContent = undefined;
+    this.state.conversationId = undefined;
+  }
+
+  /**
+   * Check if there's recoverable partial content from a failed request.
+   */
+  hasRecoverableContent(): boolean {
+    return !!(this.state.partialContent && this.state.partialContent.length > 0);
+  }
+
+  /**
+   * Get the partial content from a failed request (for display to user).
+   */
+  getPartialContent(): string | undefined {
+    return this.state.partialContent;
+  }
+
+  /**
+   * Get the conversation ID from a failed request (for retry).
+   */
+  getRecoveryConversationId(): string | undefined {
+    return this.state.conversationId;
   }
 }
 

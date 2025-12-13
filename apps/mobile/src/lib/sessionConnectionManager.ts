@@ -211,23 +211,42 @@ export class SessionConnectionManager {
   /**
    * Update the client configuration for all connections
    * This will recreate connections with the new config
+   * Note: This preserves UI subscriptions (sessionCallbacks) so mounted components
+   * will continue to receive updates when new connections are created
    */
   updateClientConfig(newConfig: OpenAIConfig): void {
     this.clientConfig = newConfig;
-    // Clear all existing connections - they'll be recreated with new config on next access
-    this.cleanupAll();
+    // Clear connections only - preserve callbacks so UI components continue to work
+    // The callbacks are managed by component lifecycle (via unsubscribe on unmount),
+    // not connection lifecycle. They'll start receiving updates when new connections
+    // are created for each session.
+    this.cleanupConnectionsOnly();
   }
 
   /**
-   * Cleanup all connections
+   * Internal method to cleanup connections without clearing callbacks.
+   * Used by updateClientConfig to preserve UI subscriptions during config changes.
+   */
+  private cleanupConnectionsOnly(): void {
+    for (const connection of this.connections.values()) {
+      connection.client.cleanup();
+    }
+    this.connections.clear();
+    console.log('[SessionConnectionManager] Connections cleared (callbacks preserved)');
+  }
+
+  /**
+   * Cleanup all connections and callbacks.
+   * Use this for full teardown (e.g., app unmount).
    */
   cleanupAll(): void {
     for (const connection of this.connections.values()) {
       connection.client.cleanup();
     }
     this.connections.clear();
-    // Also clear all session callbacks to prevent memory leaks from stale UI subscriptions
+    // Clear all session callbacks to prevent memory leaks from stale UI subscriptions
     this.sessionCallbacks.clear();
+    console.log('[SessionConnectionManager] Full cleanup complete (connections and callbacks)');
   }
 
   /**

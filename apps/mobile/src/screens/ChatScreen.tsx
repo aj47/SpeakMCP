@@ -825,7 +825,8 @@ export default function ChatScreen({ route, navigation }: any) {
       });
 
       // Guard: skip error message if session has changed since request started
-      if (sessionStore.currentSessionId !== requestSessionId) {
+      // Use currentSessionIdRef.current to avoid stale closure issue (useSessions returns new object each render)
+      if (currentSessionIdRef.current !== requestSessionId) {
         console.log('[ChatScreen] Session changed during request, skipping error message');
         return;
       }

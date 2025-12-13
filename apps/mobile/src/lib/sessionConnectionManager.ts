@@ -56,21 +56,27 @@ export class SessionConnectionManager {
   /**
    * Get or create a connection for a session.
    * If the session already has a connection, it will be reused.
-   * If max connections is reached, the least recently used connection will be evicted.
+   * If max connections is reached, the least recently used inactive connection will be evicted.
+   * If all connections are active (streaming), allows temporary overflow to avoid disrupting streams.
    */
   getOrCreateConnection(sessionId: string): SessionConnection {
     // Check if connection already exists
     let connection = this.connections.get(sessionId);
-    
+
     if (connection) {
       // Update last accessed time
       connection.lastAccessedAt = Date.now();
       return connection;
     }
 
-    // Evict LRU connection if at max capacity
+    // Try to evict LRU inactive connection if at max capacity
     if (this.connections.size >= this.maxConnections) {
-      this.evictLRUConnection();
+      const evicted = this.evictLRUConnection();
+      if (!evicted) {
+        // All connections are active - allow temporary overflow to protect streams
+        // This will resolve when streams complete and connections become inactive
+        console.log('[SessionConnectionManager] Allowing temporary overflow due to active streams, current count:', this.connections.size);
+      }
     }
 
     // Create new connection
@@ -207,6 +213,8 @@ export class SessionConnectionManager {
       connection.client.cleanup();
     }
     this.connections.clear();
+    // Also clear all session callbacks to prevent memory leaks from stale UI subscriptions
+    this.sessionCallbacks.clear();
   }
 
   /**
@@ -223,33 +231,33 @@ export class SessionConnectionManager {
     return Array.from(this.connections.keys());
   }
 
-  private evictLRUConnection(): void {
+  /**
+   * Attempts to evict the least recently used inactive connection.
+   * Returns true if a connection was evicted, false if all connections are active.
+   * This protects active streaming connections from being aborted unexpectedly.
+   */
+  private evictLRUConnection(): boolean {
     let lruSessionId: string | null = null;
     let lruTime = Infinity;
 
-    // Find the least recently used inactive connection
+    // Find the least recently used INACTIVE connection only
+    // We do NOT evict active connections to prevent stream crashes (fixes PR review feedback)
     for (const [sessionId, connection] of this.connections) {
-      // Prefer evicting inactive connections
       if (!connection.isActive && connection.lastAccessedAt < lruTime) {
         lruTime = connection.lastAccessedAt;
         lruSessionId = sessionId;
       }
     }
 
-    // If all connections are active, evict the oldest one anyway
-    if (!lruSessionId) {
-      for (const [sessionId, connection] of this.connections) {
-        if (connection.lastAccessedAt < lruTime) {
-          lruTime = connection.lastAccessedAt;
-          lruSessionId = sessionId;
-        }
-      }
+    if (lruSessionId) {
+      console.log('[SessionConnectionManager] Evicting LRU inactive connection:', lruSessionId);
+      this.removeConnection(lruSessionId);
+      return true;
     }
 
-    if (lruSessionId) {
-      console.log('[SessionConnectionManager] Evicting LRU connection:', lruSessionId);
-      this.removeConnection(lruSessionId);
-    }
+    // All connections are active - don't evict any to protect in-flight streams
+    console.warn('[SessionConnectionManager] All connections are active, cannot evict without disrupting streams');
+    return false;
   }
 }
 

@@ -1016,7 +1016,7 @@ export function MCPConfigManager({
 
   const handleImportFromText = async (text: string): Promise<boolean> => {
     try {
-      // Parse the JSON to ensure it's valid before sending to validation
+      // Attempt to format the JSON for consistency (falls back to original text if invalid)
       const formattedJson = formatJsonPreview(text)
 
       const importedConfig = await tipcClient.validateMcpConfigText({ text: formattedJson })

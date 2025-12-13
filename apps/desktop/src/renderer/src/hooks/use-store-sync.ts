@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { rendererHandlers, tipcClient } from '@renderer/lib/tipc-client'
 import { useAgentStore, useConversationStore } from '@renderer/stores'
-import { AgentProgressUpdate, Conversation, ConversationMessage } from '@shared/types'
+import { AgentProgressUpdate, Conversation, ConversationMessage, QueuedMessage } from '@shared/types'
 import { logUI, logStateChange } from '@renderer/lib/debug'
 import { useSaveConversationMutation } from '@renderer/lib/queries'
 
@@ -88,8 +88,8 @@ export function useStoreSync() {
 
   // Listen for message queue updates
   useEffect(() => {
-    const unlisten = (rendererHandlers as any).onMessageQueueUpdate?.listen?.(
-      (data: { conversationId: string; queue: any[] }) => {
+    const unlisten = rendererHandlers.onMessageQueueUpdate.listen(
+      (data: { conversationId: string; queue: QueuedMessage[] }) => {
         logUI('[useStoreSync] Message queue update:', data.conversationId, data.queue.length)
         updateMessageQueue(data.conversationId, data.queue)
       }

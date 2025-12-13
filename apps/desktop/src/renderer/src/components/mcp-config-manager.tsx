@@ -117,6 +117,7 @@ function ServerDialog({ server, onSave, onCancel, onImportFromFile, onImportFrom
   useEffect(() => {
     setName(server?.name || "")
     setActiveTab('manual')
+    setJsonInputText("")  // Clear pasted JSON to prevent data/secrets from persisting across dialog close/open
     setTransport(server?.config.transport || "stdio")
 
     // Combine command and args for editing, or reset to empty

@@ -24,9 +24,11 @@ export interface SessionStore {
   getCurrentSession: () => Session | null;
   getSessionList: () => SessionListItem[];
   setMessages: (messages: ChatMessage[]) => Promise<void>;
+  setMessagesForSession: (sessionId: string, messages: ChatMessage[]) => Promise<void>;
 
   // Server conversation ID management (for continuing conversations with SpeakMCP server)
   setServerConversationId: (serverConversationId: string) => Promise<void>;
+  setServerConversationIdForSession: (sessionId: string, serverConversationId: string) => Promise<void>;
   getServerConversationId: () => string | undefined;
 }
 
@@ -347,6 +349,55 @@ export function useSessions(): SessionStore {
     });
   }, [currentSessionId, queueSave]);
 
+  // Set messages for a specific session (allows saving to a session other than current)
+  // This is used when a background request completes after the user has switched sessions
+  const setMessagesForSession = useCallback(async (sessionId: string, messages: ChatMessage[]) => {
+    // Compute the new sessions array BEFORE setSessions to guarantee the value we save
+    // is exactly what we intend to set (same pattern as setMessages)
+    const currentSessions = sessionsRef.current;
+    const now = Date.now();
+
+    // Pre-compute session messages for consistency
+    const sessionMessages = messages.map((m, idx) => ({
+      id: generateMessageId(),
+      role: m.role as 'system' | 'user' | 'assistant',
+      content: m.content || '',
+      timestamp: now + idx,
+      toolCalls: m.toolCalls,
+      toolResults: m.toolResults,
+    }));
+
+    const firstUserMsg = messages.find(m => m.role === 'user');
+
+    const sessionsToSave = currentSessions.map(session => {
+      if (session.id !== sessionId) return session;
+
+      // Update title from first user message if needed
+      let title = session.title;
+      if (title === 'New Chat' && firstUserMsg?.content) {
+        title = generateSessionTitle(firstUserMsg.content);
+      }
+
+      return {
+        ...session,
+        title,
+        updatedAt: now,
+        messages: sessionMessages,
+      };
+    });
+
+    // Update ref synchronously so any subsequent operations see the new state immediately
+    sessionsRef.current = sessionsToSave;
+
+    // Use functional update for state
+    setSessions(() => sessionsToSave);
+
+    // Queue async save with the pre-computed sessions array
+    queueSave(async () => {
+      await saveSessions(sessionsToSave);
+    });
+  }, [queueSave]);
+
   // Set the server-side conversation ID for the current session (fixes #501)
   const setServerConversationId = useCallback(async (serverConversationId: string) => {
     if (!currentSessionId) return;
@@ -379,6 +430,36 @@ export function useSessions(): SessionStore {
     });
   }, [currentSessionId, queueSave]);
 
+  // Set the server-side conversation ID for a specific session (allows saving to a session other than current)
+  // This is used when a background request completes after the user has switched sessions
+  const setServerConversationIdForSession = useCallback(async (sessionId: string, serverConversationId: string) => {
+    // Compute the new sessions array BEFORE setSessions to guarantee the value we save
+    // is exactly what we intend to set (same pattern as setServerConversationId)
+    const currentSessions = sessionsRef.current;
+    const now = Date.now();
+
+    const sessionsToSave = currentSessions.map(session => {
+      if (session.id !== sessionId) return session;
+      return {
+        ...session,
+        serverConversationId,
+        updatedAt: now,
+      };
+    });
+
+    // Update ref synchronously so any subsequent operations see the new state immediately
+    sessionsRef.current = sessionsToSave;
+
+    // Use functional update for state - return the pre-computed sessionsToSave directly
+    // to guarantee state matches what we're saving (same pattern as addMessage)
+    setSessions(() => sessionsToSave);
+
+    // Queue async save with the pre-computed sessions array (serialized with other operations)
+    queueSave(async () => {
+      await saveSessions(sessionsToSave);
+    });
+  }, [queueSave]);
+
   // Get the server-side conversation ID for the current session
   const getServerConversationId = useCallback((): string | undefined => {
     const session = getCurrentSession();
@@ -398,7 +479,9 @@ export function useSessions(): SessionStore {
     getCurrentSession,
     getSessionList,
     setMessages,
+    setMessagesForSession,
     setServerConversationId,
+    setServerConversationIdForSession,
     getServerConversationId,
   };
 }

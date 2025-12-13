@@ -734,16 +734,17 @@ export default function ChatScreen({ route, navigation }: any) {
       console.log('[ChatScreen] Chat completed, conversationId:', response.conversationId);
       setDebugInfo(`Completed!`);
 
-      // Guard: skip final updates if session has changed since request started
+      // Guard: skip UI updates if session has changed, BUT still persist to the original session
       // Use currentSessionIdRef.current to avoid stale closure issue (useSessions returns new object each render)
-      if (currentSessionIdRef.current !== requestSessionId) {
-        console.log('[ChatScreen] Session changed during request, skipping final message updates');
-        return;
+      const sessionChanged = currentSessionIdRef.current !== requestSessionId;
+      if (sessionChanged) {
+        console.log('[ChatScreen] Session changed during request, persisting to original session without UI update');
       }
 
-      // Guard: skip final updates if this request is no longer the active one
+      // Guard: skip final updates if this request is no longer the active one (within same session)
       // This prevents older, superseded requests from clobbering messages when multiple sends occur within the same session
-      if (activeRequestIdRef.current !== thisRequestId) {
+      // Note: This guard only applies when session hasn't changed - if session changed, we still want to persist
+      if (!sessionChanged && activeRequestIdRef.current !== thisRequestId) {
         console.log('[ChatScreen] Request superseded, skipping final message updates', {
           thisRequestId,
           activeRequestId: activeRequestIdRef.current
@@ -751,8 +752,13 @@ export default function ChatScreen({ route, navigation }: any) {
         return;
       }
 
+      // Save conversation ID to the appropriate session
       if (response.conversationId) {
-        await sessionStore.setServerConversationId(response.conversationId);
+        if (sessionChanged && requestSessionId) {
+          await sessionStore.setServerConversationIdForSession(requestSessionId, response.conversationId);
+        } else {
+          await sessionStore.setServerConversationId(response.conversationId);
+        }
       }
 
       if (response.conversationHistory && response.conversationHistory.length > 0) {
@@ -783,34 +789,51 @@ export default function ChatScreen({ route, navigation }: any) {
         console.log('[ChatScreen] newMessages roles:', newMessages.map(m => `${m.role}(toolCalls:${m.toolCalls?.length || 0},toolResults:${m.toolResults?.length || 0})`).join(', '));
         console.log('[ChatScreen] messageCountBeforeTurn:', messageCountBeforeTurn);
 
-        setMessages((m) => {
-          console.log('[ChatScreen] Current messages before update:', m.length);
-          const beforePlaceholder = m.slice(0, messageCountBeforeTurn + 1);
-          console.log('[ChatScreen] beforePlaceholder count:', beforePlaceholder.length);
-          const result = [...beforePlaceholder, ...newMessages];
-          console.log('[ChatScreen] Final messages count:', result.length);
-          return result;
-        });
+        if (sessionChanged && requestSessionId) {
+          // Persist to the original session without updating UI state
+          console.log('[ChatScreen] Persisting completed response to background session:', requestSessionId);
+          // Build the final messages array: messages before this turn + user message + new assistant messages
+          const messagesBeforeTurn = messages.slice(0, messageCountBeforeTurn);
+          const finalMessages = [...messagesBeforeTurn, userMsg, ...newMessages];
+          await sessionStore.setMessagesForSession(requestSessionId, finalMessages);
+        } else {
+          // Normal case: update UI state (persistence happens via useEffect)
+          setMessages((m) => {
+            console.log('[ChatScreen] Current messages before update:', m.length);
+            const beforePlaceholder = m.slice(0, messageCountBeforeTurn + 1);
+            console.log('[ChatScreen] beforePlaceholder count:', beforePlaceholder.length);
+            const result = [...beforePlaceholder, ...newMessages];
+            console.log('[ChatScreen] Final messages count:', result.length);
+            return result;
+          });
+        }
       } else if (finalText) {
         console.log('[ChatScreen] FALLBACK: No conversationHistory, using finalText only. response.conversationHistory:', response.conversationHistory);
-        setMessages((m) => {
-          const copy = [...m];
-          for (let i = copy.length - 1; i >= 0; i--) {
-            if (copy[i].role === 'assistant') {
-              copy[i] = { ...copy[i], content: finalText };
-              break;
+        if (sessionChanged && requestSessionId) {
+          // Persist to the original session without updating UI state
+          console.log('[ChatScreen] Persisting fallback response to background session:', requestSessionId);
+          const messagesBeforeTurn = messages.slice(0, messageCountBeforeTurn);
+          const finalMessages = [...messagesBeforeTurn, userMsg, { role: 'assistant' as const, content: finalText }];
+          await sessionStore.setMessagesForSession(requestSessionId, finalMessages);
+        } else {
+          // Normal case: update UI state
+          setMessages((m) => {
+            const copy = [...m];
+            for (let i = copy.length - 1; i >= 0; i--) {
+              if (copy[i].role === 'assistant') {
+                copy[i] = { ...copy[i], content: finalText };
+                break;
+              }
             }
-          }
-          return copy;
-        });
+            return copy;
+          });
+        }
       } else {
         console.log('[ChatScreen] WARNING: No conversationHistory and no finalText!');
       }
 
-      if (response.conversationId) {
-        console.log('[ChatScreen] Saving server conversation ID:', response.conversationId);
-        sessionStore.setServerConversationId(response.conversationId);
-      }
+      // Note: Removed duplicate setServerConversationId call that was after the message handling
+      // The conversation ID is now saved once at the beginning of this block
 
       if (finalText && config.ttsEnabled !== false) {
         const processedText = preprocessTextForTTS(finalText);

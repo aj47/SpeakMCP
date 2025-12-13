@@ -41,8 +41,22 @@ class ProfileService {
       logApp("Error loading profiles:", error)
     }
 
+    // For new installs, initialize the default profile with all MCPs disabled
+    // This aligns with createProfile() behavior - users opt-in to what they need
+    const config = configStore.get()
+    const mcpConfig = config.mcpConfig
+    const allServerNames = Object.keys(mcpConfig?.mcpServers || {})
+
+    const defaultProfileWithMcpConfig: Profile = {
+      ...DEFAULT_PROFILES[0],
+      mcpServerConfig: {
+        disabledServers: allServerNames,
+        disabledTools: [],
+      },
+    }
+
     this.profilesData = {
-      profiles: DEFAULT_PROFILES,
+      profiles: [defaultProfileWithMcpConfig],
       currentProfileId: "default",
     }
     this.saveProfiles()
@@ -320,8 +334,21 @@ class ProfileService {
   }
 
   resetToDefaults(): void {
+    // Reset to defaults with all MCPs disabled, consistent with createProfile() and first run behavior
+    const config = configStore.get()
+    const mcpConfig = config.mcpConfig
+    const allServerNames = Object.keys(mcpConfig?.mcpServers || {})
+
+    const defaultProfileWithMcpConfig: Profile = {
+      ...DEFAULT_PROFILES[0],
+      mcpServerConfig: {
+        disabledServers: allServerNames,
+        disabledTools: [],
+      },
+    }
+
     this.profilesData = {
-      profiles: DEFAULT_PROFILES,
+      profiles: [defaultProfileWithMcpConfig],
       currentProfileId: "default",
     }
     this.saveProfiles()

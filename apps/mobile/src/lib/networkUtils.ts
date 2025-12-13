@@ -126,11 +126,21 @@ export async function withRetry<T>(
   let lastError: Error | null = null;
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    // Check if abort was requested before attempting
+    if (signal?.aborted) {
+      throw new Error('Operation aborted');
+    }
+
     try {
       return await operation(signal);
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
-      
+
+      // Don't retry if abort was requested
+      if (signal?.aborted) {
+        throw lastError;
+      }
+
       // Don't retry if not a retryable error or we've exhausted retries
       if (!isRetryableError(error) || attempt >= maxRetries) {
         throw lastError;
@@ -138,10 +148,15 @@ export async function withRetry<T>(
 
       // Notify about retry
       onRetry?.(attempt + 1, lastError);
-      
-      // Wait before retrying
+
+      // Wait before retrying (but check abort during wait)
       const delayMs = calculateBackoffDelay(attempt, baseDelayMs, maxDelayMs);
       console.log(`[NetworkUtils] Retry ${attempt + 1}/${maxRetries} after ${Math.round(delayMs)}ms`);
+
+      // Check abort before waiting
+      if (signal?.aborted) {
+        throw new Error('Operation aborted');
+      }
       await delay(delayMs);
     }
   }

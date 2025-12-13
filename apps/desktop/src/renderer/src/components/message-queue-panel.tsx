@@ -263,6 +263,11 @@ export function MessageQueuePanel({
     },
   })
 
+  // Check if any message is currently being processed
+  // Disable Clear All when processing to prevent confusing UX where user thinks
+  // they cancelled a running prompt while it actually continues running
+  const hasProcessingMessage = messages.some((m) => m.status === "processing")
+
   if (messages.length === 0) {
     return null
   }
@@ -279,8 +284,8 @@ export function MessageQueuePanel({
           size="icon"
           className="h-4 w-4 ml-auto"
           onClick={() => clearMutation.mutate()}
-          disabled={clearMutation.isPending}
-          title="Clear queue"
+          disabled={clearMutation.isPending || hasProcessingMessage}
+          title={hasProcessingMessage ? "Cannot clear while processing" : "Clear queue"}
         >
           <Trash2 className="h-3 w-3" />
         </Button>
@@ -308,7 +313,8 @@ export function MessageQueuePanel({
           size="sm"
           className="h-6 text-xs"
           onClick={() => clearMutation.mutate()}
-          disabled={clearMutation.isPending}
+          disabled={clearMutation.isPending || hasProcessingMessage}
+          title={hasProcessingMessage ? "Cannot clear while processing" : undefined}
         >
           Clear All
         </Button>

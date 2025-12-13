@@ -187,6 +187,9 @@ export class OpenAIClient {
       let finalContent = '';
       let conversationId: string | undefined;
       let conversationHistory: ConversationHistoryMessage[] | undefined;
+      // Track whether promise has been settled to prevent race conditions
+      // between error and close listeners
+      let settled = false;
 
       console.log('[OpenAIClient] Creating EventSource for SSE streaming');
 
@@ -244,6 +247,8 @@ export class OpenAIClient {
 
           if (obj.type === 'error' && obj.data) {
             console.error('[OpenAIClient] Error event:', obj.data.message);
+            if (settled) return;
+            settled = true;
             es.close();
             reject(new Error(obj.data.message || 'Server error'));
             return;
@@ -263,6 +268,8 @@ export class OpenAIClient {
 
       es.addEventListener('error', (event) => {
         console.error('[OpenAIClient] SSE error:', event);
+        if (settled) return;
+        settled = true;
         es.close();
 
         if (event.type === 'error') {
@@ -275,13 +282,18 @@ export class OpenAIClient {
       // 'done' event fires when server closes the connection (stream complete)
       es.addEventListener('done', () => {
         console.log('[OpenAIClient] SSE done (server closed), content length:', finalContent.length);
+        if (settled) return;
+        settled = true;
         es.close();
         resolve({ content: finalContent, conversationId, conversationHistory });
       });
 
       // 'close' event fires when client closes the connection
+      // Only resolve if not already settled by error or done handlers
       es.addEventListener('close', () => {
         console.log('[OpenAIClient] SSE connection closed, content length:', finalContent.length);
+        if (settled) return;
+        settled = true;
         resolve({ content: finalContent, conversationId, conversationHistory });
       });
     });

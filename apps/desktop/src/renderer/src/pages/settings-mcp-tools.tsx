@@ -3,7 +3,6 @@ import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { tipcClient } from "@renderer/lib/tipc-client"
 import { Config, MCPConfig } from "@shared/types"
 import { MCPConfigManager } from "@renderer/components/mcp-config-manager"
-import { MCPToolManager } from "@renderer/components/mcp-tool-manager"
 import { ProfileBadge } from "@renderer/components/profile-badge"
 
 export function Component() {
@@ -39,15 +38,11 @@ export function Component() {
           <ProfileBadge />
         </div>
 
-        <div className="min-w-0 space-y-8 border-t pt-6">
+        <div className="min-w-0 border-t pt-6">
           <MCPConfigManager
             config={config.mcpConfig || { mcpServers: {} }}
             onConfigChange={updateMcpConfig}
           />
-
-          <div className="min-w-0 border-t pt-6">
-            <MCPToolManager />
-          </div>
         </div>
       </div>
     </div>

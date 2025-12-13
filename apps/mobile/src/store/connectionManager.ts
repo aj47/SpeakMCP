@@ -68,15 +68,23 @@ export function useConnectionManagerProvider(clientConfig: OpenAIConfig): Connec
     return managerRef.current;
   }, []); // Only create once
 
-  // Update config when it changes
+  // Update config when it changes (including initial load after async config is ready)
+  // This fixes the issue where the manager could be created with default/empty config
+  // before the real async config loads (PR review comment #6)
   useEffect(() => {
+    const isFirstConfig = prevConfigRef.current === null;
     const configChanged = prevConfigRef.current && (
       prevConfigRef.current.baseUrl !== clientConfig.baseUrl ||
       prevConfigRef.current.apiKey !== clientConfig.apiKey ||
       prevConfigRef.current.model !== clientConfig.model
     );
 
-    if (configChanged) {
+    if (isFirstConfig) {
+      // First config application - update the manager to ensure it has the real config
+      // This handles the race condition where manager was created before async config loaded
+      console.log('[ConnectionManager] Applying initial config');
+      manager.updateClientConfig(clientConfig);
+    } else if (configChanged) {
       console.log('[ConnectionManager] Config changed, updating connections');
       manager.updateClientConfig(clientConfig);
     }

@@ -2067,6 +2067,7 @@ export const router = {
         // Apply custom system prompt if it exists, otherwise clear it to use default
         mcpCustomSystemPrompt: profile.systemPrompt || "",
         // Apply model config if it exists
+        // Agent/MCP Tools settings
         ...(profile.modelConfig?.mcpToolsProviderId && {
           mcpToolsProviderId: profile.modelConfig.mcpToolsProviderId,
         }),
@@ -2081,6 +2082,27 @@ export const router = {
         }),
         ...(profile.modelConfig?.currentModelPresetId && {
           currentModelPresetId: profile.modelConfig.currentModelPresetId,
+        }),
+        // STT Provider settings
+        ...(profile.modelConfig?.sttProviderId && {
+          sttProviderId: profile.modelConfig.sttProviderId,
+        }),
+        // Transcript Post-Processing settings
+        ...(profile.modelConfig?.transcriptPostProcessingProviderId && {
+          transcriptPostProcessingProviderId: profile.modelConfig.transcriptPostProcessingProviderId,
+        }),
+        ...(profile.modelConfig?.transcriptPostProcessingOpenaiModel && {
+          transcriptPostProcessingOpenaiModel: profile.modelConfig.transcriptPostProcessingOpenaiModel,
+        }),
+        ...(profile.modelConfig?.transcriptPostProcessingGroqModel && {
+          transcriptPostProcessingGroqModel: profile.modelConfig.transcriptPostProcessingGroqModel,
+        }),
+        ...(profile.modelConfig?.transcriptPostProcessingGeminiModel && {
+          transcriptPostProcessingGeminiModel: profile.modelConfig.transcriptPostProcessingGeminiModel,
+        }),
+        // TTS Provider settings
+        ...(profile.modelConfig?.ttsProviderId && {
+          ttsProviderId: profile.modelConfig.ttsProviderId,
         }),
       }
       configStore.save(updatedConfig)
@@ -2142,11 +2164,21 @@ export const router = {
       const { profileService } = await import("./profile-service")
       const config = configStore.get()
       return profileService.saveCurrentModelStateToProfile(input.profileId, {
+        // Agent/MCP Tools settings
         mcpToolsProviderId: config.mcpToolsProviderId,
         mcpToolsOpenaiModel: config.mcpToolsOpenaiModel,
         mcpToolsGroqModel: config.mcpToolsGroqModel,
         mcpToolsGeminiModel: config.mcpToolsGeminiModel,
         currentModelPresetId: config.currentModelPresetId,
+        // STT Provider settings
+        sttProviderId: config.sttProviderId,
+        // Transcript Post-Processing settings
+        transcriptPostProcessingProviderId: config.transcriptPostProcessingProviderId,
+        transcriptPostProcessingOpenaiModel: config.transcriptPostProcessingOpenaiModel,
+        transcriptPostProcessingGroqModel: config.transcriptPostProcessingGroqModel,
+        transcriptPostProcessingGeminiModel: config.transcriptPostProcessingGeminiModel,
+        // TTS Provider settings
+        ttsProviderId: config.ttsProviderId,
       })
     }),
 
@@ -2154,20 +2186,40 @@ export const router = {
   updateProfileModelConfig: t.procedure
     .input<{
       profileId: string
+      // Agent/MCP Tools settings
       mcpToolsProviderId?: "openai" | "groq" | "gemini"
       mcpToolsOpenaiModel?: string
       mcpToolsGroqModel?: string
       mcpToolsGeminiModel?: string
       currentModelPresetId?: string
+      // STT Provider settings
+      sttProviderId?: "openai" | "groq"
+      // Transcript Post-Processing settings
+      transcriptPostProcessingProviderId?: "openai" | "groq" | "gemini"
+      transcriptPostProcessingOpenaiModel?: string
+      transcriptPostProcessingGroqModel?: string
+      transcriptPostProcessingGeminiModel?: string
+      // TTS Provider settings
+      ttsProviderId?: "openai" | "groq" | "gemini"
     }>()
     .action(async ({ input }) => {
       const { profileService } = await import("./profile-service")
       return profileService.updateProfileModelConfig(input.profileId, {
+        // Agent/MCP Tools settings
         mcpToolsProviderId: input.mcpToolsProviderId,
         mcpToolsOpenaiModel: input.mcpToolsOpenaiModel,
         mcpToolsGroqModel: input.mcpToolsGroqModel,
         mcpToolsGeminiModel: input.mcpToolsGeminiModel,
         currentModelPresetId: input.currentModelPresetId,
+        // STT Provider settings
+        sttProviderId: input.sttProviderId,
+        // Transcript Post-Processing settings
+        transcriptPostProcessingProviderId: input.transcriptPostProcessingProviderId,
+        transcriptPostProcessingOpenaiModel: input.transcriptPostProcessingOpenaiModel,
+        transcriptPostProcessingGroqModel: input.transcriptPostProcessingGroqModel,
+        transcriptPostProcessingGeminiModel: input.transcriptPostProcessingGeminiModel,
+        // TTS Provider settings
+        ttsProviderId: input.ttsProviderId,
       })
     }),
 

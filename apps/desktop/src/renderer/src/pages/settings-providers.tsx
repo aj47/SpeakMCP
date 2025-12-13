@@ -156,8 +156,8 @@ export function Component() {
           </div>
 
           <ProviderSelector
-            label="Voice Transcription (STT)"
-            tooltip="Choose which provider to use for speech-to-text transcription"
+            label={<span className="flex items-center gap-1.5">Voice Transcription (STT) <ProfileBadgeCompact /></span>}
+            tooltip="Choose which provider to use for speech-to-text transcription. This setting is saved per-profile."
             value={configQuery.data.sttProviderId || "openai"}
             onChange={(value) => saveConfig({ sttProviderId: value as STT_PROVIDER_ID })}
             providers={STT_PROVIDERS}
@@ -165,8 +165,8 @@ export function Component() {
           />
 
           <ProviderSelector
-            label="Transcript Post-Processing"
-            tooltip="Choose which provider to use for transcript post-processing"
+            label={<span className="flex items-center gap-1.5">Transcript Post-Processing <ProfileBadgeCompact /></span>}
+            tooltip="Choose which provider to use for transcript post-processing. This setting is saved per-profile."
             value={configQuery.data.transcriptPostProcessingProviderId || "openai"}
             onChange={(value) => saveConfig({ transcriptPostProcessingProviderId: value as CHAT_PROVIDER_ID })}
             providers={CHAT_PROVIDERS}
@@ -183,8 +183,8 @@ export function Component() {
           />
 
           <ProviderSelector
-            label="Text-to-Speech (TTS)"
-            tooltip="Choose which provider to use for text-to-speech generation"
+            label={<span className="flex items-center gap-1.5">Text-to-Speech (TTS) <ProfileBadgeCompact /></span>}
+            tooltip="Choose which provider to use for text-to-speech generation. This setting is saved per-profile."
             value={configQuery.data.ttsProviderId || "openai"}
             onChange={(value) => saveConfig({ ttsProviderId: value as TTS_PROVIDER_ID })}
             providers={TTS_PROVIDERS}
@@ -194,25 +194,22 @@ export function Component() {
 
         {/* OpenAI Compatible Provider Section */}
         <div className={`rounded-lg border ${activeProviders.openai.length > 0 ? 'border-primary/30 bg-primary/5' : ''}`}>
-          <ControlGroup
-            title={
-              <div className="flex items-center justify-between w-full">
-                <span className="flex items-center gap-2">
-                  OpenAI Compatible
-                  {activeProviders.openai.length > 0 && (
-                    <CheckCircle2 className="h-4 w-4 text-primary" />
-                  )}
-                </span>
-                {activeProviders.openai.length > 0 && (
-                  <div className="flex gap-1.5 flex-wrap justify-end">
-                    {activeProviders.openai.map((badge) => (
-                      <ActiveProviderBadge key={badge.label} label={badge.label} icon={badge.icon} />
-                    ))}
-                  </div>
-                )}
+          <div className="px-3 py-2 flex items-center justify-between w-full">
+            <span className="flex items-center gap-2 text-sm font-semibold">
+              OpenAI Compatible
+              {activeProviders.openai.length > 0 && (
+                <CheckCircle2 className="h-4 w-4 text-primary" />
+              )}
+            </span>
+            {activeProviders.openai.length > 0 && (
+              <div className="flex gap-1.5 flex-wrap justify-end">
+                {activeProviders.openai.map((badge) => (
+                  <ActiveProviderBadge key={badge.label} label={badge.label} icon={badge.icon} />
+                ))}
               </div>
-            }
-          >
+            )}
+          </div>
+          <div className="divide-y border-t">
             {activeProviders.openai.length === 0 && (
               <div className="px-3 py-2 bg-muted/30 border-b">
                 <p className="text-xs text-muted-foreground">
@@ -287,30 +284,27 @@ export function Component() {
               />
             </Control>
             </div>
-          </ControlGroup>
+          </div>
         </div>
 
         {/* Groq Provider Section */}
         <div className={`rounded-lg border ${activeProviders.groq.length > 0 ? 'border-primary/30 bg-primary/5' : ''}`}>
-          <ControlGroup
-            title={
-              <div className="flex items-center justify-between w-full">
-                <span className="flex items-center gap-2">
-                  Groq
-                  {activeProviders.groq.length > 0 && (
-                    <CheckCircle2 className="h-4 w-4 text-primary" />
-                  )}
-                </span>
-                {activeProviders.groq.length > 0 && (
-                  <div className="flex gap-1.5 flex-wrap justify-end">
-                    {activeProviders.groq.map((badge) => (
-                      <ActiveProviderBadge key={badge.label} label={badge.label} icon={badge.icon} />
-                    ))}
-                  </div>
-                )}
+          <div className="px-3 py-2 flex items-center justify-between w-full">
+            <span className="flex items-center gap-2 text-sm font-semibold">
+              Groq
+              {activeProviders.groq.length > 0 && (
+                <CheckCircle2 className="h-4 w-4 text-primary" />
+              )}
+            </span>
+            {activeProviders.groq.length > 0 && (
+              <div className="flex gap-1.5 flex-wrap justify-end">
+                {activeProviders.groq.map((badge) => (
+                  <ActiveProviderBadge key={badge.label} label={badge.label} icon={badge.icon} />
+                ))}
               </div>
-            }
-          >
+            )}
+          </div>
+          <div className="divide-y border-t">
             {activeProviders.groq.length === 0 && (
               <div className="px-3 py-2 bg-muted/30 border-b">
                 <p className="text-xs text-muted-foreground">
@@ -397,30 +391,27 @@ export function Component() {
                 </Select>
               </Control>
             </div>
-          </ControlGroup>
+          </div>
         </div>
 
         {/* Gemini Provider Section */}
         <div className={`rounded-lg border ${activeProviders.gemini.length > 0 ? 'border-primary/30 bg-primary/5' : ''}`}>
-          <ControlGroup
-            title={
-              <div className="flex items-center justify-between w-full">
-                <span className="flex items-center gap-2">
-                  Gemini
-                  {activeProviders.gemini.length > 0 && (
-                    <CheckCircle2 className="h-4 w-4 text-primary" />
-                  )}
-                </span>
-                {activeProviders.gemini.length > 0 && (
-                  <div className="flex gap-1.5 flex-wrap justify-end">
-                    {activeProviders.gemini.map((badge) => (
-                      <ActiveProviderBadge key={badge.label} label={badge.label} icon={badge.icon} />
-                    ))}
-                  </div>
-                )}
+          <div className="px-3 py-2 flex items-center justify-between w-full">
+            <span className="flex items-center gap-2 text-sm font-semibold">
+              Gemini
+              {activeProviders.gemini.length > 0 && (
+                <CheckCircle2 className="h-4 w-4 text-primary" />
+              )}
+            </span>
+            {activeProviders.gemini.length > 0 && (
+              <div className="flex gap-1.5 flex-wrap justify-end">
+                {activeProviders.gemini.map((badge) => (
+                  <ActiveProviderBadge key={badge.label} label={badge.label} icon={badge.icon} />
+                ))}
               </div>
-            }
-          >
+            )}
+          </div>
+          <div className="divide-y border-t">
             {activeProviders.gemini.length === 0 && (
               <div className="px-3 py-2 bg-muted/30 border-b">
                 <p className="text-xs text-muted-foreground">
@@ -507,7 +498,7 @@ export function Component() {
                 </Select>
               </Control>
             </div>
-          </ControlGroup>
+          </div>
         </div>
       </div>
     </div>

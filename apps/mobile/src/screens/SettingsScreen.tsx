@@ -241,6 +241,19 @@ export default function SettingsScreen({ navigation }: any) {
           />
         </View>
 
+        <View style={styles.row}>
+          <Text style={styles.label}>Message Queuing</Text>
+          <Switch
+            value={draft.messageQueueEnabled !== false}
+            onValueChange={(v) => setDraft({ ...draft, messageQueueEnabled: v })}
+            trackColor={{ false: theme.colors.muted, true: theme.colors.primary }}
+            thumbColor={draft.messageQueueEnabled !== false ? theme.colors.primaryForeground : theme.colors.background}
+          />
+        </View>
+        <Text style={styles.helperText}>
+          Queue messages while the agent is busy processing
+        </Text>
+
         {connectionError && (
           <View style={styles.errorContainer}>
             <Text style={styles.errorText}>⚠️ {connectionError}</Text>
@@ -308,6 +321,11 @@ function createStyles(theme: ReturnType<typeof useTheme>['theme']) {
     label: {
       ...theme.typography.label,
       marginTop: spacing.sm,
+    },
+    helperText: {
+      fontSize: 12,
+      color: theme.colors.mutedForeground,
+      marginTop: -spacing.xs,
     },
     input: {
       ...theme.input,

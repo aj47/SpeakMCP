@@ -847,6 +847,15 @@ export function MCPConfigManager({
   const [expandedLogs, setExpandedLogs] = useState<Set<string>>(new Set())
   const [expandedServers, setExpandedServers] = useState<Set<string>>(new Set())
 
+  // Prune stale entries from expandedServers when servers change
+  useEffect(() => {
+    const serverNames = new Set(Object.keys(servers))
+    const prunedSet = new Set([...expandedServers].filter(name => serverNames.has(name)))
+    if (prunedSet.size !== expandedServers.size) {
+      setExpandedServers(prunedSet)
+    }
+  }, [servers])
+
   // Load OAuth status for all servers
   const refreshOAuthStatus = async (serverName?: string) => {
     try {
@@ -1237,19 +1246,24 @@ export function MCPConfigManager({
       )}
 
       {/* Expand/Collapse All button - only show when there are servers */}
-      {Object.entries(servers).length > 0 && (
-        <div className="flex justify-end">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => toggleAllServers(expandedServers.size < Object.keys(servers).length)}
-            className="text-muted-foreground"
-          >
-            <ChevronsUpDown className="mr-2 h-4 w-4" />
-            {expandedServers.size < Object.keys(servers).length ? "Expand All" : "Collapse All"}
-          </Button>
-        </div>
-      )}
+      {Object.entries(servers).length > 0 && (() => {
+        const serverKeys = Object.keys(servers)
+        const expandedCount = serverKeys.filter(key => expandedServers.has(key)).length
+        const allExpanded = expandedCount >= serverKeys.length
+        return (
+          <div className="flex justify-end">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => toggleAllServers(!allExpanded)}
+              className="text-muted-foreground"
+            >
+              <ChevronsUpDown className="mr-2 h-4 w-4" />
+              {allExpanded ? "Collapse All" : "Expand All"}
+            </Button>
+          </div>
+        )
+      })()}
 
       <div className="grid gap-2">
         {Object.entries(servers).length === 0 ? (
@@ -1266,8 +1280,18 @@ export function MCPConfigManager({
             <Card key={name} className="overflow-hidden">
               {/* Collapsed Header Row - Always Visible */}
               <div
-                className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-accent/50 transition-colors"
+                role="button"
+                tabIndex={0}
+                aria-expanded={expandedServers.has(name)}
+                aria-label={`Toggle ${name} server details`}
+                className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-accent/50 transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
                 onClick={() => toggleServerExpansion(name)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    toggleServerExpansion(name)
+                  }
+                }}
               >
                 <div className="flex min-w-0 flex-1 items-center gap-2">
                   {expandedServers.has(name) ? (

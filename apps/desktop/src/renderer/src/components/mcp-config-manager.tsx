@@ -70,9 +70,11 @@ interface ServerDialogProps {
   onImportFromFile?: () => Promise<void>
   // Returns true on success, false on failure (to preserve user input on errors)
   onImportFromText?: (text: string) => Promise<boolean>
+  // Used to trigger state reset when dialog opens/closes (for Add mode where server prop doesn't change)
+  isOpen?: boolean
 }
 
-function ServerDialog({ server, onSave, onCancel, onImportFromFile, onImportFromText }: ServerDialogProps) {
+function ServerDialog({ server, onSave, onCancel, onImportFromFile, onImportFromText, isOpen }: ServerDialogProps) {
   const [name, setName] = useState(server?.name || "")
   const [activeTab, setActiveTab] = useState<'manual' | 'file' | 'paste' | 'examples'>('manual')
   const [jsonInputText, setJsonInputText] = useState("")
@@ -149,6 +151,15 @@ function ServerDialog({ server, onSave, onCancel, onImportFromFile, onImportFrom
     )
     setOAuthConfig(server?.config.oauth || {})
   }, [server])
+
+  // Reset import-related state when dialog opens (for Add mode where server prop stays undefined)
+  // This ensures pasted JSON (potentially containing secrets) is cleared after Cancel/close
+  useEffect(() => {
+    if (isOpen) {
+      setActiveTab('manual')
+      setJsonInputText("")
+    }
+  }, [isOpen])
 
   const handleSave = () => {
     if (!name.trim()) {
@@ -708,7 +719,11 @@ function ServerDialog({ server, onSave, onCancel, onImportFromFile, onImportFrom
         <Button variant="outline" onClick={onCancel}>
           Cancel
         </Button>
-        <Button onClick={handleSave}>{server ? "Update" : "Add"} Server</Button>
+        {/* Only show Add/Update Server button on manual and examples tabs */}
+        {/* File and paste tabs have their own action buttons */}
+        {(activeTab === 'manual' || activeTab === 'examples') && (
+          <Button onClick={handleSave}>{server ? "Update" : "Add"} Server</Button>
+        )}
       </DialogFooter>
     </DialogContent>
   )
@@ -1147,6 +1162,7 @@ export function MCPConfigManager({
               onCancel={() => setShowAddDialog(false)}
               onImportFromFile={handleImportConfigFromFile}
               onImportFromText={handleImportFromText}
+              isOpen={showAddDialog}
             />
           </Dialog>
         </div>

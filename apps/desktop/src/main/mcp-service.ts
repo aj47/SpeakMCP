@@ -2369,6 +2369,21 @@ export class MCPService {
       // Check if this is a server-prefixed tool
       if (toolCall.name.includes(":")) {
         const [serverName, toolName] = toolCall.name.split(":", 2)
+
+        // Guard against executing tools from runtime-disabled servers
+        // This prevents profile pollution during profile switches
+        if (this.runtimeDisabledServers.has(serverName)) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Tool ${toolCall.name} is unavailable: server "${serverName}" is currently disabled.`,
+              },
+            ],
+            isError: true,
+          }
+        }
+
         const result = await this.executeServerTool(
           serverName,
           toolName,

@@ -512,6 +512,10 @@ export default function ChatScreen({ route, navigation }: any) {
         console.log(`[ChatScreen] Retry attempt ${attempt} after error:`, error.message);
         setDebugInfo(`Retrying... (attempt ${attempt})`);
 
+        // Reset streaming text to prevent garbled output from partial content of failed attempts
+        // Each retry should start with a clean slate
+        streamingText = '';
+
         // Update the placeholder message to show retry status
         setMessages((m) => {
           const copy = [...m];

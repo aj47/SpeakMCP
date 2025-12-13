@@ -777,6 +777,16 @@ export default function ChatScreen({ route, navigation }: any) {
         return;
       }
 
+      // Guard: skip error handling if this request is no longer the active one
+      // This prevents a superseded request from surfacing a retry banner for an older send
+      if (activeRequestIdRef.current !== thisRequestId) {
+        console.log('[ChatScreen] Request superseded, skipping error handling', {
+          thisRequestId,
+          activeRequestId: activeRequestIdRef.current
+        });
+        return;
+      }
+
       const recoveryState = connectionState;
       let errorMessage = e.message;
 
@@ -794,11 +804,22 @@ export default function ChatScreen({ route, navigation }: any) {
       const hasPartialContent = partialContent && partialContent.length > 0;
 
       setDebugInfo(`Error: ${errorMessage}`);
+      // Update the in-flight assistant message instead of appending a new one
+      // This avoids duplicating the "Assistant is thinking..." message and ensures
+      // the retry pop logic removes the correct items
       setMessages((m) => {
         const errorContent = hasPartialContent
           ? `${partialContent}\n\n---\n⚠️ Connection lost. Partial response shown above.\n\nError: ${errorMessage}`
           : `Error: ${errorMessage}\n\nTip: Check your internet connection and tap "Retry" to try again.`;
-        return [...m, { role: 'assistant', content: errorContent }];
+        // Find and update the last assistant message instead of appending
+        const copy = [...m];
+        for (let i = copy.length - 1; i >= 0; i--) {
+          if (copy[i].role === 'assistant') {
+            copy[i] = { ...copy[i], content: errorContent };
+            break;
+          }
+        }
+        return copy;
       });
     } finally {
       console.log('[ChatScreen] Chat request finished, requestId:', thisRequestId);
@@ -1428,9 +1449,18 @@ export default function ChatScreen({ route, navigation }: any) {
               </View>
               <TouchableOpacity
                 style={styles.retryButton}
-                onPress={() => {
+                onPress={async () => {
                   const messageToRetry = lastFailedMessage;
                   setLastFailedMessage(null);
+
+                  // Use the recovery conversation ID if available, so the retry resumes
+                  // the same server-created conversation when the first attempt failed mid-stream
+                  const recoveryConversationId = client.getRecoveryConversationId();
+                  if (recoveryConversationId) {
+                    console.log('[ChatScreen] Retry: Using recovery conversationId:', recoveryConversationId);
+                    await sessionStore.setServerConversationId(recoveryConversationId);
+                  }
+
                   // Remove the last error message before retrying
                   setMessages((m) => {
                     // Remove the last assistant message (error) and user message

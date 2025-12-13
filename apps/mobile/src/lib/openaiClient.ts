@@ -144,7 +144,9 @@ export class OpenAIClient {
     onRetry?: (attempt: number, error: Error) => void
   ): Promise<ChatResponse> {
     const url = this.getUrl('/chat/completions');
-    const body = { model: this.cfg.model, messages, stream: true };
+    // Strip UI-only fields before sending to API
+    const sanitizedMessages = messages.map(({ error, ...msg }) => msg);
+    const body = { model: this.cfg.model, messages: sanitizedMessages, stream: true };
 
     console.log('[OpenAIClient] Starting chat request');
     console.log('[OpenAIClient] URL:', url);

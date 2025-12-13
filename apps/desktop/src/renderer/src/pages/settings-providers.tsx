@@ -156,8 +156,8 @@ export function Component() {
           </div>
 
           <ProviderSelector
-            label={<span className="flex items-center gap-1.5">Voice Transcription (STT) <ProfileBadgeCompact /></span>}
-            tooltip="Choose which provider to use for speech-to-text transcription. This setting is saved per-profile."
+            label="Voice Transcription (STT)"
+            tooltip="Choose which provider to use for speech-to-text transcription."
             value={configQuery.data.sttProviderId || "openai"}
             onChange={(value) => saveConfig({ sttProviderId: value as STT_PROVIDER_ID })}
             providers={STT_PROVIDERS}
@@ -165,8 +165,8 @@ export function Component() {
           />
 
           <ProviderSelector
-            label={<span className="flex items-center gap-1.5">Transcript Post-Processing <ProfileBadgeCompact /></span>}
-            tooltip="Choose which provider to use for transcript post-processing. This setting is saved per-profile."
+            label="Transcript Post-Processing"
+            tooltip="Choose which provider to use for transcript post-processing."
             value={configQuery.data.transcriptPostProcessingProviderId || "openai"}
             onChange={(value) => saveConfig({ transcriptPostProcessingProviderId: value as CHAT_PROVIDER_ID })}
             providers={CHAT_PROVIDERS}
@@ -183,8 +183,8 @@ export function Component() {
           />
 
           <ProviderSelector
-            label={<span className="flex items-center gap-1.5">Text-to-Speech (TTS) <ProfileBadgeCompact /></span>}
-            tooltip="Choose which provider to use for text-to-speech generation. This setting is saved per-profile."
+            label="Text-to-Speech (TTS)"
+            tooltip="Choose which provider to use for text-to-speech generation."
             value={configQuery.data.ttsProviderId || "openai"}
             onChange={(value) => saveConfig({ ttsProviderId: value as TTS_PROVIDER_ID })}
             providers={TTS_PROVIDERS}

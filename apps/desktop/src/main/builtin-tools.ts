@@ -341,6 +341,27 @@ const toolHandlers: Record<string, ToolHandler> = {
       ...(profile.modelConfig?.currentModelPresetId && {
         currentModelPresetId: profile.modelConfig.currentModelPresetId,
       }),
+      // STT Provider settings
+      ...(profile.modelConfig?.sttProviderId && {
+        sttProviderId: profile.modelConfig.sttProviderId,
+      }),
+      // Transcript Post-Processing settings
+      ...(profile.modelConfig?.transcriptPostProcessingProviderId && {
+        transcriptPostProcessingProviderId: profile.modelConfig.transcriptPostProcessingProviderId,
+      }),
+      ...(profile.modelConfig?.transcriptPostProcessingOpenaiModel && {
+        transcriptPostProcessingOpenaiModel: profile.modelConfig.transcriptPostProcessingOpenaiModel,
+      }),
+      ...(profile.modelConfig?.transcriptPostProcessingGroqModel && {
+        transcriptPostProcessingGroqModel: profile.modelConfig.transcriptPostProcessingGroqModel,
+      }),
+      ...(profile.modelConfig?.transcriptPostProcessingGeminiModel && {
+        transcriptPostProcessingGeminiModel: profile.modelConfig.transcriptPostProcessingGeminiModel,
+      }),
+      // TTS Provider settings
+      ...(profile.modelConfig?.ttsProviderId && {
+        ttsProviderId: profile.modelConfig.ttsProviderId,
+      }),
     }
     configStore.save(updatedConfig)
 

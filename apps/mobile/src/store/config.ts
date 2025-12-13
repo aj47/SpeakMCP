@@ -7,6 +7,7 @@ export type AppConfig = {
   model: string; // model name required by /v1/chat/completions
   handsFree?: boolean; // hands-free voice mode toggle (optional for backward compatibility)
   ttsEnabled?: boolean; // text-to-speech toggle (optional for backward compatibility)
+  messageQueueEnabled?: boolean; // message queue toggle (allows queuing messages while agent is busy)
 };
 
 const DEFAULTS: AppConfig = {
@@ -15,6 +16,7 @@ const DEFAULTS: AppConfig = {
   model: 'gpt-4o-mini',
   handsFree: false,
   ttsEnabled: true,
+  messageQueueEnabled: true,
 };
 
 const STORAGE_KEY = 'app_config_v1';

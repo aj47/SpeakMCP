@@ -156,6 +156,22 @@ export interface AgentProgressUpdate {
   }
 }
 
+// Message Queue Types
+export interface QueuedMessage {
+  id: string
+  conversationId: string
+  text: string
+  createdAt: number
+  status: "pending" | "processing" | "cancelled" | "failed"
+  errorMessage?: string
+  addedToHistory?: boolean
+}
+
+export interface MessageQueue {
+  conversationId: string
+  messages: QueuedMessage[]
+}
+
 // Conversation Types
 export interface ConversationMessage {
   id: string
@@ -430,6 +446,9 @@ export type Config = {
 
   // Parallel Tool Execution Configuration
   mcpParallelToolExecution?: boolean
+
+  // Message Queue Configuration - when enabled, users can queue messages while agent is processing
+  mcpMessageQueueEnabled?: boolean
 
 
 

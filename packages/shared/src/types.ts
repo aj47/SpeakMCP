@@ -48,5 +48,32 @@ export interface ChatApiResponse {
   content: string;
   conversationId?: string;
   conversationHistory?: ConversationHistoryMessage[];
+  /** Indicates the message was queued instead of processed immediately */
+  queued?: boolean;
+  /** ID of the queued message if it was queued */
+  queuedMessageId?: string;
+}
+
+/**
+ * Queued message - represents a message waiting to be processed.
+ * Used when the agent is busy processing and messages are queued for later.
+ */
+export interface QueuedMessage {
+  id: string;
+  conversationId: string;
+  text: string;
+  createdAt: number;
+  status: 'pending' | 'processing' | 'cancelled' | 'failed';
+  errorMessage?: string;
+  /** Indicates the message was added to conversation history before processing failed */
+  addedToHistory?: boolean;
+}
+
+/**
+ * Message queue - represents a queue of messages for a conversation.
+ */
+export interface MessageQueue {
+  conversationId: string;
+  messages: QueuedMessage[];
 }
 

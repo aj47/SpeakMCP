@@ -731,6 +731,12 @@ export function Component() {
 
         {/* Agent Settings */}
         <ControlGroup title="Agent Settings">
+          <Control label={<ControlLabel label="Message Queuing" tooltip="Allow queueing messages while the agent is processing. Messages will be processed in order after the current task completes." />} className="px-3">
+            <Switch
+              checked={configQuery.data?.mcpMessageQueueEnabled ?? true}
+              onCheckedChange={(value) => saveConfig({ mcpMessageQueueEnabled: value })}
+            />
+          </Control>
           <Control label={<ControlLabel label="Require Tool Approval" tooltip="Adds a confirmation dialog before any tool executes. Recommended for safety." />} className="px-3">
             <Switch
               checked={configQuery.data?.mcpRequireApprovalBeforeToolCall ?? false}

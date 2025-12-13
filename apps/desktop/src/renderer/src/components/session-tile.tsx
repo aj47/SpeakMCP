@@ -19,6 +19,8 @@ import {
 import { Button } from "@renderer/components/ui/button"
 import { Badge } from "@renderer/components/ui/badge"
 import { MarkdownRenderer } from "@renderer/components/markdown-renderer"
+import { MessageQueuePanel } from "@renderer/components/message-queue-panel"
+import { useMessageQueue } from "@renderer/stores"
 
 const MIN_HEIGHT = 120
 const MAX_HEIGHT = 600
@@ -65,12 +67,16 @@ export function SessionTile({
   const [tileHeight, setTileHeight] = useState(DEFAULT_HEIGHT)
   const [isResizing, setIsResizing] = useState(false)
 
+  // Get queued messages for this conversation
+  const queuedMessages = useMessageQueue(session.conversationId)
+
   const isActive = session.status === "active"
   const isComplete = session.status === "completed"
   const hasError = session.status === "error"
   const isStopped = session.status === "stopped"
   const isSnoozed = session.isSnoozed
   const hasPendingApproval = !!progress?.pendingToolApproval
+  const hasQueuedMessages = queuedMessages.length > 0
 
   const handleToggleCollapse = (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -267,6 +273,17 @@ export function SessionTile({
             </div>
           </ScrollArea>
 
+          {/* Message Queue Panel */}
+          {hasQueuedMessages && session.conversationId && (
+            <div className="px-3 py-2 border-t flex-shrink-0">
+              <MessageQueuePanel
+                conversationId={session.conversationId}
+                messages={queuedMessages}
+                compact={isCollapsed}
+              />
+            </div>
+          )}
+
           {/* Footer with status info */}
           <div className="px-3 py-2 border-t bg-muted/20 text-xs text-muted-foreground flex-shrink-0">
             {session.currentIteration && session.maxIterations && (
@@ -276,6 +293,11 @@ export function SessionTile({
             )}
             {session.lastActivity && (
               <span className="ml-2 truncate">{session.lastActivity}</span>
+            )}
+            {hasQueuedMessages && (
+              <span className="ml-2 text-blue-500">
+                • {queuedMessages.length} queued
+              </span>
             )}
           </div>
 

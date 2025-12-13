@@ -6,11 +6,12 @@ import ChatScreen from './src/screens/ChatScreen';
 import SessionListScreen from './src/screens/SessionListScreen';
 import { ConfigContext, useConfig, saveConfig } from './src/store/config';
 import { SessionContext, useSessions } from './src/store/sessions';
+import { ConnectionManagerContext, useConnectionManagerProvider } from './src/store/connectionManager';
 import { View, Image, Text, StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ThemeProvider, useTheme } from './src/ui/ThemeProvider';
 import * as Linking from 'expo-linking';
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 
 const speakMCPIcon = require('./assets/speakmcp-icon.png');
 const darkSpinner = require('./assets/loading-spinner.gif');
@@ -43,6 +44,22 @@ function Navigation() {
   const { theme, isDark } = useTheme();
   const cfg = useConfig();
   const sessionStore = useSessions();
+
+  // Create connection manager config from app config
+  const clientConfig = useMemo(() => ({
+    baseUrl: cfg.config.baseUrl,
+    apiKey: cfg.config.apiKey,
+    model: cfg.config.model,
+    recoveryConfig: {
+      maxRetries: 3,
+      initialDelayMs: 1000,
+      maxDelayMs: 10000,
+      heartbeatIntervalMs: 30000,
+    },
+  }), [cfg.config.baseUrl, cfg.config.apiKey, cfg.config.model]);
+
+  // Initialize connection manager with client config
+  const connectionManager = useConnectionManagerProvider(clientConfig);
 
   // Create navigation theme that matches our theme
   const navTheme = {
@@ -104,36 +121,38 @@ function Navigation() {
   return (
     <ConfigContext.Provider value={cfg}>
       <SessionContext.Provider value={sessionStore}>
-        <NavigationContainer theme={navTheme}>
-          <Stack.Navigator
-            initialRouteName="Settings"
-            screenOptions={{
-              headerTitleStyle: { ...theme.typography.h2 },
-              headerStyle: { backgroundColor: theme.colors.card },
-              headerTintColor: theme.colors.foreground,
-              contentStyle: { backgroundColor: theme.colors.background },
-              headerLeft: () => (
-                <Image
-                  source={speakMCPIcon}
-                  style={{ width: 28, height: 28, marginLeft: 12, marginRight: 8 }}
-                  resizeMode="contain"
-                />
-              ),
-            }}
-          >
-            <Stack.Screen
-              name="Settings"
-              component={SettingsScreen}
-              options={{ title: 'SpeakMCP' }}
-            />
-            <Stack.Screen
-              name="Sessions"
-              component={SessionListScreen}
-              options={{ title: 'Chats' }}
-            />
-            <Stack.Screen name="Chat" component={ChatScreen} />
-          </Stack.Navigator>
-        </NavigationContainer>
+        <ConnectionManagerContext.Provider value={connectionManager}>
+          <NavigationContainer theme={navTheme}>
+            <Stack.Navigator
+              initialRouteName="Settings"
+              screenOptions={{
+                headerTitleStyle: { ...theme.typography.h2 },
+                headerStyle: { backgroundColor: theme.colors.card },
+                headerTintColor: theme.colors.foreground,
+                contentStyle: { backgroundColor: theme.colors.background },
+                headerLeft: () => (
+                  <Image
+                    source={speakMCPIcon}
+                    style={{ width: 28, height: 28, marginLeft: 12, marginRight: 8 }}
+                    resizeMode="contain"
+                  />
+                ),
+              }}
+            >
+              <Stack.Screen
+                name="Settings"
+                component={SettingsScreen}
+                options={{ title: 'SpeakMCP' }}
+              />
+              <Stack.Screen
+                name="Sessions"
+                component={SessionListScreen}
+                options={{ title: 'Chats' }}
+              />
+              <Stack.Screen name="Chat" component={ChatScreen} />
+            </Stack.Navigator>
+          </NavigationContainer>
+        </ConnectionManagerContext.Provider>
       </SessionContext.Provider>
     </ConfigContext.Provider>
   );

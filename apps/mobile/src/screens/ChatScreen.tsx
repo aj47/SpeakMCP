@@ -23,7 +23,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { EventEmitter } from 'expo-modules-core';
 import { useConfigContext, saveConfig } from '../store/config';
 import { useSessionContext } from '../store/sessions';
-import { OpenAIClient, ChatMessage, AgentProgressUpdate } from '../lib/openaiClient';
+import { useConnectionManager } from '../store/connectionManager';
+import { ChatMessage, AgentProgressUpdate } from '../lib/openaiClient';
 import { RecoveryState, formatConnectionStatus } from '../lib/connectionRecovery';
 import * as Speech from 'expo-speech';
 import {
@@ -48,6 +49,7 @@ export default function ChatScreen({ route, navigation }: any) {
   const styles = useMemo(() => createStyles(theme), [theme]);
   const { config, setConfig } = useConfigContext();
   const sessionStore = useSessionContext();
+  const connectionManager = useConnectionManager();
   const handsFree = !!config.handsFree;
   const handsFreeRef = useRef<boolean>(handsFree);
   useEffect(() => { handsFreeRef.current = !!config.handsFree; }, [config.handsFree]);
@@ -79,35 +81,78 @@ export default function ChatScreen({ route, navigation }: any) {
   // Each request gets a unique ID; only the currently active request can reset UI states
   const activeRequestIdRef = useRef<number>(0);
 
-  const client = useMemo(() => {
-    const openAIClient = new OpenAIClient({
-      baseUrl: config.baseUrl,
-      apiKey: config.apiKey,
-      model: config.model,
-      recoveryConfig: {
-        maxRetries: 3,
-        initialDelayMs: 1000,
-        maxDelayMs: 10000,
-        heartbeatIntervalMs: 30000,
-      },
-    });
-
-    openAIClient.setConnectionStatusCallback((state) => {
-      setConnectionState(state);
-      console.log('[ChatScreen] Connection status:', formatConnectionStatus(state));
-    });
-
-    return openAIClient;
-  }, [config.baseUrl, config.apiKey, config.model]);
-
+  // Stable ref for current session ID to avoid stale closures in callbacks
+  // This fixes the issue where useSessions() returns a new object each render
+  const currentSessionIdRef = useRef<string | null>(sessionStore.currentSessionId);
   useEffect(() => {
-    return () => {
-      client.cleanup();
-    };
-  }, [client]);
+    currentSessionIdRef.current = sessionStore.currentSessionId;
+  }, [sessionStore.currentSessionId]);
+
+  // Get or create a connection for the current session using the connection manager
+  // This preserves connections when switching between sessions (fixes #608)
+  const getSessionClient = useCallback(() => {
+    const currentSessionId = sessionStore.currentSessionId;
+    if (!currentSessionId) {
+      console.warn('[ChatScreen] No current session ID, cannot get client');
+      return null;
+    }
+    const connection = connectionManager.getOrCreateConnection(currentSessionId);
+    // Note: Connection status callback is set up via subscribeToConnectionStatus in useEffect below
+    // This avoids overwriting the SessionConnectionManager's internal callback (PR review fix)
+    return connection.client;
+  }, [connectionManager, sessionStore.currentSessionId]);
+
+  // Subscribe to connection status changes for the current session
+  // Uses subscribeToConnectionStatus to avoid overwriting the internal callback in SessionConnectionManager
+  useEffect(() => {
+    const currentSessionId = sessionStore.currentSessionId;
+    if (!currentSessionId) {
+      // Reset both connection state and responding state when there's no session
+      // This prevents the UI from being stuck in "responding" state if the session
+      // is deleted/cleared while ChatScreen remains mounted (PR review fix #15)
+      setConnectionState(null);
+      setResponding(false);
+      return;
+    }
+
+    // Restore existing connection state when switching sessions
+    const existingState = connectionManager.getConnectionState(currentSessionId);
+    if (existingState) {
+      setConnectionState(existingState);
+    } else {
+      setConnectionState(null);
+    }
+
+    // Check if there's an active request for this session
+    const isActive = connectionManager.isConnectionActive(currentSessionId);
+    setResponding(isActive);
+
+    // Ensure connection exists for subscription
+    connectionManager.getOrCreateConnection(currentSessionId);
+
+    // Subscribe to connection status changes for this session
+    // The callback uses currentSessionIdRef to always check against the latest session ID
+    const unsubscribe = connectionManager.subscribeToConnectionStatus(
+      currentSessionId,
+      (state) => {
+        // Only update UI if this is still the current session (using ref for latest value)
+        if (currentSessionIdRef.current === currentSessionId) {
+          setConnectionState(state);
+          console.log('[ChatScreen] Connection status:', formatConnectionStatus(state));
+        }
+      }
+    );
+
+    return unsubscribe;
+  }, [sessionStore.currentSessionId, connectionManager]);
 
   const handleKillSwitch = async () => {
     console.log('[ChatScreen] Kill switch button pressed');
+    const client = getSessionClient();
+    if (!client) {
+      console.error('[ChatScreen] No client available for kill switch');
+      return;
+    }
 
     if (Platform.OS === 'web') {
       const confirmed = window.confirm(
@@ -592,6 +637,14 @@ export default function ChatScreen({ route, navigation }: any) {
 
     console.log('[ChatScreen] Sending message:', text);
 
+    // Get client from connection manager (preserves connections across session switches)
+    const client = getSessionClient();
+    if (!client) {
+      console.error('[ChatScreen] No client available for send');
+      setDebugInfo('Error: No session available');
+      return;
+    }
+
     setDebugInfo(`Starting request to ${config.baseUrl}...`);
 
     const userMsg: ChatMessage = { role: 'user', content: text };
@@ -599,9 +652,11 @@ export default function ChatScreen({ route, navigation }: any) {
     setMessages((m) => [...m, userMsg, { role: 'assistant', content: 'Assistant is thinking...' }]);
     setResponding(true);
 
-    // Generate a unique request ID and mark this request as the active one
+    // Generate a unique request ID for this request
     // This prevents cross-request race conditions on view-level state
     const thisRequestId = Date.now();
+    // Note: We keep activeRequestIdRef for backward compatibility and view-level state,
+    // but the primary "superseded" check now uses per-session tracking (PR review fix #13)
     activeRequestIdRef.current = thisRequestId;
 
     const currentSession = sessionStore.getCurrentSession();
@@ -618,6 +673,14 @@ export default function ChatScreen({ route, navigation }: any) {
     // Capture the session ID at request start to guard against session changes
     const requestSessionId = sessionStore.currentSessionId;
 
+    // Mark this request as the latest for this session in the connection manager
+    // and increment active request count
+    // This enables per-session request tracking to prevent cross-session superseding (PR review fix #13)
+    if (requestSessionId) {
+      connectionManager.setLatestRequestId(requestSessionId, thisRequestId);
+      connectionManager.incrementActiveRequests(requestSessionId);
+    }
+
     try {
       let streamingText = '';
 
@@ -627,14 +690,15 @@ export default function ChatScreen({ route, navigation }: any) {
 
       const onProgress = (update: AgentProgressUpdate) => {
         // Guard: skip update if session has changed since request started
-        if (sessionStore.currentSessionId !== requestSessionId) {
+        // Use currentSessionIdRef.current to avoid stale closure issue (useSessions returns new object each render)
+        if (currentSessionIdRef.current !== requestSessionId) {
           console.log('[ChatScreen] Session changed, skipping onProgress update');
           return;
         }
-        // Guard: skip update if this request is no longer the active one
-        // This prevents concurrent sends within the same session from interleaving updates
-        if (activeRequestIdRef.current !== thisRequestId) {
-          console.log('[ChatScreen] Request superseded, skipping onProgress update');
+        // Guard: skip update if this request is no longer the latest one for this session
+        // Uses per-session tracking to prevent cross-session sends from incorrectly superseding (PR review fix #13)
+        if (requestSessionId && connectionManager.getLatestRequestId(requestSessionId) !== thisRequestId) {
+          console.log('[ChatScreen] Request superseded within same session, skipping onProgress update');
           return;
         }
         const progressMessages = convertProgressToMessages(update);
@@ -649,14 +713,15 @@ export default function ChatScreen({ route, navigation }: any) {
 
       const onToken = (tok: string) => {
         // Guard: skip update if session has changed since request started
-        if (sessionStore.currentSessionId !== requestSessionId) {
+        // Use currentSessionIdRef.current to avoid stale closure issue (useSessions returns new object each render)
+        if (currentSessionIdRef.current !== requestSessionId) {
           console.log('[ChatScreen] Session changed, skipping onToken update');
           return;
         }
-        // Guard: skip update if this request is no longer the active one
-        // This prevents concurrent sends within the same session from interleaving updates
-        if (activeRequestIdRef.current !== thisRequestId) {
-          console.log('[ChatScreen] Request superseded, skipping onToken update');
+        // Guard: skip update if this request is no longer the latest one for this session
+        // Uses per-session tracking to prevent cross-session sends from incorrectly superseding (PR review fix #13)
+        if (requestSessionId && connectionManager.getLatestRequestId(requestSessionId) !== thisRequestId) {
+          console.log('[ChatScreen] Request superseded within same session, skipping onToken update');
           return;
         }
         streamingText += tok;
@@ -676,26 +741,38 @@ export default function ChatScreen({ route, navigation }: any) {
       const response = await client.chat([...messages, userMsg], onToken, onProgress, serverConversationId);
       const finalText = response.content || streamingText;
       console.log('[ChatScreen] Chat completed, conversationId:', response.conversationId);
-      setDebugInfo(`Completed!`);
 
-      // Guard: skip final updates if session has changed since request started
-      if (sessionStore.currentSessionId !== requestSessionId) {
-        console.log('[ChatScreen] Session changed during request, skipping final message updates');
-        return;
+      // Guard: skip UI updates if session has changed, BUT still persist to the original session
+      // Use currentSessionIdRef.current to avoid stale closure issue (useSessions returns new object each render)
+      const sessionChanged = currentSessionIdRef.current !== requestSessionId;
+      if (sessionChanged) {
+        console.log('[ChatScreen] Session changed during request, persisting to original session without UI update');
+      } else {
+        setDebugInfo(`Completed!`);
       }
 
-      // Guard: skip final updates if this request is no longer the active one
+      // Guard: skip final updates if this request is no longer the latest one for this session
       // This prevents older, superseded requests from clobbering messages when multiple sends occur within the same session
-      if (activeRequestIdRef.current !== thisRequestId) {
-        console.log('[ChatScreen] Request superseded, skipping final message updates', {
+      // Uses per-session tracking to prevent cross-session sends from incorrectly superseding (PR review fix #13)
+      // Note: This guard only applies when session hasn't changed - if session changed, we still want to persist
+      const isLatestForSession = requestSessionId
+        ? connectionManager.getLatestRequestId(requestSessionId) === thisRequestId
+        : true;
+      if (!sessionChanged && !isLatestForSession) {
+        console.log('[ChatScreen] Request superseded within same session, skipping final message updates', {
           thisRequestId,
-          activeRequestId: activeRequestIdRef.current
+          latestRequestId: requestSessionId ? connectionManager.getLatestRequestId(requestSessionId) : 'no-session'
         });
         return;
       }
 
+      // Save conversation ID to the appropriate session
       if (response.conversationId) {
-        await sessionStore.setServerConversationId(response.conversationId);
+        if (sessionChanged && requestSessionId) {
+          await sessionStore.setServerConversationIdForSession(requestSessionId, response.conversationId);
+        } else {
+          await sessionStore.setServerConversationId(response.conversationId);
+        }
       }
 
       if (response.conversationHistory && response.conversationHistory.length > 0) {
@@ -726,36 +803,69 @@ export default function ChatScreen({ route, navigation }: any) {
         console.log('[ChatScreen] newMessages roles:', newMessages.map(m => `${m.role}(toolCalls:${m.toolCalls?.length || 0},toolResults:${m.toolResults?.length || 0})`).join(', '));
         console.log('[ChatScreen] messageCountBeforeTurn:', messageCountBeforeTurn);
 
-        setMessages((m) => {
-          console.log('[ChatScreen] Current messages before update:', m.length);
-          const beforePlaceholder = m.slice(0, messageCountBeforeTurn + 1);
-          console.log('[ChatScreen] beforePlaceholder count:', beforePlaceholder.length);
-          const result = [...beforePlaceholder, ...newMessages];
-          console.log('[ChatScreen] Final messages count:', result.length);
-          return result;
-        });
+        if (sessionChanged && requestSessionId) {
+          // Only persist to background session if this is still the latest request for that session
+          // This prevents an older request from overwriting newer history (PR review fix #14)
+          if (isLatestForSession) {
+            console.log('[ChatScreen] Persisting completed response to background session:', requestSessionId);
+            // Build the final messages array: messages before this turn + user message + new assistant messages
+            const messagesBeforeTurn = messages.slice(0, messageCountBeforeTurn);
+            const finalMessages = [...messagesBeforeTurn, userMsg, ...newMessages];
+            await sessionStore.setMessagesForSession(requestSessionId, finalMessages);
+          } else {
+            console.log('[ChatScreen] Skipping background persistence - request superseded within session:', {
+              thisRequestId,
+              latestRequestId: connectionManager.getLatestRequestId(requestSessionId)
+            });
+          }
+        } else {
+          // Normal case: update UI state (persistence happens via useEffect)
+          setMessages((m) => {
+            console.log('[ChatScreen] Current messages before update:', m.length);
+            const beforePlaceholder = m.slice(0, messageCountBeforeTurn + 1);
+            console.log('[ChatScreen] beforePlaceholder count:', beforePlaceholder.length);
+            const result = [...beforePlaceholder, ...newMessages];
+            console.log('[ChatScreen] Final messages count:', result.length);
+            return result;
+          });
+        }
       } else if (finalText) {
         console.log('[ChatScreen] FALLBACK: No conversationHistory, using finalText only. response.conversationHistory:', response.conversationHistory);
-        setMessages((m) => {
-          const copy = [...m];
-          for (let i = copy.length - 1; i >= 0; i--) {
-            if (copy[i].role === 'assistant') {
-              copy[i] = { ...copy[i], content: finalText };
-              break;
-            }
+        if (sessionChanged && requestSessionId) {
+          // Only persist to background session if this is still the latest request for that session
+          // This prevents an older request from overwriting newer history (PR review fix #14)
+          if (isLatestForSession) {
+            console.log('[ChatScreen] Persisting fallback response to background session:', requestSessionId);
+            const messagesBeforeTurn = messages.slice(0, messageCountBeforeTurn);
+            const finalMessages = [...messagesBeforeTurn, userMsg, { role: 'assistant' as const, content: finalText }];
+            await sessionStore.setMessagesForSession(requestSessionId, finalMessages);
+          } else {
+            console.log('[ChatScreen] Skipping fallback background persistence - request superseded within session:', {
+              thisRequestId,
+              latestRequestId: connectionManager.getLatestRequestId(requestSessionId)
+            });
           }
-          return copy;
-        });
+        } else {
+          // Normal case: update UI state
+          setMessages((m) => {
+            const copy = [...m];
+            for (let i = copy.length - 1; i >= 0; i--) {
+              if (copy[i].role === 'assistant') {
+                copy[i] = { ...copy[i], content: finalText };
+                break;
+              }
+            }
+            return copy;
+          });
+        }
       } else {
         console.log('[ChatScreen] WARNING: No conversationHistory and no finalText!');
       }
 
-      if (response.conversationId) {
-        console.log('[ChatScreen] Saving server conversation ID:', response.conversationId);
-        sessionStore.setServerConversationId(response.conversationId);
-      }
+      // Note: Removed duplicate setServerConversationId call that was after the message handling
+      // The conversation ID is now saved once at the beginning of this block
 
-      if (finalText && config.ttsEnabled !== false) {
+      if (!sessionChanged && finalText && config.ttsEnabled !== false) {
         const processedText = preprocessTextForTTS(finalText);
         Speech.speak(processedText, { language: 'en-US' });
       }
@@ -768,7 +878,8 @@ export default function ChatScreen({ route, navigation }: any) {
       });
 
       // Guard: skip error message if session has changed since request started
-      if (sessionStore.currentSessionId !== requestSessionId) {
+      // Use currentSessionIdRef.current to avoid stale closure issue (useSessions returns new object each render)
+      if (currentSessionIdRef.current !== requestSessionId) {
         console.log('[ChatScreen] Session changed during request, skipping error message');
         return;
       }
@@ -786,25 +897,44 @@ export default function ChatScreen({ route, navigation }: any) {
       setMessages((m) => [...m, { role: 'assistant', content: `Error: ${errorMessage}\n\nTip: Check your internet connection and try again.` }]);
     } finally {
       console.log('[ChatScreen] Chat request finished, requestId:', thisRequestId);
-      // Only reset UI states if this request is still the active one
-      // This prevents an old request from clobbering state if a new request started
-      // (e.g., user switched sessions and started a new chat mid-request)
-      if (activeRequestIdRef.current === thisRequestId) {
+
+      // Decrement active request count in the connection manager
+      if (requestSessionId) {
+        connectionManager.decrementActiveRequests(requestSessionId);
+      }
+
+      // Only reset UI states if:
+      // 1. This request is still the latest one for its session (per-session tracking, PR review fix #13)
+      // 2. We're still on the same session (prevents background completions from affecting other sessions)
+      // This addresses PR review comments #10 and #13
+      const isLatestForThisSession = requestSessionId
+        ? connectionManager.getLatestRequestId(requestSessionId) === thisRequestId
+        : true;
+      const isCurrentSession = currentSessionIdRef.current === requestSessionId;
+
+      if (isLatestForThisSession && isCurrentSession) {
         setResponding(false);
         setConnectionState(null);
         // Guard the setTimeout callback: only clear debugInfo if this request
-        // is still the active one when the timeout fires. This prevents an
+        // is still the latest one when the timeout fires. This prevents an
         // old request's delayed clear from wiping debug info for a newer request.
         const capturedRequestId = thisRequestId;
+        const capturedSessionId = requestSessionId;
         setTimeout(() => {
-          if (activeRequestIdRef.current === capturedRequestId) {
+          const stillLatest = capturedSessionId
+            ? connectionManager.getLatestRequestId(capturedSessionId) === capturedRequestId
+            : true;
+          if (stillLatest && currentSessionIdRef.current === capturedSessionId) {
             setDebugInfo('');
           }
         }, 5000);
       } else {
-        console.log('[ChatScreen] Skipping finally state resets: newer request is active', {
+        console.log('[ChatScreen] Skipping finally state resets:', {
           thisRequestId,
-          activeRequestId: activeRequestIdRef.current
+          latestRequestId: requestSessionId ? connectionManager.getLatestRequestId(requestSessionId) : 'no-session',
+          requestSessionId,
+          currentSessionId: currentSessionIdRef.current,
+          reason: !isLatestForThisSession ? 'newer request is active for this session' : 'session changed'
         });
       }
     }

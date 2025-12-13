@@ -144,8 +144,12 @@ export class OpenAIClient {
     onRetry?: (attempt: number, error: Error) => void
   ): Promise<ChatResponse> {
     const url = this.getUrl('/chat/completions');
-    // Strip UI-only fields before sending to API
-    const sanitizedMessages = messages.map(({ error, ...msg }) => msg);
+    // Strip UI-only fields before sending to API and filter out error-state messages
+    // Error-state messages (those with error field set) represent UI error states
+    // and should not be included in the conversation history sent to the model
+    const sanitizedMessages = messages
+      .filter(msg => !msg.error) // Remove error-state messages from context
+      .map(({ error, ...msg }) => msg); // Strip UI-only 'error' field from remaining messages
     const body = { model: this.cfg.model, messages: sanitizedMessages, stream: true };
 
     console.log('[OpenAIClient] Starting chat request');

@@ -53,6 +53,15 @@ export function isRetryableError(error: unknown): boolean {
       'enotfound',
       'sse connection error',
       'sse connection failed',
+      // Server errors (5xx) that indicate temporary unavailability
+      '500',
+      '502',
+      '503',
+      '504',
+      'internal server error',
+      'bad gateway',
+      'service unavailable',
+      'gateway timeout',
     ];
     
     return retryablePatterns.some(pattern => 

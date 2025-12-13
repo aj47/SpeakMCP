@@ -313,7 +313,9 @@ const toolHandlers: Record<string, ToolHandler> = {
     const { mcpService } = await import("./mcp-service")
     mcpService.applyProfileMcpConfig(
       profile.mcpServerConfig?.disabledServers ?? [],
-      profile.mcpServerConfig?.disabledTools ?? []
+      profile.mcpServerConfig?.disabledTools ?? [],
+      profile.mcpServerConfig?.allServersDisabledByDefault ?? false,
+      profile.mcpServerConfig?.enabledServers ?? []
     )
 
     // Update config with profile's guidelines, system prompt, and model configuration

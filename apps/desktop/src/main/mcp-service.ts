@@ -21,13 +21,14 @@ import {
   MCPTransportType,
   Config,
   ServerLogEntry,
+  ProfilesData,
 } from "../shared/types"
 import { requestElicitation, handleElicitationComplete, cancelAllElicitations } from "./mcp-elicitation"
 import { requestSampling, cancelAllSamplingRequests } from "./mcp-sampling"
 import { inferTransportType, normalizeMcpConfig } from "../shared/mcp-utils"
 import { spawn } from "child_process"
 import { promisify } from "util"
-import { access, constants } from "fs"
+import { access, constants, readFileSync, existsSync } from "fs"
 import path from "path"
 import os from "os"
 import { diagnosticsService } from "./diagnostics"
@@ -35,7 +36,7 @@ import { state, agentProcessManager } from "./state"
 import { OAuthClient } from "./oauth-client"
 import { oauthStorage } from "./oauth-storage"
 import { isDebugTools, logTools } from "./debug"
-import { dialog } from "electron"
+import { app, dialog } from "electron"
 import { builtinTools, executeBuiltinTool, isBuiltinTool, BUILTIN_SERVER_NAME } from "./builtin-tools"
 
 const accessAsync = promisify(access)
@@ -124,6 +125,50 @@ export class MCPService {
       if (Array.isArray(persistedTools)) {
         for (const toolName of persistedTools) {
           this.disabledTools.add(toolName)
+        }
+      }
+
+      // Check if current profile has allServersDisabledByDefault enabled
+      // If so, derive runtimeDisabledServers directly from enabledServers to avoid config/profile drift
+      // This handles newly-added MCP servers and ensures servers in enabledServers are not disabled
+      const profilesPath = path.join(
+        app.getPath("appData"),
+        process.env.APP_ID,
+        "profiles.json"
+      )
+      if (existsSync(profilesPath)) {
+        const profilesData = JSON.parse(readFileSync(profilesPath, "utf8")) as ProfilesData
+        const currentProfile = profilesData.profiles?.find(
+          (p) => p.id === profilesData.currentProfileId
+        )
+        const mcpServerConfig = currentProfile?.mcpServerConfig
+        if (mcpServerConfig?.allServersDisabledByDefault) {
+          // Get all configured MCP server names
+          const allServerNames = Object.keys(config?.mcpConfig?.mcpServers || {})
+          const enabledServers = new Set(mcpServerConfig.enabledServers || [])
+
+          // Derive runtimeDisabledServers directly from enabledServers (source of truth)
+          // This avoids drift where stale mcpRuntimeDisabledServers contains servers
+          // that are now in enabledServers
+          this.runtimeDisabledServers.clear()
+          for (const serverName of allServerNames) {
+            if (!enabledServers.has(serverName)) {
+              this.runtimeDisabledServers.add(serverName)
+            }
+          }
+
+          // Persist the derived runtimeDisabledServers to configStore
+          // This ensures status/reporting paths (e.g., list_mcp_servers, getDetailedToolList)
+          // that read from configStore stay in sync with actual runtime state
+          try {
+            const updatedConfig: Config = {
+              ...config,
+              mcpRuntimeDisabledServers: Array.from(this.runtimeDisabledServers),
+            }
+            configStore.save(updatedConfig)
+          } catch (persistError) {
+            // Ignore persistence errors; runtime state will still be respected in-session
+          }
         }
       }
     } catch (e) {}
@@ -767,8 +812,12 @@ export class MCPService {
   /**
    * Apply MCP configuration from a profile
    * This updates the runtime enabled/disabled state for servers and tools
+   * @param disabledServers - Array of server names to disable (only used when allServersDisabledByDefault is false)
+   * @param disabledTools - Array of tool names to disable
+   * @param allServersDisabledByDefault - If true, ALL servers are disabled except those in enabledServers (strict opt-in mode, disabledServers is ignored). If false, only servers in disabledServers are disabled.
+   * @param enabledServers - When allServersDisabledByDefault is true, servers in this list are explicitly enabled (user opt-in)
    */
-  applyProfileMcpConfig(disabledServers?: string[], disabledTools?: string[]): void {
+  applyProfileMcpConfig(disabledServers?: string[], disabledTools?: string[], allServersDisabledByDefault?: boolean, enabledServers?: string[]): void {
     const config = configStore.get()
     const mcpConfig = config.mcpConfig
     const allServerNames = Object.keys(mcpConfig?.mcpServers || {})
@@ -777,7 +826,23 @@ export class MCPService {
     // Enable all servers first, then disable those specified in the profile
     this.runtimeDisabledServers.clear()
 
-    if (disabledServers && disabledServers.length > 0) {
+    if (allServersDisabledByDefault) {
+      // When allServersDisabledByDefault is true, disable ALL servers EXCEPT those explicitly enabled
+      // enabledServers contains servers the user has opted-in to use for this profile
+      const enabledSet = new Set(enabledServers || [])
+      for (const serverName of allServerNames) {
+        if (!enabledSet.has(serverName)) {
+          this.runtimeDisabledServers.add(serverName)
+          // Stop the server if it's running
+          if (this.initializedServers.has(serverName)) {
+            this.stopServer(serverName).catch(() => {
+              // Ignore cleanup errors
+            })
+          }
+        }
+      }
+    } else if (disabledServers && disabledServers.length > 0) {
+      // Only disable explicitly listed servers
       for (const serverName of disabledServers) {
         // Only add if server exists in config
         if (allServerNames.includes(serverName)) {
@@ -843,10 +908,17 @@ export class MCPService {
   /**
    * Get current MCP configuration state (for saving to profile)
    */
-  getCurrentMcpConfigState(): { disabledServers: string[], disabledTools: string[] } {
+  getCurrentMcpConfigState(): { disabledServers: string[], disabledTools: string[], enabledServers: string[] } {
+    // Calculate enabled servers as all servers minus disabled servers
+    const config = configStore.get()
+    const mcpConfig = config.mcpConfig
+    const allServerNames = Object.keys(mcpConfig?.mcpServers || {})
+    const enabledServers = allServerNames.filter(name => !this.runtimeDisabledServers.has(name))
+
     return {
       disabledServers: Array.from(this.runtimeDisabledServers),
       disabledTools: Array.from(this.disabledTools),
+      enabledServers,
     }
   }
 
@@ -865,11 +937,12 @@ export class MCPService {
         profileService.saveCurrentMcpStateToProfile(
           currentProfileId,
           state.disabledServers,
-          state.disabledTools
+          state.disabledTools,
+          state.enabledServers
         )
 
         if (isDebugTools()) {
-          logTools(`Auto-saved MCP state to profile ${currentProfileId}: ${state.disabledServers.length} servers disabled, ${state.disabledTools.length} tools disabled`)
+          logTools(`Auto-saved MCP state to profile ${currentProfileId}: ${state.disabledServers.length} servers disabled, ${state.enabledServers.length} servers enabled, ${state.disabledTools.length} tools disabled`)
         }
       }).catch(() => {
         // Ignore errors - profile save is best-effort

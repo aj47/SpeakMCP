@@ -1,4 +1,4 @@
-import React, { useState } from "react"
+import React, { useState, useEffect } from "react"
 import { cn } from "@renderer/lib/utils"
 import { X, Clock, Trash2, Pencil, Check, ChevronDown, ChevronUp, AlertCircle, RefreshCw } from "lucide-react"
 import { Button } from "@renderer/components/ui/button"
@@ -28,6 +28,13 @@ function QueuedMessageItem({
   const [isExpanded, setIsExpanded] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
   const [editText, setEditText] = useState(message.text)
+
+  // Sync editText with message.text when it changes via IPC (only when not editing)
+  useEffect(() => {
+    if (!isEditing) {
+      setEditText(message.text)
+    }
+  }, [message.text, isEditing])
 
   const removeMutation = useMutation({
     mutationFn: async () => {
@@ -74,11 +81,10 @@ function QueuedMessageItem({
   // Mutation to retry a failed message by resetting its status to pending
   const retryMutation = useMutation({
     mutationFn: async () => {
-      // Reset the status to pending by updating the message text (triggers status reset on backend)
-      await tipcClient.updateQueuedMessageText({
+      // Retry the failed message - resets status to pending and triggers queue processing if idle
+      await tipcClient.retryQueuedMessage({
         conversationId,
         messageId: message.id,
-        text: message.text,
       })
     },
   })

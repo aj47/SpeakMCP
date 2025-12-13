@@ -2446,6 +2446,39 @@ export const router = {
       const { messageQueueService } = await import("./message-queue-service")
       return messageQueueService.updateMessageText(input.conversationId, input.messageId, input.text)
     }),
+
+  retryQueuedMessage: t.procedure
+    .input<{ conversationId: string; messageId: string }>()
+    .action(async ({ input }) => {
+      const { messageQueueService } = await import("./message-queue-service")
+      const { agentSessionTracker } = await import("./agent-session-tracker")
+
+      // Reset the message to pending status
+      const queue = messageQueueService.getQueue(input.conversationId)
+      const message = queue.find((m) => m.id === input.messageId)
+      if (!message) return false
+
+      // Use updateMessageText to reset failed message to pending
+      const success = messageQueueService.updateMessageText(input.conversationId, input.messageId, message.text)
+      if (!success) return false
+
+      // Check if conversation is idle (no active session)
+      const activeSessionId = agentSessionTracker.findSessionByConversationId(input.conversationId)
+      if (activeSessionId) {
+        const session = agentSessionTracker.getSession(activeSessionId)
+        if (session && session.status === "active") {
+          // Session is active, queue will be processed when it completes
+          return true
+        }
+      }
+
+      // Conversation is idle, trigger queue processing
+      processQueuedMessages(input.conversationId).catch((err) => {
+        logLLM("[retryQueuedMessage] Error processing queued messages:", err)
+      })
+
+      return true
+    }),
 }
 
 // TTS Provider Implementation Functions

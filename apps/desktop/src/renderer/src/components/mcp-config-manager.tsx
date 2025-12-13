@@ -68,7 +68,8 @@ interface ServerDialogProps {
   onCancel: () => void
   // Import functionality props (only needed for Add mode, not Edit mode)
   onImportFromFile?: () => Promise<void>
-  onImportFromText?: (text: string) => Promise<void>
+  // Returns true on success, false on failure (to preserve user input on errors)
+  onImportFromText?: (text: string) => Promise<boolean>
 }
 
 function ServerDialog({ server, onSave, onCancel, onImportFromFile, onImportFromText }: ServerDialogProps) {
@@ -563,8 +564,11 @@ function ServerDialog({ server, onSave, onCancel, onImportFromFile, onImportFrom
               onClick={async () => {
                 setIsValidatingJson(true)
                 try {
-                  await onImportFromText(jsonInputText)
-                  setJsonInputText("")
+                  const success = await onImportFromText(jsonInputText)
+                  // Only clear input on successful import to preserve user input on errors
+                  if (success) {
+                    setJsonInputText("")
+                  }
                 } finally {
                   setIsValidatingJson(false)
                 }
@@ -981,7 +985,7 @@ export function MCPConfigManager({
     }
   }
 
-  const handleImportFromText = async (text: string) => {
+  const handleImportFromText = async (text: string): Promise<boolean> => {
     try {
       // Format the JSON before validation for better readability
       const formattedJson = formatJsonPreview(text)
@@ -1000,9 +1004,12 @@ export function MCPConfigManager({
         onConfigChange(newConfig)
         setShowAddDialog(false)
         toast.success(`Successfully imported ${Object.keys(importedConfig.mcpServers).length} new server(s)`)
+        return true
       }
+      return false
     } catch (error) {
       toast.error(`Invalid JSON: ${error instanceof Error ? error.message : String(error)}`)
+      return false
     }
   }
 

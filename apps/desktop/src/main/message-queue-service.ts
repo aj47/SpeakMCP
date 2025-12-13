@@ -159,7 +159,8 @@ class MessageQueueService {
   peek(conversationId: string): QueuedMessage | null {
     const queue = this.queues.get(conversationId)
     if (!queue || queue.length === 0) return null
-    return queue[0]
+    // Return the first pending message, skipping failed/cancelled items
+    return queue.find((m) => m.status === "pending") || null
   }
 
   /**

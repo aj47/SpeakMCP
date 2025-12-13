@@ -1324,6 +1324,12 @@ export const router = {
           .catch((error) => {
             logLLM("[createMcpRecording] Agent processing error:", error)
           })
+          .finally(() => {
+            // Process queued messages after this session completes (success or error)
+            processQueuedMessages(conversationId!).catch((err) => {
+              logLLM("[createMcpRecording] Error processing queued messages:", err)
+            })
+          })
 
         // Return immediately with conversation ID
         // Progress updates will be sent via emitAgentProgress

@@ -1618,7 +1618,8 @@ export default function ChatScreen({ route, navigation }: any) {
 
                   // Use the recovery conversation ID if available, so the retry resumes
                   // the same server-created conversation when the first attempt failed mid-stream
-                  const recoveryConversationId = client.getRecoveryConversationId();
+                  const retryClient = getSessionClient();
+                  const recoveryConversationId = retryClient?.getRecoveryConversationId();
                   if (recoveryConversationId) {
                     console.log('[ChatScreen] Retry: Using recovery conversationId:', recoveryConversationId);
                     await sessionStore.setServerConversationId(recoveryConversationId);

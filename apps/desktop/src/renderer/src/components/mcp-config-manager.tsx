@@ -152,10 +152,11 @@ function ServerDialog({ server, onSave, onCancel, onImportFromFile, onImportFrom
     setOAuthConfig(server?.config.oauth || {})
   }, [server])
 
-  // Reset all form state when dialog opens (for Add mode where server prop stays undefined)
+  // Reset all form state when dialog opens or closes (for Add mode where server prop stays undefined)
   // This ensures sensitive data (JSON, env vars, headers, OAuth secrets) is cleared after Cancel/close
+  // and prevents stale values from flashing when the dialog reopens
   useEffect(() => {
-    if (isOpen && !server) {
+    if (!server) {
       // Only reset for Add mode (server is undefined)
       // Edit mode is handled by the server dependency useEffect above
       setName("")
@@ -1015,7 +1016,7 @@ export function MCPConfigManager({
 
   const handleImportFromText = async (text: string): Promise<boolean> => {
     try {
-      // Format the JSON for validation (ensures consistent parsing)
+      // Parse the JSON to ensure it's valid before sending to validation
       const formattedJson = formatJsonPreview(text)
 
       const importedConfig = await tipcClient.validateMcpConfigText({ text: formattedJson })
@@ -1031,7 +1032,7 @@ export function MCPConfigManager({
         }
         onConfigChange(newConfig)
         setShowAddDialog(false)
-        toast.success(`Successfully imported ${Object.keys(importedConfig.mcpServers).length} new server(s)`)
+        toast.success(`Successfully imported ${Object.keys(importedConfig.mcpServers).length} server(s)`)
         return true
       }
       return false

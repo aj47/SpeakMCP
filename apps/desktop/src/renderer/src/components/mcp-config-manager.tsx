@@ -977,7 +977,7 @@ export function MCPConfigManager({
     try {
       const importedConfig = await tipcClient.loadMcpConfigFile({})
       if (importedConfig) {
-        // Merge new servers with existing ones
+        // Add imported servers to config (duplicates will be replaced by imported versions)
         const newConfig = {
           ...config,
           mcpServers: {
@@ -1025,7 +1025,7 @@ export function MCPConfigManager({
       const importedConfig = await tipcClient.validateMcpConfigText({ text: formattedJson })
 
       if (importedConfig) {
-        // Merge new servers with existing ones instead of overwriting
+        // Add imported servers to config (duplicates will be replaced by imported versions)
         const newConfig = {
           ...config,
           mcpServers: {

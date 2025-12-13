@@ -85,13 +85,21 @@ try {
 // Sign the binary on macOS
 if (process.platform === "darwin") {
   console.log("🔐 Signing Rust binary...")
+  const signingRequired = !!process.env.APPLE_DEVELOPER_ID
+
   try {
     execSync("./scripts/sign-binary.sh", {
       cwd: desktopDir,
       stdio: "inherit",
     })
   } catch (error) {
-    console.error("⚠️  Binary signing failed (continuing anyway)")
+    if (signingRequired) {
+      console.error("❌ Binary signing failed and APPLE_DEVELOPER_ID is set")
+      console.error("   Signing is required for release builds")
+      process.exit(1)
+    } else {
+      console.warn("⚠️  Binary signing failed (continuing - set APPLE_DEVELOPER_ID for release builds)")
+    }
   }
 }
 

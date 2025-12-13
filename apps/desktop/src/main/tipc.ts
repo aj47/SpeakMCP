@@ -414,6 +414,9 @@ async function processQueuedMessages(conversationId: string): Promise<void> {
         }
 
         // Process with agent mode
+        // Note: startSnoozed=true is intentional - queued messages are processed in the background
+        // without automatically showing the floating panel, since the original session already
+        // provided visual feedback and we don't want to interrupt users with repeated pop-ups
         await processWithAgentMode(queuedMessage.text, conversationId, undefined, true)
 
         // Only remove the message after successful processing

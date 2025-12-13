@@ -214,7 +214,18 @@ export class OpenAIClient {
     // Wrap onToken to update checkpoint with streaming content
     const wrappedOnToken: ((token: string) => void) | undefined = onToken
       ? (token) => {
-          accumulatedContent += token;
+          // Handle both delta tokens and full-text updates.
+          // When called via onProgress with streamingContent.text, token contains the full accumulated text.
+          // When called via SSE delta events, token contains just the new delta.
+          // Detect full-text updates: if token starts with current accumulatedContent and is longer,
+          // or if token equals accumulatedContent (duplicate call), use replacement instead of append.
+          if (token.startsWith(accumulatedContent)) {
+            // Full-text update: replace instead of append
+            accumulatedContent = token;
+          } else {
+            // Delta token: append
+            accumulatedContent += token;
+          }
           recovery.updateCheckpoint(accumulatedContent, lastReceivedConversationId);
           onToken(token);
         }
@@ -275,7 +286,12 @@ export class OpenAIClient {
         return result;
       } catch (error: any) {
         console.error('[OpenAIClient] Chat request failed:', error);
-        console.log('[OpenAIClient] Checkpoint at failure:', recovery.getCheckpoint());
+        const checkpoint = recovery.getCheckpoint();
+        console.log('[OpenAIClient] Checkpoint at failure:', checkpoint ? {
+          contentLength: checkpoint.content?.length ?? 0,
+          hasConversationId: !!checkpoint.conversationId,
+          lastUpdateTime: checkpoint.lastUpdateTime
+        } : null);
 
         if (isRetryableError(error) && recovery.shouldRetry()) {
           const delayMs = recovery.prepareRetry();

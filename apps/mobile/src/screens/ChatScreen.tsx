@@ -1471,7 +1471,9 @@ export default function ChatScreen({ route, navigation }: any) {
                     }
                     return newMessages;
                   });
-                  send(messageToRetry);
+                  // Use setTimeout to ensure setMessages completes before send() reads the updated state.
+                  // React batches state updates, so send() would otherwise read stale messages.
+                  setTimeout(() => send(messageToRetry), 0);
                 }}
                 activeOpacity={0.7}
               >

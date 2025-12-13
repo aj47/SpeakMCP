@@ -172,12 +172,33 @@ export class SessionConnectionManager {
   /**
    * Decrement the active request count for a session connection.
    * Called when a request completes. Will not go below 0.
+   * Also attempts to trim overflow if the cache is above maxConnections.
    */
   decrementActiveRequests(sessionId: string): void {
     const connection = this.connections.get(sessionId);
     if (connection) {
       connection.activeRequestCount = Math.max(0, connection.activeRequestCount - 1);
       connection.lastAccessedAt = Date.now();
+
+      // After a request completes, try to trim overflow if we're above maxConnections
+      // This ensures the cache eventually returns to the configured limit (PR review fix #12)
+      this.tryTrimOverflow();
+    }
+  }
+
+  /**
+   * Attempts to trim the connection cache back to maxConnections by evicting
+   * inactive connections. This is called after requests complete to clean up
+   * any temporary overflow that was allowed to protect active streams.
+   */
+  private tryTrimOverflow(): void {
+    // Keep evicting LRU inactive connections until we're at or below maxConnections
+    while (this.connections.size > this.maxConnections) {
+      const evicted = this.evictLRUConnection();
+      if (!evicted) {
+        // All remaining connections are active, stop trying
+        break;
+      }
     }
   }
 

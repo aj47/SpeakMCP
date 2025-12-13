@@ -129,8 +129,8 @@ export class MCPService {
       }
 
       // Check if current profile has allServersDisabledByDefault enabled
-      // If so, ensure any servers NOT in enabledServers are disabled
-      // This handles newly-added MCP servers that weren't in the profile when it was saved
+      // If so, derive runtimeDisabledServers directly from enabledServers to avoid config/profile drift
+      // This handles newly-added MCP servers and ensures servers in enabledServers are not disabled
       const profilesPath = path.join(
         app.getPath("appData"),
         process.env.APP_ID,
@@ -147,28 +147,27 @@ export class MCPService {
           const allServerNames = Object.keys(config?.mcpConfig?.mcpServers || {})
           const enabledServers = new Set(mcpServerConfig.enabledServers || [])
 
-          // Any server NOT in enabledServers should be disabled
-          let stateChanged = false
+          // Derive runtimeDisabledServers directly from enabledServers (source of truth)
+          // This avoids drift where stale mcpRuntimeDisabledServers contains servers
+          // that are now in enabledServers
+          this.runtimeDisabledServers.clear()
           for (const serverName of allServerNames) {
-            if (!enabledServers.has(serverName) && !this.runtimeDisabledServers.has(serverName)) {
+            if (!enabledServers.has(serverName)) {
               this.runtimeDisabledServers.add(serverName)
-              stateChanged = true
             }
           }
 
-          // Persist the updated runtimeDisabledServers to configStore
+          // Persist the derived runtimeDisabledServers to configStore
           // This ensures status/reporting paths (e.g., list_mcp_servers, getDetailedToolList)
           // that read from configStore stay in sync with actual runtime state
-          if (stateChanged) {
-            try {
-              const updatedConfig: Config = {
-                ...config,
-                mcpRuntimeDisabledServers: Array.from(this.runtimeDisabledServers),
-              }
-              configStore.save(updatedConfig)
-            } catch (persistError) {
-              // Ignore persistence errors; runtime state will still be respected in-session
+          try {
+            const updatedConfig: Config = {
+              ...config,
+              mcpRuntimeDisabledServers: Array.from(this.runtimeDisabledServers),
             }
+            configStore.save(updatedConfig)
+          } catch (persistError) {
+            // Ignore persistence errors; runtime state will still be respected in-session
           }
         }
       }

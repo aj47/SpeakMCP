@@ -19,11 +19,9 @@ interface MessageQueuePanelProps {
 function QueuedMessageItem({
   message,
   conversationId,
-  index,
 }: {
   message: QueuedMessage
   conversationId: string
-  index: number
 }) {
   const [isExpanded, setIsExpanded] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
@@ -176,7 +174,7 @@ function QueuedMessageItem({
                 isFailed ? "text-destructive/70" :
                 isProcessing ? "text-primary/70" : "text-muted-foreground"
               )}>
-                {formatTime(message.createdAt)} • {isFailed ? "Failed" : isProcessing ? "Processing..." : `#${index + 1} in queue`}
+                {formatTime(message.createdAt)} • {isFailed ? "Failed" : isProcessing ? "Processing..." : "Queued"}
               </span>
               {isLongMessage && (
                 <Button
@@ -322,12 +320,11 @@ export function MessageQueuePanel({
 
       {/* Message List */}
       <div className="divide-y max-h-60 overflow-y-auto">
-        {messages.map((msg, index) => (
+        {messages.map((msg) => (
           <QueuedMessageItem
             key={msg.id}
             message={msg}
             conversationId={conversationId}
-            index={index}
           />
         ))}
       </div>

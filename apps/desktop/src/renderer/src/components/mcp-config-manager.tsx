@@ -162,6 +162,7 @@ function ServerDialog({ server, onSave, onCancel, onImportFromFile, onImportFrom
       setName("")
       setActiveTab('manual')
       setJsonInputText("")
+      setIsValidatingJson(false) // Reset validation state to prevent UI getting stuck
       setTransport("stdio")
       setFullCommand("")
       setUrl("")
@@ -1016,7 +1017,9 @@ export function MCPConfigManager({
 
   const handleImportFromText = async (text: string): Promise<boolean> => {
     try {
-      // Attempt to format the JSON for consistency (falls back to original text if invalid)
+      // Format JSON for consistency before validation (falls back to original text if parsing fails)
+      // Note: formatJsonPreview returns the original text on parse errors, actual validation
+      // is performed by validateMcpConfigText which will catch any JSON syntax errors
       const formattedJson = formatJsonPreview(text)
 
       const importedConfig = await tipcClient.validateMcpConfigText({ text: formattedJson })

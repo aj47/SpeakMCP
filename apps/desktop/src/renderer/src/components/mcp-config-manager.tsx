@@ -152,14 +152,26 @@ function ServerDialog({ server, onSave, onCancel, onImportFromFile, onImportFrom
     setOAuthConfig(server?.config.oauth || {})
   }, [server])
 
-  // Reset import-related state when dialog opens (for Add mode where server prop stays undefined)
-  // This ensures pasted JSON (potentially containing secrets) is cleared after Cancel/close
+  // Reset all form state when dialog opens (for Add mode where server prop stays undefined)
+  // This ensures sensitive data (JSON, env vars, headers, OAuth secrets) is cleared after Cancel/close
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && !server) {
+      // Only reset for Add mode (server is undefined)
+      // Edit mode is handled by the server dependency useEffect above
+      setName("")
       setActiveTab('manual')
       setJsonInputText("")
+      setTransport("stdio")
+      setFullCommand("")
+      setUrl("")
+      setEnv("")
+      setTimeout("")
+      setSelectedExample("")
+      setDisabled(false)
+      setHeaders("")
+      setOAuthConfig({})
     }
-  }, [isOpen])
+  }, [isOpen, server])
 
   const handleSave = () => {
     if (!name.trim()) {

@@ -29,6 +29,7 @@ const requiredDirs = [
   resourcesBinDir,
   join(desktopDir, "dist"),
   join(desktopDir, "dist-installer"),
+  join(desktopDir, "dist-installer@speakmcp"),
 ]
 
 for (const dir of requiredDirs) {

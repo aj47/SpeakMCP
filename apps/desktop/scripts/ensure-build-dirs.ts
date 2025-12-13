@@ -21,24 +21,33 @@ const desktopDir = join(__dirname, "..")
 const requiredDirs = [
   "dist",
   "dist-installer",
+  "dist-installer@speakmcp",
   "resources/bin",
 ]
 
 console.log("📁 Ensuring build directories exist...")
 
+let hasErrors = false
+
 for (const dir of requiredDirs) {
   const fullPath = join(desktopDir, dir)
-  
+
   if (!existsSync(fullPath)) {
     try {
       mkdirSync(fullPath, { recursive: true })
       console.log(`  ✅ Created: ${dir}`)
     } catch (error) {
       console.error(`  ❌ Failed to create ${dir}:`, error)
+      hasErrors = true
     }
   } else {
     console.log(`  ✓ Exists: ${dir}`)
   }
+}
+
+if (hasErrors) {
+  console.error("❌ Failed to create one or more required directories")
+  process.exit(1)
 }
 
 console.log("📁 Build directories ready")

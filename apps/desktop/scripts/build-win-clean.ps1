@@ -97,6 +97,7 @@ function Ensure-BuildDirectories {
     $directories = @(
         "dist",
         "dist-installer",
+        "dist-installer@speakmcp",
         "resources/bin"
     )
 

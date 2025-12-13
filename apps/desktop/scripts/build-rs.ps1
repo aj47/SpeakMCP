@@ -58,7 +58,8 @@ Write-Host "[INFO] Ensuring required directories exist..." -ForegroundColor Yell
 $requiredDirs = @(
     "resources/bin",
     "dist",
-    "dist-installer"
+    "dist-installer",
+    "dist-installer@speakmcp"
 )
 
 foreach ($dir in $requiredDirs) {

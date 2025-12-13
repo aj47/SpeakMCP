@@ -18,8 +18,10 @@ export interface ConnectionManagerContextValue {
   getOrCreateConnection: (sessionId: string) => ReturnType<SessionConnectionManager['getOrCreateConnection']>;
   /** Get an existing connection without creating */
   getConnection: (sessionId: string) => ReturnType<SessionConnectionManager['getConnection']>;
-  /** Mark a connection as active/inactive */
-  setConnectionActive: (sessionId: string, isActive: boolean) => void;
+  /** Increment active request count when a request starts */
+  incrementActiveRequests: (sessionId: string) => void;
+  /** Decrement active request count when a request completes */
+  decrementActiveRequests: (sessionId: string) => void;
   /** Check if a connection is active */
   isConnectionActive: (sessionId: string) => boolean;
   /** Get connection state for a session */
@@ -105,7 +107,8 @@ export function useConnectionManagerProvider(clientConfig: OpenAIConfig): Connec
     manager,
     getOrCreateConnection: (sessionId: string) => manager.getOrCreateConnection(sessionId),
     getConnection: (sessionId: string) => manager.getConnection(sessionId),
-    setConnectionActive: (sessionId: string, isActive: boolean) => manager.setConnectionActive(sessionId, isActive),
+    incrementActiveRequests: (sessionId: string) => manager.incrementActiveRequests(sessionId),
+    decrementActiveRequests: (sessionId: string) => manager.decrementActiveRequests(sessionId),
     isConnectionActive: (sessionId: string) => manager.isConnectionActive(sessionId),
     getConnectionState: (sessionId: string) => manager.getConnectionState(sessionId),
     removeConnection: (sessionId: string) => manager.removeConnection(sessionId),

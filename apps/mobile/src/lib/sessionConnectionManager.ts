@@ -18,7 +18,7 @@ export interface SessionConnection {
   sessionId: string;
   client: OpenAIClient;
   lastAccessedAt: number;
-  isActive: boolean;
+  activeRequestCount: number;
   connectionState: RecoveryState | null;
 }
 
@@ -86,7 +86,7 @@ export class SessionConnectionManager {
       sessionId,
       client,
       lastAccessedAt: Date.now(),
-      isActive: false,
+      activeRequestCount: 0,
       connectionState: null,
     };
 
@@ -158,21 +158,34 @@ export class SessionConnectionManager {
   }
 
   /**
-   * Mark a session connection as active (currently in use for streaming)
+   * Increment the active request count for a session connection.
+   * Called when a new request starts.
    */
-  setConnectionActive(sessionId: string, isActive: boolean): void {
+  incrementActiveRequests(sessionId: string): void {
     const connection = this.connections.get(sessionId);
     if (connection) {
-      connection.isActive = isActive;
+      connection.activeRequestCount++;
       connection.lastAccessedAt = Date.now();
     }
   }
 
   /**
-   * Check if a session has an active connection
+   * Decrement the active request count for a session connection.
+   * Called when a request completes. Will not go below 0.
+   */
+  decrementActiveRequests(sessionId: string): void {
+    const connection = this.connections.get(sessionId);
+    if (connection) {
+      connection.activeRequestCount = Math.max(0, connection.activeRequestCount - 1);
+      connection.lastAccessedAt = Date.now();
+    }
+  }
+
+  /**
+   * Check if a session has an active connection (any in-flight requests)
    */
   isConnectionActive(sessionId: string): boolean {
-    return this.connections.get(sessionId)?.isActive ?? false;
+    return (this.connections.get(sessionId)?.activeRequestCount ?? 0) > 0;
   }
 
   /**
@@ -218,10 +231,10 @@ export class SessionConnectionManager {
   }
 
   /**
-   * Get the number of active connections
+   * Get the number of active connections (sessions with at least one in-flight request)
    */
   getActiveConnectionCount(): number {
-    return Array.from(this.connections.values()).filter(c => c.isActive).length;
+    return Array.from(this.connections.values()).filter(c => c.activeRequestCount > 0).length;
   }
 
   /**
@@ -243,7 +256,7 @@ export class SessionConnectionManager {
     // Find the least recently used INACTIVE connection only
     // We do NOT evict active connections to prevent stream crashes (fixes PR review feedback)
     for (const [sessionId, connection] of this.connections) {
-      if (!connection.isActive && connection.lastAccessedAt < lruTime) {
+      if (connection.activeRequestCount === 0 && connection.lastAccessedAt < lruTime) {
         lruTime = connection.lastAccessedAt;
         lruSessionId = sessionId;
       }

@@ -667,9 +667,9 @@ export default function ChatScreen({ route, navigation }: any) {
     // Capture the session ID at request start to guard against session changes
     const requestSessionId = sessionStore.currentSessionId;
 
-    // Mark connection as active in the connection manager
+    // Increment active request count in the connection manager
     if (requestSessionId) {
-      connectionManager.setConnectionActive(requestSessionId, true);
+      connectionManager.incrementActiveRequests(requestSessionId);
     }
 
     try {
@@ -732,13 +732,14 @@ export default function ChatScreen({ route, navigation }: any) {
       const response = await client.chat([...messages, userMsg], onToken, onProgress, serverConversationId);
       const finalText = response.content || streamingText;
       console.log('[ChatScreen] Chat completed, conversationId:', response.conversationId);
-      setDebugInfo(`Completed!`);
 
       // Guard: skip UI updates if session has changed, BUT still persist to the original session
       // Use currentSessionIdRef.current to avoid stale closure issue (useSessions returns new object each render)
       const sessionChanged = currentSessionIdRef.current !== requestSessionId;
       if (sessionChanged) {
         console.log('[ChatScreen] Session changed during request, persisting to original session without UI update');
+      } else {
+        setDebugInfo(`Completed!`);
       }
 
       // Guard: skip final updates if this request is no longer the active one (within same session)
@@ -835,7 +836,7 @@ export default function ChatScreen({ route, navigation }: any) {
       // Note: Removed duplicate setServerConversationId call that was after the message handling
       // The conversation ID is now saved once at the beginning of this block
 
-      if (finalText && config.ttsEnabled !== false) {
+      if (!sessionChanged && finalText && config.ttsEnabled !== false) {
         const processedText = preprocessTextForTTS(finalText);
         Speech.speak(processedText, { language: 'en-US' });
       }
@@ -868,9 +869,9 @@ export default function ChatScreen({ route, navigation }: any) {
     } finally {
       console.log('[ChatScreen] Chat request finished, requestId:', thisRequestId);
 
-      // Mark connection as inactive in the connection manager
+      // Decrement active request count in the connection manager
       if (requestSessionId) {
-        connectionManager.setConnectionActive(requestSessionId, false);
+        connectionManager.decrementActiveRequests(requestSessionId);
       }
 
       // Only reset UI states if this request is still the active one

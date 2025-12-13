@@ -4,6 +4,7 @@ import fs from "fs"
 import { Profile, ProfilesData, ProfileMcpServerConfig, ProfileModelConfig } from "@shared/types"
 import { randomUUID } from "crypto"
 import { logApp } from "./debug"
+import { configStore } from "./config"
 
 export const profilesPath = path.join(
   app.getPath("appData"),
@@ -40,8 +41,24 @@ class ProfileService {
       logApp("Error loading profiles:", error)
     }
 
+    // For new installs, initialize the default profile with all MCPs disabled
+    // This aligns with createProfile() behavior - users opt-in to what they need
+    const config = configStore.get()
+    const mcpConfig = config.mcpConfig
+    const allServerNames = Object.keys(mcpConfig?.mcpServers || {})
+
+    const defaultProfileWithMcpConfig: Profile = {
+      ...DEFAULT_PROFILES[0],
+      mcpServerConfig: {
+        disabledServers: allServerNames,
+        disabledTools: [],
+        // Flag ensures newly-added servers are also disabled by default
+        allServersDisabledByDefault: true,
+      },
+    }
+
     this.profilesData = {
-      profiles: DEFAULT_PROFILES,
+      profiles: [defaultProfileWithMcpConfig],
       currentProfileId: "default",
     }
     this.saveProfiles()
@@ -84,6 +101,11 @@ class ProfileService {
   }
 
   createProfile(name: string, guidelines: string, systemPrompt?: string): Profile {
+    // Get all configured MCP server names to disable them by default
+    const config = configStore.get()
+    const mcpConfig = config.mcpConfig
+    const allServerNames = Object.keys(mcpConfig?.mcpServers || {})
+
     const newProfile: Profile = {
       id: randomUUID(),
       name,
@@ -91,6 +113,14 @@ class ProfileService {
       createdAt: Date.now(),
       updatedAt: Date.now(),
       ...(systemPrompt !== undefined && { systemPrompt }),
+      // New profiles have all MCPs disabled by default
+      // Users can enable specific MCPs as needed
+      mcpServerConfig: {
+        disabledServers: allServerNames,
+        disabledTools: [],
+        // Flag ensures newly-added servers are also disabled by default
+        allServersDisabledByDefault: true,
+      },
     }
 
     if (!this.profilesData) {
@@ -186,6 +216,8 @@ class ProfileService {
       ...(profile.mcpServerConfig ?? {}),
       ...(mcpServerConfig.disabledServers !== undefined && { disabledServers: mcpServerConfig.disabledServers }),
       ...(mcpServerConfig.disabledTools !== undefined && { disabledTools: mcpServerConfig.disabledTools }),
+      ...(mcpServerConfig.allServersDisabledByDefault !== undefined && { allServersDisabledByDefault: mcpServerConfig.allServersDisabledByDefault }),
+      ...(mcpServerConfig.enabledServers !== undefined && { enabledServers: mcpServerConfig.enabledServers }),
     }
 
     const updatedProfile = {
@@ -204,10 +236,11 @@ class ProfileService {
    * Save current MCP state to a profile
    * This allows saving the current enabled/disabled server state to a profile
    */
-  saveCurrentMcpStateToProfile(id: string, disabledServers: string[], disabledTools: string[]): Profile {
+  saveCurrentMcpStateToProfile(id: string, disabledServers: string[], disabledTools: string[], enabledServers?: string[]): Profile {
     return this.updateProfileMcpConfig(id, {
       disabledServers,
       disabledTools,
+      ...(enabledServers !== undefined && { enabledServers }),
     })
   }
 
@@ -318,8 +351,23 @@ class ProfileService {
   }
 
   resetToDefaults(): void {
+    // Reset to defaults with all MCPs disabled, consistent with createProfile() and first run behavior
+    const config = configStore.get()
+    const mcpConfig = config.mcpConfig
+    const allServerNames = Object.keys(mcpConfig?.mcpServers || {})
+
+    const defaultProfileWithMcpConfig: Profile = {
+      ...DEFAULT_PROFILES[0],
+      mcpServerConfig: {
+        disabledServers: allServerNames,
+        disabledTools: [],
+        // Flag ensures newly-added servers are also disabled by default
+        allServersDisabledByDefault: true,
+      },
+    }
+
     this.profilesData = {
-      profiles: DEFAULT_PROFILES,
+      profiles: [defaultProfileWithMcpConfig],
       currentProfileId: "default",
     }
     this.saveProfiles()

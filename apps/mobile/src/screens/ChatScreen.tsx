@@ -624,11 +624,20 @@ export default function ChatScreen({ route, navigation }: any) {
     }
   };
 
-  // We need a ref to send function for retryMessage callback
-  const sendRef = useRef(send);
+  // Track pending retry text - when set, a useEffect will trigger send after messages state updates
+  const [pendingRetryText, setPendingRetryText] = useState<string | null>(null);
+
+  // Effect to trigger retry send after messages state has settled
+  // This avoids the race condition with setTimeout where sendRef might have stale state
   useEffect(() => {
-    sendRef.current = send;
-  }, [send]);
+    if (pendingRetryText !== null) {
+      // Clear the pending retry first to prevent re-triggering
+      const textToSend = pendingRetryText;
+      setPendingRetryText(null);
+      // Now send - at this point, the messages state has been updated
+      send(textToSend);
+    }
+  }, [pendingRetryText, send]);
 
   /**
    * Retry a failed message - removes the error message and re-sends the original user message
@@ -660,11 +669,9 @@ export default function ChatScreen({ route, navigation }: any) {
       return [...m.slice(0, messageIndex)];
     });
 
-    // Re-send the original message
-    // Use setTimeout to ensure state updates have propagated
-    setTimeout(() => {
-      sendRef.current(originalText);
-    }, 100);
+    // Set the pending retry text - the useEffect above will trigger send
+    // after the messages state update has been applied
+    setPendingRetryText(originalText);
   }, [messages]);
 
   // Real-time speech results (web handled in ensureWebRecognizer; native listeners are attached on start)

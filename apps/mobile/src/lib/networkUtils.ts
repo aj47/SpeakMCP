@@ -92,6 +92,31 @@ export function delay(ms: number): Promise<void> {
 }
 
 /**
+ * Wait for a specified duration, but can be interrupted by an AbortSignal
+ * @returns Promise that resolves after ms, or rejects if aborted
+ */
+export function abortableDelay(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new Error('Operation aborted'));
+      return;
+    }
+
+    const timeoutId = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+
+    const onAbort = () => {
+      clearTimeout(timeoutId);
+      reject(new Error('Operation aborted'));
+    };
+
+    signal?.addEventListener('abort', onAbort, { once: true });
+  });
+}
+
+/**
  * Create an AbortController that aborts when the app goes to background
  * Returns the controller and a cleanup function
  */
@@ -158,15 +183,11 @@ export async function withRetry<T>(
       // Notify about retry
       onRetry?.(attempt + 1, lastError);
 
-      // Wait before retrying (but check abort during wait)
+      // Wait before retrying with abort-aware delay
       const delayMs = calculateBackoffDelay(attempt, baseDelayMs, maxDelayMs);
       console.log(`[NetworkUtils] Retry ${attempt + 1}/${maxRetries} after ${Math.round(delayMs)}ms`);
 
-      // Check abort before waiting
-      if (signal?.aborted) {
-        throw new Error('Operation aborted');
-      }
-      await delay(delayMs);
+      await abortableDelay(delayMs, signal);
     }
   }
 

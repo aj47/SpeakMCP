@@ -217,6 +217,9 @@ export default function ChatScreen({ route, navigation }: any) {
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
   const wasBackgroundedDuringRequestRef = useRef(false);
 
+  // Ref to track debugInfo clear timeout to prevent old timers from clearing new request's status
+  const debugInfoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // Monitor app state changes to detect backgrounding during active requests
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
@@ -361,6 +364,9 @@ export default function ChatScreen({ route, navigation }: any) {
       if (handsFreeDebounceRef.current) {
         clearTimeout(handsFreeDebounceRef.current);
       }
+      if (debugInfoTimerRef.current) {
+        clearTimeout(debugInfoTimerRef.current);
+      }
     };
   }, []);
 
@@ -459,6 +465,12 @@ export default function ChatScreen({ route, navigation }: any) {
 
   const send = async (text: string) => {
     if (!text.trim()) return;
+
+    // Clear any pending debugInfo clear timer from previous request
+    if (debugInfoTimerRef.current) {
+      clearTimeout(debugInfoTimerRef.current);
+      debugInfoTimerRef.current = null;
+    }
 
     console.log('[ChatScreen] Sending message:', text);
 
@@ -625,7 +637,7 @@ export default function ChatScreen({ route, navigation }: any) {
     } finally {
       console.log('[ChatScreen] Chat request finished');
       setResponding(false);
-      setTimeout(() => setDebugInfo(''), 5000); // Clear debug info after 5 seconds
+      debugInfoTimerRef.current = setTimeout(() => setDebugInfo(''), 5000); // Clear debug info after 5 seconds
     }
   };
 

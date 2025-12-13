@@ -52,6 +52,8 @@ class ProfileService {
       mcpServerConfig: {
         disabledServers: allServerNames,
         disabledTools: [],
+        // Flag ensures newly-added servers are also disabled by default
+        allServersDisabledByDefault: true,
       },
     }
 
@@ -116,6 +118,8 @@ class ProfileService {
       mcpServerConfig: {
         disabledServers: allServerNames,
         disabledTools: [],
+        // Flag ensures newly-added servers are also disabled by default
+        allServersDisabledByDefault: true,
       },
     }
 
@@ -212,6 +216,7 @@ class ProfileService {
       ...(profile.mcpServerConfig ?? {}),
       ...(mcpServerConfig.disabledServers !== undefined && { disabledServers: mcpServerConfig.disabledServers }),
       ...(mcpServerConfig.disabledTools !== undefined && { disabledTools: mcpServerConfig.disabledTools }),
+      ...(mcpServerConfig.allServersDisabledByDefault !== undefined && { allServersDisabledByDefault: mcpServerConfig.allServersDisabledByDefault }),
     }
 
     const updatedProfile = {
@@ -344,6 +349,8 @@ class ProfileService {
       mcpServerConfig: {
         disabledServers: allServerNames,
         disabledTools: [],
+        // Flag ensures newly-added servers are also disabled by default
+        allServersDisabledByDefault: true,
       },
     }
 

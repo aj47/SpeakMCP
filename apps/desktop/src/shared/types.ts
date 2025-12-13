@@ -203,6 +203,9 @@ export interface ConversationHistoryItem {
 export type ProfileMcpServerConfig = {
   disabledServers?: string[]
   disabledTools?: string[]
+  // When true, newly-added MCP servers (added after profile creation) are also disabled by default
+  // This ensures strict opt-in behavior for profiles created with "all MCPs disabled"
+  allServersDisabledByDefault?: boolean
 }
 
 export type ProfileModelConfig = {

@@ -767,8 +767,11 @@ export class MCPService {
   /**
    * Apply MCP configuration from a profile
    * This updates the runtime enabled/disabled state for servers and tools
+   * @param disabledServers - Array of server names to disable
+   * @param disabledTools - Array of tool names to disable
+   * @param allServersDisabledByDefault - If true, also disable servers not in disabledServers (for strict opt-in)
    */
-  applyProfileMcpConfig(disabledServers?: string[], disabledTools?: string[]): void {
+  applyProfileMcpConfig(disabledServers?: string[], disabledTools?: string[], allServersDisabledByDefault?: boolean): void {
     const config = configStore.get()
     const mcpConfig = config.mcpConfig
     const allServerNames = Object.keys(mcpConfig?.mcpServers || {})
@@ -777,7 +780,20 @@ export class MCPService {
     // Enable all servers first, then disable those specified in the profile
     this.runtimeDisabledServers.clear()
 
-    if (disabledServers && disabledServers.length > 0) {
+    if (allServersDisabledByDefault) {
+      // When allServersDisabledByDefault is true, disable ALL servers by default
+      // This ensures newly-added servers are also disabled for profiles that want strict opt-in
+      for (const serverName of allServerNames) {
+        this.runtimeDisabledServers.add(serverName)
+        // Stop the server if it's running
+        if (this.initializedServers.has(serverName)) {
+          this.stopServer(serverName).catch(() => {
+            // Ignore cleanup errors
+          })
+        }
+      }
+    } else if (disabledServers && disabledServers.length > 0) {
+      // Only disable explicitly listed servers
       for (const serverName of disabledServers) {
         // Only add if server exists in config
         if (allServerNames.includes(serverName)) {

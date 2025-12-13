@@ -23,7 +23,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { EventEmitter } from 'expo-modules-core';
 import { useConfigContext, saveConfig } from '../store/config';
 import { useSessionContext } from '../store/sessions';
-import { OpenAIClient, ChatMessage, AgentProgressUpdate } from '../lib/openaiClient';
+import { useConnectionManager } from '../store/connectionManager';
+import { ChatMessage, AgentProgressUpdate } from '../lib/openaiClient';
 import { RecoveryState, formatConnectionStatus } from '../lib/connectionRecovery';
 import * as Speech from 'expo-speech';
 import {
@@ -48,6 +49,7 @@ export default function ChatScreen({ route, navigation }: any) {
   const styles = useMemo(() => createStyles(theme), [theme]);
   const { config, setConfig } = useConfigContext();
   const sessionStore = useSessionContext();
+  const connectionManager = useConnectionManager();
   const handsFree = !!config.handsFree;
   const handsFreeRef = useRef<boolean>(handsFree);
   useEffect(() => { handsFreeRef.current = !!config.handsFree; }, [config.handsFree]);
@@ -79,35 +81,50 @@ export default function ChatScreen({ route, navigation }: any) {
   // Each request gets a unique ID; only the currently active request can reset UI states
   const activeRequestIdRef = useRef<number>(0);
 
-  const client = useMemo(() => {
-    const openAIClient = new OpenAIClient({
-      baseUrl: config.baseUrl,
-      apiKey: config.apiKey,
-      model: config.model,
-      recoveryConfig: {
-        maxRetries: 3,
-        initialDelayMs: 1000,
-        maxDelayMs: 10000,
-        heartbeatIntervalMs: 30000,
-      },
+  // Get or create a connection for the current session using the connection manager
+  // This preserves connections when switching between sessions (fixes #608)
+  const getSessionClient = useCallback(() => {
+    const currentSessionId = sessionStore.currentSessionId;
+    if (!currentSessionId) {
+      console.warn('[ChatScreen] No current session ID, cannot get client');
+      return null;
+    }
+    const connection = connectionManager.getOrCreateConnection(currentSessionId);
+    // Set up connection status callback for this session
+    connection.client.setConnectionStatusCallback((state) => {
+      // Only update UI if this is still the current session
+      if (sessionStore.currentSessionId === currentSessionId) {
+        setConnectionState(state);
+        console.log('[ChatScreen] Connection status:', formatConnectionStatus(state));
+      }
     });
+    return connection.client;
+  }, [connectionManager, sessionStore.currentSessionId]);
 
-    openAIClient.setConnectionStatusCallback((state) => {
-      setConnectionState(state);
-      console.log('[ChatScreen] Connection status:', formatConnectionStatus(state));
-    });
-
-    return openAIClient;
-  }, [config.baseUrl, config.apiKey, config.model]);
-
+  // Restore connection state when switching sessions
   useEffect(() => {
-    return () => {
-      client.cleanup();
-    };
-  }, [client]);
+    const currentSessionId = sessionStore.currentSessionId;
+    if (currentSessionId) {
+      // Check if there's an existing connection with state
+      const existingState = connectionManager.getConnectionState(currentSessionId);
+      if (existingState) {
+        setConnectionState(existingState);
+      } else {
+        setConnectionState(null);
+      }
+      // Check if there's an active request for this session
+      const isActive = connectionManager.isConnectionActive(currentSessionId);
+      setResponding(isActive);
+    }
+  }, [sessionStore.currentSessionId, connectionManager]);
 
   const handleKillSwitch = async () => {
     console.log('[ChatScreen] Kill switch button pressed');
+    const client = getSessionClient();
+    if (!client) {
+      console.error('[ChatScreen] No client available for kill switch');
+      return;
+    }
 
     if (Platform.OS === 'web') {
       const confirmed = window.confirm(
@@ -592,6 +609,14 @@ export default function ChatScreen({ route, navigation }: any) {
 
     console.log('[ChatScreen] Sending message:', text);
 
+    // Get client from connection manager (preserves connections across session switches)
+    const client = getSessionClient();
+    if (!client) {
+      console.error('[ChatScreen] No client available for send');
+      setDebugInfo('Error: No session available');
+      return;
+    }
+
     setDebugInfo(`Starting request to ${config.baseUrl}...`);
 
     const userMsg: ChatMessage = { role: 'user', content: text };
@@ -617,6 +642,11 @@ export default function ChatScreen({ route, navigation }: any) {
 
     // Capture the session ID at request start to guard against session changes
     const requestSessionId = sessionStore.currentSessionId;
+
+    // Mark connection as active in the connection manager
+    if (requestSessionId) {
+      connectionManager.setConnectionActive(requestSessionId, true);
+    }
 
     try {
       let streamingText = '';
@@ -786,6 +816,12 @@ export default function ChatScreen({ route, navigation }: any) {
       setMessages((m) => [...m, { role: 'assistant', content: `Error: ${errorMessage}\n\nTip: Check your internet connection and try again.` }]);
     } finally {
       console.log('[ChatScreen] Chat request finished, requestId:', thisRequestId);
+
+      // Mark connection as inactive in the connection manager
+      if (requestSessionId) {
+        connectionManager.setConnectionActive(requestSessionId, false);
+      }
+
       // Only reset UI states if this request is still the active one
       // This prevents an old request from clobbering state if a new request started
       // (e.g., user switched sessions and started a new chat mid-request)

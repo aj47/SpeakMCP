@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../ui/ThemeProvider';
 import { spacing, radius, Theme } from '../ui/theme';
 import { useSessionContext, SessionStore } from '../store/sessions';
+import { useConnectionManager } from '../store/connectionManager';
 import { SessionListItem } from '../types/session';
 
 const darkSpinner = require('../../assets/loading-spinner.gif');
@@ -16,6 +17,7 @@ interface Props {
 export default function SessionListScreen({ navigation }: Props) {
   const { theme, isDark } = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
+  const connectionManager = useConnectionManager();
 
   useLayoutEffect(() => {
     navigation?.setOptions?.({
@@ -59,7 +61,11 @@ export default function SessionListScreen({ navigation }: Props) {
   };
 
   const handleDeleteSession = (session: SessionListItem) => {
-    const doDelete = () => sessionStore.deleteSession(session.id);
+    const doDelete = () => {
+      // Clean up connection for this session (fixes #608)
+      connectionManager.removeConnection(session.id);
+      sessionStore.deleteSession(session.id);
+    };
 
     if (Platform.OS === 'web') {
       if (window.confirm(`Delete "${session.title}"?`)) {
@@ -78,7 +84,11 @@ export default function SessionListScreen({ navigation }: Props) {
   };
 
   const handleClearAll = () => {
-    const doClear = () => sessionStore.clearAllSessions();
+    const doClear = () => {
+      // Clean up all connections (fixes #608)
+      connectionManager.manager.cleanupAll();
+      sessionStore.clearAllSessions();
+    };
 
     if (Platform.OS === 'web') {
       if (window.confirm('Delete all sessions? This cannot be undone.')) {

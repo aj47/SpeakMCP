@@ -1,0 +1,107 @@
+/**
+ * React context and hooks for SessionConnectionManager
+ * 
+ * Provides a centralized connection manager that persists across navigation,
+ * allowing sessions to maintain their streaming connections when switching views.
+ * 
+ * Fixes issue #608: Mobile app multi-session state management
+ */
+
+import { createContext, useContext, useEffect, useMemo, useRef } from 'react';
+import { SessionConnectionManager, SessionConnectionManagerConfig } from '../lib/sessionConnectionManager';
+import { OpenAIConfig } from '../lib/openaiClient';
+import { RecoveryState } from '../lib/connectionRecovery';
+
+export interface ConnectionManagerContextValue {
+  manager: SessionConnectionManager;
+  /** Get or create a connection for a session */
+  getOrCreateConnection: (sessionId: string) => ReturnType<SessionConnectionManager['getOrCreateConnection']>;
+  /** Get an existing connection without creating */
+  getConnection: (sessionId: string) => ReturnType<SessionConnectionManager['getConnection']>;
+  /** Mark a connection as active/inactive */
+  setConnectionActive: (sessionId: string, isActive: boolean) => void;
+  /** Check if a connection is active */
+  isConnectionActive: (sessionId: string) => boolean;
+  /** Get connection state for a session */
+  getConnectionState: (sessionId: string) => RecoveryState | null;
+  /** Remove a session's connection */
+  removeConnection: (sessionId: string) => void;
+  /** Update client config (recreates connections) */
+  updateClientConfig: (config: OpenAIConfig) => void;
+}
+
+export const ConnectionManagerContext = createContext<ConnectionManagerContextValue | null>(null);
+
+/**
+ * Hook to access the connection manager
+ */
+export function useConnectionManager(): ConnectionManagerContextValue {
+  const ctx = useContext(ConnectionManagerContext);
+  if (!ctx) {
+    throw new Error('useConnectionManager must be used within a ConnectionManagerProvider');
+  }
+  return ctx;
+}
+
+/**
+ * Hook to create and manage the SessionConnectionManager instance
+ * This should be used at the app root level
+ */
+export function useConnectionManagerProvider(clientConfig: OpenAIConfig): ConnectionManagerContextValue {
+  // Use ref to maintain stable manager instance across re-renders
+  const managerRef = useRef<SessionConnectionManager | null>(null);
+  
+  // Track previous config to detect changes
+  const prevConfigRef = useRef<OpenAIConfig | null>(null);
+
+  // Create or update manager
+  const manager = useMemo(() => {
+    // Create new manager if none exists
+    if (!managerRef.current) {
+      managerRef.current = new SessionConnectionManager({
+        clientConfig,
+        maxConnections: 3,
+      });
+    }
+    return managerRef.current;
+  }, []); // Only create once
+
+  // Update config when it changes
+  useEffect(() => {
+    const configChanged = prevConfigRef.current && (
+      prevConfigRef.current.baseUrl !== clientConfig.baseUrl ||
+      prevConfigRef.current.apiKey !== clientConfig.apiKey ||
+      prevConfigRef.current.model !== clientConfig.model
+    );
+
+    if (configChanged) {
+      console.log('[ConnectionManager] Config changed, updating connections');
+      manager.updateClientConfig(clientConfig);
+    }
+
+    prevConfigRef.current = clientConfig;
+  }, [clientConfig, manager]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      console.log('[ConnectionManager] Cleaning up all connections');
+      managerRef.current?.cleanupAll();
+    };
+  }, []);
+
+  // Create stable context value
+  const contextValue = useMemo<ConnectionManagerContextValue>(() => ({
+    manager,
+    getOrCreateConnection: (sessionId: string) => manager.getOrCreateConnection(sessionId),
+    getConnection: (sessionId: string) => manager.getConnection(sessionId),
+    setConnectionActive: (sessionId: string, isActive: boolean) => manager.setConnectionActive(sessionId, isActive),
+    isConnectionActive: (sessionId: string) => manager.isConnectionActive(sessionId),
+    getConnectionState: (sessionId: string) => manager.getConnectionState(sessionId),
+    removeConnection: (sessionId: string) => manager.removeConnection(sessionId),
+    updateClientConfig: (config: OpenAIConfig) => manager.updateClientConfig(config),
+  }), [manager]);
+
+  return contextValue;
+}
+

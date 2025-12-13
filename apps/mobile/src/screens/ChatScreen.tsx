@@ -1204,8 +1204,9 @@ export default function ChatScreen({ route, navigation }: any) {
                       </View>
                     )}
 
-                    {/* Retry button for failed messages */}
-                    {m.error?.isRetryable && (
+                    {/* Retry button for failed messages - only show for the latest message
+                        since retryMessage() only supports retrying the most recent failed turn */}
+                    {m.error?.isRetryable && i === messages.length - 1 && (
                       <View style={styles.retryContainer}>
                         <TouchableOpacity
                           style={styles.retryButton}

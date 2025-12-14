@@ -610,6 +610,21 @@ export default function ChatScreen({ route, navigation }: any) {
 
         for (let i = currentTurnStartIndex + 1; i < update.conversationHistory.length; i++) {
           const historyMsg = update.conversationHistory[i];
+
+          // Merge tool role messages into the preceding assistant message that has toolCalls
+          // This prevents tool responses from appearing as separate messages
+          if (historyMsg.role === 'tool' && historyMsg.toolResults && messages.length > 0) {
+            const prevMsg = messages[messages.length - 1];
+            if (prevMsg.role === 'assistant' && (prevMsg.toolCalls?.length ?? 0) > 0) {
+              // Merge toolResults into the preceding assistant message
+              prevMsg.toolResults = [
+                ...(prevMsg.toolResults || []),
+                ...historyMsg.toolResults,
+              ];
+              continue; // Skip adding this as a separate message
+            }
+          }
+
           messages.push({
             role: historyMsg.role === 'tool' ? 'assistant' : historyMsg.role,
             content: historyMsg.content || '',
@@ -795,6 +810,20 @@ export default function ChatScreen({ route, navigation }: any) {
         for (let i = currentTurnStartIndex; i < response.conversationHistory.length; i++) {
           const historyMsg = response.conversationHistory[i];
           if (historyMsg.role === 'user') continue;
+
+          // Merge tool role messages into the preceding assistant message that has toolCalls
+          // This prevents tool responses from appearing as separate messages
+          if (historyMsg.role === 'tool' && historyMsg.toolResults && newMessages.length > 0) {
+            const prevMsg = newMessages[newMessages.length - 1];
+            if (prevMsg.role === 'assistant' && (prevMsg.toolCalls?.length ?? 0) > 0) {
+              // Merge toolResults into the preceding assistant message
+              prevMsg.toolResults = [
+                ...(prevMsg.toolResults || []),
+                ...historyMsg.toolResults,
+              ];
+              continue; // Skip adding this as a separate message
+            }
+          }
 
           newMessages.push({
             role: historyMsg.role === 'tool' ? 'assistant' : historyMsg.role,

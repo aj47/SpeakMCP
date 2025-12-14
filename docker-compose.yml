@@ -36,11 +36,18 @@ services:
   build-linux:
     build:
       context: .
-      target: builder
+      target: development
     volumes:
       - ./dist:/app/apps/desktop/dist
     environment:
       - NODE_ENV=production
+    command: >
+      sh -c "cd apps/desktop &&
+             pnpm exec electron-builder install-app-deps &&
+             pnpm run typecheck &&
+             pnpm run test:run &&
+             pnpm exec electron-vite build &&
+             pnpm exec electron-builder --linux --config electron-builder.config.cjs"
 
   # Extract built artifacts
   artifacts:

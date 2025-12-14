@@ -28,7 +28,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libatspi2.0-0 \
     libuuid1 \
     libsecret-1-0 \
-    libappindicator3-1 \
+    libayatana-appindicator3-1 \
     # Audio support
     libasound2 \
     pulseaudio \
@@ -107,7 +107,7 @@ RUN cd apps/desktop && pnpm exec electron-builder install-app-deps
 # Build the application
 RUN pnpm --filter @speakmcp/shared build
 RUN cd apps/desktop && pnpm run typecheck
-RUN cd apps/desktop && pnpm run test:run || true
+RUN cd apps/desktop && pnpm run test:run
 RUN cd apps/desktop && pnpm exec electron-vite build
 
 # Build Linux packages

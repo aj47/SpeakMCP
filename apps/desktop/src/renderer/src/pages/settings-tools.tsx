@@ -396,7 +396,7 @@ DOMAIN-SPECIFIC RULES:
                 value={additionalGuidelines}
                 onChange={(e) => handleGuidelinesChange(e.target.value)}
                 rows={8}
-                className="font-mono text-sm"
+                className="font-mono text-sm resize-y min-h-[120px] max-h-[400px]"
                 placeholder={defaultAdditionalGuidelines}
               />
 
@@ -474,7 +474,7 @@ DOMAIN-SPECIFIC RULES:
                       value={customSystemPrompt}
                       onChange={(e) => handleSystemPromptChange(e.target.value)}
                       rows={12}
-                      className="font-mono text-xs"
+                      className="font-mono text-xs resize-y min-h-[180px] max-h-[500px]"
                     />
                     <div className="flex gap-2 flex-wrap">
                       <Button
@@ -556,6 +556,7 @@ DOMAIN-SPECIFIC RULES:
                   onChange={(e) => setNewProfileGuidelines(e.target.value)}
                   placeholder="Optional additional guidelines for this profile"
                   rows={6}
+                  className="resize-y min-h-[100px] max-h-[300px]"
                 />
               </div>
             </div>

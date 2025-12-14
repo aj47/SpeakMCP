@@ -1908,7 +1908,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
             <span className="text-[10px] text-muted-foreground/50">Press Esc to close</span>
           )}
           {!isComplete && (
-            <div className="flex-1 ml-3 h-0.5 bg-muted/50 rounded-full overflow-hidden">
+            <div className={`flex-1 h-0.5 bg-muted/50 rounded-full overflow-hidden ${variant === "overlay" ? "ml-3" : ""}`}>
               <div
                 className="h-full bg-primary transition-all duration-500 ease-out"
                 style={{

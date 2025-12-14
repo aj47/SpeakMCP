@@ -617,6 +617,34 @@ export default function ChatScreen({ route, navigation }: any) {
 
         for (let i = currentTurnStartIndex + 1; i < update.conversationHistory.length; i++) {
           const historyMsg = update.conversationHistory[i];
+
+          // Merge tool results into the preceding assistant message to avoid duplication
+          // The server sends: assistant (with toolCalls) -> tool (with toolResults)
+          // We want to display them as a single message with both toolCalls and toolResults
+          if (historyMsg.role === 'tool' && messages.length > 0) {
+            const lastMessage = messages[messages.length - 1];
+            if (lastMessage.role === 'assistant' && lastMessage.toolCalls && lastMessage.toolCalls.length > 0) {
+              const hasToolResults = historyMsg.toolResults && historyMsg.toolResults.length > 0;
+              const hasContent = historyMsg.content && historyMsg.content.trim().length > 0;
+
+              if (hasToolResults) {
+                // Merge toolResults into the existing assistant message
+                lastMessage.toolResults = [
+                  ...(lastMessage.toolResults || []),
+                  ...(historyMsg.toolResults || []),
+                ];
+                // Also preserve any content from the tool message (e.g., error messages)
+                if (hasContent) {
+                  lastMessage.content = (lastMessage.content || '') +
+                    (lastMessage.content ? '\n' : '') + historyMsg.content;
+                }
+                // Skip adding this as a separate message only when we merged results
+                continue;
+              }
+              // If tool message has content but no toolResults, fall through to add it as a message
+            }
+          }
+
           messages.push({
             role: historyMsg.role === 'tool' ? 'assistant' : historyMsg.role,
             content: historyMsg.content || '',
@@ -816,6 +844,33 @@ export default function ChatScreen({ route, navigation }: any) {
         for (let i = currentTurnStartIndex; i < response.conversationHistory.length; i++) {
           const historyMsg = response.conversationHistory[i];
           if (historyMsg.role === 'user') continue;
+
+          // Merge tool results into the preceding assistant message to avoid duplication
+          // The server sends: assistant (with toolCalls) -> tool (with toolResults)
+          // We want to display them as a single message with both toolCalls and toolResults
+          if (historyMsg.role === 'tool' && newMessages.length > 0) {
+            const lastMessage = newMessages[newMessages.length - 1];
+            if (lastMessage.role === 'assistant' && lastMessage.toolCalls && lastMessage.toolCalls.length > 0) {
+              const hasToolResults = historyMsg.toolResults && historyMsg.toolResults.length > 0;
+              const hasContent = historyMsg.content && historyMsg.content.trim().length > 0;
+
+              if (hasToolResults) {
+                // Merge toolResults into the existing assistant message
+                lastMessage.toolResults = [
+                  ...(lastMessage.toolResults || []),
+                  ...(historyMsg.toolResults || []),
+                ];
+                // Also preserve any content from the tool message (e.g., error messages)
+                if (hasContent) {
+                  lastMessage.content = (lastMessage.content || '') +
+                    (lastMessage.content ? '\n' : '') + historyMsg.content;
+                }
+                // Skip adding this as a separate message only when we merged results
+                continue;
+              }
+              // If tool message has content but no toolResults, fall through to add it as a message
+            }
+          }
 
           newMessages.push({
             role: historyMsg.role === 'tool' ? 'assistant' : historyMsg.role,
@@ -1802,8 +1857,8 @@ export default function ChatScreen({ route, navigation }: any) {
 
                   // Use the recovery conversation ID if available, so the retry resumes
                   // the same server-created conversation when the first attempt failed mid-stream
-                  const client = getSessionClient();
-                  const recoveryConversationId = client?.getRecoveryConversationId();
+                  const retryClient = getSessionClient();
+                  const recoveryConversationId = retryClient?.getRecoveryConversationId();
                   if (recoveryConversationId) {
                     console.log('[ChatScreen] Retry: Using recovery conversationId:', recoveryConversationId);
                     await sessionStore.setServerConversationId(recoveryConversationId);

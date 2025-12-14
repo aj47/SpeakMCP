@@ -185,8 +185,7 @@ export function ActiveAgentsSidebar() {
     }
   }
 
-  const handleToggleExpand = (e: React.MouseEvent) => {
-    e.stopPropagation()
+  const handleToggleExpand = () => {
     const newState = !isExpanded
     logExpand("ActiveAgentsSidebar", "toggle", { from: isExpanded, to: newState, source: "user" })
     setIsExpanded(newState)
@@ -204,31 +203,37 @@ export function ActiveAgentsSidebar() {
 
   return (
     <div className="px-2 pb-2">
-      <button
-        onClick={handleHeaderClick}
+      <div
         className={cn(
           "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium transition-all duration-200",
           "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
         )}
       >
-        <span
+        <button
           onClick={handleToggleExpand}
-          className="shrink-0 cursor-pointer hover:text-foreground"
+          className="shrink-0 cursor-pointer hover:text-foreground focus:outline-none focus:ring-1 focus:ring-ring rounded"
+          aria-label={isExpanded ? "Collapse sessions" : "Expand sessions"}
+          aria-expanded={isExpanded}
         >
           {isExpanded ? (
             <ChevronDown className="h-3.5 w-3.5" />
           ) : (
             <ChevronRight className="h-3.5 w-3.5" />
           )}
-        </span>
-        <span className="i-mingcute-grid-line h-3.5 w-3.5"></span>
-        <span>Sessions</span>
-        {activeSessions.length > 0 && (
-          <span className="ml-auto flex h-4 w-4 items-center justify-center rounded-full bg-blue-500 text-[10px] font-semibold text-white">
-            {activeSessions.length}
-          </span>
-        )}
-      </button>
+        </button>
+        <button
+          onClick={handleHeaderClick}
+          className="flex items-center gap-2 flex-1 min-w-0 focus:outline-none"
+        >
+          <span className="i-mingcute-grid-line h-3.5 w-3.5"></span>
+          <span>Sessions</span>
+          {activeSessions.length > 0 && (
+            <span className="ml-auto flex h-4 w-4 items-center justify-center rounded-full bg-blue-500 text-[10px] font-semibold text-white">
+              {activeSessions.length}
+            </span>
+          )}
+        </button>
+      </div>
 
       {isExpanded && (
         <div className="mt-1 space-y-1 pl-2">

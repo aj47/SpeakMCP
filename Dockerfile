@@ -17,6 +17,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     curl \
     ca-certificates \
+    python3 \
     # Electron dependencies
     libgtk-3-0 \
     libnotify4 \
@@ -58,6 +59,8 @@ WORKDIR /app
 # =============================================================================
 FROM base AS deps
 
+# Copy package manager config for consistent installs (e.g., shamefully-hoist=true)
+COPY .npmrc ./
 # Copy package files for dependency installation
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/desktop/package.json ./apps/desktop/

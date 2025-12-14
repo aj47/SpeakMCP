@@ -1040,6 +1040,10 @@ export default function ChatScreen({ route, navigation }: any) {
     meta: false,
   });
 
+  // Timeout ref for auto-resetting modifier state
+  // This prevents "sticky" modifier state when a modifier is pressed then released before Enter
+  const modifierTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // Flag to suppress the next onChangeText update after native keyboard shortcut submission
   // This prevents stray newlines from being added when Enter is pressed with a modifier
   const suppressNextChangeRef = useRef(false);
@@ -1067,13 +1071,34 @@ export default function ChatScreen({ route, navigation }: any) {
         }
       } else {
         // On native platforms, track modifier key state
+        // Note: onKeyPress doesn't provide key-up events, so we use a timeout to auto-reset
+        // modifier state. This prevents "sticky" modifiers where pressing Shift then releasing
+        // it (without pressing another key) could cause a subsequent plain Enter to submit.
+        const setModifierWithTimeout = (modifier: 'shift' | 'ctrl' | 'meta') => {
+          modifierKeysRef.current[modifier] = true;
+          // Clear any existing timeout
+          if (modifierTimeoutRef.current) {
+            clearTimeout(modifierTimeoutRef.current);
+          }
+          // Auto-reset modifier state after 500ms if no Enter is pressed
+          // This matches the typical key repeat delay and prevents stickiness
+          modifierTimeoutRef.current = setTimeout(() => {
+            modifierKeysRef.current = { shift: false, ctrl: false, meta: false };
+          }, 500);
+        };
+
         if (key === 'Shift') {
-          modifierKeysRef.current.shift = true;
+          setModifierWithTimeout('shift');
         } else if (key === 'Control') {
-          modifierKeysRef.current.ctrl = true;
+          setModifierWithTimeout('ctrl');
         } else if (key === 'Meta') {
-          modifierKeysRef.current.meta = true;
+          setModifierWithTimeout('meta');
         } else if (key === 'Enter') {
+          // Clear the timeout since we're processing the Enter now
+          if (modifierTimeoutRef.current) {
+            clearTimeout(modifierTimeoutRef.current);
+            modifierTimeoutRef.current = null;
+          }
           const hasModifier =
             modifierKeysRef.current.shift ||
             modifierKeysRef.current.ctrl ||
@@ -1091,6 +1116,10 @@ export default function ChatScreen({ route, navigation }: any) {
           modifierKeysRef.current = { shift: false, ctrl: false, meta: false };
         } else {
           // Reset modifier state on any other key
+          if (modifierTimeoutRef.current) {
+            clearTimeout(modifierTimeoutRef.current);
+            modifierTimeoutRef.current = null;
+          }
           modifierKeysRef.current = { shift: false, ctrl: false, meta: false };
         }
       }

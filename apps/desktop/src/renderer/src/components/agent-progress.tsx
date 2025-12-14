@@ -1901,22 +1901,24 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
         className="flex-shrink-0"
       />
 
-      {/* Esc hint and progress bar footer */}
-      <div className="flex items-center justify-between px-3 py-1 bg-muted/10 border-t border-border/20 flex-shrink-0">
-        {variant === "overlay" && (
-          <span className="text-[10px] text-muted-foreground/50">Press Esc to close</span>
-        )}
-        {!isComplete && (
-          <div className="flex-1 ml-3 h-0.5 bg-muted/50 rounded-full overflow-hidden">
-            <div
-              className="h-full bg-primary transition-all duration-500 ease-out"
-              style={{
-                width: `${Math.min(100, (currentIteration / maxIterations) * 100)}%`,
-              }}
-            />
-          </div>
-        )}
-      </div>
+      {/* Esc hint and progress bar footer - only render when there's content to display */}
+      {(variant === "overlay" || !isComplete) && (
+        <div className="flex items-center justify-between px-3 py-1 bg-muted/10 border-t border-border/20 flex-shrink-0">
+          {variant === "overlay" && (
+            <span className="text-[10px] text-muted-foreground/50">Press Esc to close</span>
+          )}
+          {!isComplete && (
+            <div className="flex-1 ml-3 h-0.5 bg-muted/50 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-primary transition-all duration-500 ease-out"
+                style={{
+                  width: `${Math.min(100, (currentIteration / maxIterations) * 100)}%`,
+                }}
+              />
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Kill Switch Confirmation Dialog */}
       {showKillConfirmation && (

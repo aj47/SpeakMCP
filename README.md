@@ -109,6 +109,25 @@ pnpm test:run     # Run tests once (CI mode)
 pnpm test:coverage # Run tests with coverage
 ```
 
+### 🐳 Docker Support
+
+Docker can be used for building Linux packages in a consistent environment or for CI/CD pipelines.
+
+```bash
+# Build Linux packages using Docker (outputs to ./dist)
+docker compose run --rm build-linux
+
+# Rebuild after code changes (use --build to rebuild the Docker image)
+docker compose run --rm --build build-linux
+
+# Interactive development shell
+docker compose run --rm shell
+```
+
+> **Note**: SpeakMCP is an Electron desktop application that requires a display. Docker is primarily useful for building Linux packages, not for running the desktop app.
+
+> **Tip**: Since `build-linux` only mounts `./dist` for output, you need to use `--build` after code changes to rebuild the Docker image with your latest source code.
+
 ### 🔧 Troubleshooting Development Setup
 
 **"Electron uninstall" error when running `pnpm dev`:**

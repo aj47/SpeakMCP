@@ -223,7 +223,7 @@ export function ActiveAgentsSidebar() {
         </button>
         <button
           onClick={handleHeaderClick}
-          className="flex items-center gap-2 flex-1 min-w-0 focus:outline-none"
+          className="flex items-center gap-2 flex-1 min-w-0 focus:outline-none focus:ring-1 focus:ring-ring rounded"
         >
           <span className="i-mingcute-grid-line h-3.5 w-3.5"></span>
           <span>Sessions</span>

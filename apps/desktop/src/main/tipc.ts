@@ -372,6 +372,7 @@ const saveRecordingsHitory = (history: RecordingHistoryItem[]) => {
  */
 async function processQueuedMessages(conversationId: string): Promise<void> {
   const { messageQueueService } = await import("./message-queue-service")
+  const { agentSessionTracker } = await import("./agent-session-tracker")
 
   // Try to acquire processing lock - if another processor is already running, skip
   if (!messageQueueService.tryAcquireProcessingLock(conversationId)) {
@@ -413,11 +414,24 @@ async function processQueuedMessages(conversationId: string): Promise<void> {
           messageQueueService.markAddedToHistory(conversationId, queuedMessage.id)
         }
 
+        // Find and revive the existing session for this conversation to maintain session continuity
+        // This ensures queued messages execute in the same session context as the original conversation
+        let existingSessionId: string | undefined
+        const foundSessionId = agentSessionTracker.findSessionByConversationId(conversationId)
+        if (foundSessionId) {
+          // Revive with startSnoozed=true since queued messages are background-processed
+          const revived = agentSessionTracker.reviveSession(foundSessionId, true)
+          if (revived) {
+            existingSessionId = foundSessionId
+            logLLM(`[processQueuedMessages] Revived session ${existingSessionId} for conversation ${conversationId}`)
+          }
+        }
+
         // Process with agent mode
         // Note: startSnoozed=true is intentional - queued messages are processed in the background
         // without automatically showing the floating panel, since the original session already
         // provided visual feedback and we don't want to interrupt users with repeated pop-ups
-        await processWithAgentMode(queuedMessage.text, conversationId, undefined, true)
+        await processWithAgentMode(queuedMessage.text, conversationId, existingSessionId, true)
 
         // Only remove the message after successful processing
         messageQueueService.markProcessed(conversationId, queuedMessage.id)

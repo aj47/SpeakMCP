@@ -42,13 +42,15 @@ services:
       - ./dist:/app/apps/desktop/dist
     environment:
       - NODE_ENV=production
+    # Note: We explicitly build AppImage and deb only. Snap builds require snapcraft
+    # which adds significant complexity. For snap packages, use native environment or CI/CD.
     command: >
       sh -c "cd apps/desktop &&
              pnpm exec electron-builder install-app-deps &&
              pnpm run typecheck &&
              pnpm run test:run &&
              pnpm exec electron-vite build &&
-             pnpm exec electron-builder --linux --config electron-builder.config.cjs"
+             pnpm exec electron-builder --linux AppImage deb --config electron-builder.config.cjs"
 
 # Named volumes for caching
 # Note: The 'artifacts' Docker stage is available for CI/CD pipelines that build

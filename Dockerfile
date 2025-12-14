@@ -2,9 +2,8 @@
 # Multi-stage build for development and Linux builds
 #
 # Usage:
-#   Development: docker compose up dev
-#   Build Linux: docker compose run --rm build-linux
-#   Interactive: docker compose run --rm shell
+#   Development shell: docker compose run --rm shell
+#   Build Linux:       docker compose run --rm build-linux
 
 # =============================================================================
 # Stage 1: Base image with Node.js and system dependencies
@@ -114,8 +113,10 @@ RUN cd apps/desktop && pnpm run typecheck
 RUN cd apps/desktop && pnpm run test:run
 RUN cd apps/desktop && pnpm exec electron-vite build
 
-# Build Linux packages
-RUN cd apps/desktop && pnpm exec electron-builder --linux --config electron-builder.config.cjs
+# Build Linux packages (AppImage and deb only)
+# Note: snap builds require snapcraft which adds significant complexity;
+# use native build environment or CI/CD with snapcraft for snap packages
+RUN cd apps/desktop && pnpm exec electron-builder --linux AppImage deb --config electron-builder.config.cjs
 
 # =============================================================================
 # Stage 5: Artifacts extraction (minimal image with just the built packages)
@@ -125,10 +126,9 @@ FROM alpine:latest AS artifacts
 WORKDIR /artifacts
 
 # Copy built packages from builder stage
-# Use shell to handle missing artifact types gracefully (e.g., .snap may not be built
-# if snapcraft is unavailable). This prevents build failures when some targets are skipped.
+# Note: Only AppImage and deb are built (snap requires snapcraft which is not installed)
 COPY --from=builder /app/apps/desktop/dist/ /tmp/dist/
-RUN for ext in AppImage deb rpm snap tar.gz; do \
+RUN for ext in AppImage deb; do \
       cp /tmp/dist/*.$ext ./ 2>/dev/null || true; \
     done && \
     rm -rf /tmp/dist

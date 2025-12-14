@@ -3,7 +3,8 @@
 # Usage:
 #   Development shell:     docker compose run --rm shell
 #   Build Linux packages:  docker compose run --rm build-linux
-#   Extract artifacts:     docker compose run --rm artifacts
+#
+# The build-linux service outputs packages directly to ./dist on the host.
 #
 # Note: SpeakMCP is an Electron desktop application. Docker is primarily useful for:
 #   - Building Linux packages in a consistent environment
@@ -49,16 +50,9 @@ services:
              pnpm exec electron-vite build &&
              pnpm exec electron-builder --linux --config electron-builder.config.cjs"
 
-  # Extract built artifacts
-  artifacts:
-    build:
-      context: .
-      target: artifacts
-    volumes:
-      - ./dist:/output
-    command: sh -c "cp -r /artifacts/* /output/ 2>/dev/null || echo 'No artifacts found. Run build-linux first.'"
-
 # Named volumes for caching
+# Note: The 'artifacts' Docker stage is available for CI/CD pipelines that build
+# the full image. For local development, use 'build-linux' which outputs directly to ./dist.
 volumes:
   node_modules:
   desktop_node_modules:

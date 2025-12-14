@@ -65,7 +65,11 @@ COPY apps/desktop/package.json ./apps/desktop/
 COPY apps/mobile/package.json ./apps/mobile/
 COPY packages/shared/package.json ./packages/shared/
 
-# Install dependencies (ignore scripts to avoid Electron postinstall issues)
+# Install dependencies
+# Note: --ignore-scripts skips postinstall hooks (including electron-builder install-app-deps)
+# This is intentional to avoid issues in the container. The electron-builder install-app-deps
+# is explicitly run in the 'builder' stage before packaging to ensure native dependencies
+# are correctly installed for the Linux target platform.
 RUN pnpm install --frozen-lockfile --ignore-scripts
 
 # =============================================================================
@@ -121,9 +125,13 @@ FROM alpine:latest AS artifacts
 WORKDIR /artifacts
 
 # Copy built packages from builder stage
-COPY --from=builder /app/apps/desktop/dist/*.AppImage ./
-COPY --from=builder /app/apps/desktop/dist/*.deb ./
-COPY --from=builder /app/apps/desktop/dist/*.snap ./
+# Use shell to handle missing artifact types gracefully (e.g., .snap may not be built
+# if snapcraft is unavailable). This prevents build failures when some targets are skipped.
+COPY --from=builder /app/apps/desktop/dist/ /tmp/dist/
+RUN for ext in AppImage deb rpm snap tar.gz; do \
+      cp /tmp/dist/*.$ext ./ 2>/dev/null || true; \
+    done && \
+    rm -rf /tmp/dist
 
 # List artifacts
 CMD ["ls", "-la", "/artifacts"]

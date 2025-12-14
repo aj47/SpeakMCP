@@ -114,14 +114,11 @@ pnpm test:coverage # Run tests with coverage
 Docker can be used for building Linux packages in a consistent environment or for CI/CD pipelines.
 
 ```bash
-# Build Linux packages using Docker
+# Build Linux packages using Docker (outputs to ./dist)
 docker compose run --rm build-linux
 
 # Interactive development shell
 docker compose run --rm shell
-
-# Extract built artifacts to ./dist
-docker compose run --rm artifacts
 ```
 
 > **Note**: SpeakMCP is an Electron desktop application that requires a display. Docker is primarily useful for building Linux packages, not for running the desktop app.

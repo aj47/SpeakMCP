@@ -1057,7 +1057,10 @@ export default function ChatScreen({ route, navigation }: any) {
         const hasModifier = webEvent.shiftKey || webEvent.ctrlKey || webEvent.metaKey;
 
         if (isEnter && hasModifier) {
+          // Prevent default on both the synthetic event and the underlying keyboard event
+          // to ensure the newline is not inserted after send() clears the input
           e.preventDefault?.();
+          webEvent.preventDefault?.();
           if (input.trim()) {
             send(input);
           }

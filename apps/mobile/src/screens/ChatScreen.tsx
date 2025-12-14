@@ -15,6 +15,7 @@ import {
   Image,
   NativeScrollEvent,
   NativeSyntheticEvent,
+  TextInputKeyPressEventData,
 } from 'react-native';
 
 const darkSpinner = require('../../assets/loading-spinner.gif');
@@ -1032,6 +1033,63 @@ export default function ChatScreen({ route, navigation }: any) {
     }
   };
 
+  // Track modifier keys for keyboard shortcut handling
+  const modifierKeysRef = useRef<{ shift: boolean; ctrl: boolean; meta: boolean }>({
+    shift: false,
+    ctrl: false,
+    meta: false,
+  });
+
+  // Handle keyboard shortcuts for text submission
+  // Shift+Enter or Ctrl/Cmd+Enter to submit
+  const handleInputKeyPress = useCallback(
+    (e: NativeSyntheticEvent<TextInputKeyPressEventData>) => {
+      const key = e.nativeEvent.key;
+
+      // On web platform, we have access to modifier keys via nativeEvent
+      if (Platform.OS === 'web') {
+        const webEvent = e.nativeEvent as unknown as KeyboardEvent;
+        const isEnter = key === 'Enter';
+        const hasModifier = webEvent.shiftKey || webEvent.ctrlKey || webEvent.metaKey;
+
+        if (isEnter && hasModifier) {
+          e.preventDefault?.();
+          if (input.trim()) {
+            send(input);
+            setInput('');
+          }
+        }
+      } else {
+        // On native platforms, track modifier key state
+        if (key === 'Shift') {
+          modifierKeysRef.current.shift = true;
+        } else if (key === 'Control') {
+          modifierKeysRef.current.ctrl = true;
+        } else if (key === 'Meta') {
+          modifierKeysRef.current.meta = true;
+        } else if (key === 'Enter') {
+          const hasModifier =
+            modifierKeysRef.current.shift ||
+            modifierKeysRef.current.ctrl ||
+            modifierKeysRef.current.meta;
+
+          if (hasModifier) {
+            if (input.trim()) {
+              send(input);
+              setInput('');
+            }
+          }
+          // Reset modifier state after Enter is processed
+          modifierKeysRef.current = { shift: false, ctrl: false, meta: false };
+        } else {
+          // Reset modifier state on any other key
+          modifierKeysRef.current = { shift: false, ctrl: false, meta: false };
+        }
+      }
+    },
+    [input, send]
+  );
+
   const ensureWebRecognizer = () => {
     if (Platform.OS !== 'web') return false;
     // @ts-ignore
@@ -1711,6 +1769,7 @@ export default function ChatScreen({ route, navigation }: any) {
             style={styles.input}
             value={input}
             onChangeText={setInput}
+            onKeyPress={handleInputKeyPress}
             placeholder={handsFree ? (listening ? 'Listening…' : 'Type or tap mic') : (listening ? 'Listening…' : 'Type or hold mic')}
             placeholderTextColor={theme.colors.mutedForeground}
             multiline

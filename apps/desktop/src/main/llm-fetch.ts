@@ -705,6 +705,8 @@ async function makeAPICallAttempt(
       const isStructuredOutputError = response.status >= 400 && response.status < 500 &&
                                      (errorTextLower.includes("json_schema") ||
                                       errorTextLower.includes("response_format") ||
+                                      errorTextLower.includes("json_validate_failed") ||
+                                      errorTextLower.includes("failed to generate json") ||
                                       (errorTextLower.includes("schema") && errorTextLower.includes("not supported")) ||
                                       // Novita and other providers may return generic "model inference" errors
                                       // when they don't support structured output features
@@ -718,6 +720,21 @@ async function makeAPICallAttempt(
         }
         const error = new Error(errorText)
         ;(error as any).isStructuredOutputError = true
+
+        // Try to extract failed_generation from the error response
+        // This contains the LLM's actual response when JSON validation fails
+        try {
+          const errorJson = JSON.parse(errorText)
+          if (errorJson?.error?.failed_generation) {
+            ;(error as any).failedGeneration = errorJson.error.failed_generation
+            if (isDebugLLM()) {
+              logLLM("📝 Extracted failed_generation content")
+            }
+          }
+        } catch {
+          // Error text is not JSON, ignore
+        }
+
         throw error
       }
 

@@ -1,0 +1,71 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Build outputs
+dist/
+**/dist/
+out/
+**/out/
+.next/
+build/
+
+# Rust build artifacts (will be rebuilt in container)
+apps/desktop/speakmcp-rs/target/
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Docker files (avoid recursive copy)
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Test coverage
+coverage/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Lock files (will use pnpm-lock.yaml from context)
+package-lock.json
+bun.lock
+
+# Release artifacts
+*.dmg
+*.exe
+*.AppImage
+*.deb
+*.snap
+*.rpm
+*.pkg
+
+# Mobile build artifacts
+apps/mobile/android/app/build/
+apps/mobile/android/build/
+apps/mobile/.expo/
+

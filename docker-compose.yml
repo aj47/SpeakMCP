@@ -1,0 +1,62 @@
+# SpeakMCP Docker Compose Configuration
+#
+# Usage:
+#   Development shell:     docker compose run --rm shell
+#   Build Linux packages:  docker compose run --rm build-linux
+#   Extract artifacts:     docker compose run --rm artifacts
+#
+# Note: SpeakMCP is an Electron desktop application. Docker is primarily useful for:
+#   - Building Linux packages in a consistent environment
+#   - CI/CD pipelines
+#   - Development environment setup
+#
+# For running the desktop app, use native installation instead.
+
+services:
+  # Development shell - interactive environment for development
+  shell:
+    build:
+      context: .
+      target: development
+    volumes:
+      - .:/app
+      - node_modules:/app/node_modules
+      - desktop_node_modules:/app/apps/desktop/node_modules
+      - mobile_node_modules:/app/apps/mobile/node_modules
+      - shared_node_modules:/app/packages/shared/node_modules
+      - cargo_cache:/root/.cargo
+      - rust_target:/app/apps/desktop/speakmcp-rs/target
+    environment:
+      - NODE_ENV=development
+    stdin_open: true
+    tty: true
+    command: /bin/bash
+
+  # Build Linux packages
+  build-linux:
+    build:
+      context: .
+      target: builder
+    volumes:
+      - ./dist:/app/apps/desktop/dist
+    environment:
+      - NODE_ENV=production
+
+  # Extract built artifacts
+  artifacts:
+    build:
+      context: .
+      target: artifacts
+    volumes:
+      - ./dist:/output
+    command: sh -c "cp -r /artifacts/* /output/ 2>/dev/null || echo 'No artifacts found. Run build-linux first.'"
+
+# Named volumes for caching
+volumes:
+  node_modules:
+  desktop_node_modules:
+  mobile_node_modules:
+  shared_node_modules:
+  cargo_cache:
+  rust_target:
+

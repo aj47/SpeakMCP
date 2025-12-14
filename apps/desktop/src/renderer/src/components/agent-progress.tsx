@@ -1767,6 +1767,10 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
             </Badge>
           )}
         </div>
+        {/* Esc hint - subtle text in the middle */}
+        <span className="text-[10px] text-muted-foreground/60 hidden sm:inline">
+          Press Esc to close
+        </span>
         <div className="flex items-center gap-3">
           {!isComplete && (
             <span className="text-xs text-muted-foreground">

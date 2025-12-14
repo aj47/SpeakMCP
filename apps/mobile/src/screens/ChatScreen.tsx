@@ -624,7 +624,7 @@ export default function ChatScreen({ route, navigation }: any) {
                 // Merge toolResults into the existing assistant message
                 lastMessage.toolResults = [
                   ...(lastMessage.toolResults || []),
-                  ...historyMsg.toolResults,
+                  ...(historyMsg.toolResults || []),
                 ];
                 // Also preserve any content from the tool message (e.g., error messages)
                 if (hasContent) {
@@ -837,7 +837,7 @@ export default function ChatScreen({ route, navigation }: any) {
                 // Merge toolResults into the existing assistant message
                 lastMessage.toolResults = [
                   ...(lastMessage.toolResults || []),
-                  ...historyMsg.toolResults,
+                  ...(historyMsg.toolResults || []),
                 ];
                 // Also preserve any content from the tool message (e.g., error messages)
                 if (hasContent) {

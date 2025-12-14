@@ -1641,12 +1641,11 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
                   <div className="space-y-1 p-2">
                     {displayItems.map((item, index) => {
                       const itemKey = item.id
-                      // Tool executions should be expanded by default so users can see what tools were called
+                      // Tool executions should be collapsed by default to reduce visual clutter
                       // unless user has explicitly toggled them (itemKey exists in expandedItems)
-                      const isToolExecution = item.kind === "tool_execution"
                       const isExpanded = itemKey in expandedItems
                         ? expandedItems[itemKey]
-                        : isToolExecution // Tool executions expanded by default
+                        : false // Tool executions collapsed by default
                       const isLastAssistant = item.kind === "message" && item.data.role === "assistant" && index === lastAssistantDisplayIndex
 
                       if (item.kind === "message") {
@@ -1832,13 +1831,12 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
                   : `exec-${(item as any).data?.id || (item as any).data?.timestamp}`)
 
                 // Final assistant message should be expanded by default when agent is complete
-                // Tool executions should be expanded by default so users can see what tools were called
+                // Tool executions should be collapsed by default to reduce visual clutter
                 // unless user has explicitly toggled it (itemKey exists in expandedItems)
                 const isFinalAssistantMessage = item.kind === "message" && index === lastAssistantDisplayIndex && isComplete
-                const isToolExecution = item.kind === "tool_execution"
                 const isExpanded = itemKey in expandedItems
                   ? expandedItems[itemKey]
-                  : (isFinalAssistantMessage || isToolExecution)
+                  : isFinalAssistantMessage // Only final assistant message expanded by default
 
                 if (item.kind === "message") {
                   return (

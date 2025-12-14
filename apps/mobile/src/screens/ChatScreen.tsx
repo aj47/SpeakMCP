@@ -1040,6 +1040,10 @@ export default function ChatScreen({ route, navigation }: any) {
     meta: false,
   });
 
+  // Flag to suppress the next onChangeText update after native keyboard shortcut submission
+  // This prevents stray newlines from being added when Enter is pressed with a modifier
+  const suppressNextChangeRef = useRef(false);
+
   // Handle keyboard shortcuts for text submission
   // Shift+Enter or Ctrl/Cmd+Enter to submit
   const handleInputKeyPress = useCallback(
@@ -1074,6 +1078,8 @@ export default function ChatScreen({ route, navigation }: any) {
 
           if (hasModifier) {
             if (input.trim()) {
+              // Set flag to suppress the newline that will be inserted by the native TextInput
+              suppressNextChangeRef.current = true;
               send(input);
             }
           }
@@ -1087,6 +1093,16 @@ export default function ChatScreen({ route, navigation }: any) {
     },
     [input, send]
   );
+
+  // Wrapper for onChangeText that suppresses stray newlines after native keyboard shortcut submission
+  const handleInputChange = useCallback((text: string) => {
+    if (suppressNextChangeRef.current) {
+      // Reset the flag and ignore this update (it's likely a stray newline from Enter)
+      suppressNextChangeRef.current = false;
+      return;
+    }
+    setInput(text);
+  }, []);
 
   const ensureWebRecognizer = () => {
     if (Platform.OS !== 'web') return false;
@@ -1766,7 +1782,7 @@ export default function ChatScreen({ route, navigation }: any) {
           <TextInput
             style={styles.input}
             value={input}
-            onChangeText={setInput}
+            onChangeText={handleInputChange}
             onKeyPress={handleInputKeyPress}
             placeholder={handsFree ? (listening ? 'Listening…' : 'Type or tap mic') : (listening ? 'Listening…' : 'Type or hold mic')}
             placeholderTextColor={theme.colors.mutedForeground}

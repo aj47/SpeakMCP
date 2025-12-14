@@ -1077,9 +1077,10 @@ export default function ChatScreen({ route, navigation }: any) {
             modifierKeysRef.current.meta;
 
           if (hasModifier) {
+            // Always suppress the newline that will be inserted by the native TextInput
+            // when modifier+Enter is pressed, even if input is empty (matches web behavior)
+            suppressNextChangeRef.current = true;
             if (input.trim()) {
-              // Set flag to suppress the newline that will be inserted by the native TextInput
-              suppressNextChangeRef.current = true;
               send(input);
             }
           }

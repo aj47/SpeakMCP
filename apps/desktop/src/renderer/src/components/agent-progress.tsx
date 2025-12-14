@@ -1903,7 +1903,9 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
 
       {/* Esc hint and progress bar footer */}
       <div className="flex items-center justify-between px-3 py-1 bg-muted/10 border-t border-border/20 flex-shrink-0">
-        <span className="text-[10px] text-muted-foreground/50">Press Esc to close</span>
+        {variant === "overlay" && (
+          <span className="text-[10px] text-muted-foreground/50">Press Esc to close</span>
+        )}
         {!isComplete && (
           <div className="flex-1 ml-3 h-0.5 bg-muted/50 rounded-full overflow-hidden">
             <div

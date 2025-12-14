@@ -1056,7 +1056,6 @@ export default function ChatScreen({ route, navigation }: any) {
           e.preventDefault?.();
           if (input.trim()) {
             send(input);
-            setInput('');
           }
         }
       } else {
@@ -1076,7 +1075,6 @@ export default function ChatScreen({ route, navigation }: any) {
           if (hasModifier) {
             if (input.trim()) {
               send(input);
-              setInput('');
             }
           }
           // Reset modifier state after Enter is processed

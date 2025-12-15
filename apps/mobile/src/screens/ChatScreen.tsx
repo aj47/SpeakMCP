@@ -15,6 +15,7 @@ import {
   Image,
   NativeScrollEvent,
   NativeSyntheticEvent,
+  TextInputKeyPressEventData,
 } from 'react-native';
 
 const darkSpinner = require('../../assets/loading-spinner.gif');
@@ -1032,6 +1033,110 @@ export default function ChatScreen({ route, navigation }: any) {
     }
   };
 
+  // Track modifier keys for keyboard shortcut handling
+  const modifierKeysRef = useRef<{ shift: boolean; ctrl: boolean; meta: boolean }>({
+    shift: false,
+    ctrl: false,
+    meta: false,
+  });
+
+  // Timeout ref for auto-resetting modifier state
+  // This prevents "sticky" modifier state when a modifier is pressed then released before Enter
+  const modifierTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Flag to suppress the next onChangeText update after native keyboard shortcut submission
+  // This prevents stray newlines from being added when Enter is pressed with a modifier
+  const suppressNextChangeRef = useRef(false);
+
+  // Handle keyboard shortcuts for text submission
+  // Shift+Enter or Ctrl/Cmd+Enter to submit
+  const handleInputKeyPress = useCallback(
+    (e: NativeSyntheticEvent<TextInputKeyPressEventData>) => {
+      const key = e.nativeEvent.key;
+
+      // On web platform, we have access to modifier keys via nativeEvent
+      if (Platform.OS === 'web') {
+        const webEvent = e.nativeEvent as unknown as KeyboardEvent;
+        const isEnter = key === 'Enter';
+        const hasModifier = webEvent.shiftKey || webEvent.ctrlKey || webEvent.metaKey;
+
+        if (isEnter && hasModifier) {
+          // Prevent default on both the synthetic event and the underlying keyboard event
+          // to ensure the newline is not inserted after send() clears the input
+          e.preventDefault?.();
+          webEvent.preventDefault?.();
+          if (input.trim()) {
+            send(input);
+          }
+        }
+      } else {
+        // On native platforms, track modifier key state
+        // Note: onKeyPress doesn't provide key-up events, so we use a timeout to auto-reset
+        // modifier state. This prevents "sticky" modifiers where pressing Shift then releasing
+        // it (without pressing another key) could cause a subsequent plain Enter to submit.
+        const setModifierWithTimeout = (modifier: 'shift' | 'ctrl' | 'meta') => {
+          modifierKeysRef.current[modifier] = true;
+          // Clear any existing timeout
+          if (modifierTimeoutRef.current) {
+            clearTimeout(modifierTimeoutRef.current);
+          }
+          // Auto-reset modifier state after 500ms if no Enter is pressed
+          // This matches the typical key repeat delay and prevents stickiness
+          modifierTimeoutRef.current = setTimeout(() => {
+            modifierKeysRef.current = { shift: false, ctrl: false, meta: false };
+          }, 500);
+        };
+
+        if (key === 'Shift') {
+          setModifierWithTimeout('shift');
+        } else if (key === 'Control') {
+          setModifierWithTimeout('ctrl');
+        } else if (key === 'Meta') {
+          setModifierWithTimeout('meta');
+        } else if (key === 'Enter') {
+          // Clear the timeout since we're processing the Enter now
+          if (modifierTimeoutRef.current) {
+            clearTimeout(modifierTimeoutRef.current);
+            modifierTimeoutRef.current = null;
+          }
+          const hasModifier =
+            modifierKeysRef.current.shift ||
+            modifierKeysRef.current.ctrl ||
+            modifierKeysRef.current.meta;
+
+          if (hasModifier) {
+            // Always suppress the newline that will be inserted by the native TextInput
+            // when modifier+Enter is pressed, even if input is empty (matches web behavior)
+            suppressNextChangeRef.current = true;
+            if (input.trim()) {
+              send(input);
+            }
+          }
+          // Reset modifier state after Enter is processed
+          modifierKeysRef.current = { shift: false, ctrl: false, meta: false };
+        } else {
+          // Reset modifier state on any other key
+          if (modifierTimeoutRef.current) {
+            clearTimeout(modifierTimeoutRef.current);
+            modifierTimeoutRef.current = null;
+          }
+          modifierKeysRef.current = { shift: false, ctrl: false, meta: false };
+        }
+      }
+    },
+    [input, send]
+  );
+
+  // Wrapper for onChangeText that suppresses stray newlines after native keyboard shortcut submission
+  const handleInputChange = useCallback((text: string) => {
+    if (suppressNextChangeRef.current) {
+      // Reset the flag and ignore this update (it's likely a stray newline from Enter)
+      suppressNextChangeRef.current = false;
+      return;
+    }
+    setInput(text);
+  }, []);
+
   const ensureWebRecognizer = () => {
     if (Platform.OS !== 'web') return false;
     // @ts-ignore
@@ -1710,7 +1815,8 @@ export default function ChatScreen({ route, navigation }: any) {
           <TextInput
             style={styles.input}
             value={input}
-            onChangeText={setInput}
+            onChangeText={handleInputChange}
+            onKeyPress={handleInputKeyPress}
             placeholder={handsFree ? (listening ? 'Listening…' : 'Type or tap mic') : (listening ? 'Listening…' : 'Type or hold mic')}
             placeholderTextColor={theme.colors.mutedForeground}
             multiline

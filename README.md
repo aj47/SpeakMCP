@@ -9,6 +9,8 @@
 
 ## 🎬 Preview
 
+[V1 launch video on youtube ](https://www.youtube.com/watch?v=A4oKYCaeaaw)
+
 https://github.com/user-attachments/assets/0c181c70-d1f1-4c5d-a6f5-a73147e75182
 
 ## 🚀 Quick Start

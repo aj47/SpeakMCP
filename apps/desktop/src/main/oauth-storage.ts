@@ -22,9 +22,12 @@ export class OAuthStorage {
   private cacheLoaded: boolean = false
   // Shared promise to deduplicate concurrent loadAll() calls during startup
   private loadPromise: Promise<StoredOAuthData> | null = null
-  // Track if load failed (e.g., user cancelled keychain prompt) to prevent data loss
-  // When set, saveAll() will refuse to write to prevent overwriting existing data
+  // Track load failure state for data protection and recovery
+  // - loadFailedError: the error that occurred during load
+  // - loadFailureRecoverable: true if data is corrupted and can be overwritten (user can re-auth)
+  //                           false if keychain access was denied (existing data should be preserved)
   private loadFailedError: Error | null = null
+  private loadFailureRecoverable: boolean = false
 
   constructor() {
     this.initializeEncryption()
@@ -125,13 +128,38 @@ export class OAuthStorage {
       this.cacheLoaded = true
       return this.cachedData
     } catch (error) {
-      // On load failure (e.g., user cancelled keychain prompt, corrupted data):
-      // - Set loadFailedError to track the failure state
-      // - Cache empty data for reads (graceful degradation - app can still function)
-      // - saveAll() will refuse to write when loadFailedError is set, preventing data loss
-      // - Call invalidateCache() to clear the error and allow retry
+      // On load failure, categorize the error to determine recovery strategy:
+      // - Recoverable errors (corrupted data, parse failures, key mismatch): allow saves to start fresh
+      // - Non-recoverable errors (keychain access denied): block saves to protect existing data
       const loadError = error instanceof Error ? error : new Error(String(error))
       this.loadFailedError = loadError
+
+      // Determine if this is a recoverable error (corrupted/unreadable data that can be overwritten)
+      // or a non-recoverable error (keychain access denied, where existing data should be preserved)
+      const errorMessage = loadError.message.toLowerCase()
+      const isCorruptedData =
+        errorMessage.includes('json') ||
+        errorMessage.includes('parse') ||
+        errorMessage.includes('decrypt') ||
+        errorMessage.includes('encryption method') ||
+        errorMessage.includes('unexpected token') ||
+        errorMessage.includes('invalid') ||
+        errorMessage.includes('corrupted')
+
+      // Keychain access denied errors on macOS typically contain these phrases
+      const isKeychainDenied =
+        errorMessage.includes('keychain') ||
+        errorMessage.includes('user canceled') ||
+        errorMessage.includes('user cancelled') ||
+        errorMessage.includes('authentication') ||
+        errorMessage.includes('authorization') ||
+        errorMessage.includes('access denied') ||
+        errorMessage.includes('permission')
+
+      // Recoverable if data is corrupted (we can start fresh)
+      // Not recoverable if keychain was denied (we should preserve existing data)
+      this.loadFailureRecoverable = isCorruptedData && !isKeychainDenied
+
       this.cachedData = {}
       this.cacheLoaded = true
       return this.cachedData
@@ -139,9 +167,10 @@ export class OAuthStorage {
   }
 
   async saveAll(data: StoredOAuthData): Promise<void> {
-    // Prevent writes if initial load failed to avoid overwriting existing data
-    // This protects against data loss when user cancels keychain prompt
-    if (this.loadFailedError) {
+    // Handle load failure states:
+    // - Non-recoverable (keychain access denied): block saves to protect existing data
+    // - Recoverable (corrupted data): allow saves to let user re-authenticate
+    if (this.loadFailedError && !this.loadFailureRecoverable) {
       // User-friendly error message that doesn't expose internal API methods
       // The underlying error is preserved in loadFailedError for debugging via getLoadError()
       throw new Error(
@@ -158,6 +187,9 @@ export class OAuthStorage {
       // Update cache after successful save
       this.cachedData = data
       this.cacheLoaded = true
+      // Clear the load failure state after successful save (storage is now valid)
+      this.loadFailedError = null
+      this.loadFailureRecoverable = false
     } catch (error) {
       throw new Error(`Failed to save OAuth storage: ${error instanceof Error ? error.message : String(error)}`)
     }
@@ -173,11 +205,13 @@ export class OAuthStorage {
     this.cacheLoaded = false
     this.loadPromise = null
     this.loadFailedError = null
+    this.loadFailureRecoverable = false
   }
 
   /**
    * Check if the last load attempt failed (e.g., user cancelled keychain prompt).
-   * When true, save operations will fail to prevent data loss.
+   * When true and not recoverable, save operations will fail to prevent data loss.
+   * When true and recoverable (corrupted data), saves are allowed to let user re-authenticate.
    * Call invalidateCache() to clear this state and retry loading.
    */
   hasLoadFailed(): boolean {
@@ -185,10 +219,41 @@ export class OAuthStorage {
   }
 
   /**
+   * Check if the load failure is recoverable (e.g., corrupted data that can be overwritten).
+   * When true, save operations are allowed even though load failed.
+   * This enables recovery from corrupted/unreadable storage files.
+   */
+  isLoadFailureRecoverable(): boolean {
+    return this.loadFailureRecoverable
+  }
+
+  /**
    * Get the error from the last failed load attempt, or null if no failure.
    */
   getLoadError(): Error | null {
     return this.loadFailedError
+  }
+
+  /**
+   * Reset storage to empty state, clearing any corrupted data.
+   * Use this when storage is unreadable and user wants to start fresh.
+   * WARNING: This will delete all stored OAuth configurations and tokens!
+   */
+  async resetStorage(): Promise<void> {
+    try {
+      // Delete the storage file if it exists
+      if (fs.existsSync(OAUTH_STORAGE_FILE)) {
+        fs.unlinkSync(OAUTH_STORAGE_FILE)
+      }
+      // Reset internal state
+      this.cachedData = {}
+      this.cacheLoaded = true
+      this.loadPromise = null
+      this.loadFailedError = null
+      this.loadFailureRecoverable = false
+    } catch (error) {
+      throw new Error(`Failed to reset OAuth storage: ${error instanceof Error ? error.message : String(error)}`)
+    }
   }
 
   async load(serverUrl: string): Promise<OAuthConfig | null> {

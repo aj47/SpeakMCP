@@ -20,6 +20,8 @@ export class OAuthStorage {
   // In-memory cache to avoid repeated keychain access (which triggers macOS password prompts)
   private cachedData: StoredOAuthData | null = null
   private cacheLoaded: boolean = false
+  // Shared promise to deduplicate concurrent loadAll() calls during startup
+  private loadPromise: Promise<StoredOAuthData> | null = null
 
   constructor() {
     this.initializeEncryption()
@@ -89,6 +91,24 @@ export class OAuthStorage {
       return this.cachedData
     }
 
+    // If a load is already in progress, wait for it to complete
+    // This prevents multiple concurrent keychain prompts during startup
+    if (this.loadPromise !== null) {
+      return this.loadPromise
+    }
+
+    // Start loading and store the promise so concurrent callers share it
+    this.loadPromise = this.performLoad()
+
+    try {
+      return await this.loadPromise
+    } finally {
+      // Clear the promise after completion so future loads can start fresh if needed
+      this.loadPromise = null
+    }
+  }
+
+  private async performLoad(): Promise<StoredOAuthData> {
     try {
       if (!fs.existsSync(OAUTH_STORAGE_FILE)) {
         this.cachedData = {}
@@ -132,6 +152,7 @@ export class OAuthStorage {
   invalidateCache(): void {
     this.cachedData = null
     this.cacheLoaded = false
+    this.loadPromise = null
   }
 
   async load(serverUrl: string): Promise<OAuthConfig | null> {

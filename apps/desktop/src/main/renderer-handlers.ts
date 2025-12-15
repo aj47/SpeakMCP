@@ -1,5 +1,5 @@
 import { UpdateDownloadedEvent } from "electron-updater"
-import { AgentProgressUpdate, ElicitationRequest, SamplingRequest } from "../shared/types"
+import { AgentProgressUpdate, ElicitationRequest, SamplingRequest, QueuedMessage } from "../shared/types"
 import type { AgentSession } from "./agent-session-tracker"
 
 export type RendererHandlers = {
@@ -25,6 +25,9 @@ export type RendererHandlers = {
   agentSessionsUpdated: (data: { activeSessions: AgentSession[], recentSessions: AgentSession[] }) => void
 
   focusAgentSession: (sessionId: string) => void
+
+  // Message Queue handlers
+  onMessageQueueUpdate: (data: { conversationId: string; queue: QueuedMessage[] }) => void
 
   updateAvailable: (e: UpdateDownloadedEvent) => void
   navigate: (url: string) => void

@@ -24,6 +24,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { EventEmitter } from 'expo-modules-core';
 import { useConfigContext, saveConfig } from '../store/config';
 import { useSessionContext } from '../store/sessions';
+import { useMessageQueueContext } from '../store/message-queue';
+import { MessageQueuePanel } from '../ui/MessageQueuePanel';
 import { useConnectionManager } from '../store/connectionManager';
 import { ChatMessage, AgentProgressUpdate } from '../lib/openaiClient';
 import { RecoveryState, formatConnectionStatus } from '../lib/connectionRecovery';
@@ -50,8 +52,10 @@ export default function ChatScreen({ route, navigation }: any) {
   const styles = useMemo(() => createStyles(theme), [theme]);
   const { config, setConfig } = useConfigContext();
   const sessionStore = useSessionContext();
+  const messageQueue = useMessageQueueContext();
   const connectionManager = useConnectionManager();
   const handsFree = !!config.handsFree;
+  const messageQueueEnabled = config.messageQueueEnabled !== false; // default true
   const handsFreeRef = useRef<boolean>(handsFree);
   useEffect(() => { handsFreeRef.current = !!config.handsFree; }, [config.handsFree]);
 
@@ -299,6 +303,9 @@ export default function ChatScreen({ route, navigation }: any) {
 
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  // Keep a ref to messages to avoid stale closures in setTimeout callbacks (PR review fix)
+  const messagesRef = useRef<ChatMessage[]>(messages);
+  useEffect(() => { messagesRef.current = messages; }, [messages]);
   const [input, setInput] = useState('');
   const [listening, setListening] = useState(false);
   const [liveTranscript, setLiveTranscript] = useState('');
@@ -663,8 +670,22 @@ export default function ChatScreen({ route, navigation }: any) {
     return messages;
   }, []);
 
+  // Get the current conversation ID for queue operations
+  const currentConversationId = sessionStore.currentSessionId || 'default';
+
+  // Get queued messages for the current conversation
+  const queuedMessages = messageQueue.getQueue(currentConversationId);
+
   const send = async (text: string) => {
     if (!text.trim()) return;
+
+    // If message queue is enabled and we're already responding, queue the message
+    if (messageQueueEnabled && responding) {
+      console.log('[ChatScreen] Agent busy, queuing message:', text);
+      messageQueue.enqueue(currentConversationId, text);
+      setInput('');
+      return;
+    }
 
     console.log('[ChatScreen] Sending message:', text);
 
@@ -1021,6 +1042,19 @@ export default function ChatScreen({ route, navigation }: any) {
             setDebugInfo('');
           }
         }, 5000);
+
+        // Process next queued message if any
+        if (messageQueueEnabled) {
+          const nextMessage = messageQueue.peek(currentConversationId);
+          if (nextMessage) {
+            console.log('[ChatScreen] Processing next queued message:', nextMessage.id);
+            messageQueue.markProcessing(currentConversationId, nextMessage.id);
+            // Use setTimeout to avoid recursive call stack issues
+            setTimeout(() => {
+              processQueuedMessage(nextMessage);
+            }, 100);
+          }
+        }
       } else {
         console.log('[ChatScreen] Skipping finally state resets:', {
           thisRequestId,
@@ -1029,6 +1063,163 @@ export default function ChatScreen({ route, navigation }: any) {
           currentSessionId: currentSessionIdRef.current,
           reason: !isLatestForThisSession ? 'newer request is active for this session' : 'session changed'
         });
+      }
+    }
+  };
+
+  // Process a queued message (similar to send but handles queue state)
+  const processQueuedMessage = async (queuedMsg: { id: string; text: string }) => {
+    const text = queuedMsg.text;
+    if (!text.trim()) {
+      messageQueue.markProcessed(currentConversationId, queuedMsg.id);
+      return;
+    }
+
+    console.log('[ChatScreen] Processing queued message:', queuedMsg.id, text);
+
+    // Get client from connection manager (preserves connections across session switches)
+    const client = getSessionClient();
+    if (!client) {
+      console.error('[ChatScreen] No client available for processing queued message');
+      messageQueue.markFailed(currentConversationId, queuedMsg.id, 'No session available');
+      setDebugInfo('Error: No session available');
+      return;
+    }
+
+    setDebugInfo(`Processing queued message...`);
+
+    const userMsg: ChatMessage = { role: 'user', content: text };
+    // Use ref to get latest messages to avoid stale closure when called via setTimeout (PR review fix)
+    const currentMessages = messagesRef.current;
+    const messageCountBeforeTurn = currentMessages.length;
+    setMessages((m) => [...m, userMsg, { role: 'assistant', content: 'Assistant is thinking...' }]);
+    setResponding(true);
+
+    const thisRequestId = Date.now();
+    activeRequestIdRef.current = thisRequestId;
+
+    const currentSession = sessionStore.getCurrentSession();
+    const serverConversationId = currentSession?.serverConversationId;
+
+    const requestSessionId = sessionStore.currentSessionId;
+
+    try {
+      let streamingText = '';
+
+      const onProgress = (update: AgentProgressUpdate) => {
+        if (sessionStore.currentSessionId !== requestSessionId) return;
+        if (activeRequestIdRef.current !== thisRequestId) return;
+        const progressMessages = convertProgressToMessages(update);
+        if (progressMessages.length > 0) {
+          setMessages((m) => {
+            const beforePlaceholder = m.slice(0, messageCountBeforeTurn + 1);
+            return [...beforePlaceholder, ...progressMessages];
+          });
+        }
+      };
+
+      const onToken = (tok: string) => {
+        if (sessionStore.currentSessionId !== requestSessionId) return;
+        if (activeRequestIdRef.current !== thisRequestId) return;
+        streamingText += tok;
+        setMessages((m) => {
+          const copy = [...m];
+          for (let i = copy.length - 1; i >= 0; i--) {
+            if (copy[i].role === 'assistant') {
+              copy[i] = { ...copy[i], content: streamingText };
+              break;
+            }
+          }
+          return copy;
+        });
+      };
+
+      const response = await client.chat([...currentMessages, userMsg], onToken, onProgress, serverConversationId);
+      const finalText = response.content || streamingText;
+
+      // Early exit guards - finalize queue status before returning to prevent stuck 'processing' items
+      if (sessionStore.currentSessionId !== requestSessionId) {
+        // Session changed - mark as failed so user can retry in correct session
+        messageQueue.markFailed(currentConversationId, queuedMsg.id, 'Session changed during processing');
+        return;
+      }
+      if (activeRequestIdRef.current !== thisRequestId) {
+        // Request superseded - mark as failed so user can retry
+        messageQueue.markFailed(currentConversationId, queuedMsg.id, 'Request superseded');
+        return;
+      }
+
+      if (response.conversationId) {
+        await sessionStore.setServerConversationId(response.conversationId);
+      }
+
+      if (response.conversationHistory && response.conversationHistory.length > 0) {
+        let currentTurnStartIndex = 0;
+        for (let i = 0; i < response.conversationHistory.length; i++) {
+          if (response.conversationHistory[i].role === 'user') {
+            currentTurnStartIndex = i;
+          }
+        }
+
+        const newMessages: ChatMessage[] = [];
+        for (let i = currentTurnStartIndex; i < response.conversationHistory.length; i++) {
+          const historyMsg = response.conversationHistory[i];
+          if (historyMsg.role === 'user') continue;
+          newMessages.push({
+            role: historyMsg.role === 'tool' ? 'assistant' : historyMsg.role,
+            content: historyMsg.content || '',
+            toolCalls: historyMsg.toolCalls,
+            toolResults: historyMsg.toolResults,
+          });
+        }
+
+        setMessages((m) => {
+          const beforePlaceholder = m.slice(0, messageCountBeforeTurn + 1);
+          return [...beforePlaceholder, ...newMessages];
+        });
+      } else if (finalText) {
+        setMessages((m) => {
+          const copy = [...m];
+          for (let i = copy.length - 1; i >= 0; i--) {
+            if (copy[i].role === 'assistant') {
+              copy[i] = { ...copy[i], content: finalText };
+              break;
+            }
+          }
+          return copy;
+        });
+      }
+
+      if (finalText && config.ttsEnabled !== false) {
+        const processedText = preprocessTextForTTS(finalText);
+        Speech.speak(processedText, { language: 'en-US' });
+      }
+
+      // Mark as processed on success
+      messageQueue.markProcessed(currentConversationId, queuedMsg.id);
+    } catch (e: any) {
+      console.error('[ChatScreen] Queued message error:', e);
+      messageQueue.markFailed(currentConversationId, queuedMsg.id, e.message || 'Unknown error');
+      setMessages((m) => [...m, { role: 'assistant', content: `Error: ${e.message}` }]);
+    } finally {
+      if (activeRequestIdRef.current === thisRequestId) {
+        setResponding(false);
+        setConnectionState(null);
+        setTimeout(() => {
+          if (activeRequestIdRef.current === thisRequestId) {
+            setDebugInfo('');
+          }
+        }, 5000);
+
+        // Process next queued message if any
+        const nextMessage = messageQueue.peek(currentConversationId);
+        if (nextMessage) {
+          console.log('[ChatScreen] Processing next queued message:', nextMessage.id);
+          messageQueue.markProcessing(currentConversationId, nextMessage.id);
+          setTimeout(() => {
+            processQueuedMessage(nextMessage);
+          }, 100);
+        }
       }
     }
   };
@@ -1706,6 +1897,32 @@ export default function ChatScreen({ route, navigation }: any) {
                 {liveTranscript}
               </Text>
             )}
+          </View>
+        )}
+        {/* Message Queue Panel */}
+        {messageQueueEnabled && queuedMessages.length > 0 && (
+          <View style={{ paddingHorizontal: spacing.md, paddingTop: spacing.sm }}>
+            <MessageQueuePanel
+              conversationId={currentConversationId}
+              messages={queuedMessages}
+              onRemove={(messageId) => messageQueue.removeFromQueue(currentConversationId, messageId)}
+              onUpdate={(messageId, text) => messageQueue.updateText(currentConversationId, messageId, text)}
+              onRetry={(messageId) => {
+                messageQueue.resetToPending(currentConversationId, messageId);
+                // If not already processing, trigger queue processing
+                if (!responding) {
+                  const nextMessage = messageQueue.peek(currentConversationId);
+                  if (nextMessage) {
+                    console.log('[ChatScreen] onRetry: Processing queue while idle, next message:', nextMessage.id);
+                    messageQueue.markProcessing(currentConversationId, nextMessage.id);
+                    setTimeout(() => {
+                      processQueuedMessage(nextMessage);
+                    }, 100);
+                  }
+                }
+              }}
+              onClear={() => messageQueue.clearQueue(currentConversationId)}
+            />
           </View>
         )}
         {/* Connection status banner - shows when reconnecting */}

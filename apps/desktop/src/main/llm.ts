@@ -786,9 +786,14 @@ export async function processTranscriptWithAgentMode(
   logLLM(`[llm.ts processTranscriptWithAgentMode] conversationHistory initialized with ${conversationHistory.length} messages, roles: [${conversationHistory.map(m => m.role).join(', ')}]`)
 
   // Save the initial user message incrementally
-  // Only save if this is a new message (not from previous conversation history)
-  if (!previousConversationHistory || previousConversationHistory.length === 0 ||
-      previousConversationHistory[previousConversationHistory.length - 1]?.content !== transcript) {
+  // Only save if this is a new message (not already in previous conversation history)
+  // Check if ANY user message in previousConversationHistory has the same content (not just the last one)
+  // This handles retry scenarios where the user message exists but isn't the last message
+  // (e.g., after a failed attempt that added assistant/tool messages)
+  const userMessageAlreadyExists = previousConversationHistory?.some(
+    msg => msg.role === "user" && msg.content === transcript
+  ) ?? false
+  if (!userMessageAlreadyExists) {
     saveMessageIncremental("user", transcript).catch(err => {
       logLLM("[processTranscriptWithAgentMode] Failed to save initial user message:", err)
     })

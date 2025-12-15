@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { rendererHandlers, tipcClient } from '@renderer/lib/tipc-client'
 import { useAgentStore, useConversationStore } from '@renderer/stores'
-import { AgentProgressUpdate, Conversation, ConversationMessage } from '@shared/types'
+import { AgentProgressUpdate, Conversation, ConversationMessage, QueuedMessage } from '@shared/types'
 import { logUI, logStateChange } from '@renderer/lib/debug'
 import { useSaveConversationMutation } from '@renderer/lib/queries'
 
@@ -12,6 +12,7 @@ export function useStoreSync() {
   const clearInactiveSessions = useAgentStore((s) => s.clearInactiveSessions)
   const setFocusedSessionId = useAgentStore((s) => s.setFocusedSessionId)
   const setScrollToSessionId = useAgentStore((s) => s.setScrollToSessionId)
+  const updateMessageQueue = useAgentStore((s) => s.updateMessageQueue)
   const markConversationCompleted = useConversationStore((s) => s.markConversationCompleted)
   const saveConversationMutation = useSaveConversationMutation()
 
@@ -84,6 +85,29 @@ export function useStoreSync() {
     )
     return unlisten
   }, [setFocusedSessionId, setScrollToSessionId])
+
+  // Listen for message queue updates
+  useEffect(() => {
+    const unlisten = rendererHandlers.onMessageQueueUpdate.listen(
+      (data: { conversationId: string; queue: QueuedMessage[] }) => {
+        logUI('[useStoreSync] Message queue update:', data.conversationId, data.queue.length)
+        updateMessageQueue(data.conversationId, data.queue)
+      }
+    )
+    return unlisten
+  }, [updateMessageQueue])
+
+  // Initial hydration of message queues on mount
+  useEffect(() => {
+    tipcClient.getAllMessageQueues().then((queues) => {
+      logUI('[useStoreSync] Initial message queue hydration:', queues.length, 'queues')
+      for (const queue of queues) {
+        updateMessageQueue(queue.conversationId, queue.messages)
+      }
+    }).catch((error) => {
+      logUI('[useStoreSync] Failed to hydrate message queues:', error)
+    })
+  }, [])
 
   async function saveCompleteConversationHistory(
     conversationId: string,

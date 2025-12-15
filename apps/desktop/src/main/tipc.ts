@@ -381,6 +381,12 @@ async function processQueuedMessages(conversationId: string): Promise<void> {
 
   try {
     while (true) {
+      // Check if queue is paused (e.g., by kill switch) before processing next message
+      if (messageQueueService.isQueuePaused(conversationId)) {
+        logLLM(`[processQueuedMessages] Queue is paused for ${conversationId}, stopping processing`)
+        return
+      }
+
       // Peek at the next message without removing it
       const queuedMessage = messageQueueService.peek(conversationId)
       if (!queuedMessage) {
@@ -676,12 +682,21 @@ export const router = {
     .action(async ({ input }) => {
       const { agentSessionTracker } = await import("./agent-session-tracker")
       const { agentSessionStateManager, toolApprovalManager } = await import("./state")
+      const { messageQueueService } = await import("./message-queue-service")
 
       // Stop the session in the state manager (aborts LLM requests, kills processes)
       agentSessionStateManager.stopSession(input.sessionId)
 
       // Cancel any pending tool approvals for this session so executeToolCall doesn't hang
       toolApprovalManager.cancelSessionApprovals(input.sessionId)
+
+      // Pause the message queue for this conversation to prevent processing the next queued message
+      // The user can resume the queue later if they want to continue
+      const session = agentSessionTracker.getSession(input.sessionId)
+      if (session?.conversationId) {
+        messageQueueService.pauseQueue(session.conversationId)
+        logLLM(`[stopAgentSession] Paused queue for conversation ${session.conversationId}`)
+      }
 
       // Immediately emit a final progress update with isComplete: true
       // This ensures the UI updates immediately without waiting for the agent loop
@@ -695,7 +710,7 @@ export const router = {
             id: `stop_${Date.now()}`,
             type: "completion",
             title: "Agent stopped",
-            description: "Agent mode was stopped by emergency kill switch",
+            description: "Agent mode was stopped by emergency kill switch. Queue paused.",
             status: "error",
             timestamp: Date.now(),
           },
@@ -2546,6 +2561,40 @@ export const router = {
       // Conversation is idle, trigger queue processing
       processQueuedMessages(input.conversationId).catch((err) => {
         logLLM("[retryQueuedMessage] Error processing queued messages:", err)
+      })
+
+      return true
+    }),
+
+  isMessageQueuePaused: t.procedure
+    .input<{ conversationId: string }>()
+    .action(async ({ input }) => {
+      const { messageQueueService } = await import("./message-queue-service")
+      return messageQueueService.isQueuePaused(input.conversationId)
+    }),
+
+  resumeMessageQueue: t.procedure
+    .input<{ conversationId: string }>()
+    .action(async ({ input }) => {
+      const { messageQueueService } = await import("./message-queue-service")
+      const { agentSessionTracker } = await import("./agent-session-tracker")
+
+      // Resume the queue
+      messageQueueService.resumeQueue(input.conversationId)
+
+      // Check if conversation is idle (no active session) and trigger queue processing
+      const activeSessionId = agentSessionTracker.findSessionByConversationId(input.conversationId)
+      if (activeSessionId) {
+        const session = agentSessionTracker.getSession(activeSessionId)
+        if (session && session.status === "active") {
+          // Session is active, queue will be processed when it completes
+          return true
+        }
+      }
+
+      // Conversation is idle, trigger queue processing
+      processQueuedMessages(input.conversationId).catch((err) => {
+        logLLM("[resumeMessageQueue] Error processing queued messages:", err)
       })
 
       return true

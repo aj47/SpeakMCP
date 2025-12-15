@@ -14,6 +14,8 @@ class MessageQueueService {
   private queues: Map<string, QueuedMessage[]> = new Map()
   // Track which conversations are currently being processed to prevent concurrent processing
   private processingConversations: Set<string> = new Set()
+  // Track which conversations have their queue paused (e.g., after kill switch)
+  private pausedConversations: Set<string> = new Set()
 
   static getInstance(): MessageQueueService {
     if (!MessageQueueService.instance) {
@@ -25,10 +27,41 @@ class MessageQueueService {
   private constructor() {}
 
   /**
+   * Pause queue processing for a conversation.
+   * When paused, processQueuedMessages will not process any more messages.
+   * Used by kill switch to prevent executing the next queued message after stopping.
+   */
+  pauseQueue(conversationId: string): void {
+    this.pausedConversations.add(conversationId)
+    logApp(`[MessageQueueService] Paused queue for ${conversationId}`)
+    this.emitQueueUpdate(conversationId)
+  }
+
+  /**
+   * Resume queue processing for a conversation.
+   */
+  resumeQueue(conversationId: string): void {
+    this.pausedConversations.delete(conversationId)
+    logApp(`[MessageQueueService] Resumed queue for ${conversationId}`)
+    this.emitQueueUpdate(conversationId)
+  }
+
+  /**
+   * Check if a conversation's queue is paused.
+   */
+  isQueuePaused(conversationId: string): boolean {
+    return this.pausedConversations.has(conversationId)
+  }
+
+  /**
    * Try to acquire a processing lock for a conversation.
-   * Returns true if lock acquired, false if already being processed.
+   * Returns true if lock acquired, false if already being processed or paused.
    */
   tryAcquireProcessingLock(conversationId: string): boolean {
+    if (this.pausedConversations.has(conversationId)) {
+      logApp(`[MessageQueueService] Queue is paused for ${conversationId}, skipping`)
+      return false
+    }
     if (this.processingConversations.has(conversationId)) {
       logApp(`[MessageQueueService] Already processing queue for ${conversationId}, skipping`)
       return false

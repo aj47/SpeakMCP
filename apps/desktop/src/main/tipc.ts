@@ -414,24 +414,31 @@ async function processQueuedMessages(conversationId: string): Promise<void> {
           messageQueueService.markAddedToHistory(conversationId, queuedMessage.id)
         }
 
+        // Determine if we should start snoozed based on panel visibility
+        // If the panel is currently visible, the user is actively watching - don't snooze
+        // If the panel is hidden, process in background to avoid unwanted pop-ups
+        const panelWindow = WINDOWS.get("panel")
+        const isPanelVisible = panelWindow?.isVisible() ?? false
+        const shouldStartSnoozed = !isPanelVisible
+        logLLM(`[processQueuedMessages] Panel visible: ${isPanelVisible}, startSnoozed: ${shouldStartSnoozed}`)
+
         // Find and revive the existing session for this conversation to maintain session continuity
         // This ensures queued messages execute in the same session context as the original conversation
         let existingSessionId: string | undefined
         const foundSessionId = agentSessionTracker.findSessionByConversationId(conversationId)
         if (foundSessionId) {
-          // Revive with startSnoozed=true since queued messages are background-processed
-          const revived = agentSessionTracker.reviveSession(foundSessionId, true)
+          // Only start snoozed if panel is not visible
+          const revived = agentSessionTracker.reviveSession(foundSessionId, shouldStartSnoozed)
           if (revived) {
             existingSessionId = foundSessionId
-            logLLM(`[processQueuedMessages] Revived session ${existingSessionId} for conversation ${conversationId}`)
+            logLLM(`[processQueuedMessages] Revived session ${existingSessionId} for conversation ${conversationId}, snoozed: ${shouldStartSnoozed}`)
           }
         }
 
         // Process with agent mode
-        // Note: startSnoozed=true is intentional - queued messages are processed in the background
-        // without automatically showing the floating panel, since the original session already
-        // provided visual feedback and we don't want to interrupt users with repeated pop-ups
-        await processWithAgentMode(queuedMessage.text, conversationId, existingSessionId, true)
+        // If panel is visible, user is watching - show the execution
+        // If panel is hidden, run in background without pop-ups
+        await processWithAgentMode(queuedMessage.text, conversationId, existingSessionId, shouldStartSnoozed)
 
         // Only remove the message after successful processing
         messageQueueService.markProcessed(conversationId, queuedMessage.id)

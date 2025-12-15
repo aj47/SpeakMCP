@@ -142,9 +142,11 @@ export class OAuthStorage {
     // Prevent writes if initial load failed to avoid overwriting existing data
     // This protects against data loss when user cancels keychain prompt
     if (this.loadFailedError) {
+      // User-friendly error message that doesn't expose internal API methods
+      // The underlying error is preserved in loadFailedError for debugging via getLoadError()
       throw new Error(
-        `Cannot save OAuth data: initial load failed (${this.loadFailedError.message}). ` +
-        `Call invalidateCache() to retry loading before saving.`
+        `Cannot save OAuth data: storage access failed. Please restart the application and try again. ` +
+        `If the problem persists, you may need to grant keychain access when prompted.`
       )
     }
 

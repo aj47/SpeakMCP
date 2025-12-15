@@ -23,7 +23,7 @@ https://github.com/user-attachments/assets/0c181c70-d1f1-4c5d-a6f5-a73147e75182
 |----------|----------------|----------------|----------|
 | **macOS** (Apple Silicon & Intel) | ✅ Full | ✅ Full | [Latest Release](https://github.com/aj47/SpeakMCP/releases/latest) |
 | **Windows** (x64) | ✅ Full | ⚠️ Coming Soon | [v0.2.2](https://github.com/aj47/SpeakMCP/releases/tag/v0.2.2) |
-| **Linux** (x64) | ✅ Full | ⚠️ Coming Soon | [v0.2.2](https://github.com/aj47/SpeakMCP/releases/tag/v0.2.2) or [Build from Source](#-linux-installation-1) |
+| **Linux** (x64) | ✅ Full | ⚠️ Coming Soon | [v0.2.2](https://github.com/aj47/SpeakMCP/releases/tag/v0.2.2) or [Build from Source](#-linux-installation) |
 
 #### 🐧 Linux Installation
 

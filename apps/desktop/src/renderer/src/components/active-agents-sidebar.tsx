@@ -84,12 +84,6 @@ export function ActiveAgentsSidebar() {
     })
   }, [activeSessions.length])
 
-  // Don't render anything if there are no sessions (active or recent)
-  if (!hasAnySessions) {
-    logUI('[ActiveAgentsSidebar] No sessions (active or recent), hiding sidebar')
-    return null
-  }
-
   const handleSessionClick = (sessionId: string) => {
     logUI('[ActiveAgentsSidebar] Session clicked:', sessionId)
     // Navigate to sessions page and focus this session
@@ -197,26 +191,49 @@ export function ActiveAgentsSidebar() {
     setIsExpanded(newState)
   }
 
+  const handleHeaderClick = () => {
+    // Navigate to sessions view
+    logUI('[ActiveAgentsSidebar] Header clicked, navigating to sessions')
+    navigate('/')
+    // Expand the list if not already expanded
+    if (!isExpanded) {
+      setIsExpanded(true)
+    }
+  }
+
   return (
     <div className="px-2 pb-2">
-      <button
-        onClick={handleToggleExpand}
+      <div
         className={cn(
           "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium transition-all duration-200",
           "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
         )}
       >
-        {isExpanded ? (
-          <ChevronDown className="h-3.5 w-3.5" />
-        ) : (
-          <ChevronRight className="h-3.5 w-3.5" />
-        )}
-        <Activity className="h-3.5 w-3.5" />
-        <span>Active</span>
-        <span className="ml-auto flex h-4 w-4 items-center justify-center rounded-full bg-blue-500 text-[10px] font-semibold text-white">
-          {activeSessions.length}
-        </span>
-      </button>
+        <button
+          onClick={handleToggleExpand}
+          className="shrink-0 cursor-pointer hover:text-foreground focus:outline-none focus:ring-1 focus:ring-ring rounded"
+          aria-label={isExpanded ? "Collapse sessions" : "Expand sessions"}
+          aria-expanded={isExpanded}
+        >
+          {isExpanded ? (
+            <ChevronDown className="h-3.5 w-3.5" />
+          ) : (
+            <ChevronRight className="h-3.5 w-3.5" />
+          )}
+        </button>
+        <button
+          onClick={handleHeaderClick}
+          className="flex items-center gap-2 flex-1 min-w-0 focus:outline-none focus:ring-1 focus:ring-ring rounded"
+        >
+          <span className="i-mingcute-grid-line h-3.5 w-3.5"></span>
+          <span>Sessions</span>
+          {activeSessions.length > 0 && (
+            <span className="ml-auto flex h-4 w-4 items-center justify-center rounded-full bg-blue-500 text-[10px] font-semibold text-white">
+              {activeSessions.length}
+            </span>
+          )}
+        </button>
+      </div>
 
       {isExpanded && (
         <div className="mt-1 space-y-1 pl-2">

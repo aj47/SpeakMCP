@@ -18,14 +18,6 @@ export const Component = () => {
   const location = useLocation()
   const [settingsExpanded, setSettingsExpanded] = useState(true)
 
-  const primaryNavLinks: NavLinkItem[] = [
-    {
-      text: "Sessions",
-      href: "/",
-      icon: "i-mingcute-grid-line",
-    },
-  ]
-
   const settingsNavLinks: NavLinkItem[] = [
     {
       text: "General",
@@ -94,13 +86,8 @@ export const Component = () => {
           <SidebarProfileSelector />
         </div>
 
-        {/* Primary Navigation */}
-        <div className="grid gap-0.5 px-2 text-sm">
-          {primaryNavLinks.map(renderNavLink)}
-        </div>
-
-        {/* Active Agents Section - with max-height and scroll to prevent overflow into macOS traffic lights */}
-        <div className="mt-4 max-h-[40vh] overflow-y-auto">
+        {/* Sessions Section - shows sessions list with active count badge */}
+        <div className="max-h-[40vh] overflow-y-auto">
           <ActiveAgentsSidebar />
         </div>
 

@@ -576,12 +576,21 @@ export function resizePanelToNormal() {
  * This is used to enable input interaction in agent mode when the agent has completed.
  * When agent is still running, the panel should be non-focusable to avoid stealing focus.
  * When agent is complete, the panel should be focusable so user can interact with the continue input.
+ *
+ * @param focusable - Whether the panel should be focusable
+ * @param andFocus - If true and focusable is true, also focus the window. This is needed on macOS
+ *                   because windows shown with showInactive() need to be explicitly focused to
+ *                   receive input events, even after setFocusable(true).
  */
-export function setPanelFocusable(focusable: boolean) {
+export function setPanelFocusable(focusable: boolean, andFocus: boolean = false) {
   const win = WINDOWS.get("panel")
   if (!win) return
   try {
     win.setFocusable(focusable)
+    // On macOS, windows shown with showInactive() need explicit focus to receive input
+    if (focusable && andFocus) {
+      win.focus()
+    }
   } catch (e) {
     logApp("[window.ts] setPanelFocusable failed:", e)
   }

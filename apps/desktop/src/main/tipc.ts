@@ -510,12 +510,14 @@ export const router = {
 
   /**
    * Set the focusability of the panel window.
-   * Used to enable input interaction when agent has completed.
+   * Used to enable input interaction when agent has completed or when user wants to queue messages.
+   * @param focusable - Whether the panel should be focusable
+   * @param andFocus - If true and focusable is true, also focus the window (needed for macOS)
    */
   setPanelFocusable: t.procedure
-    .input<{ focusable: boolean }>()
+    .input<{ focusable: boolean; andFocus?: boolean }>()
     .action(async ({ input }) => {
-      setPanelFocusable(input.focusable)
+      setPanelFocusable(input.focusable, input.andFocus ?? false)
       return { success: true }
     }),
 

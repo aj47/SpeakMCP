@@ -36,10 +36,12 @@ export function OverlayFollowUpInput({
 
   // Make panel focusable when user wants to interact with the input
   // The panel is non-focusable by default in agent mode to avoid stealing focus
+  // We pass andFocus=true so the window is also focused, which is required on macOS
+  // for windows shown with showInactive() to receive input events
   const handleInputInteraction = async () => {
     try {
-      await tipcClient.setPanelFocusable({ focusable: true })
-      // After making focusable, focus the input
+      await tipcClient.setPanelFocusable({ focusable: true, andFocus: true })
+      // After making focusable and focused, ensure the input has focus
       setTimeout(() => {
         inputRef.current?.focus()
       }, 50)

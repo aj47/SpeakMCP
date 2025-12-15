@@ -22,6 +22,9 @@ export class OAuthStorage {
   private cacheLoaded: boolean = false
   // Shared promise to deduplicate concurrent loadAll() calls during startup
   private loadPromise: Promise<StoredOAuthData> | null = null
+  // Track if load failed (e.g., user cancelled keychain prompt) to prevent data loss
+  // When set, saveAll() will refuse to write to prevent overwriting existing data
+  private loadFailedError: Error | null = null
 
   constructor() {
     this.initializeEncryption()
@@ -122,9 +125,13 @@ export class OAuthStorage {
       this.cacheLoaded = true
       return this.cachedData
     } catch (error) {
-      // Cache empty data on error to prevent repeated keychain prompts on macOS.
-      // If user cancels the keychain prompt, we don't want to keep asking them.
-      // Call invalidateCache() to allow retry.
+      // On load failure (e.g., user cancelled keychain prompt, corrupted data):
+      // - Set loadFailedError to track the failure state
+      // - Cache empty data for reads (graceful degradation - app can still function)
+      // - saveAll() will refuse to write when loadFailedError is set, preventing data loss
+      // - Call invalidateCache() to clear the error and allow retry
+      const loadError = error instanceof Error ? error : new Error(String(error))
+      this.loadFailedError = loadError
       this.cachedData = {}
       this.cacheLoaded = true
       return this.cachedData
@@ -132,6 +139,15 @@ export class OAuthStorage {
   }
 
   async saveAll(data: StoredOAuthData): Promise<void> {
+    // Prevent writes if initial load failed to avoid overwriting existing data
+    // This protects against data loss when user cancels keychain prompt
+    if (this.loadFailedError) {
+      throw new Error(
+        `Cannot save OAuth data: initial load failed (${this.loadFailedError.message}). ` +
+        `Call invalidateCache() to retry loading before saving.`
+      )
+    }
+
     try {
       fs.mkdirSync(dataFolder, { recursive: true })
       const jsonData = JSON.stringify(data, null, 2)
@@ -146,13 +162,31 @@ export class OAuthStorage {
   }
 
   /**
-   * Invalidate the in-memory cache, forcing next loadAll() to read from disk
-   * Use sparingly - this will trigger a keychain prompt on macOS
+   * Invalidate the in-memory cache, forcing next loadAll() to read from disk.
+   * Also clears any load failure state, allowing retry after a failed load.
+   * Use sparingly - this will trigger a keychain prompt on macOS.
    */
   invalidateCache(): void {
     this.cachedData = null
     this.cacheLoaded = false
     this.loadPromise = null
+    this.loadFailedError = null
+  }
+
+  /**
+   * Check if the last load attempt failed (e.g., user cancelled keychain prompt).
+   * When true, save operations will fail to prevent data loss.
+   * Call invalidateCache() to clear this state and retry loading.
+   */
+  hasLoadFailed(): boolean {
+    return this.loadFailedError !== null
+  }
+
+  /**
+   * Get the error from the last failed load attempt, or null if no failure.
+   */
+  getLoadError(): Error | null {
+    return this.loadFailedError
   }
 
   async load(serverUrl: string): Promise<OAuthConfig | null> {

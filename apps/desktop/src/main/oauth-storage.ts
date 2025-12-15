@@ -199,11 +199,13 @@ export class OAuthStorage {
 
   async save(serverUrl: string, config: OAuthConfig): Promise<void> {
     const allData = await this.loadAll()
-    allData[serverUrl] = {
+    // Work on a copy to prevent cache mutation if saveAll() fails
+    const updatedData = { ...allData }
+    updatedData[serverUrl] = {
       config,
       lastUpdated: Date.now(),
     }
-    await this.saveAll(allData)
+    await this.saveAll(updatedData)
   }
 
   /**
@@ -211,8 +213,10 @@ export class OAuthStorage {
    */
   async delete(serverUrl: string): Promise<void> {
     const allData = await this.loadAll()
-    delete allData[serverUrl]
-    await this.saveAll(allData)
+    // Work on a copy to prevent cache mutation if saveAll() fails
+    const updatedData = { ...allData }
+    delete updatedData[serverUrl]
+    await this.saveAll(updatedData)
   }
 
   /**
@@ -220,8 +224,9 @@ export class OAuthStorage {
    */
   async storeTokens(serverUrl: string, tokens: OAuthTokens): Promise<void> {
     const config = await this.load(serverUrl) || {}
-    config.tokens = tokens
-    await this.save(serverUrl, config)
+    // Work on a copy to prevent cache mutation if save() fails
+    const updatedConfig = { ...config, tokens }
+    await this.save(serverUrl, updatedConfig)
   }
 
   /**
@@ -238,8 +243,9 @@ export class OAuthStorage {
   async clearTokens(serverUrl: string): Promise<void> {
     const config = await this.load(serverUrl)
     if (config) {
-      delete config.tokens
-      await this.save(serverUrl, config)
+      // Work on a copy to prevent cache mutation if save() fails
+      const { tokens, ...configWithoutTokens } = config
+      await this.save(serverUrl, configWithoutTokens as OAuthConfig)
     }
   }
 
@@ -267,24 +273,33 @@ export class OAuthStorage {
     const now = Date.now()
     let hasChanges = false
 
+    // Work on a deep copy to prevent cache mutation if saveAll() fails
+    const updatedData: StoredOAuthData = {}
     for (const [serverUrl, serverData] of Object.entries(allData)) {
       // Remove old configurations
       if (now - serverData.lastUpdated > maxAge) {
-        delete allData[serverUrl]
         hasChanges = true
         continue
+      }
+
+      // Deep copy the server data
+      const serverDataCopy = {
+        config: { ...serverData.config },
+        lastUpdated: serverData.lastUpdated,
       }
 
       // Remove expired tokens
       const tokens = serverData.config.tokens
       if (tokens?.expires_at && now >= tokens.expires_at && !tokens.refresh_token) {
-        delete serverData.config.tokens
+        delete serverDataCopy.config.tokens
         hasChanges = true
       }
+
+      updatedData[serverUrl] = serverDataCopy
     }
 
     if (hasChanges) {
-      await this.saveAll(allData)
+      await this.saveAll(updatedData)
     }
   }
 
@@ -316,10 +331,12 @@ export class OAuthStorage {
    */
   async importConfigs(configs: Record<string, Omit<OAuthConfig, 'tokens'>>): Promise<void> {
     const allData = await this.loadAll()
+    // Work on a copy to prevent cache mutation if saveAll() fails
+    const updatedData = { ...allData }
 
     for (const [serverUrl, config] of Object.entries(configs)) {
       const existingData = allData[serverUrl]
-      allData[serverUrl] = {
+      updatedData[serverUrl] = {
         config: {
           ...config,
           // Preserve existing tokens if any
@@ -329,7 +346,7 @@ export class OAuthStorage {
       }
     }
 
-    await this.saveAll(allData)
+    await this.saveAll(updatedData)
   }
 }
 

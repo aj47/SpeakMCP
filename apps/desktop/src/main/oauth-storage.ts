@@ -17,6 +17,9 @@ export interface StoredOAuthData {
 
 export class OAuthStorage {
   private encryptionKey: Buffer | null = null
+  // In-memory cache to avoid repeated keychain access (which triggers macOS password prompts)
+  private cachedData: StoredOAuthData | null = null
+  private cacheLoaded: boolean = false
 
   constructor() {
     this.initializeEncryption()
@@ -81,15 +84,26 @@ export class OAuthStorage {
   }
 
   async loadAll(): Promise<StoredOAuthData> {
+    // Return cached data if available (avoids repeated keychain prompts on macOS)
+    if (this.cacheLoaded && this.cachedData !== null) {
+      return this.cachedData
+    }
+
     try {
       if (!fs.existsSync(OAUTH_STORAGE_FILE)) {
+        this.cachedData = {}
+        this.cacheLoaded = true
         return {}
       }
 
       const encryptedData = fs.readFileSync(OAUTH_STORAGE_FILE, 'utf8')
       const decryptedData = this.decryptData(encryptedData)
-      return JSON.parse(decryptedData) as StoredOAuthData
+      this.cachedData = JSON.parse(decryptedData) as StoredOAuthData
+      this.cacheLoaded = true
+      return this.cachedData
     } catch (error) {
+      this.cachedData = {}
+      this.cacheLoaded = true
       return {}
     }
   }
@@ -100,9 +114,21 @@ export class OAuthStorage {
       const jsonData = JSON.stringify(data, null, 2)
       const encryptedData = this.encryptData(jsonData)
       fs.writeFileSync(OAUTH_STORAGE_FILE, encryptedData, { mode: 0o600 })
+      // Update cache after successful save
+      this.cachedData = data
+      this.cacheLoaded = true
     } catch (error) {
       throw new Error(`Failed to save OAuth storage: ${error instanceof Error ? error.message : String(error)}`)
     }
+  }
+
+  /**
+   * Invalidate the in-memory cache, forcing next loadAll() to read from disk
+   * Use sparingly - this will trigger a keychain prompt on macOS
+   */
+  invalidateCache(): void {
+    this.cachedData = null
+    this.cacheLoaded = false
   }
 
   async load(serverUrl: string): Promise<OAuthConfig | null> {

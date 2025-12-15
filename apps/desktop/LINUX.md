@@ -12,23 +12,23 @@ Download from [v0.2.2 Release](https://github.com/aj47/SpeakMCP/releases/tag/v0.
 
 ```bash
 # Download
-wget https://github.com/aj47/SpeakMCP/releases/download/v0.2.2/SpeakMCP-0.2.2-x64.AppImage
+wget https://github.com/aj47/SpeakMCP/releases/download/v0.2.2/speakmcp-0.2.2.AppImage
 
 # Make executable
-chmod +x SpeakMCP-0.2.2-x64.AppImage
+chmod +x speakmcp-0.2.2.AppImage
 
 # Run
-./SpeakMCP-0.2.2-x64.AppImage
+./speakmcp-0.2.2.AppImage
 ```
 
 #### Debian/Ubuntu (.deb)
 
 ```bash
 # Download
-wget https://github.com/aj47/SpeakMCP/releases/download/v0.2.2/SpeakMCP-0.2.2-amd64.deb
+wget https://github.com/aj47/SpeakMCP/releases/download/v0.2.2/speakmcp_0.2.2_amd64.deb
 
 # Install
-sudo dpkg -i SpeakMCP-0.2.2-amd64.deb
+sudo dpkg -i speakmcp_0.2.2_amd64.deb
 
 # Install missing dependencies if needed
 sudo apt-get install -f
@@ -52,10 +52,11 @@ Build the latest version with all features:
 git clone https://github.com/aj47/SpeakMCP.git
 cd SpeakMCP
 pnpm install
+cd apps/desktop
 pnpm build-rs        # Build Rust keyboard/input binary
 pnpm build:linux     # Build Linux packages
 
-# Output packages in apps/desktop/dist/
+# Output packages in dist/
 ```
 
 ### Option 3: Docker Build
@@ -104,7 +105,7 @@ Recommended:
 | Voice Dictation | ✅ Works | Hold Ctrl to record |
 | Text-to-Speech | ✅ Works | Requires API key |
 | Text Input Mode | ✅ Works | Ctrl+T |
-| MCP Agent Mode | ⚠️ Partial | Keyboard simulation limited |
+| MCP Agent Mode | ⚠️ Coming Soon | Currently macOS-only |
 | System Tray | ✅ Works | Requires libappindicator |
 
 ## Troubleshooting
@@ -139,7 +140,7 @@ gsettings set org.gnome.desktop.interface toolkit-accessibility true
 sudo apt install libfuse2
 
 # Or extract and run
-./SpeakMCP-*.AppImage --appimage-extract
+./speakmcp-*.AppImage --appimage-extract
 ./squashfs-root/AppRun
 ```
 

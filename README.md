@@ -23,24 +23,25 @@ https://github.com/user-attachments/assets/0c181c70-d1f1-4c5d-a6f5-a73147e75182
 |----------|----------------|----------------|----------|
 | **macOS** (Apple Silicon & Intel) | ✅ Full | ✅ Full | [Latest Release](https://github.com/aj47/SpeakMCP/releases/latest) |
 | **Windows** (x64) | ✅ Full | ⚠️ Coming Soon | [v0.2.2](https://github.com/aj47/SpeakMCP/releases/tag/v0.2.2) |
-| **Linux** (x64) | ✅ Full | ⚠️ Coming Soon | [v0.2.2](https://github.com/aj47/SpeakMCP/releases/tag/v0.2.2) or [Build from Source](#-linux-installation) |
+| **Linux** (x64) | ✅ Full | ⚠️ Coming Soon | [v0.2.2](https://github.com/aj47/SpeakMCP/releases/tag/v0.2.2) or [Build from Source](#-linux-installation-1) |
 
 #### 🐧 Linux Installation
 
 Linux users have two options:
 
 1. **Pre-built packages** (v0.2.2 - dictation only):
-   - **AppImage**: Download `SpeakMCP-0.2.2-x64.AppImage` - runs on any Linux distro
-   - **Debian/Ubuntu**: Download `SpeakMCP-0.2.2-amd64.deb` and install with `sudo dpkg -i SpeakMCP-*.deb`
+   - **AppImage**: Download `speakmcp-0.2.2.AppImage` - runs on any Linux distro
+   - **Debian/Ubuntu**: Download `speakmcp_0.2.2_amd64.deb` and install with `sudo dpkg -i speakmcp_*.deb`
 
 2. **Build from source** (latest features):
    ```bash
    git clone https://github.com/aj47/SpeakMCP.git
    cd SpeakMCP
    pnpm install
+   cd apps/desktop
    pnpm build-rs        # Build Rust binary for Linux
    pnpm build:linux     # Build Linux packages
-   # Output: apps/desktop/dist/
+   # Output: dist/
    ```
 
    Or use Docker for a reproducible build environment:

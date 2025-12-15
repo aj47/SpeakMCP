@@ -6,29 +6,29 @@ SpeakMCP provides voice dictation and AI assistant capabilities for Linux users.
 
 ### Option 1: Pre-built Packages (Recommended)
 
-Download from [v0.2.2 Release](https://github.com/aj47/SpeakMCP/releases/tag/v0.2.2):
+Download from the [Latest Release](https://github.com/aj47/SpeakMCP/releases/latest):
 
 #### AppImage (Universal)
 
 ```bash
 # Download
-wget https://github.com/aj47/SpeakMCP/releases/download/v0.2.2/speakmcp-0.2.2.AppImage
+wget https://github.com/aj47/SpeakMCP/releases/download/v1.0.0/SpeakMCP-1.0.0-x64.AppImage
 
 # Make executable
-chmod +x speakmcp-0.2.2.AppImage
+chmod +x SpeakMCP-1.0.0-x64.AppImage
 
 # Run
-./speakmcp-0.2.2.AppImage
+./SpeakMCP-1.0.0-x64.AppImage
 ```
 
 #### Debian/Ubuntu (.deb)
 
 ```bash
 # Download
-wget https://github.com/aj47/SpeakMCP/releases/download/v0.2.2/speakmcp_0.2.2_amd64.deb
+wget https://github.com/aj47/SpeakMCP/releases/download/v1.0.0/SpeakMCP-1.0.0-amd64.deb
 
 # Install
-sudo dpkg -i speakmcp_0.2.2_amd64.deb
+sudo dpkg -i SpeakMCP-1.0.0-amd64.deb
 
 # Install missing dependencies if needed
 sudo apt-get install -f
@@ -36,6 +36,8 @@ sudo apt-get install -f
 # Run
 speakmcp
 ```
+
+> **Note**: Previous versions are available on the [Releases page](https://github.com/aj47/SpeakMCP/releases).
 
 ### Option 2: Build from Source
 
@@ -140,7 +142,7 @@ gsettings set org.gnome.desktop.interface toolkit-accessibility true
 sudo apt install libfuse2
 
 # Or extract and run
-./speakmcp-*.AppImage --appimage-extract
+./SpeakMCP-*.AppImage --appimage-extract
 ./squashfs-root/AppRun
 ```
 

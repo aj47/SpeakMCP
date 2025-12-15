@@ -22,16 +22,16 @@ https://github.com/user-attachments/assets/0c181c70-d1f1-4c5d-a6f5-a73147e75182
 | Platform | Voice Dictation | MCP Agent Mode | Download |
 |----------|----------------|----------------|----------|
 | **macOS** (Apple Silicon & Intel) | ✅ Full | ✅ Full | [Latest Release](https://github.com/aj47/SpeakMCP/releases/latest) |
-| **Windows** (x64) | ✅ Full | ⚠️ Coming Soon | [v0.2.2](https://github.com/aj47/SpeakMCP/releases/tag/v0.2.2) |
-| **Linux** (x64) | ✅ Full | ⚠️ Coming Soon | [v0.2.2](https://github.com/aj47/SpeakMCP/releases/tag/v0.2.2) or [Build from Source](#-linux-installation) |
+| **Windows** (x64) | ✅ Full | ⚠️ Coming Soon | [Latest Release](https://github.com/aj47/SpeakMCP/releases/latest) |
+| **Linux** (x64) | ✅ Full | ⚠️ Coming Soon | [Latest Release](https://github.com/aj47/SpeakMCP/releases/latest) or [Build from Source](#-linux-installation) |
 
 #### 🐧 Linux Installation
 
 Linux users have two options:
 
-1. **Pre-built packages** (v0.2.2 - dictation only):
-   - **AppImage**: Download `speakmcp-0.2.2.AppImage` - runs on any Linux distro
-   - **Debian/Ubuntu**: Download `speakmcp_0.2.2_amd64.deb` and install with `sudo dpkg -i speakmcp_*.deb`
+1. **Pre-built packages** (latest release):
+   - **AppImage**: Download `SpeakMCP-1.0.0-x64.AppImage` - runs on any Linux distro
+   - **Debian/Ubuntu**: Download `SpeakMCP-1.0.0-amd64.deb` and install with `sudo dpkg -i SpeakMCP-*.deb`
 
 2. **Build from source** (latest features):
    ```bash

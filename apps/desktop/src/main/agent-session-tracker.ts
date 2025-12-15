@@ -286,17 +286,11 @@ class AgentSessionTracker {
     if (completedIndex === -1) {
       // Maybe it's already active?
       if (this.sessions.has(sessionId)) {
-        logApp(`[AgentSessionTracker] Session ${sessionId} is already active`)
-        // If already active and startSnoozed is requested, update the snooze state
-        if (startSnoozed) {
-          const session = this.sessions.get(sessionId)
-          if (session) {
-            session.isSnoozed = true
-            this.sessions.set(sessionId, session)
-            // Emit update so UIs reflect the snooze state change (consistent with snoozeSession/unsnoozeSession)
-            emitSessionUpdate()
-          }
-        }
+        const session = this.sessions.get(sessionId)
+        // Preserve the current snooze state for already-active sessions
+        // This ensures that if the user is actively watching the floating panel,
+        // queued message executions will still be visible (not forced to snooze)
+        logApp(`[AgentSessionTracker] Session ${sessionId} is already active, preserving snooze state: ${session?.isSnoozed}`)
         return true
       }
       logApp(`[AgentSessionTracker] Cannot revive - session not found: ${sessionId}`)

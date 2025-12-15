@@ -93,7 +93,7 @@ export class OAuthStorage {
       if (!fs.existsSync(OAUTH_STORAGE_FILE)) {
         this.cachedData = {}
         this.cacheLoaded = true
-        return {}
+        return this.cachedData
       }
 
       const encryptedData = fs.readFileSync(OAUTH_STORAGE_FILE, 'utf8')
@@ -102,9 +102,12 @@ export class OAuthStorage {
       this.cacheLoaded = true
       return this.cachedData
     } catch (error) {
+      // Cache empty data on error to prevent repeated keychain prompts on macOS.
+      // If user cancels the keychain prompt, we don't want to keep asking them.
+      // Call invalidateCache() to allow retry.
       this.cachedData = {}
       this.cacheLoaded = true
-      return {}
+      return this.cachedData
     }
   }
 

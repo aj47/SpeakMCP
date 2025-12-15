@@ -179,6 +179,10 @@ If using nvm, switch to the recommended version:
 nvm use 20
 ```
 
+### 🔧 Troubleshooting Runtime Issues
+
+Having issues with hotkeys, permissions, or microphone? See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for solutions.
+
 ## ⚙️ Configuration
 
 **AI Providers**: OpenAI, Groq, Google Gemini

@@ -2,7 +2,7 @@ import React, { useState, useCallback } from "react"
 import { Card, CardContent } from "@renderer/components/ui/card"
 import { Badge } from "@renderer/components/ui/badge"
 import { ScrollArea } from "@renderer/components/ui/scroll-area"
-import { User, Bot, Wrench, ChevronDown, ChevronUp } from "lucide-react"
+import { User, Bot, Wrench, ChevronDown, ChevronUp, Copy, CheckCheck } from "lucide-react"
 import { cn } from "@renderer/lib/utils"
 import { ConversationMessage } from "@shared/types"
 import { useAgentProgress, useIsAgentProcessing } from "@renderer/stores"
@@ -180,6 +180,19 @@ function ConversationMessageItem({
   const [audioData, setAudioData] = useState<ArrayBuffer | null>(null)
   const [isGeneratingAudio, setIsGeneratingAudio] = useState(false)
   const [ttsError, setTtsError] = useState<string | null>(null)
+  const [isCopied, setIsCopied] = useState(false)
+
+  // Copy message content to clipboard
+  const handleCopy = async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    try {
+      await navigator.clipboard.writeText(message.content)
+      setIsCopied(true)
+      setTimeout(() => setIsCopied(false), 2000)
+    } catch (err) {
+      console.error("Failed to copy message:", err)
+    }
+  }
 
   const generateAudio = async (): Promise<ArrayBuffer> => {
     if (!configQuery.data?.ttsEnabled) {
@@ -279,6 +292,19 @@ function ConversationMessageItem({
           <span className="modern-text-muted text-xs">
             {formatRelativeTimestamp(message.timestamp)}
           </span>
+          {/* Copy button */}
+          <button
+            type="button"
+            onClick={handleCopy}
+            className="inline-flex items-center p-1 rounded hover:bg-muted/50 transition-colors text-muted-foreground hover:text-foreground"
+            title={isCopied ? "Copied!" : "Copy message"}
+          >
+            {isCopied ? (
+              <CheckCheck className="h-3 w-3 text-green-500" />
+            ) : (
+              <Copy className="h-3 w-3" />
+            )}
+          </button>
           {(message.toolCalls || message.toolResults) && (
             <>
               <span className="modern-text-muted text-xs">•</span>

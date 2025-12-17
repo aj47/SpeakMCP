@@ -1508,7 +1508,9 @@ export function MCPConfigManager({
                         <div className="flex shrink-0 items-center gap-1">
                           <CheckCircle className="h-3 w-3 text-green-500" />
                           <Badge variant="default" className="text-xs">
-                            {serverStatus[name].toolCount} tools
+                            {(toolsByServer[name] || []).length > 0
+                              ? `${(toolsByServer[name] || []).filter((t) => t.enabled).length}/${(toolsByServer[name] || []).length} tools enabled`
+                              : `${serverStatus[name].toolCount} tools`}
                           </Badge>
                         </div>
                       ) : serverStatus[name]?.error ? (

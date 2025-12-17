@@ -55,23 +55,39 @@ struct RequestMessage {
     content: String,
 }
 
-/// Chat completion response from the remote server
+/// OpenAI-style choice in the response
 #[derive(Debug, Deserialize)]
+struct Choice {
+    message: ChoiceMessage,
+}
+
+#[derive(Debug, Deserialize)]
+struct ChoiceMessage {
+    content: String,
+}
+
+/// Chat completion response from the remote server
+/// Matches OpenAI format with additional conversation fields
+#[derive(Debug, Deserialize)]
+struct RawChatResponse {
+    choices: Vec<Choice>,
+    /// Conversation ID for continuing the conversation (snake_case from server)
+    conversation_id: Option<String>,
+    /// Full conversation history with tool calls (snake_case from server)
+    conversation_history: Option<Vec<ConversationMessage>>,
+}
+
+/// Processed chat response for use in the CLI
+#[derive(Debug)]
 pub struct ChatResponse {
     /// The assistant's response content
     pub content: String,
     /// Conversation ID for continuing the conversation
-    #[serde(rename = "conversationId")]
     pub conversation_id: Option<String>,
     /// Full conversation history with tool calls
-    #[serde(rename = "conversationHistory")]
     pub conversation_history: Option<Vec<ConversationMessage>>,
     /// Whether the message was queued
     pub queued: Option<bool>,
-    /// ID of queued message if applicable (used for scripting)
-    #[serde(rename = "queuedMessageId")]
-    #[allow(dead_code)]
-    pub queued_message_id: Option<String>,
 }
 
 /// SpeakMCP API client
@@ -135,10 +151,24 @@ impl ApiClient {
             return Err(anyhow!("API error ({}): {}", status, body));
         }
 
-        response
-            .json::<ChatResponse>()
+        let raw_response = response
+            .json::<RawChatResponse>()
             .await
-            .context("Failed to parse API response")
+            .context("Failed to parse API response")?;
+
+        // Extract content from OpenAI-style choices array
+        let content = raw_response
+            .choices
+            .first()
+            .map(|c| c.message.content.clone())
+            .unwrap_or_default();
+
+        Ok(ChatResponse {
+            content,
+            conversation_id: raw_response.conversation_id,
+            conversation_history: raw_response.conversation_history,
+            queued: None, // Not currently used by server
+        })
     }
 }
 

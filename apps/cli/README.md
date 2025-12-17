@@ -72,6 +72,9 @@ speakmcp send "Hello, how are you?"
 
 # Continue a conversation
 speakmcp send "Tell me more" --conversation CONV_ID
+
+# Pipe from stdin (use '-' to read from stdin)
+echo "Summarize this" | speakmcp send -
 ```
 
 ### Configuration
@@ -166,5 +169,5 @@ cargo test
 
 ## License
 
-MIT License - see the main SpeakMCP repository for details.
+AGPL-3.0-only – see the main SpeakMCP repository for details.
 

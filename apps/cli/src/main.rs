@@ -89,7 +89,17 @@ async fn main() -> Result<()> {
     let cli = Cli::parse();
 
     // Load configuration
-    let mut config = Config::load().unwrap_or_default();
+    let mut config = match Config::load() {
+        Ok(config) => config,
+        Err(e) => {
+            eprintln!("{}: Failed to load config: {}", "warning".yellow(), e);
+            eprintln!("{}", "Using default configuration.".dimmed());
+            Config::default()
+        }
+    };
+
+    // Control colored output based on config
+    colored::control::set_override(config.colored_output);
 
     // Apply command-line overrides
     if let Some(server) = &cli.server {

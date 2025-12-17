@@ -98,6 +98,15 @@ impl Config {
         fs::write(&path, content)
             .with_context(|| format!("Failed to write config file: {}", path.display()))?;
 
+        // Set restrictive permissions on Unix (0600 - owner read/write only)
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let permissions = std::fs::Permissions::from_mode(0o600);
+            fs::set_permissions(&path, permissions)
+                .with_context(|| format!("Failed to set permissions on config file: {}", path.display()))?;
+        }
+
         Ok(())
     }
 

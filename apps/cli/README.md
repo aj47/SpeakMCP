@@ -72,9 +72,6 @@ speakmcp send "Hello, how are you?"
 
 # Continue a conversation
 speakmcp send "Tell me more" --conversation CONV_ID
-
-# Use with pipes
-echo "Summarize this" | speakmcp send -
 ```
 
 ### Configuration

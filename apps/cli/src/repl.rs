@@ -11,6 +11,9 @@ use crate::config::Config;
 
 /// Run the interactive REPL
 pub async fn run(config: &Config) -> Result<()> {
+    // Control colored output based on config
+    colored::control::set_override(config.colored_output);
+
     let client = ApiClient::from_config(config)?;
     let mut conversation_id: Option<String> = config.default_conversation_id.clone();
 
@@ -25,7 +28,15 @@ pub async fn run(config: &Config) -> Result<()> {
         io::stdout().flush()?;
 
         // Read input
-        let input = read_line()?;
+        let input = match read_line()? {
+            Some(input) => input,
+            None => {
+                // EOF - exit gracefully
+                println!();
+                println!("{}", "Goodbye!".dimmed());
+                break;
+            }
+        };
         let input = input.trim();
 
         if input.is_empty() {
@@ -139,9 +150,14 @@ fn print_tool_calls(response: &ChatResponse) {
 }
 
 /// Read a line of input, handling Ctrl+C and Ctrl+D
-fn read_line() -> Result<String> {
+/// Returns None on EOF (Ctrl+D), Some(input) otherwise
+fn read_line() -> Result<Option<String>> {
     let mut input = String::new();
-    io::stdin().read_line(&mut input)?;
-    Ok(input)
+    let bytes_read = io::stdin().read_line(&mut input)?;
+    if bytes_read == 0 {
+        // EOF (Ctrl+D)
+        return Ok(None);
+    }
+    Ok(Some(input))
 }
 

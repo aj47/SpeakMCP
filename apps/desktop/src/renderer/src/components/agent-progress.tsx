@@ -360,12 +360,12 @@ const CompactMessage: React.FC<{
 
         </div>
         <div className="flex items-center gap-1 flex-shrink-0">
-          {/* Copy button for final assistant response */}
-          {message.role === "assistant" && isLast && isComplete && (
+          {/* Copy button for user prompts and final assistant response */}
+          {(message.role === "user" || (message.role === "assistant" && isLast && isComplete)) && (
             <button
               onClick={handleCopyResponse}
               className="p-1 rounded hover:bg-muted/30 transition-colors"
-              title={isCopied ? "Copied!" : "Copy response"}
+              title={isCopied ? "Copied!" : message.role === "user" ? "Copy prompt" : "Copy response"}
             >
               {isCopied ? (
                 <CheckCheck className="h-3 w-3 text-green-500" />

@@ -15,6 +15,8 @@ import {
   ChevronUp,
   ChevronDown,
   GripHorizontal,
+  Copy,
+  CheckCheck,
 } from "lucide-react"
 import { Button } from "@renderer/components/ui/button"
 import { Badge } from "@renderer/components/ui/badge"
@@ -66,9 +68,22 @@ export function SessionTile({
   const [isCollapsed, setIsCollapsed] = useState(false)
   const [tileHeight, setTileHeight] = useState(DEFAULT_HEIGHT)
   const [isResizing, setIsResizing] = useState(false)
+  const [copiedIndex, setCopiedIndex] = useState<number | null>(null)
 
   // Get queued messages for this conversation
   const queuedMessages = useMessageQueue(session.conversationId)
+
+  // Copy message to clipboard
+  const handleCopyMessage = async (e: React.MouseEvent, content: string, index: number) => {
+    e.stopPropagation()
+    try {
+      await navigator.clipboard.writeText(content)
+      setCopiedIndex(index)
+      setTimeout(() => setCopiedIndex(null), 2000)
+    } catch (err) {
+      console.error("Failed to copy message:", err)
+    }
+  }
 
   const isActive = session.status === "active"
   const isComplete = session.status === "completed"
@@ -230,8 +245,21 @@ export function SessionTile({
                         : "pl-3 border-l-2 border-muted"
                     )}
                   >
-                    <div className="text-xs text-muted-foreground mb-1 capitalize">
-                      {message.role}
+                    <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
+                      <span className="capitalize">{message.role}</span>
+                      {message.role === "user" && typeof message.content === "string" && (
+                        <button
+                          onClick={(e) => handleCopyMessage(e, message.content as string, index)}
+                          className="p-1 rounded hover:bg-muted/30 transition-colors"
+                          title={copiedIndex === index ? "Copied!" : "Copy prompt"}
+                        >
+                          {copiedIndex === index ? (
+                            <CheckCheck className="h-3 w-3 text-green-500" />
+                          ) : (
+                            <Copy className="h-3 w-3 opacity-60 hover:opacity-100" />
+                          )}
+                        </button>
+                      )}
                     </div>
                     <div className="prose prose-sm dark:prose-invert max-w-none">
                       {typeof message.content === "string" ? (

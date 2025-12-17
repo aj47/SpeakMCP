@@ -118,7 +118,7 @@ fn print_help() {
     println!("  {}      - Exit the CLI", "/quit".cyan());
     println!();
     println!("{}", "Tips:".bold());
-    println!("  • Press Ctrl+C to cancel a request");
+    println!("  • Press Ctrl+C to exit");
     println!("  • Press Ctrl+D to exit");
 }
 

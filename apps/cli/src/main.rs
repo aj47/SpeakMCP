@@ -119,7 +119,18 @@ async fn main() -> Result<()> {
             message,
             conversation,
         }) => {
-            send_message(&config, &message, conversation.as_deref()).await?;
+            // Handle stdin input if message is "-"
+            let message_text = if message == "-" {
+                use std::io::Read;
+                let mut buffer = String::new();
+                std::io::stdin()
+                    .read_to_string(&mut buffer)
+                    .context("Failed to read from stdin")?;
+                buffer
+            } else {
+                message
+            };
+            send_message(&config, &message_text, conversation.as_deref()).await?;
         }
 
         Some(Commands::Config {
@@ -274,28 +285,23 @@ async fn check_status(config: &Config) -> Result<()> {
         .build()
         .context("Failed to create HTTP client")?;
 
-    let url = format!("{}/chat/completions", config.server_url);
+    // Use the /v1/models endpoint for a lightweight health check
+    let url = format!("{}/models", config.server_url);
 
-    // Try to connect (will fail auth but proves connectivity)
+    // Try to connect using the models endpoint (lightweight, no side effects)
     match client
-        .post(&url)
+        .get(&url)
         .header("Authorization", format!("Bearer {}", config.api_key))
-        .header("Content-Type", "application/json")
-        .json(&serde_json::json!({
-            "model": "test",
-            "messages": [{"role": "user", "content": "test"}]
-        }))
         .send()
         .await
     {
         Ok(response) => {
-            if response.status().is_success() || response.status().as_u16() == 401 || response.status().as_u16() == 400 {
+            if response.status().is_success() {
                 println!("{} Connected to {}", "✓".green(), config.server_url.cyan());
-                if response.status().is_success() {
-                    println!("{} Authentication successful", "✓".green());
-                } else if response.status().as_u16() == 401 {
-                    println!("{} Server reachable but authentication failed", "✗".red());
-                }
+                println!("{} Authentication successful", "✓".green());
+            } else if response.status().as_u16() == 401 {
+                println!("{} Connected to {}", "✓".green(), config.server_url.cyan());
+                println!("{} Authentication failed - check your API key", "✗".red());
             } else {
                 println!(
                     "{} Server returned status {}",

@@ -70,9 +70,6 @@ pub async fn run(config: &Config) -> Result<()> {
         }
 
         // Send message to API
-        print!("{} ", "agent>".green().bold());
-        io::stdout().flush()?;
-
         match client.chat(input, conversation_id.as_deref()).await {
             Ok(response) => {
                 // Update conversation ID for continuing the conversation
@@ -80,12 +77,13 @@ pub async fn run(config: &Config) -> Result<()> {
                     conversation_id = Some(id.clone());
                 }
 
-                // Print tool calls if enabled
+                // Print tool calls first (before the agent prompt) if enabled
                 if config.show_tool_calls {
                     print_tool_calls(&response);
                 }
 
-                // Print the response
+                // Print the agent prompt and response on the same line
+                print!("{} ", "agent>".green().bold());
                 println!("{}", response.content);
 
                 if response.queued.unwrap_or(false) {
@@ -93,6 +91,7 @@ pub async fn run(config: &Config) -> Result<()> {
                 }
             }
             Err(e) => {
+                print!("{} ", "agent>".green().bold());
                 println!("{}", format!("Error: {}", e).red());
             }
         }

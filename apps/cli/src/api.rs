@@ -118,13 +118,15 @@ impl ApiClient {
         })
     }
 
+    fn endpoint(&self, path: &str) -> String {
+        let base = self.server_url.trim_end_matches('/');
+        let suffix = path.trim_start_matches('/');
+        format!("{}/{}", base, suffix)
+    }
+
     /// Send a chat message and get a response
-    pub async fn chat(
-        &self,
-        message: &str,
-        conversation_id: Option<&str>,
-    ) -> Result<ChatResponse> {
-        let url = format!("{}/chat/completions", self.server_url);
+    pub async fn chat(&self, message: &str, conversation_id: Option<&str>) -> Result<ChatResponse> {
+        let url = self.endpoint("chat/completions");
 
         let request = ChatRequest {
             model: "gpt-4o".to_string(), // Model is configured on server side
@@ -161,7 +163,7 @@ impl ApiClient {
             .choices
             .first()
             .map(|c| c.message.content.clone())
-            .unwrap_or_default();
+            .ok_or_else(|| anyhow!("API response missing choices"))?;
 
         Ok(ChatResponse {
             content,
@@ -171,4 +173,3 @@ impl ApiClient {
         })
     }
 }
-

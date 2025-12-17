@@ -88,15 +88,11 @@ enum Commands {
 async fn main() -> Result<()> {
     let cli = Cli::parse();
 
-    // Load configuration
-    let mut config = match Config::load() {
-        Ok(config) => config,
-        Err(e) => {
-            eprintln!("{}: Failed to load config: {}", "warning".yellow(), e);
-            eprintln!("{}", "Using default configuration.".dimmed());
-            Config::default()
-        }
-    };
+    // Load configuration (fail fast on read/parse errors so users see misconfiguration)
+    let mut config = Config::load().map_err(|e| {
+        eprintln!("{}: Failed to load config: {}", "error".red(), e);
+        e
+    })?;
 
     // Control colored output based on config
     colored::control::set_override(config.colored_output);
@@ -196,7 +192,6 @@ async fn send_message(config: &Config, message: &str, conversation_id: Option<&s
     Ok(())
 }
 
-
 /// Handle config subcommand
 fn handle_config(
     server_url: Option<String>,
@@ -206,11 +201,7 @@ fn handle_config(
 ) -> Result<()> {
     if init {
         let path = Config::init()?;
-        println!(
-            "{} {}",
-            "Created config file:".green(),
-            path.display()
-        );
+        println!("{} {}", "Created config file:".green(), path.display());
         return Ok(());
     }
 
@@ -223,7 +214,9 @@ fn handle_config(
             if config.api_key.is_empty() {
                 "(not set)".dimmed().to_string()
             } else {
-                format!("{}...", &config.api_key[..8.min(config.api_key.len())]).dimmed().to_string()
+                format!("{}...", &config.api_key[..8.min(config.api_key.len())])
+                    .dimmed()
+                    .to_string()
             }
         );
         println!(
@@ -272,10 +265,7 @@ async fn check_status(config: &Config) -> Result<()> {
     println!("{}", "Checking connection...".dimmed());
 
     if config.api_key.is_empty() {
-        println!(
-            "{}: API key not configured",
-            "warning".yellow()
-        );
+        println!("{}: API key not configured", "warning".yellow());
         println!("Run 'speakmcp config --api-key <KEY>' to set it.");
         return Ok(());
     }
@@ -286,7 +276,8 @@ async fn check_status(config: &Config) -> Result<()> {
         .context("Failed to create HTTP client")?;
 
     // Use the /v1/models endpoint for a lightweight health check
-    let url = format!("{}/models", config.server_url);
+    let base = config.server_url.trim_end_matches('/');
+    let url = format!("{}/models", base);
 
     // Try to connect using the models endpoint (lightweight, no side effects)
     match client

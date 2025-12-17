@@ -159,4 +159,3 @@ fn read_line() -> Result<Option<String>> {
     }
     Ok(Some(input))
 }
-

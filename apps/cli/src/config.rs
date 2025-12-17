@@ -5,6 +5,7 @@
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::fs;
+use std::fs::OpenOptions;
 use std::path::PathBuf;
 
 /// CLI configuration
@@ -93,18 +94,53 @@ impl Config {
         fs::create_dir_all(&dir)
             .with_context(|| format!("Failed to create config directory: {}", dir.display()))?;
 
-        let content = toml::to_string_pretty(self).context("Failed to serialize config")?;
-
-        fs::write(&path, content)
-            .with_context(|| format!("Failed to write config file: {}", path.display()))?;
-
-        // Set restrictive permissions on Unix (0600 - owner read/write only)
+        // Tighten directory permissions on Unix (0700 - owner only)
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            let permissions = std::fs::Permissions::from_mode(0o600);
-            fs::set_permissions(&path, permissions)
-                .with_context(|| format!("Failed to set permissions on config file: {}", path.display()))?;
+            let dir_perms = fs::Permissions::from_mode(0o700);
+            fs::set_permissions(&dir, dir_perms).with_context(|| {
+                format!(
+                    "Failed to set permissions on config directory: {}",
+                    dir.display()
+                )
+            })?;
+        }
+
+        let content = toml::to_string_pretty(self).context("Failed to serialize config")?;
+
+        // Write file with restrictive permissions.
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+
+            OpenOptions::new()
+                .write(true)
+                .create(true)
+                .truncate(true)
+                .mode(0o600)
+                .open(&path)
+                .and_then(|mut file| std::io::Write::write_all(&mut file, content.as_bytes()))
+                .with_context(|| format!("Failed to write config file: {}", path.display()))?;
+        }
+
+        #[cfg(not(unix))]
+        {
+            fs::write(&path, &content)
+                .with_context(|| format!("Failed to write config file: {}", path.display()))?;
+        }
+
+        // On non-Windows Unix we also set permissions to be sure (in case file existed)
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let permissions = fs::Permissions::from_mode(0o600);
+            fs::set_permissions(&path, permissions).with_context(|| {
+                format!(
+                    "Failed to set permissions on config file: {}",
+                    path.display()
+                )
+            })?;
         }
 
         Ok(())
@@ -117,4 +153,3 @@ impl Config {
         Self::config_path().context("Could not determine config path")
     }
 }
-

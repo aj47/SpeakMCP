@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react"
+import React, { useState, useCallback, useRef, useEffect } from "react"
 import { Card, CardContent } from "@renderer/components/ui/card"
 import { Badge } from "@renderer/components/ui/badge"
 import { ScrollArea } from "@renderer/components/ui/scroll-area"
@@ -181,6 +181,16 @@ function ConversationMessageItem({
   const [isGeneratingAudio, setIsGeneratingAudio] = useState(false)
   const [ttsError, setTtsError] = useState<string | null>(null)
   const [isCopied, setIsCopied] = useState(false)
+  const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (copyTimeoutRef.current) {
+        clearTimeout(copyTimeoutRef.current)
+      }
+    }
+  }, [])
 
   // Copy message content to clipboard
   const handleCopy = async (e: React.MouseEvent) => {
@@ -188,7 +198,11 @@ function ConversationMessageItem({
     try {
       await navigator.clipboard.writeText(message.content)
       setIsCopied(true)
-      setTimeout(() => setIsCopied(false), 2000)
+      // Clear any existing timeout to handle repeated clicks
+      if (copyTimeoutRef.current) {
+        clearTimeout(copyTimeoutRef.current)
+      }
+      copyTimeoutRef.current = setTimeout(() => setIsCopied(false), 2000)
     } catch (err) {
       console.error("Failed to copy message:", err)
     }
@@ -298,6 +312,7 @@ function ConversationMessageItem({
             onClick={handleCopy}
             className="inline-flex items-center p-1 rounded hover:bg-muted/50 transition-colors text-muted-foreground hover:text-foreground"
             title={isCopied ? "Copied!" : "Copy message"}
+            aria-label={isCopied ? "Copied to clipboard" : "Copy message to clipboard"}
           >
             {isCopied ? (
               <CheckCheck className="h-3 w-3 text-green-500" />

@@ -1,6 +1,6 @@
 {
   "name": "@speakmcp/shared",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Shared design tokens, types, and utilities for SpeakMCP apps",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",

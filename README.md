@@ -105,6 +105,9 @@ pnpm build:mac    # macOS build (Apple Silicon + Intel)
 pnpm build:win    # Windows build (x64)
 pnpm build:linux  # Linux build (x64)
 
+# Signed release builds (see BUILDING.md for details)
+./scripts/build-release.sh --mac-only
+
 # Testing
 pnpm test         # Run test suite
 pnpm test:run     # Run tests once (CI mode)

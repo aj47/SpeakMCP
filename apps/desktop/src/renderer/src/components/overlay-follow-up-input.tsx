@@ -89,6 +89,13 @@ export function OverlayFollowUpInput({
 
   const handleVoiceClick = async (e: React.MouseEvent) => {
     e.stopPropagation()
+    // Make panel focusable and focused first to ensure click events are received
+    // This is required on macOS for windows shown with showInactive()
+    try {
+      await tipcClient.setPanelFocusable({ focusable: true, andFocus: true })
+    } catch {
+      // Ignore errors - recording might still work
+    }
     // Pass conversationId and sessionId directly through IPC to continue in the same session
     // This is more reliable than using Zustand store which has timing issues
     // Don't pass fake "pending-*" sessionIds - let the backend find the real session by conversationId
@@ -146,6 +153,7 @@ export function OverlayFollowUpInput({
         variant="ghost"
         className="h-7 w-7 flex-shrink-0"
         disabled={!text.trim() || isDisabled}
+        onMouseDown={handleInputInteraction}
         title={isSessionActive && isQueueEnabled ? "Queue message" : "Send message"}
       >
         <Send className={cn(
@@ -163,6 +171,7 @@ export function OverlayFollowUpInput({
           "hover:text-red-600 dark:hover:text-red-400"
         )}
         disabled={isVoiceDisabled}
+        onMouseDown={handleInputInteraction}
         onClick={handleVoiceClick}
         title={isSessionActive ? "Voice unavailable while agent is processing" : "Continue with voice"}
       >

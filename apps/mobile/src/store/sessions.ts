@@ -36,7 +36,10 @@ async function loadSessions(): Promise<Session[]> {
   try {
     const raw = await AsyncStorage.getItem(SESSIONS_KEY);
     if (!raw) return [];
-    return JSON.parse(raw);
+    const sessions: Session[] = JSON.parse(raw);
+    // Sort by updatedAt descending (most recent first) to ensure
+    // the latest/newest session is always at the top
+    return sessions.sort((a, b) => b.updatedAt - a.updatedAt);
   } catch {}
   return [];
 }
@@ -242,7 +245,9 @@ export function useSessions(): SessionStore {
   }, [sessions, currentSessionId]);
 
   const getSessionList = useCallback((): SessionListItem[] => {
-    return sessions.map(sessionToListItem);
+    // Sort by updatedAt descending to ensure the latest/newest session is always at the top
+    const sortedSessions = [...sessions].sort((a, b) => b.updatedAt - a.updatedAt);
+    return sortedSessions.map(sessionToListItem);
   }, [sessions]);
 
   const addMessage = useCallback(async (

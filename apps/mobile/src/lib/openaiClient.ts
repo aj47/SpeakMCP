@@ -93,11 +93,30 @@ export class OpenAIClient {
     return trimmed.replace(/\/+$/, '');
   }
 
-  private authHeaders() {
-    return {
+  /**
+   * Check if the baseUrl indicates OpenRouter API
+   */
+  private isOpenRouterApi(): boolean {
+    return this.baseUrl.toLowerCase().includes('openrouter.ai');
+  }
+
+  /**
+   * Build authentication headers for API requests
+   * Automatically adds OpenRouter-specific headers when detected
+   */
+  private authHeaders(): Record<string, string> {
+    const headers: Record<string, string> = {
       Authorization: `Bearer ${this.cfg.apiKey}`,
       'Content-Type': 'application/json',
-    } as const;
+    };
+
+    // Add OpenRouter Response Healing plugin header when using OpenRouter
+    // See: https://openrouter.ai/docs/guides/features/plugins/response-healing
+    if (this.isOpenRouterApi()) {
+      headers['X-Enable-Plugins'] = 'response-healing';
+    }
+
+    return headers;
   }
 
   private getUrl(endpoint: string): string {

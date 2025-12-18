@@ -625,6 +625,32 @@ function isEmptyContentResponse(resp: any): boolean {
 }
 
 /**
+ * Check if the baseURL indicates OpenRouter API
+ */
+function isOpenRouterApi(baseURL: string): boolean {
+  return baseURL.toLowerCase().includes('openrouter.ai')
+}
+
+/**
+ * Build headers for OpenAI-compatible API calls
+ * Automatically adds OpenRouter-specific headers when detected
+ */
+function buildOpenAICompatibleHeaders(baseURL: string, apiKey: string): Record<string, string> {
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${apiKey}`,
+    "Content-Type": "application/json",
+  }
+
+  // Add OpenRouter Response Healing plugin header when using OpenRouter
+  // See: https://openrouter.ai/docs/guides/features/plugins/response-healing
+  if (isOpenRouterApi(baseURL)) {
+    headers["X-Enable-Plugins"] = "response-healing"
+  }
+
+  return headers
+}
+
+/**
  * Make a single API call attempt with specific response format
  */
 async function makeAPICallAttempt(
@@ -676,10 +702,7 @@ async function makeAPICallAttempt(
 
     const response = await fetch(`${baseURL}/chat/completions`, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
+      headers: buildOpenAICompatibleHeaders(baseURL, apiKey),
       body: JSON.stringify(requestBody),
       signal: controller.signal,
     })
@@ -1389,10 +1412,7 @@ export async function makeLLMCallWithStreaming(
   try {
     const response = await fetch(`${baseURL}/chat/completions`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
+      headers: buildOpenAICompatibleHeaders(baseURL, apiKey),
       body: JSON.stringify({
         model,
         messages,

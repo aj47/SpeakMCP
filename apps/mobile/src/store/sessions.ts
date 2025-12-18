@@ -242,7 +242,10 @@ export function useSessions(): SessionStore {
   }, [sessions, currentSessionId]);
 
   const getSessionList = useCallback((): SessionListItem[] => {
-    return sessions.map(sessionToListItem);
+    // Sort sessions by updatedAt descending (most recent first) - fixes #649
+    return [...sessions]
+      .sort((a, b) => b.updatedAt - a.updatedAt)
+      .map(sessionToListItem);
   }, [sessions]);
 
   const addMessage = useCallback(async (

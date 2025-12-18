@@ -106,6 +106,8 @@ export function createMainWindow({ url }: { url?: string } = {}) {
     win.on("show", () => {
       if (configStore.get().hideDockIcon && !app.dock.isVisible()) {
         app.dock.show()
+        // Reset activation policy to "regular" so app appears in Command+Tab
+        app.setActivationPolicy("regular")
       }
     })
   }

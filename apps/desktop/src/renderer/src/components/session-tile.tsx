@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react"
+import React, { useState, useCallback, useRef, useEffect } from "react"
 import { cn } from "@renderer/lib/utils"
 import { AgentProgressUpdate } from "@shared/types"
 import { ScrollArea } from "@renderer/components/ui/scroll-area"
@@ -15,6 +15,8 @@ import {
   ChevronUp,
   ChevronDown,
   GripHorizontal,
+  Copy,
+  CheckCheck,
 } from "lucide-react"
 import { Button } from "@renderer/components/ui/button"
 import { Badge } from "@renderer/components/ui/badge"
@@ -66,9 +68,43 @@ export function SessionTile({
   const [isCollapsed, setIsCollapsed] = useState(false)
   const [tileHeight, setTileHeight] = useState(DEFAULT_HEIGHT)
   const [isResizing, setIsResizing] = useState(false)
+  // Use stable message ID (timestamp+role) instead of array index to track copied message
+  // This prevents the checkmark from appearing on the wrong message if messages are inserted/removed
+  const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null)
+  const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Generate stable message ID from timestamp and role
+  const getMessageId = (message: { role: string; timestamp?: number }, index: number) => {
+    return `${message.timestamp || index}-${message.role}`
+  }
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (copyTimeoutRef.current) {
+        clearTimeout(copyTimeoutRef.current)
+      }
+    }
+  }, [])
 
   // Get queued messages for this conversation
   const queuedMessages = useMessageQueue(session.conversationId)
+
+  // Copy message to clipboard
+  const handleCopyMessage = async (e: React.MouseEvent, content: string, messageId: string) => {
+    e.stopPropagation()
+    try {
+      await navigator.clipboard.writeText(content)
+      setCopiedMessageId(messageId)
+      // Clear any existing timeout before setting a new one
+      if (copyTimeoutRef.current) {
+        clearTimeout(copyTimeoutRef.current)
+      }
+      copyTimeoutRef.current = setTimeout(() => setCopiedMessageId(null), 2000)
+    } catch (err) {
+      console.error("Failed to copy message:", err)
+    }
+  }
 
   const isActive = session.status === "active"
   const isComplete = session.status === "completed"
@@ -218,21 +254,38 @@ export function SessionTile({
                   {isActive ? "Starting..." : "No messages"}
                 </div>
               ) : (
-                messages.map((message, index) => (
-                  <div
-                    key={index}
-                    className={cn(
-                      "text-sm",
-                      message.role === "user"
-                        ? "pl-0"
-                        : message.role === "assistant"
-                        ? "pl-3 border-l-2 border-blue-500/30"
-                        : "pl-3 border-l-2 border-muted"
-                    )}
-                  >
-                    <div className="text-xs text-muted-foreground mb-1 capitalize">
-                      {message.role}
-                    </div>
+                messages.map((message, index) => {
+                  const messageId = getMessageId(message, index)
+                  const isCopied = copiedMessageId === messageId
+                  return (
+                    <div
+                      key={messageId}
+                      className={cn(
+                        "text-sm",
+                        message.role === "user"
+                          ? "pl-0"
+                          : message.role === "assistant"
+                          ? "pl-3 border-l-2 border-blue-500/30"
+                          : "pl-3 border-l-2 border-muted"
+                      )}
+                    >
+                      <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
+                        <span className="capitalize">{message.role}</span>
+                        {message.role === "user" && typeof message.content === "string" && (
+                          <button
+                            onClick={(e) => handleCopyMessage(e, message.content as string, messageId)}
+                            className="p-1 rounded hover:bg-muted/30 transition-colors"
+                            title={isCopied ? "Copied!" : "Copy prompt"}
+                            aria-label={isCopied ? "Copied!" : "Copy prompt"}
+                          >
+                            {isCopied ? (
+                              <CheckCheck className="h-3 w-3 text-green-500" />
+                            ) : (
+                              <Copy className="h-3 w-3 opacity-60 hover:opacity-100" />
+                            )}
+                          </button>
+                        )}
+                      </div>
                     <div className="prose prose-sm dark:prose-invert max-w-none">
                       {typeof message.content === "string" ? (
                         <MarkdownRenderer content={message.content} />
@@ -241,7 +294,8 @@ export function SessionTile({
                       )}
                     </div>
                   </div>
-                ))
+                  )
+                })
               )}
 
               {/* Error message if present */}

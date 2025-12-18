@@ -96,7 +96,17 @@ const CompactMessage: React.FC<{
   const [isGeneratingAudio, setIsGeneratingAudio] = useState(false)
   const [ttsError, setTtsError] = useState<string | null>(null)
   const [isCopied, setIsCopied] = useState(false)
+  const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const configQuery = useConfigQuery()
+
+  // Cleanup copy timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (copyTimeoutRef.current) {
+        clearTimeout(copyTimeoutRef.current)
+      }
+    }
+  }, [])
 
   // Copy to clipboard handler
   const handleCopyResponse = async (e: React.MouseEvent) => {
@@ -104,7 +114,11 @@ const CompactMessage: React.FC<{
     try {
       await navigator.clipboard.writeText(message.content)
       setIsCopied(true)
-      setTimeout(() => setIsCopied(false), 2000)
+      // Clear any existing timeout before setting a new one
+      if (copyTimeoutRef.current) {
+        clearTimeout(copyTimeoutRef.current)
+      }
+      copyTimeoutRef.current = setTimeout(() => setIsCopied(false), 2000)
     } catch (err) {
       console.error("Failed to copy response:", err)
     }
@@ -366,6 +380,7 @@ const CompactMessage: React.FC<{
               onClick={handleCopyResponse}
               className="p-1 rounded hover:bg-muted/30 transition-colors"
               title={isCopied ? "Copied!" : message.role === "user" ? "Copy prompt" : "Copy response"}
+              aria-label={isCopied ? "Copied!" : message.role === "user" ? "Copy prompt" : "Copy response"}
             >
               {isCopied ? (
                 <CheckCheck className="h-3 w-3 text-green-500" />

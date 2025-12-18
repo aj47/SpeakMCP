@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react"
+import React, { useState, useCallback, useRef, useEffect } from "react"
 import { cn } from "@renderer/lib/utils"
 import { AgentProgressUpdate } from "@shared/types"
 import { ScrollArea } from "@renderer/components/ui/scroll-area"
@@ -69,6 +69,16 @@ export function SessionTile({
   const [tileHeight, setTileHeight] = useState(DEFAULT_HEIGHT)
   const [isResizing, setIsResizing] = useState(false)
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null)
+  const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (copyTimeoutRef.current) {
+        clearTimeout(copyTimeoutRef.current)
+      }
+    }
+  }, [])
 
   // Get queued messages for this conversation
   const queuedMessages = useMessageQueue(session.conversationId)
@@ -79,7 +89,11 @@ export function SessionTile({
     try {
       await navigator.clipboard.writeText(content)
       setCopiedIndex(index)
-      setTimeout(() => setCopiedIndex(null), 2000)
+      // Clear any existing timeout before setting a new one
+      if (copyTimeoutRef.current) {
+        clearTimeout(copyTimeoutRef.current)
+      }
+      copyTimeoutRef.current = setTimeout(() => setCopiedIndex(null), 2000)
     } catch (err) {
       console.error("Failed to copy message:", err)
     }
@@ -252,6 +266,7 @@ export function SessionTile({
                           onClick={(e) => handleCopyMessage(e, message.content as string, index)}
                           className="p-1 rounded hover:bg-muted/30 transition-colors"
                           title={copiedIndex === index ? "Copied!" : "Copy prompt"}
+                          aria-label={copiedIndex === index ? "Copied!" : "Copy prompt"}
                         >
                           {copiedIndex === index ? (
                             <CheckCheck className="h-3 w-3 text-green-500" />

@@ -1603,11 +1603,6 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
                 <Maximize2 className="h-3 w-3" />
               </Button>
             )}
-            {!isComplete && (
-              <Button variant="ghost" size="icon" className="h-6 w-6 hover:bg-destructive/20 hover:text-destructive" onClick={(e) => { e.stopPropagation(); handleKillConfirmation(); }} title="Stop">
-                <X className="h-3 w-3" />
-              </Button>
-            )}
             {/* Show in panel button for completed sessions (not for synthetic pending tiles) */}
             {isComplete && isRealSession && (
               <Button variant="ghost" size="icon" className="h-6 w-6" onClick={async (e) => {
@@ -1624,11 +1619,16 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
                 <ExternalLink className="h-3 w-3" />
               </Button>
             )}
-            {onDismiss && (
+            {/* Combined close button: stops agent if running, dismisses if complete */}
+            {!isComplete ? (
+              <Button variant="ghost" size="icon" className="h-6 w-6 hover:bg-destructive/20 hover:text-destructive" onClick={(e) => { e.stopPropagation(); handleKillConfirmation(); }} title="Stop agent">
+                <X className="h-3 w-3" />
+              </Button>
+            ) : onDismiss ? (
               <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); onDismiss(); }} title="Dismiss">
                 <X className="h-3 w-3" />
               </Button>
-            )}
+            ) : null}
           </div>
         </div>
 

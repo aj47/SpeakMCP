@@ -77,7 +77,7 @@ build_macos() {
     npx electron-builder --mac --config electron-builder.config.cjs --publish=never
     
     # Copy artifacts to release folder
-    cp "$ROOT_DIR/dist/"*.dmg "$RELEASE_DIR/" 2>/dev/null || true
+    cp "$ROOT_DIR/apps/desktop/dist/"*.dmg "$RELEASE_DIR/" 2>/dev/null || true
     
     echo "✅ macOS build complete!"
     ls -la "$RELEASE_DIR/"*.dmg 2>/dev/null || echo "⚠️ No DMG files found"

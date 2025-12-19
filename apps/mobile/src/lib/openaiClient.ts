@@ -93,43 +93,11 @@ export class OpenAIClient {
     return trimmed.replace(/\/+$/, '');
   }
 
-  /**
-   * Check if the baseUrl indicates OpenRouter API
-   */
-  private isOpenRouterApi(): boolean {
-    return this.baseUrl.toLowerCase().includes('openrouter.ai');
-  }
-
-  /**
-   * Build authentication headers for API requests
-   */
-  private authHeaders(): Record<string, string> {
+  private authHeaders() {
     return {
       Authorization: `Bearer ${this.cfg.apiKey}`,
       'Content-Type': 'application/json',
-    };
-  }
-
-  /**
-   * Enrich request body with OpenRouter-specific fields when using OpenRouter API
-   * Adds the response-healing plugin to automatically fix malformed JSON responses
-   * Preserves any existing plugins in the request body
-   * See: https://openrouter.ai/docs/guides/features/plugins/response-healing
-   */
-  private enrichBodyForOpenRouter(body: Record<string, any>): Record<string, any> {
-    if (this.isOpenRouterApi()) {
-      const existingPlugins = Array.isArray(body.plugins) ? body.plugins : [];
-      const hasResponseHealing = existingPlugins.some(
-        (plugin: { id?: string } | null | undefined) => plugin?.id === 'response-healing'
-      );
-      return {
-        ...body,
-        plugins: hasResponseHealing
-          ? existingPlugins
-          : [...existingPlugins, { id: 'response-healing' }]
-      };
-    }
-    return body;
+    } as const;
   }
 
   private getUrl(endpoint: string): string {
@@ -210,8 +178,6 @@ export class OpenAIClient {
       body.conversation_id = conversationId;
     }
 
-    const enrichedBody = this.enrichBodyForOpenRouter(body);
-
     console.log('[OpenAIClient] Starting chat request');
     console.log('[OpenAIClient] URL:', url);
     console.log('[OpenAIClient] Platform:', Platform.OS);
@@ -222,7 +188,7 @@ export class OpenAIClient {
       this.onConnectionStatusChange
     );
 
-    return await this.chatWithRecovery(url, enrichedBody, onToken, onProgress);
+    return await this.chatWithRecovery(url, body, onToken, onProgress);
   }
 
   private async chatWithRecovery(

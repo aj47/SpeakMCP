@@ -625,42 +625,19 @@ function isEmptyContentResponse(resp: any): boolean {
 }
 
 /**
- * Check if the baseURL indicates OpenRouter API
- */
-function isOpenRouterApi(baseURL: string): boolean {
-  return baseURL.toLowerCase().includes('openrouter.ai')
-}
-
-/**
- * Build headers for OpenAI-compatible API calls
- */
-function buildOpenAICompatibleHeaders(apiKey: string): Record<string, string> {
-  return {
-    Authorization: `Bearer ${apiKey}`,
-    "Content-Type": "application/json",
-  }
-}
-
-/**
- * Enrich request body with OpenRouter-specific fields when using OpenRouter API
- * Adds the response-healing plugin to automatically fix malformed JSON responses
- * Preserves any existing plugins in the request body
+ * Enrich request body with OpenRouter-specific fields when using OpenRouter API.
+ * Adds the response-healing plugin to automatically fix malformed JSON responses.
  * See: https://openrouter.ai/docs/guides/features/plugins/response-healing
  */
 function enrichRequestBodyForOpenRouter(baseURL: string, requestBody: Record<string, any>): Record<string, any> {
-  if (isOpenRouterApi(baseURL)) {
-    const existingPlugins = Array.isArray(requestBody.plugins) ? requestBody.plugins : []
-    const hasResponseHealing = existingPlugins.some(
-      (plugin: { id?: string } | null | undefined) => plugin?.id === "response-healing"
-    )
-    return {
-      ...requestBody,
-      plugins: hasResponseHealing
-        ? existingPlugins
-        : [...existingPlugins, { id: "response-healing" }]
-    }
+  if (!baseURL.toLowerCase().includes('openrouter.ai')) {
+    return requestBody
   }
-  return requestBody
+  const existingPlugins = Array.isArray(requestBody.plugins) ? requestBody.plugins : []
+  if (existingPlugins.some((p: { id?: string } | null | undefined) => p?.id === "response-healing")) {
+    return requestBody
+  }
+  return { ...requestBody, plugins: [...existingPlugins, { id: "response-healing" }] }
 }
 
 /**
@@ -715,7 +692,10 @@ async function makeAPICallAttempt(
 
     const response = await fetch(`${baseURL}/chat/completions`, {
       method: "POST",
-      headers: buildOpenAICompatibleHeaders(apiKey),
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify(enrichRequestBodyForOpenRouter(baseURL, requestBody)),
       signal: controller.signal,
     })
@@ -1425,7 +1405,10 @@ export async function makeLLMCallWithStreaming(
   try {
     const response = await fetch(`${baseURL}/chat/completions`, {
       method: "POST",
-      headers: buildOpenAICompatibleHeaders(apiKey),
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify(enrichRequestBodyForOpenRouter(baseURL, {
         model,
         messages,

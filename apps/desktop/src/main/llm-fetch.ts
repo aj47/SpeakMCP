@@ -633,21 +633,27 @@ function isOpenRouterApi(baseURL: string): boolean {
 
 /**
  * Build headers for OpenAI-compatible API calls
- * Automatically adds OpenRouter-specific headers when detected
  */
-function buildOpenAICompatibleHeaders(baseURL: string, apiKey: string): Record<string, string> {
-  const headers: Record<string, string> = {
+function buildOpenAICompatibleHeaders(apiKey: string): Record<string, string> {
+  return {
     Authorization: `Bearer ${apiKey}`,
     "Content-Type": "application/json",
   }
+}
 
-  // Add OpenRouter Response Healing plugin header when using OpenRouter
-  // See: https://openrouter.ai/docs/guides/features/plugins/response-healing
+/**
+ * Enrich request body with OpenRouter-specific fields when using OpenRouter API
+ * Adds the response-healing plugin to automatically fix malformed JSON responses
+ * See: https://openrouter.ai/docs/guides/features/plugins/response-healing
+ */
+function enrichRequestBodyForOpenRouter(baseURL: string, requestBody: Record<string, any>): Record<string, any> {
   if (isOpenRouterApi(baseURL)) {
-    headers["X-Enable-Plugins"] = "response-healing"
+    return {
+      ...requestBody,
+      plugins: [{ id: "response-healing" }]
+    }
   }
-
-  return headers
+  return requestBody
 }
 
 /**
@@ -702,8 +708,8 @@ async function makeAPICallAttempt(
 
     const response = await fetch(`${baseURL}/chat/completions`, {
       method: "POST",
-      headers: buildOpenAICompatibleHeaders(baseURL, apiKey),
-      body: JSON.stringify(requestBody),
+      headers: buildOpenAICompatibleHeaders(apiKey),
+      body: JSON.stringify(enrichRequestBodyForOpenRouter(baseURL, requestBody)),
       signal: controller.signal,
     })
 
@@ -1412,13 +1418,13 @@ export async function makeLLMCallWithStreaming(
   try {
     const response = await fetch(`${baseURL}/chat/completions`, {
       method: "POST",
-      headers: buildOpenAICompatibleHeaders(baseURL, apiKey),
-      body: JSON.stringify({
+      headers: buildOpenAICompatibleHeaders(apiKey),
+      body: JSON.stringify(enrichRequestBodyForOpenRouter(baseURL, {
         model,
         messages,
         temperature: 0,
         stream: true,
-      }),
+      })),
       signal: abortController.signal,
     })
 

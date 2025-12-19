@@ -102,21 +102,27 @@ export class OpenAIClient {
 
   /**
    * Build authentication headers for API requests
-   * Automatically adds OpenRouter-specific headers when detected
    */
   private authHeaders(): Record<string, string> {
-    const headers: Record<string, string> = {
+    return {
       Authorization: `Bearer ${this.cfg.apiKey}`,
       'Content-Type': 'application/json',
     };
+  }
 
-    // Add OpenRouter Response Healing plugin header when using OpenRouter
-    // See: https://openrouter.ai/docs/guides/features/plugins/response-healing
+  /**
+   * Enrich request body with OpenRouter-specific fields when using OpenRouter API
+   * Adds the response-healing plugin to automatically fix malformed JSON responses
+   * See: https://openrouter.ai/docs/guides/features/plugins/response-healing
+   */
+  private enrichBodyForOpenRouter(body: Record<string, any>): Record<string, any> {
     if (this.isOpenRouterApi()) {
-      headers['X-Enable-Plugins'] = 'response-healing';
+      return {
+        ...body,
+        plugins: [{ id: 'response-healing' }]
+      };
     }
-
-    return headers;
+    return body;
   }
 
   private getUrl(endpoint: string): string {
@@ -197,6 +203,8 @@ export class OpenAIClient {
       body.conversation_id = conversationId;
     }
 
+    const enrichedBody = this.enrichBodyForOpenRouter(body);
+
     console.log('[OpenAIClient] Starting chat request');
     console.log('[OpenAIClient] URL:', url);
     console.log('[OpenAIClient] Platform:', Platform.OS);
@@ -207,7 +215,7 @@ export class OpenAIClient {
       this.onConnectionStatusChange
     );
 
-    return await this.chatWithRecovery(url, body, onToken, onProgress);
+    return await this.chatWithRecovery(url, enrichedBody, onToken, onProgress);
   }
 
   private async chatWithRecovery(

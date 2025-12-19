@@ -625,6 +625,22 @@ function isEmptyContentResponse(resp: any): boolean {
 }
 
 /**
+ * Enrich request body with OpenRouter-specific fields when using OpenRouter API.
+ * Adds the response-healing plugin to automatically fix malformed JSON responses.
+ * See: https://openrouter.ai/docs/guides/features/plugins/response-healing
+ */
+function enrichRequestBodyForOpenRouter(baseURL: string, requestBody: Record<string, any>): Record<string, any> {
+  if (!baseURL.toLowerCase().includes('openrouter.ai')) {
+    return requestBody
+  }
+  const existingPlugins = Array.isArray(requestBody.plugins) ? requestBody.plugins : []
+  if (existingPlugins.some((p: { id?: string } | null | undefined) => p?.id === "response-healing")) {
+    return requestBody
+  }
+  return { ...requestBody, plugins: [...existingPlugins, { id: "response-healing" }] }
+}
+
+/**
  * Make a single API call attempt with specific response format
  */
 async function makeAPICallAttempt(
@@ -680,7 +696,7 @@ async function makeAPICallAttempt(
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(requestBody),
+      body: JSON.stringify(enrichRequestBodyForOpenRouter(baseURL, requestBody)),
       signal: controller.signal,
     })
 
@@ -1390,15 +1406,15 @@ export async function makeLLMCallWithStreaming(
     const response = await fetch(`${baseURL}/chat/completions`, {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
         Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
       },
-      body: JSON.stringify({
+      body: JSON.stringify(enrichRequestBodyForOpenRouter(baseURL, {
         model,
         messages,
         temperature: 0,
         stream: true,
-      }),
+      })),
       signal: abortController.signal,
     })
 

@@ -120,7 +120,7 @@ export class OpenAIClient {
     if (this.isOpenRouterApi()) {
       const existingPlugins = Array.isArray(body.plugins) ? body.plugins : [];
       const hasResponseHealing = existingPlugins.some(
-        (plugin: { id?: string }) => plugin.id === 'response-healing'
+        (plugin: { id?: string } | null | undefined) => plugin?.id === 'response-healing'
       );
       return {
         ...body,

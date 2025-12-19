@@ -651,7 +651,7 @@ function enrichRequestBodyForOpenRouter(baseURL: string, requestBody: Record<str
   if (isOpenRouterApi(baseURL)) {
     const existingPlugins = Array.isArray(requestBody.plugins) ? requestBody.plugins : []
     const hasResponseHealing = existingPlugins.some(
-      (plugin: { id?: string }) => plugin.id === "response-healing"
+      (plugin: { id?: string } | null | undefined) => plugin?.id === "response-healing"
     )
     return {
       ...requestBody,

@@ -113,13 +113,20 @@ export class OpenAIClient {
   /**
    * Enrich request body with OpenRouter-specific fields when using OpenRouter API
    * Adds the response-healing plugin to automatically fix malformed JSON responses
+   * Preserves any existing plugins in the request body
    * See: https://openrouter.ai/docs/guides/features/plugins/response-healing
    */
   private enrichBodyForOpenRouter(body: Record<string, any>): Record<string, any> {
     if (this.isOpenRouterApi()) {
+      const existingPlugins = Array.isArray(body.plugins) ? body.plugins : [];
+      const hasResponseHealing = existingPlugins.some(
+        (plugin: { id?: string }) => plugin.id === 'response-healing'
+      );
       return {
         ...body,
-        plugins: [{ id: 'response-healing' }]
+        plugins: hasResponseHealing
+          ? existingPlugins
+          : [...existingPlugins, { id: 'response-healing' }]
       };
     }
     return body;

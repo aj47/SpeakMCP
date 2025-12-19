@@ -644,13 +644,20 @@ function buildOpenAICompatibleHeaders(apiKey: string): Record<string, string> {
 /**
  * Enrich request body with OpenRouter-specific fields when using OpenRouter API
  * Adds the response-healing plugin to automatically fix malformed JSON responses
+ * Preserves any existing plugins in the request body
  * See: https://openrouter.ai/docs/guides/features/plugins/response-healing
  */
 function enrichRequestBodyForOpenRouter(baseURL: string, requestBody: Record<string, any>): Record<string, any> {
   if (isOpenRouterApi(baseURL)) {
+    const existingPlugins = Array.isArray(requestBody.plugins) ? requestBody.plugins : []
+    const hasResponseHealing = existingPlugins.some(
+      (plugin: { id?: string }) => plugin.id === "response-healing"
+    )
     return {
       ...requestBody,
-      plugins: [{ id: "response-healing" }]
+      plugins: hasResponseHealing
+        ? existingPlugins
+        : [...existingPlugins, { id: "response-healing" }]
     }
   }
   return requestBody

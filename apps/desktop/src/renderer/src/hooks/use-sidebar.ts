@@ -87,7 +87,8 @@ export function useSidebar(options: UseSidebarOptions = {}): UseSidebarReturn {
   const [isResizing, setIsResizing] = useState(false)
 
   const widthBeforeCollapseRef = useRef(width)
-  const cleanupResizeRef = useRef<(() => void) | null>(null)
+  // Store ref for removing listeners only (for unmount cleanup without triggering state/callbacks)
+  const removeListenersRef = useRef<(() => void) | null>(null)
 
   const clampWidth = useCallback(
     (w: number) =>
@@ -96,21 +97,21 @@ export function useSidebar(options: UseSidebarOptions = {}): UseSidebarReturn {
   )
 
   const toggleCollapse = useCallback(() => {
-    setIsCollapsed((prev) => {
-      const newCollapsed = !prev
-      if (newCollapsed) {
-        // Store the current width before collapsing
-        widthBeforeCollapseRef.current = width
-      }
-      const newState: SidebarState = {
-        isCollapsed: newCollapsed,
-        width: newCollapsed ? widthBeforeCollapseRef.current : width,
-      }
-      savePersistedState(newState)
-      onToggle?.(newCollapsed)
-      return newCollapsed
-    })
-  }, [width, onToggle])
+    // Compute new state before calling setState to avoid side effects inside updater
+    // (React 18 StrictMode may call updater functions multiple times)
+    const newCollapsed = !isCollapsed
+    if (newCollapsed) {
+      // Store the current width before collapsing
+      widthBeforeCollapseRef.current = width
+    }
+    setIsCollapsed(newCollapsed)
+    const newState: SidebarState = {
+      isCollapsed: newCollapsed,
+      width: newCollapsed ? widthBeforeCollapseRef.current : width,
+    }
+    savePersistedState(newState)
+    onToggle?.(newCollapsed)
+  }, [isCollapsed, width, onToggle])
 
   const setCollapsed = useCallback(
     (collapsed: boolean) => {
@@ -146,26 +147,33 @@ export function useSidebar(options: UseSidebarOptions = {}): UseSidebarReturn {
         setWidth(lastWidth)
       }
 
-      const cleanup = () => {
-        setIsResizing(false)
+      // Separate function to only remove listeners (for unmount cleanup)
+      // This avoids triggering state updates, persistence, or callbacks during unmount
+      const removeListeners = () => {
         document.removeEventListener("mousemove", handleMouseMove)
         document.removeEventListener("mouseup", handleMouseUp)
         window.removeEventListener("blur", handleBlur)
-        cleanupResizeRef.current = null
+        removeListenersRef.current = null
+      }
+
+      // Full cleanup for normal resize end (mouseup/blur)
+      const fullCleanup = () => {
+        removeListeners()
+        setIsResizing(false)
         savePersistedState({ isCollapsed: false, width: lastWidth })
         onResizeEnd?.(lastWidth)
       }
 
       const handleMouseUp = () => {
-        cleanup()
+        fullCleanup()
       }
 
       const handleBlur = () => {
-        cleanup()
+        fullCleanup()
       }
 
-      // Store cleanup so it can be called on unmount
-      cleanupResizeRef.current = cleanup
+      // Store removeListeners ref for unmount cleanup
+      removeListenersRef.current = removeListeners
 
       document.addEventListener("mousemove", handleMouseMove)
       document.addEventListener("mouseup", handleMouseUp)
@@ -182,11 +190,11 @@ export function useSidebar(options: UseSidebarOptions = {}): UseSidebarReturn {
     } catch {}
   }, [initialWidth, initialCollapsed])
 
-  // Cleanup resize listeners on unmount
+  // Cleanup resize listeners on unmount - only remove listeners, don't trigger state/callbacks
   useEffect(() => {
     return () => {
-      if (cleanupResizeRef.current) {
-        cleanupResizeRef.current()
+      if (removeListenersRef.current) {
+        removeListenersRef.current()
       }
     }
   }, [])

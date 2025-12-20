@@ -95,7 +95,8 @@ export const Component = () => {
         {/* Header with collapse toggle */}
         <header
           className={cn(
-            "flex items-center justify-between",
+            "flex items-center",
+            isCollapsed ? "justify-center" : "justify-end",
             process.env.IS_MAC ? "h-10 pt-6" : "h-8 pt-2",
             isCollapsed ? "px-1" : "px-2"
           )}

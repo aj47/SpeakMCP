@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer, desktopCapturer } from "electron"
+import { contextBridge, ipcRenderer } from "electron"
 import { electronAPI } from "@electron-toolkit/preload"
 
 // Custom APIs for renderer
@@ -10,10 +10,9 @@ const api = {
   getOAuthStatus: (serverName: string) => ipcRenderer.invoke('getOAuthStatus', serverName),
   revokeOAuthTokens: (serverName: string) => ipcRenderer.invoke('revokeOAuthTokens', serverName),
   testMCPServer: (serverName: string, config: any) => ipcRenderer.invoke('testMCPServer', { serverName, config }),
-  // Screenshot API
-  desktopCapturer: {
-    getSources: (options: any) => desktopCapturer.getSources(options)
-  }
+  // Screenshot API - uses IPC to main process (desktopCapturer is only available in main process in Electron 31+)
+  getScreenSources: (options: { types: string[], thumbnailSize?: { width: number, height: number } }) =>
+    ipcRenderer.invoke('getScreenSources', options)
 }
 
 if (process.contextIsolated) {

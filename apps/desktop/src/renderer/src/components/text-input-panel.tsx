@@ -59,15 +59,15 @@ export const TextInputPanel = forwardRef<TextInputPanelRef, TextInputPanelProps>
   const captureScreenshot = async () => {
     setIsCapturingScreenshot(true)
     try {
-      // Use Electron's desktopCapturer API to capture screenshot
-      const sources = await (window as any).electron.desktopCapturer.getSources({
+      // Use IPC to get screen sources from main process (desktopCapturer is only available in main process in Electron 31+)
+      const sources = await (window as any).electronAPI.getScreenSources({
         types: ['screen'],
         thumbnailSize: { width: 1920, height: 1080 }
       })
 
       if (sources && sources.length > 0) {
-        // Get the first screen (primary display)
-        const screenshot = sources[0].thumbnail.toDataURL()
+        // Get the first screen (primary display) - thumbnail is already a data URL from main process
+        const screenshot = sources[0].thumbnail
         setScreenshot(screenshot)
       }
     } catch (error) {

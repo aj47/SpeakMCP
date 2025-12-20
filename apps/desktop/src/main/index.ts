@@ -1,4 +1,4 @@
-import { app, Menu } from "electron"
+import { app, Menu, ipcMain, desktopCapturer } from "electron"
 import { electronApp, optimizer } from "@electron-toolkit/utils"
 import {
   createMainWindow,
@@ -41,6 +41,24 @@ app.whenReady().then(() => {
 
   registerIpcMain(router)
   logApp("IPC main registered")
+
+  // Register desktopCapturer handler (available only in main process in Electron 31+)
+  ipcMain.handle('getScreenSources', async (_event, options: { types: string[], thumbnailSize?: { width: number, height: number } }) => {
+    try {
+      const sources = await desktopCapturer.getSources(options)
+      // Serialize the sources - NativeImage thumbnail needs to be converted
+      return sources.map(source => ({
+        id: source.id,
+        name: source.name,
+        thumbnail: source.thumbnail.toDataURL(),
+        display_id: source.display_id,
+        appIcon: source.appIcon ? source.appIcon.toDataURL() : null
+      }))
+    } catch (error) {
+      console.error('Failed to get screen sources:', error)
+      throw error
+    }
+  })
 
   registerServeProtocol()
 

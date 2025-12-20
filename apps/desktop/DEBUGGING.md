@@ -1,5 +1,32 @@
 # SpeakMCP Debugging Guide
 
+## ⚠️ REQUIRED: Agent UI Tests (Do These First!)
+
+Before any debugging work, **AI agents MUST run these tests** to verify UI interaction:
+
+### Setup
+```bash
+pnpm dev -- --remote-debugging-port=9222
+```
+Then: `list_electron_targets_electron-native` → `connect_to_electron_target_electron-native`
+
+### Test 1: Click Settings Button
+```javascript
+// execute_javascript_electron-native - Navigate & click toggle
+window.location.hash = '/settings/general';
+setTimeout(() => document.querySelector('[data-state]')?.click(), 500);
+```
+Take screenshot to verify toggle changed.
+
+### Test 2: Send 'hi' to Agent
+```javascript
+// execute_javascript_electron-native - Send message via IPC
+await window.electron.ipcRenderer.invoke('createMcpTextInput', { text: 'hi', conversationId: null });
+```
+Verify: `window.electron.ipcRenderer.invoke('getAgentStatus')`
+
+---
+
 ## Desktop App (Electron)
 
 ### Debug Logging

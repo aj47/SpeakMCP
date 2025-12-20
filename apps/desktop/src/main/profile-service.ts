@@ -5,7 +5,7 @@ import { Profile, ProfilesData, ProfileMcpServerConfig, ProfileModelConfig } fro
 import { randomUUID } from "crypto"
 import { logApp } from "./debug"
 import { configStore } from "./config"
-import { getBuiltinToolNames } from "./builtin-tools"
+import { getBuiltinToolNames } from "./builtin-tool-definitions"
 
 export const profilesPath = path.join(
   app.getPath("appData"),

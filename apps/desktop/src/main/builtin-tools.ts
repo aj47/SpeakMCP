@@ -840,3 +840,9 @@ export function isBuiltinTool(toolName: string): boolean {
   return toolName.startsWith(`${BUILTIN_SERVER_NAME}:`)
 }
 
+/**
+ * Get all builtin tool names (for disabling by default)
+ */
+export function getBuiltinToolNames(): string[] {
+  return builtinTools.map((tool) => tool.name)
+}

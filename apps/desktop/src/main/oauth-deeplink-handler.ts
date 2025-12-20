@@ -8,6 +8,61 @@ export interface OAuthCallbackResult {
   error_description?: string
 }
 
+/**
+ * Queue to store deep link URLs that arrive before OAuth flow is started.
+ * This is critical for macOS where open-url events can arrive before the app is ready.
+ */
+let pendingDeepLinkUrls: string[] = []
+
+/**
+ * Flag to track if early open-url handler has been registered.
+ * This must happen before app.whenReady() on macOS.
+ */
+let earlyHandlerRegistered = false
+
+/**
+ * Reference to the active deep link handler instance for processing queued URLs
+ */
+let activeHandler: OAuthDeepLinkHandler | null = null
+
+/**
+ * Early open-url handler that queues URLs before OAuth flow is started.
+ * This handler is registered at module load time (before app.whenReady()).
+ */
+function earlyOpenUrlHandler(event: Electron.Event, url: string): void {
+  event.preventDefault()
+
+  // If there's an active handler waiting for callbacks, let it handle directly
+  if (activeHandler && activeHandler.isActive()) {
+    activeHandler.processDeepLink(url)
+  } else {
+    // Queue the URL for later processing
+    pendingDeepLinkUrls.push(url)
+  }
+}
+
+/**
+ * Register early open-url handler for macOS.
+ * This MUST be called before app.whenReady() to catch deep links
+ * that arrive when the app is launched via protocol handler.
+ */
+function registerEarlyOpenUrlHandler(): void {
+  if (earlyHandlerRegistered) {
+    return
+  }
+
+  earlyHandlerRegistered = true
+
+  // On macOS, register open-url handler immediately at module load time
+  // This ensures we catch deep links even when the app is cold-started via protocol
+  if (process.platform === 'darwin') {
+    app.on('open-url', earlyOpenUrlHandler)
+  }
+}
+
+// Register early handler at module load time (before app.whenReady())
+registerEarlyOpenUrlHandler()
+
 export class OAuthDeepLinkHandler {
   private resolveCallback: ((result: OAuthCallbackResult) => void) | null = null
   private rejectCallback: ((error: Error) => void) | null = null
@@ -26,7 +81,29 @@ export class OAuthDeepLinkHandler {
       }, timeoutMs)
 
       this.startListening()
+
+      // Process any queued deep link URLs that arrived before we started listening
+      this.processQueuedUrls()
     })
+  }
+
+  /**
+   * Process any deep link URLs that were queued before OAuth flow started
+   */
+  private processQueuedUrls(): void {
+    const urls = [...pendingDeepLinkUrls]
+    pendingDeepLinkUrls = []
+
+    for (const url of urls) {
+      this.processDeepLink(url)
+    }
+  }
+
+  /**
+   * Process a deep link URL (public method for early handler to use)
+   */
+  processDeepLink(url: string): void {
+    this.handleDeepLink(null, url)
   }
 
   private startListening(): void {
@@ -36,14 +113,10 @@ export class OAuthDeepLinkHandler {
 
     this.isListening = true
 
-    app.on('open-url', this.handleDeepLink)
+    // Set this instance as the active handler for the early open-url handler
+    activeHandler = this
 
-    if (process.platform === 'darwin') {
-      app.on('will-finish-launching', () => {
-        app.on('open-url', this.handleDeepLink)
-      })
-    }
-
+    // For Windows/Linux, handle command line arguments and second-instance events
     if (process.platform === 'win32' || process.platform === 'linux') {
       const args = process.argv
       for (const arg of args) {
@@ -158,7 +231,12 @@ export class OAuthDeepLinkHandler {
     }
 
     if (this.isListening) {
-      app.removeListener('open-url', this.handleDeepLink)
+      // Clear the active handler reference so early handler queues URLs again
+      if (activeHandler === this) {
+        activeHandler = null
+      }
+
+      // Only remove second-instance handler (open-url is handled by early handler)
       if (this.secondInstanceHandler) {
         app.removeListener('second-instance', this.secondInstanceHandler)
         this.secondInstanceHandler = null

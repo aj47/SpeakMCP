@@ -1,0 +1,213 @@
+import { app } from "electron"
+import path from "path"
+import fs from "fs"
+import { Config, ModelPreset } from "@shared/types"
+import { getBuiltInModelPresets, DEFAULT_MODEL_PRESET_ID } from "@shared/index"
+
+export const dataFolder = path.join(app.getPath("appData"), process.env.APP_ID)
+
+export const recordingsFolder = path.join(dataFolder, "recordings")
+
+export const conversationsFolder = path.join(dataFolder, "conversations")
+
+export const configPath = path.join(dataFolder, "config.json")
+
+const getConfig = () => {
+  // Platform-specific defaults
+  const isWindows = process.platform === 'win32'
+
+  const defaultConfig: Partial<Config> = {
+    // Recording shortcut: On Windows, use Ctrl+/ to avoid conflicts with common shortcuts
+    // On macOS, Hold Ctrl is fine since Cmd is used for most shortcuts
+    shortcut: isWindows ? "ctrl-slash" : "hold-ctrl",
+
+    mcpToolsShortcut: "hold-ctrl-alt",
+    // Note: mcpToolsEnabled and mcpAgentModeEnabled are deprecated and always treated as true
+    // Safety: optional approval prompt before each tool call (off by default)
+    mcpRequireApprovalBeforeToolCall: false,
+    mcpAutoPasteEnabled: false,
+    mcpAutoPasteDelay: 1000, // 1 second delay by default
+    mcpMaxIterations: 10, // Default max iterations for agent mode
+    textInputEnabled: true,
+
+    // Text input: On Windows, use Ctrl+Shift+T to avoid browser new tab conflict
+    textInputShortcut: isWindows ? "ctrl-shift-t" : "ctrl-t",
+    conversationsEnabled: true,
+    maxConversationsToKeep: 100,
+    autoSaveConversations: true,
+    // Settings hotkey defaults
+    settingsHotkeyEnabled: true,
+    settingsHotkey: "ctrl-shift-s",
+    customSettingsHotkey: "",
+    // Agent kill switch defaults
+    agentKillSwitchEnabled: true,
+    agentKillSwitchHotkey: "ctrl-shift-escape",
+    // Toggle voice dictation defaults
+    toggleVoiceDictationEnabled: false,
+    toggleVoiceDictationHotkey: "fn",
+    // Custom shortcut defaults
+    customShortcut: "",
+    customShortcutMode: "hold", // Default to hold mode for custom recording shortcut
+    customTextInputShortcut: "",
+    customAgentKillSwitchHotkey: "",
+    customMcpToolsShortcut: "",
+    customMcpToolsShortcutMode: "hold", // Default to hold mode for custom MCP tools shortcut
+    customToggleVoiceDictationHotkey: "",
+    // Persisted MCP runtime state
+    mcpRuntimeDisabledServers: [],
+    mcpDisabledTools: [],
+    // Panel position defaults
+    panelPosition: "top-right",
+    panelDragEnabled: true,
+    panelCustomSize: { width: 300, height: 200 },
+    // Mode-specific panel sizes (will be set on first resize in each mode)
+    panelNormalModeSize: undefined,
+    panelAgentModeSize: undefined,
+    panelTextInputModeSize: undefined,
+    // Floating panel auto-show - when true, panel auto-shows during agent sessions
+    floatingPanelAutoShow: true,
+    // Theme preference defaults
+    themePreference: "system",
+
+	    // App behavior
+	    launchAtLogin: false,
+
+    // TTS defaults
+    ttsEnabled: true,
+    ttsAutoPlay: true,
+    ttsProviderId: "openai",
+    ttsPreprocessingEnabled: true,
+    ttsRemoveCodeBlocks: true,
+    ttsRemoveUrls: true,
+    ttsConvertMarkdown: true,
+    // LLM-based TTS preprocessing (off by default - uses regex for fast/free processing)
+    ttsUseLLMPreprocessing: false,
+    // OpenAI TTS defaults
+    openaiTtsModel: "tts-1",
+    openaiTtsVoice: "alloy",
+    openaiTtsSpeed: 1.0,
+    openaiTtsResponseFormat: "mp3",
+    // OpenAI Compatible Provider defaults
+    openaiCompatiblePreset: "openai",
+    // Groq TTS defaults
+    groqTtsModel: "playai-tts",
+    groqTtsVoice: "Fritz-PlayAI",
+    // Gemini TTS defaults
+    geminiTtsModel: "gemini-2.5-flash-preview-tts",
+    geminiTtsVoice: "Kore",
+    // API Retry defaults
+    apiRetryCount: 3,
+    apiRetryBaseDelay: 1000, // 1 second
+    apiRetryMaxDelay: 30000, // 30 seconds
+    // Context reduction defaults
+    mcpContextReductionEnabled: true,
+    mcpContextTargetRatio: 0.7,
+    mcpContextLastNMessages: 3,
+    mcpContextSummarizeCharThreshold: 2000,
+
+    // Tool response processing defaults
+    mcpToolResponseProcessingEnabled: true,
+    mcpToolResponseLargeThreshold: 20000, // 20KB threshold for processing
+    mcpToolResponseCriticalThreshold: 50000, // 50KB threshold for aggressive summarization
+    mcpToolResponseChunkSize: 15000, // Size of chunks for processing
+    mcpToolResponseProgressUpdates: true, // Show progress updates during processing
+
+    // Completion verification defaults
+    mcpVerifyCompletionEnabled: true,
+    mcpVerifyContextMaxItems: 10,
+    mcpVerifyRetryCount: 1,
+
+    // Parallel tool execution - when enabled, multiple tool calls from a single LLM response are executed concurrently
+    mcpParallelToolExecution: true,
+
+    // Message queue - when enabled, users can queue messages while agent is processing (enabled by default)
+    mcpMessageQueueEnabled: true,
+
+	    // Remote Server defaults
+	    remoteServerEnabled: false,
+	    remoteServerPort: 3210,
+	    remoteServerBindAddress: "127.0.0.1",
+	    remoteServerLogLevel: "info",
+	    remoteServerCorsOrigins: ["*"],
+	    remoteServerAutoShowPanel: false, // Don't auto-show panel by default for remote sessions
+
+
+  }
+
+  try {
+    const savedConfig = JSON.parse(
+      fs.readFileSync(configPath, "utf8"),
+    ) as Config
+    return { ...defaultConfig, ...savedConfig }
+  } catch {
+    return defaultConfig
+  }
+}
+
+/**
+ * Get the active model preset from config, merging built-in presets with saved data
+ * This includes API keys, model preferences, and any other saved properties
+ */
+function getActivePreset(config: Partial<Config>): ModelPreset | undefined {
+  const builtIn = getBuiltInModelPresets()
+  const savedPresets = config.modelPresets || []
+  const currentPresetId = config.currentModelPresetId || DEFAULT_MODEL_PRESET_ID
+
+  // Merge built-in presets with ALL saved properties (apiKey, mcpToolsModel, transcriptProcessingModel, etc.)
+  // Filter out undefined values from saved to prevent overwriting built-in defaults with undefined
+  const allPresets = builtIn.map(preset => {
+    const saved = savedPresets.find(s => s.id === preset.id)
+    // Spread saved properties over built-in preset to preserve all customizations
+    // Use defensive merge to filter out undefined values that could overwrite defaults
+    return saved ? { ...preset, ...Object.fromEntries(Object.entries(saved).filter(([_, v]) => v !== undefined)) } : preset
+  })
+
+  // Add custom (non-built-in) presets
+  const customPresets = savedPresets.filter(p => !p.isBuiltIn)
+  allPresets.push(...customPresets)
+
+  return allPresets.find(p => p.id === currentPresetId)
+}
+
+/**
+ * Sync the active preset's credentials and model preferences to legacy config fields for backward compatibility.
+ * Always syncs all fields together to keep them consistent with the active preset.
+ */
+function syncPresetToLegacyFields(config: Partial<Config>): Partial<Config> {
+  const activePreset = getActivePreset(config)
+  if (activePreset) {
+    // Always sync both fields to keep them consistent with the active preset
+    // If preset has empty values, legacy fields should reflect that
+    config.openaiApiKey = activePreset.apiKey || ''
+    config.openaiBaseUrl = activePreset.baseUrl || ''
+
+    // Always sync model preferences to keep legacy fields consistent with the active preset
+    // If preset has empty/undefined values, legacy fields should reflect that
+    config.mcpToolsOpenaiModel = activePreset.mcpToolsModel || ''
+    config.transcriptPostProcessingOpenaiModel = activePreset.transcriptProcessingModel || ''
+  }
+  return config
+}
+
+class ConfigStore {
+  config: Config | undefined
+
+  constructor() {
+    const loadedConfig = getConfig()
+    // Sync active preset credentials to legacy fields on startup
+    this.config = syncPresetToLegacyFields(loadedConfig) as Config
+  }
+
+  get(): Config {
+    return (this.config as Config) || ({} as Config)
+  }
+
+  save(config: Config) {
+    // Sync active preset credentials before saving
+    this.config = syncPresetToLegacyFields(config) as Config
+    fs.mkdirSync(dataFolder, { recursive: true })
+    fs.writeFileSync(configPath, JSON.stringify(this.config))
+  }
+}
+
+export const configStore = new ConfigStore()

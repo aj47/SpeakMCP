@@ -9,25 +9,28 @@
 
 ## 🎬 Preview
 
+[Click here to see v1 launch video on youtube ](https://www.youtube.com/watch?v=A4oKYCaeaaw)
+
 https://github.com/user-attachments/assets/0c181c70-d1f1-4c5d-a6f5-a73147e75182
 
 ## 🚀 Quick Start
 
 ### Download
 
-**Cross-Platform Support**: macOS (Apple Silicon & Intel), Windows (x64), Linux (x64)
-
 **[📥 Download Latest Release](https://github.com/aj47/SpeakMCP/releases/latest)**
+
+> **Platform Support**: macOS (Apple Silicon & Intel) with full MCP agent functionality.
+> ⚠️ **Windows/Linux**: MCP tools not currently supported — see [v0.2.2](https://github.com/aj47/SpeakMCP/releases/tag/v0.2.2) for dictation-only builds.
 
 ### Basic Usage
 
 **Voice Recording:**
 
-1. **Hold `Ctrl`** key to start recording your voice
-2. **Release `Ctrl`** to stop recording and transcribe
+1. **Hold `Ctrl`** (macOS/Linux) or **`Ctrl+/`** (Windows) to start recording
+2. **Release** to stop recording and transcribe
 3. Text is automatically inserted into your active application
 
-**MCP Agent Mode:**
+**MCP Agent Mode** (macOS only):
 
 1. **Hold `Ctrl+Alt`** to start recording for agent mode
 2. **Release `Ctrl+Alt`** to process with MCP tools
@@ -36,14 +39,14 @@ https://github.com/user-attachments/assets/0c181c70-d1f1-4c5d-a6f5-a73147e75182
 
 **Text Input:**
 
-- **Press `Ctrl+T`** to open text input mode for direct typing
+- **`Ctrl+T`** (macOS/Linux) or **`Ctrl+Shift+T`** (Windows) for direct typing
 
 
 
 ## ✨ Features
 
 ### 🎤 Voice & Speech
-- **Voice-to-Text**: Hold `Ctrl` to record, release to transcribe
+- **Voice-to-Text**: Hold `Ctrl` (macOS/Linux) or `Ctrl+/` (Windows) to record
 - **Toggle Voice Dictation**: Press `Fn` key to start/stop recording (configurable)
 - **Multi-Language Support**: 30+ languages including Spanish, French, German, Chinese, Japanese, Arabic, Hindi
 - **Text-to-Speech (TTS)**: AI-generated speech with 50+ voices across OpenAI, Groq, and Gemini
@@ -64,10 +67,10 @@ https://github.com/user-attachments/assets/0c181c70-d1f1-4c5d-a6f5-a73147e75182
 - **Universal Integration**: Works with any text-input application
 
 ### 🎨 User Experience
-- **Text Input**: Press `Ctrl+T` for direct text input mode
+- **Text Input**: `Ctrl+T` (macOS/Linux) or `Ctrl+Shift+T` (Windows) for direct input
 - **Dark/Light Themes**: Toggle between dark and light modes
 - **Resizable Panels**: Drag-to-resize interface components
-- **Kill Switch**: Emergency stop for agent operations (`Escape` key)
+- **Kill Switch**: Emergency stop for agent operations (`Ctrl+Shift+Escape`)
 - **Conversation Management**: Full conversation history with tool call visualization
 
 ## 🏗️ Architecture
@@ -83,6 +86,11 @@ Built with modern technologies for cross-platform performance:
 
 **Prerequisites**: Node.js 18+, pnpm, Rust toolchain
 
+> ⚠️ **Important**: This project uses **pnpm** as its package manager. Using npm or yarn may cause installation issues, especially with Electron binaries. If you don't have pnpm installed:
+> ```bash
+> npm install -g pnpm
+> ```
+
 ```bash
 # Setup
 git clone https://github.com/aj47/SpeakMCP.git
@@ -97,36 +105,83 @@ pnpm build:mac    # macOS build (Apple Silicon + Intel)
 pnpm build:win    # Windows build (x64)
 pnpm build:linux  # Linux build (x64)
 
+# Signed release builds (see BUILDING.md for details)
+./scripts/build-release.sh --mac-only
+
 # Testing
 pnpm test         # Run test suite
 pnpm test:run     # Run tests once (CI mode)
 pnpm test:coverage # Run tests with coverage
-
-# VNC GUI Testing (GitHub Actions)
-# Test the full app in a Linux desktop environment with remote VNC access
-# See .github/VNC_TESTING_GUIDE.md for detailed instructions
 ```
 
-### 🖥️ VNC GUI Testing
+### 🐳 Docker Support
 
-Test SpeakMCP in a full Linux desktop environment via GitHub Actions with remote VNC access:
+Docker can be used for building Linux packages in a consistent environment or for CI/CD pipelines.
 
-1. **Setup secrets** (one-time):
-   ```bash
-   # Linux/macOS
-   ./.github/setup-vnc-secrets.sh
+```bash
+# Build Linux packages using Docker (outputs to ./dist)
+docker compose run --rm build-linux
 
-   # Windows
-   .\.github\setup-vnc-secrets.ps1
-   ```
+# Rebuild after code changes (use --build to rebuild the Docker image)
+docker compose run --rm --build build-linux
 
-2. **Run VNC workflow**:
-   - Go to Actions → VNC GUI Testing → Run workflow
-   - Connect via VNC client or web browser
-   - Interact with the app in real-time
+# Interactive development shell
+docker compose run --rm shell
+```
 
-See [VNC Testing Guide](.github/VNC_TESTING_GUIDE.md) for complete documentation.
+> **Note**: SpeakMCP is an Electron desktop application that requires a display. Docker is primarily useful for building Linux packages, not for running the desktop app.
 
+> **Tip**: Since `build-linux` only mounts `./dist` for output, you need to use `--build` after code changes to rebuild the Docker image with your latest source code.
+
+### 🔧 Troubleshooting Development Setup
+
+**"Electron uninstall" error when running `pnpm dev`:**
+
+This usually means Electron binaries weren't installed correctly. Fix it by:
+
+```bash
+# Clean install with pnpm
+rm -rf node_modules
+pnpm install
+```
+
+**Multiple lock files (package-lock.json, pnpm-lock.yaml, bun.lock):**
+
+If you have multiple lock files, you've mixed package managers. Clean up:
+
+```bash
+# Remove all lock files except pnpm's
+rm -f package-lock.json bun.lock
+rm -rf node_modules
+pnpm install
+```
+
+**Windows: "not a valid Win32 application" during postinstall:**
+
+If you see this error when running `pnpm install`:
+```
+%1 is not a valid Win32 application
+```
+
+This is caused by electron-builder attempting to execute `pnpm.cjs` directly. Try the manual workaround:
+
+```powershell
+pnpm install --ignore-scripts
+pnpm.cmd -C apps/desktop exec electron-builder install-app-deps
+```
+
+**Node version mismatch:**
+
+This project works best with Node.js 18-20. Check your version:
+
+```bash
+node --version  # Should be v18.x, v19.x, or v20.x
+```
+
+If using nvm, switch to the recommended version:
+
+```bash
+nvm use 20
 ```
 
 ## ⚙️ Configuration
@@ -155,11 +210,11 @@ See [VNC Testing Guide](.github/VNC_TESTING_GUIDE.md) for complete documentation
 ```
 
 **Keyboard Shortcuts**:
-- **Hold Ctrl**: Voice recording (traditional mode)
+- **Hold Ctrl** (macOS/Linux) / **Ctrl+/** (Windows): Voice recording
 - **Fn Key**: Toggle voice dictation (press once to start/stop)
-- **Hold Ctrl+Alt**: MCP agent mode
-- **Ctrl+T**: Text input mode
-- **Escape**: Cancel/kill switch for operations
+- **Hold Ctrl+Alt**: MCP agent mode (macOS only)
+- **Ctrl+T** (macOS/Linux) / **Ctrl+Shift+T** (Windows): Text input mode
+- **Ctrl+Shift+Escape**: Kill switch for agent operations
 
 ## 🤖 MCP Agent Mode
 
@@ -171,7 +226,7 @@ See [VNC Testing Guide](.github/VNC_TESTING_GUIDE.md) for complete documentation
 - **Conversation Continuity**: Context preservation across multi-turn interactions
 - **OAuth 2.1 Integration**: Secure authentication for MCP servers
 - **Rate Limit Handling**: Automatic retry with exponential backoff
-- **Kill Switch**: Emergency stop functionality with `Escape` key
+- **Kill Switch**: Emergency stop functionality with `Ctrl+Shift+Escape`
 - **Tool Management**: Per-server tool toggles and approval prompts
 
 **Example commands**:
@@ -179,32 +234,6 @@ See [VNC Testing Guide](.github/VNC_TESTING_GUIDE.md) for complete documentation
 - "Search for latest AI news and summarize the top 3 articles"
 - "Send a message to the team about today's progress"
 - "Analyze this codebase and suggest improvements"
-
-## 🆕 What's New
-
-**Recent Major Features**:
-
-### 🎵 Text-to-Speech (TTS) Integration
-- **50+ AI Voices**: OpenAI (6 voices), Groq (23 voices), Gemini (30+ voices)
-- **Auto-Play**: Seamless conversation flow with automatic speech playback
-- **Smart Preprocessing**: Converts code blocks, URLs, and markdown to natural speech
-- **Multi-Language**: Support for 30+ languages with native pronunciation
-
-### 🖥️ Cross-Platform Support
-- **Windows Build**: Full Windows compatibility with native builds
-- **Enhanced macOS**: Apple Silicon and Intel support
-- **Linux Ready**: Complete Linux build pipeline
-
-### 🎛️ Enhanced Voice Controls
-- **Toggle Voice Dictation**: Press `Fn` key to start/stop recording
-- **Multi-Language Recognition**: 30+ languages with automatic detection
-- **Configurable Hotkeys**: Customize keyboard shortcuts for all functions
-
-### 🔧 Reliability & Performance
-- **Rate Limit Handling**: Automatic retry with exponential backoff for API limits
-- **OAuth 2.1**: Secure authentication for MCP servers with deep link integration
-- **Kill Switch**: Emergency stop functionality for all operations
-- **Model Selection**: Choose specific AI models for each provider
 
 ## 🐛 Debug Mode
 
@@ -227,7 +256,7 @@ See [DEBUGGING.md](DEBUGGING.md) for detailed debugging instructions.
 
 We welcome contributions! Fork the repo, create a feature branch, and open a Pull Request.
 
-**💬 Get help on [Discord](https://discord.gg/naGJHsKc)** | **🌐 More info at [techfren.net](https://techfren.net)**
+**💬 Get help on [Discord](https://discord.gg/cK9WeQ7jPq)** | **🌐 More info at [techfren.net](https://techfren.net)**
 
 ## 📄 License
 

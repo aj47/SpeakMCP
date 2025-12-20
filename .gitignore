@@ -3,8 +3,10 @@ dist
 dist-win
 manual-build-win
 out
+out-test
 .DS_Store
 *.log*
+logs.txt
 target/
 bin/
 
@@ -25,3 +27,33 @@ backend/.wrangler
 *.DS_Store*
 .augment
 augment.mjs
+
+# Mobile specific
+.expo/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+web-build/
+*.ipa
+
+# Turborepo / build cache
+.turbo
+
+# TypeScript build info
+*.tsbuildinfo
+
+# Swift Package Manager build directory
+macos-audio-tap/ScreenCaptureAudio/.build/
+
+# Android build artifacts
+apps/mobile/android/app/debug.keystore
+apps/mobile/android/app/.cxx/
+
+# iOS build artifacts
+apps/mobile/ios/Pods/
+apps/mobile/ios/.xcode.env.local
+apps/mobile/ios/build/
+*.ipa

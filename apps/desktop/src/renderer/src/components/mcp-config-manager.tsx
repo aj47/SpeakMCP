@@ -1351,11 +1351,21 @@ export function MCPConfigManager({
     }
   }
 
+  // Calculate total tools count
+  const totalToolsCount = tools.length
+  const enabledToolsCount = tools.filter((t) => t.enabled).length
+  const disabledToolsCount = totalToolsCount - enabledToolsCount
+
   return (
     <div className="min-w-0 space-y-6">
       <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
+        <div className="flex items-center gap-3">
           <h3 className="text-lg font-medium">MCP Server Configuration</h3>
+          {totalToolsCount > 0 && (
+            <Badge variant="secondary" className="text-sm">
+              {enabledToolsCount} enabled / {disabledToolsCount} disabled
+            </Badge>
+          )}
         </div>
         <div className="flex flex-wrap justify-start gap-2 sm:justify-end">
           <Button variant="outline" size="sm" onClick={handleExportConfig}>

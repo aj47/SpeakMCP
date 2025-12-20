@@ -63,23 +63,27 @@ export function useSidebar(options: UseSidebarOptions = {}): UseSidebarReturn {
     onResizeEnd,
   } = options
 
-  const getInitialState = useCallback((): SidebarState => {
-    const persisted = loadPersistedState()
-    if (persisted) {
-      return {
-        isCollapsed: persisted.isCollapsed,
-        width: Math.min(
-          SIDEBAR_DIMENSIONS.width.max,
-          Math.max(SIDEBAR_DIMENSIONS.width.min, persisted.width)
-        ),
+  // Use lazy state initialization to read localStorage only once on mount
+  // We use a single initializer to avoid calling loadPersistedState multiple times
+  const [{ isCollapsed: initialIsCollapsed, width: initialWidthValue }] = useState(
+    (): SidebarState => {
+      const persisted = loadPersistedState()
+      if (persisted) {
+        return {
+          isCollapsed: persisted.isCollapsed,
+          width: Math.min(
+            SIDEBAR_DIMENSIONS.width.max,
+            Math.max(SIDEBAR_DIMENSIONS.width.min, persisted.width)
+          ),
+        }
       }
+      return { isCollapsed: initialCollapsed, width: initialWidth }
     }
-    return { isCollapsed: initialCollapsed, width: initialWidth }
-  }, [initialWidth, initialCollapsed])
+  )
 
-  const initial = getInitialState()
-  const [isCollapsed, setIsCollapsed] = useState(initial.isCollapsed)
-  const [width, setWidth] = useState(initial.width)
+  const [isCollapsed, setIsCollapsed] = useState(initialIsCollapsed)
+  const [width, setWidth] = useState(initialWidthValue)
+
   const [isResizing, setIsResizing] = useState(false)
 
   const widthBeforeCollapseRef = useRef(width)

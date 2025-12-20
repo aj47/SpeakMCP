@@ -90,6 +90,8 @@ export class MCPService {
 
   private runtimeDisabledServers: Set<string> = new Set()
   private initializedServers: Set<string> = new Set()
+  private serversNeedingOAuth: Set<string> = new Set()
+  private serverInitErrors: Map<string, string> = new Map()
   private hasBeenInitialized = false
 
   private activeResources = new Map<
@@ -663,8 +665,12 @@ export class MCPService {
               }
             }
 
-            // Throw a specific error that indicates OAuth is required
-            throw new Error(`Server requires OAuth authentication. Please configure OAuth settings and authenticate manually.`)
+            // Mark this server as needing OAuth (don't throw - let app continue loading)
+            this.serversNeedingOAuth.add(serverName)
+            this.serverInitErrors.set(serverName, "Server requires OAuth authentication. Please configure OAuth settings and authenticate manually.")
+
+            // Return early without throwing - server just won't be connected
+            return
           }
         } else {
           // Re-throw non-401 errors
@@ -708,6 +714,8 @@ export class MCPService {
         }
       }
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+
       diagnosticsService.logError(
         "mcp-service",
         `Failed to initialize server ${serverName}`,
@@ -716,13 +724,40 @@ export class MCPService {
 
       if (isDebugTools()) {
         logTools(`Server initialization failed: ${serverName}`, {
-          error: error instanceof Error ? error.message : String(error),
+          error: errorMessage,
           stack: error instanceof Error ? error.stack : undefined
         })
       }
 
-      // Clean up any partial initialization
-      this.cleanupServer(serverName)
+      // Store the error for status reporting before cleanup
+      this.serverInitErrors.set(serverName, errorMessage)
+
+      // Clean up any partial initialization (but preserve the error we just set)
+      const transport = this.transports.get(serverName)
+      this.transports.delete(serverName)
+      this.clients.delete(serverName)
+      this.initializedServers.delete(serverName)
+
+      // Cancel any pending elicitation/sampling requests for this server
+      cancelAllElicitations(serverName)
+      cancelAllSamplingRequests(serverName)
+
+      // Close the transport (which will terminate the process for stdio)
+      if (transport) {
+        try {
+          transport.close()
+        } catch (closeError) {
+          // Ignore cleanup errors
+        }
+      }
+
+      // Clear server logs
+      this.serverLogs.delete(serverName)
+
+      // Remove tools from this server
+      this.availableTools = this.availableTools.filter(
+        (tool) => !tool.name.startsWith(`${serverName}:`),
+      )
 
       // Re-throw to let the caller handle it
       throw error
@@ -736,6 +771,10 @@ export class MCPService {
     this.transports.delete(serverName)
     this.clients.delete(serverName)
     this.initializedServers.delete(serverName)
+
+    // Clear OAuth-related state when cleaning up (will be re-set if still needed on reconnect)
+    this.serversNeedingOAuth.delete(serverName)
+    this.serverInitErrors.delete(serverName)
 
     // Cancel any pending elicitation/sampling requests for this server
     cancelAllElicitations(serverName)
@@ -1729,6 +1768,7 @@ export class MCPService {
       error?: string
       runtimeEnabled?: boolean
       configDisabled?: boolean
+      needsOAuth?: boolean
     }
   > {
     const status: Record<
@@ -1739,6 +1779,7 @@ export class MCPService {
         error?: string
         runtimeEnabled?: boolean
         configDisabled?: boolean
+        needsOAuth?: boolean
       }
     > = {}
     const config = configStore.get()
@@ -1760,6 +1801,8 @@ export class MCPService {
           toolCount,
           runtimeEnabled: !this.runtimeDisabledServers.has(serverName),
           configDisabled: !!(serverConfig as MCPServerConfig).disabled,
+          needsOAuth: this.serversNeedingOAuth.has(serverName),
+          error: this.serverInitErrors.get(serverName),
         }
       }
     }
@@ -1777,6 +1820,8 @@ export class MCPService {
           toolCount,
           runtimeEnabled: !this.runtimeDisabledServers.has(serverName),
           configDisabled: false,
+          needsOAuth: this.serversNeedingOAuth.has(serverName),
+          error: this.serverInitErrors.get(serverName),
         }
       }
     }
@@ -1787,6 +1832,7 @@ export class MCPService {
       toolCount: builtinTools.length,
       runtimeEnabled: true,
       configDisabled: false,
+      needsOAuth: false,
     }
 
     return status

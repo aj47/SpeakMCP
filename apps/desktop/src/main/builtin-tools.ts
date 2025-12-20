@@ -636,18 +636,27 @@ const toolHandlers: Record<string, ToolHandler> = {
   get_settings: async (): Promise<MCPToolResult> => {
     const config = configStore.get()
 
+    // Post-processing requires both the toggle AND a prompt to be set
+    const postProcessingEnabled = config.transcriptPostProcessingEnabled ?? false
+    const postProcessingPromptConfigured = !!(config.transcriptPostProcessingPrompt?.trim())
+    const postProcessingEffective = postProcessingEnabled && postProcessingPromptConfigured
+
     return {
       content: [
         {
           type: "text",
           text: JSON.stringify({
-            postProcessingEnabled: config.transcriptPostProcessingEnabled ?? false,
+            postProcessingEnabled: postProcessingEnabled,
+            postProcessingPromptConfigured: postProcessingPromptConfigured,
+            postProcessingEffective: postProcessingEffective,
             ttsEnabled: config.ttsEnabled ?? true,
             toolApprovalEnabled: config.mcpRequireApprovalBeforeToolCall ?? false,
             descriptions: {
-              postProcessingEnabled: "When enabled, transcripts are cleaned up and improved using AI",
+              postProcessingEnabled: "When enabled AND a prompt is configured, transcripts are cleaned up and improved using AI",
+              postProcessingPromptConfigured: "Whether a post-processing prompt has been configured in settings",
+              postProcessingEffective: "True only when post-processing is both enabled AND a prompt is configured",
               ttsEnabled: "When enabled, assistant responses are read aloud",
-              toolApprovalEnabled: "When enabled, a confirmation dialog appears before any tool executes",
+              toolApprovalEnabled: "When enabled, a confirmation dialog appears before any tool executes (affects new sessions only)",
             },
           }, null, 2),
         },
@@ -676,6 +685,13 @@ const toolHandlers: Record<string, ToolHandler> = {
       transcriptPostProcessingEnabled: enabled,
     })
 
+    // Check if prompt is configured
+    const promptConfigured = !!(config.transcriptPostProcessingPrompt?.trim())
+    let message = `Post-processing has been ${enabled ? "enabled" : "disabled"}.`
+    if (enabled && !promptConfigured) {
+      message += " Note: A post-processing prompt must also be configured in settings for this feature to take effect."
+    }
+
     return {
       content: [
         {
@@ -685,7 +701,9 @@ const toolHandlers: Record<string, ToolHandler> = {
             setting: "postProcessingEnabled",
             previousValue: currentValue,
             newValue: enabled,
-            message: `Post-processing has been ${enabled ? "enabled" : "disabled"}`,
+            promptConfigured: promptConfigured,
+            effectivelyActive: enabled && promptConfigured,
+            message: message,
           }, null, 2),
         },
       ],
@@ -759,7 +777,7 @@ const toolHandlers: Record<string, ToolHandler> = {
             setting: "toolApprovalEnabled",
             previousValue: currentValue,
             newValue: enabled,
-            message: `Tool approval has been ${enabled ? "enabled" : "disabled"}`,
+            message: `Tool approval has been ${enabled ? "enabled" : "disabled"}. Note: This change takes effect for new agent sessions only; currently running sessions are not affected.`,
           }, null, 2),
         },
       ],

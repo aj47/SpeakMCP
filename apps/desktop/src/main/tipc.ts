@@ -1490,6 +1490,28 @@ export const router = {
         // best-effort only
       }
 
+      // Apply dock icon visibility changes immediately (macOS only)
+      if (process.env.IS_MAC) {
+        try {
+          const prevHideDock = !!(prev as any)?.hideDockIcon
+          const nextHideDock = !!(merged as any)?.hideDockIcon
+
+          if (prevHideDock !== nextHideDock) {
+            if (nextHideDock) {
+              // User wants to hide dock icon - hide it now
+              app.setActivationPolicy("accessory")
+              app.dock.hide()
+            } else {
+              // User wants to show dock icon - show it now
+              app.dock.show()
+              app.setActivationPolicy("regular")
+            }
+          }
+        } catch (_e) {
+          // best-effort only
+        }
+      }
+
       // Manage Remote Server lifecycle on config changes
       try {
         const prevEnabled = !!(prev as any)?.remoteServerEnabled

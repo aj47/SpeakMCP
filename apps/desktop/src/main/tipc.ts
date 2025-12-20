@@ -153,6 +153,17 @@ async function processWithAgentMode(
 ): Promise<string> {
   const config = configStore.get()
 
+  // Validate screenshot if provided
+  if (screenshot) {
+    if (!screenshot.startsWith('data:image/')) {
+      throw new Error('Invalid screenshot format: must be a data URL starting with data:image/')
+    }
+    const sizeInMB = (screenshot.length * 0.75) / (1024 * 1024)
+    if (sizeInMB > 10) {
+      throw new Error(`Screenshot too large: ${sizeInMB.toFixed(1)}MB (maximum 10MB)`)
+    }
+  }
+
   // NOTE: Don't clear all agent progress here - we support multiple concurrent sessions
   // Each session manages its own progress lifecycle independently
 

@@ -1467,10 +1467,11 @@ Always use actual resource IDs from the conversation history or create new ones 
       // Optional verification before completing
       // Track if we should skip post-verify summary
       // Skip summary when:
-      // 1. Agent is repeating itself (with real content)
-      // 2. No tools were called (simple Q&A - nothing to summarize)
+      // 1. Final summary is disabled in config
+      // 2. Agent is repeating itself (with real content)
+      // 3. No tools were called (simple Q&A - nothing to summarize)
       const noToolsCalledYet = !conversationHistory.some((e) => e.role === "tool")
-      let skipPostVerifySummary = noToolsCalledYet && !isToolCallPlaceholder(finalContent) && finalContent.trim().length > 0
+      let skipPostVerifySummary = (config.mcpFinalSummaryEnabled === false) || (noToolsCalledYet && !isToolCallPlaceholder(finalContent) && finalContent.trim().length > 0)
 
       if (config.mcpVerifyCompletionEnabled) {
         const verifyStep = createProgressStep(
@@ -2146,8 +2147,8 @@ Please try alternative approaches, break down the task into smaller steps, or pr
 
 
 	      // Optional verification before completing after tools
-	      // Track if we should skip post-verify summary (when agent is repeating itself)
-	      let skipPostVerifySummary2 = false
+	      // Track if we should skip post-verify summary (when agent is repeating itself or disabled)
+	      let skipPostVerifySummary2 = config.mcpFinalSummaryEnabled === false
 
 	      if (config.mcpVerifyCompletionEnabled) {
 	        const verifyStep = createProgressStep(

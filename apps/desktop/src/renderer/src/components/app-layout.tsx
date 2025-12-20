@@ -62,6 +62,7 @@ export const Component = () => {
       role="button"
       draggable={false}
       title={isCollapsed ? link.text : undefined}
+      aria-label={isCollapsed ? link.text : undefined}
       className={({ isActive: _isActive }) => {
         const isExactMatch = location.pathname === link.href
         return cn(
@@ -143,6 +144,7 @@ export const Component = () => {
                   : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
               )}
               title="Settings"
+              aria-label="Settings"
             >
               <span className="i-mingcute-settings-3-line"></span>
             </NavLink>

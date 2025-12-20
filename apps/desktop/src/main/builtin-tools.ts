@@ -115,6 +115,57 @@ export const builtinTools: MCPTool[] = [
       required: [],
     },
   },
+  {
+    name: `${BUILTIN_SERVER_NAME}:get_settings`,
+    description: "Get the current status of SpeakMCP feature toggles including post-processing, TTS (text-to-speech), and tool approval settings.",
+    inputSchema: {
+      type: "object",
+      properties: {},
+      required: [],
+    },
+  },
+  {
+    name: `${BUILTIN_SERVER_NAME}:toggle_post_processing`,
+    description: "Enable or disable transcript post-processing. When enabled, transcripts are cleaned up and improved using AI.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        enabled: {
+          type: "boolean",
+          description: "Whether to enable (true) or disable (false) post-processing. If not provided, toggles to the opposite of the current state.",
+        },
+      },
+      required: [],
+    },
+  },
+  {
+    name: `${BUILTIN_SERVER_NAME}:toggle_tts`,
+    description: "Enable or disable text-to-speech (TTS). When enabled, assistant responses are read aloud.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        enabled: {
+          type: "boolean",
+          description: "Whether to enable (true) or disable (false) TTS. If not provided, toggles to the opposite of the current state.",
+        },
+      },
+      required: [],
+    },
+  },
+  {
+    name: `${BUILTIN_SERVER_NAME}:toggle_tool_approval`,
+    description: "Enable or disable tool approval. When enabled, a confirmation dialog appears before any tool executes. Recommended for safety.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        enabled: {
+          type: "boolean",
+          description: "Whether to enable (true) or disable (false) tool approval. If not provided, toggles to the opposite of the current state.",
+        },
+      },
+      required: [],
+    },
+  },
 ]
 
 // Tool execution handlers
@@ -575,6 +626,118 @@ const toolHandlers: Record<string, ToolHandler> = {
             processesKilled: before - after,
             processesBeforeStop: before,
             processesAfterStop: after,
+          }, null, 2),
+        },
+      ],
+      isError: false,
+    }
+  },
+
+  get_settings: async (): Promise<MCPToolResult> => {
+    const config = configStore.get()
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            settings: {
+              postProcessingEnabled: config.transcriptPostProcessingEnabled ?? false,
+              ttsEnabled: config.ttsEnabled ?? true,
+              toolApprovalEnabled: config.mcpRequireApprovalBeforeToolCall ?? false,
+            },
+            descriptions: {
+              postProcessingEnabled: "When enabled, transcripts are cleaned up and improved using AI",
+              ttsEnabled: "When enabled, assistant responses are read aloud",
+              toolApprovalEnabled: "When enabled, a confirmation dialog appears before any tool executes",
+            },
+          }, null, 2),
+        },
+      ],
+      isError: false,
+    }
+  },
+
+  toggle_post_processing: async (args: Record<string, unknown>): Promise<MCPToolResult> => {
+    const config = configStore.get()
+    const currentValue = config.transcriptPostProcessingEnabled ?? false
+
+    // Determine new value: use provided value or toggle
+    const enabled = typeof args.enabled === "boolean" ? args.enabled : !currentValue
+
+    configStore.save({
+      ...config,
+      transcriptPostProcessingEnabled: enabled,
+    })
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            success: true,
+            setting: "postProcessingEnabled",
+            previousValue: currentValue,
+            newValue: enabled,
+            message: `Post-processing has been ${enabled ? "enabled" : "disabled"}`,
+          }, null, 2),
+        },
+      ],
+      isError: false,
+    }
+  },
+
+  toggle_tts: async (args: Record<string, unknown>): Promise<MCPToolResult> => {
+    const config = configStore.get()
+    const currentValue = config.ttsEnabled ?? true
+
+    // Determine new value: use provided value or toggle
+    const enabled = typeof args.enabled === "boolean" ? args.enabled : !currentValue
+
+    configStore.save({
+      ...config,
+      ttsEnabled: enabled,
+    })
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            success: true,
+            setting: "ttsEnabled",
+            previousValue: currentValue,
+            newValue: enabled,
+            message: `Text-to-speech has been ${enabled ? "enabled" : "disabled"}`,
+          }, null, 2),
+        },
+      ],
+      isError: false,
+    }
+  },
+
+  toggle_tool_approval: async (args: Record<string, unknown>): Promise<MCPToolResult> => {
+    const config = configStore.get()
+    const currentValue = config.mcpRequireApprovalBeforeToolCall ?? false
+
+    // Determine new value: use provided value or toggle
+    const enabled = typeof args.enabled === "boolean" ? args.enabled : !currentValue
+
+    configStore.save({
+      ...config,
+      mcpRequireApprovalBeforeToolCall: enabled,
+    })
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            success: true,
+            setting: "toolApprovalEnabled",
+            previousValue: currentValue,
+            newValue: enabled,
+            message: `Tool approval has been ${enabled ? "enabled" : "disabled"}`,
           }, null, 2),
         },
       ],

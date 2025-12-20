@@ -744,6 +744,13 @@ export function Component() {
             />
           </Control>
 
+          <Control label={<ControlLabel label="Verify Task Completion" tooltip="When enabled, the agent will verify whether the user's task has been completed before finishing. Disable for faster responses without verification." />} className="px-3">
+            <Switch
+              checked={configQuery.data?.mcpVerifyCompletionEnabled ?? true}
+              onCheckedChange={(value) => saveConfig({ mcpVerifyCompletionEnabled: value })}
+            />
+          </Control>
+
           <Control label={<ControlLabel label="Max Iterations" tooltip="Maximum number of iterations the agent can perform before stopping. Higher values allow more complex tasks but may take longer." />} className="px-3">
             <Input
               type="number"

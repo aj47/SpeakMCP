@@ -751,6 +751,13 @@ export function Component() {
             />
           </Control>
 
+          <Control label={<ControlLabel label="Final Summary" tooltip="When enabled, the agent will generate a concise final summary after completing a task. Disable for faster responses without the summary step." />} className="px-3">
+            <Switch
+              checked={configQuery.data?.mcpFinalSummaryEnabled ?? true}
+              onCheckedChange={(value) => saveConfig({ mcpFinalSummaryEnabled: value })}
+            />
+          </Control>
+
           <Control label={<ControlLabel label="Max Iterations" tooltip="Maximum number of iterations the agent can perform before stopping. Higher values allow more complex tasks but may take longer." />} className="px-3">
             <Input
               type="number"

@@ -444,6 +444,9 @@ export type Config = {
   mcpVerifyContextMaxItems?: number
   mcpVerifyRetryCount?: number
 
+  // Final Summary Configuration
+  mcpFinalSummaryEnabled?: boolean
+
   // Parallel Tool Execution Configuration
   mcpParallelToolExecution?: boolean
 

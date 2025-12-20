@@ -19,103 +19,17 @@ import { agentSessionTracker } from "./agent-session-tracker"
 import { agentSessionStateManager, toolApprovalManager } from "./state"
 import { emergencyStopAll } from "./emergency-stop"
 
-// The virtual server name for built-in tools
-export const BUILTIN_SERVER_NAME = "speakmcp-settings"
+// Re-export from the dependency-free definitions module for backward compatibility
+// This breaks the circular dependency: profile-service -> builtin-tool-definitions (no cycle)
+// while builtin-tools -> profile-service is still valid since profile-service no longer imports from here
+export {
+  BUILTIN_SERVER_NAME,
+  builtinToolDefinitions as builtinTools,
+  getBuiltinToolNames,
+} from "./builtin-tool-definitions"
 
-// Tool definitions
-export const builtinTools: MCPTool[] = [
-  {
-    name: `${BUILTIN_SERVER_NAME}:list_mcp_servers`,
-    description: "List all configured MCP servers and their status (enabled/disabled, connected/disconnected)",
-    inputSchema: {
-      type: "object",
-      properties: {},
-      required: [],
-    },
-  },
-  {
-    name: `${BUILTIN_SERVER_NAME}:toggle_mcp_server`,
-    description: "Enable or disable an MCP server by name. Disabled servers will not be initialized on next startup.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        serverName: {
-          type: "string",
-          description: "The name of the MCP server to toggle",
-        },
-        enabled: {
-          type: "boolean",
-          description: "Whether to enable (true) or disable (false) the server. If not provided, toggles to the opposite of the current state.",
-        },
-      },
-      required: ["serverName"],
-    },
-  },
-  {
-    name: `${BUILTIN_SERVER_NAME}:list_profiles`,
-    description: "List all available profiles and show which one is currently active",
-    inputSchema: {
-      type: "object",
-      properties: {},
-      required: [],
-    },
-  },
-  {
-    name: `${BUILTIN_SERVER_NAME}:switch_profile`,
-    description: "Switch to a different profile by ID or name. The profile's guidelines will become active.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        profileIdOrName: {
-          type: "string",
-          description: "The ID or name of the profile to switch to",
-        },
-      },
-      required: ["profileIdOrName"],
-    },
-  },
-  {
-    name: `${BUILTIN_SERVER_NAME}:get_current_profile`,
-    description: "Get the currently active profile with its full guidelines",
-    inputSchema: {
-      type: "object",
-      properties: {},
-      required: [],
-    },
-  },
-  {
-    name: `${BUILTIN_SERVER_NAME}:list_running_agents`,
-    description: "List all currently running agent sessions with their status, iteration count, and activity. Useful for monitoring active agents before terminating them.",
-    inputSchema: {
-      type: "object",
-      properties: {},
-      required: [],
-    },
-  },
-  {
-    name: `${BUILTIN_SERVER_NAME}:kill_agent`,
-    description: "Terminate a specific agent session by its session ID. This will abort any in-flight LLM requests, kill spawned processes, and stop the agent immediately.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        sessionId: {
-          type: "string",
-          description: "The session ID of the agent to terminate (get this from list_running_agents)",
-        },
-      },
-      required: ["sessionId"],
-    },
-  },
-  {
-    name: `${BUILTIN_SERVER_NAME}:kill_all_agents`,
-    description: "Emergency stop ALL running agent sessions. This will abort all in-flight LLM requests, kill all spawned processes, and stop all agents immediately. Use with caution.",
-    inputSchema: {
-      type: "object",
-      properties: {},
-      required: [],
-    },
-  },
-]
+// Import for local use
+import { BUILTIN_SERVER_NAME, builtinToolDefinitions } from "./builtin-tool-definitions"
 
 // Tool execution handlers
 type ToolHandler = (args: Record<string, unknown>) => Promise<MCPToolResult>
@@ -581,6 +495,158 @@ const toolHandlers: Record<string, ToolHandler> = {
       isError: false,
     }
   },
+
+  get_settings: async (): Promise<MCPToolResult> => {
+    const config = configStore.get()
+
+    // Post-processing requires both the toggle AND a prompt to be set
+    const postProcessingEnabled = config.transcriptPostProcessingEnabled ?? false
+    const postProcessingPromptConfigured = !!(config.transcriptPostProcessingPrompt?.trim())
+    const postProcessingEffective = postProcessingEnabled && postProcessingPromptConfigured
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            postProcessingEnabled: postProcessingEnabled,
+            postProcessingPromptConfigured: postProcessingPromptConfigured,
+            postProcessingEffective: postProcessingEffective,
+            ttsEnabled: config.ttsEnabled ?? true,
+            toolApprovalEnabled: config.mcpRequireApprovalBeforeToolCall ?? false,
+            descriptions: {
+              postProcessingEnabled: "When enabled AND a prompt is configured, transcripts are cleaned up and improved using AI",
+              postProcessingPromptConfigured: "Whether a post-processing prompt has been configured in settings",
+              postProcessingEffective: "True only when post-processing is both enabled AND a prompt is configured",
+              ttsEnabled: "When enabled, assistant responses are read aloud",
+              toolApprovalEnabled: "When enabled, a confirmation dialog appears before any tool executes (affects new sessions only)",
+            },
+          }, null, 2),
+        },
+      ],
+      isError: false,
+    }
+  },
+
+  toggle_post_processing: async (args: Record<string, unknown>): Promise<MCPToolResult> => {
+    const config = configStore.get()
+    const currentValue = config.transcriptPostProcessingEnabled ?? false
+
+    // Validate enabled parameter if provided (optional)
+    if (args.enabled !== undefined && typeof args.enabled !== "boolean") {
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success: false, error: "enabled must be a boolean if provided" }) }],
+        isError: true,
+      }
+    }
+
+    // Determine new value: use provided value or toggle
+    const enabled = typeof args.enabled === "boolean" ? args.enabled : !currentValue
+
+    configStore.save({
+      ...config,
+      transcriptPostProcessingEnabled: enabled,
+    })
+
+    // Check if prompt is configured
+    const promptConfigured = !!(config.transcriptPostProcessingPrompt?.trim())
+    let message = `Post-processing has been ${enabled ? "enabled" : "disabled"}.`
+    if (enabled && !promptConfigured) {
+      message += " Note: A post-processing prompt must also be configured in settings for this feature to take effect."
+    }
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            success: true,
+            setting: "postProcessingEnabled",
+            previousValue: currentValue,
+            newValue: enabled,
+            promptConfigured: promptConfigured,
+            effectivelyActive: enabled && promptConfigured,
+            message: message,
+          }, null, 2),
+        },
+      ],
+      isError: false,
+    }
+  },
+
+  toggle_tts: async (args: Record<string, unknown>): Promise<MCPToolResult> => {
+    const config = configStore.get()
+    const currentValue = config.ttsEnabled ?? true
+
+    // Validate enabled parameter if provided (optional)
+    if (args.enabled !== undefined && typeof args.enabled !== "boolean") {
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success: false, error: "enabled must be a boolean if provided" }) }],
+        isError: true,
+      }
+    }
+
+    // Determine new value: use provided value or toggle
+    const enabled = typeof args.enabled === "boolean" ? args.enabled : !currentValue
+
+    configStore.save({
+      ...config,
+      ttsEnabled: enabled,
+    })
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            success: true,
+            setting: "ttsEnabled",
+            previousValue: currentValue,
+            newValue: enabled,
+            message: `Text-to-speech has been ${enabled ? "enabled" : "disabled"}`,
+          }, null, 2),
+        },
+      ],
+      isError: false,
+    }
+  },
+
+  toggle_tool_approval: async (args: Record<string, unknown>): Promise<MCPToolResult> => {
+    const config = configStore.get()
+    const currentValue = config.mcpRequireApprovalBeforeToolCall ?? false
+
+    // Validate enabled parameter if provided (optional)
+    if (args.enabled !== undefined && typeof args.enabled !== "boolean") {
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success: false, error: "enabled must be a boolean if provided" }) }],
+        isError: true,
+      }
+    }
+
+    // Determine new value: use provided value or toggle
+    const enabled = typeof args.enabled === "boolean" ? args.enabled : !currentValue
+
+    configStore.save({
+      ...config,
+      mcpRequireApprovalBeforeToolCall: enabled,
+    })
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            success: true,
+            setting: "toolApprovalEnabled",
+            previousValue: currentValue,
+            newValue: enabled,
+            message: `Tool approval has been ${enabled ? "enabled" : "disabled"}. Note: This change takes effect for new agent sessions only; currently running sessions are not affected.`,
+          }, null, 2),
+        },
+      ],
+      isError: false,
+    }
+  },
 }
 
 /**
@@ -636,4 +702,3 @@ export async function executeBuiltinTool(
 export function isBuiltinTool(toolName: string): boolean {
   return toolName.startsWith(`${BUILTIN_SERVER_NAME}:`)
 }
-

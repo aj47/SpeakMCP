@@ -83,6 +83,7 @@ export function useSidebar(options: UseSidebarOptions = {}): UseSidebarReturn {
   const [isResizing, setIsResizing] = useState(false)
 
   const widthBeforeCollapseRef = useRef(width)
+  const cleanupResizeRef = useRef<(() => void) | null>(null)
 
   const clampWidth = useCallback(
     (w: number) =>
@@ -113,7 +114,11 @@ export function useSidebar(options: UseSidebarOptions = {}): UseSidebarReturn {
         widthBeforeCollapseRef.current = width
       }
       setIsCollapsed(collapsed)
-      savePersistedState({ isCollapsed: collapsed, width: widthBeforeCollapseRef.current })
+      // When expanding, persist current width; when collapsing, persist the stored width
+      savePersistedState({
+        isCollapsed: collapsed,
+        width: collapsed ? widthBeforeCollapseRef.current : width,
+      })
       onToggle?.(collapsed)
     },
     [width, isCollapsed, onToggle]
@@ -137,16 +142,30 @@ export function useSidebar(options: UseSidebarOptions = {}): UseSidebarReturn {
         setWidth(lastWidth)
       }
 
-      const handleMouseUp = () => {
+      const cleanup = () => {
         setIsResizing(false)
         document.removeEventListener("mousemove", handleMouseMove)
         document.removeEventListener("mouseup", handleMouseUp)
+        window.removeEventListener("blur", handleBlur)
+        cleanupResizeRef.current = null
         savePersistedState({ isCollapsed: false, width: lastWidth })
         onResizeEnd?.(lastWidth)
       }
 
+      const handleMouseUp = () => {
+        cleanup()
+      }
+
+      const handleBlur = () => {
+        cleanup()
+      }
+
+      // Store cleanup so it can be called on unmount
+      cleanupResizeRef.current = cleanup
+
       document.addEventListener("mousemove", handleMouseMove)
       document.addEventListener("mouseup", handleMouseUp)
+      window.addEventListener("blur", handleBlur)
     },
     [width, isCollapsed, clampWidth, onResizeEnd]
   )
@@ -158,6 +177,15 @@ export function useSidebar(options: UseSidebarOptions = {}): UseSidebarReturn {
       localStorage.removeItem(STORAGE_KEY)
     } catch {}
   }, [initialWidth, initialCollapsed])
+
+  // Cleanup resize listeners on unmount
+  useEffect(() => {
+    return () => {
+      if (cleanupResizeRef.current) {
+        cleanupResizeRef.current()
+      }
+    }
+  }, [])
 
   return {
     isCollapsed,

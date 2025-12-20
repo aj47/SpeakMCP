@@ -85,7 +85,8 @@ export const Component = () => {
       {/* Sidebar with dynamic width */}
       <div
         className={cn(
-          "relative flex shrink-0 flex-col border-r bg-background transition-all duration-200",
+          "relative flex shrink-0 flex-col border-r bg-background",
+          !isResizing && "transition-all duration-200",
           isResizing && "select-none"
         )}
         style={{ width: sidebarWidth }}

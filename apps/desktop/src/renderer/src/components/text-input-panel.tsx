@@ -27,7 +27,9 @@ export const TextInputPanel = forwardRef<TextInputPanelRef, TextInputPanelProps>
   const [includeScreenshot, setIncludeScreenshot] = useState(false)
   const [screenshot, setScreenshot] = useState<string | null>(null)
   const [isCapturingScreenshot, setIsCapturingScreenshot] = useState(false)
+  const [screenshotError, setScreenshotError] = useState<string | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const captureWantedRef = useRef(false)
   const { isDark } = useTheme()
 
   useImperativeHandle(ref, () => ({
@@ -58,12 +60,18 @@ export const TextInputPanel = forwardRef<TextInputPanelRef, TextInputPanelProps>
 
   const captureScreenshot = async () => {
     setIsCapturingScreenshot(true)
+    setScreenshotError(null)
     try {
       // Use IPC to get screen sources from main process (desktopCapturer is only available in main process in Electron 31+)
       const sources = await (window as any).electronAPI.getScreenSources({
         types: ['screen'],
         thumbnailSize: { width: 1920, height: 1080 }
       })
+
+      // Check if screenshot is still wanted after async operation completes
+      if (!captureWantedRef.current) {
+        return
+      }
 
       if (sources && sources.length > 0) {
         // Get the first screen (primary display) - thumbnail is already a data URL from main process
@@ -72,6 +80,8 @@ export const TextInputPanel = forwardRef<TextInputPanelRef, TextInputPanelProps>
       }
     } catch (error) {
       console.error('Failed to capture screenshot:', error)
+      setScreenshotError('Failed to capture screenshot')
+      setIncludeScreenshot(false)
     } finally {
       setIsCapturingScreenshot(false)
     }
@@ -89,13 +99,19 @@ export const TextInputPanel = forwardRef<TextInputPanelRef, TextInputPanelProps>
 
   // Capture screenshot when checkbox is toggled on, clear when toggled off
   useEffect(() => {
-    if (includeScreenshot && !screenshot) {
-      captureScreenshot()
-    } else if (!includeScreenshot && screenshot) {
-      // Clear screenshot when user unchecks the box
-      setScreenshot(null)
+    if (includeScreenshot) {
+      captureWantedRef.current = true
+      if (!screenshot) {
+        captureScreenshot()
+      }
+    } else {
+      captureWantedRef.current = false
+      if (screenshot) {
+        // Clear screenshot when user unchecks the box
+        setScreenshot(null)
+      }
     }
-  }, [includeScreenshot])
+  }, [includeScreenshot, screenshot])
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     const isModifierPressed = e.metaKey || e.ctrlKey;
@@ -191,6 +207,9 @@ export const TextInputPanel = forwardRef<TextInputPanelRef, TextInputPanelProps>
             )}
             {screenshot && !isCapturingScreenshot && (
               <span className="text-xs text-green-500">✓ Screenshot captured</span>
+            )}
+            {screenshotError && !isCapturingScreenshot && (
+              <span className="text-xs text-red-500">✗ {screenshotError}</span>
             )}
           </div>
         </div>

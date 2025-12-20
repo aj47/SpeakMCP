@@ -1033,9 +1033,28 @@ async function makeGeminiCall(
   const baseURL =
     config.geminiBaseUrl || "https://generativelanguage.googleapis.com"
 
+  // Helper to extract text from multimodal content without embedding full image data
+  const extractTextFromContent = (content: string | any[]): string => {
+    if (typeof content === 'string') {
+      return content
+    }
+    if (Array.isArray(content)) {
+      return content.map(part => {
+        if (part.type === 'text') {
+          return part.text || ''
+        }
+        if (part.type === 'image_url') {
+          return '[image attached]'
+        }
+        return ''
+      }).filter(Boolean).join(' ')
+    }
+    return String(content)
+  }
+
   // Convert messages to Gemini format
   const prompt = messages.map((m) => {
-    const content = typeof m.content === 'string' ? m.content : JSON.stringify(m.content)
+    const content = extractTextFromContent(m.content)
     return `${m.role}: ${content}`
   }).join("\n\n")
 

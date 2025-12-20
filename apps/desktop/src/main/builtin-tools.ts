@@ -641,11 +641,9 @@ const toolHandlers: Record<string, ToolHandler> = {
         {
           type: "text",
           text: JSON.stringify({
-            settings: {
-              postProcessingEnabled: config.transcriptPostProcessingEnabled ?? false,
-              ttsEnabled: config.ttsEnabled ?? true,
-              toolApprovalEnabled: config.mcpRequireApprovalBeforeToolCall ?? false,
-            },
+            postProcessingEnabled: config.transcriptPostProcessingEnabled ?? false,
+            ttsEnabled: config.ttsEnabled ?? true,
+            toolApprovalEnabled: config.mcpRequireApprovalBeforeToolCall ?? false,
             descriptions: {
               postProcessingEnabled: "When enabled, transcripts are cleaned up and improved using AI",
               ttsEnabled: "When enabled, assistant responses are read aloud",
@@ -661,6 +659,14 @@ const toolHandlers: Record<string, ToolHandler> = {
   toggle_post_processing: async (args: Record<string, unknown>): Promise<MCPToolResult> => {
     const config = configStore.get()
     const currentValue = config.transcriptPostProcessingEnabled ?? false
+
+    // Validate enabled parameter if provided (optional)
+    if (args.enabled !== undefined && typeof args.enabled !== "boolean") {
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success: false, error: "enabled must be a boolean if provided" }) }],
+        isError: true,
+      }
+    }
 
     // Determine new value: use provided value or toggle
     const enabled = typeof args.enabled === "boolean" ? args.enabled : !currentValue
@@ -691,6 +697,14 @@ const toolHandlers: Record<string, ToolHandler> = {
     const config = configStore.get()
     const currentValue = config.ttsEnabled ?? true
 
+    // Validate enabled parameter if provided (optional)
+    if (args.enabled !== undefined && typeof args.enabled !== "boolean") {
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success: false, error: "enabled must be a boolean if provided" }) }],
+        isError: true,
+      }
+    }
+
     // Determine new value: use provided value or toggle
     const enabled = typeof args.enabled === "boolean" ? args.enabled : !currentValue
 
@@ -719,6 +733,14 @@ const toolHandlers: Record<string, ToolHandler> = {
   toggle_tool_approval: async (args: Record<string, unknown>): Promise<MCPToolResult> => {
     const config = configStore.get()
     const currentValue = config.mcpRequireApprovalBeforeToolCall ?? false
+
+    // Validate enabled parameter if provided (optional)
+    if (args.enabled !== undefined && typeof args.enabled !== "boolean") {
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success: false, error: "enabled must be a boolean if provided" }) }],
+        isError: true,
+      }
+    }
 
     // Determine new value: use provided value or toggle
     const enabled = typeof args.enabled === "boolean" ? args.enabled : !currentValue

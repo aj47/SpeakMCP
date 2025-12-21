@@ -41,8 +41,8 @@ function createBaseWindow({
     }),
     ...windowOptions,
     webPreferences: {
-      preload: path.join(__dirname, "../preload/index.mjs"),
-      sandbox: false,
+      preload: path.join(__dirname, "../preload/index.cjs"),
+      sandbox: true,
       ...windowOptions?.webPreferences,
     },
   })

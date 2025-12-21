@@ -12,7 +12,7 @@ import { makeLLMCallWithFetch, makeTextCompletionWithFetch, verifyCompletionWith
 import { constructSystemPrompt } from "./system-prompts"
 import { state, agentSessionStateManager } from "./state"
 import { isDebugLLM, logLLM, isDebugTools, logTools } from "./debug"
-import { shrinkMessagesForLLM, estimateTokensFromMessages, getMaxContextTokens, getProviderAndModel } from "./context-budget"
+import { shrinkMessagesForLLM, estimateTokensFromMessages } from "./context-budget"
 import { emitAgentProgress } from "./emit-agent-progress"
 import { agentSessionTracker } from "./agent-session-tracker"
 
@@ -1204,9 +1204,7 @@ Always use actual resource IDs from the conversation history or create new ones 
     ]
 
     // Apply context budget management before the agent LLM call
-    const { providerId, model } = getProviderAndModel()
-    const maxContextTokens = await getMaxContextTokens(providerId, model)
-    const { messages: shrunkMessages, estTokensAfter } = await shrinkMessagesForLLM({
+    const { messages: shrunkMessages, estTokensAfter, maxTokens: maxContextTokens } = await shrinkMessagesForLLM({
       messages: messages as any,
       availableTools: uniqueAvailableTools,
       relevantTools: toolCapabilities.relevantTools,

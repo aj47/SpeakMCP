@@ -163,7 +163,7 @@ export interface ShrinkOptions {
   onSummarizationProgress?: (current: number, total: number, message: string) => void // callback for progress updates
 }
 
-export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<{ messages: LLMMessage[]; appliedStrategies: string[]; estTokensBefore: number; estTokensAfter: number }>{
+export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<{ messages: LLMMessage[]; appliedStrategies: string[]; estTokensBefore: number; estTokensAfter: number; maxTokens: number }>{
   const config = configStore.get()
   const applied: string[] = []
 
@@ -173,11 +173,11 @@ export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<{ messa
   const summarizeThreshold = opts.summarizeCharThreshold ?? (config.mcpContextSummarizeCharThreshold ?? 2000)
 
   const { providerId, model } = getProviderAndModel()
+  const maxTokens = await getMaxContextTokens(providerId, model)
   if (!enabled) {
     const est = estimateTokensFromMessages(opts.messages)
-    return { messages: opts.messages, appliedStrategies: [], estTokensBefore: est, estTokensAfter: est }
+    return { messages: opts.messages, appliedStrategies: [], estTokensBefore: est, estTokensAfter: est, maxTokens }
   }
-  const maxTokens = await getMaxContextTokens(providerId, model)
   const targetTokens = Math.floor(maxTokens * targetRatio)
 
   let messages = [...opts.messages]
@@ -188,7 +188,7 @@ export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<{ messa
   }
 
   if (tokens <= targetTokens) {
-    return { messages, appliedStrategies: applied, estTokensBefore: tokens, estTokensAfter: tokens }
+    return { messages, appliedStrategies: applied, estTokensBefore: tokens, estTokensAfter: tokens, maxTokens }
   }
 
   // Tier 0: Aggressive truncation of very large tool responses (>5000 chars)
@@ -210,7 +210,7 @@ export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<{ messa
         tokens = estimateTokensFromMessages(messages)
         if (tokens <= targetTokens) {
           if (isDebugLLM()) logLLM("ContextBudget: after aggressive_truncate", { estTokens: tokens })
-          return { messages, appliedStrategies: applied, estTokensBefore: tokens, estTokensAfter: tokens }
+          return { messages, appliedStrategies: applied, estTokensBefore: tokens, estTokensAfter: tokens, maxTokens }
         }
       }
     }
@@ -251,7 +251,7 @@ export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<{ messa
 
   if (tokens <= targetTokens) {
     if (isDebugLLM()) logLLM("ContextBudget: after summarize", { estTokens: tokens })
-    return { messages, appliedStrategies: applied, estTokensBefore: tokens, estTokensAfter: tokens }
+    return { messages, appliedStrategies: applied, estTokensBefore: tokens, estTokensAfter: tokens, maxTokens }
   }
 
   // Tier 2: Remove middle messages (keep system, first user, last N)
@@ -285,7 +285,7 @@ export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<{ messa
 
   if (tokens <= targetTokens) {
     if (isDebugLLM()) logLLM("ContextBudget: after drop_middle", { estTokens: tokens, kept: messages.length })
-    return { messages, appliedStrategies: applied, estTokensBefore: tokens, estTokensAfter: tokens }
+    return { messages, appliedStrategies: applied, estTokensBefore: tokens, estTokensAfter: tokens, maxTokens }
   }
 
   // Tier 3: Minimal system prompt
@@ -305,6 +305,6 @@ export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<{ messa
 
   if (isDebugLLM()) logLLM("ContextBudget: after minimal_system_prompt", { estTokens: tokens })
 
-  return { messages, appliedStrategies: applied, estTokensBefore: tokens, estTokensAfter: tokens }
+  return { messages, appliedStrategies: applied, estTokensBefore: tokens, estTokensAfter: tokens, maxTokens }
 }
 

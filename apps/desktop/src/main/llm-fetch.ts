@@ -1223,7 +1223,7 @@ async function makeLLMCallAttempt(
     if (reasoningText) {
       // First, try to extract structured JSON from reasoning
       const jsonFromReasoning = extractJsonObject(reasoningText)
-      if (jsonFromReasoning && (jsonFromReasoning.toolCalls || jsonFromReasoning.content)) {
+      if (jsonFromReasoning && (jsonFromReasoning.toolCalls || jsonFromReasoning.content || jsonFromReasoning.status !== undefined || jsonFromReasoning.needsMoreWork !== undefined)) {
         if (isDebugLLM()) {
           logLLM("Parsed structured output from reasoning fallback")
         }

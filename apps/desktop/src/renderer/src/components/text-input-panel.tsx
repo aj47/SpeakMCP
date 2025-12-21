@@ -59,28 +59,37 @@ export const TextInputPanel = forwardRef<TextInputPanelRef, TextInputPanelProps>
   }, [isProcessing])
 
   const captureScreenshot = async () => {
+    console.log('[TextInputPanel] captureScreenshot called')
     setIsCapturingScreenshot(true)
     setScreenshotError(null)
     try {
       // Use IPC to get screen sources from main process (desktopCapturer is only available in main process in Electron 31+)
+      console.log('[TextInputPanel] Calling getScreenSources...')
       const sources = await (window as any).electronAPI.getScreenSources({
         types: ['screen'],
         thumbnailSize: { width: 1920, height: 1080 }
       })
+      console.log('[TextInputPanel] Got sources:', sources?.length || 0)
 
       // Check if screenshot is still wanted after async operation completes
       if (!captureWantedRef.current) {
+        console.log('[TextInputPanel] Screenshot no longer wanted, discarding')
         return
       }
 
       if (sources && sources.length > 0) {
         // Get the first screen (primary display) - thumbnail is already a data URL from main process
         const screenshot = sources[0].thumbnail
+        console.log('[TextInputPanel] Screenshot captured, length:', screenshot?.length || 0)
         setScreenshot(screenshot)
+      } else {
+        console.log('[TextInputPanel] No sources returned')
       }
-    } catch (error) {
-      console.error('Failed to capture screenshot:', error)
-      setScreenshotError('Failed to capture screenshot')
+    } catch (error: any) {
+      console.error('[TextInputPanel] Failed to capture screenshot:', error)
+      // Show the actual error message if available (e.g., permission error on macOS)
+      const errorMessage = error?.message || 'Failed to capture screenshot'
+      setScreenshotError(errorMessage)
       setIncludeScreenshot(false)
     } finally {
       setIsCapturingScreenshot(false)
@@ -90,7 +99,9 @@ export const TextInputPanel = forwardRef<TextInputPanelRef, TextInputPanelProps>
   const handleSubmit = () => {
     if (text.trim() && !isProcessing) {
       // Only include screenshot if the checkbox is still checked
-      onSubmit(text.trim(), includeScreenshot && screenshot ? screenshot : undefined)
+      const screenshotToSend = includeScreenshot && screenshot ? screenshot : undefined
+      console.log('[TextInputPanel] handleSubmit called, screenshot:', screenshotToSend ? `${screenshotToSend.length} chars` : 'none')
+      onSubmit(text.trim(), screenshotToSend)
       setText("")
       setScreenshot(null)
       setIncludeScreenshot(false)
@@ -209,7 +220,9 @@ export const TextInputPanel = forwardRef<TextInputPanelRef, TextInputPanelProps>
               <span className="text-xs text-green-500">✓ Screenshot captured</span>
             )}
             {screenshotError && !isCapturingScreenshot && (
-              <span className="text-xs text-red-500">✗ {screenshotError}</span>
+              <span className="text-xs text-red-500" title={screenshotError}>
+                ✗ {screenshotError.includes('Screen Recording') ? 'Screen Recording permission required' : screenshotError}
+              </span>
             )}
           </div>
         </div>

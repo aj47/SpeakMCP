@@ -905,7 +905,7 @@ export async function processTranscriptWithAgentMode(
             role: entry.role as "user" | "assistant",
             content: [
               { type: "text", text: entry.content },
-              { type: "image_url", image_url: { url: entry.screenshot } }
+              { type: "image_url", image_url: { url: entry.screenshot, detail: "high" } }
             ]
           }
         }
@@ -1215,7 +1215,7 @@ Always use actual resource IDs from the conversation history or create new ones 
               role: entry.role as "user" | "assistant",
               content: [
                 { type: "text", text: entry.content },
-                { type: "image_url", image_url: { url: entry.screenshot } }
+                { type: "image_url", image_url: { url: entry.screenshot, detail: "high" } }
               ]
             }
           }

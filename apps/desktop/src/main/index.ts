@@ -45,15 +45,29 @@ app.whenReady().then(() => {
   // Register desktopCapturer handler (available only in main process in Electron 31+)
   ipcMain.handle('getScreenSources', async (_event, options: { types: string[], thumbnailSize?: { width: number, height: number } }) => {
     try {
+      logApp('[getScreenSources] Capturing screen sources with options:', JSON.stringify(options))
       const sources = await desktopCapturer.getSources(options)
+      logApp(`[getScreenSources] Got ${sources.length} sources`)
+
+      // On macOS, if Screen Recording permission is not granted, desktopCapturer returns an empty array
+      // This is a silent failure - no error is thrown
+      if (sources.length === 0 && process.platform === 'darwin') {
+        throw new Error('No screen sources available. Please grant Screen Recording permission in System Settings > Privacy & Security > Screen Recording, then restart the app.')
+      }
+
       // Serialize the sources - NativeImage thumbnail needs to be converted
-      return sources.map(source => ({
-        id: source.id,
-        name: source.name,
-        thumbnail: source.thumbnail.toDataURL(),
-        display_id: source.display_id,
-        appIcon: source.appIcon ? source.appIcon.toDataURL() : null
-      }))
+      const serialized = sources.map(source => {
+        const thumbnailDataUrl = source.thumbnail.toDataURL()
+        logApp(`[getScreenSources] Source: ${source.name}, thumbnail size: ${thumbnailDataUrl.length} chars`)
+        return {
+          id: source.id,
+          name: source.name,
+          thumbnail: thumbnailDataUrl,
+          display_id: source.display_id,
+          appIcon: source.appIcon ? source.appIcon.toDataURL() : null
+        }
+      })
+      return serialized
     } catch (error) {
       console.error('Failed to get screen sources:', error)
       throw error

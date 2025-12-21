@@ -222,6 +222,45 @@ export const useSaveMcpConfigFile = () =>
   })
 
 // ============================================================================
+// Recording History Queries
+// ============================================================================
+
+export const useRecordingHistoryQuery = () =>
+  useQuery({
+    queryKey: ["recording-history"],
+    queryFn: async () => {
+      console.log("[Query Client] Fetching recording history...")
+      const result = await tipcClient.getRecordingHistory()
+      console.log("[Query Client] Recording history result:", {
+        isArray: Array.isArray(result),
+        length: Array.isArray(result) ? result.length : "N/A",
+        result,
+      })
+      return result
+    },
+  })
+
+export const useDeleteRecordingItemMutation = () =>
+  useMutation({
+    mutationFn: async (id: string) => {
+      return tipcClient.deleteRecordingItem({ id })
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["recording-history"] })
+    },
+  })
+
+export const useDeleteAllRecordingsMutation = () =>
+  useMutation({
+    mutationFn: async () => {
+      return tipcClient.deleteRecordingHistory()
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["recording-history"] })
+    },
+  })
+
+// ============================================================================
 // History-themed aliases for better semantic naming
 // ============================================================================
 

@@ -29,6 +29,7 @@ import {
   MoreVertical,
   ArrowLeft,
   FolderOpen,
+  Mic,
 } from "lucide-react"
 import { cn } from "@renderer/lib/utils"
 import {
@@ -36,13 +37,20 @@ import {
   useDeleteHistoryItemMutation,
   useDeleteAllHistoryMutation,
   useHistoryItemQuery,
+  useRecordingHistoryQuery,
+  useDeleteRecordingItemMutation,
 } from "@renderer/lib/queries"
 import { useConversationStore } from "@renderer/stores"
 import { tipcClient } from "@renderer/lib/tipc-client"
 import { ConversationDisplay } from "@renderer/components/conversation-display"
-import { ConversationHistoryItem } from "@shared/types"
+import { ConversationHistoryItem, RecordingHistoryItem } from "@shared/types"
 import dayjs from "dayjs"
 import { toast } from "sonner"
+
+// Unified history item type for display
+type UnifiedHistoryItem =
+  | { type: "conversation"; data: ConversationHistoryItem }
+  | { type: "recording"; data: RecordingHistoryItem }
 
 export function Component() {
   const { id: routeHistoryItemId } = useParams<{ id: string }>()
@@ -50,13 +58,18 @@ export function Component() {
   const [selectedHistoryItem, setSelectedHistoryItem] = useState<
     string | null
   >(null)
+  const [selectedItemType, setSelectedItemType] = useState<"conversation" | "recording">("conversation")
   const [viewMode, setViewMode] = useState<"list" | "detail">("list")
   const [showDeleteAllDialog, setShowDeleteAllDialog] = useState(false)
 
   const historyQuery = useHistoryQuery()
+  const recordingHistoryQuery = useRecordingHistoryQuery()
   const deleteHistoryItemMutation = useDeleteHistoryItemMutation()
+  const deleteRecordingItemMutation = useDeleteRecordingItemMutation()
   const deleteAllHistoryMutation = useDeleteAllHistoryMutation()
-  const selectedHistoryItemQuery = useHistoryItemQuery(selectedHistoryItem)
+  const selectedHistoryItemQuery = useHistoryItemQuery(
+    selectedItemType === "conversation" ? selectedHistoryItem : null
+  )
 
   const continueConversation = useConversationStore((s) => s.continueConversation)
 
@@ -69,7 +82,14 @@ export function Component() {
       dataLength: historyQuery.data?.length,
       data: historyQuery.data,
     })
-  }, [historyQuery.isLoading, historyQuery.isError, historyQuery.data])
+    console.log("[History Page] recordingHistoryQuery state:", {
+      isLoading: recordingHistoryQuery.isLoading,
+      isError: recordingHistoryQuery.isError,
+      error: recordingHistoryQuery.error,
+      dataLength: recordingHistoryQuery.data?.length,
+      data: recordingHistoryQuery.data,
+    })
+  }, [historyQuery.isLoading, historyQuery.isError, historyQuery.data, recordingHistoryQuery.isLoading, recordingHistoryQuery.isError, recordingHistoryQuery.data])
 
   // Handle route parameter for deep-linking to specific history item
   useEffect(() => {
@@ -79,40 +99,50 @@ export function Component() {
     }
   }, [routeHistoryItemId])
 
+  // Merge and filter both conversation and recording histories
   const filteredHistory = useMemo(() => {
-    console.log("[History Page] Computing filteredHistory:", {
-      hasData: !!historyQuery.data,
-      dataLength: historyQuery.data?.length,
-      searchQuery,
+    const unified: UnifiedHistoryItem[] = []
+
+    // Add conversations
+    if (historyQuery.data) {
+      for (const item of historyQuery.data) {
+        if (
+          item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          item.preview.toLowerCase().includes(searchQuery.toLowerCase())
+        ) {
+          unified.push({ type: "conversation", data: item })
+        }
+      }
+    }
+
+    // Add recordings
+    if (recordingHistoryQuery.data) {
+      for (const item of recordingHistoryQuery.data) {
+        if (item.transcript.toLowerCase().includes(searchQuery.toLowerCase())) {
+          unified.push({ type: "recording", data: item })
+        }
+      }
+    }
+
+    console.log("[History Page] Unified filtered history:", {
+      conversations: historyQuery.data?.length || 0,
+      recordings: recordingHistoryQuery.data?.length || 0,
+      filtered: unified.length,
     })
 
-    if (!historyQuery.data) return []
-
-    const filtered = historyQuery.data.filter(
-      (historyItem) =>
-        historyItem.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        historyItem.preview.toLowerCase().includes(searchQuery.toLowerCase()),
-    )
-
-    console.log("[History Page] Filtered history:", {
-      originalLength: historyQuery.data.length,
-      filteredLength: filtered.length,
-    })
-
-    return filtered
-  }, [historyQuery.data, searchQuery])
+    return unified
+  }, [historyQuery.data, recordingHistoryQuery.data, searchQuery])
 
   const groupedHistory = useMemo(() => {
-    console.log("[History Page] Computing groupedHistory from filteredHistory:", {
-      filteredLength: filteredHistory.length,
-    })
-
-    const groups = new Map<string, ConversationHistoryItem[]>()
+    const groups = new Map<string, UnifiedHistoryItem[]>()
     const today = dayjs().format("YYYY-MM-DD")
     const yesterday = dayjs().subtract(1, "day").format("YYYY-MM-DD")
 
-    for (const historyItem of filteredHistory) {
-      const date = dayjs(historyItem.updatedAt).format("YYYY-MM-DD")
+    for (const item of filteredHistory) {
+      const timestamp = item.type === "conversation"
+        ? item.data.updatedAt
+        : item.data.createdAt
+      const date = dayjs(timestamp).format("YYYY-MM-DD")
       let groupKey: string
 
       if (date === today) {
@@ -120,23 +150,31 @@ export function Component() {
       } else if (date === yesterday) {
         groupKey = "Yesterday"
       } else {
-        groupKey = dayjs(historyItem.updatedAt).format("MMM D, YYYY")
+        groupKey = dayjs(timestamp).format("MMM D, YYYY")
       }
 
       const items = groups.get(groupKey) || []
-      items.push(historyItem)
+      items.push(item)
       groups.set(groupKey, items)
     }
 
     return Array.from(groups.entries()).map(([date, items]) => ({
       date,
-      items: items.sort((a, b) => b.updatedAt - a.updatedAt),
+      items: items.sort((a, b) => {
+        const aTime = a.type === "conversation" ? a.data.updatedAt : a.data.createdAt
+        const bTime = b.type === "conversation" ? b.data.updatedAt : b.data.createdAt
+        return bTime - aTime
+      }),
     }))
   }, [filteredHistory])
 
-  const handleDeleteHistoryItem = async (historyItemId: string) => {
+  const handleDeleteHistoryItem = async (historyItemId: string, itemType: "conversation" | "recording") => {
     try {
-      await deleteHistoryItemMutation.mutateAsync(historyItemId)
+      if (itemType === "conversation") {
+        await deleteHistoryItemMutation.mutateAsync(historyItemId)
+      } else {
+        await deleteRecordingItemMutation.mutateAsync(historyItemId)
+      }
       toast.success("History item deleted")
       if (selectedHistoryItem === historyItemId) {
         setSelectedHistoryItem(null)
@@ -159,8 +197,9 @@ export function Component() {
     }
   }
 
-  const handleSelectHistoryItem = (historyItemId: string) => {
+  const handleSelectHistoryItem = (historyItemId: string, itemType: "conversation" | "recording") => {
     setSelectedHistoryItem(historyItemId)
+    setSelectedItemType(itemType)
     setViewMode("detail")
   }
 
@@ -183,6 +222,12 @@ export function Component() {
       toast.error("Failed to open history folder")
     }
   }
+
+  // Get selected recording data for detail view
+  const selectedRecording = useMemo(() => {
+    if (selectedItemType !== "recording" || !selectedHistoryItem) return null
+    return recordingHistoryQuery.data?.find(r => r.id === selectedHistoryItem) || null
+  }, [selectedItemType, selectedHistoryItem, recordingHistoryQuery.data])
 
   return (
     <>
@@ -249,22 +294,37 @@ export function Component() {
                         {date}
                       </h4>
                       <div className="space-y-2">
-                        {items.map((historyItem) => (
-                          <HistoryCard
-                            key={historyItem.id}
-                            conversation={historyItem}
-                            isSelected={false}
-                            onSelect={() =>
-                              handleSelectHistoryItem(historyItem.id)
-                            }
-                            onDelete={() =>
-                              handleDeleteHistoryItem(historyItem.id)
-                            }
-                            onContinue={() =>
-                              handleContinueConversation(historyItem.id)
-                            }
-                            isDeleting={deleteHistoryItemMutation.isPending}
-                          />
+                        {items.map((item) => (
+                          item.type === "conversation" ? (
+                            <HistoryCard
+                              key={`conv-${item.data.id}`}
+                              conversation={item.data}
+                              isSelected={false}
+                              onSelect={() =>
+                                handleSelectHistoryItem(item.data.id, "conversation")
+                              }
+                              onDelete={() =>
+                                handleDeleteHistoryItem(item.data.id, "conversation")
+                              }
+                              onContinue={() =>
+                                handleContinueConversation(item.data.id)
+                              }
+                              isDeleting={deleteHistoryItemMutation.isPending}
+                            />
+                          ) : (
+                            <RecordingCard
+                              key={`rec-${item.data.id}`}
+                              recording={item.data}
+                              isSelected={false}
+                              onSelect={() =>
+                                handleSelectHistoryItem(item.data.id, "recording")
+                              }
+                              onDelete={() =>
+                                handleDeleteHistoryItem(item.data.id, "recording")
+                              }
+                              isDeleting={deleteRecordingItemMutation.isPending}
+                            />
+                          )
                         ))}
                       </div>
                     </div>
@@ -289,25 +349,55 @@ export function Component() {
                 <span>Back</span>
               </Button>
               <span className="font-bold">
-                {selectedHistoryItemQuery.data?.title || "History Item"}
+                {selectedItemType === "conversation"
+                  ? (selectedHistoryItemQuery.data?.title || "Conversation")
+                  : "Voice Recording"}
               </span>
             </div>
 
-            <Button
-              onClick={() =>
-                selectedHistoryItem &&
-                handleContinueConversation(selectedHistoryItem)
-              }
-              className="h-7 gap-2 px-3 py-0"
-              disabled={!selectedHistoryItem}
-            >
-              <MessageCircle className="h-4 w-4" />
-              Continue
-            </Button>
+            {selectedItemType === "conversation" && (
+              <Button
+                onClick={() =>
+                  selectedHistoryItem &&
+                  handleContinueConversation(selectedHistoryItem)
+                }
+                className="h-7 gap-2 px-3 py-0"
+                disabled={!selectedHistoryItem}
+              >
+                <MessageCircle className="h-4 w-4" />
+                Continue
+              </Button>
+            )}
           </header>
 
           <div className="flex-1 overflow-hidden bg-muted/30">
-            {selectedHistoryItemQuery.isError ? (
+            {selectedItemType === "recording" && selectedRecording ? (
+              // Recording detail view
+              <div className="flex h-full flex-col">
+                <div className="border-b bg-background p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
+                      <Mic className="h-5 w-5 text-primary" />
+                    </div>
+                    <div>
+                      <h2 className="text-lg font-semibold">Voice Recording</h2>
+                      <p className="text-sm text-muted-foreground">
+                        {Math.round(selectedRecording.duration / 1000)}s duration •{" "}
+                        {dayjs(selectedRecording.createdAt).format("MMM D, YYYY h:mm A")}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <ScrollArea className="flex-1 p-4">
+                  <div className="rounded-lg border bg-background p-4">
+                    <h3 className="mb-2 text-sm font-medium text-muted-foreground">Transcript</h3>
+                    <p className="whitespace-pre-wrap text-sm leading-relaxed">
+                      {selectedRecording.transcript || "No transcript available"}
+                    </p>
+                  </div>
+                </ScrollArea>
+              </div>
+            ) : selectedItemType === "conversation" && selectedHistoryItemQuery.isError ? (
               <div className="flex h-full items-center justify-center p-8 text-center">
                 <div>
                   <Eye className="mx-auto mb-4 h-12 w-12 text-destructive" />
@@ -327,7 +417,7 @@ export function Component() {
                   </Button>
                 </div>
               </div>
-            ) : selectedHistoryItem && selectedHistoryItemQuery.data && Array.isArray(selectedHistoryItemQuery.data.messages) ? (
+            ) : selectedItemType === "conversation" && selectedHistoryItem && selectedHistoryItemQuery.data && Array.isArray(selectedHistoryItemQuery.data.messages) ? (
               <div className="flex h-full flex-col">
                 <div className="border-b bg-background p-4">
                   <div className="flex items-center justify-between">
@@ -353,7 +443,7 @@ export function Component() {
                   />
                 </div>
               </div>
-            ) : selectedHistoryItem && selectedHistoryItemQuery.data && !Array.isArray(selectedHistoryItemQuery.data.messages) ? (
+            ) : selectedItemType === "conversation" && selectedHistoryItem && selectedHistoryItemQuery.data && !Array.isArray(selectedHistoryItemQuery.data.messages) ? (
               <div className="flex h-full items-center justify-center p-8 text-center">
                 <div>
                   <Eye className="mx-auto mb-4 h-12 w-12 text-destructive" />
@@ -479,6 +569,70 @@ function HistoryCard({
               disabled={isDeleting}
               className="h-8 w-8 p-0 text-red-500 hover:text-red-600"
               title="Delete history item"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+interface RecordingCardProps {
+  recording: RecordingHistoryItem
+  isSelected: boolean
+  onSelect: () => void
+  onDelete: () => void
+  isDeleting: boolean
+}
+
+function RecordingCard({
+  recording,
+  isSelected,
+  onSelect,
+  onDelete,
+  isDeleting,
+}: RecordingCardProps) {
+  return (
+    <Card
+      className={cn(
+        "cursor-pointer transition-all hover:shadow-md",
+        isSelected && "ring-2 ring-primary",
+      )}
+      onClick={onSelect}
+    >
+      <CardContent className="p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex min-w-0 flex-1 gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10">
+              <Mic className="h-5 w-5 text-primary" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <h3 className="mb-1 truncate font-medium">Voice Recording</h3>
+              <p className="mb-2 line-clamp-2 text-sm text-muted-foreground">
+                {recording.transcript || "No transcript"}
+              </p>
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Badge variant="outline" className="text-xs">
+                  <Mic className="mr-1 h-3 w-3" />
+                  {Math.round(recording.duration / 1000)}s
+                </Badge>
+                <span>•</span>
+                <span>
+                  {dayjs(recording.createdAt).format("MMM D, h:mm A")}
+                </span>
+              </div>
+            </div>
+          </div>
+          <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onDelete}
+              disabled={isDeleting}
+              className="h-8 w-8 p-0 text-red-500 hover:text-red-600"
+              title="Delete recording"
             >
               <Trash2 className="h-4 w-4" />
             </Button>

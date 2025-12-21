@@ -173,11 +173,13 @@ export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<{ messa
   const summarizeThreshold = opts.summarizeCharThreshold ?? (config.mcpContextSummarizeCharThreshold ?? 2000)
 
   const { providerId, model } = getProviderAndModel()
-  const maxTokens = await getMaxContextTokens(providerId, model)
   if (!enabled) {
     const est = estimateTokensFromMessages(opts.messages)
+    // Use static default to avoid potential network call when disabled
+    const maxTokens = staticDefaultMaxTokens(providerId, model)
     return { messages: opts.messages, appliedStrategies: [], estTokensBefore: est, estTokensAfter: est, maxTokens }
   }
+  const maxTokens = await getMaxContextTokens(providerId, model)
   const targetTokens = Math.floor(maxTokens * targetRatio)
 
   let messages = [...opts.messages]

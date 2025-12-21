@@ -1437,6 +1437,10 @@ Always use actual resource IDs from the conversation history or create new ones 
     if (explicitlyBlocked) {
       const assistantContent = llmResponse.content || "I need more information to proceed."
       conversationHistory.push({ role: "assistant", content: assistantContent })
+
+      // Clean up session state before returning (to prevent session leaks)
+      agentSessionStateManager.cleanupSession(currentSessionId)
+
       return {
         content: assistantContent,
         conversationHistory,

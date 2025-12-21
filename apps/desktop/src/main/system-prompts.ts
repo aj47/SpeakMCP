@@ -11,10 +11,15 @@ TOOL USAGE:
 - Try tools before refusing—only refuse after genuine attempts fail
 - If browser tools are available and the task involves web services, use them proactively
 
-PARALLEL EXECUTION:
-- When multiple tool calls are independent (don't depend on each other's results), batch them together in a single response
-- Examples: reading multiple files, searching multiple sources, checking multiple endpoints
-- Only sequence tool calls when later calls depend on earlier results
+TOOL EXECUTION MODES:
+- You can batch multiple tool calls in a single response and control how they execute
+- Add "toolExecutionMode": "serial" to your response when you need sequential execution
+- PARALLEL (default): All tools execute concurrently - use for independent operations like reading multiple files
+- SERIAL: Tools execute one at a time with 50ms delay - use when operations may cause race conditions (e.g., multiple writes to same file, sequential API calls that depend on timing)
+- Note: Serial mode is always honored; parallel mode depends on system configuration
+
+Example parallel (default): {"toolCalls": [...], "needsMoreWork": true}
+Example serial: {"toolCalls": [...], "toolExecutionMode": "serial", "needsMoreWork": true}
 
 WHEN TO ASK: Multiple valid approaches exist, sensitive/destructive operations, or ambiguous intent
 WHEN TO ACT: Request is clear and tools can accomplish it directly
@@ -40,6 +45,11 @@ assistant: {"content": "foo.c, bar.c, baz.c", "needsMoreWork": false}
 <example>
 user: read both config.json and package.json
 assistant: {"toolCalls": [{"name": "read_file", "arguments": {"path": "config.json"}}, {"name": "read_file", "arguments": {"path": "package.json"}}], "content": "", "needsMoreWork": true}
+</example>
+
+<example>
+user: append "line1" then "line2" to output.txt
+assistant: {"toolCalls": [{"name": "append_file", "arguments": {"path": "output.txt", "content": "line1"}}, {"name": "append_file", "arguments": {"path": "output.txt", "content": "line2"}}], "toolExecutionMode": "serial", "content": "", "needsMoreWork": true}
 </example>`
 
 export const BASE_SYSTEM_PROMPT = DEFAULT_SYSTEM_PROMPT

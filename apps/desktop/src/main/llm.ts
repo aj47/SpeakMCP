@@ -17,6 +17,26 @@ import { emitAgentProgress } from "./emit-agent-progress"
 import { agentSessionTracker } from "./agent-session-tracker"
 
 /**
+ * Check if LLM response indicates completion (handles both old and new formats)
+ * - Old format: needsMoreWork: false
+ * - New format: status: "complete"
+ */
+function isResponseComplete(response: LLMToolCallResponse): boolean {
+  // New format takes precedence
+  if (response.status === "complete") return true
+  if (response.status === "working" || response.status === "blocked") return false
+  // Fall back to old format
+  return response.needsMoreWork === false
+}
+
+/**
+ * Check if LLM response indicates it's blocked and needs user input
+ */
+function isResponseBlocked(response: LLMToolCallResponse): boolean {
+  return response.status === "blocked"
+}
+
+/**
  * Use LLM to extract useful context from conversation history
  */
 async function extractContextFromHistory(
@@ -1410,7 +1430,20 @@ Always use actual resource IDs from the conversation history or create new ones 
       logTools("Planned tool calls from LLM", toolCallsArray)
     }
     const hasToolCalls = toolCallsArray.length > 0
-    const explicitlyComplete = llmResponse.needsMoreWork === false
+    const explicitlyComplete = isResponseComplete(llmResponse)
+    const explicitlyBlocked = isResponseBlocked(llmResponse)
+
+    // Handle blocked state - agent needs user input
+    if (explicitlyBlocked) {
+      const assistantContent = llmResponse.content || "I need more information to proceed."
+      conversationHistory.push({ role: "assistant", content: assistantContent })
+      return {
+        content: assistantContent,
+        conversationHistory,
+        toolResults: [],
+        relevantTools: toolCapabilities.relevantTools,
+      }
+    }
 
     if (explicitlyComplete && !hasToolCalls) {
       // Agent claims completion but provided no toolCalls.
@@ -1589,8 +1622,8 @@ Always use actual resource IDs from the conversation history or create new ones 
 
     // Handle no-op iterations (no tool calls and no explicit completion)
     // Fix for https://github.com/aj47/SpeakMCP/issues/443:
-    // Only terminate when needsMoreWork is EXPLICITLY false, not when undefined.
-    // When LLM returns plain text without JSON structure, needsMoreWork will be undefined,
+    // Only terminate when status is explicitly "complete", not when undefined.
+    // When LLM returns plain text without JSON structure, status will be undefined,
     // and we should nudge for proper JSON format rather than accepting it as final.
     if (!hasToolCalls && !explicitlyComplete) {
       noOpCount++
@@ -1599,7 +1632,7 @@ Always use actual resource IDs from the conversation history or create new ones 
       const isActionableRequest = toolCapabilities.relevantTools.length > 0
       const contentText = llmResponse.content || ""
 
-      // Always nudge for proper JSON format when needsMoreWork is not explicitly set.
+      // Always nudge for proper JSON format when status is not explicitly set.
       // For actionable requests (with relevant tools), nudge immediately.
       // For non-actionable requests (simple Q&A), allow 1 no-op before nudging,
       // giving the LLM a chance to self-correct, but don't auto-accept plain text.
@@ -1611,8 +1644,8 @@ Always use actual resource IDs from the conversation history or create new ones 
         }
 
         const nudgeMessage = isActionableRequest
-          ? "You have relevant tools available for this request. Please respond with a valid JSON object: either call tools using the toolCalls array, or set needsMoreWork=false with a complete answer in the content field."
-          : "Please respond with a valid JSON object containing your answer in the content field and needsMoreWork=false if the task is complete."
+          ? "You have relevant tools available. Please respond with valid JSON: use toolCalls array to call tools, or set status:\"complete\" with your answer in the content field."
+          : "Please respond with valid JSON containing your answer in the content field and status:\"complete\" if done."
 
         addMessage("user", nudgeMessage)
 
@@ -2020,7 +2053,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
     }
 
     // Check if agent indicated it was done after executing tools
-    const agentIndicatedDone = llmResponse.needsMoreWork === false
+    const agentIndicatedDone = isResponseComplete(llmResponse)
 
     if (agentIndicatedDone && allToolsSuccessful) {
       // Agent indicated completion, but we need to ensure we have a proper summary
@@ -2289,9 +2322,9 @@ Please try alternative approaches, break down the task into smaller steps, or pr
       break
     }
 
-    // Continue iterating if needsMoreWork is true (explicitly set) or undefined (default behavior)
-    // Only stop if needsMoreWork is explicitly false or we hit max iterations
-    const shouldContinue = llmResponse.needsMoreWork !== false
+    // Continue iterating if status is "working" or undefined (default behavior)
+    // Only stop if status is "complete" or we hit max iterations
+    const shouldContinue = !isResponseComplete(llmResponse)
     if (!shouldContinue) {
       // Agent explicitly indicated no more work needed
       const assistantContent = llmResponse.content || ""

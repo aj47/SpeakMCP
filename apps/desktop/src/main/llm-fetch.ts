@@ -52,7 +52,12 @@ const toolCallResponseSchema: OpenAI.ResponseFormatJSONSchema["json_schema"] = {
       },
       needsMoreWork: {
         type: "boolean",
-        description: "Whether more work is needed after this response",
+        description: "Deprecated: use status instead",
+      },
+      status: {
+        type: "string",
+        enum: ["working", "complete", "blocked"],
+        description: "Task status: working (continue), complete (done), blocked (need user input)",
       },
     },
     additionalProperties: false,
@@ -918,7 +923,7 @@ async function makeOpenAICompatibleCall(
               const retryMessages = [
                 ...messages,
                 { role: "assistant", content: error.failedGeneration },
-                { role: "user", content: `Return your previous response as valid JSON: {"content": "...", "needsMoreWork": false}. Escape quotes properly.` }
+                { role: "user", content: `Return your previous response as valid JSON: {"content": "...", "status": "complete"}. Escape quotes properly.` }
               ]
 
               const retryData = await makeAPICallAttempt(baseURL, apiKey, {
@@ -1217,7 +1222,13 @@ async function makeLLMCallAttempt(
           logLLM("Parsed structured output from reasoning fallback")
         }
         const resp = jsonFromReasoning as LLMToolCallResponse
-        if (resp.needsMoreWork === undefined && !resp.toolCalls) resp.needsMoreWork = true
+        // Normalize status to needsMoreWork for backward compatibility
+        if (resp.status === "complete") resp.needsMoreWork = false
+        else if (resp.status === "working" || resp.status === "blocked") resp.needsMoreWork = true
+        else if (resp.needsMoreWork === undefined && !resp.toolCalls) {
+          resp.needsMoreWork = true
+          resp.status = "working"
+        }
         return resp
       }
 
@@ -1269,17 +1280,22 @@ async function makeLLMCallAttempt(
     })
   }
   if (jsonObject && (jsonObject.toolCalls || jsonObject.content)) {
-    // If JSON lacks both toolCalls and needsMoreWork, default needsMoreWork to true (continue)
     const response = jsonObject as LLMToolCallResponse
-    if (response.needsMoreWork === undefined && !response.toolCalls) {
+
+    // Normalize status to needsMoreWork for backward compatibility
+    if (response.status === "complete") response.needsMoreWork = false
+    else if (response.status === "working" || response.status === "blocked") response.needsMoreWork = true
+    else if (response.needsMoreWork === undefined && !response.toolCalls) {
       response.needsMoreWork = true
+      response.status = "working"
     }
-    // Safety: If JSON says no more work but there are no toolCalls and the content
-    // contains tool-call markers, override to needsMoreWork=true
+
+    // Safety: If marked complete but has tool-call markers, override to working
     const toolMarkers = /<\|tool_calls_section_begin\|>|<\|tool_call_begin\|>/i
     const text = (response.content || "").replace(/<\|[^|]*\|>/g, "").trim()
     if (response.needsMoreWork === false && (!response.toolCalls || response.toolCalls.length === 0) && toolMarkers.test(text)) {
       response.needsMoreWork = true
+      response.status = "working"
     }
 
     if (isDebugLLM()) {
@@ -1287,6 +1303,7 @@ async function makeLLMCallAttempt(
         hasContent: !!response.content,
         hasToolCalls: !!response.toolCalls,
         toolCallsCount: response.toolCalls?.length || 0,
+        status: response.status,
         needsMoreWork: response.needsMoreWork
       })
     }
@@ -1295,22 +1312,22 @@ async function makeLLMCallAttempt(
   }
 
   // If no valid JSON found, decide conservatively based on content
-  // If content contains tool-call markers, do NOT mark complete: keep needsMoreWork=true so the agent can iterate.
+  // If content contains tool-call markers, do NOT mark complete: keep status=working so the agent can iterate.
   const hasToolMarkers = /<\|tool_calls_section_begin\|>|<\|tool_call_begin\|>/i.test(content || "")
   const cleaned = (content || "").replace(/<\|[^|]*\|>/g, "").trim()
   if (hasToolMarkers) {
     if (isDebugLLM()) {
-      logLLM("✅ Returning plain text with tool markers (needsMoreWork=true)")
+      logLLM("✅ Returning plain text with tool markers (status=working)")
     }
-    return { content: cleaned, needsMoreWork: true }
+    return { content: cleaned, status: "working", needsMoreWork: true }
   }
 
-  // For plain text responses without JSON structure, set needsMoreWork=undefined
-  // rather than false. This allows the agent loop to decide whether the response
+  // For plain text responses without JSON structure, set status/needsMoreWork=undefined
+  // rather than complete/false. This allows the agent loop to decide whether the response
   // is acceptable or if it needs to nudge the LLM for a properly formatted response.
   // This prevents poor-quality plain text responses from being automatically accepted.
   // Fix for https://github.com/aj47/SpeakMCP/issues/443 - agent loop will now
-  // always nudge for proper JSON format when needsMoreWork is undefined.
+  // always nudge for proper JSON format when status is undefined.
   if (isDebugLLM()) {
     logLLM("✅ Returning plain text response (needsMoreWork=undefined - agent will nudge for JSON)", {
       contentLength: (cleaned || content)?.length || 0

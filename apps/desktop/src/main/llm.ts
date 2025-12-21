@@ -1661,7 +1661,13 @@ Always use actual resource IDs from the conversation history or create new ones 
     }
 
     // Determine execution mode: parallel or sequential
-    const useParallelExecution = config.mcpParallelToolExecution !== false && toolCallsArray.length > 1
+    // Priority: LLM-specified mode > config setting > default (parallel)
+    // LLM can request serial mode with toolExecutionMode: 'serial' to avoid race conditions
+    const llmRequestedSerialMode = (llmResponse as any).toolExecutionMode === 'serial'
+    const useParallelExecution = !llmRequestedSerialMode && config.mcpParallelToolExecution !== false && toolCallsArray.length > 1
+
+    // Define serial delay constant (50ms between tool calls)
+    const SERIAL_EXECUTION_DELAY_MS = 50
 
     if (useParallelExecution) {
       // PARALLEL EXECUTION: Execute all tool calls concurrently
@@ -1782,6 +1788,14 @@ Always use actual resource IDs from the conversation history or create new ones 
       })
     } else {
       // SEQUENTIAL EXECUTION: Execute tool calls one at a time
+      if (isDebugTools()) {
+        const reason = llmRequestedSerialMode
+          ? "LLM requested serial mode (toolExecutionMode: 'serial')"
+          : toolCallsArray.length <= 1
+            ? "Single tool call"
+            : "Config disabled parallel execution"
+        logTools(`Executing ${toolCallsArray.length} tool calls sequentially - ${reason}`, toolCallsArray.map(t => t.name))
+      }
       for (const toolCall of toolCallsArray) {
         if (isDebugTools()) {
           logTools("Executing planned tool call", toolCall)
@@ -1912,6 +1926,12 @@ Always use actual resource IDs from the conversation history or create new ones 
           isComplete: false,
           conversationHistory: formatConversationForProgress(conversationHistory),
         })
+
+        // Add delay between tool calls when in serial mode (requested by LLM)
+        // This helps avoid race conditions when tools operate on shared resources
+        if (llmRequestedSerialMode && toolCallsArray.indexOf(toolCall) < toolCallsArray.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, SERIAL_EXECUTION_DELAY_MS))
+        }
       }
     }
 

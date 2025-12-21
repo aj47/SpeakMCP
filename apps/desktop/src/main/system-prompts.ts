@@ -13,9 +13,10 @@ TOOL USAGE:
 
 TOOL EXECUTION MODES:
 - You can batch multiple tool calls in a single response and control how they execute
-- Add "toolExecutionMode" to your response: "parallel" (default) or "serial"
+- Add "toolExecutionMode": "serial" to your response when you need sequential execution
 - PARALLEL (default): All tools execute concurrently - use for independent operations like reading multiple files
 - SERIAL: Tools execute one at a time with 50ms delay - use when operations may cause race conditions (e.g., multiple writes to same file, sequential API calls that depend on timing)
+- Note: Serial mode is always honored; parallel mode depends on system configuration
 
 Example parallel (default): {"toolCalls": [...], "needsMoreWork": true}
 Example serial: {"toolCalls": [...], "toolExecutionMode": "serial", "needsMoreWork": true}

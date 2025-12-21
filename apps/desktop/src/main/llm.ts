@@ -1661,8 +1661,9 @@ Always use actual resource IDs from the conversation history or create new ones 
     }
 
     // Determine execution mode: parallel or sequential
-    // Priority: LLM-specified mode > config setting > default (parallel)
-    // LLM can request serial mode with toolExecutionMode: 'serial' to avoid race conditions
+    // - LLM can request serial mode with toolExecutionMode: 'serial' to avoid race conditions (always honored)
+    // - Config mcpParallelToolExecution: false forces sequential execution (LLM cannot override to parallel)
+    // - Default is parallel execution when multiple tools are called
     const llmRequestedSerialMode = (llmResponse as any).toolExecutionMode === 'serial'
     const useParallelExecution = !llmRequestedSerialMode && config.mcpParallelToolExecution !== false && toolCallsArray.length > 1
 

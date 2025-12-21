@@ -1231,6 +1231,16 @@ async function makeLLMCallAttempt(
         if (resp.needsMoreWork === undefined && !resp.toolCalls) {
           resp = normalizeResponse({ ...resp, status: "working" })
         }
+        // Safety: If marked complete without substantive content, override to working
+        const contentText = (resp.content || "").replace(/<\|[^|]*\|>/g, "").trim()
+        const hasSubstantiveContent = contentText.length > 0
+        const hasToolCalls = resp.toolCalls && resp.toolCalls.length > 0
+        if (resp.status === "complete" && !hasSubstantiveContent && !hasToolCalls) {
+          if (isDebugLLM()) {
+            logLLM("⚠️ Complete status with no content in reasoning - overriding to working")
+          }
+          resp = normalizeResponse({ ...resp, status: "working" })
+        }
         return resp
       }
 
@@ -1292,6 +1302,18 @@ async function makeLLMCallAttempt(
     const toolMarkers = /<\|tool_calls_section_begin\|>|<\|tool_call_begin\|>/i
     const text = (response.content || "").replace(/<\|[^|]*\|>/g, "").trim()
     if (response.needsMoreWork === false && (!response.toolCalls || response.toolCalls.length === 0) && toolMarkers.test(text)) {
+      response = normalizeResponse({ ...response, status: "working" })
+    }
+
+    // Safety: If marked complete without substantive content, override to working
+    // This prevents returning blank user-facing responses when status is "complete"
+    // but no actual answer was provided (PR #683 review: empty complete responses)
+    const hasSubstantiveContent = text.length > 0
+    const hasToolCalls = response.toolCalls && response.toolCalls.length > 0
+    if (response.status === "complete" && !hasSubstantiveContent && !hasToolCalls) {
+      if (isDebugLLM()) {
+        logLLM("⚠️ Complete status with no content - overriding to working")
+      }
       response = normalizeResponse({ ...response, status: "working" })
     }
 

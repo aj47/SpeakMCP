@@ -46,8 +46,8 @@ const buildMenu = (tray: Tray) =>
           "[tray] Desktop recording menu clicked; isDesktopRecordingActive:",
           state.isDesktopRecordingActive,
         )
-        // Show main window on recordings route and start/stop desktop recording
-        showMainWindow("/recordings")
+        // Show main window on history route and start/stop desktop recording
+        showMainWindow("/history")
         const handlers = getWindowRendererHandlers("main")
         console.log(
           "[tray] getWindowRendererHandlers('main') returned:",
@@ -66,7 +66,7 @@ const buildMenu = (tray: Tray) =>
     {
       label: "View History",
       click() {
-        showMainWindow("/recordings")
+        showMainWindow("/history")
       },
     },
     {

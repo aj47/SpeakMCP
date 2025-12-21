@@ -21,6 +21,8 @@ async function transcribeWavRecording(
 ): Promise<{ transcript: string }> {
   const config = configStore.get()
 
+  logApp("[LongRecordingService] Starting transcription, provider:", config.sttProviderId, "durationMs:", durationMs, "bytes:", recording.byteLength)
+
   const form = new FormData()
   form.append(
     "file",
@@ -52,10 +54,14 @@ async function transcribeWavRecording(
   const groqBaseUrl = config.groqBaseUrl || "https://api.groq.com/openai/v1"
   const openaiBaseUrl = config.openaiBaseUrl || "https://api.openai.com/v1"
 
+  const url = config.sttProviderId === "groq"
+    ? `${groqBaseUrl}/audio/transcriptions`
+    : `${openaiBaseUrl}/audio/transcriptions`
+
+  logApp("[LongRecordingService] Sending to STT API:", url)
+
   const transcriptResponse = await fetch(
-    config.sttProviderId === "groq"
-      ? `${groqBaseUrl}/audio/transcriptions`
-      : `${openaiBaseUrl}/audio/transcriptions`,
+    url,
     {
       method: "POST",
       headers: {
@@ -71,11 +77,15 @@ async function transcribeWavRecording(
     const message = `${transcriptResponse.statusText} ${(await transcriptResponse
       .text())
       .slice(0, 300)}`
+    logApp("[LongRecordingService] Transcription failed:", message)
     throw new Error(message)
   }
 
   const json: { text: string } = await transcriptResponse.json()
+  logApp("[LongRecordingService] Transcription received, length:", json.text?.length || 0)
+
   const transcript = await postProcessTranscript(json.text)
+  logApp("[LongRecordingService] Post-processed transcript length:", transcript?.length || 0)
 
   return { transcript }
 }
@@ -241,7 +251,9 @@ class LongRecordingService {
       wavBuffer.byteOffset + wavBuffer.byteLength,
     )
 
+    logApp("[LongRecordingService] Calling transcribeWavRecording...")
     const { transcript } = await transcribeWavRecording(arrayBuffer, durationMs)
+    logApp("[LongRecordingService] Transcription complete, saving to history...")
 
     fs.mkdirSync(recordingsFolder, { recursive: true })
 
@@ -254,6 +266,7 @@ class LongRecordingService {
     }
     history.push(item)
     saveRecordingHistory(history)
+    logApp("[LongRecordingService] Recording saved to history, id:", session.id)
 
     fs.writeFileSync(
       path.join(recordingsFolder, `${session.id}.wav`),

@@ -64,6 +64,7 @@ export interface LLMToolCallResponse {
   content?: string
   toolCalls?: MCPToolCall[]
   needsMoreWork?: boolean
+  status?: "working" | "complete" | "blocked"
   /**
    * Execution mode for tool calls in this response:
    * - 'parallel': Execute all tool calls concurrently (default behavior)

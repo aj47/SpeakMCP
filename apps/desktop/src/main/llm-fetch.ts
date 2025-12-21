@@ -1,5 +1,6 @@
 import { configStore } from "./config"
 import { LLMToolCallResponse } from "./mcp-service"
+import { normalizeResponse } from "./structured-output"
 import { diagnosticsService } from "./diagnostics"
 import { isDebugLLM, logLLM } from "./debug"
 import { state, llmRequestAbortManager, agentSessionStateManager } from "./state"
@@ -52,7 +53,12 @@ const toolCallResponseSchema: OpenAI.ResponseFormatJSONSchema["json_schema"] = {
       },
       needsMoreWork: {
         type: "boolean",
-        description: "Whether more work is needed after this response",
+        description: "Whether more work is needed (deprecated, use status)",
+      },
+      status: {
+        type: "string",
+        enum: ["working", "complete", "blocked"],
+        description: "Task status: working (continue), complete (done), blocked (needs user input)",
       },
       toolExecutionMode: {
         type: "string",
@@ -923,7 +929,7 @@ async function makeOpenAICompatibleCall(
               const retryMessages = [
                 ...messages,
                 { role: "assistant", content: error.failedGeneration },
-                { role: "user", content: `Return your previous response as valid JSON: {"content": "...", "needsMoreWork": false}. Escape quotes properly.` }
+                { role: "user", content: `Return your previous response as valid JSON: {"content": "...", "status": "complete"}. Escape quotes properly.` }
               ]
 
               const retryData = await makeAPICallAttempt(baseURL, apiKey, {
@@ -1221,8 +1227,10 @@ async function makeLLMCallAttempt(
         if (isDebugLLM()) {
           logLLM("Parsed structured output from reasoning fallback")
         }
-        const resp = jsonFromReasoning as LLMToolCallResponse
-        if (resp.needsMoreWork === undefined && !resp.toolCalls) resp.needsMoreWork = true
+        let resp = normalizeResponse(jsonFromReasoning as LLMToolCallResponse)
+        if (resp.needsMoreWork === undefined && !resp.toolCalls) {
+          resp = { ...resp, needsMoreWork: true, status: "working" }
+        }
         return resp
       }
 
@@ -1274,17 +1282,17 @@ async function makeLLMCallAttempt(
     })
   }
   if (jsonObject && (jsonObject.toolCalls || jsonObject.content)) {
-    // If JSON lacks both toolCalls and needsMoreWork, default needsMoreWork to true (continue)
-    const response = jsonObject as LLMToolCallResponse
+    // Normalize status field to needsMoreWork for backward compatibility
+    let response = normalizeResponse(jsonObject as LLMToolCallResponse)
+    // If JSON lacks both toolCalls and needsMoreWork/status, default to working
     if (response.needsMoreWork === undefined && !response.toolCalls) {
-      response.needsMoreWork = true
+      response = { ...response, needsMoreWork: true, status: "working" }
     }
-    // Safety: If JSON says no more work but there are no toolCalls and the content
-    // contains tool-call markers, override to needsMoreWork=true
+    // Safety: If marked complete but has tool-call markers, override to working
     const toolMarkers = /<\|tool_calls_section_begin\|>|<\|tool_call_begin\|>/i
     const text = (response.content || "").replace(/<\|[^|]*\|>/g, "").trim()
     if (response.needsMoreWork === false && (!response.toolCalls || response.toolCalls.length === 0) && toolMarkers.test(text)) {
-      response.needsMoreWork = true
+      response = { ...response, needsMoreWork: true, status: "working" }
     }
 
     if (isDebugLLM()) {
@@ -1292,6 +1300,7 @@ async function makeLLMCallAttempt(
         hasContent: !!response.content,
         hasToolCalls: !!response.toolCalls,
         toolCallsCount: response.toolCalls?.length || 0,
+        status: response.status,
         needsMoreWork: response.needsMoreWork
       })
     }
@@ -1300,14 +1309,14 @@ async function makeLLMCallAttempt(
   }
 
   // If no valid JSON found, decide conservatively based on content
-  // If content contains tool-call markers, do NOT mark complete: keep needsMoreWork=true so the agent can iterate.
+  // If content contains tool-call markers, do NOT mark complete: keep status=working so the agent can iterate.
   const hasToolMarkers = /<\|tool_calls_section_begin\|>|<\|tool_call_begin\|>/i.test(content || "")
   const cleaned = (content || "").replace(/<\|[^|]*\|>/g, "").trim()
   if (hasToolMarkers) {
     if (isDebugLLM()) {
-      logLLM("✅ Returning plain text with tool markers (needsMoreWork=true)")
+      logLLM("✅ Returning plain text with tool markers (status=working)")
     }
-    return { content: cleaned, needsMoreWork: true }
+    return { content: cleaned, status: "working", needsMoreWork: true }
   }
 
   // For plain text responses without JSON structure, set needsMoreWork=undefined

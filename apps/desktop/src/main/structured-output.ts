@@ -14,10 +14,30 @@ const LLMToolCallSchema = z.object({
     .optional(),
   content: z.string().optional(),
   needsMoreWork: z.boolean().optional(),
+  // New status field: "working" | "complete" | "blocked"
+  status: z.enum(["working", "complete", "blocked"]).optional(),
   toolExecutionMode: z.enum(['parallel', 'serial']).optional(),
 })
 
 export type LLMToolCallResponse = z.infer<typeof LLMToolCallSchema>
+
+/**
+ * Normalize response: convert status field to needsMoreWork for backward compatibility
+ * status="complete" → needsMoreWork=false
+ * status="working" or status="blocked" → needsMoreWork=true
+ *
+ * Note: "blocked" means agent needs user input, but we still set needsMoreWork=true
+ * so the agent loop continues and can handle the blocked state appropriately.
+ */
+export function normalizeResponse(response: LLMToolCallResponse): LLMToolCallResponse {
+  if (response.status !== undefined && response.needsMoreWork === undefined) {
+    return {
+      ...response,
+      needsMoreWork: response.status !== "complete",
+    }
+  }
+  return response
+}
 
 const toolCallResponseSchema: OpenAI.ResponseFormatJSONSchema["json_schema"] = {
   name: "LLMToolCallResponse",
@@ -52,7 +72,12 @@ const toolCallResponseSchema: OpenAI.ResponseFormatJSONSchema["json_schema"] = {
       },
       needsMoreWork: {
         type: "boolean",
-        description: "Whether more work is needed after this response",
+        description: "Whether more work is needed (deprecated, use status)",
+      },
+      status: {
+        type: "string",
+        enum: ["working", "complete", "blocked"],
+        description: "Task status: working (using tools), complete (task done), blocked (needs user input)",
       },
       toolExecutionMode: {
         type: "string",
@@ -274,12 +299,12 @@ export async function makeStructuredToolCall(
           }
 
           const parsed = JSON.parse(cleanContent)
-          return LLMToolCallSchema.parse(parsed)
+          return normalizeResponse(LLMToolCallSchema.parse(parsed))
         } catch (parseError) {
           // If parsing fails completely, try to extract any meaningful content
           const textContent = content.replace(/<\|[^|]*\|>/g, '').trim()
           if (textContent) {
-            return { content: textContent, needsMoreWork: true }
+            return { content: textContent, status: "working", needsMoreWork: true }
           }
         }
       }

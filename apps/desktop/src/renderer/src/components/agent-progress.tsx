@@ -1135,6 +1135,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
     finalContent,
     conversationHistory,
     sessionStartIndex,
+    contextInfo,
   } = progress
 
   // Detect if agent was stopped by kill switch
@@ -1717,7 +1718,29 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
             </div>
 
             {/* Footer with status info */}
-            <div className="px-3 py-2 border-t bg-muted/20 text-xs text-muted-foreground flex-shrink-0">
+            <div className="px-3 py-2 border-t bg-muted/20 text-xs text-muted-foreground flex-shrink-0 flex items-center gap-2">
+              {!isComplete && contextInfo && contextInfo.maxTokens > 0 && (
+                <div
+                  className="flex items-center gap-1"
+                  title={`Context: ${Math.round(contextInfo.estTokens / 1000)}k / ${Math.round(contextInfo.maxTokens / 1000)}k tokens`}
+                >
+                  <div className="w-8 h-1 bg-muted rounded-full overflow-hidden">
+                    <div
+                      className={cn(
+                        "h-full transition-all duration-300 ease-out rounded-full",
+                        contextInfo.estTokens / contextInfo.maxTokens > 0.9
+                          ? "bg-red-500"
+                          : contextInfo.estTokens / contextInfo.maxTokens > 0.7
+                          ? "bg-amber-500"
+                          : "bg-emerald-500"
+                      )}
+                      style={{
+                        width: `${Math.min(100, (contextInfo.estTokens / contextInfo.maxTokens) * 100)}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
               {!isComplete && (
                 <span>Step {currentIteration}/{maxIterations}</span>
               )}
@@ -1804,6 +1827,32 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
           </span>
         )}
         <div className="flex items-center gap-3">
+          {/* Context fill indicator */}
+          {!isComplete && contextInfo && contextInfo.maxTokens > 0 && (
+            <div
+              className="flex items-center gap-1.5"
+              title={`Context: ${Math.round(contextInfo.estTokens / 1000)}k / ${Math.round(contextInfo.maxTokens / 1000)}k tokens (${Math.round((contextInfo.estTokens / contextInfo.maxTokens) * 100)}%)`}
+            >
+              <div className="w-12 h-1.5 bg-muted rounded-full overflow-hidden">
+                <div
+                  className={cn(
+                    "h-full transition-all duration-300 ease-out rounded-full",
+                    contextInfo.estTokens / contextInfo.maxTokens > 0.9
+                      ? "bg-red-500"
+                      : contextInfo.estTokens / contextInfo.maxTokens > 0.7
+                      ? "bg-amber-500"
+                      : "bg-emerald-500"
+                  )}
+                  style={{
+                    width: `${Math.min(100, (contextInfo.estTokens / contextInfo.maxTokens) * 100)}%`,
+                  }}
+                />
+              </div>
+              <span className="text-[10px] text-muted-foreground/70 tabular-nums">
+                {Math.round((contextInfo.estTokens / contextInfo.maxTokens) * 100)}%
+              </span>
+            </div>
+          )}
           {!isComplete && (
             <span className="text-xs text-muted-foreground">
               {`${currentIteration}/${maxIterations}`}

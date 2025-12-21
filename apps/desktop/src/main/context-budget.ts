@@ -56,7 +56,7 @@ async function fetchGroqContextWindow(model: string): Promise<number | undefined
   return undefined
 }
 
-async function getMaxContextTokens(providerId: string, model: string): Promise<number> {
+export async function getMaxContextTokens(providerId: string, model: string): Promise<number> {
   const cfg = configStore.get()
   const override = cfg.mcpMaxContextTokensOverride
   if (override && typeof override === "number" && override > 0) return override
@@ -75,13 +75,13 @@ async function getMaxContextTokens(providerId: string, model: string): Promise<n
   return result
 }
 
-function estimateTokensFromMessages(messages: LLMMessage[]): number {
+export function estimateTokensFromMessages(messages: LLMMessage[]): number {
   // Rough estimate: 4 chars ≈ 1 token
   const totalChars = messages.reduce((sum, m) => sum + (m.content?.length || 0), 0)
   return Math.ceil(totalChars / 4)
 }
 
-function getProviderAndModel(): { providerId: string; model: string } {
+export function getProviderAndModel(): { providerId: string; model: string } {
   const config = configStore.get()
   const providerId = config.mcpToolsProviderId || "openai"
   let model = "gpt-4o-mini"

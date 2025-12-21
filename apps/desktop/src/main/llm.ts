@@ -12,7 +12,7 @@ import { makeLLMCallWithFetch, makeTextCompletionWithFetch, verifyCompletionWith
 import { constructSystemPrompt } from "./system-prompts"
 import { state, agentSessionStateManager } from "./state"
 import { isDebugLLM, logLLM, isDebugTools, logTools } from "./debug"
-import { shrinkMessagesForLLM } from "./context-budget"
+import { shrinkMessagesForLLM, estimateTokensFromMessages, getMaxContextTokens, getProviderAndModel } from "./context-budget"
 import { emitAgentProgress } from "./emit-agent-progress"
 import { agentSessionTracker } from "./agent-session-tracker"
 
@@ -577,7 +577,11 @@ export async function processTranscriptWithAgentMode(
   // Create session state for this agent run
   agentSessionStateManager.createSession(currentSessionId)
 
-  // Create bound emitter that always includes sessionId, conversationId, snooze state, sessionStartIndex, and conversationTitle
+  // Track context usage info for progress display
+  // Declared here so emit() can access it
+  let contextInfoRef: { estTokens: number; maxTokens: number } | undefined = undefined
+
+  // Create bound emitter that always includes sessionId, conversationId, snooze state, sessionStartIndex, conversationTitle, and contextInfo
   const emit = (
     update: Omit<AgentProgressUpdate, 'sessionId' | 'conversationId' | 'isSnoozed' | 'conversationTitle'>,
   ) => {
@@ -592,6 +596,8 @@ export async function processTranscriptWithAgentMode(
       conversationTitle,
       isSnoozed,
       sessionStartIndex,
+      // Always include current context info if available
+      contextInfo: update.contextInfo ?? contextInfoRef,
     }
 
     // Fire and forget - don't await, but catch errors
@@ -1198,7 +1204,9 @@ Always use actual resource IDs from the conversation history or create new ones 
     ]
 
     // Apply context budget management before the agent LLM call
-    const { messages: shrunkMessages } = await shrinkMessagesForLLM({
+    const { providerId, model } = getProviderAndModel()
+    const maxContextTokens = await getMaxContextTokens(providerId, model)
+    const { messages: shrunkMessages, estTokensAfter } = await shrinkMessagesForLLM({
       messages: messages as any,
       availableTools: uniqueAvailableTools,
       relevantTools: toolCapabilities.relevantTools,
@@ -1217,6 +1225,8 @@ Always use actual resource IDs from the conversation history or create new ones 
         })
       },
     })
+    // Update context info for progress display
+    contextInfoRef = { estTokens: estTokensAfter, maxTokens: maxContextTokens }
 
     // If stop was requested during context shrinking, exit now
     if (agentSessionStateManager.shouldStopSession(currentSessionId)) {

@@ -941,7 +941,7 @@ export async function processTranscriptWithAgentMode(
       ...mapConversationToMessages(true),
     ]
 
-    const { messages: shrunkMessages } = await shrinkMessagesForLLM({
+    const { messages: shrunkMessages, estTokensAfter: verifyEstTokens, maxTokens: verifyMaxTokens } = await shrinkMessagesForLLM({
       messages: postVerifySummaryMessages as any,
       availableTools: uniqueAvailableTools,
       relevantTools: toolCapabilities.relevantTools,
@@ -961,6 +961,8 @@ export async function processTranscriptWithAgentMode(
         })
       },
     })
+    // Update context info for progress display
+    contextInfoRef = { estTokens: verifyEstTokens, maxTokens: verifyMaxTokens }
 
     const response = await makeLLMCall(shrunkMessages, config, onRetryProgress, undefined, currentSessionId)
 
@@ -2103,7 +2105,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
           ...mapConversationToMessages(),
         ]
 
-        const { messages: shrunkSummaryMessages } = await shrinkMessagesForLLM({
+        const { messages: shrunkSummaryMessages, estTokensAfter: summaryEstTokens, maxTokens: summaryMaxTokens } = await shrinkMessagesForLLM({
           messages: summaryMessages as any,
           availableTools: uniqueAvailableTools,
           relevantTools: toolCapabilities.relevantTools,
@@ -2120,6 +2122,8 @@ Please try alternative approaches, break down the task into smaller steps, or pr
             })
           },
         })
+        // Update context info for progress display
+        contextInfoRef = { estTokens: summaryEstTokens, maxTokens: summaryMaxTokens }
 
 
         try {
@@ -2372,7 +2376,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
           ...mapConversationToMessages(),
         ]
 
-        const { messages: shrunkSummaryMessages } = await shrinkMessagesForLLM({
+        const { messages: shrunkSummaryMessages, estTokensAfter: summaryEstTokens2, maxTokens: summaryMaxTokens2 } = await shrinkMessagesForLLM({
           messages: summaryMessages as any,
           availableTools: uniqueAvailableTools,
           relevantTools: toolCapabilities.relevantTools,
@@ -2389,6 +2393,8 @@ Please try alternative approaches, break down the task into smaller steps, or pr
             })
           },
         })
+        // Update context info for progress display
+        contextInfoRef = { estTokens: summaryEstTokens2, maxTokens: summaryMaxTokens2 }
 
 
         try {

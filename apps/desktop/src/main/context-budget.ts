@@ -175,8 +175,12 @@ export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<{ messa
   const { providerId, model } = getProviderAndModel()
   if (!enabled) {
     const est = estimateTokensFromMessages(opts.messages)
-    // Use static default to avoid potential network call when disabled
-    const maxTokens = staticDefaultMaxTokens(providerId, model)
+    // Check for user override first (no network call), else use static default
+    const cfg = configStore.get()
+    const override = cfg.mcpMaxContextTokensOverride
+    const maxTokens = (override && typeof override === "number" && override > 0)
+      ? override
+      : staticDefaultMaxTokens(providerId, model)
     return { messages: opts.messages, appliedStrategies: [], estTokensBefore: est, estTokensAfter: est, maxTokens }
   }
   const maxTokens = await getMaxContextTokens(providerId, model)

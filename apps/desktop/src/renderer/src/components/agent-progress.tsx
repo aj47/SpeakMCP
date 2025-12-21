@@ -1722,7 +1722,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
               {!isComplete && contextInfo && contextInfo.maxTokens > 0 && (
                 <div
                   className="flex items-center gap-1"
-                  title={`Context: ${Math.round(contextInfo.estTokens / 1000)}k / ${Math.round(contextInfo.maxTokens / 1000)}k tokens`}
+                  title={`Context: ${Math.round(contextInfo.estTokens / 1000)}k / ${Math.round(contextInfo.maxTokens / 1000)}k tokens (${Math.min(100, Math.round((contextInfo.estTokens / contextInfo.maxTokens) * 100))}%)`}
                 >
                   <div className="w-8 h-1 bg-muted rounded-full overflow-hidden">
                     <div

@@ -1281,7 +1281,7 @@ async function makeLLMCallAttempt(
       extractedObject: jsonObject
     })
   }
-  if (jsonObject && (jsonObject.toolCalls || jsonObject.content)) {
+  if (jsonObject && (jsonObject.toolCalls || jsonObject.content || jsonObject.status !== undefined || jsonObject.needsMoreWork !== undefined)) {
     // Normalize status field to needsMoreWork for backward compatibility
     let response = normalizeResponse(jsonObject as LLMToolCallResponse)
     // If JSON lacks both toolCalls and needsMoreWork/status, default to working

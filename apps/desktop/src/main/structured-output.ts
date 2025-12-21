@@ -28,9 +28,13 @@ export type LLMToolCallResponse = z.infer<typeof LLMToolCallSchema>
  *
  * Note: "blocked" means agent needs user input, but we still set needsMoreWork=true
  * so the agent loop continues and can handle the blocked state appropriately.
+ *
+ * When both status and needsMoreWork are present, status takes precedence as the
+ * source of truth to ensure consistent behavior across all code paths.
  */
 export function normalizeResponse(response: LLMToolCallResponse): LLMToolCallResponse {
-  if (response.status !== undefined && response.needsMoreWork === undefined) {
+  if (response.status !== undefined) {
+    // status is the source of truth - always derive needsMoreWork from it
     return {
       ...response,
       needsMoreWork: response.status !== "complete",

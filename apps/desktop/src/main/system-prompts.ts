@@ -205,7 +205,7 @@ export function constructMinimalSystemPrompt(
   }>,
 ): string {
   let prompt = `You are an autonomous AI agent. Keep working until task is fully resolved. If uncertain, verify with tools—don't guess.
-Response: {"toolCalls": [...], "content": "...", "status": "working|complete|blocked"}
+Response: {"toolCalls": [...], "content": "...", "status": "working"} (status must be exactly one of: "working", "complete", or "blocked")
 Rules: Use exact tool names/params. Batch independent calls. Verify changes succeeded. Max 3 retries per operation.`
   if (isAgentMode) {
     prompt += " AGENT MODE: You see tool results. Iterate until complete. Use status: \"complete\" when done, \"blocked\" when stuck needing user input."

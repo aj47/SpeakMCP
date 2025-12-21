@@ -1611,8 +1611,8 @@ Always use actual resource IDs from the conversation history or create new ones 
         }
 
         const nudgeMessage = isActionableRequest
-          ? "You have relevant tools available for this request. Please respond with a valid JSON object: either call tools using the toolCalls array, or set needsMoreWork=false with a complete answer in the content field."
-          : "Please respond with a valid JSON object containing your answer in the content field and needsMoreWork=false if the task is complete."
+          ? "You have relevant tools available. Respond with valid JSON: either call tools with status: \"working\", or provide answer with status: \"complete\"."
+          : "Respond with valid JSON: {\"content\": \"your answer\", \"status\": \"complete\"}"
 
         addMessage("user", nudgeMessage)
 

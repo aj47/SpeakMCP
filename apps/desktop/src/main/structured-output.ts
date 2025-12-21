@@ -14,9 +14,26 @@ const LLMToolCallSchema = z.object({
     .optional(),
   content: z.string().optional(),
   needsMoreWork: z.boolean().optional(),
+  // New status field: "working" | "complete" | "blocked"
+  status: z.enum(["working", "complete", "blocked"]).optional(),
 })
 
 export type LLMToolCallResponse = z.infer<typeof LLMToolCallSchema>
+
+/**
+ * Normalize response to use needsMoreWork internally (for backward compatibility)
+ * status="complete" or status="blocked" → needsMoreWork=false
+ * status="working" → needsMoreWork=true
+ */
+export function normalizeResponse(response: LLMToolCallResponse): LLMToolCallResponse {
+  if (response.status !== undefined && response.needsMoreWork === undefined) {
+    return {
+      ...response,
+      needsMoreWork: response.status === "working",
+    }
+  }
+  return response
+}
 
 const toolCallResponseSchema: OpenAI.ResponseFormatJSONSchema["json_schema"] = {
   name: "LLMToolCallResponse",
@@ -51,7 +68,12 @@ const toolCallResponseSchema: OpenAI.ResponseFormatJSONSchema["json_schema"] = {
       },
       needsMoreWork: {
         type: "boolean",
-        description: "Whether more work is needed after this response",
+        description: "Whether more work is needed after this response (deprecated, use status)",
+      },
+      status: {
+        type: "string",
+        enum: ["working", "complete", "blocked"],
+        description: "Task status: working (using tools), complete (task done), blocked (stuck/need help)",
       },
     },
     additionalProperties: false,
@@ -268,12 +290,12 @@ export async function makeStructuredToolCall(
           }
 
           const parsed = JSON.parse(cleanContent)
-          return LLMToolCallSchema.parse(parsed)
+          return normalizeResponse(LLMToolCallSchema.parse(parsed))
         } catch (parseError) {
           // If parsing fails completely, try to extract any meaningful content
           const textContent = content.replace(/<\|[^|]*\|>/g, '').trim()
           if (textContent) {
-            return { content: textContent, needsMoreWork: true }
+            return { content: textContent, needsMoreWork: true, status: "working" }
           }
         }
       }

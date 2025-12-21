@@ -6,6 +6,21 @@ import { state, llmRequestAbortManager, agentSessionStateManager } from "./state
 import OpenAI from "openai"
 
 /**
+ * Normalize response: convert status field to needsMoreWork for backward compatibility
+ * status="complete" or status="blocked" → needsMoreWork=false
+ * status="working" → needsMoreWork=true
+ */
+function normalizeStatusToNeedsMoreWork(response: LLMToolCallResponse): LLMToolCallResponse {
+  if (response.status !== undefined && response.needsMoreWork === undefined) {
+    return {
+      ...response,
+      needsMoreWork: response.status === "working",
+    }
+  }
+  return response
+}
+
+/**
  * Callback for reporting retry progress to the UI
  */
 export type RetryProgressCallback = (info: {
@@ -52,7 +67,12 @@ const toolCallResponseSchema: OpenAI.ResponseFormatJSONSchema["json_schema"] = {
       },
       needsMoreWork: {
         type: "boolean",
-        description: "Whether more work is needed after this response",
+        description: "Whether more work is needed (deprecated, use status)",
+      },
+      status: {
+        type: "string",
+        enum: ["working", "complete", "blocked"],
+        description: "Task status: working | complete | blocked",
       },
     },
     additionalProperties: false,
@@ -918,7 +938,7 @@ async function makeOpenAICompatibleCall(
               const retryMessages = [
                 ...messages,
                 { role: "assistant", content: error.failedGeneration },
-                { role: "user", content: `Return your previous response as valid JSON: {"content": "...", "needsMoreWork": false}. Escape quotes properly.` }
+                { role: "user", content: `Return your previous response as valid JSON: {"content": "...", "status": "complete"}. Escape quotes properly.` }
               ]
 
               const retryData = await makeAPICallAttempt(baseURL, apiKey, {
@@ -1216,8 +1236,8 @@ async function makeLLMCallAttempt(
         if (isDebugLLM()) {
           logLLM("Parsed structured output from reasoning fallback")
         }
-        const resp = jsonFromReasoning as LLMToolCallResponse
-        if (resp.needsMoreWork === undefined && !resp.toolCalls) resp.needsMoreWork = true
+        let resp = normalizeStatusToNeedsMoreWork(jsonFromReasoning as LLMToolCallResponse)
+        if (resp.needsMoreWork === undefined && !resp.toolCalls) resp = { ...resp, needsMoreWork: true }
         return resp
       }
 
@@ -1269,17 +1289,18 @@ async function makeLLMCallAttempt(
     })
   }
   if (jsonObject && (jsonObject.toolCalls || jsonObject.content)) {
-    // If JSON lacks both toolCalls and needsMoreWork, default needsMoreWork to true (continue)
-    const response = jsonObject as LLMToolCallResponse
+    // Normalize status field to needsMoreWork for backward compatibility
+    let response = normalizeStatusToNeedsMoreWork(jsonObject as LLMToolCallResponse)
+    // If JSON lacks both toolCalls and needsMoreWork/status, default needsMoreWork to true (continue)
     if (response.needsMoreWork === undefined && !response.toolCalls) {
-      response.needsMoreWork = true
+      response = { ...response, needsMoreWork: true }
     }
     // Safety: If JSON says no more work but there are no toolCalls and the content
     // contains tool-call markers, override to needsMoreWork=true
     const toolMarkers = /<\|tool_calls_section_begin\|>|<\|tool_call_begin\|>/i
     const text = (response.content || "").replace(/<\|[^|]*\|>/g, "").trim()
     if (response.needsMoreWork === false && (!response.toolCalls || response.toolCalls.length === 0) && toolMarkers.test(text)) {
-      response.needsMoreWork = true
+      response = { ...response, needsMoreWork: true }
     }
 
     if (isDebugLLM()) {
@@ -1287,7 +1308,8 @@ async function makeLLMCallAttempt(
         hasContent: !!response.content,
         hasToolCalls: !!response.toolCalls,
         toolCallsCount: response.toolCalls?.length || 0,
-        needsMoreWork: response.needsMoreWork
+        needsMoreWork: response.needsMoreWork,
+        status: response.status
       })
     }
 

@@ -64,6 +64,7 @@ export interface LLMToolCallResponse {
   content?: string
   toolCalls?: MCPToolCall[]
   needsMoreWork?: boolean
+  status?: "working" | "complete" | "blocked"
 }
 
 export class MCPService {

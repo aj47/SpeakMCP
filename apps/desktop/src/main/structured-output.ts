@@ -304,7 +304,7 @@ export async function makeStructuredToolCall(
           // If parsing fails completely, try to extract any meaningful content
           const textContent = content.replace(/<\|[^|]*\|>/g, '').trim()
           if (textContent) {
-            return { content: textContent, status: "working", needsMoreWork: true }
+            return normalizeResponse({ content: textContent, status: "working" })
           }
         }
       }

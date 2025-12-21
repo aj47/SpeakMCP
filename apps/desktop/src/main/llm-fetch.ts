@@ -1229,7 +1229,7 @@ async function makeLLMCallAttempt(
         }
         let resp = normalizeResponse(jsonFromReasoning as LLMToolCallResponse)
         if (resp.needsMoreWork === undefined && !resp.toolCalls) {
-          resp = { ...resp, needsMoreWork: true, status: "working" }
+          resp = normalizeResponse({ ...resp, status: "working" })
         }
         return resp
       }
@@ -1286,13 +1286,13 @@ async function makeLLMCallAttempt(
     let response = normalizeResponse(jsonObject as LLMToolCallResponse)
     // If JSON lacks both toolCalls and needsMoreWork/status, default to working
     if (response.needsMoreWork === undefined && !response.toolCalls) {
-      response = { ...response, needsMoreWork: true, status: "working" }
+      response = normalizeResponse({ ...response, status: "working" })
     }
     // Safety: If marked complete but has tool-call markers, override to working
     const toolMarkers = /<\|tool_calls_section_begin\|>|<\|tool_call_begin\|>/i
     const text = (response.content || "").replace(/<\|[^|]*\|>/g, "").trim()
     if (response.needsMoreWork === false && (!response.toolCalls || response.toolCalls.length === 0) && toolMarkers.test(text)) {
-      response = { ...response, needsMoreWork: true, status: "working" }
+      response = normalizeResponse({ ...response, status: "working" })
     }
 
     if (isDebugLLM()) {
@@ -1316,12 +1316,13 @@ async function makeLLMCallAttempt(
     if (isDebugLLM()) {
       logLLM("✅ Returning plain text with tool markers (status=working)")
     }
-    return { content: cleaned, status: "working", needsMoreWork: true }
+    return normalizeResponse({ content: cleaned, status: "working" })
   }
 
-  // For plain text responses without JSON structure, set needsMoreWork=undefined
-  // rather than false. This allows the agent loop to decide whether the response
-  // is acceptable or if it needs to nudge the LLM for a properly formatted response.
+  // For plain text responses without JSON structure, return with status undefined.
+  // normalizeResponse will leave needsMoreWork undefined when status is undefined.
+  // This allows the agent loop to decide whether the response is acceptable or
+  // if it needs to nudge the LLM for a properly formatted response.
   // This prevents poor-quality plain text responses from being automatically accepted.
   // Fix for https://github.com/aj47/SpeakMCP/issues/443 - agent loop will now
   // always nudge for proper JSON format when needsMoreWork is undefined.
@@ -1330,7 +1331,7 @@ async function makeLLMCallAttempt(
       contentLength: (cleaned || content)?.length || 0
     })
   }
-  return { content: cleaned || content, needsMoreWork: undefined }
+  return normalizeResponse({ content: cleaned || content })
 }
 
 /**
@@ -1357,7 +1358,7 @@ export async function makeLLMCallWithFetch(
   } catch (error: any) {
     // Use failed_generation content as fallback if available
     if (error?.failedGeneration) {
-      return { content: error.failedGeneration, needsMoreWork: false }
+      return normalizeResponse({ content: error.failedGeneration, status: "complete" })
     }
     diagnosticsService.logError("llm-fetch", "LLM call failed after all retries", error)
     throw error
@@ -1489,11 +1490,11 @@ export async function makeLLMCallWithStreaming(
 
     // Parse the final accumulated content as a response
     // For streaming, we typically get plain text, so wrap it
-    return {
+    // Use normalizeResponse for consistency - status undefined leaves needsMoreWork undefined
+    return normalizeResponse({
       content: accumulated,
-      needsMoreWork: undefined,
       toolCalls: undefined,
-    }
+    })
   } catch (error: any) {
     if (error?.name === "AbortError") {
       throw error

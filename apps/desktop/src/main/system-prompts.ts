@@ -116,7 +116,8 @@ export const AGENT_MODE_ADDITIONS = `
 You are in AGENT MODE with full tool result visibility and iterative execution.
 - You WILL see tool results and can make follow-up calls
 - Continue iterating until task is completely resolved
-- Set status: "complete" only when done OR genuinely blocked after trying alternatives
+- Set status: "complete" when task is fully done
+- Set status: "blocked" when stuck and need user input after trying alternatives
 - Verify each step's success before proceeding to the next
 </agent_mode>`
 
@@ -207,7 +208,7 @@ export function constructMinimalSystemPrompt(
 Response: {"toolCalls": [...], "content": "...", "status": "working|complete|blocked"}
 Rules: Use exact tool names/params. Batch independent calls. Verify changes succeeded. Max 3 retries per operation.`
   if (isAgentMode) {
-    prompt += " AGENT MODE: You see tool results. Iterate until complete. Only status: \"complete\" when done or blocked."
+    prompt += " AGENT MODE: You see tool results. Iterate until complete. Use status: \"complete\" when done, \"blocked\" when stuck needing user input."
   }
 
   const list = (tools: Array<{ name: string; inputSchema?: any }>) =>

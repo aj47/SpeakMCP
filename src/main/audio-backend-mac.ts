@@ -76,11 +76,12 @@ export class MacSystemTapBackend implements AudioBackend {
     const binaryPath = getScreenCaptureAudioPath()
 
     if (!fs.existsSync(binaryPath)) {
-      logApp(
-        `[MacSystemTapBackend] screencapture-audio binary not found at ${binaryPath}, using synthetic stub`,
+      const error = new Error(
+        "System audio capture is not available. The required helper binary was not found. Please reinstall the application.",
       )
-      this.startSyntheticCapture(sessionId)
-      return
+      logApp(`[MacSystemTapBackend] screencapture-audio binary not found at ${binaryPath}`)
+      this.emitError(error)
+      throw error
     }
 
     logApp(`[MacSystemTapBackend] Starting ScreenCaptureKit capture: ${binaryPath}`)
@@ -126,40 +127,13 @@ export class MacSystemTapBackend implements AudioBackend {
       this.captureProcess = child
       logApp(`[MacSystemTapBackend] Started ScreenCaptureKit audio capture for session ${sessionId}`)
     } catch (err) {
+      const error = new Error(
+        "System audio capture failed. Please ensure screen recording permission is granted in System Preferences > Privacy & Security > Screen Recording.",
+      )
       logApp(`[MacSystemTapBackend] Failed to start capture process: ${err}`)
-      this.emitError(err instanceof Error ? err : new Error(String(err)))
-      // Fall back to synthetic
-      this.startSyntheticCapture(sessionId)
+      this.emitError(error)
+      throw error
     }
-  }
-
-  private syntheticInterval: NodeJS.Timeout | null = null
-
-  private startSyntheticCapture(sessionId: string): void {
-    // Synthetic backend: emit silence at 48kHz stereo in small chunks
-    const sampleRate = 48_000
-    const channels = 2
-    const chunkDurationMs = 250
-    const framesPerChunk = (sampleRate * chunkDurationMs) / 1000
-    const bytesPerFrame = channels * 2 // 16-bit PCM
-    const bytesPerChunk = framesPerChunk * bytesPerFrame
-
-    this.syntheticInterval = setInterval(() => {
-      if (!this.runningSession) return
-
-      const buffer = Buffer.alloc(bytesPerChunk) // silence
-
-      for (const handler of this.audioHandlers) {
-        handler(buffer, {
-          sessionId: this.runningSession,
-          sequence: this.sequence++,
-          sampleRate,
-          channels,
-        })
-      }
-    }, chunkDurationMs)
-
-    logApp(`[MacSystemTapBackend] Started synthetic audio capture for session ${sessionId}`)
   }
 
   async stopCapture(sessionId: string): Promise<void> {
@@ -171,12 +145,6 @@ export class MacSystemTapBackend implements AudioBackend {
     if (this.captureProcess && !this.captureProcess.killed) {
       this.captureProcess.kill("SIGTERM")
       this.captureProcess = null
-    }
-
-    // Stop synthetic interval if active
-    if (this.syntheticInterval) {
-      clearInterval(this.syntheticInterval)
-      this.syntheticInterval = null
     }
 
     logApp("[MacSystemTapBackend] Stopped audio capture for session", sessionId)

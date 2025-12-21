@@ -880,13 +880,14 @@ export const router = {
   }),
 
   triggerMcpRecording: t.procedure
-    .input<{ conversationId?: string; sessionId?: string; fromTile?: boolean }>()
+    .input<{ conversationId?: string; sessionId?: string; fromTile?: boolean; screenshot?: string }>()
     .action(async ({ input }) => {
       const { showPanelWindowAndStartMcpRecording } = await import("./window")
       // Always show the panel during recording for waveform feedback
       // The fromTile flag tells the panel to hide after recording ends
       // fromButtonClick=true indicates this was triggered via UI button (not keyboard shortcut)
-      await showPanelWindowAndStartMcpRecording(input.conversationId, input.sessionId, input.fromTile, true)
+      // screenshot is passed through to the renderer for multimodal input
+      await showPanelWindowAndStartMcpRecording(input.conversationId, input.sessionId, input.fromTile, true, input.screenshot)
     }),
 
   showMainWindow: t.procedure
@@ -1198,6 +1199,7 @@ export const router = {
       conversationId?: string
       sessionId?: string
       fromTile?: boolean // When true, session runs in background (snoozed) - panel won't show
+      screenshot?: string // Optional screenshot data URL for multimodal input
     }>()
     .action(async ({ input }) => {
       fs.mkdirSync(recordingsFolder, { recursive: true })
@@ -1375,7 +1377,8 @@ export const router = {
         // Fire-and-forget: Start agent processing without blocking
         // This allows multiple sessions to run concurrently
         // Pass the sessionId to avoid creating a duplicate session
-        processWithAgentMode(transcript, conversationId, sessionId)
+        // Pass startSnoozed for tile behavior and screenshot for multimodal input
+        processWithAgentMode(transcript, conversationId, sessionId, startSnoozed, input.screenshot)
         .then((finalResponse) => {
           // Save to history after completion
           const history = getRecordingHistory()
@@ -2077,6 +2080,19 @@ export const router = {
 
   openConversationsFolder: t.procedure.action(async () => {
     await shell.openPath(conversationsFolder)
+  }),
+
+  // Display/Screen endpoints
+  getAvailableDisplays: t.procedure.action(async () => {
+    const { screen } = await import('electron')
+    const displays = screen.getAllDisplays()
+    const primaryDisplay = screen.getPrimaryDisplay()
+    return displays.map(d => ({
+      id: d.id.toString(),
+      label: d.label || `Display ${d.id}`,
+      bounds: d.bounds,
+      isPrimary: d.id === primaryDisplay.id
+    }))
   }),
 
   // Panel resize endpoints

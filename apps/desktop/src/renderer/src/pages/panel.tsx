@@ -38,6 +38,7 @@ export function Component() {
   const mcpConversationIdRef = useRef<string | undefined>(undefined)
   const mcpSessionIdRef = useRef<string | undefined>(undefined)
   const fromTileRef = useRef<boolean>(false)
+  const mcpScreenshotRef = useRef<string | undefined>(undefined)
   const [fromButtonClick, setFromButtonClick] = useState(false)
   const { isDark } = useTheme()
   const lastRequestedModeRef = useRef<"normal" | "agent" | "textInput">("normal")
@@ -225,11 +226,13 @@ export function Component() {
       const conversationIdForMcp = mcpConversationIdRef.current ?? currentConversationId
       const sessionIdForMcp = mcpSessionIdRef.current
       const wasFromTile = fromTileRef.current
+      const screenshotForMcp = mcpScreenshotRef.current
 
       // Clear the refs after capturing to avoid reusing stale IDs
       mcpConversationIdRef.current = undefined
       mcpSessionIdRef.current = undefined
       fromTileRef.current = false
+      mcpScreenshotRef.current = undefined
 
       // If recording was from a tile, hide the floating panel immediately
       // The session will continue in the tile view
@@ -251,6 +254,8 @@ export function Component() {
         sessionId: sessionIdForMcp,
         // Pass fromTile so session starts snoozed when recording was from a tile
         fromTile: wasFromTile,
+        // Pass screenshot for multimodal input if provided
+        screenshot: screenshotForMcp,
       })
 
       // NOTE: Do NOT call continueConversation here!
@@ -541,10 +546,11 @@ export function Component() {
   // MCP handlers
   useEffect(() => {
     const unlisten = rendererHandlers.startMcpRecording.listen((data) => {
-      // Store the conversationId, sessionId, and fromTile flag for use when recording ends
+      // Store the conversationId, sessionId, fromTile flag, and screenshot for use when recording ends
       mcpConversationIdRef.current = data?.conversationId
       mcpSessionIdRef.current = data?.sessionId
       fromTileRef.current = data?.fromTile ?? false
+      mcpScreenshotRef.current = data?.screenshot
       // Track if recording was triggered via UI button click vs keyboard shortcut
       // When true, we show "Enter" as the submit hint instead of "Release keys"
       setFromButtonClick(data?.fromButtonClick ?? false)
@@ -584,9 +590,10 @@ export function Component() {
         isConfirmedRef.current = true
         recorderRef.current?.stopRecording()
       } else {
-        // Store the conversationId and sessionId for use when recording ends
+        // Store the conversationId, sessionId, and screenshot for use when recording ends
         mcpConversationIdRef.current = data?.conversationId
         mcpSessionIdRef.current = data?.sessionId
+        mcpScreenshotRef.current = data?.screenshot
         // Track if recording was triggered via UI button click vs keyboard shortcut
         setFromButtonClick(data?.fromButtonClick ?? false)
         setMcpMode(true)

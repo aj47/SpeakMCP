@@ -4,7 +4,16 @@ import { cn } from "@renderer/lib/utils"
 import { AgentProcessingView } from "./agent-processing-view"
 import { AgentProgressUpdate } from "../../../shared/types"
 import { useTheme } from "@renderer/contexts/theme-context"
-import { Camera } from "lucide-react"
+import { Camera, Eye } from "lucide-react"
+import { useConfigQuery } from "@renderer/lib/query-client"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "./ui/dialog"
+import { Button } from "./ui/button"
 
 interface TextInputPanelProps {
   onSubmit: (text: string, screenshot?: string) => void
@@ -23,14 +32,25 @@ export const TextInputPanel = forwardRef<TextInputPanelRef, TextInputPanelProps>
   isProcessing = false,
   agentProgress,
 }, ref) => {
+  const configQuery = useConfigQuery()
+  const alwaysIncludeScreenshot = configQuery.data?.alwaysIncludeScreenshot ?? false
+
   const [text, setText] = useState("")
-  const [includeScreenshot, setIncludeScreenshot] = useState(false)
+  const [includeScreenshot, setIncludeScreenshot] = useState(alwaysIncludeScreenshot)
   const [screenshot, setScreenshot] = useState<string | null>(null)
   const [isCapturingScreenshot, setIsCapturingScreenshot] = useState(false)
   const [screenshotError, setScreenshotError] = useState<string | null>(null)
+  const [previewOpen, setPreviewOpen] = useState(false)
+  const [previewImage, setPreviewImage] = useState<string | null>(null)
+  const [previewImageInfo, setPreviewImageInfo] = useState<{ width: number; height: number; size: string } | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const captureWantedRef = useRef(false)
   const { isDark } = useTheme()
+
+  // Sync includeScreenshot state when config loads or alwaysIncludeScreenshot setting changes
+  useEffect(() => {
+    setIncludeScreenshot(alwaysIncludeScreenshot)
+  }, [alwaysIncludeScreenshot])
 
   useImperativeHandle(ref, () => ({
     focus: () => {
@@ -58,6 +78,23 @@ export const TextInputPanel = forwardRef<TextInputPanelRef, TextInputPanelProps>
     return undefined
   }, [isProcessing])
 
+  // Helper to find the correct source based on configured display ID
+  const findSourceByDisplayId = (sources: Array<{ id: string, name: string, thumbnail: string, display_id: string }>, configuredDisplayId: string | undefined) => {
+    if (!configuredDisplayId || configuredDisplayId === '') {
+      // No configured display ID, use first source (primary display)
+      return sources[0]
+    }
+    // Find source matching the configured display_id
+    const matchingSource = sources.find(s => s.display_id === configuredDisplayId)
+    if (matchingSource) {
+      console.log('[TextInputPanel] Found matching source for display_id:', configuredDisplayId)
+      return matchingSource
+    }
+    // Fall back to first source if configured display not found
+    console.log('[TextInputPanel] Configured display_id not found, falling back to primary:', configuredDisplayId)
+    return sources[0]
+  }
+
   const captureScreenshot = async () => {
     console.log('[TextInputPanel] captureScreenshot called')
     setIsCapturingScreenshot(true)
@@ -78,9 +115,11 @@ export const TextInputPanel = forwardRef<TextInputPanelRef, TextInputPanelProps>
       }
 
       if (sources && sources.length > 0) {
-        // Get the first screen (primary display) - thumbnail is already a data URL from main process
-        const screenshot = sources[0].thumbnail
-        console.log('[TextInputPanel] Screenshot captured, length:', screenshot?.length || 0)
+        // Get the source matching the configured display, or fallback to primary
+        const configuredDisplayId = configQuery.data?.screenshotDisplayId
+        const source = findSourceByDisplayId(sources, configuredDisplayId)
+        const screenshot = source.thumbnail
+        console.log('[TextInputPanel] Screenshot captured from display_id:', source.display_id, 'length:', screenshot?.length || 0)
         setScreenshot(screenshot)
       } else {
         console.log('[TextInputPanel] No sources returned')
@@ -93,6 +132,47 @@ export const TextInputPanel = forwardRef<TextInputPanelRef, TextInputPanelProps>
       setIncludeScreenshot(false)
     } finally {
       setIsCapturingScreenshot(false)
+    }
+  }
+
+  const handlePreviewScreenshot = async () => {
+    try {
+      // Capture a fresh screenshot for preview
+      const sources = await (window as any).electronAPI.getScreenSources({
+        types: ['screen'],
+        thumbnailSize: { width: 1920, height: 1080 }
+      })
+
+      if (sources && sources.length > 0) {
+        // Get the source matching the configured display, or fallback to primary
+        const configuredDisplayId = configQuery.data?.screenshotDisplayId
+        const source = findSourceByDisplayId(sources, configuredDisplayId)
+        const capturedImage = source.thumbnail as string
+        setPreviewImage(capturedImage)
+
+        // Calculate image info
+        const img = new Image()
+        img.onload = () => {
+          // Calculate approximate size of base64 data
+          const base64Length = capturedImage.length - (capturedImage.indexOf(',') + 1)
+          const sizeInBytes = Math.ceil(base64Length * 0.75)
+          const sizeInKB = (sizeInBytes / 1024).toFixed(1)
+          const sizeStr = sizeInBytes > 1024 * 1024
+            ? `${(sizeInBytes / (1024 * 1024)).toFixed(2)} MB`
+            : `${sizeInKB} KB`
+
+          setPreviewImageInfo({
+            width: img.naturalWidth,
+            height: img.naturalHeight,
+            size: sizeStr
+          })
+        }
+        img.src = capturedImage
+
+        setPreviewOpen(true)
+      }
+    } catch (error) {
+      console.error('[TextInputPanel] Failed to capture preview screenshot:', error)
     }
   }
 
@@ -213,6 +293,17 @@ export const TextInputPanel = forwardRef<TextInputPanelRef, TextInputPanelProps>
               <Camera className="h-3 w-3" />
               <span>Include screenshot</span>
             </label>
+            {includeScreenshot && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handlePreviewScreenshot}
+                title="Preview screenshot"
+                className="h-6 px-2"
+              >
+                <Eye className="h-3 w-3" />
+              </Button>
+            )}
             {isCapturingScreenshot && (
               <span className="text-xs modern-text-muted">Capturing...</span>
             )}
@@ -258,6 +349,32 @@ export const TextInputPanel = forwardRef<TextInputPanelRef, TextInputPanelProps>
           </button>
         </div>
       </div>
+
+      {/* Screenshot Preview Dialog */}
+      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+        <DialogContent className="max-w-[90vw] max-h-[90vh] w-auto">
+          <DialogHeader>
+            <DialogTitle>Screenshot Preview</DialogTitle>
+            <DialogDescription>
+              This is what will be sent with your message
+              {previewImageInfo && (
+                <span className="ml-2 text-xs">
+                  ({previewImageInfo.width} × {previewImageInfo.height}, {previewImageInfo.size})
+                </span>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-center items-center overflow-auto max-h-[70vh]">
+            {previewImage && (
+              <img
+                src={previewImage}
+                alt="Screenshot preview"
+                className="max-w-full max-h-[65vh] object-contain rounded-md border border-border"
+              />
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 })

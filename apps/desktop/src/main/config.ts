@@ -29,6 +29,7 @@ const getConfig = () => {
     mcpAutoPasteDelay: 1000, // 1 second delay by default
     mcpMaxIterations: 10, // Default max iterations for agent mode
     textInputEnabled: true,
+    alwaysIncludeScreenshot: false,
 
     // Text input: On Windows, use Ctrl+Shift+T to avoid browser new tab conflict
     textInputShortcut: isWindows ? "ctrl-shift-t" : "ctrl-t",

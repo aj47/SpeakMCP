@@ -1797,7 +1797,7 @@ Always use actual resource IDs from the conversation history or create new ones 
             : "Config disabled parallel execution"
         logTools(`Executing ${toolCallsArray.length} tool calls sequentially - ${reason}`, toolCallsArray.map(t => t.name))
       }
-      for (const toolCall of toolCallsArray) {
+      for (const [toolIndex, toolCall] of toolCallsArray.entries()) {
         if (isDebugTools()) {
           logTools("Executing planned tool call", toolCall)
         }
@@ -1930,7 +1930,8 @@ Always use actual resource IDs from the conversation history or create new ones 
 
         // Add delay between tool calls when in serial mode (requested by LLM)
         // This helps avoid race conditions when tools operate on shared resources
-        if (llmRequestedSerialMode && toolCallsArray.indexOf(toolCall) < toolCallsArray.length - 1) {
+        // Use toolIndex from entries() to reliably detect last element (indexOf could fail with duplicate objects)
+        if (llmRequestedSerialMode && toolIndex < toolCallsArray.length - 1) {
           await new Promise(resolve => setTimeout(resolve, SERIAL_EXECUTION_DELAY_MS))
         }
       }

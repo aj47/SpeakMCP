@@ -659,6 +659,11 @@ function ServerDialog({ server, onSave, onCancel, onImportFromFile, onImportFrom
                             Environment: {Object.keys(example.config.env).join(", ")}
                           </p>
                         )}
+                        {example.note && (
+                          <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                            ⚠️ {example.note}
+                          </p>
+                        )}
                       </div>
                       <Button
                         size="sm"
@@ -680,6 +685,14 @@ function ServerDialog({ server, onSave, onCancel, onImportFromFile, onImportFrom
                           )
                           setTimeout(example.config.timeout?.toString() || "")
                           setDisabled(example.config.disabled || false)
+                          // Set headers if the example has them
+                          setHeaders(
+                            example.config.headers
+                              ? Object.entries(example.config.headers)
+                                  .map(([k, v]) => `${k}=${v}`)
+                                  .join("\n")
+                              : ""
+                          )
                           setActiveTab('manual')
                         }}
                       >
@@ -762,7 +775,7 @@ function ServerDialog({ server, onSave, onCancel, onImportFromFile, onImportFrom
 }
 
 // Example MCP server configurations
-const MCP_EXAMPLES: Record<string, { name: string; config: MCPServerConfig }> = {
+const MCP_EXAMPLES: Record<string, { name: string; config: MCPServerConfig; note?: string }> = {
   github: {
     name: "github",
     config: {
@@ -780,6 +793,7 @@ const MCP_EXAMPLES: Record<string, { name: string; config: MCPServerConfig }> = 
       transport: "streamableHttp" as MCPTransportType,
       url: "https://mcp.exa.ai/mcp",
     },
+    note: "Requires API key. After adding, set the x-api-key header in Custom HTTP Headers.",
   },
   memory: {
     name: "memory",

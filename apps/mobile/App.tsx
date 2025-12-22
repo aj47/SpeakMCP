@@ -8,6 +8,7 @@ import { ConfigContext, useConfig, saveConfig } from './src/store/config';
 import { SessionContext, useSessions } from './src/store/sessions';
 import { MessageQueueContext, useMessageQueue } from './src/store/message-queue';
 import { ConnectionManagerContext, useConnectionManagerProvider } from './src/store/connectionManager';
+import { TunnelManagerProvider } from './src/store/tunnelManager';
 import { View, Image, Text, StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ThemeProvider, useTheme } from './src/ui/ThemeProvider';
@@ -125,36 +126,38 @@ function Navigation() {
       <SessionContext.Provider value={sessionStore}>
         <MessageQueueContext.Provider value={messageQueueStore}>
           <ConnectionManagerContext.Provider value={connectionManager}>
-            <NavigationContainer theme={navTheme}>
-              <Stack.Navigator
-                initialRouteName="Settings"
-                screenOptions={{
-                  headerTitleStyle: { ...theme.typography.h2 },
-                  headerStyle: { backgroundColor: theme.colors.card },
-                  headerTintColor: theme.colors.foreground,
-                  contentStyle: { backgroundColor: theme.colors.background },
-                  headerLeft: () => (
-                    <Image
-                      source={speakMCPIcon}
-                      style={{ width: 28, height: 28, marginLeft: 12, marginRight: 8 }}
-                      resizeMode="contain"
-                    />
-                  ),
-                }}
-              >
-                <Stack.Screen
-                  name="Settings"
-                  component={SettingsScreen}
-                  options={{ title: 'SpeakMCP' }}
-                />
-                <Stack.Screen
-                  name="Sessions"
-                  component={SessionListScreen}
-                  options={{ title: 'Chats' }}
-                />
-                <Stack.Screen name="Chat" component={ChatScreen} />
-              </Stack.Navigator>
-            </NavigationContainer>
+            <TunnelManagerProvider>
+              <NavigationContainer theme={navTheme}>
+                <Stack.Navigator
+                  initialRouteName="Settings"
+                  screenOptions={{
+                    headerTitleStyle: { ...theme.typography.h2 },
+                    headerStyle: { backgroundColor: theme.colors.card },
+                    headerTintColor: theme.colors.foreground,
+                    contentStyle: { backgroundColor: theme.colors.background },
+                    headerLeft: () => (
+                      <Image
+                        source={speakMCPIcon}
+                        style={{ width: 28, height: 28, marginLeft: 12, marginRight: 8 }}
+                        resizeMode="contain"
+                      />
+                    ),
+                  }}
+                >
+                  <Stack.Screen
+                    name="Settings"
+                    component={SettingsScreen}
+                    options={{ title: 'SpeakMCP' }}
+                  />
+                  <Stack.Screen
+                    name="Sessions"
+                    component={SessionListScreen}
+                    options={{ title: 'Chats' }}
+                  />
+                  <Stack.Screen name="Chat" component={ChatScreen} />
+                </Stack.Navigator>
+              </NavigationContainer>
+            </TunnelManagerProvider>
           </ConnectionManagerContext.Provider>
         </MessageQueueContext.Provider>
       </SessionContext.Provider>

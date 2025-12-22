@@ -135,20 +135,25 @@ export const Component = () => {
         {/* Settings Section - Collapsible */}
         <div className={cn("mt-4", isCollapsed ? "px-1" : "px-2")}>
           {isCollapsed ? (
-            /* Collapsed: Show only settings icon that navigates to settings */
-            <NavLink
-              to="/settings"
-              className={cn(
-                "flex h-8 w-full items-center justify-center rounded-md transition-all duration-200",
-                location.pathname.startsWith("/settings")
-                  ? "bg-accent text-accent-foreground"
-                  : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
-              )}
-              title="Settings"
-              aria-label="Settings"
-            >
-              <span className="i-mingcute-settings-3-line"></span>
-            </NavLink>
+            /* Collapsed: Show all settings icons for quick navigation */
+            <div className="grid gap-1">
+              {settingsNavLinks.map((link) => (
+                <NavLink
+                  key={link.text}
+                  to={link.href}
+                  className={cn(
+                    "flex h-8 w-full items-center justify-center rounded-md transition-all duration-200",
+                    location.pathname === link.href
+                      ? "bg-accent text-accent-foreground"
+                      : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                  )}
+                  title={link.text}
+                  aria-label={link.text}
+                >
+                  <span className={link.icon}></span>
+                </NavLink>
+              ))}
+            </div>
           ) : (
             /* Expanded: Show full settings menu */
             <>

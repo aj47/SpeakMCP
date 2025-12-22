@@ -1242,9 +1242,20 @@ Always use actual resource IDs from the conversation history or create new ones 
     let llmResponse: any
     try {
       // Create streaming callback that emits progress updates as content streams in
+      let lastStreamEmitTime = 0
+      const STREAM_EMIT_THROTTLE_MS = 50
+
       const onStreamingUpdate: StreamingCallback = (_chunk, accumulated) => {
-        // Update the thinking step with streaming content
+        const now = Date.now()
+        // Update the thinking step with streaming content (always)
         thinkingStep.llmContent = accumulated
+
+        // Throttle emit calls to reduce log spam
+        if (now - lastStreamEmitTime < STREAM_EMIT_THROTTLE_MS) {
+          return // Skip emit, but content is updated
+        }
+        lastStreamEmitTime = now
+
         // Emit progress update with streaming content
         emit({
           currentIteration: iteration,

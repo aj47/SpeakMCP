@@ -134,10 +134,20 @@ export function logKeybinds(...args: any[]) {
   console.log(`[${ts()}] [DEBUG][KEYBINDS]`, ...args)
 }
 
-export function logApp(...args: any[]) {
+export function logApp(...args: unknown[]) {
   if (!isDebugApp()) return
+  const formattedArgs = args.map(arg => {
+    if (typeof arg === "object" && arg !== null) {
+      try {
+        return JSON.stringify(arg, null, 2)
+      } catch {
+        return String(arg)
+      }
+    }
+    return arg
+  })
   // eslint-disable-next-line no-console
-  console.log(`[${ts()}] [DEBUG][APP]`, ...args)
+  console.log(`[${ts()}] [DEBUG][APP]`, ...formattedArgs)
 }
 
 export function logUI(...args: any[]) {

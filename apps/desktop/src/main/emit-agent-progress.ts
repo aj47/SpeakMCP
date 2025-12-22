@@ -7,6 +7,11 @@ import { agentSessionTracker } from "./agent-session-tracker"
 import { configStore } from "./config"
 import { logApp } from "./debug"
 
+// Throttle for repeated identical state logging
+let lastLogTime = 0
+let lastLogState = ""
+const LOG_THROTTLE_MS = 100
+
 export async function emitAgentProgress(update: AgentProgressUpdate): Promise<void> {
   // Skip updates for stopped sessions, except final completion updates
   if (update.sessionId && !update.isComplete) {
@@ -17,7 +22,16 @@ export async function emitAgentProgress(update: AgentProgressUpdate): Promise<vo
     }
   }
 
-  logApp(`[emitAgentProgress] Called for session ${update.sessionId}, isSnoozed: ${update.isSnoozed}`)
+  // Throttle repeated identical state logging
+  const now = Date.now()
+  const stateKey = `${update.sessionId}-${update.isComplete}-${update.isSnoozed}`
+  const shouldLog = lastLogState !== stateKey || (now - lastLogTime) > LOG_THROTTLE_MS
+
+  if (shouldLog) {
+    logApp(`[emitAgentProgress] Called for session ${update.sessionId}, isSnoozed: ${update.isSnoozed}`)
+    lastLogTime = now
+    lastLogState = stateKey
+  }
 
   // Send updates to main window if visible
   const main = WINDOWS.get("main")

@@ -778,7 +778,7 @@ const MCP_EXAMPLES: Record<string, { name: string; config: MCPServerConfig }> = 
     name: "exa",
     config: {
       transport: "streamableHttp" as MCPTransportType,
-      url: "https://mcp.exa.ai/mcp",
+      url: "https://mcp.exa.ai/mcp?exaApiKey=your-exa-api-key",
     },
   },
   memory: {

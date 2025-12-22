@@ -31,13 +31,19 @@ export function SessionGrid({ children, sessionCount, className }: SessionGridPr
       if (containerRef.current) {
         // Dynamically compute padding from computed styles to handle className overrides
         const computedStyle = getComputedStyle(containerRef.current)
-        const paddingLeft = parseFloat(computedStyle.paddingLeft) || 0
-        const paddingRight = parseFloat(computedStyle.paddingRight) || 0
+        // Use proper NaN check to allow 0 as a valid padding value
+        const parsedPaddingLeft = parseFloat(computedStyle.paddingLeft)
+        const parsedPaddingRight = parseFloat(computedStyle.paddingRight)
+        const paddingLeft = !Number.isNaN(parsedPaddingLeft) ? parsedPaddingLeft : 0
+        const paddingRight = !Number.isNaN(parsedPaddingRight) ? parsedPaddingRight : 0
         const totalPadding = paddingLeft + paddingRight
         setContainerWidth(containerRef.current.clientWidth - totalPadding)
 
         // Also compute gap from styles to handle className overrides (columnGap or gap)
-        const columnGap = parseFloat(computedStyle.columnGap) || parseFloat(computedStyle.gap) || 16
+        // Use a proper check that doesn't treat 0 as falsy (0 is a valid gap value)
+        const parsedColumnGap = parseFloat(computedStyle.columnGap)
+        const parsedGap = parseFloat(computedStyle.gap)
+        const columnGap = !Number.isNaN(parsedColumnGap) ? parsedColumnGap : (!Number.isNaN(parsedGap) ? parsedGap : 16)
         setGap(columnGap)
       }
     }

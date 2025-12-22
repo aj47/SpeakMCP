@@ -137,6 +137,9 @@ export function logKeybinds(...args: any[]) {
 export function logApp(...args: unknown[]) {
   if (!isDebugApp()) return
   const formattedArgs = args.map(arg => {
+    if (arg instanceof Error) {
+      return `${arg.name}: ${arg.message}\n${arg.stack}`
+    }
     if (typeof arg === "object" && arg !== null) {
       try {
         return JSON.stringify(arg, null, 2)

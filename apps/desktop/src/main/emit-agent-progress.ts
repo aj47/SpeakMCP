@@ -33,6 +33,11 @@ export async function emitAgentProgress(update: AgentProgressUpdate): Promise<vo
     lastLogState = stateKey
   }
 
+  // Helper for throttled logging - errors are always logged directly with logApp
+  const throttledLog = (msg: string, ...rest: unknown[]) => {
+    if (shouldLog) logApp(msg, ...rest)
+  }
+
   // Send updates to main window if visible
   const main = WINDOWS.get("main")
   if (main && main.isVisible()) {
@@ -53,11 +58,11 @@ export async function emitAgentProgress(update: AgentProgressUpdate): Promise<vo
   // Now handle panel window updates
   const panel = WINDOWS.get("panel")
   if (!panel) {
-    logApp("Panel window not available for progress update")
+    throttledLog("Panel window not available for progress update")
     return
   }
 
-  logApp(`[emitAgentProgress] Panel visible: ${panel.isVisible()}`)
+  throttledLog(`[emitAgentProgress] Panel visible: ${panel.isVisible()}`)
 
   // Check if floating panel auto-show is globally disabled in settings
   const config = configStore.get()
@@ -65,27 +70,27 @@ export async function emitAgentProgress(update: AgentProgressUpdate): Promise<vo
 
   if (!panel.isVisible() && update.sessionId) {
     const isSnoozed = agentSessionTracker.isSessionSnoozed(update.sessionId)
-    logApp(`[emitAgentProgress] Panel not visible. Session ${update.sessionId} snoozed check: ${isSnoozed}, floatingPanelAutoShow: ${floatingPanelAutoShowEnabled}`)
+    throttledLog(`[emitAgentProgress] Panel not visible. Session ${update.sessionId} snoozed check: ${isSnoozed}, floatingPanelAutoShow: ${floatingPanelAutoShowEnabled}`)
 
     if (!floatingPanelAutoShowEnabled) {
-      logApp(`[emitAgentProgress] Floating panel auto-show disabled in settings; NOT showing panel for session ${update.sessionId}`)
+      throttledLog(`[emitAgentProgress] Floating panel auto-show disabled in settings; NOT showing panel for session ${update.sessionId}`)
     } else if (isPanelAutoShowSuppressed()) {
-      logApp(`[emitAgentProgress] Panel auto-show suppressed; NOT showing panel for session ${update.sessionId}`)
+      throttledLog(`[emitAgentProgress] Panel auto-show suppressed; NOT showing panel for session ${update.sessionId}`)
     } else if (!isSnoozed) {
-      logApp(`[emitAgentProgress] Showing panel for non-snoozed session ${update.sessionId}`)
+      throttledLog(`[emitAgentProgress] Showing panel for non-snoozed session ${update.sessionId}`)
       resizePanelForAgentMode()
       showPanelWindow()
     } else {
-      logApp(`[emitAgentProgress] Session ${update.sessionId} is snoozed, NOT showing panel`)
+      throttledLog(`[emitAgentProgress] Session ${update.sessionId} is snoozed, NOT showing panel`)
     }
   } else {
-    logApp(`[emitAgentProgress] Skipping show check - panel visible: ${panel.isVisible()}, has sessionId: ${!!update.sessionId}`)
+    throttledLog(`[emitAgentProgress] Skipping show check - panel visible: ${panel.isVisible()}, has sessionId: ${!!update.sessionId}`)
   }
 
   try {
     const handlers = getRendererHandlers<RendererHandlers>(panel.webContents)
     if (!handlers.agentProgressUpdate) {
-      logApp("Agent progress handler not available")
+      throttledLog("Agent progress handler not available")
       return
     }
 

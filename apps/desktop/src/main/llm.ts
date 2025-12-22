@@ -1712,19 +1712,13 @@ Always use actual resource IDs from the conversation history or create new ones 
     }
 
     // Determine execution mode: parallel or sequential
-    // Priority order for forcing sequential execution:
-    // 1. Tool-level: Any tool in batch matches SEQUENTIAL_EXECUTION_TOOL_PATTERNS (e.g., browser_click)
-    // 2. LLM-requested: LLM sets toolExecutionMode: 'serial' in response
-    // 3. Config: mcpParallelToolExecution: false forces sequential for all tools
-    //
-    // Default is parallel execution when multiple tools are called and none of the above apply
+    // Sequential execution is forced when:
+    // 1. Any tool in batch matches SEQUENTIAL_EXECUTION_TOOL_PATTERNS (e.g., browser_click)
+    // 2. Config mcpParallelToolExecution is set to false
+    // Default is parallel execution when multiple tools are called
     const toolsRequireSequential = batchRequiresSequentialExecution(toolCallsArray)
-    const llmRequestedSerialMode = (llmResponse as any).toolExecutionMode === 'serial'
-    const forceSequential = toolsRequireSequential || llmRequestedSerialMode || config.mcpParallelToolExecution === false
+    const forceSequential = toolsRequireSequential || config.mcpParallelToolExecution === false
     const useParallelExecution = !forceSequential && toolCallsArray.length > 1
-
-    // Define serial delay constant (50ms between tool calls)
-    const SERIAL_EXECUTION_DELAY_MS = 50
 
     if (useParallelExecution) {
       // PARALLEL EXECUTION: Execute all tool calls concurrently
@@ -1852,14 +1846,12 @@ Always use actual resource IDs from the conversation history or create new ones 
         } else if (toolsRequireSequential) {
           const sequentialTools = toolCallsArray.filter(tc => toolRequiresSequentialExecution(tc.name)).map(tc => tc.name)
           reason = `Tool(s) require sequential execution to avoid race conditions: [${sequentialTools.join(', ')}]`
-        } else if (llmRequestedSerialMode) {
-          reason = "LLM requested serial mode (toolExecutionMode: 'serial')"
         } else {
           reason = "Config disabled parallel execution"
         }
         logTools(`Executing ${toolCallsArray.length} tool calls sequentially - ${reason}`, toolCallsArray.map(t => t.name))
       }
-      for (const [toolIndex, toolCall] of toolCallsArray.entries()) {
+      for (const [, toolCall] of toolCallsArray.entries()) {
         if (isDebugTools()) {
           logTools("Executing planned tool call", toolCall)
         }
@@ -1989,13 +1981,6 @@ Always use actual resource IDs from the conversation history or create new ones 
           isComplete: false,
           conversationHistory: formatConversationForProgress(conversationHistory),
         })
-
-        // Add delay between tool calls when in serial mode (requested by LLM)
-        // This helps avoid race conditions when tools operate on shared resources
-        // Use toolIndex from entries() to reliably detect last element (indexOf could fail with duplicate objects)
-        if (llmRequestedSerialMode && toolIndex < toolCallsArray.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, SERIAL_EXECUTION_DELAY_MS))
-        }
       }
     }
 

@@ -178,7 +178,7 @@ function ServerDialog({ server, onSave, onCancel, onImportFromFile, onImportFrom
       // Only reset for Add mode (server is undefined)
       // Edit mode is handled by the server dependency useEffect above
       setName("")
-      setActiveTab('manual')
+      setActiveTab('examples')  // Default to 'examples' tab when adding a new server
       setJsonInputText("")
       setIsValidatingJson(false) // Reset validation state to prevent UI getting stuck
       setTransport("stdio")

@@ -882,8 +882,9 @@ export function MCPConfigManager({
   const warnedReservedServersRef = useRef<Set<string>>(new Set())
 
   // Prune stale entries from expandedServers when servers change
+  // Include reserved server names (built-in servers) so they don't get pruned
   useEffect(() => {
-    const serverNames = new Set(Object.keys(servers))
+    const serverNames = new Set([...Object.keys(servers), ...RESERVED_SERVER_NAMES])
     const prunedSet = new Set([...expandedServers].filter(name => serverNames.has(name)))
     if (prunedSet.size !== expandedServers.size) {
       setExpandedServers(prunedSet)

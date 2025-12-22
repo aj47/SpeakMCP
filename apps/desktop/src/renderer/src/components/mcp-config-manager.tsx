@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, useRef } from "react"
 import { Button } from "@renderer/components/ui/button"
 import { Input } from "@renderer/components/ui/input"
 import { Label } from "@renderer/components/ui/label"
@@ -878,12 +878,30 @@ export function MCPConfigManager({
   // Define servers early so it can be used in hooks below
   const servers = config.mcpServers || {}
 
+  // Track which reserved server names we've already warned about (to avoid repeated warnings)
+  const warnedReservedServersRef = useRef<Set<string>>(new Set())
+
   // Prune stale entries from expandedServers when servers change
   useEffect(() => {
     const serverNames = new Set(Object.keys(servers))
     const prunedSet = new Set([...expandedServers].filter(name => serverNames.has(name)))
     if (prunedSet.size !== expandedServers.size) {
       setExpandedServers(prunedSet)
+    }
+  }, [servers])
+
+  // Warn about servers with reserved names that are being filtered out
+  useEffect(() => {
+    const hiddenServers = Object.keys(servers).filter(
+      (name) => RESERVED_SERVER_NAMES.some(
+        (reserved) => name.trim().toLowerCase() === reserved.toLowerCase()
+      )
+    )
+    for (const serverName of hiddenServers) {
+      if (!warnedReservedServersRef.current.has(serverName)) {
+        warnedReservedServersRef.current.add(serverName)
+        toast.warning(`Server "${serverName}" uses a reserved name and has been hidden. Please rename or remove it from your MCP configuration.`)
+      }
     }
   }, [servers])
 
@@ -1468,15 +1486,21 @@ export function MCPConfigManager({
 
     try {
       const results = await Promise.allSettled(promises)
-      const successful = results.filter((r) => r.status === "fulfilled").length
+      // Check both if the promise was fulfilled AND if the success field is true
+      const successful = results.filter(
+        (r) => r.status === "fulfilled" && (r.value as any).success === true,
+      ).length
       const failed = results.length - successful
 
       if (failed === 0) {
         toast.success(`All ${filteredTools.length} tools ${enable ? "enabled" : "disabled"}`)
       } else {
-        // Revert local state for failed calls
+        // Revert local state for failed calls (rejected OR success: false)
         const failedTools = filteredTools.filter(
-          (_, index) => results[index].status === "rejected",
+          (_, index) =>
+            results[index].status === "rejected" ||
+            (results[index].status === "fulfilled" &&
+              (results[index] as PromiseFulfilledResult<any>).value.success !== true),
         )
         const revertedTools = updatedTools.map((tool) => {
           if (failedTools.some(ft => ft.name === tool.name)) {

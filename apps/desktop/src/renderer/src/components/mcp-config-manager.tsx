@@ -1333,9 +1333,16 @@ export function MCPConfigManager({
     })
   }
 
+  // Build combined servers list (config servers + builtin server)
+  const BUILTIN_SERVER_NAME = "speakmcp-settings"
+  const allServers: Record<string, MCPServerConfig | { isBuiltin: true }> = {
+    ...servers,
+    [BUILTIN_SERVER_NAME]: { isBuiltin: true } as any,
+  }
+
   const toggleAllServers = (expand: boolean) => {
     if (expand) {
-      setExpandedServers(new Set(Object.keys(servers)))
+      setExpandedServers(new Set(Object.keys(allServers)))
     } else {
       setExpandedServers(new Set())
     }
@@ -1356,37 +1363,87 @@ export function MCPConfigManager({
   const enabledToolsCount = tools.filter((t) => t.enabled).length
   const disabledToolsCount = totalToolsCount - enabledToolsCount
 
+  // State for collapsible sections
+  const [toolsSectionExpanded, setToolsSectionExpanded] = useState(true)
+  const [serversSectionExpanded, setServersSectionExpanded] = useState(true)
+
+  // Get all filtered tools (global, across all servers)
+  const getAllFilteredTools = () => {
+    return tools.filter((tool) => {
+      const matchesSearch =
+        tool.name.toLowerCase().includes(toolSearchQuery.toLowerCase()) ||
+        tool.description.toLowerCase().includes(toolSearchQuery.toLowerCase())
+      const matchesVisibility = showDisabledTools || tool.enabled
+      return matchesSearch && matchesVisibility
+    })
+  }
+
+  // Handle toggle all tools (global)
+  const handleToggleAllTools = async (enable: boolean) => {
+    const filteredTools = getAllFilteredTools()
+    if (filteredTools.length === 0) return
+
+    // Update local state immediately for better UX
+    const updatedTools = tools.map((tool) => {
+      if (filteredTools.some(ft => ft.name === tool.name)) {
+        return { ...tool, enabled: enable }
+      }
+      return tool
+    })
+    setTools(updatedTools)
+
+    // Track promises for all backend calls
+    const promises = filteredTools.map((tool) =>
+      tipcClient.setMcpToolEnabled({ toolName: tool.name, enabled: enable }),
+    )
+
+    try {
+      const results = await Promise.allSettled(promises)
+      const successful = results.filter((r) => r.status === "fulfilled").length
+      const failed = results.length - successful
+
+      if (failed === 0) {
+        toast.success(`All ${filteredTools.length} tools ${enable ? "enabled" : "disabled"}`)
+      } else {
+        // Revert local state for failed calls
+        const failedTools = filteredTools.filter(
+          (_, index) => results[index].status === "rejected",
+        )
+        const revertedTools = tools.map((tool) => {
+          if (failedTools.some(ft => ft.name === tool.name)) {
+            return { ...tool, enabled: !enable }
+          }
+          return tool
+        })
+        setTools(revertedTools)
+
+        toast.warning(
+          `${successful}/${filteredTools.length} tools ${enable ? "enabled" : "disabled"} (${failed} failed)`,
+        )
+      }
+    } catch (error: any) {
+      // Revert all tools on error
+      const revertedTools = tools.map((tool) => {
+        if (filteredTools.some(ft => ft.name === tool.name)) {
+          return { ...tool, enabled: !enable }
+        }
+        return tool
+      })
+      setTools(revertedTools)
+      toast.error(`Error toggling tools: ${error.message}`)
+    }
+  }
+
   return (
     <div className="min-w-0 space-y-6">
       <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
-          <h3 className="text-lg font-medium">MCP Server Configuration</h3>
+          <h3 className="text-lg font-medium">MCP Tools & Servers</h3>
           {totalToolsCount > 0 && (
             <Badge variant="secondary" className="text-sm">
-              {enabledToolsCount} enabled / {disabledToolsCount} disabled
+              {enabledToolsCount}/{totalToolsCount} tools enabled
             </Badge>
           )}
-        </div>
-        <div className="flex flex-wrap justify-start gap-2 sm:justify-end">
-          <Button variant="outline" size="sm" onClick={handleExportConfig}>
-            <Download className="mr-2 h-4 w-4" />
-            Export
-          </Button>
-          <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
-            <DialogTrigger asChild>
-              <Button size="sm">
-                <Plus className="mr-2 h-4 w-4" />
-                Add Server
-              </Button>
-            </DialogTrigger>
-            <ServerDialog
-              onSave={handleAddServer}
-              onCancel={() => setShowAddDialog(false)}
-              onImportFromFile={handleImportConfigFromFile}
-              onImportFromText={handleImportFromText}
-              isOpen={showAddDialog}
-            />
-          </Dialog>
         </div>
       </div>
 
@@ -1419,457 +1476,534 @@ export function MCPConfigManager({
         </Card>
       )}
 
-      {/* Tool Search and Filter Controls */}
-      {Object.entries(servers).length > 0 && (
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex flex-1 items-center gap-3">
-            <div className="relative flex-1 max-w-sm">
-              <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search tools..."
-                value={toolSearchQuery}
-                onChange={(e) => setToolSearchQuery(e.target.value)}
-                className="pl-8 h-9"
-              />
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowDisabledTools(!showDisabledTools)}
-              className="shrink-0"
-            >
-              {showDisabledTools ? (
-                <EyeOff className="mr-2 h-4 w-4" />
-              ) : (
-                <Eye className="mr-2 h-4 w-4" />
-              )}
-              {showDisabledTools ? "Hide Disabled" : "Show All"}
-            </Button>
+      {/* ==================== TOOLS SECTION ==================== */}
+      <Card>
+        <div
+          role="button"
+          tabIndex={0}
+          aria-expanded={toolsSectionExpanded}
+          aria-label="Toggle tools section"
+          className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-accent/50 transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+          onClick={() => setToolsSectionExpanded(!toolsSectionExpanded)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault()
+              setToolsSectionExpanded(!toolsSectionExpanded)
+            }
+          }}
+        >
+          <div className="flex items-center gap-2">
+            {toolsSectionExpanded ? (
+              <ChevronDown className="h-4 w-4 text-muted-foreground" />
+            ) : (
+              <ChevronRight className="h-4 w-4 text-muted-foreground" />
+            )}
+            <Wrench className="h-4 w-4" />
+            <span className="font-medium">Tools</span>
+            <Badge variant="secondary" className="text-xs">
+              {enabledToolsCount}/{totalToolsCount} enabled
+            </Badge>
           </div>
-          {(() => {
-            const serverKeys = Object.keys(servers)
-            const expandedCount = serverKeys.filter(key => expandedServers.has(key)).length
-            const allExpanded = expandedCount >= serverKeys.length
-            return (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => toggleAllServers(!allExpanded)}
-                className="text-muted-foreground shrink-0"
-              >
-                <ChevronsUpDown className="mr-2 h-4 w-4" />
-                {allExpanded ? "Collapse All" : "Expand All"}
-              </Button>
-            )
-          })()}
         </div>
-      )}
 
-      <div className="grid gap-2">
-        {Object.entries(servers).length === 0 ? (
-          <Card>
-            <CardContent className="flex flex-col items-center justify-center py-8">
-              <Server className="mb-4 h-12 w-12 text-muted-foreground" />
-              <p className="text-center text-muted-foreground">
-                No MCP servers configured. Add a server to get started.
-              </p>
-            </CardContent>
-          </Card>
-        ) : (
-          Object.entries(servers).map(([name, serverConfig]) => (
-            <Card key={name} className="overflow-hidden">
-              {/* Collapsed Header Row - Always Visible */}
-              <div
-                role="button"
-                tabIndex={0}
-                aria-expanded={expandedServers.has(name)}
-                aria-label={`Toggle ${name} server details`}
-                className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-accent/50 transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                onClick={() => toggleServerExpansion(name)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault()
-                    toggleServerExpansion(name)
-                  }
-                }}
-              >
-                <div className="flex min-w-0 flex-1 items-center gap-2">
-                  {expandedServers.has(name) ? (
-                    <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
-                  ) : (
-                    <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
-                  )}
-                  <span className="font-medium truncate">{name}</span>
-                  {serverConfig.disabled ? (
-                    <Badge variant="secondary" className="shrink-0">Disabled</Badge>
-                  ) : serverStatus[name]?.runtimeEnabled === false ? (
-                    <div className="flex shrink-0 items-center gap-1">
-                      <Square className="h-3 w-3 text-orange-500" />
-                      <Badge
-                        variant="outline"
-                        className="border-orange-300 text-orange-600 text-xs"
-                      >
-                        Stopped
-                      </Badge>
-                    </div>
-                  ) : (
-                    <>
-                      {serverStatus[name]?.connected ? (
-                        <div className="flex shrink-0 items-center gap-1">
-                          <CheckCircle className="h-3 w-3 text-green-500" />
-                          <Badge variant="default" className="text-xs">
-                            {(toolsByServer[name] || []).length > 0
-                              ? `${(toolsByServer[name] || []).filter((t) => t.enabled).length}/${(toolsByServer[name] || []).length} tools enabled`
-                              : `${serverStatus[name].toolCount} tools`}
-                          </Badge>
-                        </div>
-                      ) : serverStatus[name]?.error ? (
-                        <div className="flex shrink-0 items-center gap-1">
-                          <XCircle className="h-3 w-3 text-red-500" />
-                          <Badge variant="destructive" className="text-xs">Error</Badge>
-                        </div>
-                      ) : (
-                        <div className="flex shrink-0 items-center gap-1">
-                          <AlertCircle className="h-3 w-3 text-yellow-500" />
-                          <Badge variant="outline" className="text-xs">Disconnected</Badge>
-                        </div>
-                      )}
-                    </>
-                  )}
+        {toolsSectionExpanded && (
+          <CardContent className="border-t pt-4">
+            {/* Tool Search and Filter Controls */}
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
+              <div className="flex flex-1 items-center gap-3">
+                <div className="relative flex-1 max-w-sm">
+                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search tools..."
+                    value={toolSearchQuery}
+                    onChange={(e) => setToolSearchQuery(e.target.value)}
+                    className="pl-8 h-9"
+                  />
                 </div>
-                {/* Action buttons - stop propagation so clicks/keys don't toggle expansion */}
-                <div
-                  className="flex shrink-0 items-center gap-1"
-                  onClick={(e) => e.stopPropagation()}
-                  onKeyDown={(e) => e.stopPropagation()}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowDisabledTools(!showDisabledTools)}
+                  className="shrink-0"
                 >
-                  {!serverConfig.disabled && (
-                    <>
-                      {serverStatus[name]?.runtimeEnabled === false ? (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleStartServer(name)}
-                          title="Start server"
-                        >
-                          <Play className="h-4 w-4" />
-                        </Button>
-                      ) : (
-                        <>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleRestartServer(name)}
-                            title="Restart server"
-                          >
-                            <RotateCcw className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleStopServer(name)}
-                            title="Stop server"
-                          >
-                            <Square className="h-4 w-4" />
-                          </Button>
-                        </>
-                      )}
-                    </>
+                  {showDisabledTools ? (
+                    <EyeOff className="mr-2 h-4 w-4" />
+                  ) : (
+                    <Eye className="mr-2 h-4 w-4" />
                   )}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() =>
-                      setEditingServer({ name, config: serverConfig })
-                    }
-                    title="Edit server"
-                  >
-                    <Edit className="h-4 w-4" />
-                  </Button>
-                  {/* OAuth authorization controls */}
-                  {serverConfig.transport === "streamableHttp" && serverConfig.url && (
-                    <>
-                      {oauthStatus[name]?.authenticated ? (
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={async () => {
-                            try {
-                              await window.electronAPI.revokeOAuthTokens(name)
-                              toast.success("OAuth authentication revoked")
-                              refreshOAuthStatus()
-                            } catch (error) {
-                              toast.error(`Failed to revoke authentication: ${error instanceof Error ? error.message : String(error)}`)
-                            }
-                          }}
-                          title="Revoke OAuth authentication"
-                        >
-                          <XCircle className="h-4 w-4" />
-                        </Button>
-                      ) : oauthStatus[name]?.configured ? (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={async () => {
-                            try {
-                              await window.electronAPI.initiateOAuthFlow(name)
-                              toast.success("OAuth authentication started")
-                              // Poll for completion
-                              const checkCompletion = setInterval(async () => {
-                                const status = await window.electronAPI.getOAuthStatus(name)
-                                if (status.authenticated) {
-                                  clearInterval(checkCompletion)
-                                  refreshOAuthStatus()
-                                  toast.success("OAuth authentication completed")
-                                }
-                              }, 2000)
-                              setTimeout(() => clearInterval(checkCompletion), 60000)
-                            } catch (error) {
-                              toast.error(`Failed to start OAuth flow: ${error instanceof Error ? error.message : String(error)}`)
-                            }
-                          }}
-                          title="Start OAuth authentication"
-                        >
-                          <ExternalLink className="h-4 w-4" />
-                        </Button>
-                      ) : null}
-                    </>
-                  )}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleDeleteServer(name)}
-                    title="Delete server"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
+                  {showDisabledTools ? "Hide Disabled" : "Show All"}
+                </Button>
               </div>
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleToggleAllTools(true)}
+                  className="shrink-0"
+                >
+                  <Power className="mr-1 h-3 w-3" />
+                  All ON
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleToggleAllTools(false)}
+                  className="shrink-0"
+                >
+                  <PowerOff className="mr-1 h-3 w-3" />
+                  All OFF
+                </Button>
+              </div>
+            </div>
 
-              {/* Expanded Details Section */}
-              {expandedServers.has(name) && (
-                <>
-                  <CardContent className="pt-0 border-t">
-                    <div className="space-y-3 py-3">
-                      {/* Command/Transport Info */}
-                      <div className="text-sm">
-                        <span className="font-medium text-muted-foreground">
-                          {serverConfig.transport === "stdio" || !serverConfig.transport ? "Command:" : "Transport:"}
-                        </span>{" "}
-                        <code className="text-xs bg-muted px-1.5 py-0.5 rounded">
-                          {serverConfig.transport === "stdio" || !serverConfig.transport
-                            ? `${serverConfig.command || ""} ${serverConfig.args ? serverConfig.args.join(" ") : ""}`
-                            : `${serverConfig.transport}: ${serverConfig.url || ""}`}
-                        </code>
+            {/* Tools List */}
+            <div className="space-y-2 max-h-96 overflow-y-auto">
+              {getAllFilteredTools().length === 0 ? (
+                <div className="text-sm text-muted-foreground text-center py-4">
+                  {totalToolsCount === 0
+                    ? "No tools available. Connect a server to see its tools."
+                    : "No tools match your search"}
+                </div>
+              ) : (
+                getAllFilteredTools().map((tool) => (
+                  <div
+                    key={tool.name}
+                    className="flex items-center justify-between rounded-lg border p-3"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="mb-1 flex items-center gap-2">
+                        <h4 className="truncate text-sm font-medium">
+                          {tool.name.includes(":")
+                            ? tool.name.split(":").slice(1).join(":")
+                            : tool.name}
+                        </h4>
+                        <Badge variant="outline" className="text-xs shrink-0">
+                          {tool.serverName}
+                        </Badge>
+                        {!tool.enabled && (
+                          <Badge variant="secondary" className="text-xs shrink-0">
+                            Disabled
+                          </Badge>
+                        )}
                       </div>
+                      <p className="line-clamp-2 text-xs text-muted-foreground">
+                        {tool.description}
+                      </p>
+                    </div>
+                    <div className="ml-4 flex items-center gap-2">
+                      <Dialog>
+                        <DialogTrigger asChild>
+                          <Button variant="ghost" size="sm">
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent className="max-w-2xl">
+                          <DialogHeader>
+                            <DialogTitle>{tool.name}</DialogTitle>
+                            <DialogDescription>
+                              {tool.description}
+                            </DialogDescription>
+                          </DialogHeader>
+                          <div className="space-y-4">
+                            <div>
+                              <Label className="text-sm font-medium">
+                                Server
+                              </Label>
+                              <p className="text-sm text-muted-foreground mt-1">
+                                {tool.serverName}
+                              </p>
+                            </div>
+                            <div>
+                              <Label className="text-sm font-medium">
+                                Input Schema
+                              </Label>
+                              <pre className="mt-2 max-h-64 overflow-auto rounded-md bg-muted p-3 text-xs">
+                                {JSON.stringify(tool.inputSchema, null, 2)}
+                              </pre>
+                            </div>
+                          </div>
+                        </DialogContent>
+                      </Dialog>
+                      <Switch
+                        checked={tool.enabled}
+                        onCheckedChange={(enabled) =>
+                          handleToolToggle(tool.name, enabled)
+                        }
+                      />
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </CardContent>
+        )}
+      </Card>
 
-                      {/* Environment Variables */}
-                      {serverConfig.env && Object.keys(serverConfig.env).length > 0 && (
-                        <div className="text-sm">
-                          <span className="font-medium text-muted-foreground">Environment:</span>{" "}
-                          <span className="text-xs text-muted-foreground">
-                            {Object.keys(serverConfig.env).join(", ")}
-                          </span>
-                        </div>
-                      )}
+      {/* ==================== SERVERS SECTION ==================== */}
+      <Card>
+        <div
+          role="button"
+          tabIndex={0}
+          aria-expanded={serversSectionExpanded}
+          aria-label="Toggle servers section"
+          className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-accent/50 transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+          onClick={() => setServersSectionExpanded(!serversSectionExpanded)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault()
+              setServersSectionExpanded(!serversSectionExpanded)
+            }
+          }}
+        >
+          <div className="flex items-center gap-2">
+            {serversSectionExpanded ? (
+              <ChevronDown className="h-4 w-4 text-muted-foreground" />
+            ) : (
+              <ChevronRight className="h-4 w-4 text-muted-foreground" />
+            )}
+            <Server className="h-4 w-4" />
+            <span className="font-medium">Servers</span>
+            <Badge variant="secondary" className="text-xs">
+              {Object.keys(allServers).length}
+            </Badge>
+          </div>
+          <div
+            className="flex items-center gap-2"
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
+          >
+            <Button variant="outline" size="sm" onClick={handleExportConfig}>
+              <Download className="mr-2 h-4 w-4" />
+              Export
+            </Button>
+            <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
+              <DialogTrigger asChild>
+                <Button size="sm">
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add Server
+                </Button>
+              </DialogTrigger>
+              <ServerDialog
+                onSave={handleAddServer}
+                onCancel={() => setShowAddDialog(false)}
+                onImportFromFile={handleImportConfigFromFile}
+                onImportFromText={handleImportFromText}
+                isOpen={showAddDialog}
+              />
+            </Dialog>
+          </div>
+        </div>
 
-                      {/* Timeout */}
-                      {serverConfig.timeout && (
-                        <div className="text-sm">
-                          <span className="font-medium text-muted-foreground">Timeout:</span>{" "}
-                          <span className="text-xs text-muted-foreground">{serverConfig.timeout}ms</span>
-                        </div>
-                      )}
+        {serversSectionExpanded && (
+          <CardContent className="border-t pt-4">
+            <div className="grid gap-2">
+              {Object.entries(allServers).map(([name, serverConfigOrBuiltin]) => {
+                const isBuiltin = name === BUILTIN_SERVER_NAME
+                const serverConfig = isBuiltin ? null : (serverConfigOrBuiltin as MCPServerConfig)
+                const status = serverStatus[name]
+                const serverTools = toolsByServer[name] || []
+                const enabledToolCount = serverTools.filter((t) => t.enabled).length
 
-                      {/* Error (if any) */}
-                      {serverStatus[name]?.error && (
-                        <div className="text-sm text-red-500">
-                          <span className="font-medium">Error:</span> {serverStatus[name].error}
+                return (
+                  <Card key={name} className="overflow-hidden">
+                    {/* Collapsed Header Row - Always Visible */}
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      aria-expanded={expandedServers.has(name)}
+                      aria-label={`Toggle ${name} server details`}
+                      className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-accent/50 transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                      onClick={() => toggleServerExpansion(name)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          toggleServerExpansion(name)
+                        }
+                      }}
+                    >
+                      <div className="flex min-w-0 flex-1 items-center gap-2">
+                        {expandedServers.has(name) ? (
+                          <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+                        ) : (
+                          <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                        )}
+                        <span className="font-medium truncate">{name}</span>
+                        {isBuiltin ? (
+                          <div className="flex shrink-0 items-center gap-1">
+                            <CheckCircle className="h-3 w-3 text-green-500" />
+                            <Badge variant="outline" className="text-xs border-green-300 text-green-600">
+                              Built-in
+                            </Badge>
+                            <Badge variant="default" className="text-xs">
+                              {enabledToolCount}/{serverTools.length} tools
+                            </Badge>
+                          </div>
+                        ) : serverConfig?.disabled ? (
+                          <Badge variant="secondary" className="shrink-0">Disabled</Badge>
+                        ) : status?.runtimeEnabled === false ? (
+                          <div className="flex shrink-0 items-center gap-1">
+                            <Square className="h-3 w-3 text-orange-500" />
+                            <Badge
+                              variant="outline"
+                              className="border-orange-300 text-orange-600 text-xs"
+                            >
+                              Stopped
+                            </Badge>
+                          </div>
+                        ) : (
+                          <>
+                            {status?.connected ? (
+                              <div className="flex shrink-0 items-center gap-1">
+                                <CheckCircle className="h-3 w-3 text-green-500" />
+                                <Badge variant="default" className="text-xs">
+                                  {serverTools.length > 0
+                                    ? `${enabledToolCount}/${serverTools.length} tools`
+                                    : `${status.toolCount} tools`}
+                                </Badge>
+                              </div>
+                            ) : status?.error ? (
+                              <div className="flex shrink-0 items-center gap-1">
+                                <XCircle className="h-3 w-3 text-red-500" />
+                                <Badge variant="destructive" className="text-xs">Error</Badge>
+                              </div>
+                            ) : (
+                              <div className="flex shrink-0 items-center gap-1">
+                                <AlertCircle className="h-3 w-3 text-yellow-500" />
+                                <Badge variant="outline" className="text-xs">Disconnected</Badge>
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </div>
+                      {/* Action buttons - stop propagation so clicks/keys don't toggle expansion */}
+                      {!isBuiltin && serverConfig && (
+                        <div
+                          className="flex shrink-0 items-center gap-1"
+                          onClick={(e) => e.stopPropagation()}
+                          onKeyDown={(e) => e.stopPropagation()}
+                        >
+                          {!serverConfig.disabled && (
+                            <>
+                              {status?.runtimeEnabled === false ? (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleStartServer(name)}
+                                  title="Start server"
+                                >
+                                  <Play className="h-4 w-4" />
+                                </Button>
+                              ) : (
+                                <>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleRestartServer(name)}
+                                    title="Restart server"
+                                  >
+                                    <RotateCcw className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleStopServer(name)}
+                                    title="Stop server"
+                                  >
+                                    <Square className="h-4 w-4" />
+                                  </Button>
+                                </>
+                              )}
+                            </>
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() =>
+                              setEditingServer({ name, config: serverConfig })
+                            }
+                            title="Edit server"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          {/* OAuth authorization controls */}
+                          {serverConfig.transport === "streamableHttp" && serverConfig.url && (
+                            <>
+                              {oauthStatus[name]?.authenticated ? (
+                                <Button
+                                  variant="destructive"
+                                  size="sm"
+                                  onClick={async () => {
+                                    try {
+                                      await window.electronAPI.revokeOAuthTokens(name)
+                                      toast.success("OAuth authentication revoked")
+                                      refreshOAuthStatus()
+                                    } catch (error) {
+                                      toast.error(`Failed to revoke authentication: ${error instanceof Error ? error.message : String(error)}`)
+                                    }
+                                  }}
+                                  title="Revoke OAuth authentication"
+                                >
+                                  <XCircle className="h-4 w-4" />
+                                </Button>
+                              ) : oauthStatus[name]?.configured ? (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={async () => {
+                                    try {
+                                      await window.electronAPI.initiateOAuthFlow(name)
+                                      toast.success("OAuth authentication started")
+                                      // Poll for completion
+                                      const checkCompletion = setInterval(async () => {
+                                        const statusResult = await window.electronAPI.getOAuthStatus(name)
+                                        if (statusResult.authenticated) {
+                                          clearInterval(checkCompletion)
+                                          refreshOAuthStatus()
+                                          toast.success("OAuth authentication completed")
+                                        }
+                                      }, 2000)
+                                      setTimeout(() => clearInterval(checkCompletion), 60000)
+                                    } catch (error) {
+                                      toast.error(`Failed to start OAuth flow: ${error instanceof Error ? error.message : String(error)}`)
+                                    }
+                                  }}
+                                  title="Start OAuth authentication"
+                                >
+                                  <ExternalLink className="h-4 w-4" />
+                                </Button>
+                              ) : null}
+                            </>
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDeleteServer(name)}
+                            title="Delete server"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
                         </div>
                       )}
                     </div>
-                  </CardContent>
 
-                  {/* Server Logs Section - only show for stdio servers */}
-                  {(serverConfig.transport === "stdio" || !serverConfig.transport) && (
-                    <CardContent className="pt-0 border-t">
-                      <div className="space-y-2 py-2">
-                        <div className="flex items-center justify-between">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => toggleLogs(name)}
-                            className="flex items-center gap-2 -ml-2"
-                          >
-                            <Terminal className="h-4 w-4" />
-                            <span>Server Logs</span>
-                            {expandedLogs.has(name) ? (
-                              <ChevronUp className="h-4 w-4" />
-                            ) : (
-                              <ChevronDown className="h-4 w-4" />
-                            )}
-                          </Button>
-                          {expandedLogs.has(name) && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleClearLogs(name)}
-                              title="Clear logs"
-                            >
-                              <Trash className="h-4 w-4" />
-                            </Button>
-                          )}
-                        </div>
-
-                        {expandedLogs.has(name) && (
-                          <div className="bg-black/90 rounded-md p-3 max-h-64 overflow-y-auto font-mono text-xs">
-                            {serverLogs[name]?.length > 0 ? (
-                              <div className="space-y-1">
-                                {serverLogs[name].map((log, idx) => (
-                                  <div key={idx} className="text-green-400">
-                                    <span className="text-gray-500">
-                                      [{new Date(log.timestamp).toLocaleTimeString()}]
-                                    </span>{' '}
-                                    {log.message}
-                                  </div>
-                                ))}
+                    {/* Expanded Details Section */}
+                    {expandedServers.has(name) && (
+                      <>
+                        <CardContent className="pt-0 border-t">
+                          <div className="space-y-3 py-3">
+                            {isBuiltin ? (
+                              <div className="text-sm">
+                                <span className="font-medium text-muted-foreground">Type:</span>{" "}
+                                <span className="text-xs text-muted-foreground">
+                                  Built-in SpeakMCP settings tools (always available)
+                                </span>
                               </div>
-                            ) : (
-                              <div className="text-gray-500 text-center py-4">
-                                No logs available
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </CardContent>
-                  )}
-
-                  {/* Tools Section */}
-                  {serverStatus[name]?.connected && (
-                    <CardContent className="pt-0 border-t">
-                      <div className="space-y-2 py-2">
-                        <div className="flex items-center justify-between">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => toggleToolsExpansion(name)}
-                            className="flex items-center gap-2 -ml-2"
-                          >
-                            <Wrench className="h-4 w-4" />
-                            <span>Tools</span>
-                            <Badge variant="secondary" className="text-xs">
-                              {(toolsByServer[name] || []).filter((t) => t.enabled).length}/
-                              {(toolsByServer[name] || []).length}
-                            </Badge>
-                            {expandedTools.has(name) ? (
-                              <ChevronUp className="h-4 w-4" />
-                            ) : (
-                              <ChevronDown className="h-4 w-4" />
-                            )}
-                          </Button>
-                          {expandedTools.has(name) && (toolsByServer[name]?.length > 0) && (
-                            <div className="flex items-center gap-1">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleToggleAllToolsForServer(name, true)}
-                                className="h-7 px-2 text-xs"
-                              >
-                                <Power className="mr-1 h-3 w-3" />
-                                All ON
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleToggleAllToolsForServer(name, false)}
-                                className="h-7 px-2 text-xs"
-                              >
-                                <PowerOff className="mr-1 h-3 w-3" />
-                                All OFF
-                              </Button>
-                            </div>
-                          )}
-                        </div>
-
-                        {expandedTools.has(name) && (
-                          <div className="space-y-2">
-                            {getFilteredToolsForServer(name).length === 0 ? (
-                              <div className="text-sm text-muted-foreground text-center py-4">
-                                {(toolsByServer[name] || []).length === 0
-                                  ? "No tools available"
-                                  : "No tools match your search"}
-                              </div>
-                            ) : (
-                              getFilteredToolsForServer(name).map((tool) => (
-                                <div
-                                  key={tool.name}
-                                  className="flex items-center justify-between rounded-lg border p-3"
-                                >
-                                  <div className="min-w-0 flex-1">
-                                    <div className="mb-1 flex items-center gap-2">
-                                      <h4 className="truncate text-sm font-medium">
-                                        {tool.name.includes(":")
-                                          ? tool.name.split(":").slice(1).join(":")
-                                          : tool.name}
-                                      </h4>
-                                      {!tool.enabled && (
-                                        <Badge variant="outline" className="text-xs">
-                                          Disabled
-                                        </Badge>
-                                      )}
-                                    </div>
-                                    <p className="line-clamp-2 text-xs text-muted-foreground">
-                                      {tool.description}
-                                    </p>
-                                  </div>
-                                  <div className="ml-4 flex items-center gap-2">
-                                    <Dialog>
-                                      <DialogTrigger asChild>
-                                        <Button variant="ghost" size="sm">
-                                          <Eye className="h-4 w-4" />
-                                        </Button>
-                                      </DialogTrigger>
-                                      <DialogContent className="max-w-2xl">
-                                        <DialogHeader>
-                                          <DialogTitle>{tool.name}</DialogTitle>
-                                          <DialogDescription>
-                                            {tool.description}
-                                          </DialogDescription>
-                                        </DialogHeader>
-                                        <div className="space-y-4">
-                                          <div>
-                                            <Label className="text-sm font-medium">
-                                              Input Schema
-                                            </Label>
-                                            <pre className="mt-2 max-h-64 overflow-auto rounded-md bg-muted p-3 text-xs">
-                                              {JSON.stringify(tool.inputSchema, null, 2)}
-                                            </pre>
-                                          </div>
-                                        </div>
-                                      </DialogContent>
-                                    </Dialog>
-                                    <Switch
-                                      checked={tool.enabled}
-                                      onCheckedChange={(enabled) =>
-                                        handleToolToggle(tool.name, enabled)
-                                      }
-                                    />
-                                  </div>
+                            ) : serverConfig && (
+                              <>
+                                {/* Command/Transport Info */}
+                                <div className="text-sm">
+                                  <span className="font-medium text-muted-foreground">
+                                    {serverConfig.transport === "stdio" || !serverConfig.transport ? "Command:" : "Transport:"}
+                                  </span>{" "}
+                                  <code className="text-xs bg-muted px-1.5 py-0.5 rounded">
+                                    {serverConfig.transport === "stdio" || !serverConfig.transport
+                                      ? `${serverConfig.command || ""} ${serverConfig.args ? serverConfig.args.join(" ") : ""}`
+                                      : `${serverConfig.transport}: ${serverConfig.url || ""}`}
+                                  </code>
                                 </div>
-                              ))
+
+                                {/* Environment Variables */}
+                                {serverConfig.env && Object.keys(serverConfig.env).length > 0 && (
+                                  <div className="text-sm">
+                                    <span className="font-medium text-muted-foreground">Environment:</span>{" "}
+                                    <span className="text-xs text-muted-foreground">
+                                      {Object.keys(serverConfig.env).join(", ")}
+                                    </span>
+                                  </div>
+                                )}
+
+                                {/* Timeout */}
+                                {serverConfig.timeout && (
+                                  <div className="text-sm">
+                                    <span className="font-medium text-muted-foreground">Timeout:</span>{" "}
+                                    <span className="text-xs text-muted-foreground">{serverConfig.timeout}ms</span>
+                                  </div>
+                                )}
+
+                                {/* Error (if any) */}
+                                {status?.error && (
+                                  <div className="text-sm text-red-500">
+                                    <span className="font-medium">Error:</span> {status.error}
+                                  </div>
+                                )}
+                              </>
                             )}
                           </div>
+                        </CardContent>
+
+                        {/* Server Logs Section - only show for stdio servers (not builtin) */}
+                        {!isBuiltin && serverConfig && (serverConfig.transport === "stdio" || !serverConfig.transport) && (
+                          <CardContent className="pt-0 border-t">
+                            <div className="space-y-2 py-2">
+                              <div className="flex items-center justify-between">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => toggleLogs(name)}
+                                  className="flex items-center gap-2 -ml-2"
+                                >
+                                  <Terminal className="h-4 w-4" />
+                                  <span>Server Logs</span>
+                                  {expandedLogs.has(name) ? (
+                                    <ChevronUp className="h-4 w-4" />
+                                  ) : (
+                                    <ChevronDown className="h-4 w-4" />
+                                  )}
+                                </Button>
+                                {expandedLogs.has(name) && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleClearLogs(name)}
+                                    title="Clear logs"
+                                  >
+                                    <Trash className="h-4 w-4" />
+                                  </Button>
+                                )}
+                              </div>
+
+                              {expandedLogs.has(name) && (
+                                <div className="bg-black/90 rounded-md p-3 max-h-64 overflow-y-auto font-mono text-xs">
+                                  {serverLogs[name]?.length > 0 ? (
+                                    <div className="space-y-1">
+                                      {serverLogs[name].map((log, idx) => (
+                                        <div key={idx} className="text-green-400">
+                                          <span className="text-gray-500">
+                                            [{new Date(log.timestamp).toLocaleTimeString()}]
+                                          </span>{' '}
+                                          {log.message}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <div className="text-gray-500 text-center py-4">
+                                      No logs available
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </CardContent>
                         )}
-                      </div>
-                    </CardContent>
-                  )}
-                </>
-              )}
-            </Card>
-          ))
+                      </>
+                    )}
+                  </Card>
+                )
+              })}
+            </div>
+          </CardContent>
         )}
-      </div>
+      </Card>
 
       {editingServer && (
         <Dialog open={true} onOpenChange={() => setEditingServer(null)}>

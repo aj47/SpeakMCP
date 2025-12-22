@@ -1,7 +1,14 @@
-import React, { useRef } from "react"
+import React, { useRef, useState, useEffect, createContext, useContext } from "react"
 import { cn } from "@renderer/lib/utils"
 import { GripVertical } from "lucide-react"
 import { useResizable, TILE_DIMENSIONS } from "@renderer/hooks/use-resizable"
+
+// Context to share container width with tile wrappers
+const SessionGridContext = createContext<{ containerWidth: number }>({ containerWidth: 0 })
+
+export function useSessionGridContext() {
+  return useContext(SessionGridContext)
+}
 
 interface SessionGridProps {
   children: React.ReactNode
@@ -10,15 +17,40 @@ interface SessionGridProps {
 }
 
 export function SessionGrid({ children, sessionCount, className }: SessionGridProps) {
+  const containerRef = useRef<HTMLDivElement>(null)
+  const [containerWidth, setContainerWidth] = useState(0)
+
+  useEffect(() => {
+    const updateWidth = () => {
+      if (containerRef.current) {
+        // Subtract padding (p-4 = 16px * 2 = 32px) to get usable width
+        setContainerWidth(containerRef.current.clientWidth - 32)
+      }
+    }
+
+    updateWidth()
+
+    // Also update on resize
+    const resizeObserver = new ResizeObserver(updateWidth)
+    if (containerRef.current) {
+      resizeObserver.observe(containerRef.current)
+    }
+
+    return () => resizeObserver.disconnect()
+  }, [])
+
   return (
-    <div
-      className={cn(
-        "flex flex-wrap gap-4 p-4 content-start",
-        className
-      )}
-    >
-      {children}
-    </div>
+    <SessionGridContext.Provider value={{ containerWidth }}>
+      <div
+        ref={containerRef}
+        className={cn(
+          "flex flex-wrap gap-4 p-4 content-start",
+          className
+        )}
+      >
+        {children}
+      </div>
+    </SessionGridContext.Provider>
   )
 }
 
@@ -35,6 +67,16 @@ interface SessionTileWrapperProps {
   isDragging?: boolean
 }
 
+// Calculate half container width for tile sizing, clamped to min/max
+function calculateHalfWidth(containerWidth: number): number {
+  if (containerWidth <= 0) {
+    return TILE_DIMENSIONS.width.default
+  }
+  // Account for gap between tiles (gap-4 = 16px, so subtract 16px for the gap between two tiles)
+  const halfWidth = Math.floor((containerWidth - 16) / 2)
+  return Math.max(TILE_DIMENSIONS.width.min, Math.min(TILE_DIMENSIONS.width.max, halfWidth))
+}
+
 export function SessionTileWrapper({
   children,
   sessionId,
@@ -48,6 +90,8 @@ export function SessionTileWrapper({
   isDragging,
 }: SessionTileWrapperProps) {
   const containerRef = useRef<HTMLDivElement>(null)
+  const { containerWidth } = useSessionGridContext()
+  const hasInitializedRef = useRef(false)
 
   const {
     width,
@@ -56,11 +100,28 @@ export function SessionTileWrapper({
     handleWidthResizeStart,
     handleHeightResizeStart,
     handleCornerResizeStart,
+    setSize,
   } = useResizable({
-    initialWidth: TILE_DIMENSIONS.width.default,
+    initialWidth: calculateHalfWidth(containerWidth),
     initialHeight: TILE_DIMENSIONS.height.default,
     storageKey: "session-tile",
   })
+
+  // Update width to half container width once container is measured (only on first valid measurement)
+  // This handles the case where containerWidth is 0 on initial render
+  useEffect(() => {
+    // Only run once when containerWidth becomes valid and we haven't initialized yet
+    if (containerWidth > 0 && !hasInitializedRef.current) {
+      hasInitializedRef.current = true
+      // Check if there's already a persisted size - if so, don't override it
+      const persistedKey = "speakmcp-resizable-session-tile"
+      const hasPersistedSize = localStorage.getItem(persistedKey) !== null
+      if (!hasPersistedSize) {
+        const halfWidth = calculateHalfWidth(containerWidth)
+        setSize({ width: halfWidth })
+      }
+    }
+  }, [containerWidth, setSize])
 
   const handleDragStart = (e: React.DragEvent) => {
     e.dataTransfer.effectAllowed = "move"

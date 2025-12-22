@@ -6,8 +6,17 @@ Before any debugging work, **AI agents MUST run these tests** to verify UI inter
 
 ### Setup
 ```bash
-pnpm dev -- --remote-debugging-port=9222
+# Option 1: Set environment variable (recommended)
+ELECTRON_ARGS="--remote-debugging-port=9222" pnpm dev
+
+# Option 2: Or run electron directly with the flag
+npx electron . --remote-debugging-port=9222
 ```
+
+> ⚠️ **Note**: The `--remote-debugging-port` flag must be passed directly to Electron/Chromium,
+> not as an app argument after `--`. Using `pnpm dev -- --remote-debugging-port=9222` will NOT work
+> because the flag gets passed to the app instead of Electron itself.
+
 Then: `list_electron_targets_electron-native` → `connect_to_electron_target_electron-native`
 
 ### Test 1: Click Settings Button
@@ -43,8 +52,12 @@ window.electron.ipcRenderer.invoke('getAgentSessions')
 ```
 > All procedures in `apps/desktop/src/main/tipc.ts`
 
-## CDP (Browser DevTools)
-Chrome → `chrome://inspect` → add `localhost:9222` → inspect
+## CDP (Chrome DevTools Protocol)
+```bash
+# Start app with CDP enabled
+ELECTRON_ARGS="--remote-debugging-port=9222" pnpm dev
+```
+Chrome → `chrome://inspect` → Configure → add `localhost:9222` → inspect
 
 ## Mobile App
 ```bash

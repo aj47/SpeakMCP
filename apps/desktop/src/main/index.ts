@@ -22,6 +22,13 @@ import { diagnosticsService } from "./diagnostics"
 import { configStore } from "./config"
 import { startRemoteServer } from "./remote-server"
 
+// Enable CDP remote debugging port if REMOTE_DEBUGGING_PORT env variable is set
+// This must be called before app.whenReady()
+// Usage: REMOTE_DEBUGGING_PORT=9222 pnpm dev
+if (process.env.REMOTE_DEBUGGING_PORT) {
+  app.commandLine.appendSwitch('remote-debugging-port', process.env.REMOTE_DEBUGGING_PORT)
+}
+
 registerServeSchema()
 
 app.whenReady().then(() => {

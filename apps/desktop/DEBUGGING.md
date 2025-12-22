@@ -6,16 +6,14 @@ Before any debugging work, **AI agents MUST run these tests** to verify UI inter
 
 ### Setup
 ```bash
-# Option 1: Set environment variable (recommended)
-ELECTRON_ARGS="--remote-debugging-port=9222" pnpm dev
-
-# Option 2: Or run electron directly with the flag
-npx electron . --remote-debugging-port=9222
+# Enable CDP remote debugging (recommended)
+REMOTE_DEBUGGING_PORT=9222 pnpm dev
 ```
 
-> ⚠️ **Note**: The `--remote-debugging-port` flag must be passed directly to Electron/Chromium,
-> not as an app argument after `--`. Using `pnpm dev -- --remote-debugging-port=9222` will NOT work
-> because the flag gets passed to the app instead of Electron itself.
+> ⚠️ **Note**: The `--remote-debugging-port` flag must be passed to Chromium via `app.commandLine.appendSwitch()`,
+> not as a CLI argument. Using `pnpm dev -- --remote-debugging-port=9222` will NOT work because the flag
+> gets passed to the app instead of Electron/Chromium. The `REMOTE_DEBUGGING_PORT` environment variable
+> is handled by the app to call the appropriate Electron API.
 
 Then: `list_electron_targets_electron-native` → `connect_to_electron_target_electron-native`
 
@@ -55,7 +53,7 @@ window.electron.ipcRenderer.invoke('getAgentSessions')
 ## CDP (Chrome DevTools Protocol)
 ```bash
 # Start app with CDP enabled
-ELECTRON_ARGS="--remote-debugging-port=9222" pnpm dev
+REMOTE_DEBUGGING_PORT=9222 pnpm dev
 ```
 Chrome → `chrome://inspect` → Configure → add `localhost:9222` → inspect
 

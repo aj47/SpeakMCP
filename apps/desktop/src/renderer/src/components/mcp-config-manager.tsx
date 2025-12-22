@@ -693,6 +693,8 @@ function ServerDialog({ server, onSave, onCancel, onImportFromFile, onImportFrom
                                   .join("\n")
                               : ""
                           )
+                          // Reset OAuth config when switching examples to prevent stale fields
+                          setOAuthConfig({})
                           setActiveTab('manual')
                         }}
                       >
@@ -793,7 +795,7 @@ const MCP_EXAMPLES: Record<string, { name: string; config: MCPServerConfig; note
       transport: "streamableHttp" as MCPTransportType,
       url: "https://mcp.exa.ai/mcp",
     },
-    note: "Requires API key. After adding, set the x-api-key header in Custom HTTP Headers.",
+    note: "Requires API key. After adding, set x-api-key=YOUR_KEY in Custom HTTP Headers.",
   },
   memory: {
     name: "memory",

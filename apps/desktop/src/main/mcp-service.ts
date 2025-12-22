@@ -1114,7 +1114,12 @@ export class MCPService {
   }
 
   /**
-   * Filter Playwright browser automation responses
+   * Filters Playwright responses to reduce token usage.
+   *
+   * NOTE: Each Playwright action (click, type, etc.) takes ~1 second because
+   * the server captures a full accessibility snapshot after each action.
+   * For text input, prefer browser_type over individual clicks to reduce
+   * the number of round-trips.
    */
   private filterPlaywrightResponse(
     toolName: string,

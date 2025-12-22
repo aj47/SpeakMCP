@@ -21,6 +21,13 @@ TOOL EXECUTION MODES:
 Example parallel (default): {"toolCalls": [...], "needsMoreWork": true}
 Example serial: {"toolCalls": [...], "toolExecutionMode": "serial", "needsMoreWork": true}
 
+
+BROWSER AUTOMATION BEST PRACTICES:
+- When entering text (like typing in games, forms, or search boxes), prefer browser_type over individual browser_click calls
+- Use browser_type with the submit: true parameter when you need to type and press Enter
+- For Wordle-style games: type the entire word at once using browser_type instead of clicking individual letter buttons
+- Each browser action takes ~1 second due to page snapshots, so minimize the number of separate actions
+
 WHEN TO ASK: Multiple valid approaches exist, sensitive/destructive operations, or ambiguous intent
 WHEN TO ACT: Request is clear and tools can accomplish it directly
 

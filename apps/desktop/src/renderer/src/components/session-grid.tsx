@@ -23,8 +23,12 @@ export function SessionGrid({ children, sessionCount, className }: SessionGridPr
   useEffect(() => {
     const updateWidth = () => {
       if (containerRef.current) {
-        // Subtract padding (p-4 = 16px * 2 = 32px) to get usable width
-        setContainerWidth(containerRef.current.clientWidth - 32)
+        // Dynamically compute padding from computed styles to handle className overrides
+        const computedStyle = getComputedStyle(containerRef.current)
+        const paddingLeft = parseFloat(computedStyle.paddingLeft) || 0
+        const paddingRight = parseFloat(computedStyle.paddingRight) || 0
+        const totalPadding = paddingLeft + paddingRight
+        setContainerWidth(containerRef.current.clientWidth - totalPadding)
       }
     }
 
@@ -114,8 +118,14 @@ export function SessionTileWrapper({
     if (containerWidth > 0 && !hasInitializedRef.current) {
       hasInitializedRef.current = true
       // Check if there's already a persisted size - if so, don't override it
-      const persistedKey = "speakmcp-resizable-session-tile"
-      const hasPersistedSize = localStorage.getItem(persistedKey) !== null
+      // Use try/catch to handle restricted environments where localStorage may throw
+      let hasPersistedSize = false
+      try {
+        const persistedKey = "speakmcp-resizable-session-tile"
+        hasPersistedSize = localStorage.getItem(persistedKey) !== null
+      } catch {
+        // Storage unavailable, fall back to default behavior
+      }
       if (!hasPersistedSize) {
         const halfWidth = calculateHalfWidth(containerWidth)
         setSize({ width: halfWidth })

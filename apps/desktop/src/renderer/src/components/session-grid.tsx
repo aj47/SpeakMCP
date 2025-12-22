@@ -3,8 +3,13 @@ import { cn } from "@renderer/lib/utils"
 import { GripVertical } from "lucide-react"
 import { useResizable, TILE_DIMENSIONS } from "@renderer/hooks/use-resizable"
 
-// Context to share container width with tile wrappers
-const SessionGridContext = createContext<{ containerWidth: number }>({ containerWidth: 0 })
+// Context to share container width and gap with tile wrappers
+interface SessionGridContextValue {
+  containerWidth: number
+  gap: number
+}
+
+const SessionGridContext = createContext<SessionGridContextValue>({ containerWidth: 0, gap: 16 })
 
 export function useSessionGridContext() {
   return useContext(SessionGridContext)
@@ -19,9 +24,10 @@ interface SessionGridProps {
 export function SessionGrid({ children, sessionCount, className }: SessionGridProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [containerWidth, setContainerWidth] = useState(0)
+  const [gap, setGap] = useState(16) // Default to gap-4 = 16px
 
   useEffect(() => {
-    const updateWidth = () => {
+    const updateMeasurements = () => {
       if (containerRef.current) {
         // Dynamically compute padding from computed styles to handle className overrides
         const computedStyle = getComputedStyle(containerRef.current)
@@ -29,13 +35,17 @@ export function SessionGrid({ children, sessionCount, className }: SessionGridPr
         const paddingRight = parseFloat(computedStyle.paddingRight) || 0
         const totalPadding = paddingLeft + paddingRight
         setContainerWidth(containerRef.current.clientWidth - totalPadding)
+
+        // Also compute gap from styles to handle className overrides (columnGap or gap)
+        const columnGap = parseFloat(computedStyle.columnGap) || parseFloat(computedStyle.gap) || 16
+        setGap(columnGap)
       }
     }
 
-    updateWidth()
+    updateMeasurements()
 
     // Also update on resize
-    const resizeObserver = new ResizeObserver(updateWidth)
+    const resizeObserver = new ResizeObserver(updateMeasurements)
     if (containerRef.current) {
       resizeObserver.observe(containerRef.current)
     }
@@ -44,7 +54,7 @@ export function SessionGrid({ children, sessionCount, className }: SessionGridPr
   }, [])
 
   return (
-    <SessionGridContext.Provider value={{ containerWidth }}>
+    <SessionGridContext.Provider value={{ containerWidth, gap }}>
       <div
         ref={containerRef}
         className={cn(
@@ -72,12 +82,12 @@ interface SessionTileWrapperProps {
 }
 
 // Calculate half container width for tile sizing, clamped to min/max
-function calculateHalfWidth(containerWidth: number): number {
+function calculateHalfWidth(containerWidth: number, gap: number): number {
   if (containerWidth <= 0) {
     return TILE_DIMENSIONS.width.default
   }
-  // Account for gap between tiles (gap-4 = 16px, so subtract 16px for the gap between two tiles)
-  const halfWidth = Math.floor((containerWidth - 16) / 2)
+  // Account for gap between tiles (subtract gap for the space between two tiles)
+  const halfWidth = Math.floor((containerWidth - gap) / 2)
   return Math.max(TILE_DIMENSIONS.width.min, Math.min(TILE_DIMENSIONS.width.max, halfWidth))
 }
 
@@ -94,7 +104,7 @@ export function SessionTileWrapper({
   isDragging,
 }: SessionTileWrapperProps) {
   const containerRef = useRef<HTMLDivElement>(null)
-  const { containerWidth } = useSessionGridContext()
+  const { containerWidth, gap } = useSessionGridContext()
   const hasInitializedRef = useRef(false)
 
   const {
@@ -106,7 +116,7 @@ export function SessionTileWrapper({
     handleCornerResizeStart,
     setSize,
   } = useResizable({
-    initialWidth: calculateHalfWidth(containerWidth),
+    initialWidth: calculateHalfWidth(containerWidth, gap),
     initialHeight: TILE_DIMENSIONS.height.default,
     storageKey: "session-tile",
   })
@@ -127,11 +137,11 @@ export function SessionTileWrapper({
         // Storage unavailable, fall back to default behavior
       }
       if (!hasPersistedSize) {
-        const halfWidth = calculateHalfWidth(containerWidth)
+        const halfWidth = calculateHalfWidth(containerWidth, gap)
         setSize({ width: halfWidth })
       }
     }
-  }, [containerWidth, setSize])
+  }, [containerWidth, gap, setSize])
 
   const handleDragStart = (e: React.DragEvent) => {
     e.dataTransfer.effectAllowed = "move"

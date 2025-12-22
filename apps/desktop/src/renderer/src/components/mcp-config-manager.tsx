@@ -1650,8 +1650,8 @@ export function MCPConfigManager({
               </div>
             </div>
 
-            {/* Tools List */}
-            <div className="space-y-2 max-h-96 overflow-y-auto">
+            {/* Tools List - Grouped by Server */}
+            <div className="space-y-4 max-h-96 overflow-y-auto">
               {getAllFilteredTools().length === 0 ? (
                 <div className="text-sm text-muted-foreground text-center py-4">
                   {totalToolsCount === 0
@@ -1659,71 +1659,114 @@ export function MCPConfigManager({
                     : "No tools match your search"}
                 </div>
               ) : (
-                getAllFilteredTools().map((tool) => (
-                  <div
-                    key={tool.name}
-                    className="flex items-center justify-between rounded-lg border p-3"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <div className="mb-1 flex items-center gap-2">
-                        <h4 className="truncate text-sm font-medium">
-                          {tool.name.includes(":")
-                            ? tool.name.split(":").slice(1).join(":")
-                            : tool.name}
-                        </h4>
-                        <Badge variant="outline" className="text-xs shrink-0">
-                          {tool.serverName}
+                // Group filtered tools by server
+                Object.entries(
+                  getAllFilteredTools().reduce((acc, tool) => {
+                    if (!acc[tool.serverName]) {
+                      acc[tool.serverName] = []
+                    }
+                    acc[tool.serverName].push(tool)
+                    return acc
+                  }, {} as Record<string, DetailedTool[]>)
+                ).map(([serverName, serverTools]) => (
+                  <div key={serverName} className="space-y-2">
+                    {/* Server Header with Toggle Buttons */}
+                    <div className="flex items-center justify-between bg-muted/50 rounded-lg px-3 py-2">
+                      <div className="flex items-center gap-2">
+                        <Server className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm font-medium">{serverName}</span>
+                        <Badge variant="secondary" className="text-xs">
+                          {serverTools.filter(t => t.enabled).length}/{serverTools.length} enabled
                         </Badge>
-                        {!tool.enabled && (
-                          <Badge variant="secondary" className="text-xs shrink-0">
-                            Disabled
-                          </Badge>
-                        )}
                       </div>
-                      <p className="line-clamp-2 text-xs text-muted-foreground">
-                        {tool.description}
-                      </p>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleToggleAllToolsForServer(serverName, true)}
+                          className="h-6 px-2 text-xs"
+                        >
+                          <Power className="mr-1 h-3 w-3" />
+                          ON
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleToggleAllToolsForServer(serverName, false)}
+                          className="h-6 px-2 text-xs"
+                        >
+                          <PowerOff className="mr-1 h-3 w-3" />
+                          OFF
+                        </Button>
+                      </div>
                     </div>
-                    <div className="ml-4 flex items-center gap-2">
-                      <Dialog>
-                        <DialogTrigger asChild>
-                          <Button variant="ghost" size="sm">
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                        </DialogTrigger>
-                        <DialogContent className="max-w-2xl">
-                          <DialogHeader>
-                            <DialogTitle>{tool.name}</DialogTitle>
-                            <DialogDescription>
+                    {/* Tools for this server */}
+                    <div className="space-y-2 pl-2">
+                      {serverTools.map((tool) => (
+                        <div
+                          key={tool.name}
+                          className="flex items-center justify-between rounded-lg border p-3"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="mb-1 flex items-center gap-2">
+                              <h4 className="truncate text-sm font-medium">
+                                {tool.name.includes(":")
+                                  ? tool.name.split(":").slice(1).join(":")
+                                  : tool.name}
+                              </h4>
+                              {!tool.enabled && (
+                                <Badge variant="secondary" className="text-xs shrink-0">
+                                  Disabled
+                                </Badge>
+                              )}
+                            </div>
+                            <p className="line-clamp-2 text-xs text-muted-foreground">
                               {tool.description}
-                            </DialogDescription>
-                          </DialogHeader>
-                          <div className="space-y-4">
-                            <div>
-                              <Label className="text-sm font-medium">
-                                Server
-                              </Label>
-                              <p className="text-sm text-muted-foreground mt-1">
-                                {tool.serverName}
-                              </p>
-                            </div>
-                            <div>
-                              <Label className="text-sm font-medium">
-                                Input Schema
-                              </Label>
-                              <pre className="mt-2 max-h-64 overflow-auto rounded-md bg-muted p-3 text-xs">
-                                {JSON.stringify(tool.inputSchema, null, 2)}
-                              </pre>
-                            </div>
+                            </p>
                           </div>
-                        </DialogContent>
-                      </Dialog>
-                      <Switch
-                        checked={tool.enabled}
-                        onCheckedChange={(enabled) =>
-                          handleToolToggle(tool.name, enabled)
-                        }
-                      />
+                          <div className="ml-4 flex items-center gap-2">
+                            <Dialog>
+                              <DialogTrigger asChild>
+                                <Button variant="ghost" size="sm">
+                                  <Eye className="h-4 w-4" />
+                                </Button>
+                              </DialogTrigger>
+                              <DialogContent className="max-w-2xl">
+                                <DialogHeader>
+                                  <DialogTitle>{tool.name}</DialogTitle>
+                                  <DialogDescription>
+                                    {tool.description}
+                                  </DialogDescription>
+                                </DialogHeader>
+                                <div className="space-y-4">
+                                  <div>
+                                    <Label className="text-sm font-medium">
+                                      Server
+                                    </Label>
+                                    <p className="text-sm text-muted-foreground mt-1">
+                                      {tool.serverName}
+                                    </p>
+                                  </div>
+                                  <div>
+                                    <Label className="text-sm font-medium">
+                                      Input Schema
+                                    </Label>
+                                    <pre className="mt-2 max-h-64 overflow-auto rounded-md bg-muted p-3 text-xs">
+                                      {JSON.stringify(tool.inputSchema, null, 2)}
+                                    </pre>
+                                  </div>
+                                </div>
+                              </DialogContent>
+                            </Dialog>
+                            <Switch
+                              checked={tool.enabled}
+                              onCheckedChange={(enabled) =>
+                                handleToolToggle(tool.name, enabled)
+                              }
+                            />
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 ))

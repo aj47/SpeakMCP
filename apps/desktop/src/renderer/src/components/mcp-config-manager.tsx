@@ -92,7 +92,8 @@ interface ServerDialogProps {
 
 function ServerDialog({ server, onSave, onCancel, onImportFromFile, onImportFromText, isOpen }: ServerDialogProps) {
   const [name, setName] = useState(server?.name || "")
-  const [activeTab, setActiveTab] = useState<'manual' | 'file' | 'paste' | 'examples'>('manual')
+  // Default to 'examples' tab when adding a new server, 'manual' when editing
+  const [activeTab, setActiveTab] = useState<'manual' | 'file' | 'paste' | 'examples'>(server ? 'manual' : 'examples')
   const [jsonInputText, setJsonInputText] = useState("")
   const [isValidatingJson, setIsValidatingJson] = useState(false)
   const [transport, setTransport] = useState<MCPTransportType>(
@@ -134,7 +135,8 @@ function ServerDialog({ server, onSave, onCancel, onImportFromFile, onImportFrom
   // Reset all fields when server prop changes (e.g., when switching from edit to add)
   useEffect(() => {
     setName(server?.name || "")
-    setActiveTab('manual')
+    // Default to 'examples' tab when adding a new server, 'manual' when editing
+    setActiveTab(server ? 'manual' : 'examples')
     setJsonInputText("")  // Clear pasted JSON to prevent data/secrets from persisting across dialog close/open
     setTransport(server?.config.transport || "stdio")
 
@@ -176,7 +178,7 @@ function ServerDialog({ server, onSave, onCancel, onImportFromFile, onImportFrom
       // Only reset for Add mode (server is undefined)
       // Edit mode is handled by the server dependency useEffect above
       setName("")
-      setActiveTab('manual')
+      setActiveTab('examples')  // Default to 'examples' tab when adding a new server
       setJsonInputText("")
       setIsValidatingJson(false) // Reset validation state to prevent UI getting stuck
       setTransport("stdio")
@@ -657,6 +659,11 @@ function ServerDialog({ server, onSave, onCancel, onImportFromFile, onImportFrom
                             Environment: {Object.keys(example.config.env).join(", ")}
                           </p>
                         )}
+                        {example.note && (
+                          <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                            ⚠️ {example.note}
+                          </p>
+                        )}
                       </div>
                       <Button
                         size="sm"
@@ -678,6 +685,16 @@ function ServerDialog({ server, onSave, onCancel, onImportFromFile, onImportFrom
                           )
                           setTimeout(example.config.timeout?.toString() || "")
                           setDisabled(example.config.disabled || false)
+                          // Set headers if the example has them
+                          setHeaders(
+                            example.config.headers
+                              ? Object.entries(example.config.headers)
+                                  .map(([k, v]) => `${k}=${v}`)
+                                  .join("\n")
+                              : ""
+                          )
+                          // Reset OAuth config when switching examples to prevent stale fields
+                          setOAuthConfig({})
                           setActiveTab('manual')
                         }}
                       >
@@ -760,7 +777,26 @@ function ServerDialog({ server, onSave, onCancel, onImportFromFile, onImportFrom
 }
 
 // Example MCP server configurations
-const MCP_EXAMPLES: Record<string, { name: string; config: MCPServerConfig }> = {
+const MCP_EXAMPLES: Record<string, { name: string; config: MCPServerConfig; note?: string }> = {
+  github: {
+    name: "github",
+    config: {
+      transport: "stdio" as MCPTransportType,
+      command: "npx",
+      args: ["-y", "@modelcontextprotocol/server-github"],
+      env: {
+        GITHUB_PERSONAL_ACCESS_TOKEN: "your-github-token-here",
+      },
+    },
+  },
+  exa: {
+    name: "exa",
+    config: {
+      transport: "streamableHttp" as MCPTransportType,
+      url: "https://mcp.exa.ai/mcp",
+    },
+    note: "Requires API key. After adding, set x-api-key=YOUR_KEY in Custom HTTP Headers.",
+  },
   memory: {
     name: "memory",
     config: {
@@ -785,15 +821,6 @@ const MCP_EXAMPLES: Record<string, { name: string; config: MCPServerConfig }> = 
       transport: "stdio" as MCPTransportType,
       command: "npx",
       args: ["-y", "@wonderwhy-er/desktop-commander@latest"],
-      env: {},
-    },
-  },
-  "mem0": {
-    name: "mem0",
-    config: {
-      transport: "stdio" as MCPTransportType,
-      command: "npx",
-      args: ["-y", "@pinkpixel/mem0-mcp"],
       env: {},
     },
   },

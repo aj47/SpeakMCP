@@ -55,6 +55,22 @@ export const Component = () => {
     })
   }, [])
 
+  // Check if a nav link should be considered active
+  const isNavLinkActive = (link: NavLinkItem) => {
+    // Exact match always wins
+    if (location.pathname === link.href) return true
+    // For "General" settings (/settings), also match if we're on a settings subpath
+    // that isn't covered by any other settings nav link
+    if (link.href === "/settings" && location.pathname.startsWith("/settings/")) {
+      const otherSettingsHrefs = settingsNavLinks
+        .filter((l) => l.href !== "/settings")
+        .map((l) => l.href)
+      // If current path doesn't match any other settings link, highlight General
+      return !otherSettingsHrefs.some((href) => location.pathname.startsWith(href))
+    }
+    return false
+  }
+
   const renderNavLink = (link: NavLinkItem) => (
     <NavLink
       key={link.text}
@@ -63,12 +79,12 @@ export const Component = () => {
       draggable={false}
       title={isCollapsed ? link.text : undefined}
       aria-label={isCollapsed ? link.text : undefined}
-      className={({ isActive: _isActive }) => {
-        const isExactMatch = location.pathname === link.href
+      className={() => {
+        const isActive = isNavLinkActive(link)
         return cn(
           "flex h-7 items-center rounded-md px-2 font-medium transition-all duration-200",
           isCollapsed ? "justify-center" : "gap-2",
-          isExactMatch
+          isActive
             ? "bg-accent text-accent-foreground"
             : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
         )

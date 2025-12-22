@@ -49,37 +49,31 @@ export const Component = () => {
     },
   ]
 
+  // Route aliases that should highlight the same nav item
+  // Maps route paths to their primary nav link href
+  const routeAliases: Record<string, string> = {
+    "/settings/general": "/settings",
+    "/settings/providers": "/settings/models",
+  }
+
+  // Check if current path matches the nav link (including aliases)
+  const isNavLinkActive = (linkHref: string): boolean => {
+    const currentPath = location.pathname
+    // Exact match
+    if (currentPath === linkHref) return true
+    // Check if current path is an alias that maps to this link
+    const aliasTarget = routeAliases[currentPath]
+    return aliasTarget === linkHref
+  }
+
   useEffect(() => {
     return rendererHandlers.navigate.listen((url) => {
       navigate(url)
     })
   }, [])
 
-  // Check if a nav link should be considered active
-  const isNavLinkActive = (link: NavLinkItem) => {
-    // Exact match always wins
-    if (location.pathname === link.href) return true
-    // For Models link, also match /settings/providers since it's the same page
-    if (link.href === "/settings/models" && location.pathname === "/settings/providers") return true
-    // For General link, also match /settings/general since it's the same page
-    if (link.href === "/settings" && location.pathname === "/settings/general") return true
-    // For "General" settings (/settings), also match if we're on a settings subpath
-    // that isn't covered by any other settings nav link
-    if (link.href === "/settings" && location.pathname.startsWith("/settings/")) {
-      // Include both explicit nav links AND known aliases that map to other sections
-      const coveredHrefs = [
-        ...settingsNavLinks.filter((l) => l.href !== "/settings").map((l) => l.href),
-        "/settings/providers", // Alias for /settings/models
-        "/settings/general",   // Alias for /settings
-      ]
-      // If current path doesn't match any covered route, highlight General
-      return !coveredHrefs.some((href) => location.pathname.startsWith(href))
-    }
-    return false
-  }
-
   const renderNavLink = (link: NavLinkItem) => {
-    const isActive = isNavLinkActive(link)
+    const isActive = isNavLinkActive(link.href)
     return (
       <NavLink
         key={link.text}
@@ -88,8 +82,6 @@ export const Component = () => {
         draggable={false}
         title={isCollapsed ? link.text : undefined}
         aria-label={isCollapsed ? link.text : undefined}
-        // Explicitly set aria-current to match our custom active logic
-        // This overrides NavLink's built-in aria-current which uses different matching rules
         aria-current={isActive ? "page" : undefined}
         className={() => {
           return cn(
@@ -164,9 +156,28 @@ export const Component = () => {
         {/* Settings Section - Collapsible */}
         <div className={cn("mt-4", isCollapsed ? "px-1" : "px-2")}>
           {isCollapsed ? (
-            /* Collapsed: Show icons for all settings sections */
-            <div className="grid gap-0.5">
-              {settingsNavLinks.map(renderNavLink)}
+            /* Collapsed: Show all settings icons for quick navigation */
+            <div className="grid gap-1">
+              {settingsNavLinks.map((link) => {
+                const isActive = isNavLinkActive(link.href)
+                return (
+                  <NavLink
+                    key={link.text}
+                    to={link.href}
+                    className={cn(
+                      "flex h-8 w-full items-center justify-center rounded-md transition-all duration-200",
+                      isActive
+                        ? "bg-accent text-accent-foreground"
+                        : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                    )}
+                    title={link.text}
+                    aria-label={link.text}
+                    aria-current={isActive ? "page" : undefined}
+                  >
+                    <span className={link.icon}></span>
+                  </NavLink>
+                )
+              })}
             </div>
           ) : (
             /* Expanded: Show full settings menu */

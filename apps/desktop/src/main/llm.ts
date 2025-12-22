@@ -15,6 +15,7 @@ import { isDebugLLM, logLLM, isDebugTools, logTools } from "./debug"
 import { shrinkMessagesForLLM } from "./context-budget"
 import { emitAgentProgress } from "./emit-agent-progress"
 import { agentSessionTracker } from "./agent-session-tracker"
+import { conversationService } from "./conversation-service"
 
 /**
  * Use LLM to extract useful context from conversation history
@@ -622,8 +623,6 @@ export async function processTranscriptWithAgentMode(
     }
 
     try {
-      const { conversationService } = await import("./conversation-service")
-
       // Convert toolResults from MCPToolResult format to stored format
       const convertedToolResults = toolResults?.map(tr => ({
         success: !tr.isError,

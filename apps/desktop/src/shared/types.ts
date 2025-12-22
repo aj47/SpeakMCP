@@ -468,6 +468,10 @@ export type Config = {
   streamStatusWatcherEnabled?: boolean
   streamStatusFilePath?: string
 
+  // Voice Onboarding Configuration
+  voiceOnboardingCompleted?: boolean
+  voiceOnboardingSkipped?: boolean
+
 }
 
 

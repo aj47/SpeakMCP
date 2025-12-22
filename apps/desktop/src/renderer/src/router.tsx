@@ -58,6 +58,10 @@ export const router: ReturnType<typeof createBrowserRouter> =
       lazy: () => import("./pages/setup"),
     },
     {
+      path: "/voice-onboarding",
+      lazy: () => import("./pages/voice-onboarding"),
+    },
+    {
       path: "/panel",
       lazy: () => import("./pages/panel"),
     },

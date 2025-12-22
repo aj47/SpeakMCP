@@ -1,6 +1,6 @@
 import { rendererHandlers } from "@renderer/lib/tipc-client"
 import { cn } from "@renderer/lib/utils"
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import { NavLink, Outlet, useNavigate, useLocation } from "react-router-dom"
 import { LoadingSpinner } from "@renderer/components/ui/loading-spinner"
 import { SettingsDragBar } from "@renderer/components/settings-drag-bar"
@@ -8,6 +8,7 @@ import { ActiveAgentsSidebar } from "@renderer/components/active-agents-sidebar"
 import { SidebarProfileSelector } from "@renderer/components/sidebar-profile-selector"
 import { useSidebar, SIDEBAR_DIMENSIONS } from "@renderer/hooks/use-sidebar"
 import { PanelLeftClose, PanelLeft } from "lucide-react"
+import { useConfigQuery } from "@renderer/lib/query-client"
 
 type NavLinkItem = {
   text: string
@@ -20,6 +21,8 @@ export const Component = () => {
   const location = useLocation()
   const [settingsExpanded, setSettingsExpanded] = useState(true)
   const { isCollapsed, width, isResizing, toggleCollapse, handleResizeStart } = useSidebar()
+  const configQuery = useConfigQuery()
+  const hasCheckedOnboarding = useRef(false)
 
   const settingsNavLinks: NavLinkItem[] = [
     {
@@ -71,6 +74,29 @@ export const Component = () => {
       navigate(url)
     })
   }, [])
+
+  // Check if voice onboarding should be shown
+  // This triggers after user has set up API keys but hasn't completed onboarding
+  useEffect(() => {
+    if (!configQuery.data || hasCheckedOnboarding.current) return
+
+    const config = configQuery.data
+
+    // Check if any API key is configured
+    const hasApiKey = !!(config.openaiApiKey || config.groqApiKey || config.geminiApiKey)
+
+    // Check if onboarding has been completed or skipped
+    const onboardingDone = config.voiceOnboardingCompleted || config.voiceOnboardingSkipped
+
+    // Only redirect if user has API keys but hasn't done onboarding
+    // and we're not already on the voice-onboarding page
+    if (hasApiKey && !onboardingDone && location.pathname !== "/voice-onboarding") {
+      hasCheckedOnboarding.current = true
+      navigate("/voice-onboarding")
+    } else {
+      hasCheckedOnboarding.current = true
+    }
+  }, [configQuery.data, location.pathname, navigate])
 
   const renderNavLink = (link: NavLinkItem) => {
     const isActive = isNavLinkActive(link.href)

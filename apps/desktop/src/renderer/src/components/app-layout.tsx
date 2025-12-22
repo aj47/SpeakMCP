@@ -78,29 +78,34 @@ export const Component = () => {
     return false
   }
 
-  const renderNavLink = (link: NavLinkItem) => (
-    <NavLink
-      key={link.text}
-      to={link.href}
-      role="button"
-      draggable={false}
-      title={isCollapsed ? link.text : undefined}
-      aria-label={isCollapsed ? link.text : undefined}
-      className={() => {
-        const isActive = isNavLinkActive(link)
-        return cn(
-          "flex h-7 items-center rounded-md px-2 font-medium transition-all duration-200",
-          isCollapsed ? "justify-center" : "gap-2",
-          isActive
-            ? "bg-accent text-accent-foreground"
-            : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
-        )
-      }}
-    >
-      <span className={cn(link.icon, "shrink-0")}></span>
-      {!isCollapsed && <span className="font-medium truncate">{link.text}</span>}
-    </NavLink>
-  )
+  const renderNavLink = (link: NavLinkItem) => {
+    const isActive = isNavLinkActive(link)
+    return (
+      <NavLink
+        key={link.text}
+        to={link.href}
+        role="button"
+        draggable={false}
+        title={isCollapsed ? link.text : undefined}
+        aria-label={isCollapsed ? link.text : undefined}
+        // Explicitly set aria-current to match our custom active logic
+        // This overrides NavLink's built-in aria-current which uses different matching rules
+        aria-current={isActive ? "page" : undefined}
+        className={() => {
+          return cn(
+            "flex h-7 items-center rounded-md px-2 font-medium transition-all duration-200",
+            isCollapsed ? "justify-center" : "gap-2",
+            isActive
+              ? "bg-accent text-accent-foreground"
+              : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
+          )
+        }}
+      >
+        <span className={cn(link.icon, "shrink-0")}></span>
+        {!isCollapsed && <span className="font-medium truncate">{link.text}</span>}
+      </NavLink>
+    )
+  }
 
   const sidebarWidth = isCollapsed ? SIDEBAR_DIMENSIONS.width.collapsed : width
 

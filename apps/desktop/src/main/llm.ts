@@ -4,8 +4,8 @@ import {
   MCPToolCall,
   LLMToolCallResponse,
   MCPToolResult,
-  MCPToolResultContent,
 } from "./mcp-service"
+import type { MCPToolResultContent } from "./mcp-service"
 import { AgentProgressStep, AgentProgressUpdate } from "../shared/types"
 import type { ToolResult, ToolResultContent } from "@speakmcp/shared"
 import { diagnosticsService } from "./diagnostics"

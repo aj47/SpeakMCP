@@ -55,29 +55,57 @@ export const Component = () => {
     })
   }, [])
 
-  const renderNavLink = (link: NavLinkItem) => (
-    <NavLink
-      key={link.text}
-      to={link.href}
-      role="button"
-      draggable={false}
-      title={isCollapsed ? link.text : undefined}
-      aria-label={isCollapsed ? link.text : undefined}
-      className={({ isActive: _isActive }) => {
-        const isExactMatch = location.pathname === link.href
-        return cn(
-          "flex h-7 items-center rounded-md px-2 font-medium transition-all duration-200",
-          isCollapsed ? "justify-center" : "gap-2",
-          isExactMatch
-            ? "bg-accent text-accent-foreground"
-            : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
-        )
-      }}
-    >
-      <span className={cn(link.icon, "shrink-0")}></span>
-      {!isCollapsed && <span className="font-medium truncate">{link.text}</span>}
-    </NavLink>
-  )
+  // Check if a nav link should be considered active
+  const isNavLinkActive = (link: NavLinkItem) => {
+    // Exact match always wins
+    if (location.pathname === link.href) return true
+    // For Models link, also match /settings/providers since it's the same page
+    if (link.href === "/settings/models" && location.pathname === "/settings/providers") return true
+    // For General link, also match /settings/general since it's the same page
+    if (link.href === "/settings" && location.pathname === "/settings/general") return true
+    // For "General" settings (/settings), also match if we're on a settings subpath
+    // that isn't covered by any other settings nav link
+    if (link.href === "/settings" && location.pathname.startsWith("/settings/")) {
+      // Include both explicit nav links AND known aliases that map to other sections
+      const coveredHrefs = [
+        ...settingsNavLinks.filter((l) => l.href !== "/settings").map((l) => l.href),
+        "/settings/providers", // Alias for /settings/models
+        "/settings/general",   // Alias for /settings
+      ]
+      // If current path doesn't match any covered route, highlight General
+      return !coveredHrefs.some((href) => location.pathname.startsWith(href))
+    }
+    return false
+  }
+
+  const renderNavLink = (link: NavLinkItem) => {
+    const isActive = isNavLinkActive(link)
+    return (
+      <NavLink
+        key={link.text}
+        to={link.href}
+        role="button"
+        draggable={false}
+        title={isCollapsed ? link.text : undefined}
+        aria-label={isCollapsed ? link.text : undefined}
+        // Explicitly set aria-current to match our custom active logic
+        // This overrides NavLink's built-in aria-current which uses different matching rules
+        aria-current={isActive ? "page" : undefined}
+        className={() => {
+          return cn(
+            "flex h-7 items-center rounded-md px-2 font-medium transition-all duration-200",
+            isCollapsed ? "justify-center" : "gap-2",
+            isActive
+              ? "bg-accent text-accent-foreground"
+              : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
+          )
+        }}
+      >
+        <span className={cn(link.icon, "shrink-0")}></span>
+        {!isCollapsed && <span className="font-medium truncate">{link.text}</span>}
+      </NavLink>
+    )
+  }
 
   const sidebarWidth = isCollapsed ? SIDEBAR_DIMENSIONS.width.collapsed : width
 
@@ -97,7 +125,8 @@ export const Component = () => {
           className={cn(
             "flex items-center",
             isCollapsed ? "justify-center" : "justify-end",
-            process.env.IS_MAC ? "h-10 pt-6" : "h-8 pt-2",
+            // On macOS, add extra top margin when collapsed to avoid traffic light buttons
+            process.env.IS_MAC ? (isCollapsed ? "h-16 mt-6" : "h-10 pt-6") : "h-8 pt-2",
             isCollapsed ? "px-1" : "px-2"
           )}
         >
@@ -135,20 +164,10 @@ export const Component = () => {
         {/* Settings Section - Collapsible */}
         <div className={cn("mt-4", isCollapsed ? "px-1" : "px-2")}>
           {isCollapsed ? (
-            /* Collapsed: Show only settings icon that navigates to settings */
-            <NavLink
-              to="/settings"
-              className={cn(
-                "flex h-8 w-full items-center justify-center rounded-md transition-all duration-200",
-                location.pathname.startsWith("/settings")
-                  ? "bg-accent text-accent-foreground"
-                  : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
-              )}
-              title="Settings"
-              aria-label="Settings"
-            >
-              <span className="i-mingcute-settings-3-line"></span>
-            </NavLink>
+            /* Collapsed: Show icons for all settings sections */
+            <div className="grid gap-0.5">
+              {settingsNavLinks.map(renderNavLink)}
+            </div>
           ) : (
             /* Expanded: Show full settings menu */
             <>

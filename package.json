@@ -8,10 +8,16 @@
     "dev:mobile": "pnpm --filter @speakmcp/mobile start",
     "build": "pnpm --filter @speakmcp/shared build && pnpm --filter @speakmcp/desktop build",
     "build:shared": "pnpm --filter @speakmcp/shared build",
+    "build:pmpm": "pnpm --filter @speakmcp/pmpm build",
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck",
     "lint": "pnpm -r lint",
-    "format": "pnpm -r format"
+    "format": "pnpm -r format",
+    "pmpm": "pnpm --filter @speakmcp/pmpm build && node packages/pmpm/dist/cli.js",
+    "pmpm:dev": "pnpm pmpm dev",
+    "pmpm:build": "pnpm pmpm build",
+    "pmpm:install": "pnpm pmpm install",
+    "pmpm:status": "pnpm pmpm status"
   },
   "packageManager": "pnpm@9.12.1",
   "pnpm": {

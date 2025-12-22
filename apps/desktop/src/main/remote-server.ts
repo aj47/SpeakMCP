@@ -10,6 +10,8 @@ import { processTranscriptWithAgentMode } from "./llm"
 import { state, agentProcessManager } from "./state"
 import { conversationService } from "./conversation-service"
 import { AgentProgressUpdate } from "../shared/types"
+import { agentSessionTracker } from "./agent-session-tracker"
+import { emergencyStopAll } from "./emergency-stop"
 
 let server: FastifyInstance | null = null
 let lastError: string | undefined
@@ -216,7 +218,6 @@ async function runAgent(options: RunAgentOptions): Promise<{
   // to ensure we find sessions for both existing and newly created conversations.
   // This fixes a bug where inputConversationId pointed to a non-existent conversation,
   // causing session lookup to fail and creating duplicate sessions.
-  const { agentSessionTracker } = await import("./agent-session-tracker")
   // Start snoozed unless remoteServerAutoShowPanel is enabled (affects both new and revived sessions)
   const startSnoozed = !cfg.remoteServerAutoShowPanel
   let existingSessionId: string | undefined
@@ -478,7 +479,6 @@ export async function startRemoteServer() {
       console.log("[KILLSWITCH] Loading emergency-stop module...")
       diagnosticsService.logInfo("remote-server", "Emergency stop triggered via API")
 
-      const { emergencyStopAll } = await import("./emergency-stop")
       console.log("[KILLSWITCH] Calling emergencyStopAll()...")
       const { before, after } = await emergencyStopAll()
 

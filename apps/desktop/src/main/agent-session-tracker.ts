@@ -5,6 +5,8 @@
 
 import type { RendererHandlers } from "./renderer-handlers"
 import { logApp } from "./debug"
+import { WINDOWS } from "./window"
+import { getRendererHandlers } from "@egoist/tipc/main"
 
 export interface AgentSession {
   id: string
@@ -25,9 +27,6 @@ export interface AgentSession {
  */
 async function emitSessionUpdate() {
   try {
-    const { WINDOWS } = await import("./window")
-    const { getRendererHandlers } = await import("@egoist/tipc/main")
-
     const agentSessionTracker = AgentSessionTracker.getInstance()
     const data = {
       activeSessions: agentSessionTracker.getActiveSessions(),

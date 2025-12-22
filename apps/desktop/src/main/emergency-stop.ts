@@ -1,5 +1,6 @@
 import { agentProcessManager, llmRequestAbortManager, state, agentSessionStateManager, toolApprovalManager } from "./state"
 import { emitAgentProgress } from "./emit-agent-progress"
+import { agentSessionTracker } from "./agent-session-tracker"
 
 /**
  * Centralized emergency stop: abort LLM requests, kill tracked child processes,
@@ -16,7 +17,6 @@ export async function emergencyStopAll(): Promise<{ before: number; after: numbe
 
   // Mark all active agent sessions as stopped in the tracker and emit progress updates
   try {
-    const { agentSessionTracker } = await import("./agent-session-tracker")
     const activeSessions = agentSessionTracker.getActiveSessions()
     for (const session of activeSessions) {
       // Cancel any pending tool approvals for this session

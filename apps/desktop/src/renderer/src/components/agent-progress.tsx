@@ -15,7 +15,8 @@ import { TileFollowUpInput } from "./tile-follow-up-input"
 import { OverlayFollowUpInput } from "./overlay-follow-up-input"
 import { MessageQueuePanel } from "@renderer/components/message-queue-panel"
 import { useResizable, TILE_DIMENSIONS } from "@renderer/hooks/use-resizable"
-import { getToolResultsSummary, ToolResultContent } from "@speakmcp/shared"
+import { getToolResultsSummary } from "@speakmcp/shared"
+import type { ToolResultContent } from "@speakmcp/shared"
 
 interface AgentProgressProps {
   progress: AgentProgressUpdate | null

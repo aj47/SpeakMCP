@@ -1162,13 +1162,15 @@ export function MCPConfigManager({
     try {
       const importedConfig = await tipcClient.loadMcpConfigFile({})
       if (importedConfig) {
-        // Filter out reserved server names
-        const filteredServers = { ...importedConfig.mcpServers }
+        // Filter out reserved server names (case-insensitive to match ServerDialog validation)
+        const filteredServers: Record<string, any> = {}
         const skippedNames: string[] = []
-        for (const reservedName of RESERVED_SERVER_NAMES) {
-          if (filteredServers[reservedName]) {
-            delete filteredServers[reservedName]
-            skippedNames.push(reservedName)
+        for (const [serverName, serverConfig] of Object.entries(importedConfig.mcpServers)) {
+          const normalizedName = serverName.trim().toLowerCase()
+          if (RESERVED_SERVER_NAMES.some(reserved => reserved.toLowerCase() === normalizedName)) {
+            skippedNames.push(serverName)
+          } else {
+            filteredServers[serverName] = serverConfig
           }
         }
 
@@ -1231,13 +1233,15 @@ export function MCPConfigManager({
       const importedConfig = await tipcClient.validateMcpConfigText({ text: formattedJson })
 
       if (importedConfig) {
-        // Filter out reserved server names
-        const filteredServers = { ...importedConfig.mcpServers }
+        // Filter out reserved server names (case-insensitive to match ServerDialog validation)
+        const filteredServers: Record<string, any> = {}
         const skippedNames: string[] = []
-        for (const reservedName of RESERVED_SERVER_NAMES) {
-          if (filteredServers[reservedName]) {
-            delete filteredServers[reservedName]
-            skippedNames.push(reservedName)
+        for (const [serverName, serverConfig] of Object.entries(importedConfig.mcpServers)) {
+          const normalizedName = serverName.trim().toLowerCase()
+          if (RESERVED_SERVER_NAMES.some(reserved => reserved.toLowerCase() === normalizedName)) {
+            skippedNames.push(serverName)
+          } else {
+            filteredServers[serverName] = serverConfig
           }
         }
 
@@ -1385,9 +1389,17 @@ export function MCPConfigManager({
   }
 
   // Build combined servers list (config servers + builtin server)
+  // Filter out any user servers with reserved names to prevent collisions
   const BUILTIN_SERVER_NAME = "speakmcp-settings"
+  const filteredUserServers = Object.fromEntries(
+    Object.entries(servers).filter(
+      ([name]) => !RESERVED_SERVER_NAMES.some(
+        (reserved) => name.trim().toLowerCase() === reserved.toLowerCase()
+      )
+    )
+  )
   const allServers: Record<string, MCPServerConfig | { isBuiltin: true }> = {
-    ...servers,
+    ...filteredUserServers,
     [BUILTIN_SERVER_NAME]: { isBuiltin: true } as any,
   }
 

@@ -61,14 +61,19 @@ export const Component = () => {
     if (location.pathname === link.href) return true
     // For Models link, also match /settings/providers since it's the same page
     if (link.href === "/settings/models" && location.pathname === "/settings/providers") return true
+    // For General link, also match /settings/general since it's the same page
+    if (link.href === "/settings" && location.pathname === "/settings/general") return true
     // For "General" settings (/settings), also match if we're on a settings subpath
     // that isn't covered by any other settings nav link
     if (link.href === "/settings" && location.pathname.startsWith("/settings/")) {
-      const otherSettingsHrefs = settingsNavLinks
-        .filter((l) => l.href !== "/settings")
-        .map((l) => l.href)
-      // If current path doesn't match any other settings link, highlight General
-      return !otherSettingsHrefs.some((href) => location.pathname.startsWith(href))
+      // Include both explicit nav links AND known aliases that map to other sections
+      const coveredHrefs = [
+        ...settingsNavLinks.filter((l) => l.href !== "/settings").map((l) => l.href),
+        "/settings/providers", // Alias for /settings/models
+        "/settings/general",   // Alias for /settings
+      ]
+      // If current path doesn't match any covered route, highlight General
+      return !coveredHrefs.some((href) => location.pathname.startsWith(href))
     }
     return false
   }

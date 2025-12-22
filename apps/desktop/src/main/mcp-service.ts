@@ -339,27 +339,31 @@ export class MCPService {
     serverName: string,
     result: MCPToolResult,
   ): void {
-    const firstContent = result.content[0]
-    if (!result.isError && firstContent?.type === "text" && firstContent.text) {
-      const text = firstContent.text
+    if (result.isError) return
 
-      const resourcePatterns = [
-        {
-          pattern: /(?:Session|session)\s+(?:ID|id):\s*([a-f0-9-]+)/i,
-          type: "session",
-        },
-        {
-          pattern: /(?:Connection|connection)\s+(?:ID|id):\s*([a-f0-9-]+)/i,
-          type: "connection",
-        },
-        { pattern: /(?:Handle|handle):\s*([a-f0-9-]+)/i, type: "handle" },
-      ]
+    // Scan all text content items for resource IDs
+    for (const item of result.content) {
+      if (item.type === "text" && item.text) {
+        const text = item.text
 
-      for (const { pattern, type } of resourcePatterns) {
-        const match = text.match(pattern)
-        if (match && match[1]) {
-          this.trackResource(serverName, match[1], type)
-          break
+        const resourcePatterns = [
+          {
+            pattern: /(?:Session|session)\s+(?:ID|id):\s*([a-f0-9-]+)/i,
+            type: "session",
+          },
+          {
+            pattern: /(?:Connection|connection)\s+(?:ID|id):\s*([a-f0-9-]+)/i,
+            type: "connection",
+          },
+          { pattern: /(?:Handle|handle):\s*([a-f0-9-]+)/i, type: "handle" },
+        ]
+
+        for (const { pattern, type } of resourcePatterns) {
+          const match = text.match(pattern)
+          if (match && match[1]) {
+            this.trackResource(serverName, match[1], type)
+            // Continue checking other patterns and text items - don't break here
+          }
         }
       }
     }

@@ -92,7 +92,8 @@ interface ServerDialogProps {
 
 function ServerDialog({ server, onSave, onCancel, onImportFromFile, onImportFromText, isOpen }: ServerDialogProps) {
   const [name, setName] = useState(server?.name || "")
-  const [activeTab, setActiveTab] = useState<'manual' | 'file' | 'paste' | 'examples'>('manual')
+  // Default to 'examples' tab when adding a new server, 'manual' when editing
+  const [activeTab, setActiveTab] = useState<'manual' | 'file' | 'paste' | 'examples'>(server ? 'manual' : 'examples')
   const [jsonInputText, setJsonInputText] = useState("")
   const [isValidatingJson, setIsValidatingJson] = useState(false)
   const [transport, setTransport] = useState<MCPTransportType>(
@@ -134,7 +135,8 @@ function ServerDialog({ server, onSave, onCancel, onImportFromFile, onImportFrom
   // Reset all fields when server prop changes (e.g., when switching from edit to add)
   useEffect(() => {
     setName(server?.name || "")
-    setActiveTab('manual')
+    // Default to 'examples' tab when adding a new server, 'manual' when editing
+    setActiveTab(server ? 'manual' : 'examples')
     setJsonInputText("")  // Clear pasted JSON to prevent data/secrets from persisting across dialog close/open
     setTransport(server?.config.transport || "stdio")
 
@@ -761,6 +763,28 @@ function ServerDialog({ server, onSave, onCancel, onImportFromFile, onImportFrom
 
 // Example MCP server configurations
 const MCP_EXAMPLES: Record<string, { name: string; config: MCPServerConfig }> = {
+  github: {
+    name: "github",
+    config: {
+      transport: "stdio" as MCPTransportType,
+      command: "npx",
+      args: ["-y", "@modelcontextprotocol/server-github"],
+      env: {
+        GITHUB_PERSONAL_ACCESS_TOKEN: "your-github-token-here",
+      },
+    },
+  },
+  exa: {
+    name: "exa",
+    config: {
+      transport: "stdio" as MCPTransportType,
+      command: "npx",
+      args: ["-y", "exa-mcp-server"],
+      env: {
+        EXA_API_KEY: "your-exa-api-key-here",
+      },
+    },
+  },
   memory: {
     name: "memory",
     config: {
@@ -785,15 +809,6 @@ const MCP_EXAMPLES: Record<string, { name: string; config: MCPServerConfig }> = 
       transport: "stdio" as MCPTransportType,
       command: "npx",
       args: ["-y", "@wonderwhy-er/desktop-commander@latest"],
-      env: {},
-    },
-  },
-  "mem0": {
-    name: "mem0",
-    config: {
-      transport: "stdio" as MCPTransportType,
-      command: "npx",
-      args: ["-y", "@pinkpixel/mem0-mcp"],
       env: {},
     },
   },

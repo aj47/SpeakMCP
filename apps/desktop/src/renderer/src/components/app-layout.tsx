@@ -49,6 +49,23 @@ export const Component = () => {
     },
   ]
 
+  // Route aliases that should highlight the same nav item
+  // Maps route paths to their primary nav link href
+  const routeAliases: Record<string, string> = {
+    "/settings/general": "/settings",
+    "/settings/providers": "/settings/models",
+  }
+
+  // Check if current path matches the nav link (including aliases)
+  const isNavLinkActive = (linkHref: string): boolean => {
+    const currentPath = location.pathname
+    // Exact match
+    if (currentPath === linkHref) return true
+    // Check if current path is an alias that maps to this link
+    const aliasTarget = routeAliases[currentPath]
+    return aliasTarget === linkHref
+  }
+
   useEffect(() => {
     return rendererHandlers.navigate.listen((url) => {
       navigate(url)
@@ -64,11 +81,10 @@ export const Component = () => {
       title={isCollapsed ? link.text : undefined}
       aria-label={isCollapsed ? link.text : undefined}
       className={({ isActive: _isActive }) => {
-        const isExactMatch = location.pathname === link.href
         return cn(
           "flex h-7 items-center rounded-md px-2 font-medium transition-all duration-200",
           isCollapsed ? "justify-center" : "gap-2",
-          isExactMatch
+          isNavLinkActive(link.href)
             ? "bg-accent text-accent-foreground"
             : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
         )
@@ -143,7 +159,7 @@ export const Component = () => {
                   to={link.href}
                   className={cn(
                     "flex h-8 w-full items-center justify-center rounded-md transition-all duration-200",
-                    location.pathname === link.href
+                    isNavLinkActive(link.href)
                       ? "bg-accent text-accent-foreground"
                       : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
                   )}

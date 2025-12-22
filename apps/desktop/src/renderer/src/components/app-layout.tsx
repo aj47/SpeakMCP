@@ -59,6 +59,8 @@ export const Component = () => {
   const isNavLinkActive = (link: NavLinkItem) => {
     // Exact match always wins
     if (location.pathname === link.href) return true
+    // For Models link, also match /settings/providers since it's the same page
+    if (link.href === "/settings/models" && location.pathname === "/settings/providers") return true
     // For "General" settings (/settings), also match if we're on a settings subpath
     // that isn't covered by any other settings nav link
     if (link.href === "/settings" && location.pathname.startsWith("/settings/")) {
@@ -114,7 +116,7 @@ export const Component = () => {
             "flex items-center",
             isCollapsed ? "justify-center" : "justify-end",
             // On macOS, add extra top margin when collapsed to avoid traffic light buttons
-            process.env.IS_MAC ? (isCollapsed ? "h-10 pt-10" : "h-10 pt-6") : "h-8 pt-2",
+            process.env.IS_MAC ? (isCollapsed ? "h-16 mt-6" : "h-10 pt-6") : "h-8 pt-2",
             isCollapsed ? "px-1" : "px-2"
           )}
         >

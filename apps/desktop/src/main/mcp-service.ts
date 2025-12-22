@@ -1498,34 +1498,42 @@ export class MCPService {
         }
       }
 
-      // Ensure content is properly formatted, preserving image content
-      const textContent: Array<{ type: "text"; text: string }> = []
-      const imageContent: Array<{ type: "image"; data: string; mimeType: string }> = []
+      // Parse content items, preserving original order and structure
+      // Each item is tagged with its type and original index for order preservation
+      type ParsedItem =
+        | { kind: "text"; index: number; content: { type: "text"; text: string } }
+        | { kind: "image"; index: number; content: { type: "image"; data: string; mimeType: string } }
+
+      const parsedItems: ParsedItem[] = []
 
       if (Array.isArray(result.content)) {
-        for (const item of result.content) {
+        result.content.forEach((item, index) => {
           if (typeof item === "string") {
-            textContent.push({ type: "text" as const, text: item })
+            parsedItems.push({ kind: "text", index, content: { type: "text" as const, text: item } })
           } else if (item.type === "image" && item.data && item.mimeType) {
             // Preserve image content from MCP tool results
-            imageContent.push({
-              type: "image" as const,
-              data: item.data,
-              mimeType: item.mimeType,
+            parsedItems.push({
+              kind: "image",
+              index,
+              content: { type: "image" as const, data: item.data, mimeType: item.mimeType }
             })
           } else if (item.type === "text" && item.text) {
-            textContent.push({ type: "text" as const, text: item.text })
+            parsedItems.push({ kind: "text", index, content: { type: "text" as const, text: item.text } })
           } else {
             // Fallback: convert unknown content to text
-            textContent.push({ type: "text" as const, text: JSON.stringify(item) })
+            parsedItems.push({ kind: "text", index, content: { type: "text" as const, text: JSON.stringify(item) } })
           }
-        }
+        })
       }
 
       // If no content was found, add a default message
-      if (textContent.length === 0 && imageContent.length === 0) {
-        textContent.push({ type: "text" as const, text: "Tool executed successfully" })
+      if (parsedItems.length === 0) {
+        parsedItems.push({ kind: "text", index: 0, content: { type: "text" as const, text: "Tool executed successfully" } })
       }
+
+      // Extract text items for filtering/processing (preserving their indices)
+      const textItems = parsedItems.filter((item): item is ParsedItem & { kind: "text" } => item.kind === "text")
+      const textContent = textItems.map(item => item.content)
 
       // Apply response filtering to reduce context size (only for text content)
       const filteredContent = this.filterToolResponse(serverName, toolName, textContent)
@@ -1538,15 +1546,26 @@ export class MCPService {
         onProgress
       )
 
-      // Combine processed text content with preserved image content
+      // Reconstruct the final content preserving original interleaved order
+      // Map processed text back to their original indices
+      const processedTextMap = new Map<number, { type: "text"; text: string }>()
+      textItems.forEach((item, i) => {
+        if (i < processedContent.length) {
+          processedTextMap.set(item.index, { type: "text" as const, text: processedContent[i].text })
+        }
+      })
+
+      // Build final content array in original order
+      const finalContent: MCPToolResultContent[] = parsedItems.map(item => {
+        if (item.kind === "image") {
+          return item.content
+        }
+        // Use processed text if available, otherwise fall back to original
+        return processedTextMap.get(item.index) ?? item.content
+      })
+
       const finalResult: MCPToolResult = {
-        content: [
-          ...processedContent.map(item => ({
-            type: "text" as const,
-            text: item.text
-          })),
-          ...imageContent,
-        ],
+        content: finalContent,
         isError: Boolean(result.isError),
       }
 

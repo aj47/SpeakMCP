@@ -4,8 +4,10 @@ import {
   MCPToolCall,
   LLMToolCallResponse,
   MCPToolResult,
+  MCPToolResultContent,
 } from "./mcp-service"
 import { AgentProgressStep, AgentProgressUpdate } from "../shared/types"
+import type { ToolResult, ToolResultContent } from "@speakmcp/shared"
 import { diagnosticsService } from "./diagnostics"
 import { makeStructuredContextExtraction, ContextExtractionResponse } from "./structured-output"
 import { makeLLMCallWithFetch, makeTextCompletionWithFetch, verifyCompletionWithFetch, RetryProgressCallback, makeLLMCallWithStreaming, StreamingCallback } from "./llm-fetch"
@@ -15,6 +17,47 @@ import { isDebugLLM, logLLM, isDebugTools, logTools } from "./debug"
 import { shrinkMessagesForLLM } from "./context-budget"
 import { emitAgentProgress } from "./emit-agent-progress"
 import { agentSessionTracker } from "./agent-session-tracker"
+
+/**
+ * Convert MCPToolResult content to ToolResult format for UI display
+ * Preserves both text and image content types
+ */
+function convertMCPToolResultToToolResult(mcpResult: MCPToolResult): ToolResult {
+  // Extract text content for the legacy content field
+  const textContent = Array.isArray(mcpResult.content)
+    ? mcpResult.content
+        .filter((c): c is { type: "text"; text: string } => c.type === "text")
+        .map(c => c.text)
+        .join("\n")
+    : ""
+
+  // Convert content items preserving both text and image types
+  const contentItems: ToolResultContent[] = Array.isArray(mcpResult.content)
+    ? mcpResult.content.map(c => {
+        if (c.type === "image") {
+          return { type: "image" as const, data: c.data, mimeType: c.mimeType }
+        }
+        return { type: "text" as const, text: c.text }
+      })
+    : []
+
+  return {
+    success: !mcpResult.isError,
+    content: textContent,
+    contentItems: contentItems.length > 0 ? contentItems : undefined,
+    error: mcpResult.isError ? textContent : undefined
+  }
+}
+
+/**
+ * Helper to extract text from MCPToolResultContent array
+ */
+function getTextFromContent(content: MCPToolResultContent[]): string {
+  return content
+    .filter((c): c is { type: "text"; text: string } => c.type === "text")
+    .map(c => c.text)
+    .join("\n")
+}
 
 /**
  * Use LLM to extract useful context from conversation history
@@ -100,7 +143,7 @@ function analyzeToolErrors(toolResults: MCPToolResult[]): {
   const errorTypes: string[] = []
   const errorMessages = toolResults
     .filter((r) => r.isError)
-    .map((r) => r.content.map((c) => c.text).join(" "))
+    .map((r) => getTextFromContent(r.content))
     .join(" ")
 
   // Categorize error types generically
@@ -336,10 +379,7 @@ async function executeToolWithRetries(
       }
     }
 
-    const errorText = result.content
-      .map((c) => c.text)
-      .join(" ")
-      .toLowerCase()
+    const errorText = getTextFromContent(result.content).toLowerCase()
 
     // Check if this is a retryable error
     const isRetryableError =
@@ -625,15 +665,7 @@ export async function processTranscriptWithAgentMode(
       const { conversationService } = await import("./conversation-service")
 
       // Convert toolResults from MCPToolResult format to stored format
-      const convertedToolResults = toolResults?.map(tr => ({
-        success: !tr.isError,
-        content: Array.isArray(tr.content)
-          ? tr.content.map(c => c.text).join("\n")
-          : String(tr.content || ""),
-        error: tr.isError
-          ? (Array.isArray(tr.content) ? tr.content.map(c => c.text).join("\n") : String(tr.content || ""))
-          : undefined
-      }))
+      const convertedToolResults = toolResults?.map(tr => convertMCPToolResultToToolResult(tr))
 
       await conversationService.addMessageToConversation(
         currentConversationId,
@@ -819,7 +851,7 @@ export async function processTranscriptWithAgentMode(
         toolResults: entry.toolResults?.map((tr) => {
           // Safely handle content - it should be an array, but add defensive check
           const contentText = Array.isArray(tr.content)
-            ? tr.content.map((c) => c.text).join("\n")
+            ? getTextFromContent(tr.content)
             : String(tr.content || "")
 
           return {
@@ -1728,13 +1760,7 @@ Always use actual resource IDs from the conversation history or create new ones 
 
         // Update the progress step with the result
         toolCallStep.status = execResult.result.isError ? "error" : "completed"
-        toolCallStep.toolResult = {
-          success: !execResult.result.isError,
-          content: execResult.result.content.map((c) => c.text).join("\n"),
-          error: execResult.result.isError
-            ? execResult.result.content.map((c) => c.text).join("\n")
-            : undefined,
-        }
+        toolCallStep.toolResult = convertMCPToolResultToToolResult(execResult.result)
 
         // Add tool result step
         const toolResultStep = createProgressStep(
@@ -1899,13 +1925,7 @@ Always use actual resource IDs from the conversation history or create new ones 
 
         // Update tool call step with result
         toolCallStep.status = execResult.result.isError ? "error" : "completed"
-        toolCallStep.toolResult = {
-          success: !execResult.result.isError,
-          content: execResult.result.content.map((c) => c.text).join("\n"),
-          error: execResult.result.isError
-            ? execResult.result.content.map((c) => c.text).join("\n")
-            : undefined,
-        }
+        toolCallStep.toolResult = convertMCPToolResultToToolResult(execResult.result)
 
         // Add tool result step with enhanced error information
         const toolResultStep = createProgressStep(
@@ -1963,12 +1983,19 @@ Always use actual resource IDs from the conversation history or create new ones 
     const processedToolResults = toolResults
 
     const meaningfulResults = processedToolResults.filter((r) =>
-      r.isError || (r.content?.map((c) => c.text).join("").trim().length > 0),
+      r.isError ||
+      r.content?.some(c => c.type === "text" && c.text.trim().length > 0) ||
+      r.content?.some(c => c.type === "image"),
     )
 
     if (meaningfulResults.length > 0) {
       const toolResultsText = meaningfulResults
-        .map((result) => result.content.map((c) => c.text).join("\n"))
+        .map((result) => result.content.map((c) => {
+          if (c.type === "image") {
+            return `[Image: ${c.mimeType}]`
+          }
+          return c.text
+        }).join("\n"))
         .join("\n\n")
 
       addMessage("tool", toolResultsText, undefined, meaningfulResults)
@@ -1997,7 +2024,7 @@ ${failedTools
   .map((toolName) => {
     const failedResult = toolResults.find((r) => r.isError)
     const errorText =
-      failedResult?.content.map((c) => c.text).join(" ") || "Unknown error"
+      failedResult ? getTextFromContent(failedResult.content) : "Unknown error"
 
     // Check for error patterns and provide generic suggestions
     let suggestion = ""

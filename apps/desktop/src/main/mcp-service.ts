@@ -52,11 +52,15 @@ export interface MCPToolCall {
   arguments: any
 }
 
+/**
+ * Content item in an MCP tool result - can be text or image
+ */
+export type MCPToolResultContent =
+  | { type: "text"; text: string }
+  | { type: "image"; data: string; mimeType: string }
+
 export interface MCPToolResult {
-  content: Array<{
-    type: "text"
-    text: string
-  }>
+  content: Array<MCPToolResultContent>
   isError?: boolean
 }
 
@@ -335,8 +339,9 @@ export class MCPService {
     serverName: string,
     result: MCPToolResult,
   ): void {
-    if (!result.isError && result.content[0]?.text) {
-      const text = result.content[0].text
+    const firstContent = result.content[0]
+    if (!result.isError && firstContent?.type === "text" && firstContent.text) {
+      const text = firstContent.text
 
       const resourcePatterns = [
         {
@@ -1493,26 +1498,39 @@ export class MCPService {
         }
       }
 
-      // Ensure content is properly formatted
-      const content = Array.isArray(result.content)
-        ? result.content.map((item) => ({
-            type: "text" as const,
-            text:
-              typeof item === "string"
-                ? item
-                : item.text || JSON.stringify(item),
-          }))
-        : [
-            {
-              type: "text" as const,
-              text: "Tool executed successfully",
-            },
-          ]
+      // Ensure content is properly formatted, preserving image content
+      const textContent: Array<{ type: "text"; text: string }> = []
+      const imageContent: Array<{ type: "image"; data: string; mimeType: string }> = []
 
-      // Apply response filtering to reduce context size
-      const filteredContent = this.filterToolResponse(serverName, toolName, content)
+      if (Array.isArray(result.content)) {
+        for (const item of result.content) {
+          if (typeof item === "string") {
+            textContent.push({ type: "text" as const, text: item })
+          } else if (item.type === "image" && item.data && item.mimeType) {
+            // Preserve image content from MCP tool results
+            imageContent.push({
+              type: "image" as const,
+              data: item.data,
+              mimeType: item.mimeType,
+            })
+          } else if (item.type === "text" && item.text) {
+            textContent.push({ type: "text" as const, text: item.text })
+          } else {
+            // Fallback: convert unknown content to text
+            textContent.push({ type: "text" as const, text: JSON.stringify(item) })
+          }
+        }
+      }
 
-      // Check if response needs further processing for context management
+      // If no content was found, add a default message
+      if (textContent.length === 0 && imageContent.length === 0) {
+        textContent.push({ type: "text" as const, text: "Tool executed successfully" })
+      }
+
+      // Apply response filtering to reduce context size (only for text content)
+      const filteredContent = this.filterToolResponse(serverName, toolName, textContent)
+
+      // Check if response needs further processing for context management (only for text content)
       const processedContent = await this.processLargeToolResponse(
         serverName,
         toolName,
@@ -1520,11 +1538,15 @@ export class MCPService {
         onProgress
       )
 
+      // Combine processed text content with preserved image content
       const finalResult: MCPToolResult = {
-        content: processedContent.map(item => ({
-          type: "text" as const,
-          text: item.text
-        })),
+        content: [
+          ...processedContent.map(item => ({
+            type: "text" as const,
+            text: item.text
+          })),
+          ...imageContent,
+        ],
         isError: Boolean(result.isError),
       }
 

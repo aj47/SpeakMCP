@@ -13,11 +13,21 @@ export interface ToolCall {
 }
 
 /**
+ * Content item in a tool result - can be text or image
+ */
+export type ToolResultContent =
+  | { type: "text"; text: string }
+  | { type: "image"; data: string; mimeType: string };
+
+/**
  * Tool result data - represents the result of an MCP tool execution
  */
 export interface ToolResult {
   success: boolean;
+  /** @deprecated Use contentItems for structured content with images */
   content: string;
+  /** Structured content items that can include text and images */
+  contentItems?: ToolResultContent[];
   error?: string;
 }
 

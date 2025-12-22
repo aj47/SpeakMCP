@@ -15,7 +15,7 @@ import { TileFollowUpInput } from "./tile-follow-up-input"
 import { OverlayFollowUpInput } from "./overlay-follow-up-input"
 import { MessageQueuePanel } from "@renderer/components/message-queue-panel"
 import { useResizable, TILE_DIMENSIONS } from "@renderer/hooks/use-resizable"
-import { getToolResultsSummary } from "@speakmcp/shared"
+import { getToolResultsSummary, ToolResultContent } from "@speakmcp/shared"
 
 interface AgentProgressProps {
   progress: AgentProgressUpdate | null
@@ -37,6 +37,14 @@ interface AgentProgressProps {
 
 // Enhanced conversation message component
 
+// Tool result type with optional structured content items
+type ToolResultWithContent = {
+  success: boolean
+  content: string
+  contentItems?: ToolResultContent[]
+  error?: string
+}
+
 // Types for unified tool execution display items
 type DisplayItem =
   | { kind: "message"; id: string; data: {
@@ -46,12 +54,12 @@ type DisplayItem =
       timestamp: number
       isThinking: boolean
       toolCalls?: Array<{ name: string; arguments: any }>
-      toolResults?: Array<{ success: boolean; content: string; error?: string }>
+      toolResults?: ToolResultWithContent[]
     } }
   | { kind: "tool_execution"; id: string; data: {
       timestamp: number
       calls: Array<{ name: string; arguments: any }>
-      results: Array<{ success: boolean; content: string; error?: string }>
+      results: ToolResultWithContent[]
     } }
   | { kind: "tool_approval"; id: string; data: {
       approvalId: string
@@ -80,7 +88,7 @@ const CompactMessage: React.FC<{
     isComplete?: boolean
     isThinking?: boolean
     toolCalls?: Array<{ name: string; arguments: any }>
-    toolResults?: Array<{ success: boolean; content: string; error?: string }>
+    toolResults?: ToolResultWithContent[]
     timestamp: number
   }
   isLast: boolean
@@ -127,7 +135,8 @@ const CompactMessage: React.FC<{
   const displayResults = (message.toolResults || []).filter(
     (r) =>
       (r.error && r.error.trim().length > 0) ||
-      (r.content && r.content.trim().length > 0),
+      (r.content && r.content.trim().length > 0) ||
+      (r.contentItems && r.contentItems.some(item => item.type === "image")),
   )
   const hasExtras =
     (message.toolCalls?.length ?? 0) > 0 ||
@@ -306,14 +315,41 @@ const CompactMessage: React.FC<{
                       </div>
 
                       <div className="space-y-2">
-                        <div>
-                          <div className="text-xs font-medium opacity-70 mb-1">
-                            Content:
+                        {/* Render structured content items if available */}
+                        {result.contentItems && result.contentItems.length > 0 ? (
+                          <div className="space-y-2">
+                            <div className="text-xs font-medium opacity-70 mb-1">
+                              Content:
+                            </div>
+                            {result.contentItems.map((item, itemIndex) => (
+                              <div key={itemIndex}>
+                                {item.type === "image" ? (
+                                  <div className="rounded bg-muted/30 p-2 overflow-auto max-h-96">
+                                    <img
+                                      src={`data:${item.mimeType};base64,${item.data}`}
+                                      alt={`Tool result image ${itemIndex + 1}`}
+                                      className="max-w-full h-auto rounded"
+                                      style={{ maxHeight: "350px", objectFit: "contain" }}
+                                    />
+                                  </div>
+                                ) : (
+                                  <pre className="rounded bg-muted/30 p-2 overflow-auto text-xs whitespace-pre-wrap break-all max-h-80 scrollbar-thin">
+                                    {item.text || "No content returned"}
+                                  </pre>
+                                )}
+                              </div>
+                            ))}
                           </div>
-                          <pre className="rounded bg-muted/30 p-2 overflow-auto text-xs whitespace-pre-wrap break-all max-h-80 scrollbar-thin">
-                            {result.content || "No content returned"}
-                          </pre>
-                        </div>
+                        ) : (
+                          <div>
+                            <div className="text-xs font-medium opacity-70 mb-1">
+                              Content:
+                            </div>
+                            <pre className="rounded bg-muted/30 p-2 overflow-auto text-xs whitespace-pre-wrap break-all max-h-80 scrollbar-thin">
+                              {result.content || "No content returned"}
+                            </pre>
+                          </div>
+                        )}
 
                         {result.error && (
                           <div>

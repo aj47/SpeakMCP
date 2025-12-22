@@ -90,6 +90,9 @@ interface ServerDialogProps {
   isOpen?: boolean
 }
 
+// Reserved server names that cannot be used by users (used for built-in functionality)
+const RESERVED_SERVER_NAMES = ["speakmcp-settings"]
+
 function ServerDialog({ server, onSave, onCancel, onImportFromFile, onImportFromText, isOpen }: ServerDialogProps) {
   const [name, setName] = useState(server?.name || "")
   const [activeTab, setActiveTab] = useState<'manual' | 'file' | 'paste' | 'examples'>('manual')
@@ -194,6 +197,12 @@ function ServerDialog({ server, onSave, onCancel, onImportFromFile, onImportFrom
   const handleSave = () => {
     if (!name.trim()) {
       toast.error("Server name is required")
+      return
+    }
+
+    // Check for reserved server names
+    if (RESERVED_SERVER_NAMES.includes(name.trim().toLowerCase())) {
+      toast.error(`Server name "${name.trim()}" is reserved and cannot be used`)
       return
     }
 
@@ -1153,17 +1162,38 @@ export function MCPConfigManager({
     try {
       const importedConfig = await tipcClient.loadMcpConfigFile({})
       if (importedConfig) {
+        // Filter out reserved server names
+        const filteredServers = { ...importedConfig.mcpServers }
+        const skippedNames: string[] = []
+        for (const reservedName of RESERVED_SERVER_NAMES) {
+          if (filteredServers[reservedName]) {
+            delete filteredServers[reservedName]
+            skippedNames.push(reservedName)
+          }
+        }
+
+        // Warn about skipped reserved names
+        for (const skippedName of skippedNames) {
+          toast.warning(`Skipped importing reserved server name: ${skippedName}`)
+        }
+
+        const importedCount = Object.keys(filteredServers).length
+        if (importedCount === 0 && skippedNames.length > 0) {
+          toast.error("No servers to import - all server names were reserved")
+          return
+        }
+
         // Add imported servers to config (duplicates will be replaced by imported versions)
         const newConfig = {
           ...config,
           mcpServers: {
             ...config.mcpServers,
-            ...importedConfig.mcpServers,
+            ...filteredServers,
           },
         }
         onConfigChange(newConfig)
         setShowAddDialog(false)
-        toast.success(`Successfully imported ${Object.keys(importedConfig.mcpServers).length} server(s)`)
+        toast.success(`Successfully imported ${importedCount} server(s)`)
       }
     } catch (error) {
       toast.error(`Failed to import config: ${error instanceof Error ? error.message : String(error)}`)
@@ -1201,17 +1231,38 @@ export function MCPConfigManager({
       const importedConfig = await tipcClient.validateMcpConfigText({ text: formattedJson })
 
       if (importedConfig) {
+        // Filter out reserved server names
+        const filteredServers = { ...importedConfig.mcpServers }
+        const skippedNames: string[] = []
+        for (const reservedName of RESERVED_SERVER_NAMES) {
+          if (filteredServers[reservedName]) {
+            delete filteredServers[reservedName]
+            skippedNames.push(reservedName)
+          }
+        }
+
+        // Warn about skipped reserved names
+        for (const skippedName of skippedNames) {
+          toast.warning(`Skipped importing reserved server name: ${skippedName}`)
+        }
+
+        const importedCount = Object.keys(filteredServers).length
+        if (importedCount === 0 && skippedNames.length > 0) {
+          toast.error("No servers to import - all server names were reserved")
+          return false
+        }
+
         // Add imported servers to config (duplicates will be replaced by imported versions)
         const newConfig = {
           ...config,
           mcpServers: {
             ...config.mcpServers,
-            ...importedConfig.mcpServers,
+            ...filteredServers,
           },
         }
         onConfigChange(newConfig)
         setShowAddDialog(false)
-        toast.success(`Successfully imported ${Object.keys(importedConfig.mcpServers).length} server(s)`)
+        toast.success(`Successfully imported ${importedCount} server(s)`)
         return true
       }
       return false
@@ -1383,6 +1434,12 @@ export function MCPConfigManager({
     const filteredTools = getAllFilteredTools()
     if (filteredTools.length === 0) return
 
+    // Capture original enabled states before any changes
+    const originalStates = new Map<string, boolean>()
+    filteredTools.forEach(tool => {
+      originalStates.set(tool.name, tool.enabled)
+    })
+
     // Update local state immediately for better UX
     const updatedTools = tools.map((tool) => {
       if (filteredTools.some(ft => ft.name === tool.name)) {
@@ -1409,9 +1466,9 @@ export function MCPConfigManager({
         const failedTools = filteredTools.filter(
           (_, index) => results[index].status === "rejected",
         )
-        const revertedTools = tools.map((tool) => {
+        const revertedTools = updatedTools.map((tool) => {
           if (failedTools.some(ft => ft.name === tool.name)) {
-            return { ...tool, enabled: !enable }
+            return { ...tool, enabled: originalStates.get(tool.name) ?? tool.enabled }
           }
           return tool
         })
@@ -1423,9 +1480,9 @@ export function MCPConfigManager({
       }
     } catch (error: any) {
       // Revert all tools on error
-      const revertedTools = tools.map((tool) => {
+      const revertedTools = updatedTools.map((tool) => {
         if (filteredTools.some(ft => ft.name === tool.name)) {
-          return { ...tool, enabled: !enable }
+          return { ...tool, enabled: originalStates.get(tool.name) ?? tool.enabled }
         }
         return tool
       })

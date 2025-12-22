@@ -83,7 +83,7 @@ export const Component = () => {
         title={isCollapsed ? link.text : undefined}
         aria-label={isCollapsed ? link.text : undefined}
         aria-current={isActive ? "page" : undefined}
-        className={({ isActive: _isActive }) => {
+        className={() => {
           return cn(
             "flex h-7 items-center rounded-md px-2 font-medium transition-all duration-200",
             isCollapsed ? "justify-center" : "gap-2",
@@ -117,7 +117,8 @@ export const Component = () => {
           className={cn(
             "flex items-center",
             isCollapsed ? "justify-center" : "justify-end",
-            process.env.IS_MAC ? "h-10 pt-6" : "h-8 pt-2",
+            // On macOS, add extra top margin when collapsed to avoid traffic light buttons
+            process.env.IS_MAC ? (isCollapsed ? "h-16 mt-6" : "h-10 pt-6") : "h-8 pt-2",
             isCollapsed ? "px-1" : "px-2"
           )}
         >

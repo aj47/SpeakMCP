@@ -478,6 +478,10 @@ export type Config = {
 	  remoteServerCorsOrigins?: string[]
 	  remoteServerAutoShowPanel?: boolean // Auto-show floating panel when receiving remote messages
 
+	  // Cloudflare Tunnel Persistence
+	  lastCloudflareTunnelUrl?: string // Last known Cloudflare tunnel URL for easy reconnection
+	  lastCloudflareTunnelTimestamp?: number // Timestamp when the URL was last active
+
   // Stream Status Watcher Configuration
   streamStatusWatcherEnabled?: boolean
   streamStatusFilePath?: string

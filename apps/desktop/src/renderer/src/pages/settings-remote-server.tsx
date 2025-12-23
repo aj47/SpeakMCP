@@ -397,6 +397,49 @@ export function Component() {
                     </div>
                   </div>
                 )}
+
+                {/* Show last known URL when tunnel is not running */}
+                {!tunnelStatus?.running && !tunnelStatus?.starting && tunnelStatus?.lastKnownUrl && (
+                  <Control label={<ControlLabel label="Last Known URL" tooltip="The last Cloudflare tunnel URL that was active. This URL may no longer be valid." />} className="px-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Input
+                        type="text"
+                        value={`${tunnelStatus.lastKnownUrl}/v1`}
+                        readOnly
+                        className="w-full sm:w-[360px] max-w-full min-w-0 font-mono text-xs opacity-75"
+                      />
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => navigator.clipboard.writeText(`${tunnelStatus.lastKnownUrl}/v1`)}
+                      >
+                        Copy
+                      </Button>
+                    </div>
+                    <div className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                      ⚠️ This URL was last active {tunnelStatus.lastKnownTimestamp
+                        ? new Date(tunnelStatus.lastKnownTimestamp).toLocaleString()
+                        : "previously"}. Start the tunnel to get a new URL.
+                    </div>
+                    {cfg?.remoteServerApiKey && (
+                      <div className="mt-3">
+                        <div className="text-sm font-medium mb-2">Last Known QR Code</div>
+                        <div className="flex flex-col items-start gap-3">
+                          <div className="p-3 bg-white rounded-lg opacity-75">
+                            <QRCodeSVG
+                              value={`speakmcp://config?baseUrl=${encodeURIComponent(`${tunnelStatus.lastKnownUrl}/v1`)}&apiKey=${encodeURIComponent(cfg.remoteServerApiKey)}`}
+                              size={120}
+                              level="M"
+                            />
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            This QR code uses the last known URL and may not work until the tunnel is restarted.
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </Control>
+                )}
               </>
             )}
           </ControlGroup>

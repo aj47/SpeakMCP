@@ -1398,13 +1398,18 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
           isThinking: false,
         })
       } else if (!isStreaming) {
-        messages.push({
-          role: "assistant",
-          content: currentThinkingStep.description || "Agent is thinking...",
-          isComplete: false,
-          timestamp: currentThinkingStep.timestamp,
-          isThinking: true,
-        })
+        // Skip adding a fake "thinking" message for verification steps
+        // These steps don't have LLM content and would hide the actual LLM response
+        const isVerificationStep = currentThinkingStep.title?.toLowerCase().includes("verifying")
+        if (!isVerificationStep) {
+          messages.push({
+            role: "assistant",
+            content: currentThinkingStep.description || "Agent is thinking...",
+            isComplete: false,
+            timestamp: currentThinkingStep.timestamp,
+            isThinking: true,
+          })
+        }
       }
     }
   } else {
@@ -1422,13 +1427,17 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
           })
         } else if (step.status === "in_progress" && !isComplete) {
           // Only show in-progress thinking when task is not complete
-          messages.push({
-            role: "assistant",
-            content: step.description || "Agent is thinking...",
-            isComplete: false,
-            timestamp: step.timestamp,
-            isThinking: true,
-          })
+          // Skip verification steps as they would hide the actual LLM response
+          const isVerificationStep = step.title?.toLowerCase().includes("verifying")
+          if (!isVerificationStep) {
+            messages.push({
+              role: "assistant",
+              content: step.description || "Agent is thinking...",
+              isComplete: false,
+              timestamp: step.timestamp,
+              isThinking: true,
+            })
+          }
         }
       })
 

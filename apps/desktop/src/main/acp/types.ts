@@ -33,6 +33,8 @@ export interface ACPAgentDefinition {
   maxConcurrency?: number;
   /** Default timeout in milliseconds */
   timeout?: number;
+  /** Idle timeout in milliseconds - how long to wait before stopping an idle agent */
+  idleTimeoutMs?: number;
 }
 
 /**
@@ -147,6 +149,10 @@ export interface ACPSubAgentState {
   result?: ACPRunResult;
   /** Progress message or status update */
   progress?: string;
+  /** The ACP server's run ID for async runs */
+  acpRunId?: string;
+  /** Base URL for the agent (needed for status checks) */
+  baseUrl?: string;
 }
 
 /**

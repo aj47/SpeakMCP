@@ -245,7 +245,7 @@ export class ACPProcessManager {
 
     // Check if the agent has an idle timeout configured
     // For now, use a default of 5 minutes if not specified
-    const idleTimeoutMs = instance.definition.timeout ?? 300000;
+    const idleTimeoutMs = instance.definition.idleTimeoutMs ?? 300000;
 
     if (idleTimeoutMs > 0) {
       this.startIdleTimeout(agentName, idleTimeoutMs);

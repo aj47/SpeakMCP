@@ -300,9 +300,14 @@ const CompactMessage: React.FC<{
                         <span className="font-semibold">
                           {result.success ? "✅ Success" : "❌ Error"}
                         </span>
-                        <Badge variant="outline" className="text-xs">
-                          Result {index + 1}
-                        </Badge>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] opacity-60 font-mono">
+                            {(result.content?.length || 0).toLocaleString()} chars
+                          </span>
+                          <Badge variant="outline" className="text-xs">
+                            Result {index + 1}
+                          </Badge>
+                        </div>
                       </div>
 
                       <div className="space-y-2">
@@ -605,7 +610,12 @@ const ToolExecutionBubble: React.FC<{
                   >
                     <div className="mb-1 flex items-center justify-between">
                       <span className="font-semibold">{r.success ? "✅ Success" : "❌ Error"}</span>
-                      <Badge variant="outline" className="text-[10px]">{`Result ${idx + 1}`}</Badge>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] opacity-60 font-mono">
+                          {(r.content?.length || 0).toLocaleString()} chars
+                        </span>
+                        <Badge variant="outline" className="text-[10px]">{`Result ${idx + 1}`}</Badge>
+                      </div>
                     </div>
                     <div className="space-y-2">
                       <div>

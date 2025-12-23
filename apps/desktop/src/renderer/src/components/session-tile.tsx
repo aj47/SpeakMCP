@@ -339,7 +339,12 @@ export function SessionTile({
           )}
 
           {/* Footer with status info */}
-          <div className="px-3 py-2 border-t bg-muted/20 text-xs text-muted-foreground flex-shrink-0">
+          <div className="px-3 py-2 border-t bg-muted/20 text-xs text-muted-foreground flex-shrink-0 flex items-center gap-2">
+            {isActive && progress?.modelInfo && (
+              <span className="text-[10px] truncate max-w-[100px]" title={`${progress.modelInfo.provider}: ${progress.modelInfo.model}`}>
+                {progress.modelInfo.provider}/{progress.modelInfo.model.split('/').pop()?.substring(0, 15)}
+              </span>
+            )}
             {session.currentIteration && session.maxIterations && (
               <span>
                 Step {session.currentIteration}/{session.maxIterations}

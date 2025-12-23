@@ -581,6 +581,17 @@ export async function processTranscriptWithAgentMode(
   // Declared here so emit() can access it
   let contextInfoRef: { estTokens: number; maxTokens: number } | undefined = undefined
 
+  // Get model info for progress display
+  const providerId = config.mcpToolsProviderId || "openai"
+  const modelName = providerId === "openai"
+    ? config.mcpToolsOpenaiModel || "gpt-4o-mini"
+    : providerId === "groq"
+    ? config.mcpToolsGroqModel || "llama-3.3-70b-versatile"
+    : providerId === "gemini"
+    ? config.mcpToolsGeminiModel || "gemini-1.5-flash-002"
+    : "gpt-4o-mini"
+  const modelInfoRef = { provider: providerId, model: modelName }
+
   // Create bound emitter that always includes sessionId, conversationId, snooze state, sessionStartIndex, conversationTitle, and contextInfo
   const emit = (
     update: Omit<AgentProgressUpdate, 'sessionId' | 'conversationId' | 'isSnoozed' | 'conversationTitle'>,
@@ -598,6 +609,8 @@ export async function processTranscriptWithAgentMode(
       sessionStartIndex,
       // Always include current context info if available
       contextInfo: update.contextInfo ?? contextInfoRef,
+      // Always include model info
+      modelInfo: modelInfoRef,
     }
 
     // Fire and forget - don't await, but catch errors

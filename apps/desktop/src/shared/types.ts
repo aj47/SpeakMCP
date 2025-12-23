@@ -158,6 +158,10 @@ export interface AgentProgressUpdate {
     estTokens: number
     maxTokens: number
   }
+  modelInfo?: {
+    provider: string
+    model: string
+  }
 }
 
 // Message Queue Types

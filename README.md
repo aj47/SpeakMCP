@@ -9,25 +9,28 @@
 
 ## 🎬 Preview
 
+[Click here to see v1 launch video on youtube ](https://www.youtube.com/watch?v=A4oKYCaeaaw)
+
 https://github.com/user-attachments/assets/0c181c70-d1f1-4c5d-a6f5-a73147e75182
 
 ## 🚀 Quick Start
 
 ### Download
 
-**Cross-Platform Support**: macOS (Apple Silicon & Intel), Windows (x64), Linux (x64)
-
 **[📥 Download Latest Release](https://github.com/aj47/SpeakMCP/releases/latest)**
+
+> **Platform Support**: macOS (Apple Silicon & Intel) with full MCP agent functionality.
+> ⚠️ **Windows/Linux**: MCP tools not currently supported — see [v0.2.2](https://github.com/aj47/SpeakMCP/releases/tag/v0.2.2) for dictation-only builds.
 
 ### Basic Usage
 
 **Voice Recording:**
 
-1. **Hold `Ctrl`** key to start recording your voice
-2. **Release `Ctrl`** to stop recording and transcribe
+1. **Hold `Ctrl`** (macOS/Linux) or **`Ctrl+/`** (Windows) to start recording
+2. **Release** to stop recording and transcribe
 3. Text is automatically inserted into your active application
 
-**MCP Agent Mode:**
+**MCP Agent Mode** (macOS only):
 
 1. **Hold `Ctrl+Alt`** to start recording for agent mode
 2. **Release `Ctrl+Alt`** to process with MCP tools
@@ -36,238 +39,61 @@ https://github.com/user-attachments/assets/0c181c70-d1f1-4c5d-a6f5-a73147e75182
 
 **Text Input:**
 
-- **Press `Ctrl+T`** to open text input mode for direct typing
-
-
+- **`Ctrl+T`** (macOS/Linux) or **`Ctrl+Shift+T`** (Windows) for direct typing
 
 ## ✨ Features
 
-### 🎤 Voice & Speech
-- **Voice-to-Text**: Hold `Ctrl` to record, release to transcribe
-- **Toggle Voice Dictation**: Press `Fn` key to start/stop recording (configurable)
-- **Multi-Language Support**: 30+ languages including Spanish, French, German, Chinese, Japanese, Arabic, Hindi
-- **Text-to-Speech (TTS)**: AI-generated speech with 50+ voices across OpenAI, Groq, and Gemini
-- **Auto-Play TTS**: Automatic speech playback for seamless conversations
-
-### 🤖 AI Agent & MCP
-- **MCP Agent Mode**: Hold `Ctrl+Alt` for intelligent tool execution with real-time progress
-- **MCP Integration**: Connect to any MCP-compatible tools and services
-- **OAuth 2.1 Support**: Secure authentication for MCP servers with deep link integration
-- **Tool Management**: Per-server tool toggles and approval prompts
-- **Conversation Continuity**: Context preservation across agent interactions
-
-### 🛠️ Platform & Performance
-- **Cross-Platform**: macOS, Windows, and Linux support with native builds
-- **Rate Limit Handling**: Exponential backoff retry for API rate limits (429 errors)
-- **Model Selection**: Choose specific models for OpenAI, Groq, and Gemini providers
-- **Debug Modes**: Comprehensive logging for LLM calls and tool execution
-- **Universal Integration**: Works with any text-input application
-
-### 🎨 User Experience
-- **Text Input**: Press `Ctrl+T` for direct text input mode
-- **Dark/Light Themes**: Toggle between dark and light modes
-- **Resizable Panels**: Drag-to-resize interface components
-- **Kill Switch**: Emergency stop for agent operations (`Escape` key)
-- **Conversation Management**: Full conversation history with tool call visualization
-
-## 🏗️ Architecture
-
-Built with modern technologies for cross-platform performance:
-- **Electron**: Main process for system integration, MCP orchestration, and TTS processing
-- **React + TypeScript**: Modern UI with real-time progress tracking and conversation management
-- **Rust**: High-performance keyboard monitoring and text injection across platforms
-- **MCP Client**: Full Model Context Protocol implementation with OAuth 2.1 support
-- **Multi-Provider AI**: OpenAI, Groq, and Gemini integration for speech, text, and TTS
+| Category | Capabilities |
+|----------|--------------|
+| **🎤 Voice** | Hold-to-record, 30+ languages, Fn toggle mode, auto-insert to any app |
+| **🔊 TTS** | 50+ AI voices via OpenAI, Groq, and Gemini with auto-play |
+| **🤖 MCP Agent** | Tool execution, OAuth 2.1 auth, real-time progress, conversation context |
+| **🛠️ Platform** | macOS/Windows/Linux, rate limit handling, multi-provider AI |
+| **🎨 UX** | Dark/light themes, resizable panels, kill switch, conversation history |
 
 ## 🛠️ Development
 
-**Prerequisites**: Node.js 18+, pnpm, Rust toolchain
-
-> ⚠️ **Important**: This project uses **pnpm** as its package manager. Using npm or yarn may cause installation issues, especially with Electron binaries. If you don't have pnpm installed:
-> ```bash
-> npm install -g pnpm
-> ```
-
 ```bash
-# Setup
-git clone https://github.com/aj47/SpeakMCP.git
-cd SpeakMCP
-pnpm install
-pnpm build-rs  # Build Rust binary for your platform
-pnpm dev       # Start development server
-
-# Platform-specific builds
-pnpm build        # Production build for current platform
-pnpm build:mac    # macOS build (Apple Silicon + Intel)
-pnpm build:win    # Windows build (x64)
-pnpm build:linux  # Linux build (x64)
-
-# Testing
-pnpm test         # Run test suite
-pnpm test:run     # Run tests once (CI mode)
-pnpm test:coverage # Run tests with coverage
-
-# VNC GUI Testing (GitHub Actions)
-# Test the full app in a Linux desktop environment with remote VNC access
-# See .github/VNC_TESTING_GUIDE.md for detailed instructions
+git clone https://github.com/aj47/SpeakMCP.git && cd SpeakMCP
+pnpm install && pnpm build-rs && pnpm dev
 ```
 
-### 🖥️ VNC GUI Testing
-
-Test SpeakMCP in a full Linux desktop environment via GitHub Actions with remote VNC access:
-
-1. **Setup secrets** (one-time):
-   ```bash
-   # Linux/macOS
-   ./.github/setup-vnc-secrets.sh
-
-   # Windows
-   .\.github\setup-vnc-secrets.ps1
-   ```
-
-2. **Run VNC workflow**:
-   - Go to Actions → VNC GUI Testing → Run workflow
-   - Connect via VNC client or web browser
-   - Interact with the app in real-time
-
-See [VNC Testing Guide](.github/VNC_TESTING_GUIDE.md) for complete documentation.
-
-### 🔧 Troubleshooting Development Setup
-
-**"Electron uninstall" error when running `pnpm dev`:**
-
-This usually means Electron binaries weren't installed correctly. Fix it by:
-
-```bash
-# Clean install with pnpm
-rm -rf node_modules
-pnpm install
-```
-
-**Multiple lock files (package-lock.json, pnpm-lock.yaml, bun.lock):**
-
-If you have multiple lock files, you've mixed package managers. Clean up:
-
-```bash
-# Remove all lock files except pnpm's
-rm -f package-lock.json bun.lock
-rm -rf node_modules
-pnpm install
-```
-
-**Node version mismatch:**
-
-This project works best with Node.js 18-20. Check your version:
-
-```bash
-node --version  # Should be v18.x, v19.x, or v20.x
-```
-
-If using nvm, switch to the recommended version:
-
-```bash
-nvm use 20
-```
+See **[DEVELOPMENT.md](DEVELOPMENT.md)** for full setup, build commands, troubleshooting, and architecture details.
 
 ## ⚙️ Configuration
 
-**AI Providers**: OpenAI, Groq, Google Gemini
-- Configure API keys and custom base URLs in settings
-- Select specific models for each provider
-- Multi-language speech recognition support
-- TTS with 50+ voices across providers
+**AI Providers** — Configure in settings:
+- OpenAI, Groq, or Google Gemini API keys
+- Model selection per provider
+- Custom base URLs (optional)
 
-**MCP Servers**: Configure tools in `mcpServers` JSON format:
+**MCP Servers** — Add tools in `mcpServers` JSON format:
 ```json
 {
   "mcpServers": {
     "filesystem": {
       "command": "npx",
       "args": ["-y", "@modelcontextprotocol/server-filesystem", "/path"]
-    },
-    "web-search": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-web-search"],
-      "env": {"BRAVE_API_KEY": "your-key"}
     }
   }
 }
 ```
 
 **Keyboard Shortcuts**:
-- **Hold Ctrl**: Voice recording (traditional mode)
-- **Fn Key**: Toggle voice dictation (press once to start/stop)
-- **Hold Ctrl+Alt**: MCP agent mode
-- **Ctrl+T**: Text input mode
-- **Escape**: Cancel/kill switch for operations
 
-## 🤖 MCP Agent Mode
-
-**MCP (Model Context Protocol)** enables AI assistants to connect to external tools. SpeakMCP implements a full MCP client with advanced capabilities.
-
-**Enhanced Features**:
-- **Intelligent Tool Selection**: Automatically determines which tools to use
-- **Real-time Progress**: Visual feedback with TTS narration during execution
-- **Conversation Continuity**: Context preservation across multi-turn interactions
-- **OAuth 2.1 Integration**: Secure authentication for MCP servers
-- **Rate Limit Handling**: Automatic retry with exponential backoff
-- **Kill Switch**: Emergency stop functionality with `Escape` key
-- **Tool Management**: Per-server tool toggles and approval prompts
-
-**Example commands**:
-- "Create a new project folder and add a README"
-- "Search for latest AI news and summarize the top 3 articles"
-- "Send a message to the team about today's progress"
-- "Analyze this codebase and suggest improvements"
-
-## 🆕 What's New
-
-**Recent Major Features**:
-
-### 🎵 Text-to-Speech (TTS) Integration
-- **50+ AI Voices**: OpenAI (6 voices), Groq (23 voices), Gemini (30+ voices)
-- **Auto-Play**: Seamless conversation flow with automatic speech playback
-- **Smart Preprocessing**: Converts code blocks, URLs, and markdown to natural speech
-- **Multi-Language**: Support for 30+ languages with native pronunciation
-
-### 🖥️ Cross-Platform Support
-- **Windows Build**: Full Windows compatibility with native builds
-- **Enhanced macOS**: Apple Silicon and Intel support
-- **Linux Ready**: Complete Linux build pipeline
-
-### 🎛️ Enhanced Voice Controls
-- **Toggle Voice Dictation**: Press `Fn` key to start/stop recording
-- **Multi-Language Recognition**: 30+ languages with automatic detection
-- **Configurable Hotkeys**: Customize keyboard shortcuts for all functions
-
-### 🔧 Reliability & Performance
-- **Rate Limit Handling**: Automatic retry with exponential backoff for API limits
-- **OAuth 2.1**: Secure authentication for MCP servers with deep link integration
-- **Kill Switch**: Emergency stop functionality for all operations
-- **Model Selection**: Choose specific AI models for each provider
-
-## 🐛 Debug Mode
-
-For development and troubleshooting, SpeakMCP includes comprehensive debug logging:
-
-```bash
-# Enable all debug modes
-pnpm dev d               # Shortest option
-pnpm dev debug-all       # Readable format
-
-# Enable specific modes
-pnpm dev debug-llm       # LLM calls and responses
-pnpm dev debug-tools     # MCP tool execution
-pnpm dev debug-ui        # UI focus, renders, and state changes
-```
-
-See [DEBUGGING.md](DEBUGGING.md) for detailed debugging instructions.
+| Shortcut | Action |
+|----------|--------|
+| Hold `Ctrl` / `Ctrl+/` (Win) | Voice recording |
+| `Fn` | Toggle dictation on/off |
+| Hold `Ctrl+Alt` | MCP agent mode (macOS) |
+| `Ctrl+T` / `Ctrl+Shift+T` (Win) | Text input |
+| `Ctrl+Shift+Escape` | Kill switch |
 
 ## 🤝 Contributing
 
 We welcome contributions! Fork the repo, create a feature branch, and open a Pull Request.
 
-**💬 Get help on [Discord](https://discord.gg/naGJHsKc)** | **🌐 More info at [techfren.net](https://techfren.net)**
+**💬 Get help on [Discord](https://discord.gg/cK9WeQ7jPq)** | **🌐 More info at [techfren.net](https://techfren.net)**
 
 ## 📄 License
 
@@ -275,15 +101,7 @@ This project is licensed under the [AGPL-3.0 License](./LICENSE).
 
 ## 🙏 Acknowledgments
 
-- **[Whispo](https://github.com/egoist/whispo)** - This project is a fork of Whispo, the original AI voice assistant
-- [OpenAI](https://openai.com/) for Whisper speech recognition and GPT models
-- [Anthropic](https://anthropic.com/) for Claude and MCP protocol development
-- [Model Context Protocol](https://modelcontextprotocol.io/) for the extensible tool integration standard
-- [Electron](https://electronjs.org/) for cross-platform desktop framework
-- [React](https://reactjs.org/) for the user interface
-- [Rust](https://rust-lang.org/) for system-level integration
-- [Groq](https://groq.com/) for fast inference capabilities
-- [Google](https://ai.google.dev/) for Gemini models
+Built on [Whispo](https://github.com/egoist/whispo) • Powered by [OpenAI](https://openai.com/), [Anthropic](https://anthropic.com/), [Groq](https://groq.com/), [Google](https://ai.google.dev/) • [MCP](https://modelcontextprotocol.io/) • [Electron](https://electronjs.org/) • [React](https://reactjs.org/) • [Rust](https://rust-lang.org/)
 
 ---
 

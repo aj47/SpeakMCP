@@ -1,0 +1,50 @@
+{
+  "name": "@speakmcp/shared",
+  "version": "1.1.0",
+  "description": "Shared design tokens, types, and utilities for SpeakMCP apps",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    },
+    "./colors": {
+      "types": "./dist/colors.d.ts",
+      "import": "./dist/colors.mjs",
+      "require": "./dist/colors.js"
+    },
+    "./types": {
+      "types": "./dist/types.d.ts",
+      "import": "./dist/types.mjs",
+      "require": "./dist/types.js"
+    },
+    "./tts-preprocessing": {
+      "types": "./dist/tts-preprocessing.d.ts",
+      "import": "./dist/tts-preprocessing.mjs",
+      "require": "./dist/tts-preprocessing.js"
+    },
+    "./chat-utils": {
+      "types": "./dist/chat-utils.d.ts",
+      "import": "./dist/chat-utils.mjs",
+      "require": "./dist/chat-utils.js"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "tsup": "^8.0.0",
+    "typescript": "^5.0.0"
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "private": true
+}
+

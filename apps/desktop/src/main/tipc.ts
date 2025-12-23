@@ -1178,7 +1178,7 @@ export const router = {
           }
         })
         .catch((error) => {
-          logLLM("[createMcpTextInput] Agent processing error:", error)
+          logApp("[createMcpTextInput] Agent processing error:", error)
         })
         .finally(() => {
           // Process queued messages after this session completes (success or error)

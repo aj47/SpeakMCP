@@ -292,6 +292,8 @@ export type Config = {
   hideDockIcon?: boolean
   launchAtLogin?: boolean
 
+  // Onboarding Configuration
+  onboardingCompleted?: boolean
 
   // Toggle Voice Dictation Configuration
   toggleVoiceDictationEnabled?: boolean

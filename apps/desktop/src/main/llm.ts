@@ -638,6 +638,10 @@ export async function processTranscriptWithAgentMode(
     const isSnoozed = agentSessionTracker.isSessionSnoozed(currentSessionId)
     const session = agentSessionTracker.getSession(currentSessionId)
     const conversationTitle = session?.conversationTitle
+    const profileName = session?.profileSnapshot?.profileName
+
+    // Debug logging for profile name
+    logLLM(`[emit] Session: ${currentSessionId}, hasSession: ${!!session}, hasProfileSnapshot: ${!!session?.profileSnapshot}, profileName: ${profileName}`)
 
     const fullUpdate: AgentProgressUpdate = {
       ...update,
@@ -651,7 +655,7 @@ export async function processTranscriptWithAgentMode(
       // Always include model info
       modelInfo: modelInfoRef,
       // Include profile name from session snapshot for UI display
-      profileName: session?.profileSnapshot?.profileName,
+      profileName,
     }
 
     // Fire and forget - don't await, but catch errors

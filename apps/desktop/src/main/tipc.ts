@@ -1221,6 +1221,39 @@ export const router = {
       // This ensures users see feedback during the (potentially long) STT call
           const tempConversationId = input.conversationId || `temp_${Date.now()}`
 
+      // Determine profile snapshot for session isolation
+      // If reusing an existing session, use its stored snapshot to maintain isolation
+      // Only capture a new snapshot from the current global profile when creating a new session
+      let profileSnapshot: SessionProfileSnapshot | undefined
+
+      if (input.sessionId) {
+        // Try to get the stored profile snapshot from the existing session
+        profileSnapshot = agentSessionStateManager.getSessionProfileSnapshot(input.sessionId)
+          ?? agentSessionTracker.getSessionProfileSnapshot(input.sessionId)
+      } else if (input.conversationId) {
+        // Try to find existing session for this conversation and get its profile snapshot
+        const existingSessionId = agentSessionTracker.findSessionByConversationId(input.conversationId)
+        if (existingSessionId) {
+          profileSnapshot = agentSessionStateManager.getSessionProfileSnapshot(existingSessionId)
+            ?? agentSessionTracker.getSessionProfileSnapshot(existingSessionId)
+        }
+      }
+
+      // Only capture a new snapshot if we don't have one from an existing session
+      if (!profileSnapshot) {
+        const currentProfile = profileService.getCurrentProfile()
+        if (currentProfile) {
+          profileSnapshot = {
+            profileId: currentProfile.id,
+            profileName: currentProfile.name,
+            guidelines: currentProfile.guidelines,
+            systemPrompt: currentProfile.systemPrompt,
+            mcpServerConfig: currentProfile.mcpServerConfig,
+            modelConfig: currentProfile.modelConfig,
+          }
+        }
+      }
+
       // If sessionId is provided, try to revive that session.
       // Otherwise, if conversationId is provided, try to find and revive a session for that conversation.
       // This handles the case where user continues from history (only conversationId is set).
@@ -1239,8 +1272,8 @@ export const router = {
             lastActivity: "Transcribing audio...",
           })
         } else {
-          // Session not found, create a new one
-          sessionId = agentSessionTracker.startSession(tempConversationId, "Transcribing...", startSnoozed)
+          // Session not found, create a new one with profile snapshot
+          sessionId = agentSessionTracker.startSession(tempConversationId, "Transcribing...", startSnoozed, profileSnapshot)
         }
       } else if (input.conversationId) {
         // No sessionId but have conversationId - try to find existing session for this conversation
@@ -1256,16 +1289,16 @@ export const router = {
               lastActivity: "Transcribing audio...",
             })
           } else {
-            // Revive failed, create new session
-            sessionId = agentSessionTracker.startSession(tempConversationId, "Transcribing...", startSnoozed)
+            // Revive failed, create new session with profile snapshot
+            sessionId = agentSessionTracker.startSession(tempConversationId, "Transcribing...", startSnoozed, profileSnapshot)
           }
         } else {
-          // No existing session for this conversation, create new
-          sessionId = agentSessionTracker.startSession(tempConversationId, "Transcribing...", startSnoozed)
+          // No existing session for this conversation, create new with profile snapshot
+          sessionId = agentSessionTracker.startSession(tempConversationId, "Transcribing...", startSnoozed, profileSnapshot)
         }
       } else {
-        // No sessionId or conversationId provided, create a new session
-        sessionId = agentSessionTracker.startSession(tempConversationId, "Transcribing...", startSnoozed)
+        // No sessionId or conversationId provided, create a new session with profile snapshot
+        sessionId = agentSessionTracker.startSession(tempConversationId, "Transcribing...", startSnoozed, profileSnapshot)
       }
 
       try {

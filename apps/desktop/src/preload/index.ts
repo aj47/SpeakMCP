@@ -10,6 +10,9 @@ const api = {
   getOAuthStatus: (serverName: string) => ipcRenderer.invoke('getOAuthStatus', serverName),
   revokeOAuthTokens: (serverName: string) => ipcRenderer.invoke('revokeOAuthTokens', serverName),
   testMCPServer: (serverName: string, config: any) => ipcRenderer.invoke('testMCPServer', { serverName, config }),
+  // Screenshot API - uses IPC to main process (desktopCapturer is only available in main process in Electron 31+)
+  getScreenSources: (options: { types: string[], thumbnailSize?: { width: number, height: number } }) =>
+    ipcRenderer.invoke('getScreenSources', options)
 }
 
 if (process.contextIsolated) {

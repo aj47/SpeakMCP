@@ -6,6 +6,38 @@ import { state, llmRequestAbortManager, agentSessionStateManager } from "./state
 import OpenAI from "openai"
 
 /**
+ * Helper function to get a string preview from content that may be a string or multimodal array
+ */
+function getContentPreview(content: string | any[] | undefined, maxLength: number = 100): string {
+  if (!content) return "(empty)"
+  if (typeof content === "string") {
+    return content.length > maxLength ? content.substring(0, maxLength) + "..." : content
+  }
+  // It's an array (multimodal content)
+  const textParts = content
+    .filter((part: any) => part.type === "text")
+    .map((part: any) => part.text)
+    .join(" ")
+  const hasImage = content.some((part: any) => part.type === "image_url")
+  const preview = textParts.length > maxLength ? textParts.substring(0, maxLength) + "..." : textParts
+  return hasImage ? `[image] ${preview}` : preview
+}
+
+/**
+ * Helper function to get content length from content that may be a string or multimodal array
+ */
+function getContentLength(content: string | any[] | undefined): number {
+  if (!content) return 0
+  if (typeof content === "string") {
+    return content.length
+  }
+  // It's an array (multimodal content) - sum up text lengths
+  return content
+    .filter((part: any) => part.type === "text")
+    .reduce((sum: number, part: any) => sum + (part.text?.length || 0), 0)
+}
+
+/**
  * Callback for reporting retry progress to the UI
  */
 export type RetryProgressCallback = (info: {
@@ -658,23 +690,22 @@ async function makeAPICallAttempt(
       messagesCount: requestBody.messages.length,
       responseFormat: requestBody.response_format,
       estimatedTokens,
-      totalPromptLength: (requestBody.messages as Array<{ role: string; content: string }>).reduce(
-        (sum: number, msg: { role: string; content: string }) => sum + ((msg.content?.length) || 0),
+      totalPromptLength: (requestBody.messages as Array<{ role: string; content: string | any[] }>).reduce(
+        (sum: number, msg: { role: string; content: string | any[] }) => sum + getContentLength(msg.content),
         0,
       ),
       contextWarning: estimatedTokens > 8000 ? "WARNING: High token count, may exceed context limit" : null
     })
     logLLM("Request Body (truncated)", {
       ...requestBody,
-      messages: (requestBody.messages as Array<{ role: string; content: string }>).map(
-        (msg: { role: string; content: string }) => ({
+      messages: (requestBody.messages as Array<{ role: string; content: string | any[] }>).map(
+        (msg: { role: string; content: string | any[] }) => ({
           role: msg.role,
-          content: msg.content.length > 200
-            ? msg.content.substring(0, 200) + "... [" + msg.content.length + " chars]"
-            : msg.content,
+          content: getContentPreview(msg.content, 200),
         }),
       )
     })
+
   }
 
   // Create abort controller and register it so emergency stop can cancel
@@ -841,7 +872,7 @@ async function makeAPICallAttempt(
  * Make a fetch-based LLM call for OpenAI-compatible APIs with structured output fallback
  */
 async function makeOpenAICompatibleCall(
-  messages: Array<{ role: string; content: string }>,
+  messages: Array<{ role: string; content: string | any[] }>,
   providerId: string,
   useStructuredOutput: boolean = true,
   sessionId?: string,
@@ -861,7 +892,10 @@ async function makeOpenAICompatibleCall(
   }
 
   const model = getModel(providerId, "mcp")
-  const estimatedTokens = Math.ceil(messages.reduce((sum, msg) => sum + msg.content.length, 0) / 4)
+  const estimatedTokens = Math.ceil(messages.reduce((sum, msg) => {
+    const contentLength = typeof msg.content === 'string' ? msg.content.length : JSON.stringify(msg.content).length
+    return sum + contentLength
+  }, 0) / 4)
 
   const baseRequestBody = {
     model,
@@ -1016,7 +1050,7 @@ async function makeOpenAICompatibleCall(
  * Make a fetch-based LLM call for Gemini API
  */
 async function makeGeminiCall(
-  messages: Array<{ role: string; content: string }>,
+  messages: Array<{ role: string; content: string | any[] }>,
   sessionId?: string,
   onRetryProgress?: RetryProgressCallback,
 ): Promise<any> {
@@ -1030,8 +1064,30 @@ async function makeGeminiCall(
   const baseURL =
     config.geminiBaseUrl || "https://generativelanguage.googleapis.com"
 
+  // Helper to extract text from multimodal content without embedding full image data
+  const extractTextFromContent = (content: string | any[]): string => {
+    if (typeof content === 'string') {
+      return content
+    }
+    if (Array.isArray(content)) {
+      return content.map(part => {
+        if (part.type === 'text') {
+          return part.text || ''
+        }
+        if (part.type === 'image_url') {
+          return '[image attached]'
+        }
+        return ''
+      }).filter(Boolean).join(' ')
+    }
+    return String(content)
+  }
+
   // Convert messages to Gemini format
-  const prompt = messages.map((m) => `${m.role}: ${m.content}`).join("\n\n")
+  const prompt = messages.map((m) => {
+    const content = extractTextFromContent(m.content)
+    return `${m.role}: ${content}`
+  }).join("\n\n")
 
   return apiCallWithRetry(async () => {
     if (isDebugLLM()) {
@@ -1144,7 +1200,7 @@ async function makeGeminiCall(
  * This is wrapped by makeLLMCallWithFetch with retry logic
  */
 async function makeLLMCallAttempt(
-  messages: Array<{ role: string; content: string }>,
+  messages: Array<{ role: string; content: string | any[] }>,
   chatProviderId: string,
   onRetryProgress?: RetryProgressCallback,
   sessionId?: string,
@@ -1153,7 +1209,7 @@ async function makeLLMCallAttempt(
     logLLM("🚀 Starting LLM call attempt", {
       provider: chatProviderId,
       messagesCount: messages.length,
-      lastMessagePreview: messages[messages.length - 1]?.content?.substring(0, 100) + "..."
+      lastMessagePreview: getContentPreview(messages[messages.length - 1]?.content, 100)
     })
   }
 
@@ -1323,7 +1379,7 @@ async function makeLLMCallAttempt(
  * Main function to make LLM calls using fetch with automatic retry on empty responses
  */
 export async function makeLLMCallWithFetch(
-  messages: Array<{ role: string; content: string }>,
+  messages: Array<{ role: string; content: string | any[] }>,
   providerId?: string,
   onRetryProgress?: RetryProgressCallback,
   sessionId?: string,

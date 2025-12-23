@@ -363,6 +363,10 @@ export type Config = {
   textInputShortcut?: "ctrl-t" | "ctrl-shift-t" | "alt-t" | "custom"
   customTextInputShortcut?: string
 
+  // Screenshot Configuration
+  alwaysIncludeScreenshot?: boolean
+  screenshotForVoiceCommands?: boolean // Auto-capture screenshot when using voice commands (MCP/agent mode)
+
   // Settings Window Hotkey Configuration
   settingsHotkeyEnabled?: boolean
   settingsHotkey?: "ctrl-shift-s" | "ctrl-comma" | "ctrl-shift-comma" | "custom"
@@ -477,6 +481,10 @@ export type Config = {
   // Stream Status Watcher Configuration
   streamStatusWatcherEnabled?: boolean
   streamStatusFilePath?: string
+
+  // Screenshot Display Configuration
+  // Store the preferred display ID for screenshot capture (empty = primary display)
+  screenshotDisplayId?: string
 
 }
 

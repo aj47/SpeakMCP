@@ -104,6 +104,22 @@ export function Component() {
   const shortcut = (configQuery.data as any)?.shortcut || "hold-ctrl"
   const textInputShortcut = (configQuery.data as any)?.textInputShortcut || "ctrl-t"
 
+  // State for available displays
+  const [displays, setDisplays] = useState<Array<{
+    id: string
+    label: string
+    bounds: { x: number, y: number, width: number, height: number }
+    isPrimary: boolean
+  }>>([])
+
+  // Fetch available displays
+  useEffect(() => {
+    tipcClient.getAvailableDisplays().then((result: typeof displays) => {
+      setDisplays(result || [])
+    }).catch((err: unknown) => {
+      console.error('Failed to get displays:', err)
+    })
+  }, [])
 
   if (!configQuery.data) return null
 
@@ -353,6 +369,19 @@ export function Component() {
                     placeholder="Click to record custom text input shortcut"
                   />
                 )}
+
+              <div className="flex items-center gap-2">
+                <Switch
+                  checked={configQuery.data?.alwaysIncludeScreenshot ?? false}
+                  onCheckedChange={(checked) => {
+                    saveConfig({
+                      alwaysIncludeScreenshot: checked,
+                    })
+                  }}
+                  disabled={!configQuery.data?.textInputEnabled}
+                />
+                <span className="text-sm text-muted-foreground">Always include screenshot with messages</span>
+              </div>
             </div>
           </Control>
 
@@ -727,6 +756,39 @@ export function Component() {
             />
           </Control>
 
+        </ControlGroup>
+
+        {/* Screenshot Settings */}
+        <ControlGroup title="Screenshot">
+          <Control label={<ControlLabel label="Screenshot Display" tooltip="Select which display to capture when taking screenshots. Useful for multi-monitor setups." />} className="px-3">
+            <Select
+              value={configQuery.data?.screenshotDisplayId || "primary"}
+              onValueChange={(value) => {
+                saveConfig({
+                  screenshotDisplayId: value === "primary" ? "" : value,
+                })
+              }}
+            >
+              <SelectTrigger className="w-64">
+                <SelectValue placeholder="Primary Display" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="primary">Primary Display (default)</SelectItem>
+                {displays.map(d => (
+                  <SelectItem key={d.id} value={d.id}>
+                    {d.label || `Display ${d.id}`} {d.isPrimary ? "(Primary)" : ""} - {d.bounds.width}x{d.bounds.height}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Control>
+
+          <Control label={<ControlLabel label="Screenshot for Voice Commands" tooltip="Automatically capture a screenshot when using voice commands (agent mode). The screenshot will be sent along with your voice input for context-aware responses." />} className="px-3">
+            <Switch
+              checked={configQuery.data?.screenshotForVoiceCommands ?? false}
+              onCheckedChange={(value) => saveConfig({ screenshotForVoiceCommands: value })}
+            />
+          </Control>
         </ControlGroup>
 
         {/* Agent Settings */}

@@ -592,6 +592,7 @@ export async function processTranscriptWithAgentMode(
   conversationId?: string, // Conversation ID for linking to conversation history
   sessionId?: string, // Session ID for progress routing and isolation
   onProgress?: (update: AgentProgressUpdate) => void, // Optional callback for external progress consumers (e.g., SSE)
+  screenshot?: string, // Optional screenshot data URL for multimodal input
 ): Promise<AgentModeResponse> {
   const config = configStore.get()
 
@@ -817,9 +818,15 @@ export async function processTranscriptWithAgentMode(
     toolCalls?: MCPToolCall[]
     toolResults?: MCPToolResult[]
     timestamp?: number
+    screenshot?: string
   }> = [
     ...(previousConversationHistory || []),
-    { role: "user", content: transcript, timestamp: Date.now() },
+    {
+      role: "user",
+      content: transcript,
+      timestamp: Date.now(),
+      screenshot: screenshot
+    },
   ]
 
   logLLM(`[llm.ts processTranscriptWithAgentMode] conversationHistory initialized with ${conversationHistory.length} messages, roles: [${conversationHistory.map(m => m.role).join(', ')}]`)
@@ -920,7 +927,7 @@ export async function processTranscriptWithAgentMode(
   // Helper to map conversation history to LLM messages format (filters empty content)
   const mapConversationToMessages = (
     addSummaryPrompt: boolean = false
-  ): Array<{ role: "user" | "assistant"; content: string }> => {
+  ): Array<{ role: "user" | "assistant"; content: string | any[] }> => {
     const mapped = conversationHistory
       .map((entry) => {
         if (entry.role === "tool") {
@@ -930,9 +937,21 @@ export async function processTranscriptWithAgentMode(
         }
         const content = (entry.content || "").trim()
         if (!content) return null
+
+        // Handle multimodal content (text + screenshot)
+        if (entry.screenshot) {
+          return {
+            role: entry.role as "user" | "assistant",
+            content: [
+              { type: "text", text: entry.content },
+              { type: "image_url", image_url: { url: entry.screenshot, detail: "high" } }
+            ]
+          }
+        }
+
         return { role: entry.role as "user" | "assistant", content }
       })
-      .filter(Boolean) as Array<{ role: "user" | "assistant"; content: string }>
+      .filter(Boolean) as Array<{ role: "user" | "assistant"; content: string | any[] }>
 
     // Add summary prompt if last message is from assistant (ensures LLM has something to respond to)
     if (addSummaryPrompt && mapped.length > 0 && mapped[mapped.length - 1].role === "assistant") {
@@ -1187,8 +1206,8 @@ Return ONLY JSON per schema.`,
           // For assistant messages, ensure non-empty content
           // Anthropic API requires all messages to have non-empty content
           // except for the optional final assistant message
-          let content = entry.content
-          if (entry.role === "assistant" && !content?.trim()) {
+          let content: string | any[] = entry.content
+          if (entry.role === "assistant" && !entry.content?.trim()) {
             // If assistant message has tool calls but no content, describe the tool calls
             if (entry.toolCalls && entry.toolCalls.length > 0) {
               const toolNames = entry.toolCalls.map(tc => tc.name).join(", ")
@@ -1198,6 +1217,18 @@ Return ONLY JSON per schema.`,
               content = "[Processing...]"
             }
           }
+
+          // Handle multimodal content (text + screenshot)
+          if (entry.screenshot) {
+            return {
+              role: entry.role as "user" | "assistant",
+              content: [
+                { type: "text", text: entry.content },
+                { type: "image_url", image_url: { url: entry.screenshot, detail: "high" } }
+              ]
+            }
+          }
+
           return {
             role: entry.role as "user" | "assistant",
             content,

@@ -153,8 +153,20 @@ async function processWithAgentMode(
   conversationId?: string,
   existingSessionId?: string, // Optional: reuse existing session instead of creating new one
   startSnoozed: boolean = false, // Whether to start session snoozed (default: false to show panel)
+  screenshot?: string, // Optional screenshot data URL for multimodal input
 ): Promise<string> {
   const config = configStore.get()
+
+  // Validate screenshot if provided
+  if (screenshot) {
+    if (!screenshot.startsWith('data:image/')) {
+      throw new Error('Invalid screenshot format: must be a data URL starting with data:image/')
+    }
+    const sizeInMB = (screenshot.length * 0.75) / (1024 * 1024)
+    if (sizeInMB > 10) {
+      throw new Error(`Screenshot too large: ${sizeInMB.toFixed(1)}MB (maximum 10MB)`)
+    }
+  }
 
   // NOTE: Don't clear all agent progress here - we support multiple concurrent sessions
   // Each session manages its own progress lifecycle independently
@@ -298,6 +310,8 @@ async function processWithAgentMode(
       previousConversationHistory,
       conversationId, // Pass conversation ID for linking to conversation history
       sessionId, // Pass session ID for progress routing and isolation
+      undefined, // onProgress callback (not used here, progress is emitted internally)
+      screenshot, // Pass screenshot data for multimodal input
     )
 
     // Mark session as completed
@@ -856,12 +870,13 @@ export const router = {
   }),
 
   triggerMcpRecording: t.procedure
-    .input<{ conversationId?: string; sessionId?: string; fromTile?: boolean }>()
+    .input<{ conversationId?: string; sessionId?: string; fromTile?: boolean; screenshot?: string }>()
     .action(async ({ input }) => {
       // Always show the panel during recording for waveform feedback
       // The fromTile flag tells the panel to hide after recording ends
       // fromButtonClick=true indicates this was triggered via UI button (not keyboard shortcut)
-      await showPanelWindowAndStartMcpRecording(input.conversationId, input.sessionId, input.fromTile, true)
+      // screenshot is passed through to the renderer for multimodal input
+      await showPanelWindowAndStartMcpRecording(input.conversationId, input.sessionId, input.fromTile, true, input.screenshot)
     }),
 
   showMainWindow: t.procedure
@@ -1008,6 +1023,7 @@ export const router = {
   createTextInput: t.procedure
     .input<{
       text: string
+      screenshot?: string
     }>()
     .action(async ({ input }) => {
       const config = configStore.get()
@@ -1062,6 +1078,7 @@ export const router = {
       text: string
       conversationId?: string
       fromTile?: boolean // When true, session runs in background (snoozed) - panel won't show
+      screenshot?: string // Optional screenshot data URL for multimodal input
     }>()
     .action(async ({ input }) => {
       const config = configStore.get()
@@ -1115,7 +1132,7 @@ export const router = {
       // This allows multiple sessions to run concurrently
       // Pass existingSessionId to reuse the session if found
       // When fromTile=true, start snoozed so the floating panel doesn't appear
-      processWithAgentMode(input.text, conversationId, existingSessionId, input.fromTile ?? false)
+      processWithAgentMode(input.text, conversationId, existingSessionId, input.fromTile ?? false, input.screenshot)
         .then((finalResponse) => {
           // Save to history after completion
           const history = getRecordingHistory()
@@ -1148,7 +1165,7 @@ export const router = {
           }
         })
         .catch((error) => {
-          logLLM("[createMcpTextInput] Agent processing error:", error)
+          logApp("[createMcpTextInput] Agent processing error:", error)
         })
         .finally(() => {
           // Process queued messages after this session completes (success or error)
@@ -1169,6 +1186,7 @@ export const router = {
       conversationId?: string
       sessionId?: string
       fromTile?: boolean // When true, session runs in background (snoozed) - panel won't show
+      screenshot?: string // Optional screenshot data URL for multimodal input
     }>()
     .action(async ({ input }) => {
       fs.mkdirSync(recordingsFolder, { recursive: true })
@@ -1345,7 +1363,8 @@ export const router = {
         // Fire-and-forget: Start agent processing without blocking
         // This allows multiple sessions to run concurrently
         // Pass the sessionId to avoid creating a duplicate session
-        processWithAgentMode(transcript, conversationId, sessionId)
+        // Pass startSnoozed for tile behavior and screenshot for multimodal input
+        processWithAgentMode(transcript, conversationId, sessionId, startSnoozed, input.screenshot)
         .then((finalResponse) => {
           // Save to history after completion
           const history = getRecordingHistory()
@@ -2047,6 +2066,19 @@ export const router = {
 
   openConversationsFolder: t.procedure.action(async () => {
     await shell.openPath(conversationsFolder)
+  }),
+
+  // Display/Screen endpoints
+  getAvailableDisplays: t.procedure.action(async () => {
+    const { screen } = await import('electron')
+    const displays = screen.getAllDisplays()
+    const primaryDisplay = screen.getPrimaryDisplay()
+    return displays.map(d => ({
+      id: d.id.toString(),
+      label: d.label || `Display ${d.id}`,
+      bounds: d.bounds,
+      isPrimary: d.id === primaryDisplay.id
+    }))
   }),
 
   // Panel resize endpoints

@@ -4,7 +4,28 @@ import { makeTextCompletionWithFetch } from "./llm-fetch"
 import { constructMinimalSystemPrompt } from "./system-prompts"
 import { agentSessionStateManager } from "./state"
 
-export type LLMMessage = { role: string; content: string }
+export type LLMMessage = { role: string; content: string | any[] }
+
+// Helper function to get content length that handles both string and array
+function getContentLength(content: string | any[] | undefined): number {
+  if (!content) return 0
+  if (typeof content === 'string') return content.length
+  // For multimodal content, sum up text parts only
+  return content
+    .filter((part: any) => part.type === 'text')
+    .reduce((sum: number, part: any) => sum + (part.text?.length || 0), 0)
+}
+
+// Helper function to get content as string for summarization
+function getContentAsString(content: string | any[] | undefined): string {
+  if (!content) return ''
+  if (typeof content === 'string') return content
+  // For multimodal content, extract text parts only
+  return content
+    .filter((part: any) => part.type === 'text')
+    .map((part: any) => part.text || '')
+    .join('\n')
+}
 
 // Simple in-memory cache for provider/model context windows
 const contextWindowCache = new Map<string, number>()
@@ -77,7 +98,7 @@ export async function getMaxContextTokens(providerId: string, model: string): Pr
 
 export function estimateTokensFromMessages(messages: LLMMessage[]): number {
   // Rough estimate: 4 chars ≈ 1 token
-  const totalChars = messages.reduce((sum, m) => sum + (m.content?.length || 0), 0)
+  const totalChars = messages.reduce((sum, m) => sum + getContentLength(m.content), 0)
   return Math.ceil(totalChars / 4)
 }
 
@@ -202,14 +223,15 @@ export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<{ messa
   const AGGRESSIVE_TRUNCATE_THRESHOLD = 5000
   for (let i = 0; i < messages.length; i++) {
     const msg = messages[i]
-    if (msg.role === "user" && msg.content && msg.content.length > AGGRESSIVE_TRUNCATE_THRESHOLD) {
+    if (msg.role === "user" && getContentLength(msg.content) > AGGRESSIVE_TRUNCATE_THRESHOLD) {
       // Check if this looks like a tool result (contains JSON arrays/objects)
-      if (msg.content.includes('"url":') || msg.content.includes('"id":')) {
+      const contentStr = getContentAsString(msg.content)
+      if (contentStr.includes('"url":') || contentStr.includes('"id":')) {
         // Truncate aggressively and add note
         messages[i] = {
           ...msg,
-          content: msg.content.substring(0, AGGRESSIVE_TRUNCATE_THRESHOLD) +
-                   '\n\n... (truncated ' + (msg.content.length - AGGRESSIVE_TRUNCATE_THRESHOLD) +
+          content: contentStr.substring(0, AGGRESSIVE_TRUNCATE_THRESHOLD) +
+                   '\n\n... (truncated ' + (contentStr.length - AGGRESSIVE_TRUNCATE_THRESHOLD) +
                    ' characters for context management. Key information preserved above.)'
         }
         applied.push("aggressive_truncate")
@@ -224,7 +246,7 @@ export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<{ messa
 
   // Tier 1: Summarize large messages (prefer tool outputs or very long entries)
   const indicesByLength = messages
-    .map((m, i) => ({ i, len: m.content?.length || 0, role: m.role, content: m.content }))
+    .map((m, i) => ({ i, len: getContentLength(m.content), role: m.role, content: m.content }))
     .filter((x) => x.len > summarizeThreshold && x.role !== "system")
     .sort((a, b) => b.len - a.len)
 
@@ -240,7 +262,8 @@ export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<{ messa
     // Emit progress update before summarization
     summarizedCount++
     if (opts.onSummarizationProgress) {
-      const messagePreview = item.content!.substring(0, 100).replace(/\n/g, ' ')
+      const contentStr = getContentAsString(item.content)
+      const messagePreview = contentStr.substring(0, 100).replace(/\n/g, ' ')
       opts.onSummarizationProgress(
         summarizedCount,
         totalToSummarize,
@@ -248,7 +271,7 @@ export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<{ messa
       )
     }
 
-    const summarized = await summarizeContent(item.content!, opts.sessionId)
+    const summarized = await summarizeContent(getContentAsString(item.content), opts.sessionId)
     messages[item.i] = { ...messages[item.i], content: summarized }
     applied.push("summarize")
     tokens = estimateTokensFromMessages(messages)

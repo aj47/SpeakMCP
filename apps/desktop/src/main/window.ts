@@ -4,6 +4,7 @@ import {
   shell,
   screen,
   app,
+  desktopCapturer,
 } from "electron"
 import path from "path"
 import { getRendererHandlers } from "@egoist/tipc/main"
@@ -17,6 +18,45 @@ import { setupConsoleLogger } from "./console-logger"
 import { emergencyStopAll } from "./emergency-stop"
 
 type WINDOW_ID = "main" | "panel" | "setup"
+
+/**
+ * Capture a screenshot from the configured display (or primary display)
+ * Returns the screenshot as a data URL, or undefined if capture fails
+ */
+export async function captureScreenshotFromMain(): Promise<string | undefined> {
+  try {
+    const config = configStore.get()
+    const sources = await desktopCapturer.getSources({
+      types: ['screen'],
+      thumbnailSize: { width: 1920, height: 1080 }
+    })
+
+    if (sources.length === 0) {
+      if (process.platform === 'darwin') {
+        throw new Error('No screen sources available. Please grant Screen Recording permission in System Settings > Privacy & Security > Screen Recording, then restart the app.')
+      } else {
+        throw new Error('No screen sources available')
+      }
+    }
+
+    // Find the source matching the configured display, or use the first one (primary)
+    const configuredDisplayId = config.screenshotDisplayId
+    let source = sources[0]
+    if (configuredDisplayId) {
+      const matchingSource = sources.find(s => s.display_id === configuredDisplayId)
+      if (matchingSource) {
+        source = matchingSource
+      }
+    }
+
+    const screenshot = source.thumbnail.toDataURL()
+    logApp(`[captureScreenshotFromMain] Captured screenshot from display: ${source.display_id}, size: ${screenshot.length} chars`)
+    return screenshot
+  } catch (error) {
+    logApp('[captureScreenshotFromMain] Failed to capture screenshot:', error)
+    throw error
+  }
+}
 
 export const WINDOWS = new Map<WINDOW_ID, BrowserWindow>()
 
@@ -434,7 +474,7 @@ export async function showPanelWindowAndStartRecording(fromButtonClick?: boolean
   getWindowRendererHandlers("panel")?.startRecording.send({ fromButtonClick })
 }
 
-export async function showPanelWindowAndStartMcpRecording(conversationId?: string, sessionId?: string, fromTile?: boolean, fromButtonClick?: boolean) {
+export async function showPanelWindowAndStartMcpRecording(conversationId?: string, sessionId?: string, fromTile?: boolean, fromButtonClick?: boolean, screenshot?: string) {
   // Capture focus before showing panel
   try {
     const focusedApp = await getFocusedAppInfo()
@@ -447,11 +487,25 @@ export async function showPanelWindowAndStartMcpRecording(conversationId?: strin
   state.isRecordingFromButtonClick = fromButtonClick ?? false
   state.isRecordingMcpMode = true
 
+  // Auto-capture screenshot if enabled for voice commands and no screenshot was explicitly passed
+  let effectiveScreenshot = screenshot
+  if (!effectiveScreenshot) {
+    const config = configStore.get()
+    if (config.screenshotForVoiceCommands) {
+      try {
+        effectiveScreenshot = await captureScreenshotFromMain()
+      } catch (error) {
+        // Log but continue - recording can proceed without screenshot
+        logApp('[showPanelWindowAndStartMcpRecording] Screenshot capture failed:', error)
+      }
+    }
+  }
+
   // Ensure consistent sizing by setting mode in main before showing
   setPanelMode("normal")
   showPanelWindow()
-  // Pass fromTile and fromButtonClick flags so panel knows how to behave after recording ends
-  getWindowRendererHandlers("panel")?.startMcpRecording.send({ conversationId, sessionId, fromTile, fromButtonClick })
+  // Pass fromTile, fromButtonClick, and screenshot flags so panel knows how to behave after recording ends
+  getWindowRendererHandlers("panel")?.startMcpRecording.send({ conversationId, sessionId, fromTile, fromButtonClick, screenshot: effectiveScreenshot })
 }
 
 export async function showPanelWindowAndShowTextInput() {

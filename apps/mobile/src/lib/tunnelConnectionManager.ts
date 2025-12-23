@@ -98,6 +98,12 @@ export class TunnelConnectionManager {
   async connect(baseUrl: string, apiKey: string): Promise<boolean> {
     this.updateState('connecting');
 
+    // Clear any pending reconnect timeout to avoid race conditions
+    if (this.reconnectTimeoutId) {
+      clearTimeout(this.reconnectTimeoutId);
+      this.reconnectTimeoutId = null;
+    }
+
     // Ensure we have device identity
     if (!this.deviceId) {
       const identity = await getDeviceIdentity();

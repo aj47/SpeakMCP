@@ -71,10 +71,16 @@ export function useTunnelConnectionProvider(): TunnelConnectionContextValue {
     });
 
     // Initialize the manager (loads device identity and attempts reconnection)
-    manager.initialize().then(() => {
-      setIsInitialized(true);
-      setConnectionInfo(manager.getConnectionInfo());
-    });
+    manager.initialize()
+      .then(() => {
+        setIsInitialized(true);
+        setConnectionInfo(manager.getConnectionInfo());
+      })
+      .catch((error) => {
+        console.error('[TunnelConnection] Failed to initialize manager:', error);
+        // Still mark as initialized so the app can function, but with disconnected state
+        setIsInitialized(true);
+      });
 
     return () => {
       manager.cleanup();

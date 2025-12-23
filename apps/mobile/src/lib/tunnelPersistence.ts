@@ -23,6 +23,10 @@ export interface TunnelMetadata {
 
 /**
  * Save tunnel metadata for later reconnection.
+ *
+ * TODO: Security enhancement - Consider storing the apiKey in secure storage
+ * (expo-secure-store for iOS Keychain/Android Keystore) instead of AsyncStorage
+ * for production deployments where the API key grants sensitive access.
  */
 export async function saveTunnelMetadata(metadata: TunnelMetadata): Promise<void> {
   try {

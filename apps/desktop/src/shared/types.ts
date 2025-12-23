@@ -409,6 +409,10 @@ export type Config = {
   maxConversationsToKeep?: number
   autoSaveConversations?: boolean
 
+  // Provider Section Collapse Configuration
+  providerSectionCollapsedGroq?: boolean
+  providerSectionCollapsedGemini?: boolean
+
   // Panel Position Configuration
   panelPosition?:
     | "top-left"

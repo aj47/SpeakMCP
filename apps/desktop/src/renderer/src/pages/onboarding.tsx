@@ -200,6 +200,7 @@ export function Component() {
             onBack={() => setStep("dictation")}
             config={configQuery.data}
             onSaveConfig={saveConfig}
+            onSaveConfigAsync={saveConfigAsync}
           />
         )}
       </div>
@@ -487,11 +488,13 @@ function AgentStep({
   onBack,
   config,
   onSaveConfig,
+  onSaveConfigAsync,
 }: {
   onComplete: () => void
   onBack: () => void
   config: Config | undefined
   onSaveConfig: (config: Partial<Config>) => void
+  onSaveConfigAsync: (config: Partial<Config>) => Promise<void>
 }) {
   const [isInstallingExa, setIsInstallingExa] = useState(false)
   const [exaInstalled, setExaInstalled] = useState(false)
@@ -530,14 +533,13 @@ function AgentStep({
           ...currentMcpConfig.mcpServers,
           exa: {
             transport: "streamableHttp" as const,
-            url: "https://mcp.exa.ai/mcp",
+            url: "https://mcp.exa.ai/mcp?exaApiKey=YOUR_API_KEY",
           },
         },
       }
-      onSaveConfig({ mcpConfig: newMcpConfig })
 
       // Wait for config to save, then start the server
-      await new Promise((resolve) => setTimeout(resolve, 500))
+      await onSaveConfigAsync({ mcpConfig: newMcpConfig })
 
       // Enable and start the server
       await tipcClient.setMcpServerRuntimeEnabled({
@@ -683,7 +685,16 @@ function AgentStep({
           </Button>
         </div>
         <p className="text-xs text-muted-foreground mt-2">
-          No API key required. Add more MCP tools in Settings → MCP Tools.
+          Get your Exa API key at{" "}
+          <a
+            href="https://dashboard.exa.ai/api-keys"
+            target="_blank"
+            rel="noreferrer"
+            className="text-primary underline"
+          >
+            dashboard.exa.ai/api-keys
+          </a>
+          . Add more MCP tools in Settings → MCP Tools.
         </p>
       </div>
 

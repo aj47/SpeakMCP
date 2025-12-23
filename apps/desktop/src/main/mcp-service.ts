@@ -763,6 +763,10 @@ export class MCPService {
    * Set runtime enabled/disabled state for a server
    * This is separate from the config disabled flag and represents user preference
    * Also auto-saves to the current profile's mcpServerConfig
+   *
+   * NOTE: Disabling a server only hides its tools from the current profile.
+   * The server process continues running to avoid disrupting other sessions
+   * that may still need it. Servers are persistent infrastructure.
    */
   setServerRuntimeEnabled(serverName: string, enabled: boolean): boolean {
     const config = configStore.get()
@@ -777,12 +781,8 @@ export class MCPService {
       this.runtimeDisabledServers.delete(serverName)
     } else {
       this.runtimeDisabledServers.add(serverName)
-      // If server is currently running, stop it
-      if (this.initializedServers.has(serverName)) {
-        this.stopServer(serverName).catch(() => {
-          // Ignore cleanup errors
-        })
-      }
+      // Server continues running - we only hide its tools from the current profile
+      // This avoids disrupting running agent sessions that may still need the server
     }
 
     // Persist runtime disabled servers list to config so it survives app restarts
@@ -812,6 +812,11 @@ export class MCPService {
   /**
    * Apply MCP configuration from a profile
    * This updates the runtime enabled/disabled state for servers and tools
+   *
+   * NOTE: Disabling servers only hides their tools from the current profile.
+   * Server processes continue running to avoid disrupting other sessions.
+   * Servers are persistent infrastructure that should remain available.
+   *
    * @param disabledServers - Array of server names to disable (only used when allServersDisabledByDefault is false)
    * @param disabledTools - Array of tool names to disable
    * @param allServersDisabledByDefault - If true, ALL servers are disabled except those in enabledServers (strict opt-in mode, disabledServers is ignored). If false, only servers in disabledServers are disabled.
@@ -824,6 +829,8 @@ export class MCPService {
 
     // Reset runtime disabled servers based on profile config
     // Enable all servers first, then disable those specified in the profile
+    // NOTE: We only update the runtimeDisabledServers set - we do NOT stop server processes
+    // This ensures running agent sessions aren't disrupted when switching profiles
     this.runtimeDisabledServers.clear()
 
     if (allServersDisabledByDefault) {
@@ -833,12 +840,7 @@ export class MCPService {
       for (const serverName of allServerNames) {
         if (!enabledSet.has(serverName)) {
           this.runtimeDisabledServers.add(serverName)
-          // Stop the server if it's running
-          if (this.initializedServers.has(serverName)) {
-            this.stopServer(serverName).catch(() => {
-              // Ignore cleanup errors
-            })
-          }
+          // Server continues running - we only hide its tools from the current profile
         }
       }
     } else if (disabledServers && disabledServers.length > 0) {
@@ -847,12 +849,7 @@ export class MCPService {
         // Only add if server exists in config
         if (allServerNames.includes(serverName)) {
           this.runtimeDisabledServers.add(serverName)
-          // Stop the server if it's running
-          if (this.initializedServers.has(serverName)) {
-            this.stopServer(serverName).catch(() => {
-              // Ignore cleanup errors
-            })
-          }
+          // Server continues running - we only hide its tools from the current profile
         }
       }
     }

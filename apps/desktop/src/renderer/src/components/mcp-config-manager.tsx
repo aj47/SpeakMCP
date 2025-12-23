@@ -79,12 +79,18 @@ interface DetailedTool {
   inputSchema: any
 }
 
+// Built-in server name - always enabled regardless of profile config
+const BUILTIN_SERVER_NAME = "speakmcp-settings"
+
 /**
  * Check if a tool is enabled for a specific profile
  */
 function isToolEnabledForProfile(toolName: string, serverName: string, profile: Profile): boolean {
   const mcpConfig = profile.mcpServerConfig
   if (!mcpConfig) return true // No config means all enabled
+
+  // Built-in server tools are always enabled regardless of profile config
+  if (serverName === BUILTIN_SERVER_NAME) return true
 
   // Check if the server is disabled for this profile
   if (mcpConfig.allServersDisabledByDefault) {
@@ -113,6 +119,9 @@ function isToolEnabledForProfile(toolName: string, serverName: string, profile: 
 function isServerEnabledForProfile(serverName: string, profile: Profile): boolean {
   const mcpConfig = profile.mcpServerConfig
   if (!mcpConfig) return true // No config means all enabled
+
+  // Built-in server is always enabled regardless of profile config
+  if (serverName === BUILTIN_SERVER_NAME) return true
 
   if (mcpConfig.allServersDisabledByDefault) {
     // In opt-in mode, server must be in enabledServers

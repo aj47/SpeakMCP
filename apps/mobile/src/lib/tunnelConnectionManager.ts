@@ -165,13 +165,13 @@ export class TunnelConnectionManager {
       },
     };
 
-    // Cleanup existing client to prevent resource leaks
-    this.client?.cleanup();
-    this.client = new OpenAIClient(config);
-    this.client.setConnectionStatusCallback(this.handleRecoveryStateChange);
-
-    // Test connection with health check
+    // Wrap client creation and health check in try-catch to handle constructor errors
+    // (e.g., OpenAIClient throws if baseUrl is empty)
     try {
+      // Cleanup existing client to prevent resource leaks
+      this.client?.cleanup();
+      this.client = new OpenAIClient(config);
+      this.client.setConnectionStatusCallback(this.handleRecoveryStateChange);
       const healthy = await this.client.health();
       if (!healthy) {
         this.updateState('failed', 'Server health check failed');

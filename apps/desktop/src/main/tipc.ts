@@ -35,6 +35,7 @@ import {
   Conversation,
   ConversationHistoryItem,
   AgentProgressUpdate,
+  ACPAgentConfig,
 } from "../shared/types"
 import { inferTransportType, normalizeMcpConfig } from "../shared/mcp-utils"
 import { conversationService } from "./conversation-service"
@@ -2577,6 +2578,60 @@ export const router = {
       })
 
       return true
+    }),
+
+  // ACP Agent Configuration handlers
+  getAcpAgents: t.procedure.action(async () => {
+    const config = configStore.get()
+    return config.acpAgents || []
+  }),
+
+  saveAcpAgent: t.procedure
+    .input<{ agent: ACPAgentConfig }>()
+    .action(async ({ input }) => {
+      const config = configStore.get()
+      const agents = config.acpAgents || []
+
+      // Check if agent with this name already exists
+      const existingIndex = agents.findIndex(a => a.name === input.agent.name)
+
+      if (existingIndex >= 0) {
+        // Update existing agent
+        agents[existingIndex] = input.agent
+      } else {
+        // Add new agent
+        agents.push(input.agent)
+      }
+
+      configStore.save({ ...config, acpAgents: agents })
+      return { success: true }
+    }),
+
+  deleteAcpAgent: t.procedure
+    .input<{ agentName: string }>()
+    .action(async ({ input }) => {
+      const config = configStore.get()
+      const agents = config.acpAgents || []
+
+      const filteredAgents = agents.filter(a => a.name !== input.agentName)
+
+      configStore.save({ ...config, acpAgents: filteredAgents })
+      return { success: true }
+    }),
+
+  toggleAcpAgentEnabled: t.procedure
+    .input<{ agentName: string; enabled: boolean }>()
+    .action(async ({ input }) => {
+      const config = configStore.get()
+      const agents = config.acpAgents || []
+
+      const agentIndex = agents.findIndex(a => a.name === input.agentName)
+      if (agentIndex >= 0) {
+        agents[agentIndex] = { ...agents[agentIndex], enabled: input.enabled }
+        configStore.save({ ...config, acpAgents: agents })
+      }
+
+      return { success: true }
     }),
 }
 

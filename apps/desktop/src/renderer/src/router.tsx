@@ -50,12 +50,20 @@ export const router: ReturnType<typeof createBrowserRouter> =
           path: "settings/remote-server",
           lazy: () => import("./pages/settings-remote-server"),
         },
+        {
+          path: "settings/acp-agents",
+          lazy: () => import("./pages/settings-acp-agents"),
+        },
 
       ],
     },
     {
       path: "/setup",
       lazy: () => import("./pages/setup"),
+    },
+    {
+      path: "/onboarding",
+      lazy: () => import("./pages/onboarding"),
     },
     {
       path: "/panel",

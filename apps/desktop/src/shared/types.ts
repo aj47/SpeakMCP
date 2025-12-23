@@ -324,6 +324,37 @@ export interface ModelPreset {
   transcriptProcessingModel?: string
 }
 
+// ACP Agent Configuration Types
+export type ACPConnectionType = "stdio" | "remote"
+
+export interface ACPAgentConfig {
+  // Unique identifier for the agent
+  name: string
+  // Human-readable display name
+  displayName: string
+  // Description of what the agent does
+  description?: string
+  // Agent capabilities (e.g., "coding", "debugging", "refactoring")
+  capabilities?: string[]
+  // Whether to auto-spawn this agent on app startup
+  autoSpawn?: boolean
+  // Whether this agent is enabled
+  enabled?: boolean
+  // Connection configuration
+  connection: {
+    // Connection type: "stdio" for local process, "remote" for HTTP endpoint
+    type: ACPConnectionType
+    // For stdio: command to run (e.g., "auggie", "claude-code-acp")
+    command?: string
+    // For stdio: command arguments (e.g., ["--acp"])
+    args?: string[]
+    // For stdio: environment variables
+    env?: Record<string, string>
+    // For remote: base URL of the ACP server
+    baseUrl?: string
+  }
+}
+
 export type Config = {
   shortcut?: "hold-ctrl" | "ctrl-slash" | "custom"
   customShortcut?: string
@@ -331,6 +362,8 @@ export type Config = {
   hideDockIcon?: boolean
   launchAtLogin?: boolean
 
+  // Onboarding Configuration
+  onboardingCompleted?: boolean
 
   // Toggle Voice Dictation Configuration
   toggleVoiceDictationEnabled?: boolean
@@ -520,6 +553,9 @@ export type Config = {
   // Stream Status Watcher Configuration
   streamStatusWatcherEnabled?: boolean
   streamStatusFilePath?: string
+
+  // ACP Agent Configuration
+  acpAgents?: ACPAgentConfig[]
 
 }
 

@@ -146,38 +146,30 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
 
   // Custom render rules to make text selectable when the prop is enabled
   // This is especially useful for mobile where users need to copy LLM responses
+  // IMPORTANT: Only apply 'selectable' to leaf text nodes that only contain text content.
+  // Do NOT apply 'selectable' to container elements like paragraph/textgroup that could
+  // contain non-text children (images, links with images, etc.) as React Native's <Text>
+  // component cannot contain <View>/<Image> elements and would crash.
   const selectableRules = selectable ? {
-    // Override the text rule to make text selectable
+    // Override the text rule to make text selectable (leaf node - always safe)
     text: (node: any, children: any, parent: any, styles: any) => (
       <RNText key={node.key} style={styles.text} selectable>
         {node.content}
       </RNText>
     ),
-    // Override textgroup for paragraphs containing text
-    textgroup: (node: any, children: any, parent: any, styles: any) => (
-      <RNText key={node.key} style={styles.textgroup} selectable>
-        {children}
-      </RNText>
-    ),
-    // Override paragraph to make it selectable
-    paragraph: (node: any, children: any, parent: any, styles: any) => (
-      <RNText key={node.key} style={styles.paragraph} selectable>
-        {children}
-      </RNText>
-    ),
-    // Override code_inline to make it selectable
+    // Override code_inline to make it selectable (leaf node - always safe)
     code_inline: (node: any, children: any, parent: any, styles: any) => (
       <RNText key={node.key} style={styles.code_inline} selectable>
         {node.content}
       </RNText>
     ),
-    // Override code_block to make it selectable
+    // Override code_block to make it selectable (leaf node - always safe)
     code_block: (node: any, children: any, parent: any, styles: any) => (
       <RNText key={node.key} style={styles.code_block} selectable>
         {node.content}
       </RNText>
     ),
-    // Override fence (fenced code blocks) to make it selectable
+    // Override fence (fenced code blocks) to make it selectable (leaf node - always safe)
     fence: (node: any, children: any, parent: any, styles: any) => (
       <RNText key={node.key} style={styles.fence} selectable>
         {node.content}

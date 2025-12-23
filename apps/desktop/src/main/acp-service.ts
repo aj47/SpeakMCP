@@ -55,6 +55,9 @@ export interface ACPAgentInstance {
   }>
   nextRequestId: number
   buffer: string
+  // ACP protocol state
+  initialized?: boolean
+  sessionId?: string
 }
 
 // ACP Run request
@@ -361,11 +364,84 @@ class ACPService extends EventEmitter {
   }
 
   /**
+   * Initialize an agent with the ACP protocol.
+   * Per ACP spec, clients MUST send initialize before session/new.
+   */
+  private async initializeAgent(agentName: string): Promise<void> {
+    const instance = this.agents.get(agentName)
+    if (!instance || instance.initialized) {
+      return
+    }
+
+    logApp(`[ACP:${agentName}] Sending initialize request`)
+
+    try {
+      const result = await this.sendRequest(agentName, "initialize", {
+        protocolVersion: 1,
+        clientCapabilities: {
+          fs: {
+            readTextFile: true,
+            writeTextFile: true,
+          },
+          terminal: true,
+        },
+        clientInfo: {
+          name: "speakmcp",
+          title: "SpeakMCP",
+          version: "1.0.0",
+        },
+      }) as { protocolVersion?: number; agentCapabilities?: unknown }
+
+      logApp(`[ACP:${agentName}] Initialized with protocol version ${result?.protocolVersion}`)
+      instance.initialized = true
+    } catch (error) {
+      logApp(`[ACP:${agentName}] Initialize failed: ${error}`)
+      // Don't throw - some agents might not require initialization
+    }
+  }
+
+  /**
+   * Create a new ACP session for the agent.
+   */
+  private async createSession(agentName: string): Promise<string | undefined> {
+    const instance = this.agents.get(agentName)
+    if (!instance) {
+      return undefined
+    }
+
+    // Reuse existing session if available
+    if (instance.sessionId) {
+      return instance.sessionId
+    }
+
+    logApp(`[ACP:${agentName}] Creating new session`)
+
+    try {
+      // Use session/new per ACP spec (not session/create)
+      const result = await this.sendRequest(agentName, "session/new", {
+        cwd: process.cwd(),
+        mcpServers: [],
+      }) as { sessionId?: string }
+
+      const sessionId = result?.sessionId
+      if (sessionId) {
+        instance.sessionId = sessionId
+        logApp(`[ACP:${agentName}] Session created: ${sessionId}`)
+      }
+      return sessionId
+    } catch (error) {
+      logApp(`[ACP:${agentName}] Session creation failed: ${error}`)
+      return undefined
+    }
+  }
+
+  /**
    * Run a task on an agent using the proper ACP protocol.
-   * ACP uses a session-based model:
-   * 1. Create a session with session/create
-   * 2. Send prompt with session/prompt
-   * 3. Read session/update notifications for results
+   * ACP protocol flow:
+   * 1. initialize - Negotiate protocol version and capabilities
+   * 2. session/new - Create a new session with cwd and MCP servers
+   * 3. session/prompt - Send the user's prompt
+   * 4. Receive session/update notifications for results
    */
   async runTask(request: ACPRunRequest): Promise<ACPRunResponse> {
     const { agentName, input, context } = request
@@ -393,6 +469,14 @@ class ACPService extends EventEmitter {
     }
 
     try {
+      // Step 1: Initialize if not already done
+      if (!instance.initialized) {
+        await this.initializeAgent(agentName)
+      }
+
+      // Step 2: Create session if needed
+      const sessionId = await this.createSession(agentName)
+
       // Format the input text
       const inputText = typeof input === "string" ? input :
         input.messages?.map(m => m.content).join("\n") || JSON.stringify(input)
@@ -400,19 +484,7 @@ class ACPService extends EventEmitter {
       // Combine context and input
       const promptText = context ? `Context: ${context}\n\nTask: ${inputText}` : inputText
 
-      // Step 1: Create a new session
-      const sessionResult = await this.sendRequest(agentName, "session/create", {
-        title: `Task: ${inputText.substring(0, 50)}...`,
-      }) as { sessionId?: string }
-
-      const sessionId = sessionResult?.sessionId
-      if (!sessionId) {
-        // Some agents might not require session/create - fall back to direct prompt
-        // Try using just session/prompt without a session
-        logApp(`[ACP:${agentName}] No sessionId returned, trying direct prompt`)
-      }
-
-      // Step 2: Send the prompt
+      // Step 3: Send the prompt
       // Format prompt as content blocks per ACP spec
       const promptContent = [
         {
@@ -421,10 +493,14 @@ class ACPService extends EventEmitter {
         }
       ]
 
-      const promptParams = sessionId
-        ? { sessionId, prompt: promptContent }
-        : { prompt: promptContent }
+      const promptParams: { sessionId?: string; prompt: typeof promptContent } = {
+        prompt: promptContent,
+      }
+      if (sessionId) {
+        promptParams.sessionId = sessionId
+      }
 
+      logApp(`[ACP:${agentName}] Sending session/prompt`)
       const promptResult = await this.sendRequest(agentName, "session/prompt", promptParams) as {
         stopReason?: string
         error?: { message?: string }
@@ -438,9 +514,6 @@ class ACPService extends EventEmitter {
       }
 
       // The result comes via session/update notifications which are handled asynchronously
-      // For sync mode, we need to collect the updates
-      // For now, return success - the notifications will be handled by the notification handler
-
       // Check if we got a stop reason
       const stopReason = promptResult?.stopReason
 

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, Animated } from 'react-native';
 import { useTheme } from './ThemeProvider';
 import { TunnelConnectionState } from '../lib/tunnelConnectionManager';
@@ -19,6 +19,32 @@ export function ConnectionStatusIndicator({
   compact = false,
 }: ConnectionStatusIndicatorProps) {
   const { theme } = useTheme();
+  const pulseAnim = useRef(new Animated.Value(0.3)).current;
+
+  const isPulsing = state === 'connecting' || state === 'reconnecting';
+
+  useEffect(() => {
+    if (isPulsing) {
+      const animation = Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 0.8,
+            duration: 800,
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 0.3,
+            duration: 800,
+            useNativeDriver: true,
+          }),
+        ])
+      );
+      animation.start();
+      return () => animation.stop();
+    } else {
+      pulseAnim.setValue(0.3);
+    }
+  }, [isPulsing, pulseAnim]);
 
   const getStatusColor = (): string => {
     switch (state) {
@@ -53,8 +79,6 @@ export function ConnectionStatusIndicator({
     }
   };
 
-  const isPulsing = state === 'connecting' || state === 'reconnecting';
-
   return (
     <View style={[styles.container, compact && styles.containerCompact]}>
       <View style={styles.dotContainer}>
@@ -66,10 +90,10 @@ export function ConnectionStatusIndicator({
           ]}
         />
         {isPulsing && (
-          <View
+          <Animated.View
             style={[
               styles.dotPulse,
-              { backgroundColor: getStatusColor() },
+              { backgroundColor: getStatusColor(), opacity: pulseAnim },
             ]}
           />
         )}

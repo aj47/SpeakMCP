@@ -51,6 +51,7 @@ export class TunnelConnectionManager {
   private appStateSubscription: ReturnType<typeof AppState.addEventListener> | null = null;
   private isInitialized: boolean = false;
   private reconnectTimeoutId: ReturnType<typeof setTimeout> | null = null;
+  private healthCheckIntervalId: ReturnType<typeof setInterval> | null = null;
 
   constructor() {
     this.setupAppStateListener();
@@ -67,6 +68,41 @@ export class TunnelConnectionManager {
       await this.checkAndReconnect();
     }
   };
+
+  /**
+   * Start periodic health check interval.
+   * Only runs when connection state is 'connected'.
+   */
+  private startHealthCheckInterval(): void {
+    // Clear any existing interval before starting a new one
+    this.stopHealthCheckInterval();
+
+    if (this.connectionState !== 'connected') {
+      return;
+    }
+
+    console.log('[TunnelConnectionManager] Starting health check interval (30s)');
+    this.healthCheckIntervalId = setInterval(async () => {
+      if (this.connectionState === 'connected') {
+        console.log('[TunnelConnectionManager] Periodic health check');
+        await this.checkAndReconnect();
+      } else {
+        // Stop interval if no longer connected
+        this.stopHealthCheckInterval();
+      }
+    }, 30000); // 30 seconds
+  }
+
+  /**
+   * Stop the periodic health check interval.
+   */
+  private stopHealthCheckInterval(): void {
+    if (this.healthCheckIntervalId) {
+      console.log('[TunnelConnectionManager] Stopping health check interval');
+      clearInterval(this.healthCheckIntervalId);
+      this.healthCheckIntervalId = null;
+    }
+  }
 
   /**
    * Initialize the manager and attempt to restore previous connection.
@@ -145,9 +181,11 @@ export class TunnelConnectionManager {
 
       this.retryCount = 0;
       this.updateState('connected');
+      this.startHealthCheckInterval();
       return true;
     } catch (error: any) {
       console.error('[TunnelConnectionManager] Connection failed:', error);
+      this.stopHealthCheckInterval();
       this.updateState('failed', error.message || 'Connection failed');
       return false;
     }
@@ -159,15 +197,19 @@ export class TunnelConnectionManager {
       case 'connected':
         this.retryCount = 0;
         this.updateState('connected');
+        this.startHealthCheckInterval();
         break;
       case 'reconnecting':
         this.retryCount = state.retryCount;
+        this.stopHealthCheckInterval();
         this.updateState('reconnecting');
         break;
       case 'disconnected':
+        this.stopHealthCheckInterval();
         this.updateState('disconnected', state.lastError);
         break;
       case 'failed':
+        this.stopHealthCheckInterval();
         this.updateState('failed', state.lastError);
         break;
     }
@@ -236,11 +278,14 @@ export class TunnelConnectionManager {
         }
         await updateTunnelMetadata({ lastConnectedAt: now });
         this.updateState('connected');
+        this.startHealthCheckInterval();
       } else {
+        this.stopHealthCheckInterval();
         await this.attemptReconnect();
       }
     } catch (error) {
       console.log('[TunnelConnectionManager] Health check failed, attempting reconnect');
+      this.stopHealthCheckInterval();
       await this.attemptReconnect();
     }
   }
@@ -254,8 +299,8 @@ export class TunnelConnectionManager {
       return;
     }
 
-    this.updateState('reconnecting');
     this.retryCount++;
+    this.updateState('reconnecting');
 
     // Exponential backoff with jitter
     const baseDelay = Math.min(1000 * Math.pow(2, this.retryCount - 1), 30000);
@@ -284,6 +329,8 @@ export class TunnelConnectionManager {
    * Disconnect and clear stored metadata.
    */
   async disconnect(): Promise<void> {
+    this.stopHealthCheckInterval();
+
     if (this.reconnectTimeoutId) {
       clearTimeout(this.reconnectTimeoutId);
       this.reconnectTimeoutId = null;
@@ -301,6 +348,8 @@ export class TunnelConnectionManager {
    * Cleanup resources.
    */
   cleanup(): void {
+    this.stopHealthCheckInterval();
+
     if (this.reconnectTimeoutId) {
       clearTimeout(this.reconnectTimeoutId);
       this.reconnectTimeoutId = null;

@@ -973,6 +973,26 @@ export function MCPConfigManager({
     }
   }, [servers])
 
+  // Sync expandedServers when collapsedServers prop changes (e.g., after async config load)
+  // This tracks the previous collapsedServers to detect external changes
+  const prevCollapsedServersRef = useRef<string[]>(collapsedServers)
+  useEffect(() => {
+    // Check if collapsedServers prop actually changed (compare arrays)
+    const prevCollapsed = prevCollapsedServersRef.current
+    const collapsedChanged =
+      prevCollapsed.length !== collapsedServers.length ||
+      prevCollapsed.some((s, i) => s !== collapsedServers[i])
+
+    if (collapsedChanged) {
+      prevCollapsedServersRef.current = collapsedServers
+      // Re-sync expandedServers from the new collapsed list
+      const currentServerNames = new Set([...Object.keys(servers), ...RESERVED_SERVER_NAMES])
+      const collapsedSet = new Set(collapsedServers)
+      const newExpanded = new Set([...currentServerNames].filter(name => !collapsedSet.has(name)))
+      setExpandedServers(newExpanded)
+    }
+  }, [collapsedServers, servers])
+
   // Load OAuth status for all servers
   const refreshOAuthStatus = async (serverName?: string) => {
     try {
@@ -1080,6 +1100,25 @@ export function MCPConfigManager({
       }
     }
   }, [tools, collapsedToolServers, toolServersInitialized, knownToolServers])
+
+  // Sync expandedToolServers when collapsedToolServers prop changes (e.g., after async config load)
+  const prevCollapsedToolServersRef = useRef<string[]>(collapsedToolServers)
+  useEffect(() => {
+    // Check if collapsedToolServers prop actually changed
+    const prevCollapsed = prevCollapsedToolServersRef.current
+    const collapsedChanged =
+      prevCollapsed.length !== collapsedToolServers.length ||
+      prevCollapsed.some((s, i) => s !== collapsedToolServers[i])
+
+    if (collapsedChanged && toolServersInitialized) {
+      prevCollapsedToolServersRef.current = collapsedToolServers
+      // Re-sync expandedToolServers from the new collapsed list
+      const allToolServerNames = [...new Set(tools.map(t => t.serverName))]
+      const collapsedSet = new Set(collapsedToolServers)
+      const newExpanded = new Set(allToolServerNames.filter(name => !collapsedSet.has(name)))
+      setExpandedToolServers(newExpanded)
+    }
+  }, [collapsedToolServers, tools, toolServersInitialized])
 
   // Group tools by server
   const toolsByServer = tools.reduce(

@@ -1805,9 +1805,11 @@ export function MCPConfigManager({
                     return acc
                   }, {} as Record<string, DetailedTool[]>)
                 ).map(([serverName, serverTools]) => {
-                  // Before initialization, treat all servers as expanded by default
-                  // After initialization, use the expandedToolServers set
-                  const isExpanded = !toolServersInitialized || expandedToolServers.has(serverName)
+                  // Before initialization: expanded unless in collapsedToolServers (respects persisted state)
+                  // After initialization: use the expandedToolServers set
+                  const isExpanded = !toolServersInitialized
+                    ? !collapsedToolServers.includes(serverName)
+                    : expandedToolServers.has(serverName)
                   return (
                   <div key={serverName} className="space-y-2">
                     {/* Server Header - Clickable for collapse/expand */}

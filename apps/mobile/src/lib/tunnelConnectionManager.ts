@@ -225,8 +225,12 @@ export class TunnelConnectionManager {
 
   private updateState(state: TunnelConnectionState, error?: string): void {
     this.connectionState = state;
-    // Clear error message for non-error states, set it for error states
+    // Clear error message for non-error states (including disconnected without explicit error)
+    // Only preserve errorMessage when an explicit error is provided
     if (state === 'connected' || state === 'connecting' || state === 'reconnecting') {
+      this.errorMessage = null;
+    } else if (state === 'disconnected' && error === undefined) {
+      // Clear stale error when disconnecting without error (e.g., manual disconnect)
       this.errorMessage = null;
     } else if (error !== undefined) {
       this.errorMessage = error;

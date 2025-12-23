@@ -930,15 +930,33 @@ export function MCPConfigManager({
   // Track which reserved server names we've already warned about (to avoid repeated warnings)
   const warnedReservedServersRef = useRef<Set<string>>(new Set())
 
-  // Prune stale entries from expandedServers when servers change
+  // Track known server names to detect new servers
+  const [knownServers, setKnownServers] = useState<Set<string>>(() => new Set(Object.keys(config.mcpServers || {})))
+
+  // Handle server changes: prune stale entries and expand new servers by default
   // Include reserved server names (built-in servers) so they don't get pruned
   useEffect(() => {
-    const serverNames = new Set([...Object.keys(servers), ...RESERVED_SERVER_NAMES])
-    const prunedSet = new Set([...expandedServers].filter(name => serverNames.has(name)))
-    if (prunedSet.size !== expandedServers.size) {
+    const currentServerNames = new Set([...Object.keys(servers), ...RESERVED_SERVER_NAMES])
+    const collapsedSet = new Set(collapsedServers)
+
+    // Find new servers (not in knownServers and not in collapsedServers)
+    const newServers = [...currentServerNames].filter(name => !knownServers.has(name) && !collapsedSet.has(name))
+
+    // Prune stale entries
+    const prunedSet = new Set([...expandedServers].filter(name => currentServerNames.has(name)))
+
+    // Add new servers to expanded set (expanded by default)
+    newServers.forEach(name => prunedSet.add(name))
+
+    if (prunedSet.size !== expandedServers.size || newServers.length > 0) {
       setExpandedServers(prunedSet)
     }
-  }, [servers])
+
+    // Update known servers
+    if (newServers.length > 0 || [...knownServers].some(name => !currentServerNames.has(name))) {
+      setKnownServers(currentServerNames)
+    }
+  }, [servers, collapsedServers])
 
   // Warn about servers with reserved names that are being filtered out
   useEffect(() => {
@@ -1027,18 +1045,47 @@ export function MCPConfigManager({
     return () => clearInterval(interval)
   }, [])
 
+  // Track known tool server names to detect new servers
+  const [knownToolServers, setKnownToolServers] = useState<Set<string>>(new Set())
+
   // Initialize expandedToolServers when tools are first loaded
-  // All servers are expanded by default except those in collapsedToolServers
+  // All servers are collapsed by default - only expand those NOT in collapsedToolServers
+  // (meaning the user explicitly expanded them in a previous session)
+  // Also handles new servers appearing after initialization - they default to expanded
   useEffect(() => {
-    if (tools.length > 0 && !toolServersInitialized) {
+    if (tools.length > 0) {
       const allToolServerNames = [...new Set(tools.map(t => t.serverName))]
       const collapsedSet = new Set(collapsedToolServers)
-      // Servers NOT in collapsedToolServers are expanded
-      const expanded = new Set(allToolServerNames.filter(name => !collapsedSet.has(name)))
-      setExpandedToolServers(expanded)
-      setToolServersInitialized(true)
+
+      if (!toolServersInitialized) {
+        // Initial setup: respect persisted collapsed state
+        // If collapsedToolServers is empty or includes all servers, keep all collapsed (default behavior)
+        // Otherwise, expand only servers that were previously expanded (not in collapsedToolServers)
+        const hasPersistedState = collapsedToolServers.length > 0 && collapsedToolServers.length < allToolServerNames.length
+        const expanded = hasPersistedState
+          ? new Set(allToolServerNames.filter(name => !collapsedSet.has(name)))
+          : new Set<string>() // All collapsed by default
+        setExpandedToolServers(expanded)
+        setKnownToolServers(new Set(allToolServerNames))
+        setToolServersInitialized(true)
+      } else {
+        // After initialization: detect new servers and expand them by default
+        const newServers = allToolServerNames.filter(name => !knownToolServers.has(name))
+        if (newServers.length > 0) {
+          setExpandedToolServers(prev => {
+            const updated = new Set(prev)
+            newServers.forEach(name => updated.add(name))
+            return updated
+          })
+          setKnownToolServers(prev => {
+            const updated = new Set(prev)
+            newServers.forEach(name => updated.add(name))
+            return updated
+          })
+        }
+      }
     }
-  }, [tools, collapsedToolServers, toolServersInitialized])
+  }, [tools, collapsedToolServers, toolServersInitialized, knownToolServers])
 
   // Group tools by server
   const toolsByServer = tools.reduce(
@@ -1773,7 +1820,7 @@ export function MCPConfigManager({
                           {serverTools.filter(t => t.enabled).length}/{serverTools.length} enabled
                         </Badge>
                       </div>
-                      <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
                         <Button
                           variant="ghost"
                           size="sm"

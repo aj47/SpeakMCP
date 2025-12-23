@@ -61,6 +61,8 @@ export interface OAuthConfig {
   scope?: string
   useDiscovery?: boolean // Whether to use .well-known/oauth-authorization-server
   useDynamicRegistration?: boolean // Whether to use RFC7591 dynamic client registration
+  // Optional override for redirect URI (e.g., when the provider disallows custom schemes)
+  redirectUri?: string
 
   // Pending authorization state (used during OAuth flow)
   pendingAuth?: {

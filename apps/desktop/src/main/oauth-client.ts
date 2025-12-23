@@ -88,8 +88,7 @@ export class OAuthClient {
       throw new Error('Dynamic client registration not supported by server')
     }
 
-    const isDevelopment = process.env.NODE_ENV === 'development' || !!process.env.ELECTRON_RENDERER_URL
-    const redirectUri = isDevelopment ? 'http://localhost:3000/callback' : 'speakmcp://oauth/callback'
+    const redirectUri = this.getRedirectUri()
 
     const clientMetadata: OAuthClientMetadata = {
       client_name: 'SpeakMCP',
@@ -104,6 +103,8 @@ export class OAuthClient {
         response_types: this.config.clientMetadata.response_types || ['code'],
         scope: this.config.clientMetadata.scope || this.config.scope || 'user',
         token_endpoint_auth_method: this.config.clientMetadata.token_endpoint_auth_method || 'none',
+        // Ensure any provided clientMetadata redirect uris include the override
+        redirect_uris: this.config.clientMetadata.redirect_uris || [redirectUri],
       }),
     }
 
@@ -152,6 +153,20 @@ export class OAuthClient {
   }
 
   /**
+   * Determine redirect URI, allowing server config to override the default scheme.
+   * Some providers (e.g., Notion) require a pre-registered HTTPS redirect and will
+   * reject custom schemes.
+   */
+  private getRedirectUri(): string {
+    if (this.config.redirectUri) {
+      return this.config.redirectUri
+    }
+
+    const isDevelopment = process.env.NODE_ENV === 'development' || !!process.env.ELECTRON_RENDERER_URL
+    return isDevelopment ? 'http://localhost:3000/callback' : 'speakmcp://oauth/callback'
+  }
+
+  /**
    * Generate authorization URL and initiate OAuth flow
    */
   async startAuthorizationFlow(): Promise<OAuthAuthorizationRequest> {
@@ -164,9 +179,7 @@ export class OAuthClient {
     authUrl.searchParams.set('response_type', 'code')
     authUrl.searchParams.set('client_id', clientId)
 
-    // Always determine redirect URI based on current environment, ignoring stored config
-    const isDevelopment = process.env.NODE_ENV === 'development' || !!process.env.ELECTRON_RENDERER_URL
-    const redirectUri = isDevelopment ? 'http://localhost:3000/callback' : 'speakmcp://oauth/callback'
+    const redirectUri = this.getRedirectUri()
 
     // Set OAuth parameters
     authUrl.searchParams.set('redirect_uri', redirectUri)
@@ -197,9 +210,7 @@ export class OAuthClient {
       clientSecret = registration.clientSecret
     }
 
-    // Always use appropriate redirect URI based on current environment, ignoring stored config
-    const isDevelopment = process.env.NODE_ENV === 'development' || !!process.env.ELECTRON_RENDERER_URL
-    const redirectUri = isDevelopment ? 'http://localhost:3000/callback' : 'speakmcp://oauth/callback'
+    const redirectUri = this.getRedirectUri()
 
     const tokenRequest = new URLSearchParams({
       grant_type: 'authorization_code',

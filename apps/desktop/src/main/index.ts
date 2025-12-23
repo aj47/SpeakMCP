@@ -45,8 +45,24 @@ app.whenReady().then(() => {
   // Register desktopCapturer handler (available only in main process in Electron 31+)
   ipcMain.handle('getScreenSources', async (_event, options: { types: ('screen' | 'window')[], thumbnailSize?: { width: number, height: number } }) => {
     try {
-      logApp('[getScreenSources] Capturing screen sources with options:', JSON.stringify(options))
-      const sources = await desktopCapturer.getSources(options)
+      // Validate and sanitize options
+      const validatedOptions = {
+        // Only allow 'screen' type for privacy - filter out 'window'
+        types: (options.types || ['screen']).filter(t => t === 'screen') as ('screen' | 'window')[],
+        thumbnailSize: {
+          // Clamp dimensions to reasonable bounds
+          width: Math.min(Math.max(options.thumbnailSize?.width || 1920, 100), 4096),
+          height: Math.min(Math.max(options.thumbnailSize?.height || 1080, 100), 4096)
+        }
+      }
+
+      // Ensure at least 'screen' type is present
+      if (validatedOptions.types.length === 0) {
+        validatedOptions.types = ['screen']
+      }
+
+      logApp('[getScreenSources] Capturing screen sources with validated options:', JSON.stringify(validatedOptions))
+      const sources = await desktopCapturer.getSources(validatedOptions)
       logApp(`[getScreenSources] Got ${sources.length} sources`)
 
       // On macOS, if Screen Recording permission is not granted, desktopCapturer returns an empty array

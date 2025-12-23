@@ -32,11 +32,10 @@ export async function captureScreenshotFromMain(): Promise<string | undefined> {
 
     if (sources.length === 0) {
       if (process.platform === 'darwin') {
-        logApp('[captureScreenshotFromMain] No screen sources available. This is likely a macOS permission issue. Please grant Screen Recording permission in System Settings > Privacy & Security > Screen Recording, then restart the app.')
+        throw new Error('No screen sources available. Please grant Screen Recording permission in System Settings > Privacy & Security > Screen Recording, then restart the app.')
       } else {
-        logApp('[captureScreenshotFromMain] No screen sources available')
+        throw new Error('No screen sources available')
       }
-      return undefined
     }
 
     // Find the source matching the configured display, or use the first one (primary)
@@ -54,7 +53,7 @@ export async function captureScreenshotFromMain(): Promise<string | undefined> {
     return screenshot
   } catch (error) {
     logApp('[captureScreenshotFromMain] Failed to capture screenshot:', error)
-    return undefined
+    throw error
   }
 }
 
@@ -492,7 +491,12 @@ export async function showPanelWindowAndStartMcpRecording(conversationId?: strin
   if (!effectiveScreenshot) {
     const config = configStore.get()
     if (config.screenshotForVoiceCommands) {
-      effectiveScreenshot = await captureScreenshotFromMain()
+      try {
+        effectiveScreenshot = await captureScreenshotFromMain()
+      } catch (error) {
+        // Log but continue - recording can proceed without screenshot
+        logApp('[showPanelWindowAndStartMcpRecording] Screenshot capture failed:', error)
+      }
     }
   }
 

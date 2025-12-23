@@ -20,6 +20,15 @@ export default defineConfig({
   },
   preload: {
     plugins: [tsconfigPaths(), externalizeDepsPlugin()],
+    build: {
+      rollupOptions: {
+        output: {
+          format: "cjs",
+          entryFileNames: "[name].cjs",
+          chunkFileNames: "[name].cjs",
+        },
+      },
+    },
   },
   renderer: {
     define,

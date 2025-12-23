@@ -1744,20 +1744,37 @@ export default function ChatScreen({ route, navigation }: any) {
                   <>
                     {m.content ? (
                       isExpanded || !shouldCollapse ? (
-                        <MarkdownRenderer content={m.content} />
+                        // When expanded or doesn't need collapse: show full markdown with text selection enabled
+                        <MarkdownRenderer content={m.content} selectable />
                       ) : (
-                        <Text
-                          style={{ color: theme.colors.foreground }}
-                          numberOfLines={COLLAPSED_LINES}
+                        // When collapsed: make the text area clickable to expand
+                        <Pressable
+                          onPress={() => toggleMessageExpansion(i)}
+                          accessibilityRole="button"
+                          accessibilityHint="Tap to expand message"
+                          style={({ pressed }) => [
+                            styles.contentPressable,
+                            pressed && styles.contentPressed,
+                          ]}
                         >
-                          {m.content}
-                        </Text>
+                          <Text
+                            style={{ color: theme.colors.foreground }}
+                            numberOfLines={COLLAPSED_LINES}
+                          >
+                            {m.content}
+                          </Text>
+                        </Pressable>
                       )
                     ) : null}
 
                     {/* Unified Tool Execution Display - show when there are toolCalls OR toolResults */}
                     {((m.toolCalls?.length ?? 0) > 0 || (m.toolResults?.length ?? 0) > 0) && (
-                      <View style={[
+                      <Pressable
+                        onPress={!isExpanded && shouldCollapse ? () => toggleMessageExpansion(i) : undefined}
+                        disabled={isExpanded || !shouldCollapse}
+                        accessibilityRole={!isExpanded && shouldCollapse ? 'button' : undefined}
+                        accessibilityHint={!isExpanded && shouldCollapse ? 'Tap to expand tool details' : undefined}
+                        style={[
                         styles.toolExecutionCard,
                         isPending && styles.toolExecutionPending,
                         allSuccess && styles.toolExecutionSuccess,
@@ -1853,7 +1870,7 @@ export default function ChatScreen({ route, navigation }: any) {
                             </View>
                           </>
                         )}
-                      </View>
+                      </Pressable>
                     )}
                   </>
                 )}
@@ -2472,6 +2489,13 @@ function createStyles(theme: Theme) {
       backgroundColor: 'rgba(239, 68, 68, 0.1)',
       padding: spacing.sm,
       borderRadius: radius.sm,
+    },
+    // Styles for clickable content area when collapsed
+    contentPressable: {
+      // No additional styling needed, just makes the area tappable
+    },
+    contentPressed: {
+      opacity: 0.7,
     },
   });
 }

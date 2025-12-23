@@ -1,15 +1,18 @@
 import React from 'react';
-import { Platform, StyleSheet } from 'react-native';
+import { Platform, StyleSheet, Text as RNText, TextProps } from 'react-native';
 import Markdown from 'react-native-markdown-display';
 import { useTheme } from './ThemeProvider';
 import { spacing, radius } from './theme';
 
 interface MarkdownRendererProps {
   content: string;
+  /** When true, allows text to be selected and copied (useful for mobile) */
+  selectable?: boolean;
 }
 
 export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
   content,
+  selectable = false,
 }) => {
   const { theme, isDark } = useTheme();
 
@@ -141,8 +144,52 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
     },
   });
 
+  // Custom render rules to make text selectable when the prop is enabled
+  // This is especially useful for mobile where users need to copy LLM responses
+  const selectableRules = selectable ? {
+    // Override the text rule to make text selectable
+    text: (node: any, children: any, parent: any, styles: any) => (
+      <RNText key={node.key} style={styles.text} selectable>
+        {node.content}
+      </RNText>
+    ),
+    // Override textgroup for paragraphs containing text
+    textgroup: (node: any, children: any, parent: any, styles: any) => (
+      <RNText key={node.key} style={styles.textgroup} selectable>
+        {children}
+      </RNText>
+    ),
+    // Override paragraph to make it selectable
+    paragraph: (node: any, children: any, parent: any, styles: any) => (
+      <RNText key={node.key} style={styles.paragraph} selectable>
+        {children}
+      </RNText>
+    ),
+    // Override code_inline to make it selectable
+    code_inline: (node: any, children: any, parent: any, styles: any) => (
+      <RNText key={node.key} style={styles.code_inline} selectable>
+        {node.content}
+      </RNText>
+    ),
+    // Override code_block to make it selectable
+    code_block: (node: any, children: any, parent: any, styles: any) => (
+      <RNText key={node.key} style={styles.code_block} selectable>
+        {node.content}
+      </RNText>
+    ),
+    // Override fence (fenced code blocks) to make it selectable
+    fence: (node: any, children: any, parent: any, styles: any) => (
+      <RNText key={node.key} style={styles.fence} selectable>
+        {node.content}
+      </RNText>
+    ),
+  } : {};
+
   return (
-    <Markdown style={markdownStyles}>
+    <Markdown
+      style={markdownStyles}
+      rules={selectableRules}
+    >
       {content}
     </Markdown>
   );

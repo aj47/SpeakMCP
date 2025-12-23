@@ -640,9 +640,6 @@ export async function processTranscriptWithAgentMode(
     const conversationTitle = session?.conversationTitle
     const profileName = session?.profileSnapshot?.profileName
 
-    // Debug logging for profile name
-    logLLM(`[emit] Session: ${currentSessionId}, hasSession: ${!!session}, hasProfileSnapshot: ${!!session?.profileSnapshot}, profileName: ${profileName}`)
-
     const fullUpdate: AgentProgressUpdate = {
       ...update,
       sessionId: currentSessionId,

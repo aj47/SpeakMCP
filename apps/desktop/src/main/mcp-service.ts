@@ -2415,6 +2415,21 @@ export class MCPService {
         }
 
         const [serverName, toolName] = matchingTool.name.split(":", 2)
+
+        // Guard against executing tools that are disabled in the profile config
+        // This ensures "disabled" consistently means non-executable, not just hidden from the tool list
+        if (profileMcpConfig?.disabledTools?.includes(matchingTool.name)) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Tool ${matchingTool.name} is currently disabled for this profile.`,
+              },
+            ],
+            isError: true,
+          }
+        }
+
         const result = await this.executeServerTool(
           serverName,
           toolName,

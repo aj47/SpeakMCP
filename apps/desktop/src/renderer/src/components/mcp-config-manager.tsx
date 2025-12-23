@@ -58,12 +58,18 @@ import {
   Wrench,
 } from "lucide-react"
 import { Spinner } from "@renderer/components/ui/spinner"
-import { MCPConfig, MCPServerConfig, MCPTransportType, OAuthConfig, ServerLogEntry } from "@shared/types"
+import { MCPConfig, MCPServerConfig, MCPTransportType, OAuthConfig, ServerLogEntry, Profile } from "@shared/types"
 import { tipcClient } from "@renderer/lib/tipc-client"
 import { toast } from "sonner"
 import { OAuthServerConfig } from "./OAuthServerConfig"
 import { OAUTH_MCP_EXAMPLES, getOAuthExample } from "@shared/oauth-examples"
 import { parseShellCommand } from "@shared/shell-parse"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "./ui/tooltip"
 
 interface DetailedTool {
   name: string
@@ -71,6 +77,50 @@ interface DetailedTool {
   serverName: string
   enabled: boolean
   inputSchema: any
+}
+
+/**
+ * Check if a tool is enabled for a specific profile
+ */
+function isToolEnabledForProfile(toolName: string, serverName: string, profile: Profile): boolean {
+  const mcpConfig = profile.mcpServerConfig
+  if (!mcpConfig) return true // No config means all enabled
+
+  // Check if the server is disabled for this profile
+  if (mcpConfig.allServersDisabledByDefault) {
+    // In opt-in mode, server must be in enabledServers
+    if (!mcpConfig.enabledServers?.includes(serverName)) {
+      return false
+    }
+  } else {
+    // In opt-out mode, server must not be in disabledServers
+    if (mcpConfig.disabledServers?.includes(serverName)) {
+      return false
+    }
+  }
+
+  // Check if the tool itself is disabled
+  if (mcpConfig.disabledTools?.includes(toolName)) {
+    return false
+  }
+
+  return true
+}
+
+/**
+ * Check if a server is enabled for a specific profile
+ */
+function isServerEnabledForProfile(serverName: string, profile: Profile): boolean {
+  const mcpConfig = profile.mcpServerConfig
+  if (!mcpConfig) return true // No config means all enabled
+
+  if (mcpConfig.allServersDisabledByDefault) {
+    // In opt-in mode, server must be in enabledServers
+    return mcpConfig.enabledServers?.includes(serverName) ?? false
+  } else {
+    // In opt-out mode, server must not be in disabledServers
+    return !mcpConfig.disabledServers?.includes(serverName)
+  }
 }
 
 interface MCPConfigManagerProps {
@@ -901,6 +951,9 @@ export function MCPConfigManager({
   const [toolSearchQuery, setToolSearchQuery] = useState("")
   const [showDisabledTools, setShowDisabledTools] = useState(true)
   const [expandedTools, setExpandedTools] = useState<Set<string>>(new Set())
+  // Profile data for showing which profiles have tools/servers enabled
+  const [profiles, setProfiles] = useState<Profile[]>([])
+  const [currentProfileId, setCurrentProfileId] = useState<string | null>(null)
 
   // Define servers early so it can be used in hooks below
   const servers = config.mcpServers || {}
@@ -1002,6 +1055,25 @@ export function MCPConfigManager({
     fetchTools()
     const interval = setInterval(fetchTools, 5000) // Update every 5 seconds
 
+    return () => clearInterval(interval)
+  }, [])
+
+  // Fetch profiles for showing which profiles have tools/servers enabled
+  useEffect(() => {
+    const fetchProfiles = async () => {
+      try {
+        const [profileList, currentProfile] = await Promise.all([
+          tipcClient.getProfiles(),
+          tipcClient.getCurrentProfile(),
+        ])
+        setProfiles(profileList as Profile[])
+        setCurrentProfileId((currentProfile as Profile | null)?.id ?? null)
+      } catch (error) {}
+    }
+
+    fetchProfiles()
+    // Refresh when tools change (which happens on profile switch)
+    const interval = setInterval(fetchProfiles, 5000)
     return () => clearInterval(interval)
   }, [])
 
@@ -1705,6 +1777,35 @@ export function MCPConfigManager({
                         <Badge variant="secondary" className="text-xs">
                           {serverTools.filter(t => t.enabled).length}/{serverTools.length} enabled
                         </Badge>
+                        {/* Profile availability indicators */}
+                        <TooltipProvider delayDuration={0}>
+                          <div className="flex items-center gap-0.5 ml-1">
+                            {profiles.map((profile) => {
+                              const isEnabled = isServerEnabledForProfile(serverName, profile)
+                              const isCurrent = profile.id === currentProfileId
+                              return (
+                                <Tooltip key={profile.id}>
+                                  <TooltipTrigger asChild>
+                                    <div
+                                      className={`h-2 w-2 rounded-full ${
+                                        isEnabled
+                                          ? isCurrent
+                                            ? "bg-primary ring-1 ring-primary ring-offset-1"
+                                            : "bg-green-500"
+                                          : "bg-muted-foreground/30"
+                                      }`}
+                                    />
+                                  </TooltipTrigger>
+                                  <TooltipContent side="top" className="text-xs">
+                                    <span className="font-medium">{profile.name}</span>
+                                    {isCurrent && " (current)"}
+                                    : {isEnabled ? "enabled" : "disabled"}
+                                  </TooltipContent>
+                                </Tooltip>
+                              )
+                            })}
+                          </div>
+                        </TooltipProvider>
                       </div>
                       <div className="flex items-center gap-1">
                         <Button
@@ -1746,6 +1847,35 @@ export function MCPConfigManager({
                                   Disabled
                                 </Badge>
                               )}
+                              {/* Profile availability indicators */}
+                              <TooltipProvider delayDuration={0}>
+                                <div className="flex items-center gap-0.5">
+                                  {profiles.map((profile) => {
+                                    const isEnabled = isToolEnabledForProfile(tool.name, tool.serverName, profile)
+                                    const isCurrent = profile.id === currentProfileId
+                                    return (
+                                      <Tooltip key={profile.id}>
+                                        <TooltipTrigger asChild>
+                                          <div
+                                            className={`h-2 w-2 rounded-full ${
+                                              isEnabled
+                                                ? isCurrent
+                                                  ? "bg-primary ring-1 ring-primary ring-offset-1"
+                                                  : "bg-green-500"
+                                                : "bg-muted-foreground/30"
+                                            }`}
+                                          />
+                                        </TooltipTrigger>
+                                        <TooltipContent side="top" className="text-xs">
+                                          <span className="font-medium">{profile.name}</span>
+                                          {isCurrent && " (current)"}
+                                          : {isEnabled ? "enabled" : "disabled"}
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    )
+                                  })}
+                                </div>
+                              </TooltipProvider>
                             </div>
                             <p className="line-clamp-2 text-xs text-muted-foreground">
                               {tool.description}
@@ -1773,6 +1903,32 @@ export function MCPConfigManager({
                                     <p className="text-sm text-muted-foreground mt-1">
                                       {tool.serverName}
                                     </p>
+                                  </div>
+                                  <div>
+                                    <Label className="text-sm font-medium">
+                                      Profile Availability
+                                    </Label>
+                                    <div className="mt-2 flex flex-wrap gap-2">
+                                      {profiles.map((profile) => {
+                                        const isEnabled = isToolEnabledForProfile(tool.name, tool.serverName, profile)
+                                        const isCurrent = profile.id === currentProfileId
+                                        return (
+                                          <Badge
+                                            key={profile.id}
+                                            variant={isEnabled ? "default" : "secondary"}
+                                            className={`text-xs ${isCurrent ? "ring-2 ring-primary ring-offset-1" : ""}`}
+                                          >
+                                            {isEnabled ? (
+                                              <CheckCircle className="mr-1 h-3 w-3" />
+                                            ) : (
+                                              <XCircle className="mr-1 h-3 w-3" />
+                                            )}
+                                            {profile.name}
+                                            {isCurrent && " (current)"}
+                                          </Badge>
+                                        )
+                                      })}
+                                    </div>
                                   </div>
                                   <div>
                                     <Label className="text-sm font-medium">

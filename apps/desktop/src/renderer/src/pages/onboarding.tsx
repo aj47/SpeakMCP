@@ -1,12 +1,21 @@
 import { useState, useCallback, useRef, useEffect } from "react"
 import { Button } from "@renderer/components/ui/button"
 import { Input } from "@renderer/components/ui/input"
+import { Textarea } from "@renderer/components/ui/textarea"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@renderer/components/ui/select"
 import { useConfigQuery, useSaveConfigMutation } from "@renderer/lib/query-client"
 import { Config } from "@shared/types"
 import { useNavigate } from "react-router-dom"
 import { tipcClient } from "@renderer/lib/tipc-client"
 import { Recorder } from "@renderer/lib/recorder"
 import { useMutation } from "@tanstack/react-query"
+import { KeyRecorder } from "@renderer/components/key-recorder"
 
 type OnboardingStep = "welcome" | "api-key" | "dictation" | "agent" | "complete"
 
@@ -135,16 +144,21 @@ export function Component() {
             isRecording={isRecording}
             isTranscribing={isTranscribing}
             dictationResult={dictationResult}
+            onDictationResultChange={setDictationResult}
             onStartRecording={handleStartRecording}
             onStopRecording={handleStopRecording}
             onNext={() => setStep("agent")}
             onBack={() => setStep("api-key")}
+            config={configQuery.data}
+            onSaveConfig={saveConfig}
           />
         )}
         {step === "agent" && (
           <AgentStep
             onComplete={handleCompleteOnboarding}
             onBack={() => setStep("dictation")}
+            config={configQuery.data}
+            onSaveConfig={saveConfig}
           />
         )}
       </div>
@@ -245,19 +259,39 @@ function DictationStep({
   isRecording,
   isTranscribing,
   dictationResult,
+  onDictationResultChange,
   onStartRecording,
   onStopRecording,
   onNext,
   onBack,
+  config,
+  onSaveConfig,
 }: {
   isRecording: boolean
   isTranscribing: boolean
   dictationResult: string | null
+  onDictationResultChange: (value: string | null) => void
   onStartRecording: () => void
   onStopRecording: () => void
   onNext: () => void
   onBack: () => void
+  config: Config | undefined
+  onSaveConfig: (config: Partial<Config>) => void
 }) {
+  const shortcut = config?.shortcut || "hold-ctrl"
+
+  const getShortcutDisplay = () => {
+    if (shortcut === "hold-ctrl") {
+      return "Hold Ctrl"
+    } else if (shortcut === "ctrl-slash") {
+      return "Press Ctrl+/"
+    } else if (shortcut === "custom" && config?.customShortcut) {
+      const mode = config.customShortcutMode || "hold"
+      return mode === "hold" ? `Hold ${config.customShortcut}` : `Press ${config.customShortcut}`
+    }
+    return "Hold Ctrl"
+  }
+
   const getButtonContent = () => {
     if (isTranscribing) {
       return { icon: "i-mingcute-loading-fill animate-spin", text: "Transcribing..." }
@@ -274,36 +308,107 @@ function DictationStep({
     <div>
       <StepIndicator current={2} total={3} />
       <h2 className="text-2xl font-bold mb-2 text-center">Try Voice Dictation</h2>
-      <p className="text-muted-foreground mb-6 text-center">
-        Click the button below and speak to test voice dictation.
-        Your speech will be transcribed in real-time.
+      <p className="text-muted-foreground mb-4 text-center">
+        Click the button or use your hotkey to record. Your speech will be transcribed below.
       </p>
-      <div className="flex flex-col items-center gap-6 mb-8">
-        <div className="relative">
-          <Button
-            size="lg"
-            variant={isRecording ? "destructive" : "default"}
-            onClick={isRecording ? onStopRecording : onStartRecording}
-            disabled={isTranscribing}
-            className="w-32 h-32 rounded-full flex flex-col items-center justify-center gap-2"
+
+      {/* Hotkey Configuration */}
+      <div className="mb-6 p-4 rounded-lg border bg-muted/30">
+        <div className="flex items-center gap-2 mb-3">
+          <span className="i-mingcute-keyboard-fill text-lg text-primary"></span>
+          <label className="text-sm font-medium">Recording Hotkey</label>
+        </div>
+        <div className="space-y-3">
+          <Select
+            value={shortcut}
+            onValueChange={(value) => {
+              onSaveConfig({
+                shortcut: value as Config["shortcut"],
+              })
+            }}
           >
-            <span className={`text-4xl ${buttonContent.icon}`}></span>
-            <span className="text-sm">{buttonContent.text}</span>
-          </Button>
-          {isRecording && (
-            <div className="absolute inset-0 rounded-full border-4 border-red-500 animate-ping pointer-events-none"></div>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="hold-ctrl">Hold Ctrl</SelectItem>
+              <SelectItem value="ctrl-slash">Ctrl+/</SelectItem>
+              <SelectItem value="custom">Custom</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {shortcut === "custom" && (
+            <>
+              <div className="space-y-2">
+                <label className="text-xs text-muted-foreground">Mode</label>
+                <Select
+                  value={config?.customShortcutMode || "hold"}
+                  onValueChange={(value: "hold" | "toggle") => {
+                    onSaveConfig({
+                      customShortcutMode: value,
+                    })
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="hold">Hold (Press and hold to record)</SelectItem>
+                    <SelectItem value="toggle">Toggle (Press once to start, again to stop)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <KeyRecorder
+                value={config?.customShortcut || ""}
+                onChange={(keyCombo) => {
+                  onSaveConfig({
+                    customShortcut: keyCombo,
+                  })
+                }}
+                placeholder="Click to record custom shortcut"
+              />
+            </>
           )}
         </div>
-        {dictationResult && (
-          <div className="w-full p-4 rounded-lg border bg-muted/30">
-            <p className="text-sm font-medium mb-1">Transcription Result:</p>
-            <p className="text-muted-foreground">{dictationResult}</p>
-          </div>
-        )}
-        <p className="text-sm text-muted-foreground text-center">
-          <strong>Tip:</strong> You can also hold <kbd className="px-1.5 py-0.5 rounded bg-muted border text-xs">Ctrl</kbd> to record from anywhere!
-        </p>
       </div>
+
+      {/* Recording Button and Result */}
+      <div className="flex flex-col items-center gap-4 mb-6">
+        <div className="flex items-center gap-4">
+          <div className="relative">
+            <Button
+              size="lg"
+              variant={isRecording ? "destructive" : "default"}
+              onClick={isRecording ? onStopRecording : onStartRecording}
+              disabled={isTranscribing}
+              className="w-20 h-20 rounded-full flex flex-col items-center justify-center gap-1"
+            >
+              <span className={`text-2xl ${buttonContent.icon}`}></span>
+              <span className="text-xs">{buttonContent.text}</span>
+            </Button>
+            {isRecording && (
+              <div className="absolute inset-0 rounded-full border-4 border-red-500 animate-ping pointer-events-none"></div>
+            )}
+          </div>
+          <div className="text-sm text-muted-foreground">
+            <p className="font-medium">Or use your hotkey:</p>
+            <p className="text-primary font-semibold">{getShortcutDisplay()}</p>
+          </div>
+        </div>
+
+        {/* Transcription Result Textarea */}
+        <div className="w-full">
+          <label className="block text-sm font-medium mb-2">Transcription Result</label>
+          <Textarea
+            value={dictationResult || ""}
+            onChange={(e) => onDictationResultChange(e.target.value || null)}
+            placeholder={isRecording ? "Listening..." : isTranscribing ? "Transcribing..." : "Your transcribed text will appear here..."}
+            className="min-h-[100px] resize-none"
+            readOnly={isRecording || isTranscribing}
+          />
+        </div>
+      </div>
+
       <div className="flex justify-between">
         <Button variant="outline" onClick={onBack} disabled={isRecording || isTranscribing}>
           Back
@@ -320,34 +425,267 @@ function DictationStep({
 function AgentStep({
   onComplete,
   onBack,
+  config,
+  onSaveConfig,
 }: {
   onComplete: () => void
   onBack: () => void
+  config: Config | undefined
+  onSaveConfig: (config: Partial<Config>) => void
 }) {
+  const [isInstallingExa, setIsInstallingExa] = useState(false)
+  const [exaInstalled, setExaInstalled] = useState(false)
+  const [agentPrompt, setAgentPrompt] = useState("")
+  const [isAgentRunning, setIsAgentRunning] = useState(false)
+  const [agentResponse, setAgentResponse] = useState<string | null>(null)
+  const [agentError, setAgentError] = useState<string | null>(null)
+
+  // Check if Exa is already installed
+  useEffect(() => {
+    const mcpServers = config?.mcpConfig?.mcpServers || {}
+    setExaInstalled("exa" in mcpServers)
+  }, [config?.mcpConfig?.mcpServers])
+
+  const mcpToolsShortcut = config?.mcpToolsShortcut || "hold-ctrl-alt"
+
+  const getAgentShortcutDisplay = () => {
+    if (mcpToolsShortcut === "hold-ctrl-alt") {
+      return "Hold Ctrl+Alt"
+    } else if (mcpToolsShortcut === "ctrl-alt-slash") {
+      return "Press Ctrl+Alt+/"
+    } else if (mcpToolsShortcut === "custom" && config?.customMcpToolsShortcut) {
+      return config.customMcpToolsShortcut
+    }
+    return "Hold Ctrl+Alt"
+  }
+
+  const handleInstallExa = async () => {
+    setIsInstallingExa(true)
+    try {
+      // Add Exa MCP server to config
+      const currentMcpConfig = config?.mcpConfig || { mcpServers: {} }
+      const newMcpConfig = {
+        ...currentMcpConfig,
+        mcpServers: {
+          ...currentMcpConfig.mcpServers,
+          exa: {
+            transport: "streamableHttp" as const,
+            url: "https://mcp.exa.ai/mcp",
+          },
+        },
+      }
+      onSaveConfig({ mcpConfig: newMcpConfig })
+
+      // Wait for config to save, then start the server
+      await new Promise((resolve) => setTimeout(resolve, 500))
+
+      // Enable and start the server
+      await tipcClient.setMcpServerRuntimeEnabled({
+        serverName: "exa",
+        enabled: true,
+      })
+      await tipcClient.restartMcpServer({ serverName: "exa" })
+
+      setExaInstalled(true)
+    } catch (error) {
+      console.error("Failed to install Exa:", error)
+    } finally {
+      setIsInstallingExa(false)
+    }
+  }
+
+  const handleTestAgent = async () => {
+    if (!agentPrompt.trim()) return
+
+    // Check if API key is configured for the selected provider
+    const providerId = config?.mcpToolsProviderId || "openai"
+    const hasApiKey = providerId === "groq"
+      ? !!config?.groqApiKey
+      : providerId === "gemini"
+      ? !!config?.geminiApiKey
+      : !!config?.openaiApiKey
+
+    if (!hasApiKey) {
+      setAgentError(`No API key configured. Please go back and enter your ${providerId === "groq" ? "Groq" : providerId === "gemini" ? "Gemini" : "OpenAI"} API key, or configure it in Settings.`)
+      return
+    }
+
+    setIsAgentRunning(true)
+    setAgentResponse(null)
+    setAgentError(null)
+
+    try {
+      // Start agent session - this will run in the background
+      // and show in the floating panel
+      await tipcClient.createMcpTextInput({
+        text: agentPrompt.trim(),
+      })
+
+      // Clear the prompt after sending
+      setAgentPrompt("")
+      setAgentResponse("Agent started! Check the floating panel to see the progress.")
+    } catch (error: any) {
+      console.error("Failed to start agent:", error)
+      const errorMessage = error?.message || String(error)
+      if (errorMessage.includes("API key")) {
+        setAgentError("API key is missing or invalid. Please check your settings.")
+      } else if (errorMessage.includes("model")) {
+        setAgentError("Model configuration error. Please check your model settings.")
+      } else {
+        setAgentError(`Failed to start agent: ${errorMessage}`)
+      }
+    } finally {
+      setIsAgentRunning(false)
+    }
+  }
+
   return (
     <div>
       <StepIndicator current={3} total={3} />
       <h2 className="text-2xl font-bold mb-2 text-center">Meet Your AI Agent</h2>
-      <p className="text-muted-foreground mb-6 text-center">
-        {process.env.PRODUCT_NAME} includes a powerful AI agent that can use tools to help you with tasks.
+      <p className="text-muted-foreground mb-4 text-center">
+        Your AI agent can use MCP tools to search the web, run code, and more.
       </p>
-      <div className="space-y-4 mb-8">
-        <FeatureCard
-          icon="i-mingcute-robot-fill"
-          title="Agent Mode"
-          description="Hold Ctrl+Alt to activate agent mode. The AI can browse the web, run code, and more using MCP tools."
-        />
-        <FeatureCard
-          icon="i-mingcute-tool-fill"
-          title="MCP Tools"
-          description="Configure Model Context Protocol (MCP) servers in Settings to extend your agent's capabilities."
-        />
-        <FeatureCard
-          icon="i-mingcute-keyboard-fill"
-          title="Text Input"
-          description="Press Ctrl+T to type messages to the agent instead of speaking."
-        />
+
+      {/* Agent Mode Hotkey Configuration */}
+      <div className="mb-4 p-4 rounded-lg border bg-muted/30">
+        <div className="flex items-center gap-2 mb-3">
+          <span className="i-mingcute-keyboard-fill text-lg text-primary"></span>
+          <label className="text-sm font-medium">Agent Mode Hotkey</label>
+        </div>
+        <div className="space-y-3">
+          <Select
+            value={mcpToolsShortcut}
+            onValueChange={(value) => {
+              onSaveConfig({
+                mcpToolsShortcut: value as Config["mcpToolsShortcut"],
+              })
+            }}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="hold-ctrl-alt">Hold Ctrl+Alt</SelectItem>
+              <SelectItem value="ctrl-alt-slash">Ctrl+Alt+/</SelectItem>
+              <SelectItem value="custom">Custom</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {mcpToolsShortcut === "custom" && (
+            <KeyRecorder
+              value={config?.customMcpToolsShortcut || ""}
+              onChange={(keyCombo) => {
+                onSaveConfig({
+                  customMcpToolsShortcut: keyCombo,
+                })
+              }}
+              placeholder="Click to record custom agent mode shortcut"
+            />
+          )}
+        </div>
       </div>
+
+      {/* Install Exa MCP Server */}
+      <div className="mb-4 p-4 rounded-lg border bg-muted/30">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <span className="i-mingcute-search-fill text-2xl text-primary"></span>
+            <div>
+              <h3 className="font-semibold">Exa Web Search</h3>
+              <p className="text-sm text-muted-foreground">
+                Give your agent the power to search the web
+              </p>
+            </div>
+          </div>
+          <Button
+            onClick={handleInstallExa}
+            disabled={isInstallingExa || exaInstalled}
+            variant={exaInstalled ? "outline" : "default"}
+            size="sm"
+          >
+            {isInstallingExa ? (
+              <>
+                <span className="i-mingcute-loading-fill animate-spin mr-2"></span>
+                Installing...
+              </>
+            ) : exaInstalled ? (
+              <>
+                <span className="i-mingcute-check-fill mr-2 text-green-500"></span>
+                Installed
+              </>
+            ) : (
+              <>
+                <span className="i-mingcute-add-fill mr-2"></span>
+                Install
+              </>
+            )}
+          </Button>
+        </div>
+        <p className="text-xs text-muted-foreground mt-2">
+          No API key required. Add more MCP tools in Settings → MCP Tools.
+        </p>
+      </div>
+
+      {/* Try Your Agent */}
+      <div className="mb-4 p-4 rounded-lg border bg-muted/30">
+        <div className="flex items-center gap-2 mb-3">
+          <span className="i-mingcute-robot-fill text-lg text-primary"></span>
+          <label className="text-sm font-medium">Try Your Agent</label>
+        </div>
+
+        {/* Hotkey hint */}
+        <div className="flex items-center gap-2 mb-3 p-2 rounded bg-primary/10 border border-primary/20">
+          <span className="i-mingcute-keyboard-fill text-primary"></span>
+          <span className="text-sm">
+            <strong>{getAgentShortcutDisplay()}</strong> to speak to your agent from anywhere
+          </span>
+        </div>
+
+        <div className="flex gap-2">
+          <Input
+            value={agentPrompt}
+            onChange={(e) => setAgentPrompt(e.target.value)}
+            placeholder={exaInstalled ? "Try: What's the latest news about AI?" : "Ask your agent anything..."}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault()
+                handleTestAgent()
+              }
+            }}
+            disabled={isAgentRunning}
+          />
+          <Button
+            onClick={handleTestAgent}
+            disabled={isAgentRunning || !agentPrompt.trim()}
+          >
+            {isAgentRunning ? (
+              <span className="i-mingcute-loading-fill animate-spin"></span>
+            ) : (
+              <span className="i-mingcute-send-fill"></span>
+            )}
+          </Button>
+        </div>
+
+        {agentResponse && (
+          <div className="mt-3 p-2 rounded bg-green-500/10 border border-green-500/20 text-sm text-green-600 dark:text-green-400">
+            <span className="i-mingcute-check-circle-fill mr-2"></span>
+            {agentResponse}
+          </div>
+        )}
+
+        {agentError && (
+          <div className="mt-3 p-2 rounded bg-red-500/10 border border-red-500/20 text-sm text-red-600 dark:text-red-400">
+            <span className="i-mingcute-warning-fill mr-2"></span>
+            {agentError}
+          </div>
+        )}
+
+        <p className="text-xs text-muted-foreground mt-2">
+          Or use your hotkey to speak to the agent. Results will appear in the floating panel.
+        </p>
+      </div>
+
       <div className="flex justify-between">
         <Button variant="outline" onClick={onBack}>
           Back

@@ -280,6 +280,11 @@ class HttpError extends Error {
           return `Invalid model name. The specified model does not exist or is not available. Please check your model settings and ensure the model name is correct. Error details: ${errorDetail}`
         }
 
+        // Known Groq error when model outputs something that looks like a tool call
+        if (lowerDetail.includes('tool choice is none') || lowerDetail.includes('tool_choice')) {
+          return `The model attempted to use tools but tool calling is not enabled for this request. This can happen with certain prompts. Try rephrasing your request.`
+        }
+
         return `Bad request. The API rejected the request. ${errorDetail ? `Error details: ${errorDetail}` : 'Please check your configuration.'}`
       }
 

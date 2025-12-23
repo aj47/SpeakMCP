@@ -76,6 +76,11 @@ interface DetailedTool {
 interface MCPConfigManagerProps {
   config: MCPConfig
   onConfigChange: (config: MCPConfig) => void
+  // UI state persistence for collapsed/expanded sections
+  collapsedToolServers?: string[]
+  collapsedServers?: string[]
+  onCollapsedToolServersChange?: (servers: string[]) => void
+  onCollapsedServersChange?: (servers: string[]) => void
 }
 
 interface ServerDialogProps {
@@ -869,6 +874,10 @@ const MCP_EXAMPLES: Record<string, { name: string; config: MCPServerConfig; note
 export function MCPConfigManager({
   config,
   onConfigChange,
+  collapsedToolServers = [],
+  collapsedServers = [],
+  onCollapsedToolServersChange,
+  onCollapsedServersChange,
 }: MCPConfigManagerProps) {
   const [editingServer, setEditingServer] = useState<{
     name: string
@@ -895,12 +904,25 @@ export function MCPConfigManager({
   const [oauthStatus, setOAuthStatus] = useState<Record<string, { configured: boolean; authenticated: boolean; tokenExpiry?: number; error?: string }>>({})
   const [serverLogs, setServerLogs] = useState<Record<string, ServerLogEntry[]>>({})
   const [expandedLogs, setExpandedLogs] = useState<Set<string>>(new Set())
-  const [expandedServers, setExpandedServers] = useState<Set<string>>(new Set())
+  // Initialize expandedServers from persisted collapsed state (inverted: collapsed -> not in expanded set)
+  const [expandedServers, setExpandedServers] = useState<Set<string>>(() => {
+    // Start with all servers expanded except those in collapsedServers
+    const allServerNames = Object.keys(config.mcpServers || {})
+    const collapsedSet = new Set(collapsedServers)
+    return new Set(allServerNames.filter(name => !collapsedSet.has(name)))
+  })
   // Tool management state
   const [tools, setTools] = useState<DetailedTool[]>([])
   const [toolSearchQuery, setToolSearchQuery] = useState("")
   const [showDisabledTools, setShowDisabledTools] = useState(true)
-  const [expandedTools, setExpandedTools] = useState<Set<string>>(new Set())
+  // Initialize expandedTools (servers in Tools section) - all expanded by default except those persisted as collapsed
+  const [expandedToolServers, setExpandedToolServers] = useState<Set<string>>(() => {
+    const collapsedSet = new Set(collapsedToolServers)
+    // We don't know server names yet, so start with empty set meaning "all expanded"
+    // When collapsedToolServers is provided, those will be collapsed
+    return new Set<string>() // Will be populated when tools load
+  })
+  const [toolServersInitialized, setToolServersInitialized] = useState(false)
 
   // Define servers early so it can be used in hooks below
   const servers = config.mcpServers || {}
@@ -1004,6 +1026,19 @@ export function MCPConfigManager({
 
     return () => clearInterval(interval)
   }, [])
+
+  // Initialize expandedToolServers when tools are first loaded
+  // All servers are expanded by default except those in collapsedToolServers
+  useEffect(() => {
+    if (tools.length > 0 && !toolServersInitialized) {
+      const allToolServerNames = [...new Set(tools.map(t => t.serverName))]
+      const collapsedSet = new Set(collapsedToolServers)
+      // Servers NOT in collapsedToolServers are expanded
+      const expanded = new Set(allToolServerNames.filter(name => !collapsedSet.has(name)))
+      setExpandedToolServers(expanded)
+      setToolServersInitialized(true)
+    }
+  }, [tools, collapsedToolServers, toolServersInitialized])
 
   // Group tools by server
   const toolsByServer = tools.reduce(
@@ -1123,12 +1158,18 @@ export function MCPConfigManager({
   }
 
   const toggleToolsExpansion = (serverName: string) => {
-    setExpandedTools(prev => {
+    setExpandedToolServers(prev => {
       const newSet = new Set(prev)
       if (newSet.has(serverName)) {
         newSet.delete(serverName)
       } else {
         newSet.add(serverName)
+      }
+      // Persist the collapsed state (servers NOT in expanded set are collapsed)
+      if (onCollapsedToolServersChange) {
+        const allToolServerNames = [...new Set(tools.map(t => t.serverName))]
+        const collapsed = allToolServerNames.filter(name => !newSet.has(name))
+        onCollapsedToolServersChange(collapsed)
       }
       return newSet
     })
@@ -1430,6 +1471,12 @@ export function MCPConfigManager({
       } else {
         newSet.add(serverName)
       }
+      // Persist the collapsed state (servers NOT in expanded set are collapsed)
+      if (onCollapsedServersChange) {
+        const allServerNames = Object.keys(servers)
+        const collapsed = allServerNames.filter(name => !newSet.has(name))
+        onCollapsedServersChange(collapsed)
+      }
       return newSet
     })
   }
@@ -1677,8 +1724,8 @@ export function MCPConfigManager({
               </div>
             </div>
 
-            {/* Tools List - Grouped by Server */}
-            <div className="space-y-4 max-h-96 overflow-y-auto">
+            {/* Tools List - Grouped by Server with Collapsible Groups */}
+            <div className="space-y-2 flex-1 min-h-0 overflow-y-auto">
               {getAllFilteredTools().length === 0 ? (
                 <div className="text-sm text-muted-foreground text-center py-4">
                   {totalToolsCount === 0
@@ -1695,18 +1742,38 @@ export function MCPConfigManager({
                     acc[tool.serverName].push(tool)
                     return acc
                   }, {} as Record<string, DetailedTool[]>)
-                ).map(([serverName, serverTools]) => (
+                ).map(([serverName, serverTools]) => {
+                  const isExpanded = expandedToolServers.has(serverName)
+                  return (
                   <div key={serverName} className="space-y-2">
-                    {/* Server Header with Toggle Buttons */}
-                    <div className="flex items-center justify-between bg-muted/50 rounded-lg px-3 py-2">
+                    {/* Server Header - Clickable for collapse/expand */}
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      aria-expanded={isExpanded}
+                      aria-label={`Toggle ${serverName} tools`}
+                      className="flex items-center justify-between bg-muted/50 rounded-lg px-3 py-2 cursor-pointer hover:bg-muted/70 transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1"
+                      onClick={() => toggleToolsExpansion(serverName)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          toggleToolsExpansion(serverName)
+                        }
+                      }}
+                    >
                       <div className="flex items-center gap-2">
+                        {isExpanded ? (
+                          <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform" />
+                        ) : (
+                          <ChevronRight className="h-4 w-4 text-muted-foreground transition-transform" />
+                        )}
                         <Server className="h-4 w-4 text-muted-foreground" />
                         <span className="text-sm font-medium">{serverName}</span>
                         <Badge variant="secondary" className="text-xs">
                           {serverTools.filter(t => t.enabled).length}/{serverTools.length} enabled
                         </Badge>
                       </div>
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                         <Button
                           variant="ghost"
                           size="sm"
@@ -1727,76 +1794,78 @@ export function MCPConfigManager({
                         </Button>
                       </div>
                     </div>
-                    {/* Tools for this server */}
-                    <div className="space-y-2 pl-2">
-                      {serverTools.map((tool) => (
-                        <div
-                          key={tool.name}
-                          className="flex items-center justify-between rounded-lg border p-3"
-                        >
-                          <div className="min-w-0 flex-1">
-                            <div className="mb-1 flex items-center gap-2">
-                              <h4 className="truncate text-sm font-medium">
-                                {tool.name.includes(":")
-                                  ? tool.name.split(":").slice(1).join(":")
-                                  : tool.name}
-                              </h4>
-                              {!tool.enabled && (
-                                <Badge variant="secondary" className="text-xs shrink-0">
-                                  Disabled
-                                </Badge>
-                              )}
+                    {/* Tools for this server - Collapsible with animation */}
+                    {isExpanded && (
+                      <div className="space-y-2 pl-6 animate-in fade-in slide-in-from-top-1 duration-200">
+                        {serverTools.map((tool) => (
+                          <div
+                            key={tool.name}
+                            className="flex items-center justify-between rounded-lg border p-3"
+                          >
+                            <div className="min-w-0 flex-1">
+                              <div className="mb-1 flex items-center gap-2">
+                                <h4 className="truncate text-sm font-medium">
+                                  {tool.name.includes(":")
+                                    ? tool.name.split(":").slice(1).join(":")
+                                    : tool.name}
+                                </h4>
+                                {!tool.enabled && (
+                                  <Badge variant="secondary" className="text-xs shrink-0">
+                                    Disabled
+                                  </Badge>
+                                )}
+                              </div>
+                              <p className="line-clamp-2 text-xs text-muted-foreground">
+                                {tool.description}
+                              </p>
                             </div>
-                            <p className="line-clamp-2 text-xs text-muted-foreground">
-                              {tool.description}
-                            </p>
-                          </div>
-                          <div className="ml-4 flex items-center gap-2">
-                            <Dialog>
-                              <DialogTrigger asChild>
-                                <Button variant="ghost" size="sm">
-                                  <Eye className="h-4 w-4" />
-                                </Button>
-                              </DialogTrigger>
-                              <DialogContent className="max-w-2xl">
-                                <DialogHeader>
-                                  <DialogTitle>{tool.name}</DialogTitle>
-                                  <DialogDescription>
-                                    {tool.description}
-                                  </DialogDescription>
-                                </DialogHeader>
-                                <div className="space-y-4">
-                                  <div>
-                                    <Label className="text-sm font-medium">
-                                      Server
-                                    </Label>
-                                    <p className="text-sm text-muted-foreground mt-1">
-                                      {tool.serverName}
-                                    </p>
+                            <div className="ml-4 flex items-center gap-2">
+                              <Dialog>
+                                <DialogTrigger asChild>
+                                  <Button variant="ghost" size="sm">
+                                    <Eye className="h-4 w-4" />
+                                  </Button>
+                                </DialogTrigger>
+                                <DialogContent className="max-w-2xl">
+                                  <DialogHeader>
+                                    <DialogTitle>{tool.name}</DialogTitle>
+                                    <DialogDescription>
+                                      {tool.description}
+                                    </DialogDescription>
+                                  </DialogHeader>
+                                  <div className="space-y-4">
+                                    <div>
+                                      <Label className="text-sm font-medium">
+                                        Server
+                                      </Label>
+                                      <p className="text-sm text-muted-foreground mt-1">
+                                        {tool.serverName}
+                                      </p>
+                                    </div>
+                                    <div>
+                                      <Label className="text-sm font-medium">
+                                        Input Schema
+                                      </Label>
+                                      <pre className="mt-2 max-h-64 overflow-auto rounded-md bg-muted p-3 text-xs">
+                                        {JSON.stringify(tool.inputSchema, null, 2)}
+                                      </pre>
+                                    </div>
                                   </div>
-                                  <div>
-                                    <Label className="text-sm font-medium">
-                                      Input Schema
-                                    </Label>
-                                    <pre className="mt-2 max-h-64 overflow-auto rounded-md bg-muted p-3 text-xs">
-                                      {JSON.stringify(tool.inputSchema, null, 2)}
-                                    </pre>
-                                  </div>
-                                </div>
-                              </DialogContent>
-                            </Dialog>
-                            <Switch
-                              checked={tool.enabled}
-                              onCheckedChange={(enabled) =>
-                                handleToolToggle(tool.name, enabled)
-                              }
-                            />
+                                </DialogContent>
+                              </Dialog>
+                              <Switch
+                                checked={tool.enabled}
+                                onCheckedChange={(enabled) =>
+                                  handleToolToggle(tool.name, enabled)
+                                }
+                              />
+                            </div>
                           </div>
-                        </div>
-                      ))}
-                    </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                ))
+                )})
               )}
             </div>
           </CardContent>

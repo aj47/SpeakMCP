@@ -28,6 +28,14 @@ export function Component() {
     updateConfig({ mcpConfig })
   }
 
+  const handleCollapsedToolServersChange = (servers: string[]) => {
+    updateConfig({ mcpToolsCollapsedServers: servers })
+  }
+
+  const handleCollapsedServersChange = (servers: string[]) => {
+    updateConfig({ mcpServersCollapsedServers: servers })
+  }
+
   return (
     <div className="modern-panel h-full min-w-0 overflow-y-auto overflow-x-hidden px-6 py-4">
       <div className="min-w-0 space-y-8">
@@ -42,6 +50,10 @@ export function Component() {
           <MCPConfigManager
             config={config.mcpConfig || { mcpServers: {} }}
             onConfigChange={updateMcpConfig}
+            collapsedToolServers={config.mcpToolsCollapsedServers || []}
+            collapsedServers={config.mcpServersCollapsedServers || []}
+            onCollapsedToolServersChange={handleCollapsedToolServersChange}
+            onCollapsedServersChange={handleCollapsedServersChange}
           />
         </div>
       </div>

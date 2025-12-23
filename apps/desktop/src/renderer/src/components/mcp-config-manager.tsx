@@ -905,9 +905,11 @@ export function MCPConfigManager({
   const [serverLogs, setServerLogs] = useState<Record<string, ServerLogEntry[]>>({})
   const [expandedLogs, setExpandedLogs] = useState<Set<string>>(new Set())
   // Initialize expandedServers from persisted collapsed state (inverted: collapsed -> not in expanded set)
+  // Include built-in server name to avoid flicker on first paint
   const [expandedServers, setExpandedServers] = useState<Set<string>>(() => {
     // Start with all servers expanded except those in collapsedServers
-    const allServerNames = Object.keys(config.mcpServers || {})
+    // Include built-in server name (speakmcp-settings) so it's expanded by default
+    const allServerNames = [...Object.keys(config.mcpServers || {}), "speakmcp-settings"]
     const collapsedSet = new Set(collapsedServers)
     return new Set(allServerNames.filter(name => !collapsedSet.has(name)))
   })
@@ -977,11 +979,13 @@ export function MCPConfigManager({
   // This tracks the previous collapsedServers to detect external changes
   const prevCollapsedServersRef = useRef<string[]>(collapsedServers)
   useEffect(() => {
-    // Check if collapsedServers prop actually changed (compare arrays)
+    // Check if collapsedServers prop actually changed (use set comparison for robustness)
     const prevCollapsed = prevCollapsedServersRef.current
+    const prevSet = new Set(prevCollapsed)
+    const currentSet = new Set(collapsedServers)
     const collapsedChanged =
-      prevCollapsed.length !== collapsedServers.length ||
-      prevCollapsed.some((s, i) => s !== collapsedServers[i])
+      prevSet.size !== currentSet.size ||
+      [...prevSet].some(s => !currentSet.has(s))
 
     if (collapsedChanged) {
       prevCollapsedServersRef.current = collapsedServers
@@ -1104,11 +1108,13 @@ export function MCPConfigManager({
   // Sync expandedToolServers when collapsedToolServers prop changes (e.g., after async config load)
   const prevCollapsedToolServersRef = useRef<string[]>(collapsedToolServers)
   useEffect(() => {
-    // Check if collapsedToolServers prop actually changed
+    // Check if collapsedToolServers prop actually changed (use set comparison for robustness)
     const prevCollapsed = prevCollapsedToolServersRef.current
+    const prevSet = new Set(prevCollapsed)
+    const currentSet = new Set(collapsedToolServers)
     const collapsedChanged =
-      prevCollapsed.length !== collapsedToolServers.length ||
-      prevCollapsed.some((s, i) => s !== collapsedToolServers[i])
+      prevSet.size !== currentSet.size ||
+      [...prevSet].some(s => !currentSet.has(s))
 
     if (collapsedChanged && toolServersInitialized) {
       prevCollapsedToolServersRef.current = collapsedToolServers

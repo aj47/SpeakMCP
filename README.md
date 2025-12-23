@@ -29,10 +29,10 @@ https://github.com/user-attachments/assets/0c181c70-d1f1-4c5d-a6f5-a73147e75182
 **Debian/Ubuntu (.deb package)**:
 ```bash
 # Download the latest .deb from releases
-wget https://github.com/aj47/SpeakMCP/releases/latest/download/speakmcp_VERSION_amd64.deb
+wget https://github.com/aj47/SpeakMCP/releases/latest/download/SpeakMCP-VERSION-amd64.deb
 
 # Install
-sudo apt install ./speakmcp_VERSION_amd64.deb
+sudo apt install ./SpeakMCP-VERSION-amd64.deb
 
 # Launch from terminal or application menu
 speakmcp
@@ -41,13 +41,13 @@ speakmcp
 **AppImage (Universal Linux)**:
 ```bash
 # Download the latest AppImage from releases
-wget https://github.com/aj47/SpeakMCP/releases/latest/download/speakmcp-VERSION.AppImage
+wget https://github.com/aj47/SpeakMCP/releases/latest/download/SpeakMCP-VERSION-x64.AppImage
 
 # Make executable
-chmod +x speakmcp-VERSION.AppImage
+chmod +x SpeakMCP-VERSION-x64.AppImage
 
 # Run
-./speakmcp-VERSION.AppImage
+./SpeakMCP-VERSION-x64.AppImage
 ```
 
 **Troubleshooting Linux GPU Errors**:

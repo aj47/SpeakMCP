@@ -184,7 +184,7 @@ export const TextInputPanel = forwardRef<TextInputPanelRef, TextInputPanelProps>
       onSubmit(text.trim(), screenshotToSend)
       setText("")
       setScreenshot(null)
-      setIncludeScreenshot(false)
+      setIncludeScreenshot(alwaysIncludeScreenshot)
     }
   }
 

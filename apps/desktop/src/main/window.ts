@@ -31,7 +31,11 @@ export async function captureScreenshotFromMain(): Promise<string | undefined> {
     })
 
     if (sources.length === 0) {
-      logApp('[captureScreenshotFromMain] No screen sources available')
+      if (process.platform === 'darwin') {
+        logApp('[captureScreenshotFromMain] No screen sources available. This is likely a macOS permission issue. Please grant Screen Recording permission in System Settings > Privacy & Security > Screen Recording, then restart the app.')
+      } else {
+        logApp('[captureScreenshotFromMain] No screen sources available')
+      }
       return undefined
     }
 

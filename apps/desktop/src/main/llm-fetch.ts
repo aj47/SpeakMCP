@@ -517,7 +517,13 @@ async function apiCallWithRetry<T>(
         }
 
         // Wait before retrying with interruptible delay
-        await interruptibleDelay(delay)
+        // Wrap in try-catch to ensure clearRetryStatus is called on emergency stop
+        try {
+          await interruptibleDelay(delay)
+        } catch (abortError) {
+          clearRetryStatus()
+          throw abortError
+        }
         attempt++
         continue
       }
@@ -578,7 +584,13 @@ async function apiCallWithRetry<T>(
       }
 
       // Wait before retrying with interruptible delay
-      await interruptibleDelay(delay)
+      // Wrap in try-catch to ensure clearRetryStatus is called on emergency stop
+      try {
+        await interruptibleDelay(delay)
+      } catch (abortError) {
+        clearRetryStatus()
+        throw abortError
+      }
       attempt++
     }
   }

@@ -606,8 +606,15 @@ export async function processTranscriptWithAgentMode(
   // The user explicitly wants to see the previous context when they click "Continue".
   const sessionStartIndex = 0
 
+  // For session isolation: prefer the stored snapshot over the passed-in one
+  // This ensures that when reusing an existing sessionId, we maintain the original profile settings
+  // and don't allow mid-session profile changes to affect the session
+  const storedSnapshot = sessionId ? agentSessionStateManager.getSessionProfileSnapshot(sessionId) : undefined
+  const effectiveProfileSnapshot = storedSnapshot ?? profileSnapshot
+
   // Create session state for this agent run with profile snapshot for isolation
-  agentSessionStateManager.createSession(currentSessionId, profileSnapshot)
+  // Note: createSession is a no-op if the session already exists, so this is safe for resumed sessions
+  agentSessionStateManager.createSession(currentSessionId, effectiveProfileSnapshot)
 
   // Track context usage info for progress display
   // Declared here so emit() can access it
@@ -783,8 +790,8 @@ export async function processTranscriptWithAgentMode(
   // Use profile snapshot for session isolation if available, otherwise fall back to global config
   // This ensures the session uses the profile settings at creation time,
   // even if the global profile is changed during session execution
-  const agentModeGuidelines = profileSnapshot?.guidelines ?? config.mcpToolsSystemPrompt ?? ""
-  const customSystemPrompt = profileSnapshot?.systemPrompt ?? config.mcpCustomSystemPrompt
+  const agentModeGuidelines = effectiveProfileSnapshot?.guidelines ?? config.mcpToolsSystemPrompt ?? ""
+  const customSystemPrompt = effectiveProfileSnapshot?.systemPrompt ?? config.mcpCustomSystemPrompt
 
   // Construct system prompt using the new approach
   const systemPrompt = constructSystemPrompt(

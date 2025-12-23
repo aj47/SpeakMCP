@@ -2262,7 +2262,8 @@ export class MCPService {
   async executeToolCall(
     toolCall: MCPToolCall,
     onProgress?: (message: string) => void,
-    skipApprovalCheck: boolean = false
+    skipApprovalCheck: boolean = false,
+    profileMcpConfig?: ProfileMcpServerConfig
   ): Promise<MCPToolResult> {
     try {
       if (isDebugTools()) {
@@ -2322,9 +2323,26 @@ export class MCPService {
       if (toolCall.name.includes(":")) {
         const [serverName, toolName] = toolCall.name.split(":", 2)
 
-        // Guard against executing tools from runtime-disabled servers
-        // This prevents profile pollution during profile switches
-        if (this.runtimeDisabledServers.has(serverName)) {
+        // Guard against executing tools from disabled servers
+        // When profileMcpConfig is provided (session-aware mode), check against the session's profile config
+        // Otherwise fall back to global runtimeDisabledServers (for backward compatibility)
+        const isServerDisabledForSession = (() => {
+          if (profileMcpConfig) {
+            // Session-aware: check against the profile's server config
+            const { allServersDisabledByDefault, enabledServers, disabledServers } = profileMcpConfig
+            if (allServersDisabledByDefault) {
+              // All servers disabled except those in enabledServers
+              return !(enabledServers || []).includes(serverName)
+            } else {
+              // Only servers in disabledServers are disabled
+              return (disabledServers || []).includes(serverName)
+            }
+          }
+          // Global mode: check runtime disabled servers
+          return this.runtimeDisabledServers.has(serverName)
+        })()
+
+        if (isServerDisabledForSession) {
           return {
             content: [
               {
@@ -2351,9 +2369,17 @@ export class MCPService {
 
       // Try to find a matching tool without prefix (fallback for LLM inconsistencies)
       // Include both external and built-in tools in the search
-      // Filter out tools from runtime-disabled servers to prevent profile pollution
+      // Filter out tools from disabled servers (session-aware when profileMcpConfig provided)
       const enabledExternalTools = this.availableTools.filter((tool) => {
         const sName = tool.name.includes(":") ? tool.name.split(":")[0] : "unknown"
+        if (profileMcpConfig) {
+          const { allServersDisabledByDefault, enabledServers, disabledServers } = profileMcpConfig
+          if (allServersDisabledByDefault) {
+            return (enabledServers || []).includes(sName)
+          } else {
+            return !(disabledServers || []).includes(sName)
+          }
+        }
         return !this.runtimeDisabledServers.has(sName)
       })
       const allTools = [...enabledExternalTools, ...builtinTools]

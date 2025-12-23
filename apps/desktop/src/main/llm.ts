@@ -782,16 +782,7 @@ export async function processTranscriptWithAgentMode(
   )
 
   // Enhanced user guidelines for agent mode
-  let agentModeGuidelines = config.mcpToolsSystemPrompt || ""
-
-  // Add default context awareness guidelines if no custom guidelines provided
-  if (!config.mcpToolsSystemPrompt?.trim()) {
-    agentModeGuidelines = `CONTEXT AWARENESS:
-- Maintain awareness of files created, modified, or referenced in previous operations
-- When asked to read "the file" or "that file", refer to the most recently created or mentioned file
-- Remember session IDs from terminal operations to reuse them when appropriate
-- Build upon previous actions rather than starting from scratch`
-  }
+  const agentModeGuidelines = config.mcpToolsSystemPrompt || ""
 
   // Construct system prompt using the new approach
   const systemPrompt = constructSystemPrompt(
@@ -1174,42 +1165,10 @@ Return ONLY JSON per schema.`,
         config,
       )
 
-      contextAwarePrompt += `\n\nCONTEXT AWARENESS:
-You have access to the recent conversation history. Use this history to understand:
-- Any resources (sessions, files, connections, etc.) that were created or mentioned
-- Previous tool calls and their results
-- User preferences and workflow patterns
-- Any ongoing tasks or processes
-
-${
-  contextInfo.contextSummary
-    ? `
-CURRENT CONTEXT:
-${contextInfo.contextSummary}
-`
-    : ""
-}
-
-${
-  contextInfo.resources.length > 0
-    ? `
-AVAILABLE RESOURCES:
-${contextInfo.resources.map((r) => `- ${r.type.toUpperCase()}: ${r.id} (use as parameter: ${r.parameter})`).join("\n")}
-
-CRITICAL: When using tools that require resource IDs, you MUST use the exact resource IDs listed above.
-DO NOT create fictional or made-up resource identifiers.
-`
-    : ""
-}
-
-RESOURCE USAGE GUIDELINES:
-- Always check the conversation history for existing resource IDs before creating new ones
-- Use the exact resource ID values provided above
-- Match the resource ID to the correct parameter name as specified
-- If no suitable resource is available, create a new one using the appropriate creation tool first
-
-NEVER invent resource IDs like "my-session-123" or "temp-connection-id".
-Always use actual resource IDs from the conversation history or create new ones properly.`
+      // Only add resource IDs if there are any - LLM can infer context from conversation history
+      if (contextInfo.resources.length > 0) {
+        contextAwarePrompt += `\n\nAVAILABLE RESOURCES:\n${contextInfo.resources.map((r) => `- ${r.type.toUpperCase()}: ${r.id}`).join("\n")}`
+      }
     }
 
     // Build messages for LLM call

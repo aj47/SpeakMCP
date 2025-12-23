@@ -295,6 +295,7 @@ export function Component() {
         {isGroqActive && (
           <div className="rounded-lg border border-primary/30 bg-primary/5">
             <button
+              type="button"
               className="px-3 py-2 flex items-center justify-between w-full hover:bg-muted/30 transition-colors cursor-pointer"
               onClick={() => saveConfig({ providerSectionCollapsedGroq: !configQuery.data.providerSectionCollapsedGroq })}
               aria-expanded={!configQuery.data.providerSectionCollapsedGroq}
@@ -404,6 +405,7 @@ export function Component() {
         {isGeminiActive && (
           <div className="rounded-lg border border-primary/30 bg-primary/5">
             <button
+              type="button"
               className="px-3 py-2 flex items-center justify-between w-full hover:bg-muted/30 transition-colors cursor-pointer"
               onClick={() => saveConfig({ providerSectionCollapsedGemini: !configQuery.data.providerSectionCollapsedGemini })}
               aria-expanded={!configQuery.data.providerSectionCollapsedGemini}
@@ -513,6 +515,7 @@ export function Component() {
         {!isGroqActive && (
           <div className="rounded-lg border">
             <button
+              type="button"
               className="px-3 py-2 flex items-center justify-between w-full hover:bg-muted/30 transition-colors cursor-pointer"
               onClick={() => saveConfig({ providerSectionCollapsedGroq: !configQuery.data.providerSectionCollapsedGroq })}
               aria-expanded={!configQuery.data.providerSectionCollapsedGroq}
@@ -622,6 +625,7 @@ export function Component() {
         {!isGeminiActive && (
           <div className="rounded-lg border">
             <button
+              type="button"
               className="px-3 py-2 flex items-center justify-between w-full hover:bg-muted/30 transition-colors cursor-pointer"
               onClick={() => saveConfig({ providerSectionCollapsedGemini: !configQuery.data.providerSectionCollapsedGemini })}
               aria-expanded={!configQuery.data.providerSectionCollapsedGemini}

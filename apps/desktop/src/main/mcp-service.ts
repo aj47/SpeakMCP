@@ -1023,11 +1023,9 @@ export class MCPService {
     const TRUNCATION_LIMIT = 50000
     return content.map((item) => {
       if (item.text.length > TRUNCATION_LIMIT) {
-        const truncatedChars = item.text.length - TRUNCATION_LIMIT
-        const truncationNote = `\n\n---\n⚠️ TRUNCATED: Showing first ${TRUNCATION_LIMIT.toLocaleString()} of ${item.text.length.toLocaleString()} characters (${truncatedChars.toLocaleString()} truncated).`
         return {
           type: item.type,
-          text: item.text.substring(0, TRUNCATION_LIMIT) + truncationNote
+          text: item.text.substring(0, TRUNCATION_LIMIT) + '\n\n[truncated]'
         }
       }
       return item
@@ -1079,7 +1077,7 @@ export class MCPService {
         )
         return {
           type: item.type,
-          text: `[SUMMARIZED - Original size: ${responseSize} chars]\n\n${summarized}\n\n[End of summarized content]`
+          text: `[summarized]\n${summarized}`
         }
       } else {
         // Notify user of processing if enabled
@@ -1097,7 +1095,7 @@ export class MCPService {
         )
         return {
           type: item.type,
-          text: `[PROCESSED - Original size: ${responseSize} chars]\n\n${summarized}`
+          text: summarized
         }
       }
     }))
@@ -1139,7 +1137,7 @@ export class MCPService {
       logTools('Failed to summarize large response:', error)
       // Fallback to simple truncation
       const maxLength = strategy === 'aggressive' ? 2000 : 5000
-      return content.substring(0, maxLength) + '\n\n... (truncated due to summarization failure)'
+      return content.substring(0, maxLength) + '\n\n[truncated]'
     }
   }
 

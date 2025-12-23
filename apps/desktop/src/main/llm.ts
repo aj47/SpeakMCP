@@ -80,11 +80,10 @@ async function extractContextFromHistory(
   }>,
   config: any,
 ): Promise<{
-  contextSummary: string
-  resources: Array<{ type: string; id: string; parameter: string }>
+  resources: Array<{ type: string; id: string }>
 }> {
   if (conversationHistory.length === 0) {
-    return { contextSummary: "", resources: [] }
+    return { resources: [] }
   }
 
   // Create a condensed version of the conversation for analysis
@@ -104,41 +103,21 @@ async function extractContextFromHistory(
     })
     .join("\n\n")
 
-  const contextExtractionPrompt = `Analyze the following conversation history and extract useful context information that would be needed for continuing the conversation.
+  const contextExtractionPrompt = `Extract active resource IDs from this conversation:
 
-CONVERSATION HISTORY:
 ${conversationText}
 
-Your task is to identify and extract:
-1. Resource identifiers (session IDs, connection IDs, file handles, workspace IDs, etc.)
-2. Important file paths or locations mentioned
-3. Current state or status information
-4. Any other context that would be useful for subsequent tool calls
-
-Respond with a JSON object in this exact format:
-{
-  "contextSummary": "Brief summary of the current state and what has been accomplished",
-  "resources": [
-    {
-      "type": "session|connection|handle|workspace|channel|other",
-      "id": "the actual ID value",
-      "parameter": "the parameter name this ID should be used for (e.g., sessionId, connectionId)"
-    }
-  ]
-}
-
-Focus on extracting actual resource identifiers that tools would need, not just mentioning them.
-Only include resources that are currently active and usable.
-Keep the contextSummary concise but informative.`
+Return JSON: {"resources": [{"type": "session|connection|handle|other", "id": "actual_id_value"}]}
+Only include currently active/usable resources.`
 
   try {
     const result = await makeStructuredContextExtraction(
       contextExtractionPrompt,
       config.mcpToolsProviderId,
     )
-    return result as { contextSummary: string; resources: Array<{ type: string; id: string; parameter: string }> }
+    return result as { resources: Array<{ type: string; id: string }> }
   } catch (error) {
-    return { contextSummary: "", resources: [] }
+    return { resources: [] }
   }
 }
 
@@ -782,16 +761,7 @@ export async function processTranscriptWithAgentMode(
   )
 
   // Enhanced user guidelines for agent mode
-  let agentModeGuidelines = config.mcpToolsSystemPrompt || ""
-
-  // Add default context awareness guidelines if no custom guidelines provided
-  if (!config.mcpToolsSystemPrompt?.trim()) {
-    agentModeGuidelines = `CONTEXT AWARENESS:
-- Maintain awareness of files created, modified, or referenced in previous operations
-- When asked to read "the file" or "that file", refer to the most recently created or mentioned file
-- Remember session IDs from terminal operations to reuse them when appropriate
-- Build upon previous actions rather than starting from scratch`
-  }
+  const agentModeGuidelines = config.mcpToolsSystemPrompt || ""
 
   // Construct system prompt using the new approach
   const systemPrompt = constructSystemPrompt(
@@ -1174,42 +1144,10 @@ Return ONLY JSON per schema.`,
         config,
       )
 
-      contextAwarePrompt += `\n\nCONTEXT AWARENESS:
-You have access to the recent conversation history. Use this history to understand:
-- Any resources (sessions, files, connections, etc.) that were created or mentioned
-- Previous tool calls and their results
-- User preferences and workflow patterns
-- Any ongoing tasks or processes
-
-${
-  contextInfo.contextSummary
-    ? `
-CURRENT CONTEXT:
-${contextInfo.contextSummary}
-`
-    : ""
-}
-
-${
-  contextInfo.resources.length > 0
-    ? `
-AVAILABLE RESOURCES:
-${contextInfo.resources.map((r) => `- ${r.type.toUpperCase()}: ${r.id} (use as parameter: ${r.parameter})`).join("\n")}
-
-CRITICAL: When using tools that require resource IDs, you MUST use the exact resource IDs listed above.
-DO NOT create fictional or made-up resource identifiers.
-`
-    : ""
-}
-
-RESOURCE USAGE GUIDELINES:
-- Always check the conversation history for existing resource IDs before creating new ones
-- Use the exact resource ID values provided above
-- Match the resource ID to the correct parameter name as specified
-- If no suitable resource is available, create a new one using the appropriate creation tool first
-
-NEVER invent resource IDs like "my-session-123" or "temp-connection-id".
-Always use actual resource IDs from the conversation history or create new ones properly.`
+      // Only add resource IDs if there are any - LLM can infer context from conversation history
+      if (contextInfo.resources.length > 0) {
+        contextAwarePrompt += `\n\nAVAILABLE RESOURCES:\n${contextInfo.resources.map((r) => `- ${r.type.toUpperCase()}: ${r.id}`).join("\n")}`
+      }
     }
 
     // Build messages for LLM call

@@ -56,7 +56,7 @@ async function fetchGroqContextWindow(model: string): Promise<number | undefined
   return undefined
 }
 
-async function getMaxContextTokens(providerId: string, model: string): Promise<number> {
+export async function getMaxContextTokens(providerId: string, model: string): Promise<number> {
   const cfg = configStore.get()
   const override = cfg.mcpMaxContextTokensOverride
   if (override && typeof override === "number" && override > 0) return override
@@ -75,13 +75,13 @@ async function getMaxContextTokens(providerId: string, model: string): Promise<n
   return result
 }
 
-function estimateTokensFromMessages(messages: LLMMessage[]): number {
+export function estimateTokensFromMessages(messages: LLMMessage[]): number {
   // Rough estimate: 4 chars ≈ 1 token
   const totalChars = messages.reduce((sum, m) => sum + (m.content?.length || 0), 0)
   return Math.ceil(totalChars / 4)
 }
 
-function getProviderAndModel(): { providerId: string; model: string } {
+export function getProviderAndModel(): { providerId: string; model: string } {
   const config = configStore.get()
   const providerId = config.mcpToolsProviderId || "openai"
   let model = "gpt-4o-mini"
@@ -163,7 +163,7 @@ export interface ShrinkOptions {
   onSummarizationProgress?: (current: number, total: number, message: string) => void // callback for progress updates
 }
 
-export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<{ messages: LLMMessage[]; appliedStrategies: string[]; estTokensBefore: number; estTokensAfter: number }>{
+export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<{ messages: LLMMessage[]; appliedStrategies: string[]; estTokensBefore: number; estTokensAfter: number; maxTokens: number }>{
   const config = configStore.get()
   const applied: string[] = []
 
@@ -175,7 +175,13 @@ export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<{ messa
   const { providerId, model } = getProviderAndModel()
   if (!enabled) {
     const est = estimateTokensFromMessages(opts.messages)
-    return { messages: opts.messages, appliedStrategies: [], estTokensBefore: est, estTokensAfter: est }
+    // Check for user override first (no network call), else use static default
+    const cfg = configStore.get()
+    const override = cfg.mcpMaxContextTokensOverride
+    const maxTokens = (override && typeof override === "number" && override > 0)
+      ? override
+      : staticDefaultMaxTokens(providerId, model)
+    return { messages: opts.messages, appliedStrategies: [], estTokensBefore: est, estTokensAfter: est, maxTokens }
   }
   const maxTokens = await getMaxContextTokens(providerId, model)
   const targetTokens = Math.floor(maxTokens * targetRatio)
@@ -188,7 +194,7 @@ export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<{ messa
   }
 
   if (tokens <= targetTokens) {
-    return { messages, appliedStrategies: applied, estTokensBefore: tokens, estTokensAfter: tokens }
+    return { messages, appliedStrategies: applied, estTokensBefore: tokens, estTokensAfter: tokens, maxTokens }
   }
 
   // Tier 0: Aggressive truncation of very large tool responses (>5000 chars)
@@ -210,7 +216,7 @@ export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<{ messa
         tokens = estimateTokensFromMessages(messages)
         if (tokens <= targetTokens) {
           if (isDebugLLM()) logLLM("ContextBudget: after aggressive_truncate", { estTokens: tokens })
-          return { messages, appliedStrategies: applied, estTokensBefore: tokens, estTokensAfter: tokens }
+          return { messages, appliedStrategies: applied, estTokensBefore: tokens, estTokensAfter: tokens, maxTokens }
         }
       }
     }
@@ -251,7 +257,7 @@ export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<{ messa
 
   if (tokens <= targetTokens) {
     if (isDebugLLM()) logLLM("ContextBudget: after summarize", { estTokens: tokens })
-    return { messages, appliedStrategies: applied, estTokensBefore: tokens, estTokensAfter: tokens }
+    return { messages, appliedStrategies: applied, estTokensBefore: tokens, estTokensAfter: tokens, maxTokens }
   }
 
   // Tier 2: Remove middle messages (keep system, first user, last N)
@@ -285,7 +291,7 @@ export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<{ messa
 
   if (tokens <= targetTokens) {
     if (isDebugLLM()) logLLM("ContextBudget: after drop_middle", { estTokens: tokens, kept: messages.length })
-    return { messages, appliedStrategies: applied, estTokensBefore: tokens, estTokensAfter: tokens }
+    return { messages, appliedStrategies: applied, estTokensBefore: tokens, estTokensAfter: tokens, maxTokens }
   }
 
   // Tier 3: Minimal system prompt
@@ -305,6 +311,6 @@ export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<{ messa
 
   if (isDebugLLM()) logLLM("ContextBudget: after minimal_system_prompt", { estTokens: tokens })
 
-  return { messages, appliedStrategies: applied, estTokensBefore: tokens, estTokensAfter: tokens }
+  return { messages, appliedStrategies: applied, estTokensBefore: tokens, estTokensAfter: tokens, maxTokens }
 }
 

@@ -12,7 +12,7 @@ import { makeLLMCallWithFetch, makeTextCompletionWithFetch, verifyCompletionWith
 import { constructSystemPrompt } from "./system-prompts"
 import { state, agentSessionStateManager } from "./state"
 import { isDebugLLM, logLLM, isDebugTools, logTools } from "./debug"
-import { shrinkMessagesForLLM } from "./context-budget"
+import { shrinkMessagesForLLM, estimateTokensFromMessages } from "./context-budget"
 import { emitAgentProgress } from "./emit-agent-progress"
 import { agentSessionTracker } from "./agent-session-tracker"
 import { conversationService } from "./conversation-service"
@@ -608,7 +608,22 @@ export async function processTranscriptWithAgentMode(
   // Create session state for this agent run
   agentSessionStateManager.createSession(currentSessionId)
 
-  // Create bound emitter that always includes sessionId, conversationId, snooze state, sessionStartIndex, and conversationTitle
+  // Track context usage info for progress display
+  // Declared here so emit() can access it
+  let contextInfoRef: { estTokens: number; maxTokens: number } | undefined = undefined
+
+  // Get model info for progress display
+  const providerId = config.mcpToolsProviderId || "openai"
+  const modelName = providerId === "openai"
+    ? config.mcpToolsOpenaiModel || "gpt-4o-mini"
+    : providerId === "groq"
+    ? config.mcpToolsGroqModel || "llama-3.3-70b-versatile"
+    : providerId === "gemini"
+    ? config.mcpToolsGeminiModel || "gemini-1.5-flash-002"
+    : "gpt-4o-mini"
+  const modelInfoRef = { provider: providerId, model: modelName }
+
+  // Create bound emitter that always includes sessionId, conversationId, snooze state, sessionStartIndex, conversationTitle, and contextInfo
   const emit = (
     update: Omit<AgentProgressUpdate, 'sessionId' | 'conversationId' | 'isSnoozed' | 'conversationTitle'>,
   ) => {
@@ -623,6 +638,10 @@ export async function processTranscriptWithAgentMode(
       conversationTitle,
       isSnoozed,
       sessionStartIndex,
+      // Always include current context info if available
+      contextInfo: update.contextInfo ?? contextInfoRef,
+      // Always include model info
+      modelInfo: modelInfoRef,
     }
 
     // Fire and forget - don't await, but catch errors
@@ -955,7 +974,7 @@ export async function processTranscriptWithAgentMode(
       ...mapConversationToMessages(true),
     ]
 
-    const { messages: shrunkMessages } = await shrinkMessagesForLLM({
+    const { messages: shrunkMessages, estTokensAfter: verifyEstTokens, maxTokens: verifyMaxTokens } = await shrinkMessagesForLLM({
       messages: postVerifySummaryMessages as any,
       availableTools: uniqueAvailableTools,
       relevantTools: toolCapabilities.relevantTools,
@@ -975,6 +994,8 @@ export async function processTranscriptWithAgentMode(
         })
       },
     })
+    // Update context info for progress display
+    contextInfoRef = { estTokens: verifyEstTokens, maxTokens: verifyMaxTokens }
 
     const response = await makeLLMCall(shrunkMessages, config, onRetryProgress, undefined, currentSessionId)
 
@@ -1186,7 +1207,7 @@ Return ONLY JSON per schema.`,
     ]
 
     // Apply context budget management before the agent LLM call
-    const { messages: shrunkMessages } = await shrinkMessagesForLLM({
+    const { messages: shrunkMessages, estTokensAfter, maxTokens: maxContextTokens } = await shrinkMessagesForLLM({
       messages: messages as any,
       availableTools: uniqueAvailableTools,
       relevantTools: toolCapabilities.relevantTools,
@@ -1205,6 +1226,8 @@ Return ONLY JSON per schema.`,
         })
       },
     })
+    // Update context info for progress display
+    contextInfoRef = { estTokens: estTokensAfter, maxTokens: maxContextTokens }
 
     // If stop was requested during context shrinking, exit now
     if (agentSessionStateManager.shouldStopSession(currentSessionId)) {
@@ -2090,7 +2113,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
           ...mapConversationToMessages(),
         ]
 
-        const { messages: shrunkSummaryMessages } = await shrinkMessagesForLLM({
+        const { messages: shrunkSummaryMessages, estTokensAfter: summaryEstTokens, maxTokens: summaryMaxTokens } = await shrinkMessagesForLLM({
           messages: summaryMessages as any,
           availableTools: uniqueAvailableTools,
           relevantTools: toolCapabilities.relevantTools,
@@ -2107,6 +2130,8 @@ Please try alternative approaches, break down the task into smaller steps, or pr
             })
           },
         })
+        // Update context info for progress display
+        contextInfoRef = { estTokens: summaryEstTokens, maxTokens: summaryMaxTokens }
 
 
         try {
@@ -2359,7 +2384,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
           ...mapConversationToMessages(),
         ]
 
-        const { messages: shrunkSummaryMessages } = await shrinkMessagesForLLM({
+        const { messages: shrunkSummaryMessages, estTokensAfter: summaryEstTokens2, maxTokens: summaryMaxTokens2 } = await shrinkMessagesForLLM({
           messages: summaryMessages as any,
           availableTools: uniqueAvailableTools,
           relevantTools: toolCapabilities.relevantTools,
@@ -2376,6 +2401,8 @@ Please try alternative approaches, break down the task into smaller steps, or pr
             })
           },
         })
+        // Update context info for progress display
+        contextInfoRef = { estTokens: summaryEstTokens2, maxTokens: summaryMaxTokens2 }
 
 
         try {

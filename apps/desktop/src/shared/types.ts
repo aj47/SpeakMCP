@@ -156,6 +156,14 @@ export interface AgentProgressUpdate {
     text: string
     isStreaming: boolean
   }
+  contextInfo?: {
+    estTokens: number
+    maxTokens: number
+  }
+  modelInfo?: {
+    provider: string
+    model: string
+  }
 }
 
 // Message Queue Types

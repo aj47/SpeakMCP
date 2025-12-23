@@ -27,7 +27,6 @@ import { useSessionContext } from '../store/sessions';
 import { useMessageQueueContext } from '../store/message-queue';
 import { MessageQueuePanel } from '../ui/MessageQueuePanel';
 import { useConnectionManager } from '../store/connectionManager';
-import { useTunnelManager } from '../store/tunnelManager';
 import { ChatMessage, AgentProgressUpdate } from '../lib/openaiClient';
 import { RecoveryState, formatConnectionStatus } from '../lib/connectionRecovery';
 import * as Speech from 'expo-speech';
@@ -55,7 +54,6 @@ export default function ChatScreen({ route, navigation }: any) {
   const sessionStore = useSessionContext();
   const messageQueue = useMessageQueueContext();
   const connectionManager = useConnectionManager();
-  const tunnelManager = useTunnelManager();
   const handsFree = !!config.handsFree;
   const messageQueueEnabled = config.messageQueueEnabled !== false; // default true
   const handsFreeRef = useRef<boolean>(handsFree);
@@ -83,7 +81,6 @@ export default function ChatScreen({ route, navigation }: any) {
 
   const [responding, setResponding] = useState(false);
   const [connectionState, setConnectionState] = useState<RecoveryState | null>(null);
-  const tunnelState = tunnelManager.state;
 
   // Track the current active request to prevent cross-request state clobbering
   // Each request gets a unique ID; only the currently active request can reset UI states
@@ -242,24 +239,6 @@ export default function ChatScreen({ route, navigation }: any) {
                 style={{ width: 28, height: 28 }}
                 resizeMode="contain"
               />
-            </View>
-          )}
-          {tunnelState.status !== 'connected' && tunnelState.status !== 'idle' && (
-            <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 6 }}>
-              <View
-                style={{
-                  width: 10,
-                  height: 10,
-                  borderRadius: 5,
-                  backgroundColor: theme.colors.secondary,
-                  marginRight: 6,
-                }}
-              />
-              <Text style={{ color: theme.colors.mutedForeground, fontSize: 12 }}>
-                {tunnelState.status === 'reconnecting' || tunnelState.status === 'resuming'
-                  ? 'Tunnel reconnecting…'
-                  : 'Tunnel offline'}
-              </Text>
             </View>
           )}
           <TouchableOpacity

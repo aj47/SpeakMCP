@@ -1019,31 +1019,81 @@ export class MCPService {
 
   /**
    * Filter tool responses to reduce context size
-   * Uses generic filtering for all servers - no server-specific logic
+   * Uses a higher threshold and provides guidance for accessing more content
+   * via the MCP server's native capabilities (offsets, pagination, etc.)
    */
   private filterToolResponse(
-    _serverName: string,
-    _toolName: string,
+    serverName: string,
+    toolName: string,
     content: Array<{ type: string; text: string }>
   ): Array<{ type: string; text: string }> {
-    // Apply generic large response filtering to all servers
-    return content.map((item) => this.truncateIfTooLarge(item, 8000))
+    // Use a higher threshold (50KB) - let MCP servers handle their own pagination
+    // Only truncate truly massive responses that would overwhelm context
+    return content.map((item) => this.truncateIfTooLarge(item, 50000, serverName, toolName))
   }
 
   /**
    * Helper method to truncate content if it exceeds the specified limit
+   * Provides guidance on how to access more content via MCP server capabilities
    */
   private truncateIfTooLarge(
     item: { type: string; text: string },
-    limit: number
+    limit: number,
+    serverName?: string,
+    toolName?: string
   ): { type: string; text: string } {
     if (item.text.length > limit) {
+      const truncatedChars = item.text.length - limit
+      const truncationNote = this.getTruncationGuidance(serverName, toolName, limit, truncatedChars)
       return {
         type: item.type,
-        text: item.text.substring(0, limit) + '\n\n... (truncated for context management)'
+        text: item.text.substring(0, limit) + truncationNote
       }
     }
     return item
+  }
+
+  /**
+   * Generate helpful guidance for accessing truncated content
+   * Points to MCP server's native capabilities when available
+   */
+  private getTruncationGuidance(
+    serverName?: string,
+    toolName?: string,
+    shownChars?: number,
+    truncatedChars?: number
+  ): string {
+    const sizeInfo = shownChars && truncatedChars
+      ? `Showing first ${shownChars.toLocaleString()} of ${(shownChars + truncatedChars).toLocaleString()} characters (${truncatedChars.toLocaleString()} truncated).`
+      : 'Content truncated due to size.'
+
+    // Provide tool-specific guidance for common MCP servers
+    let guidance = ''
+
+    if (toolName) {
+      // File reading tools - suggest offset/range parameters
+      if (['read_file', 'read_multiple_files', 'get_file_contents'].includes(toolName)) {
+        guidance = 'To see more: re-call this tool with offset/line_start parameters, or read specific sections.'
+      }
+      // Search/list tools - suggest pagination or more specific queries
+      else if (['search', 'list', 'find', 'query'].some(keyword => toolName.toLowerCase().includes(keyword))) {
+        guidance = 'To see more: use pagination parameters (page, limit, offset) or narrow your search query.'
+      }
+      // GitHub-style tools
+      else if (['list_issues', 'list_pull_requests', 'list_commits'].includes(toolName)) {
+        guidance = 'To see more: use per_page and page parameters to paginate through results.'
+      }
+      // Browser/snapshot tools
+      else if (['browser_snapshot', 'browser_navigate', 'screenshot'].some(keyword => toolName.toLowerCase().includes(keyword))) {
+        guidance = 'To see more: use element selectors to focus on specific page sections.'
+      }
+    }
+
+    if (!guidance) {
+      guidance = 'Check if this tool supports offset, limit, or pagination parameters to retrieve more content.'
+    }
+
+    return `\n\n---\n⚠️ TRUNCATED: ${sizeInfo}\n💡 ${guidance}`
   }
 
   /**

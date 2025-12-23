@@ -1019,57 +1019,25 @@ export class MCPService {
 
   /**
    * Filter tool responses to reduce context size
-   * Uses a higher threshold and provides guidance for accessing more content
-   * via the MCP server's native capabilities (offsets, pagination, etc.)
+   * Uses a 50KB threshold - MCP servers handle their own pagination
    */
   private filterToolResponse(
-    serverName: string,
-    toolName: string,
+    _serverName: string,
+    _toolName: string,
     content: Array<{ type: string; text: string }>
   ): Array<{ type: string; text: string }> {
-    // Use a higher threshold (50KB) - let MCP servers handle their own pagination
-    // Only truncate truly massive responses that would overwhelm context
-    return content.map((item) => this.truncateIfTooLarge(item, 50000, serverName, toolName))
-  }
-
-  /**
-   * Helper method to truncate content if it exceeds the specified limit
-   * Provides guidance on how to access more content via MCP server capabilities
-   */
-  private truncateIfTooLarge(
-    item: { type: string; text: string },
-    limit: number,
-    serverName?: string,
-    toolName?: string
-  ): { type: string; text: string } {
-    if (item.text.length > limit) {
-      const truncatedChars = item.text.length - limit
-      const truncationNote = this.getTruncationGuidance(serverName, toolName, limit, truncatedChars)
-      return {
-        type: item.type,
-        text: item.text.substring(0, limit) + truncationNote
+    const TRUNCATION_LIMIT = 50000
+    return content.map((item) => {
+      if (item.text.length > TRUNCATION_LIMIT) {
+        const truncatedChars = item.text.length - TRUNCATION_LIMIT
+        const truncationNote = `\n\n---\n⚠️ TRUNCATED: Showing first ${TRUNCATION_LIMIT.toLocaleString()} of ${item.text.length.toLocaleString()} characters (${truncatedChars.toLocaleString()} truncated).`
+        return {
+          type: item.type,
+          text: item.text.substring(0, TRUNCATION_LIMIT) + truncationNote
+        }
       }
-    }
-    return item
-  }
-
-  /**
-   * Generate helpful guidance for accessing truncated content
-   * Uses generic guidance - MCP servers should handle their own pagination/chunking
-   */
-  private getTruncationGuidance(
-    serverName?: string,
-    toolName?: string,
-    shownChars?: number,
-    truncatedChars?: number
-  ): string {
-    const sizeInfo = shownChars && truncatedChars
-      ? `Showing first ${shownChars.toLocaleString()} of ${(shownChars + truncatedChars).toLocaleString()} characters (${truncatedChars.toLocaleString()} truncated).`
-      : 'Content truncated due to size.'
-
-    const guidance = 'Check if this tool supports offset, limit, or pagination parameters to retrieve more content.'
-
-    return `\n\n---\n⚠️ TRUNCATED: ${sizeInfo}\n💡 ${guidance}`
+      return item
+    })
   }
 
   /**

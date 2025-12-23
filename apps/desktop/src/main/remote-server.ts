@@ -9,9 +9,10 @@ import { mcpService, MCPToolResult } from "./mcp-service"
 import { processTranscriptWithAgentMode } from "./llm"
 import { state, agentProcessManager } from "./state"
 import { conversationService } from "./conversation-service"
-import { AgentProgressUpdate } from "../shared/types"
+import { AgentProgressUpdate, SessionProfileSnapshot } from "../shared/types"
 import { agentSessionTracker } from "./agent-session-tracker"
 import { emergencyStopAll } from "./emergency-stop"
+import { profileService } from "./profile-service"
 
 let server: FastifyInstance | null = null
 let lastError: string | undefined
@@ -237,9 +238,25 @@ async function runAgent(options: RunAgentOptions): Promise<{
     }
   }
 
+  // Capture the current profile snapshot for session isolation
+  // This ensures the session uses the profile settings at creation time,
+  // even if the global profile is changed during session execution
+  let profileSnapshot: SessionProfileSnapshot | undefined
+  const currentProfile = profileService.getCurrentProfile()
+  if (currentProfile) {
+    profileSnapshot = {
+      profileId: currentProfile.id,
+      profileName: currentProfile.name,
+      guidelines: currentProfile.guidelines,
+      systemPrompt: currentProfile.systemPrompt,
+      mcpServerConfig: currentProfile.mcpServerConfig,
+      modelConfig: currentProfile.modelConfig,
+    }
+  }
+
   // Start or reuse agent session
   const conversationTitle = prompt.length > 50 ? prompt.substring(0, 50) + "..." : prompt
-  const sessionId = existingSessionId || agentSessionTracker.startSession(conversationId, conversationTitle, startSnoozed)
+  const sessionId = existingSessionId || agentSessionTracker.startSession(conversationId, conversationTitle, startSnoozed, profileSnapshot)
 
   try {
     await mcpService.initialize()
@@ -259,6 +276,7 @@ async function runAgent(options: RunAgentOptions): Promise<{
       conversationId,
       sessionId, // Pass session ID for progress routing
       onProgress, // Pass progress callback for SSE streaming
+      profileSnapshot, // Pass profile snapshot for session isolation
     )
 
     // Mark session as completed

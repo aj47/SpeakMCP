@@ -35,6 +35,7 @@ import {
   Conversation,
   ConversationHistoryItem,
   AgentProgressUpdate,
+  SessionProfileSnapshot,
 } from "../shared/types"
 import { inferTransportType, normalizeMcpConfig } from "../shared/mcp-utils"
 import { conversationService } from "./conversation-service"
@@ -161,10 +162,26 @@ async function processWithAgentMode(
 
   // Agent mode state is managed per-session via agentSessionStateManager
 
+  // Capture the current profile snapshot for session isolation
+  // This ensures the session uses the profile settings at creation time,
+  // even if the global profile is changed during session execution
+  let profileSnapshot: SessionProfileSnapshot | undefined
+  const currentProfile = profileService.getCurrentProfile()
+  if (currentProfile) {
+    profileSnapshot = {
+      profileId: currentProfile.id,
+      profileName: currentProfile.name,
+      guidelines: currentProfile.guidelines,
+      systemPrompt: currentProfile.systemPrompt,
+      mcpServerConfig: currentProfile.mcpServerConfig,
+      modelConfig: currentProfile.modelConfig,
+    }
+  }
+
   // Start tracking this agent session (or reuse existing one)
   let conversationTitle = text.length > 50 ? text.substring(0, 50) + "..." : text
   // When creating a new session from keybind/UI, start unsnoozed so panel shows immediately
-  const sessionId = existingSessionId || agentSessionTracker.startSession(conversationId, conversationTitle, startSnoozed)
+  const sessionId = existingSessionId || agentSessionTracker.startSession(conversationId, conversationTitle, startSnoozed, profileSnapshot)
 
   try {
     // Initialize MCP with progress feedback
@@ -298,6 +315,8 @@ async function processWithAgentMode(
       previousConversationHistory,
       conversationId, // Pass conversation ID for linking to conversation history
       sessionId, // Pass session ID for progress routing and isolation
+      undefined, // onProgress callback (not used here, progress is emitted via emitAgentProgress)
+      profileSnapshot, // Pass profile snapshot for session isolation
     )
 
     // Mark session as completed
@@ -673,6 +692,14 @@ export const router = {
       recentSessions: agentSessionTracker.getRecentSessions(4),
     }
   }),
+
+  // Get the profile snapshot for a specific session
+  // This allows the UI to display which profile a session is using
+  getSessionProfileSnapshot: t.procedure
+    .input<{ sessionId: string }>()
+    .action(async ({ input }) => {
+      return agentSessionTracker.getSessionProfileSnapshot(input.sessionId)
+    }),
 
   stopAgentSession: t.procedure
     .input<{ sessionId: string }>()

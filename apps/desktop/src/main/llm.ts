@@ -5,7 +5,7 @@ import {
   LLMToolCallResponse,
   MCPToolResult,
 } from "./mcp-service"
-import { AgentProgressStep, AgentProgressUpdate } from "../shared/types"
+import { AgentProgressStep, AgentProgressUpdate, SessionProfileSnapshot } from "../shared/types"
 import { diagnosticsService } from "./diagnostics"
 import { makeStructuredContextExtraction, ContextExtractionResponse } from "./structured-output"
 import { makeLLMCallWithFetch, makeTextCompletionWithFetch, verifyCompletionWithFetch, RetryProgressCallback, makeLLMCallWithStreaming, StreamingCallback } from "./llm-fetch"
@@ -592,6 +592,7 @@ export async function processTranscriptWithAgentMode(
   conversationId?: string, // Conversation ID for linking to conversation history
   sessionId?: string, // Session ID for progress routing and isolation
   onProgress?: (update: AgentProgressUpdate) => void, // Optional callback for external progress consumers (e.g., SSE)
+  profileSnapshot?: SessionProfileSnapshot, // Profile snapshot for session isolation
 ): Promise<AgentModeResponse> {
   const config = configStore.get()
 
@@ -605,8 +606,8 @@ export async function processTranscriptWithAgentMode(
   // The user explicitly wants to see the previous context when they click "Continue".
   const sessionStartIndex = 0
 
-  // Create session state for this agent run
-  agentSessionStateManager.createSession(currentSessionId)
+  // Create session state for this agent run with profile snapshot for isolation
+  agentSessionStateManager.createSession(currentSessionId, profileSnapshot)
 
   // Track context usage info for progress display
   // Declared here so emit() can access it
@@ -779,8 +780,11 @@ export async function processTranscriptWithAgentMode(
       index === self.findIndex((t) => t.name === tool.name),
   )
 
-  // Enhanced user guidelines for agent mode
-  const agentModeGuidelines = config.mcpToolsSystemPrompt || ""
+  // Use profile snapshot for session isolation if available, otherwise fall back to global config
+  // This ensures the session uses the profile settings at creation time,
+  // even if the global profile is changed during session execution
+  const agentModeGuidelines = profileSnapshot?.guidelines ?? config.mcpToolsSystemPrompt ?? ""
+  const customSystemPrompt = profileSnapshot?.systemPrompt ?? config.mcpCustomSystemPrompt
 
   // Construct system prompt using the new approach
   const systemPrompt = constructSystemPrompt(
@@ -788,7 +792,7 @@ export async function processTranscriptWithAgentMode(
     agentModeGuidelines,
     true,
     toolCapabilities.relevantTools,
-    config.mcpCustomSystemPrompt, // custom base system prompt
+    customSystemPrompt, // custom base system prompt from profile snapshot or global config
   )
 
   // Generic context extraction from chat history - works with any MCP tool
@@ -963,10 +967,10 @@ export async function processTranscriptWithAgentMode(
 
     const postVerifySystemPrompt = constructSystemPrompt(
       uniqueAvailableTools,
-      config.mcpToolsSystemPrompt,
+      agentModeGuidelines, // Use session-bound guidelines
       true,
       toolCapabilities.relevantTools,
-      config.mcpCustomSystemPrompt, // custom base system prompt
+      customSystemPrompt, // Use session-bound custom system prompt
     )
 
     const postVerifySummaryMessages = [
@@ -2102,10 +2106,10 @@ Please try alternative approaches, break down the task into smaller steps, or pr
         // Get the summary from the agent
         const contextAwarePrompt = constructSystemPrompt(
           uniqueAvailableTools,
-          config.mcpToolsSystemPrompt,
+          agentModeGuidelines, // Use session-bound guidelines
           true, // isAgentMode
           undefined, // relevantTools
-          config.mcpCustomSystemPrompt, // custom base system prompt
+          customSystemPrompt, // Use session-bound custom system prompt
         )
 
         const summaryMessages = [
@@ -2373,10 +2377,10 @@ Please try alternative approaches, break down the task into smaller steps, or pr
         // Get the summary from the agent
         const contextAwarePrompt = constructSystemPrompt(
           uniqueAvailableTools,
-          config.mcpToolsSystemPrompt,
+          agentModeGuidelines, // Use session-bound guidelines
           true, // isAgentMode
           undefined, // relevantTools
-          config.mcpCustomSystemPrompt, // custom base system prompt
+          customSystemPrompt, // Use session-bound custom system prompt
         )
 
         const summaryMessages = [

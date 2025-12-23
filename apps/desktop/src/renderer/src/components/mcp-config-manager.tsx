@@ -804,7 +804,6 @@ const MCP_EXAMPLES: Record<string, { name: string; config: MCPServerConfig; note
       transport: "streamableHttp" as MCPTransportType,
       url: "https://mcp.exa.ai/mcp",
     },
-    note: "Requires API key. After adding, set x-api-key=YOUR_KEY in Custom HTTP Headers.",
   },
   memory: {
     name: "memory",

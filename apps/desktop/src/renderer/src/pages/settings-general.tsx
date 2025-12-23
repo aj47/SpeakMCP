@@ -32,6 +32,7 @@ import {
 } from "@renderer/lib/query-client"
 import { tipcClient } from "@renderer/lib/tipc-client"
 import { useState, useCallback, useEffect } from "react"
+import { useNavigate } from "react-router-dom"
 import { Config } from "@shared/types"
 import { KeyRecorder } from "@renderer/components/key-recorder"
 import {
@@ -41,6 +42,7 @@ import {
 
 export function Component() {
   const configQuery = useConfigQuery()
+  const navigate = useNavigate()
 
   const saveConfigMutation = useSaveConfigMutation()
 
@@ -816,6 +818,18 @@ export function Component() {
         <ControlGroup title="About">
           <Control label="Version" className="px-3">
             <div className="text-sm">{process.env.APP_VERSION}</div>
+          </Control>
+          <Control label="Onboarding" className="px-3">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                saveConfig({ onboardingCompleted: false })
+                navigate("/onboarding")
+              }}
+            >
+              Re-run Onboarding
+            </Button>
           </Control>
         </ControlGroup>
       </div>

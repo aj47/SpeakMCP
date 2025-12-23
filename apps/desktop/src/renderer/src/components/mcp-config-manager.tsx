@@ -1550,10 +1550,19 @@ export function MCPConfigManager({
   }
 
   const toggleAllServers = (expand: boolean) => {
+    const allServerNames = Object.keys(allServers)
     if (expand) {
-      setExpandedServers(new Set(Object.keys(allServers)))
+      setExpandedServers(new Set(allServerNames))
+      // Persist: when all expanded, no servers are collapsed
+      if (onCollapsedServersChange) {
+        onCollapsedServersChange([])
+      }
     } else {
       setExpandedServers(new Set())
+      // Persist: when all collapsed, all servers are in collapsed list
+      if (onCollapsedServersChange) {
+        onCollapsedServersChange(allServerNames)
+      }
     }
   }
 

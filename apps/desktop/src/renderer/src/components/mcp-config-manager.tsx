@@ -1504,26 +1504,9 @@ export function MCPConfigManager({
     })
   }
 
-  const toggleServerExpansion = (serverName: string) => {
-    setExpandedServers(prev => {
-      const newSet = new Set(prev)
-      if (newSet.has(serverName)) {
-        newSet.delete(serverName)
-      } else {
-        newSet.add(serverName)
-      }
-      // Persist the collapsed state (servers NOT in expanded set are collapsed)
-      if (onCollapsedServersChange) {
-        const allServerNames = Object.keys(servers)
-        const collapsed = allServerNames.filter(name => !newSet.has(name))
-        onCollapsedServersChange(collapsed)
-      }
-      return newSet
-    })
-  }
-
   // Build combined servers list (config servers + builtin server)
   // Filter out any user servers with reserved names to prevent collisions
+  // Defined before toggleServerExpansion so it can use allServers for persistence
   const BUILTIN_SERVER_NAME = "speakmcp-settings"
   const filteredUserServers = Object.fromEntries(
     Object.entries(servers).filter(
@@ -1535,6 +1518,25 @@ export function MCPConfigManager({
   const allServers: Record<string, MCPServerConfig | { isBuiltin: true }> = {
     ...filteredUserServers,
     [BUILTIN_SERVER_NAME]: { isBuiltin: true } as any,
+  }
+
+  const toggleServerExpansion = (serverName: string) => {
+    setExpandedServers(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(serverName)) {
+        newSet.delete(serverName)
+      } else {
+        newSet.add(serverName)
+      }
+      // Persist the collapsed state (servers NOT in expanded set are collapsed)
+      // Use allServers to include built-in server in persistence
+      if (onCollapsedServersChange) {
+        const allServerNames = Object.keys(allServers)
+        const collapsed = allServerNames.filter(name => !newSet.has(name))
+        onCollapsedServersChange(collapsed)
+      }
+      return newSet
+    })
   }
 
   const toggleAllServers = (expand: boolean) => {
@@ -1784,7 +1786,9 @@ export function MCPConfigManager({
                     return acc
                   }, {} as Record<string, DetailedTool[]>)
                 ).map(([serverName, serverTools]) => {
-                  const isExpanded = expandedToolServers.has(serverName)
+                  // Before initialization, treat all servers as expanded by default
+                  // After initialization, use the expandedToolServers set
+                  const isExpanded = !toolServersInitialized || expandedToolServers.has(serverName)
                   return (
                   <div key={serverName} className="space-y-2">
                     {/* Server Header - Clickable for collapse/expand */}

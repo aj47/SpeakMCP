@@ -27,6 +27,8 @@ import { useSessionContext } from '../store/sessions';
 import { useMessageQueueContext } from '../store/message-queue';
 import { MessageQueuePanel } from '../ui/MessageQueuePanel';
 import { useConnectionManager } from '../store/connectionManager';
+import { useTunnelConnection } from '../store/tunnelConnection';
+import { ConnectionStatusIndicator } from '../ui/ConnectionStatusIndicator';
 import { ChatMessage, AgentProgressUpdate } from '../lib/openaiClient';
 import { RecoveryState, formatConnectionStatus } from '../lib/connectionRecovery';
 import * as Speech from 'expo-speech';
@@ -54,6 +56,7 @@ export default function ChatScreen({ route, navigation }: any) {
   const sessionStore = useSessionContext();
   const messageQueue = useMessageQueueContext();
   const connectionManager = useConnectionManager();
+  const { connectionInfo } = useTunnelConnection();
   const handsFree = !!config.handsFree;
   const messageQueueEnabled = config.messageQueueEnabled !== false; // default true
   const handsFreeRef = useRef<boolean>(handsFree);
@@ -232,6 +235,11 @@ export default function ChatScreen({ route, navigation }: any) {
       ),
       headerRight: () => (
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <ConnectionStatusIndicator
+            state={connectionInfo.state}
+            retryCount={connectionInfo.retryCount}
+            compact
+          />
           {responding && (
             <View style={{ paddingHorizontal: 8, paddingVertical: 6 }}>
               <Image
@@ -299,7 +307,7 @@ export default function ChatScreen({ route, navigation }: any) {
         </View>
       ),
     });
-  }, [navigation, handsFree, handleKillSwitch, handleNewChat, responding, theme, isDark, sessionStore]);
+  }, [navigation, handsFree, handleKillSwitch, handleNewChat, responding, theme, isDark, sessionStore, connectionInfo.state, connectionInfo.retryCount]);
 
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);

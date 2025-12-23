@@ -3,16 +3,13 @@
  * These tools allow the main agent to discover, spawn, delegate to, and manage sub-agents.
  */
 
-import { acpRegistry } from './acp-registry';
 import { acpClientService } from './acp-client-service';
-import { acpProcessManager } from './acp-process-manager';
 import type {
-  ACPAgentInstance,
-  ACPRunRequest,
-  ACPRunResult,
   ACPSubAgentState,
 } from './types';
 import { acpBackgroundNotifier } from './acp-background-notifier';
+import { configStore } from '../config';
+import { acpService } from '../acp-service';
 
 /**
  * Log ACP router-related debug messages.
@@ -139,6 +136,7 @@ export const acpRouterToolDefinitions = [
 
 /**
  * List all available ACP agents, optionally filtered by capability.
+ * Uses configStore for agent definitions and acpService for runtime status.
  * @param args - Arguments containing optional capability filter
  * @returns Object with list of available agents
  */
@@ -148,22 +146,37 @@ export async function handleListAvailableAgents(args: {
   logACPRouter('Listing available agents', args);
 
   try {
-    let agents: ACPAgentInstance[];
+    // Get agents from the actual config (shared/types.ts ACPAgentConfig)
+    const config = configStore.get();
+    let agentConfigs = config.acpAgents || [];
 
+    // Filter by capability if specified
     if (args.capability) {
-      agents = acpRegistry.getAgentsByCapability(args.capability);
-    } else {
-      agents = acpRegistry.getAllAgents();
+      agentConfigs = agentConfigs.filter(
+        (agent) => agent.capabilities?.includes(args.capability!) ?? false
+      );
     }
 
-    const formattedAgents = agents.map((agent) => ({
-      name: agent.definition.name,
-      displayName: agent.definition.displayName,
-      description: agent.definition.description,
-      capabilities: agent.definition.capabilities,
-      status: agent.status,
-      activeRuns: agent.activeRuns,
-    }));
+    // Get runtime status from acpService
+    const agentStatuses = acpService.getAgents();
+    const statusMap = new Map(
+      agentStatuses.map((a) => [a.config.name, { status: a.status, error: a.error }])
+    );
+
+    const formattedAgents = agentConfigs
+      .filter((agent) => agent.enabled !== false) // Exclude disabled agents
+      .map((agent) => {
+        const runtime = statusMap.get(agent.name);
+        return {
+          name: agent.name,
+          displayName: agent.displayName,
+          description: agent.description || '',
+          capabilities: agent.capabilities || [],
+          connectionType: agent.connection.type,
+          status: runtime?.status || 'stopped',
+          error: runtime?.error,
+        };
+      });
 
     return {
       success: true,
@@ -184,6 +197,7 @@ export async function handleListAvailableAgents(args: {
 
 /**
  * Delegate a task to a specialized ACP agent.
+ * Uses acpService to spawn and communicate with agents.
  * @param args - Arguments containing agent name, task, optional context, and wait preference
  * @param parentSessionId - Optional parent session ID for tracking
  * @returns Object with delegation result or run ID for async delegation
@@ -202,24 +216,32 @@ export async function handleDelegateToAgent(
   const waitForResult = args.waitForResult !== false; // Default to true
 
   try {
-    // Check if agent exists
-    const agent = acpRegistry.getAgent(args.agentName);
-    if (!agent) {
+    // Check if agent exists in config
+    const config = configStore.get();
+    const agentConfig = config.acpAgents?.find((a) => a.name === args.agentName);
+    if (!agentConfig) {
       return {
         success: false,
-        error: `Agent "${args.agentName}" not found`,
+        error: `Agent "${args.agentName}" not found in configuration`,
       };
     }
 
-    // Check if agent is ready, if not try to spawn it
-    if (agent.status !== 'ready' && agent.status !== 'busy') {
-      // Check if agent has spawn config
-      if (agent.definition.spawnConfig) {
+    if (agentConfig.enabled === false) {
+      return {
+        success: false,
+        error: `Agent "${args.agentName}" is disabled`,
+      };
+    }
+
+    // Check current status via acpService
+    const agentStatus = acpService.getAgentStatus(args.agentName);
+
+    // If agent is not ready, try to spawn it (only for stdio agents)
+    if (agentStatus?.status !== 'ready') {
+      if (agentConfig.connection.type === 'stdio') {
         logACPRouter(`Agent "${args.agentName}" not ready, attempting to spawn...`);
         try {
-          await acpProcessManager.spawnAgent(args.agentName);
-          // Wait a bit for the agent to become ready
-          await new Promise((resolve) => setTimeout(resolve, 1000));
+          await acpService.spawnAgent(args.agentName);
         } catch (spawnError) {
           return {
             success: false,
@@ -229,7 +251,7 @@ export async function handleDelegateToAgent(
       } else {
         return {
           success: false,
-          error: `Agent "${args.agentName}" is not ready (status: ${agent.status}) and cannot be auto-spawned`,
+          error: `Agent "${args.agentName}" is not ready (status: ${agentStatus?.status || 'stopped'}) and is a remote agent that cannot be auto-spawned`,
         };
       }
     }
@@ -255,64 +277,68 @@ export async function handleDelegateToAgent(
 
     delegatedRuns.set(runId, subAgentState);
 
-    // Get the base URL from agent definition
-    const baseUrl = agent.definition.baseUrl;
-    if (!baseUrl) {
-      return {
-        success: false,
-        error: `Agent "${args.agentName}" does not have a base URL configured`,
-      };
-    }
-
-    // Create run request - cast to include baseUrl which is used by client service
-    const runRequest = {
-      agentName: args.agentName,
-      input,
-      mode: waitForResult ? 'sync' : 'async',
-      parentSessionId,
-      baseUrl,
-    } as ACPRunRequest & { baseUrl: string };
+    // Use acpService.runTask for the actual delegation
+    subAgentState.status = 'running';
 
     if (waitForResult) {
       // Synchronous execution - wait for result
-      subAgentState.status = 'running';
-
       try {
-        const result = await acpClientService.runAgentSync(runRequest);
-        subAgentState.status = 'completed';
-        subAgentState.result = result;
-
-        // Extract text content from output
-        const outputText = result.output
-          ?.map((msg) => msg.parts.map((p) => p.content).join('\n'))
-          .join('\n\n') || '';
-
-        return {
-          success: true,
-          runId,
+        const result = await acpService.runTask({
           agentName: args.agentName,
-          status: 'completed',
-          output: outputText,
-          duration: Date.now() - startTime,
-          metadata: result.metadata,
-        };
+          input,
+          context: args.context,
+          mode: 'sync',
+        });
+
+        if (result.success) {
+          subAgentState.status = 'completed';
+          return {
+            success: true,
+            runId,
+            agentName: args.agentName,
+            status: 'completed',
+            output: result.result || '',
+            duration: Date.now() - startTime,
+          };
+        } else {
+          subAgentState.status = 'failed';
+          return {
+            success: false,
+            runId,
+            agentName: args.agentName,
+            status: 'failed',
+            error: result.error || 'Unknown error',
+            duration: Date.now() - startTime,
+          };
+        }
       } catch (error) {
         subAgentState.status = 'failed';
         throw error;
       }
     } else {
       // Asynchronous execution - return immediately with run ID
-      subAgentState.status = 'running';
-      subAgentState.baseUrl = baseUrl;
-
       // Start background polling for notifications
       acpBackgroundNotifier.startPolling();
 
       // Start the async run (don't await the result)
-      acpClientService.runAgentAsync(runRequest).then(
-        (asyncRunId) => {
-          subAgentState.acpRunId = asyncRunId;
-          logACPRouter(`Async run started for ${args.agentName}: ${asyncRunId}`);
+      acpService.runTask({
+        agentName: args.agentName,
+        input,
+        context: args.context,
+        mode: 'async',
+      }).then(
+        (result) => {
+          if (result.success) {
+            subAgentState.status = 'completed';
+            // Store result for later retrieval
+            subAgentState.result = {
+              output: [{ parts: [{ content: result.result || '' }] }],
+            };
+          } else {
+            subAgentState.status = 'failed';
+            subAgentState.result = { error: result.error };
+          }
+          logACPRouter(`Async run completed for ${args.agentName}:`, result.success ? 'success' : 'failed');
         },
         (error) => {
           subAgentState.status = 'failed';
@@ -417,6 +443,7 @@ export async function handleCheckAgentStatus(args: { runId: string }): Promise<o
 
 /**
  * Spawn a new instance of an ACP agent.
+ * Uses acpService to spawn stdio-based agents.
  * @param args - Arguments containing the agent name
  * @returns Object with spawn result
  */
@@ -424,34 +451,45 @@ export async function handleSpawnAgent(args: { agentName: string }): Promise<obj
   logACPRouter('Spawning agent', args);
 
   try {
-    // Check if agent exists
-    const agent = acpRegistry.getAgent(args.agentName);
-    if (!agent) {
+    // Check if agent exists in config
+    const config = configStore.get();
+    const agentConfig = config.acpAgents?.find((a) => a.name === args.agentName);
+    if (!agentConfig) {
       return {
         success: false,
-        error: `Agent "${args.agentName}" not found`,
+        error: `Agent "${args.agentName}" not found in configuration`,
       };
     }
+
+    if (agentConfig.enabled === false) {
+      return {
+        success: false,
+        error: `Agent "${args.agentName}" is disabled`,
+      };
+    }
+
+    // Check current status
+    const agentStatus = acpService.getAgentStatus(args.agentName);
 
     // Check if agent is already running
-    if (agent.status === 'ready' || agent.status === 'busy') {
+    if (agentStatus?.status === 'ready') {
       return {
         success: true,
-        message: `Agent "${args.agentName}" is already running (status: ${agent.status})`,
-        status: agent.status,
+        message: `Agent "${args.agentName}" is already running`,
+        status: 'ready',
       };
     }
 
-    // Check if agent has spawn config
-    if (!agent.definition.spawnConfig) {
+    // Only stdio agents can be spawned
+    if (agentConfig.connection.type !== 'stdio') {
       return {
         success: false,
-        error: `Agent "${args.agentName}" does not have spawn configuration. It may be a remote-only agent.`,
+        error: `Agent "${args.agentName}" is a remote agent and cannot be spawned. It should be started externally.`,
       };
     }
 
-    // Spawn the agent
-    await acpProcessManager.spawnAgent(args.agentName);
+    // Spawn the agent via acpService
+    await acpService.spawnAgent(args.agentName);
 
     return {
       success: true,
@@ -469,6 +507,7 @@ export async function handleSpawnAgent(args: { agentName: string }): Promise<obj
 
 /**
  * Stop a running ACP agent process.
+ * Uses acpService to stop agents.
  * @param args - Arguments containing the agent name
  * @returns Object with stop result
  */
@@ -476,17 +515,21 @@ export async function handleStopAgent(args: { agentName: string }): Promise<obje
   logACPRouter('Stopping agent', args);
 
   try {
-    // Check if agent exists
-    const agent = acpRegistry.getAgent(args.agentName);
-    if (!agent) {
+    // Check if agent exists in config
+    const config = configStore.get();
+    const agentConfig = config.acpAgents?.find((a) => a.name === args.agentName);
+    if (!agentConfig) {
       return {
         success: false,
-        error: `Agent "${args.agentName}" not found`,
+        error: `Agent "${args.agentName}" not found in configuration`,
       };
     }
 
-    // Check if agent is running
-    if (agent.status === 'stopped') {
+    // Check current status
+    const agentStatus = acpService.getAgentStatus(args.agentName);
+
+    // Check if agent is already stopped
+    if (agentStatus?.status === 'stopped' || !agentStatus) {
       return {
         success: true,
         message: `Agent "${args.agentName}" is already stopped`,
@@ -494,8 +537,8 @@ export async function handleStopAgent(args: { agentName: string }): Promise<obje
       };
     }
 
-    // Stop the agent
-    await acpProcessManager.stopAgent(args.agentName);
+    // Stop the agent via acpService
+    await acpService.stopAgent(args.agentName);
 
     return {
       success: true,

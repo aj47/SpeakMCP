@@ -544,7 +544,11 @@ const ToolExecutionBubble: React.FC<{
 
       {/* Collapsed preview - show result summary when available, otherwise show input parameters */}
       {!isExpanded && (collapsedResultSummary || collapsedInputPreview) && (
-        <div className="px-1 pb-1 text-[10px] opacity-80 truncate" title={collapsedResultSummary || collapsedInputPreview || ''}>
+        <div
+          className="px-1 pb-1 text-[10px] opacity-80 truncate cursor-pointer hover:bg-muted/20 rounded"
+          title={collapsedResultSummary || collapsedInputPreview || ''}
+          onClick={handleToggleExpand}
+        >
           {collapsedResultSummary ? (
             <span className="font-medium">{collapsedResultSummary}</span>
           ) : (
@@ -762,7 +766,10 @@ const AssistantWithToolsBubble: React.FC<{
 
             {/* Collapsed preview - show result summary */}
             {!showToolDetails && collapsedResultSummary && (
-              <div className="mt-1 text-[10px] opacity-80 truncate">
+              <div
+                className="mt-1 text-[10px] opacity-80 truncate cursor-pointer hover:bg-muted/20 rounded px-1"
+                onClick={handleToggleToolDetails}
+              >
                 <span className="font-medium">{collapsedResultSummary}</span>
               </div>
             )}

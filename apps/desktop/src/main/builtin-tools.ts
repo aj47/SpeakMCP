@@ -710,7 +710,8 @@ export async function executeBuiltinTool(
 
 /**
  * Check if a tool name is a built-in tool
+ * This includes both speakmcp-settings tools and ACP router tools (speakmcp-builtin)
  */
 export function isBuiltinTool(toolName: string): boolean {
-  return toolName.startsWith(`${BUILTIN_SERVER_NAME}:`)
+  return toolName.startsWith(`${BUILTIN_SERVER_NAME}:`) || isACPRouterTool(toolName)
 }

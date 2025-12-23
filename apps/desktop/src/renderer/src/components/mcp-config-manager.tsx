@@ -1049,8 +1049,7 @@ export function MCPConfigManager({
   const [knownToolServers, setKnownToolServers] = useState<Set<string>>(new Set())
 
   // Initialize expandedToolServers when tools are first loaded
-  // All servers are collapsed by default - only expand those NOT in collapsedToolServers
-  // (meaning the user explicitly expanded them in a previous session)
+  // All servers are expanded by default - only collapse those in collapsedToolServers
   // Also handles new servers appearing after initialization - they default to expanded
   useEffect(() => {
     if (tools.length > 0) {
@@ -1058,13 +1057,8 @@ export function MCPConfigManager({
       const collapsedSet = new Set(collapsedToolServers)
 
       if (!toolServersInitialized) {
-        // Initial setup: respect persisted collapsed state
-        // If collapsedToolServers is empty or includes all servers, keep all collapsed (default behavior)
-        // Otherwise, expand only servers that were previously expanded (not in collapsedToolServers)
-        const hasPersistedState = collapsedToolServers.length > 0 && collapsedToolServers.length < allToolServerNames.length
-        const expanded = hasPersistedState
-          ? new Set(allToolServerNames.filter(name => !collapsedSet.has(name)))
-          : new Set<string>() // All collapsed by default
+        // Initial setup: all servers expanded by default, except those persisted as collapsed
+        const expanded = new Set(allToolServerNames.filter(name => !collapsedSet.has(name)))
         setExpandedToolServers(expanded)
         setKnownToolServers(new Set(allToolServerNames))
         setToolServersInitialized(true)

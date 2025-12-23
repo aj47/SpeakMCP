@@ -102,11 +102,11 @@ export class ACPRegistry {
 
   /**
    * Get agents that are ready to accept requests.
-   * An agent is ready if its status is 'connected'.
+   * An agent is ready if its status is 'ready'.
    * @returns Array of ready agent instances
    */
   getReadyAgents(): ACPAgentInstance[] {
-    return this.getAllAgents().filter(agent => agent.status === 'connected')
+    return this.getAllAgents().filter(agent => agent.status === 'ready')
   }
 
   /**
@@ -123,7 +123,7 @@ export class ACPRegistry {
     }
 
     agent.status = status
-    if (status === 'connected') {
+    if (status === 'ready') {
       agent.lastConnected = new Date()
       agent.lastError = undefined
     } else if (status === 'error' && error) {

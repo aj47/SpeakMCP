@@ -25,6 +25,8 @@ export function Component() {
   const [isRecording, setIsRecording] = useState(false)
   const [isTranscribing, setIsTranscribing] = useState(false)
   const [dictationResult, setDictationResult] = useState<string | null>(null)
+  const [transcriptionError, setTranscriptionError] = useState<string | null>(null)
+  const [micError, setMicError] = useState<string | null>(null)
   const navigate = useNavigate()
   const configQuery = useConfigQuery()
   const saveConfigMutation = useSaveConfigMutation()
@@ -32,7 +34,21 @@ export function Component() {
 
   const saveConfig = useCallback(
     (config: Partial<Config>) => {
+      if (!configQuery.data) return
       saveConfigMutation.mutate({
+        config: {
+          ...configQuery.data,
+          ...config,
+        },
+      })
+    },
+    [saveConfigMutation, configQuery.data]
+  )
+
+  const saveConfigAsync = useCallback(
+    async (config: Partial<Config>) => {
+      if (!configQuery.data) return
+      await saveConfigMutation.mutateAsync({
         config: {
           ...configQuery.data,
           ...config,
@@ -58,9 +74,17 @@ export function Component() {
         setDictationResult(result.transcript)
       }
     },
-    onError: (error) => {
+    onError: (error: any) => {
       setIsTranscribing(false)
       console.error("Transcription failed:", error)
+      const errorMessage = error?.message || String(error)
+      if (errorMessage.includes("API key") || errorMessage.includes("401") || errorMessage.includes("403")) {
+        setTranscriptionError("API key is missing or invalid. Please go back and enter a valid Groq API key.")
+      } else if (errorMessage.includes("model")) {
+        setTranscriptionError("Model configuration error. Please check your settings.")
+      } else {
+        setTranscriptionError(`Transcription failed: ${errorMessage}`)
+      }
     },
   })
 
@@ -86,11 +110,12 @@ export function Component() {
     }
   }, [])
 
-  const handleSaveApiKey = useCallback(() => {
+  const handleSaveApiKey = useCallback(async () => {
     if (!apiKey.trim()) return
 
     // Save Groq API key and set Groq as the default provider for STT, chat, and TTS
-    saveConfig({
+    // Wait for config to save before advancing to ensure transcription uses the new provider
+    await saveConfigAsync({
       groqApiKey: apiKey.trim(),
       sttProviderId: "groq",
       transcriptPostProcessingProviderId: "groq",
@@ -99,7 +124,7 @@ export function Component() {
     })
 
     setStep("dictation")
-  }, [apiKey, saveConfig])
+  }, [apiKey, saveConfigAsync])
 
   const handleSkipApiKey = useCallback(() => {
     setStep("dictation")
@@ -107,22 +132,36 @@ export function Component() {
 
   const handleStartRecording = useCallback(async () => {
     setDictationResult(null)
-    recorderRef.current?.startRecording()
+    setTranscriptionError(null)
+    setMicError(null)
+    try {
+      await recorderRef.current?.startRecording()
+    } catch (error: any) {
+      console.error("Failed to start recording:", error)
+      const errorMessage = error?.message || String(error)
+      if (errorMessage.includes("Permission denied") || errorMessage.includes("NotAllowedError")) {
+        setMicError("Microphone access was denied. Please allow microphone access in your system settings and try again.")
+      } else if (errorMessage.includes("NotFoundError") || errorMessage.includes("no audio input")) {
+        setMicError("No microphone found. Please connect a microphone and try again.")
+      } else {
+        setMicError(`Failed to start recording: ${errorMessage}`)
+      }
+    }
   }, [])
 
   const handleStopRecording = useCallback(() => {
     recorderRef.current?.stopRecording()
   }, [])
 
-  const handleCompleteOnboarding = useCallback(() => {
-    saveConfig({ onboardingCompleted: true })
+  const handleCompleteOnboarding = useCallback(async () => {
+    await saveConfigAsync({ onboardingCompleted: true })
     navigate("/")
-  }, [saveConfig, navigate])
+  }, [saveConfigAsync, navigate])
 
-  const handleSkipOnboarding = useCallback(() => {
-    saveConfig({ onboardingCompleted: true })
+  const handleSkipOnboarding = useCallback(async () => {
+    await saveConfigAsync({ onboardingCompleted: true })
     navigate("/")
-  }, [saveConfig, navigate])
+  }, [saveConfigAsync, navigate])
 
   return (
     <div className="app-drag-region flex h-dvh items-center justify-center p-10">
@@ -151,6 +190,8 @@ export function Component() {
             onBack={() => setStep("api-key")}
             config={configQuery.data}
             onSaveConfig={saveConfig}
+            transcriptionError={transcriptionError}
+            micError={micError}
           />
         )}
         {step === "agent" && (
@@ -266,6 +307,8 @@ function DictationStep({
   onBack,
   config,
   onSaveConfig,
+  transcriptionError,
+  micError,
 }: {
   isRecording: boolean
   isTranscribing: boolean
@@ -277,6 +320,8 @@ function DictationStep({
   onBack: () => void
   config: Config | undefined
   onSaveConfig: (config: Partial<Config>) => void
+  transcriptionError: string | null
+  micError: string | null
 }) {
   const shortcut = config?.shortcut || "hold-ctrl"
 
@@ -407,6 +452,21 @@ function DictationStep({
             readOnly={isRecording || isTranscribing}
           />
         </div>
+
+        {/* Error Messages */}
+        {micError && (
+          <div className="w-full p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-sm text-red-600 dark:text-red-400">
+            <span className="i-mingcute-warning-fill mr-2"></span>
+            {micError}
+          </div>
+        )}
+
+        {transcriptionError && (
+          <div className="w-full p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-sm text-red-600 dark:text-red-400">
+            <span className="i-mingcute-warning-fill mr-2"></span>
+            {transcriptionError}
+          </div>
+        )}
       </div>
 
       <div className="flex justify-between">

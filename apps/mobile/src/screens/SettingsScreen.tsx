@@ -7,6 +7,7 @@ import { spacing, radius } from '../ui/theme';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Linking from 'expo-linking';
 import { checkServerConnection, ConnectionCheckResult } from '../lib/connectionRecovery';
+import { useTunnelConnection } from '../store/tunnelConnection';
 
 function parseQRCode(data: string): { baseUrl?: string; apiKey?: string; model?: string } | null {
   try {
@@ -44,6 +45,7 @@ export default function SettingsScreen({ navigation }: any) {
   const [scanned, setScanned] = useState(false);
   const [isCheckingConnection, setIsCheckingConnection] = useState(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
+  const { connect: tunnelConnect } = useTunnelConnection();
 
   const styles = useMemo(() => createStyles(theme), [theme]);
 
@@ -131,6 +133,14 @@ export default function SettingsScreen({ navigation }: any) {
     // Connection successful or no validation needed, proceed
     setConfig(normalizedDraft);
     await saveConfig(normalizedDraft);
+
+    // Connect tunnel for persistence (fire and forget - don't block navigation)
+    if (normalizedDraft.baseUrl && normalizedDraft.apiKey) {
+      tunnelConnect(normalizedDraft.baseUrl, normalizedDraft.apiKey).catch((error) => {
+        console.warn('[Settings] Tunnel connect failed (non-blocking):', error);
+      });
+    }
+
     navigation.navigate('Sessions');
   };
 

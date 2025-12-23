@@ -14,7 +14,6 @@ const LLMToolCallSchema = z.object({
     .optional(),
   content: z.string().optional(),
   needsMoreWork: z.boolean().optional(),
-  toolExecutionMode: z.enum(['parallel', 'serial']).optional(),
 })
 
 export type LLMToolCallResponse = z.infer<typeof LLMToolCallSchema>
@@ -53,11 +52,6 @@ const toolCallResponseSchema: OpenAI.ResponseFormatJSONSchema["json_schema"] = {
       needsMoreWork: {
         type: "boolean",
         description: "Whether more work is needed after this response",
-      },
-      toolExecutionMode: {
-        type: "string",
-        enum: ["parallel", "serial"],
-        description: "Execution mode for tool calls: 'parallel' (default) executes all concurrently, 'serial' executes one at a time with 50ms delay to avoid race conditions",
       },
     },
     additionalProperties: false,

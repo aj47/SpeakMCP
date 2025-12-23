@@ -54,11 +54,6 @@ const toolCallResponseSchema: OpenAI.ResponseFormatJSONSchema["json_schema"] = {
         type: "boolean",
         description: "Whether more work is needed after this response",
       },
-      toolExecutionMode: {
-        type: "string",
-        enum: ["parallel", "serial"],
-        description: "Execution mode for tool calls: 'parallel' (default) executes all concurrently, 'serial' executes one at a time with 50ms delay to avoid race conditions",
-      },
     },
     additionalProperties: false,
   },

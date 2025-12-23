@@ -64,12 +64,6 @@ export interface LLMToolCallResponse {
   content?: string
   toolCalls?: MCPToolCall[]
   needsMoreWork?: boolean
-  /**
-   * Execution mode for tool calls in this response:
-   * - 'parallel': Execute all tool calls concurrently (default behavior)
-   * - 'serial': Execute tool calls one at a time with 50ms delay between each (use for race-condition-sensitive operations)
-   */
-  toolExecutionMode?: 'parallel' | 'serial'
 }
 
 export class MCPService {

@@ -307,6 +307,10 @@ export class TunnelConnectionManager {
       return;
     }
 
+    // Capture metadata values before scheduling timeout to avoid potential null access
+    // if disconnect() is called between timer firing and callback executing
+    const { baseUrl, apiKey } = this.metadata;
+
     this.retryCount++;
     this.updateState('reconnecting');
 
@@ -323,7 +327,12 @@ export class TunnelConnectionManager {
     }
 
     this.reconnectTimeoutId = setTimeout(async () => {
-      const success = await this.connect(this.metadata!.baseUrl, this.metadata!.apiKey);
+      // Double-check metadata still exists (disconnect may have been called)
+      if (!this.metadata) {
+        console.log('[TunnelConnectionManager] Reconnection aborted - no metadata');
+        return;
+      }
+      const success = await this.connect(baseUrl, apiKey);
       if (!success && this.retryCount < 5) {
         // Continue retrying
         await this.attemptReconnect();

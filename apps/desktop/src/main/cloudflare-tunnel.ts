@@ -12,6 +12,34 @@ let isStarting = false
 const TUNNEL_URL_REGEX = /https:\/\/[a-zA-Z0-9-]+\.trycloudflare\.com/
 
 /**
+ * Save the tunnel URL to config for persistence across restarts
+ */
+function saveTunnelUrlToConfig(url: string): void {
+  try {
+    const cfg = configStore.get()
+    configStore.save({
+      ...cfg,
+      lastCloudflareTunnelUrl: url,
+      lastCloudflareTunnelTimestamp: Date.now(),
+    })
+    diagnosticsService.logInfo("cloudflare-tunnel", `Saved tunnel URL to config: ${url}`)
+  } catch (err) {
+    diagnosticsService.logError("cloudflare-tunnel", "Failed to save tunnel URL to config", err)
+  }
+}
+
+/**
+ * Get the last known tunnel URL from config
+ */
+export function getLastKnownTunnelUrl(): { url: string | null; timestamp: number | null } {
+  const cfg = configStore.get()
+  return {
+    url: cfg.lastCloudflareTunnelUrl || null,
+    timestamp: cfg.lastCloudflareTunnelTimestamp || null,
+  }
+}
+
+/**
  * Check if cloudflared is installed and available in PATH
  */
 export async function checkCloudflaredInstalled(): Promise<boolean> {
@@ -77,6 +105,8 @@ export async function startCloudflareTunnel(): Promise<{
           tunnelUrl = match[0]
           isStarting = false
           diagnosticsService.logInfo("cloudflare-tunnel", `Tunnel URL: ${tunnelUrl}`)
+          // Persist the tunnel URL to config for easy reconnection
+          saveTunnelUrlToConfig(tunnelUrl)
           resolve({ success: true, url: tunnelUrl })
         }
       })
@@ -91,6 +121,8 @@ export async function startCloudflareTunnel(): Promise<{
           tunnelUrl = match[0]
           isStarting = false
           diagnosticsService.logInfo("cloudflare-tunnel", `Tunnel URL: ${tunnelUrl}`)
+          // Persist the tunnel URL to config for easy reconnection
+          saveTunnelUrlToConfig(tunnelUrl)
           resolve({ success: true, url: tunnelUrl })
         }
       })
@@ -161,12 +193,17 @@ export function getCloudflareTunnelStatus(): {
   starting: boolean
   url: string | null
   error: string | null
+  lastKnownUrl: string | null
+  lastKnownTimestamp: number | null
 } {
+  const lastKnown = getLastKnownTunnelUrl()
   return {
     running: tunnelProcess !== null && !isStarting,
     starting: isStarting,
     url: tunnelUrl,
     error: tunnelError,
+    lastKnownUrl: lastKnown.url,
+    lastKnownTimestamp: lastKnown.timestamp,
   }
 }
 

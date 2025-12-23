@@ -137,40 +137,55 @@ export const TextInputPanel = forwardRef<TextInputPanelRef, TextInputPanelProps>
 
   const handlePreviewScreenshot = async () => {
     try {
-      // Capture a fresh screenshot for preview
-      const sources = await (window as any).electronAPI.getScreenSources({
-        types: ['screen'],
-        thumbnailSize: { width: 1920, height: 1080 }
-      })
+      let imageToPreview: string
 
-      if (sources && sources.length > 0) {
+      // Use existing screenshot if available, otherwise capture a fresh one
+      if (screenshot) {
+        // Use the existing screenshot state - this is what will actually be sent
+        imageToPreview = screenshot
+      } else {
+        // No screenshot exists yet, capture one and update state so preview matches what will be sent
+        const sources = await (window as any).electronAPI.getScreenSources({
+          types: ['screen'],
+          thumbnailSize: { width: 1920, height: 1080 }
+        })
+
+        if (!sources || sources.length === 0) {
+          console.error('[TextInputPanel] No sources available for preview')
+          return
+        }
+
         // Get the source matching the configured display, or fallback to primary
         const configuredDisplayId = configQuery.data?.screenshotDisplayId
         const source = findSourceByDisplayId(sources, configuredDisplayId)
-        const capturedImage = source.thumbnail as string
-        setPreviewImage(capturedImage)
+        imageToPreview = source.thumbnail as string
 
-        // Calculate image info
-        const img = new Image()
-        img.onload = () => {
-          // Calculate approximate size of base64 data
-          const base64Length = capturedImage.length - (capturedImage.indexOf(',') + 1)
-          const sizeInBytes = Math.ceil(base64Length * 0.75)
-          const sizeInKB = (sizeInBytes / 1024).toFixed(1)
-          const sizeStr = sizeInBytes > 1024 * 1024
-            ? `${(sizeInBytes / (1024 * 1024)).toFixed(2)} MB`
-            : `${sizeInKB} KB`
-
-          setPreviewImageInfo({
-            width: img.naturalWidth,
-            height: img.naturalHeight,
-            size: sizeStr
-          })
-        }
-        img.src = capturedImage
-
-        setPreviewOpen(true)
+        // Update the screenshot state so it matches what we're previewing
+        setScreenshot(imageToPreview)
       }
+
+      setPreviewImage(imageToPreview)
+
+      // Calculate image info
+      const img = new Image()
+      img.onload = () => {
+        // Calculate approximate size of base64 data
+        const base64Length = imageToPreview.length - (imageToPreview.indexOf(',') + 1)
+        const sizeInBytes = Math.ceil(base64Length * 0.75)
+        const sizeInKB = (sizeInBytes / 1024).toFixed(1)
+        const sizeStr = sizeInBytes > 1024 * 1024
+          ? `${(sizeInBytes / (1024 * 1024)).toFixed(2)} MB`
+          : `${sizeInKB} KB`
+
+        setPreviewImageInfo({
+          width: img.naturalWidth,
+          height: img.naturalHeight,
+          size: sizeStr
+        })
+      }
+      img.src = imageToPreview
+
+      setPreviewOpen(true)
     } catch (error) {
       console.error('[TextInputPanel] Failed to capture preview screenshot:', error)
     }

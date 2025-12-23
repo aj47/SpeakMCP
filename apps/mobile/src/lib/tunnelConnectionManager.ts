@@ -63,9 +63,17 @@ export class TunnelConnectionManager {
 
   private handleAppStateChange = async (nextAppState: AppStateStatus): Promise<void> => {
     if (nextAppState === 'active' && this.isInitialized && this.metadata) {
-      // App came to foreground - check connection health
+      // App came to foreground - check connection health and restart health check interval
       console.log('[TunnelConnectionManager] App became active, checking connection');
       await this.checkAndReconnect();
+      // Restart health check interval if connected
+      if (this.connectionState === 'connected') {
+        this.startHealthCheckInterval();
+      }
+    } else if (nextAppState === 'background' || nextAppState === 'inactive') {
+      // App went to background - stop health check interval to save battery
+      console.log('[TunnelConnectionManager] App went to background, stopping health checks');
+      this.stopHealthCheckInterval();
     }
   };
 

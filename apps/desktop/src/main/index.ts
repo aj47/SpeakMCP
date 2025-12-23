@@ -29,6 +29,23 @@ if (process.env.REMOTE_DEBUGGING_PORT) {
   app.commandLine.appendSwitch('remote-debugging-port', process.env.REMOTE_DEBUGGING_PORT)
 }
 
+// Linux GPU fixes - prevent common GPU/VAAPI errors
+// These flags help avoid issues with hardware acceleration on Linux systems
+if (process.platform === 'linux') {
+  // Allow disabling GPU entirely via environment variable for systems with GPU issues
+  if (process.env.SPEAKMCP_DISABLE_GPU === 'true') {
+    app.disableHardwareAcceleration()
+    logApp('GPU hardware acceleration disabled via SPEAKMCP_DISABLE_GPU')
+  } else {
+    // Apply GPU-related command line flags to prevent common errors
+    // These help with VAAPI, VA-API, and other GPU-related issues
+    app.commandLine.appendSwitch('disable-gpu-sandbox')
+    app.commandLine.appendSwitch('ignore-gpu-blocklist')
+    app.commandLine.appendSwitch('enable-features', 'VaapiVideoDecoder')
+    app.commandLine.appendSwitch('disable-features', 'UseChromeOSDirectVideoDecoder')
+  }
+}
+
 registerServeSchema()
 
 app.whenReady().then(() => {

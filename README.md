@@ -19,8 +19,53 @@ https://github.com/user-attachments/assets/0c181c70-d1f1-4c5d-a6f5-a73147e75182
 
 **[📥 Download Latest Release](https://github.com/aj47/SpeakMCP/releases/latest)**
 
-> **Platform Support**: macOS (Apple Silicon & Intel) with full MCP agent functionality.
-> ⚠️ **Windows/Linux**: MCP tools not currently supported — see [v0.2.2](https://github.com/aj47/SpeakMCP/releases/tag/v0.2.2) for dictation-only builds.
+> **Platform Support**:
+> - **macOS** (Apple Silicon & Intel): Full MCP agent functionality
+> - **Linux** (x64): Available as `.deb` and AppImage formats
+> - **Windows**: Available (MCP tools support in development)
+
+### Linux Installation
+
+**Debian/Ubuntu (.deb package)**:
+```bash
+# Download the latest .deb from releases
+wget https://github.com/aj47/SpeakMCP/releases/latest/download/speakmcp_VERSION_amd64.deb
+
+# Install
+sudo apt install ./speakmcp_VERSION_amd64.deb
+
+# Launch from terminal or application menu
+speakmcp
+```
+
+**AppImage (Universal Linux)**:
+```bash
+# Download the latest AppImage from releases
+wget https://github.com/aj47/SpeakMCP/releases/latest/download/speakmcp-VERSION.AppImage
+
+# Make executable
+chmod +x speakmcp-VERSION.AppImage
+
+# Run
+./speakmcp-VERSION.AppImage
+```
+
+**Troubleshooting Linux GPU Errors**:
+
+If you encounter GPU/VAAPI errors like:
+```
+ERROR:vaapi_wrapper.cc(1238)] Empty codec maximum resolution
+```
+
+You can disable GPU acceleration:
+```bash
+SPEAKMCP_DISABLE_GPU=true speakmcp
+```
+
+Or add to your shell profile:
+```bash
+echo 'export SPEAKMCP_DISABLE_GPU=true' >> ~/.bashrc
+```
 
 ### Basic Usage
 

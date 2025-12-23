@@ -41,9 +41,9 @@ function createBaseWindow({
     }),
     ...windowOptions,
     webPreferences: {
+      ...windowOptions?.webPreferences,
       preload: path.join(__dirname, "../preload/index.cjs"),
       sandbox: true,
-      ...windowOptions?.webPreferences,
     },
   })
 

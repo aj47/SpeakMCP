@@ -125,7 +125,18 @@ class ACPClientService {
       }
 
       const result = await response.json();
-      return result.run_id || runId;
+      const serverRunId = result.run_id;
+
+      // Update activeRuns to use server's run_id if it differs from local runId
+      if (serverRunId && serverRunId !== runId) {
+        const entry = this.activeRuns.get(runId);
+        if (entry) {
+          this.activeRuns.delete(runId);
+          this.activeRuns.set(serverRunId, entry);
+        }
+      }
+
+      return serverRunId || runId;
     } catch (error) {
       console.error('[ACP Client] Error running agent async:', error);
       this.activeRuns.delete(runId);

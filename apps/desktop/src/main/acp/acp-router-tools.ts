@@ -299,10 +299,12 @@ export async function handleDelegateToAgent(
     } else {
       // Asynchronous execution - return immediately with run ID
       subAgentState.status = 'running';
+      subAgentState.baseUrl = baseUrl;
 
       // Start the async run (don't await the result)
       acpClientService.runAgentAsync(runRequest).then(
         (asyncRunId) => {
+          subAgentState.acpRunId = asyncRunId;
           logACPRouter(`Async run started for ${args.agentName}: ${asyncRunId}`);
         },
         (error) => {
@@ -345,6 +347,29 @@ export async function handleCheckAgentStatus(args: { runId: string }): Promise<o
         success: false,
         error: `Run "${args.runId}" not found. It may have expired or never existed.`,
       };
+    }
+
+    // If we have an acpRunId and baseUrl, query the ACP server for actual status
+    if (subAgentState.acpRunId && subAgentState.baseUrl && subAgentState.status === 'running') {
+      try {
+        const acpResult = await acpClientService.getRunStatus(
+          subAgentState.baseUrl,
+          subAgentState.acpRunId
+        );
+
+        // Update local state based on ACP server response
+        if (acpResult.status === 'completed') {
+          subAgentState.status = 'completed';
+          subAgentState.result = acpResult;
+        } else if (acpResult.status === 'failed') {
+          subAgentState.status = 'failed';
+          subAgentState.result = acpResult;
+        }
+        // If still running, keep local status as 'running'
+      } catch (statusError) {
+        logACPRouter('Error querying ACP server status:', statusError);
+        // Continue with local state if ACP query fails
+      }
     }
 
     const response: Record<string, unknown> = {

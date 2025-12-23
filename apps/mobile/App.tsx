@@ -15,7 +15,7 @@ import { ThemeProvider, useTheme } from './src/ui/ThemeProvider';
 import { ConnectionStatusIndicator } from './src/ui/ConnectionStatusIndicator';
 import * as Linking from 'expo-linking';
 import { useEffect, useMemo } from 'react';
-import { saveTunnelMetadata } from './src/lib/tunnelPersistence';
+
 
 const speakMCPIcon = require('./assets/speakmcp-icon.png');
 const darkSpinner = require('./assets/loading-spinner.gif');
@@ -68,18 +68,6 @@ function Navigation() {
 
   // Initialize connection manager with client config
   const connectionManager = useConnectionManagerProvider(clientConfig);
-
-  // Save tunnel metadata when config changes (for reconnection on app restart)
-  useEffect(() => {
-    if (cfg.ready && cfg.config.baseUrl && cfg.config.apiKey) {
-      saveTunnelMetadata({
-        baseUrl: cfg.config.baseUrl,
-        apiKey: cfg.config.apiKey,
-        lastConnectedAt: Date.now(),
-        isCloudflareTunnel: cfg.config.baseUrl.includes('trycloudflare.com'),
-      });
-    }
-  }, [cfg.ready, cfg.config.baseUrl, cfg.config.apiKey]);
 
   // Create navigation theme that matches our theme
   const navTheme = {

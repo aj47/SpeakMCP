@@ -5,7 +5,7 @@ const DEVICE_ID_KEY = 'speakmcp_device_id_v1';
 
 /**
  * Device identity for stable tunnel identification.
- * This ID persists across app restarts and reinstalls (unless storage is cleared).
+ * This ID persists across app restarts (but not reinstalls, as AsyncStorage is cleared on uninstall).
  */
 export interface DeviceIdentity {
   deviceId: string;

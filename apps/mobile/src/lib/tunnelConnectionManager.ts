@@ -115,6 +115,8 @@ export class TunnelConnectionManager {
       },
     };
 
+    // Cleanup existing client to prevent resource leaks
+    this.client?.cleanup();
     this.client = new OpenAIClient(config);
     this.client.setConnectionStatusCallback(this.handleRecoveryStateChange);
 
@@ -153,8 +155,8 @@ export class TunnelConnectionManager {
         this.retryCount = 0;
         break;
       case 'reconnecting':
-        this.updateState('reconnecting');
         this.retryCount = state.retryCount;
+        this.updateState('reconnecting');
         break;
       case 'disconnected':
         this.updateState('disconnected', state.lastError);
@@ -167,7 +169,10 @@ export class TunnelConnectionManager {
 
   private updateState(state: TunnelConnectionState, error?: string): void {
     this.connectionState = state;
-    if (error !== undefined) {
+    // Clear error message for non-error states, set it for error states
+    if (state === 'connected' || state === 'connecting' || state === 'reconnecting') {
+      this.errorMessage = null;
+    } else if (error !== undefined) {
       this.errorMessage = error;
     }
     this.notifyStateChange();

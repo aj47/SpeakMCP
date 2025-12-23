@@ -82,7 +82,6 @@ export async function updateTunnelMetadata(
   const updated: TunnelMetadata = {
     ...existing,
     ...updates,
-    lastConnectedAt: updates.lastConnectedAt ?? Date.now(),
   };
 
   await saveTunnelMetadata(updated);

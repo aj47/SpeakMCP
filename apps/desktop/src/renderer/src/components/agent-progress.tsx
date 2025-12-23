@@ -1323,11 +1323,13 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
       // Unified execution bubble combining thought + tool calls + results
       // The assistant's content (thought) is included in the tool_execution item
       const execTimestamp = next?.timestamp ?? m.timestamp
+      // Use only the content-based hash for stable ID - avoid using roleCounters
+      // which can shift if message ordering changes (e.g., equal timestamps)
       const toolExecId = generateToolExecutionId(m.toolCalls, execTimestamp)
-      const aIndex = ++roleCounters.assistant
+      ++roleCounters.assistant // Still increment counter for consistency with other branches
       displayItems.push({
         kind: "tool_execution",
-        id: `exec-${toolExecId}-${aIndex}`,
+        id: `exec-${toolExecId}`,
         data: {
           timestamp: execTimestamp,
           calls: m.toolCalls,

@@ -4,6 +4,7 @@ import {
   shell,
   screen,
   app,
+  desktopCapturer,
 } from "electron"
 import path from "path"
 import { getRendererHandlers } from "@egoist/tipc/main"
@@ -16,6 +17,42 @@ import { calculatePanelPosition } from "./panel-position"
 import { setupConsoleLogger } from "./console-logger"
 
 type WINDOW_ID = "main" | "panel" | "setup"
+
+/**
+ * Capture a screenshot from the configured display (or primary display)
+ * Returns the screenshot as a data URL, or undefined if capture fails
+ */
+export async function captureScreenshotFromMain(): Promise<string | undefined> {
+  try {
+    const config = configStore.get()
+    const sources = await desktopCapturer.getSources({
+      types: ['screen'],
+      thumbnailSize: { width: 1920, height: 1080 }
+    })
+
+    if (sources.length === 0) {
+      logApp('[captureScreenshotFromMain] No screen sources available')
+      return undefined
+    }
+
+    // Find the source matching the configured display, or use the first one (primary)
+    const configuredDisplayId = config.screenshotDisplayId
+    let source = sources[0]
+    if (configuredDisplayId) {
+      const matchingSource = sources.find(s => s.display_id === configuredDisplayId)
+      if (matchingSource) {
+        source = matchingSource
+      }
+    }
+
+    const screenshot = source.thumbnail.toDataURL()
+    logApp(`[captureScreenshotFromMain] Captured screenshot from display: ${source.display_id}, size: ${screenshot.length} chars`)
+    return screenshot
+  } catch (error) {
+    logApp('[captureScreenshotFromMain] Failed to capture screenshot:', error)
+    return undefined
+  }
+}
 
 export const WINDOWS = new Map<WINDOW_ID, BrowserWindow>()
 
@@ -446,11 +483,20 @@ export async function showPanelWindowAndStartMcpRecording(conversationId?: strin
   state.isRecordingFromButtonClick = fromButtonClick ?? false
   state.isRecordingMcpMode = true
 
+  // Auto-capture screenshot if enabled for voice commands and no screenshot was explicitly passed
+  let effectiveScreenshot = screenshot
+  if (!effectiveScreenshot) {
+    const config = configStore.get()
+    if (config.screenshotForVoiceCommands) {
+      effectiveScreenshot = await captureScreenshotFromMain()
+    }
+  }
+
   // Ensure consistent sizing by setting mode in main before showing
   setPanelMode("normal")
   showPanelWindow()
   // Pass fromTile, fromButtonClick, and screenshot flags so panel knows how to behave after recording ends
-  getWindowRendererHandlers("panel")?.startMcpRecording.send({ conversationId, sessionId, fromTile, fromButtonClick, screenshot })
+  getWindowRendererHandlers("panel")?.startMcpRecording.send({ conversationId, sessionId, fromTile, fromButtonClick, screenshot: effectiveScreenshot })
 }
 
 export async function showPanelWindowAndShowTextInput() {

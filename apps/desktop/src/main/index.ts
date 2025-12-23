@@ -43,7 +43,7 @@ app.whenReady().then(() => {
   logApp("IPC main registered")
 
   // Register desktopCapturer handler (available only in main process in Electron 31+)
-  ipcMain.handle('getScreenSources', async (_event, options: { types: string[], thumbnailSize?: { width: number, height: number } }) => {
+  ipcMain.handle('getScreenSources', async (_event, options: { types: ('screen' | 'window')[], thumbnailSize?: { width: number, height: number } }) => {
     try {
       logApp('[getScreenSources] Capturing screen sources with options:', JSON.stringify(options))
       const sources = await desktopCapturer.getSources(options)

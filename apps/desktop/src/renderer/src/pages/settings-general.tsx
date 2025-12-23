@@ -782,6 +782,13 @@ export function Component() {
               </SelectContent>
             </Select>
           </Control>
+
+          <Control label={<ControlLabel label="Screenshot for Voice Commands" tooltip="Automatically capture a screenshot when using voice commands (agent mode). The screenshot will be sent along with your voice input for context-aware responses." />} className="px-3">
+            <Switch
+              checked={configQuery.data?.screenshotForVoiceCommands ?? false}
+              onCheckedChange={(value) => saveConfig({ screenshotForVoiceCommands: value })}
+            />
+          </Control>
         </ControlGroup>
 
         {/* Agent Settings */}

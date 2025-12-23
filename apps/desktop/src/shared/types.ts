@@ -355,6 +355,7 @@ export type Config = {
 
   // Screenshot Configuration
   alwaysIncludeScreenshot?: boolean
+  screenshotForVoiceCommands?: boolean // Auto-capture screenshot when using voice commands (MCP/agent mode)
 
   // Settings Window Hotkey Configuration
   settingsHotkeyEnabled?: boolean

@@ -25,6 +25,7 @@ export default defineConfig({
         output: {
           format: "cjs",
           entryFileNames: "[name].cjs",
+          chunkFileNames: "[name].cjs",
         },
       },
     },

@@ -104,6 +104,43 @@ export interface ServerLogEntry {
 }
 
 // Agent Mode Progress Tracking Types
+
+/**
+ * Progress information for a delegated ACP sub-agent
+ */
+export interface ACPDelegationProgress {
+  /** Unique identifier for this delegation run */
+  runId: string
+  /** Name of the ACP agent being delegated to */
+  agentName: string
+  /** The task that was delegated */
+  task: string
+  /** Current status of the delegation */
+  status: 'pending' | 'spawning' | 'running' | 'completed' | 'failed' | 'cancelled'
+  /** Optional progress message from the sub-agent */
+  progressMessage?: string
+  /** When the delegation started */
+  startTime: number
+  /** When the delegation ended (if complete) */
+  endTime?: number
+  /** Result summary (if completed) */
+  resultSummary?: string
+  /** Error message (if failed) */
+  error?: string
+}
+
+/**
+ * State of all active ACP delegations for a session
+ */
+export interface ACPDelegationState {
+  /** Session ID of the parent agent */
+  parentSessionId: string
+  /** All delegations for this session */
+  delegations: ACPDelegationProgress[]
+  /** Number of active (non-completed) delegations */
+  activeCount: number
+}
+
 export interface AgentProgressStep {
   id: string
   type: "thinking" | "tool_call" | "tool_result" | "completion" | "tool_approval"
@@ -119,6 +156,8 @@ export interface AgentProgressStep {
     toolName: string
     arguments: any
   }
+  /** If this step is a delegation to a sub-agent */
+  delegation?: ACPDelegationProgress
 }
 
 export interface AgentProgressUpdate {

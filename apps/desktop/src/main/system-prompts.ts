@@ -1,3 +1,6 @@
+import { acpSmartRouter } from './acp/acp-smart-router'
+import { acpRegistry } from './acp/acp-registry'
+
 export const DEFAULT_SYSTEM_PROMPT = `You are an autonomous AI assistant that uses tools to complete tasks. Work iteratively until goals are fully achieved.
 
 RESPONSE FORMAT (return ONLY valid JSON, no markdown):
@@ -52,6 +55,18 @@ export const AGENT_MODE_ADDITIONS = `
 AGENT MODE: You can see tool results and make follow-up calls. Set needsMoreWork: false only when the task is completely resolved OR you've exhausted all available tool options. If a tool fails, try alternative approaches.
 `
 
+/**
+ * Generate ACP routing prompt addition based on available agents.
+ * Returns an empty string if no agents are ready.
+ */
+export function getACPRoutingPromptAddition(): string {
+  const availableAgents = acpRegistry.getReadyAgents()
+  if (availableAgents.length === 0) {
+    return ''
+  }
+  return acpSmartRouter.generateDelegationPromptAddition(availableAgents)
+}
+
 export function constructSystemPrompt(
   availableTools: Array<{
     name: string
@@ -71,6 +86,12 @@ export function constructSystemPrompt(
 
   if (isAgentMode) {
     prompt += AGENT_MODE_ADDITIONS
+
+    // Add ACP agent delegation information if agents are available
+    const acpPromptAddition = getACPRoutingPromptAddition()
+    if (acpPromptAddition) {
+      prompt += acpPromptAddition
+    }
   }
 
   const formatToolInfo = (

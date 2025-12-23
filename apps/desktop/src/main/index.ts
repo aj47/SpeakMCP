@@ -21,6 +21,7 @@ import { diagnosticsService } from "./diagnostics"
 
 import { configStore } from "./config"
 import { startRemoteServer } from "./remote-server"
+import { acpService } from "./acp-service"
 
 // Enable CDP remote debugging port if REMOTE_DEBUGGING_PORT env variable is set
 // This must be called before app.whenReady()
@@ -115,6 +116,16 @@ app.whenReady().then(() => {
       logApp("Failed to initialize MCP service on startup:", error)
     })
 
+  // Initialize ACP service (spawns auto-start agents)
+  acpService
+    .initialize()
+    .then(() => {
+      logApp("ACP service initialized successfully")
+    })
+    .catch((error) => {
+      logApp("Failed to initialize ACP service:", error)
+    })
+
 	  try {
 	    const cfg = configStore.get()
 	    if (cfg.remoteServerEnabled) {
@@ -150,6 +161,8 @@ app.whenReady().then(() => {
 
   app.on("before-quit", () => {
     makePanelWindowClosable()
+    // Shutdown ACP agents gracefully
+    acpService.shutdown().catch(() => {})
   })
 })
 

@@ -21,7 +21,7 @@ import {
 import { tipcClient } from "@renderer/lib/tipc-client"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { ACPAgentConfig } from "../../../shared/types"
-import { Plus, Pencil, Trash2, Bot, Terminal, Globe } from "lucide-react"
+import { Plus, Pencil, Trash2, Bot, Terminal, Globe, Play, Square, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 
 // Preset configurations for common ACP agents
@@ -331,6 +331,21 @@ export function Component() {
     queryFn: () => tipcClient.getAcpAgents(),
   })
 
+  // Fetch agent statuses (includes runtime status)
+  const { data: agentStatuses = [] } = useQuery({
+    queryKey: ["acpAgentStatuses"],
+    queryFn: () => tipcClient.getAcpAgentStatuses(),
+    refetchInterval: 2000, // Poll every 2 seconds for status updates
+  })
+
+  // Map of agent name to status
+  const statusMap = new Map<string, { status: string; error?: string }>(
+    agentStatuses.map((s: { config: ACPAgentConfig; status: string; error?: string }) => [
+      s.config.name,
+      { status: s.status, error: s.error },
+    ])
+  )
+
   const saveMutation = useMutation({
     mutationFn: (agent: ACPAgentConfig) => tipcClient.saveAcpAgent({ agent }),
     onSuccess: () => {
@@ -358,6 +373,36 @@ export function Component() {
       tipcClient.toggleAcpAgentEnabled({ agentName, enabled }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["acpAgents"] })
+    },
+  })
+
+  const spawnMutation = useMutation({
+    mutationFn: (agentName: string) => tipcClient.spawnAcpAgent({ agentName }),
+    onSuccess: (result: { success: boolean; error?: string }, agentName: string) => {
+      queryClient.invalidateQueries({ queryKey: ["acpAgentStatuses"] })
+      if (result.success) {
+        toast.success(`Agent ${agentName} started`)
+      } else {
+        toast.error(`Failed to start agent: ${result.error}`)
+      }
+    },
+    onError: (error: Error) => {
+      toast.error(`Failed to start agent: ${error.message}`)
+    },
+  })
+
+  const stopMutation = useMutation({
+    mutationFn: (agentName: string) => tipcClient.stopAcpAgent({ agentName }),
+    onSuccess: (result: { success: boolean; error?: string }, agentName: string) => {
+      queryClient.invalidateQueries({ queryKey: ["acpAgentStatuses"] })
+      if (result.success) {
+        toast.success(`Agent ${agentName} stopped`)
+      } else {
+        toast.error(`Failed to stop agent: ${result.error}`)
+      }
+    },
+    onError: (error: Error) => {
+      toast.error(`Failed to stop agent: ${error.message}`)
     },
   })
 
@@ -421,61 +466,133 @@ export function Component() {
             </div>
           ) : (
             <div className="divide-y">
-              {agents.map((agent: ACPAgentConfig) => (
-                <div key={agent.name} className="px-3 py-3 flex items-center justify-between gap-4">
-                  <div className="flex items-center gap-3 min-w-0 flex-1">
-                    <Bot className="h-5 w-5 text-muted-foreground shrink-0" />
-                    <div className="min-w-0">
-                      <div className="font-medium truncate">{agent.displayName}</div>
-                      <div className="text-xs text-muted-foreground truncate">
-                        {agent.connection.type === "stdio"
-                          ? `${agent.connection.command} ${agent.connection.args?.join(" ") || ""}`
-                          : agent.connection.baseUrl}
+              {agents.map((agent: ACPAgentConfig) => {
+                const agentStatus = statusMap.get(agent.name) || { status: "stopped" }
+                const isRunning = agentStatus.status === "ready"
+                const isStarting = agentStatus.status === "starting"
+                const hasError = agentStatus.status === "error"
+                const isEnabled = agent.enabled !== false
+
+                return (
+                  <div key={agent.name} className="px-3 py-3 flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      <div className="relative">
+                        <Bot className="h-5 w-5 text-muted-foreground shrink-0" />
+                        {/* Status indicator dot */}
+                        <span
+                          className={`absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full border border-background ${
+                            isRunning
+                              ? "bg-green-500"
+                              : isStarting
+                              ? "bg-yellow-500"
+                              : hasError
+                              ? "bg-red-500"
+                              : "bg-gray-400"
+                          }`}
+                        />
                       </div>
-                      {agent.capabilities && agent.capabilities.length > 0 && (
-                        <div className="flex gap-1 mt-1 flex-wrap">
-                          {agent.capabilities.slice(0, 3).map((cap) => (
-                            <span
-                              key={cap}
-                              className="text-xs bg-muted px-1.5 py-0.5 rounded"
-                            >
-                              {cap}
-                            </span>
-                          ))}
-                          {agent.capabilities.length > 3 && (
-                            <span className="text-xs text-muted-foreground">
-                              +{agent.capabilities.length - 3} more
-                            </span>
-                          )}
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium truncate">{agent.displayName}</span>
+                          <span
+                            className={`text-xs px-1.5 py-0.5 rounded ${
+                              isRunning
+                                ? "bg-green-500/20 text-green-600"
+                                : isStarting
+                                ? "bg-yellow-500/20 text-yellow-600"
+                                : hasError
+                                ? "bg-red-500/20 text-red-600"
+                                : "bg-muted text-muted-foreground"
+                            }`}
+                          >
+                            {isRunning ? "Running" : isStarting ? "Starting" : hasError ? "Error" : "Stopped"}
+                          </span>
                         </div>
+                        <div className="text-xs text-muted-foreground truncate">
+                          {agent.connection.type === "stdio"
+                            ? `${agent.connection.command} ${agent.connection.args?.join(" ") || ""}`
+                            : agent.connection.baseUrl}
+                        </div>
+                        {hasError && agentStatus.error && (
+                          <div className="text-xs text-red-500 truncate">{agentStatus.error}</div>
+                        )}
+                        {agent.capabilities && agent.capabilities.length > 0 && (
+                          <div className="flex gap-1 mt-1 flex-wrap">
+                            {agent.capabilities.slice(0, 3).map((cap) => (
+                              <span
+                                key={cap}
+                                className="text-xs bg-muted px-1.5 py-0.5 rounded"
+                              >
+                                {cap}
+                              </span>
+                            ))}
+                            {agent.capabilities.length > 3 && (
+                              <span className="text-xs text-muted-foreground">
+                                +{agent.capabilities.length - 3} more
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      {/* Start/Stop button */}
+                      {isEnabled && (
+                        isRunning ? (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => stopMutation.mutate(agent.name)}
+                            disabled={stopMutation.isPending}
+                            title="Stop agent"
+                          >
+                            {stopMutation.isPending ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Square className="h-4 w-4 text-red-500" />
+                            )}
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => spawnMutation.mutate(agent.name)}
+                            disabled={spawnMutation.isPending || isStarting}
+                            title="Start agent"
+                          >
+                            {spawnMutation.isPending || isStarting ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Play className="h-4 w-4 text-green-500" />
+                            )}
+                          </Button>
+                        )
                       )}
+                      <Switch
+                        checked={isEnabled}
+                        onCheckedChange={(enabled) =>
+                          toggleMutation.mutate({ agentName: agent.name, enabled })
+                        }
+                      />
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setEditingAgent(agent)}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleDeleteAgent(agent.name)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </div>
                   </div>
-
-                  <div className="flex items-center gap-2 shrink-0">
-                    <Switch
-                      checked={agent.enabled !== false}
-                      onCheckedChange={(enabled) =>
-                        toggleMutation.mutate({ agentName: agent.name, enabled })
-                      }
-                    />
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => setEditingAgent(agent)}
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleDeleteAgent(agent.name)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </ControlGroup>

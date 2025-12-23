@@ -60,6 +60,7 @@ import { emitAgentProgress } from "./emit-agent-progress"
 import { agentSessionTracker } from "./agent-session-tracker"
 import { messageQueueService } from "./message-queue-service"
 import { profileService } from "./profile-service"
+import { acpService, ACPRunRequest } from "./acp-service"
 
 async function initializeMcpWithProgress(config: Config, sessionId: string): Promise<void> {
   const shouldStop = () => agentSessionStateManager.shouldStopSession(sessionId)
@@ -2632,6 +2633,45 @@ export const router = {
       }
 
       return { success: true }
+    }),
+
+  // ACP Agent Runtime handlers
+  getAcpAgentStatuses: t.procedure.action(async () => {
+    return acpService.getAgents()
+  }),
+
+  spawnAcpAgent: t.procedure
+    .input<{ agentName: string }>()
+    .action(async ({ input }) => {
+      try {
+        await acpService.spawnAgent(input.agentName)
+        return { success: true }
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : String(error)
+        }
+      }
+    }),
+
+  stopAcpAgent: t.procedure
+    .input<{ agentName: string }>()
+    .action(async ({ input }) => {
+      try {
+        await acpService.stopAgent(input.agentName)
+        return { success: true }
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : String(error)
+        }
+      }
+    }),
+
+  runAcpTask: t.procedure
+    .input<{ request: ACPRunRequest }>()
+    .action(async ({ input }) => {
+      return acpService.runTask(input.request)
     }),
 }
 

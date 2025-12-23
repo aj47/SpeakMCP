@@ -143,8 +143,8 @@ export class TunnelConnectionManager {
       };
       await saveTunnelMetadata(this.metadata);
 
-      this.updateState('connected');
       this.retryCount = 0;
+      this.updateState('connected');
       return true;
     } catch (error: any) {
       console.error('[TunnelConnectionManager] Connection failed:', error);
@@ -157,8 +157,8 @@ export class TunnelConnectionManager {
     // Map recovery state to tunnel connection state
     switch (state.status) {
       case 'connected':
-        this.updateState('connected');
         this.retryCount = 0;
+        this.updateState('connected');
         break;
       case 'reconnecting':
         this.retryCount = state.retryCount;

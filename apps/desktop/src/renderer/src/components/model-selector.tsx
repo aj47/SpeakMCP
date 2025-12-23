@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react"
+import { useState, useEffect, useRef } from "react"
 import {
   Select,
   SelectContent,
@@ -9,7 +9,7 @@ import {
 import { Label } from "@renderer/components/ui/label"
 import { Input } from "@renderer/components/ui/input"
 import { useAvailableModelsQuery, useConfigQuery } from "@renderer/lib/query-client"
-import { AlertCircle, RefreshCw, Search } from "lucide-react"
+import { AlertCircle, RefreshCw, Search, Edit3 } from "lucide-react"
 import { Button } from "@renderer/components/ui/button"
 import { logUI, logFocus, logStateChange, logRender } from "@renderer/lib/debug"
 import { DEFAULT_MODEL_PRESET_ID } from "@shared/index"
@@ -36,7 +36,9 @@ export function ModelSelector({
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [isOpen, setIsOpen] = useState(false)
+  const [useCustomInput, setUseCustomInput] = useState(false)
   const searchInputRef = useRef<HTMLInputElement>(null)
+  const customInputRef = useRef<HTMLInputElement>(null)
 
   const configQuery = useConfigQuery()
   const currentPresetId = providerId === "openai"
@@ -64,12 +66,23 @@ export function ModelSelector({
     }
   }
 
+  // Auto-detect if current value is a custom model (not in list)
   useEffect(() => {
-    if (!value && modelsQuery.data && modelsQuery.data.length > 0) {
+    if (value && modelsQuery.data && modelsQuery.data.length > 0 && !useCustomInput) {
+      const isInList = modelsQuery.data.some(model => model.id === value)
+      if (!isInList) {
+        setUseCustomInput(true)
+        logUI('[ModelSelector] Detected custom model:', value)
+      }
+    }
+  }, [value, modelsQuery.data])
+
+  useEffect(() => {
+    if (!value && modelsQuery.data && modelsQuery.data.length > 0 && !useCustomInput) {
       logUI('[ModelSelector] Auto-selecting first model:', modelsQuery.data[0].id)
       onValueChange(modelsQuery.data[0].id)
     }
-  }, [value, modelsQuery.data])
+  }, [value, modelsQuery.data, useCustomInput])
 
   useEffect(() => {
     if (!isOpen) {
@@ -118,25 +131,64 @@ export function ModelSelector({
     )
   })
 
+  const handleToggleCustom = () => {
+    if (useCustomInput) {
+      // Switching back to dropdown - select first model if available
+      setUseCustomInput(false)
+      if (allModels.length > 0) {
+        onValueChange(allModels[0].id)
+      }
+    } else {
+      // Switching to custom input
+      setUseCustomInput(true)
+      requestAnimationFrame(() => customInputRef.current?.focus())
+    }
+  }
+
   return (
     <div className={`space-y-2 ${className}`}>
       {label && (
         <div className="flex items-center justify-between">
           <Label className="text-sm font-medium">{label}</Label>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleRefresh}
-            disabled={isLoading || disabled}
-            className="h-6 px-2 text-xs ml-2 flex-shrink-0"
-          >
-            <RefreshCw
-              className={`h-3 w-3 ${isLoading ? "animate-spin" : ""}`}
-            />
-          </Button>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleToggleCustom}
+              disabled={disabled}
+              className="h-6 px-2 text-xs flex-shrink-0"
+              title={useCustomInput ? "Switch to model list" : "Use custom model name"}
+            >
+              <Edit3 className="h-3 w-3" />
+            </Button>
+            {!useCustomInput && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleRefresh}
+                disabled={isLoading || disabled}
+                className="h-6 px-2 text-xs flex-shrink-0"
+              >
+                <RefreshCw
+                  className={`h-3 w-3 ${isLoading ? "animate-spin" : ""}`}
+                />
+              </Button>
+            )}
+          </div>
         </div>
       )}
 
+      {useCustomInput ? (
+        <Input
+          ref={customInputRef}
+          value={value || ""}
+          onChange={(e) => onValueChange(e.target.value)}
+          placeholder="Enter custom model name (e.g., gpt-4o, claude-3-opus)"
+          disabled={disabled}
+          className="w-full"
+          maxLength={100}
+        />
+      ) : (
       <Select
         value={value}
         onValueChange={(newValue) => {
@@ -263,14 +315,21 @@ export function ModelSelector({
           </div>
         </SelectContent>
       </Select>
+      )}
 
-      {hasError && (
+      {useCustomInput && (
+        <p className="text-xs text-muted-foreground">
+          Enter any model name supported by your provider
+        </p>
+      )}
+
+      {!useCustomInput && hasError && (
         <p className="text-xs text-destructive">
           Failed to load models. Using fallback options.
         </p>
       )}
 
-      {!hasError && allModels.length > 0 && (
+      {!useCustomInput && !hasError && allModels.length > 0 && (
         <p className="text-xs text-muted-foreground">
           {searchQuery.trim()
             ? `${filteredModels.length} of ${allModels.length} models match "${searchQuery}"`

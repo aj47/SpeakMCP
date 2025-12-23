@@ -1200,7 +1200,18 @@ export function MCPConfigManager({
 
   const toggleToolsExpansion = (serverName: string) => {
     setExpandedToolServers(prev => {
-      const newSet = new Set(prev)
+      const allToolServerNames = [...new Set(tools.map(t => t.serverName))]
+      const collapsedSet = new Set(collapsedToolServers)
+
+      // If not yet initialized, start with all servers expanded (minus persisted collapsed ones)
+      // This ensures first toggle behaves correctly even before useEffect runs
+      let newSet: Set<string>
+      if (!toolServersInitialized && prev.size === 0) {
+        newSet = new Set(allToolServerNames.filter(name => !collapsedSet.has(name)))
+      } else {
+        newSet = new Set(prev)
+      }
+
       if (newSet.has(serverName)) {
         newSet.delete(serverName)
       } else {
@@ -1208,7 +1219,6 @@ export function MCPConfigManager({
       }
       // Persist the collapsed state (servers NOT in expanded set are collapsed)
       if (onCollapsedToolServersChange) {
-        const allToolServerNames = [...new Set(tools.map(t => t.serverName))]
         const collapsed = allToolServerNames.filter(name => !newSet.has(name))
         onCollapsedToolServersChange(collapsed)
       }

@@ -75,11 +75,151 @@ export interface ACPRunResponse {
   error?: string
 }
 
+// Content block from ACP session/update notifications
+export interface ACPContentBlock {
+  type: "text" | "tool_use" | "tool_result" | "image" | "resource"
+  text?: string
+  name?: string  // for tool_use
+  input?: unknown  // for tool_use
+  result?: unknown  // for tool_result
+  mimeType?: string  // for image/resource
+  data?: string  // for image (base64)
+}
+
+// Session output tracking
+export interface ACPSessionOutput {
+  sessionId: string
+  agentName: string
+  contentBlocks: ACPContentBlock[]
+  isComplete: boolean
+  stopReason?: string
+}
+
 class ACPService extends EventEmitter {
   private agents: Map<string, ACPAgentInstance> = new Map()
+  // Track session outputs for visibility
+  private sessionOutputs: Map<string, ACPSessionOutput> = new Map()
 
   constructor() {
     super()
+    // Listen to our own notifications to process them
+    this.on("notification", this.handleAgentNotification.bind(this))
+  }
+
+  /**
+   * Handle notifications from ACP agents (session/update, etc.)
+   */
+  private handleAgentNotification(event: { agentName: string; method: string; params: unknown }): void {
+    const { agentName, method, params } = event
+
+    logApp(`[ACP:${agentName}] Received notification: ${method}`)
+
+    if (method === "session/update") {
+      this.handleSessionUpdate(agentName, params as {
+        sessionId?: string
+        content?: ACPContentBlock[]
+        stopReason?: string
+        isComplete?: boolean
+      })
+    } else if (method === "$/log" || method === "notifications/log") {
+      // Log message from agent
+      const logParams = params as { level?: string; message?: string; data?: unknown }
+      const level = logParams?.level || "info"
+      const message = logParams?.message || JSON.stringify(logParams)
+      logApp(`[ACP:${agentName}:${level}] ${message}`)
+
+      // Emit for UI consumption
+      this.emit("agentLog", { agentName, level, message, data: logParams?.data })
+    }
+  }
+
+  /**
+   * Handle session/update notifications - agent's streaming output
+   */
+  private handleSessionUpdate(agentName: string, params: {
+    sessionId?: string
+    content?: ACPContentBlock[]
+    stopReason?: string
+    isComplete?: boolean
+  }): void {
+    const instance = this.agents.get(agentName)
+    const sessionId = params.sessionId || instance?.sessionId || "unknown"
+
+    // Get or create session output tracking
+    let output = this.sessionOutputs.get(sessionId)
+    if (!output) {
+      output = {
+        sessionId,
+        agentName,
+        contentBlocks: [],
+        isComplete: false,
+      }
+      this.sessionOutputs.set(sessionId, output)
+    }
+
+    // Append new content blocks
+    if (params.content && Array.isArray(params.content)) {
+      for (const block of params.content) {
+        output.contentBlocks.push(block)
+
+        // Log text content for visibility
+        if (block.type === "text" && block.text) {
+          // Truncate long text for logging
+          const displayText = block.text.length > 500
+            ? block.text.substring(0, 500) + "..."
+            : block.text
+          logApp(`[ACP:${agentName}:output] ${displayText}`)
+        } else if (block.type === "tool_use" && block.name) {
+          logApp(`[ACP:${agentName}:tool] Using tool: ${block.name}`)
+        } else if (block.type === "tool_result") {
+          logApp(`[ACP:${agentName}:tool] Tool result received`)
+        }
+      }
+    }
+
+    // Update completion status
+    if (params.isComplete) {
+      output.isComplete = true
+      output.stopReason = params.stopReason
+      logApp(`[ACP:${agentName}] Session ${sessionId} complete. Stop reason: ${params.stopReason}`)
+    }
+
+    // Emit event for real-time UI updates
+    this.emit("sessionUpdate", {
+      agentName,
+      sessionId,
+      content: params.content,
+      isComplete: params.isComplete,
+      stopReason: params.stopReason,
+      totalBlocks: output.contentBlocks.length,
+    })
+  }
+
+  /**
+   * Get the accumulated output for a session
+   */
+  getSessionOutput(sessionId: string): ACPSessionOutput | undefined {
+    return this.sessionOutputs.get(sessionId)
+  }
+
+  /**
+   * Get all session outputs for an agent
+   */
+  getAgentSessionOutputs(agentName: string): ACPSessionOutput[] {
+    const outputs: ACPSessionOutput[] = []
+    for (const output of this.sessionOutputs.values()) {
+      if (output.agentName === agentName) {
+        outputs.push(output)
+      }
+    }
+    return outputs
+  }
+
+  /**
+   * Clear session output tracking (e.g., when session is closed)
+   */
+  clearSessionOutput(sessionId: string): void {
+    this.sessionOutputs.delete(sessionId)
   }
 
   /**
@@ -504,6 +644,7 @@ class ACPService extends EventEmitter {
       const promptResult = await this.sendRequest(agentName, "session/prompt", promptParams) as {
         stopReason?: string
         error?: { message?: string }
+        content?: ACPContentBlock[]
       }
 
       if (promptResult?.error) {
@@ -513,13 +654,46 @@ class ACPService extends EventEmitter {
         }
       }
 
-      // The result comes via session/update notifications which are handled asynchronously
+      // Collect text output from the response (if returned directly)
+      let resultText = ""
+      if (promptResult?.content && Array.isArray(promptResult.content)) {
+        for (const block of promptResult.content) {
+          if (block.type === "text" && block.text) {
+            resultText += block.text + "\n"
+          }
+        }
+      }
+
+      // Also check session output collected from notifications
+      if (sessionId) {
+        const sessionOutput = this.getSessionOutput(sessionId)
+        if (sessionOutput) {
+          for (const block of sessionOutput.contentBlocks) {
+            if (block.type === "text" && block.text && !resultText.includes(block.text)) {
+              resultText += block.text + "\n"
+            }
+          }
+        }
+      }
+
       // Check if we got a stop reason
       const stopReason = promptResult?.stopReason
 
+      // Build a meaningful result message
+      let resultMessage: string
+      if (resultText.trim()) {
+        resultMessage = resultText.trim()
+      } else if (stopReason) {
+        resultMessage = `Task completed with stop reason: ${stopReason}`
+      } else {
+        resultMessage = "Task sent to agent. Output will be logged as it arrives."
+      }
+
+      logApp(`[ACP:${agentName}] Task result: ${resultMessage.substring(0, 200)}...`)
+
       return {
         success: true,
-        result: stopReason ? `Task completed with stop reason: ${stopReason}` : "Task sent to agent",
+        result: resultMessage,
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)

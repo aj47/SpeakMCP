@@ -650,6 +650,8 @@ export async function processTranscriptWithAgentMode(
       contextInfo: update.contextInfo ?? contextInfoRef,
       // Always include model info
       modelInfo: modelInfoRef,
+      // Include profile name from session snapshot for UI display
+      profileName: session?.profileSnapshot?.profileName,
     }
 
     // Fire and forget - don't await, but catch errors

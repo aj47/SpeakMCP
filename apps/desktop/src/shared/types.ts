@@ -164,6 +164,8 @@ export interface AgentProgressUpdate {
     provider: string
     model: string
   }
+  /** Profile name associated with this session (from profile snapshot) */
+  profileName?: string
 }
 
 // Message Queue Types

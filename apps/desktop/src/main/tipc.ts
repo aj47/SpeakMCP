@@ -13,6 +13,9 @@ import {
   getCurrentPanelMode,
   markManualResize,
   setPanelFocusable,
+  emergencyStopAgentMode,
+  showPanelWindowAndShowTextInput,
+  showPanelWindowAndStartMcpRecording,
 } from "./window"
 import {
   app,
@@ -48,15 +51,16 @@ import {
   constrainPositionToScreen,
   PanelPosition,
 } from "./panel-position"
-import { state, agentProcessManager, suppressPanelAutoShow, isPanelAutoShowSuppressed, toolApprovalManager } from "./state"
+import { state, agentProcessManager, suppressPanelAutoShow, isPanelAutoShowSuppressed, toolApprovalManager, agentSessionStateManager } from "./state"
 
 
 import { startRemoteServer, stopRemoteServer, restartRemoteServer } from "./remote-server"
 import { emitAgentProgress } from "./emit-agent-progress"
+import { agentSessionTracker } from "./agent-session-tracker"
+import { messageQueueService } from "./message-queue-service"
+import { profileService } from "./profile-service"
 
 async function initializeMcpWithProgress(config: Config, sessionId: string): Promise<void> {
-  const { agentSessionStateManager } = await import("./state")
-
   const shouldStop = () => agentSessionStateManager.shouldStopSession(sessionId)
 
   if (shouldStop()) {
@@ -158,7 +162,6 @@ async function processWithAgentMode(
   // Agent mode state is managed per-session via agentSessionStateManager
 
   // Start tracking this agent session (or reuse existing one)
-  const { agentSessionTracker } = await import("./agent-session-tracker")
   let conversationTitle = text.length > 50 ? text.substring(0, 50) + "..." : text
   // When creating a new session from keybind/UI, start unsnoozed so panel shows immediately
   const sessionId = existingSessionId || agentSessionTracker.startSession(conversationId, conversationTitle, startSnoozed)
@@ -307,7 +310,6 @@ async function processWithAgentMode(
     agentSessionTracker.errorSession(sessionId, errorMessage)
 
     // Emit error progress update to the UI so users see the error message
-    const { emitAgentProgress } = await import("./emit-agent-progress")
     await emitAgentProgress({
       sessionId,
       conversationId: conversationId || "",
@@ -371,8 +373,6 @@ const saveRecordingsHitory = (history: RecordingHistoryItem[]) => {
  * Uses a per-conversation lock to prevent concurrent processing of the same queue.
  */
 async function processQueuedMessages(conversationId: string): Promise<void> {
-  const { messageQueueService } = await import("./message-queue-service")
-  const { agentSessionTracker } = await import("./agent-session-tracker")
 
   // Try to acquire processing lock - if another processor is already running, skip
   if (!messageQueueService.tryAcquireProcessingLock(conversationId)) {
@@ -603,7 +603,6 @@ export const router = {
   }),
 
   emergencyStopAgent: t.procedure.action(async () => {
-    const { emergencyStopAgentMode } = await import("./window")
     await emergencyStopAgentMode()
 
     return { success: true, message: "Agent mode emergency stopped" }
@@ -638,8 +637,7 @@ export const router = {
     }),
 
   clearInactiveSessions: t.procedure.action(async () => {
-    const { agentSessionTracker } = await import("./agent-session-tracker")
-
+  
     // Clear completed sessions from the tracker
     agentSessionTracker.clearCompletedSessions()
 
@@ -670,8 +668,7 @@ export const router = {
   }),
 
   getAgentSessions: t.procedure.action(async () => {
-    const { agentSessionTracker } = await import("./agent-session-tracker")
-    return {
+      return {
       activeSessions: agentSessionTracker.getActiveSessions(),
       recentSessions: agentSessionTracker.getRecentSessions(4),
     }
@@ -680,10 +677,7 @@ export const router = {
   stopAgentSession: t.procedure
     .input<{ sessionId: string }>()
     .action(async ({ input }) => {
-      const { agentSessionTracker } = await import("./agent-session-tracker")
-      const { agentSessionStateManager, toolApprovalManager } = await import("./state")
-      const { messageQueueService } = await import("./message-queue-service")
-
+        
       // Stop the session in the state manager (aborts LLM requests, kills processes)
       agentSessionStateManager.stopSession(input.sessionId)
 
@@ -729,8 +723,7 @@ export const router = {
   snoozeAgentSession: t.procedure
     .input<{ sessionId: string }>()
     .action(async ({ input }) => {
-      const { agentSessionTracker } = await import("./agent-session-tracker")
-
+    
       // Snooze the session (runs in background without stealing focus)
       agentSessionTracker.snoozeSession(input.sessionId)
 
@@ -740,8 +733,7 @@ export const router = {
   unsnoozeAgentSession: t.procedure
     .input<{ sessionId: string }>()
     .action(async ({ input }) => {
-      const { agentSessionTracker } = await import("./agent-session-tracker")
-
+    
       // Unsnooze the session (allow it to show progress UI again)
       agentSessionTracker.unsnoozeSession(input.sessionId)
 
@@ -752,7 +744,6 @@ export const router = {
   respondToToolApproval: t.procedure
     .input<{ approvalId: string; approved: boolean }>()
     .action(async ({ input }) => {
-      const { toolApprovalManager } = await import("./state")
       const success = toolApprovalManager.respondToApproval(input.approvalId, input.approved)
       return { success }
     }),
@@ -861,14 +852,12 @@ export const router = {
   }),
 
   showPanelWindowWithTextInput: t.procedure.action(async () => {
-    const { showPanelWindowAndShowTextInput } = await import("./window")
     await showPanelWindowAndShowTextInput()
   }),
 
   triggerMcpRecording: t.procedure
     .input<{ conversationId?: string; sessionId?: string; fromTile?: boolean }>()
     .action(async ({ input }) => {
-      const { showPanelWindowAndStartMcpRecording } = await import("./window")
       // Always show the panel during recording for waveform feedback
       // The fromTile flag tells the panel to hide after recording ends
       // fromButtonClick=true indicates this was triggered via UI button (not keyboard shortcut)
@@ -1076,9 +1065,7 @@ export const router = {
     }>()
     .action(async ({ input }) => {
       const config = configStore.get()
-      const { agentSessionTracker } = await import("./agent-session-tracker")
-      const { messageQueueService } = await import("./message-queue-service")
-
+        
       // Create or get conversation ID
       let conversationId = input.conversationId
       if (!conversationId) {
@@ -1191,8 +1178,7 @@ export const router = {
 
       // Emit initial loading progress immediately BEFORE transcription
       // This ensures users see feedback during the (potentially long) STT call
-      const { agentSessionTracker } = await import("./agent-session-tracker")
-      const tempConversationId = input.conversationId || `temp_${Date.now()}`
+          const tempConversationId = input.conversationId || `temp_${Date.now()}`
 
       // If sessionId is provided, try to revive that session.
       // Otherwise, if conversationId is provided, try to find and revive a session for that conversation.
@@ -2154,19 +2140,16 @@ export const router = {
 
   // Profile Management
   getProfiles: t.procedure.action(async () => {
-    const { profileService } = await import("./profile-service")
     return profileService.getProfiles()
   }),
 
   getProfile: t.procedure
     .input<{ id: string }>()
     .action(async ({ input }) => {
-      const { profileService } = await import("./profile-service")
-      return profileService.getProfile(input.id)
+        return profileService.getProfile(input.id)
     }),
 
   getCurrentProfile: t.procedure.action(async () => {
-    const { profileService } = await import("./profile-service")
     return profileService.getCurrentProfile()
   }),
 
@@ -2179,15 +2162,13 @@ export const router = {
   createProfile: t.procedure
     .input<{ name: string; guidelines: string; systemPrompt?: string }>()
     .action(async ({ input }) => {
-      const { profileService } = await import("./profile-service")
-      return profileService.createProfile(input.name, input.guidelines, input.systemPrompt)
+        return profileService.createProfile(input.name, input.guidelines, input.systemPrompt)
     }),
 
   updateProfile: t.procedure
     .input<{ id: string; name?: string; guidelines?: string; systemPrompt?: string }>()
     .action(async ({ input }) => {
-      const { profileService } = await import("./profile-service")
-      const updates: any = {}
+        const updates: any = {}
       if (input.name !== undefined) updates.name = input.name
       if (input.guidelines !== undefined) updates.guidelines = input.guidelines
       if (input.systemPrompt !== undefined) updates.systemPrompt = input.systemPrompt
@@ -2209,16 +2190,13 @@ export const router = {
   deleteProfile: t.procedure
     .input<{ id: string }>()
     .action(async ({ input }) => {
-      const { profileService } = await import("./profile-service")
-      return profileService.deleteProfile(input.id)
+        return profileService.deleteProfile(input.id)
     }),
 
   setCurrentProfile: t.procedure
     .input<{ id: string }>()
     .action(async ({ input }) => {
-      const { profileService } = await import("./profile-service")
-      const { mcpService } = await import("./mcp-service")
-      const profile = profileService.setCurrentProfile(input.id)
+        const profile = profileService.setCurrentProfile(input.id)
 
       // Update the config with the profile's guidelines, system prompt, and model config
       const config = configStore.get()
@@ -2284,24 +2262,20 @@ export const router = {
   exportProfile: t.procedure
     .input<{ id: string }>()
     .action(async ({ input }) => {
-      const { profileService } = await import("./profile-service")
-      return profileService.exportProfile(input.id)
+        return profileService.exportProfile(input.id)
     }),
 
   importProfile: t.procedure
     .input<{ profileJson: string }>()
     .action(async ({ input }) => {
-      const { profileService } = await import("./profile-service")
-      return profileService.importProfile(input.profileJson)
+        return profileService.importProfile(input.profileJson)
     }),
 
   // Save current MCP server state to a profile
   saveCurrentMcpStateToProfile: t.procedure
     .input<{ profileId: string }>()
     .action(async ({ input }) => {
-      const { profileService } = await import("./profile-service")
-      const { mcpService } = await import("./mcp-service")
-
+  
       const currentState = mcpService.getCurrentMcpConfigState()
       return profileService.saveCurrentMcpStateToProfile(
         input.profileId,
@@ -2315,8 +2289,7 @@ export const router = {
   updateProfileMcpConfig: t.procedure
     .input<{ profileId: string; disabledServers?: string[]; disabledTools?: string[]; enabledServers?: string[] }>()
     .action(async ({ input }) => {
-      const { profileService } = await import("./profile-service")
-      return profileService.updateProfileMcpConfig(input.profileId, {
+        return profileService.updateProfileMcpConfig(input.profileId, {
         disabledServers: input.disabledServers,
         disabledTools: input.disabledTools,
         enabledServers: input.enabledServers,
@@ -2327,8 +2300,7 @@ export const router = {
   saveCurrentModelStateToProfile: t.procedure
     .input<{ profileId: string }>()
     .action(async ({ input }) => {
-      const { profileService } = await import("./profile-service")
-      const config = configStore.get()
+        const config = configStore.get()
       return profileService.saveCurrentModelStateToProfile(input.profileId, {
         // Agent/MCP Tools settings
         mcpToolsProviderId: config.mcpToolsProviderId,
@@ -2369,8 +2341,7 @@ export const router = {
       ttsProviderId?: "openai" | "groq" | "gemini"
     }>()
     .action(async ({ input }) => {
-      const { profileService } = await import("./profile-service")
-      return profileService.updateProfileModelConfig(input.profileId, {
+        return profileService.updateProfileModelConfig(input.profileId, {
         // Agent/MCP Tools settings
         mcpToolsProviderId: input.mcpToolsProviderId,
         mcpToolsOpenaiModel: input.mcpToolsOpenaiModel,
@@ -2392,8 +2363,7 @@ export const router = {
   saveProfileFile: t.procedure
     .input<{ id: string }>()
     .action(async ({ input }) => {
-      const { profileService } = await import("./profile-service")
-      const profileJson = profileService.exportProfile(input.id)
+        const profileJson = profileService.exportProfile(input.id)
 
       const result = await dialog.showSaveDialog({
         title: "Export Profile",
@@ -2434,8 +2404,7 @@ export const router = {
 
     try {
       const profileJson = fs.readFileSync(result.filePaths[0], "utf8")
-      const { profileService } = await import("./profile-service")
-      return profileService.importProfile(profileJson)
+        return profileService.importProfile(profileJson)
     } catch (error) {
       throw new Error(
         `Failed to import profile: ${error instanceof Error ? error.message : String(error)}`,
@@ -2494,41 +2463,35 @@ export const router = {
   getMessageQueue: t.procedure
     .input<{ conversationId: string }>()
     .action(async ({ input }) => {
-      const { messageQueueService } = await import("./message-queue-service")
-      return messageQueueService.getQueue(input.conversationId)
+          return messageQueueService.getQueue(input.conversationId)
     }),
 
   getAllMessageQueues: t.procedure.action(async () => {
-    const { messageQueueService } = await import("./message-queue-service")
-    return messageQueueService.getAllQueues()
+      return messageQueueService.getAllQueues()
   }),
 
   removeFromMessageQueue: t.procedure
     .input<{ conversationId: string; messageId: string }>()
     .action(async ({ input }) => {
-      const { messageQueueService } = await import("./message-queue-service")
-      return messageQueueService.removeFromQueue(input.conversationId, input.messageId)
+          return messageQueueService.removeFromQueue(input.conversationId, input.messageId)
     }),
 
   clearMessageQueue: t.procedure
     .input<{ conversationId: string }>()
     .action(async ({ input }) => {
-      const { messageQueueService } = await import("./message-queue-service")
-      return messageQueueService.clearQueue(input.conversationId)
+          return messageQueueService.clearQueue(input.conversationId)
     }),
 
   reorderMessageQueue: t.procedure
     .input<{ conversationId: string; messageIds: string[] }>()
     .action(async ({ input }) => {
-      const { messageQueueService } = await import("./message-queue-service")
-      return messageQueueService.reorderQueue(input.conversationId, input.messageIds)
+          return messageQueueService.reorderQueue(input.conversationId, input.messageIds)
     }),
 
   updateQueuedMessageText: t.procedure
     .input<{ conversationId: string; messageId: string; text: string }>()
     .action(async ({ input }) => {
-      const { messageQueueService } = await import("./message-queue-service")
-
+    
       // Check if this was a failed message before updating
       const queue = messageQueueService.getQueue(input.conversationId)
       const message = queue.find((m) => m.id === input.messageId)
@@ -2540,8 +2503,7 @@ export const router = {
       // If this was a failed message that's now reset to pending,
       // check if conversation is idle and trigger queue processing
       if (wasFailed) {
-        const { agentSessionTracker } = await import("./agent-session-tracker")
-        const activeSessionId = agentSessionTracker.findSessionByConversationId(input.conversationId)
+              const activeSessionId = agentSessionTracker.findSessionByConversationId(input.conversationId)
         if (activeSessionId) {
           const session = agentSessionTracker.getSession(activeSessionId)
           if (session && session.status === "active") {
@@ -2562,9 +2524,7 @@ export const router = {
   retryQueuedMessage: t.procedure
     .input<{ conversationId: string; messageId: string }>()
     .action(async ({ input }) => {
-      const { messageQueueService } = await import("./message-queue-service")
-      const { agentSessionTracker } = await import("./agent-session-tracker")
-
+        
       // Use resetToPending to reset failed message status without modifying text
       // This works even for addedToHistory messages since we're not changing the text
       const success = messageQueueService.resetToPending(input.conversationId, input.messageId)
@@ -2591,16 +2551,13 @@ export const router = {
   isMessageQueuePaused: t.procedure
     .input<{ conversationId: string }>()
     .action(async ({ input }) => {
-      const { messageQueueService } = await import("./message-queue-service")
-      return messageQueueService.isQueuePaused(input.conversationId)
+          return messageQueueService.isQueuePaused(input.conversationId)
     }),
 
   resumeMessageQueue: t.procedure
     .input<{ conversationId: string }>()
     .action(async ({ input }) => {
-      const { messageQueueService } = await import("./message-queue-service")
-      const { agentSessionTracker } = await import("./agent-session-tracker")
-
+        
       // Resume the queue
       messageQueueService.resumeQueue(input.conversationId)
 

@@ -71,6 +71,7 @@ const getConfig = () => {
 
 	    // App behavior
 	    launchAtLogin: false,
+	    hideDockIcon: false,
 
     // TTS defaults
     ttsEnabled: true,

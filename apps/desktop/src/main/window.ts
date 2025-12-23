@@ -14,6 +14,7 @@ import { getFocusedAppInfo } from "./keyboard"
 import { state, agentProcessManager, suppressPanelAutoShow } from "./state"
 import { calculatePanelPosition } from "./panel-position"
 import { setupConsoleLogger } from "./console-logger"
+import { emergencyStopAll } from "./emergency-stop"
 
 type WINDOW_ID = "main" | "panel" | "setup"
 
@@ -541,7 +542,6 @@ export const emergencyStopAgentMode = async () => {
   }
 
   try {
-    const { emergencyStopAll } = await import("./emergency-stop")
     const { before, after } = await emergencyStopAll()
     logApp(`Emergency stop completed. Killed ${before} processes. Remaining: ${after}`)
   } catch (error) {

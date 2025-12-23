@@ -49,35 +49,55 @@ export const Component = () => {
     },
   ]
 
+  // Route aliases that should highlight the same nav item
+  // Maps route paths to their primary nav link href
+  const routeAliases: Record<string, string> = {
+    "/settings/general": "/settings",
+    "/settings/providers": "/settings/models",
+  }
+
+  // Check if current path matches the nav link (including aliases)
+  const isNavLinkActive = (linkHref: string): boolean => {
+    const currentPath = location.pathname
+    // Exact match
+    if (currentPath === linkHref) return true
+    // Check if current path is an alias that maps to this link
+    const aliasTarget = routeAliases[currentPath]
+    return aliasTarget === linkHref
+  }
+
   useEffect(() => {
     return rendererHandlers.navigate.listen((url) => {
       navigate(url)
     })
   }, [])
 
-  const renderNavLink = (link: NavLinkItem) => (
-    <NavLink
-      key={link.text}
-      to={link.href}
-      role="button"
-      draggable={false}
-      title={isCollapsed ? link.text : undefined}
-      aria-label={isCollapsed ? link.text : undefined}
-      className={({ isActive: _isActive }) => {
-        const isExactMatch = location.pathname === link.href
-        return cn(
-          "flex h-7 items-center rounded-md px-2 font-medium transition-all duration-200",
-          isCollapsed ? "justify-center" : "gap-2",
-          isExactMatch
-            ? "bg-accent text-accent-foreground"
-            : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
-        )
-      }}
-    >
-      <span className={cn(link.icon, "shrink-0")}></span>
-      {!isCollapsed && <span className="font-medium truncate">{link.text}</span>}
-    </NavLink>
-  )
+  const renderNavLink = (link: NavLinkItem) => {
+    const isActive = isNavLinkActive(link.href)
+    return (
+      <NavLink
+        key={link.text}
+        to={link.href}
+        role="button"
+        draggable={false}
+        title={isCollapsed ? link.text : undefined}
+        aria-label={isCollapsed ? link.text : undefined}
+        aria-current={isActive ? "page" : undefined}
+        className={() => {
+          return cn(
+            "flex h-7 items-center rounded-md px-2 font-medium transition-all duration-200",
+            isCollapsed ? "justify-center" : "gap-2",
+            isActive
+              ? "bg-accent text-accent-foreground"
+              : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
+          )
+        }}
+      >
+        <span className={cn(link.icon, "shrink-0")}></span>
+        {!isCollapsed && <span className="font-medium truncate">{link.text}</span>}
+      </NavLink>
+    )
+  }
 
   const sidebarWidth = isCollapsed ? SIDEBAR_DIMENSIONS.width.collapsed : width
 
@@ -97,7 +117,8 @@ export const Component = () => {
           className={cn(
             "flex items-center",
             isCollapsed ? "justify-center" : "justify-end",
-            process.env.IS_MAC ? "h-10 pt-6" : "h-8 pt-2",
+            // On macOS, add extra top margin when collapsed to avoid traffic light buttons
+            process.env.IS_MAC ? (isCollapsed ? "h-16 mt-6" : "h-10 pt-6") : "h-8 pt-2",
             isCollapsed ? "px-1" : "px-2"
           )}
         >
@@ -135,20 +156,29 @@ export const Component = () => {
         {/* Settings Section - Collapsible */}
         <div className={cn("mt-4", isCollapsed ? "px-1" : "px-2")}>
           {isCollapsed ? (
-            /* Collapsed: Show only settings icon that navigates to settings */
-            <NavLink
-              to="/settings"
-              className={cn(
-                "flex h-8 w-full items-center justify-center rounded-md transition-all duration-200",
-                location.pathname.startsWith("/settings")
-                  ? "bg-accent text-accent-foreground"
-                  : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
-              )}
-              title="Settings"
-              aria-label="Settings"
-            >
-              <span className="i-mingcute-settings-3-line"></span>
-            </NavLink>
+            /* Collapsed: Show all settings icons for quick navigation */
+            <div className="grid gap-1">
+              {settingsNavLinks.map((link) => {
+                const isActive = isNavLinkActive(link.href)
+                return (
+                  <NavLink
+                    key={link.text}
+                    to={link.href}
+                    className={cn(
+                      "flex h-8 w-full items-center justify-center rounded-md transition-all duration-200",
+                      isActive
+                        ? "bg-accent text-accent-foreground"
+                        : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                    )}
+                    title={link.text}
+                    aria-label={link.text}
+                    aria-current={isActive ? "page" : undefined}
+                  >
+                    <span className={link.icon}></span>
+                  </NavLink>
+                )
+              })}
+            </div>
           ) : (
             /* Expanded: Show full settings menu */
             <>

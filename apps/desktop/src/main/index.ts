@@ -22,6 +22,13 @@ import { diagnosticsService } from "./diagnostics"
 import { configStore } from "./config"
 import { startRemoteServer } from "./remote-server"
 
+// Enable CDP remote debugging port if REMOTE_DEBUGGING_PORT env variable is set
+// This must be called before app.whenReady()
+// Usage: REMOTE_DEBUGGING_PORT=9222 pnpm dev
+if (process.env.REMOTE_DEBUGGING_PORT) {
+  app.commandLine.appendSwitch('remote-debugging-port', process.env.REMOTE_DEBUGGING_PORT)
+}
+
 registerServeSchema()
 
 app.whenReady().then(() => {
@@ -53,6 +60,26 @@ app.whenReady().then(() => {
 	      })
 	    }
 	  } catch (_) {}
+
+	  // Apply hideDockIcon setting on startup (macOS only)
+	  if (process.platform === "darwin") {
+	    try {
+	      const cfg = configStore.get()
+	      if (cfg.hideDockIcon) {
+	        app.setActivationPolicy("accessory")
+	        app.dock.hide()
+	        logApp("Dock icon hidden on startup per user preference")
+	      } else {
+	        // Ensure dock is visible when hideDockIcon is false
+	        // This handles the case where dock state persisted from a previous session
+	        app.dock.show()
+	        app.setActivationPolicy("regular")
+	        logApp("Dock icon shown on startup per user preference")
+	      }
+	    } catch (e) {
+	      logApp("Failed to apply hideDockIcon on startup:", e)
+	    }
+	  }
 
 
   logApp("Serve protocol registered")

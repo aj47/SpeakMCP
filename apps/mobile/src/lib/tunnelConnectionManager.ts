@@ -229,8 +229,12 @@ export class TunnelConnectionManager {
     try {
       const healthy = await this.client.health();
       if (healthy) {
-        // Update last connected timestamp
-        await updateTunnelMetadata({ lastConnectedAt: Date.now() });
+        // Update last connected timestamp (both in-memory and persisted)
+        const now = Date.now();
+        if (this.metadata) {
+          this.metadata.lastConnectedAt = now;
+        }
+        await updateTunnelMetadata({ lastConnectedAt: now });
         this.updateState('connected');
       } else {
         await this.attemptReconnect();

@@ -164,6 +164,8 @@ export interface AgentProgressUpdate {
     provider: string
     model: string
   }
+  /** Profile name associated with this session (from profile snapshot) */
+  profileName?: string
 }
 
 // Message Queue Types
@@ -271,6 +273,19 @@ export type Profile = {
 export type ProfilesData = {
   profiles: Profile[]
   currentProfileId?: string
+}
+
+/**
+ * Snapshot of profile settings captured at session creation time.
+ * This ensures session isolation - changes to the global profile don't affect running sessions.
+ */
+export type SessionProfileSnapshot = {
+  profileId: string
+  profileName: string
+  guidelines: string
+  systemPrompt?: string
+  mcpServerConfig?: ProfileMcpServerConfig
+  modelConfig?: ProfileModelConfig
 }
 
 export interface ModelPreset {

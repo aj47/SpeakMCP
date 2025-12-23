@@ -35,6 +35,7 @@ import {
   Conversation,
   ConversationHistoryItem,
   AgentProgressUpdate,
+  SessionProfileSnapshot,
 } from "../shared/types"
 import { inferTransportType, normalizeMcpConfig } from "../shared/mcp-utils"
 import { conversationService } from "./conversation-service"
@@ -161,10 +162,36 @@ async function processWithAgentMode(
 
   // Agent mode state is managed per-session via agentSessionStateManager
 
+  // Determine profile snapshot for session isolation
+  // If reusing an existing session, use its stored snapshot to maintain isolation
+  // Only capture a new snapshot from the current global profile when creating a new session
+  let profileSnapshot: SessionProfileSnapshot | undefined
+
+  if (existingSessionId) {
+    // Try to get the stored profile snapshot from the existing session
+    profileSnapshot = agentSessionStateManager.getSessionProfileSnapshot(existingSessionId)
+      ?? agentSessionTracker.getSessionProfileSnapshot(existingSessionId)
+  }
+
+  // Only capture a new snapshot if we don't have one from an existing session
+  if (!profileSnapshot) {
+    const currentProfile = profileService.getCurrentProfile()
+    if (currentProfile) {
+      profileSnapshot = {
+        profileId: currentProfile.id,
+        profileName: currentProfile.name,
+        guidelines: currentProfile.guidelines,
+        systemPrompt: currentProfile.systemPrompt,
+        mcpServerConfig: currentProfile.mcpServerConfig,
+        modelConfig: currentProfile.modelConfig,
+      }
+    }
+  }
+
   // Start tracking this agent session (or reuse existing one)
   let conversationTitle = text.length > 50 ? text.substring(0, 50) + "..." : text
   // When creating a new session from keybind/UI, start unsnoozed so panel shows immediately
-  const sessionId = existingSessionId || agentSessionTracker.startSession(conversationId, conversationTitle, startSnoozed)
+  const sessionId = existingSessionId || agentSessionTracker.startSession(conversationId, conversationTitle, startSnoozed, profileSnapshot)
 
   try {
     // Initialize MCP with progress feedback
@@ -174,8 +201,11 @@ async function processWithAgentMode(
     // This handles the case where servers were already initialized before agent mode was activated
     mcpService.registerExistingProcessesWithAgentManager()
 
-    // Get available tools
-    const availableTools = mcpService.getAvailableTools()
+    // Get available tools filtered by profile snapshot if available (for session isolation)
+    // This ensures revived sessions use the same tool list they started with
+    const availableTools = profileSnapshot?.mcpServerConfig
+      ? mcpService.getAvailableToolsForProfile(profileSnapshot.mcpServerConfig)
+      : mcpService.getAvailableTools()
 
     // Use agent mode for iterative tool calling
     const executeToolCall = async (toolCall: any, onProgress?: (message: string) => void): Promise<MCPToolResult> => {
@@ -229,7 +259,8 @@ async function processWithAgentMode(
       }
 
       // Execute the tool call (approval either not required or was granted)
-      return await mcpService.executeToolCall(toolCall, onProgress, true) // Pass skipApprovalCheck=true
+      // Pass profileSnapshot.mcpServerConfig for session-aware server availability checks
+      return await mcpService.executeToolCall(toolCall, onProgress, true, profileSnapshot?.mcpServerConfig)
     }
 
     // Load previous conversation history if continuing a conversation
@@ -298,6 +329,8 @@ async function processWithAgentMode(
       previousConversationHistory,
       conversationId, // Pass conversation ID for linking to conversation history
       sessionId, // Pass session ID for progress routing and isolation
+      undefined, // onProgress callback (not used here, progress is emitted via emitAgentProgress)
+      profileSnapshot, // Pass profile snapshot for session isolation
     )
 
     // Mark session as completed
@@ -673,6 +706,15 @@ export const router = {
       recentSessions: agentSessionTracker.getRecentSessions(4),
     }
   }),
+
+  // Get the profile snapshot for a specific session
+  // This allows the UI to display which profile a session is using
+  getSessionProfileSnapshot: t.procedure
+    .input<{ sessionId: string }>()
+    .action(async ({ input }) => {
+      return agentSessionStateManager.getSessionProfileSnapshot(input.sessionId)
+        ?? agentSessionTracker.getSessionProfileSnapshot(input.sessionId)
+    }),
 
   stopAgentSession: t.procedure
     .input<{ sessionId: string }>()
@@ -1180,6 +1222,39 @@ export const router = {
       // This ensures users see feedback during the (potentially long) STT call
           const tempConversationId = input.conversationId || `temp_${Date.now()}`
 
+      // Determine profile snapshot for session isolation
+      // If reusing an existing session, use its stored snapshot to maintain isolation
+      // Only capture a new snapshot from the current global profile when creating a new session
+      let profileSnapshot: SessionProfileSnapshot | undefined
+
+      if (input.sessionId) {
+        // Try to get the stored profile snapshot from the existing session
+        profileSnapshot = agentSessionStateManager.getSessionProfileSnapshot(input.sessionId)
+          ?? agentSessionTracker.getSessionProfileSnapshot(input.sessionId)
+      } else if (input.conversationId) {
+        // Try to find existing session for this conversation and get its profile snapshot
+        const existingSessionId = agentSessionTracker.findSessionByConversationId(input.conversationId)
+        if (existingSessionId) {
+          profileSnapshot = agentSessionStateManager.getSessionProfileSnapshot(existingSessionId)
+            ?? agentSessionTracker.getSessionProfileSnapshot(existingSessionId)
+        }
+      }
+
+      // Only capture a new snapshot if we don't have one from an existing session
+      if (!profileSnapshot) {
+        const currentProfile = profileService.getCurrentProfile()
+        if (currentProfile) {
+          profileSnapshot = {
+            profileId: currentProfile.id,
+            profileName: currentProfile.name,
+            guidelines: currentProfile.guidelines,
+            systemPrompt: currentProfile.systemPrompt,
+            mcpServerConfig: currentProfile.mcpServerConfig,
+            modelConfig: currentProfile.modelConfig,
+          }
+        }
+      }
+
       // If sessionId is provided, try to revive that session.
       // Otherwise, if conversationId is provided, try to find and revive a session for that conversation.
       // This handles the case where user continues from history (only conversationId is set).
@@ -1198,8 +1273,8 @@ export const router = {
             lastActivity: "Transcribing audio...",
           })
         } else {
-          // Session not found, create a new one
-          sessionId = agentSessionTracker.startSession(tempConversationId, "Transcribing...", startSnoozed)
+          // Session not found, create a new one with profile snapshot
+          sessionId = agentSessionTracker.startSession(tempConversationId, "Transcribing...", startSnoozed, profileSnapshot)
         }
       } else if (input.conversationId) {
         // No sessionId but have conversationId - try to find existing session for this conversation
@@ -1215,16 +1290,16 @@ export const router = {
               lastActivity: "Transcribing audio...",
             })
           } else {
-            // Revive failed, create new session
-            sessionId = agentSessionTracker.startSession(tempConversationId, "Transcribing...", startSnoozed)
+            // Revive failed, create new session with profile snapshot
+            sessionId = agentSessionTracker.startSession(tempConversationId, "Transcribing...", startSnoozed, profileSnapshot)
           }
         } else {
-          // No existing session for this conversation, create new
-          sessionId = agentSessionTracker.startSession(tempConversationId, "Transcribing...", startSnoozed)
+          // No existing session for this conversation, create new with profile snapshot
+          sessionId = agentSessionTracker.startSession(tempConversationId, "Transcribing...", startSnoozed, profileSnapshot)
         }
       } else {
-        // No sessionId or conversationId provided, create a new session
-        sessionId = agentSessionTracker.startSession(tempConversationId, "Transcribing...", startSnoozed)
+        // No sessionId or conversationId provided, create a new session with profile snapshot
+        sessionId = agentSessionTracker.startSession(tempConversationId, "Transcribing...", startSnoozed, profileSnapshot)
       }
 
       try {

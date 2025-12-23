@@ -7,7 +7,7 @@ import { configStore, recordingsFolder } from "./config"
 import { diagnosticsService } from "./diagnostics"
 import { mcpService, MCPToolResult } from "./mcp-service"
 import { processTranscriptWithAgentMode } from "./llm"
-import { state, agentProcessManager } from "./state"
+import { state, agentProcessManager, agentSessionStateManager } from "./state"
 import { conversationService } from "./conversation-service"
 import { AgentProgressUpdate, SessionProfileSnapshot } from "../shared/types"
 import { agentSessionTracker } from "./agent-session-tracker"
@@ -238,19 +238,29 @@ async function runAgent(options: RunAgentOptions): Promise<{
     }
   }
 
-  // Capture the current profile snapshot for session isolation
-  // This ensures the session uses the profile settings at creation time,
-  // even if the global profile is changed during session execution
+  // Determine profile snapshot for session isolation
+  // If reusing an existing session, use its stored snapshot to maintain isolation
+  // Only capture a new snapshot when creating a new session
   let profileSnapshot: SessionProfileSnapshot | undefined
-  const currentProfile = profileService.getCurrentProfile()
-  if (currentProfile) {
-    profileSnapshot = {
-      profileId: currentProfile.id,
-      profileName: currentProfile.name,
-      guidelines: currentProfile.guidelines,
-      systemPrompt: currentProfile.systemPrompt,
-      mcpServerConfig: currentProfile.mcpServerConfig,
-      modelConfig: currentProfile.modelConfig,
+
+  if (existingSessionId) {
+    // Try to get the stored profile snapshot from the existing session
+    profileSnapshot = agentSessionStateManager.getSessionProfileSnapshot(existingSessionId)
+      ?? agentSessionTracker.getSessionProfileSnapshot(existingSessionId)
+  }
+
+  // Only capture a new snapshot if we don't have one from an existing session
+  if (!profileSnapshot) {
+    const currentProfile = profileService.getCurrentProfile()
+    if (currentProfile) {
+      profileSnapshot = {
+        profileId: currentProfile.id,
+        profileName: currentProfile.name,
+        guidelines: currentProfile.guidelines,
+        systemPrompt: currentProfile.systemPrompt,
+        mcpServerConfig: currentProfile.mcpServerConfig,
+        modelConfig: currentProfile.modelConfig,
+      }
     }
   }
 

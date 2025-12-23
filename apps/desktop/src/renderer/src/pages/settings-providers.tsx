@@ -16,7 +16,7 @@ import { Config } from "@shared/types"
 import { ModelPresetManager } from "@renderer/components/model-preset-manager"
 import { ProviderModelSelector } from "@renderer/components/model-selector"
 import { ProfileBadgeCompact } from "@renderer/components/profile-badge"
-import { Mic, Bot, Volume2, FileText, CheckCircle2 } from "lucide-react"
+import { Mic, Bot, Volume2, FileText, CheckCircle2, ChevronDown, ChevronRight } from "lucide-react"
 
 import {
   STT_PROVIDERS,
@@ -140,6 +140,10 @@ export function Component() {
       ],
     }
   }, [configQuery.data])
+
+  // Determine which providers are active (selected for at least one feature)
+  const isGroqActive = activeProviders.groq.length > 0
+  const isGeminiActive = activeProviders.gemini.length > 0
 
   if (!configQuery.data) return null
 
@@ -287,219 +291,445 @@ export function Component() {
           </div>
         </div>
 
-        {/* Groq Provider Section */}
-        <div className={`rounded-lg border ${activeProviders.groq.length > 0 ? 'border-primary/30 bg-primary/5' : ''}`}>
-          <div className="px-3 py-2 flex items-center justify-between w-full">
-            <span className="flex items-center gap-2 text-sm font-semibold">
-              Groq
-              {activeProviders.groq.length > 0 && (
+        {/* Groq Provider Section - rendered in order based on active status */}
+        {isGroqActive && (
+          <div className="rounded-lg border border-primary/30 bg-primary/5">
+            <button
+              type="button"
+              className="px-3 py-2 flex items-center justify-between w-full hover:bg-muted/30 transition-colors cursor-pointer"
+              onClick={() => saveConfig({ providerSectionCollapsedGroq: !configQuery.data.providerSectionCollapsedGroq })}
+              aria-expanded={!configQuery.data.providerSectionCollapsedGroq}
+              aria-controls="groq-provider-content"
+            >
+              <span className="flex items-center gap-2 text-sm font-semibold">
+                {configQuery.data.providerSectionCollapsedGroq ? (
+                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                ) : (
+                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                )}
+                Groq
                 <CheckCircle2 className="h-4 w-4 text-primary" />
-              )}
-            </span>
-            {activeProviders.groq.length > 0 && (
+              </span>
               <div className="flex gap-1.5 flex-wrap justify-end">
                 {activeProviders.groq.map((badge) => (
                   <ActiveProviderBadge key={badge.label} label={badge.label} icon={badge.icon} />
                 ))}
               </div>
-            )}
-          </div>
-          <div className="divide-y border-t">
-            {activeProviders.groq.length === 0 && (
-              <div className="px-3 py-2 bg-muted/30 border-b">
-                <p className="text-xs text-muted-foreground">
-                  This provider is not currently selected for any feature. Select it above to use it.
-                </p>
+            </button>
+            {!configQuery.data.providerSectionCollapsedGroq && (
+              <div id="groq-provider-content" className="divide-y border-t">
+                <Control label="API Key" className="px-3">
+                  <Input
+                    type="password"
+                    defaultValue={configQuery.data.groqApiKey}
+                    onChange={(e) => {
+                      saveConfig({
+                        groqApiKey: e.currentTarget.value,
+                      })
+                    }}
+                  />
+                </Control>
+
+                <Control label="API Base URL" className="px-3">
+                  <Input
+                    type="url"
+                    placeholder="https://api.groq.com/openai/v1"
+                    defaultValue={configQuery.data.groqBaseUrl}
+                    onChange={(e) => {
+                      saveConfig({
+                        groqBaseUrl: e.currentTarget.value,
+                      })
+                    }}
+                  />
+                </Control>
+
+                <div className="px-3 py-2">
+                  <ProviderModelSelector
+                    providerId="groq"
+                    mcpModel={configQuery.data.mcpToolsGroqModel}
+                    transcriptModel={configQuery.data.transcriptPostProcessingGroqModel}
+                    onMcpModelChange={(value) => saveConfig({ mcpToolsGroqModel: value })}
+                    onTranscriptModelChange={(value) => saveConfig({ transcriptPostProcessingGroqModel: value })}
+                    showMcpModel={true}
+                    showTranscriptModel={true}
+                  />
+                </div>
+
+                {/* Groq TTS */}
+                <div className="border-t mt-3 pt-3">
+                  <div className="px-3 pb-2">
+                    <span className="text-sm font-medium">Text-to-Speech</span>
+                  </div>
+                  <Control label={<ControlLabel label="TTS Model" tooltip="Choose the Groq TTS model to use" />} className="px-3">
+                    <Select
+                      value={configQuery.data.groqTtsModel || "playai-tts"}
+                      onValueChange={(value) => saveConfig({ groqTtsModel: value as "playai-tts" | "playai-tts-arabic" })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {GROQ_TTS_MODELS.map((model) => (
+                          <SelectItem key={model.value} value={model.value}>
+                            {model.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Control>
+
+                  <Control label={<ControlLabel label="TTS Voice" tooltip="Choose the voice for Groq TTS" />} className="px-3">
+                    <Select
+                      value={configQuery.data.groqTtsVoice || "Fritz-PlayAI"}
+                      onValueChange={(value) => saveConfig({ groqTtsVoice: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(configQuery.data.groqTtsModel === "playai-tts-arabic" ? GROQ_TTS_VOICES_ARABIC : GROQ_TTS_VOICES_ENGLISH).map((voice) => (
+                          <SelectItem key={voice.value} value={voice.value}>
+                            {voice.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Control>
+                </div>
               </div>
             )}
-
-            <Control label="API Key" className="px-3">
-              <Input
-                type="password"
-                defaultValue={configQuery.data.groqApiKey}
-                onChange={(e) => {
-                  saveConfig({
-                    groqApiKey: e.currentTarget.value,
-                  })
-                }}
-              />
-            </Control>
-
-            <Control label="API Base URL" className="px-3">
-              <Input
-                type="url"
-                placeholder="https://api.groq.com/openai/v1"
-                defaultValue={configQuery.data.groqBaseUrl}
-                onChange={(e) => {
-                  saveConfig({
-                    groqBaseUrl: e.currentTarget.value,
-                  })
-                }}
-              />
-            </Control>
-
-            <div className="px-3 py-2">
-              <ProviderModelSelector
-                providerId="groq"
-                mcpModel={configQuery.data.mcpToolsGroqModel}
-                transcriptModel={configQuery.data.transcriptPostProcessingGroqModel}
-                onMcpModelChange={(value) => saveConfig({ mcpToolsGroqModel: value })}
-                onTranscriptModelChange={(value) => saveConfig({ transcriptPostProcessingGroqModel: value })}
-                showMcpModel={true}
-                showTranscriptModel={true}
-              />
-            </div>
-
-            {/* Groq TTS */}
-            <div className="border-t mt-3 pt-3">
-              <div className="px-3 pb-2">
-                <span className="text-sm font-medium">Text-to-Speech</span>
-              </div>
-              <Control label={<ControlLabel label="TTS Model" tooltip="Choose the Groq TTS model to use" />} className="px-3">
-                <Select
-                  value={configQuery.data.groqTtsModel || "playai-tts"}
-                  onValueChange={(value) => saveConfig({ groqTtsModel: value as "playai-tts" | "playai-tts-arabic" })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {GROQ_TTS_MODELS.map((model) => (
-                      <SelectItem key={model.value} value={model.value}>
-                        {model.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </Control>
-
-              <Control label={<ControlLabel label="TTS Voice" tooltip="Choose the voice for Groq TTS" />} className="px-3">
-                <Select
-                  value={configQuery.data.groqTtsVoice || "Fritz-PlayAI"}
-                  onValueChange={(value) => saveConfig({ groqTtsVoice: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(configQuery.data.groqTtsModel === "playai-tts-arabic" ? GROQ_TTS_VOICES_ARABIC : GROQ_TTS_VOICES_ENGLISH).map((voice) => (
-                      <SelectItem key={voice.value} value={voice.value}>
-                        {voice.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </Control>
-            </div>
           </div>
-        </div>
+        )}
 
-        {/* Gemini Provider Section */}
-        <div className={`rounded-lg border ${activeProviders.gemini.length > 0 ? 'border-primary/30 bg-primary/5' : ''}`}>
-          <div className="px-3 py-2 flex items-center justify-between w-full">
-            <span className="flex items-center gap-2 text-sm font-semibold">
-              Gemini
-              {activeProviders.gemini.length > 0 && (
+        {/* Gemini Provider Section - rendered in order based on active status */}
+        {isGeminiActive && (
+          <div className="rounded-lg border border-primary/30 bg-primary/5">
+            <button
+              type="button"
+              className="px-3 py-2 flex items-center justify-between w-full hover:bg-muted/30 transition-colors cursor-pointer"
+              onClick={() => saveConfig({ providerSectionCollapsedGemini: !configQuery.data.providerSectionCollapsedGemini })}
+              aria-expanded={!configQuery.data.providerSectionCollapsedGemini}
+              aria-controls="gemini-provider-content"
+            >
+              <span className="flex items-center gap-2 text-sm font-semibold">
+                {configQuery.data.providerSectionCollapsedGemini ? (
+                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                ) : (
+                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                )}
+                Gemini
                 <CheckCircle2 className="h-4 w-4 text-primary" />
-              )}
-            </span>
-            {activeProviders.gemini.length > 0 && (
+              </span>
               <div className="flex gap-1.5 flex-wrap justify-end">
                 {activeProviders.gemini.map((badge) => (
                   <ActiveProviderBadge key={badge.label} label={badge.label} icon={badge.icon} />
                 ))}
               </div>
-            )}
-          </div>
-          <div className="divide-y border-t">
-            {activeProviders.gemini.length === 0 && (
-              <div className="px-3 py-2 bg-muted/30 border-b">
-                <p className="text-xs text-muted-foreground">
-                  This provider is not currently selected for any feature. Select it above to use it.
-                </p>
+            </button>
+            {!configQuery.data.providerSectionCollapsedGemini && (
+              <div id="gemini-provider-content" className="divide-y border-t">
+                <Control label="API Key" className="px-3">
+                  <Input
+                    type="password"
+                    defaultValue={configQuery.data.geminiApiKey}
+                    onChange={(e) => {
+                      saveConfig({
+                        geminiApiKey: e.currentTarget.value,
+                      })
+                    }}
+                  />
+                </Control>
+
+                <Control label="API Base URL" className="px-3">
+                  <Input
+                    type="url"
+                    placeholder="https://generativelanguage.googleapis.com"
+                    defaultValue={configQuery.data.geminiBaseUrl}
+                    onChange={(e) => {
+                      saveConfig({
+                        geminiBaseUrl: e.currentTarget.value,
+                      })
+                    }}
+                  />
+                </Control>
+
+                <div className="px-3 py-2">
+                  <ProviderModelSelector
+                    providerId="gemini"
+                    mcpModel={configQuery.data.mcpToolsGeminiModel}
+                    transcriptModel={configQuery.data.transcriptPostProcessingGeminiModel}
+                    onMcpModelChange={(value) => saveConfig({ mcpToolsGeminiModel: value })}
+                    onTranscriptModelChange={(value) => saveConfig({ transcriptPostProcessingGeminiModel: value })}
+                    showMcpModel={true}
+                    showTranscriptModel={true}
+                  />
+                </div>
+
+                {/* Gemini TTS */}
+                <div className="border-t mt-3 pt-3">
+                  <div className="px-3 pb-2">
+                    <span className="text-sm font-medium">Text-to-Speech</span>
+                  </div>
+                  <Control label={<ControlLabel label="TTS Model" tooltip="Choose the Gemini TTS model to use" />} className="px-3">
+                    <Select
+                      value={configQuery.data.geminiTtsModel || "gemini-2.5-flash-preview-tts"}
+                      onValueChange={(value) => saveConfig({ geminiTtsModel: value as "gemini-2.5-flash-preview-tts" | "gemini-2.5-pro-preview-tts" })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {GEMINI_TTS_MODELS.map((model) => (
+                          <SelectItem key={model.value} value={model.value}>
+                            {model.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Control>
+
+                  <Control label={<ControlLabel label="TTS Voice" tooltip="Choose the voice for Gemini TTS" />} className="px-3">
+                    <Select
+                      value={configQuery.data.geminiTtsVoice || "Kore"}
+                      onValueChange={(value) => saveConfig({ geminiTtsVoice: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {GEMINI_TTS_VOICES.map((voice) => (
+                          <SelectItem key={voice.value} value={voice.value}>
+                            {voice.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Control>
+                </div>
               </div>
             )}
-
-            <Control label="API Key" className="px-3">
-              <Input
-                type="password"
-                defaultValue={configQuery.data.geminiApiKey}
-                onChange={(e) => {
-                  saveConfig({
-                    geminiApiKey: e.currentTarget.value,
-                  })
-                }}
-              />
-            </Control>
-
-            <Control label="API Base URL" className="px-3">
-              <Input
-                type="url"
-                placeholder="https://generativelanguage.googleapis.com"
-                defaultValue={configQuery.data.geminiBaseUrl}
-                onChange={(e) => {
-                  saveConfig({
-                    geminiBaseUrl: e.currentTarget.value,
-                  })
-                }}
-              />
-            </Control>
-
-            <div className="px-3 py-2">
-              <ProviderModelSelector
-                providerId="gemini"
-                mcpModel={configQuery.data.mcpToolsGeminiModel}
-                transcriptModel={configQuery.data.transcriptPostProcessingGeminiModel}
-                onMcpModelChange={(value) => saveConfig({ mcpToolsGeminiModel: value })}
-                onTranscriptModelChange={(value) => saveConfig({ transcriptPostProcessingGeminiModel: value })}
-                showMcpModel={true}
-                showTranscriptModel={true}
-              />
-            </div>
-
-            {/* Gemini TTS */}
-            <div className="border-t mt-3 pt-3">
-              <div className="px-3 pb-2">
-                <span className="text-sm font-medium">Text-to-Speech</span>
-              </div>
-              <Control label={<ControlLabel label="TTS Model" tooltip="Choose the Gemini TTS model to use" />} className="px-3">
-                <Select
-                  value={configQuery.data.geminiTtsModel || "gemini-2.5-flash-preview-tts"}
-                  onValueChange={(value) => saveConfig({ geminiTtsModel: value as "gemini-2.5-flash-preview-tts" | "gemini-2.5-pro-preview-tts" })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {GEMINI_TTS_MODELS.map((model) => (
-                      <SelectItem key={model.value} value={model.value}>
-                        {model.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </Control>
-
-              <Control label={<ControlLabel label="TTS Voice" tooltip="Choose the voice for Gemini TTS" />} className="px-3">
-                <Select
-                  value={configQuery.data.geminiTtsVoice || "Kore"}
-                  onValueChange={(value) => saveConfig({ geminiTtsVoice: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {GEMINI_TTS_VOICES.map((voice) => (
-                      <SelectItem key={voice.value} value={voice.value}>
-                        {voice.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </Control>
-            </div>
           </div>
-        </div>
+        )}
+
+        {/* Inactive Groq Provider Section - shown at bottom when not selected */}
+        {!isGroqActive && (
+          <div className="rounded-lg border">
+            <button
+              type="button"
+              className="px-3 py-2 flex items-center justify-between w-full hover:bg-muted/30 transition-colors cursor-pointer"
+              onClick={() => saveConfig({ providerSectionCollapsedGroq: !configQuery.data.providerSectionCollapsedGroq })}
+              aria-expanded={!configQuery.data.providerSectionCollapsedGroq}
+              aria-controls="groq-provider-content-inactive"
+            >
+              <span className="flex items-center gap-2 text-sm font-semibold">
+                {configQuery.data.providerSectionCollapsedGroq ? (
+                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                ) : (
+                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                )}
+                Groq
+              </span>
+            </button>
+            {!configQuery.data.providerSectionCollapsedGroq && (
+              <div id="groq-provider-content-inactive" className="divide-y border-t">
+                <div className="px-3 py-2 bg-muted/30 border-b">
+                  <p className="text-xs text-muted-foreground">
+                    This provider is not currently selected for any feature. Select it above to use it.
+                  </p>
+                </div>
+
+                <Control label="API Key" className="px-3">
+                  <Input
+                    type="password"
+                    defaultValue={configQuery.data.groqApiKey}
+                    onChange={(e) => {
+                      saveConfig({
+                        groqApiKey: e.currentTarget.value,
+                      })
+                    }}
+                  />
+                </Control>
+
+                <Control label="API Base URL" className="px-3">
+                  <Input
+                    type="url"
+                    placeholder="https://api.groq.com/openai/v1"
+                    defaultValue={configQuery.data.groqBaseUrl}
+                    onChange={(e) => {
+                      saveConfig({
+                        groqBaseUrl: e.currentTarget.value,
+                      })
+                    }}
+                  />
+                </Control>
+
+                <div className="px-3 py-2">
+                  <ProviderModelSelector
+                    providerId="groq"
+                    mcpModel={configQuery.data.mcpToolsGroqModel}
+                    transcriptModel={configQuery.data.transcriptPostProcessingGroqModel}
+                    onMcpModelChange={(value) => saveConfig({ mcpToolsGroqModel: value })}
+                    onTranscriptModelChange={(value) => saveConfig({ transcriptPostProcessingGroqModel: value })}
+                    showMcpModel={true}
+                    showTranscriptModel={true}
+                  />
+                </div>
+
+                {/* Groq TTS */}
+                <div className="border-t mt-3 pt-3">
+                  <div className="px-3 pb-2">
+                    <span className="text-sm font-medium">Text-to-Speech</span>
+                  </div>
+                  <Control label={<ControlLabel label="TTS Model" tooltip="Choose the Groq TTS model to use" />} className="px-3">
+                    <Select
+                      value={configQuery.data.groqTtsModel || "playai-tts"}
+                      onValueChange={(value) => saveConfig({ groqTtsModel: value as "playai-tts" | "playai-tts-arabic" })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {GROQ_TTS_MODELS.map((model) => (
+                          <SelectItem key={model.value} value={model.value}>
+                            {model.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Control>
+
+                  <Control label={<ControlLabel label="TTS Voice" tooltip="Choose the voice for Groq TTS" />} className="px-3">
+                    <Select
+                      value={configQuery.data.groqTtsVoice || "Fritz-PlayAI"}
+                      onValueChange={(value) => saveConfig({ groqTtsVoice: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(configQuery.data.groqTtsModel === "playai-tts-arabic" ? GROQ_TTS_VOICES_ARABIC : GROQ_TTS_VOICES_ENGLISH).map((voice) => (
+                          <SelectItem key={voice.value} value={voice.value}>
+                            {voice.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Control>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Inactive Gemini Provider Section - shown at bottom when not selected */}
+        {!isGeminiActive && (
+          <div className="rounded-lg border">
+            <button
+              type="button"
+              className="px-3 py-2 flex items-center justify-between w-full hover:bg-muted/30 transition-colors cursor-pointer"
+              onClick={() => saveConfig({ providerSectionCollapsedGemini: !configQuery.data.providerSectionCollapsedGemini })}
+              aria-expanded={!configQuery.data.providerSectionCollapsedGemini}
+              aria-controls="gemini-provider-content-inactive"
+            >
+              <span className="flex items-center gap-2 text-sm font-semibold">
+                {configQuery.data.providerSectionCollapsedGemini ? (
+                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                ) : (
+                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                )}
+                Gemini
+              </span>
+            </button>
+            {!configQuery.data.providerSectionCollapsedGemini && (
+              <div id="gemini-provider-content-inactive" className="divide-y border-t">
+                <div className="px-3 py-2 bg-muted/30 border-b">
+                  <p className="text-xs text-muted-foreground">
+                    This provider is not currently selected for any feature. Select it above to use it.
+                  </p>
+                </div>
+
+                <Control label="API Key" className="px-3">
+                  <Input
+                    type="password"
+                    defaultValue={configQuery.data.geminiApiKey}
+                    onChange={(e) => {
+                      saveConfig({
+                        geminiApiKey: e.currentTarget.value,
+                      })
+                    }}
+                  />
+                </Control>
+
+                <Control label="API Base URL" className="px-3">
+                  <Input
+                    type="url"
+                    placeholder="https://generativelanguage.googleapis.com"
+                    defaultValue={configQuery.data.geminiBaseUrl}
+                    onChange={(e) => {
+                      saveConfig({
+                        geminiBaseUrl: e.currentTarget.value,
+                      })
+                    }}
+                  />
+                </Control>
+
+                <div className="px-3 py-2">
+                  <ProviderModelSelector
+                    providerId="gemini"
+                    mcpModel={configQuery.data.mcpToolsGeminiModel}
+                    transcriptModel={configQuery.data.transcriptPostProcessingGeminiModel}
+                    onMcpModelChange={(value) => saveConfig({ mcpToolsGeminiModel: value })}
+                    onTranscriptModelChange={(value) => saveConfig({ transcriptPostProcessingGeminiModel: value })}
+                    showMcpModel={true}
+                    showTranscriptModel={true}
+                  />
+                </div>
+
+                {/* Gemini TTS */}
+                <div className="border-t mt-3 pt-3">
+                  <div className="px-3 pb-2">
+                    <span className="text-sm font-medium">Text-to-Speech</span>
+                  </div>
+                  <Control label={<ControlLabel label="TTS Model" tooltip="Choose the Gemini TTS model to use" />} className="px-3">
+                    <Select
+                      value={configQuery.data.geminiTtsModel || "gemini-2.5-flash-preview-tts"}
+                      onValueChange={(value) => saveConfig({ geminiTtsModel: value as "gemini-2.5-flash-preview-tts" | "gemini-2.5-pro-preview-tts" })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {GEMINI_TTS_MODELS.map((model) => (
+                          <SelectItem key={model.value} value={model.value}>
+                            {model.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Control>
+
+                  <Control label={<ControlLabel label="TTS Voice" tooltip="Choose the voice for Gemini TTS" />} className="px-3">
+                    <Select
+                      value={configQuery.data.geminiTtsVoice || "Kore"}
+                      onValueChange={(value) => saveConfig({ geminiTtsVoice: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {GEMINI_TTS_VOICES.map((voice) => (
+                          <SelectItem key={voice.value} value={voice.value}>
+                            {voice.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Control>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )

@@ -2044,6 +2044,12 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
           </span>
         )}
         <div className="flex items-center gap-3">
+          {/* Profile name */}
+          {profileName && (
+            <span className="text-[10px] text-primary/70 truncate max-w-[80px]" title={`Profile: ${profileName}`}>
+              {profileName}
+            </span>
+          )}
           {/* Model and provider info */}
           {!isComplete && modelInfo && (
             <span className="text-[10px] text-muted-foreground/70 truncate max-w-[120px]" title={`${modelInfo.provider}: ${modelInfo.model}`}>

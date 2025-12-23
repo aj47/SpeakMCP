@@ -80,11 +80,10 @@ async function extractContextFromHistory(
   }>,
   config: any,
 ): Promise<{
-  contextSummary: string
-  resources: Array<{ type: string; id: string; parameter: string }>
+  resources: Array<{ type: string; id: string }>
 }> {
   if (conversationHistory.length === 0) {
-    return { contextSummary: "", resources: [] }
+    return { resources: [] }
   }
 
   // Create a condensed version of the conversation for analysis
@@ -104,41 +103,21 @@ async function extractContextFromHistory(
     })
     .join("\n\n")
 
-  const contextExtractionPrompt = `Analyze the following conversation history and extract useful context information that would be needed for continuing the conversation.
+  const contextExtractionPrompt = `Extract active resource IDs from this conversation:
 
-CONVERSATION HISTORY:
 ${conversationText}
 
-Your task is to identify and extract:
-1. Resource identifiers (session IDs, connection IDs, file handles, workspace IDs, etc.)
-2. Important file paths or locations mentioned
-3. Current state or status information
-4. Any other context that would be useful for subsequent tool calls
-
-Respond with a JSON object in this exact format:
-{
-  "contextSummary": "Brief summary of the current state and what has been accomplished",
-  "resources": [
-    {
-      "type": "session|connection|handle|workspace|channel|other",
-      "id": "the actual ID value",
-      "parameter": "the parameter name this ID should be used for (e.g., sessionId, connectionId)"
-    }
-  ]
-}
-
-Focus on extracting actual resource identifiers that tools would need, not just mentioning them.
-Only include resources that are currently active and usable.
-Keep the contextSummary concise but informative.`
+Return JSON: {"resources": [{"type": "session|connection|handle|other", "id": "actual_id_value"}]}
+Only include currently active/usable resources.`
 
   try {
     const result = await makeStructuredContextExtraction(
       contextExtractionPrompt,
       config.mcpToolsProviderId,
     )
-    return result as { contextSummary: string; resources: Array<{ type: string; id: string; parameter: string }> }
+    return result as { resources: Array<{ type: string; id: string }> }
   } catch (error) {
-    return { contextSummary: "", resources: [] }
+    return { resources: [] }
   }
 }
 

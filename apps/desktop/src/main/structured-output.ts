@@ -60,12 +60,10 @@ const toolCallResponseSchema: OpenAI.ResponseFormatJSONSchema["json_schema"] = {
 }
 
 const ContextExtractionSchema = z.object({
-  contextSummary: z.string(),
   resources: z.array(
     z.object({
       type: z.string(),
       id: z.string(),
-      parameter: z.string(),
     }),
   ),
 })
@@ -75,44 +73,31 @@ export type ContextExtractionResponse = z.infer<typeof ContextExtractionSchema>
 const contextExtractionSchema: OpenAI.ResponseFormatJSONSchema["json_schema"] =
   {
     name: "ContextExtraction",
-    description:
-      "Extract context summary and resource identifiers from conversation",
+    description: "Extract resource identifiers from conversation",
     schema: {
       type: "object",
       properties: {
-        contextSummary: {
-          type: "string",
-          description:
-            "Brief summary of the current state and what has been accomplished",
-        },
         resources: {
           type: "array",
-          description:
-            "Array of resource objects with type, id, and parameter information",
+          description: "Array of active resource identifiers",
           items: {
             type: "object",
             properties: {
               type: {
                 type: "string",
-                description:
-                  "Type of resource (session, connection, handle, workspace, channel, other)",
+                description: "Resource type (session, connection, handle, etc)",
               },
               id: {
                 type: "string",
-                description: "The actual ID value",
-              },
-              parameter: {
-                type: "string",
-                description:
-                  "The parameter name this ID should be used for (e.g., sessionId, connectionId)",
+                description: "The resource identifier value",
               },
             },
-            required: ["type", "id", "parameter"],
+            required: ["type", "id"],
             additionalProperties: false,
           },
         },
       },
-      required: ["contextSummary", "resources"],
+      required: ["resources"],
       additionalProperties: false,
     },
     strict: true,
@@ -367,9 +352,9 @@ export async function makeStructuredContextExtraction(
       } catch (parseError) {}
     }
 
-    return { contextSummary: "", resources: [] }
+    return { resources: [] }
   } catch (error) {
-    return { contextSummary: "", resources: [] }
+    return { resources: [] }
   }
 }
 

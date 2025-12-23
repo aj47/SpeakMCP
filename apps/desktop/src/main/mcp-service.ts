@@ -22,6 +22,7 @@ import {
   Config,
   ServerLogEntry,
   ProfilesData,
+  ProfileMcpServerConfig,
 } from "../shared/types"
 import { requestElicitation, handleElicitationComplete, cancelAllElicitations } from "./mcp-elicitation"
 import { requestSampling, cancelAllSamplingRequests } from "./mcp-sampling"
@@ -1482,6 +1483,60 @@ export class MCPService {
       (tool) => !this.disabledTools.has(tool.name),
     )
     return enabledTools
+  }
+
+  /**
+   * Get available tools filtered by a specific profile's MCP server configuration.
+   * This is used for session isolation - ensuring a session uses the tool configuration
+   * from when it was created, not the current global profile.
+   *
+   * @param profileMcpConfig - The profile's MCP server configuration to filter by
+   * @returns Tools filtered according to the profile's enabled/disabled servers and tools
+   */
+  getAvailableToolsForProfile(profileMcpConfig?: ProfileMcpServerConfig): MCPTool[] {
+    // If no profile config, return all available tools (minus globally disabled tools)
+    if (!profileMcpConfig) {
+      // Return all tools without profile-specific filtering
+      const allTools = [...this.availableTools, ...builtinTools]
+      return allTools.filter((tool) => !this.disabledTools.has(tool.name))
+    }
+
+    const { allServersDisabledByDefault, enabledServers, disabledServers, disabledTools } = profileMcpConfig
+
+    // Determine which servers are enabled for this profile
+    const config = configStore.get()
+    const allServerNames = Object.keys(config?.mcpConfig?.mcpServers || {})
+    const profileDisabledServers = new Set<string>()
+
+    if (allServersDisabledByDefault) {
+      // When allServersDisabledByDefault is true, disable ALL servers EXCEPT those explicitly enabled
+      const enabledSet = new Set(enabledServers || [])
+      for (const serverName of allServerNames) {
+        if (!enabledSet.has(serverName)) {
+          profileDisabledServers.add(serverName)
+        }
+      }
+    } else {
+      // When allServersDisabledByDefault is false, only disable servers in disabledServers
+      for (const serverName of disabledServers || []) {
+        profileDisabledServers.add(serverName)
+      }
+    }
+
+    // Also respect the profile's disabled tools
+    const profileDisabledTools = new Set(disabledTools || [])
+
+    // Filter external tools by server availability
+    const enabledExternalTools = this.availableTools.filter((tool) => {
+      const serverName = tool.name.includes(":")
+        ? tool.name.split(":")[0]
+        : "unknown"
+      return !profileDisabledServers.has(serverName)
+    })
+
+    // Combine with built-in tools and filter by disabled tools
+    const allTools = [...enabledExternalTools, ...builtinTools]
+    return allTools.filter((tool) => !profileDisabledTools.has(tool.name))
   }
 
   getDetailedToolList(): Array<{

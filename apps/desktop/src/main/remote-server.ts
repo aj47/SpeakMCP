@@ -272,7 +272,11 @@ async function runAgent(options: RunAgentOptions): Promise<{
     await mcpService.initialize()
     mcpService.registerExistingProcessesWithAgentManager()
 
-    const availableTools = mcpService.getAvailableTools()
+    // Get available tools filtered by profile snapshot if available (for session isolation)
+    // This ensures revived sessions use the same tool list they started with
+    const availableTools = profileSnapshot?.mcpServerConfig
+      ? mcpService.getAvailableToolsForProfile(profileSnapshot.mcpServerConfig)
+      : mcpService.getAvailableTools()
     const executeToolCall = async (toolCall: any, onProgress?: (message: string) => void): Promise<MCPToolResult> => {
       return await mcpService.executeToolCall(toolCall, onProgress)
     }

@@ -201,8 +201,11 @@ async function processWithAgentMode(
     // This handles the case where servers were already initialized before agent mode was activated
     mcpService.registerExistingProcessesWithAgentManager()
 
-    // Get available tools
-    const availableTools = mcpService.getAvailableTools()
+    // Get available tools filtered by profile snapshot if available (for session isolation)
+    // This ensures revived sessions use the same tool list they started with
+    const availableTools = profileSnapshot?.mcpServerConfig
+      ? mcpService.getAvailableToolsForProfile(profileSnapshot.mcpServerConfig)
+      : mcpService.getAvailableTools()
 
     // Use agent mode for iterative tool calling
     const executeToolCall = async (toolCall: any, onProgress?: (message: string) => void): Promise<MCPToolResult> => {

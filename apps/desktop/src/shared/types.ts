@@ -421,6 +421,10 @@ export type Config = {
 
   mcpDisabledTools?: string[]
 
+  // UI State Persistence - Collapsed/Expanded sections in Settings
+  mcpToolsCollapsedServers?: string[]  // Server names that are collapsed in the Tools section
+  mcpServersCollapsedServers?: string[]  // Server names that are collapsed in the Servers section
+
   // Conversation Configuration
   conversationsEnabled?: boolean
   maxConversationsToKeep?: number

@@ -135,6 +135,11 @@ function isServerEnabledForProfile(serverName: string, profile: Profile): boolea
 interface MCPConfigManagerProps {
   config: MCPConfig
   onConfigChange: (config: MCPConfig) => void
+  // UI state persistence for collapsed/expanded sections
+  collapsedToolServers?: string[]
+  collapsedServers?: string[]
+  onCollapsedToolServersChange?: (servers: string[]) => void
+  onCollapsedServersChange?: (servers: string[]) => void
 }
 
 interface ServerDialogProps {
@@ -927,6 +932,10 @@ const MCP_EXAMPLES: Record<string, { name: string; config: MCPServerConfig; note
 export function MCPConfigManager({
   config,
   onConfigChange,
+  collapsedToolServers = [],
+  collapsedServers = [],
+  onCollapsedToolServersChange,
+  onCollapsedServersChange,
 }: MCPConfigManagerProps) {
   const [editingServer, setEditingServer] = useState<{
     name: string
@@ -953,12 +962,27 @@ export function MCPConfigManager({
   const [oauthStatus, setOAuthStatus] = useState<Record<string, { configured: boolean; authenticated: boolean; tokenExpiry?: number; error?: string }>>({})
   const [serverLogs, setServerLogs] = useState<Record<string, ServerLogEntry[]>>({})
   const [expandedLogs, setExpandedLogs] = useState<Set<string>>(new Set())
-  const [expandedServers, setExpandedServers] = useState<Set<string>>(new Set())
+  // Initialize expandedServers from persisted collapsed state (inverted: collapsed -> not in expanded set)
+  // Include built-in server name to avoid flicker on first paint
+  const [expandedServers, setExpandedServers] = useState<Set<string>>(() => {
+    // Start with all servers expanded except those in collapsedServers
+    // Include built-in server name (speakmcp-settings) so it's expanded by default
+    const allServerNames = [...Object.keys(config.mcpServers || {}), "speakmcp-settings"]
+    const collapsedSet = new Set(collapsedServers)
+    return new Set(allServerNames.filter(name => !collapsedSet.has(name)))
+  })
   // Tool management state
   const [tools, setTools] = useState<DetailedTool[]>([])
   const [toolSearchQuery, setToolSearchQuery] = useState("")
   const [showDisabledTools, setShowDisabledTools] = useState(true)
-  const [expandedTools, setExpandedTools] = useState<Set<string>>(new Set())
+  // Initialize expandedTools (servers in Tools section) - all expanded by default except those persisted as collapsed
+  const [expandedToolServers, setExpandedToolServers] = useState<Set<string>>(() => {
+    const collapsedSet = new Set(collapsedToolServers)
+    // We don't know server names yet, so start with empty set meaning "all expanded"
+    // When collapsedToolServers is provided, those will be collapsed
+    return new Set<string>() // Will be populated when tools load
+  })
+  const [toolServersInitialized, setToolServersInitialized] = useState(false)
   // Profile data for showing which profiles have tools/servers enabled
   const [profiles, setProfiles] = useState<Profile[]>([])
   const [currentProfileId, setCurrentProfileId] = useState<string | null>(null)
@@ -969,15 +993,33 @@ export function MCPConfigManager({
   // Track which reserved server names we've already warned about (to avoid repeated warnings)
   const warnedReservedServersRef = useRef<Set<string>>(new Set())
 
-  // Prune stale entries from expandedServers when servers change
+  // Track known server names to detect new servers
+  const [knownServers, setKnownServers] = useState<Set<string>>(() => new Set(Object.keys(config.mcpServers || {})))
+
+  // Handle server changes: prune stale entries and expand new servers by default
   // Include reserved server names (built-in servers) so they don't get pruned
   useEffect(() => {
-    const serverNames = new Set([...Object.keys(servers), ...RESERVED_SERVER_NAMES])
-    const prunedSet = new Set([...expandedServers].filter(name => serverNames.has(name)))
-    if (prunedSet.size !== expandedServers.size) {
+    const currentServerNames = new Set([...Object.keys(servers), ...RESERVED_SERVER_NAMES])
+    const collapsedSet = new Set(collapsedServers)
+
+    // Find new servers (not in knownServers and not in collapsedServers)
+    const newServers = [...currentServerNames].filter(name => !knownServers.has(name) && !collapsedSet.has(name))
+
+    // Prune stale entries
+    const prunedSet = new Set([...expandedServers].filter(name => currentServerNames.has(name)))
+
+    // Add new servers to expanded set (expanded by default)
+    newServers.forEach(name => prunedSet.add(name))
+
+    if (prunedSet.size !== expandedServers.size || newServers.length > 0) {
       setExpandedServers(prunedSet)
     }
-  }, [servers])
+
+    // Update known servers
+    if (newServers.length > 0 || [...knownServers].some(name => !currentServerNames.has(name))) {
+      setKnownServers(currentServerNames)
+    }
+  }, [servers, collapsedServers])
 
   // Warn about servers with reserved names that are being filtered out
   useEffect(() => {
@@ -993,6 +1035,28 @@ export function MCPConfigManager({
       }
     }
   }, [servers])
+
+  // Sync expandedServers when collapsedServers prop changes (e.g., after async config load)
+  // This tracks the previous collapsedServers to detect external changes
+  const prevCollapsedServersRef = useRef<string[]>(collapsedServers)
+  useEffect(() => {
+    // Check if collapsedServers prop actually changed (use set comparison for robustness)
+    const prevCollapsed = prevCollapsedServersRef.current
+    const prevSet = new Set(prevCollapsed)
+    const currentSet = new Set(collapsedServers)
+    const collapsedChanged =
+      prevSet.size !== currentSet.size ||
+      [...prevSet].some(s => !currentSet.has(s))
+
+    if (collapsedChanged) {
+      prevCollapsedServersRef.current = collapsedServers
+      // Re-sync expandedServers from the new collapsed list
+      const currentServerNames = new Set([...Object.keys(servers), ...RESERVED_SERVER_NAMES])
+      const collapsedSet = new Set(collapsedServers)
+      const newExpanded = new Set([...currentServerNames].filter(name => !collapsedSet.has(name)))
+      setExpandedServers(newExpanded)
+    }
+  }, [collapsedServers, servers])
 
   // Load OAuth status for all servers
   const refreshOAuthStatus = async (serverName?: string) => {
@@ -1065,6 +1129,63 @@ export function MCPConfigManager({
 
     return () => clearInterval(interval)
   }, [])
+
+  // Track known tool server names to detect new servers
+  const [knownToolServers, setKnownToolServers] = useState<Set<string>>(new Set())
+
+  // Initialize expandedToolServers when tools are first loaded
+  // All servers are expanded by default - only collapse those in collapsedToolServers
+  // Also handles new servers appearing after initialization - they default to expanded
+  useEffect(() => {
+    if (tools.length > 0) {
+      const allToolServerNames = [...new Set(tools.map(t => t.serverName))]
+      const collapsedSet = new Set(collapsedToolServers)
+
+      if (!toolServersInitialized) {
+        // Initial setup: all servers expanded by default, except those persisted as collapsed
+        const expanded = new Set(allToolServerNames.filter(name => !collapsedSet.has(name)))
+        setExpandedToolServers(expanded)
+        setKnownToolServers(new Set(allToolServerNames))
+        setToolServersInitialized(true)
+      } else {
+        // After initialization: detect new servers and expand them by default
+        const newServers = allToolServerNames.filter(name => !knownToolServers.has(name))
+        if (newServers.length > 0) {
+          setExpandedToolServers(prev => {
+            const updated = new Set(prev)
+            newServers.forEach(name => updated.add(name))
+            return updated
+          })
+          setKnownToolServers(prev => {
+            const updated = new Set(prev)
+            newServers.forEach(name => updated.add(name))
+            return updated
+          })
+        }
+      }
+    }
+  }, [tools, collapsedToolServers, toolServersInitialized, knownToolServers])
+
+  // Sync expandedToolServers when collapsedToolServers prop changes (e.g., after async config load)
+  const prevCollapsedToolServersRef = useRef<string[]>(collapsedToolServers)
+  useEffect(() => {
+    // Check if collapsedToolServers prop actually changed (use set comparison for robustness)
+    const prevCollapsed = prevCollapsedToolServersRef.current
+    const prevSet = new Set(prevCollapsed)
+    const currentSet = new Set(collapsedToolServers)
+    const collapsedChanged =
+      prevSet.size !== currentSet.size ||
+      [...prevSet].some(s => !currentSet.has(s))
+
+    if (collapsedChanged && toolServersInitialized) {
+      prevCollapsedToolServersRef.current = collapsedToolServers
+      // Re-sync expandedToolServers from the new collapsed list
+      const allToolServerNames = [...new Set(tools.map(t => t.serverName))]
+      const collapsedSet = new Set(collapsedToolServers)
+      const newExpanded = new Set(allToolServerNames.filter(name => !collapsedSet.has(name)))
+      setExpandedToolServers(newExpanded)
+    }
+  }, [collapsedToolServers, tools, toolServersInitialized])
 
   // Fetch profiles for showing which profiles have tools/servers enabled
   useEffect(() => {
@@ -1203,12 +1324,28 @@ export function MCPConfigManager({
   }
 
   const toggleToolsExpansion = (serverName: string) => {
-    setExpandedTools(prev => {
-      const newSet = new Set(prev)
+    setExpandedToolServers(prev => {
+      const allToolServerNames = [...new Set(tools.map(t => t.serverName))]
+      const collapsedSet = new Set(collapsedToolServers)
+
+      // If not yet initialized, start with all servers expanded (minus persisted collapsed ones)
+      // This ensures first toggle behaves correctly even before useEffect runs
+      let newSet: Set<string>
+      if (!toolServersInitialized && prev.size === 0) {
+        newSet = new Set(allToolServerNames.filter(name => !collapsedSet.has(name)))
+      } else {
+        newSet = new Set(prev)
+      }
+
       if (newSet.has(serverName)) {
         newSet.delete(serverName)
       } else {
         newSet.add(serverName)
+      }
+      // Persist the collapsed state (servers NOT in expanded set are collapsed)
+      if (onCollapsedToolServersChange) {
+        const collapsed = allToolServerNames.filter(name => !newSet.has(name))
+        onCollapsedToolServersChange(collapsed)
       }
       return newSet
     })
@@ -1502,20 +1639,9 @@ export function MCPConfigManager({
     })
   }
 
-  const toggleServerExpansion = (serverName: string) => {
-    setExpandedServers(prev => {
-      const newSet = new Set(prev)
-      if (newSet.has(serverName)) {
-        newSet.delete(serverName)
-      } else {
-        newSet.add(serverName)
-      }
-      return newSet
-    })
-  }
-
   // Build combined servers list (config servers + builtin server)
   // Filter out any user servers with reserved names to prevent collisions
+  // Defined before toggleServerExpansion so it can use allServers for persistence
   const BUILTIN_SERVER_NAME = "speakmcp-settings"
   const filteredUserServers = Object.fromEntries(
     Object.entries(servers).filter(
@@ -1529,11 +1655,39 @@ export function MCPConfigManager({
     [BUILTIN_SERVER_NAME]: { isBuiltin: true } as any,
   }
 
+  const toggleServerExpansion = (serverName: string) => {
+    setExpandedServers(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(serverName)) {
+        newSet.delete(serverName)
+      } else {
+        newSet.add(serverName)
+      }
+      // Persist the collapsed state (servers NOT in expanded set are collapsed)
+      // Use allServers to include built-in server in persistence
+      if (onCollapsedServersChange) {
+        const allServerNames = Object.keys(allServers)
+        const collapsed = allServerNames.filter(name => !newSet.has(name))
+        onCollapsedServersChange(collapsed)
+      }
+      return newSet
+    })
+  }
+
   const toggleAllServers = (expand: boolean) => {
+    const allServerNames = Object.keys(allServers)
     if (expand) {
-      setExpandedServers(new Set(Object.keys(allServers)))
+      setExpandedServers(new Set(allServerNames))
+      // Persist: when all expanded, no servers are collapsed
+      if (onCollapsedServersChange) {
+        onCollapsedServersChange([])
+      }
     } else {
       setExpandedServers(new Set())
+      // Persist: when all collapsed, all servers are in collapsed list
+      if (onCollapsedServersChange) {
+        onCollapsedServersChange(allServerNames)
+      }
     }
   }
 
@@ -1757,8 +1911,8 @@ export function MCPConfigManager({
               </div>
             </div>
 
-            {/* Tools List - Grouped by Server */}
-            <div className="space-y-4 max-h-96 overflow-y-auto">
+            {/* Tools List - Grouped by Server with Collapsible Groups */}
+            <div className="space-y-2 flex-1 min-h-0 overflow-y-auto">
               {getAllFilteredTools().length === 0 ? (
                 <div className="text-sm text-muted-foreground text-center py-4">
                   {totalToolsCount === 0
@@ -1775,11 +1929,35 @@ export function MCPConfigManager({
                     acc[tool.serverName].push(tool)
                     return acc
                   }, {} as Record<string, DetailedTool[]>)
-                ).map(([serverName, serverTools]) => (
+                ).map(([serverName, serverTools]) => {
+                  // Before initialization: expanded unless in collapsedToolServers (respects persisted state)
+                  // After initialization: use the expandedToolServers set
+                  const isExpanded = !toolServersInitialized
+                    ? !collapsedToolServers.includes(serverName)
+                    : expandedToolServers.has(serverName)
+                  return (
                   <div key={serverName} className="space-y-2">
-                    {/* Server Header with Toggle Buttons */}
-                    <div className="flex items-center justify-between bg-muted/50 rounded-lg px-3 py-2">
+                    {/* Server Header - Clickable for collapse/expand */}
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      aria-expanded={isExpanded}
+                      aria-label={`Toggle ${serverName} tools`}
+                      className="flex items-center justify-between bg-muted/50 rounded-lg px-3 py-2 cursor-pointer hover:bg-muted/70 transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1"
+                      onClick={() => toggleToolsExpansion(serverName)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          toggleToolsExpansion(serverName)
+                        }
+                      }}
+                    >
                       <div className="flex items-center gap-2">
+                        {isExpanded ? (
+                          <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform" />
+                        ) : (
+                          <ChevronRight className="h-4 w-4 text-muted-foreground transition-transform" />
+                        )}
                         <Server className="h-4 w-4 text-muted-foreground" />
                         <span className="text-sm font-medium">{serverName}</span>
                         <Badge variant="secondary" className="text-xs">
@@ -1815,7 +1993,7 @@ export function MCPConfigManager({
                           </div>
                         </TooltipProvider>
                       </div>
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
                         <Button
                           variant="ghost"
                           size="sm"
@@ -1836,81 +2014,87 @@ export function MCPConfigManager({
                         </Button>
                       </div>
                     </div>
-                    {/* Tools for this server */}
-                    <div className="space-y-2 pl-2">
-                      {serverTools.map((tool) => (
-                        <div
-                          key={tool.name}
-                          className="flex items-center justify-between rounded-lg border p-3"
-                        >
-                          <div className="min-w-0 flex-1">
-                            <div className="mb-1 flex items-center gap-2">
-                              <h4 className="truncate text-sm font-medium">
-                                {tool.name.includes(":")
-                                  ? tool.name.split(":").slice(1).join(":")
-                                  : tool.name}
-                              </h4>
-                              {!tool.enabled && (
-                                <Badge variant="secondary" className="text-xs shrink-0">
-                                  Disabled
-                                </Badge>
-                              )}
-                              {/* Profile availability indicators */}
-                              <TooltipProvider delayDuration={0}>
-                                <div className="flex items-center gap-0.5">
-                                  {profiles.map((profile) => {
-                                    const isEnabled = isToolEnabledForProfile(tool.name, tool.serverName, profile)
-                                    const isCurrent = profile.id === currentProfileId
-                                    return (
-                                      <Tooltip key={profile.id}>
-                                        <TooltipTrigger asChild>
-                                          <div
-                                            className={`h-2 w-2 rounded-full ${
-                                              isEnabled
-                                                ? isCurrent
-                                                  ? "bg-primary ring-1 ring-primary ring-offset-1"
-                                                  : "bg-green-500"
-                                                : "bg-muted-foreground/30"
-                                            }`}
-                                          />
-                                        </TooltipTrigger>
-                                        <TooltipContent side="top" className="text-xs">
-                                          <span className="font-medium">{profile.name}</span>
-                                          {isCurrent && " (current)"}
-                                          : {isEnabled ? "enabled" : "disabled"}
-                                        </TooltipContent>
-                                      </Tooltip>
-                                    )
-                                  })}
-                                </div>
-                              </TooltipProvider>
+                    {/* Tools for this server - Collapsible with animation */}
+                    {isExpanded && (
+                      <div className="space-y-2 pl-6 animate-in fade-in slide-in-from-top-1 duration-200">
+                        {serverTools.map((tool) => (
+                          <div
+                            key={tool.name}
+                            className="flex items-center justify-between rounded-lg border p-3"
+                          >
+                            <div className="min-w-0 flex-1">
+                              <div className="mb-1 flex items-center gap-2">
+                                <h4 className="truncate text-sm font-medium">
+                                  {tool.name.includes(":")
+                                    ? tool.name.split(":").slice(1).join(":")
+                                    : tool.name}
+                                </h4>
+                                {!tool.enabled && (
+                                  <Badge variant="secondary" className="text-xs shrink-0">
+                                    Disabled
+                                  </Badge>
+                                )}
+                                {/* Profile availability indicators */}
+                                <TooltipProvider delayDuration={0}>
+                                  <div className="flex items-center gap-0.5">
+                                    {profiles.map((profile) => {
+                                      const isEnabled = isToolEnabledForProfile(tool.name, tool.serverName, profile)
+                                      const isCurrent = profile.id === currentProfileId
+                                      return (
+                                        <Tooltip key={profile.id}>
+                                          <TooltipTrigger asChild>
+                                            <div
+                                              className={`h-2 w-2 rounded-full ${
+                                                isEnabled
+                                                  ? isCurrent
+                                                    ? "bg-primary ring-1 ring-primary ring-offset-1"
+                                                    : "bg-green-500"
+                                                  : "bg-muted-foreground/30"
+                                              }`}
+                                            />
+                                          </TooltipTrigger>
+                                          <TooltipContent side="top" className="text-xs">
+                                            <span className="font-medium">{profile.name}</span>
+                                            {isCurrent && " (current)"}
+                                            : {isEnabled ? "enabled" : "disabled"}
+                                          </TooltipContent>
+                                        </Tooltip>
+                                      )
+                                    })}
+                                  </div>
+                                </TooltipProvider>
                             </div>
-                            <p className="line-clamp-2 text-xs text-muted-foreground">
-                              {tool.description}
-                            </p>
-                          </div>
-                          <div className="ml-4 flex items-center gap-2">
-                            <Dialog>
-                              <DialogTrigger asChild>
-                                <Button variant="ghost" size="sm">
-                                  <Eye className="h-4 w-4" />
-                                </Button>
-                              </DialogTrigger>
-                              <DialogContent className="max-w-2xl">
-                                <DialogHeader>
-                                  <DialogTitle>{tool.name}</DialogTitle>
-                                  <DialogDescription>
-                                    {tool.description}
-                                  </DialogDescription>
-                                </DialogHeader>
-                                <div className="space-y-4">
-                                  <div>
-                                    <Label className="text-sm font-medium">
-                                      Server
-                                    </Label>
-                                    <p className="text-sm text-muted-foreground mt-1">
-                                      {tool.serverName}
-                                    </p>
+                            <div className="ml-4 flex items-center gap-2">
+                              <Dialog>
+                                <DialogTrigger asChild>
+                                  <Button variant="ghost" size="sm">
+                                    <Eye className="h-4 w-4" />
+                                  </Button>
+                                </DialogTrigger>
+                                <DialogContent className="max-w-2xl">
+                                  <DialogHeader>
+                                    <DialogTitle>{tool.name}</DialogTitle>
+                                    <DialogDescription>
+                                      {tool.description}
+                                    </DialogDescription>
+                                  </DialogHeader>
+                                  <div className="space-y-4">
+                                    <div>
+                                      <Label className="text-sm font-medium">
+                                        Server
+                                      </Label>
+                                      <p className="text-sm text-muted-foreground mt-1">
+                                        {tool.serverName}
+                                      </p>
+                                    </div>
+                                    <div>
+                                      <Label className="text-sm font-medium">
+                                        Input Schema
+                                      </Label>
+                                      <pre className="mt-2 max-h-64 overflow-auto rounded-md bg-muted p-3 text-xs">
+                                        {JSON.stringify(tool.inputSchema, null, 2)}
+                                      </pre>
+                                    </div>
                                   </div>
                                   <div>
                                     <Label className="text-sm font-medium">
@@ -1938,14 +2122,6 @@ export function MCPConfigManager({
                                       })}
                                     </div>
                                   </div>
-                                  <div>
-                                    <Label className="text-sm font-medium">
-                                      Input Schema
-                                    </Label>
-                                    <pre className="mt-2 max-h-64 overflow-auto rounded-md bg-muted p-3 text-xs">
-                                      {JSON.stringify(tool.inputSchema, null, 2)}
-                                    </pre>
-                                  </div>
                                 </div>
                               </DialogContent>
                             </Dialog>
@@ -1956,11 +2132,11 @@ export function MCPConfigManager({
                               }
                             />
                           </div>
-                        </div>
-                      ))}
-                    </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                ))
+                )})
               )}
             </div>
           </CardContent>

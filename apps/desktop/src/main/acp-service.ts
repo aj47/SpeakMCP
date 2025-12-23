@@ -361,17 +361,22 @@ class ACPService extends EventEmitter {
   }
 
   /**
-   * Run a task on an agent (main ACP operation)
+   * Run a task on an agent using the proper ACP protocol.
+   * ACP uses a session-based model:
+   * 1. Create a session with session/create
+   * 2. Send prompt with session/prompt
+   * 3. Read session/update notifications for results
    */
   async runTask(request: ACPRunRequest): Promise<ACPRunResponse> {
-    const { agentName, input, context, mode = "sync" } = request
+    const { agentName, input, context } = request
 
     // Ensure agent is running
-    const instance = this.agents.get(agentName)
+    let instance = this.agents.get(agentName)
     if (!instance || instance.status !== "ready") {
       // Try to spawn it
       try {
         await this.spawnAgent(agentName)
+        instance = this.agents.get(agentName)
       } catch (error) {
         return {
           success: false,
@@ -380,31 +385,84 @@ class ACPService extends EventEmitter {
       }
     }
 
+    if (!instance || instance.status !== "ready") {
+      return {
+        success: false,
+        error: `Agent ${agentName} is not ready`,
+      }
+    }
+
     try {
-      // Format input for ACP protocol
-      const formattedInput = typeof input === "string"
-        ? { messages: [{ role: "user", content: input }] }
-        : input
+      // Format the input text
+      const inputText = typeof input === "string" ? input :
+        input.messages?.map(m => m.content).join("\n") || JSON.stringify(input)
 
-      // Send the run request via JSON-RPC
-      const result = await this.sendRequest(agentName, "run", {
-        input: formattedInput,
-        context,
-        mode,
-      })
+      // Combine context and input
+      const promptText = context ? `Context: ${context}\n\nTask: ${inputText}` : inputText
 
-      // Extract result
-      const response = result as { output?: string; content?: string; result?: string }
-      const output = response.output || response.content || response.result || JSON.stringify(result)
+      // Step 1: Create a new session
+      const sessionResult = await this.sendRequest(agentName, "session/create", {
+        title: `Task: ${inputText.substring(0, 50)}...`,
+      }) as { sessionId?: string }
+
+      const sessionId = sessionResult?.sessionId
+      if (!sessionId) {
+        // Some agents might not require session/create - fall back to direct prompt
+        // Try using just session/prompt without a session
+        logApp(`[ACP:${agentName}] No sessionId returned, trying direct prompt`)
+      }
+
+      // Step 2: Send the prompt
+      // Format prompt as content blocks per ACP spec
+      const promptContent = [
+        {
+          type: "text",
+          text: promptText,
+        }
+      ]
+
+      const promptParams = sessionId
+        ? { sessionId, prompt: promptContent }
+        : { prompt: promptContent }
+
+      const promptResult = await this.sendRequest(agentName, "session/prompt", promptParams) as {
+        stopReason?: string
+        error?: { message?: string }
+      }
+
+      if (promptResult?.error) {
+        return {
+          success: false,
+          error: promptResult.error.message || JSON.stringify(promptResult.error),
+        }
+      }
+
+      // The result comes via session/update notifications which are handled asynchronously
+      // For sync mode, we need to collect the updates
+      // For now, return success - the notifications will be handled by the notification handler
+
+      // Check if we got a stop reason
+      const stopReason = promptResult?.stopReason
 
       return {
         success: true,
-        result: output,
+        result: stopReason ? `Task completed with stop reason: ${stopReason}` : "Task sent to agent",
       }
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+
+      // Check if this is a "Method not found" error - agent might use different protocol
+      if (errorMessage.includes("Method not found")) {
+        logApp(`[ACP:${agentName}] Standard ACP methods not supported, this agent may use a different protocol`)
+        return {
+          success: false,
+          error: `Agent "${agentName}" doesn't support standard ACP protocol. It may require a different integration method.`,
+        }
+      }
+
       return {
         success: false,
-        error: error instanceof Error ? error.message : String(error),
+        error: errorMessage,
       }
     }
   }

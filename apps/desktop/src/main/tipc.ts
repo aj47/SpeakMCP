@@ -712,7 +712,8 @@ export const router = {
   getSessionProfileSnapshot: t.procedure
     .input<{ sessionId: string }>()
     .action(async ({ input }) => {
-      return agentSessionTracker.getSessionProfileSnapshot(input.sessionId)
+      return agentSessionStateManager.getSessionProfileSnapshot(input.sessionId)
+        ?? agentSessionTracker.getSessionProfileSnapshot(input.sessionId)
     }),
 
   stopAgentSession: t.procedure

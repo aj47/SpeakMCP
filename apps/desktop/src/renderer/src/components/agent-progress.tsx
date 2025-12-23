@@ -52,6 +52,7 @@ type DisplayItem =
       timestamp: number
       calls: Array<{ name: string; arguments: any }>
       results: Array<{ success: boolean; content: string; error?: string }>
+      thought?: string  // Optional thought/reasoning from the assistant
     } }
   | { kind: "tool_approval"; id: string; data: {
       approvalId: string
@@ -292,8 +293,8 @@ const CompactMessage: React.FC<{
                       className={cn(
                         "rounded-lg border p-2 text-xs",
                         result.success
-                          ? "border-green-200/50 bg-green-50/30 text-green-700 dark:border-green-800/50 dark:bg-green-900/20 dark:text-green-300"
-                          : "border-red-200/50 bg-red-50/30 text-red-700 dark:border-red-800/50 dark:bg-red-900/20 dark:text-red-300",
+                          ? "border-green-200/50 bg-green-50/30 text-green-700 dark:border-green-800/50 dark:bg-green-900/20 dark:text-green-100"
+                          : "border-red-200/50 bg-red-50/30 text-red-700 dark:border-red-800/50 dark:bg-red-900/20 dark:text-red-100",
                       )}
                     >
                       <div className="flex items-center justify-between mb-1">
@@ -412,12 +413,13 @@ const CompactMessage: React.FC<{
   )
 }
 
-// Unified Tool Execution bubble combining call + response
+// Unified Tool Execution bubble combining thought + call + response
 const ToolExecutionBubble: React.FC<{
   execution: {
     timestamp: number
     calls: Array<{ name: string; arguments: any }>
     results: Array<{ success: boolean; content: string; error?: string }>
+    thought?: string  // Optional thought/reasoning from the assistant
   }
   isExpanded: boolean
   onToggleExpand: () => void
@@ -497,12 +499,24 @@ const ToolExecutionBubble: React.FC<{
       className={cn(
         "rounded-lg border p-2 text-xs",
         isPending
-          ? "border-blue-200/50 bg-blue-50/30 text-blue-700 dark:border-blue-800/50 dark:bg-blue-900/20 dark:text-blue-300"
+          ? "border-blue-200/50 bg-blue-50/30 text-blue-700 dark:border-blue-800/50 dark:bg-blue-900/20 dark:text-blue-100"
           : allSuccess
-            ? "border-green-200/50 bg-green-50/30 text-green-700 dark:border-green-800/50 dark:bg-green-900/20 dark:text-green-300"
-            : "border-red-200/50 bg-red-50/30 text-red-700 dark:border-red-800/50 dark:bg-red-900/20 dark:text-red-300",
+            ? "border-green-200/50 bg-green-50/30 text-green-700 dark:border-green-800/50 dark:bg-green-900/20 dark:text-green-100"
+            : "border-red-200/50 bg-red-50/30 text-red-700 dark:border-red-800/50 dark:bg-red-900/20 dark:text-red-100",
       )}
     >
+      {/* Thought/reasoning section - show when present */}
+      {execution.thought && (
+        <div className="mb-2 pb-2 border-b border-current/10">
+          <div className="flex items-start gap-2 px-1">
+            <span className="opacity-60 mt-0.5 flex-shrink-0">🤖</span>
+            <div className="flex-1 min-w-0 leading-relaxed">
+              <MarkdownRenderer content={execution.thought.trim()} />
+            </div>
+          </div>
+        </div>
+      )}
+
       <div
         className="mb-1 flex items-center justify-between px-1 py-1 cursor-pointer hover:bg-muted/20 rounded"
         onClick={handleToggleExpand}
@@ -1298,6 +1312,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
   }
 
   // Build unified display items that combine tool calls with subsequent results
+  // When an assistant message has tool calls, we combine the thought (content) + tool execution into a single unified item
   const displayItems: DisplayItem[] = []
   const roleCounters: Record<'user' | 'assistant' | 'tool', number> = { user: 0, assistant: 0, tool: 0 }
   for (let i = 0; i < messages.length; i++) {
@@ -1305,19 +1320,19 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
     if (m.role === "assistant" && m.toolCalls && m.toolCalls.length > 0) {
       const next = messages[i + 1]
       const results = next && next.role === "tool" && next.toolResults ? next.toolResults : []
-      // Show assistant message without extras (stable key by role ordinal)
-      const aIndex = ++roleCounters.assistant
-      displayItems.push({ kind: "message", id: `msg-assistant-${aIndex}`, data: { ...m, toolCalls: undefined, toolResults: undefined } })
-      // Unified execution bubble with stable ID (include timestamp for uniqueness)
+      // Unified execution bubble combining thought + tool calls + results
+      // The assistant's content (thought) is included in the tool_execution item
       const execTimestamp = next?.timestamp ?? m.timestamp
       const toolExecId = generateToolExecutionId(m.toolCalls, execTimestamp)
+      const aIndex = ++roleCounters.assistant
       displayItems.push({
         kind: "tool_execution",
-        id: `exec-${toolExecId}`,
+        id: `exec-${toolExecId}-${aIndex}`,
         data: {
           timestamp: execTimestamp,
           calls: m.toolCalls,
           results,
+          thought: m.content?.trim() || undefined,  // Include assistant's thought/reasoning
         },
       })
       if (next && next.role === "tool" && next.toolResults) {

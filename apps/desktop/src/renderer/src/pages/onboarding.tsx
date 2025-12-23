@@ -533,7 +533,7 @@ function AgentStep({
           ...currentMcpConfig.mcpServers,
           exa: {
             transport: "streamableHttp" as const,
-            url: "https://mcp.exa.ai/mcp?exaApiKey=YOUR_API_KEY",
+            url: "https://mcp.exa.ai/mcp",
           },
         },
       }

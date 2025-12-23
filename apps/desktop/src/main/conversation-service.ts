@@ -6,6 +6,7 @@ import {
   Conversation,
   ConversationMessage,
   ConversationHistoryItem,
+  ToolResult,
 } from "../shared/types"
 
 export class ConversationService {
@@ -207,7 +208,7 @@ export class ConversationService {
     content: string,
     role: "user" | "assistant" | "tool",
     toolCalls?: Array<{ name: string; arguments: any }>,
-    toolResults?: Array<{ success: boolean; content: string; error?: string }>,
+    toolResults?: ToolResult[],
   ): Promise<Conversation | null> {
     try {
       const conversation = await this.loadConversation(conversationId)

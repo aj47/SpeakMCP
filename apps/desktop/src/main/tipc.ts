@@ -260,15 +260,23 @@ async function processWithAgentMode(
           content: msg.content,
           toolCalls: msg.toolCalls,
           timestamp: msg.timestamp,
-          // Convert toolResults from stored format (content as string) to MCPToolResult format (content as array)
+          // Convert toolResults from stored format to MCPToolResult format (content as array)
+          // Preserve contentItems (including images) if available, otherwise fall back to text content
           toolResults: msg.toolResults?.map((tr) => ({
-            content: [
-              {
-                type: "text" as const,
-                // Use content for successful results, error message for failures
-                text: tr.success ? tr.content : (tr.error || tr.content),
-              },
-            ],
+            content: tr.contentItems && tr.contentItems.length > 0
+              ? tr.contentItems.map(item => {
+                  if (item.type === "image") {
+                    return { type: "image" as const, data: item.data, mimeType: item.mimeType }
+                  }
+                  return { type: "text" as const, text: item.text }
+                })
+              : [
+                  {
+                    type: "text" as const,
+                    // Use content for successful results, error message for failures
+                    text: tr.success ? tr.content : (tr.error || tr.content),
+                  },
+                ],
             isError: !tr.success,
           })),
         }))

@@ -853,9 +853,20 @@ export async function processTranscriptWithAgentMode(
             ? getTextFromContent(tr.content)
             : String(tr.content || "")
 
+          // Convert content items preserving both text and image types for UI rendering
+          const contentItems = Array.isArray(tr.content)
+            ? tr.content.map(c => {
+                if (c.type === "image") {
+                  return { type: "image" as const, data: c.data, mimeType: c.mimeType }
+                }
+                return { type: "text" as const, text: c.text }
+              })
+            : undefined
+
           return {
             success: !tr.isError,
             content: contentText,
+            contentItems: contentItems && contentItems.length > 0 ? contentItems : undefined,
             error: tr.isError ? contentText : undefined,
           }
         }),

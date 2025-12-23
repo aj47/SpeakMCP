@@ -1823,6 +1823,9 @@ export default function ChatScreen({ route, navigation }: any) {
                                     ]}>
                                       {result.success ? '✅ Success' : '❌ Error'}
                                     </Text>
+                                    <Text style={styles.toolResultCharCount}>
+                                      {(result.content?.length || 0).toLocaleString()} chars
+                                    </Text>
                                   </View>
                                   <ScrollView style={styles.toolResultScroll} nestedScrollEnabled>
                                     <Text style={styles.toolResultCode}>
@@ -2416,7 +2419,14 @@ function createStyles(theme: Theme) {
     toolResultHeader: {
       flexDirection: 'row',
       alignItems: 'center',
+      justifyContent: 'space-between',
       marginBottom: spacing.xs,
+    },
+    toolResultCharCount: {
+      fontSize: 10,
+      fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+      color: theme.colors.mutedForeground,
+      opacity: 0.7,
     },
     toolResultBadge: {
       fontSize: 11,

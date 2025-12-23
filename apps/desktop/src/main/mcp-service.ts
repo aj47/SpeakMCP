@@ -1012,189 +1012,26 @@ export class MCPService {
   }
 
   /**
-   * Filter tool responses to reduce context size by removing unnecessary fields
+   * Filter tool responses to reduce context size
+   * Uses a 50KB threshold - MCP servers handle their own pagination
    */
   private filterToolResponse(
-    serverName: string,
-    toolName: string,
+    _serverName: string,
+    _toolName: string,
     content: Array<{ type: string; text: string }>
   ): Array<{ type: string; text: string }> {
-    // Handle different server types
-    if (serverName === 'github') {
-      return this.filterGitHubResponse(toolName, content)
-    } else if (serverName === 'Playwright') {
-      return this.filterPlaywrightResponse(toolName, content)
-    } else if (serverName === 'desktop-commander') {
-      return this.filterDesktopCommanderResponse(toolName, content)
-    }
-
-    // For other servers, apply generic large response filtering
-    return this.filterGenericLargeResponse(content)
-  }
-
-  /**
-   * Filter GitHub-specific responses
-   */
-  private filterGitHubResponse(
-    toolName: string,
-    content: Array<{ type: string; text: string }>
-  ): Array<{ type: string; text: string }> {
-
+    const TRUNCATION_LIMIT = 50000
     return content.map((item) => {
-      try {
-        const parsed = JSON.parse(item.text)
-
-        // Filter GitHub list_issues and list_pull_requests responses
-        if (toolName === 'list_issues' || toolName === 'list_pull_requests') {
-          if (Array.isArray(parsed)) {
-            const filtered = parsed.map((issue: any) => ({
-              number: issue.number,
-              title: issue.title,
-              state: issue.state,
-              html_url: issue.html_url,
-              created_at: issue.created_at,
-              updated_at: issue.updated_at,
-              user: issue.user ? { login: issue.user.login } : null,
-              labels: issue.labels?.map((l: any) => l.name) || [],
-              draft: issue.draft,
-              pull_request: issue.pull_request ? { url: issue.pull_request.url } : undefined,
-            }))
-            return {
-              type: item.type,
-              text: JSON.stringify(filtered, null, 2)
-            }
-          }
+      if (item.text.length > TRUNCATION_LIMIT) {
+        const truncatedChars = item.text.length - TRUNCATION_LIMIT
+        const truncationNote = `\n\n---\n⚠️ TRUNCATED: Showing first ${TRUNCATION_LIMIT.toLocaleString()} of ${item.text.length.toLocaleString()} characters (${truncatedChars.toLocaleString()} truncated).`
+        return {
+          type: item.type,
+          text: item.text.substring(0, TRUNCATION_LIMIT) + truncationNote
         }
-
-        // Filter single issue/PR responses
-        if (toolName === 'get_issue' || toolName === 'get_pull_request') {
-          const filtered = {
-            number: parsed.number,
-            title: parsed.title,
-            state: parsed.state,
-            html_url: parsed.html_url,
-            body: parsed.body?.substring(0, 500), // Truncate body
-            created_at: parsed.created_at,
-            updated_at: parsed.updated_at,
-            user: parsed.user ? { login: parsed.user.login } : null,
-            labels: parsed.labels?.map((l: any) => l.name) || [],
-          }
-          return {
-            type: item.type,
-            text: JSON.stringify(filtered, null, 2)
-          }
-        }
-
-        // For other GitHub tools, return as-is but truncate if too large
-        if (item.text.length > 10000) {
-          return {
-            type: item.type,
-            text: item.text.substring(0, 10000) + '\n\n... (truncated for context management)'
-          }
-        }
-
-        return item
-      } catch (e) {
-        // Not JSON or parsing failed, return as-is but truncate if too large
-        if (item.text.length > 10000) {
-          return {
-            type: item.type,
-            text: item.text.substring(0, 10000) + '\n\n... (truncated for context management)'
-          }
-        }
-        return item
       }
+      return item
     })
-  }
-
-  /**
-   * Filter Playwright browser automation responses
-   */
-  private filterPlaywrightResponse(
-    toolName: string,
-    content: Array<{ type: string; text: string }>
-  ): Array<{ type: string; text: string }> {
-    return content.map((item) => {
-      // For browser navigation and snapshot responses, truncate large YAML structures
-      if (toolName === 'browser_navigate' || toolName === 'browser_snapshot') {
-        if (item.text.length > 5000) {
-          const lines = item.text.split('\n')
-          const truncatedLines = lines.slice(0, 100) // Keep first 100 lines
-          const remainingLines = lines.length - 100
-
-          return {
-            type: item.type,
-            text: truncatedLines.join('\n') +
-                  `\n\n... (${remainingLines} more lines truncated for context management)\n` +
-                  `Full page structure available but summarized to prevent context overflow.`
-          }
-        }
-      }
-
-      // For other Playwright tools, apply generic large response filtering
-      return this.truncateIfTooLarge(item, 8000)
-    })
-  }
-
-  /**
-   * Filter Desktop Commander responses
-   */
-  private filterDesktopCommanderResponse(
-    toolName: string,
-    content: Array<{ type: string; text: string }>
-  ): Array<{ type: string; text: string }> {
-    return content.map((item) => {
-      // For file reading operations, truncate very large files
-      if (toolName === 'read_file' || toolName === 'read_multiple_files') {
-        if (item.text.length > 15000) {
-          const truncated = item.text.substring(0, 15000)
-          return {
-            type: item.type,
-            text: truncated + '\n\n... (file content truncated for context management)'
-          }
-        }
-      }
-
-      // For directory listings, limit the number of items shown
-      if (toolName === 'list_directory') {
-        const lines = item.text.split('\n')
-        if (lines.length > 200) {
-          const truncatedLines = lines.slice(0, 200)
-          return {
-            type: item.type,
-            text: truncatedLines.join('\n') +
-                  `\n\n... (${lines.length - 200} more items truncated for context management)`
-          }
-        }
-      }
-
-      return this.truncateIfTooLarge(item, 10000)
-    })
-  }
-
-  /**
-   * Apply generic filtering for large responses from any server
-   */
-  private filterGenericLargeResponse(
-    content: Array<{ type: string; text: string }>
-  ): Array<{ type: string; text: string }> {
-    return content.map((item) => this.truncateIfTooLarge(item, 8000))
-  }
-
-  /**
-   * Helper method to truncate content if it exceeds the specified limit
-   */
-  private truncateIfTooLarge(
-    item: { type: string; text: string },
-    limit: number
-  ): { type: string; text: string } {
-    if (item.text.length > limit) {
-      return {
-        type: item.type,
-        text: item.text.substring(0, limit) + '\n\n... (truncated for context management)'
-      }
-    }
-    return item
   }
 
   /**
@@ -1307,7 +1144,8 @@ export class MCPService {
   }
 
   /**
-   * Create context-aware summarization prompts
+   * Create summarization prompts
+   * Uses generic prompts for all servers - no server-specific logic
    */
   private createSummarizationPrompt(
     serverName: string,
@@ -1317,15 +1155,6 @@ export class MCPService {
     const basePrompt = strategy === 'aggressive'
       ? 'Aggressively summarize this content, keeping only the most essential information:'
       : 'Summarize this content while preserving important details:'
-
-    // Add server-specific context
-    if (serverName === 'Playwright') {
-      return `${basePrompt} This is a browser automation result from ${toolName}. Focus on page structure, key elements, and actionable information. Preserve element references and URLs.`
-    } else if (serverName === 'github') {
-      return `${basePrompt} This is a GitHub API response from ${toolName}. Preserve issue/PR numbers, titles, states, URLs, and key metadata.`
-    } else if (serverName === 'desktop-commander') {
-      return `${basePrompt} This is a desktop automation result from ${toolName}. Focus on file paths, command outputs, and key results.`
-    }
 
     return `${basePrompt} This is output from ${serverName}:${toolName}.`
   }

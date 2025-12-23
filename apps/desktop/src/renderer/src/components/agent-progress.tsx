@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react"
 import { cn } from "@renderer/lib/utils"
-import { AgentProgressUpdate } from "../../../shared/types"
-import { ChevronDown, ChevronUp, ChevronRight, X, AlertTriangle, Minimize2, Shield, Check, XCircle, Loader2, Clock, Copy, CheckCheck, GripHorizontal, Activity, Moon, Maximize2, RefreshCw, ExternalLink } from "lucide-react"
+import { AgentProgressUpdate, ACPDelegationProgress } from "../../../shared/types"
+import { ChevronDown, ChevronUp, ChevronRight, X, AlertTriangle, Minimize2, Shield, Check, XCircle, Loader2, Clock, Copy, CheckCheck, GripHorizontal, Activity, Moon, Maximize2, RefreshCw, ExternalLink, Bot } from "lucide-react"
 import { MarkdownRenderer } from "@renderer/components/markdown-renderer"
 import { Button } from "./ui/button"
 import { Badge } from "./ui/badge"
@@ -77,6 +77,7 @@ type DisplayItem =
       text: string
       isStreaming: boolean
     } }
+  | { kind: "delegation"; id: string; data: ACPDelegationProgress }
 
 
 // Compact message component for space efficiency
@@ -1063,6 +1064,110 @@ const RetryStatusBanner: React.FC<{
   )
 }
 
+// Delegation Bubble - shows status of delegated ACP sub-agent tasks
+const DelegationBubble: React.FC<{
+  delegation: ACPDelegationProgress
+}> = ({ delegation }) => {
+  const isRunning = delegation.status === 'running' || delegation.status === 'pending'
+  const isCompleted = delegation.status === 'completed'
+  const isFailed = delegation.status === 'failed'
+
+  const duration = delegation.endTime
+    ? Math.round((delegation.endTime - delegation.startTime) / 1000)
+    : Math.round((Date.now() - delegation.startTime) / 1000)
+
+  const statusColor = isCompleted
+    ? 'border-green-300 dark:border-green-700 bg-green-50/50 dark:bg-green-950/30'
+    : isFailed
+    ? 'border-red-300 dark:border-red-700 bg-red-50/50 dark:bg-red-950/30'
+    : 'border-blue-300 dark:border-blue-700 bg-blue-50/50 dark:bg-blue-950/30'
+
+  const headerColor = isCompleted
+    ? 'bg-green-100/50 dark:bg-green-900/30 border-green-200 dark:border-green-800'
+    : isFailed
+    ? 'bg-red-100/50 dark:bg-red-900/30 border-red-200 dark:border-red-800'
+    : 'bg-blue-100/50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-800'
+
+  const textColor = isCompleted
+    ? 'text-green-800 dark:text-green-200'
+    : isFailed
+    ? 'text-red-800 dark:text-red-200'
+    : 'text-blue-800 dark:text-blue-200'
+
+  const iconColor = isCompleted
+    ? 'text-green-600 dark:text-green-400'
+    : isFailed
+    ? 'text-red-600 dark:text-red-400'
+    : 'text-blue-600 dark:text-blue-400'
+
+  return (
+    <div className={cn("rounded-lg border overflow-hidden", statusColor)}>
+      {/* Header */}
+      <div className={cn("flex items-center gap-2 px-3 py-2 border-b", headerColor)}>
+        <Bot className={cn("h-3.5 w-3.5", iconColor)} />
+        <span className={cn("text-xs font-medium", textColor)}>
+          {delegation.agentName}
+        </span>
+        {isRunning && (
+          <Loader2 className={cn("h-3 w-3 animate-spin ml-auto", iconColor)} />
+        )}
+        {isCompleted && (
+          <Check className={cn("h-3 w-3 ml-auto", iconColor)} />
+        )}
+        {isFailed && (
+          <XCircle className={cn("h-3 w-3 ml-auto", iconColor)} />
+        )}
+      </div>
+
+      {/* Content */}
+      <div className="px-3 py-2">
+        <p className={cn("text-xs", textColor.replace('800', '700').replace('200', '300'))}>
+          {delegation.task.length > 100
+            ? `${delegation.task.substring(0, 100)}...`
+            : delegation.task}
+        </p>
+
+        {/* Progress message */}
+        {delegation.progressMessage && (
+          <p className={cn("text-xs mt-1 italic", textColor.replace('800', '600').replace('200', '400'))}>
+            {delegation.progressMessage}
+          </p>
+        )}
+
+        {/* Result summary */}
+        {delegation.resultSummary && (
+          <div className="mt-2 p-2 rounded bg-white/50 dark:bg-black/20">
+            <p className="text-xs text-gray-700 dark:text-gray-300">
+              {delegation.resultSummary.length > 150
+                ? `${delegation.resultSummary.substring(0, 150)}...`
+                : delegation.resultSummary}
+            </p>
+          </div>
+        )}
+
+        {/* Error message */}
+        {delegation.error && (
+          <div className="mt-2 p-2 rounded bg-red-100/50 dark:bg-red-900/30">
+            <p className="text-xs text-red-700 dark:text-red-300">
+              {delegation.error}
+            </p>
+          </div>
+        )}
+
+        {/* Duration */}
+        <div className="flex items-center justify-between mt-2">
+          <span className={cn("text-xs", textColor.replace('800', '600').replace('200', '400'))}>
+            {isRunning ? 'Running' : isCompleted ? 'Completed' : 'Failed'}
+          </span>
+          <span className="text-xs font-mono text-gray-500 dark:text-gray-400">
+            {duration}s
+          </span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // Streaming Content Bubble - shows real-time LLM response as it's being generated
 const StreamingContentBubble: React.FC<{
   streamingContent: {
@@ -1550,6 +1655,17 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
     })
   }
 
+  // Add delegation progress items from steps
+  for (const step of progress.steps) {
+    if (step.delegation) {
+      displayItems.push({
+        kind: "delegation",
+        id: `delegation-${step.delegation.runId}`,
+        data: step.delegation,
+      })
+    }
+  }
+
   // Determine the last assistant message among display items (by position, not timestamp)
   const lastAssistantDisplayIndex = (() => {
     for (let i = displayItems.length - 1; i >= 0; i--) {
@@ -1900,6 +2016,8 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
                         return <RetryStatusBanner key={itemKey} retryInfo={item.data} />
                       } else if (item.kind === "streaming") {
                         return <StreamingContentBubble key={itemKey} streamingContent={item.data} />
+                      } else if (item.kind === "delegation") {
+                        return <DelegationBubble key={itemKey} delegation={item.data} />
                       } else {
                         return (
                           <ToolExecutionBubble
@@ -2177,6 +2295,13 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
                     <StreamingContentBubble
                       key={itemKey}
                       streamingContent={item.data}
+                    />
+                  )
+                } else if (item.kind === "delegation") {
+                  return (
+                    <DelegationBubble
+                      key={itemKey}
+                      delegation={item.data}
                     />
                   )
                 } else {

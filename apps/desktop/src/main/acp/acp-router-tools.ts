@@ -12,6 +12,7 @@ import type {
   ACPRunResult,
   ACPSubAgentState,
 } from './types';
+import { acpBackgroundNotifier } from './acp-background-notifier';
 
 /**
  * Log ACP router-related debug messages.
@@ -31,6 +32,9 @@ function generateDelegationRunId(): string {
 
 /** Track delegated sub-agent runs for status checking */
 const delegatedRuns: Map<string, ACPSubAgentState> = new Map();
+
+// Initialize background notifier with our delegated runs map
+acpBackgroundNotifier.setDelegatedRunsMap(delegatedRuns);
 
 // ============================================================================
 // Tool Definitions
@@ -300,6 +304,9 @@ export async function handleDelegateToAgent(
       // Asynchronous execution - return immediately with run ID
       subAgentState.status = 'running';
       subAgentState.baseUrl = baseUrl;
+
+      // Start background polling for notifications
+      acpBackgroundNotifier.startPolling();
 
       // Start the async run (don't await the result)
       acpClientService.runAgentAsync(runRequest).then(

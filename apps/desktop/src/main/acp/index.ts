@@ -21,11 +21,13 @@ export {
 } from './acp-router-tools'
 export { acpSmartRouter, ACPSmartRouter } from './acp-smart-router'
 export { acpParallelOrchestrator, ACPParallelOrchestrator } from './acp-parallel-orchestrator'
+export { acpBackgroundNotifier, ACPBackgroundNotifier } from './acp-background-notifier'
 
 import type { ACPAgentConfig } from './types'
 import { acpRegistry } from './acp-registry'
 import { acpProcessManager } from './acp-process-manager'
 import { acpClientService } from './acp-client-service'
+import { acpBackgroundNotifier } from './acp-background-notifier'
 
 /**
  * Initialize the ACP subsystem
@@ -55,6 +57,7 @@ export async function initializeACP(config: { acpAgents?: ACPAgentConfig[] }): P
  */
 export async function shutdownACP(): Promise<void> {
   console.log('[ACP] Shutting down ACP subsystem...')
+  acpBackgroundNotifier.stopPolling()
   await acpProcessManager.stopAllAgents()
   acpClientService.cancelAllRuns()
   console.log('[ACP] ACP shutdown complete')

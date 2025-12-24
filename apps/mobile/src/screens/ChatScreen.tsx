@@ -314,8 +314,16 @@ export default function ChatScreen({ route, navigation }: any) {
   // Keep a ref to messages to avoid stale closures in setTimeout callbacks (PR review fix)
   const messagesRef = useRef<ChatMessage[]>(messages);
   useEffect(() => { messagesRef.current = messages; }, [messages]);
+	// Stable ref to the latest send() to avoid stale closures in speech callbacks
+	const sendRef = useRef<(text: string) => Promise<void>>(async () => {});
   const [input, setInput] = useState('');
   const [listening, setListening] = useState(false);
+	const listeningRef = useRef<boolean>(listening);
+	useEffect(() => { listeningRef.current = listening; }, [listening]);
+	const setListeningValue = useCallback((v: boolean) => {
+		listeningRef.current = v;
+		setListening(v);
+	}, []);
   const [liveTranscript, setLiveTranscript] = useState('');
   const [debugInfo, setDebugInfo] = useState<string>('');
   const [expandedMessages, setExpandedMessages] = useState<Record<number, boolean>>({});
@@ -544,6 +552,43 @@ export default function ChatScreen({ route, navigation }: any) {
   const willCancelRef = useRef<boolean>(false);
   useEffect(() => { liveTranscriptRef.current = liveTranscript; }, [liveTranscript]);
   useEffect(() => { willCancelRef.current = willCancel; }, [willCancel]);
+	const setLiveTranscriptValue = useCallback((t: string) => {
+		liveTranscriptRef.current = t;
+		setLiveTranscript(t);
+	}, []);
+
+	// Merge accumulated final transcript with the latest live transcript.
+	// This avoids "cut off" endings when the recognizer ends before producing a final segment,
+	// and also helps dedupe overlaps when multiple callbacks fire.
+	const normalizeVoiceText = (t?: string) => (t || '').replace(/\s+/g, ' ').trim();
+	const mergeVoiceText = (base?: string, live?: string) => {
+		const a = normalizeVoiceText(base);
+		const b = normalizeVoiceText(live);
+		if (!a) return b;
+		if (!b) return a;
+		if (a === b) return a;
+		if (b.startsWith(a)) return b;
+		if (a.startsWith(b)) return a;
+		if (a.includes(b)) return a;
+		if (b.includes(a)) return b;
+		const aWords = a.split(' ');
+		const bWords = b.split(' ');
+		const maxOverlap = Math.min(aWords.length, bWords.length);
+		for (let k = maxOverlap; k > 0; k--) {
+			const aSuffix = aWords.slice(-k).join(' ');
+			const bPrefix = bWords.slice(0, k).join(' ');
+			if (aSuffix === bPrefix) {
+				const prefix = aWords.slice(0, aWords.length - k).join(' ');
+				return normalizeVoiceText(`${prefix} ${b}`);
+			}
+		}
+		return normalizeVoiceText(`${a} ${b}`);
+	};
+
+	// Used to dedupe push-to-talk finalization when speech engines (or subscriptions)
+	// emit multiple 'end' events for the same gesture.
+	const voiceGestureIdRef = useRef(0);
+	const voiceGestureFinalizedIdRef = useRef(0);
 
   const startingRef = useRef(false);
   const stoppingRef = useRef(false);
@@ -772,6 +817,9 @@ export default function ChatScreen({ route, navigation }: any) {
           });
         }
       };
+
+	// Keep sendRef in sync with the latest send() implementation for speech callbacks.
+	sendRef.current = send;
 
       const onToken = (tok: string) => {
         // Guard: skip update if session has changed since request started
@@ -1362,7 +1410,7 @@ export default function ChatScreen({ route, navigation }: any) {
           if (res.isFinal) finalText += txt;
           else interim += txt;
         }
-        if (interim) setLiveTranscript(interim);
+	        if (interim) setLiveTranscriptValue(interim);
         if (finalText) {
           if (handsFreeRef.current) {
             if (handsFreeDebounceRef.current) {
@@ -1377,8 +1425,8 @@ export default function ChatScreen({ route, navigation }: any) {
                 const toSend = pendingHandsFreeFinalRef.current.trim();
                 pendingHandsFreeFinalRef.current = '';
                 webFinalRef.current = '';
-                setLiveTranscript('');
-                if (toSend) send(toSend);
+	                setLiveTranscriptValue('');
+	                if (toSend) void sendRef.current(toSend);
               }, handsFreeDebounceMs);
             }
           } else {
@@ -1398,28 +1446,36 @@ export default function ChatScreen({ route, navigation }: any) {
             return;
           } catch (restartErr) {
             console.warn('[Voice] Failed to restart web recognition after voice break:', restartErr);
-            setListening(false);
-            setLiveTranscript('');
-            const accumulatedText = (webFinalRef.current || '').trim() || (liveTranscriptRef.current || '').trim();
+	            setListeningValue(false);
+	            setLiveTranscriptValue('');
+	            const accumulatedText = mergeVoiceText(webFinalRef.current, liveTranscriptRef.current);
             if (accumulatedText) {
               setInput((t) => (t ? `${t} ${accumulatedText}` : accumulatedText));
             }
+	            // Treat as finalized for this push-to-talk gesture to prevent duplicate sends.
+	            voiceGestureFinalizedIdRef.current = voiceGestureIdRef.current;
             webFinalRef.current = '';
             pendingHandsFreeFinalRef.current = '';
             return;
           }
         }
+			const gestureId = voiceGestureIdRef.current;
+			const alreadyFinalizedPushToTalk = !handsFreeRef.current && voiceGestureFinalizedIdRef.current === gestureId;
 
-        const finalText = (pendingHandsFreeFinalRef.current || webFinalRef.current || '').trim() || (liveTranscriptRef.current || '').trim();
+	        const finalText = mergeVoiceText(
+	          pendingHandsFreeFinalRef.current || webFinalRef.current,
+	          liveTranscriptRef.current
+	        );
         pendingHandsFreeFinalRef.current = '';
-        setListening(false);
-        setLiveTranscript('');
+	        setListeningValue(false);
+	        setLiveTranscriptValue('');
         const willEdit = willCancelRef.current;
-        if (!handsFreeRef.current && finalText) {
-          if (willEdit) setInput((t) => (t ? `${t} ${finalText}` : finalText));
-          else send(finalText);
+	        if (!handsFreeRef.current && finalText && !alreadyFinalizedPushToTalk) {
+	          voiceGestureFinalizedIdRef.current = gestureId;
+	          if (willEdit) setInput((t) => (t ? `${t} ${finalText}` : finalText));
+	          else void sendRef.current(finalText);
         } else if (handsFreeRef.current && finalText) {
-          send(finalText);
+	          void sendRef.current(finalText);
         }
         webFinalRef.current = '';
       };
@@ -1429,15 +1485,18 @@ export default function ChatScreen({ route, navigation }: any) {
   };
 
   const startRecording = async (e?: GestureResponderEvent) => {
-    if (startingRef.current || listening) {
+	    if (startingRef.current || listeningRef.current) {
       return;
     }
     startingRef.current = true;
     try {
+	      // New push-to-talk gesture/session.
+	      voiceGestureIdRef.current += 1;
       setWillCancel(false);
-      setLiveTranscript('');
-      setListening(true);
+	      setLiveTranscriptValue('');
+	      setListeningValue(true);
       nativeFinalRef.current = '';
+	      webFinalRef.current = '';
       pendingHandsFreeFinalRef.current = '';
       userReleasedButtonRef.current = false;
       if (handsFreeDebounceRef.current) {
@@ -1456,7 +1515,7 @@ export default function ChatScreen({ route, navigation }: any) {
             cleanupNativeSubs();
             const subResult = srEmitterRef.current.addListener('result', (event: any) => {
               const t = event?.results?.[0]?.transcript ?? event?.text ?? event?.transcript ?? '';
-              if (t) setLiveTranscript(t);
+	                  if (t) setLiveTranscriptValue(t);
               if (event?.isFinal && t) {
                 if (handsFreeRef.current) {
                   if (handsFreeDebounceRef.current) {
@@ -1471,8 +1530,8 @@ export default function ChatScreen({ route, navigation }: any) {
                       const toSend = pendingHandsFreeFinalRef.current.trim();
                       pendingHandsFreeFinalRef.current = '';
                       nativeFinalRef.current = '';
-                      setLiveTranscript('');
-                      if (toSend) send(toSend);
+	                          setLiveTranscriptValue('');
+	                          if (toSend) void sendRef.current(toSend);
                     }, handsFreeDebounceMs);
                   }
                 } else {
@@ -1505,28 +1564,36 @@ export default function ChatScreen({ route, navigation }: any) {
                   }
                 } catch (restartErr) {
                   console.warn('[Voice] Failed to restart recognition after voice break:', restartErr);
-                  setListening(false);
-                  setLiveTranscript('');
-                  const accumulatedText = (nativeFinalRef.current || '').trim() || (liveTranscriptRef.current || '').trim();
+	                  setListeningValue(false);
+	                  setLiveTranscriptValue('');
+	                  const accumulatedText = mergeVoiceText(nativeFinalRef.current, liveTranscriptRef.current);
                   if (accumulatedText) {
                     setInput((t) => (t ? `${t} ${accumulatedText}` : accumulatedText));
                   }
+	                  // Treat as finalized for this push-to-talk gesture to prevent duplicate sends.
+	                  voiceGestureFinalizedIdRef.current = voiceGestureIdRef.current;
                   nativeFinalRef.current = '';
                   pendingHandsFreeFinalRef.current = '';
                   return;
                 }
               }
+					const gestureId = voiceGestureIdRef.current;
+					const alreadyFinalizedPushToTalk = !handsFreeRef.current && voiceGestureFinalizedIdRef.current === gestureId;
 
-              setListening(false);
-              const finalText = (pendingHandsFreeFinalRef.current || nativeFinalRef.current || liveTranscriptRef.current || '').trim();
+	              setListeningValue(false);
+	              const finalText = mergeVoiceText(
+	                pendingHandsFreeFinalRef.current || nativeFinalRef.current,
+	                liveTranscriptRef.current
+	              );
               pendingHandsFreeFinalRef.current = '';
-              setLiveTranscript('');
+	              setLiveTranscriptValue('');
               const willEdit = willCancelRef.current;
-              if (!handsFreeRef.current && finalText) {
-                if (willEdit) setInput((t) => (t ? `${t} ${finalText}` : finalText));
-                else send(finalText);
+	              if (!handsFreeRef.current && finalText && !alreadyFinalizedPushToTalk) {
+	                voiceGestureFinalizedIdRef.current = gestureId;
+	                if (willEdit) setInput((t) => (t ? `${t} ${finalText}` : finalText));
+	                else void sendRef.current(finalText);
               } else if (handsFreeRef.current && finalText) {
-                send(finalText);
+	                void sendRef.current(finalText);
               }
               nativeFinalRef.current = '';
             });
@@ -1538,7 +1605,7 @@ export default function ChatScreen({ route, navigation }: any) {
                 const req = await SR.ExpoSpeechRecognitionModule.requestPermissionsAsync();
                 if (!req?.granted) {
                   console.warn('[Voice] microphone/speech permission not granted; aborting');
-                  setListening(false);
+	                  setListeningValue(false);
                   startingRef.current = false;
                   return;
                 }
@@ -1556,7 +1623,7 @@ export default function ChatScreen({ route, navigation }: any) {
               });
             } catch (serr) {
               console.error('[Voice] Native start error:', serr);
-              setListening(false);
+	              setListeningValue(false);
             }
             startingRef.current = false;
             return;
@@ -1567,7 +1634,7 @@ export default function ChatScreen({ route, navigation }: any) {
 
           if (!nativeSRUnavailableShownRef.current && errorMsg.includes('ExpoSpeechRecognition')) {
             nativeSRUnavailableShownRef.current = true;
-            setListening(false);
+	            setListeningValue(false);
             startingRef.current = false;
             Alert.alert(
               'Development Build Required',
@@ -1590,16 +1657,16 @@ export default function ChatScreen({ route, navigation }: any) {
           startingRef.current = false;
         } catch (err) {
           console.error('[Voice] Web start error:', err);
-          setListening(false);
+	          setListeningValue(false);
           startingRef.current = false;
         }
       } else {
-        setListening(false);
+	        setListeningValue(false);
         startingRef.current = false;
       }
     } catch (err) {
       console.error('[Voice] startRecording error:', err);
-      setListening(false);
+	      setListeningValue(false);
       startingRef.current = false;
     }
   };
@@ -1612,7 +1679,7 @@ export default function ChatScreen({ route, navigation }: any) {
     userReleasedButtonRef.current = true;
     try {
       const hasWeb = Platform.OS === 'web' && webRecognitionRef.current;
-      if (!listening && !hasWeb) {
+	      if (!listeningRef.current && !hasWeb) {
         return;
       }
 
@@ -1632,12 +1699,12 @@ export default function ChatScreen({ route, navigation }: any) {
           webRecognitionRef.current.stop();
         } catch (err) {
           console.error('[Voice] Web stop error:', err);
-          setListening(false);
+	          setListeningValue(false);
         }
       }
     } catch (err) {
       console.error('[Voice] stopRecording error:', err);
-      setListening(false);
+	      setListeningValue(false);
     } finally {
       startYRef.current = null;
       setWillCancel(false);
@@ -2016,20 +2083,20 @@ export default function ChatScreen({ route, navigation }: any) {
               delayPressIn={0}
               onPressIn={!handsFree ? (e: GestureResponderEvent) => {
                 lastGrantTimeRef.current = Date.now();
-                if (!listening) startRecording(e);
+	                if (!listeningRef.current) startRecording(e);
               } : undefined}
               onPressOut={!handsFree ? () => {
                 const now = Date.now();
                 const dt = now - lastGrantTimeRef.current;
                 const delay = Math.max(0, minHoldMs - dt);
                 if (delay > 0) {
-                  setTimeout(() => { if (listening) stopRecordingAndHandle(); }, delay);
+	                  setTimeout(() => { if (listeningRef.current) stopRecordingAndHandle(); }, delay);
                 } else {
-                  if (listening) stopRecordingAndHandle();
+	                  if (listeningRef.current) stopRecordingAndHandle();
                 }
               } : undefined}
               onPress={handsFree ? () => {
-                if (!listening) startRecording(); else stopRecordingAndHandle();
+	                if (!listeningRef.current) startRecording(); else stopRecordingAndHandle();
               } : undefined}
             >
               <Text style={styles.micText}>

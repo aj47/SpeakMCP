@@ -1,7 +1,6 @@
 import type {
   ACPAgentDefinition,
   ACPMessage,
-  ACPMessagePart,
   ACPRunRequest,
   ACPRunResult,
 } from './types';
@@ -23,15 +22,25 @@ function formatInput(input: string | ACPMessage[]): ACPMessage[] {
     return [
       {
         role: 'user',
-        parts: [{ type: 'text', content: input }] as ACPMessagePart[],
+        parts: [{ content: input, content_type: 'text/plain' }],
       },
     ];
   }
   return input;
 }
 
-class ACPClientService {
+export class ACPClientService {
   private activeRuns: Map<string, ActiveRun> = new Map();
+
+  private getBaseUrlForAgent(agentName: string): string {
+    const agent = acpRegistry.getAgent(agentName);
+    if (!agent) {
+      throw new Error(`ACP agent "${agentName}" not found in registry`);
+    }
+
+    // Normalize trailing slash to avoid double slashes in URL joins.
+    return agent.definition.baseUrl.replace(/\/$/, '');
+  }
 
   async discoverAgents(baseUrl: string): Promise<ACPAgentDefinition[]> {
     try {
@@ -57,6 +66,7 @@ class ACPClientService {
   async runAgentSync(request: ACPRunRequest): Promise<ACPRunResult> {
     const runId = generateRunId();
     const controller = new AbortController();
+    const baseUrl = this.getBaseUrlForAgent(request.agentName);
 
     this.activeRuns.set(runId, {
       controller,
@@ -65,7 +75,7 @@ class ACPClientService {
     });
 
     try {
-      const response = await fetch(`${request.baseUrl}/runs`, {
+      const response = await fetch(`${baseUrl}/runs`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -97,17 +107,25 @@ class ACPClientService {
   }
 
   async runAgentAsync(request: ACPRunRequest): Promise<string> {
-    const runId = generateRunId();
+    const localRunId = generateRunId();
     const controller = new AbortController();
+    const baseUrl = this.getBaseUrlForAgent(request.agentName);
 
-    this.activeRuns.set(runId, {
+    // Track only while the start request is in-flight.
+    // Note: without a server-side cancel endpoint, cancellation is limited to aborting the local
+    // HTTP request (it may not stop a server-side run once started).
+    this.activeRuns.set(localRunId, {
       controller,
       agentName: request.agentName,
       parentSessionId: request.parentSessionId,
     });
 
+    // Key used in activeRuns. This may be re-keyed to serverRunId if the ACP server returns a
+    // different identifier.
+    let activeRunId = localRunId;
+
     try {
-      const response = await fetch(`${request.baseUrl}/runs`, {
+      const response = await fetch(`${baseUrl}/runs`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -125,22 +143,30 @@ class ACPClientService {
       }
 
       const result = await response.json();
-      const serverRunId = result.run_id;
+      const serverRunId: string | undefined = result.run_id;
 
-      // Update activeRuns to use server's run_id if it differs from local runId
-      if (serverRunId && serverRunId !== runId) {
-        const entry = this.activeRuns.get(runId);
-        if (entry) {
-          this.activeRuns.delete(runId);
-          this.activeRuns.set(serverRunId, entry);
+      // If the server returns a different id, re-key our local tracking so callers can cancel
+      // using the returned run id during the in-flight window.
+      if (serverRunId && serverRunId !== localRunId) {
+        const tracked = this.activeRuns.get(activeRunId);
+        if (tracked) {
+          this.activeRuns.delete(activeRunId);
+          this.activeRuns.set(serverRunId, tracked);
+          activeRunId = serverRunId;
         }
       }
 
-      return serverRunId || runId;
+      return serverRunId || localRunId;
     } catch (error) {
-      console.error('[ACP Client] Error running agent async:', error);
-      this.activeRuns.delete(runId);
+      if ((error as Error).name === 'AbortError') {
+        console.log(`[ACP Client] Async run start ${localRunId} was cancelled`);
+      } else {
+        console.error('[ACP Client] Error running agent async:', error);
+      }
       throw error;
+    } finally {
+      // Async mode only needs tracking while the start request is in-flight.
+      this.activeRuns.delete(activeRunId);
     }
   }
 
@@ -171,6 +197,8 @@ class ACPClientService {
   ): Promise<ACPRunResult> {
     const runId = generateRunId();
     const controller = new AbortController();
+    const startTime = Date.now();
+    const baseUrl = this.getBaseUrlForAgent(request.agentName);
 
     this.activeRuns.set(runId, {
       controller,
@@ -179,7 +207,7 @@ class ACPClientService {
     });
 
     try {
-      const response = await fetch(`${request.baseUrl}/runs`, {
+      const response = await fetch(`${baseUrl}/runs`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -203,8 +231,9 @@ class ACPClientService {
       }
 
       const decoder = new TextDecoder();
-      let finalResult: ACPRunResult | null = null;
+      let finalResult: Partial<ACPRunResult> | null = null;
       let buffer = '';
+      let collectedContent = '';
 
       while (true) {
         const { done, value } = await reader.read();
@@ -222,9 +251,11 @@ class ACPClientService {
             try {
               const event = JSON.parse(data);
               if (event.type === 'chunk' || event.type === 'content') {
-                onChunk(event.content || '', event.thought);
+                const content = event.content || '';
+                collectedContent += content;
+                onChunk(content, event.thought);
               } else if (event.type === 'result' || event.type === 'complete') {
-                finalResult = event as ACPRunResult;
+                finalResult = event as Partial<ACPRunResult>;
               }
             } catch {
               // Ignore parse errors for partial data
@@ -233,7 +264,27 @@ class ACPClientService {
         }
       }
 
-      return finalResult || { status: 'completed', output: [] };
+      const endTime = Date.now();
+      const output: ACPMessage[] = collectedContent
+        ? [
+            {
+              role: 'assistant',
+              parts: [{ content: collectedContent, content_type: 'text/plain' }],
+            },
+          ]
+        : [];
+
+      const baseResult: ACPRunResult = {
+        runId,
+        agentName: request.agentName,
+        status: 'completed',
+        startTime,
+        endTime,
+        output,
+        metadata: { duration: endTime - startTime },
+      };
+
+      return finalResult ? { ...baseResult, ...finalResult } : baseResult;
     } catch (error) {
       if ((error as Error).name === 'AbortError') {
         console.log(`[ACP Client] Stream ${runId} was cancelled`);

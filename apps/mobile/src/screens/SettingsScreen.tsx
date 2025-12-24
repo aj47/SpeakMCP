@@ -45,7 +45,7 @@ export default function SettingsScreen({ navigation }: any) {
   const [scanned, setScanned] = useState(false);
   const [isCheckingConnection, setIsCheckingConnection] = useState(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
-  const { connect: tunnelConnect } = useTunnelConnection();
+  const { connect: tunnelConnect, disconnect: tunnelDisconnect } = useTunnelConnection();
 
   const styles = useMemo(() => createStyles(theme), [theme]);
 
@@ -138,6 +138,11 @@ export default function SettingsScreen({ navigation }: any) {
     if (normalizedDraft.baseUrl && normalizedDraft.apiKey) {
       tunnelConnect(normalizedDraft.baseUrl, normalizedDraft.apiKey).catch((error) => {
         console.warn('[Settings] Tunnel connect failed (non-blocking):', error);
+      });
+    } else {
+      // Clear tunnel metadata when credentials are removed
+      tunnelDisconnect().catch((error) => {
+        console.warn('[Settings] Tunnel disconnect failed (non-blocking):', error);
       });
     }
 

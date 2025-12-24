@@ -54,8 +54,14 @@ export async function loadTunnelMetadata(): Promise<TunnelMetadata | null> {
     }
 
     const parsed = JSON.parse(stored);
-    if (!parsed.baseUrl || !parsed.apiKey) {
-      console.warn('[TunnelPersistence] Invalid stored metadata, missing required fields');
+
+    // Validate required fields exist and have correct types
+    if (
+      typeof parsed.baseUrl !== 'string' ||
+      typeof parsed.apiKey !== 'string' ||
+      typeof parsed.lastConnectedAt !== 'number'
+    ) {
+      console.warn('[TunnelPersistence] Invalid stored metadata: missing required fields or incorrect types');
       return null;
     }
 

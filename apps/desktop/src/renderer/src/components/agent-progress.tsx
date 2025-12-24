@@ -1488,6 +1488,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
     sessionStartIndex,
     contextInfo,
     modelInfo,
+    profileName,
   } = progress
 
   // Detect if agent was stopped by kill switch
@@ -1556,13 +1557,18 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
           isThinking: false,
         })
       } else if (!isStreaming) {
-        messages.push({
-          role: "assistant",
-          content: currentThinkingStep.description || "Agent is thinking...",
-          isComplete: false,
-          timestamp: currentThinkingStep.timestamp,
-          isThinking: true,
-        })
+        // Skip adding a fake "thinking" message for verification steps
+        // These steps don't have LLM content and would hide the actual LLM response
+        const isVerificationStep = currentThinkingStep.title?.toLowerCase().includes("verifying")
+        if (!isVerificationStep) {
+          messages.push({
+            role: "assistant",
+            content: currentThinkingStep.description || "Agent is thinking...",
+            isComplete: false,
+            timestamp: currentThinkingStep.timestamp,
+            isThinking: true,
+          })
+        }
       }
     }
   } else {
@@ -1580,13 +1586,17 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
           })
         } else if (step.status === "in_progress" && !isComplete) {
           // Only show in-progress thinking when task is not complete
-          messages.push({
-            role: "assistant",
-            content: step.description || "Agent is thinking...",
-            isComplete: false,
-            timestamp: step.timestamp,
-            isThinking: true,
-          })
+          // Skip verification steps as they would hide the actual LLM response
+          const isVerificationStep = step.title?.toLowerCase().includes("verifying")
+          if (!isVerificationStep) {
+            messages.push({
+              role: "assistant",
+              content: step.description || "Agent is thinking...",
+              isComplete: false,
+              timestamp: step.timestamp,
+              isThinking: true,
+            })
+          }
         }
       })
 
@@ -2093,6 +2103,14 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
 
             {/* Footer with status info */}
             <div className="px-3 py-2 border-t bg-muted/20 text-xs text-muted-foreground flex-shrink-0 flex items-center gap-2">
+              {profileName && (
+                <span className="text-[10px] truncate max-w-[80px] text-primary/70" title={`Profile: ${profileName}`}>
+                  {profileName}
+                </span>
+              )}
+              {profileName && modelInfo && !isComplete && (
+                <span className="text-muted-foreground/50">•</span>
+              )}
               {!isComplete && modelInfo && (
                 <span className="text-[10px] truncate max-w-[100px]" title={`${modelInfo.provider}: ${modelInfo.model}`}>
                   {modelInfo.provider}/{modelInfo.model.split('/').pop()?.substring(0, 15)}
@@ -2206,6 +2224,12 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
           </span>
         )}
         <div className="flex items-center gap-3">
+          {/* Profile name */}
+          {profileName && (
+            <span className="text-[10px] text-primary/70 truncate max-w-[80px]" title={`Profile: ${profileName}`}>
+              {profileName}
+            </span>
+          )}
           {/* Model and provider info */}
           {!isComplete && modelInfo && (
             <span className="text-[10px] text-muted-foreground/70 truncate max-w-[120px]" title={`${modelInfo.provider}: ${modelInfo.model}`}>

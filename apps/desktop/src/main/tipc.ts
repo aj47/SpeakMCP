@@ -36,6 +36,7 @@ import {
   ConversationHistoryItem,
   AgentProgressUpdate,
   ACPAgentConfig,
+  SessionProfileSnapshot,
 } from "../shared/types"
 import { inferTransportType, normalizeMcpConfig } from "../shared/mcp-utils"
 import { conversationService } from "./conversation-service"
@@ -163,10 +164,36 @@ async function processWithAgentMode(
 
   // Agent mode state is managed per-session via agentSessionStateManager
 
+  // Determine profile snapshot for session isolation
+  // If reusing an existing session, use its stored snapshot to maintain isolation
+  // Only capture a new snapshot from the current global profile when creating a new session
+  let profileSnapshot: SessionProfileSnapshot | undefined
+
+  if (existingSessionId) {
+    // Try to get the stored profile snapshot from the existing session
+    profileSnapshot = agentSessionStateManager.getSessionProfileSnapshot(existingSessionId)
+      ?? agentSessionTracker.getSessionProfileSnapshot(existingSessionId)
+  }
+
+  // Only capture a new snapshot if we don't have one from an existing session
+  if (!profileSnapshot) {
+    const currentProfile = profileService.getCurrentProfile()
+    if (currentProfile) {
+      profileSnapshot = {
+        profileId: currentProfile.id,
+        profileName: currentProfile.name,
+        guidelines: currentProfile.guidelines,
+        systemPrompt: currentProfile.systemPrompt,
+        mcpServerConfig: currentProfile.mcpServerConfig,
+        modelConfig: currentProfile.modelConfig,
+      }
+    }
+  }
+
   // Start tracking this agent session (or reuse existing one)
   let conversationTitle = text.length > 50 ? text.substring(0, 50) + "..." : text
   // When creating a new session from keybind/UI, start unsnoozed so panel shows immediately
-  const sessionId = existingSessionId || agentSessionTracker.startSession(conversationId, conversationTitle, startSnoozed)
+  const sessionId = existingSessionId || agentSessionTracker.startSession(conversationId, conversationTitle, startSnoozed, profileSnapshot)
 
   try {
     // Initialize MCP with progress feedback
@@ -176,8 +203,11 @@ async function processWithAgentMode(
     // This handles the case where servers were already initialized before agent mode was activated
     mcpService.registerExistingProcessesWithAgentManager()
 
-    // Get available tools
-    const availableTools = mcpService.getAvailableTools()
+    // Get available tools filtered by profile snapshot if available (for session isolation)
+    // This ensures revived sessions use the same tool list they started with
+    const availableTools = profileSnapshot?.mcpServerConfig
+      ? mcpService.getAvailableToolsForProfile(profileSnapshot.mcpServerConfig)
+      : mcpService.getAvailableTools()
 
     // Use agent mode for iterative tool calling
     const executeToolCall = async (toolCall: any, onProgress?: (message: string) => void): Promise<MCPToolResult> => {
@@ -231,8 +261,8 @@ async function processWithAgentMode(
       }
 
       // Execute the tool call (approval either not required or was granted)
-      // Pass sessionId so ACP router tools can emit progress to the correct session
-      return await mcpService.executeToolCall(toolCall, onProgress, true, sessionId)
+      // Pass sessionId for ACP router tools progress, and profileSnapshot.mcpServerConfig for session-aware server availability
+      return await mcpService.executeToolCall(toolCall, onProgress, true, sessionId, profileSnapshot?.mcpServerConfig)
     }
 
     // Load previous conversation history if continuing a conversation
@@ -301,6 +331,8 @@ async function processWithAgentMode(
       previousConversationHistory,
       conversationId, // Pass conversation ID for linking to conversation history
       sessionId, // Pass session ID for progress routing and isolation
+      undefined, // onProgress callback (not used here, progress is emitted via emitAgentProgress)
+      profileSnapshot, // Pass profile snapshot for session isolation
     )
 
     // Mark session as completed
@@ -676,6 +708,15 @@ export const router = {
       recentSessions: agentSessionTracker.getRecentSessions(4),
     }
   }),
+
+  // Get the profile snapshot for a specific session
+  // This allows the UI to display which profile a session is using
+  getSessionProfileSnapshot: t.procedure
+    .input<{ sessionId: string }>()
+    .action(async ({ input }) => {
+      return agentSessionStateManager.getSessionProfileSnapshot(input.sessionId)
+        ?? agentSessionTracker.getSessionProfileSnapshot(input.sessionId)
+    }),
 
   stopAgentSession: t.procedure
     .input<{ sessionId: string }>()
@@ -1179,9 +1220,117 @@ export const router = {
       const config = configStore.get()
       let transcript: string
 
+      // Check if message queuing is enabled and there's an active session for this conversation
+      // If so, we'll transcribe the audio and queue the transcript instead of processing immediately
+      if (input.conversationId && config.mcpMessageQueueEnabled !== false) {
+        const activeSessionId = agentSessionTracker.findSessionByConversationId(input.conversationId)
+        if (activeSessionId) {
+          const session = agentSessionTracker.getSession(activeSessionId)
+          if (session && session.status === "active") {
+            // Active session exists - transcribe audio and queue the result
+            logApp(`[createMcpRecording] Active session ${activeSessionId} found for conversation ${input.conversationId}, will queue transcript`)
+
+            // Transcribe the audio first
+            const form = new FormData()
+            form.append(
+              "file",
+              new File([input.recording], "recording.webm", { type: "audio/webm" }),
+            )
+            form.append(
+              "model",
+              config.sttProviderId === "groq" ? "whisper-large-v3" : "whisper-1",
+            )
+            form.append("response_format", "json")
+
+            if (config.sttProviderId === "groq" && config.groqSttPrompt?.trim()) {
+              form.append("prompt", config.groqSttPrompt.trim())
+            }
+
+            const languageCode = config.sttProviderId === "groq"
+              ? config.groqSttLanguage || config.sttLanguage
+              : config.openaiSttLanguage || config.sttLanguage
+
+            if (languageCode && languageCode !== "auto") {
+              form.append("language", languageCode)
+            }
+
+            const groqBaseUrl = config.groqBaseUrl || "https://api.groq.com/openai/v1"
+            const openaiBaseUrl = config.openaiBaseUrl || "https://api.openai.com/v1"
+
+            const transcriptResponse = await fetch(
+              config.sttProviderId === "groq"
+                ? `${groqBaseUrl}/audio/transcriptions`
+                : `${openaiBaseUrl}/audio/transcriptions`,
+              {
+                method: "POST",
+                headers: {
+                  Authorization: `Bearer ${config.sttProviderId === "groq" ? config.groqApiKey : config.openaiApiKey}`,
+                },
+                body: form,
+              },
+            )
+
+            if (!transcriptResponse.ok) {
+              const message = `${transcriptResponse.statusText} ${(await transcriptResponse.text()).slice(0, 300)}`
+              throw new Error(message)
+            }
+
+            const json: { text: string } = await transcriptResponse.json()
+            transcript = json.text
+
+            // Save the recording file
+            const recordingId = Date.now().toString()
+            fs.writeFileSync(
+              path.join(recordingsFolder, `${recordingId}.webm`),
+              Buffer.from(input.recording),
+            )
+
+            // Queue the transcript instead of processing immediately
+            const queuedMessage = messageQueueService.enqueue(input.conversationId, transcript)
+            logApp(`[createMcpRecording] Queued voice transcript ${queuedMessage.id} for active session ${activeSessionId}`)
+
+            return { conversationId: input.conversationId, queued: true, queuedMessageId: queuedMessage.id }
+          }
+        }
+      }
+
+      // No active session or queuing disabled - proceed with normal processing
       // Emit initial loading progress immediately BEFORE transcription
       // This ensures users see feedback during the (potentially long) STT call
-          const tempConversationId = input.conversationId || `temp_${Date.now()}`
+      const tempConversationId = input.conversationId || `temp_${Date.now()}`
+
+      // Determine profile snapshot for session isolation
+      // If reusing an existing session, use its stored snapshot to maintain isolation
+      // Only capture a new snapshot from the current global profile when creating a new session
+      let profileSnapshot: SessionProfileSnapshot | undefined
+
+      if (input.sessionId) {
+        // Try to get the stored profile snapshot from the existing session
+        profileSnapshot = agentSessionStateManager.getSessionProfileSnapshot(input.sessionId)
+          ?? agentSessionTracker.getSessionProfileSnapshot(input.sessionId)
+      } else if (input.conversationId) {
+        // Try to find existing session for this conversation and get its profile snapshot
+        const existingSessionId = agentSessionTracker.findSessionByConversationId(input.conversationId)
+        if (existingSessionId) {
+          profileSnapshot = agentSessionStateManager.getSessionProfileSnapshot(existingSessionId)
+            ?? agentSessionTracker.getSessionProfileSnapshot(existingSessionId)
+        }
+      }
+
+      // Only capture a new snapshot if we don't have one from an existing session
+      if (!profileSnapshot) {
+        const currentProfile = profileService.getCurrentProfile()
+        if (currentProfile) {
+          profileSnapshot = {
+            profileId: currentProfile.id,
+            profileName: currentProfile.name,
+            guidelines: currentProfile.guidelines,
+            systemPrompt: currentProfile.systemPrompt,
+            mcpServerConfig: currentProfile.mcpServerConfig,
+            modelConfig: currentProfile.modelConfig,
+          }
+        }
+      }
 
       // If sessionId is provided, try to revive that session.
       // Otherwise, if conversationId is provided, try to find and revive a session for that conversation.
@@ -1201,8 +1350,8 @@ export const router = {
             lastActivity: "Transcribing audio...",
           })
         } else {
-          // Session not found, create a new one
-          sessionId = agentSessionTracker.startSession(tempConversationId, "Transcribing...", startSnoozed)
+          // Session not found, create a new one with profile snapshot
+          sessionId = agentSessionTracker.startSession(tempConversationId, "Transcribing...", startSnoozed, profileSnapshot)
         }
       } else if (input.conversationId) {
         // No sessionId but have conversationId - try to find existing session for this conversation
@@ -1218,16 +1367,16 @@ export const router = {
               lastActivity: "Transcribing audio...",
             })
           } else {
-            // Revive failed, create new session
-            sessionId = agentSessionTracker.startSession(tempConversationId, "Transcribing...", startSnoozed)
+            // Revive failed, create new session with profile snapshot
+            sessionId = agentSessionTracker.startSession(tempConversationId, "Transcribing...", startSnoozed, profileSnapshot)
           }
         } else {
-          // No existing session for this conversation, create new
-          sessionId = agentSessionTracker.startSession(tempConversationId, "Transcribing...", startSnoozed)
+          // No existing session for this conversation, create new with profile snapshot
+          sessionId = agentSessionTracker.startSession(tempConversationId, "Transcribing...", startSnoozed, profileSnapshot)
         }
       } else {
-        // No sessionId or conversationId provided, create a new session
-        sessionId = agentSessionTracker.startSession(tempConversationId, "Transcribing...", startSnoozed)
+        // No sessionId or conversationId provided, create a new session with profile snapshot
+        sessionId = agentSessionTracker.startSession(tempConversationId, "Transcribing...", startSnoozed, profileSnapshot)
       }
 
       try {

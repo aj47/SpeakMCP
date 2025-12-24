@@ -86,8 +86,17 @@ app.whenReady().then(() => {
   logApp("Serve protocol registered")
 
   if (accessibilityGranted) {
-    createMainWindow()
-    logApp("Main window created")
+    // Check if onboarding has been completed
+    const cfg = configStore.get()
+    const needsOnboarding = !cfg.onboardingCompleted
+
+    if (needsOnboarding) {
+      createMainWindow({ url: "/onboarding" })
+      logApp("Main window created (showing onboarding)")
+    } else {
+      createMainWindow()
+      logApp("Main window created")
+    }
   } else {
     createSetupWindow()
     logApp("Setup window created (accessibility not granted)")
@@ -150,7 +159,15 @@ app.whenReady().then(() => {
   app.on("activate", function () {
     if (accessibilityGranted) {
       if (!WINDOWS.get("main")) {
-        createMainWindow()
+        // Check if onboarding has been completed
+        const cfg = configStore.get()
+        const needsOnboarding = !cfg.onboardingCompleted
+
+        if (needsOnboarding) {
+          createMainWindow({ url: "/onboarding" })
+        } else {
+          createMainWindow()
+        }
       }
     } else {
       if (!WINDOWS.get("setup")) {

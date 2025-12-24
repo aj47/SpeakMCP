@@ -22,6 +22,7 @@ import {
   Config,
   ServerLogEntry,
   ProfilesData,
+  ProfileMcpServerConfig,
 } from "../shared/types"
 import { requestElicitation, handleElicitationComplete, cancelAllElicitations } from "./mcp-elicitation"
 import { requestSampling, cancelAllSamplingRequests } from "./mcp-sampling"
@@ -763,6 +764,10 @@ export class MCPService {
    * Set runtime enabled/disabled state for a server
    * This is separate from the config disabled flag and represents user preference
    * Also auto-saves to the current profile's mcpServerConfig
+   *
+   * NOTE: Disabling a server only hides its tools from the current profile.
+   * The server process continues running to avoid disrupting other sessions
+   * that may still need it. Servers are persistent infrastructure.
    */
   setServerRuntimeEnabled(serverName: string, enabled: boolean): boolean {
     const config = configStore.get()
@@ -777,12 +782,8 @@ export class MCPService {
       this.runtimeDisabledServers.delete(serverName)
     } else {
       this.runtimeDisabledServers.add(serverName)
-      // If server is currently running, stop it
-      if (this.initializedServers.has(serverName)) {
-        this.stopServer(serverName).catch(() => {
-          // Ignore cleanup errors
-        })
-      }
+      // Server continues running - we only hide its tools from the current profile
+      // This avoids disrupting running agent sessions that may still need the server
     }
 
     // Persist runtime disabled servers list to config so it survives app restarts
@@ -812,6 +813,11 @@ export class MCPService {
   /**
    * Apply MCP configuration from a profile
    * This updates the runtime enabled/disabled state for servers and tools
+   *
+   * NOTE: Disabling servers only hides their tools from the current profile.
+   * Server processes continue running to avoid disrupting other sessions.
+   * Servers are persistent infrastructure that should remain available.
+   *
    * @param disabledServers - Array of server names to disable (only used when allServersDisabledByDefault is false)
    * @param disabledTools - Array of tool names to disable
    * @param allServersDisabledByDefault - If true, ALL servers are disabled except those in enabledServers (strict opt-in mode, disabledServers is ignored). If false, only servers in disabledServers are disabled.
@@ -824,6 +830,8 @@ export class MCPService {
 
     // Reset runtime disabled servers based on profile config
     // Enable all servers first, then disable those specified in the profile
+    // NOTE: We only update the runtimeDisabledServers set - we do NOT stop server processes
+    // This ensures running agent sessions aren't disrupted when switching profiles
     this.runtimeDisabledServers.clear()
 
     if (allServersDisabledByDefault) {
@@ -833,12 +841,7 @@ export class MCPService {
       for (const serverName of allServerNames) {
         if (!enabledSet.has(serverName)) {
           this.runtimeDisabledServers.add(serverName)
-          // Stop the server if it's running
-          if (this.initializedServers.has(serverName)) {
-            this.stopServer(serverName).catch(() => {
-              // Ignore cleanup errors
-            })
-          }
+          // Server continues running - we only hide its tools from the current profile
         }
       }
     } else if (disabledServers && disabledServers.length > 0) {
@@ -847,12 +850,7 @@ export class MCPService {
         // Only add if server exists in config
         if (allServerNames.includes(serverName)) {
           this.runtimeDisabledServers.add(serverName)
-          // Stop the server if it's running
-          if (this.initializedServers.has(serverName)) {
-            this.stopServer(serverName).catch(() => {
-              // Ignore cleanup errors
-            })
-          }
+          // Server continues running - we only hide its tools from the current profile
         }
       }
     }
@@ -1485,6 +1483,60 @@ export class MCPService {
       (tool) => !this.disabledTools.has(tool.name),
     )
     return enabledTools
+  }
+
+  /**
+   * Get available tools filtered by a specific profile's MCP server configuration.
+   * This is used for session isolation - ensuring a session uses the tool configuration
+   * from when it was created, not the current global profile.
+   *
+   * @param profileMcpConfig - The profile's MCP server configuration to filter by
+   * @returns Tools filtered according to the profile's enabled/disabled servers and tools
+   */
+  getAvailableToolsForProfile(profileMcpConfig?: ProfileMcpServerConfig): MCPTool[] {
+    // If no profile config, return all available tools (minus globally disabled tools)
+    if (!profileMcpConfig) {
+      // Return all tools without profile-specific filtering
+      const allTools = [...this.availableTools, ...builtinTools]
+      return allTools.filter((tool) => !this.disabledTools.has(tool.name))
+    }
+
+    const { allServersDisabledByDefault, enabledServers, disabledServers, disabledTools } = profileMcpConfig
+
+    // Determine which servers are enabled for this profile
+    const config = configStore.get()
+    const allServerNames = Object.keys(config?.mcpConfig?.mcpServers || {})
+    const profileDisabledServers = new Set<string>()
+
+    if (allServersDisabledByDefault) {
+      // When allServersDisabledByDefault is true, disable ALL servers EXCEPT those explicitly enabled
+      const enabledSet = new Set(enabledServers || [])
+      for (const serverName of allServerNames) {
+        if (!enabledSet.has(serverName)) {
+          profileDisabledServers.add(serverName)
+        }
+      }
+    } else {
+      // When allServersDisabledByDefault is false, only disable servers in disabledServers
+      for (const serverName of disabledServers || []) {
+        profileDisabledServers.add(serverName)
+      }
+    }
+
+    // Also respect the profile's disabled tools
+    const profileDisabledTools = new Set(disabledTools || [])
+
+    // Filter external tools by server availability
+    const enabledExternalTools = this.availableTools.filter((tool) => {
+      const serverName = tool.name.includes(":")
+        ? tool.name.split(":")[0]
+        : "unknown"
+      return !profileDisabledServers.has(serverName)
+    })
+
+    // Combine with built-in tools and filter by disabled tools
+    const allTools = [...enabledExternalTools, ...builtinTools]
+    return allTools.filter((tool) => !profileDisabledTools.has(tool.name))
   }
 
   getDetailedToolList(): Array<{
@@ -2211,7 +2263,8 @@ export class MCPService {
     toolCall: MCPToolCall,
     onProgress?: (message: string) => void,
     skipApprovalCheck: boolean = false,
-    sessionId?: string
+    sessionId?: string,
+    profileMcpConfig?: ProfileMcpServerConfig
   ): Promise<MCPToolResult> {
     try {
       if (isDebugTools()) {
@@ -2271,14 +2324,45 @@ export class MCPService {
       if (toolCall.name.includes(":")) {
         const [serverName, toolName] = toolCall.name.split(":", 2)
 
-        // Guard against executing tools from runtime-disabled servers
-        // This prevents profile pollution during profile switches
-        if (this.runtimeDisabledServers.has(serverName)) {
+        // Guard against executing tools from disabled servers
+        // When profileMcpConfig is provided (session-aware mode), check against the session's profile config
+        // Otherwise fall back to global runtimeDisabledServers (for backward compatibility)
+        const isServerDisabledForSession = (() => {
+          if (profileMcpConfig) {
+            // Session-aware: check against the profile's server config
+            const { allServersDisabledByDefault, enabledServers, disabledServers } = profileMcpConfig
+            if (allServersDisabledByDefault) {
+              // All servers disabled except those in enabledServers
+              return !(enabledServers || []).includes(serverName)
+            } else {
+              // Only servers in disabledServers are disabled
+              return (disabledServers || []).includes(serverName)
+            }
+          }
+          // Global mode: check runtime disabled servers
+          return this.runtimeDisabledServers.has(serverName)
+        })()
+
+        if (isServerDisabledForSession) {
           return {
             content: [
               {
                 type: "text",
                 text: `Tool ${toolCall.name} is unavailable: server "${serverName}" is currently disabled.`,
+              },
+            ],
+            isError: true,
+          }
+        }
+
+        // Guard against executing tools that are disabled in the profile config
+        // This ensures "disabled" consistently means non-executable, not just hidden from the tool list
+        if (profileMcpConfig?.disabledTools?.includes(toolCall.name)) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Tool ${toolCall.name} is currently disabled for this profile.`,
               },
             ],
             isError: true,
@@ -2300,9 +2384,17 @@ export class MCPService {
 
       // Try to find a matching tool without prefix (fallback for LLM inconsistencies)
       // Include both external and built-in tools in the search
-      // Filter out tools from runtime-disabled servers to prevent profile pollution
+      // Filter out tools from disabled servers (session-aware when profileMcpConfig provided)
       const enabledExternalTools = this.availableTools.filter((tool) => {
         const sName = tool.name.includes(":") ? tool.name.split(":")[0] : "unknown"
+        if (profileMcpConfig) {
+          const { allServersDisabledByDefault, enabledServers, disabledServers } = profileMcpConfig
+          if (allServersDisabledByDefault) {
+            return (enabledServers || []).includes(sName)
+          } else {
+            return !(disabledServers || []).includes(sName)
+          }
+        }
         return !this.runtimeDisabledServers.has(sName)
       })
       const allTools = [...enabledExternalTools, ...builtinTools]
@@ -2324,6 +2416,21 @@ export class MCPService {
         }
 
         const [serverName, toolName] = matchingTool.name.split(":", 2)
+
+        // Guard against executing tools that are disabled in the profile config
+        // This ensures "disabled" consistently means non-executable, not just hidden from the tool list
+        if (profileMcpConfig?.disabledTools?.includes(matchingTool.name)) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Tool ${matchingTool.name} is currently disabled for this profile.`,
+              },
+            ],
+            isError: true,
+          }
+        }
+
         const result = await this.executeServerTool(
           serverName,
           toolName,

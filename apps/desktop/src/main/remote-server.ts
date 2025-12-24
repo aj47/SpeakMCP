@@ -7,11 +7,12 @@ import { configStore, recordingsFolder } from "./config"
 import { diagnosticsService } from "./diagnostics"
 import { mcpService, MCPToolResult } from "./mcp-service"
 import { processTranscriptWithAgentMode } from "./llm"
-import { state, agentProcessManager } from "./state"
+import { state, agentProcessManager, agentSessionStateManager } from "./state"
 import { conversationService } from "./conversation-service"
-import { AgentProgressUpdate } from "../shared/types"
+import { AgentProgressUpdate, SessionProfileSnapshot } from "../shared/types"
 import { agentSessionTracker } from "./agent-session-tracker"
 import { emergencyStopAll } from "./emergency-stop"
+import { profileService } from "./profile-service"
 
 let server: FastifyInstance | null = null
 let lastError: string | undefined
@@ -237,18 +238,48 @@ async function runAgent(options: RunAgentOptions): Promise<{
     }
   }
 
+  // Determine profile snapshot for session isolation
+  // If reusing an existing session, use its stored snapshot to maintain isolation
+  // Only capture a new snapshot when creating a new session
+  let profileSnapshot: SessionProfileSnapshot | undefined
+
+  if (existingSessionId) {
+    // Try to get the stored profile snapshot from the existing session
+    profileSnapshot = agentSessionStateManager.getSessionProfileSnapshot(existingSessionId)
+      ?? agentSessionTracker.getSessionProfileSnapshot(existingSessionId)
+  }
+
+  // Only capture a new snapshot if we don't have one from an existing session
+  if (!profileSnapshot) {
+    const currentProfile = profileService.getCurrentProfile()
+    if (currentProfile) {
+      profileSnapshot = {
+        profileId: currentProfile.id,
+        profileName: currentProfile.name,
+        guidelines: currentProfile.guidelines,
+        systemPrompt: currentProfile.systemPrompt,
+        mcpServerConfig: currentProfile.mcpServerConfig,
+        modelConfig: currentProfile.modelConfig,
+      }
+    }
+  }
+
   // Start or reuse agent session
   const conversationTitle = prompt.length > 50 ? prompt.substring(0, 50) + "..." : prompt
-  const sessionId = existingSessionId || agentSessionTracker.startSession(conversationId, conversationTitle, startSnoozed)
+  const sessionId = existingSessionId || agentSessionTracker.startSession(conversationId, conversationTitle, startSnoozed, profileSnapshot)
 
   try {
     await mcpService.initialize()
     mcpService.registerExistingProcessesWithAgentManager()
 
-    const availableTools = mcpService.getAvailableTools()
+    // Get available tools filtered by profile snapshot if available (for session isolation)
+    // This ensures revived sessions use the same tool list they started with
+    const availableTools = profileSnapshot?.mcpServerConfig
+      ? mcpService.getAvailableToolsForProfile(profileSnapshot.mcpServerConfig)
+      : mcpService.getAvailableTools()
     const executeToolCall = async (toolCall: any, onProgress?: (message: string) => void): Promise<MCPToolResult> => {
-      // Pass sessionId so ACP router tools can emit progress to the correct session
-      return await mcpService.executeToolCall(toolCall, onProgress, false, sessionId)
+      // Pass sessionId for ACP router tools progress, and profileSnapshot.mcpServerConfig for session-aware server availability
+      return await mcpService.executeToolCall(toolCall, onProgress, false, sessionId, profileSnapshot?.mcpServerConfig)
     }
 
     const agentResult = await processTranscriptWithAgentMode(
@@ -260,6 +291,7 @@ async function runAgent(options: RunAgentOptions): Promise<{
       conversationId,
       sessionId, // Pass session ID for progress routing
       onProgress, // Pass progress callback for SSE streaming
+      profileSnapshot, // Pass profile snapshot for session isolation
     )
 
     // Mark session as completed

@@ -221,6 +221,8 @@ export interface AgentProgressUpdate {
     provider: string
     model: string
   }
+  /** Profile name associated with this session (from profile snapshot) */
+  profileName?: string
 }
 
 // Message Queue Types
@@ -330,6 +332,19 @@ export type ProfilesData = {
   currentProfileId?: string
 }
 
+/**
+ * Snapshot of profile settings captured at session creation time.
+ * This ensures session isolation - changes to the global profile don't affect running sessions.
+ */
+export type SessionProfileSnapshot = {
+  profileId: string
+  profileName: string
+  guidelines: string
+  systemPrompt?: string
+  mcpServerConfig?: ProfileMcpServerConfig
+  modelConfig?: ProfileModelConfig
+}
+
 export interface ModelPreset {
   id: string
   name: string
@@ -379,6 +394,9 @@ export type Config = {
   customShortcutMode?: "hold" | "toggle" // Mode for custom recording shortcut
   hideDockIcon?: boolean
   launchAtLogin?: boolean
+
+  // Onboarding Configuration
+  onboardingCompleted?: boolean
 
   // Toggle Voice Dictation Configuration
   toggleVoiceDictationEnabled?: boolean
@@ -490,6 +508,10 @@ export type Config = {
   mcpRuntimeDisabledServers?: string[]
 
   mcpDisabledTools?: string[]
+
+  // UI State Persistence - Collapsed/Expanded sections in Settings
+  mcpToolsCollapsedServers?: string[]  // Server names that are collapsed in the Tools section
+  mcpServersCollapsedServers?: string[]  // Server names that are collapsed in the Servers section
 
   // Conversation Configuration
   conversationsEnabled?: boolean

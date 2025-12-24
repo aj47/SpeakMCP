@@ -208,6 +208,10 @@ const parseEvents = (data: Buffer | string): RdevEvent[] => {
 // when other keys are pressed, pressing ctrl will not start recording
 const keysPressed = new Map<string, number>()
 
+// Delay before starting hold-to-record (kept small to reduce perceived latency, while still
+// allowing common modifier combos like Ctrl+C to cancel before recording begins).
+const HOLD_TO_RECORD_DELAY_MS = 250
+
 const hasRecentKeyPress = () => {
   if (keysPressed.size === 0) return false
 
@@ -301,7 +305,7 @@ export function listenToKeyboardEvents() {
       if (!isPressedCtrlKey || !isPressedAltKey) return
       isHoldingCtrlAltKey = true
       showPanelWindowAndStartMcpRecording()
-    }, 800)
+    }, HOLD_TO_RECORD_DELAY_MS)
   }
 
 
@@ -707,7 +711,7 @@ export function listenToKeyboardEvents() {
             getWindowRendererHandlers("panel")?.startOrFinishMcpRecording.send()
             return
           } else {
-            // Hold mode: start timer on key press, start recording after 800ms
+            // Hold mode: start timer on key press, start recording after a short delay
             if (isDebugKeybinds()) {
               logKeybinds(
                 "MCP tools triggered: Custom hotkey (hold mode)",
@@ -743,7 +747,7 @@ export function listenToKeyboardEvents() {
 
               isHoldingCustomMcpKey = true
               showPanelWindowAndStartMcpRecording()
-            }, 800)
+            }, HOLD_TO_RECORD_DELAY_MS)
             return
           }
         }
@@ -868,7 +872,7 @@ export function listenToKeyboardEvents() {
             getWindowRendererHandlers("panel")?.startOrFinishRecording.send()
             return
           } else {
-            // Hold mode: start timer on key press, start recording after 800ms
+            // Hold mode: start timer on key press, start recording after a short delay
             if (isDebugKeybinds()) {
               logKeybinds(
                 "Recording triggered: Custom hotkey (hold mode)",
@@ -900,7 +904,7 @@ export function listenToKeyboardEvents() {
 
               isHoldingCustomRecordingKey = true
               showPanelWindowAndStartRecording()
-            }, 800)
+            }, HOLD_TO_RECORD_DELAY_MS)
             return
           }
         }
@@ -924,7 +928,7 @@ export function listenToKeyboardEvents() {
             }
             isHoldingCtrlKey = true
             showPanelWindowAndStartRecording()
-          }, 800)
+          }, HOLD_TO_RECORD_DELAY_MS)
         } else if (
           (e.data.key === "Alt" || e.data.key === "AltLeft" || e.data.key === "AltRight") &&
           isPressedCtrlKey &&
@@ -950,7 +954,7 @@ export function listenToKeyboardEvents() {
             }
             isHoldingCtrlAltKey = true
             showPanelWindowAndStartMcpRecording()
-          }, 800)
+          }, HOLD_TO_RECORD_DELAY_MS)
         } else {
           keysPressed.set(e.data.key, e.time.secs_since_epoch)
           cancelRecordingTimer()

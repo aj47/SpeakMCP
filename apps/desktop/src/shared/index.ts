@@ -199,6 +199,19 @@ export const getBuiltInModelPresets = (): ModelPreset[] => {
 // Default preset ID
 export const DEFAULT_MODEL_PRESET_ID = "builtin-openai"
 
+/**
+ * Get the current preset display name from config.
+ * Looks up the preset by ID and returns its name.
+ */
+export const getCurrentPresetName = (
+  currentModelPresetId: string | undefined,
+  modelPresets: ModelPreset[] | undefined
+): string => {
+  const presetId = currentModelPresetId || DEFAULT_MODEL_PRESET_ID
+  const allPresets = [...getBuiltInModelPresets(), ...(modelPresets || [])]
+  return allPresets.find(p => p.id === presetId)?.name || "OpenAI"
+}
+
 // Helper to check if a provider has TTS support
 export const providerHasTts = (providerId: string): boolean => {
   return TTS_PROVIDERS.some(p => p.value === providerId)

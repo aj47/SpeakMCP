@@ -283,7 +283,9 @@ export function MCPToolManager({ onToolToggle }: MCPToolManagerProps) {
               <p className="text-center text-muted-foreground">
                 {tools.length === 0
                   ? "No tools available. Configure MCP servers to see tools."
-                  : "No tools match your search criteria."}
+                  : toolsFromEnabledServers.length === 0
+                    ? "No tools from enabled servers. Enable a server to see its tools."
+                    : "No tools match your search criteria."}
               </p>
             </CardContent>
           </Card>

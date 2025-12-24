@@ -1022,6 +1022,15 @@ export function MCPConfigManager({
       setExpandedServers(prunedSet)
     }
 
+    // Persist new servers as collapsed to ensure consistency after Settings reopen
+    // Only do this if we have already persisted (collapsedServers is not undefined)
+    // This ensures that when a new server is added and we want it collapsed,
+    // it's added to the persisted collapsed list so it stays collapsed after reopening
+    if (newServers.length > 0 && collapsedServers !== undefined && onCollapsedServersChange) {
+      const updatedCollapsed = [...new Set([...collapsedServers, ...newServers])]
+      onCollapsedServersChange(updatedCollapsed)
+    }
+
     // Update known servers
     if (newServers.length > 0 || [...knownServers].some(name => !currentServerNames.has(name))) {
       setKnownServers(currentServerNames)

@@ -1218,9 +1218,84 @@ export const router = {
       const config = configStore.get()
       let transcript: string
 
+      // Check if message queuing is enabled and there's an active session for this conversation
+      // If so, we'll transcribe the audio and queue the transcript instead of processing immediately
+      if (input.conversationId && config.mcpMessageQueueEnabled !== false) {
+        const activeSessionId = agentSessionTracker.findSessionByConversationId(input.conversationId)
+        if (activeSessionId) {
+          const session = agentSessionTracker.getSession(activeSessionId)
+          if (session && session.status === "active") {
+            // Active session exists - transcribe audio and queue the result
+            logApp(`[createMcpRecording] Active session ${activeSessionId} found for conversation ${input.conversationId}, will queue transcript`)
+
+            // Transcribe the audio first
+            const form = new FormData()
+            form.append(
+              "file",
+              new File([input.recording], "recording.webm", { type: "audio/webm" }),
+            )
+            form.append(
+              "model",
+              config.sttProviderId === "groq" ? "whisper-large-v3" : "whisper-1",
+            )
+            form.append("response_format", "json")
+
+            if (config.sttProviderId === "groq" && config.groqSttPrompt?.trim()) {
+              form.append("prompt", config.groqSttPrompt.trim())
+            }
+
+            const languageCode = config.sttProviderId === "groq"
+              ? config.groqSttLanguage || config.sttLanguage
+              : config.openaiSttLanguage || config.sttLanguage
+
+            if (languageCode && languageCode !== "auto") {
+              form.append("language", languageCode)
+            }
+
+            const groqBaseUrl = config.groqBaseUrl || "https://api.groq.com/openai/v1"
+            const openaiBaseUrl = config.openaiBaseUrl || "https://api.openai.com/v1"
+
+            const transcriptResponse = await fetch(
+              config.sttProviderId === "groq"
+                ? `${groqBaseUrl}/audio/transcriptions`
+                : `${openaiBaseUrl}/audio/transcriptions`,
+              {
+                method: "POST",
+                headers: {
+                  Authorization: `Bearer ${config.sttProviderId === "groq" ? config.groqApiKey : config.openaiApiKey}`,
+                },
+                body: form,
+              },
+            )
+
+            if (!transcriptResponse.ok) {
+              const message = `${transcriptResponse.statusText} ${(await transcriptResponse.text()).slice(0, 300)}`
+              throw new Error(message)
+            }
+
+            const json: { text: string } = await transcriptResponse.json()
+            transcript = json.text
+
+            // Save the recording file
+            const recordingId = Date.now().toString()
+            fs.writeFileSync(
+              path.join(recordingsFolder, `${recordingId}.webm`),
+              Buffer.from(input.recording),
+            )
+
+            // Queue the transcript instead of processing immediately
+            const queuedMessage = messageQueueService.enqueue(input.conversationId, transcript)
+            logApp(`[createMcpRecording] Queued voice transcript ${queuedMessage.id} for active session ${activeSessionId}`)
+
+            return { conversationId: input.conversationId, queued: true, queuedMessageId: queuedMessage.id }
+          }
+        }
+      }
+
+      // No active session or queuing disabled - proceed with normal processing
       // Emit initial loading progress immediately BEFORE transcription
       // This ensures users see feedback during the (potentially long) STT call
-          const tempConversationId = input.conversationId || `temp_${Date.now()}`
+      const tempConversationId = input.conversationId || `temp_${Date.now()}`
 
       // Determine profile snapshot for session isolation
       // If reusing an existing session, use its stored snapshot to maintain isolation

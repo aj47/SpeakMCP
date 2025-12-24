@@ -962,13 +962,22 @@ export function MCPConfigManager({
   const [oauthStatus, setOAuthStatus] = useState<Record<string, { configured: boolean; authenticated: boolean; tokenExpiry?: number; error?: string }>>({})
   const [serverLogs, setServerLogs] = useState<Record<string, ServerLogEntry[]>>({})
   const [expandedLogs, setExpandedLogs] = useState<Set<string>>(new Set())
-  // Initialize expandedServers from persisted collapsed state (inverted: collapsed -> not in expanded set)
-  // Include built-in server name to avoid flicker on first paint
+  // Initialize expandedServers from persisted expanded state
+  // All servers are collapsed by default - only expand those explicitly persisted as expanded
   const [expandedServers, setExpandedServers] = useState<Set<string>>(() => {
-    // Start with all servers expanded except those in collapsedServers
-    // Include built-in server name (speakmcp-settings) so it's expanded by default
+    // collapsedServers is actually the list of servers NOT expanded
+    // We invert the logic: start with empty set (all collapsed), and expand only those NOT in collapsedServers
+    // But since we're changing to "collapsed by default", we need a different approach:
+    // The prop is still called collapsedServers, so servers IN that list are collapsed
+    // Servers NOT in that list would be expanded - but with no persistence yet, start with all collapsed
     const allServerNames = [...Object.keys(config.mcpServers || {}), "speakmcp-settings"]
     const collapsedSet = new Set(collapsedServers)
+    // If collapsedServers is empty and there are servers, it means we haven't persisted yet
+    // In that case, default to all collapsed (empty expanded set)
+    if (collapsedServers.length === 0) {
+      return new Set<string>() // All collapsed by default
+    }
+    // Otherwise, respect persisted state - expand servers not in collapsed list
     return new Set(allServerNames.filter(name => !collapsedSet.has(name)))
   })
   // Tool management state
@@ -996,22 +1005,20 @@ export function MCPConfigManager({
   // Track known server names to detect new servers
   const [knownServers, setKnownServers] = useState<Set<string>>(() => new Set(Object.keys(config.mcpServers || {})))
 
-  // Handle server changes: prune stale entries and expand new servers by default
+  // Handle server changes: prune stale entries (new servers stay collapsed by default)
   // Include reserved server names (built-in servers) so they don't get pruned
   useEffect(() => {
     const currentServerNames = new Set([...Object.keys(servers), ...RESERVED_SERVER_NAMES])
-    const collapsedSet = new Set(collapsedServers)
 
-    // Find new servers (not in knownServers and not in collapsedServers)
-    const newServers = [...currentServerNames].filter(name => !knownServers.has(name) && !collapsedSet.has(name))
+    // Find new servers (not in knownServers)
+    const newServers = [...currentServerNames].filter(name => !knownServers.has(name))
 
-    // Prune stale entries
+    // Prune stale entries (remove servers that no longer exist)
     const prunedSet = new Set([...expandedServers].filter(name => currentServerNames.has(name)))
 
-    // Add new servers to expanded set (expanded by default)
-    newServers.forEach(name => prunedSet.add(name))
+    // New servers stay collapsed by default - don't add them to expanded set
 
-    if (prunedSet.size !== expandedServers.size || newServers.length > 0) {
+    if (prunedSet.size !== expandedServers.size) {
       setExpandedServers(prunedSet)
     }
 
@@ -1051,10 +1058,17 @@ export function MCPConfigManager({
     if (collapsedChanged) {
       prevCollapsedServersRef.current = collapsedServers
       // Re-sync expandedServers from the new collapsed list
+      // Default is all collapsed - only expand servers NOT in the collapsed list
       const currentServerNames = new Set([...Object.keys(servers), ...RESERVED_SERVER_NAMES])
       const collapsedSet = new Set(collapsedServers)
-      const newExpanded = new Set([...currentServerNames].filter(name => !collapsedSet.has(name)))
-      setExpandedServers(newExpanded)
+      // If collapsedServers is empty, default to all collapsed (matches initial state)
+      if (collapsedServers.length === 0) {
+        setExpandedServers(new Set<string>())
+      } else {
+        // Expand servers not in collapsed list
+        const newExpanded = new Set([...currentServerNames].filter(name => !collapsedSet.has(name)))
+        setExpandedServers(newExpanded)
+      }
     }
   }, [collapsedServers, servers])
 

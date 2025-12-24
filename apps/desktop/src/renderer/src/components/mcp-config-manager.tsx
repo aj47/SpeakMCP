@@ -1003,7 +1003,8 @@ export function MCPConfigManager({
   const warnedReservedServersRef = useRef<Set<string>>(new Set())
 
   // Track known server names to detect new servers
-  const [knownServers, setKnownServers] = useState<Set<string>>(() => new Set(Object.keys(config.mcpServers || {})))
+  // Include RESERVED_SERVER_NAMES so built-in servers aren't treated as "new" on first mount
+  const [knownServers, setKnownServers] = useState<Set<string>>(() => new Set([...Object.keys(config.mcpServers || {}), ...RESERVED_SERVER_NAMES]))
 
   // Handle server changes: prune stale entries (new servers stay collapsed by default)
   // Include reserved server names (built-in servers) so they don't get pruned

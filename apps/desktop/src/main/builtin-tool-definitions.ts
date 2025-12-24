@@ -9,7 +9,7 @@
  * import from services that might also need access to these definitions.
  */
 
-import { acpRouterToolDefinitions } from './acp/acp-router-tools'
+import { acpRouterToolDefinitions } from './acp/acp-router-tool-definitions'
 
 // Define a local type to avoid importing from mcp-service
 export interface BuiltinToolDefinition {

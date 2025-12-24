@@ -12,8 +12,8 @@ export * from './types'
 export { acpRegistry, ACPRegistry, configToDefinition } from './acp-registry'
 export { acpClientService, ACPClientService } from './acp-client-service'
 export { acpProcessManager, ACPProcessManager } from './acp-process-manager'
+export { acpRouterToolDefinitions } from './acp-router-tool-definitions'
 export {
-  acpRouterToolDefinitions,
   executeACPRouterTool,
   isACPRouterTool,
   getDelegatedRunsForSession,

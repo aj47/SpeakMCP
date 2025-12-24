@@ -1006,6 +1006,14 @@ export function MCPConfigManager({
   // Include RESERVED_SERVER_NAMES so built-in servers aren't treated as "new" on first mount
   const [knownServers, setKnownServers] = useState<Set<string>>(() => new Set([...Object.keys(config.mcpServers || {}), ...RESERVED_SERVER_NAMES]))
 
+  // Track if we've completed the initial config hydration
+  // This prevents treating all servers as "new" when settings-mcp-tools initially renders
+  // with an empty config before useConfigQuery resolves
+  const initialHydrationCompleteRef = useRef(
+    // If config already has servers on mount, we're hydrated
+    Object.keys(config.mcpServers || {}).length > 0
+  )
+
   // Handle server changes: prune stale entries (new servers stay collapsed by default)
   // Include reserved server names (built-in servers) so they don't get pruned
   useEffect(() => {
@@ -1023,11 +1031,30 @@ export function MCPConfigManager({
       setExpandedServers(prunedSet)
     }
 
+    // Check if we're still in initial hydration phase
+    // If knownServers only had RESERVED_SERVER_NAMES and now we're seeing user servers,
+    // this is the initial config load, not new servers being added
+    const wasEmptyOnMount = knownServers.size <= RESERVED_SERVER_NAMES.length &&
+      [...knownServers].every(name => RESERVED_SERVER_NAMES.includes(name))
+
+    if (wasEmptyOnMount && newServers.length > 0 && !initialHydrationCompleteRef.current) {
+      // This is the initial config load - don't persist, just update knownServers
+      initialHydrationCompleteRef.current = true
+      setKnownServers(currentServerNames)
+      return
+    }
+
+    // Mark hydration complete if we see any servers
+    if (Object.keys(servers).length > 0) {
+      initialHydrationCompleteRef.current = true
+    }
+
     // Persist new servers as collapsed to ensure consistency after Settings reopen
     // Only do this if we have already persisted (collapsedServers is not undefined)
+    // and we're past the initial hydration phase
     // This ensures that when a new server is added and we want it collapsed,
     // it's added to the persisted collapsed list so it stays collapsed after reopening
-    if (newServers.length > 0 && collapsedServers !== undefined && onCollapsedServersChange) {
+    if (newServers.length > 0 && collapsedServers !== undefined && onCollapsedServersChange && initialHydrationCompleteRef.current) {
       const updatedCollapsed = [...new Set([...collapsedServers, ...newServers])]
       onCollapsedServersChange(updatedCollapsed)
     }

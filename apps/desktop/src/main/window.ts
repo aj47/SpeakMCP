@@ -20,6 +20,36 @@ type WINDOW_ID = "main" | "panel" | "setup"
 
 export const WINDOWS = new Map<WINDOW_ID, BrowserWindow>()
 
+// Track panel webContents ready state to avoid sending IPC before renderer is ready
+let panelWebContentsReady = false
+
+/**
+ * Ensures the panel webContents is ready before executing a callback.
+ * If already ready (not loading), executes immediately.
+ * If still loading (e.g., right after app launch), waits for did-finish-load.
+ */
+function whenPanelReady(callback: () => void): void {
+  const win = WINDOWS.get("panel")
+  if (!win) return
+
+  // If webContents is not loading, it's ready to receive IPC messages
+  // This handles both cases:
+  // 1. panelWebContentsReady is true (normal case after did-finish-load)
+  // 2. panelWebContentsReady is false but did-finish-load already fired before we attached listener
+  if (!win.webContents.isLoading()) {
+    // Mark as ready in case the flag wasn't set (handles the race condition
+    // where did-finish-load fired before createPanelWindow's listener was attached)
+    panelWebContentsReady = true
+    callback()
+  } else {
+    // Still loading, wait for the renderer to finish
+    win.webContents.once("did-finish-load", () => {
+      panelWebContentsReady = true
+      callback()
+    })
+  }
+}
+
 
 function createBaseWindow({
   id,
@@ -374,6 +404,14 @@ export function createPanelWindow() {
 
   logApp("[window.ts] createPanelWindow - window created with size:", { width: savedSize.width, height: savedSize.height })
 
+  // Track when the panel renderer is ready to receive IPC messages
+  // Reset the ready flag since we're creating a new panel window
+  panelWebContentsReady = false
+  win.webContents.once("did-finish-load", () => {
+    panelWebContentsReady = true
+    logApp("[window.ts] Panel webContents finished loading, ready for IPC")
+  })
+
   win.on("hide", () => {
     getRendererHandlers<RendererHandlers>(win.webContents).stopRecording.send()
   })
@@ -429,9 +467,13 @@ export async function showPanelWindowAndStartRecording(fromButtonClick?: boolean
   state.isRecordingFromButtonClick = fromButtonClick ?? false
   state.isRecordingMcpMode = false
 
-  showPanelWindow()
+  // Start mic capture/recording as early as possible, but only after panel renderer is ready
+  // This prevents lost IPC messages right after app launch when webContents may not have finished loading
   // Pass fromButtonClick so panel shows correct submit hint (Enter vs Release keys)
-  getWindowRendererHandlers("panel")?.startRecording.send({ fromButtonClick })
+  whenPanelReady(() => {
+    getWindowRendererHandlers("panel")?.startRecording.send({ fromButtonClick })
+  })
+  showPanelWindow()
 }
 
 export async function showPanelWindowAndStartMcpRecording(conversationId?: string, sessionId?: string, fromTile?: boolean, fromButtonClick?: boolean) {
@@ -449,9 +491,14 @@ export async function showPanelWindowAndStartMcpRecording(conversationId?: strin
 
   // Ensure consistent sizing by setting mode in main before showing
   setPanelMode("normal")
-  showPanelWindow()
+
+  // Start mic capture/recording as early as possible, but only after panel renderer is ready
+  // This prevents lost IPC messages right after app launch when webContents may not have finished loading
   // Pass fromTile and fromButtonClick flags so panel knows how to behave after recording ends
-  getWindowRendererHandlers("panel")?.startMcpRecording.send({ conversationId, sessionId, fromTile, fromButtonClick })
+  whenPanelReady(() => {
+    getWindowRendererHandlers("panel")?.startMcpRecording.send({ conversationId, sessionId, fromTile, fromButtonClick })
+  })
+  showPanelWindow()
 }
 
 export async function showPanelWindowAndShowTextInput() {

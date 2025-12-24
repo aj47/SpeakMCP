@@ -9,7 +9,9 @@ import type {
 } from './types';
 import { acpBackgroundNotifier } from './acp-background-notifier';
 import { configStore } from '../config';
-import { acpService } from '../acp-service';
+import { acpService, ACPContentBlock } from '../acp-service';
+import { emitAgentProgress } from '../emit-agent-progress';
+import type { ACPDelegationProgress, ACPSubAgentMessage } from '../../shared/types';
 
 /**
  * Log ACP router-related debug messages.
@@ -30,8 +32,112 @@ function generateDelegationRunId(): string {
 /** Track delegated sub-agent runs for status checking */
 const delegatedRuns: Map<string, ACPSubAgentState> = new Map();
 
+/** Track conversation messages per session for UI display */
+const sessionConversations: Map<string, ACPSubAgentMessage[]> = new Map();
+
+/** Map from agent session IDs to our delegation run IDs */
+const sessionToRunId: Map<string, string> = new Map();
+
 // Initialize background notifier with our delegated runs map
 acpBackgroundNotifier.setDelegatedRunsMap(delegatedRuns);
+
+/**
+ * Listen to session updates from ACP service and forward to UI
+ */
+acpService.on('sessionUpdate', (event: {
+  agentName: string;
+  sessionId: string;
+  content?: ACPContentBlock[];
+  isComplete?: boolean;
+  stopReason?: string;
+  totalBlocks: number;
+}) => {
+  const { agentName, sessionId, content, isComplete, stopReason } = event;
+
+  logACPRouter(`Session update from ${agentName}:`, { sessionId, isComplete, contentBlocks: content?.length });
+
+  // Find the run ID for this session
+  const runId = sessionToRunId.get(sessionId);
+  if (!runId) {
+    logACPRouter(`No run ID found for session ${sessionId}, creating new mapping`);
+    return;
+  }
+
+  const subAgentState = delegatedRuns.get(runId);
+  if (!subAgentState) {
+    logACPRouter(`No sub-agent state found for run ${runId}`);
+    return;
+  }
+
+  // Get or create conversation for this session
+  let conversation = sessionConversations.get(sessionId);
+  if (!conversation) {
+    conversation = [];
+    sessionConversations.set(sessionId, conversation);
+  }
+
+  // Convert content blocks to conversation messages
+  if (content && Array.isArray(content)) {
+    for (const block of content) {
+      const message: ACPSubAgentMessage = {
+        role: 'assistant',
+        content: '',
+        timestamp: Date.now(),
+      };
+
+      if (block.type === 'text' && block.text) {
+        message.content = block.text;
+        conversation.push(message);
+      } else if (block.type === 'tool_use' && block.name) {
+        message.role = 'tool';
+        message.toolName = block.name;
+        message.toolInput = block.input;
+        message.content = `Using tool: ${block.name}`;
+        if (block.input) {
+          message.content += `\nInput: ${JSON.stringify(block.input, null, 2).substring(0, 500)}`;
+        }
+        conversation.push(message);
+      } else if (block.type === 'tool_result') {
+        message.role = 'tool';
+        message.content = `Tool result: ${typeof block.result === 'string' ? block.result.substring(0, 500) : JSON.stringify(block.result).substring(0, 500)}`;
+        conversation.push(message);
+      }
+    }
+  }
+
+  // Build delegation progress with conversation
+  const delegationProgress: ACPDelegationProgress = {
+    runId: subAgentState.runId,
+    agentName: subAgentState.agentName,
+    task: subAgentState.task,
+    status: isComplete ? 'completed' : 'running',
+    startTime: subAgentState.startTime,
+    endTime: isComplete ? Date.now() : undefined,
+    progressMessage: stopReason ? `Stop reason: ${stopReason}` : undefined,
+    conversation: [...conversation], // Copy to avoid mutation issues
+  };
+
+  // Emit progress update to UI
+  emitAgentProgress({
+    sessionId: subAgentState.parentSessionId,
+    currentIteration: 0,
+    maxIterations: 1,
+    isComplete: isComplete || false,
+    steps: [
+      {
+        id: `delegation-${runId}`,
+        type: 'completion',
+        title: `Sub-agent: ${agentName}`,
+        description: subAgentState.task,
+        status: isComplete ? 'completed' : 'in_progress',
+        timestamp: Date.now(),
+        delegation: delegationProgress,
+      },
+    ],
+  }).catch(err => {
+    logACPRouter('Failed to emit agent progress:', err);
+  });
+});
 
 // ============================================================================
 // Tool Definitions
@@ -280,15 +386,50 @@ export async function handleDelegateToAgent(
     // Use acpService.runTask for the actual delegation
     subAgentState.status = 'running';
 
+    // Add user message to conversation
+    const userMessage: ACPSubAgentMessage = {
+      role: 'user',
+      content: input,
+      timestamp: Date.now(),
+    };
+    sessionConversations.set(runId, [userMessage]);
+
+    // Helper to register session mapping after task starts
+    const registerSessionMapping = () => {
+      const sessionId = acpService.getAgentSessionId(args.agentName);
+      if (sessionId) {
+        sessionToRunId.set(sessionId, runId);
+        logACPRouter(`Mapped session ${sessionId} to run ${runId}`);
+      }
+    };
+
     if (waitForResult) {
       // Synchronous execution - wait for result
       try {
+        // Register mapping before running (session may already exist)
+        registerSessionMapping();
+
         const result = await acpService.runTask({
           agentName: args.agentName,
           input,
           context: args.context,
           mode: 'sync',
         });
+
+        // Register mapping again after task (session may have been created)
+        registerSessionMapping();
+
+        // Get collected conversation
+        const conversation = sessionConversations.get(runId) || [];
+
+        // Add final assistant message if we got a result
+        if (result.result) {
+          conversation.push({
+            role: 'assistant',
+            content: result.result,
+            timestamp: Date.now(),
+          });
+        }
 
         if (result.success) {
           subAgentState.status = 'completed';
@@ -299,6 +440,7 @@ export async function handleDelegateToAgent(
             status: 'completed',
             output: result.result || '',
             duration: Date.now() - startTime,
+            conversation,
           };
         } else {
           subAgentState.status = 'failed';
@@ -309,6 +451,7 @@ export async function handleDelegateToAgent(
             status: 'failed',
             error: result.error || 'Unknown error',
             duration: Date.now() - startTime,
+            conversation,
           };
         }
       } catch (error) {

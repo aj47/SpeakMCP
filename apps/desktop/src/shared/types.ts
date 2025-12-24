@@ -106,6 +106,22 @@ export interface ServerLogEntry {
 // Agent Mode Progress Tracking Types
 
 /**
+ * A message in a sub-agent conversation
+ */
+export interface ACPSubAgentMessage {
+  /** Role of the sender */
+  role: 'user' | 'assistant' | 'tool'
+  /** Message content */
+  content: string
+  /** Tool name if this is a tool call/result */
+  toolName?: string
+  /** Tool input (for tool calls) */
+  toolInput?: unknown
+  /** Timestamp */
+  timestamp: number
+}
+
+/**
  * Progress information for a delegated ACP sub-agent
  */
 export interface ACPDelegationProgress {
@@ -127,6 +143,8 @@ export interface ACPDelegationProgress {
   resultSummary?: string
   /** Error message (if failed) */
   error?: string
+  /** Full conversation history from the sub-agent */
+  conversation?: ACPSubAgentMessage[]
 }
 
 /**

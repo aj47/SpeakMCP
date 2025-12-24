@@ -273,6 +273,14 @@ class ACPService extends EventEmitter {
   }
 
   /**
+   * Get the current session ID for an agent (if any)
+   */
+  getAgentSessionId(agentName: string): string | undefined {
+    const instance = this.agents.get(agentName)
+    return instance?.sessionId
+  }
+
+  /**
    * Spawn an ACP agent process
    */
   async spawnAgent(agentName: string): Promise<void> {

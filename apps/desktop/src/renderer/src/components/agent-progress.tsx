@@ -1068,9 +1068,11 @@ const RetryStatusBanner: React.FC<{
 const DelegationBubble: React.FC<{
   delegation: ACPDelegationProgress
 }> = ({ delegation }) => {
+  const [isExpanded, setIsExpanded] = useState(false)
   const isRunning = delegation.status === 'running' || delegation.status === 'pending'
   const isCompleted = delegation.status === 'completed'
   const isFailed = delegation.status === 'failed'
+  const hasConversation = delegation.conversation && delegation.conversation.length > 0
 
   const duration = delegation.endTime
     ? Math.round((delegation.endTime - delegation.startTime) / 1000)
@@ -1103,20 +1105,38 @@ const DelegationBubble: React.FC<{
   return (
     <div className={cn("rounded-lg border overflow-hidden", statusColor)}>
       {/* Header */}
-      <div className={cn("flex items-center gap-2 px-3 py-2 border-b", headerColor)}>
+      <div
+        className={cn(
+          "flex items-center gap-2 px-3 py-2 border-b cursor-pointer hover:opacity-80 transition-opacity",
+          headerColor
+        )}
+        onClick={() => hasConversation && setIsExpanded(!isExpanded)}
+      >
         <Bot className={cn("h-3.5 w-3.5", iconColor)} />
         <span className={cn("text-xs font-medium", textColor)}>
           {delegation.agentName}
         </span>
-        {isRunning && (
-          <Loader2 className={cn("h-3 w-3 animate-spin ml-auto", iconColor)} />
+        {hasConversation && (
+          <span className="text-xs text-gray-500 dark:text-gray-400">
+            ({delegation.conversation!.length} messages)
+          </span>
         )}
-        {isCompleted && (
-          <Check className={cn("h-3 w-3 ml-auto", iconColor)} />
-        )}
-        {isFailed && (
-          <XCircle className={cn("h-3 w-3 ml-auto", iconColor)} />
-        )}
+        <div className="ml-auto flex items-center gap-1">
+          {isRunning && (
+            <Loader2 className={cn("h-3 w-3 animate-spin", iconColor)} />
+          )}
+          {isCompleted && (
+            <Check className={cn("h-3 w-3", iconColor)} />
+          )}
+          {isFailed && (
+            <XCircle className={cn("h-3 w-3", iconColor)} />
+          )}
+          {hasConversation && (
+            isExpanded
+              ? <ChevronUp className="h-3 w-3 text-gray-500" />
+              : <ChevronDown className="h-3 w-3 text-gray-500" />
+          )}
+        </div>
       </div>
 
       {/* Content */}
@@ -1134,8 +1154,41 @@ const DelegationBubble: React.FC<{
           </p>
         )}
 
-        {/* Result summary */}
-        {delegation.resultSummary && (
+        {/* Expanded conversation view */}
+        {isExpanded && hasConversation && (
+          <div className="mt-3 space-y-2 max-h-96 overflow-y-auto border-t border-gray-200 dark:border-gray-700 pt-2">
+            <div className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">
+              Sub-Agent Conversation
+            </div>
+            {delegation.conversation!.map((msg, idx) => (
+              <div
+                key={idx}
+                className={cn(
+                  "rounded-md p-2 text-xs",
+                  msg.role === 'user'
+                    ? "bg-blue-100/50 dark:bg-blue-900/30 ml-4"
+                    : msg.role === 'assistant'
+                    ? "bg-gray-100/50 dark:bg-gray-800/50 mr-4"
+                    : "bg-amber-100/50 dark:bg-amber-900/30 mx-2 font-mono"
+                )}
+              >
+                <div className="flex items-center gap-1 mb-1 text-[10px] font-medium text-gray-500 dark:text-gray-400">
+                  {msg.role === 'user' && <span>📤 User</span>}
+                  {msg.role === 'assistant' && <span>🤖 {delegation.agentName}</span>}
+                  {msg.role === 'tool' && <span>🔧 {msg.toolName || 'Tool'}</span>}
+                </div>
+                <div className="whitespace-pre-wrap break-words">
+                  {msg.content.length > 500
+                    ? `${msg.content.substring(0, 500)}...`
+                    : msg.content}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Result summary (when collapsed) */}
+        {!isExpanded && delegation.resultSummary && (
           <div className="mt-2 p-2 rounded bg-white/50 dark:bg-black/20">
             <p className="text-xs text-gray-700 dark:text-gray-300">
               {delegation.resultSummary.length > 150

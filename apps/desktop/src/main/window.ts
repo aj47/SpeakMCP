@@ -32,11 +32,17 @@ function whenPanelReady(callback: () => void): void {
   const win = WINDOWS.get("panel")
   if (!win) return
 
-  if (panelWebContentsReady && !win.webContents.isLoading()) {
-    // Already loaded, execute immediately
+  // If webContents is not loading, it's ready to receive IPC messages
+  // This handles both cases:
+  // 1. panelWebContentsReady is true (normal case after did-finish-load)
+  // 2. panelWebContentsReady is false but did-finish-load already fired before we attached listener
+  if (!win.webContents.isLoading()) {
+    // Mark as ready in case the flag wasn't set (handles the race condition
+    // where did-finish-load fired before createPanelWindow's listener was attached)
+    panelWebContentsReady = true
     callback()
   } else {
-    // Wait for the renderer to finish loading
+    // Still loading, wait for the renderer to finish
     win.webContents.once("did-finish-load", () => {
       panelWebContentsReady = true
       callback()

@@ -561,37 +561,35 @@ export function Component() {
 
                     <div className="flex items-center gap-2 shrink-0">
                       {/* Start/Stop button */}
-                      {isEnabled && (
-                        isRunning ? (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => stopMutation.mutate(agent.name)}
-                            disabled={stopMutation.isPending}
-                            title="Stop agent"
-                          >
-                            {stopMutation.isPending ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <Square className="h-4 w-4 text-red-500" />
-                            )}
-                          </Button>
-                        ) : (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => spawnMutation.mutate(agent.name)}
-                            disabled={spawnMutation.isPending || isStarting}
-                            title="Start agent"
-                          >
-                            {spawnMutation.isPending || isStarting ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <Play className="h-4 w-4 text-green-500" />
-                            )}
-                          </Button>
-                        )
-                      )}
+                      {isRunning ? (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => stopMutation.mutate(agent.name)}
+                          disabled={stopMutation.isPending}
+                          title="Stop agent"
+                        >
+                          {stopMutation.isPending ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Square className="h-4 w-4 text-red-500" />
+                          )}
+                        </Button>
+                      ) : isEnabled ? (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => spawnMutation.mutate(agent.name)}
+                          disabled={spawnMutation.isPending || isStarting}
+                          title="Start agent"
+                        >
+                          {spawnMutation.isPending || isStarting ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Play className="h-4 w-4 text-green-500" />
+                          )}
+                        </Button>
+                      ) : null}
                       <Switch
                         checked={isEnabled}
                         onCheckedChange={(enabled) =>

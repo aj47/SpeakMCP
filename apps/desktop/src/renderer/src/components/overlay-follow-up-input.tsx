@@ -217,6 +217,7 @@ export function OverlayFollowUpInput({
             "hover:bg-red-100 dark:hover:bg-red-950/30"
           )}
           disabled={isStoppingSession}
+          onMouseDown={handleInputInteraction}
           onClick={handleStopSession}
           title="Stop agent execution"
         >

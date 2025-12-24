@@ -80,10 +80,12 @@ export default function SettingsScreen({ navigation }: any) {
     setRemoteError(null);
 
     try {
+      const errors: string[] = [];
+
       const [profilesRes, serversRes, settingsRes] = await Promise.all([
-        settingsClient.getProfiles().catch(() => null),
-        settingsClient.getMCPServers().catch(() => null),
-        settingsClient.getSettings().catch(() => null),
+        settingsClient.getProfiles().catch((e) => { errors.push('profiles'); return null; }),
+        settingsClient.getMCPServers().catch((e) => { errors.push('MCP servers'); return null; }),
+        settingsClient.getSettings().catch((e) => { errors.push('settings'); return null; }),
       ]);
 
       if (profilesRes) {
@@ -95,6 +97,11 @@ export default function SettingsScreen({ navigation }: any) {
       }
       if (settingsRes) {
         setRemoteSettings(settingsRes);
+      }
+
+      // Show error if any endpoint failed
+      if (errors.length > 0) {
+        setRemoteError(`Failed to load: ${errors.join(', ')}`);
       }
     } catch (error: any) {
       console.error('[Settings] Failed to fetch remote settings:', error);

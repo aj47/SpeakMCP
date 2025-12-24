@@ -379,7 +379,7 @@ export async function startRemoteServer() {
     // When origin is ["*"] or includes "*", use true to reflect the request origin
     // This is needed because credentials: true doesn't work with literal "*"
     origin: corsOrigins.includes("*") ? true : corsOrigins,
-    methods: ["GET", "POST", "OPTIONS"],
+    methods: ["GET", "POST", "PATCH", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,
     maxAge: 86400, // Cache preflight for 24 hours
@@ -579,7 +579,9 @@ export async function startRemoteServer() {
       })
     } catch (error: any) {
       diagnosticsService.logError("remote-server", "Failed to set current profile", error)
-      return reply.code(500).send({ error: error?.message || "Failed to set current profile" })
+      // Return 404 if profile was not found, otherwise 500
+      const isNotFound = error?.message?.includes("not found")
+      return reply.code(isNotFound ? 404 : 500).send({ error: error?.message || "Failed to set current profile" })
     }
   })
 

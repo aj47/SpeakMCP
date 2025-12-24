@@ -509,7 +509,7 @@ export function getInternalAgentInfo() {
     name: 'internal',
     displayName: 'Internal Sub-Agent',
     description: 'An internal sub-session of SpeakMCP itself. Can perform any task the main agent can, with access to all configured MCP tools. Useful for parallel task execution or isolating complex sub-tasks.',
-    capabilities: ['general', 'research', 'coding', 'analysis', 'writing', 'tools'],
+    capabilities: ['general'],
     isInternal: true,
     maxRecursionDepth: MAX_RECURSION_DEPTH,
     maxConcurrent: MAX_CONCURRENT_SUB_SESSIONS,

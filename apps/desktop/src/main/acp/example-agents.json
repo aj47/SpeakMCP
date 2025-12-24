@@ -8,10 +8,9 @@
       "description": "Specialized agent for web research, information gathering, and fact-checking",
       "capabilities": ["research", "web-search", "fact-checking", "summarization"],
       "connection": {
-        "type": "spawn",
+        "type": "stdio",
         "command": "python",
-        "args": ["-m", "agents.research_agent"],
-        "port": 8001
+        "args": ["-m", "agents.research_agent"]
       },
       "autoSpawn": false,
       "keepAlive": false,
@@ -25,10 +24,9 @@
       "description": "Specialized agent for code generation, review, debugging, and refactoring",
       "capabilities": ["coding", "debugging", "refactoring", "code-review"],
       "connection": {
-        "type": "spawn",
+        "type": "stdio",
         "command": "node",
-        "args": ["./agents/coding-agent/index.js"],
-        "port": 8002
+        "args": ["./agents/coding-agent/index.js"]
       },
       "autoSpawn": false,
       "idleTimeoutMs": 600000,
@@ -40,10 +38,9 @@
       "description": "Specialized agent for content creation, editing, and document formatting",
       "capabilities": ["writing", "editing", "formatting", "content-creation"],
       "connection": {
-        "type": "spawn",
+        "type": "stdio",
         "command": "uv",
-        "args": ["run", "writing_agent.py"],
-        "port": 8003
+        "args": ["run", "writing_agent.py"]
       },
       "autoSpawn": false
     },

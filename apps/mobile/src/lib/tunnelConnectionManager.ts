@@ -52,6 +52,7 @@ export class TunnelConnectionManager {
   private isInitialized: boolean = false;
   private reconnectTimeoutId: ReturnType<typeof setTimeout> | null = null;
   private healthCheckIntervalId: ReturnType<typeof setInterval> | null = null;
+  private isCheckingConnection: boolean = false;
 
   constructor() {
     this.setupAppStateListener();
@@ -97,6 +98,11 @@ export class TunnelConnectionManager {
     console.log('[TunnelConnectionManager] Starting health check interval (30s)');
     this.healthCheckIntervalId = setInterval(async () => {
       if (this.connectionState === 'connected') {
+        // Skip if a health check is already in progress to prevent overlapping calls
+        if (this.isCheckingConnection) {
+          console.log('[TunnelConnectionManager] Skipping health check - already in progress');
+          return;
+        }
         console.log('[TunnelConnectionManager] Periodic health check');
         await this.checkAndReconnect();
       } else {
@@ -283,12 +289,20 @@ export class TunnelConnectionManager {
 
   /**
    * Check connection health and reconnect if needed.
+   * Uses a mutex flag to prevent overlapping calls from concurrent interval/foreground triggers.
    */
   async checkAndReconnect(): Promise<void> {
     if (!this.client || !this.metadata) {
       return;
     }
 
+    // Prevent overlapping health checks
+    if (this.isCheckingConnection) {
+      console.log('[TunnelConnectionManager] Skipping checkAndReconnect - already in progress');
+      return;
+    }
+
+    this.isCheckingConnection = true;
     try {
       const healthy = await this.client.health();
       if (healthy) {
@@ -308,6 +322,8 @@ export class TunnelConnectionManager {
       console.log('[TunnelConnectionManager] Health check failed, attempting reconnect');
       this.stopHealthCheckInterval();
       await this.attemptReconnect();
+    } finally {
+      this.isCheckingConnection = false;
     }
   }
 

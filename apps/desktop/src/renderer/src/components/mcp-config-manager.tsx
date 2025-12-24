@@ -2063,6 +2063,7 @@ export function MCPConfigManager({
                                     })}
                                   </div>
                                 </TooltipProvider>
+	                              </div>
                             </div>
                             <div className="ml-4 flex items-center gap-2">
                               <Dialog>
@@ -2122,7 +2123,6 @@ export function MCPConfigManager({
                                       })}
                                     </div>
                                   </div>
-                                </div>
                               </DialogContent>
                             </Dialog>
                             <Switch
@@ -2132,6 +2132,7 @@ export function MCPConfigManager({
                               }
                             />
                           </div>
+	                        </div>
                         ))}
                       </div>
                     )}

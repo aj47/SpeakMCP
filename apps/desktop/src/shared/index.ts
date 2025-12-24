@@ -200,39 +200,16 @@ export const getBuiltInModelPresets = (): ModelPreset[] => {
 export const DEFAULT_MODEL_PRESET_ID = "builtin-openai"
 
 /**
- * Get the provider display name from a base URL by matching against known presets.
- * Normalizes URLs by trimming whitespace, removing trailing slashes, and lowercasing
- * for case-insensitive full URL comparison.
- * Falls back to "OpenAI-compatible" for unrecognized custom URLs, or "OpenAI" for default.
+ * Get the current preset display name from config.
+ * Looks up the preset by ID and returns its name.
  */
-export const getProviderNameFromBaseUrl = (baseUrl: string | undefined): string => {
-  if (!baseUrl) return "OpenAI"
-
-  // Normalize URL by trimming whitespace and removing trailing slashes
-  const normalizedUrl = baseUrl.trim().replace(/\/+$/, "").toLowerCase()
-
-  // Treat empty/whitespace-only strings as undefined (use default OpenAI)
-  // This aligns with call sites that use `config.openaiBaseUrl || "https://api.openai.com/v1"`
-  if (!normalizedUrl) return "OpenAI"
-
-  // Find matching preset by comparing normalized URLs
-  const matchingPreset = OPENAI_COMPATIBLE_PRESETS.find(preset => {
-    if (!preset.baseUrl) return false
-    const normalizedPresetUrl = preset.baseUrl.trim().replace(/\/+$/, "").toLowerCase()
-    return normalizedUrl === normalizedPresetUrl
-  })
-
-  if (matchingPreset) {
-    return matchingPreset.label
-  }
-
-  // If no preset matches and it's not the default OpenAI URL, show as "OpenAI-compatible"
-  const defaultOpenAIUrl = "https://api.openai.com/v1".toLowerCase()
-  if (normalizedUrl !== defaultOpenAIUrl) {
-    return "OpenAI-compatible"
-  }
-
-  return "OpenAI"
+export const getCurrentPresetName = (
+  currentModelPresetId: string | undefined,
+  modelPresets: ModelPreset[] | undefined
+): string => {
+  const presetId = currentModelPresetId || DEFAULT_MODEL_PRESET_ID
+  const allPresets = [...getBuiltInModelPresets(), ...(modelPresets || [])]
+  return allPresets.find(p => p.id === presetId)?.name || "OpenAI"
 }
 
 // Helper to check if a provider has TTS support

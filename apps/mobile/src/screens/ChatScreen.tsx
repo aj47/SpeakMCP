@@ -1487,8 +1487,10 @@ export default function ChatScreen({ route, navigation }: any) {
 						voiceLog('web:onend -> restart failed', restartErr);
             console.warn('[Voice] Failed to restart web recognition after voice break:', restartErr);
 	            setListeningValue(false);
-	            setLiveTranscriptValue('');
+	            // Capture liveTranscriptRef.current BEFORE clearing it, since setLiveTranscriptValue
+	            // updates the ref synchronously and would cause mergeVoiceText to use stale value
 	            const accumulatedText = mergeVoiceText(webFinalRef.current, liveTranscriptRef.current);
+	            setLiveTranscriptValue('');
             if (accumulatedText) {
               setInput((t) => (t ? `${t} ${accumulatedText}` : accumulatedText));
             }
@@ -1648,8 +1650,10 @@ export default function ChatScreen({ route, navigation }: any) {
 									voiceLog('native:end -> restart failed', restartErr);
                   console.warn('[Voice] Failed to restart recognition after voice break:', restartErr);
 	                  setListeningValue(false);
-	                  setLiveTranscriptValue('');
+	                  // Capture liveTranscriptRef.current BEFORE clearing it, since setLiveTranscriptValue
+	                  // updates the ref synchronously and would cause mergeVoiceText to use stale value
 	                  const accumulatedText = mergeVoiceText(nativeFinalRef.current, liveTranscriptRef.current);
+	                  setLiveTranscriptValue('');
                   if (accumulatedText) {
                     setInput((t) => (t ? `${t} ${accumulatedText}` : accumulatedText));
                   }

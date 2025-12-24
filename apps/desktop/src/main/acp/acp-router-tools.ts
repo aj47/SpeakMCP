@@ -41,8 +41,71 @@ const sessionToRunId: Map<string, string> = new Map();
 /** Map from agent names to their currently active run IDs (for session mapping fallback) */
 const agentNameToActiveRunId: Map<string, string> = new Map();
 
+/** Track last emit time per runId for rate limiting */
+const lastEmitTime: Map<string, number> = new Map();
+
+// ============================================================================
+// Streaming Safeguards Configuration
+// ============================================================================
+
+/** Minimum interval between UI updates per run (ms) */
+const MIN_EMIT_INTERVAL_MS = 100;
+
+/** Maximum number of messages to keep in conversation history */
+const MAX_CONVERSATION_MESSAGES = 100;
+
+/** Maximum size of a single message content (characters) */
+const MAX_MESSAGE_CONTENT_SIZE = 10000;
+
+/** Maximum total conversation size to send to UI (characters) */
+const MAX_CONVERSATION_SIZE_FOR_UI = 50000;
+
 // Initialize background notifier with our delegated runs map
 acpBackgroundNotifier.setDelegatedRunsMap(delegatedRuns);
+
+/**
+ * Truncate content to max size, adding ellipsis if truncated
+ */
+function truncateContent(content: string, maxSize: number): string {
+  if (content.length <= maxSize) return content;
+  return content.substring(0, maxSize - 3) + '...';
+}
+
+/**
+ * Prepare conversation for UI transmission with size limits
+ */
+function prepareConversationForUI(conversation: ACPSubAgentMessage[]): ACPSubAgentMessage[] {
+  // Take only the last N messages
+  const recentMessages = conversation.slice(-MAX_CONVERSATION_MESSAGES);
+
+  // Calculate total size and truncate if needed
+  let totalSize = 0;
+  const result: ACPSubAgentMessage[] = [];
+
+  // Process from end to start to keep most recent messages
+  for (let i = recentMessages.length - 1; i >= 0; i--) {
+    const msg = recentMessages[i];
+    const msgSize = msg.content.length;
+
+    if (totalSize + msgSize > MAX_CONVERSATION_SIZE_FOR_UI) {
+      // Add a truncation notice at the start
+      result.unshift({
+        role: 'assistant',
+        content: `[${i + 1} earlier messages truncated for display]`,
+        timestamp: msg.timestamp,
+      });
+      break;
+    }
+
+    totalSize += msgSize;
+    result.unshift({
+      ...msg,
+      content: truncateContent(msg.content, MAX_MESSAGE_CONTENT_SIZE),
+    });
+  }
+
+  return result;
+}
 
 /**
  * Listen to session updates from ACP service and forward to UI
@@ -89,7 +152,7 @@ acpService.on('sessionUpdate', (event: {
     sessionConversations.set(runId, conversation);
   }
 
-  // Convert content blocks to conversation messages
+  // Convert content blocks to conversation messages with size limits
   if (content && Array.isArray(content)) {
     for (const block of content) {
       const message: ACPSubAgentMessage = {
@@ -99,7 +162,8 @@ acpService.on('sessionUpdate', (event: {
       };
 
       if (block.type === 'text' && block.text) {
-        message.content = block.text;
+        // Truncate individual message content
+        message.content = truncateContent(block.text, MAX_MESSAGE_CONTENT_SIZE);
         conversation.push(message);
       } else if (block.type === 'tool_use' && block.name) {
         message.role = 'tool';
@@ -107,18 +171,35 @@ acpService.on('sessionUpdate', (event: {
         message.toolInput = block.input;
         message.content = `Using tool: ${block.name}`;
         if (block.input) {
-          message.content += `\nInput: ${JSON.stringify(block.input, null, 2).substring(0, 500)}`;
+          message.content += `\nInput: ${truncateContent(JSON.stringify(block.input, null, 2), 500)}`;
         }
         conversation.push(message);
       } else if (block.type === 'tool_result') {
         message.role = 'tool';
-        message.content = `Tool result: ${typeof block.result === 'string' ? block.result.substring(0, 500) : JSON.stringify(block.result).substring(0, 500)}`;
+        const resultStr = typeof block.result === 'string' ? block.result : JSON.stringify(block.result);
+        message.content = `Tool result: ${truncateContent(resultStr, 500)}`;
         conversation.push(message);
       }
     }
   }
 
-  // Build delegation progress with conversation
+  // Enforce conversation size limit (keep most recent messages)
+  if (conversation.length > MAX_CONVERSATION_MESSAGES * 2) {
+    const trimmed = conversation.slice(-MAX_CONVERSATION_MESSAGES);
+    sessionConversations.set(runId, trimmed);
+    conversation = trimmed;
+  }
+
+  // Rate limiting: skip emit if we recently emitted (unless complete)
+  const now = Date.now();
+  const lastEmit = lastEmitTime.get(runId) || 0;
+  if (!isComplete && now - lastEmit < MIN_EMIT_INTERVAL_MS) {
+    logACPRouter(`Rate limiting UI emit for run ${runId} (${now - lastEmit}ms since last)`);
+    return;
+  }
+  lastEmitTime.set(runId, now);
+
+  // Build delegation progress with size-limited conversation
   const delegationProgress: ACPDelegationProgress = {
     runId: subAgentState.runId,
     agentName: subAgentState.agentName,
@@ -127,7 +208,7 @@ acpService.on('sessionUpdate', (event: {
     startTime: subAgentState.startTime,
     endTime: isComplete ? Date.now() : undefined,
     progressMessage: stopReason ? `Stop reason: ${stopReason}` : undefined,
-    conversation: [...conversation], // Copy to avoid mutation issues
+    conversation: prepareConversationForUI(conversation),
   };
 
   // Emit progress update to UI
@@ -889,6 +970,8 @@ export function cleanupOldDelegatedRuns(maxAgeMs: number = 60 * 60 * 1000): void
 
   for (const runId of toDelete) {
     delegatedRuns.delete(runId);
+    sessionConversations.delete(runId);
+    lastEmitTime.delete(runId);
     logACPRouter(`Cleaned up old delegated run: ${runId}`);
   }
 }

@@ -50,8 +50,8 @@ export function Component() {
           <MCPConfigManager
             config={config.mcpConfig || { mcpServers: {} }}
             onConfigChange={updateMcpConfig}
-            collapsedToolServers={config.mcpToolsCollapsedServers || []}
-            collapsedServers={config.mcpServersCollapsedServers || []}
+            collapsedToolServers={config.mcpToolsCollapsedServers}
+            collapsedServers={config.mcpServersCollapsedServers}
             onCollapsedToolServersChange={handleCollapsedToolServersChange}
             onCollapsedServersChange={handleCollapsedServersChange}
           />

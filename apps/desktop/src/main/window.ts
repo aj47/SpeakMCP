@@ -429,9 +429,10 @@ export async function showPanelWindowAndStartRecording(fromButtonClick?: boolean
   state.isRecordingFromButtonClick = fromButtonClick ?? false
   state.isRecordingMcpMode = false
 
-  showPanelWindow()
+  // Start mic capture/recording as early as possible (can begin before the panel UI is shown)
   // Pass fromButtonClick so panel shows correct submit hint (Enter vs Release keys)
   getWindowRendererHandlers("panel")?.startRecording.send({ fromButtonClick })
+  showPanelWindow()
 }
 
 export async function showPanelWindowAndStartMcpRecording(conversationId?: string, sessionId?: string, fromTile?: boolean, fromButtonClick?: boolean) {
@@ -449,9 +450,11 @@ export async function showPanelWindowAndStartMcpRecording(conversationId?: strin
 
   // Ensure consistent sizing by setting mode in main before showing
   setPanelMode("normal")
-  showPanelWindow()
+
+  // Start mic capture/recording as early as possible (can begin before the panel UI is shown)
   // Pass fromTile and fromButtonClick flags so panel knows how to behave after recording ends
   getWindowRendererHandlers("panel")?.startMcpRecording.send({ conversationId, sessionId, fromTile, fromButtonClick })
+  showPanelWindow()
 }
 
 export async function showPanelWindowAndShowTextInput() {

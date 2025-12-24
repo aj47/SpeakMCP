@@ -358,7 +358,7 @@ export interface ModelPreset {
 }
 
 // ACP Agent Configuration Types
-export type ACPConnectionType = "stdio" | "remote"
+export type ACPConnectionType = "stdio" | "remote" | "internal"
 
 export interface ACPAgentConfig {
   // Unique identifier for the agent
@@ -373,9 +373,11 @@ export interface ACPAgentConfig {
   autoSpawn?: boolean
   // Whether this agent is enabled
   enabled?: boolean
+  // Whether this is a built-in internal agent (cannot be deleted)
+  isInternal?: boolean
   // Connection configuration
   connection: {
-    // Connection type: "stdio" for local process, "remote" for HTTP endpoint
+    // Connection type: "stdio" for local process, "remote" for HTTP endpoint, "internal" for built-in
     type: ACPConnectionType
     // For stdio: command to run (e.g., "auggie", "claude-code-acp")
     command?: string

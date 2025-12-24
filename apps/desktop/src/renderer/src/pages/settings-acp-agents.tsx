@@ -66,8 +66,9 @@ function AgentDialog({
   const [displayName, setDisplayName] = useState(agent?.displayName || "")
   const [description, setDescription] = useState(agent?.description || "")
   const [capabilities, setCapabilities] = useState(agent?.capabilities?.join(", ") || "")
+  // Internal agents can't be edited, so we only support stdio/remote here
   const [connectionType, setConnectionType] = useState<"stdio" | "remote">(
-    agent?.connection?.type || "stdio"
+    (agent?.connection?.type === "internal" ? "stdio" : agent?.connection?.type) || "stdio"
   )
   const [command, setCommand] = useState(agent?.connection?.command || "")
   const [args, setArgs] = useState(agent?.connection?.args?.join(" ") || "")
@@ -89,7 +90,7 @@ function AgentDialog({
       setDisplayName(agent?.displayName || "")
       setDescription(agent?.description || "")
       setCapabilities(agent?.capabilities?.join(", ") || "")
-      setConnectionType(agent?.connection?.type || "stdio")
+      setConnectionType((agent?.connection?.type === "internal" ? "stdio" : agent?.connection?.type) || "stdio")
       setCommand(agent?.connection?.command || "")
       setArgs(agent?.connection?.args?.join(" ") || "")
       setEnvVars(
@@ -112,7 +113,7 @@ function AgentDialog({
       setDisplayName(preset.displayName || "")
       setDescription(preset.description || "")
       setCapabilities(preset.capabilities?.join(", ") || "")
-      setConnectionType(preset.connection?.type || "stdio")
+      setConnectionType((preset.connection?.type === "internal" ? "stdio" : preset.connection?.type) || "stdio")
       setCommand(preset.connection?.command || "")
       setArgs(preset.connection?.args?.join(" ") || "")
       setEnvVars(
@@ -495,16 +496,19 @@ export function Component() {
                 const isStarting = agentStatus.status === "starting"
                 const hasError = agentStatus.status === "error"
                 const isEnabled = agent.enabled !== false
+                const isInternal = agent.isInternal === true
 
                 return (
                   <div key={agent.name} className="px-3 py-3 flex items-center justify-between gap-4">
                     <div className="flex items-center gap-3 min-w-0 flex-1">
                       <div className="relative">
                         <Bot className="h-5 w-5 text-muted-foreground shrink-0" />
-                        {/* Status indicator dot */}
+                        {/* Status indicator dot - internal agents are always "ready" */}
                         <span
                           className={`absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full border border-background ${
-                            isRunning
+                            isInternal && isEnabled
+                              ? "bg-green-500"
+                              : isRunning
                               ? "bg-green-500"
                               : isStarting
                               ? "bg-yellow-500"
@@ -517,22 +521,31 @@ export function Component() {
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
                           <span className="font-medium truncate">{agent.displayName}</span>
-                          <span
-                            className={`text-xs px-1.5 py-0.5 rounded ${
-                              isRunning
-                                ? "bg-green-500/20 text-green-600"
-                                : isStarting
-                                ? "bg-yellow-500/20 text-yellow-600"
-                                : hasError
-                                ? "bg-red-500/20 text-red-600"
-                                : "bg-muted text-muted-foreground"
-                            }`}
-                          >
-                            {isRunning ? "Running" : isStarting ? "Starting" : hasError ? "Error" : "Stopped"}
-                          </span>
+                          {isInternal && (
+                            <span className="text-xs px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-600">
+                              Built-in
+                            </span>
+                          )}
+                          {!isInternal && (
+                            <span
+                              className={`text-xs px-1.5 py-0.5 rounded ${
+                                isRunning
+                                  ? "bg-green-500/20 text-green-600"
+                                  : isStarting
+                                  ? "bg-yellow-500/20 text-yellow-600"
+                                  : hasError
+                                  ? "bg-red-500/20 text-red-600"
+                                  : "bg-muted text-muted-foreground"
+                              }`}
+                            >
+                              {isRunning ? "Running" : isStarting ? "Starting" : hasError ? "Error" : "Stopped"}
+                            </span>
+                          )}
                         </div>
                         <div className="text-xs text-muted-foreground truncate">
-                          {agent.connection.type === "stdio"
+                          {isInternal
+                            ? "Spawns isolated sub-sessions for parallel tasks"
+                            : agent.connection.type === "stdio"
                             ? `${agent.connection.command} ${agent.connection.args?.join(" ") || ""}`
                             : agent.connection.baseUrl}
                         </div>
@@ -560,8 +573,8 @@ export function Component() {
                     </div>
 
                     <div className="flex items-center gap-2 shrink-0">
-                      {/* Start/Stop button */}
-                      {isRunning ? (
+                      {/* Start/Stop button - not shown for internal agents */}
+                      {!isInternal && isRunning ? (
                         <Button
                           variant="ghost"
                           size="icon"
@@ -575,7 +588,7 @@ export function Component() {
                             <Square className="h-4 w-4 text-red-500" />
                           )}
                         </Button>
-                      ) : isEnabled ? (
+                      ) : !isInternal && isEnabled ? (
                         <Button
                           variant="ghost"
                           size="icon"
@@ -596,20 +609,25 @@ export function Component() {
                           toggleMutation.mutate({ agentName: agent.name, enabled })
                         }
                       />
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => setEditingAgent(agent)}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleDeleteAgent(agent.name)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      {/* Edit/Delete buttons - not shown for internal agents */}
+                      {!isInternal && (
+                        <>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setEditingAgent(agent)}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleDeleteAgent(agent.name)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </>
+                      )}
                     </div>
                   </div>
                 )

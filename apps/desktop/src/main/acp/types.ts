@@ -145,7 +145,7 @@ export interface ACPSubAgentState {
   /** Description of the task delegated to this sub-agent */
   task: string;
   /** Current status of the sub-agent run */
-  status: 'pending' | 'running' | 'completed' | 'failed';
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
   /** Timestamp when the sub-agent run started */
   startTime: number;
   /** Result from the sub-agent run (when completed) */
@@ -156,6 +156,8 @@ export interface ACPSubAgentState {
   acpRunId?: string;
   /** Base URL for the agent (needed for status checks) */
   baseUrl?: string;
+  /** Whether this is an internal sub-agent (not external ACP) */
+  isInternal?: boolean;
 }
 
 /**

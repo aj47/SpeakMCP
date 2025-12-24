@@ -2734,7 +2734,11 @@ export const router = {
   // ACP Agent Configuration handlers
   getAcpAgents: t.procedure.action(async () => {
     const config = configStore.get()
-    return config.acpAgents || []
+    const externalAgents = config.acpAgents || []
+    // Include internal agent in the list
+    const { getInternalAgentConfig } = await import('./acp/acp-router-tools')
+    const internalAgent = getInternalAgentConfig()
+    return [internalAgent, ...externalAgents]
   }),
 
   saveAcpAgent: t.procedure

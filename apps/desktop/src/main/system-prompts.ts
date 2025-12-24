@@ -1,6 +1,6 @@
 import { acpSmartRouter } from './acp/acp-smart-router'
 import { acpService } from './acp-service'
-import { getInternalAgentInfo } from './acp/internal-sub-session'
+import { getInternalAgentInfo } from './acp/internal-agent'
 
 export const DEFAULT_SYSTEM_PROMPT = `You are an autonomous AI assistant that uses tools to complete tasks. Work iteratively until goals are fully achieved.
 
@@ -87,15 +87,15 @@ export function getACPRoutingPromptAddition(): string {
 }
 
 /**
- * Generate prompt addition for internal sub-sessions.
- * This instructs the agent on when and how to use sub-sessions for parallel work.
+ * Generate prompt addition for the internal agent.
+ * This instructs the agent on when and how to use the internal agent for parallel work.
  */
 export function getSubSessionPromptAddition(): string {
   const info = getInternalAgentInfo()
 
   return `
-PARALLEL SUB-SESSIONS: Use \`run_sub_session\` to spawn isolated sub-agents for parallel work. Batch multiple calls in one response for efficiency.
-- USE FOR: Independent tasks (analyzing multiple files, researching different topics, divide-and-conquer)
+INTERNAL AGENT: Use \`delegate_to_agent\` with \`agentName: "internal"\` to spawn parallel sub-agents. Batch multiple calls for efficiency.
+- USE FOR: Independent parallel tasks (analyzing multiple files, researching different topics, divide-and-conquer)
 - AVOID FOR: Sequential dependencies, shared state/file conflicts, simple tasks
 - LIMITS: Max depth ${info.maxRecursionDepth}, max ${info.maxConcurrent} concurrent per parent
 `.trim()

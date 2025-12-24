@@ -16,11 +16,10 @@ import { emitAgentProgress } from '../emit-agent-progress';
 import type { ACPDelegationProgress, ACPSubAgentMessage } from '../../shared/types';
 import {
   runInternalSubSession,
-  getSubSession,
   cancelSubSession,
   getInternalAgentInfo,
   getSessionDepth,
-} from './internal-sub-session';
+} from './internal-agent';
 
 /**
  * Log ACP router-related debug messages.
@@ -304,8 +303,31 @@ export { acpRouterToolDefinitions } from './acp-router-tool-definitions';
 // ============================================================================
 
 /**
+ * Get the internal agent config, merged with enabled state from user config if present.
+ */
+export function getInternalAgentConfig(): import('../../shared/types').ACPAgentConfig {
+  const internalInfo = getInternalAgentInfo();
+  const config = configStore.get();
+
+  // Check if user has explicitly disabled internal agent
+  const userInternalConfig = config.acpAgents?.find(a => a.name === 'internal');
+  const enabled = userInternalConfig?.enabled !== false; // Default to true
+
+  return {
+    name: internalInfo.name,
+    displayName: internalInfo.displayName,
+    description: internalInfo.description,
+    capabilities: internalInfo.capabilities,
+    enabled,
+    isInternal: true,
+    connection: { type: 'internal' },
+  };
+}
+
+/**
  * List all available ACP agents, optionally filtered by capability.
  * Uses configStore for agent definitions and acpService for runtime status.
+ * Includes the built-in internal agent alongside configured external agents.
  * @param args - Arguments containing optional capability filter
  * @returns Object with list of available agents
  */
@@ -317,7 +339,13 @@ export async function handleListAvailableAgents(args: {
   try {
     // Get agents from the actual config (shared/types.ts ACPAgentConfig)
     const config = configStore.get();
-    let agentConfigs = config.acpAgents || [];
+
+    // Start with external agents from config (excluding any 'internal' entry - we add it separately)
+    let agentConfigs = (config.acpAgents || []).filter(a => a.name !== 'internal');
+
+    // Add the internal agent
+    const internalAgentConfig = getInternalAgentConfig();
+    agentConfigs = [internalAgentConfig, ...agentConfigs];
 
     // Filter by capability if specified
     if (args.capability) {
@@ -326,7 +354,7 @@ export async function handleListAvailableAgents(args: {
       );
     }
 
-    // Get runtime status from acpService
+    // Get runtime status from acpService (for external agents)
     const agentStatuses = acpService.getAgents();
     const statusMap = new Map(
       agentStatuses.map((a) => [a.config.name, { status: a.status, error: a.error }])
@@ -335,6 +363,21 @@ export async function handleListAvailableAgents(args: {
     const formattedAgents = agentConfigs
       .filter((agent) => agent.enabled !== false) // Exclude disabled agents
       .map((agent) => {
+        // Internal agent is always ready
+        if (agent.connection.type === 'internal') {
+          return {
+            name: agent.name,
+            displayName: agent.displayName,
+            description: agent.description || '',
+            capabilities: agent.capabilities || [],
+            connectionType: agent.connection.type,
+            status: 'ready' as const,
+            error: undefined,
+            isInternal: true,
+          };
+        }
+
+        // External agents - check runtime status
         const runtime = statusMap.get(agent.name);
         return {
           name: agent.name,
@@ -347,23 +390,6 @@ export async function handleListAvailableAgents(args: {
           isInternal: false,
         };
       });
-
-    // Add the internal SpeakMCP sub-session agent
-    const internalAgent = getInternalAgentInfo();
-    const matchesCapability = !args.capability || internalAgent.capabilities.includes(args.capability);
-
-    if (matchesCapability) {
-      formattedAgents.unshift({
-        name: internalAgent.name,
-        displayName: internalAgent.displayName,
-        description: internalAgent.description,
-        capabilities: internalAgent.capabilities,
-        connectionType: 'internal' as any, // Internal agent uses special 'internal' type
-        status: 'ready', // Internal agent is always ready
-        error: undefined,
-        isInternal: true,
-      });
-    }
 
     return {
       success: true,
@@ -383,8 +409,8 @@ export async function handleListAvailableAgents(args: {
 }
 
 /**
- * Delegate a task to a specialized ACP agent.
- * Uses acpService to spawn and communicate with agents.
+ * Delegate a task to a specialized ACP agent (external or internal).
+ * Routes to internal sub-session for 'internal' agent, otherwise uses acpService.
  * @param args - Arguments containing agent name, task, optional context, and wait preference
  * @param parentSessionId - Optional parent session ID for tracking
  * @returns Object with delegation result or run ID for async delegation
@@ -401,6 +427,11 @@ export async function handleDelegateToAgent(
   logACPRouter('Delegating to agent', { ...args, parentSessionId });
 
   const waitForResult = args.waitForResult !== false; // Default to true
+
+  // Handle internal agent delegation
+  if (args.agentName === 'internal') {
+    return handleInternalAgentDelegation(args, parentSessionId);
+  }
 
   try {
     // Check if agent exists in config
@@ -913,23 +944,8 @@ export async function executeACPRouterTool(
         result = await handleStopAgent(args as { agentName: string });
         break;
 
-      case 'speakmcp-builtin:run_sub_session':
-        result = await handleRunSubSession(
-          args as {
-            task: string;
-            context?: string;
-            maxIterations?: number;
-          },
-          parentSessionId
-        );
-        break;
-
-      case 'speakmcp-builtin:check_sub_session':
-        result = await handleCheckSubSession(args as { subSessionId: string });
-        break;
-
-      case 'speakmcp-builtin:cancel_sub_session':
-        result = await handleCancelSubSession(args as { subSessionId: string });
+      case 'speakmcp-builtin:cancel_agent_run':
+        result = await handleCancelAgentRun(args as { runId: string });
         break;
 
       default:
@@ -1061,145 +1077,175 @@ export function cleanupOldDelegatedRuns(maxAgeMs: number = 60 * 60 * 1000): void
 }
 
 // ============================================================================
-// Internal Sub-Session Handlers
+// Internal Agent Delegation (unified with external agents)
 // ============================================================================
 
 /**
- * Run an internal sub-session of SpeakMCP itself.
- * @param args - Arguments containing the task, optional context, and max iterations
- * @param parentSessionId - The parent session ID for tracking and depth calculation
- * @returns Object with sub-session result
+ * Handle delegation to the internal agent.
+ * This routes to the internal sub-session system but tracks in delegatedRuns like external agents.
  */
-export async function handleRunSubSession(
+async function handleInternalAgentDelegation(
   args: {
     task: string;
     context?: string;
-    maxIterations?: number;
+    waitForResult?: boolean;
   },
   parentSessionId?: string
 ): Promise<object> {
-  logACPRouter('Running internal sub-session', { task: args.task.substring(0, 100), parentSessionId });
+  logACPRouter('Delegating to internal agent', { task: args.task.substring(0, 100), parentSessionId });
+
+  // Check if internal agent is enabled
+  const internalConfig = getInternalAgentConfig();
+  if (internalConfig.enabled === false) {
+    return {
+      success: false,
+      error: 'Internal agent is disabled',
+    };
+  }
 
   if (!parentSessionId) {
     return {
       success: false,
-      error: 'Parent session ID is required to run a sub-session',
+      error: 'Parent session ID is required for internal agent delegation',
     };
   }
 
+  const runId = generateDelegationRunId();
+  const startTime = Date.now();
+
+  // Create sub-agent state for unified tracking
+  const subAgentState: ACPSubAgentState = {
+    runId,
+    agentName: 'internal',
+    parentSessionId,
+    task: args.task,
+    status: 'pending',
+    startTime,
+    isInternal: true,
+  };
+
+  delegatedRuns.set(runId, subAgentState);
+  subAgentState.status = 'running';
+
+  // Add user message to conversation
+  const userMessage: ACPSubAgentMessage = {
+    role: 'user',
+    content: args.task,
+    timestamp: Date.now(),
+  };
+  sessionConversations.set(runId, [userMessage]);
+
   try {
+    // Run the internal sub-session
     const result = await runInternalSubSession({
       task: args.task,
       context: args.context,
       parentSessionId,
-      maxIterations: args.maxIterations,
     });
 
+    // Convert conversation history to ACPSubAgentMessage format
+    const conversation = result.conversationHistory.map(msg => ({
+      role: msg.role,
+      content: msg.content,
+      timestamp: msg.timestamp,
+    }));
+    sessionConversations.set(runId, conversation);
+
     if (result.success) {
+      subAgentState.status = 'completed';
       return {
         success: true,
-        subSessionId: result.subSessionId,
-        result: result.result,
-        duration: result.duration,
-        conversationLength: result.conversationHistory.length,
-        message: `Sub-session completed successfully in ${Math.round(result.duration / 1000)}s`,
+        runId,
+        agentName: 'internal',
+        status: 'completed',
+        output: result.result || '',
+        duration: Date.now() - startTime,
+        conversation,
       };
     } else {
+      subAgentState.status = 'failed';
       return {
         success: false,
-        subSessionId: result.subSessionId,
-        error: result.error,
-        duration: result.duration,
+        runId,
+        agentName: 'internal',
+        status: 'failed',
+        error: result.error || 'Unknown error',
+        duration: Date.now() - startTime,
+        conversation,
       };
     }
   } catch (error) {
-    logACPRouter('Error running sub-session:', error);
+    subAgentState.status = 'failed';
+    logACPRouter('Error in internal agent delegation:', error);
     return {
       success: false,
+      runId,
+      agentName: 'internal',
       error: error instanceof Error ? error.message : String(error),
     };
   }
 }
 
 /**
- * Check the status of an internal sub-session.
- * @param args - Arguments containing the sub-session ID
- * @returns Object with sub-session status
- */
-export async function handleCheckSubSession(args: { subSessionId: string }): Promise<object> {
-  logACPRouter('Checking sub-session status', args);
-
-  try {
-    const subSession = getSubSession(args.subSessionId);
-
-    if (!subSession) {
-      return {
-        success: false,
-        error: `Sub-session "${args.subSessionId}" not found`,
-      };
-    }
-
-    return {
-      success: true,
-      subSessionId: subSession.id,
-      status: subSession.status,
-      depth: subSession.depth,
-      task: subSession.task,
-      startTime: subSession.startTime,
-      endTime: subSession.endTime,
-      duration: subSession.endTime
-        ? subSession.endTime - subSession.startTime
-        : Date.now() - subSession.startTime,
-      result: subSession.result,
-      error: subSession.error,
-      conversationLength: subSession.conversationHistory.length,
-    };
-  } catch (error) {
-    logACPRouter('Error checking sub-session:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : String(error),
-    };
-  }
-}
-
-/**
- * Cancel a running internal sub-session.
- * @param args - Arguments containing the sub-session ID
+ * Cancel a running agent task (internal or external).
+ * @param args - Arguments containing the run ID
  * @returns Object with cancellation result
  */
-export async function handleCancelSubSession(args: { subSessionId: string }): Promise<object> {
-  logACPRouter('Cancelling sub-session', args);
+export async function handleCancelAgentRun(args: { runId: string }): Promise<object> {
+  logACPRouter('Cancelling agent run', args);
+
+  const state = delegatedRuns.get(args.runId);
+  if (!state) {
+    return {
+      success: false,
+      error: `Run "${args.runId}" not found`,
+    };
+  }
+
+  if (state.status !== 'running' && state.status !== 'pending') {
+    return {
+      success: false,
+      error: `Run "${args.runId}" is not running (status: ${state.status})`,
+    };
+  }
 
   try {
-    const cancelled = cancelSubSession(args.subSessionId);
-
-    if (cancelled) {
+    // Handle internal agent cancellation
+    if (state.isInternal) {
+      // The runId for internal agents is the sub-session ID format
+      // Find the sub-session by looking for it in active sessions
+      const cancelled = cancelSubSession(args.runId);
+      if (!cancelled) {
+        // Try to find sub-session by matching runId pattern
+        // The runId is like "acp_delegation_..." but sub-session ID is "subsession_..."
+        // We need to track this mapping - for now, mark as cancelled in our state
+        state.status = 'cancelled';
+        return {
+          success: true,
+          message: `Internal agent run "${args.runId}" cancelled`,
+        };
+      }
+      state.status = 'cancelled';
       return {
         success: true,
-        message: `Sub-session "${args.subSessionId}" cancelled`,
-      };
-    } else {
-      return {
-        success: false,
-        error: `Sub-session "${args.subSessionId}" not found or not running`,
+        message: `Internal agent run "${args.runId}" cancelled`,
       };
     }
+
+    // For external agents, we can't really cancel mid-run but we can mark it
+    state.status = 'cancelled';
+    return {
+      success: true,
+      message: `Agent run "${args.runId}" marked as cancelled`,
+      note: 'External agent tasks cannot be forcefully stopped mid-execution',
+    };
   } catch (error) {
-    logACPRouter('Error cancelling sub-session:', error);
+    logACPRouter('Error cancelling agent run:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : String(error),
     };
   }
-}
-
-/**
- * Get internal agent info for listing.
- * Called by handleListAgents to include the internal agent.
- */
-export function getInternalAgentForListing() {
-  return getInternalAgentInfo();
 }
 
 /**

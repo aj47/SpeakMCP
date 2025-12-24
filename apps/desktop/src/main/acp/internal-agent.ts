@@ -195,7 +195,7 @@ function emitSubSessionDelegationProgress(
   // Build delegation progress
   const delegationProgress: ACPDelegationProgress = {
     runId: subSession.id,
-    agentName: 'SpeakMCP Internal',
+    agentName: 'Internal',
     task: subSession.task,
     status: subSession.status === 'pending' ? 'pending'
           : subSession.status === 'running' ? 'running'
@@ -506,8 +506,8 @@ export function cancelSubSession(subSessionId: string): boolean {
  */
 export function getInternalAgentInfo() {
   return {
-    name: 'speakmcp-internal',
-    displayName: 'SpeakMCP Internal Sub-Agent',
+    name: 'internal',
+    displayName: 'Internal Sub-Agent',
     description: 'An internal sub-session of SpeakMCP itself. Can perform any task the main agent can, with access to all configured MCP tools. Useful for parallel task execution or isolating complex sub-tasks.',
     capabilities: ['general', 'research', 'coding', 'analysis', 'writing', 'tools'],
     isInternal: true,

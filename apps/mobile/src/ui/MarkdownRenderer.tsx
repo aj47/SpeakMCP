@@ -1,15 +1,17 @@
-import React from 'react';
-import { Platform, StyleSheet } from 'react-native';
-import Markdown from 'react-native-markdown-display';
+import React, { useMemo } from 'react';
+import { Platform, StyleSheet, Text } from 'react-native';
+import Markdown, { RenderRules } from 'react-native-markdown-display';
 import { useTheme } from './ThemeProvider';
 import { spacing, radius } from './theme';
 
 interface MarkdownRendererProps {
   content: string;
+  selectable?: boolean;
 }
 
 export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
   content,
+  selectable = true,
 }) => {
   const { theme, isDark } = useTheme();
 
@@ -141,8 +143,22 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
     },
   });
 
+  // Custom render rules to enable text selection
+  const rules: RenderRules = useMemo(() => {
+    if (!selectable) return {};
+
+    return {
+      // Make text content selectable
+      textgroup: (node, children, parent, styles) => (
+        <Text key={node.key} style={styles.textgroup} selectable={true}>
+          {children}
+        </Text>
+      ),
+    };
+  }, [selectable]);
+
   return (
-    <Markdown style={markdownStyles}>
+    <Markdown style={markdownStyles} rules={rules}>
       {content}
     </Markdown>
   );

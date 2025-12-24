@@ -1744,25 +1744,42 @@ export default function ChatScreen({ route, navigation }: any) {
                   <>
                     {m.content ? (
                       isExpanded || !shouldCollapse ? (
-                        <MarkdownRenderer content={m.content} />
+                        <MarkdownRenderer content={m.content} selectable={true} />
                       ) : (
-                        <Text
-                          style={{ color: theme.colors.foreground }}
-                          numberOfLines={COLLAPSED_LINES}
+                        <Pressable
+                          onPress={() => toggleMessageExpansion(i)}
+                          accessibilityRole="button"
+                          accessibilityHint="Tap to expand message"
+                          style={({ pressed }) => [
+                            styles.collapsedContentPressable,
+                            pressed && styles.collapsedContentPressed,
+                          ]}
                         >
-                          {m.content}
-                        </Text>
+                          <Text
+                            style={{ color: theme.colors.foreground }}
+                            numberOfLines={COLLAPSED_LINES}
+                          >
+                            {m.content}
+                          </Text>
+                        </Pressable>
                       )
                     ) : null}
 
                     {/* Unified Tool Execution Display - show when there are toolCalls OR toolResults */}
                     {((m.toolCalls?.length ?? 0) > 0 || (m.toolResults?.length ?? 0) > 0) && (
-                      <View style={[
-                        styles.toolExecutionCard,
-                        isPending && styles.toolExecutionPending,
-                        allSuccess && styles.toolExecutionSuccess,
-                        hasErrors && styles.toolExecutionError,
-                      ]}>
+                      <Pressable
+                        onPress={!isExpanded && shouldCollapse ? () => toggleMessageExpansion(i) : undefined}
+                        disabled={isExpanded || !shouldCollapse}
+                        accessibilityRole={!isExpanded && shouldCollapse ? 'button' : undefined}
+                        accessibilityHint={!isExpanded && shouldCollapse ? 'Tap to expand tool details' : undefined}
+                        style={({ pressed }) => [
+                          styles.toolExecutionCard,
+                          isPending && styles.toolExecutionPending,
+                          allSuccess && styles.toolExecutionSuccess,
+                          hasErrors && styles.toolExecutionError,
+                          !isExpanded && shouldCollapse && pressed && styles.toolExecutionPressed,
+                        ]}
+                      >
                         {/* Collapsed view - show preview */}
                         {!isExpanded && (
                           <View style={styles.toolExecutionCollapsed}>
@@ -1795,7 +1812,7 @@ export default function ChatScreen({ route, navigation }: any) {
                                     <Text style={styles.toolName}>{toolCall.name}</Text>
                                     {toolCall.arguments && (
                                       <ScrollView style={styles.toolParamsScroll} nestedScrollEnabled>
-                                        <Text style={styles.toolParamsCode}>
+                                        <Text style={styles.toolParamsCode} selectable={true}>
                                           {formatToolArguments(toolCall.arguments)}
                                         </Text>
                                       </ScrollView>
@@ -1828,14 +1845,14 @@ export default function ChatScreen({ route, navigation }: any) {
                                     </Text>
                                   </View>
                                   <ScrollView style={styles.toolResultScroll} nestedScrollEnabled>
-                                    <Text style={styles.toolResultCode}>
+                                    <Text style={styles.toolResultCode} selectable={true}>
                                       {result.content || 'No content returned'}
                                     </Text>
                                   </ScrollView>
                                   {result.error && (
                                     <View style={styles.toolResultErrorSection}>
                                       <Text style={styles.toolResultErrorLabel}>Error:</Text>
-                                      <Text style={styles.toolResultErrorText}>{result.error}</Text>
+                                      <Text style={styles.toolResultErrorText} selectable={true}>{result.error}</Text>
                                     </View>
                                   )}
                                 </View>
@@ -1853,7 +1870,7 @@ export default function ChatScreen({ route, navigation }: any) {
                             </View>
                           </>
                         )}
-                      </View>
+                      </Pressable>
                     )}
                   </>
                 )}
@@ -2151,6 +2168,16 @@ function createStyles(theme: Theme) {
     },
     collapsedToolTextError: {
       color: 'rgb(239, 68, 68)',
+    },
+    collapsedContentPressable: {
+      // Make the collapsed text area tappable
+    },
+    collapsedContentPressed: {
+      backgroundColor: theme.colors.muted,
+      borderRadius: radius.sm,
+    },
+    toolExecutionPressed: {
+      opacity: 0.7,
     },
     inputRow: {
       flexDirection: 'row',

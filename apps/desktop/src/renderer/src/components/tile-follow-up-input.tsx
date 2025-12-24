@@ -14,7 +14,7 @@ interface TileFollowUpInputProps {
   /** Called when a message is successfully sent */
   onMessageSent?: () => void
   /** Called when stop button is clicked (optional - will call stopAgentSession directly if not provided) */
-  onStopSession?: () => void
+  onStopSession?: () => void | Promise<void>
 }
 
 /**
@@ -95,9 +95,13 @@ export function TileFollowUpInput({
     // Use custom handler if provided, otherwise call stopAgentSession directly
     if (onStopSession) {
       setIsStoppingSession(true)
-      onStopSession()
-      // Reset after a delay since we don't know when the callback completes
-      setTimeout(() => setIsStoppingSession(false), 2000)
+      try {
+        await onStopSession()
+      } catch (error) {
+        console.error("Failed to stop agent session via callback:", error)
+      } finally {
+        setIsStoppingSession(false)
+      }
       return
     }
 

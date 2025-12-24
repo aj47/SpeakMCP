@@ -201,19 +201,20 @@ export const DEFAULT_MODEL_PRESET_ID = "builtin-openai"
 
 /**
  * Get the provider display name from a base URL by matching against known presets.
- * Normalizes URLs by removing trailing slashes and comparing base domains.
+ * Normalizes URLs by trimming whitespace, removing trailing slashes, and lowercasing
+ * for case-insensitive full URL comparison.
  * Falls back to "OpenAI-compatible" for unrecognized custom URLs, or "OpenAI" for default.
  */
 export const getProviderNameFromBaseUrl = (baseUrl: string | undefined): string => {
   if (!baseUrl) return "OpenAI"
 
-  // Normalize URL by removing trailing slashes
-  const normalizedUrl = baseUrl.replace(/\/+$/, "").toLowerCase()
+  // Normalize URL by trimming whitespace and removing trailing slashes
+  const normalizedUrl = baseUrl.trim().replace(/\/+$/, "").toLowerCase()
 
   // Find matching preset by comparing normalized URLs
   const matchingPreset = OPENAI_COMPATIBLE_PRESETS.find(preset => {
     if (!preset.baseUrl) return false
-    const normalizedPresetUrl = preset.baseUrl.replace(/\/+$/, "").toLowerCase()
+    const normalizedPresetUrl = preset.baseUrl.trim().replace(/\/+$/, "").toLowerCase()
     return normalizedUrl === normalizedPresetUrl
   })
 

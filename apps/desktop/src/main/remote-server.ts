@@ -589,15 +589,18 @@ export async function startRemoteServer() {
   fastify.get("/v1/mcp/servers", async (_req, reply) => {
     try {
       const serverStatus = mcpService.getServerStatus()
-      const servers = Object.entries(serverStatus).map(([name, status]) => ({
-        name,
-        connected: status.connected,
-        toolCount: status.toolCount,
-        enabled: status.runtimeEnabled && !status.configDisabled,
-        runtimeEnabled: status.runtimeEnabled,
-        configDisabled: status.configDisabled,
-        error: status.error,
-      }))
+      const servers = Object.entries(serverStatus)
+        // Filter out the built-in speakmcp-settings pseudo-server as it's not user-toggleable
+        .filter(([name]) => name !== "speakmcp-settings")
+        .map(([name, status]) => ({
+          name,
+          connected: status.connected,
+          toolCount: status.toolCount,
+          enabled: status.runtimeEnabled && !status.configDisabled,
+          runtimeEnabled: status.runtimeEnabled,
+          configDisabled: status.configDisabled,
+          error: status.error,
+        }))
       return reply.send({ servers })
     } catch (error: any) {
       diagnosticsService.logError("remote-server", "Failed to get MCP servers", error)

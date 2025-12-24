@@ -5,6 +5,8 @@ import { useTheme } from '../ui/ThemeProvider';
 import { spacing, radius, Theme } from '../ui/theme';
 import { useSessionContext, SessionStore } from '../store/sessions';
 import { useConnectionManager } from '../store/connectionManager';
+import { useTunnelConnection } from '../store/tunnelConnection';
+import { ConnectionStatusIndicator } from '../ui/ConnectionStatusIndicator';
 import { SessionListItem } from '../types/session';
 
 const darkSpinner = require('../../assets/loading-spinner.gif');
@@ -18,21 +20,29 @@ export default function SessionListScreen({ navigation }: Props) {
   const { theme, isDark } = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const connectionManager = useConnectionManager();
+  const { connectionInfo } = useTunnelConnection();
 
   useLayoutEffect(() => {
     navigation?.setOptions?.({
       headerRight: () => (
-        <TouchableOpacity
-          onPress={() => navigation.navigate('Settings')}
-          style={{ paddingHorizontal: 12, paddingVertical: 6 }}
-          accessibilityRole="button"
-          accessibilityLabel="Settings"
-        >
-          <Text style={{ fontSize: 20, color: theme.colors.foreground }}>⚙️</Text>
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <ConnectionStatusIndicator
+            state={connectionInfo.state}
+            retryCount={connectionInfo.retryCount}
+            compact
+          />
+          <TouchableOpacity
+            onPress={() => navigation.navigate('Settings')}
+            style={{ paddingHorizontal: 12, paddingVertical: 6 }}
+            accessibilityRole="button"
+            accessibilityLabel="Settings"
+          >
+            <Text style={{ fontSize: 20, color: theme.colors.foreground }}>⚙️</Text>
+          </TouchableOpacity>
+        </View>
       ),
     });
-  }, [navigation, theme]);
+  }, [navigation, theme, connectionInfo.state, connectionInfo.retryCount]);
   const insets = useSafeAreaInsets();
   const sessionStore = useSessionContext();
   const sessions = sessionStore.getSessionList();

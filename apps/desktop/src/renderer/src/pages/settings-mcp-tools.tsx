@@ -5,6 +5,23 @@ import { Config, MCPConfig } from "@shared/types"
 import { MCPConfigManager } from "@renderer/components/mcp-config-manager"
 import { ProfileBadge } from "@renderer/components/profile-badge"
 
+/**
+ * Normalizes a collapsed servers value from persisted config.
+ * - undefined → undefined (first-run sentinel: all collapsed by default)
+ * - valid string[] → string[] (persisted state)
+ * - null/non-array → undefined (treat as first-run to avoid crashes)
+ */
+function normalizeCollapsedServers(value: unknown): string[] | undefined {
+  if (value === undefined) {
+    return undefined
+  }
+  if (Array.isArray(value) && value.every(item => typeof item === 'string')) {
+    return value as string[]
+  }
+  // Invalid value (null, non-array, array with non-strings) - treat as undefined
+  return undefined
+}
+
 export function Component() {
   const queryClient = useQueryClient()
   const configQuery = useConfigQuery()
@@ -50,8 +67,8 @@ export function Component() {
           <MCPConfigManager
             config={config.mcpConfig || { mcpServers: {} }}
             onConfigChange={updateMcpConfig}
-            collapsedToolServers={config.mcpToolsCollapsedServers || []}
-            collapsedServers={config.mcpServersCollapsedServers || []}
+            collapsedToolServers={normalizeCollapsedServers(config.mcpToolsCollapsedServers)}
+            collapsedServers={normalizeCollapsedServers(config.mcpServersCollapsedServers)}
             onCollapsedToolServersChange={handleCollapsedToolServersChange}
             onCollapsedServersChange={handleCollapsedServersChange}
           />

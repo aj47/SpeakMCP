@@ -107,9 +107,10 @@ export function OverlayFollowUpInput({
   // When queue is disabled, don't allow input while session is active
   const isDisabled = sendMutation.isPending || (isSessionActive && !isQueueEnabled)
 
-  // Voice recording cannot be queued, so always disable voice button when session is active
-  // This prevents concurrent processing issues from voice recordings during active sessions
-  const isVoiceDisabled = sendMutation.isPending || isSessionActive
+  // When queue is enabled, allow voice recording even when session is active
+  // The transcript will be queued after transcription completes
+  // When queue is disabled, don't allow voice input while session is active
+  const isVoiceDisabled = sendMutation.isPending || (isSessionActive && !isQueueEnabled)
 
   // Show appropriate placeholder based on state
   const getPlaceholder = () => {
@@ -173,7 +174,7 @@ export function OverlayFollowUpInput({
         disabled={isVoiceDisabled}
         onMouseDown={handleInputInteraction}
         onClick={handleVoiceClick}
-        title={isSessionActive ? "Voice unavailable while agent is processing" : "Continue with voice"}
+        title={isSessionActive && isQueueEnabled ? "Record voice message (will be queued)" : isSessionActive ? "Voice unavailable while agent is processing" : "Continue with voice"}
       >
         <Mic className="h-3.5 w-3.5" />
       </Button>

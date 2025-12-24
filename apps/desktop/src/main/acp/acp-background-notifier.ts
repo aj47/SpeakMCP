@@ -49,7 +49,7 @@ export class ACPBackgroundNotifier {
   }
 
   /**
-   * Returns true if any tasks are in 'running' status.
+   * Returns true if any tasks are poll-worthy (running with required fields).
    */
   hasRunningTasks(): boolean {
     if (!this.delegatedRuns) {
@@ -57,7 +57,7 @@ export class ACPBackgroundNotifier {
     }
 
     for (const state of this.delegatedRuns.values()) {
-      if (state.status === 'running') {
+      if (state.status === 'running' && state.baseUrl && state.acpRunId) {
         return true
       }
     }

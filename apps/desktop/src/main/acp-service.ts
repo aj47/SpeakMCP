@@ -486,18 +486,38 @@ class ACPService extends EventEmitter {
     }
 
     return new Promise((resolve, reject) => {
-      instance.pendingRequests.set(id, { resolve, reject })
+      // Timeout handle so we can clear it when response arrives
+      let timeoutHandle: ReturnType<typeof setTimeout> | undefined
+
+      const cleanup = () => {
+        if (timeoutHandle) {
+          clearTimeout(timeoutHandle)
+          timeoutHandle = undefined
+        }
+      }
+
+      instance.pendingRequests.set(id, {
+        resolve: (result: unknown) => {
+          cleanup()
+          resolve(result)
+        },
+        reject: (error: Error) => {
+          cleanup()
+          reject(error)
+        }
+      })
 
       const message = JSON.stringify(request) + "\n"
       instance.process?.stdin?.write(message, (error) => {
         if (error) {
+          cleanup()
           instance.pendingRequests.delete(id)
           reject(error)
         }
       })
 
       // Timeout after 5 minutes
-      setTimeout(() => {
+      timeoutHandle = setTimeout(() => {
         if (instance.pendingRequests.has(id)) {
           instance.pendingRequests.delete(id)
           reject(new Error(`Request timeout for method ${method}`))

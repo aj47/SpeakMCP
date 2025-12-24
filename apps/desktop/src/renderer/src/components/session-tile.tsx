@@ -17,6 +17,7 @@ import {
   GripHorizontal,
   Copy,
   CheckCheck,
+  OctagonX,
 } from "lucide-react"
 import { Button } from "@renderer/components/ui/button"
 import { Badge } from "@renderer/components/ui/badge"
@@ -227,7 +228,7 @@ export function SessionTile({
           )}
           {isActive && onStop && (
             <Button variant="ghost" size="icon" className="h-6 w-6 hover:bg-destructive/20 hover:text-destructive" onClick={(e) => { e.stopPropagation(); onStop(); }} title="Stop">
-              <X className="h-3 w-3" />
+              <OctagonX className="h-3 w-3" />
             </Button>
           )}
           {(hasError || isStopped) && onRetry && (

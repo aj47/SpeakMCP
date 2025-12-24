@@ -336,6 +336,21 @@ export class TunnelConnectionManager {
         console.log('[TunnelConnectionManager] Reconnection aborted - no metadata');
         return;
       }
+
+      // Verify credentials haven't changed since timeout was scheduled
+      // (user may have updated settings while reconnect was pending)
+      if (this.metadata.baseUrl !== baseUrl || this.metadata.apiKey !== apiKey) {
+        console.log('[TunnelConnectionManager] Reconnection aborted - credentials changed');
+        // Use current metadata for reconnection instead
+        const success = await this.connect(this.metadata.baseUrl, this.metadata.apiKey);
+        if (!success && this.retryCount < 5) {
+          await this.attemptReconnect();
+        } else if (!success) {
+          this.updateState('failed', 'Max reconnection attempts reached');
+        }
+        return;
+      }
+
       const success = await this.connect(baseUrl, apiKey);
       if (!success && this.retryCount < 5) {
         // Continue retrying

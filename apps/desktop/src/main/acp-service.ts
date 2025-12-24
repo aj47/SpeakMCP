@@ -328,10 +328,10 @@ class ACPService extends EventEmitter {
       throw new Error(`Agent ${agentName} is disabled`)
     }
 
-    // Check if already running
+    // Check if already running or starting
     const existing = this.agents.get(agentName)
-    if (existing && existing.status === "ready") {
-      logApp(`[ACP] Agent ${agentName} is already running`)
+    if (existing && (existing.status === "ready" || existing.status === "starting")) {
+      logApp(`[ACP] Agent ${agentName} is already ${existing.status}`)
       return
     }
 

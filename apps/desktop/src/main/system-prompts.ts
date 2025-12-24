@@ -1,5 +1,5 @@
 import { acpSmartRouter } from './acp/acp-smart-router'
-import { acpRegistry } from './acp/acp-registry'
+import { acpService } from './acp-service'
 
 export const DEFAULT_SYSTEM_PROMPT = `You are an autonomous AI assistant that uses tools to complete tasks. Work iteratively until goals are fully achieved.
 
@@ -60,11 +60,29 @@ AGENT MODE: You can see tool results and make follow-up calls. Set needsMoreWork
  * Returns an empty string if no agents are ready.
  */
 export function getACPRoutingPromptAddition(): string {
-  const availableAgents = acpRegistry.getReadyAgents()
-  if (availableAgents.length === 0) {
+  // Get agents from acpService which has runtime status
+  const agentStatuses = acpService.getAgents()
+
+  // Filter to only ready agents
+  const readyAgents = agentStatuses.filter(a => a.status === 'ready')
+
+  if (readyAgents.length === 0) {
     return ''
   }
-  return acpSmartRouter.generateDelegationPromptAddition(availableAgents)
+
+  // Format agents for the smart router
+  const formattedAgents = readyAgents.map(a => ({
+    definition: {
+      name: a.config.name,
+      displayName: a.config.displayName,
+      description: a.config.description || '',
+      capabilities: a.config.capabilities || [],
+    },
+    status: 'ready' as const,
+    activeRuns: 0,
+  }))
+
+  return acpSmartRouter.generateDelegationPromptAddition(formattedAgents)
 }
 
 export function constructSystemPrompt(

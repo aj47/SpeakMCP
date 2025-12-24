@@ -24,9 +24,16 @@ export const Component = () => {
   const configQuery = useConfigQuery()
 
   // Redirect to onboarding if not completed
+  // Skip for existing users who have already configured models (pre-onboarding installs)
   useEffect(() => {
-    if (configQuery.data && !configQuery.data.onboardingCompleted) {
-      navigate("/onboarding")
+    if (configQuery.data) {
+      const hasExistingConfig = configQuery.data.modelConfigurations &&
+        configQuery.data.modelConfigurations.length > 0
+
+      // Only redirect to onboarding for truly new users
+      if (!configQuery.data.onboardingCompleted && !hasExistingConfig) {
+        navigate("/onboarding")
+      }
     }
   }, [configQuery.data, navigate])
 

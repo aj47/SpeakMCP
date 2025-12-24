@@ -510,7 +510,6 @@ export async function handleDelegateToAgent(
         const result = await acpService.runTask({
           agentName: args.agentName,
           input,
-          context: args.context,
           mode: 'sync',
         });
 
@@ -565,7 +564,6 @@ export async function handleDelegateToAgent(
       acpService.runTask({
         agentName: args.agentName,
         input,
-        context: args.context,
         mode: 'async',
       }).then(
         (result) => {

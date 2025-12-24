@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react"
+import { useState, useCallback, useEffect } from "react"
 import { ControlGroup } from "@renderer/components/ui/control"
 import { Input } from "@renderer/components/ui/input"
 import { Button } from "@renderer/components/ui/button"
@@ -81,6 +81,29 @@ function AgentDialog({
   const [baseUrl, setBaseUrl] = useState(agent?.connection?.baseUrl || "")
   const [autoSpawn, setAutoSpawn] = useState(agent?.autoSpawn || false)
   const [selectedPreset, setSelectedPreset] = useState<string>("")
+
+  // Sync form state when dialog opens or agent changes
+  useEffect(() => {
+    if (open) {
+      setName(agent?.name || "")
+      setDisplayName(agent?.displayName || "")
+      setDescription(agent?.description || "")
+      setCapabilities(agent?.capabilities?.join(", ") || "")
+      setConnectionType(agent?.connection?.type || "stdio")
+      setCommand(agent?.connection?.command || "")
+      setArgs(agent?.connection?.args?.join(" ") || "")
+      setEnvVars(
+        agent?.connection?.env
+          ? Object.entries(agent.connection.env)
+              .map(([k, v]) => `${k}=${v}`)
+              .join("\n")
+          : ""
+      )
+      setBaseUrl(agent?.connection?.baseUrl || "")
+      setAutoSpawn(agent?.autoSpawn || false)
+      setSelectedPreset("")
+    }
+  }, [open, agent])
 
   const applyPreset = (presetKey: string) => {
     const preset = AGENT_PRESETS[presetKey]

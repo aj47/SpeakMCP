@@ -5,6 +5,7 @@
 
 import { acpClientService } from './acp-client-service';
 import type {
+  ACPRunResult,
   ACPSubAgentState,
 } from './types';
 import { acpBackgroundNotifier } from './acp-background-notifier';
@@ -27,6 +28,28 @@ function logACPRouter(...args: unknown[]): void {
 function generateDelegationRunId(): string {
   const random = Math.random().toString(36).substring(2, 10);
   return `acp_delegation_${Date.now()}_${random}`;
+}
+
+/**
+ * Cleanup per-run mapping state so stale entries don't leak or misroute future session updates.
+ *
+ * Note: deletion is conditional to avoid clobbering mappings for a newer run that may have
+ * already replaced the agentName/session mapping.
+ */
+function cleanupDelegationMappings(runId: string, agentName: string): void {
+  // Remove agentName → runId fallback mapping only if it still points at this run.
+  if (agentNameToActiveRunId.get(agentName) === runId) {
+    agentNameToActiveRunId.delete(agentName);
+    logACPRouter(`Cleaned up active run mapping for ${agentName}: ${runId}`);
+  }
+
+  // Remove any sessionId → runId mappings pointing at this run.
+  for (const [sessionId, mappedRunId] of sessionToRunId.entries()) {
+    if (mappedRunId === runId) {
+      sessionToRunId.delete(sessionId);
+      logACPRouter(`Cleaned up session mapping: ${sessionId} -> ${runId}`);
+    }
+  }
 }
 
 /** Track delegated sub-agent runs for status checking */
@@ -123,7 +146,8 @@ acpService.on('sessionUpdate', (event: {
   logACPRouter(`Session update from ${agentName}:`, { sessionId, isComplete, contentBlocks: content?.length });
 
   // Find the run ID for this session
-  let runId = sessionToRunId.get(sessionId);
+  const mappedRunId = sessionToRunId.get(sessionId);
+  let runId = mappedRunId;
 
   // If no session mapping exists, try to find by agent name (fallback for race condition)
   if (!runId) {
@@ -139,10 +163,35 @@ acpService.on('sessionUpdate', (event: {
     }
   }
 
-  const subAgentState = delegatedRuns.get(runId);
+  let subAgentState = delegatedRuns.get(runId);
   if (!subAgentState) {
-    logACPRouter(`No sub-agent state found for run ${runId}`);
-    return;
+    // If we got a runId from session mapping but can't find state, the mapping is stale.
+    // Clean it up and retry via agent-name fallback (fixes misrouting/dropping later updates).
+    if (mappedRunId) {
+      sessionToRunId.delete(sessionId);
+      if (agentNameToActiveRunId.get(agentName) === mappedRunId) {
+        agentNameToActiveRunId.delete(agentName);
+      }
+      logACPRouter(`Removed stale session mapping: ${sessionId} -> ${mappedRunId}`);
+
+      const activeRunId = agentNameToActiveRunId.get(agentName);
+      if (!activeRunId) {
+        logACPRouter(`No active run found for agent ${agentName} after stale mapping cleanup`);
+        return;
+      }
+
+      sessionToRunId.set(sessionId, activeRunId);
+      runId = activeRunId;
+      subAgentState = delegatedRuns.get(runId);
+      if (!subAgentState) {
+        logACPRouter(`No sub-agent state found for recovered run ${runId}`);
+        return;
+      }
+      logACPRouter(`Recovered session mapping: ${sessionId} -> ${runId} (after stale cleanup)`);
+    } else {
+      logACPRouter(`No sub-agent state found for run ${runId}`);
+      return;
+    }
   }
 
   // Get or create conversation for this run (use runId, not sessionId, for consistency)
@@ -231,6 +280,12 @@ acpService.on('sessionUpdate', (event: {
   }).catch(err => {
     logACPRouter('Failed to emit agent progress:', err);
   });
+
+  // Once the agent reports completion for this session, the mappings are no longer needed.
+  // Clean them up to prevent leaks / stale fallbacks affecting future runs.
+  if (isComplete) {
+    cleanupDelegationMappings(runId, subAgentState.agentName);
+  }
 });
 
 // ============================================================================
@@ -457,10 +512,8 @@ export async function handleDelegateToAgent(
     }
 
     // Prepare the input message
-    let input = args.task;
-    if (args.context) {
-      input = `Context: ${args.context}\n\nTask: ${args.task}`;
-    }
+    // NOTE: Do not inline context formatting here; ACP service handles context formatting.
+    const input = args.task;
 
     const runId = generateDelegationRunId();
     const startTime = Date.now();
@@ -510,6 +563,7 @@ export async function handleDelegateToAgent(
         const result = await acpService.runTask({
           agentName: args.agentName,
           input,
+          context: args.context,
           mode: 'sync',
         });
 
@@ -530,6 +584,7 @@ export async function handleDelegateToAgent(
 
         if (result.success) {
           subAgentState.status = 'completed';
+          cleanupDelegationMappings(runId, args.agentName);
           return {
             success: true,
             runId,
@@ -541,6 +596,7 @@ export async function handleDelegateToAgent(
           };
         } else {
           subAgentState.status = 'failed';
+          cleanupDelegationMappings(runId, args.agentName);
           return {
             success: false,
             runId,
@@ -553,6 +609,7 @@ export async function handleDelegateToAgent(
         }
       } catch (error) {
         subAgentState.status = 'failed';
+        cleanupDelegationMappings(runId, args.agentName);
         throw error;
       }
     } else {
@@ -564,26 +621,64 @@ export async function handleDelegateToAgent(
       acpService.runTask({
         agentName: args.agentName,
         input,
+        context: args.context,
         mode: 'async',
       }).then(
         (result) => {
           // Register mapping after task completes (session should now exist)
           registerSessionMapping();
 
+          const endTime = Date.now();
+
           if (result.success) {
             subAgentState.status = 'completed';
             // Store result for later retrieval
-            subAgentState.result = {
-              output: [{ parts: [{ content: result.result || '' }] }],
+            const runResult: ACPRunResult = {
+              runId,
+              agentName: args.agentName,
+              status: 'completed',
+              startTime: subAgentState.startTime,
+              endTime,
+              metadata: { duration: endTime - subAgentState.startTime },
+              output: [
+                {
+                  role: 'assistant',
+                  parts: [{ content: result.result || '' }],
+                },
+              ],
             };
+            subAgentState.result = runResult;
           } else {
             subAgentState.status = 'failed';
-            subAgentState.result = { error: result.error };
+            const runResult: ACPRunResult = {
+              runId,
+              agentName: args.agentName,
+              status: 'failed',
+              startTime: subAgentState.startTime,
+              endTime,
+              metadata: { duration: endTime - subAgentState.startTime },
+              error: result.error || 'Unknown error',
+            };
+            subAgentState.result = runResult;
           }
+          // Clean up mappings now that the run is done to avoid stale routing.
+          cleanupDelegationMappings(runId, args.agentName);
           logACPRouter(`Async run completed for ${args.agentName}:`, result.success ? 'success' : 'failed');
         },
         (error) => {
           subAgentState.status = 'failed';
+          const endTime = Date.now();
+          subAgentState.result = {
+            runId,
+            agentName: args.agentName,
+            status: 'failed',
+            startTime: subAgentState.startTime,
+            endTime,
+            metadata: { duration: endTime - subAgentState.startTime },
+            error: error instanceof Error ? error.message : String(error),
+          };
+          // Best-effort mapping cleanup for hard failures (no further session updates expected)
+          cleanupDelegationMappings(runId, args.agentName);
           logACPRouter(`Async run failed for ${args.agentName}:`, error);
         }
       );
@@ -967,6 +1062,10 @@ export function cleanupOldDelegatedRuns(maxAgeMs: number = 60 * 60 * 1000): void
   });
 
   for (const runId of toDelete) {
+    const state = delegatedRuns.get(runId);
+    if (state) {
+      cleanupDelegationMappings(runId, state.agentName);
+    }
     delegatedRuns.delete(runId);
     sessionConversations.delete(runId);
     lastEmitTime.delete(runId);

@@ -151,7 +151,7 @@ class ACPService extends EventEmitter {
     }
   }): void {
     const instance = this.agents.get(agentName)
-    const sessionId = params.sessionId || instance?.sessionId || "unknown"
+    const sessionId = params.sessionId || instance?.sessionId || `${agentName}_fallback_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`
 
     // Get or create session output tracking
     let output = this.sessionOutputs.get(sessionId)

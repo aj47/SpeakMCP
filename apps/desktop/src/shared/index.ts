@@ -211,6 +211,10 @@ export const getProviderNameFromBaseUrl = (baseUrl: string | undefined): string 
   // Normalize URL by trimming whitespace and removing trailing slashes
   const normalizedUrl = baseUrl.trim().replace(/\/+$/, "").toLowerCase()
 
+  // Treat empty/whitespace-only strings as undefined (use default OpenAI)
+  // This aligns with call sites that use `config.openaiBaseUrl || "https://api.openai.com/v1"`
+  if (!normalizedUrl) return "OpenAI"
+
   // Find matching preset by comparing normalized URLs
   const matchingPreset = OPENAI_COMPATIBLE_PRESETS.find(preset => {
     if (!preset.baseUrl) return false

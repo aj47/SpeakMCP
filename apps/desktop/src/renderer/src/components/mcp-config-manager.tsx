@@ -932,8 +932,8 @@ const MCP_EXAMPLES: Record<string, { name: string; config: MCPServerConfig; note
 export function MCPConfigManager({
   config,
   onConfigChange,
-  collapsedToolServers = [],
-  collapsedServers = [],
+  collapsedToolServers,
+  collapsedServers,
   onCollapsedToolServersChange,
   onCollapsedServersChange,
 }: MCPConfigManagerProps) {
@@ -962,12 +962,22 @@ export function MCPConfigManager({
   const [oauthStatus, setOAuthStatus] = useState<Record<string, { configured: boolean; authenticated: boolean; tokenExpiry?: number; error?: string }>>({})
   const [serverLogs, setServerLogs] = useState<Record<string, ServerLogEntry[]>>({})
   const [expandedLogs, setExpandedLogs] = useState<Set<string>>(new Set())
-  // Initialize expandedServers from persisted collapsed state (inverted: collapsed -> not in expanded set)
-  // Include built-in server name to avoid flicker on first paint
+  // Initialize expandedServers from persisted expanded state
+  // All servers are collapsed by default - only expand those explicitly persisted as expanded
   const [expandedServers, setExpandedServers] = useState<Set<string>>(() => {
-    // Start with all servers expanded except those in collapsedServers
-    // Include built-in server name (speakmcp-settings) so it's expanded by default
+    // collapsedServers stores which servers are collapsed
+    // - undefined: never persisted before (first time) → all collapsed by default
+    // - []: explicitly persisted as "no servers collapsed" (e.g., user clicked "expand all") → all expanded
+    // - [...names]: specific servers are collapsed → expand all except those
     const allServerNames = [...Object.keys(config.mcpServers || {}), "speakmcp-settings"]
+
+    // If collapsedServers is undefined, we haven't persisted yet - default to all collapsed
+    if (collapsedServers === undefined) {
+      return new Set<string>() // All collapsed by default
+    }
+
+    // If collapsedServers is an empty array, user explicitly set "no servers collapsed" (all expanded)
+    // Otherwise, expand servers not in the collapsed list
     const collapsedSet = new Set(collapsedServers)
     return new Set(allServerNames.filter(name => !collapsedSet.has(name)))
   })
@@ -977,7 +987,6 @@ export function MCPConfigManager({
   const [showDisabledTools, setShowDisabledTools] = useState(true)
   // Initialize expandedTools (servers in Tools section) - all expanded by default except those persisted as collapsed
   const [expandedToolServers, setExpandedToolServers] = useState<Set<string>>(() => {
-    const collapsedSet = new Set(collapsedToolServers)
     // We don't know server names yet, so start with empty set meaning "all expanded"
     // When collapsedToolServers is provided, those will be collapsed
     return new Set<string>() // Will be populated when tools load
@@ -994,25 +1003,63 @@ export function MCPConfigManager({
   const warnedReservedServersRef = useRef<Set<string>>(new Set())
 
   // Track known server names to detect new servers
-  const [knownServers, setKnownServers] = useState<Set<string>>(() => new Set(Object.keys(config.mcpServers || {})))
+  // Include RESERVED_SERVER_NAMES so built-in servers aren't treated as "new" on first mount
+  const [knownServers, setKnownServers] = useState<Set<string>>(() => new Set([...Object.keys(config.mcpServers || {}), ...RESERVED_SERVER_NAMES]))
 
-  // Handle server changes: prune stale entries and expand new servers by default
+  // Track if we've completed the initial config hydration
+  // This prevents treating all servers as "new" when settings-mcp-tools initially renders
+  // with an empty config before useConfigQuery resolves
+  const initialHydrationCompleteRef = useRef(
+    // If config already has servers on mount, we're hydrated.
+    // Also treat persisted collapse state as a signal that config is hydrated,
+    // even when the config legitimately has zero servers.
+    collapsedServers !== undefined || Object.keys(config.mcpServers || {}).length > 0
+  )
+
+  // Handle server changes: prune stale entries (new servers stay collapsed by default)
   // Include reserved server names (built-in servers) so they don't get pruned
   useEffect(() => {
     const currentServerNames = new Set([...Object.keys(servers), ...RESERVED_SERVER_NAMES])
-    const collapsedSet = new Set(collapsedServers)
 
-    // Find new servers (not in knownServers and not in collapsedServers)
-    const newServers = [...currentServerNames].filter(name => !knownServers.has(name) && !collapsedSet.has(name))
+    // Find new servers (not in knownServers)
+    const newServers = [...currentServerNames].filter(name => !knownServers.has(name))
 
-    // Prune stale entries
+    // Prune stale entries (remove servers that no longer exist)
     const prunedSet = new Set([...expandedServers].filter(name => currentServerNames.has(name)))
 
-    // Add new servers to expanded set (expanded by default)
-    newServers.forEach(name => prunedSet.add(name))
+    // New servers stay collapsed by default - don't add them to expanded set
 
-    if (prunedSet.size !== expandedServers.size || newServers.length > 0) {
+    if (prunedSet.size !== expandedServers.size) {
       setExpandedServers(prunedSet)
+    }
+
+    // Check if we're still in initial hydration phase
+    // If knownServers only had RESERVED_SERVER_NAMES and now we're seeing user servers,
+    // this is the initial config load, not new servers being added
+    const wasEmptyOnMount = knownServers.size <= RESERVED_SERVER_NAMES.length &&
+      [...knownServers].every(name => RESERVED_SERVER_NAMES.includes(name))
+
+    if (wasEmptyOnMount && newServers.length > 0 && !initialHydrationCompleteRef.current) {
+      // This is the initial config load - don't persist, just update knownServers
+      initialHydrationCompleteRef.current = true
+      setKnownServers(currentServerNames)
+      return
+    }
+
+    // Mark hydration complete once we have any persisted collapse state, even if
+    // the config legitimately has zero servers.
+    if (collapsedServers !== undefined || Object.keys(servers).length > 0) {
+      initialHydrationCompleteRef.current = true
+    }
+
+    // Persist new servers as collapsed to ensure consistency after Settings reopen
+    // Only do this if we have already persisted (collapsedServers is not undefined)
+    // and we're past the initial hydration phase
+    // This ensures that when a new server is added and we want it collapsed,
+    // it's added to the persisted collapsed list so it stays collapsed after reopening
+    if (newServers.length > 0 && collapsedServers !== undefined && onCollapsedServersChange && initialHydrationCompleteRef.current) {
+      const updatedCollapsed = [...new Set([...collapsedServers, ...newServers])]
+      onCollapsedServersChange(updatedCollapsed)
     }
 
     // Update known servers
@@ -1038,13 +1085,17 @@ export function MCPConfigManager({
 
   // Sync expandedServers when collapsedServers prop changes (e.g., after async config load)
   // This tracks the previous collapsedServers to detect external changes
-  const prevCollapsedServersRef = useRef<string[]>(collapsedServers)
+  const prevCollapsedServersRef = useRef<string[] | undefined>(collapsedServers)
   useEffect(() => {
-    // Check if collapsedServers prop actually changed (use set comparison for robustness)
+    // Check if collapsedServers prop actually changed
     const prevCollapsed = prevCollapsedServersRef.current
-    const prevSet = new Set(prevCollapsed)
-    const currentSet = new Set(collapsedServers)
+    const prevSet = new Set(prevCollapsed ?? [])
+    const currentSet = new Set(collapsedServers ?? [])
+    // Also detect undefined → array transitions
+    const wasUndefined = prevCollapsed === undefined
+    const isUndefined = collapsedServers === undefined
     const collapsedChanged =
+      wasUndefined !== isUndefined ||
       prevSet.size !== currentSet.size ||
       [...prevSet].some(s => !currentSet.has(s))
 
@@ -1052,9 +1103,17 @@ export function MCPConfigManager({
       prevCollapsedServersRef.current = collapsedServers
       // Re-sync expandedServers from the new collapsed list
       const currentServerNames = new Set([...Object.keys(servers), ...RESERVED_SERVER_NAMES])
-      const collapsedSet = new Set(collapsedServers)
-      const newExpanded = new Set([...currentServerNames].filter(name => !collapsedSet.has(name)))
-      setExpandedServers(newExpanded)
+
+      // undefined = never persisted (first time) → all collapsed
+      if (collapsedServers === undefined) {
+        setExpandedServers(new Set<string>())
+      } else {
+        // [] = explicitly "no servers collapsed" (all expanded)
+        // [...names] = specific servers are collapsed
+        const collapsedSet = new Set(collapsedServers)
+        const newExpanded = new Set([...currentServerNames].filter(name => !collapsedSet.has(name)))
+        setExpandedServers(newExpanded)
+      }
     }
   }, [collapsedServers, servers])
 
@@ -1139,7 +1198,7 @@ export function MCPConfigManager({
   useEffect(() => {
     if (tools.length > 0) {
       const allToolServerNames = [...new Set(tools.map(t => t.serverName))]
-      const collapsedSet = new Set(collapsedToolServers)
+      const collapsedSet = new Set(collapsedToolServers ?? [])
 
       if (!toolServersInitialized) {
         // Initial setup: all servers expanded by default, except those persisted as collapsed
@@ -1167,12 +1226,12 @@ export function MCPConfigManager({
   }, [tools, collapsedToolServers, toolServersInitialized, knownToolServers])
 
   // Sync expandedToolServers when collapsedToolServers prop changes (e.g., after async config load)
-  const prevCollapsedToolServersRef = useRef<string[]>(collapsedToolServers)
+  const prevCollapsedToolServersRef = useRef<string[] | undefined>(collapsedToolServers)
   useEffect(() => {
     // Check if collapsedToolServers prop actually changed (use set comparison for robustness)
     const prevCollapsed = prevCollapsedToolServersRef.current
-    const prevSet = new Set(prevCollapsed)
-    const currentSet = new Set(collapsedToolServers)
+    const prevSet = new Set(prevCollapsed ?? [])
+    const currentSet = new Set(collapsedToolServers ?? [])
     const collapsedChanged =
       prevSet.size !== currentSet.size ||
       [...prevSet].some(s => !currentSet.has(s))
@@ -1181,7 +1240,7 @@ export function MCPConfigManager({
       prevCollapsedToolServersRef.current = collapsedToolServers
       // Re-sync expandedToolServers from the new collapsed list
       const allToolServerNames = [...new Set(tools.map(t => t.serverName))]
-      const collapsedSet = new Set(collapsedToolServers)
+      const collapsedSet = new Set(collapsedToolServers ?? [])
       const newExpanded = new Set(allToolServerNames.filter(name => !collapsedSet.has(name)))
       setExpandedToolServers(newExpanded)
     }
@@ -1326,7 +1385,7 @@ export function MCPConfigManager({
   const toggleToolsExpansion = (serverName: string) => {
     setExpandedToolServers(prev => {
       const allToolServerNames = [...new Set(tools.map(t => t.serverName))]
-      const collapsedSet = new Set(collapsedToolServers)
+      const collapsedSet = new Set(collapsedToolServers ?? [])
 
       // If not yet initialized, start with all servers expanded (minus persisted collapsed ones)
       // This ensures first toggle behaves correctly even before useEffect runs
@@ -1933,7 +1992,7 @@ export function MCPConfigManager({
                   // Before initialization: expanded unless in collapsedToolServers (respects persisted state)
                   // After initialization: use the expandedToolServers set
                   const isExpanded = !toolServersInitialized
-                    ? !collapsedToolServers.includes(serverName)
+                    ? !(collapsedToolServers ?? []).includes(serverName)
                     : expandedToolServers.has(serverName)
                   return (
                   <div key={serverName} className="space-y-2">

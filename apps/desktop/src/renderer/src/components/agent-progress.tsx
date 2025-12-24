@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react"
 import { cn } from "@renderer/lib/utils"
 import { AgentProgressUpdate, ACPDelegationProgress } from "../../../shared/types"
-import { ChevronDown, ChevronUp, ChevronRight, X, AlertTriangle, Minimize2, Shield, Check, XCircle, Loader2, Clock, Copy, CheckCheck, GripHorizontal, Activity, Moon, Maximize2, RefreshCw, ExternalLink, Bot } from "lucide-react"
+import { ChevronDown, ChevronUp, ChevronRight, X, AlertTriangle, Minimize2, Shield, Check, XCircle, Loader2, Clock, Copy, CheckCheck, GripHorizontal, Activity, Moon, Maximize2, RefreshCw, ExternalLink, Bot, OctagonX } from "lucide-react"
 import { MarkdownRenderer } from "@renderer/components/markdown-renderer"
 import { Button } from "./ui/button"
 import { Badge } from "./ui/badge"
@@ -2011,7 +2011,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
             {/* Combined close button: stops agent if running, dismisses if complete */}
             {!isComplete ? (
               <Button variant="ghost" size="icon" className="h-6 w-6 hover:bg-destructive/20 hover:text-destructive" onClick={(e) => { e.stopPropagation(); handleKillConfirmation(); }} title="Stop agent">
-                <X className="h-3 w-3" />
+                <OctagonX className="h-3 w-3" />
               </Button>
             ) : onDismiss ? (
               <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); onDismiss(); }} title="Dismiss">
@@ -2287,7 +2287,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
               disabled={isKilling}
               title="Stop agent execution"
             >
-              <X className="h-3 w-3" />
+              <OctagonX className="h-3 w-3" />
             </Button>
           ) : (
             <Button

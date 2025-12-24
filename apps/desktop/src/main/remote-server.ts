@@ -247,7 +247,8 @@ async function runAgent(options: RunAgentOptions): Promise<{
 
     const availableTools = mcpService.getAvailableTools()
     const executeToolCall = async (toolCall: any, onProgress?: (message: string) => void): Promise<MCPToolResult> => {
-      return await mcpService.executeToolCall(toolCall, onProgress)
+      // Pass sessionId so ACP router tools can emit progress to the correct session
+      return await mcpService.executeToolCall(toolCall, onProgress, false, sessionId)
     }
 
     const agentResult = await processTranscriptWithAgentMode(

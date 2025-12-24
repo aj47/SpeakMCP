@@ -2210,7 +2210,8 @@ export class MCPService {
   async executeToolCall(
     toolCall: MCPToolCall,
     onProgress?: (message: string) => void,
-    skipApprovalCheck: boolean = false
+    skipApprovalCheck: boolean = false,
+    sessionId?: string
   ): Promise<MCPToolResult> {
     try {
       if (isDebugTools()) {
@@ -2257,7 +2258,7 @@ export class MCPService {
         if (isDebugTools()) {
           logTools("Executing built-in tool", { name: toolCall.name, arguments: toolCall.arguments })
         }
-        const result = await executeBuiltinTool(toolCall.name, toolCall.arguments || {})
+        const result = await executeBuiltinTool(toolCall.name, toolCall.arguments || {}, sessionId)
         if (result) {
           if (isDebugTools()) {
             logTools("Built-in tool result", { name: toolCall.name, result })

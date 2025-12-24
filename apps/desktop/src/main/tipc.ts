@@ -231,7 +231,8 @@ async function processWithAgentMode(
       }
 
       // Execute the tool call (approval either not required or was granted)
-      return await mcpService.executeToolCall(toolCall, onProgress, true) // Pass skipApprovalCheck=true
+      // Pass sessionId so ACP router tools can emit progress to the correct session
+      return await mcpService.executeToolCall(toolCall, onProgress, true, sessionId)
     }
 
     // Load previous conversation history if continuing a conversation

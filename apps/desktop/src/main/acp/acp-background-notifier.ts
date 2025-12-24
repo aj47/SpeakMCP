@@ -10,7 +10,7 @@ import type { ACPSubAgentState } from './types'
  * Monitors running delegated tasks and emits completion notifications to the UI.
  */
 export class ACPBackgroundNotifier {
-  private pollingInterval: NodeJS.Timeout | undefined
+  private pollingInterval: ReturnType<typeof setInterval> | undefined
   private delegatedRuns: Map<string, ACPSubAgentState> | undefined
   private readonly POLL_INTERVAL_MS = 3000
 

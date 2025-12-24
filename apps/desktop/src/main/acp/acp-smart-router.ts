@@ -19,6 +19,15 @@
 import { acpRegistry } from './acp-registry'
 import type { ACPAgentDefinition, ACPAgentInstance } from './types'
 
+type ACPAgentForDelegationPrompt = {
+  definition: {
+    name: ACPAgentDefinition['name']
+    displayName?: ACPAgentDefinition['displayName'] | undefined
+    description?: ACPAgentDefinition['description'] | undefined
+    capabilities: ACPAgentDefinition['capabilities']
+  }
+}
+
 /**
  * Represents the router's decision about whether to delegate a task.
  */
@@ -427,7 +436,7 @@ export class ACPSmartRouter {
    * // Returns: "You have access to the following specialized agents..."
    * ```
    */
-  generateDelegationPromptAddition(availableAgents: ACPAgentInstance[]): string {
+  generateDelegationPromptAddition(availableAgents: ReadonlyArray<ACPAgentForDelegationPrompt>): string {
     if (availableAgents.length === 0) {
       return ''
     }

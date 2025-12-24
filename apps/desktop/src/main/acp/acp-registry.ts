@@ -16,14 +16,30 @@ function logACP(...args: unknown[]): void {
  * @returns The agent definition ready for registration
  */
 export function configToDefinition(config: ACPAgentConfig): ACPAgentDefinition {
+  const baseUrl =
+    config.connection.type === 'remote'
+      ? config.connection.baseUrl
+      : config.connection.port != null
+        ? `http://localhost:${config.connection.port}`
+        : 'http://localhost'
+
   return {
     name: config.name,
+    displayName: config.displayName ?? config.name,
     description: config.description ?? '',
     capabilities: config.capabilities ?? [],
-    endpoint: config.endpoint,
-    transport: config.transport ?? 'http',
-    auth: config.auth,
-    metadata: config.metadata,
+    baseUrl,
+    spawnConfig:
+      config.connection.type === 'spawn'
+        ? {
+            command: config.connection.command,
+            args: config.connection.args ?? [],
+            env: config.connection.env,
+          }
+        : undefined,
+    maxConcurrency: config.maxConcurrentRuns,
+    timeout: config.defaultTimeout,
+    idleTimeoutMs: config.idleTimeoutMs,
   }
 }
 
@@ -44,15 +60,19 @@ export class ACPRegistry {
    * @param definition - The agent definition to register
    */
   registerAgent(definition: ACPAgentDefinition): void {
-    if (this.agents.has(definition.name)) {
-      logACP(`Agent "${definition.name}" already registered, updating definition`)
+    const existing = this.agents.get(definition.name)
+    if (existing) {
+      existing.definition = definition
+      logACP(`Agent "${definition.name}" already registered, updated definition`)
+      return
     }
 
     const instance: ACPAgentInstance = {
       definition,
-      status: 'disconnected',
+      // Remote agents are assumed reachable; spawned agents start stopped until spawned.
+      status: definition.spawnConfig ? 'stopped' : 'ready',
       activeRuns: 0,
-      lastConnected: undefined,
+      lastUsed: undefined,
       lastError: undefined,
     }
 
@@ -102,11 +122,23 @@ export class ACPRegistry {
 
   /**
    * Get agents that are ready to accept requests.
-   * An agent is ready if its status is 'ready'.
+   * An agent is considered available if its status is 'ready', or 'busy' but still below maxConcurrency.
    * @returns Array of ready agent instances
    */
   getReadyAgents(): ACPAgentInstance[] {
-    return this.getAllAgents().filter(agent => agent.status === 'ready')
+    return this.getAllAgents().filter(agent => {
+      if (agent.status !== 'ready' && agent.status !== 'busy') {
+        return false
+      }
+
+      // If maxConcurrency isn't configured, assume single-concurrency.
+      const maxConcurrency = agent.definition.maxConcurrency ?? 1
+      if (maxConcurrency <= 0) {
+        return true
+      }
+
+      return agent.activeRuns < maxConcurrency
+    })
   }
 
   /**
@@ -123,11 +155,11 @@ export class ACPRegistry {
     }
 
     agent.status = status
+
     if (status === 'ready') {
-      agent.lastConnected = new Date()
       agent.lastError = undefined
-    } else if (status === 'error' && error) {
-      agent.lastError = error
+    } else if (status === 'error') {
+      agent.lastError = error ?? agent.lastError
     }
 
     logACP(`Agent "${name}" status updated to: ${status}${error ? ` (${error})` : ''}`)
@@ -141,6 +173,15 @@ export class ACPRegistry {
     const agent = this.agents.get(name)
     if (agent) {
       agent.activeRuns++
+      agent.lastUsed = Date.now()
+
+      // Best-effort status tracking based on concurrency.
+      if (agent.status === 'ready' || agent.status === 'busy') {
+        const maxConcurrency = agent.definition.maxConcurrency ?? 1
+        if (maxConcurrency > 0 && agent.activeRuns >= maxConcurrency) {
+          agent.status = 'busy'
+        }
+      }
       logACP(`Agent "${name}" active runs: ${agent.activeRuns}`)
     }
   }
@@ -153,6 +194,14 @@ export class ACPRegistry {
     const agent = this.agents.get(name)
     if (agent && agent.activeRuns > 0) {
       agent.activeRuns--
+      agent.lastUsed = Date.now()
+
+      if (agent.status === 'busy') {
+        const maxConcurrency = agent.definition.maxConcurrency ?? 1
+        if (maxConcurrency <= 0 || agent.activeRuns < maxConcurrency) {
+          agent.status = 'ready'
+        }
+      }
       logACP(`Agent "${name}" active runs: ${agent.activeRuns}`)
     }
   }
@@ -182,8 +231,12 @@ export class ACPRegistry {
         Array.from(this.agents.entries()).map(([name, instance]) => [
           name,
           {
-            ...instance,
-            lastConnected: instance.lastConnected?.toISOString(),
+            definition: instance.definition,
+            status: instance.status,
+            activeRuns: instance.activeRuns,
+            pid: instance.pid,
+            lastUsed: instance.lastUsed ? new Date(instance.lastUsed).toISOString() : undefined,
+            lastError: instance.lastError,
           },
         ])
       ),

@@ -100,5 +100,57 @@ export const acpRouterToolDefinitions = [
       required: ['agentName'],
     },
   },
+  {
+    name: 'speakmcp-builtin:run_sub_session',
+    description:
+      'Run an internal sub-session of SpeakMCP itself to handle a sub-task. The sub-session has access to all the same MCP tools as the main session but runs with isolated state. Useful for parallel task execution, complex sub-tasks that benefit from isolated context, or when you need to delegate work without relying on external agents. Note: There is a maximum recursion depth to prevent infinite loops.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        task: {
+          type: 'string',
+          description: 'The task or prompt for the sub-session to execute',
+        },
+        context: {
+          type: 'string',
+          description: 'Optional additional context to provide to the sub-session',
+        },
+        maxIterations: {
+          type: 'number',
+          description: 'Maximum number of agent iterations for the sub-session (default: 10)',
+          default: 10,
+        },
+      },
+      required: ['task'],
+    },
+  },
+  {
+    name: 'speakmcp-builtin:check_sub_session',
+    description: 'Check the status of a running internal sub-session',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        subSessionId: {
+          type: 'string',
+          description: 'The sub-session ID returned from a previous run_sub_session call',
+        },
+      },
+      required: ['subSessionId'],
+    },
+  },
+  {
+    name: 'speakmcp-builtin:cancel_sub_session',
+    description: 'Cancel a running internal sub-session',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        subSessionId: {
+          type: 'string',
+          description: 'The sub-session ID to cancel',
+        },
+      },
+      required: ['subSessionId'],
+    },
+  },
 ];
 

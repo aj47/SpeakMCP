@@ -14,6 +14,13 @@ import { configStore } from '../config';
 import { acpService, ACPContentBlock } from '../acp-service';
 import { emitAgentProgress } from '../emit-agent-progress';
 import type { ACPDelegationProgress, ACPSubAgentMessage } from '../../shared/types';
+import {
+  runInternalSubSession,
+  getSubSession,
+  cancelSubSession,
+  getInternalAgentInfo,
+  getSessionDepth,
+} from './internal-sub-session';
 
 /**
  * Log ACP router-related debug messages.
@@ -337,8 +344,26 @@ export async function handleListAvailableAgents(args: {
           connectionType: agent.connection.type,
           status: runtime?.status || 'stopped',
           error: runtime?.error,
+          isInternal: false,
         };
       });
+
+    // Add the internal SpeakMCP sub-session agent
+    const internalAgent = getInternalAgentInfo();
+    const matchesCapability = !args.capability || internalAgent.capabilities.includes(args.capability);
+
+    if (matchesCapability) {
+      formattedAgents.unshift({
+        name: internalAgent.name,
+        displayName: internalAgent.displayName,
+        description: internalAgent.description,
+        capabilities: internalAgent.capabilities,
+        connectionType: 'internal' as any, // Internal agent uses special 'internal' type
+        status: 'ready', // Internal agent is always ready
+        error: undefined,
+        isInternal: true,
+      });
+    }
 
     return {
       success: true,
@@ -888,6 +913,25 @@ export async function executeACPRouterTool(
         result = await handleStopAgent(args as { agentName: string });
         break;
 
+      case 'speakmcp-builtin:run_sub_session':
+        result = await handleRunSubSession(
+          args as {
+            task: string;
+            context?: string;
+            maxIterations?: number;
+          },
+          parentSessionId
+        );
+        break;
+
+      case 'speakmcp-builtin:check_sub_session':
+        result = await handleCheckSubSession(args as { subSessionId: string });
+        break;
+
+      case 'speakmcp-builtin:cancel_sub_session':
+        result = await handleCancelSubSession(args as { subSessionId: string });
+        break;
+
       default:
         return {
           content: JSON.stringify({
@@ -1014,4 +1058,154 @@ export function cleanupOldDelegatedRuns(maxAgeMs: number = 60 * 60 * 1000): void
     lastEmitTime.delete(runId);
     logACPRouter(`Cleaned up old delegated run: ${runId}`);
   }
+}
+
+// ============================================================================
+// Internal Sub-Session Handlers
+// ============================================================================
+
+/**
+ * Run an internal sub-session of SpeakMCP itself.
+ * @param args - Arguments containing the task, optional context, and max iterations
+ * @param parentSessionId - The parent session ID for tracking and depth calculation
+ * @returns Object with sub-session result
+ */
+export async function handleRunSubSession(
+  args: {
+    task: string;
+    context?: string;
+    maxIterations?: number;
+  },
+  parentSessionId?: string
+): Promise<object> {
+  logACPRouter('Running internal sub-session', { task: args.task.substring(0, 100), parentSessionId });
+
+  if (!parentSessionId) {
+    return {
+      success: false,
+      error: 'Parent session ID is required to run a sub-session',
+    };
+  }
+
+  try {
+    const result = await runInternalSubSession({
+      task: args.task,
+      context: args.context,
+      parentSessionId,
+      maxIterations: args.maxIterations,
+    });
+
+    if (result.success) {
+      return {
+        success: true,
+        subSessionId: result.subSessionId,
+        result: result.result,
+        duration: result.duration,
+        conversationLength: result.conversationHistory.length,
+        message: `Sub-session completed successfully in ${Math.round(result.duration / 1000)}s`,
+      };
+    } else {
+      return {
+        success: false,
+        subSessionId: result.subSessionId,
+        error: result.error,
+        duration: result.duration,
+      };
+    }
+  } catch (error) {
+    logACPRouter('Error running sub-session:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+/**
+ * Check the status of an internal sub-session.
+ * @param args - Arguments containing the sub-session ID
+ * @returns Object with sub-session status
+ */
+export async function handleCheckSubSession(args: { subSessionId: string }): Promise<object> {
+  logACPRouter('Checking sub-session status', args);
+
+  try {
+    const subSession = getSubSession(args.subSessionId);
+
+    if (!subSession) {
+      return {
+        success: false,
+        error: `Sub-session "${args.subSessionId}" not found`,
+      };
+    }
+
+    return {
+      success: true,
+      subSessionId: subSession.id,
+      status: subSession.status,
+      depth: subSession.depth,
+      task: subSession.task,
+      startTime: subSession.startTime,
+      endTime: subSession.endTime,
+      duration: subSession.endTime
+        ? subSession.endTime - subSession.startTime
+        : Date.now() - subSession.startTime,
+      result: subSession.result,
+      error: subSession.error,
+      conversationLength: subSession.conversationHistory.length,
+    };
+  } catch (error) {
+    logACPRouter('Error checking sub-session:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+/**
+ * Cancel a running internal sub-session.
+ * @param args - Arguments containing the sub-session ID
+ * @returns Object with cancellation result
+ */
+export async function handleCancelSubSession(args: { subSessionId: string }): Promise<object> {
+  logACPRouter('Cancelling sub-session', args);
+
+  try {
+    const cancelled = cancelSubSession(args.subSessionId);
+
+    if (cancelled) {
+      return {
+        success: true,
+        message: `Sub-session "${args.subSessionId}" cancelled`,
+      };
+    } else {
+      return {
+        success: false,
+        error: `Sub-session "${args.subSessionId}" not found or not running`,
+      };
+    }
+  } catch (error) {
+    logACPRouter('Error cancelling sub-session:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+/**
+ * Get internal agent info for listing.
+ * Called by handleListAgents to include the internal agent.
+ */
+export function getInternalAgentForListing() {
+  return getInternalAgentInfo();
+}
+
+/**
+ * Get the current recursion depth for a session.
+ * Useful for debugging and UI display.
+ */
+export function getCurrentSessionDepth(sessionId: string): number {
+  return getSessionDepth(sessionId);
 }

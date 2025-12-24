@@ -339,13 +339,13 @@ class ACPService extends EventEmitter {
       throw new Error(`Connection type ${agentConfig.connection.type} not yet supported`)
     }
 
-    const { command, args = [], env = {} } = agentConfig.connection
+    const { command, args = [], env = {}, cwd } = agentConfig.connection
 
     if (!command) {
       throw new Error(`No command specified for agent ${agentName}`)
     }
 
-    logApp(`[ACP] Spawning agent ${agentName}: ${command} ${args.join(" ")}`)
+    logApp(`[ACP] Spawning agent ${agentName}: ${command} ${args.join(" ")}${cwd ? ` (cwd: ${cwd})` : ""}`)
 
     // Create agent instance
     const instance: ACPAgentInstance = {
@@ -363,11 +363,12 @@ class ACPService extends EventEmitter {
       // Merge environment variables
       const processEnv = { ...process.env, ...env }
 
-      // Spawn the process
+      // Spawn the process with optional working directory
       const proc = spawn(command, args, {
         env: processEnv,
         stdio: ["pipe", "pipe", "pipe"],
         shell: process.platform === "win32",
+        ...(cwd && { cwd }),
       })
 
       instance.process = proc

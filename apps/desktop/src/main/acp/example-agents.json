@@ -10,7 +10,8 @@
       "connection": {
         "type": "stdio",
         "command": "python",
-        "args": ["-m", "agents.research_agent"]
+        "args": ["-m", "agents.research_agent"],
+        "cwd": "/path/to/research-agent-project"
       },
       "autoSpawn": false,
       "keepAlive": false,
@@ -26,7 +27,8 @@
       "connection": {
         "type": "stdio",
         "command": "node",
-        "args": ["./agents/coding-agent/index.js"]
+        "args": ["./agents/coding-agent/index.js"],
+        "cwd": "~/projects/my-codebase"
       },
       "autoSpawn": false,
       "idleTimeoutMs": 600000,
@@ -40,7 +42,8 @@
       "connection": {
         "type": "stdio",
         "command": "uv",
-        "args": ["run", "writing_agent.py"]
+        "args": ["run", "writing_agent.py"],
+        "cwd": "/Users/username/writing-tools"
       },
       "autoSpawn": false
     },

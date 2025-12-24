@@ -67,19 +67,20 @@ export class ACPProcessManager {
       return false;
     }
 
-    const { command, args, env, startupTimeMs } = definition.spawnConfig;
+    const { command, args, env, cwd, startupTimeMs } = definition.spawnConfig;
 
-    logACP(`Spawning agent "${agentName}": ${command} ${args.join(' ')}`);
+    logACP(`Spawning agent "${agentName}": ${command} ${args.join(' ')}${cwd ? ` (cwd: ${cwd})` : ''}`);
 
     // Update status to starting
     acpRegistry.updateAgentStatus(agentName, 'starting');
 
     try {
-      // Spawn the process
+      // Spawn the process with optional working directory
       const childProcess = spawn(command, args, {
         env: { ...process.env, ...env },
         stdio: ['ignore', 'pipe', 'pipe'],
         detached: false,
+        ...(cwd && { cwd }),
       });
 
       // Extract port from baseUrl

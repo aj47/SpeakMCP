@@ -23,6 +23,7 @@ export interface ACPAgentDefinition {
     command: string;
     args: string[];
     env?: Record<string, string>;
+    cwd?: string;
     startupTimeMs?: number;
   };
   /** JSON schema for agent input validation */
@@ -177,6 +178,7 @@ export interface ACPAgentConfig {
         command: string;
         args?: string[];
         env?: Record<string, string>;
+        cwd?: string;
         port?: number;
       };
   /** Whether to automatically spawn the agent when needed */

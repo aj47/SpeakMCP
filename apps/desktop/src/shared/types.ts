@@ -383,6 +383,8 @@ export interface ACPAgentConfig {
     args?: string[]
     // For stdio: environment variables
     env?: Record<string, string>
+    // For stdio: working directory to spawn the agent in
+    cwd?: string
     // For remote: base URL of the ACP server
     baseUrl?: string
   }

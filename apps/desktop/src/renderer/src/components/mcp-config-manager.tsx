@@ -76,6 +76,7 @@ interface DetailedTool {
   description: string
   serverName: string
   enabled: boolean
+  serverEnabled: boolean
   inputSchema: any
 }
 
@@ -1278,9 +1279,12 @@ export function MCPConfigManager({
   )
 
   // Filter tools for a specific server
+  // Only include tools from enabled servers
   const getFilteredToolsForServer = (serverName: string) => {
     const serverTools = toolsByServer[serverName] || []
     return serverTools.filter((tool) => {
+      // Hide tools from disabled servers
+      if (!tool.serverEnabled) return false
       const matchesSearch =
         tool.name.toLowerCase().includes(toolSearchQuery.toLowerCase()) ||
         tool.description.toLowerCase().includes(toolSearchQuery.toLowerCase())
@@ -1760,9 +1764,10 @@ export function MCPConfigManager({
     }
   }
 
-  // Calculate total tools count
-  const totalToolsCount = tools.length
-  const enabledToolsCount = tools.filter((t) => t.enabled).length
+  // Calculate total tools count (only from enabled servers)
+  const toolsFromEnabledServers = tools.filter((t) => t.serverEnabled)
+  const totalToolsCount = toolsFromEnabledServers.length
+  const enabledToolsCount = toolsFromEnabledServers.filter((t) => t.enabled).length
   const disabledToolsCount = totalToolsCount - enabledToolsCount
 
   // State for collapsible sections
@@ -1770,8 +1775,11 @@ export function MCPConfigManager({
   const [serversSectionExpanded, setServersSectionExpanded] = useState(true)
 
   // Get all filtered tools (global, across all servers)
+  // Only include tools from enabled servers
   const getAllFilteredTools = () => {
     return tools.filter((tool) => {
+      // Hide tools from disabled servers
+      if (!tool.serverEnabled) return false
       const matchesSearch =
         tool.name.toLowerCase().includes(toolSearchQuery.toLowerCase()) ||
         tool.description.toLowerCase().includes(toolSearchQuery.toLowerCase())

@@ -1549,6 +1549,7 @@ export class MCPService {
     description: string
     serverName: string
     enabled: boolean
+    serverEnabled: boolean
     inputSchema: any
   }> {
     // Clean up orphaned tools from deleted servers
@@ -1589,6 +1590,7 @@ export class MCPService {
           description: tool.description,
           serverName,
           enabled: !toolDisabled && !serverDisabled,
+          serverEnabled: !serverDisabled,
           inputSchema: tool.inputSchema,
         }
       })
@@ -1599,6 +1601,7 @@ export class MCPService {
       description: tool.description,
       serverName: BUILTIN_SERVER_NAME,
       enabled: !this.disabledTools.has(tool.name),
+      serverEnabled: true,
       inputSchema: tool.inputSchema,
     }))
 

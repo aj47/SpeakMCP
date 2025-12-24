@@ -38,6 +38,7 @@ interface DetailedTool {
   description: string
   serverName: string
   enabled: boolean
+  serverEnabled: boolean
   inputSchema: any
 }
 
@@ -67,8 +68,11 @@ export function MCPToolManager({ onToolToggle }: MCPToolManagerProps) {
     return () => clearInterval(interval)
   }, [])
 
-  // Group tools by server
-  const toolsByServer = tools.reduce(
+  // Filter tools to only include those from enabled servers
+  const toolsFromEnabledServers = tools.filter((tool) => tool.serverEnabled)
+
+  // Group tools by server (only from enabled servers)
+  const toolsByServer = toolsFromEnabledServers.reduce(
     (acc, tool) => {
       if (!acc[tool.serverName]) {
         acc[tool.serverName] = []
@@ -213,8 +217,8 @@ export function MCPToolManager({ onToolToggle }: MCPToolManagerProps) {
   }
 
   const serverNames = Object.keys(toolsByServer)
-  const totalTools = tools.length
-  const enabledTools = tools.filter((tool) => tool.enabled).length
+  const totalTools = toolsFromEnabledServers.length
+  const enabledTools = toolsFromEnabledServers.filter((tool) => tool.enabled).length
 
   return (
     <div className="min-w-0 space-y-6">
@@ -279,7 +283,9 @@ export function MCPToolManager({ onToolToggle }: MCPToolManagerProps) {
               <p className="text-center text-muted-foreground">
                 {tools.length === 0
                   ? "No tools available. Configure MCP servers to see tools."
-                  : "No tools match your search criteria."}
+                  : toolsFromEnabledServers.length === 0
+                    ? "No tools from enabled servers. Enable a server to see its tools."
+                    : "No tools match your search criteria."}
               </p>
             </CardContent>
           </Card>

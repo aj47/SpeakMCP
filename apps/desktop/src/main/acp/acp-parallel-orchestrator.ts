@@ -174,6 +174,7 @@ export class ACPParallelOrchestrator {
             parentSessionId: group.parentSessionId,
             timeout: group.timeout,
             baseUrl: agent.definition.baseUrl,
+            signal: controller.signal,
           };
 
           const runResult = await acpClientService.runAgentSync(runRequest);

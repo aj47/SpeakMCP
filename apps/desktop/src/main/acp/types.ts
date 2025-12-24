@@ -101,6 +101,8 @@ export interface ACPRunRequest {
   parentSessionId?: string;
   /** Timeout in milliseconds for this specific run */
   timeout?: number;
+  /** External abort signal to cancel the request */
+  signal?: AbortSignal;
 }
 
 /**

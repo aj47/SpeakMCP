@@ -68,6 +68,19 @@ export class ACPClientService {
     const controller = new AbortController();
     const baseUrl = this.getBaseUrlForAgent(request.agentName);
 
+    // Wire external abort signal to internal controller
+    const externalSignal = request.signal;
+    let externalAbortHandler: (() => void) | undefined;
+    if (externalSignal) {
+      if (externalSignal.aborted) {
+        // Already aborted, abort immediately
+        controller.abort();
+      } else {
+        externalAbortHandler = () => controller.abort();
+        externalSignal.addEventListener('abort', externalAbortHandler);
+      }
+    }
+
     this.activeRuns.set(runId, {
       controller,
       agentName: request.agentName,
@@ -103,6 +116,10 @@ export class ACPClientService {
       throw error;
     } finally {
       this.activeRuns.delete(runId);
+      // Clean up external signal listener
+      if (externalSignal && externalAbortHandler) {
+        externalSignal.removeEventListener('abort', externalAbortHandler);
+      }
     }
   }
 

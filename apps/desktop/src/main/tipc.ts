@@ -2780,6 +2780,19 @@ export const router = {
       if (agentIndex >= 0) {
         agents[agentIndex] = { ...agents[agentIndex], enabled: input.enabled }
         configStore.save({ ...config, acpAgents: agents })
+
+        // When disabling an agent, automatically stop it if it's running
+        if (!input.enabled) {
+          const agentStatus = acpService.getAgentStatus(input.agentName)
+          if (agentStatus && (agentStatus.status === "ready" || agentStatus.status === "starting")) {
+            try {
+              await acpService.stopAgent(input.agentName)
+            } catch (error) {
+              // Log but don't fail the toggle operation
+              logApp(`[ACP] Failed to auto-stop agent ${input.agentName} on disable:`, error)
+            }
+          }
+        }
       }
 
       return { success: true }

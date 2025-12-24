@@ -1,15 +1,16 @@
 /**
  * Internal Sub-Session Service
- * 
+ *
  * Allows SpeakMCP to spawn internal sub-sessions of itself as ACP-style agents.
  * Unlike external ACP agents, these run within the same process with isolated state.
- * 
+ *
  * Key features:
  * - Runs in the same process (platform-agnostic, no OS process spawning)
  * - Isolated conversation history per sub-session
  * - Access to the same MCP tools as the parent
  * - Configurable recursion depth limits to prevent infinite loops
  * - Progress updates flow to parent session
+ * - Embedded UI display in parent session via ACPDelegationProgress
  */
 
 import { v4 as uuidv4 } from 'uuid';
@@ -18,7 +19,7 @@ import { mcpService } from '../mcp-service';
 import { agentSessionStateManager } from '../state';
 import { agentSessionTracker } from '../agent-session-tracker';
 import { emitAgentProgress } from '../emit-agent-progress';
-import type { AgentProgressUpdate, SessionProfileSnapshot } from '../../shared/types';
+import type { AgentProgressUpdate, SessionProfileSnapshot, ACPDelegationProgress, ACPSubAgentMessage } from '../../shared/types';
 import type { MCPToolCall, MCPToolResult } from '../mcp-service';
 
 const logSubSession = (...args: unknown[]) => {
@@ -161,6 +162,82 @@ export function cleanupOldSubSessions(maxAgeMs: number = 30 * 60 * 1000): void {
 // Sub-Session Execution
 // ============================================================================
 
+/** Minimum interval between UI updates per sub-session (ms) */
+const MIN_EMIT_INTERVAL_MS = 100;
+
+/** Track last emit time per sub-session for rate limiting */
+const lastEmitTime = new Map<string, number>();
+
+/**
+ * Emit delegation progress to the parent session's UI.
+ * This allows the sub-session to be displayed inline in the parent's conversation.
+ */
+function emitSubSessionDelegationProgress(
+  subSession: InternalSubSession,
+  parentSessionId: string
+): void {
+  const now = Date.now();
+  const lastEmit = lastEmitTime.get(subSession.id) ?? 0;
+
+  // Rate limit emissions
+  if (now - lastEmit < MIN_EMIT_INTERVAL_MS) {
+    return;
+  }
+  lastEmitTime.set(subSession.id, now);
+
+  // Convert internal conversation history to ACPSubAgentMessage format
+  const conversation: ACPSubAgentMessage[] = subSession.conversationHistory.map(msg => ({
+    role: msg.role,
+    content: msg.content,
+    timestamp: msg.timestamp,
+  }));
+
+  // Build delegation progress
+  const delegationProgress: ACPDelegationProgress = {
+    runId: subSession.id,
+    agentName: 'SpeakMCP Internal',
+    task: subSession.task,
+    status: subSession.status === 'pending' ? 'pending'
+          : subSession.status === 'running' ? 'running'
+          : subSession.status === 'completed' ? 'completed'
+          : subSession.status === 'cancelled' ? 'cancelled'
+          : 'failed',
+    startTime: subSession.startTime,
+    endTime: subSession.endTime,
+    progressMessage: subSession.status === 'running'
+      ? `Depth ${subSession.depth} sub-session processing...`
+      : undefined,
+    resultSummary: subSession.result?.substring(0, 200),
+    error: subSession.error,
+    conversation,
+  };
+
+  // Emit progress update to parent session's UI
+  emitAgentProgress({
+    sessionId: parentSessionId,
+    currentIteration: 0,
+    maxIterations: 1,
+    isComplete: subSession.status === 'completed' || subSession.status === 'failed' || subSession.status === 'cancelled',
+    steps: [
+      {
+        id: `delegation-${subSession.id}`,
+        type: 'completion',
+        title: `Internal Sub-Agent (depth ${subSession.depth})`,
+        description: subSession.task.length > 100
+          ? subSession.task.substring(0, 100) + '...'
+          : subSession.task,
+        status: subSession.status === 'completed' ? 'completed'
+              : subSession.status === 'failed' || subSession.status === 'cancelled' ? 'error'
+              : 'in_progress',
+        timestamp: Date.now(),
+        delegation: delegationProgress,
+      },
+    ],
+  }).catch(err => {
+    logSubSession('Failed to emit delegation progress:', err);
+  });
+}
+
 export interface RunSubSessionOptions {
   /** The task/prompt to execute in the sub-session */
   task: string;
@@ -258,6 +335,9 @@ export async function runInternalSubSession(
 
   subSession.status = 'running';
 
+  // Emit initial delegation progress to show sub-session starting in parent UI
+  emitSubSessionDelegationProgress(subSession, parentSessionId);
+
   try {
     // Get available tools - use profile-filtered tools if we have a profile snapshot
     const availableTools = effectiveProfileSnapshot?.mcpServerConfig
@@ -287,6 +367,16 @@ export async function runInternalSubSession(
         effectiveProfileSnapshot?.mcpServerConfig
       );
 
+      // Add tool result to conversation history for UI display
+      subSession.conversationHistory.push({
+        role: 'tool',
+        content: `Tool: ${toolCall.name}\nResult: ${JSON.stringify(result.content).substring(0, 500)}`,
+        timestamp: Date.now(),
+      });
+
+      // Emit updated delegation progress with tool result
+      emitSubSessionDelegationProgress(subSession, parentSessionId);
+
       return result;
     };
 
@@ -302,8 +392,26 @@ export async function runInternalSubSession(
       // Forward to caller's progress callback
       onProgress?.(taggedUpdate);
 
-      // Also emit to UI (snoozed by default for sub-sessions)
-      emitAgentProgress(taggedUpdate).catch(() => {});
+      // Extract any assistant content from the update to add to conversation history
+      if (update.conversationHistory) {
+        const lastMsg = update.conversationHistory[update.conversationHistory.length - 1];
+        if (lastMsg && lastMsg.role === 'assistant' && lastMsg.content) {
+          // Check if we already have this message (avoid duplicates)
+          const existingAssistant = subSession.conversationHistory.find(
+            m => m.role === 'assistant' && m.content === lastMsg.content
+          );
+          if (!existingAssistant) {
+            subSession.conversationHistory.push({
+              role: 'assistant',
+              content: lastMsg.content,
+              timestamp: lastMsg.timestamp || Date.now(),
+            });
+          }
+        }
+      }
+
+      // Emit updated delegation progress to parent UI
+      emitSubSessionDelegationProgress(subSession, parentSessionId);
     };
 
     // Run the agent loop in the sub-session
@@ -324,12 +432,20 @@ export async function runInternalSubSession(
     subSession.endTime = Date.now();
     subSession.result = result.content;
 
-    // Add assistant message to conversation history
-    subSession.conversationHistory.push({
-      role: 'assistant',
-      content: result.content,
-      timestamp: Date.now(),
-    });
+    // Add final assistant message to conversation history (if not already added)
+    const existingFinal = subSession.conversationHistory.find(
+      m => m.role === 'assistant' && m.content === result.content
+    );
+    if (!existingFinal) {
+      subSession.conversationHistory.push({
+        role: 'assistant',
+        content: result.content,
+        timestamp: Date.now(),
+      });
+    }
+
+    // Emit final delegation progress showing completion
+    emitSubSessionDelegationProgress(subSession, parentSessionId);
 
     logSubSession(`Sub-session ${subSessionId} completed successfully`);
 
@@ -346,6 +462,9 @@ export async function runInternalSubSession(
     subSession.endTime = Date.now();
     subSession.error = error instanceof Error ? error.message : String(error);
 
+    // Emit final delegation progress showing failure
+    emitSubSessionDelegationProgress(subSession, parentSessionId);
+
     logSubSession(`Sub-session ${subSessionId} failed:`, error);
 
     return {
@@ -357,8 +476,9 @@ export async function runInternalSubSession(
     };
 
   } finally {
-    // Clean up session state
+    // Clean up session state and rate limit tracking
     agentSessionStateManager.cleanupSession(subSessionId);
+    lastEmitTime.delete(subSessionId);
   }
 }
 

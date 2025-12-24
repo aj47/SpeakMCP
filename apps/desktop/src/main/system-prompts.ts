@@ -1,5 +1,6 @@
 import { acpSmartRouter } from './acp/acp-smart-router'
 import { acpService } from './acp-service'
+import { getInternalAgentInfo } from './acp/internal-sub-session'
 
 export const DEFAULT_SYSTEM_PROMPT = `You are an autonomous AI assistant that uses tools to complete tasks. Work iteratively until goals are fully achieved.
 
@@ -85,6 +86,21 @@ export function getACPRoutingPromptAddition(): string {
   return acpSmartRouter.generateDelegationPromptAddition(formattedAgents)
 }
 
+/**
+ * Generate prompt addition for internal sub-sessions.
+ * This instructs the agent on when and how to use sub-sessions for parallel work.
+ */
+export function getSubSessionPromptAddition(): string {
+  const info = getInternalAgentInfo()
+
+  return `
+PARALLEL SUB-SESSIONS: Use \`run_sub_session\` to spawn isolated sub-agents for parallel work. Batch multiple calls in one response for efficiency.
+- USE FOR: Independent tasks (analyzing multiple files, researching different topics, divide-and-conquer)
+- AVOID FOR: Sequential dependencies, shared state/file conflicts, simple tasks
+- LIMITS: Max depth ${info.maxRecursionDepth}, max ${info.maxConcurrent} concurrent per parent
+`.trim()
+}
+
 export function constructSystemPrompt(
   availableTools: Array<{
     name: string
@@ -108,8 +124,11 @@ export function constructSystemPrompt(
     // Add ACP agent delegation information if agents are available
     const acpPromptAddition = getACPRoutingPromptAddition()
     if (acpPromptAddition) {
-      prompt += acpPromptAddition
+      prompt += '\n\n' + acpPromptAddition
     }
+
+    // Add internal sub-session instructions (always available in agent mode)
+    prompt += '\n\n' + getSubSessionPromptAddition()
   }
 
   const formatToolInfo = (

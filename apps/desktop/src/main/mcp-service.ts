@@ -968,10 +968,15 @@ export class MCPService {
     })
 
     // Also clean up disabled tools for non-existent servers
+    // BUT preserve built-in tools (speakmcp-settings) since they're not in mcpServers config
     const orphanedDisabledTools = Array.from(this.disabledTools).filter((toolName) => {
       const serverName = toolName.includes(":")
         ? toolName.split(":")[0]
         : "unknown"
+      // Built-in tools are not orphaned - they're always valid
+      if (serverName === BUILTIN_SERVER_NAME) {
+        return false
+      }
       return configuredServers[serverName] === undefined
     })
 
@@ -1682,10 +1687,14 @@ export class MCPService {
   }
 
   setToolEnabled(toolName: string, enabled: boolean): boolean {
-    const toolExists = this.availableTools.some(
+    // Check both external tools and built-in tools
+    const toolExistsExternal = this.availableTools.some(
       (tool) => tool.name === toolName,
     )
-    if (!toolExists) {
+    const toolExistsBuiltin = builtinTools.some(
+      (tool) => tool.name === toolName,
+    )
+    if (!toolExistsExternal && !toolExistsBuiltin) {
       return false
     }
 

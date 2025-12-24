@@ -71,9 +71,14 @@ export class TunnelConnectionManager {
         this.startHealthCheckInterval();
       }
     } else if (nextAppState === 'background' || nextAppState === 'inactive') {
-      // App went to background - stop health check interval to save battery
+      // App went to background - stop health check interval and cancel pending reconnects to save battery
       console.log('[TunnelConnectionManager] App went to background, stopping health checks');
       this.stopHealthCheckInterval();
+      if (this.reconnectTimeoutId) {
+        console.log('[TunnelConnectionManager] Cancelling pending reconnect timeout');
+        clearTimeout(this.reconnectTimeoutId);
+        this.reconnectTimeoutId = null;
+      }
     }
   };
 
@@ -174,6 +179,10 @@ export class TunnelConnectionManager {
       this.client.setConnectionStatusCallback(this.handleRecoveryStateChange);
       const healthy = await this.client.health();
       if (!healthy) {
+        // Clean up the newly created client to avoid stale state
+        // where this.client points to new endpoint but this.metadata reflects old endpoint
+        this.client.cleanup();
+        this.client = null;
         this.updateState('failed', 'Server health check failed');
         return false;
       }

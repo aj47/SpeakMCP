@@ -112,7 +112,9 @@ class ACPService extends EventEmitter {
   private handleAgentNotification(event: { agentName: string; method: string; params: unknown }): void {
     const { agentName, method, params } = event
 
+    // Always log the raw params for debugging
     logApp(`[ACP:${agentName}] Received notification: ${method}`)
+    logApp(`[ACP:${agentName}] Notification params: ${JSON.stringify(params, null, 2).substring(0, 2000)}`)
 
     if (method === "session/update") {
       this.handleSessionUpdate(agentName, params as {

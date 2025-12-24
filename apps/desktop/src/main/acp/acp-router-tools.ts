@@ -82,11 +82,11 @@ acpService.on('sessionUpdate', (event: {
     return;
   }
 
-  // Get or create conversation for this session
-  let conversation = sessionConversations.get(sessionId);
+  // Get or create conversation for this run (use runId, not sessionId, for consistency)
+  let conversation = sessionConversations.get(runId);
   if (!conversation) {
     conversation = [];
-    sessionConversations.set(sessionId, conversation);
+    sessionConversations.set(runId, conversation);
   }
 
   // Convert content blocks to conversation messages
@@ -820,6 +820,54 @@ export function getDelegatedRunsForSession(parentSessionId: string): string[] {
     }
   });
   return runIds;
+}
+
+/**
+ * Get detailed information about a delegated run, including conversation.
+ * @param runId - The run ID to look up
+ * @returns The delegation progress with conversation, or null if not found
+ */
+export function getDelegatedRunDetails(runId: string): ACPDelegationProgress | null {
+  const state = delegatedRuns.get(runId);
+  if (!state) {
+    return null;
+  }
+
+  const conversation = sessionConversations.get(runId) || [];
+
+  return {
+    runId: state.runId,
+    agentName: state.agentName,
+    task: state.task,
+    status: state.status,
+    startTime: state.startTime,
+    endTime: state.status === 'completed' || state.status === 'failed' ? Date.now() : undefined,
+    progressMessage: state.progress,
+    resultSummary: state.result?.output?.[0]?.parts?.[0]?.content?.substring(0, 200),
+    error: state.result?.error,
+    conversation: [...conversation],
+  };
+}
+
+/**
+ * Get all delegated runs with their conversations for a session.
+ * Useful for inspecting subagent activity.
+ * @param parentSessionId - The parent session ID
+ * @returns Array of delegation progress objects with conversations
+ */
+export function getAllDelegationsForSession(parentSessionId: string): ACPDelegationProgress[] {
+  const results: ACPDelegationProgress[] = [];
+
+  delegatedRuns.forEach((state, runId) => {
+    if (state.parentSessionId === parentSessionId) {
+      const details = getDelegatedRunDetails(runId);
+      if (details) {
+        results.push(details);
+      }
+    }
+  });
+
+  return results;
 }
 
 /**

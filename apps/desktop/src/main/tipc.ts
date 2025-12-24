@@ -2674,6 +2674,22 @@ export const router = {
     .action(async ({ input }) => {
       return acpService.runTask(input.request)
     }),
+
+  // Get all subagent delegations with conversations for a session
+  getSubagentDelegations: t.procedure
+    .input<{ sessionId: string }>()
+    .action(async ({ input }) => {
+      const { getAllDelegationsForSession } = await import("./acp/acp-router-tools")
+      return getAllDelegationsForSession(input.sessionId)
+    }),
+
+  // Get details of a specific subagent delegation
+  getSubagentDelegationDetails: t.procedure
+    .input<{ runId: string }>()
+    .action(async ({ input }) => {
+      const { getDelegatedRunDetails } = await import("./acp/acp-router-tools")
+      return getDelegatedRunDetails(input.runId)
+    }),
 }
 
 // TTS Provider Implementation Functions

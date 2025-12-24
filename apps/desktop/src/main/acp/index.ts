@@ -17,6 +17,8 @@ export {
   executeACPRouterTool,
   isACPRouterTool,
   getDelegatedRunsForSession,
+  getDelegatedRunDetails,
+  getAllDelegationsForSession,
   cleanupOldDelegatedRuns
 } from './acp-router-tools'
 export { acpSmartRouter, ACPSmartRouter } from './acp-smart-router'

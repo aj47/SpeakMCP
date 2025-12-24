@@ -617,71 +617,107 @@ export async function handleDelegateToAgent(
       // Start background polling for notifications
       acpBackgroundNotifier.startPolling();
 
-      // Start the async run (don't await the result)
-      acpService.runTask({
-        agentName: args.agentName,
-        input,
-        context: args.context,
-        mode: 'async',
-      }).then(
-        (result) => {
-          // Register mapping after task completes (session should now exist)
-          registerSessionMapping();
+      // For remote HTTP agents, use acpClientService which returns a server run_id for status polling
+      if (agentConfig.connection.type === 'remote') {
+        const baseUrl = agentConfig.connection.baseUrl;
+        // Store baseUrl in subAgentState for background notifier to use
+        subAgentState.baseUrl = baseUrl;
 
-          const endTime = Date.now();
-
-          if (result.success) {
-            subAgentState.status = 'completed';
-            // Store result for later retrieval
-            const runResult: ACPRunResult = {
-              runId,
-              agentName: args.agentName,
-              status: 'completed',
-              startTime: subAgentState.startTime,
-              endTime,
-              metadata: { duration: endTime - subAgentState.startTime },
-              output: [
-                {
-                  role: 'assistant',
-                  parts: [{ content: result.result || '' }],
-                },
-              ],
-            };
-            subAgentState.result = runResult;
-          } else {
+        // Start the async run via HTTP API
+        acpClientService.runAgentAsync({
+          agentName: args.agentName,
+          input,
+          mode: 'async',
+          parentSessionId,
+        }).then(
+          (acpRunId) => {
+            // Store the server's run ID for status polling
+            subAgentState.acpRunId = acpRunId;
+            logACPRouter(`Async HTTP run started for ${args.agentName}: acpRunId=${acpRunId}`);
+          },
+          (error) => {
             subAgentState.status = 'failed';
-            const runResult: ACPRunResult = {
+            const endTime = Date.now();
+            subAgentState.result = {
               runId,
               agentName: args.agentName,
               status: 'failed',
               startTime: subAgentState.startTime,
               endTime,
               metadata: { duration: endTime - subAgentState.startTime },
-              error: result.error || 'Unknown error',
+              error: error instanceof Error ? error.message : String(error),
             };
-            subAgentState.result = runResult;
+            cleanupDelegationMappings(runId, args.agentName);
+            logACPRouter(`Async HTTP run failed for ${args.agentName}:`, error);
           }
-          // Clean up mappings now that the run is done to avoid stale routing.
-          cleanupDelegationMappings(runId, args.agentName);
-          logACPRouter(`Async run completed for ${args.agentName}:`, result.success ? 'success' : 'failed');
-        },
-        (error) => {
-          subAgentState.status = 'failed';
-          const endTime = Date.now();
-          subAgentState.result = {
-            runId,
-            agentName: args.agentName,
-            status: 'failed',
-            startTime: subAgentState.startTime,
-            endTime,
-            metadata: { duration: endTime - subAgentState.startTime },
-            error: error instanceof Error ? error.message : String(error),
-          };
-          // Best-effort mapping cleanup for hard failures (no further session updates expected)
-          cleanupDelegationMappings(runId, args.agentName);
-          logACPRouter(`Async run failed for ${args.agentName}:`, error);
-        }
-      );
+        );
+      } else {
+        // For stdio agents, use acpService.runTask
+        acpService.runTask({
+          agentName: args.agentName,
+          input,
+          context: args.context,
+          mode: 'async',
+        }).then(
+          (result) => {
+            // Register mapping after task completes (session should now exist)
+            registerSessionMapping();
+
+            const endTime = Date.now();
+
+            if (result.success) {
+              subAgentState.status = 'completed';
+              // Store result for later retrieval
+              const runResult: ACPRunResult = {
+                runId,
+                agentName: args.agentName,
+                status: 'completed',
+                startTime: subAgentState.startTime,
+                endTime,
+                metadata: { duration: endTime - subAgentState.startTime },
+                output: [
+                  {
+                    role: 'assistant',
+                    parts: [{ content: result.result || '' }],
+                  },
+                ],
+              };
+              subAgentState.result = runResult;
+            } else {
+              subAgentState.status = 'failed';
+              const runResult: ACPRunResult = {
+                runId,
+                agentName: args.agentName,
+                status: 'failed',
+                startTime: subAgentState.startTime,
+                endTime,
+                metadata: { duration: endTime - subAgentState.startTime },
+                error: result.error || 'Unknown error',
+              };
+              subAgentState.result = runResult;
+            }
+            // Clean up mappings now that the run is done to avoid stale routing.
+            cleanupDelegationMappings(runId, args.agentName);
+            logACPRouter(`Async run completed for ${args.agentName}:`, result.success ? 'success' : 'failed');
+          },
+          (error) => {
+            subAgentState.status = 'failed';
+            const endTime = Date.now();
+            subAgentState.result = {
+              runId,
+              agentName: args.agentName,
+              status: 'failed',
+              startTime: subAgentState.startTime,
+              endTime,
+              metadata: { duration: endTime - subAgentState.startTime },
+              error: error instanceof Error ? error.message : String(error),
+            };
+            // Best-effort mapping cleanup for hard failures (no further session updates expected)
+            cleanupDelegationMappings(runId, args.agentName);
+            logACPRouter(`Async run failed for ${args.agentName}:`, error);
+          }
+        );
+      }
 
       return {
         success: true,

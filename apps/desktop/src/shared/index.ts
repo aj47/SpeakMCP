@@ -202,7 +202,7 @@ export const DEFAULT_MODEL_PRESET_ID = "builtin-openai"
 /**
  * Get the provider display name from a base URL by matching against known presets.
  * Normalizes URLs by removing trailing slashes and comparing base domains.
- * Falls back to "OpenAI" if no preset matches.
+ * Falls back to "OpenAI-compatible" for unrecognized custom URLs, or "OpenAI" for default.
  */
 export const getProviderNameFromBaseUrl = (baseUrl: string | undefined): string => {
   if (!baseUrl) return "OpenAI"
@@ -217,7 +217,17 @@ export const getProviderNameFromBaseUrl = (baseUrl: string | undefined): string 
     return normalizedUrl === normalizedPresetUrl
   })
 
-  return matchingPreset?.label || "OpenAI"
+  if (matchingPreset) {
+    return matchingPreset.label
+  }
+
+  // If no preset matches and it's not the default OpenAI URL, show as "OpenAI-compatible"
+  const defaultOpenAIUrl = "https://api.openai.com/v1".toLowerCase()
+  if (normalizedUrl !== defaultOpenAIUrl) {
+    return "OpenAI-compatible"
+  }
+
+  return "OpenAI"
 }
 
 // Helper to check if a provider has TTS support

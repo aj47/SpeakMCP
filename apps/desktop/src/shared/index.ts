@@ -199,6 +199,27 @@ export const getBuiltInModelPresets = (): ModelPreset[] => {
 // Default preset ID
 export const DEFAULT_MODEL_PRESET_ID = "builtin-openai"
 
+/**
+ * Get the provider display name from a base URL by matching against known presets.
+ * Normalizes URLs by removing trailing slashes and comparing base domains.
+ * Falls back to "OpenAI" if no preset matches.
+ */
+export const getProviderNameFromBaseUrl = (baseUrl: string | undefined): string => {
+  if (!baseUrl) return "OpenAI"
+
+  // Normalize URL by removing trailing slashes
+  const normalizedUrl = baseUrl.replace(/\/+$/, "").toLowerCase()
+
+  // Find matching preset by comparing normalized URLs
+  const matchingPreset = OPENAI_COMPATIBLE_PRESETS.find(preset => {
+    if (!preset.baseUrl) return false
+    const normalizedPresetUrl = preset.baseUrl.replace(/\/+$/, "").toLowerCase()
+    return normalizedUrl === normalizedPresetUrl
+  })
+
+  return matchingPreset?.label || "OpenAI"
+}
+
 // Helper to check if a provider has TTS support
 export const providerHasTts = (providerId: string): boolean => {
   return TTS_PROVIDERS.some(p => p.value === providerId)

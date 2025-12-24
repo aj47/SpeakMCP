@@ -16,6 +16,7 @@ import { shrinkMessagesForLLM, estimateTokensFromMessages } from "./context-budg
 import { emitAgentProgress } from "./emit-agent-progress"
 import { agentSessionTracker } from "./agent-session-tracker"
 import { conversationService } from "./conversation-service"
+import { getProviderNameFromBaseUrl } from "../shared"
 
 /**
  * Tool name patterns that require sequential execution to avoid race conditions.
@@ -629,7 +630,16 @@ export async function processTranscriptWithAgentMode(
     : providerId === "gemini"
     ? config.mcpToolsGeminiModel || "gemini-1.5-flash-002"
     : "gpt-4o-mini"
-  const modelInfoRef = { provider: providerId, model: modelName }
+  // For OpenAI provider, use the preset name from base URL (e.g., "OpenRouter", "Together AI")
+  // For other providers (Groq, Gemini), use their actual provider names
+  const providerDisplayName = providerId === "openai"
+    ? getProviderNameFromBaseUrl(config.openaiBaseUrl)
+    : providerId === "groq"
+    ? "Groq"
+    : providerId === "gemini"
+    ? "Gemini"
+    : providerId
+  const modelInfoRef = { provider: providerDisplayName, model: modelName }
 
   // Create bound emitter that always includes sessionId, conversationId, snooze state, sessionStartIndex, conversationTitle, and contextInfo
   const emit = (

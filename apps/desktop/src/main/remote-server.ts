@@ -505,6 +505,196 @@ export async function startRemoteServer() {
     })
   })
 
+  // ============================================
+  // Settings Management Endpoints (for mobile app)
+  // ============================================
+
+  // GET /v1/profiles - List all profiles
+  fastify.get("/v1/profiles", async (_req, reply) => {
+    try {
+      const profiles = profileService.getProfiles()
+      const currentProfile = profileService.getCurrentProfile()
+      return reply.send({
+        profiles: profiles.map(p => ({
+          id: p.id,
+          name: p.name,
+          isDefault: p.isDefault,
+          createdAt: p.createdAt,
+          updatedAt: p.updatedAt,
+        })),
+        currentProfileId: currentProfile?.id,
+      })
+    } catch (error: any) {
+      diagnosticsService.logError("remote-server", "Failed to get profiles", error)
+      return reply.code(500).send({ error: "Failed to get profiles" })
+    }
+  })
+
+  // GET /v1/profiles/current - Get current profile details
+  fastify.get("/v1/profiles/current", async (_req, reply) => {
+    try {
+      const profile = profileService.getCurrentProfile()
+      if (!profile) {
+        return reply.code(404).send({ error: "No current profile set" })
+      }
+      return reply.send({
+        id: profile.id,
+        name: profile.name,
+        isDefault: profile.isDefault,
+        guidelines: profile.guidelines,
+        systemPrompt: profile.systemPrompt,
+        createdAt: profile.createdAt,
+        updatedAt: profile.updatedAt,
+      })
+    } catch (error: any) {
+      diagnosticsService.logError("remote-server", "Failed to get current profile", error)
+      return reply.code(500).send({ error: "Failed to get current profile" })
+    }
+  })
+
+  // POST /v1/profiles/current - Set current profile
+  fastify.post("/v1/profiles/current", async (req, reply) => {
+    try {
+      const body = req.body as any
+      const profileId = body?.profileId
+      if (!profileId || typeof profileId !== "string") {
+        return reply.code(400).send({ error: "Missing or invalid profileId" })
+      }
+      const profile = profileService.setCurrentProfile(profileId)
+      // Apply the profile's MCP configuration
+      mcpService.applyProfileMcpConfig(
+        profile.mcpServerConfig?.disabledServers,
+        profile.mcpServerConfig?.disabledTools,
+        profile.mcpServerConfig?.allServersDisabledByDefault,
+        profile.mcpServerConfig?.enabledServers
+      )
+      diagnosticsService.logInfo("remote-server", `Switched to profile: ${profile.name}`)
+      return reply.send({
+        success: true,
+        profile: {
+          id: profile.id,
+          name: profile.name,
+          isDefault: profile.isDefault,
+        },
+      })
+    } catch (error: any) {
+      diagnosticsService.logError("remote-server", "Failed to set current profile", error)
+      return reply.code(500).send({ error: error?.message || "Failed to set current profile" })
+    }
+  })
+
+  // GET /v1/mcp/servers - List MCP servers with status
+  fastify.get("/v1/mcp/servers", async (_req, reply) => {
+    try {
+      const serverStatus = mcpService.getServerStatus()
+      const servers = Object.entries(serverStatus).map(([name, status]) => ({
+        name,
+        connected: status.connected,
+        toolCount: status.toolCount,
+        enabled: status.runtimeEnabled && !status.configDisabled,
+        runtimeEnabled: status.runtimeEnabled,
+        configDisabled: status.configDisabled,
+        error: status.error,
+      }))
+      return reply.send({ servers })
+    } catch (error: any) {
+      diagnosticsService.logError("remote-server", "Failed to get MCP servers", error)
+      return reply.code(500).send({ error: "Failed to get MCP servers" })
+    }
+  })
+
+  // POST /v1/mcp/servers/:name/toggle - Toggle MCP server enabled/disabled
+  fastify.post("/v1/mcp/servers/:name/toggle", async (req, reply) => {
+    try {
+      const params = req.params as { name: string }
+      const body = req.body as any
+      const serverName = params.name
+      const enabled = body?.enabled
+
+      if (typeof enabled !== "boolean") {
+        return reply.code(400).send({ error: "Missing or invalid 'enabled' boolean" })
+      }
+
+      const success = mcpService.setServerRuntimeEnabled(serverName, enabled)
+      if (!success) {
+        return reply.code(404).send({ error: `Server '${serverName}' not found` })
+      }
+
+      diagnosticsService.logInfo("remote-server", `Toggled MCP server ${serverName} to ${enabled ? "enabled" : "disabled"}`)
+      return reply.send({
+        success: true,
+        server: serverName,
+        enabled,
+      })
+    } catch (error: any) {
+      diagnosticsService.logError("remote-server", "Failed to toggle MCP server", error)
+      return reply.code(500).send({ error: error?.message || "Failed to toggle MCP server" })
+    }
+  })
+
+  // GET /v1/settings - Get relevant settings for mobile app
+  fastify.get("/v1/settings", async (_req, reply) => {
+    try {
+      const cfg = configStore.get()
+      return reply.send({
+        // Model settings
+        mcpToolsProviderId: cfg.mcpToolsProviderId || "openai",
+        mcpToolsOpenaiModel: cfg.mcpToolsOpenaiModel,
+        mcpToolsGroqModel: cfg.mcpToolsGroqModel,
+        mcpToolsGeminiModel: cfg.mcpToolsGeminiModel,
+        // Feature toggles
+        transcriptPostProcessingEnabled: cfg.transcriptPostProcessingEnabled ?? true,
+        ttsEnabled: cfg.ttsEnabled ?? true,
+        mcpRequireApprovalBeforeToolCall: cfg.mcpRequireApprovalBeforeToolCall ?? false,
+        // TTS settings
+        ttsProviderId: cfg.ttsProviderId,
+        // Agent settings
+        mcpMaxIterations: cfg.mcpMaxIterations ?? 10,
+      })
+    } catch (error: any) {
+      diagnosticsService.logError("remote-server", "Failed to get settings", error)
+      return reply.code(500).send({ error: "Failed to get settings" })
+    }
+  })
+
+  // PATCH /v1/settings - Update settings
+  fastify.patch("/v1/settings", async (req, reply) => {
+    try {
+      const body = req.body as any
+      const cfg = configStore.get()
+      const updates: Partial<typeof cfg> = {}
+
+      // Only allow updating specific settings
+      if (typeof body.transcriptPostProcessingEnabled === "boolean") {
+        updates.transcriptPostProcessingEnabled = body.transcriptPostProcessingEnabled
+      }
+      if (typeof body.ttsEnabled === "boolean") {
+        updates.ttsEnabled = body.ttsEnabled
+      }
+      if (typeof body.mcpRequireApprovalBeforeToolCall === "boolean") {
+        updates.mcpRequireApprovalBeforeToolCall = body.mcpRequireApprovalBeforeToolCall
+      }
+      if (typeof body.mcpMaxIterations === "number" && body.mcpMaxIterations >= 1 && body.mcpMaxIterations <= 100) {
+        updates.mcpMaxIterations = body.mcpMaxIterations
+      }
+
+      if (Object.keys(updates).length === 0) {
+        return reply.code(400).send({ error: "No valid settings to update" })
+      }
+
+      configStore.save({ ...cfg, ...updates })
+      diagnosticsService.logInfo("remote-server", `Updated settings: ${Object.keys(updates).join(", ")}`)
+
+      return reply.send({
+        success: true,
+        updated: Object.keys(updates),
+      })
+    } catch (error: any) {
+      diagnosticsService.logError("remote-server", "Failed to update settings", error)
+      return reply.code(500).send({ error: error?.message || "Failed to update settings" })
+    }
+  })
+
   // Kill switch endpoint - emergency stop all agent sessions
   fastify.post("/v1/emergency-stop", async (_req, reply) => {
     console.log("[KILLSWITCH] /v1/emergency-stop endpoint called")

@@ -1,5 +1,5 @@
-import { useEffect, useState, useMemo } from 'react';
-import { View, Text, TextInput, Switch, StyleSheet, ScrollView, Modal, TouchableOpacity, Platform, Pressable, ActivityIndicator } from 'react-native';
+import { useEffect, useState, useMemo, useCallback } from 'react';
+import { View, Text, TextInput, Switch, StyleSheet, ScrollView, Modal, TouchableOpacity, Platform, Pressable, ActivityIndicator, RefreshControl } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppConfig, saveConfig, useConfigContext } from '../store/config';
 import { useTheme, ThemeMode } from '../ui/ThemeProvider';
@@ -8,6 +8,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Linking from 'expo-linking';
 import { checkServerConnection, ConnectionCheckResult } from '../lib/connectionRecovery';
 import { useTunnelConnection } from '../store/tunnelConnection';
+import { SettingsApiClient, Profile, MCPServer, Settings } from '../lib/settingsApi';
 
 function parseQRCode(data: string): { baseUrl?: string; apiKey?: string; model?: string } | null {
   try {
@@ -47,7 +48,122 @@ export default function SettingsScreen({ navigation }: any) {
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const { connect: tunnelConnect, disconnect: tunnelDisconnect } = useTunnelConnection();
 
+  // Remote settings state
+  const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [currentProfileId, setCurrentProfileId] = useState<string | undefined>();
+  const [mcpServers, setMcpServers] = useState<MCPServer[]>([]);
+  const [remoteSettings, setRemoteSettings] = useState<Settings | null>(null);
+  const [isLoadingRemote, setIsLoadingRemote] = useState(false);
+  const [remoteError, setRemoteError] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
   const styles = useMemo(() => createStyles(theme), [theme]);
+
+  // Create settings API client when we have valid credentials
+  const settingsClient = useMemo(() => {
+    if (config.baseUrl && config.apiKey) {
+      return new SettingsApiClient(config.baseUrl, config.apiKey);
+    }
+    return null;
+  }, [config.baseUrl, config.apiKey]);
+
+  // Fetch remote settings from desktop
+  const fetchRemoteSettings = useCallback(async () => {
+    if (!settingsClient) {
+      setProfiles([]);
+      setMcpServers([]);
+      setRemoteSettings(null);
+      return;
+    }
+
+    setIsLoadingRemote(true);
+    setRemoteError(null);
+
+    try {
+      const [profilesRes, serversRes, settingsRes] = await Promise.all([
+        settingsClient.getProfiles().catch(() => null),
+        settingsClient.getMCPServers().catch(() => null),
+        settingsClient.getSettings().catch(() => null),
+      ]);
+
+      if (profilesRes) {
+        setProfiles(profilesRes.profiles);
+        setCurrentProfileId(profilesRes.currentProfileId);
+      }
+      if (serversRes) {
+        setMcpServers(serversRes.servers);
+      }
+      if (settingsRes) {
+        setRemoteSettings(settingsRes);
+      }
+    } catch (error: any) {
+      console.error('[Settings] Failed to fetch remote settings:', error);
+      setRemoteError(error.message || 'Failed to load remote settings');
+    } finally {
+      setIsLoadingRemote(false);
+    }
+  }, [settingsClient]);
+
+  // Fetch remote settings when client becomes available
+  useEffect(() => {
+    if (settingsClient) {
+      fetchRemoteSettings();
+    }
+  }, [settingsClient, fetchRemoteSettings]);
+
+  // Handle pull-to-refresh
+  const onRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    await fetchRemoteSettings();
+    setIsRefreshing(false);
+  }, [fetchRemoteSettings]);
+
+  // Handle profile switch
+  const handleProfileSwitch = async (profileId: string) => {
+    if (!settingsClient || profileId === currentProfileId) return;
+
+    try {
+      await settingsClient.setCurrentProfile(profileId);
+      setCurrentProfileId(profileId);
+      // Refresh MCP servers as they may have changed with the profile
+      const serversRes = await settingsClient.getMCPServers();
+      setMcpServers(serversRes.servers);
+    } catch (error: any) {
+      console.error('[Settings] Failed to switch profile:', error);
+      setRemoteError(error.message || 'Failed to switch profile');
+    }
+  };
+
+  // Handle MCP server toggle
+  const handleServerToggle = async (serverName: string, enabled: boolean) => {
+    if (!settingsClient) return;
+
+    try {
+      await settingsClient.toggleMCPServer(serverName, enabled);
+      // Update local state optimistically
+      setMcpServers(prev => prev.map(s =>
+        s.name === serverName ? { ...s, enabled, runtimeEnabled: enabled } : s
+      ));
+    } catch (error: any) {
+      console.error('[Settings] Failed to toggle server:', error);
+      setRemoteError(error.message || 'Failed to toggle server');
+      // Refresh to get actual state
+      fetchRemoteSettings();
+    }
+  };
+
+  // Handle remote settings toggle
+  const handleRemoteSettingToggle = async (key: keyof Settings, value: boolean) => {
+    if (!settingsClient || !remoteSettings) return;
+
+    try {
+      await settingsClient.updateSettings({ [key]: value });
+      setRemoteSettings(prev => prev ? { ...prev, [key]: value } : null);
+    } catch (error: any) {
+      console.error('[Settings] Failed to update setting:', error);
+      setRemoteError(error.message || 'Failed to update setting');
+    }
+  };
 
   useEffect(() => {
     setDraft(config);
@@ -186,6 +302,14 @@ export default function SettingsScreen({ navigation }: any) {
       <ScrollView
         style={{ backgroundColor: theme.colors.background }}
         contentContainerStyle={[styles.container, { paddingBottom: insets.bottom + spacing.md }]}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={onRefresh}
+            tintColor={theme.colors.primary}
+            colors={[theme.colors.primary]}
+          />
+        }
       >
         <Text style={styles.h1}>Settings</Text>
 
@@ -268,6 +392,123 @@ export default function SettingsScreen({ navigation }: any) {
         <Text style={styles.helperText}>
           Queue messages while the agent is busy processing
         </Text>
+
+        {/* Remote Settings Section - only show when connected */}
+        {settingsClient && (
+          <>
+            <Text style={styles.sectionTitle}>Desktop Settings</Text>
+
+            {isLoadingRemote && !isRefreshing && (
+              <View style={styles.loadingRow}>
+                <ActivityIndicator size="small" color={theme.colors.primary} />
+                <Text style={styles.loadingText}>Loading remote settings...</Text>
+              </View>
+            )}
+
+            {remoteError && (
+              <View style={styles.warningContainer}>
+                <Text style={styles.warningText}>⚠️ {remoteError}</Text>
+                <TouchableOpacity onPress={fetchRemoteSettings}>
+                  <Text style={styles.retryText}>Retry</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* Profile Switching */}
+            {profiles.length > 0 && (
+              <>
+                <Text style={styles.subsectionTitle}>Profile</Text>
+                <View style={styles.profileList}>
+                  {profiles.map((profile) => (
+                    <TouchableOpacity
+                      key={profile.id}
+                      style={[
+                        styles.profileItem,
+                        currentProfileId === profile.id && styles.profileItemActive,
+                      ]}
+                      onPress={() => handleProfileSwitch(profile.id)}
+                    >
+                      <Text style={[
+                        styles.profileName,
+                        currentProfileId === profile.id && styles.profileNameActive,
+                      ]}>
+                        {profile.name}
+                        {profile.isDefault && ' (Default)'}
+                      </Text>
+                      {currentProfileId === profile.id && (
+                        <Text style={styles.checkmark}>✓</Text>
+                      )}
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </>
+            )}
+
+            {/* MCP Servers */}
+            {mcpServers.length > 0 && (
+              <>
+                <Text style={styles.subsectionTitle}>MCP Servers</Text>
+                {mcpServers.map((server) => (
+                  <View key={server.name} style={styles.serverRow}>
+                    <View style={styles.serverInfo}>
+                      <View style={styles.serverNameRow}>
+                        <View style={[
+                          styles.statusDot,
+                          server.connected ? styles.statusConnected : styles.statusDisconnected,
+                        ]} />
+                        <Text style={styles.serverName}>{server.name}</Text>
+                      </View>
+                      <Text style={styles.serverMeta}>
+                        {server.toolCount} tool{server.toolCount !== 1 ? 's' : ''}
+                        {server.error && ` • ${server.error}`}
+                      </Text>
+                    </View>
+                    <Switch
+                      value={server.enabled}
+                      onValueChange={(v) => handleServerToggle(server.name, v)}
+                      trackColor={{ false: theme.colors.muted, true: theme.colors.primary }}
+                      thumbColor={server.enabled ? theme.colors.primaryForeground : theme.colors.background}
+                      disabled={server.configDisabled}
+                    />
+                  </View>
+                ))}
+              </>
+            )}
+
+            {/* Feature Toggles */}
+            {remoteSettings && (
+              <>
+                <Text style={styles.subsectionTitle}>Features</Text>
+
+                <View style={styles.row}>
+                  <Text style={styles.label}>Post-Processing</Text>
+                  <Switch
+                    value={remoteSettings.transcriptPostProcessingEnabled}
+                    onValueChange={(v) => handleRemoteSettingToggle('transcriptPostProcessingEnabled', v)}
+                    trackColor={{ false: theme.colors.muted, true: theme.colors.primary }}
+                    thumbColor={remoteSettings.transcriptPostProcessingEnabled ? theme.colors.primaryForeground : theme.colors.background}
+                  />
+                </View>
+                <Text style={styles.helperText}>
+                  Clean up transcripts before sending to LLM
+                </Text>
+
+                <View style={styles.row}>
+                  <Text style={styles.label}>Tool Approval Required</Text>
+                  <Switch
+                    value={remoteSettings.mcpRequireApprovalBeforeToolCall}
+                    onValueChange={(v) => handleRemoteSettingToggle('mcpRequireApprovalBeforeToolCall', v)}
+                    trackColor={{ false: theme.colors.muted, true: theme.colors.primary }}
+                    thumbColor={remoteSettings.mcpRequireApprovalBeforeToolCall ? theme.colors.primaryForeground : theme.colors.background}
+                  />
+                </View>
+                <Text style={styles.helperText}>
+                  Require approval before executing MCP tools
+                </Text>
+              </>
+            )}
+          </>
+        )}
 
         {connectionError && (
           <View style={styles.errorContainer}>
@@ -462,6 +703,115 @@ function createStyles(theme: ReturnType<typeof useTheme>['theme']) {
       color: '#fff',
       fontSize: 16,
       fontWeight: '600',
+    },
+    // Remote settings styles
+    subsectionTitle: {
+      ...theme.typography.label,
+      marginTop: spacing.md,
+      marginBottom: spacing.xs,
+      fontSize: 14,
+      fontWeight: '600',
+      color: theme.colors.foreground,
+    },
+    loadingRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      paddingVertical: spacing.sm,
+    },
+    loadingText: {
+      color: theme.colors.mutedForeground,
+      fontSize: 14,
+    },
+    warningContainer: {
+      backgroundColor: '#f59e0b20', // amber-500 with opacity
+      borderWidth: 1,
+      borderColor: '#f59e0b', // amber-500
+      borderRadius: radius.md,
+      padding: spacing.md,
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+    },
+    warningText: {
+      color: '#d97706', // amber-600
+      fontSize: 14,
+      flex: 1,
+    },
+    retryText: {
+      color: theme.colors.primary,
+      fontSize: 14,
+      fontWeight: '600',
+      marginLeft: spacing.sm,
+    },
+    profileList: {
+      gap: spacing.xs,
+    },
+    profileItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingVertical: spacing.sm,
+      paddingHorizontal: spacing.md,
+      borderRadius: radius.md,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      backgroundColor: theme.colors.background,
+    },
+    profileItemActive: {
+      borderColor: theme.colors.primary,
+      backgroundColor: theme.colors.primary + '10',
+    },
+    profileName: {
+      fontSize: 14,
+      color: theme.colors.foreground,
+    },
+    profileNameActive: {
+      fontWeight: '600',
+      color: theme.colors.primary,
+    },
+    checkmark: {
+      color: theme.colors.primary,
+      fontSize: 16,
+      fontWeight: '600',
+    },
+    serverRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingVertical: spacing.sm,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.border,
+    },
+    serverInfo: {
+      flex: 1,
+      marginRight: spacing.md,
+    },
+    serverNameRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xs,
+    },
+    serverName: {
+      fontSize: 14,
+      fontWeight: '500',
+      color: theme.colors.foreground,
+    },
+    serverMeta: {
+      fontSize: 12,
+      color: theme.colors.mutedForeground,
+      marginTop: 2,
+    },
+    statusDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+    },
+    statusConnected: {
+      backgroundColor: '#22c55e', // green-500
+    },
+    statusDisconnected: {
+      backgroundColor: theme.colors.muted,
     },
   });
 }

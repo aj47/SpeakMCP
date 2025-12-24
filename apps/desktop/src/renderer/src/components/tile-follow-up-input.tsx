@@ -94,7 +94,10 @@ export function TileFollowUpInput({
 
     // Use custom handler if provided, otherwise call stopAgentSession directly
     if (onStopSession) {
+      setIsStoppingSession(true)
       onStopSession()
+      // Reset after a delay since we don't know when the callback completes
+      setTimeout(() => setIsStoppingSession(false), 2000)
       return
     }
 

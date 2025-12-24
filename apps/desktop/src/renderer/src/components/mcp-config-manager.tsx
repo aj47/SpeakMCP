@@ -1010,8 +1010,10 @@ export function MCPConfigManager({
   // This prevents treating all servers as "new" when settings-mcp-tools initially renders
   // with an empty config before useConfigQuery resolves
   const initialHydrationCompleteRef = useRef(
-    // If config already has servers on mount, we're hydrated
-    Object.keys(config.mcpServers || {}).length > 0
+    // If config already has servers on mount, we're hydrated.
+    // Also treat persisted collapse state as a signal that config is hydrated,
+    // even when the config legitimately has zero servers.
+    collapsedServers !== undefined || Object.keys(config.mcpServers || {}).length > 0
   )
 
   // Handle server changes: prune stale entries (new servers stay collapsed by default)
@@ -1044,8 +1046,9 @@ export function MCPConfigManager({
       return
     }
 
-    // Mark hydration complete if we see any servers
-    if (Object.keys(servers).length > 0) {
+    // Mark hydration complete once we have any persisted collapse state, even if
+    // the config legitimately has zero servers.
+    if (collapsedServers !== undefined || Object.keys(servers).length > 0) {
       initialHydrationCompleteRef.current = true
     }
 

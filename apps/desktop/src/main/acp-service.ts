@@ -140,9 +140,15 @@ class ACPService extends EventEmitter {
    */
   private handleSessionUpdate(agentName: string, params: {
     sessionId?: string
-    content?: ACPContentBlock[]
+    content?: ACPContentBlock[] | ACPContentBlock
     stopReason?: string
     isComplete?: boolean
+    // ACP agents may nest content inside an "update" object
+    update?: {
+      sessionUpdate?: string
+      content?: ACPContentBlock | ACPContentBlock[]
+      stopReason?: string
+    }
   }): void {
     const instance = this.agents.get(agentName)
     const sessionId = params.sessionId || instance?.sessionId || "unknown"
@@ -159,9 +165,33 @@ class ACPService extends EventEmitter {
       this.sessionOutputs.set(sessionId, output)
     }
 
+    // Extract content from various possible locations in the params
+    // ACP agents may structure content differently:
+    // 1. params.content (array or single block)
+    // 2. params.update.content (nested inside update object)
+    let contentBlocks: ACPContentBlock[] = []
+
+    // Check for content at top level
+    if (params.content) {
+      if (Array.isArray(params.content)) {
+        contentBlocks = params.content
+      } else if (typeof params.content === "object") {
+        contentBlocks = [params.content]
+      }
+    }
+
+    // Check for content nested in update object (Augment ACP format)
+    if (params.update?.content) {
+      if (Array.isArray(params.update.content)) {
+        contentBlocks = [...contentBlocks, ...params.update.content]
+      } else if (typeof params.update.content === "object") {
+        contentBlocks = [...contentBlocks, params.update.content]
+      }
+    }
+
     // Append new content blocks
-    if (params.content && Array.isArray(params.content)) {
-      for (const block of params.content) {
+    if (contentBlocks.length > 0) {
+      for (const block of contentBlocks) {
         output.contentBlocks.push(block)
 
         // Log text content for visibility
@@ -179,20 +209,23 @@ class ACPService extends EventEmitter {
       }
     }
 
+    // Check for stop reason in update object as well
+    const stopReason = params.stopReason || params.update?.stopReason
+
     // Update completion status
     if (params.isComplete) {
       output.isComplete = true
-      output.stopReason = params.stopReason
-      logApp(`[ACP:${agentName}] Session ${sessionId} complete. Stop reason: ${params.stopReason}`)
+      output.stopReason = stopReason
+      logApp(`[ACP:${agentName}] Session ${sessionId} complete. Stop reason: ${stopReason}`)
     }
 
     // Emit event for real-time UI updates
     this.emit("sessionUpdate", {
       agentName,
       sessionId,
-      content: params.content,
+      content: contentBlocks.length > 0 ? contentBlocks : undefined,
       isComplete: params.isComplete,
-      stopReason: params.stopReason,
+      stopReason,
       totalBlocks: output.contentBlocks.length,
     })
   }
@@ -655,7 +688,11 @@ class ACPService extends EventEmitter {
         stopReason?: string
         error?: { message?: string }
         content?: ACPContentBlock[]
+        message?: { content?: ACPContentBlock[] }  // Some agents wrap content in message
       }
+
+      // Debug: Log the raw response structure
+      logApp(`[ACP:${agentName}] session/prompt response: ${JSON.stringify(promptResult, null, 2).substring(0, 3000)}`)
 
       if (promptResult?.error) {
         return {
@@ -666,12 +703,30 @@ class ACPService extends EventEmitter {
 
       // Collect text output from the response (if returned directly)
       let resultText = ""
-      if (promptResult?.content && Array.isArray(promptResult.content)) {
-        for (const block of promptResult.content) {
-          if (block.type === "text" && block.text) {
+
+      // Try different response formats - agents may structure content differently
+      const contentBlocks = promptResult?.content
+        || promptResult?.message?.content
+        || (promptResult as Record<string, unknown>)?.messages?.[0]?.content
+        || []
+
+      if (Array.isArray(contentBlocks)) {
+        for (const block of contentBlocks) {
+          if (typeof block === "string") {
+            resultText += block + "\n"
+          } else if (block?.type === "text" && block?.text) {
+            resultText += block.text + "\n"
+          } else if (block?.text) {
             resultText += block.text + "\n"
           }
         }
+      } else if (typeof contentBlocks === "string") {
+        resultText = contentBlocks
+      }
+
+      // Also check for direct text field in response
+      if (!resultText && (promptResult as Record<string, unknown>)?.text) {
+        resultText = String((promptResult as Record<string, unknown>).text)
       }
 
       // Also check session output collected from notifications

@@ -2317,7 +2317,7 @@ export class MCPService {
       if (matchingTool && matchingTool.name.includes(":")) {
         // Check if it's a built-in tool
         if (isBuiltinTool(matchingTool.name)) {
-          const result = await executeBuiltinTool(matchingTool.name, toolCall.arguments || {})
+          const result = await executeBuiltinTool(matchingTool.name, toolCall.arguments || {}, sessionId)
           if (result) {
             return result
           }

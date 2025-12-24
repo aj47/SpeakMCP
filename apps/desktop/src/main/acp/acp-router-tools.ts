@@ -38,6 +38,9 @@ const sessionConversations: Map<string, ACPSubAgentMessage[]> = new Map();
 /** Map from agent session IDs to our delegation run IDs */
 const sessionToRunId: Map<string, string> = new Map();
 
+/** Map from agent names to their currently active run IDs (for session mapping fallback) */
+const agentNameToActiveRunId: Map<string, string> = new Map();
+
 // Initialize background notifier with our delegated runs map
 acpBackgroundNotifier.setDelegatedRunsMap(delegatedRuns);
 
@@ -57,10 +60,20 @@ acpService.on('sessionUpdate', (event: {
   logACPRouter(`Session update from ${agentName}:`, { sessionId, isComplete, contentBlocks: content?.length });
 
   // Find the run ID for this session
-  const runId = sessionToRunId.get(sessionId);
+  let runId = sessionToRunId.get(sessionId);
+
+  // If no session mapping exists, try to find by agent name (fallback for race condition)
   if (!runId) {
-    logACPRouter(`No run ID found for session ${sessionId}, creating new mapping`);
-    return;
+    const activeRunId = agentNameToActiveRunId.get(agentName);
+    if (activeRunId) {
+      // Establish the session mapping now that we have both IDs
+      sessionToRunId.set(sessionId, activeRunId);
+      runId = activeRunId;
+      logACPRouter(`Created session mapping: ${sessionId} -> ${runId} (via agent name fallback)`);
+    } else {
+      logACPRouter(`No run ID found for session ${sessionId} or agent ${agentName}`);
+      return;
+    }
   }
 
   const subAgentState = delegatedRuns.get(runId);
@@ -386,6 +399,10 @@ export async function handleDelegateToAgent(
     // Use acpService.runTask for the actual delegation
     subAgentState.status = 'running';
 
+    // Register the agent name -> runId mapping for session update fallback
+    agentNameToActiveRunId.set(args.agentName, runId);
+    logACPRouter(`Registered active run for ${args.agentName}: ${runId}`);
+
     // Add user message to conversation
     const userMessage: ACPSubAgentMessage = {
       role: 'user',
@@ -471,6 +488,9 @@ export async function handleDelegateToAgent(
         mode: 'async',
       }).then(
         (result) => {
+          // Register mapping after task completes (session should now exist)
+          registerSessionMapping();
+
           if (result.success) {
             subAgentState.status = 'completed';
             // Store result for later retrieval

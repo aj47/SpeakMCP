@@ -401,9 +401,19 @@ export function Component() {
           <EmptyState onTextClick={handleTextClick} onVoiceClick={handleVoiceStart} />
         ) : (
           <>
-            {/* Header with clear inactive button */}
-            {inactiveSessionCount > 0 && (
-              <div className="px-4 py-2 flex items-center justify-end bg-muted/20 border-b">
+            {/* Header with start buttons and clear inactive button */}
+            <div className="px-4 py-2 flex items-center justify-between bg-muted/20 border-b">
+              <div className="flex gap-2">
+                <Button size="sm" onClick={handleTextClick} className="gap-2">
+                  <Plus className="h-4 w-4" />
+                  Start with Text
+                </Button>
+                <Button variant="secondary" size="sm" onClick={handleVoiceStart} className="gap-2">
+                  <Mic className="h-4 w-4" />
+                  Start with Voice
+                </Button>
+              </div>
+              {inactiveSessionCount > 0 && (
                 <Button
                   variant="ghost"
                   size="sm"
@@ -414,8 +424,8 @@ export function Component() {
                   <CheckCircle2 className="h-4 w-4" />
                   Clear {inactiveSessionCount} completed
                 </Button>
-              </div>
-            )}
+              )}
+            </div>
             {/* Active sessions grid - includes pending continuation if any */}
             <SessionGrid sessionCount={allProgressEntries.length + (pendingProgress ? 1 : 0)}>
               {/* Pending continuation tile first */}

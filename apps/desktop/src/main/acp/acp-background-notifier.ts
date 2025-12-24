@@ -146,7 +146,7 @@ export class ACPBackgroundNotifier {
       sessionId: state.parentSessionId,
       currentIteration: 0,
       maxIterations: 1,
-      isComplete: state.status === 'completed',
+      isComplete: state.status === 'completed' || state.status === 'failed',
       steps: [
         {
           id: `delegation-complete-${state.runId}`,

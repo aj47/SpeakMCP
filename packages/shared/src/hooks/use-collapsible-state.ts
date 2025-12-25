@@ -5,7 +5,7 @@
  * Supports both single item and multi-item (Set-based) collapsible state.
  */
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, Dispatch, SetStateAction } from 'react';
 
 /**
  * Options for useCollapsibleState hook
@@ -172,7 +172,7 @@ export interface UseCollapsibleSetReturn {
    */
   collapseAll: (ids?: string[]) => void;
   /** Set the tracked items directly */
-  setExpandedItems: React.Dispatch<React.SetStateAction<Set<string>>>;
+  setExpandedItems: Dispatch<SetStateAction<Set<string>>>;
 }
 
 /**

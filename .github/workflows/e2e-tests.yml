@@ -1,0 +1,83 @@
+name: E2E Tests
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  e2e-tests:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        # Windows E2E tests are disabled until Playwright Electron support improves
+        # os: [ubuntu-latest, macos-latest, windows-latest]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 9.12.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --ignore-scripts
+
+      - name: Build shared package
+        run: pnpm -w run build:shared
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+        working-directory: apps/desktop
+
+      - name: Build Electron app
+        run: pnpm run build
+        working-directory: apps/desktop
+        env:
+          # Skip tests during build for E2E workflow
+          SKIP_TESTS: true
+
+      - name: Run E2E tests
+        run: pnpm run test:e2e:ci
+        working-directory: apps/desktop
+        env:
+          CI: true
+          # Required for Electron on Linux
+          DISPLAY: ':99'
+
+      - name: Upload test report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report-${{ matrix.os }}
+          path: apps/desktop/playwright-report/
+          retention-days: 7
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: test-results-${{ matrix.os }}
+          path: apps/desktop/test-results/
+          retention-days: 7
+
+  # Linux requires xvfb for headless Electron testing
+  e2e-linux-setup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Start Xvfb
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb
+          Xvfb :99 -screen 0 1280x1024x24 &

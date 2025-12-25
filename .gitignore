@@ -57,3 +57,8 @@ apps/mobile/ios/Pods/
 apps/mobile/ios/.xcode.env.local
 apps/mobile/ios/build/
 *.ipa
+
+# Playwright E2E test artifacts
+playwright-report/
+test-results/
+.playwright/

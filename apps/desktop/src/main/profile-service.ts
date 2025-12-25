@@ -313,8 +313,9 @@ class ProfileService {
       throw new Error(`Profile with id ${id} not found`)
     }
 
-    // Create a clean export without the id (will be regenerated on import)
-    const exportData: { name: string; guidelines: string; systemPrompt?: string } = {
+    // Create a comprehensive export with all profile settings and enabled MCP servers
+    const exportData: any = {
+      version: 1, // For future compatibility
       name: profile.name,
       guidelines: profile.guidelines,
     }
@@ -322,6 +323,50 @@ class ProfileService {
     // Include systemPrompt if it exists
     if (profile.systemPrompt) {
       exportData.systemPrompt = profile.systemPrompt
+    }
+
+    // Include MCP server configuration if it exists
+    if (profile.mcpServerConfig) {
+      exportData.mcpServerConfig = profile.mcpServerConfig
+    }
+
+    // Include model configuration if it exists
+    if (profile.modelConfig) {
+      exportData.modelConfig = profile.modelConfig
+    }
+
+    // Include actual MCP server definitions for enabled servers
+    const config = configStore.get()
+    const mcpConfig = config.mcpConfig
+    if (mcpConfig && mcpConfig.mcpServers && profile.mcpServerConfig) {
+      const enabledServers: Record<string, any> = {}
+
+      // Determine which servers are enabled based on the profile's configuration
+      const allServerNames = Object.keys(mcpConfig.mcpServers)
+      const disabledServers = profile.mcpServerConfig.disabledServers || []
+      const explicitlyEnabledServers = profile.mcpServerConfig.enabledServers || []
+      const allServersDisabledByDefault = profile.mcpServerConfig.allServersDisabledByDefault || false
+
+      // Logic to determine enabled servers:
+      // If allServersDisabledByDefault is true, only enabledServers are enabled
+      // Otherwise, all servers except those in disabledServers are enabled
+      let serversToExport: string[]
+      if (allServersDisabledByDefault) {
+        serversToExport = explicitlyEnabledServers
+      } else {
+        serversToExport = allServerNames.filter(name => !disabledServers.includes(name))
+      }
+
+      // Export the definitions of enabled servers
+      for (const serverName of serversToExport) {
+        if (mcpConfig.mcpServers[serverName]) {
+          enabledServers[serverName] = mcpConfig.mcpServers[serverName]
+        }
+      }
+
+      if (Object.keys(enabledServers).length > 0) {
+        exportData.mcpServers = enabledServers
+      }
     }
 
     return JSON.stringify(exportData, null, 2)
@@ -345,11 +390,54 @@ class ProfileService {
         throw new Error("Invalid profile data: systemPrompt must be a string")
       }
 
-      return this.createProfile(
+      // Create the basic profile
+      const newProfile = this.createProfile(
         importData.name,
         importData.guidelines || "",
         importData.systemPrompt
       )
+
+      // Import MCP server definitions if present
+      if (importData.mcpServers && typeof importData.mcpServers === "object") {
+        const config = configStore.get()
+        const currentMcpServers = config.mcpConfig?.mcpServers || {}
+
+        // Merge imported servers with existing ones (don't overwrite existing servers)
+        const mergedServers = { ...currentMcpServers }
+        let newServersAdded = 0
+
+        for (const [serverName, serverConfig] of Object.entries(importData.mcpServers)) {
+          if (!mergedServers[serverName]) {
+            mergedServers[serverName] = serverConfig
+            newServersAdded++
+          }
+        }
+
+        // Update config with merged servers
+        if (newServersAdded > 0) {
+          configStore.set({
+            ...config,
+            mcpConfig: {
+              ...config.mcpConfig,
+              mcpServers: mergedServers,
+            },
+          })
+          logApp(`Imported ${newServersAdded} new MCP server(s)`)
+        }
+      }
+
+      // Apply MCP server configuration if present
+      if (importData.mcpServerConfig && typeof importData.mcpServerConfig === "object") {
+        this.updateProfileMcpConfig(newProfile.id, importData.mcpServerConfig)
+      }
+
+      // Apply model configuration if present
+      if (importData.modelConfig && typeof importData.modelConfig === "object") {
+        this.updateProfileModelConfig(newProfile.id, importData.modelConfig)
+      }
+
+      // Return the updated profile
+      return this.getProfile(newProfile.id)!
     } catch (error) {
       throw new Error(`Failed to import profile: ${error instanceof Error ? error.message : String(error)}`)
     }

@@ -9,6 +9,42 @@ import { getBuiltinToolNames } from "./builtin-tool-definitions"
 
 const RESERVED_SERVER_NAMES = ["speakmcp-settings"]
 
+/**
+ * Validates the shape of an imported MCP server config
+ * Returns true if the config has a valid structure, false otherwise
+ */
+function isValidServerConfig(config: unknown): boolean {
+  if (typeof config !== "object" || config === null || Array.isArray(config)) {
+    return false
+  }
+
+  const c = config as Record<string, unknown>
+
+  // Validate transport if provided
+  if (
+    c.transport !== undefined &&
+    (typeof c.transport !== "string" ||
+      !["stdio", "websocket", "streamableHttp"].includes(c.transport))
+  ) {
+    return false
+  }
+
+  // Validate command/args for stdio transport
+  if (c.command !== undefined && typeof c.command !== "string") {
+    return false
+  }
+  if (c.args !== undefined && !Array.isArray(c.args)) {
+    return false
+  }
+
+  // Validate url for remote transports
+  if (c.url !== undefined && typeof c.url !== "string") {
+    return false
+  }
+
+  return true
+}
+
 export const profilesPath = path.join(
   app.getPath("appData"),
   process.env.APP_ID,
@@ -364,7 +400,7 @@ class ProfileService {
         if (mcpConfig.mcpServers[serverName]) {
           const serverConfig = mcpConfig.mcpServers[serverName]
           // Strip sensitive fields that may contain API keys/secrets
-          const { env, headers, ...sanitizedConfig } = serverConfig
+          const { env, headers, oauth, ...sanitizedConfig } = serverConfig
           enabledServers[serverName] = sanitizedConfig
         }
       }
@@ -425,6 +461,11 @@ class ProfileService {
           }
 
           if (!mergedServers[serverName]) {
+            // Validate server config shape
+            if (!isValidServerConfig(serverConfig)) {
+              logApp(`Skipping server "${serverName}" with invalid configuration`)
+              continue
+            }
             mergedServers[serverName] = serverConfig
             newServersAdded++
           }

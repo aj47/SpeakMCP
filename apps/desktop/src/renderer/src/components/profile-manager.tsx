@@ -133,7 +133,7 @@ export function ProfileManager({
     },
     onSuccess: (success: boolean) => {
       if (success) {
-        toast.success("Profile exported with all enabled MCP servers and settings")
+        toast.success("Profile exported (MCP credentials excluded for security)")
       }
     },
     onError: (error: Error) => {

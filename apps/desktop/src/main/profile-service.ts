@@ -7,6 +7,8 @@ import { logApp } from "./debug"
 import { configStore } from "./config"
 import { getBuiltinToolNames } from "./builtin-tool-definitions"
 
+const RESERVED_SERVER_NAMES = ["speakmcp-settings"]
+
 export const profilesPath = path.join(
   app.getPath("appData"),
   process.env.APP_ID,
@@ -360,7 +362,10 @@ class ProfileService {
       // Export the definitions of enabled servers
       for (const serverName of serversToExport) {
         if (mcpConfig.mcpServers[serverName]) {
-          enabledServers[serverName] = mcpConfig.mcpServers[serverName]
+          const serverConfig = mcpConfig.mcpServers[serverName]
+          // Strip sensitive fields that may contain API keys/secrets
+          const { env, headers, ...sanitizedConfig } = serverConfig
+          enabledServers[serverName] = sanitizedConfig
         }
       }
 
@@ -407,6 +412,18 @@ class ProfileService {
         let newServersAdded = 0
 
         for (const [serverName, serverConfig] of Object.entries(importData.mcpServers)) {
+          // Validate against prototype pollution attacks
+          if (serverName === "__proto__" || serverName === "constructor" || serverName === "prototype") {
+            logApp(`Skipping dangerous server name: ${serverName}`)
+            continue
+          }
+
+          // Validate against reserved names (case-insensitive)
+          if (RESERVED_SERVER_NAMES.some(reserved => reserved.toLowerCase() === serverName.toLowerCase())) {
+            logApp(`Skipping reserved server name: ${serverName}`)
+            continue
+          }
+
           if (!mergedServers[serverName]) {
             mergedServers[serverName] = serverConfig
             newServersAdded++
@@ -415,7 +432,7 @@ class ProfileService {
 
         // Update config with merged servers
         if (newServersAdded > 0) {
-          configStore.set({
+          configStore.save({
             ...config,
             mcpConfig: {
               ...config.mcpConfig,

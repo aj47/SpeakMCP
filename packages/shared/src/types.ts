@@ -88,6 +88,8 @@ export interface AgentProgressStep {
   description?: string;
   status: 'pending' | 'in_progress' | 'completed' | 'error' | 'awaiting_approval';
   timestamp: number;
+  /** @deprecated Use llmContent instead. Kept for backward compatibility. */
+  content?: string;
   llmContent?: string;
   toolCall?: ToolCall;
   toolResult?: ToolResult;

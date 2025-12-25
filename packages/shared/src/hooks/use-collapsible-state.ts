@@ -114,9 +114,27 @@ export function useCollapsibleState(
  * Options for useCollapsibleSet hook
  */
 export interface UseCollapsibleSetOptions {
-  /** Initial set of expanded item IDs (default: empty = all collapsed) */
+  /**
+   * Initial set of item IDs to track.
+   *
+   * The meaning of this set depends on the `defaultItemExpanded` option:
+   * - When `defaultItemExpanded` is `false` (default): These are the **expanded** item IDs.
+   *   Items in the set are expanded, items not in the set are collapsed.
+   * - When `defaultItemExpanded` is `true`: These are the **collapsed** item IDs (exceptions).
+   *   Items in the set are collapsed, items not in the set are expanded.
+   *
+   * Default: empty set (all items follow the default state from `defaultItemExpanded`)
+   */
   defaultExpanded?: Set<string> | string[];
-  /** Whether items should be expanded by default when not in the set */
+  /**
+   * Whether items should be expanded by default when not tracked in the set.
+   *
+   * - `false` (default): Items are collapsed by default. The set tracks which items are expanded.
+   * - `true`: Items are expanded by default. The set tracks which items are collapsed (exceptions).
+   *
+   * Note: When `true`, `collapseAll()` cannot work without knowing all IDs.
+   * Use `collapseAll(allIds)` or `setExpandedItems(new Set(allIds))` instead.
+   */
   defaultItemExpanded?: boolean;
 }
 
@@ -124,7 +142,15 @@ export interface UseCollapsibleSetOptions {
  * Return type for useCollapsibleSet hook
  */
 export interface UseCollapsibleSetReturn {
-  /** Set of currently expanded item IDs */
+  /**
+   * The internal set of tracked item IDs.
+   *
+   * Note: The meaning depends on `defaultItemExpanded`:
+   * - When `false`: Contains expanded item IDs
+   * - When `true`: Contains collapsed item IDs (exceptions)
+   *
+   * Prefer using `isExpanded()` and `isCollapsed()` for checking state.
+   */
   expandedItems: Set<string>;
   /** Check if a specific item is expanded */
   isExpanded: (id: string) => boolean;
@@ -136,11 +162,16 @@ export interface UseCollapsibleSetReturn {
   expand: (id: string) => void;
   /** Collapse a specific item */
   collapse: (id: string) => void;
-  /** Expand all items (provide all IDs) */
+  /** Expand all items (provide all IDs when defaultItemExpanded is false) */
   expandAll: (ids: string[]) => void;
-  /** Collapse all items */
-  collapseAll: () => void;
-  /** Set the expanded items directly */
+  /**
+   * Collapse all items.
+   *
+   * @param ids - Required when `defaultItemExpanded` is `true`. All item IDs to collapse.
+   *              Optional when `defaultItemExpanded` is `false` (clears the set).
+   */
+  collapseAll: (ids?: string[]) => void;
+  /** Set the tracked items directly */
   setExpandedItems: React.Dispatch<React.SetStateAction<Set<string>>>;
 }
 
@@ -254,14 +285,27 @@ export function useCollapsibleSet(
     [defaultItemExpanded]
   );
 
-  const collapseAll = useCallback(() => {
-    if (defaultItemExpanded) {
-      // We can't collapse all without knowing all IDs in defaultItemExpanded mode
-      // This is a limitation - caller should use expandAll([]) instead
-      console.warn('collapseAll() requires all IDs in defaultItemExpanded mode. Use setExpandedItems(new Set(allIds)) instead.');
-    }
-    setExpandedItems(new Set());
-  }, [defaultItemExpanded]);
+  const collapseAll = useCallback(
+    (ids?: string[]) => {
+      if (defaultItemExpanded) {
+        if (!ids) {
+          // In defaultItemExpanded mode, we need all IDs to collapse all
+          // Without IDs, we cannot collapse - return early to avoid incorrect behavior
+          console.warn(
+            'collapseAll() requires all IDs in defaultItemExpanded mode. ' +
+              'Call collapseAll(allIds) or use setExpandedItems(new Set(allIds)) instead.'
+          );
+          return;
+        }
+        // Add all IDs to the set to mark them as collapsed
+        setExpandedItems(new Set(ids));
+      } else {
+        // Clear the set to collapse all
+        setExpandedItems(new Set());
+      }
+    },
+    [defaultItemExpanded]
+  );
 
   return {
     expandedItems,

@@ -33,13 +33,112 @@ function isValidServerConfig(config: unknown): boolean {
   if (c.command !== undefined && typeof c.command !== "string") {
     return false
   }
-  if (c.args !== undefined && !Array.isArray(c.args)) {
-    return false
+  if (c.args !== undefined) {
+    if (!Array.isArray(c.args) || !c.args.every((arg) => typeof arg === "string")) {
+      return false
+    }
   }
 
   // Validate url for remote transports
   if (c.url !== undefined && typeof c.url !== "string") {
     return false
+  }
+
+  // Validate env if provided (must be Record<string, string>)
+  if (c.env !== undefined) {
+    if (typeof c.env !== "object" || c.env === null || Array.isArray(c.env)) {
+      return false
+    }
+    const env = c.env as Record<string, unknown>
+    if (!Object.values(env).every((val) => typeof val === "string")) {
+      return false
+    }
+  }
+
+  // Validate headers if provided (must be Record<string, string>)
+  if (c.headers !== undefined) {
+    if (typeof c.headers !== "object" || c.headers === null || Array.isArray(c.headers)) {
+      return false
+    }
+    const headers = c.headers as Record<string, unknown>
+    if (!Object.values(headers).every((val) => typeof val === "string")) {
+      return false
+    }
+  }
+
+  // Validate timeout if provided (must be a number)
+  if (c.timeout !== undefined && typeof c.timeout !== "number") {
+    return false
+  }
+
+  // Validate disabled if provided (must be a boolean)
+  if (c.disabled !== undefined && typeof c.disabled !== "boolean") {
+    return false
+  }
+
+  return true
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === "string")
+}
+
+function isValidMcpServerConfig(config: unknown): config is Partial<ProfileMcpServerConfig> {
+  if (config === null || typeof config !== "object" || Array.isArray(config)) {
+    return false
+  }
+
+  const c = config as Record<string, unknown>
+
+  if (c.disabledServers !== undefined && !isStringArray(c.disabledServers)) {
+    return false
+  }
+
+  if (c.disabledTools !== undefined && !isStringArray(c.disabledTools)) {
+    return false
+  }
+
+  if (c.enabledServers !== undefined && !isStringArray(c.enabledServers)) {
+    return false
+  }
+
+  if (c.allServersDisabledByDefault !== undefined && typeof c.allServersDisabledByDefault !== "boolean") {
+    return false
+  }
+
+  return true
+}
+
+/**
+ * Validates the shape of an imported model config
+ * Returns true if the config has a valid structure, false otherwise
+ */
+function isValidModelConfig(config: unknown): boolean {
+  if (typeof config !== "object" || config === null || Array.isArray(config)) {
+    return false
+  }
+
+  const c = config as Record<string, unknown>
+
+  // All ProfileModelConfig fields are optional strings
+  const stringFields = [
+    "mcpToolsProviderId",
+    "mcpToolsOpenaiModel",
+    "mcpToolsGroqModel",
+    "mcpToolsGeminiModel",
+    "currentModelPresetId",
+    "sttProviderId",
+    "transcriptPostProcessingProviderId",
+    "transcriptPostProcessingOpenaiModel",
+    "transcriptPostProcessingGroqModel",
+    "transcriptPostProcessingGeminiModel",
+    "ttsProviderId",
+  ]
+
+  for (const field of stringFields) {
+    if (c[field] !== undefined && typeof c[field] !== "string") {
+      return false
+    }
   }
 
   return true
@@ -486,12 +585,20 @@ class ProfileService {
 
       // Apply MCP server configuration if present
       if (importData.mcpServerConfig && typeof importData.mcpServerConfig === "object") {
-        this.updateProfileMcpConfig(newProfile.id, importData.mcpServerConfig)
+        if (isValidMcpServerConfig(importData.mcpServerConfig)) {
+          this.updateProfileMcpConfig(newProfile.id, importData.mcpServerConfig)
+        } else {
+          logApp("Warning: Invalid mcpServerConfig format in import data, skipping")
+        }
       }
 
       // Apply model configuration if present
       if (importData.modelConfig && typeof importData.modelConfig === "object") {
-        this.updateProfileModelConfig(newProfile.id, importData.modelConfig)
+        if (isValidModelConfig(importData.modelConfig)) {
+          this.updateProfileModelConfig(newProfile.id, importData.modelConfig)
+        } else {
+          logApp("Warning: Invalid modelConfig format in import data, skipping")
+        }
       }
 
       // Return the updated profile

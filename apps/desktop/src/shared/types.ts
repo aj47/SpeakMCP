@@ -1,7 +1,7 @@
 import type { CHAT_PROVIDER_ID, STT_PROVIDER_ID, TTS_PROVIDER_ID, OPENAI_COMPATIBLE_PRESET_ID } from "."
 import type { ToolCall, ToolResult } from '@speakmcp/shared'
 
-export type { ToolCall, ToolResult, BaseChatMessage, ConversationHistoryMessage, ChatApiResponse } from '@speakmcp/shared'
+export type { ToolCall, ToolResult, BaseChatMessage, ConversationHistoryMessage, ChatApiResponse, QueuedMessage, MessageQueue, AgentProgressStep, AgentProgressUpdate } from '@speakmcp/shared'
 
 export type RecordingHistoryItem = {
   id: string
@@ -101,87 +101,6 @@ export interface MCPConfig {
 export interface ServerLogEntry {
   timestamp: number
   message: string
-}
-
-// Agent Mode Progress Tracking Types
-export interface AgentProgressStep {
-  id: string
-  type: "thinking" | "tool_call" | "tool_result" | "completion" | "tool_approval"
-  title: string
-  description?: string
-  status: "pending" | "in_progress" | "completed" | "error" | "awaiting_approval"
-  timestamp: number
-  llmContent?: string
-  toolCall?: ToolCall
-  toolResult?: ToolResult
-  approvalRequest?: {
-    approvalId: string
-    toolName: string
-    arguments: any
-  }
-}
-
-export interface AgentProgressUpdate {
-  sessionId: string
-  conversationId?: string
-  conversationTitle?: string
-  currentIteration: number
-  maxIterations: number
-  steps: AgentProgressStep[]
-  isComplete: boolean
-  isSnoozed?: boolean
-  finalContent?: string
-  conversationHistory?: Array<{
-    role: "user" | "assistant" | "tool"
-    content: string
-    toolCalls?: ToolCall[]
-    toolResults?: ToolResult[]
-    timestamp?: number
-  }>
-  sessionStartIndex?: number
-  pendingToolApproval?: {
-    approvalId: string
-    toolName: string
-    arguments: any
-  }
-  retryInfo?: {
-    isRetrying: boolean
-    attempt: number
-    maxAttempts?: number
-    delaySeconds: number
-    reason: string
-    startedAt: number
-  }
-  streamingContent?: {
-    text: string
-    isStreaming: boolean
-  }
-  contextInfo?: {
-    estTokens: number
-    maxTokens: number
-  }
-  modelInfo?: {
-    provider: string
-    model: string
-  }
-  /** Profile name associated with this session (from profile snapshot) */
-  profileName?: string
-}
-
-// Message Queue Types
-export interface QueuedMessage {
-  id: string
-  conversationId: string
-  text: string
-  createdAt: number
-  status: "pending" | "processing" | "cancelled" | "failed"
-  errorMessage?: string
-  addedToHistory?: boolean
-}
-
-export interface MessageQueue {
-  conversationId: string
-  messages: QueuedMessage[]
 }
 
 // Conversation Types

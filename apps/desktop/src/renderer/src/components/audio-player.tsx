@@ -4,6 +4,7 @@ import { Slider } from "@renderer/components/ui/slider"
 import { Play, Pause, Volume2, VolumeX, Loader2 } from "lucide-react"
 import { cn } from "@renderer/lib/utils"
 import { ttsManager } from "@renderer/lib/tts-manager"
+import { formatDuration } from "@speakmcp/shared"
 
 interface AudioPlayerProps {
   audioData?: ArrayBuffer
@@ -199,11 +200,7 @@ export function AudioPlayer({
     }
   }
 
-  const formatTime = (time: number) => {
-    const minutes = Math.floor(time / 60)
-    const seconds = Math.floor(time % 60)
-    return `${minutes}:${seconds.toString().padStart(2, "0")}`
-  }
+
 
   if (compact) {
     return (
@@ -225,7 +222,7 @@ export function AudioPlayer({
         </Button>
         {hasAudio && duration > 0 && (
           <span className="text-xs text-muted-foreground">
-            {formatTime(currentTime)} / {formatTime(duration)}
+            {formatDuration(currentTime)} / {formatDuration(duration)}
           </span>
         )}
         <audio ref={audioRef} />
@@ -263,8 +260,8 @@ export function AudioPlayer({
                 className="w-full"
               />
               <div className="flex justify-between text-xs text-muted-foreground">
-                <span>{formatTime(currentTime)}</span>
-                <span>{formatTime(duration)}</span>
+                <span>{formatDuration(currentTime)}</span>
+                <span>{formatDuration(duration)}</span>
               </div>
             </>
           ) : (

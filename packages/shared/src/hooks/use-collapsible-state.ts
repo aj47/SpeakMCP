@@ -1,0 +1,248 @@
+/**
+ * SpeakMCP Shared Collapsible State Hook
+ *
+ * Consolidates common collapse/expand state logic used across the app.
+ * Supports both single item and multi-item (Set-based) collapsible state.
+ */
+
+import { useState, useCallback, Dispatch, SetStateAction } from 'react';
+
+/**
+ * Options for useCollapsibleState hook
+ */
+export interface UseCollapsibleStateOptions {
+  /** Initial collapsed state (default: true = collapsed) */
+  defaultCollapsed?: boolean;
+  /** External controlled value for collapsed state */
+  isCollapsed?: boolean;
+  /** Callback when toggle is triggered (for controlled mode) */
+  onToggle?: () => void;
+}
+
+/**
+ * Return type for useCollapsibleState hook
+ */
+export interface UseCollapsibleStateReturn {
+  /** Whether the item is currently collapsed */
+  isCollapsed: boolean;
+  /** Whether the item is currently expanded (inverse of isCollapsed) */
+  isExpanded: boolean;
+  /** Toggle the collapsed state */
+  toggle: () => void;
+  /** Set collapsed state to true */
+  collapse: () => void;
+  /** Set collapsed state to false (expand) */
+  expand: () => void;
+  /** Set collapsed state directly */
+  setCollapsed: (collapsed: boolean) => void;
+}
+
+/**
+ * Hook for managing single item collapsible state.
+ * Supports both controlled and uncontrolled modes.
+ */
+export function useCollapsibleState(
+  options: UseCollapsibleStateOptions = {}
+): UseCollapsibleStateReturn {
+  const { defaultCollapsed = true, isCollapsed: controlledCollapsed, onToggle } = options;
+
+  const [internalCollapsed, setInternalCollapsed] = useState(defaultCollapsed);
+
+  const isCollapsed = controlledCollapsed ?? internalCollapsed;
+  const isExpanded = !isCollapsed;
+
+  const toggle = useCallback(() => {
+    if (onToggle) {
+      onToggle();
+    } else {
+      setInternalCollapsed((prev) => !prev);
+    }
+  }, [onToggle]);
+
+  const collapse = useCallback(() => {
+    if (onToggle) {
+      if (!isCollapsed) onToggle();
+    } else {
+      setInternalCollapsed(true);
+    }
+  }, [onToggle, isCollapsed]);
+
+  const expand = useCallback(() => {
+    if (onToggle) {
+      if (isCollapsed) onToggle();
+    } else {
+      setInternalCollapsed(false);
+    }
+  }, [onToggle, isCollapsed]);
+
+  const setCollapsed = useCallback(
+    (collapsed: boolean) => {
+      if (onToggle) {
+        if (collapsed !== isCollapsed) onToggle();
+      } else {
+        setInternalCollapsed(collapsed);
+      }
+    },
+    [onToggle, isCollapsed]
+  );
+
+  return {
+    isCollapsed,
+    isExpanded,
+    toggle,
+    collapse,
+    expand,
+    setCollapsed,
+  };
+}
+
+/**
+ * Options for useCollapsibleSet hook
+ */
+export interface UseCollapsibleSetOptions {
+  /** Initial set of expanded item IDs */
+  defaultExpanded?: Set<string> | string[];
+  /** Whether items should be expanded by default when not tracked in the set */
+  defaultItemExpanded?: boolean;
+}
+
+/**
+ * Return type for useCollapsibleSet hook
+ */
+export interface UseCollapsibleSetReturn {
+  /** The internal set of tracked item IDs */
+  expandedItems: Set<string>;
+  /** Check if a specific item is expanded */
+  isExpanded: (id: string) => boolean;
+  /** Check if a specific item is collapsed */
+  isCollapsed: (id: string) => boolean;
+  /** Toggle a specific item's expanded state */
+  toggle: (id: string) => void;
+  /** Expand a specific item */
+  expand: (id: string) => void;
+  /** Collapse a specific item */
+  collapse: (id: string) => void;
+  /** Expand all items */
+  expandAll: (ids: string[]) => void;
+  /** Collapse all items */
+  collapseAll: (ids?: string[]) => void;
+  /** Set the tracked items directly */
+  setExpandedItems: Dispatch<SetStateAction<Set<string>>>;
+}
+
+/**
+ * Hook for managing multiple items' collapsible state using a Set.
+ */
+export function useCollapsibleSet(
+  options: UseCollapsibleSetOptions = {}
+): UseCollapsibleSetReturn {
+  const { defaultExpanded = [], defaultItemExpanded = false } = options;
+
+  const [expandedItems, setExpandedItems] = useState<Set<string>>(() => {
+    if (defaultExpanded instanceof Set) {
+      return new Set(defaultExpanded);
+    }
+    return new Set(defaultExpanded);
+  });
+
+  const isExpanded = useCallback(
+    (id: string): boolean => {
+      if (defaultItemExpanded) {
+        return !expandedItems.has(id);
+      }
+      return expandedItems.has(id);
+    },
+    [expandedItems, defaultItemExpanded]
+  );
+
+  const isCollapsed = useCallback((id: string): boolean => !isExpanded(id), [isExpanded]);
+
+  const toggle = useCallback((id: string) => {
+    setExpandedItems((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }, []);
+
+  const expand = useCallback(
+    (id: string) => {
+      setExpandedItems((prev) => {
+        if (defaultItemExpanded) {
+          if (!prev.has(id)) return prev;
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        }
+        if (prev.has(id)) return prev;
+        const next = new Set(prev);
+        next.add(id);
+        return next;
+      });
+    },
+    [defaultItemExpanded]
+  );
+
+  const collapse = useCallback(
+    (id: string) => {
+      setExpandedItems((prev) => {
+        if (defaultItemExpanded) {
+          if (prev.has(id)) return prev;
+          const next = new Set(prev);
+          next.add(id);
+          return next;
+        }
+        if (!prev.has(id)) return prev;
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    },
+    [defaultItemExpanded]
+  );
+
+  const expandAll = useCallback(
+    (ids: string[]) => {
+      if (defaultItemExpanded) {
+        setExpandedItems(new Set());
+      } else {
+        setExpandedItems(new Set(ids));
+      }
+    },
+    [defaultItemExpanded]
+  );
+
+  const collapseAll = useCallback(
+    (ids?: string[]) => {
+      if (defaultItemExpanded) {
+        if (!ids) {
+          console.warn(
+            'collapseAll() requires all IDs in defaultItemExpanded mode.'
+          );
+          return;
+        }
+        setExpandedItems(new Set(ids));
+      } else {
+        setExpandedItems(new Set());
+      }
+    },
+    [defaultItemExpanded]
+  );
+
+  return {
+    expandedItems,
+    isExpanded,
+    isCollapsed,
+    toggle,
+    expand,
+    collapse,
+    expandAll,
+    collapseAll,
+    setExpandedItems,
+  };
+}
+

@@ -15,7 +15,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { QueuedMessage } from '@speakmcp/shared';
+import { QueuedMessage, formatTime } from '@speakmcp/shared';
 import { useTheme } from './ThemeProvider';
 
 interface MessageQueuePanelProps {
@@ -55,11 +55,6 @@ function QueuedMessageItem({ message, onRemove, onUpdate, onRetry }: QueuedMessa
       setEditText(message.text);
     }
   }, [message.status, message.text]);
-
-  const formatTime = (timestamp: number) => {
-    const date = new Date(timestamp);
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  };
 
   const handleSaveEdit = () => {
     const trimmed = editText.trim();

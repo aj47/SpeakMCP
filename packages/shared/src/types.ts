@@ -77,3 +77,69 @@ export interface MessageQueue {
   messages: QueuedMessage[];
 }
 
+/**
+ * Agent progress step - represents a single step in agent execution.
+ * Used for tracking and displaying agent progress in both desktop and mobile.
+ */
+export interface AgentProgressStep {
+  id: string;
+  type: 'thinking' | 'tool_call' | 'tool_result' | 'completion' | 'tool_approval' | 'response' | 'error' | 'pending_approval';
+  title: string;
+  description?: string;
+  status: 'pending' | 'in_progress' | 'completed' | 'error' | 'awaiting_approval';
+  timestamp: number;
+  llmContent?: string;
+  toolCall?: ToolCall;
+  toolResult?: ToolResult;
+  approvalRequest?: {
+    approvalId: string;
+    toolName: string;
+    arguments: unknown;
+  };
+}
+
+/**
+ * Agent progress update - represents the current state of an agent session.
+ * Used for real-time updates between desktop/mobile and the agent backend.
+ */
+export interface AgentProgressUpdate {
+  sessionId: string;
+  conversationId?: string;
+  conversationTitle?: string;
+  currentIteration: number;
+  maxIterations: number;
+  steps: AgentProgressStep[];
+  isComplete: boolean;
+  isSnoozed?: boolean;
+  finalContent?: string;
+  conversationHistory?: ConversationHistoryMessage[];
+  sessionStartIndex?: number;
+  pendingToolApproval?: {
+    approvalId: string;
+    toolName: string;
+    arguments: unknown;
+  };
+  retryInfo?: {
+    isRetrying: boolean;
+    attempt: number;
+    maxAttempts?: number;
+    delaySeconds: number;
+    reason: string;
+    startedAt: number;
+  };
+  streamingContent?: {
+    text: string;
+    isStreaming: boolean;
+  };
+  contextInfo?: {
+    estTokens: number;
+    maxTokens: number;
+  };
+  modelInfo?: {
+    provider: string;
+    model: string;
+  };
+  /** Profile name associated with this session (from profile snapshot) */
+  profileName?: string;
+}
+

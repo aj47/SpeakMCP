@@ -250,6 +250,17 @@ function truncatePreview(text: string, maxLength: number): string {
 }
 
 /**
+ * Format a timestamp as a simple time string (HH:MM format).
+ * Used for message queue panels and similar UI elements.
+ * @param timestamp Unix timestamp in milliseconds
+ * @returns Time string in locale-specific 2-digit hour:minute format
+ */
+export function formatTime(timestamp: number): string {
+  const date = new Date(timestamp);
+  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+/**
  * Format a timestamp for display relative to current time
  * @param timestamp Unix timestamp in milliseconds
  * @returns A human-readable relative time string

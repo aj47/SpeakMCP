@@ -3,6 +3,7 @@ import { cn } from "@renderer/lib/utils"
 import { X, Clock, Trash2, Pencil, Check, ChevronDown, ChevronUp, AlertCircle, RefreshCw, Loader2 } from "lucide-react"
 import { Button } from "@renderer/components/ui/button"
 import { QueuedMessage } from "@shared/types"
+import { formatTime } from "@speakmcp/shared"
 import { useMutation } from "@tanstack/react-query"
 import { tipcClient } from "@renderer/lib/tipc-client"
 
@@ -69,11 +70,6 @@ function QueuedMessageItem({
       setEditText(message.text)
     },
   })
-
-  const formatTime = (timestamp: number) => {
-    const date = new Date(timestamp)
-    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-  }
 
   const handleSaveEdit = () => {
     const trimmed = editText.trim()

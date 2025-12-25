@@ -77,3 +77,72 @@ export interface MessageQueue {
   messages: QueuedMessage[];
 }
 
+// Agent Mode Progress Tracking Types
+
+/**
+ * Represents a single step in the agent's progress.
+ * Used to track thinking, tool calls, tool results, and completions.
+ */
+export interface AgentProgressStep {
+  id: string;
+  type: 'thinking' | 'tool_call' | 'tool_result' | 'completion' | 'tool_approval' | 'response' | 'error' | 'pending_approval';
+  title: string;
+  description?: string;
+  status: 'pending' | 'in_progress' | 'completed' | 'error' | 'awaiting_approval';
+  timestamp: number;
+  content?: string;
+  llmContent?: string;
+  toolCall?: ToolCall;
+  toolResult?: ToolResult;
+  approvalRequest?: {
+    approvalId: string;
+    toolName: string;
+    arguments: Record<string, unknown>;
+  };
+}
+
+/**
+ * Represents an update to the agent's progress during a session.
+ * Contains the full state of the agent's current processing.
+ */
+export interface AgentProgressUpdate {
+  sessionId: string;
+  conversationId?: string;
+  conversationTitle?: string;
+  currentIteration: number;
+  maxIterations: number;
+  steps: AgentProgressStep[];
+  isComplete: boolean;
+  isSnoozed?: boolean;
+  finalContent?: string;
+  conversationHistory?: ConversationHistoryMessage[];
+  sessionStartIndex?: number;
+  pendingToolApproval?: {
+    approvalId: string;
+    toolName: string;
+    arguments: Record<string, unknown>;
+  };
+  retryInfo?: {
+    isRetrying: boolean;
+    attempt: number;
+    maxAttempts?: number;
+    delaySeconds: number;
+    reason: string;
+    startedAt: number;
+  };
+  streamingContent?: {
+    text: string;
+    isStreaming: boolean;
+  };
+  contextInfo?: {
+    estTokens: number;
+    maxTokens: number;
+  };
+  modelInfo?: {
+    provider: string;
+    model: string;
+  };
+  /** Profile name associated with this session (from profile snapshot) */
+  profileName?: string;
+}
+

@@ -2,7 +2,9 @@ import type {
   ToolCall,
   ToolResult,
   ConversationHistoryMessage,
-  ChatApiResponse
+  ChatApiResponse,
+  AgentProgressStep,
+  AgentProgressUpdate
 } from '@speakmcp/shared';
 import { Platform } from 'react-native';
 import EventSource from 'react-native-sse';
@@ -36,36 +38,8 @@ export type ChatMessage = {
 
 export type ChatResponse = ChatApiResponse;
 
-export type { ToolCall, ToolResult, ConversationHistoryMessage } from '@speakmcp/shared';
+export type { ToolCall, ToolResult, ConversationHistoryMessage, AgentProgressStep, AgentProgressUpdate } from '@speakmcp/shared';
 export type { StreamingCheckpoint } from './connectionRecovery';
-
-export interface AgentProgressUpdate {
-  sessionId: string;
-  conversationId?: string;
-  currentIteration: number;
-  maxIterations: number;
-  steps: AgentProgressStep[];
-  isComplete: boolean;
-  finalContent?: string;
-  conversationHistory?: ConversationHistoryMessage[];
-  streamingContent?: {
-    text: string;
-    isStreaming: boolean;
-  };
-}
-
-export interface AgentProgressStep {
-  id: string;
-  type: 'thinking' | 'tool_call' | 'tool_result' | 'response' | 'error' | 'pending_approval' | 'completion';
-  title: string;
-  description?: string;
-  status: 'pending' | 'in_progress' | 'completed' | 'error';
-  timestamp: number;
-  content?: string;
-  llmContent?: string;
-  toolCall?: { name: string; arguments: any };
-  toolResult?: { success: boolean; content: string; error?: string };
-}
 
 export type OnProgressCallback = (update: AgentProgressUpdate) => void;
 

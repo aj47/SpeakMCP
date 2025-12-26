@@ -387,7 +387,7 @@ export function Component() {
 
                   <Control label={<ControlLabel label="TTS Voice" tooltip="Choose the voice for Groq TTS" />} className="px-3">
                     <Select
-                      value={configQuery.data.groqTtsVoice || "troy"}
+                      value={configQuery.data.groqTtsVoice || (configQuery.data.groqTtsModel === "canopylabs/orpheus-arabic-saudi" ? "fahad" : "troy")}
                       onValueChange={(value) => saveConfig({ groqTtsVoice: value })}
                     >
                       <SelectTrigger>
@@ -614,7 +614,7 @@ export function Component() {
 
                   <Control label={<ControlLabel label="TTS Voice" tooltip="Choose the voice for Groq TTS" />} className="px-3">
                     <Select
-                      value={configQuery.data.groqTtsVoice || "troy"}
+                      value={configQuery.data.groqTtsVoice || (configQuery.data.groqTtsModel === "canopylabs/orpheus-arabic-saudi" ? "fahad" : "troy")}
                       onValueChange={(value) => saveConfig({ groqTtsVoice: value })}
                     >
                       <SelectTrigger>

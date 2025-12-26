@@ -28,7 +28,8 @@ function migrateGroqTtsConfig(config: Partial<Config>): Partial<Config> {
 
   // Migrate deprecated PlayAI voices to Orpheus equivalents
   // If the voice ends with "-PlayAI", it's a deprecated voice that needs migration
-  if (config.groqTtsVoice && config.groqTtsVoice.endsWith("-PlayAI")) {
+  // Guard with typeof check since config.json is user-editable and groqTtsVoice could be non-string
+  if (config.groqTtsVoice && typeof config.groqTtsVoice === "string" && config.groqTtsVoice.endsWith("-PlayAI")) {
     // Set to appropriate default voice based on the model
     if (config.groqTtsModel === "canopylabs/orpheus-arabic-saudi") {
       config.groqTtsVoice = "fahad" // Default Arabic voice

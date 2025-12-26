@@ -2788,7 +2788,9 @@ async function generateGroqTTS(
   config: Config
 ): Promise<ArrayBuffer> {
   const model = input.model || config.groqTtsModel || "canopylabs/orpheus-v1-english"
-  const voice = input.voice || config.groqTtsVoice || "troy"
+  // Choose default voice based on model - Arabic model should use Arabic voice
+  const defaultVoice = model === "canopylabs/orpheus-arabic-saudi" ? "fahad" : "troy"
+  const voice = input.voice || config.groqTtsVoice || defaultVoice
 
   const baseUrl = config.groqBaseUrl || "https://api.groq.com/openai/v1"
   const apiKey = config.groqApiKey

@@ -17,9 +17,12 @@ const MEETINGS_FOLDER = path.join(app.getPath("appData"), process.env.APP_ID, "m
 
 // Audio buffer settings for transcription
 const TRANSCRIPTION_INTERVAL_MS = 30000 // Transcribe every 30 seconds
-const SAMPLE_RATE = 48000
-const CHANNELS = 1
-const BYTES_PER_SAMPLE = 2 // 16-bit audio
+const TRANSCRIPTION_TIMEOUT_MS = 60000 // 60 second timeout for transcription requests
+
+// Default audio settings (can be overridden by actual recorder settings)
+const DEFAULT_SAMPLE_RATE = 48000
+const DEFAULT_CHANNELS = 1
+const DEFAULT_BYTES_PER_SAMPLE = 2 // 16-bit audio
 
 // Dynamically import macos-system-audio-recorder (only available on macOS)
 let SystemAudioRecorder: any = null
@@ -40,10 +43,17 @@ async function loadSystemAudioRecorder() {
   }
 }
 
+interface AudioDetails {
+  sampleRate: number
+  channels: number
+  bitsPerSample: number
+}
+
 interface AudioBuffer {
   data: Buffer[]
   source: "microphone" | "system"
   startTime: number
+  audioDetails: AudioDetails
 }
 
 class MeetingRecorderService {
@@ -57,6 +67,11 @@ class MeetingRecorderService {
   private transcriptionTimer: ReturnType<typeof setInterval> | null = null
   private isRecording = false
   private isTranscribing = false // Guard to prevent overlapping transcription runs
+  private systemAudioDetails: AudioDetails = {
+    sampleRate: DEFAULT_SAMPLE_RATE,
+    channels: DEFAULT_CHANNELS,
+    bitsPerSample: DEFAULT_BYTES_PER_SAMPLE * 8,
+  }
 
   constructor() {
     fs.mkdirSync(MEETINGS_FOLDER, { recursive: true })
@@ -126,10 +141,26 @@ class MeetingRecorderService {
     this.systemRecorder = new RecorderClass()
     this.systemRecorder.start()
 
+    // Get actual audio details from the recorder if available
+    try {
+      const details = this.systemRecorder.getAudioDetails?.()
+      if (details) {
+        this.systemAudioDetails = {
+          sampleRate: details.sampleRate || DEFAULT_SAMPLE_RATE,
+          channels: details.channels || DEFAULT_CHANNELS,
+          bitsPerSample: details.bitsPerSample || (DEFAULT_BYTES_PER_SAMPLE * 8),
+        }
+        logApp(`[MeetingRecorder] System audio details: ${JSON.stringify(this.systemAudioDetails)}`)
+      }
+    } catch (error) {
+      logApp("[MeetingRecorder] Could not get audio details, using defaults:", error)
+    }
+
     this.systemAudioBuffer = {
       data: [],
       source: "system",
       startTime: Date.now(),
+      audioDetails: { ...this.systemAudioDetails },
     }
 
     // Get the audio stream and collect data
@@ -148,6 +179,7 @@ class MeetingRecorderService {
   }
 
   // Called from renderer to add microphone audio data
+  // Microphone audio is always 48kHz mono 16-bit from the renderer AudioContext
   addMicrophoneAudioData(audioData: ArrayBuffer): void {
     if (!this.isRecording || !this.currentMeeting) return
     if (this.currentMeeting.audioSource !== "microphone" && this.currentMeeting.audioSource !== "both") return
@@ -157,6 +189,11 @@ class MeetingRecorderService {
         data: [],
         source: "microphone",
         startTime: Date.now(),
+        audioDetails: {
+          sampleRate: DEFAULT_SAMPLE_RATE,
+          channels: DEFAULT_CHANNELS,
+          bitsPerSample: DEFAULT_BYTES_PER_SAMPLE * 8,
+        },
       }
     }
 
@@ -198,6 +235,7 @@ class MeetingRecorderService {
         data: [...this.systemAudioBuffer.data],
         source: "system",
         startTime: this.systemAudioBuffer.startTime,
+        audioDetails: { ...this.systemAudioBuffer.audioDetails },
       })
       this.systemAudioBuffer.data = []
       this.systemAudioBuffer.startTime = Date.now()
@@ -209,6 +247,7 @@ class MeetingRecorderService {
         data: [...this.micAudioBuffer.data],
         source: "microphone",
         startTime: this.micAudioBuffer.startTime,
+        audioDetails: { ...this.micAudioBuffer.audioDetails },
       })
       this.micAudioBuffer.data = []
       this.micAudioBuffer.startTime = Date.now()
@@ -217,7 +256,7 @@ class MeetingRecorderService {
     // Transcribe each buffer
     for (const buffer of buffers) {
       try {
-        const audioBlob = this.createWavBlob(buffer.data)
+        const audioBlob = this.createWavBlob(buffer.data, buffer.audioDetails)
         const transcript = await this.transcribeAudio(audioBlob)
 
         if (transcript && transcript.trim()) {
@@ -239,11 +278,16 @@ class MeetingRecorderService {
     }
   }
 
-  private createWavBlob(chunks: Buffer[]): Blob {
+  private createWavBlob(chunks: Buffer[], audioDetails: AudioDetails): Blob {
     const audioData = Buffer.concat(chunks)
 
-    // Create WAV header
-    const wavHeader = this.createWavHeader(audioData.length, SAMPLE_RATE, CHANNELS, BYTES_PER_SAMPLE * 8)
+    // Create WAV header using actual audio details
+    const wavHeader = this.createWavHeader(
+      audioData.length,
+      audioDetails.sampleRate,
+      audioDetails.channels,
+      audioDetails.bitsPerSample
+    )
     const wavBuffer = Buffer.concat([wavHeader, audioData])
 
     return new Blob([wavBuffer], { type: "audio/wav" })
@@ -302,26 +346,35 @@ class MeetingRecorderService {
     const groqBaseUrl = config.groqBaseUrl || "https://api.groq.com/openai/v1"
     const openaiBaseUrl = config.openaiBaseUrl || "https://api.openai.com/v1"
 
-    const response = await fetch(
-      config.sttProviderId === "groq"
-        ? `${groqBaseUrl}/audio/transcriptions`
-        : `${openaiBaseUrl}/audio/transcriptions`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${config.sttProviderId === "groq" ? config.groqApiKey : config.openaiApiKey}`,
-        },
-        body: form,
+    // Use AbortController for timeout to prevent hanging requests
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), TRANSCRIPTION_TIMEOUT_MS)
+
+    try {
+      const response = await fetch(
+        config.sttProviderId === "groq"
+          ? `${groqBaseUrl}/audio/transcriptions`
+          : `${openaiBaseUrl}/audio/transcriptions`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${config.sttProviderId === "groq" ? config.groqApiKey : config.openaiApiKey}`,
+          },
+          body: form,
+          signal: controller.signal,
+        }
+      )
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        throw new Error(`Transcription API error: ${response.statusText} - ${errorText.substring(0, 200)}`)
       }
-    )
 
-    if (!response.ok) {
-      const errorText = await response.text()
-      throw new Error(`Transcription API error: ${response.statusText} - ${errorText.substring(0, 200)}`)
+      const result: { text: string } = await response.json()
+      return result.text
+    } finally {
+      clearTimeout(timeoutId)
     }
-
-    const result: { text: string } = await response.json()
-    return result.text
   }
 
   async stopRecording(): Promise<Meeting | null> {

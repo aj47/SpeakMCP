@@ -168,7 +168,7 @@ function RecordingControls({
               )}
             </Button>
 
-            {process.platform !== "darwin" && (
+            {!process.env.IS_MAC && (
               <div className="flex items-center gap-2 text-sm text-amber-600 bg-amber-50 dark:bg-amber-950/30 p-3 rounded-md">
                 <AlertCircle className="h-4 w-4 flex-shrink-0" />
                 <span>Meeting transcription is only available on macOS</span>

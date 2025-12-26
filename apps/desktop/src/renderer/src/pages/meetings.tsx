@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react"
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { tipcClient } from "@renderer/lib/tipc-client"
 import {
@@ -342,6 +342,99 @@ function MeetingCard({
   )
 }
 
+// Hook to capture microphone audio and send to main process
+function useMicrophoneCapture(
+  isRecording: boolean,
+  audioSource: MeetingAudioSource | undefined
+) {
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const streamRef = useRef<MediaStream | null>(null)
+
+  useEffect(() => {
+    const shouldCaptureMic =
+      isRecording && (audioSource === "microphone" || audioSource === "both")
+
+    if (!shouldCaptureMic) {
+      // Stop any existing capture
+      if (mediaRecorderRef.current) {
+        mediaRecorderRef.current.stop()
+        mediaRecorderRef.current = null
+      }
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop())
+        streamRef.current = null
+      }
+      return undefined
+    }
+
+    let cancelled = false
+
+    const startCapture = async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            sampleRate: 48000,
+            channelCount: 1,
+            echoCancellation: true,
+            noiseSuppression: true,
+          },
+        })
+
+        if (cancelled) {
+          stream.getTracks().forEach((track) => track.stop())
+          return
+        }
+
+        streamRef.current = stream
+
+        // Use AudioContext to capture raw PCM data
+        const audioContext = new AudioContext({ sampleRate: 48000 })
+        const source = audioContext.createMediaStreamSource(stream)
+        const processor = audioContext.createScriptProcessor(4096, 1, 1)
+
+        processor.onaudioprocess = (e) => {
+          if (!isRecording) return
+
+          const inputData = e.inputBuffer.getChannelData(0)
+          // Convert float32 to int16
+          const int16Data = new Int16Array(inputData.length)
+          for (let i = 0; i < inputData.length; i++) {
+            const s = Math.max(-1, Math.min(1, inputData[i]))
+            int16Data[i] = s < 0 ? s * 0x8000 : s * 0x7fff
+          }
+
+          // Send to main process
+          tipcClient.addMeetingMicrophoneData({ audioData: int16Data.buffer })
+        }
+
+        source.connect(processor)
+        processor.connect(audioContext.destination)
+
+        // Store references for cleanup
+        ;(streamRef.current as any)._audioContext = audioContext
+        ;(streamRef.current as any)._processor = processor
+      } catch (error) {
+        console.error("[Meetings] Failed to capture microphone:", error)
+        toast.error("Failed to access microphone. Please check permissions.")
+      }
+    }
+
+    startCapture()
+
+    return () => {
+      cancelled = true
+      if (streamRef.current) {
+        const ctx = (streamRef.current as any)._audioContext
+        const proc = (streamRef.current as any)._processor
+        if (proc) proc.disconnect()
+        if (ctx) ctx.close()
+        streamRef.current.getTracks().forEach((track) => track.stop())
+        streamRef.current = null
+      }
+    }
+  }, [isRecording, audioSource])
+}
+
 function MeetingDetail({
   meeting,
   onClose,
@@ -421,6 +514,12 @@ export function Component() {
     queryFn: () => tipcClient.getMeetingRecordingState(),
     refetchInterval: 1000, // Poll every second during recording
   })
+
+  // Start/stop microphone capture based on recording state
+  useMicrophoneCapture(
+    recordingStateQuery.data?.isRecording ?? false,
+    recordingStateQuery.data?.audioSource
+  )
 
   // Query meetings list
   const meetingsQuery = useQuery({

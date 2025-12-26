@@ -56,6 +56,7 @@ class MeetingRecorderService {
   private micAudioBuffer: AudioBuffer | null = null
   private transcriptionTimer: ReturnType<typeof setInterval> | null = null
   private isRecording = false
+  private isTranscribing = false // Guard to prevent overlapping transcription runs
 
   constructor() {
     fs.mkdirSync(MEETINGS_FOLDER, { recursive: true })
@@ -170,6 +171,24 @@ class MeetingRecorderService {
 
   private async transcribeBufferedAudio(): Promise<void> {
     if (!this.currentMeeting || !this.isRecording) return
+
+    // Prevent overlapping transcription runs
+    if (this.isTranscribing) {
+      logApp("[MeetingRecorder] Transcription already in progress, skipping this interval")
+      return
+    }
+
+    this.isTranscribing = true
+
+    try {
+      await this.performTranscription()
+    } finally {
+      this.isTranscribing = false
+    }
+  }
+
+  private async performTranscription(): Promise<void> {
+    if (!this.currentMeeting) return
 
     const buffers: AudioBuffer[] = []
 
@@ -316,8 +335,19 @@ class MeetingRecorderService {
       this.transcriptionTimer = null
     }
 
-    // Final transcription of remaining audio
-    await this.transcribeBufferedAudio()
+    // Wait for any in-progress transcription to complete
+    while (this.isTranscribing) {
+      logApp("[MeetingRecorder] Waiting for in-progress transcription to complete...")
+      await new Promise(resolve => setTimeout(resolve, 100))
+    }
+
+    // Final transcription of remaining audio (bypass the guard since we're stopping)
+    this.isTranscribing = true
+    try {
+      await this.performTranscription()
+    } finally {
+      this.isTranscribing = false
+    }
 
     // Stop system audio recording
     if (this.systemRecorder) {

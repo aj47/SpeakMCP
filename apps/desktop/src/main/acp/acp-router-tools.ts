@@ -21,7 +21,7 @@ import {
   getSessionDepth,
 } from './internal-agent';
 import { a2aAgentRegistry, createA2AClient, a2aTaskManager } from '../a2a';
-import type { A2ATextPart, A2AMessage, A2ATask, A2AArtifact } from '../a2a/types';
+import type { A2ATextPart, A2AMessage, A2ATask, A2AArtifact, A2APart } from '../a2a/types';
 
 /**
  * Log ACP router-related debug messages.
@@ -751,21 +751,27 @@ export async function handleCheckAgentStatus(args: { runId: string }): Promise<o
             subAgentState.status = 'completed';
             // Extract output from artifacts if available
             const outputText = a2aTask.artifacts
-              ?.filter((a: A2AArtifact) => a.parts?.some((p: { text?: string }) => 'text' in p))
-              .map((a: A2AArtifact) => a.parts?.map((p: { text?: string }) => p.text || '').join(''))
+              ?.filter((a: A2AArtifact) => a.parts?.some((p: A2APart) => 'text' in p))
+              .map((a: A2AArtifact) => a.parts?.map((p: A2APart) => ('text' in p ? p.text : '')).join(''))
               .join('\n\n') || '';
             subAgentState.result = {
+              runId: subAgentState.runId,
+              agentName: subAgentState.agentName,
               status: 'completed',
-              output: outputText ? [{ parts: [{ content: outputText }] }] : [],
+              startTime: subAgentState.startTime,
+              output: outputText ? [{ role: 'assistant', parts: [{ content: outputText }] }] : [],
               metadata: a2aTask.metadata,
             };
           } else if (taskState === 'failed' || taskState === 'canceled') {
             subAgentState.status = 'failed';
             subAgentState.result = {
+              runId: subAgentState.runId,
+              agentName: subAgentState.agentName,
               status: 'failed',
+              startTime: subAgentState.startTime,
               error: a2aTask.status?.message?.parts
-                ?.filter((p: { text?: string }) => 'text' in p)
-                .map((p: { text?: string }) => p.text)
+                ?.filter((p: A2APart) => 'text' in p)
+                .map((p: A2APart) => ('text' in p ? p.text : ''))
                 .join('') || 'A2A task failed',
             };
           }

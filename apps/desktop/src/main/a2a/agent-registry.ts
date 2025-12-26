@@ -91,10 +91,10 @@ export class A2AAgentRegistry {
 
     logA2A(`Discovering agent at: ${agentCardUrl}`);
 
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
+    try {
       const response = await fetch(agentCardUrl, {
         method: 'GET',
         headers: {
@@ -105,15 +105,11 @@ export class A2AAgentRegistry {
       });
 
       if (!response.ok) {
-        clearTimeout(timeoutId);
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
       // Consume body before clearing timeout to cover slow/stalled response bodies
       const card: A2AAgentCard = await response.json();
-
-      // Clear timeout only after body is fully consumed
-      clearTimeout(timeoutId);
 
       // Validate required fields
       if (!card.name || !card.url || !card.protocolVersion) {
@@ -137,6 +133,9 @@ export class A2AAgentRegistry {
       }
 
       throw new Error(`Failed to discover agent: ${errorMessage}`);
+    } finally {
+      // Always clear timeout to prevent leaks
+      clearTimeout(timeoutId);
     }
   }
 
@@ -341,16 +340,14 @@ export class A2AAgentRegistry {
       return false;
     }
 
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
+    try {
       const response = await fetch(`${normalizedUrl}/.well-known/agent-card.json`, {
         method: 'HEAD',
         signal: controller.signal,
       });
-
-      clearTimeout(timeoutId);
 
       agent.isReachable = response.ok;
       agent.lastError = response.ok ? undefined : `HTTP ${response.status}`;
@@ -360,6 +357,9 @@ export class A2AAgentRegistry {
       agent.isReachable = false;
       agent.lastError = error instanceof Error ? error.message : String(error);
       return false;
+    } finally {
+      // Always clear timeout to prevent leaks
+      clearTimeout(timeoutId);
     }
   }
 

@@ -363,7 +363,14 @@ export function Component() {
                   <Control label={<ControlLabel label="TTS Model" tooltip="Choose the Groq TTS model to use" />} className="px-3">
                     <Select
                       value={configQuery.data.groqTtsModel || "canopylabs/orpheus-v1-english"}
-                      onValueChange={(value) => saveConfig({ groqTtsModel: value as "canopylabs/orpheus-v1-english" | "canopylabs/orpheus-arabic-saudi" })}
+                      onValueChange={(value) => {
+                        // Reset voice to appropriate default when model changes
+                        const defaultVoice = value === "canopylabs/orpheus-arabic-saudi" ? "fahad" : "troy"
+                        saveConfig({
+                          groqTtsModel: value as "canopylabs/orpheus-v1-english" | "canopylabs/orpheus-arabic-saudi",
+                          groqTtsVoice: defaultVoice
+                        })
+                      }}
                     >
                       <SelectTrigger>
                         <SelectValue />
@@ -583,7 +590,14 @@ export function Component() {
                   <Control label={<ControlLabel label="TTS Model" tooltip="Choose the Groq TTS model to use" />} className="px-3">
                     <Select
                       value={configQuery.data.groqTtsModel || "canopylabs/orpheus-v1-english"}
-                      onValueChange={(value) => saveConfig({ groqTtsModel: value as "canopylabs/orpheus-v1-english" | "canopylabs/orpheus-arabic-saudi" })}
+                      onValueChange={(value) => {
+                        // Reset voice to appropriate default when model changes
+                        const defaultVoice = value === "canopylabs/orpheus-arabic-saudi" ? "fahad" : "troy"
+                        saveConfig({
+                          groqTtsModel: value as "canopylabs/orpheus-v1-english" | "canopylabs/orpheus-arabic-saudi",
+                          groqTtsVoice: defaultVoice
+                        })
+                      }}
                     >
                       <SelectTrigger>
                         <SelectValue />

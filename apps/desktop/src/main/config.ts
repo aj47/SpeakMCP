@@ -12,6 +12,34 @@ export const conversationsFolder = path.join(dataFolder, "conversations")
 
 export const configPath = path.join(dataFolder, "config.json")
 
+/**
+ * Migrate deprecated Groq TTS PlayAI models/voices to new Orpheus equivalents.
+ * This ensures existing installs with saved PlayAI settings continue to work.
+ */
+function migrateGroqTtsConfig(config: Partial<Config>): Partial<Config> {
+  // Migrate deprecated PlayAI models to Orpheus equivalents
+  // Use string comparison since saved config may contain deprecated values not in current type
+  const savedModel = config.groqTtsModel as string | undefined
+  if (savedModel === "playai-tts") {
+    config.groqTtsModel = "canopylabs/orpheus-v1-english"
+  } else if (savedModel === "playai-tts-arabic") {
+    config.groqTtsModel = "canopylabs/orpheus-arabic-saudi"
+  }
+
+  // Migrate deprecated PlayAI voices to Orpheus equivalents
+  // If the voice ends with "-PlayAI", it's a deprecated voice that needs migration
+  if (config.groqTtsVoice && config.groqTtsVoice.endsWith("-PlayAI")) {
+    // Set to appropriate default voice based on the model
+    if (config.groqTtsModel === "canopylabs/orpheus-arabic-saudi") {
+      config.groqTtsVoice = "fahad" // Default Arabic voice
+    } else {
+      config.groqTtsVoice = "troy" // Default English voice
+    }
+  }
+
+  return config
+}
+
 const getConfig = () => {
   // Platform-specific defaults
   const isWindows = process.platform === 'win32'
@@ -139,7 +167,9 @@ const getConfig = () => {
     const savedConfig = JSON.parse(
       fs.readFileSync(configPath, "utf8"),
     ) as Config
-    return { ...defaultConfig, ...savedConfig }
+    // Apply migration for deprecated Groq TTS settings
+    const mergedConfig = { ...defaultConfig, ...savedConfig }
+    return migrateGroqTtsConfig(mergedConfig)
   } catch {
     return defaultConfig
   }

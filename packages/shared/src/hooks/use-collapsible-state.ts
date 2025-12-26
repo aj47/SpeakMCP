@@ -100,9 +100,17 @@ export function useCollapsibleState(
  * Options for useCollapsibleSet hook
  */
 export interface UseCollapsibleSetOptions {
-  /** Initial set of expanded item IDs */
+  /**
+   * Initial set of tracked item IDs.
+   * - When defaultItemExpanded is false (default): these are the initially EXPANDED items
+   * - When defaultItemExpanded is true: these are the initially COLLAPSED items (exceptions)
+   */
   defaultExpanded?: Set<string> | string[];
-  /** Whether items should be expanded by default when not tracked in the set */
+  /**
+   * Whether items should be expanded by default when not in the tracked set.
+   * - false (default): items start collapsed, set tracks expanded items
+   * - true: items start expanded, set tracks collapsed items (exceptions)
+   */
   defaultItemExpanded?: boolean;
 }
 
@@ -110,8 +118,13 @@ export interface UseCollapsibleSetOptions {
  * Return type for useCollapsibleSet hook
  */
 export interface UseCollapsibleSetReturn {
-  /** The internal set of tracked item IDs (readonly to prevent external mutation) */
-  expandedItems: ReadonlySet<string>;
+  /**
+   * The internal set of tracked item IDs (readonly to prevent external mutation).
+   * - When defaultItemExpanded is false: contains IDs of EXPANDED items
+   * - When defaultItemExpanded is true: contains IDs of COLLAPSED items (exceptions)
+   * Use isExpanded()/isCollapsed() for correct state checks regardless of mode.
+   */
+  trackedItems: ReadonlySet<string>;
   /** Check if a specific item is expanded */
   isExpanded: (id: string) => boolean;
   /** Check if a specific item is collapsed */
@@ -126,8 +139,8 @@ export interface UseCollapsibleSetReturn {
   expandAll: (ids: string[]) => void;
   /** Collapse all items (requires all IDs to set collapsed state) */
   collapseAll: (ids: string[]) => void;
-  /** Set the tracked items directly */
-  setExpandedItems: Dispatch<SetStateAction<Set<string>>>;
+  /** Set the tracked items directly (see trackedItems for semantic meaning) */
+  setTrackedItems: Dispatch<SetStateAction<Set<string>>>;
 }
 
 /**
@@ -138,7 +151,7 @@ export function useCollapsibleSet(
 ): UseCollapsibleSetReturn {
   const { defaultExpanded = [], defaultItemExpanded = false } = options;
 
-  const [expandedItems, setExpandedItems] = useState<Set<string>>(() => {
+  const [trackedItems, setTrackedItems] = useState<Set<string>>(() => {
     if (defaultExpanded instanceof Set) {
       return new Set(defaultExpanded);
     }
@@ -148,17 +161,19 @@ export function useCollapsibleSet(
   const isExpanded = useCallback(
     (id: string): boolean => {
       if (defaultItemExpanded) {
-        return !expandedItems.has(id);
+        // In defaultItemExpanded mode, items in set are collapsed (exceptions)
+        return !trackedItems.has(id);
       }
-      return expandedItems.has(id);
+      // In normal mode, items in set are expanded
+      return trackedItems.has(id);
     },
-    [expandedItems, defaultItemExpanded]
+    [trackedItems, defaultItemExpanded]
   );
 
   const isCollapsed = useCallback((id: string): boolean => !isExpanded(id), [isExpanded]);
 
   const toggle = useCallback((id: string) => {
-    setExpandedItems((prev) => {
+    setTrackedItems((prev) => {
       const next = new Set(prev);
       if (next.has(id)) {
         next.delete(id);
@@ -171,13 +186,15 @@ export function useCollapsibleSet(
 
   const expand = useCallback(
     (id: string) => {
-      setExpandedItems((prev) => {
+      setTrackedItems((prev) => {
         if (defaultItemExpanded) {
+          // In defaultItemExpanded mode, expanding means removing from tracked (collapsed) set
           if (!prev.has(id)) return prev;
           const next = new Set(prev);
           next.delete(id);
           return next;
         }
+        // In normal mode, expanding means adding to tracked (expanded) set
         if (prev.has(id)) return prev;
         const next = new Set(prev);
         next.add(id);
@@ -189,13 +206,15 @@ export function useCollapsibleSet(
 
   const collapse = useCallback(
     (id: string) => {
-      setExpandedItems((prev) => {
+      setTrackedItems((prev) => {
         if (defaultItemExpanded) {
+          // In defaultItemExpanded mode, collapsing means adding to tracked (collapsed) set
           if (prev.has(id)) return prev;
           const next = new Set(prev);
           next.add(id);
           return next;
         }
+        // In normal mode, collapsing means removing from tracked (expanded) set
         if (!prev.has(id)) return prev;
         const next = new Set(prev);
         next.delete(id);
@@ -208,9 +227,11 @@ export function useCollapsibleSet(
   const expandAll = useCallback(
     (ids: string[]) => {
       if (defaultItemExpanded) {
-        setExpandedItems(new Set());
+        // In defaultItemExpanded mode, expanding all means clearing tracked (collapsed) set
+        setTrackedItems(new Set());
       } else {
-        setExpandedItems(new Set(ids));
+        // In normal mode, expanding all means adding all to tracked (expanded) set
+        setTrackedItems(new Set(ids));
       }
     },
     [defaultItemExpanded]
@@ -219,18 +240,18 @@ export function useCollapsibleSet(
   const collapseAll = useCallback(
     (ids: string[]) => {
       if (defaultItemExpanded) {
-        // In defaultItemExpanded mode, set tracks collapsed items, so add all IDs
-        setExpandedItems(new Set(ids));
+        // In defaultItemExpanded mode, collapsing all means adding all to tracked (collapsed) set
+        setTrackedItems(new Set(ids));
       } else {
-        // In normal mode, set tracks expanded items, so clear it
-        setExpandedItems(new Set());
+        // In normal mode, collapsing all means clearing tracked (expanded) set
+        setTrackedItems(new Set());
       }
     },
     [defaultItemExpanded]
   );
 
   return {
-    expandedItems: expandedItems as ReadonlySet<string>,
+    trackedItems: trackedItems as ReadonlySet<string>,
     isExpanded,
     isCollapsed,
     toggle,
@@ -238,7 +259,7 @@ export function useCollapsibleSet(
     collapse,
     expandAll,
     collapseAll,
-    setExpandedItems,
+    setTrackedItems,
   };
 }
 

@@ -191,9 +191,9 @@ describe("ACP Service", () => {
         const { acpService } = await import("./acp-service")
         
         // The handleReadTextFile is private, so we test via the event system
-        // For now, just verify the types are exported correctly
-        const { ACPReadTextFileRequest } = await import("./acp-service")
-        expect(ACPReadTextFileRequest).toBeUndefined() // It's an interface, not a value
+        // Verify the service exists
+        expect(acpService).toBeDefined()
+        expect(acpService.on).toBeDefined()
       })
     })
 

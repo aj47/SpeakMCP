@@ -141,12 +141,15 @@ export class ACPBackgroundNotifier {
       error: state.status === 'failed' ? state.result?.error : undefined,
     }
 
+    // Mark as complete for any terminal state (completed or failed)
+    const isTerminalState = state.status === 'completed' || state.status === 'failed'
+
     // Emit progress update to UI
     await emitAgentProgress({
       sessionId: state.parentSessionId,
       currentIteration: 0,
       maxIterations: 1,
-      isComplete: state.status === 'completed' || state.status === 'failed',
+      isComplete: isTerminalState,
       steps: [
         {
           id: `delegation-complete-${state.runId}`,

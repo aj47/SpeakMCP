@@ -1,8 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "_comment": "Example ACP agent configurations for SpeakMCP. Copy relevant entries to your config.",
+  "_comment": "Example ACP agent configurations for SpeakMCP. Copy relevant entries to your config. NOTE: 'type' should be 'stdio' for local processes or 'remote' for HTTP endpoints.",
   "examples": [
     {
+      "_comment": "Example stdio agent - spawns a local process",
       "name": "research-agent",
       "displayName": "Research Agent",
       "description": "Specialized agent for web research, information gathering, and fact-checking",
@@ -14,7 +15,6 @@
         "cwd": "/path/to/research-agent-project"
       },
       "autoSpawn": false,
-      "keepAlive": false,
       "idleTimeoutMs": 300000,
       "maxConcurrentRuns": 2,
       "defaultTimeout": 60000

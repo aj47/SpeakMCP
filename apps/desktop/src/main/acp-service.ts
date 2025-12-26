@@ -169,8 +169,10 @@ export interface ACPWriteTextFileRequest {
 
 class ACPService extends EventEmitter {
   private agents: Map<string, ACPAgentInstance> = new Map()
-  // Track session outputs for visibility
+  // Track session outputs for visibility (keyed by sessionId or unique fallback)
   private sessionOutputs: Map<string, ACPSessionOutput> = new Map()
+  // Counter for generating unique fallback session IDs when sessionId is not provided
+  private fallbackSessionCounter = 0
 
   constructor() {
     super()
@@ -226,7 +228,9 @@ class ACPService extends EventEmitter {
     }
   }): void {
     const instance = this.agents.get(agentName)
-    const sessionId = params.sessionId || instance?.sessionId || `${agentName}_fallback_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`
+    // Generate a unique fallback session ID per agent to avoid mixing output from different agents/runs
+    // when sessionId is not provided by the notification
+    const sessionId = params.sessionId || instance?.sessionId || `${agentName}_fallback_${++this.fallbackSessionCounter}`
 
     // Get or create session output tracking
     let output = this.sessionOutputs.get(sessionId)
@@ -416,11 +420,20 @@ class ACPService extends EventEmitter {
       throw new Error(`Agent ${agentName} is disabled`)
     }
 
-    // Check if already running or starting
+    // Check if already running or starting - treat both 'ready' and 'starting' as "already spawning"
+    // This prevents spawning duplicate processes when a second call arrives while a spawn is in progress
     const existing = this.agents.get(agentName)
-    if (existing && (existing.status === "ready" || existing.status === "starting")) {
-      logApp(`[ACP] Agent ${agentName} is already ${existing.status}`)
-      return
+    if (existing) {
+      if (existing.status === "ready") {
+        logApp(`[ACP] Agent ${agentName} is already ready`)
+        return
+      }
+      if (existing.status === "starting") {
+        logApp(`[ACP] Agent ${agentName} is already starting, waiting for it to be ready`)
+        // Wait for the existing spawn to complete (poll until ready or error)
+        await this.waitForAgentReady(agentName)
+        return
+      }
     }
 
     if (agentConfig.connection.type !== "stdio") {
@@ -511,6 +524,25 @@ class ACPService extends EventEmitter {
       this.emit("agentStatusChanged", { agentName, status: "error", error: errorMessage })
       throw error
     }
+  }
+
+  /**
+   * Wait for an agent to transition from 'starting' to 'ready' or 'error'.
+   * Used to prevent spawning duplicate processes when multiple spawn requests arrive.
+   */
+  private async waitForAgentReady(agentName: string, timeoutMs = 30000): Promise<void> {
+    const startTime = Date.now()
+    const pollIntervalMs = 200
+
+    while (Date.now() - startTime < timeoutMs) {
+      const instance = this.agents.get(agentName)
+      if (!instance || instance.status === "ready" || instance.status === "error" || instance.status === "stopped") {
+        return
+      }
+      await new Promise(resolve => setTimeout(resolve, pollIntervalMs))
+    }
+
+    logApp(`[ACP] Timeout waiting for agent ${agentName} to become ready`)
   }
 
   /**

@@ -574,6 +574,7 @@ export function Component() {
 
                     <div className="flex items-center gap-2 shrink-0">
                       {/* Start/Stop button - not shown for internal agents */}
+                      {/* Show Stop button when running (regardless of enabled state to allow stopping) */}
                       {!isInternal && isRunning ? (
                         <Button
                           variant="ghost"
@@ -588,7 +589,7 @@ export function Component() {
                             <Square className="h-4 w-4 text-red-500" />
                           )}
                         </Button>
-                      ) : !isInternal && isEnabled ? (
+                      ) : !isInternal && isEnabled && !isRunning ? (
                         <Button
                           variant="ghost"
                           size="icon"

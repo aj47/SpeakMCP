@@ -676,6 +676,7 @@ export async function startRemoteServer() {
 
       // Merge built-in presets with any saved overrides (e.g., edited baseUrl/name)
       // and include custom (non-built-in) presets
+      const builtInIds = new Set(builtInPresets.map(p => p.id))
       const mergedPresets = builtInPresets.map(builtIn => {
         const savedOverride = savedPresets.find(p => p.id === builtIn.id)
         if (savedOverride) {
@@ -684,7 +685,9 @@ export async function startRemoteServer() {
         }
         return builtIn
       })
-      const customPresets = savedPresets.filter(p => !p.isBuiltIn)
+      // Filter custom presets by excluding any IDs that match built-in presets
+      // This prevents duplicates from older entries where isBuiltIn was unset
+      const customPresets = savedPresets.filter(p => !builtInIds.has(p.id))
 
       return reply.send({
         // Model settings
@@ -748,9 +751,18 @@ export async function startRemoteServer() {
       if (typeof body.mcpToolsGeminiModel === "string") {
         updates.mcpToolsGeminiModel = body.mcpToolsGeminiModel
       }
-      // OpenAI compatible preset
+      // OpenAI compatible preset - validate against known preset IDs
       if (typeof body.currentModelPresetId === "string") {
-        updates.currentModelPresetId = body.currentModelPresetId
+        const { getBuiltInModelPresets } = await import("../shared/index")
+        const builtInPresets = getBuiltInModelPresets()
+        const savedPresets = cfg.modelPresets || []
+        const builtInIds = new Set(builtInPresets.map(p => p.id))
+        const allValidIds = new Set([...builtInIds, ...savedPresets.filter(p => !builtInIds.has(p.id)).map(p => p.id)])
+
+        if (allValidIds.has(body.currentModelPresetId)) {
+          updates.currentModelPresetId = body.currentModelPresetId
+        }
+        // If preset ID is invalid, silently ignore to avoid breaking client
       }
 
       if (Object.keys(updates).length === 0) {

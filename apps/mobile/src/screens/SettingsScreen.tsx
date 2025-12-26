@@ -235,6 +235,12 @@ export default function SettingsScreen({ navigation }: any) {
   const handleProviderChange = async (provider: 'openai' | 'groq' | 'gemini') => {
     if (!settingsClient || !remoteSettings || remoteSettings.mcpToolsProviderId === provider) return;
 
+    // Cancel any pending model update to avoid writing to the wrong provider's model key
+    if (modelUpdateTimeoutRef.current) {
+      clearTimeout(modelUpdateTimeoutRef.current);
+      modelUpdateTimeoutRef.current = null;
+    }
+
     try {
       await settingsClient.updateSettings({ mcpToolsProviderId: provider });
       setRemoteSettings(prev => prev ? { ...prev, mcpToolsProviderId: provider } : null);
@@ -250,6 +256,12 @@ export default function SettingsScreen({ navigation }: any) {
   // Handle preset change (OpenAI compatible providers)
   const handlePresetChange = async (presetId: string) => {
     if (!settingsClient || !remoteSettings || remoteSettings.currentModelPresetId === presetId) return;
+
+    // Cancel any pending model update to avoid writing to the wrong preset's context
+    if (modelUpdateTimeoutRef.current) {
+      clearTimeout(modelUpdateTimeoutRef.current);
+      modelUpdateTimeoutRef.current = null;
+    }
 
     setShowPresetPicker(false);
     try {

@@ -1577,6 +1577,66 @@ export const router = {
     fs.rmSync(recordingsFolder, { force: true, recursive: true })
   }),
 
+  // Meeting Transcription (macOS only)
+  startMeetingRecording: t.procedure
+    .input<{
+      audioSource: "microphone" | "system" | "both"
+      sampleRate?: number
+      channels?: number
+    }>()
+    .action(async ({ input }) => {
+      const { meetingRecorderService } = await import("./meeting-recorder")
+      return meetingRecorderService.startRecording({
+        audioSource: input.audioSource,
+        sampleRate: input.sampleRate,
+        channels: input.channels,
+      })
+    }),
+
+  stopMeetingRecording: t.procedure.action(async () => {
+    const { meetingRecorderService } = await import("./meeting-recorder")
+    return meetingRecorderService.stopRecording()
+  }),
+
+  getMeetingRecordingState: t.procedure.action(async () => {
+    const { meetingRecorderService } = await import("./meeting-recorder")
+    return meetingRecorderService.getState()
+  }),
+
+  addMeetingMicrophoneData: t.procedure
+    .input<{ audioData: ArrayBuffer }>()
+    .action(async ({ input }) => {
+      const { meetingRecorderService } = await import("./meeting-recorder")
+      meetingRecorderService.addMicrophoneAudioData(input.audioData)
+      return { success: true }
+    }),
+
+  listMeetings: t.procedure.action(async () => {
+    const { meetingRecorderService } = await import("./meeting-recorder")
+    return meetingRecorderService.listMeetings()
+  }),
+
+  getMeeting: t.procedure
+    .input<{ meetingId: string }>()
+    .action(async ({ input }) => {
+      const { meetingRecorderService } = await import("./meeting-recorder")
+      return meetingRecorderService.getMeeting(input.meetingId)
+    }),
+
+  deleteMeeting: t.procedure
+    .input<{ meetingId: string }>()
+    .action(async ({ input }) => {
+      const { meetingRecorderService } = await import("./meeting-recorder")
+      return meetingRecorderService.deleteMeeting(input.meetingId)
+    }),
+
+  updateMeetingTitle: t.procedure
+    .input<{ meetingId: string; title: string }>()
+    .action(async ({ input }) => {
+      const { meetingRecorderService } = await import("./meeting-recorder")
+      return meetingRecorderService.updateMeetingTitle(input.meetingId, input.title)
+    }),
+
   getConfig: t.procedure.action(async () => {
     return configStore.get()
   }),

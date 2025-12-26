@@ -588,3 +588,54 @@ export interface SamplingResult {
   content?: SamplingMessageContent
   stopReason?: string
 }
+
+// Meeting Transcription Types (macOS only)
+export type MeetingAudioSource = "microphone" | "system" | "both"
+
+export interface MeetingRecordingConfig {
+  audioSource: MeetingAudioSource
+  sampleRate?: number // defaults to 48000
+  channels?: number // defaults to 1 (mono)
+}
+
+export interface MeetingTranscriptSegment {
+  id: string
+  text: string
+  timestamp: number
+  source: "microphone" | "system"
+  duration?: number
+}
+
+export interface Meeting {
+  id: string
+  title: string
+  createdAt: number
+  endedAt?: number
+  duration?: number // in milliseconds
+  audioSource: MeetingAudioSource
+  transcriptSegments: MeetingTranscriptSegment[]
+  fullTranscript?: string
+  summary?: string
+  status: "recording" | "processing" | "completed" | "error"
+  errorMessage?: string
+}
+
+export interface MeetingListItem {
+  id: string
+  title: string
+  createdAt: number
+  endedAt?: number
+  duration?: number
+  status: Meeting["status"]
+  segmentCount: number
+  previewText?: string
+}
+
+export interface MeetingRecordingState {
+  isRecording: boolean
+  meetingId?: string
+  startedAt?: number
+  audioSource?: MeetingAudioSource
+  micLevel?: number
+  systemLevel?: number
+}

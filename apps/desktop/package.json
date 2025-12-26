@@ -90,6 +90,7 @@
     "electron-updater": "^6.1.7",
     "electron-vite": "^2.3.0",
     "lucide-react": "^0.452.0",
+    "macos-system-audio-recorder": "^0.0.1",
     "prettier": "^3.3.3",
     "prettier-plugin-tailwindcss": "^0.6.8",
     "react": "^18.3.1",

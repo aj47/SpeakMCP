@@ -56,6 +56,8 @@ export default function SettingsScreen({ navigation }: any) {
   const [isLoadingRemote, setIsLoadingRemote] = useState(false);
   const [remoteError, setRemoteError] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  // Track if the server is a SpeakMCP desktop server (supports our settings API)
+  const [isSpeakMCPServer, setIsSpeakMCPServer] = useState(false);
 
   const styles = useMemo(() => createStyles(theme), [theme]);
 
@@ -73,6 +75,7 @@ export default function SettingsScreen({ navigation }: any) {
       setProfiles([]);
       setMcpServers([]);
       setRemoteSettings(null);
+      setIsSpeakMCPServer(false);
       return;
     }
 
@@ -81,6 +84,7 @@ export default function SettingsScreen({ navigation }: any) {
 
     try {
       const errors: string[] = [];
+      let successCount = 0;
 
       const [profilesRes, serversRes, settingsRes] = await Promise.all([
         settingsClient.getProfiles().catch((e) => { errors.push('profiles'); return null; }),
@@ -91,21 +95,32 @@ export default function SettingsScreen({ navigation }: any) {
       if (profilesRes) {
         setProfiles(profilesRes.profiles);
         setCurrentProfileId(profilesRes.currentProfileId);
+        successCount++;
       }
       if (serversRes) {
         setMcpServers(serversRes.servers);
+        successCount++;
       }
       if (settingsRes) {
         setRemoteSettings(settingsRes);
+        successCount++;
       }
 
-      // Show error if any endpoint failed
-      if (errors.length > 0) {
+      // Consider it a SpeakMCP server if at least one endpoint succeeded
+      // This gates the Desktop Settings section for non-SpeakMCP endpoints (e.g., OpenAI)
+      setIsSpeakMCPServer(successCount > 0);
+
+      // Show error if any endpoint failed but at least one succeeded
+      if (errors.length > 0 && successCount > 0) {
         setRemoteError(`Failed to load: ${errors.join(', ')}`);
+      } else if (successCount === 0) {
+        // All endpoints failed - not a SpeakMCP server
+        setIsSpeakMCPServer(false);
       }
     } catch (error: any) {
       console.error('[Settings] Failed to fetch remote settings:', error);
       setRemoteError(error.message || 'Failed to load remote settings');
+      setIsSpeakMCPServer(false);
     } finally {
       setIsLoadingRemote(false);
     }
@@ -400,8 +415,8 @@ export default function SettingsScreen({ navigation }: any) {
           Queue messages while the agent is busy processing
         </Text>
 
-        {/* Remote Settings Section - only show when connected */}
-        {settingsClient && (
+        {/* Remote Settings Section - only show when connected to a SpeakMCP desktop server */}
+        {settingsClient && (isLoadingRemote || isSpeakMCPServer) && (
           <>
             <Text style={styles.sectionTitle}>Desktop Settings</Text>
 

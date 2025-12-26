@@ -680,7 +680,8 @@ export async function startRemoteServer() {
         updates.mcpRequireApprovalBeforeToolCall = body.mcpRequireApprovalBeforeToolCall
       }
       if (typeof body.mcpMaxIterations === "number" && body.mcpMaxIterations >= 1 && body.mcpMaxIterations <= 100) {
-        updates.mcpMaxIterations = body.mcpMaxIterations
+        // Coerce to integer to avoid surprising iteration counts with floats
+        updates.mcpMaxIterations = Math.floor(body.mcpMaxIterations)
       }
 
       if (Object.keys(updates).length === 0) {

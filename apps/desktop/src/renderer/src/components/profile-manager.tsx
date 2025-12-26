@@ -149,7 +149,7 @@ export function ProfileManager({
     onSuccess: (profile: Profile | null) => {
       if (profile) {
         queryClient.invalidateQueries({ queryKey: ["profiles"] })
-        toast.success(`Profile "${profile.name}" imported with MCP servers and settings`)
+        toast.success(`Profile "${profile.name}" imported (you may need to configure MCP credentials)`)
       }
     },
     onError: (error: Error) => {

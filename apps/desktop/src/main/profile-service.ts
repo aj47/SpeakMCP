@@ -76,6 +76,27 @@ function isValidServerConfig(config: unknown): boolean {
     return false
   }
 
+  // Validate oauth if provided (must be an object with expected structure)
+  if (c.oauth !== undefined) {
+    if (typeof c.oauth !== "object" || c.oauth === null || Array.isArray(c.oauth)) {
+      return false
+    }
+    const oauth = c.oauth as Record<string, unknown>
+    // clientId and authorizationUrl are required for OAuth configs
+    if (oauth.clientId !== undefined && typeof oauth.clientId !== "string") {
+      return false
+    }
+    if (oauth.authorizationUrl !== undefined && typeof oauth.authorizationUrl !== "string") {
+      return false
+    }
+    if (oauth.tokenUrl !== undefined && typeof oauth.tokenUrl !== "string") {
+      return false
+    }
+    if (oauth.scope !== undefined && typeof oauth.scope !== "string") {
+      return false
+    }
+  }
+
   return true
 }
 

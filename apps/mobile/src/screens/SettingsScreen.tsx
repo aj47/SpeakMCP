@@ -516,6 +516,19 @@ export default function SettingsScreen({ navigation }: any) {
                 </Text>
 
                 <View style={styles.row}>
+                  <Text style={styles.label}>Text-to-Speech (Desktop)</Text>
+                  <Switch
+                    value={remoteSettings.ttsEnabled}
+                    onValueChange={(v) => handleRemoteSettingToggle('ttsEnabled', v)}
+                    trackColor={{ false: theme.colors.muted, true: theme.colors.primary }}
+                    thumbColor={remoteSettings.ttsEnabled ? theme.colors.primaryForeground : theme.colors.background}
+                  />
+                </View>
+                <Text style={styles.helperText}>
+                  Enable text-to-speech on the desktop app
+                </Text>
+
+                <View style={styles.row}>
                   <Text style={styles.label}>Tool Approval Required</Text>
                   <Switch
                     value={remoteSettings.mcpRequireApprovalBeforeToolCall}

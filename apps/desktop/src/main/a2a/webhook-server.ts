@@ -201,11 +201,15 @@ export class A2AWebhookServer {
 
     // Collect request body
     let body = '';
+    let sizeLimitExceeded = false;
     req.on('data', (chunk) => {
+      if (sizeLimitExceeded) return; // Skip further processing
+      
       body += chunk.toString();
       
       // Limit body size to prevent abuse
       if (body.length > 1024 * 1024) {
+        sizeLimitExceeded = true;
         res.writeHead(413, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: 'Payload too large' }));
         req.destroy();
@@ -213,6 +217,8 @@ export class A2AWebhookServer {
     });
 
     req.on('end', () => {
+      // Skip processing if size limit was exceeded (response already sent)
+      if (sizeLimitExceeded) return;
       try {
         const event = JSON.parse(body) as A2AStreamEvent;
         

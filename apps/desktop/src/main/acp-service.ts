@@ -986,14 +986,22 @@ class ACPService extends EventEmitter {
       }
 
       // Resolve symlinks to check the real path for security
-      // For writes, we check if the parent directory resolves to a sensitive location
-      // This prevents bypassing blocklist via symlinks
-      const resolvedPath = await this.resolveRealPath(dirname(filePath))
-      const pathToCheck = resolvedPath ? `${resolvedPath}/${filePath.split(/[/\\]/).pop()}` : filePath
+      // We check both the file itself (if it exists and is a symlink) and the parent directory
+      // This prevents bypassing blocklist via symlinks to sensitive locations
+      
+      // First, try to resolve the file path itself (handles existing symlinks)
+      const resolvedFilePath = await this.resolveRealPath(filePath)
+      
+      // Also resolve the parent directory for the case where file doesn't exist yet
+      const resolvedDirPath = await this.resolveRealPath(dirname(filePath))
+      const constructedPath = resolvedDirPath ? `${resolvedDirPath}/${filePath.split(/[/\\]/).pop()}` : filePath
 
-      // Security check: Block writes to sensitive paths (check both original and resolved)
-      if (this.isSensitivePath(filePath) || this.isSensitivePath(pathToCheck)) {
-        logApp(`[ACP:${agentName}] BLOCKED write to sensitive path: ${filePath} (resolved: ${pathToCheck})`)
+      // Security check: Block writes to sensitive paths
+      // Check: original path, resolved file path (if symlink exists), and constructed path from resolved directory
+      if (this.isSensitivePath(filePath) || 
+          (resolvedFilePath && this.isSensitivePath(resolvedFilePath)) ||
+          this.isSensitivePath(constructedPath)) {
+        logApp(`[ACP:${agentName}] BLOCKED write to sensitive path: ${filePath} (resolved file: ${resolvedFilePath}, constructed: ${constructedPath})`)
         throw new Error("Access denied: Cannot write files in sensitive locations (SSH keys, credentials, etc.)")
       }
 

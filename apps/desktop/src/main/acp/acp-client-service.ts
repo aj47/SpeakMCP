@@ -128,6 +128,19 @@ export class ACPClientService {
     const controller = new AbortController();
     const baseUrl = this.getBaseUrlForAgent(request.agentName);
 
+    // Wire external abort signal to internal controller
+    const externalSignal = request.signal;
+    let externalAbortHandler: (() => void) | undefined;
+    if (externalSignal) {
+      if (externalSignal.aborted) {
+        // Already aborted, abort immediately
+        controller.abort();
+      } else {
+        externalAbortHandler = () => controller.abort();
+        externalSignal.addEventListener('abort', externalAbortHandler);
+      }
+    }
+
     // Track only while the start request is in-flight.
     // Note: without a server-side cancel endpoint, cancellation is limited to aborting the local
     // HTTP request (it may not stop a server-side run once started).
@@ -184,6 +197,10 @@ export class ACPClientService {
     } finally {
       // Async mode only needs tracking while the start request is in-flight.
       this.activeRuns.delete(activeRunId);
+      // Clean up external signal listener
+      if (externalSignal && externalAbortHandler) {
+        externalSignal.removeEventListener('abort', externalAbortHandler);
+      }
     }
   }
 
@@ -216,6 +233,19 @@ export class ACPClientService {
     const controller = new AbortController();
     const startTime = Date.now();
     const baseUrl = this.getBaseUrlForAgent(request.agentName);
+
+    // Wire external abort signal to internal controller
+    const externalSignal = request.signal;
+    let externalAbortHandler: (() => void) | undefined;
+    if (externalSignal) {
+      if (externalSignal.aborted) {
+        // Already aborted, abort immediately
+        controller.abort();
+      } else {
+        externalAbortHandler = () => controller.abort();
+        externalSignal.addEventListener('abort', externalAbortHandler);
+      }
+    }
 
     this.activeRuns.set(runId, {
       controller,
@@ -311,6 +341,10 @@ export class ACPClientService {
       throw error;
     } finally {
       this.activeRuns.delete(runId);
+      // Clean up external signal listener
+      if (externalSignal && externalAbortHandler) {
+        externalSignal.removeEventListener('abort', externalAbortHandler);
+      }
     }
   }
 

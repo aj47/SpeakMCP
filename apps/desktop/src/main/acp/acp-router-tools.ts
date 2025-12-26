@@ -461,12 +461,12 @@ export async function handleDelegateToAgent(
       };
     }
 
-    // Check current status via acpService
-    const agentStatus = acpService.getAgentStatus(args.agentName);
-
-    // If agent is not ready, try to spawn it (only for stdio agents)
-    if (agentStatus?.status !== 'ready') {
-      if (agentConfig.connection.type === 'stdio') {
+    // Check current status via acpService (only for stdio agents)
+    // For remote agents, acpService doesn't track status - they're assumed reachable
+    // and the actual HTTP call will fail if they're not available
+    if (agentConfig.connection.type === 'stdio') {
+      const agentStatus = acpService.getAgentStatus(args.agentName);
+      if (agentStatus?.status !== 'ready') {
         logACPRouter(`Agent "${args.agentName}" not ready, attempting to spawn...`);
         try {
           await acpService.spawnAgent(args.agentName);
@@ -476,13 +476,9 @@ export async function handleDelegateToAgent(
             error: `Failed to spawn agent "${args.agentName}": ${spawnError instanceof Error ? spawnError.message : String(spawnError)}`,
           };
         }
-      } else {
-        return {
-          success: false,
-          error: `Agent "${args.agentName}" is not ready (status: ${agentStatus?.status || 'stopped'}) and is a remote agent that cannot be auto-spawned`,
-        };
       }
     }
+    // For remote agents, we proceed directly - acpClientService will handle the HTTP call
 
     // Prepare the input message
     // NOTE: Do not inline context formatting here; ACP service handles context formatting.
@@ -1568,8 +1564,10 @@ export async function handleCancelAgentRun(args: { runId: string }): Promise<obj
   try {
     // Handle internal agent cancellation
     if (state.isInternal) {
-      // The runId for internal agents is the sub-session ID format
-      // Find the sub-session by looking for it in active sessions
+      // Internal delegations use a delegation run ID format (e.g., 'acp_delegation_*'),
+      // but sub-sessions are tracked by their session ID. Try to find the sub-session
+      // that corresponds to this delegation's parent session context.
+      // For now, we attempt to cancel using the runId which may or may not match a sub-session.
       const cancelled = cancelSubSession(args.runId);
       if (cancelled) {
         state.status = 'cancelled';

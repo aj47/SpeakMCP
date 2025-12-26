@@ -351,7 +351,7 @@ export type Config = {
   openaiTtsResponseFormat?: "mp3" | "opus" | "aac" | "flac" | "wav" | "pcm"
 
   // Groq TTS Configuration
-  groqTtsModel?: "playai-tts" | "playai-tts-arabic"
+  groqTtsModel?: "canopylabs/orpheus-v1-english" | "canopylabs/orpheus-arabic-saudi"
   groqTtsVoice?: string
 
   // Gemini TTS Configuration

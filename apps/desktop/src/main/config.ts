@@ -12,6 +12,50 @@ export const conversationsFolder = path.join(dataFolder, "conversations")
 
 export const configPath = path.join(dataFolder, "config.json")
 
+// Valid Orpheus voices - used for migration validation
+const ORPHEUS_ENGLISH_VOICES = ["autumn", "diana", "hannah", "austin", "daniel", "troy"]
+const ORPHEUS_ARABIC_VOICES = ["fahad", "sultan", "lulwa", "noura"]
+
+// Valid Groq TTS model IDs
+const VALID_GROQ_TTS_MODELS = ["canopylabs/orpheus-v1-english", "canopylabs/orpheus-arabic-saudi"]
+
+/**
+ * Migrate deprecated Groq TTS PlayAI models/voices to new Orpheus equivalents.
+ * This ensures existing installs with saved PlayAI settings continue to work.
+ */
+function migrateGroqTtsConfig(config: Partial<Config>): Partial<Config> {
+  // Migrate deprecated PlayAI models to Orpheus equivalents
+  // Use string comparison since saved config may contain deprecated values not in current type
+  const savedModel = config.groqTtsModel as string | undefined
+  if (savedModel === "playai-tts") {
+    config.groqTtsModel = "canopylabs/orpheus-v1-english"
+  } else if (savedModel === "playai-tts-arabic") {
+    config.groqTtsModel = "canopylabs/orpheus-arabic-saudi"
+  } else if (savedModel && !VALID_GROQ_TTS_MODELS.includes(savedModel)) {
+    // Unknown model value (user-edited config.json) - reset to default English model
+    config.groqTtsModel = "canopylabs/orpheus-v1-english"
+  }
+
+  // Migrate voices: check if voice is valid for the current model
+  // Guard with typeof check since config.json is user-editable and groqTtsVoice could be non-string
+  const voice = config.groqTtsVoice
+  const isValidVoice = voice && typeof voice === "string"
+  
+  if (config.groqTtsModel === "canopylabs/orpheus-arabic-saudi") {
+    // For Arabic model, ensure voice is a valid Arabic voice
+    if (!isValidVoice || !ORPHEUS_ARABIC_VOICES.includes(voice)) {
+      config.groqTtsVoice = "fahad" // Default Arabic voice
+    }
+  } else if (config.groqTtsModel === "canopylabs/orpheus-v1-english") {
+    // For English model, ensure voice is a valid English voice
+    if (!isValidVoice || !ORPHEUS_ENGLISH_VOICES.includes(voice)) {
+      config.groqTtsVoice = "troy" // Default English voice
+    }
+  }
+
+  return config
+}
+
 const getConfig = () => {
   // Platform-specific defaults
   const isWindows = process.platform === 'win32'
@@ -91,8 +135,8 @@ const getConfig = () => {
     // OpenAI Compatible Provider defaults
     openaiCompatiblePreset: "openai",
     // Groq TTS defaults
-    groqTtsModel: "playai-tts",
-    groqTtsVoice: "Fritz-PlayAI",
+    groqTtsModel: "canopylabs/orpheus-v1-english",
+    groqTtsVoice: "troy",
     // Gemini TTS defaults
     geminiTtsModel: "gemini-2.5-flash-preview-tts",
     geminiTtsVoice: "Kore",
@@ -139,7 +183,9 @@ const getConfig = () => {
     const savedConfig = JSON.parse(
       fs.readFileSync(configPath, "utf8"),
     ) as Config
-    return { ...defaultConfig, ...savedConfig }
+    // Apply migration for deprecated Groq TTS settings
+    const mergedConfig = { ...defaultConfig, ...savedConfig }
+    return migrateGroqTtsConfig(mergedConfig)
   } catch {
     return defaultConfig
   }

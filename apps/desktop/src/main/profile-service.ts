@@ -1,7 +1,7 @@
 import { app } from "electron"
 import path from "path"
 import fs from "fs"
-import { Profile, ProfilesData, ProfileMcpServerConfig, ProfileModelConfig } from "@shared/types"
+import { Profile, ProfilesData, ProfileMcpServerConfig, ProfileModelConfig, MCPServerConfig } from "@shared/types"
 import { randomUUID } from "crypto"
 import { logApp } from "./debug"
 import { configStore } from "./config"
@@ -11,6 +11,8 @@ const RESERVED_SERVER_NAMES = ["speakmcp-settings"]
 
 // Valid provider IDs that are supported by the application
 const VALID_PROVIDER_IDS = ["openai", "groq", "gemini"]
+// STT only supports openai and groq (no gemini support for STT)
+const VALID_STT_PROVIDER_IDS = ["openai", "groq"]
 
 /**
  * Validates the shape of an imported MCP server config
@@ -144,10 +146,9 @@ function isValidModelConfig(config: unknown): boolean {
 
   const c = config as Record<string, unknown>
 
-  // Provider ID fields that must match valid provider enums
+  // Provider ID fields that must match valid provider enums (full set)
   const providerIdFields = [
     "mcpToolsProviderId",
-    "sttProviderId",
     "transcriptPostProcessingProviderId",
     "ttsProviderId",
   ]
@@ -158,6 +159,13 @@ function isValidModelConfig(config: unknown): boolean {
       if (typeof c[field] !== "string" || !VALID_PROVIDER_IDS.includes(c[field] as string)) {
         return false
       }
+    }
+  }
+
+  // sttProviderId only supports openai and groq (no gemini)
+  if (c.sttProviderId !== undefined) {
+    if (typeof c.sttProviderId !== "string" || !VALID_STT_PROVIDER_IDS.includes(c.sttProviderId as string)) {
+      return false
     }
   }
 
@@ -599,13 +607,15 @@ class ProfileService {
             continue
           }
 
-          if (!mergedServers[serverName]) {
+          // Use normalizedServerName for both existence check and insertion
+          // to prevent duplicates that differ only by whitespace
+          if (!mergedServers[normalizedServerName]) {
             // Validate server config shape
             if (!isValidServerConfig(serverConfig)) {
               logApp(`Skipping server "${serverName}" with invalid configuration`)
               continue
             }
-            mergedServers[serverName] = serverConfig
+            mergedServers[normalizedServerName] = serverConfig as MCPServerConfig
             newServersAdded++
           }
         }

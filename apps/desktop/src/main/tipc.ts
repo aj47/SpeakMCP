@@ -2742,6 +2742,94 @@ export const router = {
 
       return true
     }),
+
+  // Meeting Transcription (macOS only - captures mic + system audio)
+  createMeetingTranscription: t.procedure
+    .input<{
+      recording: ArrayBuffer
+      duration: number
+    }>()
+    .action(async ({ input }) => {
+      fs.mkdirSync(recordingsFolder, { recursive: true })
+
+      const config = configStore.get()
+      let transcript: string
+
+      // Use OpenAI or Groq for transcription (same as regular recording)
+      const form = new FormData()
+      form.append(
+        "file",
+        new File([input.recording], "meeting-recording.webm", { type: "audio/webm" }),
+      )
+      form.append(
+        "model",
+        config.sttProviderId === "groq" ? "whisper-large-v3" : "whisper-1",
+      )
+      form.append("response_format", "json")
+
+      // Add prompt parameter for Groq if provided
+      if (config.sttProviderId === "groq" && config.groqSttPrompt?.trim()) {
+        form.append("prompt", config.groqSttPrompt.trim())
+      }
+
+      // Add language parameter if specified
+      const languageCode = config.sttProviderId === "groq"
+        ? config.groqSttLanguage || config.sttLanguage
+        : config.openaiSttLanguage || config.sttLanguage
+
+      if (languageCode && languageCode !== "auto") {
+        form.append("language", languageCode)
+      }
+
+      const groqBaseUrl = config.groqBaseUrl || "https://api.groq.com/openai/v1"
+      const openaiBaseUrl = config.openaiBaseUrl || "https://api.openai.com/v1"
+
+      const transcriptResponse = await fetch(
+        config.sttProviderId === "groq"
+          ? `${groqBaseUrl}/audio/transcriptions`
+          : `${openaiBaseUrl}/audio/transcriptions`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${config.sttProviderId === "groq" ? config.groqApiKey : config.openaiApiKey}`,
+          },
+          body: form,
+        },
+      )
+
+      if (!transcriptResponse.ok) {
+        const message = `${transcriptResponse.statusText} ${(await transcriptResponse.text()).slice(0, 300)}`
+        throw new Error(message)
+      }
+
+      const json: { text: string } = await transcriptResponse.json()
+      transcript = await postProcessTranscript(json.text)
+
+      // Save meeting recording to history with a special marker
+      const history = getRecordingHistory()
+      const item: RecordingHistoryItem = {
+        id: `meeting-${Date.now().toString()}`,
+        createdAt: Date.now(),
+        duration: input.duration,
+        transcript,
+      }
+      history.push(item)
+      saveRecordingsHitory(history)
+
+      fs.writeFileSync(
+        path.join(recordingsFolder, `${item.id}.webm`),
+        Buffer.from(input.recording),
+      )
+
+      const main = WINDOWS.get("main")
+      if (main) {
+        getRendererHandlers<RendererHandlers>(
+          main.webContents,
+        ).refreshRecordingHistory.send()
+      }
+
+      return { transcript, recordingId: item.id }
+    }),
 }
 
 // TTS Provider Implementation Functions

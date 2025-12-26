@@ -10,6 +10,10 @@ const api = {
   getOAuthStatus: (serverName: string) => ipcRenderer.invoke('getOAuthStatus', serverName),
   revokeOAuthTokens: (serverName: string) => ipcRenderer.invoke('revokeOAuthTokens', serverName),
   testMCPServer: (serverName: string, config: any) => ipcRenderer.invoke('testMCPServer', { serverName, config }),
+
+  // Audio Loopback APIs (for meeting transcription - macOS 12.3+)
+  enableLoopbackAudio: () => ipcRenderer.invoke('enable-loopback-audio'),
+  disableLoopbackAudio: () => ipcRenderer.invoke('disable-loopback-audio'),
 }
 
 if (process.contextIsolated) {

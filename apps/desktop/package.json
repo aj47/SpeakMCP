@@ -49,6 +49,7 @@
     "@radix-ui/react-tabs": "^1.1.13",
     "@speakmcp/shared": "workspace:^",
     "ajv": "^8.17.1",
+    "electron-audio-loopback": "^1.0.6",
     "fastify": "^5.6.1",
     "highlight.js": "^11.11.1",
     "openai": "^5.10.2",

@@ -35,6 +35,7 @@ import {
   Conversation,
   ConversationHistoryItem,
   AgentProgressUpdate,
+  ACPAgentConfig,
   SessionProfileSnapshot,
 } from "../shared/types"
 import { inferTransportType, normalizeMcpConfig } from "../shared/mcp-utils"
@@ -60,6 +61,7 @@ import { emitAgentProgress } from "./emit-agent-progress"
 import { agentSessionTracker } from "./agent-session-tracker"
 import { messageQueueService } from "./message-queue-service"
 import { profileService } from "./profile-service"
+import { acpService, ACPRunRequest } from "./acp-service"
 
 async function initializeMcpWithProgress(config: Config, sessionId: string): Promise<void> {
   const shouldStop = () => agentSessionStateManager.shouldStopSession(sessionId)
@@ -259,8 +261,8 @@ async function processWithAgentMode(
       }
 
       // Execute the tool call (approval either not required or was granted)
-      // Pass profileSnapshot.mcpServerConfig for session-aware server availability checks
-      return await mcpService.executeToolCall(toolCall, onProgress, true, profileSnapshot?.mcpServerConfig)
+      // Pass sessionId for ACP router tools progress, and profileSnapshot.mcpServerConfig for session-aware server availability
+      return await mcpService.executeToolCall(toolCall, onProgress, true, sessionId, profileSnapshot?.mcpServerConfig)
     }
 
     // Load previous conversation history if continuing a conversation
@@ -2727,6 +2729,132 @@ export const router = {
       })
 
       return true
+    }),
+
+  // ACP Agent Configuration handlers
+  getAcpAgents: t.procedure.action(async () => {
+    const config = configStore.get()
+    const externalAgents = config.acpAgents || []
+    // Include internal agent in the list
+    const { getInternalAgentConfig } = await import('./acp/acp-router-tools')
+    const internalAgent = getInternalAgentConfig()
+    return [internalAgent, ...externalAgents]
+  }),
+
+  saveAcpAgent: t.procedure
+    .input<{ agent: ACPAgentConfig }>()
+    .action(async ({ input }) => {
+      const config = configStore.get()
+      const agents = config.acpAgents || []
+
+      // Check if agent with this name already exists
+      const existingIndex = agents.findIndex(a => a.name === input.agent.name)
+
+      if (existingIndex >= 0) {
+        // Update existing agent
+        agents[existingIndex] = input.agent
+      } else {
+        // Add new agent
+        agents.push(input.agent)
+      }
+
+      configStore.save({ ...config, acpAgents: agents })
+      return { success: true }
+    }),
+
+  deleteAcpAgent: t.procedure
+    .input<{ agentName: string }>()
+    .action(async ({ input }) => {
+      const config = configStore.get()
+      const agents = config.acpAgents || []
+
+      const filteredAgents = agents.filter(a => a.name !== input.agentName)
+
+      configStore.save({ ...config, acpAgents: filteredAgents })
+      return { success: true }
+    }),
+
+  toggleAcpAgentEnabled: t.procedure
+    .input<{ agentName: string; enabled: boolean }>()
+    .action(async ({ input }) => {
+      const config = configStore.get()
+      const agents = config.acpAgents || []
+
+      const agentIndex = agents.findIndex(a => a.name === input.agentName)
+      if (agentIndex >= 0) {
+        agents[agentIndex] = { ...agents[agentIndex], enabled: input.enabled }
+        configStore.save({ ...config, acpAgents: agents })
+
+        // When disabling an agent, automatically stop it if it's running
+        if (!input.enabled) {
+          const agentStatus = acpService.getAgentStatus(input.agentName)
+          if (agentStatus && (agentStatus.status === "ready" || agentStatus.status === "starting")) {
+            try {
+              await acpService.stopAgent(input.agentName)
+            } catch (error) {
+              // Log but don't fail the toggle operation
+              logApp(`[ACP] Failed to auto-stop agent ${input.agentName} on disable:`, error)
+            }
+          }
+        }
+      }
+
+      return { success: true }
+    }),
+
+  // ACP Agent Runtime handlers
+  getAcpAgentStatuses: t.procedure.action(async () => {
+    return acpService.getAgents()
+  }),
+
+  spawnAcpAgent: t.procedure
+    .input<{ agentName: string }>()
+    .action(async ({ input }) => {
+      try {
+        await acpService.spawnAgent(input.agentName)
+        return { success: true }
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : String(error)
+        }
+      }
+    }),
+
+  stopAcpAgent: t.procedure
+    .input<{ agentName: string }>()
+    .action(async ({ input }) => {
+      try {
+        await acpService.stopAgent(input.agentName)
+        return { success: true }
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : String(error)
+        }
+      }
+    }),
+
+  runAcpTask: t.procedure
+    .input<{ request: ACPRunRequest }>()
+    .action(async ({ input }) => {
+      return acpService.runTask(input.request)
+    }),
+
+  // Get all subagent delegations with conversations for a session
+  getSubagentDelegations: t.procedure
+    .input<{ sessionId: string }>()
+    .action(async ({ input }) => {
+      const { getAllDelegationsForSession } = await import("./acp/acp-router-tools")
+      return getAllDelegationsForSession(input.sessionId)
+    }),
+
+  // Get details of a specific subagent delegation
+  getSubagentDelegationDetails: t.procedure
+    .input<{ runId: string }>()
+    .action(async ({ input }) => {
+      const { getDelegatedRunDetails } = await import("./acp/acp-router-tools")
+      return getDelegatedRunDetails(input.runId)
     }),
 }
 

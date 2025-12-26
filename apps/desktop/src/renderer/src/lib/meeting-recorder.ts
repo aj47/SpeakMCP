@@ -18,11 +18,20 @@ const normalizeRMS = (rms: number) => {
   return Math.min(1.0, Math.max(0.01, scaledRMS))
 }
 
+// Maximum recording duration in milliseconds (2 hours)
+// This prevents unbounded memory growth for very long meetings
+const MAX_RECORDING_DURATION_MS = 2 * 60 * 60 * 1000
+
+// Maximum recording size in bytes (500 MB)
+// At 128kbps, this is approximately 8.7 hours of audio, but we set a limit for safety
+const MAX_RECORDING_SIZE_BYTES = 500 * 1024 * 1024
+
 export type MeetingRecorderEvents = {
   "record-start": []
   "record-end": [Blob, number]
   "visualizer-data": [number]
   "error": [Error]
+  "max-duration-reached": []
   destroy: []
 }
 
@@ -40,6 +49,9 @@ export class MeetingRecorder extends EventEmitter<MeetingRecorderEvents> {
   private audioContext: AudioContext | null = null
   private mixedDestination: MediaStreamAudioDestinationNode | null = null
   private isRecording = false
+  private durationCheckInterval: number | null = null
+  private recordingStartTime: number = 0
+  private currentRecordingSize: number = 0
 
   constructor() {
     super()
@@ -155,17 +167,39 @@ export class MeetingRecorder extends EventEmitter<MeetingRecorderEvents> {
 
       let audioChunks: Blob[] = []
       let startTime = Date.now()
+      this.currentRecordingSize = 0
 
       this.mediaRecorder.onstart = () => {
         startTime = Date.now()
+        this.recordingStartTime = startTime
         this.isRecording = true
         this.emit("record-start")
         const stopAnalysing = this.analyseAudio(mixedStream)
         this.once("destroy", stopAnalysing)
+
+        // Start duration check interval to enforce maximum recording time
+        this.durationCheckInterval = window.setInterval(() => {
+          const elapsed = Date.now() - this.recordingStartTime
+          if (elapsed >= MAX_RECORDING_DURATION_MS) {
+            console.warn("[MeetingRecorder] Maximum recording duration reached (2 hours), stopping recording")
+            this.emit("max-duration-reached")
+            this.stopRecording()
+          }
+        }, 10000) // Check every 10 seconds
       }
 
       this.mediaRecorder.ondataavailable = (event) => {
         if (event.data && event.data.size > 0) {
+          this.currentRecordingSize += event.data.size
+          
+          // Check if we've exceeded the maximum recording size
+          if (this.currentRecordingSize > MAX_RECORDING_SIZE_BYTES) {
+            console.warn("[MeetingRecorder] Maximum recording size reached (500 MB), stopping recording")
+            this.emit("max-duration-reached")
+            this.stopRecording()
+            return
+          }
+          
           audioChunks.push(event.data)
         }
       }
@@ -214,6 +248,12 @@ export class MeetingRecorder extends EventEmitter<MeetingRecorderEvents> {
   private cleanup(): void {
     this.isRecording = false
 
+    // Clear the duration check interval
+    if (this.durationCheckInterval) {
+      clearInterval(this.durationCheckInterval)
+      this.durationCheckInterval = null
+    }
+
     if (this.mediaRecorder) {
       this.mediaRecorder = null
     }
@@ -234,6 +274,7 @@ export class MeetingRecorder extends EventEmitter<MeetingRecorderEvents> {
     }
 
     this.mixedDestination = null
+    this.currentRecordingSize = 0
     this.emit("destroy")
   }
 

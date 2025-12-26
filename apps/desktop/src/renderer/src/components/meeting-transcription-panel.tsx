@@ -82,6 +82,12 @@ export function MeetingTranscriptionPanel() {
         setVisualizerData(Array(VISUALIZER_BUFFER_LENGTH).fill(0.01))
       })
 
+      recorder.on("max-duration-reached", () => {
+        // Recording was automatically stopped due to duration/size limit
+        // The "record-end" event will still fire with the recorded data
+        setError("Recording stopped: maximum duration or size limit reached")
+      })
+
       await recorder.startRecording()
     } catch (err) {
       console.error("[MeetingTranscription] Failed to start recording:", err)

@@ -484,6 +484,12 @@ export async function runInternalSubSession(
     // Clean up session state and rate limit tracking
     agentSessionStateManager.cleanupSession(subSessionId);
     lastEmitTime.delete(subSessionId);
+    
+    // Clean up parent-child relationship to prevent MAX_CONCURRENT_SUB_SESSIONS from becoming a lifetime limit
+    const children = parentToChildren.get(parentSessionId);
+    if (children) {
+      children.delete(subSessionId);
+    }
   }
 }
 
@@ -501,6 +507,15 @@ export function cancelSubSession(subSessionId: string): boolean {
 
   subSession.status = 'cancelled';
   subSession.endTime = Date.now();
+
+  // Emit progress update to notify parent UI that the sub-session was cancelled
+  emitSubSessionDelegationProgress(subSession, subSession.parentSessionId);
+
+  // Clean up parent-child relationship to prevent MAX_CONCURRENT_SUB_SESSIONS from becoming a lifetime limit
+  const children = parentToChildren.get(subSession.parentSessionId);
+  if (children) {
+    children.delete(subSessionId);
+  }
 
   logSubSession(`Sub-session ${subSessionId} cancelled`);
   return true;

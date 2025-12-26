@@ -8,7 +8,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Linking from 'expo-linking';
 import { checkServerConnection, ConnectionCheckResult } from '../lib/connectionRecovery';
 import { useTunnelConnection } from '../store/tunnelConnection';
-import { SettingsApiClient, Profile, MCPServer, Settings } from '../lib/settingsApi';
+import { SettingsApiClient, Profile, MCPServer, Settings, ModelInfo } from '../lib/settingsApi';
 
 function parseQRCode(data: string): { baseUrl?: string; apiKey?: string; model?: string } | null {
   try {
@@ -58,6 +58,13 @@ export default function SettingsScreen({ navigation }: any) {
   const [isRefreshing, setIsRefreshing] = useState(false);
   // Track if the server is a SpeakMCP desktop server (supports our settings API)
   const [isSpeakMCPServer, setIsSpeakMCPServer] = useState(false);
+
+  // Model picker state
+  const [availableModels, setAvailableModels] = useState<ModelInfo[]>([]);
+  const [isLoadingModels, setIsLoadingModels] = useState(false);
+  const [showModelPicker, setShowModelPicker] = useState(false);
+  const [modelSearchQuery, setModelSearchQuery] = useState('');
+  const [useCustomModel, setUseCustomModel] = useState(false);
 
   const styles = useMemo(() => createStyles(theme), [theme]);
 
@@ -187,6 +194,36 @@ export default function SettingsScreen({ navigation }: any) {
     }
   };
 
+  // Fetch available models for the current provider
+  const fetchModels = useCallback(async (providerId: 'openai' | 'groq' | 'gemini') => {
+    if (!settingsClient) return;
+
+    setIsLoadingModels(true);
+    try {
+      const response = await settingsClient.getModels(providerId);
+      setAvailableModels(response.models);
+      // Check if current model is in the list, if not enable custom mode
+      const currentModel = getCurrentModelValue();
+      if (currentModel && response.models.length > 0) {
+        const isInList = response.models.some(m => m.id === currentModel);
+        setUseCustomModel(!isInList);
+      }
+    } catch (error: any) {
+      console.error('[Settings] Failed to fetch models:', error);
+      // Keep any existing models, don't clear on error
+      setAvailableModels([]);
+    } finally {
+      setIsLoadingModels(false);
+    }
+  }, [settingsClient]);
+
+  // Fetch models when remote settings load or provider changes
+  useEffect(() => {
+    if (remoteSettings?.mcpToolsProviderId && settingsClient) {
+      fetchModels(remoteSettings.mcpToolsProviderId);
+    }
+  }, [remoteSettings?.mcpToolsProviderId, settingsClient, fetchModels]);
+
   // Handle provider change
   const handleProviderChange = async (provider: 'openai' | 'groq' | 'gemini') => {
     if (!settingsClient || !remoteSettings || remoteSettings.mcpToolsProviderId === provider) return;
@@ -194,6 +231,9 @@ export default function SettingsScreen({ navigation }: any) {
     try {
       await settingsClient.updateSettings({ mcpToolsProviderId: provider });
       setRemoteSettings(prev => prev ? { ...prev, mcpToolsProviderId: provider } : null);
+      // Reset custom model mode when switching providers
+      setUseCustomModel(false);
+      // Models will be fetched via the useEffect above
     } catch (error: any) {
       console.error('[Settings] Failed to change provider:', error);
       setRemoteError(error.message || 'Failed to change provider');
@@ -239,6 +279,30 @@ export default function SettingsScreen({ navigation }: any) {
     if (provider === 'groq') return 'llama-3.3-70b-versatile';
     return 'gemini-1.5-flash-002';
   };
+
+  // Get display name for current model
+  const getCurrentModelDisplayName = () => {
+    const currentValue = getCurrentModelValue();
+    if (!currentValue) return 'Select a model';
+    const model = availableModels.find(m => m.id === currentValue);
+    return model?.name || currentValue;
+  };
+
+  // Handle model selection from picker
+  const handleModelSelect = async (modelId: string) => {
+    setShowModelPicker(false);
+    setModelSearchQuery('');
+    await handleModelNameChange(modelId);
+  };
+
+  // Filter models by search query
+  const filteredModels = useMemo(() => {
+    if (!modelSearchQuery.trim()) return availableModels;
+    const query = modelSearchQuery.toLowerCase();
+    return availableModels.filter(
+      m => m.id.toLowerCase().includes(query) || m.name.toLowerCase().includes(query)
+    );
+  }, [availableModels, modelSearchQuery]);
 
   useEffect(() => {
     setDraft(config);
@@ -576,18 +640,76 @@ export default function SettingsScreen({ navigation }: any) {
                   ))}
                 </View>
 
-                <Text style={styles.label}>Model Name</Text>
-                <TextInput
-                  style={styles.input}
-                  value={getCurrentModelValue()}
-                  onChangeText={handleModelNameChange}
-                  placeholder={getModelPlaceholder()}
-                  placeholderTextColor={theme.colors.mutedForeground}
-                  autoCapitalize='none'
-                />
-                <Text style={styles.helperText}>
-                  Model used for agent/MCP tool calling
-                </Text>
+                <View style={styles.modelLabelRow}>
+                  <Text style={styles.label}>Model Name</Text>
+                  <View style={styles.modelActions}>
+                    <TouchableOpacity
+                      style={styles.modelActionButton}
+                      onPress={() => setUseCustomModel(!useCustomModel)}
+                    >
+                      <Text style={styles.modelActionText}>
+                        {useCustomModel ? '📋 List' : '✏️ Custom'}
+                      </Text>
+                    </TouchableOpacity>
+                    {!useCustomModel && (
+                      <TouchableOpacity
+                        style={styles.modelActionButton}
+                        onPress={() => remoteSettings && fetchModels(remoteSettings.mcpToolsProviderId)}
+                        disabled={isLoadingModels}
+                      >
+                        <Text style={styles.modelActionText}>
+                          {isLoadingModels ? '⏳' : '🔄'}
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                </View>
+
+                {useCustomModel ? (
+                  <>
+                    <TextInput
+                      style={styles.input}
+                      value={getCurrentModelValue()}
+                      onChangeText={handleModelNameChange}
+                      placeholder={getModelPlaceholder()}
+                      placeholderTextColor={theme.colors.mutedForeground}
+                      autoCapitalize='none'
+                    />
+                    <Text style={styles.helperText}>
+                      Enter any model name supported by your provider
+                    </Text>
+                  </>
+                ) : (
+                  <>
+                    <TouchableOpacity
+                      style={styles.modelSelector}
+                      onPress={() => setShowModelPicker(true)}
+                      disabled={isLoadingModels}
+                    >
+                      {isLoadingModels ? (
+                        <View style={styles.modelSelectorContent}>
+                          <ActivityIndicator size="small" color={theme.colors.mutedForeground} />
+                          <Text style={styles.modelSelectorPlaceholder}>Loading models...</Text>
+                        </View>
+                      ) : (
+                        <View style={styles.modelSelectorContent}>
+                          <Text style={[
+                            styles.modelSelectorText,
+                            !getCurrentModelValue() && styles.modelSelectorPlaceholder
+                          ]}>
+                            {getCurrentModelDisplayName()}
+                          </Text>
+                          <Text style={styles.modelSelectorChevron}>▼</Text>
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                    <Text style={styles.helperText}>
+                      {availableModels.length > 0
+                        ? `${availableModels.length} model${availableModels.length !== 1 ? 's' : ''} available`
+                        : 'Model used for agent/MCP tool calling'}
+                    </Text>
+                  </>
+                )}
               </>
             )}
 
@@ -665,6 +787,95 @@ export default function SettingsScreen({ navigation }: any) {
           <TouchableOpacity style={styles.closeButton} onPress={() => setShowScanner(false)}>
             <Text style={styles.closeButtonText}>✕ Close</Text>
           </TouchableOpacity>
+        </View>
+      </Modal>
+
+      {/* Model Picker Modal */}
+      <Modal
+        visible={showModelPicker}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => {
+          setShowModelPicker(false);
+          setModelSearchQuery('');
+        }}
+      >
+        <View style={styles.modelPickerOverlay}>
+          <View style={styles.modelPickerContainer}>
+            <View style={styles.modelPickerHeader}>
+              <Text style={styles.modelPickerTitle}>Select Model</Text>
+              <TouchableOpacity
+                onPress={() => {
+                  setShowModelPicker(false);
+                  setModelSearchQuery('');
+                }}
+              >
+                <Text style={styles.modelPickerClose}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Search Input */}
+            <View style={styles.modelSearchContainer}>
+              <TextInput
+                style={styles.modelSearchInput}
+                value={modelSearchQuery}
+                onChangeText={setModelSearchQuery}
+                placeholder="Search models..."
+                placeholderTextColor={theme.colors.mutedForeground}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+            </View>
+
+            {/* Models List */}
+            <ScrollView style={styles.modelList} keyboardShouldPersistTaps="handled">
+              {filteredModels.length === 0 ? (
+                <View style={styles.modelListEmpty}>
+                  <Text style={styles.modelListEmptyText}>
+                    {modelSearchQuery ? `No models match "${modelSearchQuery}"` : 'No models available'}
+                  </Text>
+                </View>
+              ) : (
+                filteredModels.map((model) => {
+                  const isSelected = getCurrentModelValue() === model.id;
+                  return (
+                    <TouchableOpacity
+                      key={model.id}
+                      style={[
+                        styles.modelItem,
+                        isSelected && styles.modelItemActive,
+                      ]}
+                      onPress={() => handleModelSelect(model.id)}
+                    >
+                      <View style={styles.modelItemContent}>
+                        <Text style={[
+                          styles.modelItemName,
+                          isSelected && styles.modelItemNameActive,
+                        ]}>
+                          {model.name}
+                        </Text>
+                        {model.id !== model.name && (
+                          <Text style={styles.modelItemId}>{model.id}</Text>
+                        )}
+                      </View>
+                      {isSelected && (
+                        <Text style={styles.modelItemCheck}>✓</Text>
+                      )}
+                    </TouchableOpacity>
+                  );
+                })
+              )}
+            </ScrollView>
+
+            {/* Footer with model count */}
+            <View style={styles.modelPickerFooter}>
+              <Text style={styles.modelPickerFooterText}>
+                {modelSearchQuery
+                  ? `${filteredModels.length} of ${availableModels.length} models`
+                  : `${availableModels.length} model${availableModels.length !== 1 ? 's' : ''} available`}
+              </Text>
+            </View>
+          </View>
         </View>
       </Modal>
     </>
@@ -955,6 +1166,143 @@ function createStyles(theme: ReturnType<typeof useTheme>['theme']) {
     },
     statusDisconnected: {
       backgroundColor: theme.colors.muted,
+    },
+    // Model picker styles
+    modelLabelRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginTop: spacing.sm,
+    },
+    modelActions: {
+      flexDirection: 'row',
+      gap: spacing.xs,
+    },
+    modelActionButton: {
+      paddingHorizontal: spacing.sm,
+      paddingVertical: spacing.xs,
+    },
+    modelActionText: {
+      fontSize: 12,
+      color: theme.colors.primary,
+    },
+    modelSelector: {
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      borderRadius: radius.md,
+      backgroundColor: theme.colors.background,
+      padding: spacing.md,
+    },
+    modelSelectorContent: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      gap: spacing.sm,
+    },
+    modelSelectorText: {
+      flex: 1,
+      fontSize: 14,
+      color: theme.colors.foreground,
+    },
+    modelSelectorPlaceholder: {
+      color: theme.colors.mutedForeground,
+    },
+    modelSelectorChevron: {
+      fontSize: 10,
+      color: theme.colors.mutedForeground,
+    },
+    // Model Picker Modal styles
+    modelPickerOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.5)',
+      justifyContent: 'flex-end',
+    },
+    modelPickerContainer: {
+      backgroundColor: theme.colors.background,
+      borderTopLeftRadius: radius.xl,
+      borderTopRightRadius: radius.xl,
+      maxHeight: '80%',
+    },
+    modelPickerHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      padding: spacing.lg,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.border,
+    },
+    modelPickerTitle: {
+      fontSize: 18,
+      fontWeight: '600',
+      color: theme.colors.foreground,
+    },
+    modelPickerClose: {
+      fontSize: 20,
+      color: theme.colors.mutedForeground,
+      padding: spacing.sm,
+    },
+    modelSearchContainer: {
+      padding: spacing.md,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.border,
+    },
+    modelSearchInput: {
+      ...theme.input,
+      marginTop: 0,
+    },
+    modelList: {
+      maxHeight: 400,
+    },
+    modelListEmpty: {
+      padding: spacing.xl,
+      alignItems: 'center',
+    },
+    modelListEmptyText: {
+      color: theme.colors.mutedForeground,
+      fontSize: 14,
+    },
+    modelItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      padding: spacing.md,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.border,
+    },
+    modelItemActive: {
+      backgroundColor: theme.colors.primary + '10',
+    },
+    modelItemContent: {
+      flex: 1,
+    },
+    modelItemName: {
+      fontSize: 14,
+      color: theme.colors.foreground,
+    },
+    modelItemNameActive: {
+      fontWeight: '600',
+      color: theme.colors.primary,
+    },
+    modelItemId: {
+      fontSize: 12,
+      color: theme.colors.mutedForeground,
+      marginTop: 2,
+    },
+    modelItemCheck: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: theme.colors.primary,
+      marginLeft: spacing.sm,
+    },
+    modelPickerFooter: {
+      padding: spacing.md,
+      borderTopWidth: 1,
+      borderTopColor: theme.colors.border,
+      alignItems: 'center',
+    },
+    modelPickerFooterText: {
+      fontSize: 12,
+      color: theme.colors.mutedForeground,
     },
   });
 }

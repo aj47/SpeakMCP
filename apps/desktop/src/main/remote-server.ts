@@ -505,6 +505,35 @@ export async function startRemoteServer() {
     })
   })
 
+  // GET /v1/models/:providerId - Fetch available models for a provider
+  fastify.get("/v1/models/:providerId", async (req, reply) => {
+    try {
+      const params = req.params as { providerId: string }
+      const providerId = params.providerId
+
+      const validProviders = ["openai", "groq", "gemini"]
+      if (!validProviders.includes(providerId)) {
+        return reply.code(400).send({ error: `Invalid provider: ${providerId}. Valid providers: ${validProviders.join(", ")}` })
+      }
+
+      const { fetchAvailableModels } = await import("./models-service")
+      const models = await fetchAvailableModels(providerId)
+
+      return reply.send({
+        providerId,
+        models: models.map(m => ({
+          id: m.id,
+          name: m.name,
+          description: m.description,
+          context_length: m.context_length,
+        })),
+      })
+    } catch (error: any) {
+      diagnosticsService.logError("remote-server", "Failed to fetch models", error)
+      return reply.code(500).send({ error: error?.message || "Failed to fetch models" })
+    }
+  })
+
   // ============================================
   // Settings Management Endpoints (for mobile app)
   // ============================================

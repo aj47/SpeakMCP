@@ -42,6 +42,18 @@ export interface Settings {
   mcpMaxIterations: number;
 }
 
+export interface ModelInfo {
+  id: string;
+  name: string;
+  description?: string;
+  context_length?: number;
+}
+
+export interface ModelsResponse {
+  providerId: string;
+  models: ModelInfo[];
+}
+
 export interface SettingsUpdate {
   transcriptPostProcessingEnabled?: boolean;
   mcpRequireApprovalBeforeToolCall?: boolean;
@@ -124,6 +136,11 @@ export class SettingsApiClient {
       method: 'PATCH',
       body: JSON.stringify(updates),
     });
+  }
+
+  // Models Management
+  async getModels(providerId: 'openai' | 'groq' | 'gemini'): Promise<ModelsResponse> {
+    return this.request<ModelsResponse>(`/models/${providerId}`);
   }
 }
 

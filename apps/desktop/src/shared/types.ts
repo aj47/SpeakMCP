@@ -216,6 +216,9 @@ export interface Conversation {
     provider?: string
     agentMode?: boolean
   }
+  // Optional per-conversation MCP configuration
+  // When specified, allows project-specific MCP tools
+  mcpConfig?: ConversationMcpConfig
 }
 
 export interface ConversationHistoryItem {
@@ -237,6 +240,25 @@ export type ProfileMcpServerConfig = {
   // When allServersDisabledByDefault is true, this list contains servers that are explicitly ENABLED
   // (i.e., servers the user has opted-in to use for this profile)
   enabledServers?: string[]
+}
+
+/**
+ * Per-conversation MCP configuration.
+ * Allows conversations to have project-specific MCP tools.
+ * Example: Python project conversation enables `ruff`, `mypy`
+ * Example: Web project conversation enables `eslint`, `prettier`
+ */
+export type ConversationMcpConfig = {
+  // When true, inherit MCP config from the current profile
+  inheritFromProfile: boolean
+  // Conversation-specific disabled servers (layered on top of profile config if inheritFromProfile is true)
+  disabledServers?: string[]
+  // Conversation-specific disabled tools (layered on top of profile config if inheritFromProfile is true)
+  disabledTools?: string[]
+  // Conversation-specific enabled servers (when not inheriting from profile)
+  enabledServers?: string[]
+  // Custom MCP servers specific to this conversation (e.g., project-specific tools)
+  customServers?: Record<string, MCPServerConfig>
 }
 
 export type ProfileModelConfig = {
@@ -587,4 +609,21 @@ export interface SamplingResult {
   model?: string
   content?: SamplingMessageContent
   stopReason?: string
+}
+
+// Context Management Types
+export interface ContextLimitWarning {
+  sessionId: string
+  conversationId?: string
+  contextUsagePercent: number
+  estTokens: number
+  maxTokens: number
+  timestamp: number
+}
+
+export type ContextLimitAction = "clear_and_continue" | "summarize" | "continue_anyway" | "dismiss"
+
+export interface ContextLimitActionRequest {
+  warningId: string
+  action: ContextLimitAction
 }

@@ -163,7 +163,15 @@ export interface ShrinkOptions {
   onSummarizationProgress?: (current: number, total: number, message: string) => void // callback for progress updates
 }
 
-export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<{ messages: LLMMessage[]; appliedStrategies: string[]; estTokensBefore: number; estTokensAfter: number; maxTokens: number }>{
+export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<{
+  messages: LLMMessage[];
+  appliedStrategies: string[];
+  estTokensBefore: number;
+  estTokensAfter: number;
+  maxTokens: number;
+  shouldWarnContextLimit?: boolean;
+  contextUsagePercent?: number;
+}>{
   const config = configStore.get()
   const applied: string[] = []
 
@@ -181,7 +189,17 @@ export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<{ messa
     const maxTokens = (override && typeof override === "number" && override > 0)
       ? override
       : staticDefaultMaxTokens(providerId, model)
-    return { messages: opts.messages, appliedStrategies: [], estTokensBefore: est, estTokensAfter: est, maxTokens }
+    const contextUsagePercent = (est / maxTokens) * 100
+    const shouldWarnContextLimit = contextUsagePercent >= 85
+    return {
+      messages: opts.messages,
+      appliedStrategies: [],
+      estTokensBefore: est,
+      estTokensAfter: est,
+      maxTokens,
+      shouldWarnContextLimit,
+      contextUsagePercent
+    }
   }
   const maxTokens = await getMaxContextTokens(providerId, model)
   const targetTokens = Math.floor(maxTokens * targetRatio)
@@ -193,8 +211,19 @@ export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<{ messa
     logLLM("ContextBudget: initial", { providerId, model, maxTokens, targetTokens, estTokens: tokens, count: messages.length })
   }
 
+  const contextUsagePercent = (tokens / maxTokens) * 100
+  const shouldWarnContextLimit = contextUsagePercent >= 85
+
   if (tokens <= targetTokens) {
-    return { messages, appliedStrategies: applied, estTokensBefore: tokens, estTokensAfter: tokens, maxTokens }
+    return {
+      messages,
+      appliedStrategies: applied,
+      estTokensBefore: tokens,
+      estTokensAfter: tokens,
+      maxTokens,
+      shouldWarnContextLimit,
+      contextUsagePercent
+    }
   }
 
   // Tier 0: Aggressive truncation of very large tool responses (>5000 chars)
@@ -214,9 +243,18 @@ export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<{ messa
         }
         applied.push("aggressive_truncate")
         tokens = estimateTokensFromMessages(messages)
+        const usageAfterTruncate = (tokens / maxTokens) * 100
         if (tokens <= targetTokens) {
           if (isDebugLLM()) logLLM("ContextBudget: after aggressive_truncate", { estTokens: tokens })
-          return { messages, appliedStrategies: applied, estTokensBefore: tokens, estTokensAfter: tokens, maxTokens }
+          return {
+            messages,
+            appliedStrategies: applied,
+            estTokensBefore: tokens,
+            estTokensAfter: tokens,
+            maxTokens,
+            shouldWarnContextLimit: usageAfterTruncate >= 85,
+            contextUsagePercent: usageAfterTruncate
+          }
         }
       }
     }
@@ -257,7 +295,16 @@ export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<{ messa
 
   if (tokens <= targetTokens) {
     if (isDebugLLM()) logLLM("ContextBudget: after summarize", { estTokens: tokens })
-    return { messages, appliedStrategies: applied, estTokensBefore: tokens, estTokensAfter: tokens, maxTokens }
+    const usageAfterSummarize = (tokens / maxTokens) * 100
+    return {
+      messages,
+      appliedStrategies: applied,
+      estTokensBefore: tokens,
+      estTokensAfter: tokens,
+      maxTokens,
+      shouldWarnContextLimit: usageAfterSummarize >= 85,
+      contextUsagePercent: usageAfterSummarize
+    }
   }
 
   // Tier 2: Remove middle messages (keep system, first user, last N)
@@ -291,7 +338,16 @@ export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<{ messa
 
   if (tokens <= targetTokens) {
     if (isDebugLLM()) logLLM("ContextBudget: after drop_middle", { estTokens: tokens, kept: messages.length })
-    return { messages, appliedStrategies: applied, estTokensBefore: tokens, estTokensAfter: tokens, maxTokens }
+    const usageAfterDrop = (tokens / maxTokens) * 100
+    return {
+      messages,
+      appliedStrategies: applied,
+      estTokensBefore: tokens,
+      estTokensAfter: tokens,
+      maxTokens,
+      shouldWarnContextLimit: usageAfterDrop >= 85,
+      contextUsagePercent: usageAfterDrop
+    }
   }
 
   // Tier 3: Minimal system prompt
@@ -308,9 +364,18 @@ export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<{ messa
   }
   applied.push("minimal_system_prompt")
   tokens = estimateTokensFromMessages(messages)
+  const finalUsagePercent = (tokens / maxTokens) * 100
 
   if (isDebugLLM()) logLLM("ContextBudget: after minimal_system_prompt", { estTokens: tokens })
 
-  return { messages, appliedStrategies: applied, estTokensBefore: tokens, estTokensAfter: tokens, maxTokens }
+  return {
+    messages,
+    appliedStrategies: applied,
+    estTokensBefore: tokens,
+    estTokensAfter: tokens,
+    maxTokens,
+    shouldWarnContextLimit: finalUsagePercent >= 85,
+    contextUsagePercent: finalUsagePercent
+  }
 }
 

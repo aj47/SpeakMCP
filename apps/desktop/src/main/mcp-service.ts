@@ -23,6 +23,7 @@ import {
   ServerLogEntry,
   ProfilesData,
   ProfileMcpServerConfig,
+  ConversationMcpConfig,
 } from "../shared/types"
 import { requestElicitation, handleElicitationComplete, cancelAllElicitations } from "./mcp-elicitation"
 import { requestSampling, cancelAllSamplingRequests } from "./mcp-sampling"
@@ -1542,6 +1543,108 @@ export class MCPService {
     // Combine with built-in tools and filter by disabled tools
     const allTools = [...enabledExternalTools, ...builtinTools]
     return allTools.filter((tool) => !profileDisabledTools.has(tool.name))
+  }
+
+  /**
+   * Get available tools for a conversation, optionally layering conversation-specific config
+   * on top of profile config.
+   *
+   * Resolution hierarchy:
+   * 1. If no conversationMcpConfig, use profile config only
+   * 2. If conversationMcpConfig.inheritFromProfile is true, layer conversation config on profile config
+   * 3. If conversationMcpConfig.inheritFromProfile is false, use only conversation config
+   *
+   * @param profileMcpConfig - The profile's MCP server configuration
+   * @param conversationMcpConfig - Optional conversation-specific MCP configuration
+   * @returns Tools filtered according to the layered configuration
+   */
+  getAvailableToolsForConversation(
+    profileMcpConfig?: ProfileMcpServerConfig,
+    conversationMcpConfig?: ConversationMcpConfig,
+  ): MCPTool[] {
+    // If no conversation config, fall back to profile-only filtering
+    if (!conversationMcpConfig) {
+      return this.getAvailableToolsForProfile(profileMcpConfig)
+    }
+
+    const config = configStore.get()
+    const allServerNames = Object.keys(config?.mcpConfig?.mcpServers || {})
+    const finalDisabledServers = new Set<string>()
+    const finalDisabledTools = new Set<string>()
+
+    if (conversationMcpConfig.inheritFromProfile && profileMcpConfig) {
+      // Layer conversation config on top of profile config
+
+      // Start with profile's disabled servers
+      const { allServersDisabledByDefault, enabledServers, disabledServers, disabledTools } = profileMcpConfig
+
+      if (allServersDisabledByDefault) {
+        // Profile disables all servers by default, only enable explicitly enabled ones
+        const enabledSet = new Set(enabledServers || [])
+        for (const serverName of allServerNames) {
+          if (!enabledSet.has(serverName)) {
+            finalDisabledServers.add(serverName)
+          }
+        }
+      } else {
+        // Profile only disables specific servers
+        for (const serverName of disabledServers || []) {
+          finalDisabledServers.add(serverName)
+        }
+      }
+
+      // Layer profile's disabled tools
+      for (const toolName of disabledTools || []) {
+        finalDisabledTools.add(toolName)
+      }
+
+      // Now layer conversation-specific config on top
+      for (const serverName of conversationMcpConfig.disabledServers || []) {
+        finalDisabledServers.add(serverName)
+      }
+
+      for (const serverName of conversationMcpConfig.enabledServers || []) {
+        finalDisabledServers.delete(serverName) // Re-enable server at conversation level
+      }
+
+      for (const toolName of conversationMcpConfig.disabledTools || []) {
+        finalDisabledTools.add(toolName)
+      }
+    } else {
+      // Don't inherit from profile - use only conversation config
+      const { enabledServers, disabledServers, disabledTools } = conversationMcpConfig
+
+      if (enabledServers && enabledServers.length > 0) {
+        // Explicit whitelist of enabled servers
+        const enabledSet = new Set(enabledServers)
+        for (const serverName of allServerNames) {
+          if (!enabledSet.has(serverName)) {
+            finalDisabledServers.add(serverName)
+          }
+        }
+      } else {
+        // Use conversation's disabled servers list
+        for (const serverName of disabledServers || []) {
+          finalDisabledServers.add(serverName)
+        }
+      }
+
+      for (const toolName of disabledTools || []) {
+        finalDisabledTools.add(toolName)
+      }
+    }
+
+    // Filter external tools by server availability
+    const enabledExternalTools = this.availableTools.filter((tool) => {
+      const serverName = tool.name.includes(":")
+        ? tool.name.split(":")[0]
+        : "unknown"
+      return !finalDisabledServers.has(serverName)
+    })
+
+    // Combine with built-in tools and filter by disabled tools
+    const allTools = [...enabledExternalTools, ...builtinTools]
+    return allTools.filter((tool) => !finalDisabledTools.has(tool.name))
   }
 
   getDetailedToolList(): Array<{

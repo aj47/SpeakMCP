@@ -104,6 +104,19 @@ function truncateContent(content: string, maxSize: number): string {
 }
 
 /**
+ * Safely stringify a value to JSON, catching errors from circular structures or BigInt.
+ * Returns a fallback string if serialization fails.
+ */
+function safeJsonStringify(value: unknown, indent?: number): string {
+  try {
+    return JSON.stringify(value, null, indent);
+  } catch {
+    // Handle circular references, BigInt, or other non-serializable values
+    return '[Unable to serialize value]';
+  }
+}
+
+/**
  * Prepare conversation for UI transmission with size limits
  */
 function prepareConversationForUI(conversation: ACPSubAgentMessage[]): ACPSubAgentMessage[] {
@@ -229,12 +242,12 @@ acpService.on('sessionUpdate', (event: {
         message.toolInput = block.input;
         message.content = `Using tool: ${block.name}`;
         if (block.input) {
-          message.content += `\nInput: ${truncateContent(JSON.stringify(block.input, null, 2), 500)}`;
+          message.content += `\nInput: ${truncateContent(safeJsonStringify(block.input, 2), 500)}`;
         }
         conversation.push(message);
       } else if (block.type === 'tool_result') {
         message.role = 'tool';
-        const resultStr = typeof block.result === 'string' ? block.result : JSON.stringify(block.result);
+        const resultStr = typeof block.result === 'string' ? block.result : safeJsonStringify(block.result);
         message.content = `Tool result: ${truncateContent(resultStr, 500)}`;
         conversation.push(message);
       }

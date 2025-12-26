@@ -8,6 +8,7 @@ import { useStoreSync } from "./hooks/use-store-sync"
 const Updater = lazy(() => import("./components/updater"))
 const McpElicitationDialog = lazy(() => import("./components/mcp-elicitation-dialog"))
 const McpSamplingDialog = lazy(() => import("./components/mcp-sampling-dialog"))
+const ContextLimitWarningDialog = lazy(() => import("./components/context-limit-warning-dialog"))
 
 function StoreInitializer({ children }: { children: React.ReactNode }) {
   useStoreSync()
@@ -28,6 +29,11 @@ function App(): JSX.Element {
         <Suspense>
           <McpElicitationDialog />
           <McpSamplingDialog />
+        </Suspense>
+
+        {/* Context Limit Warning Dialog */}
+        <Suspense>
+          <ContextLimitWarningDialog />
         </Suspense>
 
         <Toaster />

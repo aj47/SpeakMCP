@@ -48,6 +48,7 @@ export interface Settings {
   availablePresets?: ModelPreset[];
   transcriptPostProcessingEnabled: boolean;
   mcpRequireApprovalBeforeToolCall: boolean;
+  ttsEnabled: boolean;
   mcpMaxIterations: number;
 }
 
@@ -66,6 +67,7 @@ export interface ModelsResponse {
 export interface SettingsUpdate {
   transcriptPostProcessingEnabled?: boolean;
   mcpRequireApprovalBeforeToolCall?: boolean;
+  ttsEnabled?: boolean;
   mcpMaxIterations?: number;
   mcpToolsProviderId?: 'openai' | 'groq' | 'gemini';
   mcpToolsOpenaiModel?: string;

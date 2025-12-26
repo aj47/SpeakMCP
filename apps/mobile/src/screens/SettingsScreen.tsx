@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useCallback } from 'react';
+import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { View, Text, TextInput, Switch, StyleSheet, ScrollView, Modal, TouchableOpacity, Platform, Pressable, ActivityIndicator, RefreshControl } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppConfig, saveConfig, useConfigContext } from '../store/config';
@@ -68,6 +68,10 @@ export default function SettingsScreen({ navigation }: any) {
 
   // Preset picker state
   const [showPresetPicker, setShowPresetPicker] = useState(false);
+
+  // Custom model input state (for debouncing)
+  const [customModelDraft, setCustomModelDraft] = useState('');
+  const modelUpdateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const styles = useMemo(() => createStyles(theme), [theme]);
 
@@ -271,27 +275,54 @@ export default function SettingsScreen({ navigation }: any) {
     return preset?.name || 'OpenAI';
   };
 
-  // Handle model name change
-  const handleModelNameChange = async (modelName: string) => {
-    if (!settingsClient || !remoteSettings) return;
+  // Handle model name change with debouncing to avoid request storms per keystroke
+  const handleModelNameChange = useCallback((modelName: string) => {
+    // Update draft state immediately for responsive UI
+    setCustomModelDraft(modelName);
 
-    const provider = remoteSettings.mcpToolsProviderId;
-    const modelKey = provider === 'openai' ? 'mcpToolsOpenaiModel'
-      : provider === 'groq' ? 'mcpToolsGroqModel'
-      : 'mcpToolsGeminiModel';
-
-    // Update local state immediately for responsive UI
-    setRemoteSettings(prev => prev ? { ...prev, [modelKey]: modelName } : null);
-
-    try {
-      await settingsClient.updateSettings({ [modelKey]: modelName });
-    } catch (error: any) {
-      console.error('[Settings] Failed to update model:', error);
-      setRemoteError(error.message || 'Failed to update model');
-      // Refresh to get actual state
-      fetchRemoteSettings();
+    // Cancel any pending update
+    if (modelUpdateTimeoutRef.current) {
+      clearTimeout(modelUpdateTimeoutRef.current);
     }
-  };
+
+    // Debounce the actual API call by 500ms
+    modelUpdateTimeoutRef.current = setTimeout(async () => {
+      if (!settingsClient || !remoteSettings) return;
+
+      const provider = remoteSettings.mcpToolsProviderId;
+      const modelKey = provider === 'openai' ? 'mcpToolsOpenaiModel'
+        : provider === 'groq' ? 'mcpToolsGroqModel'
+        : 'mcpToolsGeminiModel';
+
+      // Update local state
+      setRemoteSettings(prev => prev ? { ...prev, [modelKey]: modelName } : null);
+
+      try {
+        await settingsClient.updateSettings({ [modelKey]: modelName });
+      } catch (error: any) {
+        console.error('[Settings] Failed to update model:', error);
+        setRemoteError(error.message || 'Failed to update model');
+        // Refresh to get actual state
+        fetchRemoteSettings();
+      }
+    }, 500);
+  }, [settingsClient, remoteSettings, fetchRemoteSettings]);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (modelUpdateTimeoutRef.current) {
+        clearTimeout(modelUpdateTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Sync customModelDraft with remoteSettings when it changes (e.g., on initial load or provider change)
+  useEffect(() => {
+    if (remoteSettings) {
+      setCustomModelDraft(getCurrentModelValue());
+    }
+  }, [remoteSettings?.mcpToolsProviderId, remoteSettings?.mcpToolsOpenaiModel, remoteSettings?.mcpToolsGroqModel, remoteSettings?.mcpToolsGeminiModel]);
 
   // Get current model value based on provider
   const getCurrentModelValue = () => {
@@ -721,7 +752,7 @@ export default function SettingsScreen({ navigation }: any) {
                   <>
                     <TextInput
                       style={styles.input}
-                      value={getCurrentModelValue()}
+                      value={customModelDraft}
                       onChangeText={handleModelNameChange}
                       placeholder={getModelPlaceholder()}
                       placeholderTextColor={theme.colors.mutedForeground}
@@ -769,6 +800,19 @@ export default function SettingsScreen({ navigation }: any) {
             {remoteSettings && (
               <>
                 <Text style={styles.subsectionTitle}>Features</Text>
+
+                <View style={styles.row}>
+                  <Text style={styles.label}>Text-to-Speech</Text>
+                  <Switch
+                    value={remoteSettings.ttsEnabled}
+                    onValueChange={(v) => handleRemoteSettingToggle('ttsEnabled', v)}
+                    trackColor={{ false: theme.colors.muted, true: theme.colors.primary }}
+                    thumbColor={remoteSettings.ttsEnabled ? theme.colors.primaryForeground : theme.colors.background}
+                  />
+                </View>
+                <Text style={styles.helperText}>
+                  Enable text-to-speech for responses on desktop
+                </Text>
 
                 <View style={styles.row}>
                   <Text style={styles.label}>Post-Processing</Text>

@@ -672,7 +672,19 @@ export async function startRemoteServer() {
       const cfg = configStore.get()
       const { getBuiltInModelPresets, DEFAULT_MODEL_PRESET_ID } = await import("../shared/index")
       const builtInPresets = getBuiltInModelPresets()
-      const customPresets = cfg.modelPresets?.filter(p => !p.isBuiltIn) || []
+      const savedPresets = cfg.modelPresets || []
+
+      // Merge built-in presets with any saved overrides (e.g., edited baseUrl/name)
+      // and include custom (non-built-in) presets
+      const mergedPresets = builtInPresets.map(builtIn => {
+        const savedOverride = savedPresets.find(p => p.id === builtIn.id)
+        if (savedOverride) {
+          // Apply saved overrides to built-in preset
+          return { ...builtIn, ...savedOverride }
+        }
+        return builtIn
+      })
+      const customPresets = savedPresets.filter(p => !p.isBuiltIn)
 
       return reply.send({
         // Model settings
@@ -682,7 +694,7 @@ export async function startRemoteServer() {
         mcpToolsGeminiModel: cfg.mcpToolsGeminiModel,
         // OpenAI compatible preset settings
         currentModelPresetId: cfg.currentModelPresetId || DEFAULT_MODEL_PRESET_ID,
-        availablePresets: [...builtInPresets, ...customPresets].map(p => ({
+        availablePresets: [...mergedPresets, ...customPresets].map(p => ({
           id: p.id,
           name: p.name,
           baseUrl: p.baseUrl,
@@ -691,6 +703,7 @@ export async function startRemoteServer() {
         // Feature toggles
         transcriptPostProcessingEnabled: cfg.transcriptPostProcessingEnabled ?? true,
         mcpRequireApprovalBeforeToolCall: cfg.mcpRequireApprovalBeforeToolCall ?? false,
+        ttsEnabled: cfg.ttsEnabled ?? true,
         // Agent settings
         mcpMaxIterations: cfg.mcpMaxIterations ?? 10,
       })
@@ -713,6 +726,9 @@ export async function startRemoteServer() {
       }
       if (typeof body.mcpRequireApprovalBeforeToolCall === "boolean") {
         updates.mcpRequireApprovalBeforeToolCall = body.mcpRequireApprovalBeforeToolCall
+      }
+      if (typeof body.ttsEnabled === "boolean") {
+        updates.ttsEnabled = body.ttsEnabled
       }
       if (typeof body.mcpMaxIterations === "number" && body.mcpMaxIterations >= 1 && body.mcpMaxIterations <= 100) {
         // Coerce to integer to avoid surprising iteration counts with floats

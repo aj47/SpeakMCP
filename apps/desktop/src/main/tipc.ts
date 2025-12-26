@@ -2735,10 +2735,12 @@ export const router = {
   getAcpAgents: t.procedure.action(async () => {
     const config = configStore.get()
     const externalAgents = config.acpAgents || []
-    // Include internal agent in the list
+    // Include internal agent in the list, but filter out any persisted 'internal' entries
+    // from externalAgents to avoid duplicates (can happen after toggling enabled state)
     const { getInternalAgentConfig } = await import('./acp/acp-router-tools')
     const internalAgent = getInternalAgentConfig()
-    return [internalAgent, ...externalAgents]
+    const filteredExternalAgents = externalAgents.filter(a => a.name !== 'internal')
+    return [internalAgent, ...filteredExternalAgents]
   }),
 
   saveAcpAgent: t.procedure

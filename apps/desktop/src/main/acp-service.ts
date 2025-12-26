@@ -958,7 +958,9 @@ class ACPService extends EventEmitter {
             readTextFile: true,
             writeTextFile: true,
           },
-          terminal: true,
+          // Note: terminal capability is not advertised since terminal/* methods are not yet implemented
+          // in handleAgentRequest(). Enable this once terminal support is added.
+          // terminal: true,
         },
         clientInfo: {
           name: "speakmcp",

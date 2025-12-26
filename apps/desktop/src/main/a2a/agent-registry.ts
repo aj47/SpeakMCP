@@ -146,6 +146,15 @@ export class A2AAgentRegistry {
   registerAgent(card: A2AAgentCard, tags?: string[]): void {
     const normalizedUrl = card.url.replace(/\/$/, '');
 
+    // Clear old skill mappings for this URL before updating
+    // This prevents stale skill-based lookups when re-registering/updating an agent
+    const existingAgent = this.agents.get(normalizedUrl);
+    if (existingAgent?.card.skills) {
+      for (const skill of existingAgent.card.skills) {
+        this.skillIndex.get(skill.id)?.delete(normalizedUrl);
+      }
+    }
+
     // Create or update the registered agent
     const registered: RegisteredAgent = {
       card,
@@ -156,7 +165,7 @@ export class A2AAgentRegistry {
 
     this.agents.set(normalizedUrl, registered);
 
-    // Update skill index
+    // Update skill index with new skills
     if (card.skills) {
       for (const skill of card.skills) {
         if (!this.skillIndex.has(skill.id)) {

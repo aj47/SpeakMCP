@@ -34,6 +34,15 @@ interface ParsedRegistryServer {
   pypiPackage?: string
   ociImage?: string
   remoteUrl?: string
+  // Flag indicating if remote URL contains unresolved template placeholders (e.g., {var})
+  hasUrlPlaceholders?: boolean
+  // Variables required for remote URL template substitution
+  remoteVariables?: Array<{
+    name: string
+    description?: string
+    isRequired?: boolean
+    choices?: string[]
+  }>
   envVars?: Array<{
     name: string
     description?: string
@@ -55,26 +64,31 @@ function getSanitizedServerName(server: ParsedRegistryServer): string {
   return baseName.replace(/[^a-zA-Z0-9-_]/g, "-")
 }
 
-// Check if a server is supported (SSE transport is not supported by this codebase)
+// Check if a server is supported (SSE transport and URL placeholders are not supported)
 // MCPTransportType in this codebase is "stdio" | "websocket" | "streamableHttp"
-function isServerSupported(server: ParsedRegistryServer): boolean {
+function isServerSupported(server: ParsedRegistryServer): { supported: boolean; reason?: string } {
   // SSE transport is not supported by this codebase (regardless of install type)
   if (server.transportType === "sse") {
-    return false
+    return { supported: false, reason: "SSE transport is not supported" }
   }
   
   // For remote servers, we only support streamableHttp
   if (server.installType === "remote" && server.transportType !== "streamableHttp") {
-    return false
+    return { supported: false, reason: "Only streamableHttp transport is supported for remote servers" }
+  }
+  
+  // Remote URLs with template placeholders require manual configuration
+  if (server.installType === "remote" && server.hasUrlPlaceholders) {
+    return { supported: false, reason: "URL requires variable substitution" }
   }
   
   // For packages (npm/pypi/oci), we only support stdio transport
   if ((server.installType === "npm" || server.installType === "pypi" || server.installType === "oci") 
       && server.transportType !== "stdio") {
-    return false
+    return { supported: false, reason: "Only stdio transport is supported for packages" }
   }
   
-  return true
+  return { supported: true }
 }
 
 interface MCPRegistryBrowserProps {
@@ -131,8 +145,9 @@ export function MCPRegistryBrowser({ onSelectServer, existingServerNames }: MCPR
 
   const handleInstall = (server: ParsedRegistryServer) => {
     // Check if the server transport type is supported
-    if (!isServerSupported(server)) {
-      toast.error("SSE transport is not supported. Please check the server's repository for alternative installation methods.")
+    const supportCheck = isServerSupported(server)
+    if (!supportCheck.supported) {
+      toast.error(`${supportCheck.reason}. Please check the server's repository for alternative installation methods.`)
       return
     }
 
@@ -314,7 +329,8 @@ export function MCPRegistryBrowser({ onSelectServer, existingServerNames }: MCPR
               Array.from(installedServers).some(name => 
                 name === sanitizedName || name.match(new RegExp(`^${sanitizedName}-\\d+$`))
               )
-            const isSupported = isServerSupported(server)
+            const supportCheck = isServerSupported(server)
+            const isSupported = supportCheck.supported
 
             return (
               <Card key={server.name} className={`p-3 ${!isSupported ? 'opacity-60' : ''}`}>
@@ -333,9 +349,9 @@ export function MCPRegistryBrowser({ onSelectServer, existingServerNames }: MCPR
                           v{server.version}
                         </Badge>
                       )}
-                      {!isSupported && (
+                      {!isSupported && supportCheck.reason && (
                         <Badge variant="destructive" className="text-xs shrink-0">
-                          SSE Not Supported
+                          {supportCheck.reason}
                         </Badge>
                       )}
                       {isInstalled && isSupported && (
@@ -370,7 +386,7 @@ export function MCPRegistryBrowser({ onSelectServer, existingServerNames }: MCPR
                       size="sm"
                       onClick={() => handleInstall(server)}
                       disabled={!isSupported}
-                      title={!isSupported ? "SSE transport is not supported" : undefined}
+                      title={!isSupported ? supportCheck.reason : undefined}
                     >
                       {isInstalled ? "Add Again" : "Add"}
                     </Button>

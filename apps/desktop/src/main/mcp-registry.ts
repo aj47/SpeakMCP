@@ -92,6 +92,15 @@ export interface ParsedRegistryServer {
   pypiPackage?: string
   ociImage?: string
   remoteUrl?: string
+  // Flag indicating if remote URL contains unresolved template placeholders (e.g., {var})
+  hasUrlPlaceholders?: boolean
+  // Variables required for remote URL template substitution
+  remoteVariables?: Array<{
+    name: string
+    description?: string
+    isRequired?: boolean
+    choices?: string[]
+  }>
   envVars?: Array<{
     name: string
     description?: string
@@ -119,6 +128,8 @@ function parseRegistryServer(entry: RegistryServerEntry): ParsedRegistryServer |
   let pypiPackage: string | undefined
   let ociImage: string | undefined
   let remoteUrl: string | undefined
+  let hasUrlPlaceholders: boolean | undefined
+  let remoteVariables: ParsedRegistryServer["remoteVariables"]
   let envVars: ParsedRegistryServer["envVars"]
   let args: ParsedRegistryServer["args"]
 
@@ -128,6 +139,19 @@ function parseRegistryServer(entry: RegistryServerEntry): ParsedRegistryServer |
     transportType = remote.type === "streamable-http" ? "streamableHttp" : "sse"
     installType = "remote"
     remoteUrl = remote.url
+    
+    // Detect if URL contains template placeholders like {var}
+    hasUrlPlaceholders = /\{[^}]+\}/.test(remote.url)
+    
+    // Capture variables if defined
+    if (remote.variables) {
+      remoteVariables = Object.entries(remote.variables).map(([name, config]) => ({
+        name,
+        description: config.description,
+        isRequired: config.isRequired,
+        choices: config.choices,
+      }))
+    }
   } else if (server.packages && server.packages.length > 0) {
     const pkg = server.packages[0]
     
@@ -190,6 +214,8 @@ function parseRegistryServer(entry: RegistryServerEntry): ParsedRegistryServer |
     pypiPackage,
     ociImage,
     remoteUrl,
+    hasUrlPlaceholders,
+    remoteVariables,
     envVars,
     args,
   }

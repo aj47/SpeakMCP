@@ -51,8 +51,9 @@ function isValidServerConfig(config: unknown): boolean {
 
   // Validate transport-specific required fields to prevent configs that break MCP initialization
   const transport = c.transport as string | undefined
-  if (transport === "stdio" && !c.command) {
-    // stdio transport requires command field
+  // When transport is undefined, it defaults to "stdio", so we need to check for command
+  if ((transport === "stdio" || transport === undefined) && !c.command) {
+    // stdio transport (or default) requires command field
     return false
   }
   if ((transport === "websocket" || transport === "streamableHttp") && !c.url) {

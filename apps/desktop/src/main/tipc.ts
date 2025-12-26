@@ -60,6 +60,7 @@ import { emitAgentProgress } from "./emit-agent-progress"
 import { agentSessionTracker } from "./agent-session-tracker"
 import { messageQueueService } from "./message-queue-service"
 import { profileService } from "./profile-service"
+import { handlers } from "./tipc-handlers"
 
 async function initializeMcpWithProgress(config: Config, sessionId: string): Promise<void> {
   const shouldStop = () => agentSessionStateManager.shouldStopSession(sessionId)
@@ -405,7 +406,7 @@ const saveRecordingsHitory = (history: RecordingHistoryItem[]) => {
  * This function peeks at messages and only removes them after successful processing.
  * Uses a per-conversation lock to prevent concurrent processing of the same queue.
  */
-async function processQueuedMessages(conversationId: string): Promise<void> {
+export async function processQueuedMessages(conversationId: string): Promise<void> {
 
   // Try to acquire processing lock - if another processor is already running, skip
   if (!messageQueueService.tryAcquireProcessingLock(conversationId)) {
@@ -499,10 +500,12 @@ async function processQueuedMessages(conversationId: string): Promise<void> {
 }
 
 export const router = {
-  restartApp: t.procedure.action(async () => {
-    app.relaunch()
-    app.quit()
-  }),
+  // Import all modular handlers
+  ...handlers,
+
+  // Keep complex MCP handlers that depend on local helper functions
+  // These handlers use processWithAgentMode, initializeMcpWithProgress, and other complex helpers
+  // that are not easily extracted without significant restructuring
 
   getUpdateInfo: t.procedure.action(async () => {
     const { getUpdateInfo } = await import("./updater")

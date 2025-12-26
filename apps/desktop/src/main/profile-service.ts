@@ -633,6 +633,8 @@ class ProfileService {
 
       // Import MCP server definitions if present
       // Check both for object type AND that it's not an array (arrays are objects in JS)
+      // Track imported server names for enabling them when no mcpServerConfig is provided
+      const importedServerNames: string[] = []
       if (importData.mcpServers && typeof importData.mcpServers === "object" && !Array.isArray(importData.mcpServers)) {
         const config = configStore.get()
         const currentMcpServers = config.mcpConfig?.mcpServers || {}
@@ -672,6 +674,7 @@ class ProfileService {
               continue
             }
             mergedServers[normalizedServerName] = serverConfig as MCPServerConfig
+            importedServerNames.push(normalizedServerName)
             newServersAdded++
           }
         }
@@ -695,6 +698,18 @@ class ProfileService {
           this.updateProfileMcpConfig(newProfile.id, importData.mcpServerConfig)
         } else {
           logApp("Warning: Invalid mcpServerConfig format in import data, skipping")
+        }
+      } else if (importedServerNames.length > 0) {
+        // Legacy behavior: when mcpServers are present but mcpServerConfig is missing,
+        // it means "all imported servers should be enabled". Since createProfile()
+        // disables all servers by default, we need to explicitly enable the imported servers.
+        const currentProfile = this.getProfile(newProfile.id)
+        if (currentProfile?.mcpServerConfig) {
+          const currentEnabledServers = currentProfile.mcpServerConfig.enabledServers || []
+          this.updateProfileMcpConfig(newProfile.id, {
+            enabledServers: [...new Set([...currentEnabledServers, ...importedServerNames])],
+          })
+          logApp(`Enabled ${importedServerNames.length} imported server(s) for legacy import`)
         }
       }
 

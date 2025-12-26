@@ -71,8 +71,15 @@ export function MeetingTranscriptionPanel() {
       })
 
       recorder.on("error", (err) => {
+        // Clear the duration interval on error to prevent timer from continuing
+        if (durationIntervalRef.current) {
+          clearInterval(durationIntervalRef.current)
+          durationIntervalRef.current = null
+        }
         setError(err.message)
         setIsRecording(false)
+        setDuration(0)
+        setVisualizerData(Array(VISUALIZER_BUFFER_LENGTH).fill(0.01))
       })
 
       await recorder.startRecording()

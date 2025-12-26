@@ -24,9 +24,15 @@ import { startRemoteServer } from "./remote-server"
 
 // Initialize electron-audio-loopback for system audio capture (macOS 12.3+)
 // Must be called before app.whenReady()
+// Wrapped in try-catch to prevent app crash if initialization fails (unsupported OS, packaging issues, etc.)
 import { initMain as initAudioLoopback } from "electron-audio-loopback"
 if (process.platform === "darwin") {
-  initAudioLoopback()
+  try {
+    initAudioLoopback()
+  } catch (error) {
+    console.warn("[MeetingTranscription] Failed to initialize audio loopback:", error)
+    // Meeting transcription will be unavailable, but app continues to work
+  }
 }
 
 // Enable CDP remote debugging port if REMOTE_DEBUGGING_PORT env variable is set

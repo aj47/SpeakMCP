@@ -172,7 +172,8 @@ export class MeetingRecorder extends EventEmitter<MeetingRecorderEvents> {
 
       this.mediaRecorder.onstop = async () => {
         const duration = Date.now() - startTime
-        const blob = new Blob(audioChunks, { type: this.mediaRecorder?.mimeType || "audio/webm" })
+        const mimeType = this.mediaRecorder?.mimeType || "audio/webm"
+        const blob = new Blob(audioChunks, { type: mimeType })
 
         if (blob.size === 0) {
           console.warn("[MeetingRecorder] Recording blob is empty, duration:", duration)
@@ -180,6 +181,9 @@ export class MeetingRecorder extends EventEmitter<MeetingRecorderEvents> {
 
         this.emit("record-end", blob, duration)
         audioChunks = []
+        
+        // Cleanup after blob is created to avoid truncating the recording
+        this.cleanup()
       }
 
       this.mediaRecorder.onerror = (event) => {
@@ -199,8 +203,12 @@ export class MeetingRecorder extends EventEmitter<MeetingRecorderEvents> {
   stopRecording(): void {
     if (this.mediaRecorder && this.mediaRecorder.state !== "inactive") {
       this.mediaRecorder.stop()
+      // Note: cleanup() is called in the onstop handler after the recording blob is created
+      // to avoid truncating the recording or losing the mimeType
+    } else {
+      // Only cleanup if there's no active recording to wait for
+      this.cleanup()
     }
-    this.cleanup()
   }
 
   private cleanup(): void {

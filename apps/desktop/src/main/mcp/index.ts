@@ -523,5 +523,4 @@ export class MCPService {
 export const mcpService = new MCPService()
 
 // Re-export types
-export type { MCPTool, MCPToolCall, MCPToolResult } from "./types"
-export { LLMToolCallResponse } from "./types"
+export type { MCPTool, MCPToolCall, MCPToolResult, LLMToolCallResponse } from "./types"

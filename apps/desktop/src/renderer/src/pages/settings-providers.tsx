@@ -362,8 +362,8 @@ export function Component() {
                   </div>
                   <Control label={<ControlLabel label="TTS Model" tooltip="Choose the Groq TTS model to use" />} className="px-3">
                     <Select
-                      value={configQuery.data.groqTtsModel || "playai-tts"}
-                      onValueChange={(value) => saveConfig({ groqTtsModel: value as "playai-tts" | "playai-tts-arabic" })}
+                      value={configQuery.data.groqTtsModel || "canopylabs/orpheus-v1-english"}
+                      onValueChange={(value) => saveConfig({ groqTtsModel: value as "canopylabs/orpheus-v1-english" | "canopylabs/orpheus-arabic-saudi" })}
                     >
                       <SelectTrigger>
                         <SelectValue />
@@ -380,14 +380,14 @@ export function Component() {
 
                   <Control label={<ControlLabel label="TTS Voice" tooltip="Choose the voice for Groq TTS" />} className="px-3">
                     <Select
-                      value={configQuery.data.groqTtsVoice || "Fritz-PlayAI"}
+                      value={configQuery.data.groqTtsVoice || "troy"}
                       onValueChange={(value) => saveConfig({ groqTtsVoice: value })}
                     >
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {(configQuery.data.groqTtsModel === "playai-tts-arabic" ? GROQ_TTS_VOICES_ARABIC : GROQ_TTS_VOICES_ENGLISH).map((voice) => (
+                        {(configQuery.data.groqTtsModel === "canopylabs/orpheus-arabic-saudi" ? GROQ_TTS_VOICES_ARABIC : GROQ_TTS_VOICES_ENGLISH).map((voice) => (
                           <SelectItem key={voice.value} value={voice.value}>
                             {voice.label}
                           </SelectItem>
@@ -582,8 +582,8 @@ export function Component() {
                   </div>
                   <Control label={<ControlLabel label="TTS Model" tooltip="Choose the Groq TTS model to use" />} className="px-3">
                     <Select
-                      value={configQuery.data.groqTtsModel || "playai-tts"}
-                      onValueChange={(value) => saveConfig({ groqTtsModel: value as "playai-tts" | "playai-tts-arabic" })}
+                      value={configQuery.data.groqTtsModel || "canopylabs/orpheus-v1-english"}
+                      onValueChange={(value) => saveConfig({ groqTtsModel: value as "canopylabs/orpheus-v1-english" | "canopylabs/orpheus-arabic-saudi" })}
                     >
                       <SelectTrigger>
                         <SelectValue />
@@ -600,14 +600,14 @@ export function Component() {
 
                   <Control label={<ControlLabel label="TTS Voice" tooltip="Choose the voice for Groq TTS" />} className="px-3">
                     <Select
-                      value={configQuery.data.groqTtsVoice || "Fritz-PlayAI"}
+                      value={configQuery.data.groqTtsVoice || "troy"}
                       onValueChange={(value) => saveConfig({ groqTtsVoice: value })}
                     >
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {(configQuery.data.groqTtsModel === "playai-tts-arabic" ? GROQ_TTS_VOICES_ARABIC : GROQ_TTS_VOICES_ENGLISH).map((voice) => (
+                        {(configQuery.data.groqTtsModel === "canopylabs/orpheus-arabic-saudi" ? GROQ_TTS_VOICES_ARABIC : GROQ_TTS_VOICES_ENGLISH).map((voice) => (
                           <SelectItem key={voice.value} value={voice.value}>
                             {voice.label}
                           </SelectItem>

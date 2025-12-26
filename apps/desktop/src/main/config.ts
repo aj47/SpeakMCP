@@ -91,8 +91,8 @@ const getConfig = () => {
     // OpenAI Compatible Provider defaults
     openaiCompatiblePreset: "openai",
     // Groq TTS defaults
-    groqTtsModel: "playai-tts",
-    groqTtsVoice: "Fritz-PlayAI",
+    groqTtsModel: "canopylabs/orpheus-v1-english",
+    groqTtsVoice: "troy",
     // Gemini TTS defaults
     geminiTtsModel: "gemini-2.5-flash-preview-tts",
     geminiTtsVoice: "Kore",

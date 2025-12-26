@@ -62,40 +62,27 @@ export const OPENAI_TTS_MODELS = [
   { label: "TTS-1-HD (High Quality)", value: "tts-1-hd" },
 ] as const
 
-// Groq TTS Voice Options (English)
+// Groq TTS Voice Options (English) - Orpheus model voices
 export const GROQ_TTS_VOICES_ENGLISH = [
-  { label: "Arista", value: "Arista-PlayAI" },
-  { label: "Atlas", value: "Atlas-PlayAI" },
-  { label: "Basil", value: "Basil-PlayAI" },
-  { label: "Briggs", value: "Briggs-PlayAI" },
-  { label: "Calum", value: "Calum-PlayAI" },
-  { label: "Celeste", value: "Celeste-PlayAI" },
-  { label: "Cheyenne", value: "Cheyenne-PlayAI" },
-  { label: "Chip", value: "Chip-PlayAI" },
-  { label: "Cillian", value: "Cillian-PlayAI" },
-  { label: "Deedee", value: "Deedee-PlayAI" },
-  { label: "Fritz", value: "Fritz-PlayAI" },
-  { label: "Gail", value: "Gail-PlayAI" },
-  { label: "Indigo", value: "Indigo-PlayAI" },
-  { label: "Mamaw", value: "Mamaw-PlayAI" },
-  { label: "Mason", value: "Mason-PlayAI" },
-  { label: "Mikail", value: "Mikail-PlayAI" },
-  { label: "Mitch", value: "Mitch-PlayAI" },
-  { label: "Quinn", value: "Quinn-PlayAI" },
-  { label: "Thunder", value: "Thunder-PlayAI" },
+  { label: "Autumn", value: "autumn" },
+  { label: "Diana", value: "diana" },
+  { label: "Hannah", value: "hannah" },
+  { label: "Austin", value: "austin" },
+  { label: "Daniel", value: "daniel" },
+  { label: "Troy", value: "troy" },
 ] as const
 
-// Groq TTS Voice Options (Arabic)
+// Groq TTS Voice Options (Arabic Saudi) - Orpheus model voices
 export const GROQ_TTS_VOICES_ARABIC = [
-  { label: "Ahmad", value: "Ahmad-PlayAI" },
-  { label: "Amira", value: "Amira-PlayAI" },
-  { label: "Khalid", value: "Khalid-PlayAI" },
-  { label: "Nasser", value: "Nasser-PlayAI" },
+  { label: "Fahad", value: "fahad" },
+  { label: "Sultan", value: "sultan" },
+  { label: "Lulwa", value: "lulwa" },
+  { label: "Noura", value: "noura" },
 ] as const
 
 export const GROQ_TTS_MODELS = [
-  { label: "PlayAI TTS (English)", value: "playai-tts" },
-  { label: "PlayAI TTS (Arabic)", value: "playai-tts-arabic" },
+  { label: "Orpheus TTS (English)", value: "canopylabs/orpheus-v1-english" },
+  { label: "Orpheus TTS (Arabic Saudi)", value: "canopylabs/orpheus-arabic-saudi" },
 ] as const
 
 // Gemini TTS Voice Options (30 voices)
@@ -238,7 +225,7 @@ export const getTtsVoicesForProvider = (providerId: string, ttsModel?: string) =
       return OPENAI_TTS_VOICES
     case 'groq':
       // Groq voices depend on the selected model (English vs Arabic)
-      return ttsModel === 'playai-tts-arabic' ? GROQ_TTS_VOICES_ARABIC : GROQ_TTS_VOICES_ENGLISH
+      return ttsModel === 'canopylabs/orpheus-arabic-saudi' ? GROQ_TTS_VOICES_ARABIC : GROQ_TTS_VOICES_ENGLISH
     case 'gemini':
       return GEMINI_TTS_VOICES
     default:

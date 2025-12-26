@@ -2787,8 +2787,8 @@ async function generateGroqTTS(
   input: { voice?: string; model?: string },
   config: Config
 ): Promise<ArrayBuffer> {
-  const model = input.model || config.groqTtsModel || "playai-tts"
-  const voice = input.voice || config.groqTtsVoice || "Fritz-PlayAI"
+  const model = input.model || config.groqTtsModel || "canopylabs/orpheus-v1-english"
+  const voice = input.voice || config.groqTtsVoice || "troy"
 
   const baseUrl = config.groqBaseUrl || "https://api.groq.com/openai/v1"
   const apiKey = config.groqApiKey
@@ -2824,7 +2824,7 @@ async function generateGroqTTS(
 
     // Check for specific error cases and provide helpful messages
     if (errorText.includes("requires terms acceptance")) {
-      throw new Error("Groq TTS model requires terms acceptance. Please visit https://console.groq.com/playground?model=playai-tts to accept the terms for the PlayAI TTS model.")
+      throw new Error("Groq TTS model requires terms acceptance. Please visit https://console.groq.com/playground to accept the terms for the Orpheus TTS model.")
     }
 
     throw new Error(`Groq TTS API error: ${response.statusText} - ${errorText}`)

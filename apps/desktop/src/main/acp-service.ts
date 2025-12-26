@@ -932,7 +932,8 @@ class ACPService extends EventEmitter {
 
     try {
       // Security check: Ensure path is absolute
-      if (!filePath.startsWith("/") && !filePath.match(/^[a-zA-Z]:\\/)) {
+      // Allow both forward slash (Unix and Windows C:/) and backslash (Windows C:\) patterns
+      if (!filePath.startsWith("/") && !filePath.match(/^[a-zA-Z]:[/\\]/)) {
         throw new Error("Path must be absolute")
       }
 
@@ -981,7 +982,8 @@ class ACPService extends EventEmitter {
 
     try {
       // Security check: Ensure path is absolute
-      if (!filePath.startsWith("/") && !filePath.match(/^[a-zA-Z]:\\/)) {
+      // Allow both forward slash (Unix and Windows C:/) and backslash (Windows C:\) patterns
+      if (!filePath.startsWith("/") && !filePath.match(/^[a-zA-Z]:[/\\]/)) {
         throw new Error("Path must be absolute")
       }
 

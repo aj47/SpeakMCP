@@ -762,7 +762,17 @@ export async function handleCheckAgentStatus(args: { runId: string }): Promise<o
               output: outputText ? [{ role: 'assistant', parts: [{ content: outputText }] }] : [],
               metadata: a2aTask.metadata,
             };
-          } else if (taskState === 'failed' || taskState === 'canceled') {
+          } else if (taskState === 'canceled') {
+            // Handle canceled state separately from failed to preserve user cancel semantics
+            subAgentState.status = 'cancelled';
+            subAgentState.result = {
+              runId: subAgentState.runId,
+              agentName: subAgentState.agentName,
+              status: 'cancelled',
+              startTime: subAgentState.startTime,
+              error: 'A2A task was cancelled',
+            };
+          } else if (taskState === 'failed') {
             subAgentState.status = 'failed';
             subAgentState.result = {
               runId: subAgentState.runId,

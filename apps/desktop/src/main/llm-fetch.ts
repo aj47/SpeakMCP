@@ -1722,7 +1722,15 @@ export async function makeStructuredContextExtraction(
       try {
         const parsed = JSON.parse(content)
         if (parsed.resources && Array.isArray(parsed.resources)) {
-          return parsed as ContextExtractionResponse
+          // Validate and filter to only include properly structured items
+          const validResources = parsed.resources.filter(
+            (item: unknown): item is { type: string; id: string } =>
+              typeof item === "object" &&
+              item !== null &&
+              typeof (item as any).type === "string" &&
+              typeof (item as any).id === "string"
+          )
+          return { resources: validResources }
         }
       } catch {}
     }

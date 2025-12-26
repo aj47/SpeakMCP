@@ -179,8 +179,13 @@ function emitSubSessionDelegationProgress(
   const now = Date.now();
   const lastEmit = lastEmitTime.get(subSession.id) ?? 0;
 
-  // Rate limit emissions
-  if (now - lastEmit < MIN_EMIT_INTERVAL_MS) {
+  // Check if this is a terminal state (completed, failed, cancelled)
+  const isTerminalState = subSession.status === 'completed' ||
+                          subSession.status === 'failed' ||
+                          subSession.status === 'cancelled';
+
+  // Rate limit emissions, but ALWAYS emit terminal states to ensure UI updates
+  if (!isTerminalState && now - lastEmit < MIN_EMIT_INTERVAL_MS) {
     return;
   }
   lastEmitTime.set(subSession.id, now);

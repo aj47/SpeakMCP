@@ -1965,6 +1965,42 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
     }
   }
 
+  // Sort all display items by timestamp to ensure delegations appear in chronological order
+  // Items without timestamps (tool_approval, streaming) will be handled separately
+  const getItemTimestamp = (item: DisplayItem): number | null => {
+    switch (item.kind) {
+      case "message":
+        return item.data.timestamp
+      case "tool_execution":
+        return item.data.timestamp
+      case "assistant_with_tools":
+        return item.data.timestamp
+      case "delegation":
+        return item.data.startTime
+      case "retry_status":
+        return item.data.startedAt
+      case "tool_approval":
+      case "streaming":
+        // These represent current state and should stay at the end
+        return null
+    }
+  }
+
+  // Separate items with timestamps from "current state" items (approval, streaming)
+  const timestampedItems = displayItems.filter(item => getItemTimestamp(item) !== null)
+  const currentStateItems = displayItems.filter(item => getItemTimestamp(item) === null)
+
+  // Sort timestamped items chronologically
+  timestampedItems.sort((a, b) => {
+    const tsA = getItemTimestamp(a) ?? 0
+    const tsB = getItemTimestamp(b) ?? 0
+    return tsA - tsB
+  })
+
+  // Replace displayItems with sorted items, keeping current state items at the end
+  displayItems.length = 0
+  displayItems.push(...timestampedItems, ...currentStateItems)
+
   // Determine the last assistant message among display items (by position, not timestamp)
   const lastAssistantDisplayIndex = (() => {
     for (let i = displayItems.length - 1; i >= 0; i--) {

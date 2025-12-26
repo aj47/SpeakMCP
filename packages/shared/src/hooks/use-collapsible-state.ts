@@ -110,8 +110,8 @@ export interface UseCollapsibleSetOptions {
  * Return type for useCollapsibleSet hook
  */
 export interface UseCollapsibleSetReturn {
-  /** The internal set of tracked item IDs */
-  expandedItems: Set<string>;
+  /** The internal set of tracked item IDs (readonly to prevent external mutation) */
+  expandedItems: ReadonlySet<string>;
   /** Check if a specific item is expanded */
   isExpanded: (id: string) => boolean;
   /** Check if a specific item is collapsed */
@@ -122,10 +122,10 @@ export interface UseCollapsibleSetReturn {
   expand: (id: string) => void;
   /** Collapse a specific item */
   collapse: (id: string) => void;
-  /** Expand all items */
+  /** Expand all items (requires all IDs to set expanded state) */
   expandAll: (ids: string[]) => void;
-  /** Collapse all items */
-  collapseAll: (ids?: string[]) => void;
+  /** Collapse all items (requires all IDs to set collapsed state) */
+  collapseAll: (ids: string[]) => void;
   /** Set the tracked items directly */
   setExpandedItems: Dispatch<SetStateAction<Set<string>>>;
 }
@@ -217,16 +217,12 @@ export function useCollapsibleSet(
   );
 
   const collapseAll = useCallback(
-    (ids?: string[]) => {
+    (ids: string[]) => {
       if (defaultItemExpanded) {
-        if (!ids) {
-          console.warn(
-            'collapseAll() requires all IDs in defaultItemExpanded mode.'
-          );
-          return;
-        }
+        // In defaultItemExpanded mode, set tracks collapsed items, so add all IDs
         setExpandedItems(new Set(ids));
       } else {
+        // In normal mode, set tracks expanded items, so clear it
         setExpandedItems(new Set());
       }
     },
@@ -234,7 +230,7 @@ export function useCollapsibleSet(
   );
 
   return {
-    expandedItems,
+    expandedItems: expandedItems as ReadonlySet<string>,
     isExpanded,
     isCollapsed,
     toggle,

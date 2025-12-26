@@ -22,6 +22,13 @@ import { diagnosticsService } from "./diagnostics"
 import { configStore } from "./config"
 import { startRemoteServer } from "./remote-server"
 
+// Initialize electron-audio-loopback for system audio capture (macOS 12.3+)
+// Must be called before app.whenReady()
+import { initMain as initAudioLoopback } from "electron-audio-loopback"
+if (process.platform === "darwin") {
+  initAudioLoopback()
+}
+
 // Enable CDP remote debugging port if REMOTE_DEBUGGING_PORT env variable is set
 // This must be called before app.whenReady()
 // Usage: REMOTE_DEBUGGING_PORT=9222 pnpm dev

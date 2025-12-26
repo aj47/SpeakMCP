@@ -37,6 +37,9 @@ importers:
       ajv:
         specifier: ^8.17.1
         version: 8.17.1
+      electron-audio-loopback:
+        specifier: ^1.0.6
+        version: 1.0.6(electron@31.7.7)
       fastify:
         specifier: ^5.6.1
         version: 5.6.2
@@ -3141,6 +3144,11 @@ packages:
     resolution: {integrity: sha512-UeJmFfOrAQS8OJWPZ4qtgHyWExa088/MtK5UEyoJGFH67cDEXkZSviOiKRCZ4Xij0zxI3JECgYs3oKx+AizQBA==}
     engines: {node: '>=0.10.0'}
     hasBin: true
+
+  electron-audio-loopback@1.0.6:
+    resolution: {integrity: sha512-QW0ogDqMpWHDAQHmQyssJ+Yh4qR3kWCP3Q4H9WuIXKwVlgkqOYGyt0v/JzbK3tBNTwfqbuHZy86kwCCajxqAdg==}
+    peerDependencies:
+      electron: '>=31.0.1'
 
   electron-builder-squirrel-windows@24.13.3:
     resolution: {integrity: sha512-oHkV0iogWfyK+ah9ZIvMDpei1m9ZRpdXcvde1wTpra2U8AFDNNpqJdnin5z+PM1GbQ5BoaKCWas2HSjtR0HwMg==}
@@ -9905,6 +9913,10 @@ snapshots:
   ejs@3.1.10:
     dependencies:
       jake: 10.9.4
+
+  electron-audio-loopback@1.0.6(electron@31.7.7):
+    dependencies:
+      electron: 31.7.7
 
   electron-builder-squirrel-windows@24.13.3(dmg-builder@24.13.3):
     dependencies:

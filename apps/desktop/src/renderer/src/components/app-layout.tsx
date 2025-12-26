@@ -47,6 +47,11 @@ export const Component = () => {
       href: "/settings/remote-server",
       icon: "i-mingcute-server-line",
     },
+    {
+      text: "Meeting",
+      href: "/meeting-transcription",
+      icon: "i-mingcute-video-line",
+    },
   ]
 
   // Route aliases that should highlight the same nav item

@@ -56,11 +56,24 @@ function getSanitizedServerName(server: ParsedRegistryServer): string {
 }
 
 // Check if a server is supported (SSE transport is not supported by this codebase)
+// MCPTransportType in this codebase is "stdio" | "websocket" | "streamableHttp"
 function isServerSupported(server: ParsedRegistryServer): boolean {
-  // For remote servers, we need streamableHttp (SSE is not supported)
-  if (server.installType === "remote" && server.transportType === "sse") {
+  // SSE transport is not supported by this codebase (regardless of install type)
+  if (server.transportType === "sse") {
     return false
   }
+  
+  // For remote servers, we only support streamableHttp
+  if (server.installType === "remote" && server.transportType !== "streamableHttp") {
+    return false
+  }
+  
+  // For packages (npm/pypi/oci), we only support stdio transport
+  if ((server.installType === "npm" || server.installType === "pypi" || server.installType === "oci") 
+      && server.transportType !== "stdio") {
+    return false
+  }
+  
   return true
 }
 
@@ -138,27 +151,44 @@ export function MCPRegistryBrowser({ onSelectServer, existingServerNames }: MCPR
     let config: MCPServerConfig
 
     if (server.installType === "remote" && server.remoteUrl) {
-      // Remote server (streamableHttp only, SSE is filtered out above)
+      // Remote server (streamableHttp only, SSE is filtered out by isServerSupported)
+      // Validate that this is actually streamableHttp (not SSE)
+      if (server.transportType !== "streamableHttp") {
+        toast.error("Only streamableHttp transport is supported for remote servers.")
+        return
+      }
       config = {
-        transport: server.transportType as MCPTransportType,
+        transport: "streamableHttp" as MCPTransportType,
         url: server.remoteUrl,
       }
     } else if (server.installType === "npm" && server.npmPackage) {
-      // NPM package (stdio)
+      // NPM package - only stdio is supported for package-based servers
+      if (server.transportType !== "stdio") {
+        toast.error("Only stdio transport is supported for npm packages. Please check the server's repository for alternative installation methods.")
+        return
+      }
       config = {
         transport: "stdio" as MCPTransportType,
         command: "npx",
         args: ["-y", server.npmPackage],
       }
     } else if (server.installType === "pypi" && server.pypiPackage) {
-      // PyPI package (stdio) - use uvx for Python packages
+      // PyPI package - only stdio is supported for package-based servers
+      if (server.transportType !== "stdio") {
+        toast.error("Only stdio transport is supported for PyPI packages. Please check the server's repository for alternative installation methods.")
+        return
+      }
       config = {
         transport: "stdio" as MCPTransportType,
         command: "uvx",
         args: [server.pypiPackage],
       }
     } else if (server.installType === "oci" && server.ociImage) {
-      // OCI container (stdio)
+      // OCI container - only stdio is supported for package-based servers
+      if (server.transportType !== "stdio") {
+        toast.error("Only stdio transport is supported for Docker containers. Please check the server's repository for alternative installation methods.")
+        return
+      }
       config = {
         transport: "stdio" as MCPTransportType,
         command: "docker",

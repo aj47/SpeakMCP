@@ -5,7 +5,7 @@ import { clipboard } from "electron"
 import { recordingsFolder, configStore } from "../config"
 import { RecordingHistoryItem } from "../../shared/types"
 import { postProcessTranscript } from "../llm"
-import { WINDOWS, getRendererHandlers } from "../window"
+import { WINDOWS, getWindowRendererHandlers } from "../window"
 import { RendererHandlers } from "../renderer-handlers"
 import { isAccessibilityGranted } from "../utils"
 import { writeText, writeTextWithFocusRestore } from "../keyboard"
@@ -113,9 +113,7 @@ export const recordingHandlers = {
 
       const main = WINDOWS.get("main")
       if (main) {
-        getRendererHandlers<RendererHandlers>(
-          main.webContents,
-        ).refreshRecordingHistory.send()
+        getWindowRendererHandlers("main")?.refreshRecordingHistory.send()
       }
 
       const panel = WINDOWS.get("panel")
@@ -168,9 +166,7 @@ export const recordingHandlers = {
 
       const main = WINDOWS.get("main")
       if (main) {
-        getRendererHandlers<RendererHandlers>(
-          main.webContents,
-        ).refreshRecordingHistory.send()
+        getWindowRendererHandlers("main")?.refreshRecordingHistory.send()
       }
 
       const panel = WINDOWS.get("panel")

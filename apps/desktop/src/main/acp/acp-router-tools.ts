@@ -1527,20 +1527,18 @@ export async function handleCancelAgentRun(args: { runId: string }): Promise<obj
       // The runId for internal agents is the sub-session ID format
       // Find the sub-session by looking for it in active sessions
       const cancelled = cancelSubSession(args.runId);
-      if (!cancelled) {
-        // Try to find sub-session by matching runId pattern
-        // The runId is like "acp_delegation_..." but sub-session ID is "subsession_..."
-        // We need to track this mapping - for now, mark as cancelled in our state
+      if (cancelled) {
         state.status = 'cancelled';
         return {
           success: true,
           message: `Internal agent run "${args.runId}" cancelled`,
         };
       }
-      state.status = 'cancelled';
+      // Sub-session not found or already completed - report failure
+      // Don't mark local state as cancelled since sub-session cancellation failed
       return {
-        success: true,
-        message: `Internal agent run "${args.runId}" cancelled`,
+        success: false,
+        error: `Failed to cancel internal agent run "${args.runId}": sub-session not found or already completed`,
       };
     }
 

@@ -120,9 +120,10 @@ export class A2AClient {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
-    // Chain with external abort signal if provided
+    // Chain with external abort signal if provided, and track for cleanup
+    const abortHandler = () => controller.abort();
     if (options?.signal) {
-      options.signal.addEventListener('abort', () => controller.abort());
+      options.signal.addEventListener('abort', abortHandler);
     }
 
     try {
@@ -162,6 +163,11 @@ export class A2AClient {
       }
 
       throw error;
+    } finally {
+      // Clean up event listener to prevent memory leaks
+      if (options?.signal) {
+        options.signal.removeEventListener('abort', abortHandler);
+      }
     }
   }
 
@@ -214,10 +220,25 @@ export class A2AClient {
     const { timeoutMs = 120000 } = options || {};
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    let timeoutId: ReturnType<typeof setTimeout> | null = setTimeout(() => controller.abort(), timeoutMs);
 
+    // Helper to reset the timeout (called on each chunk received)
+    const resetTimeout = () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    };
+
+    // Helper to clear timeout completely
+    const clearStreamTimeout = () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+    };
+
+    const abortHandler = () => controller.abort();
     if (options?.signal) {
-      options.signal.addEventListener('abort', () => controller.abort());
+      options.signal.addEventListener('abort', abortHandler);
     }
 
     try {
@@ -246,7 +267,8 @@ export class A2AClient {
         signal: controller.signal,
       });
 
-      clearTimeout(timeoutId);
+      // Reset timeout after fetch completes - timeout now covers stream read
+      resetTimeout();
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -267,6 +289,9 @@ export class A2AClient {
           logA2A('Stream ended');
           break;
         }
+
+        // Reset timeout on each chunk received
+        resetTimeout();
 
         buffer += decoder.decode(value, { stream: true });
 
@@ -304,6 +329,11 @@ export class A2AClient {
         throw new Error('Stream timeout or aborted');
       }
       throw error;
+    } finally {
+      clearStreamTimeout();
+      if (options?.signal) {
+        options.signal.removeEventListener('abort', abortHandler);
+      }
     }
   }
 
@@ -390,10 +420,25 @@ export class A2AClient {
     const { timeoutMs = 300000 } = options || {};
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    let timeoutId: ReturnType<typeof setTimeout> | null = setTimeout(() => controller.abort(), timeoutMs);
 
+    // Helper to reset the timeout (called on each chunk received)
+    const resetTimeout = () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    };
+
+    // Helper to clear timeout completely
+    const clearStreamTimeout = () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+    };
+
+    const abortHandler = () => controller.abort();
     if (options?.signal) {
-      options.signal.addEventListener('abort', () => controller.abort());
+      options.signal.addEventListener('abort', abortHandler);
     }
 
     try {
@@ -416,7 +461,8 @@ export class A2AClient {
         signal: controller.signal,
       });
 
-      clearTimeout(timeoutId);
+      // Reset timeout after fetch completes - timeout now covers stream read
+      resetTimeout();
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -436,6 +482,9 @@ export class A2AClient {
         if (done) {
           break;
         }
+
+        // Reset timeout on each chunk received
+        resetTimeout();
 
         buffer += decoder.decode(value, { stream: true });
 
@@ -467,6 +516,11 @@ export class A2AClient {
         throw new Error('Subscription timeout or aborted');
       }
       throw error;
+    } finally {
+      clearStreamTimeout();
+      if (options?.signal) {
+        options.signal.removeEventListener('abort', abortHandler);
+      }
     }
   }
 

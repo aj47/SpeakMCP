@@ -2783,18 +2783,28 @@ export const router = {
       const agentIndex = agents.findIndex(a => a.name === input.agentName)
       if (agentIndex >= 0) {
         agents[agentIndex] = { ...agents[agentIndex], enabled: input.enabled }
-        configStore.save({ ...config, acpAgents: agents })
+      } else {
+        // Agent not in config (e.g., built-in 'internal' agent) - add a minimal entry to persist enabled state
+        // For built-in agents, we only need to store the name and enabled state
+        // The full config is defined elsewhere (e.g., getInternalAgentConfig())
+        agents.push({
+          name: input.agentName,
+          enabled: input.enabled,
+          connection: { type: 'internal' as const }
+        } as import('../shared/types').ACPAgentConfig)
+      }
 
-        // When disabling an agent, automatically stop it if it's running
-        if (!input.enabled) {
-          const agentStatus = acpService.getAgentStatus(input.agentName)
-          if (agentStatus && (agentStatus.status === "ready" || agentStatus.status === "starting")) {
-            try {
-              await acpService.stopAgent(input.agentName)
-            } catch (error) {
-              // Log but don't fail the toggle operation
-              logApp(`[ACP] Failed to auto-stop agent ${input.agentName} on disable:`, error)
-            }
+      configStore.save({ ...config, acpAgents: agents })
+
+      // When disabling an agent, automatically stop it if it's running
+      if (!input.enabled) {
+        const agentStatus = acpService.getAgentStatus(input.agentName)
+        if (agentStatus && (agentStatus.status === "ready" || agentStatus.status === "starting")) {
+          try {
+            await acpService.stopAgent(input.agentName)
+          } catch (error) {
+            // Log but don't fail the toggle operation
+            logApp(`[ACP] Failed to auto-stop agent ${input.agentName} on disable:`, error)
           }
         }
       }

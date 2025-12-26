@@ -2,7 +2,7 @@ import { useConfigQuery } from "@renderer/lib/query-client"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { tipcClient } from "@renderer/lib/tipc-client"
 import { Config, MCPConfig } from "@shared/types"
-import { MCPConfigManager } from "@renderer/components/mcp-config-manager"
+import { MCPConfigManager } from "@renderer/components/mcp-config"
 import { ProfileBadge } from "@renderer/components/profile-badge"
 
 /**

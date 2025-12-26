@@ -9,6 +9,9 @@ import { getBuiltinToolNames } from "./builtin-tool-definitions"
 
 const RESERVED_SERVER_NAMES = ["speakmcp-settings"]
 
+// Valid provider IDs that are supported by the application
+const VALID_PROVIDER_IDS = ["openai", "groq", "gemini"]
+
 /**
  * Validates the shape of an imported MCP server config
  * Returns true if the config has a valid structure, false otherwise
@@ -141,19 +144,32 @@ function isValidModelConfig(config: unknown): boolean {
 
   const c = config as Record<string, unknown>
 
-  // All ProfileModelConfig fields are optional strings
-  const stringFields = [
+  // Provider ID fields that must match valid provider enums
+  const providerIdFields = [
     "mcpToolsProviderId",
+    "sttProviderId",
+    "transcriptPostProcessingProviderId",
+    "ttsProviderId",
+  ]
+
+  // Validate provider ID fields against allowed enums
+  for (const field of providerIdFields) {
+    if (c[field] !== undefined) {
+      if (typeof c[field] !== "string" || !VALID_PROVIDER_IDS.includes(c[field] as string)) {
+        return false
+      }
+    }
+  }
+
+  // Other string fields that don't need enum validation
+  const stringFields = [
     "mcpToolsOpenaiModel",
     "mcpToolsGroqModel",
     "mcpToolsGeminiModel",
     "currentModelPresetId",
-    "sttProviderId",
-    "transcriptPostProcessingProviderId",
     "transcriptPostProcessingOpenaiModel",
     "transcriptPostProcessingGroqModel",
     "transcriptPostProcessingGeminiModel",
-    "ttsProviderId",
   ]
 
   for (const field of stringFields) {
@@ -568,14 +584,17 @@ class ProfileService {
         let newServersAdded = 0
 
         for (const [serverName, serverConfig] of Object.entries(importData.mcpServers)) {
+          // Normalize server name for comparison (trim whitespace)
+          const normalizedServerName = serverName.trim()
+
           // Validate against prototype pollution attacks
-          if (serverName === "__proto__" || serverName === "constructor" || serverName === "prototype") {
+          if (normalizedServerName === "__proto__" || normalizedServerName === "constructor" || normalizedServerName === "prototype") {
             logApp(`Skipping dangerous server name: ${serverName}`)
             continue
           }
 
-          // Validate against reserved names (case-insensitive)
-          if (RESERVED_SERVER_NAMES.some(reserved => reserved.toLowerCase() === serverName.toLowerCase())) {
+          // Validate against reserved names (case-insensitive, trimmed)
+          if (RESERVED_SERVER_NAMES.some(reserved => reserved.toLowerCase() === normalizedServerName.toLowerCase())) {
             logApp(`Skipping reserved server name: ${serverName}`)
             continue
           }

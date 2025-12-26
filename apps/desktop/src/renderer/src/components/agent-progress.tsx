@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react"
 import { cn } from "@renderer/lib/utils"
-import { AgentProgressUpdate, ACPDelegationProgress } from "../../../shared/types"
+import { AgentProgressUpdate, ACPDelegationProgress, ACPSubAgentMessage } from "../../../shared/types"
 import { ChevronDown, ChevronUp, ChevronRight, X, AlertTriangle, Minimize2, Shield, Check, XCircle, Loader2, Clock, Copy, CheckCheck, GripHorizontal, Activity, Moon, Maximize2, RefreshCw, ExternalLink, Bot, OctagonX } from "lucide-react"
 import { MarkdownRenderer } from "@renderer/components/markdown-renderer"
 import { Button } from "./ui/button"
@@ -1064,19 +1064,253 @@ const RetryStatusBanner: React.FC<{
   )
 }
 
-// Delegation Bubble - shows status of delegated ACP sub-agent tasks
+// Subagent Conversation Message - individual message in the collapsible conversation
+const SubAgentConversationMessage: React.FC<{
+  message: ACPSubAgentMessage
+  agentName: string
+  isExpanded: boolean
+  onToggleExpand: () => void
+}> = ({ message, agentName, isExpanded, onToggleExpand }) => {
+  const [isCopied, setIsCopied] = useState(false)
+  const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (copyTimeoutRef.current) {
+        clearTimeout(copyTimeoutRef.current)
+      }
+    }
+  }, [])
+
+  const handleCopy = async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    try {
+      await navigator.clipboard.writeText(message.content)
+      setIsCopied(true)
+      if (copyTimeoutRef.current) {
+        clearTimeout(copyTimeoutRef.current)
+      }
+      copyTimeoutRef.current = setTimeout(() => setIsCopied(false), 2000)
+    } catch (err) {
+      console.error("Failed to copy message:", err)
+    }
+  }
+
+  const isLongContent = message.content.length > 300
+  const shouldShowToggle = isLongContent
+
+  const getRoleStyle = () => {
+    switch (message.role) {
+      case 'user':
+        return "border-l-2 border-blue-400 bg-blue-50/50 dark:bg-blue-900/20"
+      case 'assistant':
+        return "border-l-2 border-purple-400 bg-purple-50/50 dark:bg-purple-900/20"
+      case 'tool':
+        return "border-l-2 border-amber-400 bg-amber-50/50 dark:bg-amber-900/20"
+      default:
+        return "border-l-2 border-gray-400 bg-gray-50/50 dark:bg-gray-900/20"
+    }
+  }
+
+  const getRoleIcon = () => {
+    switch (message.role) {
+      case 'user': return "📤"
+      case 'assistant': return "🤖"
+      case 'tool': return "🔧"
+      default: return "💬"
+    }
+  }
+
+  const getRoleLabel = () => {
+    switch (message.role) {
+      case 'user': return "Task"
+      case 'assistant': return agentName
+      case 'tool': return message.toolName || "Tool"
+      default: return "Message"
+    }
+  }
+
+  return (
+    <div className={cn("rounded-md text-xs transition-all", getRoleStyle())}>
+      <div
+        className={cn(
+          "flex items-start gap-2 px-2 py-1.5",
+          shouldShowToggle && "cursor-pointer hover:bg-black/5 dark:hover:bg-white/5"
+        )}
+        onClick={shouldShowToggle ? onToggleExpand : undefined}
+      >
+        <span className="opacity-60 mt-0.5 flex-shrink-0">{getRoleIcon()}</span>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400">
+              {getRoleLabel()}
+            </span>
+            {message.timestamp && (
+              <span className="text-[9px] text-gray-400 dark:text-gray-500">
+                {new Date(message.timestamp).toLocaleTimeString()}
+              </span>
+            )}
+          </div>
+          <div className={cn(
+            "whitespace-pre-wrap break-words text-gray-700 dark:text-gray-300",
+            !isExpanded && isLongContent && "line-clamp-3"
+          )}>
+            {message.content}
+          </div>
+        </div>
+        <div className="flex items-center gap-1 flex-shrink-0">
+          <button
+            onClick={handleCopy}
+            className="p-1 rounded hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
+            title={isCopied ? "Copied!" : "Copy message"}
+          >
+            {isCopied ? (
+              <CheckCheck className="h-3 w-3 text-green-500" />
+            ) : (
+              <Copy className="h-3 w-3 opacity-50 hover:opacity-100" />
+            )}
+          </button>
+          {shouldShowToggle && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onToggleExpand() }}
+              className="p-1 rounded hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
+            >
+              {isExpanded ? (
+                <ChevronUp className="h-3 w-3 opacity-60" />
+              ) : (
+                <ChevronDown className="h-3 w-3 opacity-60" />
+              )}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Collapsible Subagent Conversation Panel
+const SubAgentConversationPanel: React.FC<{
+  conversation: ACPSubAgentMessage[]
+  agentName: string
+  isOpen: boolean
+  onToggle: () => void
+}> = ({ conversation, agentName, isOpen, onToggle }) => {
+  const [expandedMessages, setExpandedMessages] = useState<Record<number, boolean>>({})
+  const scrollRef = useRef<HTMLDivElement>(null)
+
+  const toggleMessage = (index: number) => {
+    setExpandedMessages(prev => ({
+      ...prev,
+      [index]: !prev[index]
+    }))
+  }
+
+  const handleCopyAll = async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    const fullConversation = conversation.map(msg => {
+      const role = msg.role === 'user' ? 'Task' : msg.role === 'assistant' ? agentName : (msg.toolName || 'Tool')
+      return `[${role}]\n${msg.content}`
+    }).join('\n\n---\n\n')
+    try {
+      await navigator.clipboard.writeText(fullConversation)
+    } catch (err) {
+      console.error("Failed to copy conversation:", err)
+    }
+  }
+
+  return (
+    <div className="mt-3 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+      {/* Collapsible Header */}
+      <div
+        className="flex items-center gap-2 px-3 py-2 bg-gray-50 dark:bg-gray-800/50 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+        onClick={onToggle}
+      >
+        <Bot className="h-3.5 w-3.5 text-purple-500 dark:text-purple-400" />
+        <span className="text-xs font-medium text-gray-700 dark:text-gray-300">
+          Subagent Conversation
+        </span>
+        <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+          {conversation.length} messages
+        </Badge>
+        <div className="ml-auto flex items-center gap-1">
+          <button
+            onClick={handleCopyAll}
+            className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+            title="Copy entire conversation"
+          >
+            <Copy className="h-3 w-3 opacity-60 hover:opacity-100" />
+          </button>
+          {isOpen ? (
+            <ChevronUp className="h-4 w-4 text-gray-500" />
+          ) : (
+            <ChevronDown className="h-4 w-4 text-gray-500" />
+          )}
+        </div>
+      </div>
+
+      {/* Collapsible Content */}
+      {isOpen && (
+        <div
+          ref={scrollRef}
+          className="max-h-[400px] overflow-y-auto p-2 space-y-2 bg-white/50 dark:bg-black/20"
+        >
+          {conversation.map((msg, idx) => (
+            <SubAgentConversationMessage
+              key={idx}
+              message={msg}
+              agentName={agentName}
+              isExpanded={expandedMessages[idx] ?? false}
+              onToggleExpand={() => toggleMessage(idx)}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Delegation Bubble - shows status of delegated subagent tasks
+// The entire component is collapsible, and conversations persist after completion
 const DelegationBubble: React.FC<{
   delegation: ACPDelegationProgress
-}> = ({ delegation }) => {
-  const [isExpanded, setIsExpanded] = useState(false)
+  isExpanded?: boolean
+  onToggleExpand?: () => void
+}> = ({ delegation, isExpanded = true, onToggleExpand }) => {
+  const [isConversationOpen, setIsConversationOpen] = useState(false)
   const isRunning = delegation.status === 'running' || delegation.status === 'pending'
   const isCompleted = delegation.status === 'completed'
   const isFailed = delegation.status === 'failed'
   const hasConversation = delegation.conversation && delegation.conversation.length > 0
 
+  // Track live elapsed time only while running
+  const [liveElapsed, setLiveElapsed] = useState(0)
+  
+  useEffect(() => {
+    // Only run timer while the delegation is actively running
+    if (!isRunning) {
+      return undefined
+    }
+    
+    // Update immediately
+    setLiveElapsed(Math.round((Date.now() - delegation.startTime) / 1000))
+    
+    // Update every second
+    const interval = setInterval(() => {
+      setLiveElapsed(Math.round((Date.now() - delegation.startTime) / 1000))
+    }, 1000)
+    
+    return () => clearInterval(interval)
+  }, [isRunning, delegation.startTime])
+
+  // Calculate duration:
+  // - If endTime exists (completed/failed), use it for accurate final duration
+  // - If still running, use the live timer
+  // - Fallback: shouldn't happen, but use endTime-based or 0
   const duration = delegation.endTime
     ? Math.round((delegation.endTime - delegation.startTime) / 1000)
-    : Math.round((Date.now() - delegation.startTime) / 1000)
+    : isRunning
+      ? liveElapsed
+      : 0
 
   const statusColor = isCompleted
     ? 'border-green-300 dark:border-green-700 bg-green-50/50 dark:bg-green-950/30'
@@ -1102,24 +1336,29 @@ const DelegationBubble: React.FC<{
     ? 'text-red-600 dark:text-red-400'
     : 'text-blue-600 dark:text-blue-400'
 
+  const handleHeaderClick = () => {
+    onToggleExpand?.()
+  }
+
   return (
     <div className={cn("rounded-lg border overflow-hidden", statusColor)}>
-      {/* Header */}
+      {/* Header - clickable to collapse/expand entire bubble */}
       <div
         className={cn(
-          "flex items-center gap-2 px-3 py-2 border-b cursor-pointer hover:opacity-80 transition-opacity",
+          "flex items-center gap-2 px-3 py-2 cursor-pointer hover:opacity-90 transition-opacity",
+          isExpanded && "border-b",
           headerColor
         )}
-        onClick={() => hasConversation && setIsExpanded(!isExpanded)}
+        onClick={handleHeaderClick}
       >
         <Bot className={cn("h-3.5 w-3.5", iconColor)} />
         <span className={cn("text-xs font-medium", textColor)}>
           {delegation.agentName}
         </span>
         {hasConversation && (
-          <span className="text-xs text-gray-500 dark:text-gray-400">
-            ({delegation.conversation!.length} messages)
-          </span>
+          <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-gray-500 dark:text-gray-400">
+            {delegation.conversation!.length} msgs
+          </Badge>
         )}
         <div className="ml-auto flex items-center gap-1">
           {isRunning && (
@@ -1131,92 +1370,89 @@ const DelegationBubble: React.FC<{
           {isFailed && (
             <XCircle className={cn("h-3 w-3", iconColor)} />
           )}
-          {hasConversation && (
-            isExpanded
-              ? <ChevronUp className="h-3 w-3 text-gray-500" />
-              : <ChevronDown className="h-3 w-3 text-gray-500" />
+          <span className="text-[10px] font-mono text-gray-500 dark:text-gray-400 ml-1">
+            {duration}s
+          </span>
+          {/* Collapse/Expand chevron */}
+          {isExpanded ? (
+            <ChevronUp className="h-3.5 w-3.5 text-gray-400 ml-1" />
+          ) : (
+            <ChevronDown className="h-3.5 w-3.5 text-gray-400 ml-1" />
           )}
         </div>
       </div>
 
-      {/* Content */}
-      <div className="px-3 py-2">
-        <p className={cn("text-xs", textColor.replace('800', '700').replace('200', '300'))}>
-          {delegation.task.length > 100
-            ? `${delegation.task.substring(0, 100)}...`
+      {/* Collapsed preview - show task snippet when collapsed */}
+      {!isExpanded && (
+        <div className="px-3 py-1.5 text-xs text-gray-600 dark:text-gray-400 truncate">
+          {delegation.task.length > 60
+            ? `${delegation.task.substring(0, 60)}...`
             : delegation.task}
-        </p>
-
-        {/* Progress message */}
-        {delegation.progressMessage && (
-          <p className={cn("text-xs mt-1 italic", textColor.replace('800', '600').replace('200', '400'))}>
-            {delegation.progressMessage}
-          </p>
-        )}
-
-        {/* Expanded conversation view */}
-        {isExpanded && hasConversation && (
-          <div className="mt-3 space-y-2 max-h-96 overflow-y-auto border-t border-gray-200 dark:border-gray-700 pt-2">
-            <div className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">
-              Sub-Agent Conversation
-            </div>
-            {delegation.conversation!.map((msg, idx) => (
-              <div
-                key={idx}
-                className={cn(
-                  "rounded-md p-2 text-xs",
-                  msg.role === 'user'
-                    ? "bg-blue-100/50 dark:bg-blue-900/30 ml-4"
-                    : msg.role === 'assistant'
-                    ? "bg-gray-100/50 dark:bg-gray-800/50 mr-4"
-                    : "bg-amber-100/50 dark:bg-amber-900/30 mx-2 font-mono"
-                )}
-              >
-                <div className="flex items-center gap-1 mb-1 text-[10px] font-medium text-gray-500 dark:text-gray-400">
-                  {msg.role === 'user' && <span>📤 User</span>}
-                  {msg.role === 'assistant' && <span>🤖 {delegation.agentName}</span>}
-                  {msg.role === 'tool' && <span>🔧 {msg.toolName || 'Tool'}</span>}
-                </div>
-                <div className="whitespace-pre-wrap break-words">
-                  {msg.content.length > 500
-                    ? `${msg.content.substring(0, 500)}...`
-                    : msg.content}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Result summary (when collapsed) */}
-        {!isExpanded && delegation.resultSummary && (
-          <div className="mt-2 p-2 rounded bg-white/50 dark:bg-black/20">
-            <p className="text-xs text-gray-700 dark:text-gray-300">
-              {delegation.resultSummary.length > 150
-                ? `${delegation.resultSummary.substring(0, 150)}...`
-                : delegation.resultSummary}
-            </p>
-          </div>
-        )}
-
-        {/* Error message */}
-        {delegation.error && (
-          <div className="mt-2 p-2 rounded bg-red-100/50 dark:bg-red-900/30">
-            <p className="text-xs text-red-700 dark:text-red-300">
-              {delegation.error}
-            </p>
-          </div>
-        )}
-
-        {/* Duration */}
-        <div className="flex items-center justify-between mt-2">
-          <span className={cn("text-xs", textColor.replace('800', '600').replace('200', '400'))}>
-            {isRunning ? 'Running' : isCompleted ? 'Completed' : 'Failed'}
-          </span>
-          <span className="text-xs font-mono text-gray-500 dark:text-gray-400">
-            {duration}s
-          </span>
         </div>
-      </div>
+      )}
+
+      {/* Content - only shown when expanded */}
+      {isExpanded && (
+        <div className="px-3 py-2">
+          <p className={cn("text-xs", textColor.replace('800', '700').replace('200', '300'))}>
+            {delegation.task.length > 100
+              ? `${delegation.task.substring(0, 100)}...`
+              : delegation.task}
+          </p>
+
+          {/* Progress message */}
+          {delegation.progressMessage && (
+            <p className={cn("text-xs mt-1 italic", textColor.replace('800', '600').replace('200', '400'))}>
+              {delegation.progressMessage}
+            </p>
+          )}
+
+          {/* Collapsible conversation panel - persists after completion */}
+          {hasConversation && (
+            <SubAgentConversationPanel
+              conversation={delegation.conversation!}
+              agentName={delegation.agentName}
+              isOpen={isConversationOpen}
+              onToggle={() => setIsConversationOpen(!isConversationOpen)}
+            />
+          )}
+
+          {/* Result summary (when conversation is collapsed) */}
+          {!isConversationOpen && delegation.resultSummary && (
+            <div className="mt-2 p-2 rounded bg-white/50 dark:bg-black/20">
+              <p className="text-xs text-gray-700 dark:text-gray-300">
+                {delegation.resultSummary.length > 150
+                  ? `${delegation.resultSummary.substring(0, 150)}...`
+                  : delegation.resultSummary}
+              </p>
+            </div>
+          )}
+
+          {/* Error message */}
+          {delegation.error && (
+            <div className="mt-2 p-2 rounded bg-red-100/50 dark:bg-red-900/30">
+              <p className="text-xs text-red-700 dark:text-red-300">
+                {delegation.error}
+              </p>
+            </div>
+          )}
+
+          {/* Status footer */}
+          <div className="flex items-center justify-between mt-2">
+            <span className={cn("text-xs", textColor.replace('800', '600').replace('200', '400'))}>
+              {isRunning ? 'Running' : isCompleted ? 'Completed' : 'Failed'}
+            </span>
+            {hasConversation && !isConversationOpen && (
+              <button
+                onClick={(e) => { e.stopPropagation(); setIsConversationOpen(true) }}
+                className="text-[10px] text-purple-600 dark:text-purple-400 hover:underline"
+              >
+                View conversation
+              </button>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -2080,7 +2316,15 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
                       } else if (item.kind === "streaming") {
                         return <StreamingContentBubble key={itemKey} streamingContent={item.data} />
                       } else if (item.kind === "delegation") {
-                        return <DelegationBubble key={itemKey} delegation={item.data} />
+                        const delegationExpanded = expandedItems[itemKey] ?? true
+                        return (
+                          <DelegationBubble
+                            key={itemKey}
+                            delegation={item.data}
+                            isExpanded={delegationExpanded}
+                            onToggleExpand={() => toggleItemExpansion(itemKey, true)}
+                          />
+                        )
                       } else {
                         return (
                           <ToolExecutionBubble
@@ -2375,10 +2619,13 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
                     />
                   )
                 } else if (item.kind === "delegation") {
+                  const delegationExpanded = expandedItems[itemKey] ?? true
                   return (
                     <DelegationBubble
                       key={itemKey}
                       delegation={item.data}
+                      isExpanded={delegationExpanded}
+                      onToggleExpand={() => toggleItemExpansion(itemKey, true)}
                     />
                   )
                 } else {

@@ -20,6 +20,8 @@ import {
   getInternalAgentInfo,
   getSessionDepth,
 } from './internal-agent';
+import { a2aAgentRegistry, createA2AClient, a2aTaskManager } from '../a2a';
+import type { A2ATextPart, A2AMessage, A2ATask, A2AArtifact } from '../a2a/types';
 
 /**
  * Log ACP router-related debug messages.
@@ -433,6 +435,14 @@ export async function handleDelegateToAgent(
     return handleInternalAgentDelegation(args, parentSessionId);
   }
 
+  // Check if this is an A2A agent (by URL or name match in A2A registry)
+  const a2aAgent = a2aAgentRegistry.getAllAgents().find(
+    a => a.card.name === args.agentName || a.card.url === args.agentName
+  );
+  if (a2aAgent) {
+    return handleA2ADelegation(args, a2aAgent.card.url, parentSessionId);
+  }
+
   try {
     // Check if agent exists in config
     const config = configStore.get();
@@ -440,7 +450,7 @@ export async function handleDelegateToAgent(
     if (!agentConfig) {
       return {
         success: false,
-        error: `Agent "${args.agentName}" not found in configuration`,
+        error: `Agent "${args.agentName}" not found in configuration or A2A registry`,
       };
     }
 
@@ -1196,6 +1206,294 @@ async function handleInternalAgentDelegation(
       runId,
       agentName: 'internal',
       error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+// ============================================================================
+// A2A Agent Delegation (Google Agent-to-Agent Protocol)
+// ============================================================================
+
+/**
+ * Handle delegation to an A2A remote agent.
+ * Uses the A2A protocol (message/send, tasks/get, etc.) for communication.
+ */
+async function handleA2ADelegation(
+  args: {
+    agentName: string;
+    task: string;
+    context?: string;
+    contextId?: string;
+    waitForResult?: boolean;
+  },
+  agentUrl: string,
+  parentSessionId?: string
+): Promise<object> {
+  logACPRouter('Delegating to A2A agent', { agentName: args.agentName, agentUrl, parentSessionId });
+
+  const waitForResult = args.waitForResult !== false;
+  const runId = generateDelegationRunId();
+  const startTime = Date.now();
+
+  // Create sub-agent state for tracking
+  const subAgentState: ACPSubAgentState = {
+    runId,
+    agentName: args.agentName,
+    parentSessionId: parentSessionId || 'unknown',
+    task: args.task,
+    status: 'pending',
+    startTime,
+    baseUrl: agentUrl,
+    isA2A: true,
+  };
+
+  delegatedRuns.set(runId, subAgentState);
+  subAgentState.status = 'running';
+
+  // Add user message to conversation
+  const userMessage: ACPSubAgentMessage = {
+    role: 'user',
+    content: args.task,
+    timestamp: Date.now(),
+  };
+  sessionConversations.set(runId, [userMessage]);
+
+  // Helper to extract text from A2A message parts
+  const extractTextFromParts = (parts: Array<A2ATextPart | unknown>): string => {
+    return parts
+      .filter((p): p is A2ATextPart => typeof p === 'object' && p !== null && 'text' in p)
+      .map(p => p.text)
+      .join('\n');
+  };
+
+  // Helper to extract text from A2A artifacts
+  const extractTextFromArtifacts = (artifacts: A2AArtifact[]): string => {
+    return artifacts
+      .filter(a => a.parts?.some(p => 'text' in p))
+      .map(a => extractTextFromParts(a.parts || []))
+      .join('\n\n');
+  };
+
+  try {
+    // Create A2A client for this agent
+    const a2aClient = createA2AClient(agentUrl);
+    const a2aClientOptions = { timeoutMs: 300000 }; // 5 minutes
+
+    // Build the message content
+    const messageContent = args.context
+      ? `Context: ${args.context}\n\nTask: ${args.task}`
+      : args.task;
+
+    // Create a task via the task manager for tracking
+    const contextId = args.contextId || parentSessionId || `ctx_${Date.now()}`;
+    const managedTask = a2aTaskManager.createTask({
+      agentUrl,
+      description: messageContent,
+      contextId,
+    });
+
+    // Store the A2A task ID for status polling
+    subAgentState.acpRunId = managedTask.task.id;
+
+    if (waitForResult) {
+      // Synchronous execution - send message and wait for completion
+      try {
+        const result = await a2aClient.sendMessage({
+          message: {
+            role: 'user',
+            parts: [{ text: messageContent }],
+          },
+          configuration: {
+            acceptedOutputModes: ['text'],
+          },
+        }, a2aClientOptions);
+
+        // Process the response - could be { task: A2ATask } or { message: A2AMessage }
+        const conversation: ACPSubAgentMessage[] = [userMessage];
+        let outputText = '';
+        let taskState: string = 'unknown';
+        let taskId: string | undefined;
+
+        if ('task' in result && result.task) {
+          const task = result.task;
+          taskId = task.id;
+          taskState = task.status?.state || 'unknown';
+
+          // Extract from task history
+          if (task.history) {
+            for (const msg of task.history) {
+              const textContent = extractTextFromParts(msg.parts);
+              if (textContent) {
+                conversation.push({
+                  role: msg.role === 'user' ? 'user' : 'assistant',
+                  content: textContent,
+                  timestamp: Date.now(),
+                });
+              }
+            }
+          }
+
+          // Extract from artifacts
+          if (task.artifacts) {
+            outputText = extractTextFromArtifacts(task.artifacts);
+          }
+
+          // Update task manager status
+          a2aTaskManager.updateStatus(managedTask.task.id, task.status?.state || 'working');
+        } else if ('message' in result && result.message) {
+          // Direct message response (no task created)
+          const msg = result.message;
+          const textContent = extractTextFromParts(msg.parts);
+          if (textContent) {
+            outputText = textContent;
+            conversation.push({
+              role: 'assistant',
+              content: textContent,
+              timestamp: Date.now(),
+            });
+          }
+          taskState = 'completed'; // Direct message means task is done
+        }
+
+        sessionConversations.set(runId, conversation);
+
+        // Check task status
+        if (taskState === 'completed') {
+          subAgentState.status = 'completed';
+          cleanupDelegationMappings(runId, args.agentName);
+          return {
+            success: true,
+            runId,
+            agentName: args.agentName,
+            status: 'completed',
+            output: outputText || 'Task completed',
+            duration: Date.now() - startTime,
+            conversation,
+            isA2A: true,
+          };
+        } else if (taskState === 'failed') {
+          subAgentState.status = 'failed';
+          cleanupDelegationMappings(runId, args.agentName);
+          return {
+            success: false,
+            runId,
+            agentName: args.agentName,
+            status: 'failed',
+            error: 'A2A task failed',
+            duration: Date.now() - startTime,
+            conversation,
+            isA2A: true,
+          };
+        } else {
+          // Task is still running or in input-required state
+          subAgentState.status = 'running';
+          return {
+            success: true,
+            runId,
+            agentName: args.agentName,
+            status: taskState,
+            message: `A2A task submitted. Current state: ${taskState}`,
+            taskId,
+            isA2A: true,
+          };
+        }
+      } catch (error) {
+        subAgentState.status = 'failed';
+        cleanupDelegationMappings(runId, args.agentName);
+        throw error;
+      }
+    } else {
+      // Asynchronous execution - return immediately
+      acpBackgroundNotifier.startPolling();
+
+      // Send message asynchronously
+      a2aClient.sendMessage({
+        message: {
+          role: 'user',
+          parts: [{ text: messageContent }],
+        },
+        configuration: {
+          acceptedOutputModes: ['text'],
+        },
+      }).then(
+        (result) => {
+          let taskState = 'unknown';
+          let outputText = '';
+
+          if ('task' in result && result.task) {
+            const task = result.task;
+            taskState = task.status?.state || 'unknown';
+            a2aTaskManager.updateStatus(managedTask.task.id, task.status?.state || 'working');
+
+            if (task.artifacts) {
+              outputText = extractTextFromArtifacts(task.artifacts);
+            }
+          } else if ('message' in result && result.message) {
+            outputText = extractTextFromParts(result.message.parts);
+            taskState = 'completed';
+          }
+
+          if (taskState === 'completed') {
+            subAgentState.status = 'completed';
+            subAgentState.result = {
+              runId,
+              agentName: args.agentName,
+              status: 'completed',
+              startTime: subAgentState.startTime,
+              endTime: Date.now(),
+              metadata: { duration: Date.now() - subAgentState.startTime },
+              output: [{ role: 'assistant', parts: [{ content: outputText }] }],
+            };
+          } else if (taskState === 'failed') {
+            subAgentState.status = 'failed';
+            subAgentState.result = {
+              runId,
+              agentName: args.agentName,
+              status: 'failed',
+              startTime: subAgentState.startTime,
+              endTime: Date.now(),
+              metadata: { duration: Date.now() - subAgentState.startTime },
+              error: 'A2A task failed',
+            };
+          }
+          cleanupDelegationMappings(runId, args.agentName);
+        },
+        (error) => {
+          subAgentState.status = 'failed';
+          subAgentState.result = {
+            runId,
+            agentName: args.agentName,
+            status: 'failed',
+            startTime: subAgentState.startTime,
+            endTime: Date.now(),
+            metadata: { duration: Date.now() - subAgentState.startTime },
+            error: error instanceof Error ? error.message : String(error),
+          };
+          cleanupDelegationMappings(runId, args.agentName);
+          logACPRouter(`Async A2A run failed for ${args.agentName}:`, error);
+        }
+      );
+
+      return {
+        success: true,
+        runId,
+        agentName: args.agentName,
+        status: 'running',
+        message: `Task delegated to A2A agent "${args.agentName}". Use check_agent_status with runId "${runId}" to check progress.`,
+        taskId: managedTask.task.id,
+        isA2A: true,
+      };
+    }
+  } catch (error) {
+    subAgentState.status = 'failed';
+    cleanupDelegationMappings(runId, args.agentName);
+    logACPRouter('Error in A2A agent delegation:', error);
+    return {
+      success: false,
+      runId,
+      agentName: args.agentName,
+      error: error instanceof Error ? error.message : String(error),
+      isA2A: true,
     };
   }
 }

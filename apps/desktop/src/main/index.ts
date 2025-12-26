@@ -22,6 +22,7 @@ import { diagnosticsService } from "./diagnostics"
 import { configStore } from "./config"
 import { startRemoteServer } from "./remote-server"
 import { acpService } from "./acp-service"
+import { initializeA2A, shutdownA2A } from "./a2a"
 
 // Enable CDP remote debugging port if REMOTE_DEBUGGING_PORT env variable is set
 // This must be called before app.whenReady()
@@ -135,6 +136,20 @@ app.whenReady().then(() => {
       logApp("Failed to initialize ACP service:", error)
     })
 
+  // Initialize A2A subsystem (agent-to-agent protocol)
+  const a2aConfig = configStore.get().a2aConfig
+  initializeA2A({
+    agentUrls: a2aConfig?.agentUrls || [],
+    enableWebhooks: a2aConfig?.enableWebhooks ?? false,
+    webhookPort: a2aConfig?.webhookPort,
+  })
+    .then(() => {
+      logApp("A2A subsystem initialized successfully")
+    })
+    .catch((error) => {
+      logApp("Failed to initialize A2A subsystem:", error)
+    })
+
 	  try {
 	    const cfg = configStore.get()
 	    if (cfg.remoteServerEnabled) {
@@ -180,6 +195,8 @@ app.whenReady().then(() => {
     makePanelWindowClosable()
     // Shutdown ACP agents gracefully
     acpService.shutdown().catch(() => {})
+    // Shutdown A2A subsystem
+    shutdownA2A().catch(() => {})
   })
 })
 

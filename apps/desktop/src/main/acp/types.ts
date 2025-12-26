@@ -158,6 +158,8 @@ export interface ACPSubAgentState {
   baseUrl?: string;
   /** Whether this is an internal sub-agent (not external ACP) */
   isInternal?: boolean;
+  /** Whether this is an A2A (Agent-to-Agent Protocol) remote agent */
+  isA2A?: boolean;
 }
 
 /**

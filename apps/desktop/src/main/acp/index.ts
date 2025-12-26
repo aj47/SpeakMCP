@@ -32,7 +32,7 @@ export {
   getAllDelegationsForSession,
   cleanupOldDelegatedRuns
 } from './acp-router-tools'
-export { acpSmartRouter, ACPSmartRouter } from './acp-smart-router'
+export { acpSmartRouter, ACPSmartRouter, type UnifiedAgent, type RoutingDecision } from './acp-smart-router'
 export { acpParallelOrchestrator, ACPParallelOrchestrator } from './acp-parallel-orchestrator'
 export { acpBackgroundNotifier, ACPBackgroundNotifier } from './acp-background-notifier'
 

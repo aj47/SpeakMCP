@@ -869,6 +869,43 @@ class ACPService extends EventEmitter {
   }
 
   /**
+   * Check if a path is in a sensitive location that should be blocked.
+   * This provides a basic security boundary for file operations.
+   */
+  private isSensitivePath(filePath: string): boolean {
+    const normalizedPath = filePath.toLowerCase()
+    
+    // Blocklist of sensitive paths that should not be accessed
+    const sensitivePatterns = [
+      // SSH keys and config
+      '/.ssh/',
+      '\\.ssh\\',
+      // GPG keys
+      '/.gnupg/',
+      '\\.gnupg\\',
+      // AWS credentials
+      '/.aws/credentials',
+      '\\.aws\\credentials',
+      // Environment files with secrets
+      '/.env',
+      // Keychain/credential stores
+      '/keychain/',
+      '/keychains/',
+      // System password files
+      '/etc/passwd',
+      '/etc/shadow',
+      // Private keys
+      '.pem',
+      '_rsa',
+      '_dsa',
+      '_ecdsa',
+      '_ed25519',
+    ]
+    
+    return sensitivePatterns.some(pattern => normalizedPath.includes(pattern))
+  }
+
+  /**
    * Handle fs/read_text_file - Read file contents for agent
    * Per ACP spec, only available if client advertises fs.readTextFile capability.
    */
@@ -884,6 +921,12 @@ class ACPService extends EventEmitter {
       // Security check: Ensure path is absolute
       if (!filePath.startsWith("/") && !filePath.match(/^[a-zA-Z]:\\/)) {
         throw new Error("Path must be absolute")
+      }
+
+      // Security check: Block access to sensitive paths
+      if (this.isSensitivePath(filePath)) {
+        logApp(`[ACP:${agentName}] BLOCKED read of sensitive path: ${filePath}`)
+        throw new Error("Access denied: Cannot read files in sensitive locations (SSH keys, credentials, etc.)")
       }
 
       const content = await readFile(filePath, "utf-8")
@@ -922,6 +965,12 @@ class ACPService extends EventEmitter {
       // Security check: Ensure path is absolute
       if (!filePath.startsWith("/") && !filePath.match(/^[a-zA-Z]:\\/)) {
         throw new Error("Path must be absolute")
+      }
+
+      // Security check: Block writes to sensitive paths
+      if (this.isSensitivePath(filePath)) {
+        logApp(`[ACP:${agentName}] BLOCKED write to sensitive path: ${filePath}`)
+        throw new Error("Access denied: Cannot write files in sensitive locations (SSH keys, credentials, etc.)")
       }
 
       // Ensure parent directory exists

@@ -10,9 +10,13 @@
 
 import { spawn, ChildProcess } from "child_process"
 import { EventEmitter } from "events"
+import { readFile, writeFile, mkdir } from "fs/promises"
+import { dirname } from "path"
 import { configStore } from "./config"
 import { ACPAgentConfig } from "../shared/types"
 import { logApp } from "./debug"
+import { toolApprovalManager } from "./state"
+import { emitAgentProgress } from "./emit-agent-progress"
 
 // JSON-RPC types
 interface JsonRpcRequest {
@@ -95,6 +99,74 @@ export interface ACPSessionOutput {
   stopReason?: string
 }
 
+// ACP Tool Call Status (per protocol spec)
+export type ACPToolCallStatus = 
+  | "pending"        // Tool call hasn't started running yet
+  | "running"        // Tool is currently executing
+  | "completed"      // Tool completed successfully
+  | "failed"         // Tool failed with an error
+
+// ACP Tool Call Update (from session/update or request_permission)
+export interface ACPToolCallUpdate {
+  toolCallId: string
+  title: string
+  status?: ACPToolCallStatus
+  content?: ACPToolCallContent[]
+  rawInput?: unknown
+  rawOutput?: unknown
+}
+
+// ACP Tool Call Content (shows tool execution details)
+export interface ACPToolCallContent {
+  type: "diff" | "terminal" | "text" | "location"
+  // For diff type
+  path?: string
+  patch?: string
+  // For terminal type
+  terminalId?: string
+  // For text type
+  text?: string
+  // For location type
+  line?: number
+  column?: number
+}
+
+// ACP Permission Option (presented to user)
+export interface ACPPermissionOption {
+  optionId: string
+  name: string
+  kind: "allow_once" | "allow_always" | "deny"
+}
+
+// ACP Request Permission Request (from agent to client)
+export interface ACPRequestPermissionRequest {
+  sessionId: string
+  toolCall: ACPToolCallUpdate
+  options: ACPPermissionOption[]
+}
+
+// ACP Request Permission Response (from client to agent)
+export interface ACPRequestPermissionResponse {
+  outcome: 
+    | { selected: { optionId: string } }
+    | { cancelled: Record<string, never> }
+}
+
+// ACP fs/read_text_file Request
+export interface ACPReadTextFileRequest {
+  sessionId: string
+  path: string
+  line?: number
+  limit?: number
+}
+
+// ACP fs/write_text_file Request
+export interface ACPWriteTextFileRequest {
+  sessionId: string
+  path: string
+  content: string
+}
+
 class ACPService extends EventEmitter {
   private agents: Map<string, ACPAgentInstance> = new Map()
   // Track session outputs for visibility
@@ -136,18 +208,21 @@ class ACPService extends EventEmitter {
   }
 
   /**
-   * Handle session/update notifications - agent's streaming output
+   * Handle session/update notifications - agent's streaming output and tool call updates
    */
   private handleSessionUpdate(agentName: string, params: {
     sessionId?: string
     content?: ACPContentBlock[] | ACPContentBlock
     stopReason?: string
     isComplete?: boolean
+    // Tool call updates per ACP spec
+    toolCall?: ACPToolCallUpdate
     // ACP agents may nest content inside an "update" object
     update?: {
       sessionUpdate?: string
       content?: ACPContentBlock | ACPContentBlock[]
       stopReason?: string
+      toolCall?: ACPToolCallUpdate
     }
   }): void {
     const instance = this.agents.get(agentName)
@@ -219,11 +294,24 @@ class ACPService extends EventEmitter {
       logApp(`[ACP:${agentName}] Session ${sessionId} complete. Stop reason: ${stopReason}`)
     }
 
+    // Handle tool call updates from the notification
+    const toolCallUpdate = params.toolCall || params.update?.toolCall
+    if (toolCallUpdate) {
+      logApp(`[ACP:${agentName}] Tool call update: ${toolCallUpdate.title} (status: ${toolCallUpdate.status})`)
+      this.emit("toolCallUpdate", {
+        agentName,
+        sessionId,
+        toolCall: toolCallUpdate,
+        awaitingPermission: false,
+      })
+    }
+
     // Emit event for real-time UI updates
     this.emit("sessionUpdate", {
       agentName,
       sessionId,
       content: contentBlocks.length > 0 ? contentBlocks : undefined,
+      toolCall: toolCallUpdate,
       isComplete: params.isComplete,
       stopReason,
       totalBlocks: output.contentBlocks.length,
@@ -544,26 +632,277 @@ class ACPService extends EventEmitter {
       if (!line.trim()) continue
 
       try {
-        const message = JSON.parse(line) as JsonRpcResponse | JsonRpcNotification
+        const message = JSON.parse(line) as JsonRpcRequest | JsonRpcResponse | JsonRpcNotification
 
-        if ("id" in message && message.id !== null) {
-          // This is a response
+        if ("id" in message && message.id !== null && "method" in message) {
+          // This is a REQUEST from the agent to us (the client)
+          // We need to handle it and send a response back
+          this.handleAgentRequest(agentName, message as JsonRpcRequest)
+        } else if ("id" in message && message.id !== null) {
+          // This is a RESPONSE to one of our requests
           const pending = instance.pendingRequests.get(message.id)
           if (pending) {
             instance.pendingRequests.delete(message.id)
-            if (message.error) {
-              pending.reject(new Error(message.error.message))
+            if ((message as JsonRpcResponse).error) {
+              pending.reject(new Error((message as JsonRpcResponse).error!.message))
             } else {
-              pending.resolve(message.result)
+              pending.resolve((message as JsonRpcResponse).result)
             }
           }
         } else if ("method" in message) {
-          // This is a notification
+          // This is a notification (no id means no response expected)
           this.emit("notification", { agentName, method: message.method, params: message.params })
         }
       } catch (error) {
         logApp(`[ACP:${agentName}] Failed to parse message: ${line}`)
       }
+    }
+  }
+
+  /**
+   * Handle incoming requests from ACP agents (reverse direction).
+   * Per ACP spec, agents can send requests to clients for:
+   * - session/request_permission: Request user approval for tool calls
+   * - fs/read_text_file: Read file contents
+   * - fs/write_text_file: Write file contents
+   * - terminal/*: Terminal operations (future)
+   */
+  private async handleAgentRequest(agentName: string, request: JsonRpcRequest): Promise<void> {
+    const { id, method, params } = request
+    logApp(`[ACP:${agentName}] Received request: ${method} (id: ${id})`)
+
+    try {
+      let result: unknown
+
+      switch (method) {
+        case "session/request_permission":
+          result = await this.handleRequestPermission(agentName, params as ACPRequestPermissionRequest)
+          break
+
+        case "fs/read_text_file":
+          result = await this.handleReadTextFile(agentName, params as ACPReadTextFileRequest)
+          break
+
+        case "fs/write_text_file":
+          result = await this.handleWriteTextFile(agentName, params as ACPWriteTextFileRequest)
+          break
+
+        default:
+          // Unknown method - send error response
+          this.sendResponse(agentName, id, undefined, {
+            code: -32601,
+            message: `Method not found: ${method}`,
+          })
+          return
+      }
+
+      // Send success response
+      this.sendResponse(agentName, id, result)
+    } catch (error) {
+      // Send error response
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      logApp(`[ACP:${agentName}] Error handling request ${method}: ${errorMessage}`)
+      this.sendResponse(agentName, id, undefined, {
+        code: -32000,
+        message: errorMessage,
+      })
+    }
+  }
+
+  /**
+   * Send a JSON-RPC response to an agent
+   */
+  private sendResponse(
+    agentName: string,
+    id: number | string,
+    result?: unknown,
+    error?: { code: number; message: string; data?: unknown }
+  ): void {
+    const instance = this.agents.get(agentName)
+    if (!instance?.process?.stdin) {
+      logApp(`[ACP:${agentName}] Cannot send response - agent not ready`)
+      return
+    }
+
+    const response: JsonRpcResponse = {
+      jsonrpc: "2.0",
+      id,
+      ...(error ? { error } : { result: result ?? {} }),
+    }
+
+    const message = JSON.stringify(response) + "\n"
+    instance.process.stdin.write(message, (err) => {
+      if (err) {
+        logApp(`[ACP:${agentName}] Failed to send response: ${err.message}`)
+      }
+    })
+  }
+
+  /**
+   * Handle session/request_permission - Request user approval for tool calls
+   * Per ACP spec, this is sent by agents before executing sensitive operations.
+   */
+  private async handleRequestPermission(
+    agentName: string,
+    params: ACPRequestPermissionRequest
+  ): Promise<ACPRequestPermissionResponse> {
+    const { sessionId, toolCall, options } = params
+
+    logApp(`[ACP:${agentName}] Permission request for tool: ${toolCall.title} (id: ${toolCall.toolCallId})`)
+    logApp(`[ACP:${agentName}] Options: ${JSON.stringify(options.map(o => o.name))}`)
+
+    // Emit tool call status update for UI visibility
+    this.emit("toolCallUpdate", {
+      agentName,
+      sessionId,
+      toolCall: {
+        ...toolCall,
+        status: "pending" as ACPToolCallStatus,
+      },
+      awaitingPermission: true,
+    })
+
+    // Use the existing tool approval manager to request approval
+    // This integrates with SpeakMCP's existing UI approval flow
+    const { approvalId, promise } = toolApprovalManager.requestApproval(
+      sessionId,
+      toolCall.title,
+      toolCall.rawInput
+    )
+
+    // Emit progress update to show pending approval in UI
+    await emitAgentProgress({
+      sessionId,
+      currentIteration: 0,
+      maxIterations: 1,
+      steps: [
+        {
+          id: `acp-tool-${toolCall.toolCallId}`,
+          type: "tool_approval",
+          title: `ACP Agent: ${agentName}`,
+          description: toolCall.title,
+          status: "awaiting_approval",
+          timestamp: Date.now(),
+          approvalRequest: {
+            approvalId,
+            toolName: toolCall.title,
+            arguments: toolCall.rawInput,
+          },
+        },
+      ],
+      isComplete: false,
+      pendingToolApproval: {
+        approvalId,
+        toolName: toolCall.title,
+        arguments: toolCall.rawInput,
+      },
+    })
+
+    // Wait for user response
+    const approved = await promise
+
+    // Emit status update
+    this.emit("toolCallUpdate", {
+      agentName,
+      sessionId,
+      toolCall: {
+        ...toolCall,
+        status: approved ? "running" : "failed",
+      },
+      awaitingPermission: false,
+    })
+
+    if (approved) {
+      // Find the "allow_once" or first allow option
+      const allowOption = options.find(o => o.kind === "allow_once") || options.find(o => o.kind !== "deny")
+      if (allowOption) {
+        return {
+          outcome: { selected: { optionId: allowOption.optionId } },
+        }
+      }
+    }
+
+    // User denied or cancelled - find deny option or use cancelled
+    const denyOption = options.find(o => o.kind === "deny")
+    if (denyOption) {
+      return {
+        outcome: { selected: { optionId: denyOption.optionId } },
+      }
+    }
+
+    // No deny option available, return cancelled
+    return {
+      outcome: { cancelled: {} },
+    }
+  }
+
+  /**
+   * Handle fs/read_text_file - Read file contents for agent
+   * Per ACP spec, only available if client advertises fs.readTextFile capability.
+   */
+  private async handleReadTextFile(
+    agentName: string,
+    params: ACPReadTextFileRequest
+  ): Promise<{ content: string }> {
+    const { path: filePath, line, limit } = params
+
+    logApp(`[ACP:${agentName}] Reading file: ${filePath} (line: ${line}, limit: ${limit})`)
+
+    try {
+      // Security check: Ensure path is absolute
+      if (!filePath.startsWith("/") && !filePath.match(/^[a-zA-Z]:\\/)) {
+        throw new Error("Path must be absolute")
+      }
+
+      const content = await readFile(filePath, "utf-8")
+
+      // Handle line offset and limit if specified
+      if (line !== undefined || limit !== undefined) {
+        const lines = content.split("\n")
+        const startLine = (line ?? 1) - 1 // Convert to 0-based
+        const endLine = limit !== undefined ? startLine + limit : lines.length
+        return {
+          content: lines.slice(Math.max(0, startLine), endLine).join("\n"),
+        }
+      }
+
+      return { content }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      logApp(`[ACP:${agentName}] Failed to read file ${filePath}: ${errorMessage}`)
+      throw new Error(`Failed to read file: ${errorMessage}`)
+    }
+  }
+
+  /**
+   * Handle fs/write_text_file - Write file contents for agent
+   * Per ACP spec, only available if client advertises fs.writeTextFile capability.
+   */
+  private async handleWriteTextFile(
+    agentName: string,
+    params: ACPWriteTextFileRequest
+  ): Promise<Record<string, never>> {
+    const { path: filePath, content } = params
+
+    logApp(`[ACP:${agentName}] Writing file: ${filePath} (${content.length} bytes)`)
+
+    try {
+      // Security check: Ensure path is absolute
+      if (!filePath.startsWith("/") && !filePath.match(/^[a-zA-Z]:\\/)) {
+        throw new Error("Path must be absolute")
+      }
+
+      // Ensure parent directory exists
+      await mkdir(dirname(filePath), { recursive: true })
+
+      await writeFile(filePath, content, "utf-8")
+
+      logApp(`[ACP:${agentName}] Successfully wrote file: ${filePath}`)
+      return {}
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      logApp(`[ACP:${agentName}] Failed to write file ${filePath}: ${errorMessage}`)
+      throw new Error(`Failed to write file: ${errorMessage}`)
     }
   }
 

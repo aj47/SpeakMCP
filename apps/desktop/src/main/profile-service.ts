@@ -583,7 +583,8 @@ class ProfileService {
       )
 
       // Import MCP server definitions if present
-      if (importData.mcpServers && typeof importData.mcpServers === "object") {
+      // Check both for object type AND that it's not an array (arrays are objects in JS)
+      if (importData.mcpServers && typeof importData.mcpServers === "object" && !Array.isArray(importData.mcpServers)) {
         const config = configStore.get()
         const currentMcpServers = config.mcpConfig?.mcpServers || {}
 

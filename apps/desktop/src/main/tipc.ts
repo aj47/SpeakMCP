@@ -2042,6 +2042,20 @@ export const router = {
       return { success: true }
     }),
 
+  // MCP Registry
+  fetchMcpRegistryServers: t.procedure
+    .input<{ search?: string; forceRefresh?: boolean }>()
+    .action(async ({ input }) => {
+      const { fetchRegistryServers } = await import("./mcp-registry")
+      return fetchRegistryServers(input)
+    }),
+
+  clearMcpRegistryCache: t.procedure.action(async () => {
+    const { clearRegistryCache } = await import("./mcp-registry")
+    clearRegistryCache()
+    return { success: true }
+  }),
+
   // Text-to-Speech
   generateSpeech: t.procedure
     .input<{

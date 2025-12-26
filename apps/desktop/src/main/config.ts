@@ -12,6 +12,10 @@ export const conversationsFolder = path.join(dataFolder, "conversations")
 
 export const configPath = path.join(dataFolder, "config.json")
 
+// Valid Orpheus voices - used for migration validation
+const ORPHEUS_ENGLISH_VOICES = ["autumn", "diana", "hannah", "austin", "daniel", "troy"]
+const ORPHEUS_ARABIC_VOICES = ["fahad", "sultan", "lulwa", "noura"]
+
 /**
  * Migrate deprecated Groq TTS PlayAI models/voices to new Orpheus equivalents.
  * This ensures existing installs with saved PlayAI settings continue to work.
@@ -26,14 +30,19 @@ function migrateGroqTtsConfig(config: Partial<Config>): Partial<Config> {
     config.groqTtsModel = "canopylabs/orpheus-arabic-saudi"
   }
 
-  // Migrate deprecated PlayAI voices to Orpheus equivalents
-  // If the voice ends with "-PlayAI", it's a deprecated voice that needs migration
+  // Migrate voices: check if voice is valid for the current model
   // Guard with typeof check since config.json is user-editable and groqTtsVoice could be non-string
-  if (config.groqTtsVoice && typeof config.groqTtsVoice === "string" && config.groqTtsVoice.endsWith("-PlayAI")) {
-    // Set to appropriate default voice based on the model
-    if (config.groqTtsModel === "canopylabs/orpheus-arabic-saudi") {
+  const voice = config.groqTtsVoice
+  const isValidVoice = voice && typeof voice === "string"
+  
+  if (config.groqTtsModel === "canopylabs/orpheus-arabic-saudi") {
+    // For Arabic model, ensure voice is a valid Arabic voice
+    if (!isValidVoice || !ORPHEUS_ARABIC_VOICES.includes(voice)) {
       config.groqTtsVoice = "fahad" // Default Arabic voice
-    } else {
+    }
+  } else if (config.groqTtsModel === "canopylabs/orpheus-v1-english") {
+    // For English model, ensure voice is a valid English voice
+    if (!isValidVoice || !ORPHEUS_ENGLISH_VOICES.includes(voice)) {
       config.groqTtsVoice = "troy" // Default English voice
     }
   }

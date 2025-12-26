@@ -721,10 +721,10 @@ export async function handleDelegateToAgent(
 
 /**
  * Check the status of a running delegated agent task.
- * @param args - Arguments containing the run ID
+ * @param args - Arguments containing the run ID and optional history length
  * @returns Object with current status of the run
  */
-export async function handleCheckAgentStatus(args: { runId: string }): Promise<object> {
+export async function handleCheckAgentStatus(args: { runId: string; historyLength?: number }): Promise<object> {
   logACPRouter('Checking agent status', args);
 
   try {
@@ -743,7 +743,7 @@ export async function handleCheckAgentStatus(args: { runId: string }): Promise<o
         if (subAgentState.isA2A) {
           // A2A protocol: Use A2A client to query task status
           const a2aClient = createA2AClient(subAgentState.baseUrl);
-          const a2aTask = await a2aClient.getTask(subAgentState.acpRunId);
+          const a2aTask = await a2aClient.getTask(subAgentState.acpRunId, args.historyLength);
 
           // Map A2A task state to our internal status
           const taskState = a2aTask.status?.state;
@@ -1008,7 +1008,8 @@ export async function executeACPRouterTool(
         // Handle both legacy 'runId' and A2A 'taskId' parameter names
         const statusArgs = args as { runId?: string; taskId?: string; historyLength?: number };
         result = await handleCheckAgentStatus({ 
-          runId: statusArgs.runId || statusArgs.taskId || '' 
+          runId: statusArgs.runId || statusArgs.taskId || '',
+          historyLength: statusArgs.historyLength,
         });
         break;
 

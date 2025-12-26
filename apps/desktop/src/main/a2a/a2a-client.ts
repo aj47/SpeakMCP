@@ -123,6 +123,11 @@ export class A2AClient {
     // Chain with external abort signal if provided, and track for cleanup
     const abortHandler = () => controller.abort();
     if (options?.signal) {
+      // Check if already aborted before proceeding
+      if (options.signal.aborted) {
+        clearTimeout(timeoutId);
+        throw new Error('Request timeout or aborted');
+      }
       options.signal.addEventListener('abort', abortHandler);
     }
 
@@ -240,6 +245,11 @@ export class A2AClient {
 
     const abortHandler = () => controller.abort();
     if (options?.signal) {
+      // Check if already aborted before proceeding
+      if (options.signal.aborted) {
+        clearStreamTimeout();
+        throw new Error('Stream timeout or aborted');
+      }
       options.signal.addEventListener('abort', abortHandler);
     }
 
@@ -440,6 +450,11 @@ export class A2AClient {
 
     const abortHandler = () => controller.abort();
     if (options?.signal) {
+      // Check if already aborted before proceeding
+      if (options.signal.aborted) {
+        clearStreamTimeout();
+        throw new Error('Subscription timeout or aborted');
+      }
       options.signal.addEventListener('abort', abortHandler);
     }
 

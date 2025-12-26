@@ -49,6 +49,17 @@ function isValidServerConfig(config: unknown): boolean {
     return false
   }
 
+  // Validate transport-specific required fields to prevent configs that break MCP initialization
+  const transport = c.transport as string | undefined
+  if (transport === "stdio" && !c.command) {
+    // stdio transport requires command field
+    return false
+  }
+  if ((transport === "websocket" || transport === "streamableHttp") && !c.url) {
+    // websocket and streamableHttp transports require url field
+    return false
+  }
+
   // Validate env if provided (must be Record<string, string>)
   if (c.env !== undefined) {
     if (typeof c.env !== "object" || c.env === null || Array.isArray(c.env)) {
@@ -595,6 +606,12 @@ class ProfileService {
         for (const [serverName, serverConfig] of Object.entries(importData.mcpServers)) {
           // Normalize server name for comparison (trim whitespace)
           const normalizedServerName = serverName.trim()
+
+          // Reject empty normalized server names (e.g., whitespace-only keys)
+          if (!normalizedServerName) {
+            logApp(`Skipping empty server name: "${serverName}"`)
+            continue
+          }
 
           // Validate against prototype pollution attacks
           if (normalizedServerName === "__proto__" || normalizedServerName === "constructor" || normalizedServerName === "prototype") {

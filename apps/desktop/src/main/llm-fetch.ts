@@ -1629,3 +1629,106 @@ export async function verifyCompletionWithFetch(
     return { isComplete: false, reason: (error as any)?.message || "Verification failed" }
   }
 }
+
+// ============================================================================
+// Context Extraction
+// ============================================================================
+
+export type ContextExtractionResponse = {
+  resources: Array<{ type: string; id: string }>
+}
+
+const contextExtractionSchema: OpenAI.ResponseFormatJSONSchema["json_schema"] = {
+  name: "ContextExtraction",
+  description: "Extract resource identifiers from conversation",
+  schema: {
+    type: "object",
+    properties: {
+      resources: {
+        type: "array",
+        description: "Array of active resource identifiers",
+        items: {
+          type: "object",
+          properties: {
+            type: { type: "string", description: "Resource type (session, connection, handle, etc)" },
+            id: { type: "string", description: "The resource identifier value" },
+          },
+          required: ["type", "id"],
+          additionalProperties: false,
+        },
+      },
+    },
+    required: ["resources"],
+    additionalProperties: false,
+  },
+  strict: true,
+}
+
+/**
+ * Make a structured LLM call for context extraction
+ */
+export async function makeStructuredContextExtraction(
+  prompt: string,
+  providerId?: string,
+): Promise<ContextExtractionResponse> {
+  const config = configStore.get()
+  const chatProviderId = providerId || config.mcpToolsProviderId || "openai"
+  const model = getModel(chatProviderId, "mcp")
+
+  const baseURL = chatProviderId === "groq"
+    ? config.groqBaseUrl || "https://api.groq.com/openai/v1"
+    : config.openaiBaseUrl || "https://api.openai.com/v1"
+  const apiKey = chatProviderId === "groq" ? config.groqApiKey : config.openaiApiKey
+
+  if (!apiKey) return { resources: [] }
+
+  const messages = [
+    { role: "system", content: "You are a context extraction assistant. Analyze conversation history and extract useful resource identifiers and context information." },
+    { role: "user", content: prompt },
+  ]
+
+  try {
+    let response: any = null
+    const estimatedTokens = Math.ceil(prompt.length / 4)
+
+    // Try JSON Schema first
+    if (shouldAttemptStructuredOutput(model)) {
+      try {
+        response = await makeAPICallAttempt(baseURL, apiKey, {
+          model,
+          messages,
+          temperature: 0,
+          response_format: { type: "json_schema", json_schema: contextExtractionSchema },
+        }, estimatedTokens)
+      } catch (error: any) {
+        if (!error?.isStructuredOutputError) throw error
+      }
+    }
+
+    // Fallback to regular completion
+    if (!response) {
+      response = await makeAPICallAttempt(baseURL, apiKey, {
+        model,
+        messages: [
+          { role: "system", content: "You are a context extraction assistant. Always respond with valid JSON only." },
+          { role: "user", content: prompt },
+        ],
+        temperature: 0,
+      }, estimatedTokens)
+    }
+
+    const content = response?.choices?.[0]?.message?.content
+    if (content) {
+      try {
+        const parsed = JSON.parse(content)
+        if (parsed.resources && Array.isArray(parsed.resources)) {
+          return parsed as ContextExtractionResponse
+        }
+      } catch {}
+    }
+
+    return { resources: [] }
+  } catch {
+    return { resources: [] }
+  }
+}

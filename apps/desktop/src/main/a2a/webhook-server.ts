@@ -6,6 +6,7 @@
  */
 
 import * as http from 'http';
+import * as crypto from 'crypto';
 import type { A2AStreamEvent, A2ATask, A2APushNotificationConfig } from './types';
 import { a2aTaskManager } from './task-manager';
 
@@ -133,8 +134,9 @@ export class A2AWebhookServer {
    * @returns The push notification config
    */
   generateConfig(taskId: string): A2APushNotificationConfig {
-    // Generate a random token for authentication
-    const token = Math.random().toString(36).substring(2) + Math.random().toString(36).substring(2);
+    // Generate a cryptographically secure random token for authentication
+    // Using crypto.randomBytes instead of Math.random() for security
+    const token = crypto.randomBytes(32).toString('hex');
     
     // Store the expected token
     this.expectedTokens.set(taskId, token);

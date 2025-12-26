@@ -728,26 +728,59 @@ export async function handleCheckAgentStatus(args: { runId: string }): Promise<o
       };
     }
 
-    // If we have an acpRunId and baseUrl, query the ACP server for actual status
+    // Query remote server for actual status if we have tracking info and the task is still running
     if (subAgentState.acpRunId && subAgentState.baseUrl && subAgentState.status === 'running') {
       try {
-        const acpResult = await acpClientService.getRunStatus(
-          subAgentState.baseUrl,
-          subAgentState.acpRunId
-        );
+        if (subAgentState.isA2A) {
+          // A2A protocol: Use A2A client to query task status
+          const a2aClient = createA2AClient(subAgentState.baseUrl);
+          const a2aTask = await a2aClient.getTask(subAgentState.acpRunId);
 
-        // Update local state based on ACP server response
-        if (acpResult.status === 'completed') {
-          subAgentState.status = 'completed';
-          subAgentState.result = acpResult;
-        } else if (acpResult.status === 'failed') {
-          subAgentState.status = 'failed';
-          subAgentState.result = acpResult;
+          // Map A2A task state to our internal status
+          const taskState = a2aTask.status?.state;
+          if (taskState === 'completed') {
+            subAgentState.status = 'completed';
+            // Extract output from artifacts if available
+            const outputText = a2aTask.artifacts
+              ?.filter((a: A2AArtifact) => a.parts?.some((p: { text?: string }) => 'text' in p))
+              .map((a: A2AArtifact) => a.parts?.map((p: { text?: string }) => p.text || '').join(''))
+              .join('\n\n') || '';
+            subAgentState.result = {
+              status: 'completed',
+              output: outputText ? [{ parts: [{ content: outputText }] }] : [],
+              metadata: a2aTask.metadata,
+            };
+          } else if (taskState === 'failed' || taskState === 'canceled') {
+            subAgentState.status = 'failed';
+            subAgentState.result = {
+              status: 'failed',
+              error: a2aTask.status?.message?.parts
+                ?.filter((p: { text?: string }) => 'text' in p)
+                .map((p: { text?: string }) => p.text)
+                .join('') || 'A2A task failed',
+            };
+          }
+          // If still 'working' or 'input-required', keep local status as 'running'
+        } else {
+          // ACP protocol: Use ACP client to query run status
+          const acpResult = await acpClientService.getRunStatus(
+            subAgentState.baseUrl,
+            subAgentState.acpRunId
+          );
+
+          // Update local state based on ACP server response
+          if (acpResult.status === 'completed') {
+            subAgentState.status = 'completed';
+            subAgentState.result = acpResult;
+          } else if (acpResult.status === 'failed') {
+            subAgentState.status = 'failed';
+            subAgentState.result = acpResult;
+          }
+          // If still running, keep local status as 'running'
         }
-        // If still running, keep local status as 'running'
       } catch (statusError) {
-        logACPRouter('Error querying ACP server status:', statusError);
-        // Continue with local state if ACP query fails
+        logACPRouter(`Error querying ${subAgentState.isA2A ? 'A2A' : 'ACP'} server status:`, statusError);
+        // Continue with local state if query fails
       }
     }
 
@@ -1319,6 +1352,12 @@ async function handleA2ADelegation(
           taskId = task.id;
           taskState = task.status?.state || 'unknown';
 
+          // Update acpRunId with the server-provided task ID for subsequent polling
+          // This ensures check_agent_status uses the correct ID returned by the server
+          if (taskId) {
+            subAgentState.acpRunId = taskId;
+          }
+
           // Extract from task history
           if (task.history) {
             for (const msg of task.history) {
@@ -1424,6 +1463,11 @@ async function handleA2ADelegation(
             const task = result.task;
             taskState = task.status?.state || 'unknown';
             a2aTaskManager.updateStatus(managedTask.task.id, task.status?.state || 'working');
+
+            // Update acpRunId with the server-provided task ID for subsequent polling
+            if (task.id) {
+              subAgentState.acpRunId = task.id;
+            }
 
             if (task.artifacts) {
               outputText = extractTextFromArtifacts(task.artifacts);

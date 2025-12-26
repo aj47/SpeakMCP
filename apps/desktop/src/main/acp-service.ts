@@ -10,7 +10,7 @@
 
 import { spawn, ChildProcess } from "child_process"
 import { EventEmitter } from "events"
-import { readFile, writeFile, mkdir } from "fs/promises"
+import { readFile, writeFile, mkdir, realpath } from "fs/promises"
 import { dirname } from "path"
 import { configStore } from "./config"
 import { ACPAgentConfig } from "../shared/types"
@@ -873,29 +873,27 @@ class ACPService extends EventEmitter {
    * This provides a basic security boundary for file operations.
    */
   private isSensitivePath(filePath: string): boolean {
-    const normalizedPath = filePath.toLowerCase()
+    // Normalize separators to forward slash for consistent matching on all platforms
+    const normalizedPath = filePath.toLowerCase().replace(/\\/g, '/')
     
     // Blocklist of sensitive paths that should not be accessed
+    // All patterns use forward slash since we normalized the path above
     const sensitivePatterns = [
       // SSH keys and config
       '/.ssh/',
-      '\\.ssh\\',
       // GPG keys
       '/.gnupg/',
-      '\\.gnupg\\',
       // AWS credentials
       '/.aws/credentials',
-      '\\.aws\\credentials',
-      // Environment files with secrets (both Unix and Windows paths)
+      // Environment files with secrets
       '/.env',
-      '\\.env',
       // Keychain/credential stores
       '/keychain/',
       '/keychains/',
       // System password files
       '/etc/passwd',
       '/etc/shadow',
-      // Private keys
+      // Private keys (these are suffix patterns, not path patterns)
       '.pem',
       '_rsa',
       '_dsa',
@@ -904,6 +902,20 @@ class ACPService extends EventEmitter {
     ]
     
     return sensitivePatterns.some(pattern => normalizedPath.includes(pattern))
+  }
+
+  /**
+   * Resolve the real path of a file, following symlinks.
+   * Returns null if the path doesn't exist or can't be resolved.
+   */
+  private async resolveRealPath(filePath: string): Promise<string | null> {
+    try {
+      return await realpath(filePath)
+    } catch {
+      // File doesn't exist or can't be resolved - return original path
+      // The actual read/write operation will fail with appropriate error
+      return filePath
+    }
   }
 
   /**
@@ -924,9 +936,14 @@ class ACPService extends EventEmitter {
         throw new Error("Path must be absolute")
       }
 
-      // Security check: Block access to sensitive paths
-      if (this.isSensitivePath(filePath)) {
-        logApp(`[ACP:${agentName}] BLOCKED read of sensitive path: ${filePath}`)
+      // Resolve symlinks to check the real path for security
+      // This prevents bypassing blocklist via symlinks to sensitive locations
+      const resolvedPath = await this.resolveRealPath(filePath)
+      const pathToCheck = resolvedPath || filePath
+
+      // Security check: Block access to sensitive paths (check both original and resolved)
+      if (this.isSensitivePath(filePath) || this.isSensitivePath(pathToCheck)) {
+        logApp(`[ACP:${agentName}] BLOCKED read of sensitive path: ${filePath} (resolved: ${pathToCheck})`)
         throw new Error("Access denied: Cannot read files in sensitive locations (SSH keys, credentials, etc.)")
       }
 
@@ -968,9 +985,15 @@ class ACPService extends EventEmitter {
         throw new Error("Path must be absolute")
       }
 
-      // Security check: Block writes to sensitive paths
-      if (this.isSensitivePath(filePath)) {
-        logApp(`[ACP:${agentName}] BLOCKED write to sensitive path: ${filePath}`)
+      // Resolve symlinks to check the real path for security
+      // For writes, we check if the parent directory resolves to a sensitive location
+      // This prevents bypassing blocklist via symlinks
+      const resolvedPath = await this.resolveRealPath(dirname(filePath))
+      const pathToCheck = resolvedPath ? `${resolvedPath}/${filePath.split(/[/\\]/).pop()}` : filePath
+
+      // Security check: Block writes to sensitive paths (check both original and resolved)
+      if (this.isSensitivePath(filePath) || this.isSensitivePath(pathToCheck)) {
+        logApp(`[ACP:${agentName}] BLOCKED write to sensitive path: ${filePath} (resolved: ${pathToCheck})`)
         throw new Error("Access denied: Cannot write files in sensitive locations (SSH keys, credentials, etc.)")
       }
 

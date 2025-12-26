@@ -83,6 +83,15 @@ export default function SettingsScreen({ navigation }: any) {
     return null;
   }, [config.baseUrl, config.apiKey]);
 
+  // Clear pending model update timeout when settingsClient changes
+  // to prevent sending updates to the previous server
+  useEffect(() => {
+    if (modelUpdateTimeoutRef.current) {
+      clearTimeout(modelUpdateTimeoutRef.current);
+      modelUpdateTimeoutRef.current = null;
+    }
+  }, [settingsClient]);
+
   // Fetch remote settings from desktop
   const fetchRemoteSettings = useCallback(async () => {
     if (!settingsClient) {
@@ -217,8 +226,8 @@ export default function SettingsScreen({ navigation }: any) {
       }
     } catch (error: any) {
       console.error('[Settings] Failed to fetch models:', error);
-      // Keep any existing models, don't clear on error
-      setAvailableModels([]);
+      // Keep any existing models on error to avoid UI looking empty
+      // Only log the error, don't clear the list
     } finally {
       setIsLoadingModels(false);
     }

@@ -403,8 +403,10 @@ function useMicrophoneCapture(
             int16Data[i] = s < 0 ? s * 0x8000 : s * 0x7fff
           }
 
-          // Send to main process
-          tipcClient.addMeetingMicrophoneData({ audioData: int16Data.buffer })
+          // Send to main process (handle errors to prevent unhandled rejections)
+          tipcClient.addMeetingMicrophoneData({ audioData: int16Data.buffer }).catch((error) => {
+            console.error("[Meetings] Error sending microphone data:", error)
+          })
         }
 
         source.connect(processor)

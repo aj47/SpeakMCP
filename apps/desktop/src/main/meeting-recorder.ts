@@ -126,10 +126,34 @@ class MeetingRecorderService {
       logApp(`[MeetingRecorder] Started recording meeting ${meetingId}`)
       return meeting
     } catch (error) {
+      // Clean up any resources that may have been started before the error
+      this.cleanupRecordingResources()
       this.isRecording = false
       this.currentMeeting = null
       throw error
     }
+  }
+
+  private cleanupRecordingResources(): void {
+    // Stop transcription timer
+    if (this.transcriptionTimer) {
+      clearInterval(this.transcriptionTimer)
+      this.transcriptionTimer = null
+    }
+
+    // Stop system audio recording
+    if (this.systemRecorder) {
+      try {
+        this.systemRecorder.stop()
+      } catch (error) {
+        logApp("[MeetingRecorder] Error stopping system recorder during cleanup:", error)
+      }
+      this.systemRecorder = null
+    }
+
+    // Clear audio buffers
+    this.systemAudioBuffer = null
+    this.micAudioBuffer = null
   }
 
   private async startSystemAudioRecording(): Promise<void> {
@@ -227,54 +251,52 @@ class MeetingRecorderService {
   private async performTranscription(): Promise<void> {
     if (!this.currentMeeting) return
 
-    const buffers: AudioBuffer[] = []
-
-    // Collect system audio buffer
+    // Transcribe system audio buffer if available
     if (this.systemAudioBuffer && this.systemAudioBuffer.data.length > 0) {
-      buffers.push({
-        data: [...this.systemAudioBuffer.data],
-        source: "system",
-        startTime: this.systemAudioBuffer.startTime,
-        audioDetails: { ...this.systemAudioBuffer.audioDetails },
-      })
-      this.systemAudioBuffer.data = []
-      this.systemAudioBuffer.startTime = Date.now()
+      await this.transcribeBuffer(this.systemAudioBuffer, "system")
     }
 
-    // Collect mic audio buffer
+    // Transcribe mic audio buffer if available
     if (this.micAudioBuffer && this.micAudioBuffer.data.length > 0) {
-      buffers.push({
-        data: [...this.micAudioBuffer.data],
-        source: "microphone",
-        startTime: this.micAudioBuffer.startTime,
-        audioDetails: { ...this.micAudioBuffer.audioDetails },
-      })
-      this.micAudioBuffer.data = []
-      this.micAudioBuffer.startTime = Date.now()
+      await this.transcribeBuffer(this.micAudioBuffer, "microphone")
     }
+  }
 
-    // Transcribe each buffer
-    for (const buffer of buffers) {
-      try {
-        const audioBlob = this.createWavBlob(buffer.data, buffer.audioDetails)
-        const transcript = await this.transcribeAudio(audioBlob)
+  private async transcribeBuffer(
+    buffer: AudioBuffer,
+    source: "system" | "microphone"
+  ): Promise<void> {
+    if (!this.currentMeeting) return
 
-        if (transcript && transcript.trim()) {
-          const segment: MeetingTranscriptSegment = {
-            id: `seg_${Date.now()}_${buffer.source}`,
-            text: transcript,
-            timestamp: buffer.startTime,
-            source: buffer.source,
-          }
+    // Copy buffer data for transcription (don't clear yet in case of failure)
+    const bufferData = [...buffer.data]
+    const bufferStartTime = buffer.startTime
+    const bufferAudioDetails = { ...buffer.audioDetails }
 
-          this.currentMeeting.transcriptSegments.push(segment)
-          await this.saveMeeting(this.currentMeeting)
+    try {
+      const audioBlob = this.createWavBlob(bufferData, bufferAudioDetails)
+      const transcript = await this.transcribeAudio(audioBlob)
 
-          logApp(`[MeetingRecorder] Transcribed ${buffer.source} audio: ${transcript.substring(0, 50)}...`)
+      // Only clear the buffer after successful transcription
+      buffer.data = []
+      buffer.startTime = Date.now()
+
+      if (transcript && transcript.trim()) {
+        const segment: MeetingTranscriptSegment = {
+          id: `seg_${Date.now()}_${source}`,
+          text: transcript,
+          timestamp: bufferStartTime,
+          source: source,
         }
-      } catch (error) {
-        logApp(`[MeetingRecorder] Transcription error for ${buffer.source}:`, error)
+
+        this.currentMeeting.transcriptSegments.push(segment)
+        await this.saveMeeting(this.currentMeeting)
+
+        logApp(`[MeetingRecorder] Transcribed ${source} audio: ${transcript.substring(0, 50)}...`)
       }
+    } catch (error) {
+      // Keep the buffer data for retry on next interval
+      logApp(`[MeetingRecorder] Transcription error for ${source} (will retry):`, error)
     }
   }
 

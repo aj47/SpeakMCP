@@ -1,3 +1,7 @@
+import { acpSmartRouter } from './acp/acp-smart-router'
+import { acpService } from './acp-service'
+import { getInternalAgentInfo } from './acp/internal-agent'
+
 export const DEFAULT_SYSTEM_PROMPT = `You are an autonomous AI assistant that uses tools to complete tasks. Work iteratively until goals are fully achieved.
 
 RESPONSE FORMAT (return ONLY valid JSON, no markdown):
@@ -52,6 +56,51 @@ export const AGENT_MODE_ADDITIONS = `
 AGENT MODE: You can see tool results and make follow-up calls. Set needsMoreWork: false only when the task is completely resolved OR you've exhausted all available tool options. If a tool fails, try alternative approaches.
 `
 
+/**
+ * Generate ACP routing prompt addition based on available agents.
+ * Returns an empty string if no agents are ready.
+ */
+export function getACPRoutingPromptAddition(): string {
+  // Get agents from acpService which has runtime status
+  const agentStatuses = acpService.getAgents()
+
+  // Filter to only ready agents
+  const readyAgents = agentStatuses.filter(a => a.status === 'ready')
+
+  if (readyAgents.length === 0) {
+    return ''
+  }
+
+  // Format agents for the smart router
+  const formattedAgents = readyAgents.map(a => ({
+    definition: {
+      name: a.config.name,
+      displayName: a.config.displayName,
+      description: a.config.description || '',
+      capabilities: a.config.capabilities || [],
+    },
+    status: 'ready' as const,
+    activeRuns: 0,
+  }))
+
+  return acpSmartRouter.generateDelegationPromptAddition(formattedAgents)
+}
+
+/**
+ * Generate prompt addition for the internal agent.
+ * This instructs the agent on when and how to use the internal agent for parallel work.
+ */
+export function getSubSessionPromptAddition(): string {
+  const info = getInternalAgentInfo()
+
+  return `
+INTERNAL AGENT: Use \`delegate_to_agent\` with \`agentName: "internal"\` to spawn parallel sub-agents. Batch multiple calls for efficiency.
+- USE FOR: Independent parallel tasks (analyzing multiple files, researching different topics, divide-and-conquer)
+- AVOID FOR: Sequential dependencies, shared state/file conflicts, simple tasks
+- LIMITS: Max depth ${info.maxRecursionDepth}, max ${info.maxConcurrent} concurrent per parent
+`.trim()
+}
+
 export function constructSystemPrompt(
   availableTools: Array<{
     name: string
@@ -71,6 +120,15 @@ export function constructSystemPrompt(
 
   if (isAgentMode) {
     prompt += AGENT_MODE_ADDITIONS
+
+    // Add ACP agent delegation information if agents are available
+    const acpPromptAddition = getACPRoutingPromptAddition()
+    if (acpPromptAddition) {
+      prompt += '\n\n' + acpPromptAddition
+    }
+
+    // Add internal sub-session instructions (always available in agent mode)
+    prompt += '\n\n' + getSubSessionPromptAddition()
   }
 
   const formatToolInfo = (

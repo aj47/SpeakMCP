@@ -1,6 +1,8 @@
 import { agentProcessManager, llmRequestAbortManager, state, agentSessionStateManager, toolApprovalManager } from "./state"
 import { emitAgentProgress } from "./emit-agent-progress"
 import { agentSessionTracker } from "./agent-session-tracker"
+import { acpProcessManager, acpClientService } from "./acp"
+import { acpService } from "./acp-service"
 
 /**
  * Centralized emergency stop: abort LLM requests, kill tracked child processes,
@@ -90,6 +92,15 @@ export async function emergencyStopAll(): Promise<{ before: number; after: numbe
   // This prevents a race condition where stray updates slip through after emergency stop.
   state.isAgentModeActive = false
   state.agentIterationCount = 0
+
+  // Cancel all ACP runs
+  acpClientService.cancelAllRuns()
+
+  // Stop all spawned ACP agents
+  await acpProcessManager.stopAllAgents()
+
+  // Stop all ACP stdio agents
+  await acpService.shutdown()
 
   return { before, after }
 }

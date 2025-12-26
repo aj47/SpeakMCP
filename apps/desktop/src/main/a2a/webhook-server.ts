@@ -1,0 +1,304 @@
+/**
+ * A2A Webhook Server
+ * 
+ * HTTP server for receiving A2A push notifications.
+ * Agents can send task updates to the webhook URL when tasks complete or update.
+ */
+
+import * as http from 'http';
+import type { A2AStreamEvent, A2ATask, A2APushNotificationConfig } from './types';
+import { a2aTaskManager } from './task-manager';
+
+function logA2A(...args: unknown[]): void {
+  // eslint-disable-next-line no-console
+  console.log(`[${new Date().toISOString()}] [A2A Webhook]`, ...args);
+}
+
+/**
+ * Webhook event handler callback.
+ */
+export type WebhookEventHandler = (event: {
+  taskId: string;
+  event: A2AStreamEvent;
+  headers: Record<string, string | string[] | undefined>;
+}) => void;
+
+/**
+ * Options for the webhook server.
+ */
+export interface WebhookServerOptions {
+  /** Port to listen on (default: 0 for auto-assign) */
+  port?: number;
+  /** Host to bind to (default: 127.0.0.1) */
+  host?: string;
+  /** Path prefix for webhook endpoints (default: /a2a/webhook) */
+  pathPrefix?: string;
+  /** Expected authentication tokens per task */
+  expectedTokens?: Map<string, string>;
+}
+
+/**
+ * A2A Webhook Server for receiving push notifications.
+ */
+export class A2AWebhookServer {
+  private server: http.Server | null = null;
+  private port: number = 0;
+  private host: string = '127.0.0.1';
+  private pathPrefix: string = '/a2a/webhook';
+  private handlers: Set<WebhookEventHandler> = new Set();
+  private expectedTokens: Map<string, string> = new Map();
+  private isRunning: boolean = false;
+
+  constructor(options?: WebhookServerOptions) {
+    if (options) {
+      if (options.port !== undefined) this.port = options.port;
+      if (options.host) this.host = options.host;
+      if (options.pathPrefix) this.pathPrefix = options.pathPrefix;
+      if (options.expectedTokens) this.expectedTokens = options.expectedTokens;
+    }
+  }
+
+  /**
+   * Start the webhook server.
+   * 
+   * @returns The actual port the server is listening on
+   */
+  async start(): Promise<number> {
+    if (this.isRunning) {
+      return this.port;
+    }
+
+    return new Promise((resolve, reject) => {
+      this.server = http.createServer((req, res) => {
+        this.handleRequest(req, res);
+      });
+
+      this.server.on('error', (error) => {
+        logA2A('Server error:', error);
+        reject(error);
+      });
+
+      this.server.listen(this.port, this.host, () => {
+        const address = this.server?.address();
+        if (address && typeof address === 'object') {
+          this.port = address.port;
+        }
+
+        this.isRunning = true;
+        logA2A(`Webhook server started on ${this.host}:${this.port}`);
+        resolve(this.port);
+      });
+    });
+  }
+
+  /**
+   * Stop the webhook server.
+   */
+  async stop(): Promise<void> {
+    if (!this.isRunning || !this.server) {
+      return;
+    }
+
+    return new Promise((resolve, reject) => {
+      this.server!.close((error) => {
+        if (error) {
+          logA2A('Error stopping server:', error);
+          reject(error);
+        } else {
+          this.isRunning = false;
+          this.server = null;
+          logA2A('Webhook server stopped');
+          resolve();
+        }
+      });
+    });
+  }
+
+  /**
+   * Get the webhook URL for a specific task.
+   * 
+   * @param taskId - The task ID
+   * @returns The webhook URL
+   */
+  getWebhookUrl(taskId: string): string {
+    // URL-encode the task ID
+    const encodedTaskId = encodeURIComponent(taskId);
+    return `http://${this.host}:${this.port}${this.pathPrefix}/${encodedTaskId}`;
+  }
+
+  /**
+   * Generate a push notification config for a task.
+   * 
+   * @param taskId - The task ID
+   * @returns The push notification config
+   */
+  generateConfig(taskId: string): A2APushNotificationConfig {
+    // Generate a random token for authentication
+    const token = Math.random().toString(36).substring(2) + Math.random().toString(36).substring(2);
+    
+    // Store the expected token
+    this.expectedTokens.set(taskId, token);
+
+    return {
+      id: `config_${taskId}`,
+      url: this.getWebhookUrl(taskId),
+      token,
+      events: ['completed', 'failed', 'canceled'],
+    };
+  }
+
+  /**
+   * Add an event handler.
+   * 
+   * @param handler - The event handler
+   * @returns Unsubscribe function
+   */
+  onNotification(handler: WebhookEventHandler): () => void {
+    this.handlers.add(handler);
+    return () => {
+      this.handlers.delete(handler);
+    };
+  }
+
+  /**
+   * Handle incoming HTTP request.
+   */
+  private handleRequest(req: http.IncomingMessage, res: http.ServerResponse): void {
+    // Only accept POST requests
+    if (req.method !== 'POST') {
+      res.writeHead(405, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Method not allowed' }));
+      return;
+    }
+
+    // Parse the path to extract task ID
+    const url = new URL(req.url || '/', `http://${this.host}:${this.port}`);
+    const pathMatch = url.pathname.match(new RegExp(`^${this.pathPrefix}/(.+)$`));
+    
+    if (!pathMatch) {
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Not found' }));
+      return;
+    }
+
+    const taskId = decodeURIComponent(pathMatch[1]);
+
+    // Verify authentication token if configured
+    const authHeader = req.headers['authorization'];
+    const expectedToken = this.expectedTokens.get(taskId);
+
+    if (expectedToken) {
+      const providedToken = authHeader?.replace(/^Bearer\s+/i, '');
+      if (providedToken !== expectedToken) {
+        logA2A(`Unauthorized webhook request for task ${taskId}`);
+        res.writeHead(401, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Unauthorized' }));
+        return;
+      }
+    }
+
+    // Collect request body
+    let body = '';
+    req.on('data', (chunk) => {
+      body += chunk.toString();
+      
+      // Limit body size to prevent abuse
+      if (body.length > 1024 * 1024) {
+        res.writeHead(413, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Payload too large' }));
+        req.destroy();
+      }
+    });
+
+    req.on('end', () => {
+      try {
+        const event = JSON.parse(body) as A2AStreamEvent;
+        
+        logA2A(`Received webhook for task ${taskId}:`, { event });
+
+        // Apply to task manager
+        a2aTaskManager.applyStreamEvent(taskId, event);
+
+        // Notify handlers
+        const headers: Record<string, string | string[] | undefined> = {};
+        for (const [key, value] of Object.entries(req.headers)) {
+          headers[key] = value;
+        }
+
+        for (const handler of this.handlers) {
+          try {
+            handler({ taskId, event, headers });
+          } catch (error) {
+            logA2A('Handler error:', error);
+          }
+        }
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true }));
+
+        // Clean up token after terminal events
+        if ('statusUpdate' in event) {
+          const state = event.statusUpdate.status.state;
+          if (['completed', 'failed', 'canceled', 'rejected'].includes(state)) {
+            this.expectedTokens.delete(taskId);
+          }
+        }
+      } catch (error) {
+        logA2A('Error processing webhook:', error);
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Invalid JSON' }));
+      }
+    });
+
+    req.on('error', (error) => {
+      logA2A('Request error:', error);
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Internal server error' }));
+    });
+  }
+
+  /**
+   * Check if the server is running.
+   */
+  isListening(): boolean {
+    return this.isRunning;
+  }
+
+  /**
+   * Get the current port.
+   */
+  getPort(): number {
+    return this.port;
+  }
+
+  /**
+   * Get the full base URL.
+   */
+  getBaseUrl(): string {
+    return `http://${this.host}:${this.port}`;
+  }
+
+  /**
+   * Clear all expected tokens.
+   */
+  clearTokens(): void {
+    this.expectedTokens.clear();
+  }
+
+  /**
+   * Serialize state for debugging.
+   */
+  toJSON(): object {
+    return {
+      isRunning: this.isRunning,
+      port: this.port,
+      host: this.host,
+      pathPrefix: this.pathPrefix,
+      handlerCount: this.handlers.size,
+      tokenCount: this.expectedTokens.size,
+    };
+  }
+}
+
+/** Singleton instance of the A2A webhook server */
+export const a2aWebhookServer = new A2AWebhookServer();

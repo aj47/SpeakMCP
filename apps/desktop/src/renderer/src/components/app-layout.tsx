@@ -8,6 +8,7 @@ import { ActiveAgentsSidebar } from "@renderer/components/active-agents-sidebar"
 import { SidebarProfileSelector } from "@renderer/components/sidebar-profile-selector"
 import { useSidebar, SIDEBAR_DIMENSIONS } from "@renderer/hooks/use-sidebar"
 import { PanelLeftClose, PanelLeft } from "lucide-react"
+import { useConfigQuery } from "@renderer/lib/query-client"
 
 type NavLinkItem = {
   text: string
@@ -20,6 +21,21 @@ export const Component = () => {
   const location = useLocation()
   const [settingsExpanded, setSettingsExpanded] = useState(true)
   const { isCollapsed, width, isResizing, toggleCollapse, handleResizeStart } = useSidebar()
+  const configQuery = useConfigQuery()
+
+  // Redirect to onboarding if not completed
+  // Skip for existing users who have already configured models (pre-onboarding installs)
+  useEffect(() => {
+    if (configQuery.data) {
+      const hasExistingConfig = configQuery.data.modelConfigurations &&
+        configQuery.data.modelConfigurations.length > 0
+
+      // Only redirect to onboarding for truly new users
+      if (!configQuery.data.onboardingCompleted && !hasExistingConfig) {
+        navigate("/onboarding")
+      }
+    }
+  }, [configQuery.data, navigate])
 
   const settingsNavLinks: NavLinkItem[] = [
     {
@@ -46,6 +62,11 @@ export const Component = () => {
       text: "Remote Server",
       href: "/settings/remote-server",
       icon: "i-mingcute-server-line",
+    },
+    {
+      text: "ACP Agents",
+      href: "/settings/acp-agents",
+      icon: "i-mingcute-robot-line",
     },
   ]
 

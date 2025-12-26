@@ -66,6 +66,9 @@ export default function SettingsScreen({ navigation }: any) {
   const [modelSearchQuery, setModelSearchQuery] = useState('');
   const [useCustomModel, setUseCustomModel] = useState(false);
 
+  // Preset picker state
+  const [showPresetPicker, setShowPresetPicker] = useState(false);
+
   const styles = useMemo(() => createStyles(theme), [theme]);
 
   // Create settings API client when we have valid credentials
@@ -238,6 +241,34 @@ export default function SettingsScreen({ navigation }: any) {
       console.error('[Settings] Failed to change provider:', error);
       setRemoteError(error.message || 'Failed to change provider');
     }
+  };
+
+  // Handle preset change (OpenAI compatible providers)
+  const handlePresetChange = async (presetId: string) => {
+    if (!settingsClient || !remoteSettings || remoteSettings.currentModelPresetId === presetId) return;
+
+    setShowPresetPicker(false);
+    try {
+      await settingsClient.updateSettings({ currentModelPresetId: presetId });
+      setRemoteSettings(prev => prev ? { ...prev, currentModelPresetId: presetId } : null);
+      // Reset models and fetch new ones for the new preset
+      setAvailableModels([]);
+      setUseCustomModel(false);
+      // Fetch models for the new preset
+      if (remoteSettings.mcpToolsProviderId === 'openai') {
+        fetchModels('openai');
+      }
+    } catch (error: any) {
+      console.error('[Settings] Failed to change preset:', error);
+      setRemoteError(error.message || 'Failed to change preset');
+    }
+  };
+
+  // Get current preset display name
+  const getCurrentPresetName = () => {
+    if (!remoteSettings?.availablePresets || !remoteSettings.currentModelPresetId) return 'OpenAI';
+    const preset = remoteSettings.availablePresets.find(p => p.id === remoteSettings.currentModelPresetId);
+    return preset?.name || 'OpenAI';
   };
 
   // Handle model name change
@@ -640,6 +671,27 @@ export default function SettingsScreen({ navigation }: any) {
                   ))}
                 </View>
 
+                {/* OpenAI Compatible Preset Selector - only show when OpenAI provider is selected */}
+                {remoteSettings.mcpToolsProviderId === 'openai' && remoteSettings.availablePresets && remoteSettings.availablePresets.length > 0 && (
+                  <>
+                    <Text style={styles.label}>OpenAI Compatible Endpoint</Text>
+                    <TouchableOpacity
+                      style={styles.modelSelector}
+                      onPress={() => setShowPresetPicker(true)}
+                    >
+                      <View style={styles.modelSelectorContent}>
+                        <Text style={styles.modelSelectorText}>
+                          {getCurrentPresetName()}
+                        </Text>
+                        <Text style={styles.modelSelectorChevron}>▼</Text>
+                      </View>
+                    </TouchableOpacity>
+                    <Text style={styles.helperText}>
+                      Select API endpoint (OpenAI, OpenRouter, Together AI, etc.)
+                    </Text>
+                  </>
+                )}
+
                 <View style={styles.modelLabelRow}>
                   <Text style={styles.label}>Model Name</Text>
                   <View style={styles.modelActions}>
@@ -873,6 +925,60 @@ export default function SettingsScreen({ navigation }: any) {
                 {modelSearchQuery
                   ? `${filteredModels.length} of ${availableModels.length} models`
                   : `${availableModels.length} model${availableModels.length !== 1 ? 's' : ''} available`}
+              </Text>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Preset Picker Modal */}
+      <Modal
+        visible={showPresetPicker}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowPresetPicker(false)}
+      >
+        <View style={styles.modelPickerOverlay}>
+          <View style={styles.modelPickerContainer}>
+            <View style={styles.modelPickerHeader}>
+              <Text style={styles.modelPickerTitle}>Select Endpoint</Text>
+              <TouchableOpacity onPress={() => setShowPresetPicker(false)}>
+                <Text style={styles.modelPickerClose}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modelList}>
+              {remoteSettings?.availablePresets?.map((preset) => {
+                const isSelected = remoteSettings.currentModelPresetId === preset.id;
+                return (
+                  <TouchableOpacity
+                    key={preset.id}
+                    style={[
+                      styles.modelItem,
+                      isSelected && styles.modelItemActive,
+                    ]}
+                    onPress={() => handlePresetChange(preset.id)}
+                  >
+                    <View style={styles.modelItemContent}>
+                      <Text style={[
+                        styles.modelItemName,
+                        isSelected && styles.modelItemNameActive,
+                      ]}>
+                        {preset.name}
+                      </Text>
+                      <Text style={styles.modelItemId}>{preset.baseUrl}</Text>
+                    </View>
+                    {isSelected && (
+                      <Text style={styles.modelItemCheck}>✓</Text>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
+            <View style={styles.modelPickerFooter}>
+              <Text style={styles.modelPickerFooterText}>
+                {remoteSettings?.availablePresets?.length || 0} endpoint{(remoteSettings?.availablePresets?.length || 0) !== 1 ? 's' : ''} available
               </Text>
             </View>
           </View>

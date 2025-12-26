@@ -670,12 +670,24 @@ export async function startRemoteServer() {
   fastify.get("/v1/settings", async (_req, reply) => {
     try {
       const cfg = configStore.get()
+      const { getBuiltInModelPresets, DEFAULT_MODEL_PRESET_ID } = await import("../shared/index")
+      const builtInPresets = getBuiltInModelPresets()
+      const customPresets = cfg.modelPresets?.filter(p => !p.isBuiltIn) || []
+
       return reply.send({
         // Model settings
         mcpToolsProviderId: cfg.mcpToolsProviderId || "openai",
         mcpToolsOpenaiModel: cfg.mcpToolsOpenaiModel,
         mcpToolsGroqModel: cfg.mcpToolsGroqModel,
         mcpToolsGeminiModel: cfg.mcpToolsGeminiModel,
+        // OpenAI compatible preset settings
+        currentModelPresetId: cfg.currentModelPresetId || DEFAULT_MODEL_PRESET_ID,
+        availablePresets: [...builtInPresets, ...customPresets].map(p => ({
+          id: p.id,
+          name: p.name,
+          baseUrl: p.baseUrl,
+          isBuiltIn: p.isBuiltIn ?? false,
+        })),
         // Feature toggles
         transcriptPostProcessingEnabled: cfg.transcriptPostProcessingEnabled ?? true,
         mcpRequireApprovalBeforeToolCall: cfg.mcpRequireApprovalBeforeToolCall ?? false,
@@ -719,6 +731,10 @@ export async function startRemoteServer() {
       }
       if (typeof body.mcpToolsGeminiModel === "string") {
         updates.mcpToolsGeminiModel = body.mcpToolsGeminiModel
+      }
+      // OpenAI compatible preset
+      if (typeof body.currentModelPresetId === "string") {
+        updates.currentModelPresetId = body.currentModelPresetId
       }
 
       if (Object.keys(updates).length === 0) {

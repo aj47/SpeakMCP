@@ -32,11 +32,20 @@ export interface MCPServersResponse {
   servers: MCPServer[];
 }
 
+export interface ModelPreset {
+  id: string;
+  name: string;
+  baseUrl: string;
+  isBuiltIn: boolean;
+}
+
 export interface Settings {
   mcpToolsProviderId: 'openai' | 'groq' | 'gemini';
   mcpToolsOpenaiModel?: string;
   mcpToolsGroqModel?: string;
   mcpToolsGeminiModel?: string;
+  currentModelPresetId?: string;
+  availablePresets?: ModelPreset[];
   transcriptPostProcessingEnabled: boolean;
   mcpRequireApprovalBeforeToolCall: boolean;
   mcpMaxIterations: number;
@@ -62,6 +71,7 @@ export interface SettingsUpdate {
   mcpToolsOpenaiModel?: string;
   mcpToolsGroqModel?: string;
   mcpToolsGeminiModel?: string;
+  currentModelPresetId?: string;
 }
 
 export class SettingsApiClient {

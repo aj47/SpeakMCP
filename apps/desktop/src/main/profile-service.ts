@@ -51,13 +51,20 @@ function isValidServerConfig(config: unknown): boolean {
 
   // Validate transport-specific required fields to prevent configs that break MCP initialization
   const transport = c.transport as string | undefined
-  // When transport is undefined, it defaults to "stdio", so we need to check for command
-  if ((transport === "stdio" || transport === undefined) && !c.command) {
-    // stdio transport (or default) requires command field
+  // When transport is undefined, the app can infer based on presence of command vs url:
+  // - If command is present, treat as stdio
+  // - If url is present, treat as streamableHttp (for portability with older/handwritten configs)
+  // - If neither is present, the config is invalid
+  if (transport === "stdio" && !c.command) {
+    // Explicit stdio transport requires command field
     return false
   }
   if ((transport === "websocket" || transport === "streamableHttp") && !c.url) {
     // websocket and streamableHttp transports require url field
+    return false
+  }
+  if (transport === undefined && !c.command && !c.url) {
+    // When transport is not specified, we need at least command or url to infer the transport type
     return false
   }
 
@@ -94,23 +101,47 @@ function isValidServerConfig(config: unknown): boolean {
   }
 
   // Validate oauth if provided (must be an object with expected structure)
+  // OAuthConfig uses serverMetadata.authorization_endpoint/token_endpoint, not authorizationUrl/tokenUrl
   if (c.oauth !== undefined) {
     if (typeof c.oauth !== "object" || c.oauth === null || Array.isArray(c.oauth)) {
       return false
     }
     const oauth = c.oauth as Record<string, unknown>
-    // clientId and authorizationUrl are required for OAuth configs
+    // Validate top-level string fields
     if (oauth.clientId !== undefined && typeof oauth.clientId !== "string") {
       return false
     }
-    if (oauth.authorizationUrl !== undefined && typeof oauth.authorizationUrl !== "string") {
-      return false
-    }
-    if (oauth.tokenUrl !== undefined && typeof oauth.tokenUrl !== "string") {
+    if (oauth.clientSecret !== undefined && typeof oauth.clientSecret !== "string") {
       return false
     }
     if (oauth.scope !== undefined && typeof oauth.scope !== "string") {
       return false
+    }
+    if (oauth.redirectUri !== undefined && typeof oauth.redirectUri !== "string") {
+      return false
+    }
+    // Validate boolean fields
+    if (oauth.useDiscovery !== undefined && typeof oauth.useDiscovery !== "boolean") {
+      return false
+    }
+    if (oauth.useDynamicRegistration !== undefined && typeof oauth.useDynamicRegistration !== "boolean") {
+      return false
+    }
+    // Validate serverMetadata if provided (contains authorization_endpoint/token_endpoint)
+    if (oauth.serverMetadata !== undefined) {
+      if (typeof oauth.serverMetadata !== "object" || oauth.serverMetadata === null || Array.isArray(oauth.serverMetadata)) {
+        return false
+      }
+      const serverMetadata = oauth.serverMetadata as Record<string, unknown>
+      if (serverMetadata.authorization_endpoint !== undefined && typeof serverMetadata.authorization_endpoint !== "string") {
+        return false
+      }
+      if (serverMetadata.token_endpoint !== undefined && typeof serverMetadata.token_endpoint !== "string") {
+        return false
+      }
+      if (serverMetadata.issuer !== undefined && typeof serverMetadata.issuer !== "string") {
+        return false
+      }
     }
   }
 
@@ -532,23 +563,29 @@ class ProfileService {
     // Include actual MCP server definitions for enabled servers
     const config = configStore.get()
     const mcpConfig = config.mcpConfig
-    if (mcpConfig && mcpConfig.mcpServers && profile.mcpServerConfig) {
+    if (mcpConfig && mcpConfig.mcpServers) {
       const enabledServers: Record<string, any> = {}
+      const allServerNames = Object.keys(mcpConfig.mcpServers)
 
       // Determine which servers are enabled based on the profile's configuration
-      const allServerNames = Object.keys(mcpConfig.mcpServers)
-      const disabledServers = profile.mcpServerConfig.disabledServers || []
-      const explicitlyEnabledServers = profile.mcpServerConfig.enabledServers || []
-      const allServersDisabledByDefault = profile.mcpServerConfig.allServersDisabledByDefault || false
-
-      // Logic to determine enabled servers:
-      // If allServersDisabledByDefault is true, only enabledServers are enabled
-      // Otherwise, all servers except those in disabledServers are enabled
+      // When mcpServerConfig is missing/falsy, it means "all servers enabled" (legacy behavior)
       let serversToExport: string[]
-      if (allServersDisabledByDefault) {
-        serversToExport = explicitlyEnabledServers
+      if (profile.mcpServerConfig) {
+        const disabledServers = profile.mcpServerConfig.disabledServers || []
+        const explicitlyEnabledServers = profile.mcpServerConfig.enabledServers || []
+        const allServersDisabledByDefault = profile.mcpServerConfig.allServersDisabledByDefault || false
+
+        // Logic to determine enabled servers:
+        // If allServersDisabledByDefault is true, only enabledServers are enabled
+        // Otherwise, all servers except those in disabledServers are enabled
+        if (allServersDisabledByDefault) {
+          serversToExport = explicitlyEnabledServers
+        } else {
+          serversToExport = allServerNames.filter(name => !disabledServers.includes(name))
+        }
       } else {
-        serversToExport = allServerNames.filter(name => !disabledServers.includes(name))
+        // Legacy profiles without mcpServerConfig have all servers enabled
+        serversToExport = allServerNames
       }
 
       // Export the definitions of enabled servers

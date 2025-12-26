@@ -156,7 +156,7 @@ export function SidebarProfileSelector() {
     },
     onSuccess: (success: boolean) => {
       if (success) {
-        toast.success("Profile exported (MCP credentials excluded for security)")
+        toast.success("Profile exported - review file before sharing (may contain sensitive data in args/URLs)")
       }
     },
     onError: (error: Error) => {
@@ -172,7 +172,7 @@ export function SidebarProfileSelector() {
     onSuccess: (profile: Profile | null) => {
       if (profile) {
         queryClient.invalidateQueries({ queryKey: ["profiles"] })
-        toast.success(`Profile "${profile.name}" imported (you may need to configure MCP credentials)`)
+        toast.success(`Profile "${profile.name}" imported - configure MCP server credentials as needed`)
       }
     },
     onError: (error: Error) => {

@@ -7,6 +7,8 @@ export default defineConfig({
     types: 'src/types.ts',
     'tts-preprocessing': 'src/tts-preprocessing.ts',
     'chat-utils': 'src/chat-utils.ts',
+    'time-utils': 'src/time-utils.ts',
+    'hooks/index': 'src/hooks/index.ts',
   },
   format: ['cjs', 'esm'],
   dts: true,

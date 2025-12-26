@@ -9,5 +9,6 @@ export * from './types';
 export * from './tts-preprocessing';
 export * from './chat-utils';
 export * from './time-utils';
-export * from './hooks';
+// Note: hooks are NOT exported from root entry to avoid React dependency for Node-only consumers
+// Use `import { ... } from '@speakmcp/shared/hooks'` for React hooks
 

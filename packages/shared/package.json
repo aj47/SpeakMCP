@@ -30,6 +30,16 @@
       "types": "./dist/chat-utils.d.ts",
       "import": "./dist/chat-utils.mjs",
       "require": "./dist/chat-utils.js"
+    },
+    "./time-utils": {
+      "types": "./dist/time-utils.d.ts",
+      "import": "./dist/time-utils.mjs",
+      "require": "./dist/time-utils.js"
+    },
+    "./hooks": {
+      "types": "./dist/hooks/index.d.ts",
+      "import": "./dist/hooks/index.mjs",
+      "require": "./dist/hooks/index.js"
     }
   },
   "scripts": {
@@ -48,6 +58,11 @@
   "private": true,
   "peerDependencies": {
     "react": "^18.0.0 || ^19.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
   }
 }
 

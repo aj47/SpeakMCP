@@ -48,6 +48,22 @@ interface ParsedRegistryServer {
   }>
 }
 
+// Helper function to generate a sanitized server name from a registry server
+function getSanitizedServerName(server: ParsedRegistryServer): string {
+  const nameParts = server.name.split("/")
+  const baseName = nameParts[nameParts.length - 1] || server.displayName
+  return baseName.replace(/[^a-zA-Z0-9-_]/g, "-")
+}
+
+// Check if a server is supported (SSE transport is not supported by this codebase)
+function isServerSupported(server: ParsedRegistryServer): boolean {
+  // For remote servers, we need streamableHttp (SSE is not supported)
+  if (server.installType === "remote" && server.transportType === "sse") {
+    return false
+  }
+  return true
+}
+
 interface MCPRegistryBrowserProps {
   onSelectServer: (name: string, config: MCPServerConfig) => void
   existingServerNames: string[]
@@ -101,10 +117,14 @@ export function MCPRegistryBrowser({ onSelectServer, existingServerNames }: MCPR
   }, [searchQuery, servers])
 
   const handleInstall = (server: ParsedRegistryServer) => {
-    // Generate a clean server name (last part of the name, e.g., "ai.exa/exa" -> "exa")
-    const nameParts = server.name.split("/")
-    let serverName = nameParts[nameParts.length - 1] || server.displayName
-    serverName = serverName.replace(/[^a-zA-Z0-9-_]/g, "-")
+    // Check if the server transport type is supported
+    if (!isServerSupported(server)) {
+      toast.error("SSE transport is not supported. Please check the server's repository for alternative installation methods.")
+      return
+    }
+
+    // Generate a clean server name using the shared helper function
+    let serverName = getSanitizedServerName(server)
 
     // Check if name already exists
     if (installedServers.has(serverName)) {
@@ -118,7 +138,7 @@ export function MCPRegistryBrowser({ onSelectServer, existingServerNames }: MCPR
     let config: MCPServerConfig
 
     if (server.installType === "remote" && server.remoteUrl) {
-      // Remote server (streamableHttp or sse)
+      // Remote server (streamableHttp only, SSE is filtered out above)
       config = {
         transport: server.transportType as MCPTransportType,
         url: server.remoteUrl,
@@ -257,11 +277,17 @@ export function MCPRegistryBrowser({ onSelectServer, existingServerNames }: MCPR
           </div>
         ) : (
           filteredServers.map((server) => {
-            const isInstalled = installedServers.has(server.displayName) ||
-              installedServers.has(server.name.split("/").pop() || "")
+            // Use the same sanitization logic as handleInstall for consistent "Installed" detection
+            const sanitizedName = getSanitizedServerName(server)
+            const isInstalled = installedServers.has(sanitizedName) ||
+              // Also check for names with numeric suffixes (e.g., "server-2", "server-3")
+              Array.from(installedServers).some(name => 
+                name === sanitizedName || name.match(new RegExp(`^${sanitizedName}-\\d+$`))
+              )
+            const isSupported = isServerSupported(server)
 
             return (
-              <Card key={server.name} className="p-3">
+              <Card key={server.name} className={`p-3 ${!isSupported ? 'opacity-60' : ''}`}>
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
@@ -277,7 +303,12 @@ export function MCPRegistryBrowser({ onSelectServer, existingServerNames }: MCPR
                           v{server.version}
                         </Badge>
                       )}
-                      {isInstalled && (
+                      {!isSupported && (
+                        <Badge variant="destructive" className="text-xs shrink-0">
+                          SSE Not Supported
+                        </Badge>
+                      )}
+                      {isInstalled && isSupported && (
                         <Badge variant="default" className="text-xs shrink-0 bg-green-600">
                           <Check className="h-3 w-3 mr-1" />
                           Installed
@@ -308,6 +339,8 @@ export function MCPRegistryBrowser({ onSelectServer, existingServerNames }: MCPR
                     <Button
                       size="sm"
                       onClick={() => handleInstall(server)}
+                      disabled={!isSupported}
+                      title={!isSupported ? "SSE transport is not supported" : undefined}
                     >
                       {isInstalled ? "Add Again" : "Add"}
                     </Button>

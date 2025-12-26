@@ -4,7 +4,7 @@
  */
 
 import { acpClientService } from './acp-client-service';
-import { acpRouterToolDefinitions } from './acp-router-tool-definitions';
+import { acpRouterToolDefinitions, resolveToolName } from './acp-router-tool-definitions';
 import type {
   ACPRunResult,
   ACPSubAgentState,
@@ -910,22 +910,26 @@ export async function executeACPRouterTool(
   args: Record<string, unknown>,
   parentSessionId?: string
 ): Promise<{ content: string; isError: boolean }> {
-  logACPRouter('Executing tool', { toolName, args, parentSessionId });
+  // Resolve A2A-aligned tool names to their canonical handlers
+  const resolvedToolName = resolveToolName(toolName);
+  logACPRouter('Executing tool', { toolName, resolvedToolName, args, parentSessionId });
 
   try {
     let result: object;
 
-    switch (toolName) {
+    switch (resolvedToolName) {
       case 'speakmcp-builtin:list_available_agents':
-        result = await handleListAvailableAgents(args as { capability?: string });
+        result = await handleListAvailableAgents(args as { capability?: string; skillName?: string });
         break;
 
       case 'speakmcp-builtin:delegate_to_agent':
+        // Handle both legacy 'runId' and A2A 'taskId' terminology
         result = await handleDelegateToAgent(
           args as {
             agentName: string;
             task: string;
             context?: string;
+            contextId?: string;
             waitForResult?: boolean;
           },
           parentSessionId
@@ -933,7 +937,11 @@ export async function executeACPRouterTool(
         break;
 
       case 'speakmcp-builtin:check_agent_status':
-        result = await handleCheckAgentStatus(args as { runId: string });
+        // Handle both legacy 'runId' and A2A 'taskId' parameter names
+        const statusArgs = args as { runId?: string; taskId?: string; historyLength?: number };
+        result = await handleCheckAgentStatus({ 
+          runId: statusArgs.runId || statusArgs.taskId || '' 
+        });
         break;
 
       case 'speakmcp-builtin:spawn_agent':
@@ -945,14 +953,18 @@ export async function executeACPRouterTool(
         break;
 
       case 'speakmcp-builtin:cancel_agent_run':
-        result = await handleCancelAgentRun(args as { runId: string });
+        // Handle both legacy 'runId' and A2A 'taskId' parameter names
+        const cancelArgs = args as { runId?: string; taskId?: string };
+        result = await handleCancelAgentRun({ 
+          runId: cancelArgs.runId || cancelArgs.taskId || '' 
+        });
         break;
 
       default:
         return {
           content: JSON.stringify({
             success: false,
-            error: `Unknown ACP router tool: ${toolName}`,
+            error: `Unknown ACP/A2A router tool: ${toolName}`,
           }),
           isError: true,
         };
@@ -977,10 +989,12 @@ export async function executeACPRouterTool(
 
 /**
  * Check if a tool name is an ACP router tool.
+ * Includes both legacy names and A2A-aligned aliases.
  * @param toolName - The tool name to check
- * @returns True if the tool is an ACP router tool
+ * @returns True if the tool is an ACP/A2A router tool
  */
 export function isACPRouterTool(toolName: string): boolean {
+  // Check both the original name and any aliases
   return acpRouterToolDefinitions.some((def) => def.name === toolName);
 }
 

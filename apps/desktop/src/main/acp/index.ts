@@ -2,7 +2,13 @@
  * ACP (Agent Communication Protocol) Module
  *
  * This module provides the infrastructure for delegating tasks to external AI agents
- * via the Agent Communication Protocol.
+ * via the Agent Communication Protocol (Zed ACP) for user-to-agent interaction.
+ * 
+ * For agent-to-agent communication, see the A2A module (../a2a).
+ * 
+ * Architecture:
+ * - ACP (this module): User-facing agent interaction (Zed ACP protocol)
+ * - A2A (../a2a): Backend agent-to-agent delegation (Google A2A protocol)
  */
 
 // Re-export all types
@@ -12,7 +18,12 @@ export * from './types'
 export { acpRegistry, ACPRegistry, configToDefinition } from './acp-registry'
 export { acpClientService, ACPClientService } from './acp-client-service'
 export { acpProcessManager, ACPProcessManager } from './acp-process-manager'
-export { acpRouterToolDefinitions } from './acp-router-tool-definitions'
+export { 
+  acpRouterToolDefinitions, 
+  toolNameAliases, 
+  resolveToolName, 
+  isRouterTool 
+} from './acp-router-tool-definitions'
 export {
   executeACPRouterTool,
   isACPRouterTool,

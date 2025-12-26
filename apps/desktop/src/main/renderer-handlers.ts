@@ -1,5 +1,5 @@
 import { UpdateDownloadedEvent } from "electron-updater"
-import { AgentProgressUpdate, ElicitationRequest, SamplingRequest, QueuedMessage } from "../shared/types"
+import { AgentProgressUpdate, ElicitationRequest, SamplingRequest, QueuedMessage, ContextLimitWarning } from "../shared/types"
 import type { AgentSession } from "./agent-session-tracker"
 
 export type RendererHandlers = {
@@ -38,4 +38,7 @@ export type RendererHandlers = {
 
   // MCP Sampling handlers (Protocol 2025-11-25)
   "mcp:sampling-request": (request: SamplingRequest) => void
+
+  // Context Limit Warning handlers
+  "context:limit-warning": (warning: ContextLimitWarning) => void
 }

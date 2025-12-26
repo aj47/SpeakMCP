@@ -14,6 +14,7 @@ import { state, agentSessionStateManager } from "./state"
 import { isDebugLLM, logLLM, isDebugTools, logTools } from "./debug"
 import { shrinkMessagesForLLM, estimateTokensFromMessages } from "./context-budget"
 import { emitAgentProgress } from "./emit-agent-progress"
+import { emitContextWarning } from "./emit-context-warning"
 import { agentSessionTracker } from "./agent-session-tracker"
 import { conversationService } from "./conversation-service"
 import { getCurrentPresetName } from "../shared"
@@ -1226,7 +1227,13 @@ Return ONLY JSON per schema.`,
     ]
 
     // Apply context budget management before the agent LLM call
-    const { messages: shrunkMessages, estTokensAfter, maxTokens: maxContextTokens } = await shrinkMessagesForLLM({
+    const {
+      messages: shrunkMessages,
+      estTokensAfter,
+      maxTokens: maxContextTokens,
+      shouldWarnContextLimit,
+      contextUsagePercent
+    } = await shrinkMessagesForLLM({
       messages: messages as any,
       availableTools: uniqueAvailableTools,
       relevantTools: toolCapabilities.relevantTools,
@@ -1245,6 +1252,19 @@ Return ONLY JSON per schema.`,
         })
       },
     })
+
+    // Emit context limit warning if needed (≥85% usage)
+    if (shouldWarnContextLimit && contextUsagePercent) {
+      await emitContextWarning({
+        sessionId: currentSessionId,
+        conversationId: conversationIdRef,
+        contextUsagePercent,
+        estTokens: estTokensAfter,
+        maxTokens: maxContextTokens,
+        timestamp: Date.now(),
+      })
+    }
+
     // Update context info for progress display
     contextInfoRef = { estTokens: estTokensAfter, maxTokens: maxContextTokens }
 

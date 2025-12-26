@@ -886,8 +886,9 @@ class ACPService extends EventEmitter {
       // AWS credentials
       '/.aws/credentials',
       '\\.aws\\credentials',
-      // Environment files with secrets
+      // Environment files with secrets (both Unix and Windows paths)
       '/.env',
+      '\\.env',
       // Keychain/credential stores
       '/keychain/',
       '/keychains/',

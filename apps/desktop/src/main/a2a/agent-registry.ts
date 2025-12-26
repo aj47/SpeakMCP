@@ -104,13 +104,16 @@ export class A2AAgentRegistry {
         signal: controller.signal,
       });
 
-      clearTimeout(timeoutId);
-
       if (!response.ok) {
+        clearTimeout(timeoutId);
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
+      // Consume body before clearing timeout to cover slow/stalled response bodies
       const card: A2AAgentCard = await response.json();
+
+      // Clear timeout only after body is fully consumed
+      clearTimeout(timeoutId);
 
       // Validate required fields
       if (!card.name || !card.url || !card.protocolVersion) {

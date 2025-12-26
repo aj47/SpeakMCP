@@ -136,13 +136,15 @@ export class A2AClient {
         signal: controller.signal,
       });
 
-      clearTimeout(timeoutId);
-
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
+      // Consume body before clearing timeout to cover slow/stalled response bodies
       const jsonResponse: JsonRpcResponse = await response.json();
+
+      // Clear timeout only after body is fully consumed
+      clearTimeout(timeoutId);
 
       if (jsonResponse.error) {
         const error: A2AError = {

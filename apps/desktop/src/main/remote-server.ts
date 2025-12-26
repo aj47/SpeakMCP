@@ -649,10 +649,7 @@ export async function startRemoteServer() {
         mcpToolsGeminiModel: cfg.mcpToolsGeminiModel,
         // Feature toggles
         transcriptPostProcessingEnabled: cfg.transcriptPostProcessingEnabled ?? true,
-        ttsEnabled: cfg.ttsEnabled ?? true,
         mcpRequireApprovalBeforeToolCall: cfg.mcpRequireApprovalBeforeToolCall ?? false,
-        // TTS settings
-        ttsProviderId: cfg.ttsProviderId,
         // Agent settings
         mcpMaxIterations: cfg.mcpMaxIterations ?? 10,
       })
@@ -673,15 +670,26 @@ export async function startRemoteServer() {
       if (typeof body.transcriptPostProcessingEnabled === "boolean") {
         updates.transcriptPostProcessingEnabled = body.transcriptPostProcessingEnabled
       }
-      if (typeof body.ttsEnabled === "boolean") {
-        updates.ttsEnabled = body.ttsEnabled
-      }
       if (typeof body.mcpRequireApprovalBeforeToolCall === "boolean") {
         updates.mcpRequireApprovalBeforeToolCall = body.mcpRequireApprovalBeforeToolCall
       }
       if (typeof body.mcpMaxIterations === "number" && body.mcpMaxIterations >= 1 && body.mcpMaxIterations <= 100) {
         // Coerce to integer to avoid surprising iteration counts with floats
         updates.mcpMaxIterations = Math.floor(body.mcpMaxIterations)
+      }
+      // Model settings
+      const validProviders = ["openai", "groq", "gemini"]
+      if (typeof body.mcpToolsProviderId === "string" && validProviders.includes(body.mcpToolsProviderId)) {
+        updates.mcpToolsProviderId = body.mcpToolsProviderId as "openai" | "groq" | "gemini"
+      }
+      if (typeof body.mcpToolsOpenaiModel === "string") {
+        updates.mcpToolsOpenaiModel = body.mcpToolsOpenaiModel
+      }
+      if (typeof body.mcpToolsGroqModel === "string") {
+        updates.mcpToolsGroqModel = body.mcpToolsGroqModel
+      }
+      if (typeof body.mcpToolsGeminiModel === "string") {
+        updates.mcpToolsGeminiModel = body.mcpToolsGeminiModel
       }
 
       if (Object.keys(updates).length === 0) {

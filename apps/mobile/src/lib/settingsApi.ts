@@ -38,17 +38,18 @@ export interface Settings {
   mcpToolsGroqModel?: string;
   mcpToolsGeminiModel?: string;
   transcriptPostProcessingEnabled: boolean;
-  ttsEnabled: boolean;
   mcpRequireApprovalBeforeToolCall: boolean;
-  ttsProviderId?: string;
   mcpMaxIterations: number;
 }
 
 export interface SettingsUpdate {
   transcriptPostProcessingEnabled?: boolean;
-  ttsEnabled?: boolean;
   mcpRequireApprovalBeforeToolCall?: boolean;
   mcpMaxIterations?: number;
+  mcpToolsProviderId?: 'openai' | 'groq' | 'gemini';
+  mcpToolsOpenaiModel?: string;
+  mcpToolsGroqModel?: string;
+  mcpToolsGeminiModel?: string;
 }
 
 export class SettingsApiClient {

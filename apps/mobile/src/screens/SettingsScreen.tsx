@@ -187,6 +187,59 @@ export default function SettingsScreen({ navigation }: any) {
     }
   };
 
+  // Handle provider change
+  const handleProviderChange = async (provider: 'openai' | 'groq' | 'gemini') => {
+    if (!settingsClient || !remoteSettings || remoteSettings.mcpToolsProviderId === provider) return;
+
+    try {
+      await settingsClient.updateSettings({ mcpToolsProviderId: provider });
+      setRemoteSettings(prev => prev ? { ...prev, mcpToolsProviderId: provider } : null);
+    } catch (error: any) {
+      console.error('[Settings] Failed to change provider:', error);
+      setRemoteError(error.message || 'Failed to change provider');
+    }
+  };
+
+  // Handle model name change
+  const handleModelNameChange = async (modelName: string) => {
+    if (!settingsClient || !remoteSettings) return;
+
+    const provider = remoteSettings.mcpToolsProviderId;
+    const modelKey = provider === 'openai' ? 'mcpToolsOpenaiModel'
+      : provider === 'groq' ? 'mcpToolsGroqModel'
+      : 'mcpToolsGeminiModel';
+
+    // Update local state immediately for responsive UI
+    setRemoteSettings(prev => prev ? { ...prev, [modelKey]: modelName } : null);
+
+    try {
+      await settingsClient.updateSettings({ [modelKey]: modelName });
+    } catch (error: any) {
+      console.error('[Settings] Failed to update model:', error);
+      setRemoteError(error.message || 'Failed to update model');
+      // Refresh to get actual state
+      fetchRemoteSettings();
+    }
+  };
+
+  // Get current model value based on provider
+  const getCurrentModelValue = () => {
+    if (!remoteSettings) return '';
+    const provider = remoteSettings.mcpToolsProviderId;
+    if (provider === 'openai') return remoteSettings.mcpToolsOpenaiModel || '';
+    if (provider === 'groq') return remoteSettings.mcpToolsGroqModel || '';
+    return remoteSettings.mcpToolsGeminiModel || '';
+  };
+
+  // Get placeholder based on provider
+  const getModelPlaceholder = () => {
+    if (!remoteSettings) return '';
+    const provider = remoteSettings.mcpToolsProviderId;
+    if (provider === 'openai') return 'gpt-4o-mini';
+    if (provider === 'groq') return 'llama-3.3-70b-versatile';
+    return 'gemini-1.5-flash-002';
+  };
+
   useEffect(() => {
     setDraft(config);
   }, [ready]);
@@ -497,6 +550,47 @@ export default function SettingsScreen({ navigation }: any) {
               </>
             )}
 
+            {/* Model Settings */}
+            {remoteSettings && (
+              <>
+                <Text style={styles.subsectionTitle}>Model</Text>
+
+                <Text style={styles.label}>Provider</Text>
+                <View style={styles.providerSelector}>
+                  {(['openai', 'groq', 'gemini'] as const).map((provider) => (
+                    <Pressable
+                      key={provider}
+                      style={[
+                        styles.providerOption,
+                        remoteSettings.mcpToolsProviderId === provider && styles.providerOptionActive,
+                      ]}
+                      onPress={() => handleProviderChange(provider)}
+                    >
+                      <Text style={[
+                        styles.providerOptionText,
+                        remoteSettings.mcpToolsProviderId === provider && styles.providerOptionTextActive,
+                      ]}>
+                        {provider.charAt(0).toUpperCase() + provider.slice(1)}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+
+                <Text style={styles.label}>Model Name</Text>
+                <TextInput
+                  style={styles.input}
+                  value={getCurrentModelValue()}
+                  onChangeText={handleModelNameChange}
+                  placeholder={getModelPlaceholder()}
+                  placeholderTextColor={theme.colors.mutedForeground}
+                  autoCapitalize='none'
+                />
+                <Text style={styles.helperText}>
+                  Model used for agent/MCP tool calling
+                </Text>
+              </>
+            )}
+
             {/* Feature Toggles */}
             {remoteSettings && (
               <>
@@ -513,19 +607,6 @@ export default function SettingsScreen({ navigation }: any) {
                 </View>
                 <Text style={styles.helperText}>
                   Clean up transcripts before sending to LLM
-                </Text>
-
-                <View style={styles.row}>
-                  <Text style={styles.label}>Text-to-Speech (Desktop)</Text>
-                  <Switch
-                    value={remoteSettings.ttsEnabled}
-                    onValueChange={(v) => handleRemoteSettingToggle('ttsEnabled', v)}
-                    trackColor={{ false: theme.colors.muted, true: theme.colors.primary }}
-                    thumbColor={remoteSettings.ttsEnabled ? theme.colors.primaryForeground : theme.colors.background}
-                  />
-                </View>
-                <Text style={styles.helperText}>
-                  Enable text-to-speech on the desktop app
                 </Text>
 
                 <View style={styles.row}>
@@ -651,6 +732,33 @@ function createStyles(theme: ReturnType<typeof useTheme>['theme']) {
       color: theme.colors.foreground,
     },
     themeOptionTextActive: {
+      color: theme.colors.primaryForeground,
+      fontWeight: '600',
+    },
+    providerSelector: {
+      flexDirection: 'row',
+      gap: spacing.sm,
+      marginTop: spacing.xs,
+    },
+    providerOption: {
+      flex: 1,
+      paddingVertical: spacing.sm,
+      paddingHorizontal: spacing.md,
+      borderRadius: radius.lg,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      backgroundColor: theme.colors.background,
+      alignItems: 'center',
+    },
+    providerOptionActive: {
+      borderColor: theme.colors.primary,
+      backgroundColor: theme.colors.primary,
+    },
+    providerOptionText: {
+      fontSize: 14,
+      color: theme.colors.foreground,
+    },
+    providerOptionTextActive: {
       color: theme.colors.primaryForeground,
       fontWeight: '600',
     },

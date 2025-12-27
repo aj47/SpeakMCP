@@ -1006,6 +1006,452 @@ interface SpeakMCPClient {
 
 ---
 
+## Getting Started: Implementation Guide
+
+### Step 1: Create the Server Package
+
+```bash
+mkdir -p packages/server/src/{routes,services,middleware,db}
+cd packages/server
+pnpm init
+```
+
+### Step 2: Install Dependencies
+
+```json
+{
+  "name": "@speakmcp/server",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "fastify": "^5.0.0",
+    "@fastify/cors": "^10.0.0",
+    "@fastify/websocket": "^11.0.0",
+    "better-sqlite3": "^11.0.0",
+    "zod": "^3.23.0",
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.0",
+    "@types/node": "^22.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.0.0"
+  }
+}
+```
+
+### Step 3: Project Structure
+
+```
+packages/server/
+├── src/
+│   ├── index.ts              # Server entry point
+│   ├── app.ts                # Fastify app setup
+│   ├── routes/
+│   │   ├── agent.ts          # POST /api/agent/process (SSE)
+│   │   ├── config.ts         # GET/PATCH /api/config
+│   │   ├── conversations.ts  # CRUD /api/conversations
+│   │   ├── mcp.ts            # MCP servers/tools
+│   │   ├── profiles.ts       # CRUD /api/profiles
+│   │   ├── speech.ts         # STT/TTS
+│   │   └── health.ts         # GET /api/health
+│   ├── services/
+│   │   ├── config-service.ts
+│   │   ├── profile-service.ts
+│   │   ├── conversation-service.ts
+│   │   ├── mcp-service.ts
+│   │   ├── llm-service.ts
+│   │   └── agent-service.ts
+│   ├── middleware/
+│   │   ├── auth.ts           # API key validation
+│   │   └── error-handler.ts
+│   └── db/
+│       ├── index.ts          # SQLite setup
+│       └── migrations/
+├── tsconfig.json
+└── package.json
+```
+
+### Step 4: Server Entry Point
+
+```typescript
+// src/index.ts
+import Fastify from 'fastify'
+import cors from '@fastify/cors'
+import { configRoutes } from './routes/config'
+import { profileRoutes } from './routes/profiles'
+import { conversationRoutes } from './routes/conversations'
+import { mcpRoutes } from './routes/mcp'
+import { agentRoutes } from './routes/agent'
+import { speechRoutes } from './routes/speech'
+import { authMiddleware } from './middleware/auth'
+import { initDatabase } from './db'
+
+const server = Fastify({ logger: true })
+
+async function start() {
+  // Initialize database
+  await initDatabase()
+
+  // Plugins
+  await server.register(cors, {
+    origin: process.env.CORS_ORIGIN || '*',
+    credentials: true
+  })
+
+  // Auth middleware (checks X-API-Key header)
+  server.addHook('onRequest', authMiddleware)
+
+  // Routes
+  await server.register(configRoutes, { prefix: '/api/config' })
+  await server.register(profileRoutes, { prefix: '/api/profiles' })
+  await server.register(conversationRoutes, { prefix: '/api/conversations' })
+  await server.register(mcpRoutes, { prefix: '/api/mcp' })
+  await server.register(agentRoutes, { prefix: '/api/agent' })
+  await server.register(speechRoutes, { prefix: '/api/speech' })
+
+  // Health check (no auth)
+  server.get('/api/health', async () => ({ status: 'ok', timestamp: Date.now() }))
+
+  const port = parseInt(process.env.PORT || '3847')
+  await server.listen({ port, host: '0.0.0.0' })
+  console.log(`Server running on http://localhost:${port}`)
+}
+
+start().catch(console.error)
+```
+
+### Step 5: Environment Variables
+
+```bash
+# .env
+PORT=3847
+API_KEY=your-secret-api-key
+DATABASE_PATH=./data/speakmcp.db
+
+# LLM Provider Keys (stored in DB, but can bootstrap from env)
+OPENAI_API_KEY=
+GROQ_API_KEY=
+GEMINI_API_KEY=
+```
+
+### Step 6: Example Route Implementation
+
+```typescript
+// src/routes/config.ts
+import { FastifyPluginAsync } from 'fastify'
+import { z } from 'zod'
+import { ConfigService } from '../services/config-service'
+
+const configService = new ConfigService()
+
+const ConfigPatchSchema = z.object({
+  openaiApiKey: z.string().optional(),
+  groqApiKey: z.string().optional(),
+  sttProviderId: z.enum(['openai', 'groq']).optional(),
+  ttsEnabled: z.boolean().optional(),
+  mcpMaxIterations: z.number().min(1).max(50).optional(),
+  // ... other fields
+})
+
+export const configRoutes: FastifyPluginAsync = async (fastify) => {
+  // GET /api/config
+  fastify.get('/', async (request, reply) => {
+    const config = await configService.get()
+    // Redact sensitive keys
+    return {
+      ...config,
+      openaiApiKey: config.openaiApiKey ? '***' : undefined,
+      groqApiKey: config.groqApiKey ? '***' : undefined,
+    }
+  })
+
+  // PATCH /api/config
+  fastify.patch('/', async (request, reply) => {
+    const body = ConfigPatchSchema.parse(request.body)
+    const updated = await configService.update(body)
+    return { success: true, config: updated }
+  })
+}
+```
+
+```typescript
+// src/services/config-service.ts
+import Database from 'better-sqlite3'
+import { getDb } from '../db'
+
+export class ConfigService {
+  async get(): Promise<Config> {
+    const db = getDb()
+    const row = db.prepare('SELECT value FROM config WHERE key = ?').get('main')
+    return row ? JSON.parse(row.value) : {}
+  }
+
+  async update(patch: Partial<Config>): Promise<Config> {
+    const current = await this.get()
+    const updated = { ...current, ...patch }
+    const db = getDb()
+    db.prepare('INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)')
+      .run('main', JSON.stringify(updated))
+    return updated
+  }
+}
+```
+
+### Step 7: SSE Streaming Agent Endpoint
+
+```typescript
+// src/routes/agent.ts
+import { FastifyPluginAsync } from 'fastify'
+import { AgentService } from '../services/agent-service'
+
+export const agentRoutes: FastifyPluginAsync = async (fastify) => {
+  // POST /api/agent/process - SSE streaming
+  fastify.post('/process', async (request, reply) => {
+    const { text, conversationId, profileId } = request.body as {
+      text: string
+      conversationId?: string
+      profileId?: string
+    }
+
+    // Set SSE headers
+    reply.raw.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+    })
+
+    const agentService = new AgentService()
+    
+    try {
+      for await (const update of agentService.process(text, { conversationId, profileId })) {
+        reply.raw.write(`data: ${JSON.stringify(update)}\n\n`)
+      }
+      reply.raw.write('data: [DONE]\n\n')
+    } catch (error) {
+      reply.raw.write(`data: ${JSON.stringify({ error: error.message })}\n\n`)
+    }
+    
+    reply.raw.end()
+  })
+
+  // POST /api/agent/stop
+  fastify.post('/stop', async (request, reply) => {
+    const { sessionId } = request.body as { sessionId?: string }
+    const agentService = new AgentService()
+    await agentService.stop(sessionId)
+    return { success: true }
+  })
+
+  // GET /api/agent/sessions
+  fastify.get('/sessions', async (request, reply) => {
+    const agentService = new AgentService()
+    return agentService.getActiveSessions()
+  })
+}
+```
+
+---
+
+## Request/Response Schemas
+
+### Agent Process
+
+**Request:**
+```typescript
+POST /api/agent/process
+Content-Type: application/json
+X-API-Key: your-api-key
+
+{
+  "text": "What files are in the current directory?",
+  "conversationId": "conv_123",  // optional, creates new if omitted
+  "profileId": "profile_456"     // optional, uses current if omitted
+}
+```
+
+**Response (SSE stream):**
+```
+data: {"sessionId":"sess_789","status":"started","iteration":1}
+
+data: {"sessionId":"sess_789","status":"tool_calling","tool":"list_files","args":{}}
+
+data: {"sessionId":"sess_789","status":"tool_result","tool":"list_files","result":"..."}
+
+data: {"sessionId":"sess_789","status":"streaming","content":"Here are the files..."}
+
+data: {"sessionId":"sess_789","status":"complete","finalContent":"...","conversationId":"conv_123"}
+
+data: [DONE]
+```
+
+### Conversations
+
+**List:**
+```typescript
+GET /api/conversations
+// Response:
+{
+  "conversations": [
+    { "id": "conv_123", "title": "File analysis", "updatedAt": 1703123456 },
+    ...
+  ]
+}
+```
+
+**Get:**
+```typescript
+GET /api/conversations/conv_123
+// Response:
+{
+  "id": "conv_123",
+  "title": "File analysis",
+  "messages": [
+    { "id": "msg_1", "role": "user", "content": "...", "timestamp": 1703123456 },
+    { "id": "msg_2", "role": "assistant", "content": "...", "timestamp": 1703123460 }
+  ],
+  "metadata": { "model": "gpt-4", "totalTokens": 1500 }
+}
+```
+
+### Profiles
+
+**Create:**
+```typescript
+POST /api/profiles
+{
+  "name": "Coding Assistant",
+  "guidelines": "Help with programming tasks",
+  "systemPrompt": "You are a helpful coding assistant...",
+  "mcpServerConfig": {
+    "enabledServers": ["filesystem", "git"],
+    "serverOverrides": {}
+  }
+}
+// Response:
+{ "id": "profile_456", "name": "Coding Assistant", ... }
+```
+
+### MCP Servers
+
+**List:**
+```typescript
+GET /api/mcp/servers
+// Response:
+{
+  "servers": [
+    { "name": "filesystem", "status": "connected", "tools": ["read_file", "write_file"] },
+    { "name": "git", "status": "disconnected", "error": "Command not found" }
+  ]
+}
+```
+
+**Toggle:**
+```typescript
+PATCH /api/mcp/servers/filesystem
+{ "enabled": false }
+// Response:
+{ "success": true, "server": { "name": "filesystem", "status": "disabled" } }
+```
+
+### Speech
+
+**Transcribe:**
+```typescript
+POST /api/speech/transcribe
+Content-Type: multipart/form-data
+X-API-Key: your-api-key
+
+audio: <file.webm>
+language: "en"
+provider: "openai"
+
+// Response:
+{ "text": "Hello, how can I help you today?" }
+```
+
+**Synthesize:**
+```typescript
+POST /api/speech/synthesize
+{
+  "text": "Hello world",
+  "provider": "openai",
+  "voice": "alloy"
+}
+// Response: audio/mpeg binary
+```
+
+---
+
+## Error Response Format
+
+All errors return a consistent format:
+
+```typescript
+{
+  "error": {
+    "code": "VALIDATION_ERROR" | "NOT_FOUND" | "UNAUTHORIZED" | "MCP_ERROR" | "LLM_ERROR",
+    "message": "Human-readable error message",
+    "details": { ... }  // optional additional context
+  }
+}
+```
+
+HTTP status codes:
+- 400: Validation error
+- 401: Missing/invalid API key
+- 404: Resource not found
+- 500: Internal server error
+- 503: Service unavailable (MCP server down)
+
+---
+
+## Testing the Server
+
+```bash
+# Start the server
+cd packages/server
+pnpm dev
+
+# Test health
+curl http://localhost:3847/api/health
+
+# Test with API key
+curl -H "X-API-Key: your-key" http://localhost:3847/api/config
+
+# Test agent (SSE)
+curl -N -H "X-API-Key: your-key" \
+  -H "Content-Type: application/json" \
+  -d '{"text": "Hello"}' \
+  http://localhost:3847/api/agent/process
+
+# Upload audio for transcription
+curl -H "X-API-Key: your-key" \
+  -F "audio=@recording.webm" \
+  -F "provider=openai" \
+  http://localhost:3847/api/speech/transcribe
+```
+
+---
+
+## Troubleshooting
+
+| Issue | Cause | Solution |
+|-------|-------|----------|
+| MCP servers not starting | Command not found | Ensure MCP server binaries are in PATH |
+| SSE not streaming | Proxy buffering | Disable buffering in nginx/cloudflare |
+| OAuth callback fails | Wrong redirect URI | Set correct callback URL in OAuth config |
+| Audio transcription fails | Wrong format | Ensure audio is webm/mp3/wav |
+| Rate limit errors | Too many requests | Implement exponential backoff |
+
+---
+
 ## Implementation Checklist
 
 ### Server Setup

@@ -6,6 +6,7 @@ import { LoadingSpinner } from "@renderer/components/ui/loading-spinner"
 import { SettingsDragBar } from "@renderer/components/settings-drag-bar"
 import { ActiveAgentsSidebar } from "@renderer/components/active-agents-sidebar"
 import { SidebarProfileSelector } from "@renderer/components/sidebar-profile-selector"
+import { ServerStatusIndicator } from "@renderer/components/server-status-indicator"
 import { useSidebar, SIDEBAR_DIMENSIONS } from "@renderer/hooks/use-sidebar"
 import { PanelLeftClose, PanelLeft } from "lucide-react"
 
@@ -41,6 +42,11 @@ export const Component = () => {
       text: "MCP Tools",
       href: "/settings/mcp-tools",
       icon: "i-mingcute-tool-line",
+    },
+    {
+      text: "Server Connection",
+      href: "/settings/server-connection",
+      icon: "i-mingcute-cloud-line",
     },
     {
       text: "Remote Server",
@@ -206,12 +212,13 @@ export const Component = () => {
           )}
         </div>
 
-        {/* Loading spinner at the bottom of the sidebar */}
+        {/* Loading spinner and server status at the bottom of the sidebar */}
         <div className="flex flex-1 flex-col justify-end">
           <div className={cn(
             "flex flex-col items-center pb-4",
             isCollapsed ? "space-y-1" : "space-y-2"
           )}>
+            <ServerStatusIndicator compact={isCollapsed} />
             <LoadingSpinner size={isCollapsed ? "sm" : "lg"} />
             {!isCollapsed && (
               <>

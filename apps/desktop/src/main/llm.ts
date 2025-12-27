@@ -1459,7 +1459,15 @@ Return ONLY JSON per schema.`,
       const contentText = (llmResponse.content || "")
       const hasToolMarkers = /<\|tool_calls_section_begin\|>|<\|tool_call_begin\|>|<function_calls>|<invoke\s|<tool_call>/i.test(contentText)
       if (hasToolMarkers) {
-        conversationHistory.push({ role: "assistant", content: contentText.replace(/<\|[^|]*\|>/g, "").trim() })
+        // Strip both <|...|> style tokens and XML tool-call markup to avoid reinforcing undesired formats
+        const cleanedContent = contentText
+          .replace(/<\|[^|]*\|>/g, "")
+          .replace(/<\/?function_calls>/gi, "")
+          .replace(/<invoke\s[^>]*>[\s\S]*?<\/invoke>/gi, "")
+          .replace(/<invoke\s[^>]*\/?>/gi, "")
+          .replace(/<\/?tool_call>/gi, "")
+          .trim()
+        conversationHistory.push({ role: "assistant", content: cleanedContent })
         conversationHistory.push({ role: "user", content: "Please return a valid JSON object with toolCalls per the schema so we can proceed." })
         continue
       }

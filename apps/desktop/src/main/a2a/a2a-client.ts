@@ -208,8 +208,15 @@ export class A2AClient {
       return { message: result.message };
     }
 
-    // Fallback: treat the result as a task
-    return { task: result as unknown as A2ATask };
+    // Validate that result has a task-like structure before returning
+    // This prevents returning an invalid task shape that could cause downstream errors
+    if (result && typeof result === 'object' && 'id' in result && 'status' in result) {
+      // Result looks like a task (has required id and status fields)
+      return { task: result as unknown as A2ATask };
+    }
+
+    // Invalid response from server - neither task nor message
+    throw new Error('Invalid A2A response: server returned neither task nor message');
   }
 
   /**

@@ -4,17 +4,65 @@
 
 This document provides a comprehensive audit of the SpeakMCP desktop application functionality and serves as a specification for refactoring to a central server architecture that can support multiple client interfaces (Electron, Mobile, Web, Tauri, etc.).
 
-## Current Architecture
+---
+
+## Table of Contents
+
+1. [Architecture Overview](#architecture-overview)
+2. [Core Services (Server-Side)](#core-services-server-side)
+3. [Platform-Specific Features (Client-Side)](#platform-specific-features-client-side)
+4. [API Endpoints](#api-endpoints)
+5. [Data Models](#data-models)
+6. [Real-Time Communication](#real-time-communication)
+7. [Built-in Tools](#built-in-tools)
+8. [Data Persistence](#data-persistence)
+9. [Migration Strategy](#migration-strategy)
+10. [Security Considerations](#security-considerations)
+11. [Implementation Checklist](#implementation-checklist)
+12. [Client SDK](#client-sdk)
+13. [Notes & Recommendations](#notes--recommendations)
+
+---
+
+## Architecture Overview
+
+### Current Architecture
+```
++------------------+     IPC (tipc)     +------------------+
+|   Renderer       | <----------------> |   Main Process   |
+|   (React UI)     |                    |   (Electron)     |
++------------------+                    +------------------+
+                                              |
+                                              v
+                                        +----------+
+                                        |  MCP     |
+                                        |  Servers |
+                                        +----------+
+```
 
 The desktop app is built with Electron and uses:
 - **Main Process**: Core business logic, IPC handlers, native integrations
 - **Renderer Process**: React-based UI
-- **TIPC (@egoist/tipc)**: Type-safe IPC communication
+- **TIPC (@egoist/tipc)**: Type-safe IPC communication (100+ procedures)
 - **MCP SDK**: Model Context Protocol for AI tool calling
+
+### Target Architecture
+```
++------------------+     HTTP/WS      +------------------+
+|   Any UI Client  | <--------------> |   Central Server |
+|   (Electron,     |                  |   (Node.js/Bun)  |
+|    Mobile,       |                  +------------------+
+|    Web,          |                        |
+|    Tauri, etc.)  |                        v
++------------------+                  +----------+
+                                      |  MCP     |
+                                      |  Servers |
+                                      +----------+
+```
 
 ---
 
-## Functionality Audit
+## Core Services (Server-Side)
 
 ### 1. Core AI/LLM Services
 
@@ -145,54 +193,77 @@ The desktop app is built with Electron and uses:
 
 ---
 
-### 5. Platform-Specific Features (Client-Side Only)
+## Platform-Specific Features (Client-Side Only)
 
-#### 5.1 Keyboard & Input (`keyboard.ts`)
-| Feature | Description | Notes |
-|---------|-------------|-------|
-| Global keyboard hooks | Native `speakmcp-rs` binary | Platform-specific |
-| Hold-to-record shortcuts | Configurable key combinations | Platform-specific |
-| Kill switch hotkeys | Ctrl+Shift+Escape, etc. | Platform-specific |
-| Text input shortcuts | Quick text entry | Platform-specific |
-| Focus capture/restore | Track focused app | Platform-specific |
-| `writeText()` | Type text into focused app | Platform-specific |
+These features are inherently client-side and should NOT be extracted to the server. Each client platform implements its own version.
 
-#### 5.2 Window Management (`window.ts`)
-| Feature | Description | Notes |
-|---------|-------------|-------|
-| Panel window | Floating overlay for recording/agent | Electron-specific |
-| Main window | Settings and history | Electron-specific |
-| Panel positioning | Custom position/size | Electron-specific |
-| Panel modes | Normal/agent/textInput | Electron-specific |
-| Always-on-top | Panel stays visible | Electron-specific |
+### 1. Keyboard Shortcuts (`keyboard.ts`)
 
-#### 5.3 System Tray (`tray.ts`)
-| Feature | Description | Notes |
-|---------|-------------|-------|
-| Tray icon | System tray presence | Platform-specific |
-| Context menu | Quick actions | Platform-specific |
-| Recording indicator | Visual feedback | Platform-specific |
+| Feature | Description | Migration Notes |
+|---------|-------------|-----------------|
+| Global keyboard hooks | Native `speakmcp-rs` Rust binary | Each platform needs native implementation |
+| Hold-to-record | Ctrl, Ctrl+Alt combinations | Platform keyboard APIs |
+| Toggle shortcuts | Fn, F1-F12 keys | Platform keyboard APIs |
+| Kill switch | Ctrl+Shift+Escape, etc. | Platform keyboard APIs |
+| Text input mode | Ctrl+T quick text entry | Platform keyboard APIs |
+| Settings hotkey | Quick settings access | Platform keyboard APIs |
 
-#### 5.4 Auto-Update (`updater.ts`)
-| Feature | Description | Notes |
-|---------|-------------|-------|
-| Check for updates | GitHub releases | Electron-specific |
-| Download updates | Background download | Electron-specific |
-| Quit and install | Apply updates | Electron-specific |
+**Native Paste (`writeText`)**: Uses Rust binary for native keyboard simulation to type text into focused app. Mobile/web can use clipboard API, native apps need platform-specific code.
 
-#### 5.5 Accessibility & Permissions
-| Feature | Description | Notes |
-|---------|-------------|-------|
-| Microphone access | Request/check permission | Platform-specific |
-| Accessibility access | For keyboard hooks | macOS-specific |
-| Clipboard access | Copy/paste operations | Platform-specific |
+### 2. Window Management (`window.ts`)
 
-#### 5.6 Audio Recording
-| Feature | Description | Notes |
-|---------|-------------|-------|
-| MediaRecorder API | Capture audio | Browser/Electron |
-| Waveform visualization | Audio feedback | Client UI |
-| Recording history | Local file storage | Could be server |
+| Feature | Description | Migration Notes |
+|---------|-------------|-----------------|
+| Panel window | Floating overlay for recording/agent | Each platform's window system |
+| Main window | Settings and history | Standard app window |
+| Panel positioning | Custom position/size persistence | Platform window APIs |
+| Panel modes | Normal/agent/textInput modes | State management |
+| Always-on-top | Panel stays visible over other apps | Platform window flags |
+| Tray icon | System tray presence | Platform system tray APIs |
+| Context menu | Quick actions from tray | Platform menu APIs |
+
+### 3. Audio Recording (`recorder.ts` in renderer)
+
+| Feature | Description | Migration Notes |
+|---------|-------------|-----------------|
+| Web Audio API | Capture audio from microphone | Web: MediaRecorder, Native: platform APIs |
+| Waveform visualization | Real-time audio feedback | Client-side rendering |
+| Recording history | Local audio file storage | Could move to server (object storage) |
+
+### 4. Audio Playback (`tts-manager.ts`, `audio-player.tsx`)
+
+| Feature | Description | Migration Notes |
+|---------|-------------|-----------------|
+| TTS playback | Play synthesized speech | Each platform's audio APIs |
+| Sound effects | begin-record, end-record sounds | Platform audio playback |
+| Queue management | Sequential audio playback | Client-side state |
+
+### 5. Focus Management
+
+| Feature | Description | Migration Notes |
+|---------|-------------|-----------------|
+| Track focused app | Remember app before recording | macOS/Windows APIs only |
+| Restore focus | Return to original app after paste | Platform-specific |
+| Auto-paste | Type transcribed text into target app | Native keyboard simulation |
+
+**Note**: Web clients cannot access focus information outside the browser.
+
+### 6. System Integration
+
+| Feature | Description | Migration Notes |
+|---------|-------------|-----------------|
+| Accessibility permissions | Required for keyboard hooks (macOS) | macOS-specific |
+| Microphone permissions | Request/check permission | Platform permission APIs |
+| Login item (auto-start) | Launch on system boot | Platform-specific |
+| Dock icon visibility | Show/hide dock icon (macOS) | macOS-specific |
+
+### 7. Auto-Update (`updater.ts`)
+
+| Feature | Description | Migration Notes |
+|---------|-------------|-----------------|
+| Check for updates | Query GitHub releases | Electron-updater, each platform different |
+| Download updates | Background download | Platform-specific |
+| Quit and install | Apply updates | Platform-specific |
 
 ---
 
@@ -467,25 +538,97 @@ For simpler clients, Server-Sent Events can be used:
 
 ---
 
+## Built-in Tools
+
+SpeakMCP provides its own built-in tools for settings management via MCP. These become native server endpoints:
+
+| Tool | Description | Server Endpoint |
+|------|-------------|-----------------|
+| `list_mcp_servers` | List MCP servers and status | `GET /api/mcp/servers` |
+| `toggle_mcp_server` | Enable/disable MCP server | `POST /api/mcp/servers/{name}/toggle` |
+| `list_profiles` | List profiles | `GET /api/profiles` |
+| `switch_profile` | Switch active profile | `POST /api/profiles/{id}/activate` |
+| `get_current_profile` | Get current profile | `GET /api/profiles/current` |
+| `list_running_agents` | List active agent sessions | `GET /api/agent/sessions` |
+| `kill_agent` | Kill specific agent | `POST /api/agent/stop/{sessionId}` |
+| `kill_all_agents` | Emergency stop all | `POST /api/agent/stop-all` |
+| `get_settings` | Get app settings | `GET /api/config` |
+| `toggle_post_processing` | Toggle post-processing | `PATCH /api/config` |
+| `toggle_tts` | Toggle TTS | `PATCH /api/config` |
+| `toggle_tool_approval` | Toggle tool approval | `PATCH /api/config` |
+
+---
+
+## Data Persistence
+
+### Current Storage Locations
+
+| Data | Location | Format | Migration Target |
+|------|----------|--------|------------------|
+| Config | `{appData}/config.json` | JSON | SQLite for atomic updates |
+| Profiles | `{appData}/profiles.json` | JSON | SQLite for relationships |
+| Conversations | `{appData}/conversations/*.json` | JSON files | SQLite for querying |
+| Recordings | `{appData}/recordings/*.webm` | Audio files | Object storage (S3-compatible) |
+| Recording History | `{appData}/recordings/history.json` | JSON | SQLite |
+| OAuth Tokens | `{appData}/oauth/*.json` | JSON | Encrypted secure storage |
+
+### Migration Considerations
+- Config could use SQLite for atomic updates
+- Conversations would benefit from SQLite for better querying
+- OAuth tokens need secure encrypted storage
+- Recordings could use object storage (S3-compatible) for scalability
+
+---
+
 ## Migration Strategy
 
-### Phase 1: Extract Core Services
-1. Create standalone Node.js/Bun server package
-2. Move conversation-service, profile-service, mcp-service
-3. Implement REST API layer
-4. Add WebSocket support for real-time updates
+### Priority Matrix
 
-### Phase 2: Database Migration
+#### Phase 1: Essential (MVP)
+| Feature | Priority | Effort | Notes |
+|---------|----------|--------|-------|
+| Configuration API | P0 | Low | Foundation for everything |
+| Profile Service | P0 | Medium | Controls MCP/model config |
+| MCP Service | P0 | High | Core functionality |
+| Agent Processing (SSE) | P0 | High | Main value prop |
+| Conversation Service | P0 | Medium | State management |
+| STT API | P0 | Medium | Voice input |
+
+#### Phase 2: Enhanced
+| Feature | Priority | Effort | Notes |
+|---------|----------|--------|-------|
+| TTS API | P1 | Medium | Voice output |
+| Session Tracking | P1 | Medium | Multi-session support |
+| Message Queue | P1 | Low | Async message handling |
+| Models Service | P1 | Low | Model selection |
+| OAuth Flow | P1 | Medium | MCP authentication |
+
+#### Phase 3: Polish
+| Feature | Priority | Effort | Notes |
+|---------|----------|--------|-------|
+| Diagnostics | P2 | Low | Debug/support |
+| MCP Registry | P2 | Low | Discovery |
+| Built-in Tools | P2 | Medium | Settings management |
+
+### Implementation Phases
+
+#### Phase 1: Extract Core Services
+1. Create standalone Node.js/Bun server package (`packages/server`)
+2. Move conversation-service, profile-service, mcp-service
+3. Implement REST API layer with Fastify
+4. Add WebSocket/SSE support for real-time updates
+
+#### Phase 2: Database Migration
 1. Replace JSON file storage with SQLite/PostgreSQL
 2. Implement proper data migrations
 3. Add user authentication layer
 
-### Phase 3: Client Adaptation
-1. Create shared API client package
+#### Phase 3: Client Adaptation
+1. Create shared API client package (`packages/client`)
 2. Update Electron app to use HTTP/WebSocket
 3. Keep platform-specific features in Electron
 
-### Phase 4: Multi-Client Support
+#### Phase 4: Multi-Client Support
 1. Build web client
 2. Build mobile client (React Native)
 3. Build Tauri client
@@ -508,22 +651,187 @@ For simpler clients, Server-Sent Events can be used:
 - Encrypt API keys at rest
 - Secure WebSocket connections (WSS)
 - Rate limiting on API endpoints
+- CORS configuration for web clients
+
+---
+
+## Implementation Checklist
+
+### Server Setup
+- [ ] Create new `packages/server` package
+- [ ] Set up Fastify with TypeScript
+- [ ] Move existing `remote-server.ts` as base
+- [ ] Add SQLite for persistence
+- [ ] Implement authentication middleware
+- [ ] Add request validation (Zod/TypeBox)
+- [ ] Add error handling middleware
+- [ ] Add rate limiting
+- [ ] Add CORS configuration
+
+### Core Services Migration
+- [ ] Extract `config-service.ts`
+- [ ] Extract `profile-service.ts` (already mostly standalone)
+- [ ] Extract `mcp-service.ts` (complex, careful refactoring)
+- [ ] Extract `conversation-service.ts`
+- [ ] Extract `llm-service.ts`
+- [ ] Extract `agent-service.ts` (agent loop logic)
+- [ ] Extract `message-queue-service.ts`
+
+### API Implementation
+- [ ] Implement all REST endpoints (~60 endpoints)
+- [ ] Add SSE streaming for agent progress
+- [ ] Add WebSocket support for bidirectional communication
+- [ ] Implement tool approval flow over WebSocket
+- [ ] Implement elicitation/sampling flow
+
+### Client SDK
+- [ ] Create `packages/client` package
+- [ ] Implement TypeScript SDK
+- [ ] Add retry logic with exponential backoff
+- [ ] Add streaming support (SSE/WebSocket)
+- [ ] Add offline queue support
+
+### Desktop Client Refactor
+- [ ] Create HTTP client wrapper
+- [ ] Replace IPC calls with HTTP/WebSocket
+- [ ] Keep UI-specific code in renderer
+- [ ] Maintain offline fallback (optional)
+
+### Mobile Client
+- [ ] Use client SDK
+- [ ] Implement audio recording (platform APIs)
+- [ ] Implement audio playback
+- [ ] Handle background processing
+- [ ] Push notifications for agent completion
+
+---
+
+## Client SDK
+
+### TypeScript SDK Interface
+
+```typescript
+interface SpeakMCPClient {
+  // Agent
+  processAgent(input: string | Blob, options?: AgentOptions): AsyncIterable<AgentProgress>
+  stopAgent(sessionId?: string): Promise<void>
+  stopAllAgents(): Promise<void>
+  getAgentSessions(): Promise<AgentSession[]>
+  respondToToolApproval(approvalId: string, approved: boolean): Promise<void>
+
+  // STT/TTS
+  transcribe(audio: Blob, options?: STTOptions): Promise<string>
+  speak(text: string, options?: TTSOptions): Promise<Blob>
+
+  // Config
+  getConfig(): Promise<Config>
+  updateConfig(patch: Partial<Config>): Promise<Config>
+
+  // Profiles
+  getProfiles(): Promise<Profile[]>
+  getProfile(id: string): Promise<Profile>
+  createProfile(data: CreateProfileInput): Promise<Profile>
+  updateProfile(id: string, data: UpdateProfileInput): Promise<Profile>
+  deleteProfile(id: string): Promise<void>
+  switchProfile(id: string): Promise<Profile>
+  getCurrentProfile(): Promise<Profile>
+
+  // MCP
+  getServers(): Promise<MCPServer[]>
+  toggleServer(name: string, enabled: boolean): Promise<void>
+  restartServer(name: string): Promise<void>
+  getTools(): Promise<MCPTool[]>
+  toggleTool(name: string, enabled: boolean): Promise<void>
+
+  // Conversations
+  getConversations(): Promise<ConversationSummary[]>
+  getConversation(id: string): Promise<Conversation>
+  createConversation(firstMessage: string): Promise<Conversation>
+  deleteConversation(id: string): Promise<void>
+  addMessage(conversationId: string, message: MessageInput): Promise<ConversationMessage>
+
+  // Message Queue
+  getQueue(conversationId: string): Promise<QueuedMessage[]>
+  enqueue(conversationId: string, text: string): Promise<QueuedMessage>
+  removeFromQueue(conversationId: string, messageId: string): Promise<void>
+  pauseQueue(conversationId: string): Promise<void>
+  resumeQueue(conversationId: string): Promise<void>
+
+  // Real-time subscriptions
+  onProgress(callback: (update: AgentProgress) => void): Unsubscribe
+  onSessionUpdate(callback: (session: AgentSession) => void): Unsubscribe
+  onElicitation(callback: (request: ElicitationRequest) => void): Unsubscribe
+  onSampling(callback: (request: SamplingRequest) => void): Unsubscribe
+}
+
+// Factory function
+function createSpeakMCPClient(options: {
+  baseUrl: string
+  apiKey?: string
+  onAuthError?: () => void
+}): SpeakMCPClient
+```
+
+---
+
+## Notes & Recommendations
+
+### What Already Works
+The `remote-server.ts` already provides a good foundation with:
+- OpenAI-compatible `/v1/chat/completions` endpoint
+- SSE streaming for agent progress
+- Profile and MCP server management
+- Settings API
+- Bearer token authentication
+
+**Recommendation**: Start by expanding `remote-server.ts` rather than rewriting from scratch.
+
+### Key Challenges
+
+1. **MCP Server Management**: MCP servers are child processes; need to handle lifecycle across network boundary. Consider:
+   - Running MCP servers on the server
+   - Proxy model where server manages connections
+
+2. **Audio Streaming**: Large audio files need chunked upload/download. Consider:
+   - Multipart upload for audio
+   - Streaming response for TTS
+
+3. **Session State**: Agent sessions need to be tracked server-side with proper cleanup on disconnect.
+
+4. **Real-time Updates**: SSE works for uni-directional updates, but WebSocket may be better for:
+   - Tool approval requests
+   - Elicitation requests
+   - Sampling approval
+   - Bidirectional message queue
+
+5. **Profile Snapshots**: Sessions freeze profile at start; need to maintain this isolation in server architecture.
+
+### Technology Recommendations
+
+- **Runtime**: Node.js or Bun for performance
+- **Framework**: Fastify (already in use, proven)
+- **Database**: SQLite for single-instance, PostgreSQL for multi-instance
+- **Real-time**: SSE for simple clients, WebSocket for full functionality
+- **Authentication**: API Key (current) + optional JWT/OAuth2 for user accounts
 
 ---
 
 ## Appendix: TIPC Procedure Mapping
 
-Complete mapping of all 100+ TIPC procedures to server API endpoints is available in the detailed audit above. Key categories:
+Complete mapping of all 100+ TIPC procedures to server API endpoints. Key categories:
 
-1. **App Lifecycle** (5 procedures): restart, update, quit
-2. **Window Management** (15 procedures): panel, main window, positioning
-3. **Agent Operations** (12 procedures): process, stop, sessions, approval
-4. **Conversations** (8 procedures): CRUD, messages
-5. **Message Queue** (10 procedures): queue management
-6. **Profiles** (15 procedures): CRUD, MCP/model config
-7. **MCP Servers** (12 procedures): lifecycle, tools, OAuth
-8. **Configuration** (8 procedures): get/save, validation
-9. **Speech** (3 procedures): STT, TTS
-10. **Diagnostics** (5 procedures): health, errors, reports
-11. **Platform-Specific** (10+ procedures): keyboard, accessibility, clipboard
+| Category | Count | Description |
+|----------|-------|-------------|
+| App Lifecycle | 5 | restart, update, quit |
+| Window Management | 15 | panel, main window, positioning |
+| Agent Operations | 12 | process, stop, sessions, approval |
+| Conversations | 8 | CRUD, messages |
+| Message Queue | 10 | queue management |
+| Profiles | 15 | CRUD, MCP/model config |
+| MCP Servers | 12 | lifecycle, tools, OAuth |
+| Configuration | 8 | get/save, validation |
+| Speech | 3 | STT, TTS |
+| Diagnostics | 5 | health, errors, reports |
+| Platform-Specific | 10+ | keyboard, accessibility, clipboard |
 
+**Note**: Platform-specific procedures (Window Management, some App Lifecycle) remain client-side. All others migrate to server API endpoints.

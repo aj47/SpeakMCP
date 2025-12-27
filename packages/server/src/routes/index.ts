@@ -9,4 +9,5 @@ export * from './speech.js'
 export * from './diagnostics.js'
 export * from './models.js'
 export * from './openai-compat.js'
+export * from './oauth.js'
 

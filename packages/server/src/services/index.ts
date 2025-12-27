@@ -7,4 +7,5 @@ export * from './agent-service.js'
 export * from './speech-service.js'
 export * from './diagnostics-service.js'
 export * from './models-service.js'
+export * from './oauth-service.js'
 

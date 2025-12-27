@@ -21,6 +21,7 @@ import { speechRoutes } from './routes/speech.js'
 import { diagnosticsRoutes } from './routes/diagnostics.js'
 import { modelsRoutes } from './routes/models.js'
 import { openaiCompatRoutes } from './routes/openai-compat.js'
+import { oauthRoutes } from './routes/oauth.js'
 
 async function main() {
   const server = Fastify({
@@ -70,6 +71,7 @@ async function main() {
   await server.register(speechRoutes, { prefix: '/api' })
   await server.register(diagnosticsRoutes, { prefix: '/api' })
   await server.register(modelsRoutes, { prefix: '/api' })
+  await server.register(oauthRoutes, { prefix: '/api' })
 
   // OpenAI-compatible API (no /api prefix for compatibility)
   await server.register(openaiCompatRoutes)

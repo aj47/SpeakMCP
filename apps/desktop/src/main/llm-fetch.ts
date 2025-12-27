@@ -386,6 +386,32 @@ function calculateBackoffDelay(attempt: number, baseDelay: number = 1000, maxDel
   return Math.max(0, cappedDelay + jitter)
 }
 
+
+/**
+ * Sleep for the specified delay while allowing the kill switch to interrupt.
+ * Checks state.shouldStopAgent immediately and roughly every 100ms during the wait.
+ * Throws an error if the emergency stop is triggered.
+ */
+async function interruptibleDelay(delay: number): Promise<void> {
+  // Immediate check (also covers delay === 0 case semantics)
+  if (state.shouldStopAgent) {
+    throw new Error("Aborted by emergency stop")
+  }
+
+  if (delay <= 0) {
+    return
+  }
+
+  const startTime = Date.now()
+  while (Date.now() - startTime < delay) {
+    if (state.shouldStopAgent) {
+      throw new Error("Aborted by emergency stop")
+    }
+    const remaining = delay - (Date.now() - startTime)
+    await new Promise(resolve => setTimeout(resolve, Math.min(100, Math.max(0, remaining))))
+  }
+}
+
 /**
  * Makes an API call with enhanced retry logic including exponential backoff for rate limits.
  * Rate limit errors (429) will retry indefinitely until successful.
@@ -495,12 +521,14 @@ async function apiCallWithRetry<T>(
           })
         }
 
-        // Wait before retrying unless we've been asked to stop
-        if (state.shouldStopAgent) {
+        // Wait before retrying with interruptible delay
+        // Wrap in try-catch to ensure clearRetryStatus is called on emergency stop
+        try {
+          await interruptibleDelay(delay)
+        } catch (abortError) {
           clearRetryStatus()
-          throw new Error("Aborted by emergency stop")
+          throw abortError
         }
-        await new Promise(resolve => setTimeout(resolve, delay))
         attempt++
         continue
       }
@@ -560,12 +588,14 @@ async function apiCallWithRetry<T>(
         })
       }
 
-      // Wait before retrying unless we've been asked to stop
-      if (state.shouldStopAgent) {
+      // Wait before retrying with interruptible delay
+      // Wrap in try-catch to ensure clearRetryStatus is called on emergency stop
+      try {
+        await interruptibleDelay(delay)
+      } catch (abortError) {
         clearRetryStatus()
-        throw new Error("Aborted by emergency stop")
+        throw abortError
       }
-      await new Promise(resolve => setTimeout(resolve, delay))
       attempt++
     }
   }

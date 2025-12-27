@@ -912,9 +912,9 @@ class ACPService extends EventEmitter {
     try {
       return await realpath(filePath)
     } catch {
-      // File doesn't exist or can't be resolved - return original path
-      // The actual read/write operation will fail with appropriate error
-      return filePath
+      // File doesn't exist or can't be resolved - return null
+      // Callers should fall back to filePath for the actual operation
+      return null
     }
   }
 
@@ -953,10 +953,13 @@ class ACPService extends EventEmitter {
       // Handle line offset and limit if specified
       if (line !== undefined || limit !== undefined) {
         const lines = content.split("\n")
-        const startLine = (line ?? 1) - 1 // Convert to 0-based
-        const endLine = limit !== undefined ? startLine + limit : lines.length
+        // Validate and normalize line/limit to prevent unexpected behavior
+        const effectiveLine = Math.max(1, line ?? 1) // Line is 1-based, minimum 1
+        const effectiveLimit = limit !== undefined ? Math.max(0, limit) : undefined
+        const startLine = effectiveLine - 1 // Convert to 0-based
+        const endLine = effectiveLimit !== undefined ? startLine + effectiveLimit : lines.length
         return {
-          content: lines.slice(Math.max(0, startLine), endLine).join("\n"),
+          content: lines.slice(startLine, endLine).join("\n"),
         }
       }
 

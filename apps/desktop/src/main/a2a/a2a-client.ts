@@ -152,7 +152,11 @@ export class A2AClient {
       clearTimeout(timeoutId);
 
       if (jsonResponse.error) {
-        const error: A2AError = {
+        // Throw proper Error object so downstream catch blocks can use instanceof Error
+        const errorMessage = jsonResponse.error.message || 'Unknown A2A error';
+        const error = new Error(errorMessage);
+        // Attach A2A error details for callers that need them
+        (error as Error & { a2aError: A2AError }).a2aError = {
           code: 'INTERNAL_ERROR',
           message: jsonResponse.error.message,
           data: jsonResponse.error.data,

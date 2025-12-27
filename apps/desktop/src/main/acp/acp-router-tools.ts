@@ -1101,7 +1101,8 @@ export function getDelegatedRunDetails(runId: string): ACPDelegationProgress | n
     task: state.task,
     status: state.status,
     startTime: state.startTime,
-    endTime: state.status === 'completed' || state.status === 'failed' ? Date.now() : undefined,
+    // Use stored endTime from result if available, otherwise undefined for in-progress runs
+    endTime: state.result?.endTime,
     progressMessage: state.progress,
     resultSummary: state.result?.output?.[0]?.parts?.[0]?.content?.substring(0, 200),
     error: state.result?.error,

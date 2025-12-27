@@ -196,7 +196,16 @@ export class A2AWebhookServer {
       return;
     }
 
-    const taskId = decodeURIComponent(pathMatch[1]);
+    // Safely decode the task ID, returning 400 for malformed percent-encoding
+    let taskId: string;
+    try {
+      taskId = decodeURIComponent(pathMatch[1]);
+    } catch {
+      logA2A(`Invalid task ID encoding: ${pathMatch[1]}`);
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Invalid task ID encoding' }));
+      return;
+    }
 
     // Verify authentication token if configured
     const authHeader = req.headers['authorization'];

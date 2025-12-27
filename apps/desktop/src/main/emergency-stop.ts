@@ -96,11 +96,21 @@ export async function emergencyStopAll(): Promise<{ before: number; after: numbe
   // Cancel all ACP runs
   acpClientService.cancelAllRuns()
 
-  // Stop all spawned ACP agents
-  await acpProcessManager.stopAllAgents()
+  // Stop all spawned ACP agents - isolated so failures don't prevent rest of cleanup
+  try {
+    await acpProcessManager.stopAllAgents()
+  } catch (error) {
+    // Log but don't fail - emergency stop should be best-effort
+    console.error('[EmergencyStop] Error stopping ACP agents:', error)
+  }
 
-  // Stop all ACP stdio agents
-  await acpService.shutdown()
+  // Stop all ACP stdio agents - isolated so failures don't prevent rest of cleanup
+  try {
+    await acpService.shutdown()
+  } catch (error) {
+    // Log but don't fail - emergency stop should be best-effort
+    console.error('[EmergencyStop] Error shutting down ACP service:', error)
+  }
 
   return { before, after }
 }

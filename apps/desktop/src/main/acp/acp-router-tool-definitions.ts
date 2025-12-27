@@ -75,8 +75,14 @@ export const acpRouterToolDefinitions = [
           type: 'string',
           description: 'The run ID returned from a previous delegate_to_agent call',
         },
+        taskId: {
+          type: 'string',
+          description: 'Alternative A2A-aligned name for runId (use either runId or taskId)',
+        },
       },
-      required: ['runId'],
+      // Neither runId nor taskId is strictly required in schema since caller can use either
+      // Runtime validation handles the case where neither is provided
+      required: [],
     },
   },
   {
@@ -118,8 +124,14 @@ export const acpRouterToolDefinitions = [
           type: 'string',
           description: 'The run ID returned from a previous delegate_to_agent call',
         },
+        taskId: {
+          type: 'string',
+          description: 'Alternative A2A-aligned name for runId (use either runId or taskId)',
+        },
       },
-      required: ['runId'],
+      // Neither runId nor taskId is strictly required in schema since caller can use either
+      // Runtime validation handles the case where neither is provided
+      required: [],
     },
   },
   // A2A-aligned tool names (aliases for the above)

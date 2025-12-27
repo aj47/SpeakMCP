@@ -1008,10 +1008,18 @@ export async function executeACPRouterTool(
       case 'speakmcp-builtin:check_agent_status':
         // Handle both legacy 'runId' and A2A 'taskId' parameter names
         const statusArgs = args as { runId?: string; taskId?: string; historyLength?: number };
-        result = await handleCheckAgentStatus({ 
-          runId: statusArgs.runId || statusArgs.taskId || '',
-          historyLength: statusArgs.historyLength,
-        });
+        const statusRunId = statusArgs.runId || statusArgs.taskId;
+        if (!statusRunId) {
+          result = {
+            success: false,
+            error: 'Missing required parameter: runId or taskId must be provided',
+          };
+        } else {
+          result = await handleCheckAgentStatus({ 
+            runId: statusRunId,
+            historyLength: statusArgs.historyLength,
+          });
+        }
         break;
 
       case 'speakmcp-builtin:spawn_agent':
@@ -1025,9 +1033,17 @@ export async function executeACPRouterTool(
       case 'speakmcp-builtin:cancel_agent_run':
         // Handle both legacy 'runId' and A2A 'taskId' parameter names
         const cancelArgs = args as { runId?: string; taskId?: string };
-        result = await handleCancelAgentRun({ 
-          runId: cancelArgs.runId || cancelArgs.taskId || '' 
-        });
+        const cancelRunId = cancelArgs.runId || cancelArgs.taskId;
+        if (!cancelRunId) {
+          result = {
+            success: false,
+            error: 'Missing required parameter: runId or taskId must be provided',
+          };
+        } else {
+          result = await handleCancelAgentRun({ 
+            runId: cancelRunId 
+          });
+        }
         break;
 
       default:

@@ -50,7 +50,7 @@ export function useServerHealth(options: UseServerHealthOptions) {
 
   // Initial check and polling
   useEffect(() => {
-    if (!client) return
+    if (!client) return undefined
 
     checkHealth()
 
@@ -58,6 +58,7 @@ export function useServerHealth(options: UseServerHealthOptions) {
       const interval = setInterval(checkHealth, pollInterval)
       return () => clearInterval(interval)
     }
+    return undefined
   }, [client, pollInterval, checkHealth])
 
   return {

@@ -1376,11 +1376,16 @@ Return ONLY JSON per schema.`,
     }
 
     // Validate response is not null/empty
-    // A response is valid if it has either content OR toolCalls (tool-only responses have empty content)
+    // A response is valid if it has either:
+    // 1. Non-empty content, OR
+    // 2. Valid toolCalls (tool-only responses have empty content), OR
+    // 3. Empty content with needsMoreWork=false (LLM intentionally completed with finish_reason='stop')
     const hasValidContent = llmResponse?.content && llmResponse.content.trim().length > 0
     const hasValidToolCalls = llmResponse?.toolCalls && Array.isArray(llmResponse.toolCalls) && llmResponse.toolCalls.length > 0
+    // Check for intentional empty completion (finish_reason='stop' in llm-fetch.ts returns this)
+    const isIntentionalEmptyCompletion = llmResponse?.needsMoreWork === false && llmResponse?.content === ""
 
-    if (!llmResponse || (!hasValidContent && !hasValidToolCalls)) {
+    if (!llmResponse || (!hasValidContent && !hasValidToolCalls && !isIntentionalEmptyCompletion)) {
       logLLM(`❌ LLM null/empty response on iteration ${iteration}`)
       logLLM("Response details:", {
         hasResponse: !!llmResponse,
@@ -1409,6 +1414,47 @@ Return ONLY JSON per schema.`,
       })
       addMessage("user", "Previous request had invalid response. Please retry or summarize progress.")
       continue
+    }
+
+    // Handle intentional empty completion from LLM (finish_reason='stop')
+    // This is unusual but valid - the model chose to complete without any content
+    if (isIntentionalEmptyCompletion) {
+      logLLM("⚠️ LLM intentionally completed with empty response (finish_reason=stop)")
+      diagnosticsService.logWarning("llm", "LLM completed with empty response in agent mode", {
+        iteration,
+        needsMoreWork: llmResponse.needsMoreWork,
+        message: "Model completed intentionally without content - treating as valid completion"
+      })
+      
+      // Mark thinking step as completed
+      thinkingStep.status = "completed"
+      thinkingStep.title = "Agent completed"
+      thinkingStep.description = "Model completed without additional content"
+      
+      // Add completion step
+      const completionStep = createProgressStep(
+        "completion",
+        "Task completed",
+        "The model completed without additional content",
+        "completed",
+      )
+      progressSteps.push(completionStep)
+      
+      // Emit final progress with empty content
+      emit({
+        currentIteration: iteration,
+        maxIterations,
+        steps: progressSteps.slice(-3),
+        isComplete: true,
+        finalContent: "",
+        conversationHistory: formatConversationForProgress(conversationHistory),
+      })
+      
+      return {
+        content: "",
+        conversationHistory,
+        totalIterations: iteration,
+      }
     }
 
     // Update thinking step with actual LLM content and mark as completed

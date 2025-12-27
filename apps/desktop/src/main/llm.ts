@@ -1457,7 +1457,7 @@ Return ONLY JSON per schema.`,
       // Agent claims completion but provided no toolCalls.
       // If the content still contains tool-call markers, treat as not complete and nudge for structured toolCalls.
       const contentText = (llmResponse.content || "")
-      const hasToolMarkers = /<\|tool_calls_section_begin\|>|<\|tool_call_begin\|>/i.test(contentText)
+      const hasToolMarkers = /<\|tool_calls_section_begin\|>|<\|tool_call_begin\|>|<function_calls>|<invoke\s|<tool_call>/i.test(contentText)
       if (hasToolMarkers) {
         conversationHistory.push({ role: "assistant", content: contentText.replace(/<\|[^|]*\|>/g, "").trim() })
         conversationHistory.push({ role: "user", content: "Please return a valid JSON object with toolCalls per the schema so we can proceed." })

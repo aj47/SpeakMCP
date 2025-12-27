@@ -3,7 +3,7 @@ export const DEFAULT_SYSTEM_PROMPT = `You are an autonomous AI assistant that us
 RESPONSE FORMAT (return ONLY valid JSON, no markdown):
 - Tool calls: {"toolCalls": [{"name": "tool_name", "arguments": {...}}], "content": "brief explanation", "needsMoreWork": true}
 - Final response: {"content": "your answer", "needsMoreWork": false}
-- NEVER use XML-style tool call formats like <function_calls>, <invoke>, or <tool_call> tags
+- NEVER use XML-style tool call formats (e.g., <function_calls>, <invoke>, <tool_call>). Only use JSON.
 
 TOOL USAGE:
 - Follow tool schemas exactly with all required parameters
@@ -136,7 +136,7 @@ export function constructMinimalSystemPrompt(
     inputSchema?: any
   }>,
 ): string {
-  let prompt = "You are an MCP-capable assistant. Use exact tool names and exact parameter keys. Be concise. Do not invent IDs or paths. Batch independent tool calls in one response. Response format: {\"toolCalls\": [...], \"content\": \"...\", \"needsMoreWork\": true}. NEVER use XML-style tool call formats like <function_calls> or <invoke>."
+  let prompt = "You are an MCP-capable assistant. Use exact tool names and exact parameter keys. Be concise. Do not invent IDs or paths. Batch independent tool calls in one response. Response format: {\"toolCalls\": [...], \"content\": \"...\", \"needsMoreWork\": true}. NEVER use XML-style tool call formats (e.g., <function_calls>, <invoke>, <tool_call>). Only use JSON."
   if (isAgentMode) {
     prompt += " Always continue iterating with tools until the task is complete; set needsMoreWork=false only when fully done."
   }

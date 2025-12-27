@@ -1457,15 +1457,19 @@ Return ONLY JSON per schema.`,
       // Agent claims completion but provided no toolCalls.
       // If the content still contains tool-call markers, treat as not complete and nudge for structured toolCalls.
       const contentText = (llmResponse.content || "")
-      const hasToolMarkers = /<\|tool_calls_section_begin\|>|<\|tool_call_begin\|>|<function_calls>|<invoke\s|<tool_call>/i.test(contentText)
+      // Detect XML tool-call patterns. Use structured pattern to reduce false positives:
+      // - Match opening tags that look like actual XML elements (not just mentions in text)
+      // - Require either attributes or closing tags to indicate real XML usage, not discussion
+      const xmlToolCallPattern = /<(function_calls|invoke|tool_call)(\s[^>]*)?>[\s\S]*?<\/\1>|<(function_calls|invoke|tool_call)(\s[^>]*)?\/>/i
+      const hasToolMarkers = /<\|tool_calls_section_begin\|>|<\|tool_call_begin\|>/i.test(contentText) || xmlToolCallPattern.test(contentText)
       if (hasToolMarkers) {
         // Strip both <|...|> style tokens and XML tool-call markup to avoid reinforcing undesired formats
         const cleanedContent = contentText
           .replace(/<\|[^|]*\|>/g, "")
-          .replace(/<\/?function_calls>/gi, "")
-          .replace(/<invoke\s[^>]*>[\s\S]*?<\/invoke>/gi, "")
-          .replace(/<invoke\s[^>]*\/?>/gi, "")
-          .replace(/<\/?tool_call>/gi, "")
+          .replace(/<\/?function_calls(\s[^>]*)?>/gi, "")
+          .replace(/<invoke(\s[^>]*)?>[\s\S]*?<\/invoke>/gi, "")
+          .replace(/<invoke(\s[^>]*)?\/?>/gi, "")
+          .replace(/<\/?tool_call(\s[^>]*)?>/gi, "")
           .trim()
         conversationHistory.push({ role: "assistant", content: cleanedContent })
         conversationHistory.push({ role: "user", content: "Please return a valid JSON object with toolCalls per the schema so we can proceed." })

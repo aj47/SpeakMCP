@@ -353,7 +353,9 @@ function isRetryableError(error: unknown): boolean {
            error.status === 504    // Gateway Timeout
   }
 
-  // Retry on network errors and empty response errors
+  // Retry on network errors only
+  // Note: Empty LLM responses are NOT retried here - they're handled at the agent loop level
+  // in llm.ts with context-aware retrying (adds user message to help LLM recover)
   if (error instanceof Error) {
     const message = error.message.toLowerCase()
 
@@ -361,8 +363,6 @@ function isRetryableError(error: unknown): boolean {
            message.includes('timeout') ||
            message.includes('connection') ||
            message.includes('fetch') ||
-           message.includes('empty response') || // Empty LLM responses
-           message.includes('empty content') ||  // Empty content in structured responses
            message.includes('cloudflare') ||     // Cloudflare errors (524, etc.)
            message.includes('gateway')           // Gateway errors
   }
@@ -1234,6 +1234,7 @@ async function makeLLMCallAttempt(
     }
 
     if (!content) {
+      const finishReason = response?.choices?.[0]?.finish_reason
       const emptyResponseDetails = {
         hasResponse: !!response,
         hasChoices: !!response?.choices,
@@ -1243,10 +1244,28 @@ async function makeLLMCallAttempt(
         messageContent: response?.choices?.[0]?.message?.content,
         messageContentType: typeof response?.choices?.[0]?.message?.content,
         hasReasoning: !!(response?.choices?.[0]?.message as any)?.reasoning,
+        finishReason,
       }
 
       if (isDebugLLM()) {
         logLLM("Empty response details:", emptyResponseDetails)
+      }
+
+      // If finish_reason is 'stop', the model intentionally completed with no content
+      // This is unusual but valid - don't treat it as an error requiring retry
+      if (finishReason === 'stop') {
+        diagnosticsService.logWarning(
+          "llm-fetch",
+          "LLM completed with empty response (finish_reason=stop) - this is unusual but valid",
+          emptyResponseDetails
+        )
+
+        if (isDebugLLM()) {
+          logLLM("⚠️ Returning empty response (LLM completed with finish_reason=stop)")
+        }
+
+        // Return empty content - let the caller decide how to handle it
+        return { content: "", needsMoreWork: false }
       }
 
       diagnosticsService.logError(
@@ -1255,9 +1274,9 @@ async function makeLLMCallAttempt(
         emptyResponseDetails
       )
 
-      // Empty responses should be treated as errors requiring retry, not completion
-      // This prevents workflows from terminating prematurely when LLM fails to respond
-      throw new Error("LLM returned empty response - this indicates a model or API issue that should be retried")
+      // Empty responses without finish_reason='stop' propagate to llm.ts for context-aware handling
+      // The agent loop handles this with a user message to help the LLM recover
+      throw new Error("LLM returned empty response")
     }
   }
 
@@ -1325,7 +1344,10 @@ async function makeLLMCallAttempt(
 }
 
 /**
- * Main function to make LLM calls using fetch with automatic retry on empty responses
+ * Main function to make LLM calls using fetch with automatic retry on network errors.
+ * Note: Empty LLM responses are NOT retried here - they're handled at the agent loop level
+ * in llm.ts with context-aware retrying (adds user message to help LLM recover).
+ * Empty responses with finish_reason='stop' are returned as valid completions with empty content.
  */
 export async function makeLLMCallWithFetch(
   messages: Array<{ role: string; content: string }>,

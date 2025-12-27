@@ -1344,7 +1344,10 @@ async function makeLLMCallAttempt(
 }
 
 /**
- * Main function to make LLM calls using fetch with automatic retry on empty responses
+ * Main function to make LLM calls using fetch with automatic retry on network errors.
+ * Note: Empty LLM responses are NOT retried here - they're handled at the agent loop level
+ * in llm.ts with context-aware retrying (adds user message to help LLM recover).
+ * Empty responses with finish_reason='stop' are returned as valid completions with empty content.
  */
 export async function makeLLMCallWithFetch(
   messages: Array<{ role: string; content: string }>,

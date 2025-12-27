@@ -1,6 +1,8 @@
-# SpeakMCP Desktop App - Functionality Audit & Server Extraction Spec
+# SpeakMCP Server Architecture Specification
 
-This document provides a comprehensive audit of all functionality in the SpeakMCP desktop app, with the goal of identifying what needs to be extracted to a central server that can serve multiple UI clients (Electron, mobile, web, Tauri, etc.).
+## Overview
+
+This document provides a comprehensive audit of the SpeakMCP desktop application functionality and serves as a specification for refactoring to a central server architecture that can support multiple client interfaces (Electron, Mobile, Web, Tauri, etc.).
 
 ---
 
@@ -9,16 +11,27 @@ This document provides a comprehensive audit of all functionality in the SpeakMC
 1. [Architecture Overview](#architecture-overview)
 2. [Core Services (Server-Side Candidates)](#core-services-server-side-candidates)
 3. [UI/Platform-Specific Features](#uiplatform-specific-features)
-4. [API Surface Analysis](#api-surface-analysis)
-5. [Data Persistence](#data-persistence)
-6. [Migration Priority Matrix](#migration-priority-matrix)
-7. [Proposed Server Architecture](#proposed-server-architecture)
+4. [Complete API Endpoints](#complete-api-endpoints)
+5. [Data Models](#data-models)
+6. [Real-Time Communication](#real-time-communication)
+7. [Data Persistence](#data-persistence)
+8. [Security Considerations](#security-considerations)
+9. [Migration Priority Matrix](#migration-priority-matrix)
+10. [Proposed Server Architecture](#proposed-server-architecture)
+11. [Implementation Checklist](#implementation-checklist)
 
 ---
 
 ## Architecture Overview
 
 ### Current Architecture
+
+The desktop app is built with Electron and uses:
+- **Main Process**: Core business logic, IPC handlers, native integrations
+- **Renderer Process**: React-based UI
+- **TIPC (@egoist/tipc)**: Type-safe IPC communication
+- **MCP SDK**: Model Context Protocol for AI tool calling
+
 ```
 +------------------+     IPC (tipc)     +------------------+
 |   Renderer       | <----------------> |   Main Process   |
@@ -33,6 +46,7 @@ This document provides a comprehensive audit of all functionality in the SpeakMC
 ```
 
 ### Target Architecture
+
 ```
 +------------------+     HTTP/WS      +------------------+
 |   Any UI Client  | <--------------> |   Central Server |
@@ -71,6 +85,19 @@ This document provides a comprehensive audit of all functionality in the SpeakMC
 
 **Complexity**: HIGH - Core functionality, requires careful refactoring
 
+**Detailed Feature Breakdown**:
+| Feature | Description | Server-Side | Client-Side |
+|---------|-------------|-------------|-------------|
+| Server initialization | Connect to MCP servers (stdio/websocket/http) | ✅ | |
+| Tool discovery | List available tools from servers | ✅ | |
+| Tool execution | Execute MCP tool calls | ✅ | |
+| OAuth 2.1 support | Authentication for remote MCP servers | ✅ | |
+| Elicitation handling | Form/URL mode user input requests | ✅ | UI only |
+| Sampling requests | Server-initiated LLM completions | ✅ | Approval UI |
+| Server lifecycle | Start/stop/restart servers | ✅ | |
+| Resource tracking | Track active sessions/connections | ✅ | |
+| Response processing | Summarize large tool responses | ✅ | |
+
 ---
 
 ### 2. LLM Service (`llm.ts`, `llm-fetch.ts`)
@@ -86,6 +113,17 @@ This document provides a comprehensive audit of all functionality in the SpeakMC
 | `verifyCompletionWithFetch(messages, provider)` | Verify completion | `POST /api/llm/verify` |
 
 **Complexity**: HIGH - Agent mode requires streaming support
+
+**Detailed Feature Breakdown**:
+| Feature | Description | Server-Side | Client-Side |
+|---------|-------------|-------------|-------------|
+| `processTranscriptWithAgentMode()` | Multi-iteration LLM processing with tool calling | ✅ | |
+| `executeToolWithRetries()` | Tool execution with retry logic | ✅ | |
+| Context extraction from history | Extract relevant context for LLM | ✅ | |
+| Verification loop | Schema-based completion checking | ✅ | |
+| Streaming callbacks | Real-time response streaming | ✅ | WebSocket/SSE |
+| Kill switch integration | Emergency stop functionality | ✅ | Trigger only |
+| Context budget management | Token estimation and summarization | ✅ | |
 
 ---
 
@@ -354,7 +392,138 @@ These features are inherently client-side and should NOT be extracted:
 
 ---
 
-## API Surface Analysis
+## Complete API Endpoints
+
+Based on the TIPC router analysis, here are all procedures that need server API equivalents:
+
+### Authentication & App Lifecycle
+```
+POST   /api/auth/login              # User authentication (new)
+POST   /api/auth/logout             # User logout (new)
+GET    /api/health                  # Health check
+```
+
+### Agent/LLM Operations
+```
+POST   /api/agent/process           # Process text with agent mode (SSE stream)
+POST   /api/agent/process-audio     # Process audio recording (SSE stream)
+POST   /api/agent/stop              # Emergency stop all sessions
+POST   /api/agent/stop/:sessionId   # Stop specific session
+GET    /api/agent/sessions          # List active sessions
+GET    /api/agent/sessions/:id      # Get session details
+POST   /api/agent/sessions/:id/snooze    # Snooze session
+POST   /api/agent/sessions/:id/unsnooze  # Unsnooze session
+POST   /api/agent/tool-approval/:id # Respond to tool approval
+```
+
+### Conversations
+```
+GET    /api/conversations           # List conversations
+POST   /api/conversations           # Create conversation
+GET    /api/conversations/:id       # Load conversation
+PUT    /api/conversations/:id       # Save conversation
+DELETE /api/conversations/:id       # Delete conversation
+DELETE /api/conversations           # Delete all conversations
+POST   /api/conversations/:id/messages   # Add message
+```
+
+### Message Queue
+```
+GET    /api/conversations/:id/queue      # Get message queue
+POST   /api/conversations/:id/queue      # Add to queue
+DELETE /api/conversations/:id/queue/:msgId   # Remove from queue
+PATCH  /api/conversations/:id/queue/:msgId   # Update message text
+POST   /api/conversations/:id/queue/pause    # Pause queue
+POST   /api/conversations/:id/queue/resume   # Resume queue
+POST   /api/conversations/:id/queue/:msgId/retry  # Retry failed message
+```
+
+### Profiles
+```
+GET    /api/profiles                # List profiles
+POST   /api/profiles                # Create profile
+GET    /api/profiles/:id            # Get profile
+PATCH  /api/profiles/:id            # Update profile
+DELETE /api/profiles/:id            # Delete profile
+POST   /api/profiles/:id/activate   # Set current profile
+GET    /api/profiles/current        # Get current profile
+GET    /api/profiles/:id/export     # Export profile
+POST   /api/profiles/import         # Import profile
+PUT    /api/profiles/:id/mcp-config     # Update MCP config
+PUT    /api/profiles/:id/model-config   # Update model config
+```
+
+### MCP Servers
+```
+GET    /api/mcp/servers             # List MCP servers with status
+GET    /api/mcp/initialization-status   # Get initialization progress
+PATCH  /api/mcp/servers/:name       # Enable/disable server
+POST   /api/mcp/servers/:name/restart   # Restart server
+POST   /api/mcp/servers/:name/stop      # Stop server
+POST   /api/mcp/servers/:name/test      # Test connection
+GET    /api/mcp/servers/:name/logs      # Get server logs
+DELETE /api/mcp/servers/:name/logs      # Clear server logs
+```
+
+### MCP Tools
+```
+GET    /api/mcp/tools               # List all tools with status
+PATCH  /api/mcp/tools/:name         # Enable/disable tool
+POST   /api/mcp/tools/:name/execute # Execute tool (internal use)
+```
+
+### MCP OAuth
+```
+POST   /api/mcp/oauth/:serverName/initiate  # Start OAuth flow
+POST   /api/mcp/oauth/:serverName/complete  # Complete OAuth
+GET    /api/mcp/oauth/:serverName/status    # Get OAuth status
+POST   /api/mcp/oauth/:serverName/revoke    # Revoke tokens
+```
+
+### MCP Elicitation & Sampling
+```
+POST   /api/mcp/elicitation/:requestId/resolve  # Resolve elicitation
+POST   /api/mcp/sampling/:requestId/resolve     # Resolve sampling
+```
+
+### Configuration
+```
+GET    /api/config                  # Get configuration
+PATCH  /api/config                  # Update configuration
+POST   /api/config/validate-mcp     # Validate MCP config JSON
+```
+
+### Models
+```
+GET    /api/models/:providerId      # Fetch available models
+POST   /api/models/preset           # Fetch models for custom preset
+DELETE /api/models/cache            # Clear models cache
+```
+
+### Speech
+```
+POST   /api/speech/transcribe       # Transcribe audio (STT)
+POST   /api/speech/synthesize       # Generate speech (TTS)
+POST   /api/speech/preprocess       # Preprocess text for TTS
+```
+
+### MCP Registry
+```
+GET    /api/mcp/registry            # Fetch registry servers
+DELETE /api/mcp/registry/cache      # Clear registry cache
+```
+
+### Diagnostics
+```
+GET    /api/diagnostics/report      # Generate diagnostic report
+GET    /api/diagnostics/health      # Perform health check
+GET    /api/diagnostics/errors      # Get recent errors
+DELETE /api/diagnostics/errors      # Clear error log
+```
+
+---
+
+## TIPC Procedure Mapping Summary
 
 ### Current IPC Methods (tipc.ts)
 
@@ -447,6 +616,235 @@ Total methods: **~100+**
 
 ---
 
+## Data Models
+
+### Core Types (from `shared/types.ts`)
+
+```typescript
+// Configuration
+interface Config {
+  // API Keys & Endpoints
+  openaiApiKey?: string
+  openaiBaseUrl?: string
+  groqApiKey?: string
+  groqBaseUrl?: string
+  geminiApiKey?: string
+  geminiBaseUrl?: string
+  
+  // MCP Configuration
+  mcpConfig?: MCPConfig
+  mcpRuntimeDisabledServers?: string[]
+  mcpDisabledTools?: string[]
+  mcpMaxIterations?: number
+  mcpRequireApprovalBeforeToolCall?: boolean
+  mcpMessageQueueEnabled?: boolean
+  
+  // STT Settings
+  sttProviderId?: "openai" | "groq"
+  sttLanguage?: string
+  
+  // TTS Settings
+  ttsEnabled?: boolean
+  ttsProviderId?: "openai" | "groq" | "gemini"
+  
+  // Agent Settings
+  mcpToolsProviderId?: "openai" | "groq" | "gemini"
+  mcpToolsSystemPrompt?: string
+  mcpCustomSystemPrompt?: string
+  
+  // Model Presets
+  modelPresets?: ModelPreset[]
+  currentModelPresetId?: string
+  
+  // Remote Server
+  remoteServerEnabled?: boolean
+  remoteServerPort?: number
+  remoteServerApiKey?: string
+}
+
+// MCP Configuration
+interface MCPConfig {
+  mcpServers: Record<string, MCPServerConfig>
+}
+
+interface MCPServerConfig {
+  command?: string
+  args?: string[]
+  env?: Record<string, string>
+  url?: string
+  transport?: "stdio" | "websocket" | "streamableHttp"
+  timeout?: number
+  disabled?: boolean
+  oauth?: OAuthConfig
+}
+
+// Profiles
+interface Profile {
+  id: string
+  name: string
+  guidelines: string
+  systemPrompt?: string
+  mcpServerConfig?: ProfileMcpServerConfig
+  modelConfig?: ProfileModelConfig
+  createdAt: number
+  updatedAt: number
+  isDefault?: boolean
+}
+
+interface SessionProfileSnapshot {
+  profileId: string
+  profileName: string
+  guidelines?: string
+  systemPrompt?: string
+  mcpServerConfig?: ProfileMcpServerConfig
+  modelConfig?: ProfileModelConfig
+}
+
+// Conversations
+interface Conversation {
+  id: string
+  title: string
+  messages: ConversationMessage[]
+  createdAt: number
+  updatedAt: number
+  metadata?: {
+    totalTokens?: number
+    model?: string
+    provider?: string
+    agentMode?: boolean
+  }
+}
+
+interface ConversationMessage {
+  id: string
+  role: "user" | "assistant" | "tool"
+  content: string
+  timestamp: number
+  toolCalls?: Array<{ name: string; arguments: any }>
+  toolResults?: Array<{ success: boolean; content: string; error?: string }>
+}
+
+// Agent Progress
+interface AgentProgressUpdate {
+  sessionId: string
+  conversationId?: string
+  conversationTitle?: string
+  currentIteration: number
+  maxIterations: number
+  steps: AgentProgressStep[]
+  isComplete: boolean
+  isSnoozed?: boolean
+  finalContent?: string
+  conversationHistory?: Array<{
+    role: "user" | "assistant" | "tool"
+    content: string
+    toolCalls?: ToolCall[]
+    toolResults?: ToolResult[]
+    timestamp?: number
+  }>
+  pendingToolApproval?: {
+    approvalId: string
+    toolName: string
+    arguments: any
+  }
+  retryInfo?: {
+    isRetrying: boolean
+    attempt: number
+    maxAttempts?: number
+    delaySeconds: number
+    reason: string
+  }
+  streamingContent?: {
+    text: string
+    isStreaming: boolean
+  }
+  contextInfo?: {
+    estTokens: number
+    maxTokens: number
+  }
+  modelInfo?: {
+    provider: string
+    model: string
+  }
+  profileName?: string
+}
+
+// Message Queue
+interface QueuedMessage {
+  id: string
+  conversationId: string
+  text: string
+  status: "pending" | "processing" | "failed"
+  createdAt: number
+  errorMessage?: string
+  addedToHistory?: boolean
+}
+```
+
+---
+
+## Real-Time Communication
+
+### WebSocket Events
+
+The server should support WebSocket connections for real-time updates:
+
+```typescript
+// Client -> Server
+interface ClientMessage {
+  type: "subscribe" | "unsubscribe"
+  channel: "agent-progress" | "sessions" | "queue"
+  sessionId?: string
+  conversationId?: string
+}
+
+// Server -> Client
+interface ServerMessage {
+  type: "agent-progress" | "session-update" | "queue-update" | 
+        "elicitation-request" | "sampling-request"
+  data: AgentProgressUpdate | AgentSession | QueuedMessage[] | 
+        ElicitationRequest | SamplingRequest
+}
+```
+
+### SSE Endpoints (Alternative)
+
+For simpler clients, Server-Sent Events can be used:
+```
+GET /api/agent/progress/:sessionId/stream   # Stream progress updates
+GET /api/conversations/:id/queue/stream     # Stream queue updates
+```
+
+---
+
+## Security Considerations
+
+### Authentication
+- JWT-based authentication for API access
+- API key support for programmatic access (current implementation)
+- Session management with refresh tokens
+- Rate limiting per API key/user
+
+### Authorization
+- User-scoped data access
+- Profile-level permissions
+- MCP server access control per profile
+
+### Data Protection
+- Encrypt API keys at rest (provider keys: OpenAI, Groq, Gemini)
+- Secure WebSocket connections (WSS)
+- HTTPS required for production
+- CORS configuration for web clients
+- No sensitive data in logs
+
+### OAuth Security
+- PKCE flow for MCP server OAuth
+- Secure token storage
+- Token refresh handling
+- Revocation support
+
+---
+
 ## Migration Priority Matrix
 
 ### Phase 1: Essential (MVP)
@@ -474,6 +872,33 @@ Total methods: **~100+**
 | Diagnostics | P2 | Low | Debug/support |
 | MCP Registry | P2 | Low | Discovery |
 | Built-in Tools | P2 | Medium | Settings management |
+
+---
+
+## Migration Strategy
+
+### Phase 1: Extract Core Services
+1. Create standalone Node.js/Bun server package (`packages/server`)
+2. Move conversation-service, profile-service, mcp-service
+3. Implement REST API layer using Fastify
+4. Add WebSocket/SSE support for real-time updates
+
+### Phase 2: Database Migration
+1. Replace JSON file storage with SQLite/PostgreSQL
+2. Implement proper data migrations
+3. Add user authentication layer
+4. Secure API key storage
+
+### Phase 3: Client Adaptation
+1. Create shared API client package (`packages/client`)
+2. Update Electron app to use HTTP/WebSocket instead of IPC
+3. Keep platform-specific features in Electron (keyboard, window management)
+4. Optional: Maintain offline fallback
+
+### Phase 4: Multi-Client Support
+1. Build web client (React)
+2. Build mobile client (React Native - already started in `apps/mobile`)
+3. Build Tauri client (optional, for smaller desktop binary)
 
 ---
 

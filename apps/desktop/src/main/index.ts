@@ -194,9 +194,13 @@ app.whenReady().then(() => {
   app.on("before-quit", () => {
     makePanelWindowClosable()
     // Shutdown ACP agents gracefully
-    acpService.shutdown().catch(() => {})
+    acpService.shutdown().catch((error) => {
+      console.error('[App] Error shutting down ACP service:', error)
+    })
     // Shutdown A2A subsystem
-    shutdownA2A().catch(() => {})
+    shutdownA2A().catch((error) => {
+      console.error('[App] Error shutting down A2A subsystem:', error)
+    })
   })
 })
 

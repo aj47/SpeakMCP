@@ -328,6 +328,9 @@ export class A2AAgentRegistry {
   /**
    * Check if an agent is reachable.
    * 
+   * Uses GET instead of HEAD to avoid false negatives - some servers don't implement HEAD
+   * on /.well-known/agent-card.json and return 405, even though GET would succeed.
+   * 
    * @param url - URL of the agent to check
    * @param timeoutMs - Timeout in milliseconds
    * @returns Whether the agent is reachable
@@ -344,8 +347,10 @@ export class A2AAgentRegistry {
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
+      // Use GET instead of HEAD - some servers don't implement HEAD on agent-card.json
+      // and return 405, which would incorrectly mark the agent as unreachable.
       const response = await fetch(`${normalizedUrl}/.well-known/agent-card.json`, {
-        method: 'HEAD',
+        method: 'GET',
         signal: controller.signal,
       });
 

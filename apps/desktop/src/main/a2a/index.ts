@@ -85,6 +85,10 @@ export async function initializeA2A(config: {
   // Start webhook server if enabled
   if (config.enableWebhooks) {
     try {
+      // Pass the configured webhookPort if provided
+      if (config.webhookPort !== undefined) {
+        a2aWebhookServer.setPort(config.webhookPort);
+      }
       const port = await a2aWebhookServer.start();
       console.log(`[A2A] Webhook server started on port ${port}`);
     } catch (error) {

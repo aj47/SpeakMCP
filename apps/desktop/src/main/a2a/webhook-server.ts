@@ -60,6 +60,19 @@ export class A2AWebhookServer {
   }
 
   /**
+   * Set the port before starting the server.
+   * Must be called before start() to take effect.
+   * 
+   * @param port - The port to listen on (0 for auto-assign)
+   */
+  setPort(port: number): void {
+    if (this.isRunning) {
+      throw new Error('Cannot change port while server is running');
+    }
+    this.port = port;
+  }
+
+  /**
    * Start the webhook server.
    * 
    * @returns The actual port the server is listening on
@@ -245,8 +258,14 @@ export class A2AWebhookServer {
         res.end(JSON.stringify({ success: true }));
 
         // Clean up token after terminal events
+        // Handle both statusUpdate events and full task events with terminal states
         if ('statusUpdate' in event) {
           const state = event.statusUpdate.status.state;
+          if (['completed', 'failed', 'canceled', 'rejected'].includes(state)) {
+            this.expectedTokens.delete(taskId);
+          }
+        } else if ('task' in event && event.task?.status?.state) {
+          const state = event.task.status.state;
           if (['completed', 'failed', 'canceled', 'rejected'].includes(state)) {
             this.expectedTokens.delete(taskId);
           }
@@ -260,8 +279,11 @@ export class A2AWebhookServer {
 
     req.on('error', (error) => {
       logA2A('Request error:', error);
-      res.writeHead(500, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: 'Internal server error' }));
+      // Guard against writing after response is already ended (e.g., after 413 response)
+      if (!res.writableEnded) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Internal server error' }));
+      }
     });
   }
 

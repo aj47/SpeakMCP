@@ -18,6 +18,7 @@ const MEETINGS_FOLDER = path.join(app.getPath("appData"), process.env.APP_ID, "m
 // Audio buffer settings for transcription
 const TRANSCRIPTION_INTERVAL_MS = 30000 // Transcribe every 30 seconds
 const TRANSCRIPTION_TIMEOUT_MS = 60000 // 60 second timeout for transcription requests
+const MAX_BUFFER_SIZE_BYTES = 25 * 1024 * 1024 // 25MB max buffer size to prevent unbounded growth
 
 // Default audio settings (can be overridden by actual recorder settings)
 const DEFAULT_SAMPLE_RATE = 48000
@@ -191,6 +192,16 @@ class MeetingRecorderService {
     const stream = this.systemRecorder.getStream() as Readable
     stream.on("data", (chunk: Buffer) => {
       if (this.systemAudioBuffer) {
+        // Check buffer size limit to prevent unbounded growth
+        const currentSize = this.getBufferSize(this.systemAudioBuffer.data)
+        if (currentSize + chunk.length > MAX_BUFFER_SIZE_BYTES) {
+          logApp(`[MeetingRecorder] System audio buffer size limit reached (${Math.round(currentSize / 1024 / 1024)}MB), discarding oldest data`)
+          // Remove oldest chunks until we have room
+          while (this.systemAudioBuffer.data.length > 0 && 
+                 this.getBufferSize(this.systemAudioBuffer.data) + chunk.length > MAX_BUFFER_SIZE_BYTES) {
+            this.systemAudioBuffer.data.shift()
+          }
+        }
         this.systemAudioBuffer.data.push(chunk)
       }
     })
@@ -221,7 +232,22 @@ class MeetingRecorderService {
       }
     }
 
-    this.micAudioBuffer.data.push(Buffer.from(audioData))
+    // Check buffer size limit to prevent unbounded growth
+    const newData = Buffer.from(audioData)
+    const currentSize = this.getBufferSize(this.micAudioBuffer.data)
+    if (currentSize + newData.length > MAX_BUFFER_SIZE_BYTES) {
+      logApp(`[MeetingRecorder] Mic audio buffer size limit reached (${Math.round(currentSize / 1024 / 1024)}MB), discarding oldest data`)
+      // Remove oldest chunks until we have room
+      while (this.micAudioBuffer.data.length > 0 && 
+             this.getBufferSize(this.micAudioBuffer.data) + newData.length > MAX_BUFFER_SIZE_BYTES) {
+        this.micAudioBuffer.data.shift()
+      }
+    }
+    this.micAudioBuffer.data.push(newData)
+  }
+
+  private getBufferSize(chunks: Buffer[]): number {
+    return chunks.reduce((total, chunk) => total + chunk.length, 0)
   }
 
   private startTranscriptionLoop(): void {

@@ -410,7 +410,12 @@ function useMicrophoneCapture(
         }
 
         source.connect(processor)
-        processor.connect(audioContext.destination)
+        // Connect to a dummy destination to keep the processing callback running
+        // without routing audio to speakers (which would cause echo/feedback)
+        const silentDestination = audioContext.createGain()
+        silentDestination.gain.value = 0
+        silentDestination.connect(audioContext.destination)
+        processor.connect(silentDestination)
 
         // Store references for cleanup
         ;(streamRef.current as any)._audioContext = audioContext

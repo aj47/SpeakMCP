@@ -22,6 +22,7 @@ import {
 } from './internal-agent';
 import { a2aAgentRegistry, createA2AClient, a2aTaskManager } from '../a2a';
 import type { A2ATextPart, A2AMessage, A2ATask, A2AArtifact, A2APart } from '../a2a/types';
+import { isTerminalState as isA2ATerminalState } from '../a2a/types';
 
 /**
  * Log ACP router-related debug messages.
@@ -1227,6 +1228,11 @@ async function handleInternalAgentDelegation(
       parentSessionId,
     });
 
+    // Store the sub-session ID for cancellation support
+    if (result.subSessionId) {
+      subAgentState.subSessionId = result.subSessionId;
+    }
+
     // Convert conversation history to ACPSubAgentMessage format
     const conversation = result.conversationHistory.map(msg => ({
       role: msg.role,
@@ -1451,7 +1457,88 @@ async function handleA2ADelegation(
             isA2A: true,
           };
         } else {
-          // Task is still running or in input-required state
+          // Task is still running or in input-required state - poll for completion
+          // since waitForResult=true means the caller expects a final result
+          if (taskId) {
+            const pollIntervalMs = 1000;
+            const maxWaitMs = 300000; // 5 minutes max wait
+            const pollStartTime = Date.now();
+
+            while (Date.now() - pollStartTime < maxWaitMs) {
+              await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
+
+              try {
+                const updatedTask = await a2aClient.getTask(taskId, undefined, a2aClientOptions);
+                const updatedState = updatedTask.status?.state;
+
+                if (updatedState && isA2ATerminalState(updatedState)) {
+                  // Update conversation with any new history
+                  if (updatedTask.history) {
+                    for (const msg of updatedTask.history) {
+                      const textContent = extractTextFromParts(msg.parts);
+                      if (textContent && !conversation.some(c => c.content === textContent)) {
+                        conversation.push({
+                          role: msg.role === 'user' ? 'user' : 'assistant',
+                          content: textContent,
+                          timestamp: Date.now(),
+                        });
+                      }
+                    }
+                  }
+
+                  sessionConversations.set(runId, conversation);
+
+                  if (updatedState === 'completed') {
+                    subAgentState.status = 'completed';
+                    const finalOutput = updatedTask.artifacts
+                      ? extractTextFromArtifacts(updatedTask.artifacts)
+                      : outputText;
+                    cleanupDelegationMappings(runId, args.agentName);
+                    return {
+                      success: true,
+                      runId,
+                      agentName: args.agentName,
+                      status: 'completed',
+                      output: finalOutput || 'Task completed',
+                      duration: Date.now() - startTime,
+                      conversation,
+                      isA2A: true,
+                    };
+                  } else {
+                    // failed, canceled, or rejected
+                    subAgentState.status = updatedState === 'canceled' ? 'cancelled' : 'failed';
+                    cleanupDelegationMappings(runId, args.agentName);
+                    return {
+                      success: false,
+                      runId,
+                      agentName: args.agentName,
+                      status: subAgentState.status,
+                      error: `A2A task ${updatedState}`,
+                      duration: Date.now() - startTime,
+                      conversation,
+                      isA2A: true,
+                    };
+                  }
+                }
+              } catch (pollError) {
+                logACPRouter('Error polling A2A task:', pollError);
+                // Continue polling on transient errors
+              }
+            }
+
+            // Timeout - return current state
+            return {
+              success: true,
+              runId,
+              agentName: args.agentName,
+              status: 'running',
+              message: `A2A task did not complete within timeout. Current state: ${taskState}. Use check_agent_status to poll for updates.`,
+              taskId,
+              isA2A: true,
+            };
+          }
+
+          // No taskId available, can't poll - return current state
           subAgentState.status = 'running';
           return {
             success: true,
@@ -1595,11 +1682,16 @@ export async function handleCancelAgentRun(args: { runId: string }): Promise<obj
   try {
     // Handle internal agent cancellation
     if (state.isInternal) {
-      // Internal delegations use a delegation run ID format (e.g., 'acp_delegation_*'),
-      // but sub-sessions are tracked by their session ID. Try to find the sub-session
-      // that corresponds to this delegation's parent session context.
-      // For now, we attempt to cancel using the runId which may or may not match a sub-session.
-      const cancelled = cancelSubSession(args.runId);
+      // Use the stored subSessionId for cancellation (this is the actual internal sub-session ID,
+      // whereas state.runId is the delegation tracking ID 'acp_delegation_*')
+      const subSessionId = state.subSessionId;
+      if (!subSessionId) {
+        return {
+          success: false,
+          error: `Failed to cancel internal agent run "${args.runId}": sub-session ID not found (task may have completed before cancellation was attempted)`,
+        };
+      }
+      const cancelled = cancelSubSession(subSessionId);
       if (cancelled) {
         state.status = 'cancelled';
         return {

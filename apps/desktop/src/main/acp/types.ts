@@ -160,6 +160,8 @@ export interface ACPSubAgentState {
   isInternal?: boolean;
   /** Whether this is an A2A (Agent-to-Agent Protocol) remote agent */
   isA2A?: boolean;
+  /** The internal sub-session ID (for internal agents, used for cancellation) */
+  subSessionId?: string;
 }
 
 /**

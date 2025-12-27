@@ -18,6 +18,7 @@ import { mcpService, type MCPTool, type MCPToolResult } from "./mcp-service"
 import { agentSessionTracker } from "./agent-session-tracker"
 import { agentSessionStateManager, toolApprovalManager } from "./state"
 import { emergencyStopAll } from "./emergency-stop"
+import { executeACPRouterTool, isACPRouterTool } from "./acp/acp-router-tools"
 
 // Re-export from the dependency-free definitions module for backward compatibility
 // This breaks the circular dependency: profile-service -> builtin-tool-definitions (no cycle)
@@ -653,12 +654,23 @@ const toolHandlers: Record<string, ToolHandler> = {
  * Execute a built-in tool by name
  * @param toolName The full tool name (e.g., "speakmcp-settings:list_mcp_servers")
  * @param args The tool arguments
+ * @param sessionId Optional session ID for ACP router tools
  * @returns The tool result
  */
 export async function executeBuiltinTool(
   toolName: string,
-  args: Record<string, unknown>
+  args: Record<string, unknown>,
+  sessionId?: string
 ): Promise<MCPToolResult | null> {
+  // Check for ACP router tools first
+  if (isACPRouterTool(toolName)) {
+    const result = await executeACPRouterTool(toolName, args, sessionId)
+    return {
+      content: [{ type: "text", text: result.content }],
+      isError: result.isError
+    }
+  }
+
   // Check if this is a built-in tool
   if (!toolName.startsWith(`${BUILTIN_SERVER_NAME}:`)) {
     return null
@@ -698,7 +710,8 @@ export async function executeBuiltinTool(
 
 /**
  * Check if a tool name is a built-in tool
+ * This includes both speakmcp-settings tools and ACP router tools (speakmcp-builtin)
  */
 export function isBuiltinTool(toolName: string): boolean {
-  return toolName.startsWith(`${BUILTIN_SERVER_NAME}:`)
+  return toolName.startsWith(`${BUILTIN_SERVER_NAME}:`) || isACPRouterTool(toolName)
 }

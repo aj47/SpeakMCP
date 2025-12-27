@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "_comment": "Example ACP agent configurations for SpeakMCP. Copy relevant entries to your config. NOTE: 'type' should be 'stdio' for local processes or 'remote' for HTTP endpoints.",
+  "examples": [
+    {
+      "_comment": "Example stdio agent - spawns a local process",
+      "name": "research-agent",
+      "displayName": "Research Agent",
+      "description": "Specialized agent for web research, information gathering, and fact-checking",
+      "capabilities": ["research", "web-search", "fact-checking", "summarization"],
+      "connection": {
+        "type": "stdio",
+        "command": "python",
+        "args": ["-m", "agents.research_agent"],
+        "cwd": "/path/to/research-agent-project"
+      },
+      "autoSpawn": false,
+      "idleTimeoutMs": 300000,
+      "maxConcurrentRuns": 2,
+      "defaultTimeout": 60000
+    },
+    {
+      "name": "coding-agent",
+      "displayName": "Coding Agent",
+      "description": "Specialized agent for code generation, review, debugging, and refactoring",
+      "capabilities": ["coding", "debugging", "refactoring", "code-review"],
+      "connection": {
+        "type": "stdio",
+        "command": "node",
+        "args": ["./agents/coding-agent/index.js"],
+        "cwd": "~/projects/my-codebase"
+      },
+      "autoSpawn": false,
+      "idleTimeoutMs": 600000,
+      "maxConcurrentRuns": 1
+    },
+    {
+      "name": "writing-agent",
+      "displayName": "Writing Agent",
+      "description": "Specialized agent for content creation, editing, and document formatting",
+      "capabilities": ["writing", "editing", "formatting", "content-creation"],
+      "connection": {
+        "type": "stdio",
+        "command": "uv",
+        "args": ["run", "writing_agent.py"],
+        "cwd": "/Users/username/writing-tools"
+      },
+      "autoSpawn": false
+    },
+    {
+      "name": "remote-analysis-agent",
+      "displayName": "Remote Analysis Agent",
+      "description": "Remote ACP agent for data analysis (hosted externally)",
+      "capabilities": ["analysis", "data-processing", "visualization"],
+      "connection": {
+        "type": "remote",
+        "baseUrl": "https://acp.example.com"
+      },
+      "maxConcurrentRuns": 5,
+      "defaultTimeout": 120000
+    },
+    {
+      "name": "beeai-agent",
+      "displayName": "BeeAI Agent",
+      "description": "Agent running on local BeeAI platform",
+      "capabilities": ["general", "reasoning"],
+      "connection": {
+        "type": "remote",
+        "baseUrl": "http://localhost:8333"
+      }
+    }
+  ]
+}
+

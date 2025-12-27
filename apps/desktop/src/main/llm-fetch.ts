@@ -200,17 +200,63 @@ function shouldAttemptJsonObject(model: string): boolean {
 }
 
 /**
- * Extracts the first JSON object from a given string.
+ * Normalize XML-style tool call wrappers into our canonical JSON envelope.
+ * Handles patterns like: <function_calls>[{...}]</function_calls>
+ */
+function normalizeXmlToolCalls(str: string): string {
+  // Match <function_calls>...</function_calls> (possibly nested/duplicated tags)
+  const xmlPattern = /<function_calls\s*>[\s\S]*?<\/function_calls\s*>/gi
+  const match = str.match(xmlPattern)
+  if (!match) return str
+
+  // Extract JSON array from inside the XML tags
+  const innerContent = match[0]
+    .replace(/<\/?function_calls\s*>/gi, '')
+    .trim()
+
+  // Try to parse as array of tool calls
+  try {
+    const parsed = JSON.parse(innerContent)
+    if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].name) {
+      // Convert to canonical envelope format
+      const envelope = {
+        toolCalls: parsed,
+        content: str.replace(xmlPattern, '').trim() || 'Executing tools',
+        needsMoreWork: true
+      }
+      return JSON.stringify(envelope)
+    }
+  } catch {
+    // Not valid JSON inside, return original
+  }
+  return str
+}
+
+/**
+ * Check if a parsed object looks like our expected tool-call envelope.
+ */
+function isToolCallEnvelope(obj: any): boolean {
+  if (!obj || typeof obj !== 'object') return false
+  return 'toolCalls' in obj || 'needsMoreWork' in obj
+}
+
+/**
+ * Extracts the best JSON object from a given string.
+ * Prefers objects that match our tool-call envelope schema (has toolCalls or needsMoreWork).
  * @param str - The string to search for a JSON object.
  * @returns The parsed JSON object, or null if no valid JSON object is found.
  */
 function extractJsonObject(str: string): any | null {
-  // Try to find JSON by looking for balanced braces
+  // First, normalize any XML-style tool call wrappers
+  const normalized = normalizeXmlToolCalls(str)
+
+  // Collect all top-level JSON objects
+  const candidates: any[] = []
   let braceCount = 0
   let startIndex = -1
 
-  for (let i = 0; i < str.length; i++) {
-    const char = str[i]
+  for (let i = 0; i < normalized.length; i++) {
+    const char = normalized[i]
 
     if (char === "{") {
       if (braceCount === 0) {
@@ -221,19 +267,23 @@ function extractJsonObject(str: string): any | null {
       braceCount--
 
       if (braceCount === 0 && startIndex !== -1) {
-        // Found a complete JSON object
-        const jsonStr = str.substring(startIndex, i + 1)
+        const jsonStr = normalized.substring(startIndex, i + 1)
         try {
-          return JSON.parse(jsonStr)
-        } catch (e) {
-          // Continue looking for the next JSON object
-          startIndex = -1
+          const obj = JSON.parse(jsonStr)
+          candidates.push(obj)
+        } catch {
+          // Continue looking
         }
+        startIndex = -1
       }
     }
   }
 
-  return null
+  if (candidates.length === 0) return null
+
+  // Prefer envelope objects (with toolCalls or needsMoreWork)
+  const envelope = candidates.find(isToolCallEnvelope)
+  return envelope ?? candidates[0]
 }
 
 /**

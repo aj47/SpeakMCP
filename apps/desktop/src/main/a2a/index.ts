@@ -49,6 +49,12 @@ import { a2aAgentRegistry } from './agent-registry';
 import { a2aTaskManager } from './task-manager';
 import { a2aWebhookServer } from './webhook-server';
 
+/** Handle for the periodic cleanup interval */
+let cleanupInterval: ReturnType<typeof setInterval> | null = null;
+
+/** Cleanup interval in milliseconds (30 minutes) */
+const CLEANUP_INTERVAL_MS = 30 * 60 * 1000;
+
 /**
  * Initialize the A2A subsystem.
  * Call this during app startup.
@@ -96,7 +102,53 @@ export async function initializeA2A(config: {
     }
   }
 
+  // Start periodic cleanup to prevent memory leaks from old sessions
+  startPeriodicCleanup();
+
   console.log('[A2A] A2A subsystem initialized');
+}
+
+/**
+ * Start periodic cleanup of old sessions and delegations.
+ * This prevents memory leaks from accumulating stale state.
+ */
+function startPeriodicCleanup(): void {
+  if (cleanupInterval) {
+    return; // Already running
+  }
+
+  cleanupInterval = setInterval(() => {
+    try {
+      // Import cleanup functions dynamically to avoid circular dependencies
+      const { cleanupOldDelegatedRuns } = require('../acp/acp-router-tools');
+      const { cleanupOldSubSessions } = require('../acp/internal-agent');
+
+      // Clean up old delegated runs (1 hour threshold)
+      cleanupOldDelegatedRuns(60 * 60 * 1000);
+
+      // Clean up old sub-sessions (30 minute threshold)
+      cleanupOldSubSessions(30 * 60 * 1000);
+
+      // Clean up old A2A tasks
+      a2aTaskManager.cleanup();
+
+      console.log('[A2A] Periodic cleanup completed');
+    } catch (error) {
+      console.error('[A2A] Error during periodic cleanup:', error);
+    }
+  }, CLEANUP_INTERVAL_MS);
+
+  console.log('[A2A] Periodic cleanup started (every 30 minutes)');
+}
+
+/**
+ * Stop periodic cleanup.
+ */
+function stopPeriodicCleanup(): void {
+  if (cleanupInterval) {
+    clearInterval(cleanupInterval);
+    cleanupInterval = null;
+  }
 }
 
 /**
@@ -105,6 +157,9 @@ export async function initializeA2A(config: {
  */
 export async function shutdownA2A(): Promise<void> {
   console.log('[A2A] Shutting down A2A subsystem...');
+
+  // Stop periodic cleanup
+  stopPeriodicCleanup();
 
   // Stop webhook server
   if (a2aWebhookServer.isListening()) {

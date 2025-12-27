@@ -187,13 +187,21 @@ export class ACPProcessManager {
 
   /**
    * Stop all spawned agent processes.
+   * Uses Promise.allSettled to ensure all agents get a stop attempt even if some fail.
    */
   async stopAllAgents(): Promise<void> {
     logACP(`Stopping all ${this.processes.size} spawned agents...`);
     const stopPromises = Array.from(this.processes.keys()).map((agentName) =>
       this.stopAgent(agentName)
     );
-    await Promise.all(stopPromises);
+    const results = await Promise.allSettled(stopPromises);
+    
+    // Log any failures for debugging
+    const failures = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected');
+    if (failures.length > 0) {
+      logACP(`${failures.length} agent(s) failed to stop:`, failures.map(f => f.reason));
+    }
+    
     logACP('All agents stopped');
   }
 

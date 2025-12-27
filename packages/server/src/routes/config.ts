@@ -48,9 +48,16 @@ export const configRoutes: FastifyPluginAsync = async (server) => {
   })
 
   // DELETE /api/config/:key - Delete config key (reset to default)
-  server.delete<{ Params: { key: string } }>('/config/:key', async (request) => {
-    const key = request.params.key as keyof ReturnType<typeof configService.get>
-    configService.deleteKey(key)
+  server.delete<{ Params: { key: string } }>('/config/:key', async (request, reply) => {
+    const key = request.params.key
+    
+    // Validate the key exists in schema
+    const schema = AppConfigSchema.shape
+    if (!(key in schema)) {
+      return reply.status(400).send({ error: `Invalid config key '${key}'` })
+    }
+    
+    configService.deleteKey(key as keyof ReturnType<typeof configService.get>)
     return { success: true }
   })
 }

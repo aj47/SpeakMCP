@@ -2,6 +2,7 @@ import { FastifyInstance } from 'fastify'
 import { WebSocket } from 'ws'
 import { agentService, type AgentProgress } from './services/agent-service.js'
 import { mcpService } from './services/mcp-service.js'
+import { config } from './config.js'
 
 interface WebSocketClient {
   ws: WebSocket
@@ -10,8 +11,48 @@ interface WebSocketClient {
 
 const clients: Set<WebSocketClient> = new Set()
 
+/**
+ * Validate WebSocket authentication from query parameter or Authorization header
+ */
+function validateWebSocketAuth(request: { headers: { authorization?: string }, url: string }): boolean {
+  // Check Authorization header (supports "Bearer <token>" or just "<token>")
+  const authHeader = request.headers.authorization
+  if (authHeader) {
+    const token = authHeader.startsWith('Bearer ')
+      ? authHeader.slice(7)
+      : authHeader
+    if (token === config.apiKey) {
+      return true
+    }
+  }
+
+  // Check query parameter for token (e.g., /api/ws?token=<key>)
+  try {
+    const url = new URL(request.url, 'http://localhost')
+    const queryToken = url.searchParams.get('token')
+    if (queryToken && queryToken === config.apiKey) {
+      return true
+    }
+  } catch {
+    // Invalid URL, ignore
+  }
+
+  return false
+}
+
 export async function setupWebSocket(server: FastifyInstance): Promise<void> {
   server.get('/api/ws', { websocket: true }, (socket, request) => {
+    // Authenticate WebSocket connection
+    if (!validateWebSocketAuth(request)) {
+      socket.send(JSON.stringify({
+        type: 'error',
+        error: 'Unauthorized: Invalid or missing API key',
+        code: 'UNAUTHORIZED',
+      }))
+      socket.close(4001, 'Unauthorized')
+      return
+    }
+
     const client: WebSocketClient = {
       ws: socket,
       subscriptions: new Set(),

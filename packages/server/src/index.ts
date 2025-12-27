@@ -51,9 +51,9 @@ async function main() {
   await initDatabase()
   server.log.info('Database initialized')
 
-  // Auth middleware (skip for health check and WebSocket upgrade)
+  // Auth middleware (skip for health check; WebSocket auth is handled in websocket.ts)
   server.addHook('onRequest', async (request, reply) => {
-    // Skip auth for WebSocket upgrade requests
+    // Skip auth for WebSocket upgrade requests (authentication handled in WebSocket handler)
     if (request.headers.upgrade === 'websocket') {
       return
     }

@@ -302,50 +302,74 @@ export class A2AClient {
         throw new Error('Response body is not readable');
       }
 
+      // Helper to properly close the reader/cancel the stream
+      const closeReader = async () => {
+        try {
+          await reader.cancel();
+        } catch {
+          // Ignore errors during cleanup
+        }
+      };
+
       const decoder = new TextDecoder();
       let buffer = '';
 
-      while (true) {
-        const { done, value } = await reader.read();
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
 
-        if (done) {
-          logA2A('Stream ended');
-          break;
-        }
+          if (done) {
+            logA2A('Stream ended');
+            break;
+          }
 
-        // Reset timeout on each chunk received
-        resetTimeout();
+          // Reset timeout on each chunk received
+          resetTimeout();
 
-        buffer += decoder.decode(value, { stream: true });
+          buffer += decoder.decode(value, { stream: true });
 
-        // Parse SSE events
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
+          // Parse SSE events
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
 
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const data = line.slice(6).trim();
-            if (data === '[DONE]') {
-              return;
+          for (const line of lines) {
+            // SSE spec allows both 'data: ' (with space) and 'data:' (no space after colon)
+            let data: string | null = null;
+            if (line.startsWith('data: ')) {
+              data = line.slice(6).trim();
+            } else if (line.startsWith('data:')) {
+              data = line.slice(5).trim();
             }
 
-            try {
-              const event = JSON.parse(data) as A2AStreamEvent;
-              logA2A('Stream event received', { event });
-              yield event;
+            if (data !== null) {
+              if (data === '[DONE]') {
+                await closeReader();
+                return;
+              }
 
-              // Check for terminal state
-              if ('task' in event && isTerminalState(event.task.status.state)) {
-                return;
+              try {
+                const event = JSON.parse(data) as A2AStreamEvent;
+                logA2A('Stream event received', { event });
+                yield event;
+
+                // Check for terminal state
+                if ('task' in event && isTerminalState(event.task.status.state)) {
+                  await closeReader();
+                  return;
+                }
+                if ('statusUpdate' in event && isTerminalState(event.statusUpdate.status.state)) {
+                  await closeReader();
+                  return;
+                }
+              } catch (parseError) {
+                logA2A('Failed to parse stream event:', parseError);
               }
-              if ('statusUpdate' in event && isTerminalState(event.statusUpdate.status.state)) {
-                return;
-              }
-            } catch (parseError) {
-              logA2A('Failed to parse stream event:', parseError);
             }
           }
         }
+      } finally {
+        // Ensure reader is closed on any exit path from the loop
+        await closeReader();
       }
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
@@ -501,43 +525,66 @@ export class A2AClient {
         throw new Error('Response body is not readable');
       }
 
+      // Helper to properly close the reader/cancel the stream
+      const closeReader = async () => {
+        try {
+          await reader.cancel();
+        } catch {
+          // Ignore errors during cleanup
+        }
+      };
+
       const decoder = new TextDecoder();
       let buffer = '';
 
-      while (true) {
-        const { done, value } = await reader.read();
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
 
-        if (done) {
-          break;
-        }
+          if (done) {
+            break;
+          }
 
-        // Reset timeout on each chunk received
-        resetTimeout();
+          // Reset timeout on each chunk received
+          resetTimeout();
 
-        buffer += decoder.decode(value, { stream: true });
+          buffer += decoder.decode(value, { stream: true });
 
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
 
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const data = line.slice(6).trim();
-            if (data === '[DONE]') {
-              return;
+          for (const line of lines) {
+            // SSE spec allows both 'data: ' (with space) and 'data:' (no space after colon)
+            let data: string | null = null;
+            if (line.startsWith('data: ')) {
+              data = line.slice(6).trim();
+            } else if (line.startsWith('data:')) {
+              data = line.slice(5).trim();
             }
 
-            try {
-              const event = JSON.parse(data) as A2AStreamEvent;
-              yield event;
-
-              if ('statusUpdate' in event && isTerminalState(event.statusUpdate.status.state)) {
+            if (data !== null) {
+              if (data === '[DONE]') {
+                await closeReader();
                 return;
               }
-            } catch (parseError) {
-              logA2A('Failed to parse subscription event:', parseError);
+
+              try {
+                const event = JSON.parse(data) as A2AStreamEvent;
+                yield event;
+
+                if ('statusUpdate' in event && isTerminalState(event.statusUpdate.status.state)) {
+                  await closeReader();
+                  return;
+                }
+              } catch (parseError) {
+                logA2A('Failed to parse subscription event:', parseError);
+              }
             }
           }
         }
+      } finally {
+        // Ensure reader is closed on any exit path from the loop
+        await closeReader();
       }
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {

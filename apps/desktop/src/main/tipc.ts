@@ -2739,6 +2739,11 @@ export const router = {
     // from externalAgents to avoid duplicates (can happen after toggling enabled state)
     const { getInternalAgentConfig } = await import('./acp/acp-router-tools')
     const internalAgent = getInternalAgentConfig()
+    // Merge any persisted enabled state from config into the internal agent
+    const persistedInternalAgent = externalAgents.find(a => a.name === 'internal')
+    if (persistedInternalAgent && typeof persistedInternalAgent.enabled === 'boolean') {
+      internalAgent.enabled = persistedInternalAgent.enabled
+    }
     const filteredExternalAgents = externalAgents.filter(a => a.name !== 'internal')
     return [internalAgent, ...filteredExternalAgents]
   }),
@@ -2786,12 +2791,13 @@ export const router = {
       if (agentIndex >= 0) {
         agents[agentIndex] = { ...agents[agentIndex], enabled: input.enabled }
       } else {
-        // Agent not in config (e.g., built-in 'internal' agent) - add a minimal entry to persist enabled state
-        // For built-in agents, we only need to store the name and enabled state
-        // The full config is defined elsewhere (e.g., getInternalAgentConfig())
+        // Agent not in config (e.g., built-in 'internal' agent) - add an entry to persist enabled state
+        // We include displayName to satisfy the ACPAgentConfig contract and avoid undefined issues
         agents.push({
           name: input.agentName,
+          displayName: input.agentName === 'internal' ? 'SpeakMCP Internal' : input.agentName,
           enabled: input.enabled,
+          isInternal: input.agentName === 'internal',
           connection: { type: 'internal' as const }
         } as import('../shared/types').ACPAgentConfig)
       }

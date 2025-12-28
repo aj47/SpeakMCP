@@ -35,7 +35,7 @@ function convertMCPToolsToAISDKTools(mcpTools: MCPTool[]): Record<string, Return
     // Create AI SDK tool with JSON schema (not Zod)
     tools[mcpTool.name] = aiTool({
       description: mcpTool.description || `Tool: ${mcpTool.name}`,
-      parameters: jsonSchema(mcpTool.inputSchema || { type: "object", properties: {} }),
+      inputSchema: jsonSchema(mcpTool.inputSchema || { type: "object", properties: {} }),
       // No execute function - we handle execution separately via MCP
     })
   }
@@ -381,7 +381,7 @@ export async function makeLLMCallWithFetch(
           // Convert AI SDK tool calls to our MCPToolCall format
           const toolCalls = result.toolCalls.map(tc => ({
             name: tc.toolName,
-            arguments: tc.args,
+            arguments: tc.input,
           }))
 
           return {
@@ -422,10 +422,12 @@ export async function makeLLMCallWithFetch(
           return { content: cleaned, needsMoreWork: true }
         }
 
-        // Return as plain text - if no tool calls, assume task is complete
+        // Return as plain text with needsMoreWork undefined
+        // This allows the agent loop to decide whether to continue or nudge for proper format
+        // (see llm.ts handling around issue #443)
         return {
           content: cleaned || text,
-          needsMoreWork: false,
+          needsMoreWork: undefined,
         }
       } finally {
         unregisterSessionAbortController(abortController, sessionId)

@@ -105,8 +105,9 @@ describe('LLM Fetch with AI SDK', () => {
     )
 
     expect(result.content).toBe('This is a plain text response without JSON')
-    // When there are no tool calls and no JSON, the task is considered complete
-    expect(result.needsMoreWork).toBe(false)
+    // When there are no tool calls and no JSON, needsMoreWork is undefined
+    // to let the agent loop decide whether to continue or nudge for proper format
+    expect(result.needsMoreWork).toBeUndefined()
   })
 
   it('should extract toolCalls from JSON response', async () => {
@@ -212,7 +213,7 @@ describe('LLM Fetch with AI SDK', () => {
       toolCalls: [
         {
           toolName: 'play_wordle',
-          args: { word: 'hello' },
+          input: { word: 'hello' },
           toolCallId: 'call_123',
         },
       ],

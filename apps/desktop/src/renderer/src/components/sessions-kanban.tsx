@@ -64,11 +64,10 @@ export function SessionsKanban({
     const active: Array<[string, AgentProgressUpdate]> = []
     const done: Array<[string, AgentProgressUpdate]> = []
 
-    // Add pending continuation to active column if it exists
+    // Add pending continuation to idle column if it exists
+    // Pending conversations are waiting for user input, so they're idle until a message is sent
     if (pendingProgress && pendingSessionId) {
-      // Pending continuations are marked isComplete but should show in active column
-      // since they're waiting for user action
-      active.push([pendingSessionId, pendingProgress])
+      idle.push([pendingSessionId, pendingProgress])
     }
 
     for (const entry of sessions) {

@@ -5,6 +5,7 @@ import { Send, Mic, OctagonX } from "lucide-react"
 import { useMutation } from "@tanstack/react-query"
 import { tipcClient } from "@renderer/lib/tipc-client"
 import { useConfigQuery } from "@renderer/lib/queries"
+import { PredefinedPromptsMenu } from "./predefined-prompts-menu"
 
 interface OverlayFollowUpInputProps {
   conversationId?: string
@@ -181,6 +182,10 @@ export function OverlayFollowUpInput({
           "placeholder:text-muted-foreground/60",
           "focus:ring-0"
         )}
+        disabled={isDisabled}
+      />
+      <PredefinedPromptsMenu
+        onSelectPrompt={(content) => setText(content)}
         disabled={isDisabled}
       />
       <Button

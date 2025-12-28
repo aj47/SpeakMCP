@@ -5,6 +5,7 @@ import { Send, Mic, OctagonX } from "lucide-react"
 import { useMutation } from "@tanstack/react-query"
 import { tipcClient } from "@renderer/lib/tipc-client"
 import { useConfigQuery } from "@renderer/lib/queries"
+import { PredefinedPromptsMenu } from "./predefined-prompts-menu"
 
 interface TileFollowUpInputProps {
   conversationId?: string
@@ -160,6 +161,11 @@ export function TileFollowUpInput({
           "focus:ring-0"
         )}
         disabled={isDisabled}
+      />
+      <PredefinedPromptsMenu
+        onSelectPrompt={(content) => setText(content)}
+        disabled={isDisabled}
+        className="h-6 w-6"
       />
       <Button
         type="submit"

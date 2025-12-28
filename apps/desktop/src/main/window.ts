@@ -237,7 +237,8 @@ function createBaseWindow({
   if (onCrashRecreate) {
     win.webContents.on("render-process-gone", (_event, details) => {
       // Only attempt recovery for crash reasons (not clean exit)
-      if (details.reason !== "clean-exit") {
+      // Also skip recovery if app is quitting - SIGTERM during shutdown is not a crash
+      if (details.reason !== "clean-exit" && !state.isQuitting) {
         handleRendererCrash(id, details, onCrashRecreate)
       }
     })

@@ -21,6 +21,7 @@ import { diagnosticsService } from "./diagnostics"
 
 import { configStore } from "./config"
 import { startRemoteServer } from "./remote-server"
+import { setAppQuitting } from "./state"
 
 // Enable CDP remote debugging port if REMOTE_DEBUGGING_PORT env variable is set
 // This must be called before app.whenReady()
@@ -166,6 +167,8 @@ app.whenReady().then(() => {
   })
 
   app.on("before-quit", () => {
+    // Mark app as quitting to prevent crash recovery from recreating windows during shutdown
+    setAppQuitting()
     makePanelWindowClosable()
   })
 })

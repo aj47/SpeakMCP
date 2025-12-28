@@ -15,10 +15,135 @@ import { state, agentProcessManager, suppressPanelAutoShow } from "./state"
 import { calculatePanelPosition } from "./panel-position"
 import { setupConsoleLogger } from "./console-logger"
 import { emergencyStopAll } from "./emergency-stop"
+import { diagnosticsService } from "./diagnostics"
 
 type WINDOW_ID = "main" | "panel" | "setup"
 
 export const WINDOWS = new Map<WINDOW_ID, BrowserWindow>()
+
+// Crash recovery tracking to prevent infinite restart loops
+interface CrashRecord {
+  count: number
+  firstCrashTime: number
+  lastCrashTime: number
+}
+
+const crashRecords = new Map<WINDOW_ID, CrashRecord>()
+const MAX_CRASHES_IN_WINDOW = 3 // Max crashes allowed before giving up
+const CRASH_WINDOW_MS = 60000 // 1 minute window for counting crashes
+const CRASH_RECOVERY_DELAY_MS = 1000 // Delay before attempting recovery
+
+/**
+ * Check if we should attempt crash recovery for a window
+ */
+function shouldAttemptCrashRecovery(windowId: WINDOW_ID): boolean {
+  const record = crashRecords.get(windowId)
+  const now = Date.now()
+
+  if (!record) {
+    // First crash, allow recovery
+    crashRecords.set(windowId, {
+      count: 1,
+      firstCrashTime: now,
+      lastCrashTime: now,
+    })
+    return true
+  }
+
+  // Reset crash count if outside the time window
+  if (now - record.firstCrashTime > CRASH_WINDOW_MS) {
+    crashRecords.set(windowId, {
+      count: 1,
+      firstCrashTime: now,
+      lastCrashTime: now,
+    })
+    return true
+  }
+
+  // Within time window, check crash count
+  record.count++
+  record.lastCrashTime = now
+
+  if (record.count > MAX_CRASHES_IN_WINDOW) {
+    logApp(`[CRASH RECOVERY] Window ${windowId} has crashed ${record.count} times in ${CRASH_WINDOW_MS / 1000}s, not attempting recovery`)
+    return false
+  }
+
+  return true
+}
+
+/**
+ * Handle renderer process crash with recovery attempt
+ */
+function handleRendererCrash(
+  windowId: WINDOW_ID,
+  details: Electron.RenderProcessGoneDetails,
+  recreateWindow: () => BrowserWindow | void
+): void {
+  const crashInfo = {
+    windowId,
+    reason: details.reason,
+    exitCode: details.exitCode,
+    timestamp: new Date().toISOString(),
+  }
+
+  // Log to console (always, not just in debug mode)
+  console.error(`[CRASH] Renderer process gone for ${windowId}:`, crashInfo)
+
+  // Log to diagnostics service
+  diagnosticsService.logError(
+    "window",
+    `Renderer process crashed: ${windowId}`,
+    { ...crashInfo, details }
+  )
+
+  // Check if we should attempt recovery
+  if (!shouldAttemptCrashRecovery(windowId)) {
+    diagnosticsService.logError(
+      "window",
+      `Crash recovery disabled for ${windowId} due to repeated crashes`,
+      crashInfo
+    )
+    return
+  }
+
+  logApp(`[CRASH RECOVERY] Attempting to recreate ${windowId} window after crash...`)
+
+  // Delay before recreating to prevent rapid crash loops
+  setTimeout(() => {
+    try {
+      // Remove the crashed window from the map if still there
+      const existingWin = WINDOWS.get(windowId)
+      if (existingWin) {
+        try {
+          existingWin.destroy()
+        } catch (e) {
+          // Window may already be destroyed
+        }
+        WINDOWS.delete(windowId)
+      }
+
+      // Recreate the window
+      const newWin = recreateWindow()
+      if (newWin) {
+        logApp(`[CRASH RECOVERY] Successfully recreated ${windowId} window`)
+        diagnosticsService.logInfo(
+          "window",
+          `Successfully recovered ${windowId} window after crash`,
+          crashInfo
+        )
+      }
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error)
+      logApp(`[CRASH RECOVERY] Failed to recreate ${windowId} window:`, errorMsg)
+      diagnosticsService.logError(
+        "window",
+        `Failed to recover ${windowId} window after crash`,
+        { ...crashInfo, error: errorMsg }
+      )
+    }
+  }, CRASH_RECOVERY_DELAY_MS)
+}
 
 // Track panel webContents ready state to avoid sending IPC before renderer is ready
 let panelWebContentsReady = false
@@ -56,11 +181,13 @@ function createBaseWindow({
   url,
   showWhenReady = true,
   windowOptions,
+  onCrashRecreate,
 }: {
   id: WINDOW_ID
   url?: string
   showWhenReady?: boolean
   windowOptions?: BrowserWindowConstructorOptions
+  onCrashRecreate?: () => BrowserWindow | void
 }) {
   const win = new BrowserWindow({
     width: 900,
@@ -106,6 +233,16 @@ function createBaseWindow({
     return { action: "deny" }
   })
 
+  // Handle renderer process crashes with recovery attempt
+  if (onCrashRecreate) {
+    win.webContents.on("render-process-gone", (_event, details) => {
+      // Only attempt recovery for crash reasons (not clean exit)
+      if (details.reason !== "clean-exit") {
+        handleRendererCrash(id, details, onCrashRecreate)
+      }
+    })
+  }
+
   const baseUrl = import.meta.env.PROD
     ? "assets://app"
     : process.env["ELECTRON_RENDERER_URL"]
@@ -124,6 +261,8 @@ export function createMainWindow({ url }: { url?: string } = {}) {
     windowOptions: {
       titleBarStyle: "hiddenInset",
     },
+    // Enable crash recovery for main window
+    onCrashRecreate: () => createMainWindow({ url }),
   })
 
   if (process.env.IS_MAC) {
@@ -156,6 +295,8 @@ export function createSetupWindow() {
       height: 600,
       resizable: false,
     },
+    // Enable crash recovery for setup window
+    onCrashRecreate: () => createSetupWindow(),
   })
 
   return win
@@ -400,6 +541,8 @@ export function createPanelWindow() {
       x: position.x,
       y: position.y,
     },
+    // Enable crash recovery for panel window
+    onCrashRecreate: () => createPanelWindow(),
   })
 
   logApp("[window.ts] createPanelWindow - window created with size:", { width: savedSize.width, height: savedSize.height })

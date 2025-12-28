@@ -1419,20 +1419,71 @@ Return ONLY JSON per schema.`,
     }
 
     // Handle intentional empty completion from LLM (finish_reason='stop')
-    // This is unusual but valid - the model chose to complete without any content
+    // This is unusual - the model chose to complete without any content
+    // We should verify this is actually complete before accepting it
     if (isIntentionalEmptyCompletion) {
       logLLM("⚠️ LLM intentionally completed with empty response (finish_reason=stop)")
       diagnosticsService.logWarning("llm", "LLM completed with empty response in agent mode", {
         iteration,
         needsMoreWork: llmResponse.needsMoreWork,
-        message: "Model completed intentionally without content - treating as valid completion"
+        message: "Model completed intentionally without content - will verify before accepting"
       })
-      
+
+      // Run verifier to check if task is actually complete before accepting empty completion
+      if (config.mcpVerifyCompletionEnabled) {
+        const verifyStep = createProgressStep(
+          "thinking",
+          "Verifying empty completion",
+          "Checking if task was actually completed despite empty response",
+          "in_progress",
+        )
+        progressSteps.push(verifyStep)
+        emit({
+          currentIteration: iteration,
+          maxIterations,
+          steps: progressSteps.slice(-3),
+          isComplete: false,
+          conversationHistory: formatConversationForProgress(conversationHistory),
+        })
+
+        // Build verification context from last assistant message with content
+        const lastAssistantContent = conversationHistory
+          .filter(m => m.role === "assistant" && m.content && m.content.trim().length > 0)
+          .pop()?.content || ""
+
+        const retries = Math.max(0, config.mcpVerifyRetryCount ?? 1)
+        let verified = false
+        let verification: any = null
+
+        for (let i = 0; i <= retries; i++) {
+          verification = await verifyCompletionWithFetch(buildVerificationMessages(lastAssistantContent), config.mcpToolsProviderId)
+          if (verification?.isComplete === true) { verified = true; break }
+        }
+
+        if (!verified) {
+          verifyStep.status = "error"
+          verifyStep.description = "Empty completion rejected: task not actually complete"
+          logLLM("⚠️ Empty completion rejected by verifier - nudging LLM to continue")
+
+          const missing = (verification?.missingItems || []).filter((s: string) => s && s.trim()).map((s: string) => `- ${s}`).join("\n")
+          const reason = verification?.reason ? `Reason: ${verification.reason}` : ""
+          const userNudge = `Your previous response was empty. The task is not complete.\n${reason}\n${missing ? `Missing items:\n${missing}` : ""}\nPlease continue working on the task and provide a response.`
+          conversationHistory.push({ role: "user", content: userNudge })
+
+          // Continue the loop instead of returning
+          continue
+        }
+
+        verifyStep.status = "completed"
+        verifyStep.description = "Empty completion verified as actually complete"
+        logLLM("✅ Empty completion verified - task is actually complete")
+      }
+
       // Mark thinking step as completed
       thinkingStep.status = "completed"
       thinkingStep.title = "Agent completed"
       thinkingStep.description = "Model completed without additional content"
-      
+
       // Add completion step
       const completionStep = createProgressStep(
         "completion",
@@ -1441,7 +1492,7 @@ Return ONLY JSON per schema.`,
         "completed",
       )
       progressSteps.push(completionStep)
-      
+
       // Emit final progress with empty content
       emit({
         currentIteration: iteration,
@@ -1451,7 +1502,7 @@ Return ONLY JSON per schema.`,
         finalContent: "",
         conversationHistory: formatConversationForProgress(conversationHistory),
       })
-      
+
       return {
         content: "",
         conversationHistory,

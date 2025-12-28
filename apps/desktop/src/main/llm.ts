@@ -248,7 +248,8 @@ export async function processTranscriptWithTools(
   const chatProviderId = config.mcpToolsProviderId
 
   try {
-    const result = await makeLLMCallWithFetch(shrunkMessages, chatProviderId)
+    // Pass tools for native AI SDK tool calling
+    const result = await makeLLMCallWithFetch(shrunkMessages, chatProviderId, undefined, undefined, uniqueAvailableTools)
     return result
   } catch (error) {
     throw error
@@ -1300,7 +1301,7 @@ Return ONLY JSON per schema.`,
         })
       }
 
-      llmResponse = await makeLLMCall(shrunkMessages, config, onRetryProgress, onStreamingUpdate, currentSessionId)
+      llmResponse = await makeLLMCall(shrunkMessages, config, onRetryProgress, onStreamingUpdate, currentSessionId, uniqueAvailableTools)
 
       // Clear streaming state after response is complete
       emit({
@@ -2643,6 +2644,7 @@ async function makeLLMCall(
   onRetryProgress?: RetryProgressCallback,
   onStreamingUpdate?: StreamingCallback,
   sessionId?: string,
+  tools?: MCPTool[],
 ): Promise<LLMToolCallResponse> {
   const chatProviderId = config.mcpToolsProviderId
 
@@ -2654,6 +2656,12 @@ async function makeLLMCall(
         totalChars: messages.reduce((sum, msg) => sum + msg.content.length, 0),
         messages: messages,
       })
+      if (tools) {
+        logLLM("Tools →", {
+          count: tools.length,
+          names: tools.map(t => t.name),
+        })
+      }
     }
 
     // If streaming callback is provided and provider supports it, use streaming
@@ -2698,7 +2706,7 @@ async function makeLLMCall(
       // Wrap in try/finally to ensure streaming is cleaned up even if the call fails
       let result: LLMToolCallResponse
       try {
-        result = await makeLLMCallWithFetch(messages, chatProviderId, onRetryProgress, sessionId)
+        result = await makeLLMCallWithFetch(messages, chatProviderId, onRetryProgress, sessionId, tools)
       } finally {
         // Abort streaming request - we have the real response (or error) now
         // This saves bandwidth/tokens by closing the SSE connection immediately
@@ -2719,7 +2727,7 @@ async function makeLLMCall(
     }
 
     // Non-streaming path
-    const result = await makeLLMCallWithFetch(messages, chatProviderId, onRetryProgress, sessionId)
+    const result = await makeLLMCallWithFetch(messages, chatProviderId, onRetryProgress, sessionId, tools)
     if (isDebugLLM()) {
       logLLM("Response ←", result)
       logLLM("=== LLM CALL END ===")

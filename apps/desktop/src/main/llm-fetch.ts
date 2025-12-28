@@ -10,7 +10,8 @@
  * Migrated from custom fetch-based implementation to use @ai-sdk packages.
  */
 
-import { generateText, streamText } from "ai"
+import { generateText, streamText, tool as aiTool } from "ai"
+import { jsonSchema } from "ai"
 import {
   createLanguageModel,
   getCurrentProviderId,
@@ -18,10 +19,29 @@ import {
   type ProviderType,
 } from "./ai-sdk-provider"
 import { configStore } from "./config"
-import type { LLMToolCallResponse } from "./mcp-service"
+import type { LLMToolCallResponse, MCPTool } from "./mcp-service"
 import { diagnosticsService } from "./diagnostics"
 import { isDebugLLM, logLLM } from "./debug"
 import { state, agentSessionStateManager, llmRequestAbortManager } from "./state"
+
+/**
+ * Convert MCP tools to AI SDK tool format
+ * Uses dynamicTool pattern since MCP tool schemas are JSON Schema, not Zod
+ */
+function convertMCPToolsToAISDKTools(mcpTools: MCPTool[]): Record<string, ReturnType<typeof aiTool>> {
+  const tools: Record<string, ReturnType<typeof aiTool>> = {}
+
+  for (const mcpTool of mcpTools) {
+    // Create AI SDK tool with JSON schema (not Zod)
+    tools[mcpTool.name] = aiTool({
+      description: mcpTool.description || `Tool: ${mcpTool.name}`,
+      parameters: jsonSchema(mcpTool.inputSchema || { type: "object", properties: {} }),
+      // No execute function - we handle execution separately via MCP
+    })
+  }
+
+  return tools
+}
 
 /**
  * Callback for reporting retry progress to the UI
@@ -294,12 +314,14 @@ function extractJsonObject(str: string): any | null {
 
 /**
  * Main function to make LLM calls using AI SDK with automatic retry
+ * Now supports native AI SDK tool calling when tools are provided
  */
 export async function makeLLMCallWithFetch(
   messages: Array<{ role: string; content: string }>,
   providerId?: string,
   onRetryProgress?: RetryProgressCallback,
-  sessionId?: string
+  sessionId?: string,
+  tools?: MCPTool[]
 ): Promise<LLMToolCallResponse> {
   const effectiveProviderId = (providerId ||
     getCurrentProviderId()) as ProviderType
@@ -319,11 +341,18 @@ export async function makeLLMCallWithFetch(
           abortController.abort()
         }
 
+        // Convert MCP tools to AI SDK format if provided
+        const aiSdkTools = tools && tools.length > 0
+          ? convertMCPToolsToAISDKTools(tools)
+          : undefined
+
         if (isDebugLLM()) {
           logLLM("🚀 AI SDK generateText call", {
             provider: effectiveProviderId,
             messagesCount: messages.length,
             hasSystem: !!system,
+            hasTools: !!aiSdkTools,
+            toolCount: tools?.length || 0,
           })
         }
 
@@ -332,22 +361,49 @@ export async function makeLLMCallWithFetch(
           system,
           messages: convertedMessages,
           abortSignal: abortController.signal,
+          tools: aiSdkTools,
+          // Allow the model to choose whether to use tools or respond with text
+          toolChoice: aiSdkTools ? "auto" : undefined,
         })
 
         const text = result.text?.trim() || ""
 
-        if (!text) {
+        // Check for native AI SDK tool calls first
+        if (result.toolCalls && result.toolCalls.length > 0) {
+          if (isDebugLLM()) {
+            logLLM("✅ AI SDK native tool calls received", {
+              toolCallCount: result.toolCalls.length,
+              toolNames: result.toolCalls.map(tc => tc.toolName),
+              textContent: text.substring(0, 100),
+            })
+          }
+
+          // Convert AI SDK tool calls to our MCPToolCall format
+          const toolCalls = result.toolCalls.map(tc => ({
+            name: tc.toolName,
+            arguments: tc.args,
+          }))
+
+          return {
+            content: text || undefined,
+            toolCalls,
+            needsMoreWork: true, // Tool calls always need more work
+          }
+        }
+
+        // No tool calls - process as text response
+        if (!text && !result.toolCalls?.length) {
           throw new Error("LLM returned empty response")
         }
 
         if (isDebugLLM()) {
-          logLLM("✅ AI SDK response received", {
+          logLLM("✅ AI SDK text response received", {
             textLength: text.length,
             textPreview: text.substring(0, 200),
           })
         }
 
-        // Try to parse JSON from the response
+        // Try to parse JSON from the response (fallback for models that respond with JSON)
         const jsonObject = extractJsonObject(text)
         if (jsonObject && (jsonObject.toolCalls || jsonObject.content)) {
           const response = jsonObject as LLMToolCallResponse
@@ -366,10 +422,10 @@ export async function makeLLMCallWithFetch(
           return { content: cleaned, needsMoreWork: true }
         }
 
-        // Return as plain text
+        // Return as plain text - if no tool calls, assume task is complete
         return {
           content: cleaned || text,
-          needsMoreWork: undefined,
+          needsMoreWork: false,
         }
       } finally {
         unregisterSessionAbortController(abortController, sessionId)

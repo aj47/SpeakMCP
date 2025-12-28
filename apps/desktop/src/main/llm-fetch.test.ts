@@ -43,10 +43,14 @@ vi.mock('./state', () => ({
   },
 }))
 
-// Mock the AI SDK generateText function
+// Mock the AI SDK functions
 vi.mock('ai', () => ({
   generateText: vi.fn(),
   streamText: vi.fn(),
+  // Mock the tool helper - returns a simple object representing the tool
+  tool: vi.fn((config: any) => ({ ...config, _type: 'tool' })),
+  // Mock jsonSchema helper - returns the schema wrapped
+  jsonSchema: vi.fn((schema: any) => ({ _type: 'jsonSchema', schema })),
 }))
 
 // Mock the ai-sdk-provider module
@@ -101,7 +105,8 @@ describe('LLM Fetch with AI SDK', () => {
     )
 
     expect(result.content).toBe('This is a plain text response without JSON')
-    expect(result.needsMoreWork).toBeUndefined()
+    // When there are no tool calls and no JSON, the task is considered complete
+    expect(result.needsMoreWork).toBe(false)
   })
 
   it('should extract toolCalls from JSON response', async () => {
@@ -181,7 +186,7 @@ describe('LLM Fetch with AI SDK', () => {
   it('should not retry on abort errors', async () => {
     const { generateText } = await import('ai')
     const generateTextMock = vi.mocked(generateText)
-    
+
     const abortError = new Error('Aborted')
     abortError.name = 'AbortError'
     generateTextMock.mockRejectedValue(abortError)
@@ -193,6 +198,91 @@ describe('LLM Fetch with AI SDK', () => {
     ).rejects.toThrow('Aborted')
 
     expect(generateTextMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('should handle native AI SDK tool calls when tools are provided', async () => {
+    const { generateText } = await import('ai')
+    const generateTextMock = vi.mocked(generateText)
+
+    // Mock a response with native tool calls
+    generateTextMock.mockResolvedValue({
+      text: 'I will help you play wordle.',
+      finishReason: 'tool-calls',
+      usage: { promptTokens: 10, completionTokens: 20 },
+      toolCalls: [
+        {
+          toolName: 'play_wordle',
+          args: { word: 'hello' },
+          toolCallId: 'call_123',
+        },
+      ],
+    } as any)
+
+    const { makeLLMCallWithFetch } = await import('./llm-fetch')
+
+    const mockTools = [
+      {
+        name: 'play_wordle',
+        description: 'Play a game of wordle',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            word: { type: 'string' },
+          },
+        },
+      },
+    ]
+
+    const result = await makeLLMCallWithFetch(
+      [{ role: 'user', content: 'play wordle' }],
+      'openai',
+      undefined,
+      undefined,
+      mockTools
+    )
+
+    expect(result.toolCalls).toBeDefined()
+    expect(result.toolCalls).toHaveLength(1)
+    expect(result.toolCalls![0].name).toBe('play_wordle')
+    expect(result.toolCalls![0].arguments).toEqual({ word: 'hello' })
+    expect(result.needsMoreWork).toBe(true)
+  })
+
+  it('should pass tools to generateText when provided', async () => {
+    const { generateText } = await import('ai')
+    const generateTextMock = vi.mocked(generateText)
+
+    generateTextMock.mockResolvedValue({
+      text: 'No tools needed for this response.',
+      finishReason: 'stop',
+      usage: { promptTokens: 10, completionTokens: 20 },
+    } as any)
+
+    const { makeLLMCallWithFetch } = await import('./llm-fetch')
+
+    const mockTools = [
+      {
+        name: 'test_tool',
+        description: 'A test tool',
+        inputSchema: { type: 'object', properties: {} },
+      },
+    ]
+
+    await makeLLMCallWithFetch(
+      [{ role: 'user', content: 'test' }],
+      'openai',
+      undefined,
+      undefined,
+      mockTools
+    )
+
+    // Verify generateText was called with tools
+    expect(generateTextMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tools: expect.any(Object),
+        toolChoice: 'auto',
+      })
+    )
   })
 })
 

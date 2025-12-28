@@ -601,105 +601,121 @@ export async function makeLLMCallWithStreaming(
 /**
  * Make a simple text completion call using AI SDK
  * Used for transcript post-processing and similar text completion tasks.
+ * Includes automatic retry with exponential backoff for transient failures.
  */
 export async function makeTextCompletionWithFetch(
   prompt: string,
   providerId?: string,
-  sessionId?: string
+  sessionId?: string,
+  onRetryProgress?: RetryProgressCallback
 ): Promise<string> {
   // Use transcript provider as default since this is primarily used for transcript post-processing
   const effectiveProviderId = (providerId ||
     getTranscriptProviderId()) as ProviderType
-  const abortController = createSessionAbortController(sessionId)
 
-  try {
-    // Check for stop signal before starting
-    if (
-      state.shouldStopAgent ||
-      (sessionId && agentSessionStateManager.shouldStopSession(sessionId))
-    ) {
-      abortController.abort()
-    }
+  return withRetry(
+    async () => {
+      const abortController = createSessionAbortController(sessionId)
 
-    const model = createLanguageModel(effectiveProviderId, "transcript")
+      try {
+        // Check for stop signal before starting
+        if (
+          state.shouldStopAgent ||
+          (sessionId && agentSessionStateManager.shouldStopSession(sessionId))
+        ) {
+          abortController.abort()
+        }
 
-    if (isDebugLLM()) {
-      logLLM("🚀 AI SDK text completion call", {
-        provider: effectiveProviderId,
-        promptLength: prompt.length,
-      })
-    }
+        const model = createLanguageModel(effectiveProviderId, "transcript")
 
-    const result = await generateText({
-      model,
-      prompt,
-      abortSignal: abortController.signal,
-    })
+        if (isDebugLLM()) {
+          logLLM("🚀 AI SDK text completion call", {
+            provider: effectiveProviderId,
+            promptLength: prompt.length,
+          })
+        }
 
-    return result.text?.trim() || ""
-  } catch (error) {
-    diagnosticsService.logError("llm-fetch", "Text completion failed", error)
-    throw error
-  } finally {
-    unregisterSessionAbortController(abortController, sessionId)
-  }
+        const result = await generateText({
+          model,
+          prompt,
+          abortSignal: abortController.signal,
+        })
+
+        return result.text?.trim() || ""
+      } catch (error) {
+        diagnosticsService.logError("llm-fetch", "Text completion failed", error)
+        throw error
+      } finally {
+        unregisterSessionAbortController(abortController, sessionId)
+      }
+    },
+    { onRetryProgress, sessionId }
+  )
 }
 
 /**
  * Verify completion using AI SDK
+ * Includes automatic retry with exponential backoff for transient failures.
  */
 export async function verifyCompletionWithFetch(
   messages: Array<{ role: string; content: string }>,
   providerId?: string,
-  sessionId?: string
+  sessionId?: string,
+  onRetryProgress?: RetryProgressCallback
 ): Promise<CompletionVerification> {
   const effectiveProviderId = (providerId ||
     getCurrentProviderId()) as ProviderType
-  const abortController = createSessionAbortController(sessionId)
 
-  try {
-    // Check for stop signal before starting
-    if (
-      state.shouldStopAgent ||
-      (sessionId && agentSessionStateManager.shouldStopSession(sessionId))
-    ) {
-      abortController.abort()
-    }
+  return withRetry(
+    async () => {
+      const abortController = createSessionAbortController(sessionId)
 
-    const model = createLanguageModel(effectiveProviderId)
-    const { system, messages: convertedMessages } = convertMessages(messages)
+      try {
+        // Check for stop signal before starting
+        if (
+          state.shouldStopAgent ||
+          (sessionId && agentSessionStateManager.shouldStopSession(sessionId))
+        ) {
+          abortController.abort()
+        }
 
-    if (isDebugLLM()) {
-      logLLM("🚀 AI SDK verification call", {
-        provider: effectiveProviderId,
-        messagesCount: messages.length,
-        hasSystem: !!system,
-      })
-    }
+        const model = createLanguageModel(effectiveProviderId)
+        const { system, messages: convertedMessages } = convertMessages(messages)
 
-    const result = await generateText({
-      model,
-      system,
-      messages: convertedMessages,
-      abortSignal: abortController.signal,
-    })
+        if (isDebugLLM()) {
+          logLLM("🚀 AI SDK verification call", {
+            provider: effectiveProviderId,
+            messagesCount: messages.length,
+            hasSystem: !!system,
+          })
+        }
 
-    const text = result.text?.trim() || ""
-    const jsonObject = extractJsonObject(text)
+        const result = await generateText({
+          model,
+          system,
+          messages: convertedMessages,
+          abortSignal: abortController.signal,
+        })
 
-    if (jsonObject && typeof jsonObject.isComplete === "boolean") {
-      return jsonObject as CompletionVerification
-    }
+        const text = result.text?.trim() || ""
+        const jsonObject = extractJsonObject(text)
 
-    // Conservative default
-    return { isComplete: false, reason: "Failed to parse verification response" }
-  } catch (error) {
-    diagnosticsService.logError("llm-fetch", "Verification call failed", error)
-    return {
-      isComplete: false,
-      reason: (error as any)?.message || "Verification failed",
-    }
-  } finally {
-    unregisterSessionAbortController(abortController, sessionId)
-  }
+        if (jsonObject && typeof jsonObject.isComplete === "boolean") {
+          return jsonObject as CompletionVerification
+        }
+
+        // Conservative default
+        return { isComplete: false, reason: "Failed to parse verification response" }
+      } catch (error) {
+        diagnosticsService.logError("llm-fetch", "Verification call failed", error)
+        return {
+          isComplete: false,
+          reason: (error as any)?.message || "Verification failed",
+        }
+      } finally {
+        unregisterSessionAbortController(abortController, sessionId)
+      }
+    },
+    { onRetryProgress, sessionId }
+  )
 }

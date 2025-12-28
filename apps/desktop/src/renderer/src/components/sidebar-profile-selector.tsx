@@ -2,16 +2,19 @@ import { tipcClient } from "@renderer/lib/tipc-client"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { Profile } from "@shared/types"
 import { toast } from "sonner"
+import { useNavigate } from "react-router-dom"
 import {
   Select,
   SelectContent,
   SelectItem,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from "./ui/select"
 
 export function SidebarProfileSelector() {
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
 
   // Fetch profiles
   const profilesQuery = useQuery({
@@ -63,6 +66,12 @@ export function SidebarProfileSelector() {
     },
   })
 
+  const handleEditProfilesClick = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    navigate("/settings/tools")
+  }
+
   return (
     <Select
       value={currentProfile?.id || ""}
@@ -79,6 +88,15 @@ export function SidebarProfileSelector() {
             {profile.isDefault && " (Default)"}
           </SelectItem>
         ))}
+        <SelectSeparator />
+        <div
+          className="relative flex w-full cursor-pointer select-none items-center rounded-sm py-1.5 pl-2 pr-8 text-sm outline-none hover:bg-accent hover:text-accent-foreground text-muted-foreground"
+          onClick={handleEditProfilesClick}
+          onPointerDown={(e) => e.stopPropagation()}
+        >
+          <span className="i-mingcute-settings-3-line mr-1.5 h-3.5 w-3.5 shrink-0" />
+          Edit Profiles
+        </div>
       </SelectContent>
     </Select>
   )

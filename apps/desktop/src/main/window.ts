@@ -22,53 +22,44 @@ type WINDOW_ID = "main" | "panel" | "setup"
 export const WINDOWS = new Map<WINDOW_ID, BrowserWindow>()
 
 // Crash recovery tracking to prevent infinite restart loops
-interface CrashRecord {
-  count: number
-  firstCrashTime: number
-  lastCrashTime: number
-}
+// Uses a rolling window approach: tracks actual crash timestamps to enforce
+// a true "max N crashes in the last 60 seconds" limit, rather than a fixed
+// window that resets after 60s from the first crash.
 
-const crashRecords = new Map<WINDOW_ID, CrashRecord>()
+const crashTimestamps = new Map<WINDOW_ID, number[]>()
 const MAX_CRASHES_IN_WINDOW = 3 // Max crashes allowed before giving up
-const CRASH_WINDOW_MS = 60000 // 1 minute window for counting crashes
+const CRASH_WINDOW_MS = 60000 // 1 minute rolling window for counting crashes
 const CRASH_RECOVERY_DELAY_MS = 1000 // Delay before attempting recovery
 
 /**
- * Check if we should attempt crash recovery for a window
+ * Check if we should attempt crash recovery for a window.
+ * Uses a rolling window approach: counts crashes within the last CRASH_WINDOW_MS.
+ * This prevents the edge case where crashes spaced across fixed window boundaries
+ * could allow unlimited recovery attempts despite exceeding the per-minute limit.
  */
 function shouldAttemptCrashRecovery(windowId: WINDOW_ID): boolean {
-  const record = crashRecords.get(windowId)
   const now = Date.now()
+  const cutoff = now - CRASH_WINDOW_MS
 
-  if (!record) {
-    // First crash, allow recovery
-    crashRecords.set(windowId, {
-      count: 1,
-      firstCrashTime: now,
-      lastCrashTime: now,
-    })
-    return true
-  }
+  // Get existing timestamps or create empty array
+  let timestamps = crashTimestamps.get(windowId) || []
 
-  // Reset crash count if outside the time window
-  if (now - record.firstCrashTime > CRASH_WINDOW_MS) {
-    crashRecords.set(windowId, {
-      count: 1,
-      firstCrashTime: now,
-      lastCrashTime: now,
-    })
-    return true
-  }
+  // Filter to only keep crashes within the rolling window
+  timestamps = timestamps.filter((ts) => ts > cutoff)
 
-  // Within time window, check crash count
-  record.count++
-  record.lastCrashTime = now
-
-  if (record.count > MAX_CRASHES_IN_WINDOW) {
-    logApp(`[CRASH RECOVERY] Window ${windowId} has crashed ${record.count} times in ${CRASH_WINDOW_MS / 1000}s, not attempting recovery`)
+  // Check if we've exceeded the limit within the rolling window
+  if (timestamps.length >= MAX_CRASHES_IN_WINDOW) {
+    logApp(
+      `[CRASH RECOVERY] Window ${windowId} has crashed ${timestamps.length} times in the last ${CRASH_WINDOW_MS / 1000}s, not attempting recovery`
+    )
+    // Still update the map with filtered timestamps (cleanup old entries)
+    crashTimestamps.set(windowId, timestamps)
     return false
   }
 
+  // Add current crash timestamp and allow recovery
+  timestamps.push(now)
+  crashTimestamps.set(windowId, timestamps)
   return true
 }
 

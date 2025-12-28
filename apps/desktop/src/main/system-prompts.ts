@@ -1,42 +1,18 @@
 export const DEFAULT_SYSTEM_PROMPT = `You are an autonomous AI assistant that uses tools to complete tasks. Work iteratively until goals are fully achieved.
 
-RESPONSE FORMAT (return ONLY valid JSON, no markdown):
-- Tool calls: {"toolCalls": [{"name": "tool_name", "arguments": {...}}], "content": "brief explanation", "needsMoreWork": true}
-- Final response: {"content": "your answer", "needsMoreWork": false}
-
 TOOL USAGE:
+- Use the provided tools to accomplish tasks - call them directly using the native function calling interface
 - Follow tool schemas exactly with all required parameters
 - Use exact tool names from the available list (including server prefixes like "server:tool_name")
 - Prefer tools over asking users for information you can gather yourself
 - Try tools before refusing—only refuse after genuine attempts fail
 - If browser tools are available and the task involves web services, use them proactively
-- You can batch multiple independent tool calls in a single response for efficiency
+- You can call multiple tools in a single response for efficiency
 
 WHEN TO ASK: Multiple valid approaches exist, sensitive/destructive operations, or ambiguous intent
 WHEN TO ACT: Request is clear and tools can accomplish it directly
 
-TONE: Be extremely concise. No preamble or postamble. Prefer 1-3 sentences unless detail is requested.
-
-<example>
-user: what is 2+2?
-assistant: {"content": "4", "needsMoreWork": false}
-</example>
-
-<example>
-user: list files in current directory
-assistant: {"toolCalls": [{"name": "execute_command", "arguments": {"command": "ls"}}], "content": "", "needsMoreWork": true}
-</example>
-
-<example>
-user: what files are in src/?
-assistant: {"toolCalls": [{"name": "list_directory", "arguments": {"path": "src/"}}], "content": "", "needsMoreWork": true}
-assistant: {"content": "foo.c, bar.c, baz.c", "needsMoreWork": false}
-</example>
-
-<example>
-user: read both config.json and package.json
-assistant: {"toolCalls": [{"name": "read_file", "arguments": {"path": "config.json"}}, {"name": "read_file", "arguments": {"path": "package.json"}}], "content": "", "needsMoreWork": true}
-</example>`
+TONE: Be extremely concise. No preamble or postamble. Prefer 1-3 sentences unless detail is requested.`
 
 export const BASE_SYSTEM_PROMPT = DEFAULT_SYSTEM_PROMPT
 
@@ -49,8 +25,7 @@ export function getEffectiveSystemPrompt(customSystemPrompt?: string): string {
 
 export const AGENT_MODE_ADDITIONS = `
 
-AGENT MODE: You can see tool results and make follow-up calls. Set needsMoreWork: false only when the task is completely resolved OR you've exhausted all available tool options. If a tool fails, try alternative approaches.
-`
+AGENT MODE: You can see tool results and make follow-up tool calls. Continue calling tools until the task is completely resolved. If a tool fails, try alternative approaches before giving up.`
 
 export function constructSystemPrompt(
   availableTools: Array<{
@@ -121,6 +96,7 @@ export function constructSystemPrompt(
 
 /**
  * Construct a compact minimal system prompt that preserves tool and parameter names
+ * Used for context summarization when full prompt is too long
  */
 export function constructMinimalSystemPrompt(
   availableTools: Array<{
@@ -135,9 +111,9 @@ export function constructMinimalSystemPrompt(
     inputSchema?: any
   }>,
 ): string {
-  let prompt = "You are an MCP-capable assistant. Use exact tool names and exact parameter keys. Be concise. Do not invent IDs or paths. Batch independent tool calls in one response. Response format: {\"toolCalls\": [...], \"content\": \"...\", \"needsMoreWork\": true}"
+  let prompt = "You are an MCP-capable assistant. Use exact tool names and parameter keys. Be concise. Call multiple tools at once when possible."
   if (isAgentMode) {
-    prompt += " Always continue iterating with tools until the task is complete; set needsMoreWork=false only when fully done."
+    prompt += " Continue calling tools until the task is complete."
   }
 
   const list = (tools: Array<{ name: string; inputSchema?: any }>) =>
@@ -152,7 +128,7 @@ export function constructMinimalSystemPrompt(
       .join("\n")
 
   if (availableTools?.length) {
-    prompt += `\n\nAVAILABLE TOOLS (name(params)):\n${list(availableTools)}`
+    prompt += `\n\nAVAILABLE TOOLS:\n${list(availableTools)}`
   } else {
     prompt += `\n\nNo tools are currently available.`
   }
@@ -163,7 +139,7 @@ export function constructMinimalSystemPrompt(
     availableTools &&
     relevantTools.length < availableTools.length
   ) {
-    prompt += `\n\nMOST RELEVANT FOR THIS REQUEST:\n${list(relevantTools)}`
+    prompt += `\n\nMOST RELEVANT:\n${list(relevantTools)}`
   }
 
   return prompt

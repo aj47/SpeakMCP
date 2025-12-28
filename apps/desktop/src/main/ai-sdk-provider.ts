@@ -53,7 +53,11 @@ function getProviderConfig(
       return {
         apiKey: config.geminiApiKey || "",
         baseURL: config.geminiBaseUrl || undefined,
-        model: config.mcpToolsGeminiModel || "gemini-1.5-flash-002",
+        model:
+          modelContext === "mcp"
+            ? config.mcpToolsGeminiModel || "gemini-1.5-flash-002"
+            : config.transcriptPostProcessingGeminiModel ||
+              "gemini-1.5-flash-002",
       }
 
     default:

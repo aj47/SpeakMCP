@@ -20,7 +20,7 @@ import { configStore } from "./config"
 import type { LLMToolCallResponse } from "./mcp-service"
 import { diagnosticsService } from "./diagnostics"
 import { isDebugLLM, logLLM } from "./debug"
-import { state, agentSessionStateManager } from "./state"
+import { state, agentSessionStateManager, llmRequestAbortManager } from "./state"
 
 /**
  * Callback for reporting retry progress to the UI
@@ -223,6 +223,30 @@ function convertMessages(
 }
 
 /**
+ * Create and register an abort controller for session management
+ */
+function createSessionAbortController(sessionId?: string): AbortController {
+  const controller = new AbortController()
+  if (sessionId) {
+    agentSessionStateManager.registerAbortController(sessionId, controller)
+  } else {
+    llmRequestAbortManager.register(controller)
+  }
+  return controller
+}
+
+/**
+ * Unregister an abort controller from session management
+ */
+function unregisterSessionAbortController(controller: AbortController, sessionId?: string): void {
+  if (sessionId) {
+    agentSessionStateManager.unregisterAbortController(sessionId, controller)
+  } else {
+    llmRequestAbortManager.unregister(controller)
+  }
+}
+
+/**
  * Extract JSON object from a string response
  */
 function extractJsonObject(str: string): any | null {
@@ -265,55 +289,69 @@ export async function makeLLMCallWithFetch(
     async () => {
       const model = createLanguageModel(effectiveProviderId)
       const convertedMessages = convertMessages(messages)
+      const abortController = createSessionAbortController(sessionId)
 
-      if (isDebugLLM()) {
-        logLLM("🚀 AI SDK generateText call", {
-          provider: effectiveProviderId,
-          messagesCount: messages.length,
-        })
-      }
-
-      const result = await generateText({
-        model,
-        messages: convertedMessages,
-      })
-
-      const text = result.text?.trim() || ""
-
-      if (!text) {
-        throw new Error("LLM returned empty response")
-      }
-
-      if (isDebugLLM()) {
-        logLLM("✅ AI SDK response received", {
-          textLength: text.length,
-          textPreview: text.substring(0, 200),
-        })
-      }
-
-      // Try to parse JSON from the response
-      const jsonObject = extractJsonObject(text)
-      if (jsonObject && (jsonObject.toolCalls || jsonObject.content)) {
-        const response = jsonObject as LLMToolCallResponse
-        if (response.needsMoreWork === undefined && !response.toolCalls) {
-          response.needsMoreWork = true
+      try {
+        // Check for stop signal before starting
+        if (
+          state.shouldStopAgent ||
+          (sessionId && agentSessionStateManager.shouldStopSession(sessionId))
+        ) {
+          abortController.abort()
         }
-        return response
-      }
 
-      // Check for tool markers in plain text response
-      const hasToolMarkers =
-        /<\|tool_calls_section_begin\|>|<\|tool_call_begin\|>/i.test(text)
-      const cleaned = text.replace(/<\|[^|]*\|>/g, "").trim()
+        if (isDebugLLM()) {
+          logLLM("🚀 AI SDK generateText call", {
+            provider: effectiveProviderId,
+            messagesCount: messages.length,
+          })
+        }
 
-      if (hasToolMarkers) {
-        return { content: cleaned, needsMoreWork: true }
-      }
+        const result = await generateText({
+          model,
+          messages: convertedMessages,
+          abortSignal: abortController.signal,
+        })
 
-      // Return as plain text
-      return {
-        content: cleaned || text,
-        needsMoreWork: undefined,
+        const text = result.text?.trim() || ""
+
+        if (!text) {
+          throw new Error("LLM returned empty response")
+        }
+
+        if (isDebugLLM()) {
+          logLLM("✅ AI SDK response received", {
+            textLength: text.length,
+            textPreview: text.substring(0, 200),
+          })
+        }
+
+        // Try to parse JSON from the response
+        const jsonObject = extractJsonObject(text)
+        if (jsonObject && (jsonObject.toolCalls || jsonObject.content)) {
+          const response = jsonObject as LLMToolCallResponse
+          if (response.needsMoreWork === undefined && !response.toolCalls) {
+            response.needsMoreWork = true
+          }
+          return response
+        }
+
+        // Check for tool markers in plain text response
+        const hasToolMarkers =
+          /<\|tool_calls_section_begin\|>|<\|tool_call_begin\|>/i.test(text)
+        const cleaned = text.replace(/<\|[^|]*\|>/g, "").trim()
+
+        if (hasToolMarkers) {
+          return { content: cleaned, needsMoreWork: true }
+        }
+
+        // Return as plain text
+        return {
+          content: cleaned || text,
+          needsMoreWork: undefined,
+        }
+      } finally {
+        unregisterSessionAbortController(abortController, sessionId)
       }
     },
     { onRetryProgress, sessionId }
@@ -391,8 +429,17 @@ export async function makeTextCompletionWithFetch(
 ): Promise<string> {
   const effectiveProviderId = (providerId ||
     getCurrentProviderId()) as ProviderType
+  const abortController = createSessionAbortController(sessionId)
 
   try {
+    // Check for stop signal before starting
+    if (
+      state.shouldStopAgent ||
+      (sessionId && agentSessionStateManager.shouldStopSession(sessionId))
+    ) {
+      abortController.abort()
+    }
+
     const model = createLanguageModel(effectiveProviderId, "transcript")
 
     if (isDebugLLM()) {
@@ -405,12 +452,15 @@ export async function makeTextCompletionWithFetch(
     const result = await generateText({
       model,
       prompt,
+      abortSignal: abortController.signal,
     })
 
     return result.text?.trim() || ""
   } catch (error) {
     diagnosticsService.logError("llm-fetch", "Text completion failed", error)
     throw error
+  } finally {
+    unregisterSessionAbortController(abortController, sessionId)
   }
 }
 
@@ -419,12 +469,22 @@ export async function makeTextCompletionWithFetch(
  */
 export async function verifyCompletionWithFetch(
   messages: Array<{ role: string; content: string }>,
-  providerId?: string
+  providerId?: string,
+  sessionId?: string
 ): Promise<CompletionVerification> {
   const effectiveProviderId = (providerId ||
     getCurrentProviderId()) as ProviderType
+  const abortController = createSessionAbortController(sessionId)
 
   try {
+    // Check for stop signal before starting
+    if (
+      state.shouldStopAgent ||
+      (sessionId && agentSessionStateManager.shouldStopSession(sessionId))
+    ) {
+      abortController.abort()
+    }
+
     const model = createLanguageModel(effectiveProviderId)
     const convertedMessages = convertMessages(messages)
 
@@ -438,6 +498,7 @@ export async function verifyCompletionWithFetch(
     const result = await generateText({
       model,
       messages: convertedMessages,
+      abortSignal: abortController.signal,
     })
 
     const text = result.text?.trim() || ""
@@ -455,5 +516,7 @@ export async function verifyCompletionWithFetch(
       isComplete: false,
       reason: (error as any)?.message || "Verification failed",
     }
+  } finally {
+    unregisterSessionAbortController(abortController, sessionId)
   }
 }

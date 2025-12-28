@@ -382,5 +382,88 @@ describe('LLM Fetch with AI SDK', () => {
       })
     )
   })
+
+  it('should retry on AI SDK structured errors with isRetryable flag', async () => {
+    const { generateText } = await import('ai')
+    const generateTextMock = vi.mocked(generateText)
+    
+    let callCount = 0
+    generateTextMock.mockImplementation(() => {
+      callCount++
+      if (callCount === 1) {
+        // Simulate AI SDK APICallError with structured fields
+        const error = new Error('Server error') as any
+        error.statusCode = 500
+        error.isRetryable = true
+        throw error
+      }
+      return Promise.resolve({
+        text: '{"content": "Success after retry with structured error"}',
+        finishReason: 'stop',
+        usage: { promptTokens: 10, completionTokens: 20 },
+      } as any)
+    })
+
+    const { makeLLMCallWithFetch } = await import('./llm-fetch')
+
+    const result = await makeLLMCallWithFetch(
+      [{ role: 'user', content: 'test' }],
+      'openai'
+    )
+
+    expect(callCount).toBe(2)
+    expect(result.content).toBe('Success after retry with structured error')
+  })
+
+  it('should not retry on AI SDK structured errors with isRetryable=false', async () => {
+    const { generateText } = await import('ai')
+    const generateTextMock = vi.mocked(generateText)
+    
+    // Simulate AI SDK APICallError with isRetryable=false
+    const error = new Error('Bad request') as any
+    error.statusCode = 400
+    error.isRetryable = false
+    generateTextMock.mockRejectedValue(error)
+
+    const { makeLLMCallWithFetch } = await import('./llm-fetch')
+
+    await expect(
+      makeLLMCallWithFetch([{ role: 'user', content: 'test' }], 'openai')
+    ).rejects.toThrow('Bad request')
+
+    // Should not retry - called only once
+    expect(generateTextMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('should retry on AI SDK rate limit errors (statusCode 429)', async () => {
+    const { generateText } = await import('ai')
+    const generateTextMock = vi.mocked(generateText)
+    
+    let callCount = 0
+    generateTextMock.mockImplementation(() => {
+      callCount++
+      if (callCount === 1) {
+        // Simulate AI SDK TooManyRequestsError
+        const error = new Error('Rate limited') as any
+        error.statusCode = 429
+        throw error
+      }
+      return Promise.resolve({
+        text: '{"content": "Success after rate limit retry"}',
+        finishReason: 'stop',
+        usage: { promptTokens: 10, completionTokens: 20 },
+      } as any)
+    })
+
+    const { makeLLMCallWithFetch } = await import('./llm-fetch')
+
+    const result = await makeLLMCallWithFetch(
+      [{ role: 'user', content: 'test' }],
+      'openai'
+    )
+
+    expect(callCount).toBe(2)
+    expect(result.content).toBe('Success after rate limit retry')
+  })
 })
 

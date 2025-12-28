@@ -129,16 +129,51 @@ function calculateBackoffDelay(
 }
 
 /**
- * Check if an error is retryable
+ * Check if an error is retryable.
+ * Uses AI SDK structured error fields (statusCode, isRetryable) when available,
+ * with fallback to message-based detection for consistency across providers.
  */
 function isRetryableError(error: unknown): boolean {
   if (error instanceof Error) {
+    // Abort errors should never be retried
     if (
       error.name === "AbortError" ||
       error.message.toLowerCase().includes("abort")
     ) {
       return false
     }
+
+    // Check for AI SDK structured error fields (AI_APICallError, etc.)
+    // These errors have statusCode and isRetryable properties
+    const errorWithStatus = error as { statusCode?: number; isRetryable?: boolean; status?: number }
+    
+    // If the error has an explicit isRetryable flag, use it
+    if (typeof errorWithStatus.isRetryable === "boolean") {
+      return errorWithStatus.isRetryable
+    }
+    
+    // Check for statusCode or status field (AI SDK errors use statusCode)
+    const statusCode = errorWithStatus.statusCode ?? errorWithStatus.status
+    if (typeof statusCode === "number") {
+      // Rate limits (429) are always retryable
+      if (statusCode === 429) {
+        return true
+      }
+      // Server errors (5xx) are retryable
+      if (statusCode >= 500 && statusCode < 600) {
+        return true
+      }
+      // Timeout errors
+      if (statusCode === 408 || statusCode === 504) {
+        return true
+      }
+      // Client errors (4xx except 429, 408) are not retryable
+      if (statusCode >= 400 && statusCode < 500) {
+        return false
+      }
+    }
+
+    // Fallback: message-based detection for errors without structured fields
     const message = error.message.toLowerCase()
     return (
       message.includes("rate limit") ||

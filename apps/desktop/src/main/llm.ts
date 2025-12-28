@@ -863,7 +863,10 @@ export async function processTranscriptWithAgentMode(
   ) => {
     const isNudge = (content: string) =>
       content.includes("Please either take action using available tools") ||
-      content.includes("You have relevant tools available for this request")
+      content.includes("You have relevant tools available for this request") ||
+      content.includes("Your previous response was empty") ||
+      content.includes("Verifier indicates the task is not complete") ||
+      content.includes("Please respond with a valid JSON object")
 
     return history
       .filter((entry) => !(entry.role === "user" && isNudge(entry.content)))

@@ -1640,6 +1640,34 @@ Return ONLY JSON per schema.`,
       const isActionableRequest = toolCapabilities.relevantTools.length > 0
       const contentText = llmResponse.content || ""
 
+      // Check if tools have already been executed in this conversation
+      // If so, and the LLM provides a substantive response, treat as completion
+      // This fixes the infinite loop when LLM answers after tool execution but doesn't set needsMoreWork=false
+      const hasToolResultsInHistory = conversationHistory.some((e) => e.role === "tool")
+      const hasSubstantiveResponse = contentText.trim().length >= 10 && !isToolCallPlaceholder(contentText)
+
+      if (hasToolResultsInHistory && hasSubstantiveResponse) {
+        // Tools were already called and LLM provided a real answer - treat as complete
+        if (isDebugLLM()) {
+          logLLM("Treating as complete: tools were executed and LLM provided substantive response", {
+            hasToolResults: hasToolResultsInHistory,
+            responseLength: contentText.trim().length,
+            responsePreview: contentText.substring(0, 100)
+          })
+        }
+        finalContent = contentText
+        addMessage("assistant", contentText)
+        emit({
+          currentIteration: iteration,
+          maxIterations,
+          steps: progressSteps.slice(-3),
+          isComplete: true,
+          finalContent,
+          conversationHistory: formatConversationForProgress(conversationHistory),
+        })
+        break
+      }
+
       // Nudge the model to either use tools or provide a complete answer.
       // For actionable requests (with relevant tools), nudge immediately.
       // For non-actionable requests (simple Q&A), allow 1 no-op before nudging,

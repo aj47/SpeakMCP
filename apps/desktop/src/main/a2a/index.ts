@@ -117,11 +117,14 @@ function startPeriodicCleanup(): void {
     return; // Already running
   }
 
-  cleanupInterval = setInterval(() => {
+  cleanupInterval = setInterval(async () => {
     try {
       // Import cleanup functions dynamically to avoid circular dependencies
-      const { cleanupOldDelegatedRuns } = require('../acp/acp-router-tools');
-      const { cleanupOldSubSessions } = require('../acp/internal-agent');
+      // Using dynamic import() for ESM compatibility instead of require()
+      const [{ cleanupOldDelegatedRuns }, { cleanupOldSubSessions }] = await Promise.all([
+        import('../acp/acp-router-tools'),
+        import('../acp/internal-agent'),
+      ]);
 
       // Clean up old delegated runs (1 hour threshold)
       cleanupOldDelegatedRuns(60 * 60 * 1000);

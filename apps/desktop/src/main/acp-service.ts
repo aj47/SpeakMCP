@@ -660,7 +660,9 @@ class ACPService extends EventEmitter {
     const lines = instance.buffer.split("\n")
     instance.buffer = lines.pop() || "" // Keep incomplete line in buffer
 
-    for (const line of lines) {
+    for (let line of lines) {
+      // Handle Windows CRLF line endings - strip trailing \r before parsing
+      line = line.replace(/\r$/, '')
       if (!line.trim()) continue
 
       try {

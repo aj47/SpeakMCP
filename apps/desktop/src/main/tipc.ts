@@ -2751,6 +2751,12 @@ export const router = {
   saveAcpAgent: t.procedure
     .input<{ agent: ACPAgentConfig }>()
     .action(async ({ input }) => {
+      // Block saving agent with reserved name "internal" to avoid config conflicts
+      // The internal agent is a built-in and should not be persisted as an external agent
+      if (input.agent.name === 'internal') {
+        return { success: false, error: 'Cannot save agent with reserved name "internal"' }
+      }
+
       const config = configStore.get()
       const agents = config.acpAgents || []
 

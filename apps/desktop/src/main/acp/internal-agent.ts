@@ -401,11 +401,13 @@ export async function runInternalSubSession(
       if (update.conversationHistory) {
         const lastMsg = update.conversationHistory[update.conversationHistory.length - 1];
         if (lastMsg && lastMsg.role === 'assistant' && lastMsg.content) {
-          // Check if we already have this message (avoid duplicates)
-          const existingAssistant = subSession.conversationHistory.find(
-            m => m.role === 'assistant' && m.content === lastMsg.content
-          );
-          if (!existingAssistant) {
+          // Check only against the last message in our history to avoid duplicates
+          // Using .find() over full history can drop legitimate repeated assistant outputs
+          const lastHistoryMsg = subSession.conversationHistory[subSession.conversationHistory.length - 1];
+          const isDuplicate = lastHistoryMsg &&
+            lastHistoryMsg.role === 'assistant' &&
+            lastHistoryMsg.content === lastMsg.content;
+          if (!isDuplicate) {
             subSession.conversationHistory.push({
               role: 'assistant',
               content: lastMsg.content,
@@ -432,10 +434,15 @@ export async function runInternalSubSession(
       effectiveProfileSnapshot
     );
 
-    // Update sub-session state
-    subSession.status = 'completed';
-    subSession.endTime = Date.now();
-    subSession.result = result.content;
+    // Update sub-session state only if not already cancelled
+    // This prevents a cancelled sub-session from transitioning back to completed
+    // Note: Re-fetch from map since cancelSubSession() can mutate status asynchronously
+    const currentSubSession = activeSubSessions.get(subSessionId);
+    if (currentSubSession && currentSubSession.status !== 'cancelled') {
+      currentSubSession.status = 'completed';
+      currentSubSession.endTime = Date.now();
+      currentSubSession.result = result.content;
+    }
 
     // Add final assistant message to conversation history (if not already added)
     const existingFinal = subSession.conversationHistory.find(

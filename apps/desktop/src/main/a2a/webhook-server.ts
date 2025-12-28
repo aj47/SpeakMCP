@@ -188,7 +188,9 @@ export class A2AWebhookServer {
 
     // Parse the path to extract task ID
     const url = new URL(req.url || '/', `http://${this.host}:${this.port}`);
-    const pathMatch = url.pathname.match(new RegExp(`^${this.pathPrefix}/(.+)$`));
+    // Escape regex metacharacters in pathPrefix to prevent incorrect matching
+    const escapedPrefix = this.pathPrefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const pathMatch = url.pathname.match(new RegExp(`^${escapedPrefix}/(.+)$`));
     
     if (!pathMatch) {
       res.writeHead(404, { 'Content-Type': 'application/json' });

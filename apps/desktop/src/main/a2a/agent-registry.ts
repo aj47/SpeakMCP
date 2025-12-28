@@ -126,7 +126,18 @@ export class A2AAgentRegistry {
       logA2A(`Failed to discover agent at ${baseUrl}: ${errorMessage}`);
 
       // Update agent status if already registered
-      const existing = this.agents.get(normalizedUrl);
+      // Try both the input URL and check all registered agents for matching URLs
+      // This handles cases where card.url differs from the discovery baseUrl
+      let existing = this.agents.get(normalizedUrl);
+      if (!existing) {
+        // Fallback: search for any agent whose card.url matches our discovery URL
+        for (const [url, agent] of this.agents.entries()) {
+          if (url === normalizedUrl || agent.card.url.replace(/\/$/, '') === normalizedUrl) {
+            existing = agent;
+            break;
+          }
+        }
+      }
       if (existing) {
         existing.isReachable = false;
         existing.lastError = errorMessage;
@@ -158,11 +169,12 @@ export class A2AAgentRegistry {
     }
 
     // Create or update the registered agent
+    // Preserve existing tags if not explicitly provided (e.g., during discoverAgent refresh)
     const registered: RegisteredAgent = {
       card,
       lastUpdated: Date.now(),
       isReachable: true,
-      tags,
+      tags: tags ?? existingAgent?.tags,
     };
 
     this.agents.set(normalizedUrl, registered);

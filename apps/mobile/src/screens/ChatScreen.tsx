@@ -2164,7 +2164,97 @@ export default function ChatScreen({ route, navigation }: any) {
                   // the same server-created conversation when the first attempt failed mid-stream
                   const retryClient = getSessionClient();
                   const recoveryConversationId = retryClient?.getRecoveryConversationId();
-                  if (recoveryConversationId) {
+
+                  // Try to recover conversation state from server first (fixes #815)
+                  // If the server already processed the message, we should sync the state
+                  // instead of re-sending the message
+                  if (recoveryConversationId && retryClient) {
+                    console.log('[ChatScreen] Retry: Checking server conversation state:', recoveryConversationId);
+                    try {
+                      const serverConversation = await retryClient.getConversation(recoveryConversationId);
+                      if (serverConversation && serverConversation.messages.length > 0) {
+                        // Check if the server has the user's message and a response
+                        const serverMessages = serverConversation.messages;
+
+                        // Find the index of the last user message
+                        let lastUserMsgIndex = -1;
+                        for (let i = serverMessages.length - 1; i >= 0; i--) {
+                          if (serverMessages[i].role === 'user') {
+                            lastUserMsgIndex = i;
+                            break;
+                          }
+                        }
+
+                        // Check if there's ANY assistant message with content after the last user message
+                        // This handles cases where tool messages follow the assistant response
+                        let hasAssistantResponse = false;
+                        if (lastUserMsgIndex >= 0) {
+                          for (let i = lastUserMsgIndex + 1; i < serverMessages.length; i++) {
+                            if (serverMessages[i].role === 'assistant' && serverMessages[i].content) {
+                              hasAssistantResponse = true;
+                              break;
+                            }
+                          }
+                        }
+
+                        // If there's an assistant response after the last user message, server already processed the request
+                        if (hasAssistantResponse) {
+                          console.log('[ChatScreen] Retry: Server already has response, syncing state');
+
+                          // Update the server conversation ID
+                          await sessionStore.setServerConversationId(recoveryConversationId);
+
+                          // Convert server messages to ChatMessage format, filtering out tool messages
+                          // and merging their toolResults into the preceding assistant message
+                          const recoveredMessages: ChatMessage[] = [];
+                          for (const msg of serverMessages) {
+                            // Only include 'user' and 'assistant' roles
+                            if (msg.role === 'user' || msg.role === 'assistant') {
+                              recoveredMessages.push({
+                                id: msg.id,
+                                role: msg.role,
+                                content: msg.content,
+                                toolCalls: msg.toolCalls,
+                                toolResults: msg.toolResults,
+                              });
+                            } else if (msg.role === 'tool' && recoveredMessages.length > 0) {
+                              // Merge tool message toolResults into the preceding assistant message
+                              const lastMessage = recoveredMessages[recoveredMessages.length - 1];
+                              if (lastMessage.role === 'assistant' && lastMessage.toolCalls && lastMessage.toolCalls.length > 0) {
+                                const hasToolResults = msg.toolResults && msg.toolResults.length > 0;
+                                const hasContent = msg.content && msg.content.trim().length > 0;
+
+                                if (hasToolResults) {
+                                  // Merge toolResults into the existing assistant message
+                                  lastMessage.toolResults = [
+                                    ...(lastMessage.toolResults || []),
+                                    ...(msg.toolResults || []),
+                                  ];
+                                  // Also preserve any content from the tool message (e.g., error messages)
+                                  if (hasContent) {
+                                    lastMessage.content = (lastMessage.content || '') +
+                                      (lastMessage.content ? '\n' : '') + msg.content;
+                                  }
+                                }
+                              }
+                            }
+                          }
+
+                          // Replace local messages with server state
+                          setMessages(recoveredMessages);
+
+                          // Also persist to session store
+                          await sessionStore.setMessages(recoveredMessages);
+
+                          console.log('[ChatScreen] Retry: Successfully recovered', recoveredMessages.length, 'messages from server');
+                          return; // Don't retry, we've recovered the state
+                        }
+                      }
+                    } catch (error) {
+                      console.log('[ChatScreen] Retry: Could not fetch server state, will retry message:', error);
+                    }
+
+                    // If we couldn't recover, set the conversation ID for the retry
                     console.log('[ChatScreen] Retry: Using recovery conversationId:', recoveryConversationId);
                     await sessionStore.setServerConversationId(recoveryConversationId);
                   }

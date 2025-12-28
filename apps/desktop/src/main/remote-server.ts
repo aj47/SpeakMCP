@@ -782,6 +782,58 @@ export async function startRemoteServer() {
     }
   })
 
+  // ============================================
+  // Conversation Recovery Endpoints (for mobile app)
+  // ============================================
+
+  // GET /v1/conversations/:id - Fetch conversation state for recovery
+  fastify.get("/v1/conversations/:id", async (req, reply) => {
+    try {
+      const params = req.params as { id: string }
+      const conversationId = params.id
+
+      if (!conversationId || typeof conversationId !== "string") {
+        return reply.code(400).send({ error: "Missing or invalid conversation ID" })
+      }
+
+      // Validate conversation ID format to prevent path traversal attacks
+      // Valid IDs match pattern: conv_${timestamp}_${random} where random is alphanumeric
+      if (conversationId.includes("..") || conversationId.includes("/") || conversationId.includes("\\")) {
+        return reply.code(400).send({ error: "Invalid conversation ID: path traversal characters not allowed" })
+      }
+      if (!/^conv_[a-zA-Z0-9_]+$/.test(conversationId)) {
+        return reply.code(400).send({ error: "Invalid conversation ID format" })
+      }
+
+      const conversation = await conversationService.loadConversation(conversationId)
+
+      if (!conversation) {
+        return reply.code(404).send({ error: "Conversation not found" })
+      }
+
+      diagnosticsService.logInfo("remote-server", `Fetched conversation ${conversationId} for recovery`)
+
+      return reply.send({
+        id: conversation.id,
+        title: conversation.title,
+        createdAt: conversation.createdAt,
+        updatedAt: conversation.updatedAt,
+        messages: conversation.messages.map(msg => ({
+          id: msg.id,
+          role: msg.role,
+          content: msg.content,
+          timestamp: msg.timestamp,
+          toolCalls: msg.toolCalls,
+          toolResults: msg.toolResults,
+        })),
+        metadata: conversation.metadata,
+      })
+    } catch (error: any) {
+      diagnosticsService.logError("remote-server", "Failed to fetch conversation", error)
+      return reply.code(500).send({ error: error?.message || "Failed to fetch conversation" })
+    }
+  })
+
   // Kill switch endpoint - emergency stop all agent sessions
   fastify.post("/v1/emergency-stop", async (_req, reply) => {
     console.log("[KILLSWITCH] /v1/emergency-stop endpoint called")

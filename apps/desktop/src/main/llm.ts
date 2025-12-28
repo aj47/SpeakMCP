@@ -221,8 +221,14 @@ export async function processTranscriptWithTools(
 
   const userGuidelines = config.mcpToolsSystemPrompt
   // Load enabled agent skills instructions for non-agent mode too
+  // Use the current profile's skills config
   const { skillsService } = await import("./skills-service")
-  const skillsInstructions = skillsService.getEnabledSkillsInstructions()
+  const { profileService } = await import("./profile-service")
+  const currentProfileId = config.mcpCurrentProfileId
+  const enabledSkillIds = currentProfileId
+    ? profileService.getEnabledSkillIdsForProfile(currentProfileId)
+    : []
+  const skillsInstructions = skillsService.getEnabledSkillsInstructionsForProfile(enabledSkillIds)
 
   const systemPrompt = constructSystemPrompt(
     uniqueAvailableTools,
@@ -806,10 +812,12 @@ export async function processTranscriptWithAgentMode(
   const agentModeGuidelines = effectiveProfileSnapshot?.guidelines ?? config.mcpToolsSystemPrompt ?? ""
   const customSystemPrompt = effectiveProfileSnapshot?.systemPrompt ?? config.mcpCustomSystemPrompt
 
-  // Load enabled agent skills instructions
+  // Load enabled agent skills instructions for the current profile
   // Skills provide specialized instructions that improve AI performance on specific tasks
+  // Use per-profile skills config if available, otherwise fall back to empty (no skills)
   const { skillsService } = await import("./skills-service")
-  const skillsInstructions = skillsService.getEnabledSkillsInstructions()
+  const enabledSkillIds = effectiveProfileSnapshot?.skillsConfig?.enabledSkillIds ?? []
+  const skillsInstructions = skillsService.getEnabledSkillsInstructionsForProfile(enabledSkillIds)
 
   // Construct system prompt using the new approach
   const systemPrompt = constructSystemPrompt(

@@ -2804,6 +2804,7 @@ export const router = {
       return skillsService.exportSkillToMarkdown(input.id)
     }),
 
+  // Import a single skill - can be a .md file or a folder containing SKILL.md
   importSkillFile: t.procedure.action(async () => {
     const { skillsService } = await import("./skills-service")
     const result = await dialog.showOpenDialog({
@@ -2812,7 +2813,7 @@ export const router = {
         { name: "Skill Files", extensions: ["md"] },
         { name: "All Files", extensions: ["*"] },
       ],
-      properties: ["openFile"],
+      properties: ["openFile", "showHiddenFiles"],
     })
 
     if (result.canceled || result.filePaths.length === 0) {
@@ -2820,6 +2821,38 @@ export const router = {
     }
 
     return skillsService.importSkillFromFile(result.filePaths[0])
+  }),
+
+  // Import a skill from a folder containing SKILL.md
+  importSkillFolder: t.procedure.action(async () => {
+    const { skillsService } = await import("./skills-service")
+    const result = await dialog.showOpenDialog({
+      title: "Import Skill Folder",
+      message: "Select a folder containing SKILL.md",
+      properties: ["openDirectory", "showHiddenFiles"],
+    })
+
+    if (result.canceled || result.filePaths.length === 0) {
+      return null
+    }
+
+    return skillsService.importSkillFromFolder(result.filePaths[0])
+  }),
+
+  // Bulk import all skill folders from a parent directory
+  importSkillsFromParentFolder: t.procedure.action(async () => {
+    const { skillsService } = await import("./skills-service")
+    const result = await dialog.showOpenDialog({
+      title: "Import Skills from Folder",
+      message: "Select a folder containing multiple skill folders (each with SKILL.md)",
+      properties: ["openDirectory", "showHiddenFiles"],
+    })
+
+    if (result.canceled || result.filePaths.length === 0) {
+      return null
+    }
+
+    return skillsService.importSkillsFromParentFolder(result.filePaths[0])
   }),
 
   saveSkillFile: t.procedure
@@ -2864,6 +2897,48 @@ export const router = {
     const { skillsService } = await import("./skills-service")
     return skillsService.getEnabledSkillsInstructions()
   }),
+
+  // Per-profile skill management
+  getProfileSkillsConfig: t.procedure
+    .input<{ profileId: string }>()
+    .action(async ({ input }) => {
+      const profile = profileService.getProfile(input.profileId)
+      return profile?.skillsConfig ?? { enabledSkillIds: [], allSkillsDisabledByDefault: true }
+    }),
+
+  updateProfileSkillsConfig: t.procedure
+    .input<{ profileId: string; enabledSkillIds?: string[]; allSkillsDisabledByDefault?: boolean }>()
+    .action(async ({ input }) => {
+      const { profileId, ...config } = input
+      return profileService.updateProfileSkillsConfig(profileId, config)
+    }),
+
+  toggleProfileSkill: t.procedure
+    .input<{ profileId: string; skillId: string }>()
+    .action(async ({ input }) => {
+      return profileService.toggleProfileSkill(input.profileId, input.skillId)
+    }),
+
+  isSkillEnabledForProfile: t.procedure
+    .input<{ profileId: string; skillId: string }>()
+    .action(async ({ input }) => {
+      return profileService.isSkillEnabledForProfile(input.profileId, input.skillId)
+    }),
+
+  getEnabledSkillIdsForProfile: t.procedure
+    .input<{ profileId: string }>()
+    .action(async ({ input }) => {
+      return profileService.getEnabledSkillIdsForProfile(input.profileId)
+    }),
+
+  // Get enabled skills instructions for a specific profile
+  getEnabledSkillsInstructionsForProfile: t.procedure
+    .input<{ profileId: string }>()
+    .action(async ({ input }) => {
+      const { skillsService } = await import("./skills-service")
+      const enabledSkillIds = profileService.getEnabledSkillIdsForProfile(input.profileId)
+      return skillsService.getEnabledSkillsInstructionsForProfile(enabledSkillIds)
+    }),
 }
 
 // TTS Provider Implementation Functions

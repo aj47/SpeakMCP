@@ -12,11 +12,18 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@renderer/components/ui/dialog"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@renderer/components/ui/dropdown-menu"
 import { tipcClient } from "@renderer/lib/tipc-client"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { AgentSkill } from "@shared/types"
 import { toast } from "sonner"
-import { Plus, Pencil, Trash2, Download, Upload, FolderOpen, RefreshCw, Sparkles, Loader2 } from "lucide-react"
+import { Plus, Pencil, Trash2, Download, Upload, FolderOpen, RefreshCw, Sparkles, Loader2, ChevronDown, FolderUp } from "lucide-react"
+import { ProfileBadge } from "@renderer/components/profile-badge"
 
 export function Component() {
   const queryClient = useQueryClient()
@@ -34,7 +41,30 @@ export function Component() {
     },
   })
 
+  // Get current profile for per-profile skill enabling
+  const currentProfileQuery = useQuery({
+    queryKey: ["current-profile"],
+    queryFn: async () => {
+      return await tipcClient.getCurrentProfile()
+    },
+  })
+
+  // Get enabled skill IDs for the current profile
+  const enabledSkillIdsQuery = useQuery({
+    queryKey: ["enabled-skill-ids", currentProfileQuery.data?.id],
+    queryFn: async () => {
+      if (!currentProfileQuery.data?.id) return []
+      return await tipcClient.getEnabledSkillIdsForProfile({ profileId: currentProfileQuery.data.id })
+    },
+    enabled: !!currentProfileQuery.data?.id,
+  })
+
   const skills = skillsQuery.data || []
+  const currentProfileId = currentProfileQuery.data?.id
+  const enabledSkillIds = enabledSkillIdsQuery.data || []
+
+  // Check if a skill is enabled for the current profile
+  const isSkillEnabled = (skillId: string) => enabledSkillIds.includes(skillId)
 
   const createSkillMutation = useMutation({
     mutationFn: async ({ name, description, instructions }: { name: string; description: string; instructions: string }) => {
@@ -79,12 +109,14 @@ export function Component() {
     },
   })
 
-  const toggleSkillMutation = useMutation({
-    mutationFn: async (id: string) => {
-      return await tipcClient.toggleSkill({ id })
+  // Toggle skill for current profile (per-profile enable/disable)
+  const toggleProfileSkillMutation = useMutation({
+    mutationFn: async (skillId: string) => {
+      if (!currentProfileId) throw new Error("No profile selected")
+      return await tipcClient.toggleProfileSkill({ profileId: currentProfileId, skillId })
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["skills"] })
+      queryClient.invalidateQueries({ queryKey: ["enabled-skill-ids", currentProfileId] })
     },
     onError: (error: Error) => {
       toast.error(`Failed to toggle skill: ${error.message}`)
@@ -103,6 +135,56 @@ export function Component() {
     },
     onError: (error: Error) => {
       toast.error(`Failed to import skill: ${error.message}`)
+    },
+  })
+
+  // Import a single skill folder containing SKILL.md
+  const importSkillFolderMutation = useMutation({
+    mutationFn: async () => {
+      return await tipcClient.importSkillFolder()
+    },
+    onSuccess: (skill: AgentSkill | null) => {
+      if (skill) {
+        queryClient.invalidateQueries({ queryKey: ["skills"] })
+        toast.success(`Skill "${skill.name}" imported successfully`)
+      }
+    },
+    onError: (error: Error) => {
+      toast.error(`Failed to import skill folder: ${error.message}`)
+    },
+  })
+
+  // Bulk import all skill folders from a parent directory
+  const importSkillsFromParentFolderMutation = useMutation({
+    mutationFn: async () => {
+      return await tipcClient.importSkillsFromParentFolder()
+    },
+    onSuccess: (result: { imported: AgentSkill[]; skipped: string[]; errors: Array<{ folder: string; error: string }> } | null) => {
+      if (result) {
+        queryClient.invalidateQueries({ queryKey: ["skills"] })
+        const messages: string[] = []
+        if (result.imported.length > 0) {
+          messages.push(`Imported ${result.imported.length} skill(s)`)
+        }
+        if (result.skipped.length > 0) {
+          messages.push(`${result.skipped.length} already imported`)
+        }
+        if (result.errors.length > 0) {
+          messages.push(`${result.errors.length} failed`)
+        }
+        if (result.imported.length > 0) {
+          toast.success(messages.join(", "))
+        } else if (result.skipped.length > 0) {
+          toast.info(messages.join(", "))
+        } else if (result.errors.length > 0) {
+          toast.error(`Failed to import skills: ${result.errors.map(e => e.folder).join(", ")}`)
+        } else {
+          toast.info("No skill folders found")
+        }
+      }
+    },
+    onError: (error: Error) => {
+      toast.error(`Failed to import skills: ${error.message}`)
     },
   })
 
@@ -213,15 +295,33 @@ export function Component() {
               <RefreshCw className={`h-3 w-3 mr-1 ${scanSkillsFolderMutation.isPending ? 'animate-spin' : ''}`} />
               Scan Folder
             </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => importSkillMutation.mutate()}
-              disabled={importSkillMutation.isPending}
-            >
-              <Upload className="h-3 w-3 mr-1" />
-              Import
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={importSkillMutation.isPending || importSkillFolderMutation.isPending || importSkillsFromParentFolderMutation.isPending}
+                >
+                  <Upload className="h-3 w-3 mr-1" />
+                  Import
+                  <ChevronDown className="h-3 w-3 ml-1" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => importSkillMutation.mutate()}>
+                  <Upload className="h-4 w-4 mr-2" />
+                  Import SKILL.md File
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => importSkillFolderMutation.mutate()}>
+                  <FolderOpen className="h-4 w-4 mr-2" />
+                  Import Skill Folder
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => importSkillsFromParentFolderMutation.mutate()}>
+                  <FolderUp className="h-4 w-4 mr-2" />
+                  Bulk Import from Folder
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <Button
               size="sm"
               onClick={() => setIsCreateDialogOpen(true)}
@@ -232,10 +332,13 @@ export function Component() {
           </div>
         </div>
 
-        <p className="text-sm text-muted-foreground">
-          Skills are specialized instructions that improve AI performance on specific tasks.
-          Enable skills to include their instructions in the system prompt.
-        </p>
+        <div className="flex items-center gap-2">
+          <p className="text-sm text-muted-foreground">
+            Skills are specialized instructions that improve AI performance on specific tasks.
+            Enable skills to include their instructions in the system prompt.
+          </p>
+          <ProfileBadge />
+        </div>
 
         {/* Skills List */}
         <div className="space-y-3">
@@ -262,8 +365,9 @@ export function Component() {
               >
                 <div className="flex items-start gap-3 flex-1 min-w-0">
                   <Switch
-                    checked={skill.enabled}
-                    onCheckedChange={() => toggleSkillMutation.mutate(skill.id)}
+                    checked={isSkillEnabled(skill.id)}
+                    onCheckedChange={() => toggleProfileSkillMutation.mutate(skill.id)}
+                    disabled={!currentProfileId}
                   />
                   <div className="flex-1 min-w-0">
                     <h3 className="font-medium">{skill.name}</h3>

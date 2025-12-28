@@ -235,6 +235,84 @@ class SkillsService {
   }
 
   /**
+   * Import a skill from a folder containing SKILL.md
+   * @param folderPath Path to the folder containing SKILL.md
+   * @returns The imported skill, or existing skill if already imported
+   */
+  importSkillFromFolder(folderPath: string): AgentSkill {
+    const skillFilePath = path.join(folderPath, "SKILL.md")
+
+    if (!fs.existsSync(skillFilePath)) {
+      throw new Error(`No SKILL.md found in folder: ${folderPath}`)
+    }
+
+    return this.importSkillFromFile(skillFilePath)
+  }
+
+  /**
+   * Bulk import all skill folders from a parent directory
+   * Looks for subdirectories containing SKILL.md files
+   * @param parentFolderPath Path to the parent folder containing skill folders
+   * @returns Object with imported skills and any errors encountered
+   */
+  importSkillsFromParentFolder(parentFolderPath: string): {
+    imported: AgentSkill[]
+    skipped: string[]
+    errors: Array<{ folder: string; error: string }>
+  } {
+    const imported: AgentSkill[] = []
+    const skipped: string[] = []
+    const errors: Array<{ folder: string; error: string }> = []
+
+    if (!fs.existsSync(parentFolderPath)) {
+      throw new Error(`Folder does not exist: ${parentFolderPath}`)
+    }
+
+    const stat = fs.statSync(parentFolderPath)
+    if (!stat.isDirectory()) {
+      throw new Error(`Path is not a directory: ${parentFolderPath}`)
+    }
+
+    try {
+      const entries = fs.readdirSync(parentFolderPath, { withFileTypes: true })
+
+      for (const entry of entries) {
+        if (!entry.isDirectory()) continue
+
+        const skillFolderPath = path.join(parentFolderPath, entry.name)
+        const skillFilePath = path.join(skillFolderPath, "SKILL.md")
+
+        // Check if this folder contains a SKILL.md
+        if (!fs.existsSync(skillFilePath)) {
+          continue // Not a skill folder, skip silently
+        }
+
+        // Check if already imported
+        const existingSkill = this.getSkillByFilePath(skillFilePath)
+        if (existingSkill) {
+          skipped.push(entry.name)
+          logApp(`Skill already imported, skipping: ${entry.name}`)
+          continue
+        }
+
+        try {
+          const skill = this.importSkillFromFile(skillFilePath)
+          imported.push(skill)
+          logApp(`Imported skill from folder: ${entry.name}`)
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : String(error)
+          errors.push({ folder: entry.name, error: errorMessage })
+          logApp(`Failed to import skill from ${entry.name}:`, error)
+        }
+      }
+    } catch (error) {
+      throw new Error(`Failed to read parent folder: ${error instanceof Error ? error.message : String(error)}`)
+    }
+
+    return { imported, skipped, errors }
+  }
+
+  /**
    * Export a skill to SKILL.md format
    */
   exportSkillToMarkdown(id: string): string {
@@ -251,6 +329,37 @@ class SkillsService {
    */
   getEnabledSkillsInstructions(): string {
     const enabledSkills = this.getEnabledSkills()
+    if (enabledSkills.length === 0) {
+      return ""
+    }
+
+    const skillsContent = enabledSkills.map(skill => {
+      return `## Skill: ${skill.name}
+${skill.description ? `*${skill.description}*\n` : ""}
+${skill.instructions}`
+    }).join("\n\n---\n\n")
+
+    return `
+# Active Agent Skills
+
+The following skills provide specialized instructions for specific tasks:
+
+${skillsContent}
+`
+  }
+
+  /**
+   * Get the combined instructions for skills enabled for a specific profile
+   * @param enabledSkillIds Array of skill IDs that are enabled for the profile
+   */
+  getEnabledSkillsInstructionsForProfile(enabledSkillIds: string[]): string {
+    if (enabledSkillIds.length === 0) {
+      return ""
+    }
+
+    const allSkills = this.getSkills()
+    const enabledSkills = allSkills.filter(skill => enabledSkillIds.includes(skill.id))
+
     if (enabledSkills.length === 0) {
       return ""
     }

@@ -475,7 +475,7 @@ export function Component() {
 
   // Text input handlers
   useEffect(() => {
-    const unlisten = rendererHandlers.showTextInput.listen(() => {
+    const unlisten = rendererHandlers.showTextInput.listen((data) => {
       // Reset any previous pending state to ensure textarea is enabled
       logUI('[Panel] showTextInput received: resetting text input mutations and enabling textarea')
       textInputMutation.reset()
@@ -491,6 +491,10 @@ export function Component() {
       // Panel window is already shown by the keyboard handler
       // Focus the text input after a short delay to ensure it's rendered
       setTimeout(() => {
+        // Set initial text if provided (e.g., from predefined prompts)
+        if (data?.initialText) {
+          textInputPanelRef.current?.setInitialText(data.initialText)
+        }
         textInputPanelRef.current?.focus()
       }, 100)
     })

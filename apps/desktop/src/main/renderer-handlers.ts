@@ -13,7 +13,7 @@ export type RendererHandlers = {
   finishMcpRecording: () => void
   startOrFinishMcpRecording: (data?: { conversationId?: string; sessionId?: string; fromTile?: boolean; fromButtonClick?: boolean }) => void
 
-  showTextInput: () => void
+  showTextInput: (data?: { initialText?: string }) => void
   hideTextInput: () => void
 
   agentProgressUpdate: (update: AgentProgressUpdate) => void

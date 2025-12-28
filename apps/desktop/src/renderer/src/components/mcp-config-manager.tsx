@@ -2164,32 +2164,32 @@ export function MCPConfigManager({
                                     <Eye className="h-4 w-4" />
                                   </Button>
                                 </DialogTrigger>
-                                <DialogContent className="max-w-2xl">
-                                  <DialogHeader>
-                                    <DialogTitle>{tool.name}</DialogTitle>
-                                    <DialogDescription>
+                                <DialogContent className="max-w-2xl w-[90vw] max-h-[85vh] overflow-y-auto">
+                                  <DialogHeader className="min-w-0">
+                                    <DialogTitle className="break-words">{tool.name}</DialogTitle>
+                                    <DialogDescription className="break-words">
                                       {tool.description}
                                     </DialogDescription>
                                   </DialogHeader>
-                                  <div className="space-y-4">
-                                    <div>
+                                  <div className="space-y-4 min-w-0">
+                                    <div className="min-w-0">
                                       <Label className="text-sm font-medium">
                                         Server
                                       </Label>
-                                      <p className="text-sm text-muted-foreground mt-1">
+                                      <p className="text-sm text-muted-foreground mt-1 break-words">
                                         {tool.serverName}
                                       </p>
                                     </div>
-                                    <div>
+                                    <div className="min-w-0">
                                       <Label className="text-sm font-medium">
                                         Input Schema
                                       </Label>
-                                      <pre className="mt-2 max-h-64 overflow-auto rounded-md bg-muted p-3 text-xs">
+                                      <pre className="mt-2 max-h-80 overflow-auto rounded-md bg-muted p-3 text-xs whitespace-pre-wrap break-words">
                                         {JSON.stringify(tool.inputSchema, null, 2)}
                                       </pre>
                                     </div>
                                   </div>
-                                  <div>
+                                  <div className="min-w-0">
                                     <Label className="text-sm font-medium">
                                       Profile Availability
                                     </Label>

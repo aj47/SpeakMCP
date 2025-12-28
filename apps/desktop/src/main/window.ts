@@ -77,6 +77,7 @@ function shouldAttemptCrashRecovery(windowId: WINDOW_ID): boolean {
  */
 function handleRendererCrash(
   windowId: WINDOW_ID,
+  crashedWindow: BrowserWindow,
   details: Electron.RenderProcessGoneDetails,
   recreateWindow: () => BrowserWindow | void
 ): void {
@@ -97,6 +98,18 @@ function handleRendererCrash(
     { ...crashInfo, details }
   )
 
+  // IMMEDIATELY clear the crashed window from WINDOWS map to prevent
+  // other code from attempting IPC against the dead webContents during
+  // the recovery delay. This fixes the race condition where:
+  // - whenPanelReady() might see isLoading()==false on dead webContents
+  // - getWindowRendererHandlers() would return handlers for dead webContents
+  WINDOWS.delete(windowId)
+
+  // Also reset panel-specific ready state if the panel crashed
+  if (windowId === "panel") {
+    panelWebContentsReady = false
+  }
+
   // Check if we should attempt recovery
   if (!shouldAttemptCrashRecovery(windowId)) {
     diagnosticsService.logError(
@@ -104,6 +117,12 @@ function handleRendererCrash(
       `Crash recovery disabled for ${windowId} due to repeated crashes`,
       crashInfo
     )
+    // Still destroy the crashed window even if not recovering
+    try {
+      crashedWindow.destroy()
+    } catch (e) {
+      // Window may already be destroyed
+    }
     return
   }
 
@@ -115,19 +134,21 @@ function handleRendererCrash(
     // after the crash event but before this delayed callback runs
     if (state.isQuitting) {
       logApp(`[CRASH RECOVERY] App is quitting, skipping recovery for ${windowId}`)
+      // Still destroy the crashed window during quit
+      try {
+        crashedWindow.destroy()
+      } catch (e) {
+        // Window may already be destroyed
+      }
       return
     }
 
     try {
-      // Remove the crashed window from the map if still there
-      const existingWin = WINDOWS.get(windowId)
-      if (existingWin) {
-        try {
-          existingWin.destroy()
-        } catch (e) {
-          // Window may already be destroyed
-        }
-        WINDOWS.delete(windowId)
+      // Destroy the crashed window (already removed from WINDOWS map above)
+      try {
+        crashedWindow.destroy()
+      } catch (e) {
+        // Window may already be destroyed
       }
 
       // Recreate the window
@@ -246,7 +267,7 @@ function createBaseWindow({
       // Only attempt recovery for crash reasons (not clean exit)
       // Also skip recovery if app is quitting - SIGTERM during shutdown is not a crash
       if (details.reason !== "clean-exit" && !state.isQuitting) {
-        handleRendererCrash(id, details, onCrashRecreate)
+        handleRendererCrash(id, win, details, onCrashRecreate)
       }
     })
   }

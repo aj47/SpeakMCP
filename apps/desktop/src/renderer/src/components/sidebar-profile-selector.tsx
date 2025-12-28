@@ -12,6 +12,8 @@ import {
   SelectValue,
 } from "./ui/select"
 
+const EDIT_PROFILES_VALUE = "__edit_profiles__"
+
 export function SidebarProfileSelector() {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
@@ -66,16 +68,18 @@ export function SidebarProfileSelector() {
     },
   })
 
-  const handleEditProfilesClick = (e: React.MouseEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    navigate("/settings/tools")
+  const handleValueChange = (value: string) => {
+    if (value === EDIT_PROFILES_VALUE) {
+      navigate("/settings/tools")
+    } else {
+      setCurrentProfileMutation.mutate(value)
+    }
   }
 
   return (
     <Select
       value={currentProfile?.id || ""}
-      onValueChange={(value) => setCurrentProfileMutation.mutate(value)}
+      onValueChange={handleValueChange}
     >
       <SelectTrigger className="h-8 text-xs">
         <span className="i-mingcute-user-3-line mr-1.5 h-3.5 w-3.5 shrink-0" />
@@ -89,14 +93,13 @@ export function SidebarProfileSelector() {
           </SelectItem>
         ))}
         <SelectSeparator />
-        <div
-          className="relative flex w-full cursor-pointer select-none items-center rounded-sm py-1.5 pl-2 pr-8 text-sm outline-none hover:bg-accent hover:text-accent-foreground text-muted-foreground"
-          onClick={handleEditProfilesClick}
-          onPointerDown={(e) => e.stopPropagation()}
+        <SelectItem
+          value={EDIT_PROFILES_VALUE}
+          className="text-muted-foreground"
         >
           <span className="i-mingcute-settings-3-line mr-1.5 h-3.5 w-3.5 shrink-0" />
           Edit Profiles
-        </div>
+        </SelectItem>
       </SelectContent>
     </Select>
   )

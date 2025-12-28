@@ -2164,7 +2164,50 @@ export default function ChatScreen({ route, navigation }: any) {
                   // the same server-created conversation when the first attempt failed mid-stream
                   const retryClient = getSessionClient();
                   const recoveryConversationId = retryClient?.getRecoveryConversationId();
-                  if (recoveryConversationId) {
+
+                  // Try to recover conversation state from server first (fixes #815)
+                  // If the server already processed the message, we should sync the state
+                  // instead of re-sending the message
+                  if (recoveryConversationId && retryClient) {
+                    console.log('[ChatScreen] Retry: Checking server conversation state:', recoveryConversationId);
+                    try {
+                      const serverConversation = await retryClient.getConversation(recoveryConversationId);
+                      if (serverConversation && serverConversation.messages.length > 0) {
+                        // Check if the server has the user's message and a response
+                        const serverMessages = serverConversation.messages;
+                        const lastServerMsg = serverMessages[serverMessages.length - 1];
+
+                        // If the last message is from the assistant, the server already processed the request
+                        if (lastServerMsg.role === 'assistant' && lastServerMsg.content) {
+                          console.log('[ChatScreen] Retry: Server already has response, syncing state');
+
+                          // Update the server conversation ID
+                          await sessionStore.setServerConversationId(recoveryConversationId);
+
+                          // Convert server messages to ChatMessage format and update local state
+                          const recoveredMessages: ChatMessage[] = serverMessages.map(msg => ({
+                            id: msg.id,
+                            role: msg.role as 'user' | 'assistant',
+                            content: msg.content,
+                            toolCalls: msg.toolCalls,
+                            toolResults: msg.toolResults,
+                          }));
+
+                          // Replace local messages with server state
+                          setMessages(recoveredMessages);
+
+                          // Also persist to session store
+                          await sessionStore.setMessages(recoveredMessages);
+
+                          console.log('[ChatScreen] Retry: Successfully recovered', recoveredMessages.length, 'messages from server');
+                          return; // Don't retry, we've recovered the state
+                        }
+                      }
+                    } catch (error) {
+                      console.log('[ChatScreen] Retry: Could not fetch server state, will retry message:', error);
+                    }
+
+                    // If we couldn't recover, set the conversation ID for the retry
                     console.log('[ChatScreen] Retry: Using recovery conversationId:', recoveryConversationId);
                     await sessionStore.setServerConversationId(recoveryConversationId);
                   }

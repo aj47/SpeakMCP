@@ -2742,6 +2742,128 @@ export const router = {
 
       return true
     }),
+
+  // Agent Skills Management
+  getSkills: t.procedure.action(async () => {
+    const { skillsService } = await import("./skills-service")
+    return skillsService.getSkills()
+  }),
+
+  getEnabledSkills: t.procedure.action(async () => {
+    const { skillsService } = await import("./skills-service")
+    return skillsService.getEnabledSkills()
+  }),
+
+  getSkill: t.procedure
+    .input<{ id: string }>()
+    .action(async ({ input }) => {
+      const { skillsService } = await import("./skills-service")
+      return skillsService.getSkill(input.id)
+    }),
+
+  createSkill: t.procedure
+    .input<{ name: string; description: string; instructions: string }>()
+    .action(async ({ input }) => {
+      const { skillsService } = await import("./skills-service")
+      return skillsService.createSkill(input.name, input.description, input.instructions)
+    }),
+
+  updateSkill: t.procedure
+    .input<{ id: string; name?: string; description?: string; instructions?: string; enabled?: boolean }>()
+    .action(async ({ input }) => {
+      const { skillsService } = await import("./skills-service")
+      const { id, ...updates } = input
+      return skillsService.updateSkill(id, updates)
+    }),
+
+  deleteSkill: t.procedure
+    .input<{ id: string }>()
+    .action(async ({ input }) => {
+      const { skillsService } = await import("./skills-service")
+      return skillsService.deleteSkill(input.id)
+    }),
+
+  toggleSkill: t.procedure
+    .input<{ id: string }>()
+    .action(async ({ input }) => {
+      const { skillsService } = await import("./skills-service")
+      return skillsService.toggleSkill(input.id)
+    }),
+
+  importSkillFromMarkdown: t.procedure
+    .input<{ content: string }>()
+    .action(async ({ input }) => {
+      const { skillsService } = await import("./skills-service")
+      return skillsService.importSkillFromMarkdown(input.content)
+    }),
+
+  exportSkillToMarkdown: t.procedure
+    .input<{ id: string }>()
+    .action(async ({ input }) => {
+      const { skillsService } = await import("./skills-service")
+      return skillsService.exportSkillToMarkdown(input.id)
+    }),
+
+  importSkillFile: t.procedure.action(async () => {
+    const { skillsService } = await import("./skills-service")
+    const result = await dialog.showOpenDialog({
+      title: "Import Skill",
+      filters: [
+        { name: "Skill Files", extensions: ["md"] },
+        { name: "All Files", extensions: ["*"] },
+      ],
+      properties: ["openFile"],
+    })
+
+    if (result.canceled || result.filePaths.length === 0) {
+      return null
+    }
+
+    return skillsService.importSkillFromFile(result.filePaths[0])
+  }),
+
+  saveSkillFile: t.procedure
+    .input<{ id: string }>()
+    .action(async ({ input }) => {
+      const { skillsService } = await import("./skills-service")
+      const skill = skillsService.getSkill(input.id)
+      if (!skill) {
+        throw new Error(`Skill with id ${input.id} not found`)
+      }
+
+      const result = await dialog.showSaveDialog({
+        title: "Export Skill",
+        defaultPath: `${skill.name.replace(/[^a-z0-9]/gi, "-").toLowerCase()}.md`,
+        filters: [
+          { name: "Markdown Files", extensions: ["md"] },
+        ],
+      })
+
+      if (result.canceled || !result.filePath) {
+        return false
+      }
+
+      const content = skillsService.exportSkillToMarkdown(input.id)
+      fs.writeFileSync(result.filePath, content)
+      return true
+    }),
+
+  openSkillsFolder: t.procedure.action(async () => {
+    const { skillsFolder } = await import("./skills-service")
+    // Ensure folder exists
+    fs.mkdirSync(skillsFolder, { recursive: true })
+    await shell.openPath(skillsFolder)
+  }),
+
+  scanSkillsFolder: t.procedure.action(async () => {
+    const { skillsService } = await import("./skills-service")
+    return skillsService.scanSkillsFolder()
+  }),
+
+  getEnabledSkillsInstructions: t.procedure.action(async () => {
+    const { skillsService } = await import("./skills-service")
+    return skillsService.getEnabledSkillsInstructions()
+  }),
 }
 
 // TTS Provider Implementation Functions

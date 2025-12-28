@@ -1,0 +1,299 @@
+import { app } from "electron"
+import path from "path"
+import fs from "fs"
+import { AgentSkill, AgentSkillsData } from "@shared/types"
+import { randomUUID } from "crypto"
+import { logApp } from "./debug"
+
+// Skills are stored in a JSON file in the app data folder
+export const skillsPath = path.join(
+  app.getPath("appData"),
+  process.env.APP_ID,
+  "skills.json"
+)
+
+// Skills folder for SKILL.md files (optional - for users who want to manage skills as files)
+export const skillsFolder = path.join(
+  app.getPath("appData"),
+  process.env.APP_ID,
+  "skills"
+)
+
+/**
+ * Parse a SKILL.md file content into skill metadata and instructions
+ * Format:
+ * ---
+ * name: skill-name
+ * description: Description of what skill does
+ * ---
+ * 
+ * # Instructions
+ * [Markdown content]
+ */
+function parseSkillMarkdown(content: string): { name: string; description: string; instructions: string } | null {
+  const frontmatterMatch = content.match(/^---\s*\n([\s\S]*?)\n---\s*\n([\s\S]*)$/)
+  
+  if (!frontmatterMatch) {
+    // No frontmatter, treat entire content as instructions
+    return null
+  }
+
+  const frontmatter = frontmatterMatch[1]
+  const instructions = frontmatterMatch[2].trim()
+
+  // Parse YAML-like frontmatter (simple key: value pairs)
+  const nameMatch = frontmatter.match(/^name:\s*(.+)$/m)
+  const descriptionMatch = frontmatter.match(/^description:\s*(.+)$/m)
+
+  if (!nameMatch) {
+    return null
+  }
+
+  return {
+    name: nameMatch[1].trim(),
+    description: descriptionMatch ? descriptionMatch[1].trim() : "",
+    instructions,
+  }
+}
+
+/**
+ * Generate SKILL.md content from a skill
+ */
+function generateSkillMarkdown(skill: AgentSkill): string {
+  return `---
+name: ${skill.name}
+description: ${skill.description}
+---
+
+${skill.instructions}
+`
+}
+
+class SkillsService {
+  private skillsData: AgentSkillsData | undefined
+
+  constructor() {
+    this.loadSkills()
+  }
+
+  private loadSkills(): AgentSkillsData {
+    try {
+      if (fs.existsSync(skillsPath)) {
+        const data = JSON.parse(fs.readFileSync(skillsPath, "utf8")) as AgentSkillsData
+        this.skillsData = data
+        return data
+      }
+    } catch (error) {
+      logApp("Error loading skills:", error)
+    }
+
+    // Initialize with empty skills array
+    this.skillsData = { skills: [] }
+    this.saveSkills()
+    return this.skillsData
+  }
+
+  private saveSkills(): void {
+    if (!this.skillsData) return
+
+    try {
+      const dataFolder = path.dirname(skillsPath)
+      fs.mkdirSync(dataFolder, { recursive: true })
+      fs.writeFileSync(skillsPath, JSON.stringify(this.skillsData, null, 2))
+    } catch (error) {
+      logApp("Error saving skills:", error)
+      throw new Error(`Failed to save skills: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+
+  getSkills(): AgentSkill[] {
+    if (!this.skillsData) {
+      this.loadSkills()
+    }
+    return this.skillsData?.skills || []
+  }
+
+  getEnabledSkills(): AgentSkill[] {
+    return this.getSkills().filter(skill => skill.enabled)
+  }
+
+  getSkill(id: string): AgentSkill | undefined {
+    return this.getSkills().find(s => s.id === id)
+  }
+
+  createSkill(name: string, description: string, instructions: string): AgentSkill {
+    if (!this.skillsData) {
+      this.loadSkills()
+    }
+
+    const newSkill: AgentSkill = {
+      id: randomUUID(),
+      name,
+      description,
+      instructions,
+      enabled: true,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      source: "local",
+    }
+
+    this.skillsData!.skills.push(newSkill)
+    this.saveSkills()
+    return newSkill
+  }
+
+  updateSkill(id: string, updates: Partial<Pick<AgentSkill, "name" | "description" | "instructions" | "enabled">>): AgentSkill {
+    if (!this.skillsData) {
+      this.loadSkills()
+    }
+
+    const skill = this.getSkill(id)
+    if (!skill) {
+      throw new Error(`Skill with id ${id} not found`)
+    }
+
+    const updatedSkill = {
+      ...skill,
+      ...updates,
+      updatedAt: Date.now(),
+    }
+
+    const index = this.skillsData!.skills.findIndex(s => s.id === id)
+    this.skillsData!.skills[index] = updatedSkill
+    this.saveSkills()
+    return updatedSkill
+  }
+
+  deleteSkill(id: string): boolean {
+    if (!this.skillsData) {
+      this.loadSkills()
+    }
+
+    const skill = this.getSkill(id)
+    if (!skill) {
+      return false
+    }
+
+    this.skillsData!.skills = this.skillsData!.skills.filter(s => s.id !== id)
+    this.saveSkills()
+    return true
+  }
+
+  toggleSkill(id: string): AgentSkill {
+    const skill = this.getSkill(id)
+    if (!skill) {
+      throw new Error(`Skill with id ${id} not found`)
+    }
+    return this.updateSkill(id, { enabled: !skill.enabled })
+  }
+
+  /**
+   * Import a skill from SKILL.md content
+   */
+  importSkillFromMarkdown(content: string): AgentSkill {
+    const parsed = parseSkillMarkdown(content)
+    if (!parsed) {
+      throw new Error("Invalid SKILL.md format. Expected YAML frontmatter with 'name' field.")
+    }
+    return this.createSkill(parsed.name, parsed.description, parsed.instructions)
+  }
+
+  /**
+   * Import a skill from a SKILL.md file path
+   */
+  importSkillFromFile(filePath: string): AgentSkill {
+    try {
+      const content = fs.readFileSync(filePath, "utf8")
+      const skill = this.importSkillFromMarkdown(content)
+      // Update the skill with the file path
+      return this.updateSkill(skill.id, { ...skill, source: "imported" } as any)
+    } catch (error) {
+      throw new Error(`Failed to import skill from file: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+
+  /**
+   * Export a skill to SKILL.md format
+   */
+  exportSkillToMarkdown(id: string): string {
+    const skill = this.getSkill(id)
+    if (!skill) {
+      throw new Error(`Skill with id ${id} not found`)
+    }
+    return generateSkillMarkdown(skill)
+  }
+
+  /**
+   * Get the combined instructions from all enabled skills
+   * This is used to inject into the system prompt
+   */
+  getEnabledSkillsInstructions(): string {
+    const enabledSkills = this.getEnabledSkills()
+    if (enabledSkills.length === 0) {
+      return ""
+    }
+
+    const skillsContent = enabledSkills.map(skill => {
+      return `## Skill: ${skill.name}
+${skill.description ? `*${skill.description}*\n` : ""}
+${skill.instructions}`
+    }).join("\n\n---\n\n")
+
+    return `
+# Active Agent Skills
+
+The following skills provide specialized instructions for specific tasks:
+
+${skillsContent}
+`
+  }
+
+  /**
+   * Scan the skills folder for SKILL.md files and import any new ones
+   */
+  scanSkillsFolder(): AgentSkill[] {
+    const importedSkills: AgentSkill[] = []
+
+    try {
+      if (!fs.existsSync(skillsFolder)) {
+        fs.mkdirSync(skillsFolder, { recursive: true })
+        return importedSkills
+      }
+
+      const entries = fs.readdirSync(skillsFolder, { withFileTypes: true })
+
+      for (const entry of entries) {
+        if (entry.isDirectory()) {
+          // Look for SKILL.md in subdirectory
+          const skillPath = path.join(skillsFolder, entry.name, "SKILL.md")
+          if (fs.existsSync(skillPath)) {
+            try {
+              const skill = this.importSkillFromFile(skillPath)
+              importedSkills.push(skill)
+              logApp(`Imported skill from folder: ${entry.name}`)
+            } catch (error) {
+              logApp(`Failed to import skill from ${skillPath}:`, error)
+            }
+          }
+        } else if (entry.name.endsWith(".md")) {
+          // Import standalone .md files
+          const skillPath = path.join(skillsFolder, entry.name)
+          try {
+            const skill = this.importSkillFromFile(skillPath)
+            importedSkills.push(skill)
+            logApp(`Imported skill from file: ${entry.name}`)
+          } catch (error) {
+            logApp(`Failed to import skill from ${skillPath}:`, error)
+          }
+        }
+      }
+    } catch (error) {
+      logApp("Error scanning skills folder:", error)
+    }
+
+    return importedSkills
+  }
+}
+
+export const skillsService = new SkillsService()
+

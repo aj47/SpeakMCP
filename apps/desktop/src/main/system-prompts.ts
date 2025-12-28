@@ -66,11 +66,18 @@ export function constructSystemPrompt(
     inputSchema?: any
   }>,
   customSystemPrompt?: string,
+  skillsInstructions?: string,
 ): string {
   let prompt = getEffectiveSystemPrompt(customSystemPrompt)
 
   if (isAgentMode) {
     prompt += AGENT_MODE_ADDITIONS
+  }
+
+  // Add agent skills instructions if provided
+  // Skills are injected early in the prompt so they can influence tool usage behavior
+  if (skillsInstructions?.trim()) {
+    prompt += `\n\n${skillsInstructions.trim()}`
   }
 
   const formatToolInfo = (

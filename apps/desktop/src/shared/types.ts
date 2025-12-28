@@ -300,6 +300,25 @@ export interface ModelPreset {
   transcriptProcessingModel?: string
 }
 
+// Agent Skills Types
+// Skills are instruction files that can be loaded dynamically to improve AI performance on specialized tasks
+// Based on Anthropic's Agent Skills specification (formerly Claude Skills)
+export interface AgentSkill {
+  id: string
+  name: string
+  description: string
+  instructions: string // The markdown content with instructions
+  enabled: boolean
+  createdAt: number
+  updatedAt: number
+  source?: "local" | "imported" // Where the skill came from
+  filePath?: string // Path to the SKILL.md file if loaded from disk
+}
+
+export interface AgentSkillsData {
+  skills: AgentSkill[]
+}
+
 export type Config = {
   shortcut?: "hold-ctrl" | "ctrl-slash" | "custom"
   customShortcut?: string

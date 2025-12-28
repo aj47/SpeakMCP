@@ -220,12 +220,17 @@ export async function processTranscriptWithTools(
   )
 
   const userGuidelines = config.mcpToolsSystemPrompt
+  // Load enabled agent skills instructions for non-agent mode too
+  const { skillsService } = await import("./skills-service")
+  const skillsInstructions = skillsService.getEnabledSkillsInstructions()
+
   const systemPrompt = constructSystemPrompt(
     uniqueAvailableTools,
     userGuidelines,
     false,
     undefined,
     config.mcpCustomSystemPrompt,
+    skillsInstructions,
   )
 
   const messages = [
@@ -801,6 +806,11 @@ export async function processTranscriptWithAgentMode(
   const agentModeGuidelines = effectiveProfileSnapshot?.guidelines ?? config.mcpToolsSystemPrompt ?? ""
   const customSystemPrompt = effectiveProfileSnapshot?.systemPrompt ?? config.mcpCustomSystemPrompt
 
+  // Load enabled agent skills instructions
+  // Skills provide specialized instructions that improve AI performance on specific tasks
+  const { skillsService } = await import("./skills-service")
+  const skillsInstructions = skillsService.getEnabledSkillsInstructions()
+
   // Construct system prompt using the new approach
   const systemPrompt = constructSystemPrompt(
     uniqueAvailableTools,
@@ -808,6 +818,7 @@ export async function processTranscriptWithAgentMode(
     true,
     toolCapabilities.relevantTools,
     customSystemPrompt, // custom base system prompt from profile snapshot or global config
+    skillsInstructions, // agent skills instructions
   )
 
   // Generic context extraction from chat history - works with any MCP tool
@@ -986,6 +997,7 @@ export async function processTranscriptWithAgentMode(
       true,
       toolCapabilities.relevantTools,
       customSystemPrompt, // Use session-bound custom system prompt
+      skillsInstructions, // agent skills instructions
     )
 
     const postVerifySummaryMessages = [
@@ -2125,6 +2137,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
           true, // isAgentMode
           undefined, // relevantTools
           customSystemPrompt, // Use session-bound custom system prompt
+          skillsInstructions, // agent skills instructions
         )
 
         const summaryMessages = [
@@ -2396,6 +2409,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
           true, // isAgentMode
           undefined, // relevantTools
           customSystemPrompt, // Use session-bound custom system prompt
+          skillsInstructions, // agent skills instructions
         )
 
         const summaryMessages = [

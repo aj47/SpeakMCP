@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { AgentProgressUpdate, QueuedMessage } from '@shared/types'
 
-export type SessionViewMode = 'grid' | 'list'
+export type SessionViewMode = 'grid' | 'list' | 'kanban'
 export type SessionFilter = 'all' | 'active' | 'completed' | 'error'
 export type SessionSortBy = 'recent' | 'oldest' | 'status'
 

@@ -5,7 +5,7 @@ import { tipcClient } from "@renderer/lib/tipc-client"
 import { useAgentStore } from "@renderer/stores"
 import { SessionGrid, SessionTileWrapper } from "@renderer/components/session-grid"
 import { AgentProgress } from "@renderer/components/agent-progress"
-import { MessageCircle, Mic, Plus, Calendar, Trash2, Search, ChevronDown, FolderOpen, CheckCircle2 } from "lucide-react"
+import { MessageCircle, Mic, Plus, Calendar, Trash2, Search, ChevronDown, FolderOpen, CheckCircle2, LayoutGrid, Kanban } from "lucide-react"
 import { Button } from "@renderer/components/ui/button"
 import { Input } from "@renderer/components/ui/input"
 import { Card, CardContent } from "@renderer/components/ui/card"
@@ -14,6 +14,8 @@ import { useConversationHistoryQuery, useDeleteConversationMutation, useDeleteAl
 import { ConversationHistoryItem, AgentProgressUpdate } from "@shared/types"
 import { cn } from "@renderer/lib/utils"
 import { toast } from "sonner"
+import { SessionsKanban } from "@renderer/components/sessions-kanban"
+import { SessionViewMode } from "@renderer/stores"
 import dayjs from "dayjs"
 import {
   Dialog,
@@ -59,6 +61,8 @@ export function Component() {
   const setFocusedSessionId = useAgentStore((s) => s.setFocusedSessionId)
   const scrollToSessionId = useAgentStore((s) => s.scrollToSessionId)
   const setScrollToSessionId = useAgentStore((s) => s.setScrollToSessionId)
+  const viewMode = useAgentStore((s) => s.viewMode)
+  const setViewMode = useAgentStore((s) => s.setViewMode)
 
   const [sessionOrder, setSessionOrder] = useState<string[]>([])
   const [draggedSessionId, setDraggedSessionId] = useState<string | null>(null)
@@ -401,7 +405,7 @@ export function Component() {
           <EmptyState onTextClick={handleTextClick} onVoiceClick={handleVoiceStart} />
         ) : (
           <>
-            {/* Header with start buttons and clear inactive button */}
+            {/* Header with start buttons, view toggle, and clear inactive button */}
             <div className="px-4 py-2 flex items-center justify-between bg-muted/20 border-b">
               <div className="flex gap-2">
                 <Button size="sm" onClick={handleTextClick} className="gap-2">
@@ -413,78 +417,110 @@ export function Component() {
                   Start with Voice
                 </Button>
               </div>
-              {inactiveSessionCount > 0 && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleClearInactiveSessions}
-                  className="gap-2 text-muted-foreground hover:text-foreground"
-                  title="Clear all completed sessions from view (conversations are saved to history)"
-                >
-                  <CheckCircle2 className="h-4 w-4" />
-                  Clear {inactiveSessionCount} completed
-                </Button>
-              )}
-            </div>
-            {/* Active sessions grid - includes pending continuation if any */}
-            <SessionGrid sessionCount={allProgressEntries.length + (pendingProgress ? 1 : 0)}>
-              {/* Pending continuation tile first */}
-              {pendingProgress && pendingSessionId && (
-                <SessionTileWrapper
-                  key={pendingSessionId}
-                  sessionId={pendingSessionId}
-                  index={0}
-                  isCollapsed={false}
-                  onDragStart={() => {}}
-                  onDragOver={() => {}}
-                  onDragEnd={() => {}}
-                  isDragTarget={false}
-                  isDragging={false}
-                >
-                  <AgentProgress
-                    progress={pendingProgress}
-                    variant="tile"
-                    isFocused={true}
-                    onFocus={() => {}}
-                    onDismiss={handleDismissPendingContinuation}
-                    isCollapsed={false}
-                    onCollapsedChange={() => {}}
-                  />
-                </SessionTileWrapper>
-              )}
-              {/* Regular sessions */}
-              {allProgressEntries.map(([sessionId, progress], index) => {
-                const isCollapsed = collapsedSessions[sessionId] ?? false
-                const adjustedIndex = pendingProgress ? index + 1 : index
-                return (
-                  <div
-                    key={sessionId}
-                    ref={(el) => { sessionRefs.current[sessionId] = el }}
+              <div className="flex items-center gap-2">
+                {/* View mode toggle */}
+                <div className="flex border rounded-md overflow-hidden">
+                  <Button
+                    variant={viewMode === "grid" ? "default" : "ghost"}
+                    size="sm"
+                    onClick={() => setViewMode("grid")}
+                    className="rounded-none h-7 px-2"
+                    title="Grid view"
                   >
-                    <SessionTileWrapper
-                      sessionId={sessionId}
-                      index={adjustedIndex}
-                      isCollapsed={isCollapsed}
-                      onDragStart={handleDragStart}
-                      onDragOver={handleDragOver}
-                      onDragEnd={handleDragEnd}
-                      isDragTarget={dragTargetIndex === adjustedIndex && draggedSessionId !== sessionId}
-                      isDragging={draggedSessionId === sessionId}
+                    <LayoutGrid className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant={viewMode === "kanban" ? "default" : "ghost"}
+                    size="sm"
+                    onClick={() => setViewMode("kanban")}
+                    className="rounded-none h-7 px-2"
+                    title="Kanban view"
+                  >
+                    <Kanban className="h-4 w-4" />
+                  </Button>
+                </div>
+                {inactiveSessionCount > 0 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleClearInactiveSessions}
+                    className="gap-2 text-muted-foreground hover:text-foreground"
+                    title="Clear all completed sessions from view (conversations are saved to history)"
+                  >
+                    <CheckCircle2 className="h-4 w-4" />
+                    Clear {inactiveSessionCount} completed
+                  </Button>
+                )}
+              </div>
+            </div>
+            {/* Active sessions - grid or kanban view */}
+            {viewMode === "kanban" ? (
+              <SessionsKanban
+                sessions={allProgressEntries}
+                focusedSessionId={focusedSessionId}
+                onFocusSession={handleFocusSession}
+                onDismissSession={handleDismissSession}
+              />
+            ) : (
+              <SessionGrid sessionCount={allProgressEntries.length + (pendingProgress ? 1 : 0)}>
+                {/* Pending continuation tile first */}
+                {pendingProgress && pendingSessionId && (
+                  <SessionTileWrapper
+                    key={pendingSessionId}
+                    sessionId={pendingSessionId}
+                    index={0}
+                    isCollapsed={false}
+                    onDragStart={() => {}}
+                    onDragOver={() => {}}
+                    onDragEnd={() => {}}
+                    isDragTarget={false}
+                    isDragging={false}
+                  >
+                    <AgentProgress
+                      progress={pendingProgress}
+                      variant="tile"
+                      isFocused={true}
+                      onFocus={() => {}}
+                      onDismiss={handleDismissPendingContinuation}
+                      isCollapsed={false}
+                      onCollapsedChange={() => {}}
+                    />
+                  </SessionTileWrapper>
+                )}
+                {/* Regular sessions */}
+                {allProgressEntries.map(([sessionId, progress], index) => {
+                  const isCollapsed = collapsedSessions[sessionId] ?? false
+                  const adjustedIndex = pendingProgress ? index + 1 : index
+                  return (
+                    <div
+                      key={sessionId}
+                      ref={(el) => { sessionRefs.current[sessionId] = el }}
                     >
-                      <AgentProgress
-                        progress={progress}
-                        variant="tile"
-                        isFocused={focusedSessionId === sessionId}
-                        onFocus={() => handleFocusSession(sessionId)}
-                        onDismiss={() => handleDismissSession(sessionId)}
+                      <SessionTileWrapper
+                        sessionId={sessionId}
+                        index={adjustedIndex}
                         isCollapsed={isCollapsed}
-                        onCollapsedChange={(collapsed) => handleCollapsedChange(sessionId, collapsed)}
-                      />
-                    </SessionTileWrapper>
-                  </div>
-                )
-              })}
-            </SessionGrid>
+                        onDragStart={handleDragStart}
+                        onDragOver={handleDragOver}
+                        onDragEnd={handleDragEnd}
+                        isDragTarget={dragTargetIndex === adjustedIndex && draggedSessionId !== sessionId}
+                        isDragging={draggedSessionId === sessionId}
+                      >
+                        <AgentProgress
+                          progress={progress}
+                          variant="tile"
+                          isFocused={focusedSessionId === sessionId}
+                          onFocus={() => handleFocusSession(sessionId)}
+                          onDismiss={() => handleDismissSession(sessionId)}
+                          isCollapsed={isCollapsed}
+                          onCollapsedChange={(collapsed) => handleCollapsedChange(sessionId, collapsed)}
+                        />
+                      </SessionTileWrapper>
+                    </div>
+                  )
+                })}
+              </SessionGrid>
+            )}
           </>
         )}
 

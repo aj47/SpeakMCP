@@ -53,6 +53,7 @@ vi.mock('ai', () => ({
 vi.mock('./ai-sdk-provider', () => ({
   createLanguageModel: vi.fn(() => ({})),
   getCurrentProviderId: vi.fn(() => 'openai'),
+  getTranscriptProviderId: vi.fn(() => 'openai'),
 }))
 
 describe('LLM Fetch with AI SDK', () => {

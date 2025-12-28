@@ -114,11 +114,19 @@ export function createLanguageModel(
 }
 
 /**
- * Get the current provider ID from config
+ * Get the current provider ID from config (for MCP tools)
  */
 export function getCurrentProviderId(): ProviderType {
   const config = configStore.get()
   return (config.mcpToolsProviderId as ProviderType) || "openai"
+}
+
+/**
+ * Get the transcript post-processing provider ID from config
+ */
+export function getTranscriptProviderId(): ProviderType {
+  const config = configStore.get()
+  return (config.transcriptPostProcessingProviderId as ProviderType) || "openai"
 }
 
 /**

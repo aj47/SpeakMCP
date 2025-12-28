@@ -14,6 +14,7 @@ import { generateText, streamText } from "ai"
 import {
   createLanguageModel,
   getCurrentProviderId,
+  getTranscriptProviderId,
   type ProviderType,
 } from "./ai-sdk-provider"
 import { configStore } from "./config"
@@ -421,14 +422,16 @@ export async function makeLLMCallWithStreaming(
 
 /**
  * Make a simple text completion call using AI SDK
+ * Used for transcript post-processing and similar text completion tasks.
  */
 export async function makeTextCompletionWithFetch(
   prompt: string,
   providerId?: string,
   sessionId?: string
 ): Promise<string> {
+  // Use transcript provider as default since this is primarily used for transcript post-processing
   const effectiveProviderId = (providerId ||
-    getCurrentProviderId()) as ProviderType
+    getTranscriptProviderId()) as ProviderType
   const abortController = createSessionAbortController(sessionId)
 
   try {

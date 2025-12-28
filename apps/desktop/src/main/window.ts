@@ -143,6 +143,19 @@ function handleRendererCrash(
       return
     }
 
+    // Check if window was already recreated by another code path (e.g., app.on("activate"),
+    // tray click, etc.) during the recovery delay. Skip recreation to prevent duplicates.
+    if (WINDOWS.has(windowId)) {
+      logApp(`[CRASH RECOVERY] Window ${windowId} already recreated by another code path, skipping duplicate creation`)
+      // Still destroy the old crashed window
+      try {
+        crashedWindow.destroy()
+      } catch (e) {
+        // Window may already be destroyed
+      }
+      return
+    }
+
     try {
       // Destroy the crashed window (already removed from WINDOWS map above)
       try {

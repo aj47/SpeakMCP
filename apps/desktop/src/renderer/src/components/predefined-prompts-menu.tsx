@@ -67,6 +67,7 @@ export function PredefinedPromptsMenu({
 
   const handleDelete = (e: React.MouseEvent, prompt: PredefinedPrompt) => {
     e.stopPropagation()
+    if (!configQuery.data) return
     const updatedPrompts = prompts.filter((p) => p.id !== prompt.id)
     saveConfig.mutate({
       config: {
@@ -78,6 +79,7 @@ export function PredefinedPromptsMenu({
 
   const handleSave = () => {
     if (!promptName.trim() || !promptContent.trim()) return
+    if (!configQuery.data) return
 
     const now = Date.now()
     let updatedPrompts: PredefinedPrompt[]
@@ -135,7 +137,7 @@ export function PredefinedPromptsMenu({
               <DropdownMenuItem
                 key={prompt.id}
                 className="flex items-center justify-between gap-2 cursor-pointer"
-                onClick={() => handleSelectPrompt(prompt)}
+                onSelect={() => handleSelectPrompt(prompt)}
               >
                 <span className="truncate flex-1">{prompt.name}</span>
                 <div className="flex items-center gap-1 flex-shrink-0">
@@ -164,7 +166,7 @@ export function PredefinedPromptsMenu({
             ))
           )}
           <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={handleAddNew} className="cursor-pointer">
+          <DropdownMenuItem onSelect={handleAddNew} className="cursor-pointer">
             <Plus className="h-4 w-4 mr-2" />
             Add new prompt
           </DropdownMenuItem>

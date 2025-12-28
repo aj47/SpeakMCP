@@ -214,6 +214,7 @@ export const Component = () => {
               return (
                 <NavLink
                   to="/"
+                  end
                   className={cn(
                     "flex h-8 w-full items-center justify-center rounded-md transition-all duration-200",
                     isSessionsActive

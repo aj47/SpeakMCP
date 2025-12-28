@@ -2,16 +2,21 @@ import { tipcClient } from "@renderer/lib/tipc-client"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { Profile } from "@shared/types"
 import { toast } from "sonner"
+import { useNavigate } from "react-router-dom"
 import {
   Select,
   SelectContent,
   SelectItem,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from "./ui/select"
 
+const EDIT_PROFILES_VALUE = "__edit_profiles__"
+
 export function SidebarProfileSelector() {
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
 
   // Fetch profiles
   const profilesQuery = useQuery({
@@ -63,10 +68,18 @@ export function SidebarProfileSelector() {
     },
   })
 
+  const handleValueChange = (value: string) => {
+    if (value === EDIT_PROFILES_VALUE) {
+      navigate("/settings/tools")
+    } else {
+      setCurrentProfileMutation.mutate(value)
+    }
+  }
+
   return (
     <Select
       value={currentProfile?.id || ""}
-      onValueChange={(value) => setCurrentProfileMutation.mutate(value)}
+      onValueChange={handleValueChange}
     >
       <SelectTrigger className="h-8 text-xs">
         <span className="i-mingcute-user-3-line mr-1.5 h-3.5 w-3.5 shrink-0" />
@@ -79,6 +92,14 @@ export function SidebarProfileSelector() {
             {profile.isDefault && " (Default)"}
           </SelectItem>
         ))}
+        <SelectSeparator />
+        <SelectItem
+          value={EDIT_PROFILES_VALUE}
+          className="text-muted-foreground"
+        >
+          <span className="i-mingcute-settings-3-line mr-1.5 h-3.5 w-3.5 shrink-0" />
+          Edit Profiles
+        </SelectItem>
       </SelectContent>
     </Select>
   )

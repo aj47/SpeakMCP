@@ -41,6 +41,8 @@
     "setup:worktree": "pnpm install --ignore-scripts --frozen-lockfile && npx electron-rebuild"
   },
   "dependencies": {
+    "@ai-sdk/google": "^3.0.1",
+    "@ai-sdk/openai": "^3.0.1",
     "@egoist/electron-panel-window": "^8.0.3",
     "@fastify/cors": "^11.1.0",
     "@modelcontextprotocol/sdk": "^1.24.3",
@@ -48,6 +50,7 @@
     "@radix-ui/react-scroll-area": "^1.2.9",
     "@radix-ui/react-tabs": "^1.1.13",
     "@speakmcp/shared": "workspace:^",
+    "ai": "^6.0.3",
     "ajv": "^8.17.1",
     "fastify": "^5.6.1",
     "highlight.js": "^11.11.1",

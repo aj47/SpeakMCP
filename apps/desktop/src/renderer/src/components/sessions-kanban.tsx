@@ -7,30 +7,37 @@ import { Loader2, Clock, CheckCircle2 } from "lucide-react"
 interface KanbanColumn {
   id: "idle" | "active" | "done"
   title: string
-  icon: React.ReactNode
   color: string
 }
 
 const COLUMNS: KanbanColumn[] = [
-  { 
-    id: "idle", 
-    title: "Idle", 
-    icon: <Clock className="h-4 w-4" />,
+  {
+    id: "idle",
+    title: "Idle",
     color: "border-t-amber-500"
   },
-  { 
-    id: "active", 
-    title: "In Progress", 
-    icon: <Loader2 className="h-4 w-4 animate-spin" />,
+  {
+    id: "active",
+    title: "In Progress",
     color: "border-t-blue-500"
   },
-  { 
-    id: "done", 
-    title: "Done", 
-    icon: <CheckCircle2 className="h-4 w-4" />,
+  {
+    id: "done",
+    title: "Done",
     color: "border-t-green-500"
   },
 ]
+
+function getColumnIcon(columnId: KanbanColumn["id"], hasActiveSessions: boolean): React.ReactNode {
+  switch (columnId) {
+    case "idle":
+      return <Clock className="h-4 w-4" />
+    case "active":
+      return <Loader2 className={cn("h-4 w-4", hasActiveSessions && "animate-spin")} />
+    case "done":
+      return <CheckCircle2 className="h-4 w-4" />
+  }
+}
 
 export interface SessionsKanbanProps {
   sessions: Array<[string, AgentProgressUpdate]>
@@ -127,7 +134,7 @@ function KanbanColumnComponent({
     )}>
       {/* Column header */}
       <div className="flex items-center gap-2 p-3 border-b bg-muted/50">
-        {column.icon}
+        {getColumnIcon(column.id, sessions.length > 0)}
         <span className="font-medium text-sm">{column.title}</span>
         <span className="ml-auto text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
           {sessions.length}

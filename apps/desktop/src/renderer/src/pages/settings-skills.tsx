@@ -16,7 +16,7 @@ import { tipcClient } from "@renderer/lib/tipc-client"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { AgentSkill } from "@shared/types"
 import { toast } from "sonner"
-import { Plus, Pencil, Trash2, Download, Upload, FolderOpen, RefreshCw, Sparkles } from "lucide-react"
+import { Plus, Pencil, Trash2, Download, Upload, FolderOpen, RefreshCw, Sparkles, Loader2 } from "lucide-react"
 
 export function Component() {
   const queryClient = useQueryClient()
@@ -239,7 +239,17 @@ export function Component() {
 
         {/* Skills List */}
         <div className="space-y-3">
-          {skills.length === 0 ? (
+          {skillsQuery.isLoading ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <Loader2 className="h-8 w-8 mx-auto mb-4 animate-spin" />
+              <p>Loading skills...</p>
+            </div>
+          ) : skillsQuery.isError ? (
+            <div className="text-center py-8 text-destructive">
+              <Sparkles className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <p>Failed to load skills. Please try again.</p>
+            </div>
+          ) : skills.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               <Sparkles className="h-12 w-12 mx-auto mb-4 opacity-50" />
               <p>No skills yet. Create your first skill or import one.</p>

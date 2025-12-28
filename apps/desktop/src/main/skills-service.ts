@@ -35,7 +35,9 @@ function parseSkillMarkdown(content: string): { name: string; description: strin
   const frontmatterMatch = content.match(/^---\s*\r?\n([\s\S]*?)\r?\n---\s*\r?\n([\s\S]*)$/)
   
   if (!frontmatterMatch) {
-    // No frontmatter, treat entire content as instructions
+    // No valid frontmatter found - return null to indicate invalid format
+    // Note: Skills without frontmatter are not supported; a valid SKILL.md must have
+    // YAML frontmatter with at least a 'name' field
     return null
   }
 

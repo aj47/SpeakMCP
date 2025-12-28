@@ -57,7 +57,8 @@ export function PredefinedPromptsMenu({
     setIsDialogOpen(true)
   }
 
-  const handleEdit = (e: React.MouseEvent, prompt: PredefinedPrompt) => {
+  const handleEdit = (e: React.MouseEvent | Event, prompt: PredefinedPrompt) => {
+    e.preventDefault()
     e.stopPropagation()
     setEditingPrompt(prompt)
     setPromptName(prompt.name)
@@ -65,7 +66,8 @@ export function PredefinedPromptsMenu({
     setIsDialogOpen(true)
   }
 
-  const handleDelete = (e: React.MouseEvent, prompt: PredefinedPrompt) => {
+  const handleDelete = (e: React.MouseEvent | Event, prompt: PredefinedPrompt) => {
+    e.preventDefault()
     e.stopPropagation()
     if (!configQuery.data) return
     const updatedPrompts = prompts.filter((p) => p.id !== prompt.id)
@@ -140,7 +142,11 @@ export function PredefinedPromptsMenu({
                 onSelect={() => handleSelectPrompt(prompt)}
               >
                 <span className="truncate flex-1">{prompt.name}</span>
-                <div className="flex items-center gap-1 flex-shrink-0">
+                <div
+                  className="flex items-center gap-1 flex-shrink-0"
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => e.stopPropagation()}
+                >
                   <Button
                     type="button"
                     variant="ghost"

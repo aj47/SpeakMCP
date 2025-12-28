@@ -37,6 +37,9 @@ export interface SessionsKanbanProps {
   focusedSessionId: string | null
   onFocusSession: (sessionId: string) => void
   onDismissSession: (sessionId: string) => void
+  pendingProgress?: AgentProgressUpdate | null
+  pendingSessionId?: string | null
+  onDismissPendingContinuation?: () => void
 }
 
 export function SessionsKanban({
@@ -44,12 +47,22 @@ export function SessionsKanban({
   focusedSessionId,
   onFocusSession,
   onDismissSession,
+  pendingProgress,
+  pendingSessionId,
+  onDismissPendingContinuation,
 }: SessionsKanbanProps) {
   // Categorize sessions into columns
   const categorizedSessions = React.useMemo(() => {
     const idle: Array<[string, AgentProgressUpdate]> = []
     const active: Array<[string, AgentProgressUpdate]> = []
     const done: Array<[string, AgentProgressUpdate]> = []
+
+    // Add pending continuation to active column if it exists
+    if (pendingProgress && pendingSessionId) {
+      // Pending continuations are marked isComplete but should show in active column
+      // since they're waiting for user action
+      active.push([pendingSessionId, pendingProgress])
+    }
 
     for (const entry of sessions) {
       const [_, progress] = entry
@@ -63,7 +76,7 @@ export function SessionsKanban({
     }
 
     return { idle, active, done }
-  }, [sessions])
+  }, [sessions, pendingProgress, pendingSessionId])
 
   return (
     <div className="flex gap-4 p-4 h-full overflow-x-auto">
@@ -75,6 +88,8 @@ export function SessionsKanban({
           focusedSessionId={focusedSessionId}
           onFocusSession={onFocusSession}
           onDismissSession={onDismissSession}
+          pendingSessionId={pendingSessionId}
+          onDismissPendingContinuation={onDismissPendingContinuation}
         />
       ))}
     </div>
@@ -87,6 +102,8 @@ interface KanbanColumnComponentProps {
   focusedSessionId: string | null
   onFocusSession: (sessionId: string) => void
   onDismissSession: (sessionId: string) => void
+  pendingSessionId?: string | null
+  onDismissPendingContinuation?: () => void
 }
 
 function KanbanColumnComponent({
@@ -95,6 +112,8 @@ function KanbanColumnComponent({
   focusedSessionId,
   onFocusSession,
   onDismissSession,
+  pendingSessionId,
+  onDismissPendingContinuation,
 }: KanbanColumnComponentProps) {
   return (
     <div className={cn(
@@ -118,16 +137,19 @@ function KanbanColumnComponent({
             No sessions
           </div>
         ) : (
-          sessions.map(([sessionId, progress]) => (
-            <KanbanCard
-              key={sessionId}
-              sessionId={sessionId}
-              progress={progress}
-              isFocused={focusedSessionId === sessionId}
-              onFocus={() => onFocusSession(sessionId)}
-              onDismiss={() => onDismissSession(sessionId)}
-            />
-          ))
+          sessions.map(([sessionId, progress]) => {
+            const isPending = sessionId === pendingSessionId
+            return (
+              <KanbanCard
+                key={sessionId}
+                sessionId={sessionId}
+                progress={progress}
+                isFocused={isPending || focusedSessionId === sessionId}
+                onFocus={() => !isPending && onFocusSession(sessionId)}
+                onDismiss={() => isPending && onDismissPendingContinuation ? onDismissPendingContinuation() : onDismissSession(sessionId)}
+              />
+            )
+          })
         )}
       </div>
     </div>
@@ -149,6 +171,9 @@ function KanbanCard({
   onFocus,
   onDismiss,
 }: KanbanCardProps) {
+  // Local collapsed state for the card - defaults to true for compact Kanban view
+  const [isCollapsed, setIsCollapsed] = React.useState(true)
+
   return (
     <div className={cn(
       "bg-background rounded-md border shadow-sm overflow-hidden",
@@ -161,8 +186,8 @@ function KanbanCard({
         isFocused={isFocused}
         onFocus={onFocus}
         onDismiss={onDismiss}
-        isCollapsed={true}
-        onCollapsedChange={() => {}}
+        isCollapsed={isCollapsed}
+        onCollapsedChange={setIsCollapsed}
       />
     </div>
   )

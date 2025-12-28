@@ -460,6 +460,9 @@ export function Component() {
                 focusedSessionId={focusedSessionId}
                 onFocusSession={handleFocusSession}
                 onDismissSession={handleDismissSession}
+                pendingProgress={pendingProgress}
+                pendingSessionId={pendingSessionId}
+                onDismissPendingContinuation={handleDismissPendingContinuation}
               />
             ) : (
               <SessionGrid sessionCount={allProgressEntries.length + (pendingProgress ? 1 : 0)}>

@@ -206,7 +206,33 @@ export const Component = () => {
           </div>
         )}
 
-        {/* Spacer to push footer down when collapsed (no sessions section) */}
+        {/* Sessions icon when collapsed - navigates to sessions page */}
+        {isCollapsed && (
+          <div className="mt-2 px-1">
+            {(() => {
+              const isSessionsActive = location.pathname === "/" || (!location.pathname.startsWith("/settings") && !location.pathname.startsWith("/onboarding") && !location.pathname.startsWith("/setup") && !location.pathname.startsWith("/panel"))
+              return (
+                <NavLink
+                  to="/"
+                  end
+                  className={cn(
+                    "flex h-8 w-full items-center justify-center rounded-md transition-all duration-200",
+                    isSessionsActive
+                      ? "bg-accent text-accent-foreground"
+                      : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                  )}
+                  title="Sessions"
+                  aria-label="Sessions"
+                  aria-current={isSessionsActive ? "page" : undefined}
+                >
+                  <span className="i-mingcute-chat-3-line"></span>
+                </NavLink>
+              )
+            })()}
+          </div>
+        )}
+
+        {/* Spacer to push footer down when collapsed */}
         {isCollapsed && <div className="flex-1" />}
 
         {/* Loading spinner at the bottom of the sidebar */}

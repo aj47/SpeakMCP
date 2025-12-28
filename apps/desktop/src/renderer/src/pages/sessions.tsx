@@ -419,13 +419,15 @@ export function Component() {
               </div>
               <div className="flex items-center gap-2">
                 {/* View mode toggle */}
-                <div className="flex border rounded-md overflow-hidden">
+                <div className="flex border rounded-md overflow-hidden" role="group" aria-label="Session view mode">
                   <Button
                     variant={viewMode === "grid" ? "default" : "ghost"}
                     size="sm"
                     onClick={() => setViewMode("grid")}
                     className="rounded-none h-7 px-2"
                     title="Grid view"
+                    aria-label="Grid view"
+                    aria-pressed={viewMode === "grid"}
                   >
                     <LayoutGrid className="h-4 w-4" />
                   </Button>
@@ -435,6 +437,8 @@ export function Component() {
                     onClick={() => setViewMode("kanban")}
                     className="rounded-none h-7 px-2"
                     title="Kanban view"
+                    aria-label="Kanban view"
+                    aria-pressed={viewMode === "kanban"}
                   >
                     <Kanban className="h-4 w-4" />
                   </Button>

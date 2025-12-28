@@ -65,7 +65,11 @@ export function SessionsKanban({
     }
 
     for (const entry of sessions) {
-      const [_, progress] = entry
+      const [sessionId, progress] = entry
+      // Skip if this is the pending session (already added above to avoid duplicates)
+      if (pendingSessionId && sessionId === pendingSessionId) {
+        continue
+      }
       if (progress.isComplete) {
         done.push(entry)
       } else if (progress.isSnoozed) {

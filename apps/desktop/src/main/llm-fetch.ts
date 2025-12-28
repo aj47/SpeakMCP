@@ -25,6 +25,24 @@ import { isDebugLLM, logLLM } from "./debug"
 import { state, agentSessionStateManager, llmRequestAbortManager } from "./state"
 
 /**
+ * Sanitize tool name for provider compatibility.
+ * Some providers (OpenAI, Groq) reject tool names containing ':'.
+ * MCP tool names often include server prefixes like "server:tool_name".
+ * We replace ':' with '__' (double underscore) to maintain readability while being valid.
+ */
+function sanitizeToolName(name: string): string {
+  return name.replace(/:/g, "__")
+}
+
+/**
+ * Restore original tool name from sanitized version.
+ * Reverses the sanitization by replacing '__' back to ':'.
+ */
+function restoreToolName(sanitizedName: string): string {
+  return sanitizedName.replace(/__/g, ":")
+}
+
+/**
  * Convert MCP tools to AI SDK tool format
  * Uses dynamicTool pattern since MCP tool schemas are JSON Schema, not Zod
  */
@@ -32,8 +50,12 @@ function convertMCPToolsToAISDKTools(mcpTools: MCPTool[]): Record<string, Return
   const tools: Record<string, ReturnType<typeof aiTool>> = {}
 
   for (const mcpTool of mcpTools) {
+    // Sanitize tool name to avoid provider compatibility issues
+    // (OpenAI/Groq reject tool names containing ':')
+    const sanitizedName = sanitizeToolName(mcpTool.name)
+    
     // Create AI SDK tool with JSON schema (not Zod)
-    tools[mcpTool.name] = aiTool({
+    tools[sanitizedName] = aiTool({
       description: mcpTool.description || `Tool: ${mcpTool.name}`,
       inputSchema: jsonSchema(mcpTool.inputSchema || { type: "object", properties: {} }),
       // No execute function - we handle execution separately via MCP
@@ -379,8 +401,9 @@ export async function makeLLMCallWithFetch(
           }
 
           // Convert AI SDK tool calls to our MCPToolCall format
+          // Restore original tool names (reverse the sanitization)
           const toolCalls = result.toolCalls.map(tc => ({
-            name: tc.toolName,
+            name: restoreToolName(tc.toolName),
             arguments: tc.input,
           }))
 
@@ -452,7 +475,10 @@ export async function makeLLMCallWithStreaming(
   const model = createLanguageModel(effectiveProviderId)
   const { system, messages: convertedMessages } = convertMessages(messages)
 
-  const abortController = externalAbortController || new AbortController()
+  // Use external controller if provided, otherwise create and register one
+  // This ensures stopSession() / emergency stop can abort in-flight streams
+  const abortController = externalAbortController || createSessionAbortController(sessionId)
+  const isInternalController = !externalAbortController
 
   try {
     if (isDebugLLM()) {
@@ -497,6 +523,11 @@ export async function makeLLMCallWithStreaming(
     }
     diagnosticsService.logError("llm-fetch", "Streaming LLM call failed", error)
     throw error
+  } finally {
+    // Only unregister if we created the controller internally
+    if (isInternalController) {
+      unregisterSessionAbortController(abortController, sessionId)
+    }
   }
 }
 

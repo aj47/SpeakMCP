@@ -212,15 +212,33 @@ async function withRetry<T>(
 }
 
 /**
- * Convert messages to AI SDK format
+ * Convert messages to AI SDK format, extracting system messages separately
+ * This is needed for compatibility with Anthropic/Claude APIs which expect
+ * system prompts as a separate parameter, not in the messages array
  */
-function convertMessages(
-  messages: Array<{ role: string; content: string }>
-): Array<{ role: "user" | "assistant" | "system"; content: string }> {
-  return messages.map((msg) => ({
-    role: msg.role as "user" | "assistant" | "system",
-    content: msg.content,
-  }))
+function convertMessages(messages: Array<{ role: string; content: string }>): {
+  system: string | undefined
+  messages: Array<{ role: "user" | "assistant"; content: string }>
+} {
+  const systemMessages: string[] = []
+  const otherMessages: Array<{ role: "user" | "assistant"; content: string }> =
+    []
+
+  for (const msg of messages) {
+    if (msg.role === "system") {
+      systemMessages.push(msg.content)
+    } else {
+      otherMessages.push({
+        role: msg.role as "user" | "assistant",
+        content: msg.content,
+      })
+    }
+  }
+
+  return {
+    system: systemMessages.length > 0 ? systemMessages.join("\n\n") : undefined,
+    messages: otherMessages,
+  }
 }
 
 /**
@@ -289,7 +307,7 @@ export async function makeLLMCallWithFetch(
   return withRetry(
     async () => {
       const model = createLanguageModel(effectiveProviderId)
-      const convertedMessages = convertMessages(messages)
+      const { system, messages: convertedMessages } = convertMessages(messages)
       const abortController = createSessionAbortController(sessionId)
 
       try {
@@ -305,11 +323,13 @@ export async function makeLLMCallWithFetch(
           logLLM("🚀 AI SDK generateText call", {
             provider: effectiveProviderId,
             messagesCount: messages.length,
+            hasSystem: !!system,
           })
         }
 
         const result = await generateText({
           model,
+          system,
           messages: convertedMessages,
           abortSignal: abortController.signal,
         })
@@ -372,7 +392,7 @@ export async function makeLLMCallWithStreaming(
   const effectiveProviderId = (providerId ||
     getCurrentProviderId()) as ProviderType
   const model = createLanguageModel(effectiveProviderId)
-  const convertedMessages = convertMessages(messages)
+  const { system, messages: convertedMessages } = convertMessages(messages)
 
   const abortController = externalAbortController || new AbortController()
 
@@ -381,11 +401,13 @@ export async function makeLLMCallWithStreaming(
       logLLM("🚀 AI SDK streamText call", {
         provider: effectiveProviderId,
         messagesCount: messages.length,
+        hasSystem: !!system,
       })
     }
 
     const result = streamText({
       model,
+      system,
       messages: convertedMessages,
       abortSignal: abortController.signal,
     })
@@ -489,17 +511,19 @@ export async function verifyCompletionWithFetch(
     }
 
     const model = createLanguageModel(effectiveProviderId)
-    const convertedMessages = convertMessages(messages)
+    const { system, messages: convertedMessages } = convertMessages(messages)
 
     if (isDebugLLM()) {
       logLLM("🚀 AI SDK verification call", {
         provider: effectiveProviderId,
         messagesCount: messages.length,
+        hasSystem: !!system,
       })
     }
 
     const result = await generateText({
       model,
+      system,
       messages: convertedMessages,
       abortSignal: abortController.signal,
     })

@@ -93,11 +93,14 @@ export function createLanguageModel(
     case "openai":
     case "groq": {
       // Both OpenAI and Groq use OpenAI-compatible API
+      // Use .chat() to use the Chat Completions API instead of the Responses API
+      // This is required for compatibility with Claude/Anthropic proxies and other
+      // OpenAI-compatible endpoints that don't support the Responses API
       const openai = createOpenAI({
         apiKey: providerConfig.apiKey,
         baseURL: providerConfig.baseURL,
       })
-      return openai(providerConfig.model)
+      return openai.chat(providerConfig.model)
     }
 
     case "gemini": {

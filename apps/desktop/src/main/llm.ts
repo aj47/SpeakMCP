@@ -1379,11 +1379,13 @@ Return ONLY JSON per schema.`,
     // A response is valid if it has either:
     // 1. Non-empty content, OR
     // 2. Valid toolCalls (tool-only responses have empty content), OR
-    // 3. Empty content with needsMoreWork=false (LLM intentionally completed with finish_reason='stop')
+    // 3. Empty content with needsMoreWork=false AND no toolCalls (LLM intentionally completed with finish_reason='stop')
     const hasValidContent = llmResponse?.content && llmResponse.content.trim().length > 0
     const hasValidToolCalls = llmResponse?.toolCalls && Array.isArray(llmResponse.toolCalls) && llmResponse.toolCalls.length > 0
     // Check for intentional empty completion (finish_reason='stop' in llm-fetch.ts returns this)
-    const isIntentionalEmptyCompletion = llmResponse?.needsMoreWork === false && llmResponse?.content === ""
+    // IMPORTANT: If there are toolCalls, they take precedence over intentional-empty completion
+    // to ensure tool execution is not skipped
+    const isIntentionalEmptyCompletion = llmResponse?.needsMoreWork === false && llmResponse?.content === "" && !hasValidToolCalls
 
     if (!llmResponse || (!hasValidContent && !hasValidToolCalls && !isIntentionalEmptyCompletion)) {
       logLLM(`❌ LLM null/empty response on iteration ${iteration}`)

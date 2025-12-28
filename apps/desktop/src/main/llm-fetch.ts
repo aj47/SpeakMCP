@@ -355,7 +355,9 @@ function isRetryableError(error: unknown): boolean {
 
   // Retry on network errors only
   // Note: Empty LLM responses are NOT retried here - they're handled at the agent loop level
-  // in llm.ts with context-aware retrying (adds user message to help LLM recover)
+  // in llm.ts with context-aware retrying (adds user message to help LLM recover).
+  // Non-agent callers (e.g., MCP sampling in mcp-sampling.ts) handle empty responses in their
+  // own try/catch blocks, returning appropriate error messages to the caller.
   if (error instanceof Error) {
     const message = error.message.toLowerCase()
 
@@ -764,9 +766,10 @@ async function makeAPICallAttempt(
 
     const data = await response.json()
 
-    // Log empty content cases - this is anomalous behavior
+    // Log empty content cases
     const messageContent = data.choices?.[0]?.message?.content
     const hasToolCalls = !!data.choices?.[0]?.message?.tool_calls?.length
+    const finishReason = data.choices?.[0]?.finish_reason
     const isEmptyContent = !hasToolCalls && (!messageContent ||
       (typeof messageContent === 'string' && messageContent.trim() === '') ||
       (Array.isArray(messageContent) && messageContent.length === 0))
@@ -775,12 +778,18 @@ async function makeAPICallAttempt(
       const diagnostic = {
         model: requestBody.model,
         provider: baseURL,
-        finishReason: data.choices?.[0]?.finish_reason,
+        finishReason,
         usage: data.usage,
         messagesCount: requestBody.messages?.length,
         lastMessageRole: requestBody.messages?.at(-1)?.role,
       }
-      diagnosticsService.logError("llm-fetch", "Empty content from LLM API", diagnostic)
+      // If finish_reason is 'stop', the model intentionally completed with no content
+      // This is unusual but valid - log as warning, not error
+      if (finishReason === 'stop') {
+        diagnosticsService.logWarning("llm-fetch", "Empty content from LLM API (finish_reason=stop)", diagnostic)
+      } else {
+        diagnosticsService.logError("llm-fetch", "Empty content from LLM API", diagnostic)
+      }
     }
 
     if (isDebugLLM()) {

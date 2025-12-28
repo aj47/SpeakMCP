@@ -796,6 +796,15 @@ export async function startRemoteServer() {
         return reply.code(400).send({ error: "Missing or invalid conversation ID" })
       }
 
+      // Validate conversation ID format to prevent path traversal attacks
+      // Valid IDs match pattern: conv_${timestamp}_${random} where random is alphanumeric
+      if (conversationId.includes("..") || conversationId.includes("/") || conversationId.includes("\\")) {
+        return reply.code(400).send({ error: "Invalid conversation ID: path traversal characters not allowed" })
+      }
+      if (!/^conv_[a-zA-Z0-9_]+$/.test(conversationId)) {
+        return reply.code(400).send({ error: "Invalid conversation ID format" })
+      }
+
       const conversation = await conversationService.loadConversation(conversationId)
 
       if (!conversation) {

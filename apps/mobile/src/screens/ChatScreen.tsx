@@ -2175,23 +2175,70 @@ export default function ChatScreen({ route, navigation }: any) {
                       if (serverConversation && serverConversation.messages.length > 0) {
                         // Check if the server has the user's message and a response
                         const serverMessages = serverConversation.messages;
-                        const lastServerMsg = serverMessages[serverMessages.length - 1];
 
-                        // If the last message is from the assistant, the server already processed the request
-                        if (lastServerMsg.role === 'assistant' && lastServerMsg.content) {
+                        // Find the index of the last user message
+                        let lastUserMsgIndex = -1;
+                        for (let i = serverMessages.length - 1; i >= 0; i--) {
+                          if (serverMessages[i].role === 'user') {
+                            lastUserMsgIndex = i;
+                            break;
+                          }
+                        }
+
+                        // Check if there's ANY assistant message with content after the last user message
+                        // This handles cases where tool messages follow the assistant response
+                        let hasAssistantResponse = false;
+                        if (lastUserMsgIndex >= 0) {
+                          for (let i = lastUserMsgIndex + 1; i < serverMessages.length; i++) {
+                            if (serverMessages[i].role === 'assistant' && serverMessages[i].content) {
+                              hasAssistantResponse = true;
+                              break;
+                            }
+                          }
+                        }
+
+                        // If there's an assistant response after the last user message, server already processed the request
+                        if (hasAssistantResponse) {
                           console.log('[ChatScreen] Retry: Server already has response, syncing state');
 
                           // Update the server conversation ID
                           await sessionStore.setServerConversationId(recoveryConversationId);
 
-                          // Convert server messages to ChatMessage format and update local state
-                          const recoveredMessages: ChatMessage[] = serverMessages.map(msg => ({
-                            id: msg.id,
-                            role: msg.role as 'user' | 'assistant',
-                            content: msg.content,
-                            toolCalls: msg.toolCalls,
-                            toolResults: msg.toolResults,
-                          }));
+                          // Convert server messages to ChatMessage format, filtering out tool messages
+                          // and merging their toolResults into the preceding assistant message
+                          const recoveredMessages: ChatMessage[] = [];
+                          for (const msg of serverMessages) {
+                            // Only include 'user' and 'assistant' roles
+                            if (msg.role === 'user' || msg.role === 'assistant') {
+                              recoveredMessages.push({
+                                id: msg.id,
+                                role: msg.role,
+                                content: msg.content,
+                                toolCalls: msg.toolCalls,
+                                toolResults: msg.toolResults,
+                              });
+                            } else if (msg.role === 'tool' && recoveredMessages.length > 0) {
+                              // Merge tool message toolResults into the preceding assistant message
+                              const lastMessage = recoveredMessages[recoveredMessages.length - 1];
+                              if (lastMessage.role === 'assistant' && lastMessage.toolCalls && lastMessage.toolCalls.length > 0) {
+                                const hasToolResults = msg.toolResults && msg.toolResults.length > 0;
+                                const hasContent = msg.content && msg.content.trim().length > 0;
+
+                                if (hasToolResults) {
+                                  // Merge toolResults into the existing assistant message
+                                  lastMessage.toolResults = [
+                                    ...(lastMessage.toolResults || []),
+                                    ...(msg.toolResults || []),
+                                  ];
+                                  // Also preserve any content from the tool message (e.g., error messages)
+                                  if (hasContent) {
+                                    lastMessage.content = (lastMessage.content || '') +
+                                      (lastMessage.content ? '\n' : '') + msg.content;
+                                  }
+                                }
+                              }
+                            }
+                          }
 
                           // Replace local messages with server state
                           setMessages(recoveredMessages);

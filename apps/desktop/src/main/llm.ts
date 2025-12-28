@@ -19,57 +19,6 @@ import { conversationService } from "./conversation-service"
 import { getCurrentPresetName } from "../shared"
 
 /**
- * Tool name patterns that require sequential execution to avoid race conditions.
- * These are typically browser automation tools that modify shared state (DOM, browser context).
- * The patterns match the tool name suffix (after the server prefix, e.g., "playwright:browser_click").
- *
- * When ANY tool in a batch matches these patterns, the entire batch executes sequentially
- * to prevent stale DOM references and other race conditions.
- */
-const SEQUENTIAL_EXECUTION_TOOL_PATTERNS: string[] = [
-  // Playwright browser tools that modify DOM or browser state
-  'browser_click',
-  'browser_drag',
-  'browser_type',
-  'browser_fill_form',
-  'browser_hover',
-  'browser_press_key',
-  'browser_select_option',
-  'browser_file_upload',
-  'browser_handle_dialog',
-  'browser_navigate',
-  'browser_navigate_back',
-  'browser_close',
-  'browser_resize',
-  'browser_tabs',
-  'browser_wait_for',
-  'browser_evaluate',
-  'browser_run_code',
-  // Vision-based coordinate tools
-  'browser_mouse_click_xy',
-  'browser_mouse_drag_xy',
-  'browser_mouse_move_xy',
-]
-
-/**
- * Check if a tool call requires sequential execution based on its name.
- * Matches against the SEQUENTIAL_EXECUTION_TOOL_PATTERNS list.
- */
-function toolRequiresSequentialExecution(toolName: string): boolean {
-  // Extract the tool name without server prefix (e.g., "browser_click" from "playwright:browser_click")
-  const baseName = toolName.includes(':') ? toolName.split(':')[1] : toolName
-  return SEQUENTIAL_EXECUTION_TOOL_PATTERNS.some(pattern => baseName === pattern)
-}
-
-/**
- * Check if any tools in the batch require sequential execution.
- * If even one tool requires sequential execution, the entire batch should execute sequentially.
- */
-function batchRequiresSequentialExecution(toolCalls: MCPToolCall[]): boolean {
-  return toolCalls.some(tc => toolRequiresSequentialExecution(tc.name))
-}
-
-/**
  * Use LLM to extract useful context from conversation history
  */
 async function extractContextFromHistory(
@@ -1702,12 +1651,9 @@ Return ONLY JSON per schema.`,
     }
 
     // Determine execution mode: parallel or sequential
-    // Sequential execution is forced when:
-    // 1. Any tool in batch matches SEQUENTIAL_EXECUTION_TOOL_PATTERNS (e.g., browser_click)
-    // 2. Config mcpParallelToolExecution is set to false
+    // Sequential execution is used when config mcpParallelToolExecution is set to false
     // Default is parallel execution when multiple tools are called
-    const toolsRequireSequential = batchRequiresSequentialExecution(toolCallsArray)
-    const forceSequential = toolsRequireSequential || config.mcpParallelToolExecution === false
+    const forceSequential = config.mcpParallelToolExecution === false
     const useParallelExecution = !forceSequential && toolCallsArray.length > 1
 
     if (useParallelExecution) {
@@ -1830,15 +1776,9 @@ Return ONLY JSON per schema.`,
     } else {
       // SEQUENTIAL EXECUTION: Execute tool calls one at a time
       if (isDebugTools()) {
-        let reason: string
-        if (toolCallsArray.length <= 1) {
-          reason = "Single tool call"
-        } else if (toolsRequireSequential) {
-          const sequentialTools = toolCallsArray.filter(tc => toolRequiresSequentialExecution(tc.name)).map(tc => tc.name)
-          reason = `Tool(s) require sequential execution to avoid race conditions: [${sequentialTools.join(', ')}]`
-        } else {
-          reason = "Config disabled parallel execution"
-        }
+        const reason = toolCallsArray.length <= 1
+          ? "Single tool call"
+          : "Config disabled parallel execution"
         logTools(`Executing ${toolCallsArray.length} tool calls sequentially - ${reason}`, toolCallsArray.map(t => t.name))
       }
       for (const [, toolCall] of toolCallsArray.entries()) {

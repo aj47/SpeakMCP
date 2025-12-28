@@ -111,6 +111,13 @@ function handleRendererCrash(
 
   // Delay before recreating to prevent rapid crash loops
   setTimeout(() => {
+    // Re-check isQuitting inside timeout - app may have entered quit mode
+    // after the crash event but before this delayed callback runs
+    if (state.isQuitting) {
+      logApp(`[CRASH RECOVERY] App is quitting, skipping recovery for ${windowId}`)
+      return
+    }
+
     try {
       // Remove the crashed window from the map if still there
       const existingWin = WINDOWS.get(windowId)

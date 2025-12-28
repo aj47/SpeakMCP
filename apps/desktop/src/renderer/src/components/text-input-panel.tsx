@@ -11,10 +11,12 @@ interface TextInputPanelProps {
   onCancel: () => void
   isProcessing?: boolean
   agentProgress?: AgentProgressUpdate | null
+  initialText?: string
 }
 
 export interface TextInputPanelRef {
   focus: () => void
+  setInitialText: (text: string) => void
 }
 
 export const TextInputPanel = forwardRef<TextInputPanelRef, TextInputPanelProps>(({
@@ -22,14 +24,18 @@ export const TextInputPanel = forwardRef<TextInputPanelRef, TextInputPanelProps>
   onCancel,
   isProcessing = false,
   agentProgress,
+  initialText,
 }, ref) => {
-  const [text, setText] = useState("")
+  const [text, setText] = useState(initialText || "")
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const { isDark } = useTheme()
 
   useImperativeHandle(ref, () => ({
     focus: () => {
       textareaRef.current?.focus()
+    },
+    setInitialText: (newText: string) => {
+      setText(newText)
     }
   }))
 

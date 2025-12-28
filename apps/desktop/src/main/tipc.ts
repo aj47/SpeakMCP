@@ -893,9 +893,11 @@ export const router = {
     showPanelWindow()
   }),
 
-  showPanelWindowWithTextInput: t.procedure.action(async () => {
-    await showPanelWindowAndShowTextInput()
-  }),
+  showPanelWindowWithTextInput: t.procedure
+    .input<{ initialText?: string }>()
+    .action(async ({ input }) => {
+      await showPanelWindowAndShowTextInput(input.initialText)
+    }),
 
   triggerMcpRecording: t.procedure
     .input<{ conversationId?: string; sessionId?: string; fromTile?: boolean }>()

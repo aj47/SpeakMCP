@@ -23,8 +23,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@renderer/components/ui/dialog"
+import { PredefinedPromptsMenu } from "@renderer/components/predefined-prompts-menu"
 
-function EmptyState({ onTextClick, onVoiceClick }: { onTextClick: () => void; onVoiceClick: () => void }) {
+function EmptyState({ onTextClick, onVoiceClick, onSelectPrompt }: { onTextClick: () => void; onVoiceClick: () => void; onSelectPrompt: (content: string) => void }) {
   return (
     <div className="flex flex-col items-center justify-center p-8 text-center">
       <div className="rounded-full bg-muted p-4 mb-4">
@@ -34,7 +35,7 @@ function EmptyState({ onTextClick, onVoiceClick }: { onTextClick: () => void; on
       <p className="text-muted-foreground mb-6 max-w-md">
         Start a new agent session using text or voice input. Your sessions will appear here as tiles.
       </p>
-      <div className="flex gap-3">
+      <div className="flex gap-3 items-center">
         <Button onClick={onTextClick} className="gap-2">
           <Plus className="h-4 w-4" />
           Start with Text
@@ -43,6 +44,9 @@ function EmptyState({ onTextClick, onVoiceClick }: { onTextClick: () => void; on
           <Mic className="h-4 w-4" />
           Start with Voice
         </Button>
+        <PredefinedPromptsMenu
+          onSelectPrompt={onSelectPrompt}
+        />
       </div>
     </div>
   )
@@ -298,6 +302,11 @@ export function Component() {
     await tipcClient.triggerMcpRecording({})
   }
 
+  // Handle predefined prompt selection - open panel with text input pre-filled
+  const handleSelectPrompt = async (content: string) => {
+    await tipcClient.showPanelWindowWithTextInput({ initialText: content })
+  }
+
   const handleFocusSession = async (sessionId: string) => {
     setFocusedSessionId(sessionId)
     // Also show the panel window with this session focused
@@ -398,12 +407,12 @@ export function Component() {
       <div className="flex-1 overflow-y-auto scrollbar-hide-until-hover">
         {/* Show empty state when no sessions and no pending */}
         {allProgressEntries.length === 0 && !pendingProgress ? (
-          <EmptyState onTextClick={handleTextClick} onVoiceClick={handleVoiceStart} />
+          <EmptyState onTextClick={handleTextClick} onVoiceClick={handleVoiceStart} onSelectPrompt={handleSelectPrompt} />
         ) : (
           <>
             {/* Header with start buttons and clear inactive button */}
             <div className="px-4 py-2 flex items-center justify-between bg-muted/20 border-b">
-              <div className="flex gap-2">
+              <div className="flex gap-2 items-center">
                 <Button size="sm" onClick={handleTextClick} className="gap-2">
                   <Plus className="h-4 w-4" />
                   Start with Text
@@ -412,6 +421,9 @@ export function Component() {
                   <Mic className="h-4 w-4" />
                   Start with Voice
                 </Button>
+                <PredefinedPromptsMenu
+                  onSelectPrompt={handleSelectPrompt}
+                />
               </div>
               {inactiveSessionCount > 0 && (
                 <Button

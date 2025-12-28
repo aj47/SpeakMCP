@@ -37,6 +37,8 @@ export function PredefinedPromptsMenu({
   disabled = false,
   buttonSize = "icon",
 }: PredefinedPromptsMenuProps) {
+  // Map buttonSize prop to actual Button size - always use "icon" variant for icon-only buttons
+  const actualButtonSize = "icon" as const
   const configQuery = useConfigQuery()
   const saveConfig = useSaveConfigMutation()
   const [isDialogOpen, setIsDialogOpen] = useState(false)
@@ -118,13 +120,13 @@ export function PredefinedPromptsMenu({
         <DropdownMenuTrigger asChild>
           <Button
             type="button"
-            size={buttonSize}
+            size={actualButtonSize}
             variant="ghost"
-            className={cn("h-7 w-7 flex-shrink-0", className)}
+            className={cn("flex-shrink-0", className)}
             disabled={disabled}
             title="Predefined prompts"
           >
-            <BookMarked className="h-3.5 w-3.5" />
+            <BookMarked className="h-4 w-4" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-64 max-h-80 overflow-y-auto">

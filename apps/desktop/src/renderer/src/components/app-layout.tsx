@@ -18,7 +18,7 @@ type NavLinkItem = {
 export const Component = () => {
   const navigate = useNavigate()
   const location = useLocation()
-  const [settingsExpanded, setSettingsExpanded] = useState(true)
+  const [settingsExpanded, setSettingsExpanded] = useState(false)
   const { isCollapsed, width, isResizing, toggleCollapse, handleResizeStart } = useSidebar()
 
   const settingsNavLinks: NavLinkItem[] = [
@@ -146,15 +146,8 @@ export const Component = () => {
           </div>
         )}
 
-        {/* Sessions Section - shows sessions list with active count badge */}
-        {!isCollapsed && (
-          <div className="max-h-[40vh] overflow-y-auto">
-            <ActiveAgentsSidebar />
-          </div>
-        )}
-
-        {/* Settings Section - Collapsible */}
-        <div className={cn("mt-4", isCollapsed ? "px-1" : "px-2")}>
+        {/* Settings Section - Collapsible, collapsed by default */}
+        <div className={cn("shrink-0", isCollapsed ? "px-1" : "px-2")}>
           {isCollapsed ? (
             /* Collapsed: Show all settings icons for quick navigation */
             <div className="grid gap-1">
@@ -206,10 +199,17 @@ export const Component = () => {
           )}
         </div>
 
+        {/* Sessions Section - shows sessions list, scrollable to bottom */}
+        {!isCollapsed && (
+          <div className="mt-2 min-h-0 flex-1 overflow-y-auto px-2">
+            <ActiveAgentsSidebar />
+          </div>
+        )}
+
         {/* Loading spinner at the bottom of the sidebar */}
-        <div className="flex flex-1 flex-col justify-end">
+        <div className="shrink-0">
           <div className={cn(
-            "flex flex-col items-center pb-4",
+            "flex flex-col items-center pb-4 pt-2",
             isCollapsed ? "space-y-1" : "space-y-2"
           )}>
             <LoadingSpinner size={isCollapsed ? "sm" : "lg"} />

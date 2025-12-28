@@ -53,7 +53,7 @@ function convertMCPToolsToAISDKTools(mcpTools: MCPTool[]): Record<string, Return
     // Sanitize tool name to avoid provider compatibility issues
     // (OpenAI/Groq reject tool names containing ':')
     const sanitizedName = sanitizeToolName(mcpTool.name)
-    
+
     // Create AI SDK tool with JSON schema (not Zod)
     tools[sanitizedName] = aiTool({
       description: mcpTool.description || `Tool: ${mcpTool.name}`,
@@ -432,6 +432,13 @@ export async function makeLLMCallWithFetch(
           const response = jsonObject as LLMToolCallResponse
           if (response.needsMoreWork === undefined && !response.toolCalls) {
             response.needsMoreWork = true
+          }
+          // Restore original tool names (convert "__" back to ":")
+          if (response.toolCalls) {
+            response.toolCalls = response.toolCalls.map(tc => ({
+              ...tc,
+              name: restoreToolName(tc.name),
+            }))
           }
           return response
         }

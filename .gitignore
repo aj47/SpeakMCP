@@ -60,3 +60,4 @@ apps/mobile/ios/Pods/
 apps/mobile/ios/.xcode.env.local
 apps/mobile/ios/build/
 *.ipa
+release/

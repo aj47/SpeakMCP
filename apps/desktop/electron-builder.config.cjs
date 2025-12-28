@@ -191,7 +191,7 @@ module.exports = {
     overwriteAction: "upgrade",
   },
   linux: {
-    target: ["AppImage", "snap", "deb"],
+    target: ["AppImage", "deb"],
     maintainer: "SpeakMCP <hi@techfren.net>",
     vendor: "SpeakMCP",
     category: "Utility",

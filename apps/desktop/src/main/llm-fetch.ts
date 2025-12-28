@@ -267,11 +267,21 @@ async function withRetry<T>(
         throw error
       }
 
-      // Check for rate limit (429)
-      const isRateLimit =
-        error instanceof Error &&
-        (error.message.includes("429") ||
-          error.message.toLowerCase().includes("rate limit"))
+      // Check for rate limit (429) using structured error fields when available
+      let isRateLimit = false
+      if (error instanceof Error) {
+        // Check for AI SDK structured error fields (AI_APICallError, etc.)
+        const errorWithStatus = error as { statusCode?: number; status?: number }
+        const statusCode = errorWithStatus.statusCode ?? errorWithStatus.status
+        
+        if (typeof statusCode === "number" && statusCode === 429) {
+          isRateLimit = true
+        } else {
+          // Fallback to message-based detection for errors without structured fields
+          const message = error.message.toLowerCase()
+          isRateLimit = message.includes("429") || message.includes("rate limit")
+        }
+      }
 
       // Rate limits retry indefinitely, other errors respect the limit
       if (!isRateLimit && attempt >= maxRetries) {

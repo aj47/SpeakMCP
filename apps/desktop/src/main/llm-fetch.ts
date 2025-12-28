@@ -28,31 +28,56 @@ import { state, agentSessionStateManager, llmRequestAbortManager } from "./state
  * Sanitize tool name for provider compatibility.
  * Some providers (OpenAI, Groq) reject tool names containing ':'.
  * MCP tool names often include server prefixes like "server:tool_name".
- * We replace ':' with '__' (double underscore) to maintain readability while being valid.
+ * We replace ':' with '__COLON__' to avoid collisions with tool names that
+ * legitimately contain '__' (double underscore).
  */
 function sanitizeToolName(name: string): string {
-  return name.replace(/:/g, "__")
+  return name.replace(/:/g, "__COLON__")
 }
 
 /**
- * Restore original tool name from sanitized version.
- * Reverses the sanitization by replacing '__' back to ':'.
+ * Restore original tool name from sanitized version using the provided map.
+ * Falls back to simple replacement if no map is provided (for JSON response parsing).
  */
-function restoreToolName(sanitizedName: string): string {
-  return sanitizedName.replace(/__/g, ":")
+function restoreToolName(sanitizedName: string, toolNameMap?: Map<string, string>): string {
+  // If we have a map, use it for exact lookup (preferred method)
+  if (toolNameMap && toolNameMap.has(sanitizedName)) {
+    return toolNameMap.get(sanitizedName)!
+  }
+  // Fallback: reverse the sanitization for JSON responses where we don't have the map
+  return sanitizedName.replace(/__COLON__/g, ":")
+}
+
+/**
+ * Result of converting MCP tools to AI SDK format
+ */
+interface ConvertedTools {
+  tools: Record<string, ReturnType<typeof aiTool>>
+  /** Map from sanitized name back to original MCP tool name */
+  nameMap: Map<string, string>
 }
 
 /**
  * Convert MCP tools to AI SDK tool format
  * Uses dynamicTool pattern since MCP tool schemas are JSON Schema, not Zod
+ * Returns both the tools and a map for restoring original names
  */
-function convertMCPToolsToAISDKTools(mcpTools: MCPTool[]): Record<string, ReturnType<typeof aiTool>> {
+function convertMCPToolsToAISDKTools(mcpTools: MCPTool[]): ConvertedTools {
   const tools: Record<string, ReturnType<typeof aiTool>> = {}
+  const nameMap = new Map<string, string>()
 
   for (const mcpTool of mcpTools) {
     // Sanitize tool name to avoid provider compatibility issues
     // (OpenAI/Groq reject tool names containing ':')
     const sanitizedName = sanitizeToolName(mcpTool.name)
+
+    // Check for collision (two different tool names sanitizing to the same key)
+    if (nameMap.has(sanitizedName) && nameMap.get(sanitizedName) !== mcpTool.name) {
+      logLLM(`⚠️ Tool name collision detected: "${mcpTool.name}" and "${nameMap.get(sanitizedName)}" both sanitize to "${sanitizedName}"`)
+    }
+
+    // Store the mapping from sanitized name to original name
+    nameMap.set(sanitizedName, mcpTool.name)
 
     // Create AI SDK tool with JSON schema (not Zod)
     tools[sanitizedName] = aiTool({
@@ -62,7 +87,7 @@ function convertMCPToolsToAISDKTools(mcpTools: MCPTool[]): Record<string, Return
     })
   }
 
-  return tools
+  return { tools, nameMap }
 }
 
 /**
@@ -364,7 +389,7 @@ export async function makeLLMCallWithFetch(
         }
 
         // Convert MCP tools to AI SDK format if provided
-        const aiSdkTools = tools && tools.length > 0
+        const convertedTools = tools && tools.length > 0
           ? convertMCPToolsToAISDKTools(tools)
           : undefined
 
@@ -373,7 +398,7 @@ export async function makeLLMCallWithFetch(
             provider: effectiveProviderId,
             messagesCount: messages.length,
             hasSystem: !!system,
-            hasTools: !!aiSdkTools,
+            hasTools: !!convertedTools,
             toolCount: tools?.length || 0,
           })
         }
@@ -383,9 +408,9 @@ export async function makeLLMCallWithFetch(
           system,
           messages: convertedMessages,
           abortSignal: abortController.signal,
-          tools: aiSdkTools,
+          tools: convertedTools?.tools,
           // Allow the model to choose whether to use tools or respond with text
-          toolChoice: aiSdkTools ? "auto" : undefined,
+          toolChoice: convertedTools?.tools ? "auto" : undefined,
         })
 
         const text = result.text?.trim() || ""
@@ -401,9 +426,9 @@ export async function makeLLMCallWithFetch(
           }
 
           // Convert AI SDK tool calls to our MCPToolCall format
-          // Restore original tool names (reverse the sanitization)
+          // Restore original tool names using the nameMap for accurate lookup
           const toolCalls = result.toolCalls.map(tc => ({
-            name: restoreToolName(tc.toolName),
+            name: restoreToolName(tc.toolName, convertedTools?.nameMap),
             arguments: tc.input,
           }))
 
@@ -433,11 +458,11 @@ export async function makeLLMCallWithFetch(
           if (response.needsMoreWork === undefined && !response.toolCalls) {
             response.needsMoreWork = true
           }
-          // Restore original tool names (convert "__" back to ":")
+          // Restore original tool names using nameMap if available, otherwise fallback to pattern replacement
           if (response.toolCalls) {
             response.toolCalls = response.toolCalls.map(tc => ({
               ...tc,
-              name: restoreToolName(tc.name),
+              name: restoreToolName(tc.name, convertedTools?.nameMap),
             }))
           }
           return response

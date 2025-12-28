@@ -249,6 +249,103 @@ describe('LLM Fetch with AI SDK', () => {
     expect(result.needsMoreWork).toBe(true)
   })
 
+  it('should correctly restore tool names with colons from MCP server prefixes', async () => {
+    const { generateText } = await import('ai')
+    const generateTextMock = vi.mocked(generateText)
+
+    // Mock a response with a tool call using sanitized name (colon replaced with __COLON__)
+    generateTextMock.mockResolvedValue({
+      text: 'Navigating to the page.',
+      finishReason: 'tool-calls',
+      usage: { promptTokens: 10, completionTokens: 20 },
+      toolCalls: [
+        {
+          toolName: 'playwright__COLON__browser_navigate',
+          input: { url: 'https://example.com' },
+          toolCallId: 'call_456',
+        },
+      ],
+    } as any)
+
+    const { makeLLMCallWithFetch } = await import('./llm-fetch')
+
+    const mockTools = [
+      {
+        name: 'playwright:browser_navigate',
+        description: 'Navigate to a URL',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            url: { type: 'string' },
+          },
+        },
+      },
+    ]
+
+    const result = await makeLLMCallWithFetch(
+      [{ role: 'user', content: 'go to example.com' }],
+      'openai',
+      undefined,
+      undefined,
+      mockTools
+    )
+
+    expect(result.toolCalls).toBeDefined()
+    expect(result.toolCalls).toHaveLength(1)
+    // The tool name should be restored to original format with colon
+    expect(result.toolCalls![0].name).toBe('playwright:browser_navigate')
+    expect(result.toolCalls![0].arguments).toEqual({ url: 'https://example.com' })
+  })
+
+  it('should not incorrectly restore tool names with double underscores that are not from sanitization', async () => {
+    const { generateText } = await import('ai')
+    const generateTextMock = vi.mocked(generateText)
+
+    // Mock a response with a tool that legitimately has double underscores in its name
+    generateTextMock.mockResolvedValue({
+      text: 'Running the tool.',
+      finishReason: 'tool-calls',
+      usage: { promptTokens: 10, completionTokens: 20 },
+      toolCalls: [
+        {
+          toolName: 'my__custom__tool',
+          input: { param: 'value' },
+          toolCallId: 'call_789',
+        },
+      ],
+    } as any)
+
+    const { makeLLMCallWithFetch } = await import('./llm-fetch')
+
+    const mockTools = [
+      {
+        name: 'my__custom__tool',
+        description: 'A tool with double underscores in its name',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            param: { type: 'string' },
+          },
+        },
+      },
+    ]
+
+    const result = await makeLLMCallWithFetch(
+      [{ role: 'user', content: 'run the tool' }],
+      'openai',
+      undefined,
+      undefined,
+      mockTools
+    )
+
+    expect(result.toolCalls).toBeDefined()
+    expect(result.toolCalls).toHaveLength(1)
+    // The tool name should remain unchanged - double underscores are NOT replaced
+    // because they are not the __COLON__ pattern
+    expect(result.toolCalls![0].name).toBe('my__custom__tool')
+    expect(result.toolCalls![0].arguments).toEqual({ param: 'value' })
+  })
+
   it('should pass tools to generateText when provided', async () => {
     const { generateText } = await import('ai')
     const generateTextMock = vi.mocked(generateText)

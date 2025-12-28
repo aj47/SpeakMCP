@@ -31,7 +31,8 @@ export const skillsFolder = path.join(
  * [Markdown content]
  */
 function parseSkillMarkdown(content: string): { name: string; description: string; instructions: string } | null {
-  const frontmatterMatch = content.match(/^---\s*\n([\s\S]*?)\n---\s*\n([\s\S]*)$/)
+  // Use \r?\n to handle both Unix (LF) and Windows (CRLF) line endings
+  const frontmatterMatch = content.match(/^---\s*\r?\n([\s\S]*?)\r?\n---\s*\r?\n([\s\S]*)$/)
   
   if (!frontmatterMatch) {
     // No frontmatter, treat entire content as instructions
@@ -121,7 +122,16 @@ class SkillsService {
     return this.getSkills().find(s => s.id === id)
   }
 
-  createSkill(name: string, description: string, instructions: string): AgentSkill {
+  getSkillByFilePath(filePath: string): AgentSkill | undefined {
+    return this.getSkills().find(s => s.filePath === filePath)
+  }
+
+  createSkill(
+    name: string,
+    description: string,
+    instructions: string,
+    options?: { source?: "local" | "imported"; filePath?: string }
+  ): AgentSkill {
     if (!this.skillsData) {
       this.loadSkills()
     }
@@ -134,7 +144,8 @@ class SkillsService {
       enabled: true,
       createdAt: Date.now(),
       updatedAt: Date.now(),
-      source: "local",
+      source: options?.source ?? "local",
+      filePath: options?.filePath,
     }
 
     this.skillsData!.skills.push(newSkill)
@@ -190,23 +201,32 @@ class SkillsService {
   /**
    * Import a skill from SKILL.md content
    */
-  importSkillFromMarkdown(content: string): AgentSkill {
+  importSkillFromMarkdown(content: string, filePath?: string): AgentSkill {
     const parsed = parseSkillMarkdown(content)
     if (!parsed) {
       throw new Error("Invalid SKILL.md format. Expected YAML frontmatter with 'name' field.")
     }
-    return this.createSkill(parsed.name, parsed.description, parsed.instructions)
+    return this.createSkill(parsed.name, parsed.description, parsed.instructions, {
+      source: filePath ? "imported" : "local",
+      filePath,
+    })
   }
 
   /**
    * Import a skill from a SKILL.md file path
+   * If a skill with the same file path already exists, it will be skipped (returns existing skill)
    */
   importSkillFromFile(filePath: string): AgentSkill {
+    // Check if skill from this file path already exists (de-duplication)
+    const existingSkill = this.getSkillByFilePath(filePath)
+    if (existingSkill) {
+      logApp(`Skill from file already exists, skipping: ${filePath}`)
+      return existingSkill
+    }
+
     try {
       const content = fs.readFileSync(filePath, "utf8")
-      const skill = this.importSkillFromMarkdown(content)
-      // Update the skill with the file path
-      return this.updateSkill(skill.id, { ...skill, source: "imported" } as any)
+      return this.importSkillFromMarkdown(content, filePath)
     } catch (error) {
       throw new Error(`Failed to import skill from file: ${error instanceof Error ? error.message : String(error)}`)
     }
@@ -249,7 +269,8 @@ ${skillsContent}
   }
 
   /**
-   * Scan the skills folder for SKILL.md files and import any new ones
+   * Scan the skills folder for SKILL.md files and import any new ones.
+   * Uses file path de-duplication to prevent re-importing the same files on repeated scans.
    */
   scanSkillsFolder(): AgentSkill[] {
     const importedSkills: AgentSkill[] = []
@@ -267,6 +288,11 @@ ${skillsContent}
           // Look for SKILL.md in subdirectory
           const skillPath = path.join(skillsFolder, entry.name, "SKILL.md")
           if (fs.existsSync(skillPath)) {
+            // Check if already imported (de-duplication by file path)
+            if (this.getSkillByFilePath(skillPath)) {
+              logApp(`Skill already imported, skipping: ${entry.name}`)
+              continue
+            }
             try {
               const skill = this.importSkillFromFile(skillPath)
               importedSkills.push(skill)
@@ -278,6 +304,11 @@ ${skillsContent}
         } else if (entry.name.endsWith(".md")) {
           // Import standalone .md files
           const skillPath = path.join(skillsFolder, entry.name)
+          // Check if already imported (de-duplication by file path)
+          if (this.getSkillByFilePath(skillPath)) {
+            logApp(`Skill already imported, skipping: ${entry.name}`)
+            continue
+          }
           try {
             const skill = this.importSkillFromFile(skillPath)
             importedSkills.push(skill)

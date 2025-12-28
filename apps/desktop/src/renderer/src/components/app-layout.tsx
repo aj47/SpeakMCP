@@ -201,10 +201,13 @@ export const Component = () => {
 
         {/* Sessions Section - shows sessions list, scrollable to bottom */}
         {!isCollapsed && (
-          <div className="mt-2 min-h-0 flex-1 overflow-y-auto px-2">
+          <div className="mt-2 min-h-0 flex-1 overflow-y-auto">
             <ActiveAgentsSidebar />
           </div>
         )}
+
+        {/* Spacer to push footer down when collapsed (no sessions section) */}
+        {isCollapsed && <div className="flex-1" />}
 
         {/* Loading spinner at the bottom of the sidebar */}
         <div className="shrink-0">

@@ -186,27 +186,34 @@ export function SessionTile({
   const messages = React.useMemo(() => {
     const baseMessages = progress?.conversationHistory || []
 
-    // If there's a session error message, integrate it into the messages at the correct chronological position
-    if (session.errorMessage && session.endTime) {
+    // If there's a session error message, integrate it into the messages
+    if (session.errorMessage) {
       const errorEntry = {
         role: "error" as const,
         content: session.errorMessage,
-        timestamp: session.endTime,
+        timestamp: session.endTime || Date.now(),
       }
 
-      // Find the correct position to insert the error based on timestamp
       const messagesWithError = [...baseMessages]
-      let insertIndex = messagesWithError.length // Default to end
 
-      for (let i = 0; i < messagesWithError.length; i++) {
-        const msgTimestamp = messagesWithError[i].timestamp || 0
-        if (msgTimestamp > session.endTime) {
-          insertIndex = i
-          break
+      // If endTime is available, insert chronologically; otherwise append to end
+      if (session.endTime) {
+        let insertIndex = messagesWithError.length // Default to end
+
+        for (let i = 0; i < messagesWithError.length; i++) {
+          const msgTimestamp = messagesWithError[i].timestamp || 0
+          if (msgTimestamp > session.endTime) {
+            insertIndex = i
+            break
+          }
         }
+
+        messagesWithError.splice(insertIndex, 0, errorEntry)
+      } else {
+        // No endTime - append error at the end so it's still visible
+        messagesWithError.push(errorEntry)
       }
 
-      messagesWithError.splice(insertIndex, 0, errorEntry)
       return messagesWithError
     }
 

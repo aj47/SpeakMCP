@@ -27,7 +27,7 @@ export type RendererHandlers = {
   focusAgentSession: (sessionId: string) => void
 
   // Message Queue handlers
-  onMessageQueueUpdate: (data: { conversationId: string; queue: QueuedMessage[] }) => void
+  onMessageQueueUpdate: (data: { conversationId: string; queue: QueuedMessage[]; isPaused: boolean }) => void
 
   updateAvailable: (e: UpdateDownloadedEvent) => void
   navigate: (url: string) => void

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react"
 import { cn } from "@renderer/lib/utils"
-import { X, Clock, Trash2, Pencil, Check, ChevronDown, ChevronUp, AlertCircle, RefreshCw, Loader2 } from "lucide-react"
+import { X, Clock, Trash2, Pencil, Check, ChevronDown, ChevronUp, AlertCircle, RefreshCw, Loader2, Play, Pause } from "lucide-react"
 import { Button } from "@renderer/components/ui/button"
 import { QueuedMessage } from "@shared/types"
 import { useMutation } from "@tanstack/react-query"
@@ -11,6 +11,7 @@ interface MessageQueuePanelProps {
   messages: QueuedMessage[]
   className?: string
   compact?: boolean
+  isPaused?: boolean
 }
 
 /**
@@ -257,16 +258,24 @@ function QueuedMessageItem({
 /**
  * Panel component for displaying and managing queued messages.
  * Shows pending messages with options to view full text, edit, and remove them.
+ * When queue is paused (e.g., after kill switch), shows a play button to resume.
  */
 export function MessageQueuePanel({
   conversationId,
   messages,
   className,
   compact = false,
+  isPaused = false,
 }: MessageQueuePanelProps) {
   const clearMutation = useMutation({
     mutationFn: async () => {
       await tipcClient.clearMessageQueue({ conversationId })
+    },
+  })
+
+  const resumeMutation = useMutation({
+    mutationFn: async () => {
+      await tipcClient.resumeMessageQueue({ conversationId })
     },
   })
 
@@ -283,17 +292,43 @@ export function MessageQueuePanel({
     return (
       <div className={cn(
         "flex items-center gap-2 px-2 py-1.5 text-xs rounded-md",
-        "bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800",
+        isPaused
+          ? "bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-800"
+          : "bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800",
         className
       )}>
-        <Clock className="h-3 w-3 text-amber-600 dark:text-amber-400" />
-        <span className="text-amber-700 dark:text-amber-300">
-          {messages.length} queued message{messages.length > 1 ? "s" : ""}
+        {isPaused ? (
+          <Pause className="h-3 w-3 text-orange-600 dark:text-orange-400" />
+        ) : (
+          <Clock className="h-3 w-3 text-amber-600 dark:text-amber-400" />
+        )}
+        <span className={cn(
+          isPaused ? "text-orange-700 dark:text-orange-300" : "text-amber-700 dark:text-amber-300"
+        )}>
+          {messages.length} queued{isPaused ? " (paused)" : ""}
         </span>
+        {isPaused && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-4 w-4 text-green-600 dark:text-green-400 hover:text-green-800 dark:hover:text-green-200 hover:bg-green-100 dark:hover:bg-green-900/30"
+            onClick={() => resumeMutation.mutate()}
+            disabled={resumeMutation.isPending}
+            title="Resume queue execution"
+          >
+            <Play className="h-3 w-3" />
+          </Button>
+        )}
         <Button
           variant="ghost"
           size="icon"
-          className="h-4 w-4 ml-auto text-amber-600 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-200"
+          className={cn(
+            "h-4 w-4",
+            isPaused ? "ml-0" : "ml-auto",
+            isPaused
+              ? "text-orange-600 dark:text-orange-400 hover:text-orange-800 dark:hover:text-orange-200"
+              : "text-amber-600 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-200"
+          )}
           onClick={() => clearMutation.mutate()}
           disabled={clearMutation.isPending || hasProcessingMessage}
           title={hasProcessingMessage ? "Cannot clear while processing" : "Clear queue"}
@@ -308,29 +343,70 @@ export function MessageQueuePanel({
     <div
       className={cn(
         "rounded-md border overflow-hidden",
-        "border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-950/30",
+        isPaused
+          ? "border-orange-300 dark:border-orange-700 bg-orange-50/50 dark:bg-orange-950/30"
+          : "border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-950/30",
         className
       )}
     >
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-amber-200 dark:border-amber-800 bg-amber-100/50 dark:bg-amber-900/30">
+      <div className={cn(
+        "flex items-center justify-between px-3 py-2 border-b",
+        isPaused
+          ? "border-orange-200 dark:border-orange-800 bg-orange-100/50 dark:bg-orange-900/30"
+          : "border-amber-200 dark:border-amber-800 bg-amber-100/50 dark:bg-amber-900/30"
+      )}>
         <div className="flex items-center gap-2">
-          <Clock className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-          <span className="text-sm font-medium text-amber-800 dark:text-amber-200">
-            Queued Messages ({messages.length})
+          {isPaused ? (
+            <Pause className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+          ) : (
+            <Clock className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+          )}
+          <span className={cn(
+            "text-sm font-medium",
+            isPaused ? "text-orange-800 dark:text-orange-200" : "text-amber-800 dark:text-amber-200"
+          )}>
+            {isPaused ? "Queue Paused" : "Queued Messages"} ({messages.length})
           </span>
         </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-6 text-xs text-amber-700 dark:text-amber-300 hover:text-amber-900 dark:hover:text-amber-100 hover:bg-amber-200/50 dark:hover:bg-amber-800/50"
-          onClick={() => clearMutation.mutate()}
-          disabled={clearMutation.isPending || hasProcessingMessage}
-          title={hasProcessingMessage ? "Cannot clear while processing" : undefined}
-        >
-          Clear All
-        </Button>
+        <div className="flex items-center gap-1">
+          {isPaused && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 text-xs text-green-700 dark:text-green-300 hover:text-green-900 dark:hover:text-green-100 hover:bg-green-200/50 dark:hover:bg-green-800/50"
+              onClick={() => resumeMutation.mutate()}
+              disabled={resumeMutation.isPending}
+              title="Resume queue execution"
+            >
+              <Play className="h-3 w-3 mr-1" />
+              Resume
+            </Button>
+          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            className={cn(
+              "h-6 text-xs",
+              isPaused
+                ? "text-orange-700 dark:text-orange-300 hover:text-orange-900 dark:hover:text-orange-100 hover:bg-orange-200/50 dark:hover:bg-orange-800/50"
+                : "text-amber-700 dark:text-amber-300 hover:text-amber-900 dark:hover:text-amber-100 hover:bg-amber-200/50 dark:hover:bg-amber-800/50"
+            )}
+            onClick={() => clearMutation.mutate()}
+            disabled={clearMutation.isPending || hasProcessingMessage}
+            title={hasProcessingMessage ? "Cannot clear while processing" : undefined}
+          >
+            Clear All
+          </Button>
+        </div>
       </div>
+
+      {/* Paused notice */}
+      {isPaused && (
+        <div className="px-3 py-2 text-xs text-orange-700 dark:text-orange-300 bg-orange-100/30 dark:bg-orange-900/20 border-b border-orange-200 dark:border-orange-800">
+          Queue was stopped. Click Resume to continue processing queued messages.
+        </div>
+      )}
 
       {/* Message List */}
       <div className="divide-y max-h-60 overflow-y-auto">

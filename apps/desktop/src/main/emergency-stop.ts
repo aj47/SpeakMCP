@@ -1,6 +1,7 @@
 import { agentProcessManager, llmRequestAbortManager, state, agentSessionStateManager, toolApprovalManager } from "./state"
 import { emitAgentProgress } from "./emit-agent-progress"
 import { agentSessionTracker } from "./agent-session-tracker"
+import { messageQueueService } from "./message-queue-service"
 
 /**
  * Centralized emergency stop: abort LLM requests, kill tracked child processes,
@@ -22,6 +23,12 @@ export async function emergencyStopAll(): Promise<{ before: number; after: numbe
       // Cancel any pending tool approvals for this session
       toolApprovalManager.cancelSessionApprovals(session.id)
 
+      // Pause the message queue for this conversation to prevent processing the next queued message
+      // The user can resume the queue later if they want to continue
+      if (session.conversationId) {
+        messageQueueService.pauseQueue(session.conversationId)
+      }
+
       // Emit a final progress update so the UI shows "Stopped" state
       // This allows users to see the stopped state and send follow-up messages
       // Note: pendingToolApproval is explicitly set to undefined to clear any stale
@@ -38,7 +45,7 @@ export async function emergencyStopAll(): Promise<{ before: number; after: numbe
             id: `stop_${Date.now()}`,
             type: "completion",
             title: "Agent stopped",
-            description: "Agent mode was stopped by emergency kill switch",
+            description: "Agent mode was stopped by emergency kill switch. Queue paused.",
             status: "error",
             timestamp: Date.now(),
           },

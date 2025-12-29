@@ -184,11 +184,19 @@ const calculateMinWaveformWidth = () => {
   return (VISUALIZER_BUFFER_LENGTH * (WAVEFORM_BAR_WIDTH + WAVEFORM_GAP)) + WAVEFORM_PADDING
 }
 
-const MIN_WAVEFORM_WIDTH = calculateMinWaveformWidth() // ~172px
+export const MIN_WAVEFORM_WIDTH = calculateMinWaveformWidth() // ~312px
+
+// Minimum height for waveform panel:
+// - Drag bar: 24px
+// - Waveform: 24px
+// - Submit button + hint: 28px
+// - Padding: ~4px
+// Total: ~80px
+export const WAVEFORM_MIN_HEIGHT = 80
 
 const panelWindowSize = {
   width: Math.max(260, MIN_WAVEFORM_WIDTH),
-  height: 50,
+  height: WAVEFORM_MIN_HEIGHT,
 }
 
 const agentPanelWindowSize = {
@@ -211,7 +219,7 @@ const getSavedPanelSize = () => {
     const maxWidth = 3000
     const maxHeight = 2000
     const minWidth = 200
-    const minHeight = 100
+    const minHeight = WAVEFORM_MIN_HEIGHT
 
     if (savedSize.width > maxWidth || savedSize.height > maxHeight) {
       logApp(`[window.ts] Saved size too large (${savedSize.width}x${savedSize.height}), using default:`, panelWindowSize)
@@ -330,7 +338,7 @@ function applyPanelMode(mode: "normal" | "agent" | "textInput") {
   // Ensure minimum size is enforced (prevents OS-level resize below waveform requirements)
   const minWidth = Math.max(200, MIN_WAVEFORM_WIDTH)
   try {
-    win.setMinimumSize(minWidth, 100)
+    win.setMinimumSize(minWidth, WAVEFORM_MIN_HEIGHT)
   } catch {}
 
   // Update focus behavior for the mode
@@ -390,7 +398,7 @@ export function createPanelWindow() {
       width: savedSize.width,
       height: savedSize.height,
       minWidth: minWidth, // Ensure minimum waveform width
-      minHeight: 100, // Allow resizing down to minimum
+      minHeight: WAVEFORM_MIN_HEIGHT, // Allow compact waveform panel with reduced negative space
       resizable: true, // Enable resizing
       focusable: false,
 
@@ -467,6 +475,14 @@ export async function showPanelWindowAndStartRecording(fromButtonClick?: boolean
   state.isRecordingFromButtonClick = fromButtonClick ?? false
   state.isRecordingMcpMode = false
 
+  // Ensure consistent sizing by setting mode in main before showing
+  // This prevents inheriting textInput mode's focus/show behavior from prior sessions
+  setPanelMode("normal")
+
+  // Resize panel to compact waveform size before showing
+  // This fixes the issue where panel had too much negative space (#817)
+  resizePanelForWaveform()
+
   // Start mic capture/recording as early as possible, but only after panel renderer is ready
   // This prevents lost IPC messages right after app launch when webContents may not have finished loading
   // Pass fromButtonClick so panel shows correct submit hint (Enter vs Release keys)
@@ -491,6 +507,10 @@ export async function showPanelWindowAndStartMcpRecording(conversationId?: strin
 
   // Ensure consistent sizing by setting mode in main before showing
   setPanelMode("normal")
+
+  // Resize panel to compact waveform size before showing
+  // This fixes the issue where panel had too much negative space (#817)
+  resizePanelForWaveform()
 
   // Start mic capture/recording as early as possible, but only after panel renderer is ready
   // This prevents lost IPC messages right after app launch when webContents may not have finished loading
@@ -610,6 +630,29 @@ export const emergencyStopAgentMode = async () => {
 
 export function resizePanelForAgentMode() {
   setPanelMode("agent")
+
+  // Resize panel back to saved size for agent mode
+  // This is needed after resizePanelForWaveform() shrinks it to 80px
+  const win = WINDOWS.get("panel")
+  if (!win) return
+
+  try {
+    const savedSize = getSavedPanelSize()
+    const [currentWidth, currentHeight] = win.getSize()
+
+    // Only resize if current size is smaller than saved size
+    // This handles the case where panel was shrunk for waveform recording
+    if (currentHeight < savedSize.height || currentWidth < savedSize.width) {
+      logApp(`[resizePanelForAgentMode] Resizing panel from ${currentWidth}x${currentHeight} to saved size ${savedSize.width}x${savedSize.height}`)
+      win.setSize(savedSize.width, savedSize.height)
+
+      // Reposition to maintain the panel's anchor point
+      const position = calculatePanelPosition(savedSize, "agent")
+      win.setPosition(position.x, position.y)
+    }
+  } catch (e) {
+    logApp("[resizePanelForAgentMode] Failed to resize panel:", e)
+  }
 }
 
 export function resizePanelForTextInput() {
@@ -618,6 +661,37 @@ export function resizePanelForTextInput() {
 
 export function resizePanelToNormal() {
   setPanelMode("normal")
+}
+
+/**
+ * Resize the panel to compact waveform size for recording.
+ * This shrinks the panel height to WAVEFORM_MIN_HEIGHT while keeping the current width.
+ * This fixes the issue where the panel had too much negative space when showing
+ * the waveform after being sized for agent mode.
+ * See: https://github.com/aj47/SpeakMCP/issues/817
+ */
+export function resizePanelForWaveform() {
+  const win = WINDOWS.get("panel")
+  if (!win) return
+
+  try {
+    const [currentWidth] = win.getSize()
+    const targetHeight = WAVEFORM_MIN_HEIGHT
+
+    // Keep the current width but shrink to waveform height
+    const minWidth = Math.max(200, MIN_WAVEFORM_WIDTH)
+    const newWidth = Math.max(currentWidth, minWidth)
+
+    logApp(`[resizePanelForWaveform] Resizing panel from current size to ${newWidth}x${targetHeight}`)
+
+    win.setSize(newWidth, targetHeight)
+
+    // Reposition to maintain the panel's anchor point (e.g., bottom-right of screen)
+    const position = calculatePanelPosition({ width: newWidth, height: targetHeight }, "normal")
+    win.setPosition(position.x, position.y)
+  } catch (e) {
+    logApp("[resizePanelForWaveform] Failed to resize panel:", e)
+  }
 }
 
 /**

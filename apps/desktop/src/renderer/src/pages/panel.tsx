@@ -20,6 +20,7 @@ import { formatKeyComboForDisplay } from "@shared/key-utils"
 import { Send } from "lucide-react"
 
 const VISUALIZER_BUFFER_LENGTH = 70
+const WAVEFORM_MIN_HEIGHT = 80
 
 const getInitialVisualizerData = () =>
   Array<number>(VISUALIZER_BUFFER_LENGTH).fill(-1000)
@@ -41,6 +42,7 @@ export function Component() {
   const [fromButtonClick, setFromButtonClick] = useState(false)
   const { isDark } = useTheme()
   const lastRequestedModeRef = useRef<"normal" | "agent" | "textInput">("normal")
+
   const requestPanelMode = (mode: "normal" | "agent" | "textInput") => {
     if (lastRequestedModeRef.current === mode) return
     lastRequestedModeRef.current = mode
@@ -722,7 +724,6 @@ export function Component() {
     return unlisten
   }, [isConversationActive, endConversation, transcribeMutation, mcpTranscribeMutation, textInputMutation, mcpTextInputMutation])
 
-
 	  // Track latest state values in a ref to avoid race conditions with auto-close timeout
 	  const autoCloseStateRef = useRef({
 	    anyVisibleSessions,
@@ -779,7 +780,7 @@ export function Component() {
     <PanelResizeWrapper
       enableResize={true}
       minWidth={200}
-      minHeight={100}
+      minHeight={WAVEFORM_MIN_HEIGHT}
       className={cn(
         "floating-panel modern-text-strong flex h-screen flex-col text-foreground",
         isDark ? "dark" : ""
@@ -806,7 +807,8 @@ export function Component() {
             agentProgress={agentProgress}
           />
         ) : (
-          <div className={cn(
+          <div
+            className={cn(
             "voice-input-panel modern-text-strong flex h-full w-full rounded-xl transition-all duration-300",
             isDark ? "dark" : ""
           )}>

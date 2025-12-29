@@ -17,6 +17,7 @@ import {
   showPanelWindowAndShowTextInput,
   showPanelWindowAndStartMcpRecording,
   WAVEFORM_MIN_HEIGHT,
+  MIN_WAVEFORM_WIDTH,
 } from "./window"
 import {
   app,
@@ -2234,8 +2235,8 @@ export const router = {
         throw new Error("Panel window not found")
       }
 
-      // Apply minimum size constraints
-      const minWidth = 200
+      // Apply minimum size constraints (use MIN_WAVEFORM_WIDTH to ensure visualizer bars aren't clipped)
+      const minWidth = Math.max(200, MIN_WAVEFORM_WIDTH)
       const minHeight = WAVEFORM_MIN_HEIGHT
       const finalWidth = Math.max(minWidth, input.width)
       const finalHeight = Math.max(minHeight, input.height)
@@ -2290,12 +2291,13 @@ export const router = {
 
     const config = configStore.get()
     if (config.panelCustomSize) {
-      // Apply saved custom size
+      // Apply saved custom size (use MIN_WAVEFORM_WIDTH to ensure visualizer bars aren't clipped)
       const { width, height } = config.panelCustomSize
-      const finalWidth = Math.max(200, width)
+      const minWidth = Math.max(200, MIN_WAVEFORM_WIDTH)
+      const finalWidth = Math.max(minWidth, width)
       const finalHeight = Math.max(WAVEFORM_MIN_HEIGHT, height)
 
-      win.setMinimumSize(200, WAVEFORM_MIN_HEIGHT)
+      win.setMinimumSize(minWidth, WAVEFORM_MIN_HEIGHT)
       win.setSize(finalWidth, finalHeight, false) // no animation on init
       return { width: finalWidth, height: finalHeight }
     }

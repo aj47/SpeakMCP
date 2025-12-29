@@ -184,7 +184,7 @@ const calculateMinWaveformWidth = () => {
   return (VISUALIZER_BUFFER_LENGTH * (WAVEFORM_BAR_WIDTH + WAVEFORM_GAP)) + WAVEFORM_PADDING
 }
 
-const MIN_WAVEFORM_WIDTH = calculateMinWaveformWidth() // ~172px
+export const MIN_WAVEFORM_WIDTH = calculateMinWaveformWidth() // ~312px
 
 // Minimum height for waveform panel:
 // - Drag bar: 24px

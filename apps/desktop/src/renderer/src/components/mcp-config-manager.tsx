@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react"
+import React, { useState, useEffect, useRef, useCallback } from "react"
 import { Button } from "@renderer/components/ui/button"
 import { Input } from "@renderer/components/ui/input"
 import { Label } from "@renderer/components/ui/label"
@@ -1200,20 +1200,21 @@ export function MCPConfigManager({
     return () => clearInterval(interval)
   }, [servers, expandedLogs])
 
+  // Fetch tools function - defined as useCallback so it can be reused
+  const fetchTools = useCallback(async () => {
+    try {
+      const toolList = await tipcClient.getMcpDetailedToolList({})
+      setTools(toolList as DetailedTool[])
+    } catch (error) {}
+  }, [])
+
   // Fetch tools periodically
   useEffect(() => {
-    const fetchTools = async () => {
-      try {
-        const toolList = await tipcClient.getMcpDetailedToolList({})
-        setTools(toolList as DetailedTool[])
-      } catch (error) {}
-    }
-
     fetchTools()
     const interval = setInterval(fetchTools, 5000) // Update every 5 seconds
 
     return () => clearInterval(interval)
-  }, [])
+  }, [fetchTools])
 
   // Track known tool server names to detect new servers
   const [knownToolServers, setKnownToolServers] = useState<Set<string>>(new Set())
@@ -1681,6 +1682,8 @@ export function MCPConfigManager({
       const result = await tipcClient.stopMcpServer({ serverName })
       if ((result as any).success) {
         toast.success(`Server ${serverName} stopped successfully`)
+        // Immediately fetch tools to update the UI
+        await fetchTools()
       } else {
         toast.error(`Failed to stop server: ${(result as any).error}`)
       }
@@ -1705,6 +1708,8 @@ export function MCPConfigManager({
       const result = await tipcClient.restartMcpServer({ serverName })
       if ((result as any).success) {
         toast.success(`Server ${serverName} started successfully`)
+        // Immediately fetch tools so they appear without waiting for the 5-second interval
+        await fetchTools()
       } else {
         toast.error(`Failed to start server: ${(result as any).error}`)
       }

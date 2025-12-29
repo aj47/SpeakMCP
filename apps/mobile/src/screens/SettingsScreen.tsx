@@ -8,6 +8,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Linking from 'expo-linking';
 import { checkServerConnection, ConnectionCheckResult } from '../lib/connectionRecovery';
 import { useTunnelConnection } from '../store/tunnelConnection';
+import { useProfile } from '../store/profile';
 import { SettingsApiClient, Profile, MCPServer, Settings, ModelInfo } from '../lib/settingsApi';
 
 function parseQRCode(data: string): { baseUrl?: string; apiKey?: string; model?: string } | null {
@@ -47,6 +48,7 @@ export default function SettingsScreen({ navigation }: any) {
   const [isCheckingConnection, setIsCheckingConnection] = useState(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const { connect: tunnelConnect, disconnect: tunnelDisconnect } = useTunnelConnection();
+  const { setCurrentProfile: setProfileContext } = useProfile();
 
   // Remote settings state
   const [profiles, setProfiles] = useState<Profile[]>([]);
@@ -170,6 +172,11 @@ export default function SettingsScreen({ navigation }: any) {
     try {
       await settingsClient.setCurrentProfile(profileId);
       setCurrentProfileId(profileId);
+      // Update the profile context so the header badge updates immediately
+      const selectedProfile = profiles.find(p => p.id === profileId);
+      if (selectedProfile) {
+        setProfileContext(selectedProfile);
+      }
       // Refresh MCP servers as they may have changed with the profile
       const serversRes = await settingsClient.getMCPServers();
       setMcpServers(serversRes.servers);

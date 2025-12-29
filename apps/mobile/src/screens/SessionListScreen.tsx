@@ -6,6 +6,7 @@ import { spacing, radius, Theme } from '../ui/theme';
 import { useSessionContext, SessionStore } from '../store/sessions';
 import { useConnectionManager } from '../store/connectionManager';
 import { useTunnelConnection } from '../store/tunnelConnection';
+import { useProfile } from '../store/profile';
 import { ConnectionStatusIndicator } from '../ui/ConnectionStatusIndicator';
 import { SessionListItem } from '../types/session';
 
@@ -21,9 +22,34 @@ export default function SessionListScreen({ navigation }: Props) {
   const styles = useMemo(() => createStyles(theme), [theme]);
   const connectionManager = useConnectionManager();
   const { connectionInfo } = useTunnelConnection();
+  const { currentProfile } = useProfile();
 
   useLayoutEffect(() => {
     navigation?.setOptions?.({
+      headerTitle: () => (
+        <View style={{ flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+          <Text style={{ fontSize: 17, fontWeight: '600', color: theme.colors.foreground }}>Chats</Text>
+          {currentProfile && (
+            <View style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: theme.colors.primary + '20',
+              paddingHorizontal: 8,
+              paddingVertical: 2,
+              borderRadius: 10,
+              marginTop: 2,
+            }}>
+              <Text style={{
+                fontSize: 11,
+                color: theme.colors.primary,
+                fontWeight: '500',
+              }}>
+                {currentProfile.name}
+              </Text>
+            </View>
+          )}
+        </View>
+      ),
       headerRight: () => (
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
           <ConnectionStatusIndicator
@@ -42,7 +68,7 @@ export default function SessionListScreen({ navigation }: Props) {
         </View>
       ),
     });
-  }, [navigation, theme, connectionInfo.state, connectionInfo.retryCount]);
+  }, [navigation, theme, connectionInfo.state, connectionInfo.retryCount, currentProfile]);
   const insets = useSafeAreaInsets();
   const sessionStore = useSessionContext();
   const sessions = sessionStore.getSessionList();

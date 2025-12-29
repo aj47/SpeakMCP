@@ -381,6 +381,7 @@ class MessageQueueService {
     const panel = WINDOWS.get("panel")
 
     const queue = this.getQueue(conversationId)
+    const isPaused = this.isQueuePaused(conversationId)
 
     ;[main, panel].forEach((win) => {
       if (win) {
@@ -391,6 +392,7 @@ class MessageQueueService {
               handlers.onMessageQueueUpdate.send({
                 conversationId,
                 queue,
+                isPaused,
               })
             } catch (error) {
               logApp("Failed to send queue update:", error)

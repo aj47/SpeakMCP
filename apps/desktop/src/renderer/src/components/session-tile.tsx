@@ -23,7 +23,7 @@ import { Button } from "@renderer/components/ui/button"
 import { Badge } from "@renderer/components/ui/badge"
 import { MarkdownRenderer } from "@renderer/components/markdown-renderer"
 import { MessageQueuePanel } from "@renderer/components/message-queue-panel"
-import { useMessageQueue } from "@renderer/stores"
+import { useMessageQueue, useIsQueuePaused } from "@renderer/stores"
 
 const MIN_HEIGHT = 120
 const MAX_HEIGHT = 600
@@ -91,6 +91,7 @@ export function SessionTile({
 
   // Get queued messages for this conversation
   const queuedMessages = useMessageQueue(session.conversationId)
+  const isQueuePaused = useIsQueuePaused(session.conversationId)
 
   // Copy message to clipboard
   const handleCopyMessage = async (e: React.MouseEvent, content: string, messageId: string) => {
@@ -377,6 +378,7 @@ export function SessionTile({
                 conversationId={session.conversationId}
                 messages={queuedMessages}
                 compact={isCollapsed}
+                isPaused={isQueuePaused}
               />
             </div>
           )}

@@ -2633,7 +2633,12 @@ export const router = {
     }),
 
   getAllMessageQueues: t.procedure.action(async () => {
-      return messageQueueService.getAllQueues()
+      const queues = messageQueueService.getAllQueues()
+      // Include isPaused state for each queue
+      return queues.map(q => ({
+        ...q,
+        isPaused: messageQueueService.isQueuePaused(q.conversationId),
+      }))
   }),
 
   removeFromMessageQueue: t.procedure

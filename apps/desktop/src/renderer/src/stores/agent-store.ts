@@ -10,6 +10,7 @@ interface AgentState {
   focusedSessionId: string | null
   scrollToSessionId: string | null
   messageQueuesByConversation: Map<string, QueuedMessage[]> // Message queues per conversation
+  pausedQueueConversations: Set<string> // Conversations with paused queues
 
   viewMode: SessionViewMode
   filter: SessionFilter
@@ -26,8 +27,9 @@ interface AgentState {
   getAgentProgress: () => AgentProgressUpdate | null
 
   // Message queue actions
-  updateMessageQueue: (conversationId: string, queue: QueuedMessage[]) => void
+  updateMessageQueue: (conversationId: string, queue: QueuedMessage[], isPaused: boolean) => void
   getMessageQueue: (conversationId: string) => QueuedMessage[]
+  isQueuePaused: (conversationId: string) => boolean
 
   setViewMode: (mode: SessionViewMode) => void
   setFilter: (filter: SessionFilter) => void
@@ -41,6 +43,7 @@ export const useAgentStore = create<AgentState>((set, get) => ({
   focusedSessionId: null,
   scrollToSessionId: null,
   messageQueuesByConversation: new Map(),
+  pausedQueueConversations: new Set(),
 
   viewMode: 'grid' as SessionViewMode,
   filter: 'all' as SessionFilter,
@@ -179,20 +182,36 @@ export const useAgentStore = create<AgentState>((set, get) => ({
   },
 
   // Message queue actions
-  updateMessageQueue: (conversationId: string, queue: QueuedMessage[]) => {
+  updateMessageQueue: (conversationId: string, queue: QueuedMessage[], isPaused: boolean) => {
     set((state) => {
-      const newMap = new Map(state.messageQueuesByConversation)
+      const newQueueMap = new Map(state.messageQueuesByConversation)
+      const newPausedSet = new Set(state.pausedQueueConversations)
+
       if (queue.length === 0) {
-        newMap.delete(conversationId)
+        newQueueMap.delete(conversationId)
       } else {
-        newMap.set(conversationId, queue)
+        newQueueMap.set(conversationId, queue)
       }
-      return { messageQueuesByConversation: newMap }
+
+      if (isPaused) {
+        newPausedSet.add(conversationId)
+      } else {
+        newPausedSet.delete(conversationId)
+      }
+
+      return {
+        messageQueuesByConversation: newQueueMap,
+        pausedQueueConversations: newPausedSet,
+      }
     })
   },
 
   getMessageQueue: (conversationId: string) => {
     return get().messageQueuesByConversation.get(conversationId) || []
+  },
+
+  isQueuePaused: (conversationId: string) => {
+    return get().pausedQueueConversations.has(conversationId)
   },
 
   // View settings actions
@@ -244,4 +263,11 @@ export const useMessageQueue = (conversationId: string | undefined) => {
   const messageQueuesByConversation = useAgentStore((state) => state.messageQueuesByConversation)
   if (!conversationId) return []
   return messageQueuesByConversation.get(conversationId) || []
+}
+
+// Hook to check if a conversation's queue is paused
+export const useIsQueuePaused = (conversationId: string | undefined) => {
+  const pausedQueueConversations = useAgentStore((state) => state.pausedQueueConversations)
+  if (!conversationId) return false
+  return pausedQueueConversations.has(conversationId)
 }

@@ -363,7 +363,7 @@ function createSessionAbortController(sessionId?: string): AbortController {
   } else {
     llmRequestAbortManager.register(controller)
   }
-  return controller
+return controller
 }
 
 /**

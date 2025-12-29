@@ -817,7 +817,10 @@ export async function processTranscriptWithAgentMode(
   ) => {
     const isNudge = (content: string) =>
       content.includes("Please either take action using available tools") ||
-      content.includes("You have relevant tools available for this request")
+      content.includes("You have relevant tools available for this request") ||
+      content.includes("Your previous response was empty") ||
+      content.includes("Verifier indicates the task is not complete") ||
+      content.includes("Please respond with a valid JSON object")
 
     return history
       .filter((entry) => !(entry.role === "user" && isNudge(entry.content)))
@@ -1330,11 +1333,18 @@ Return ONLY JSON per schema.`,
     }
 
     // Validate response is not null/empty
-    // A response is valid if it has either content OR toolCalls (tool-only responses have empty content)
+    // A response is valid if it has either:
+    // 1. Non-empty content, OR
+    // 2. Valid toolCalls (tool-only responses have empty content), OR
+    // 3. Empty content with needsMoreWork=false AND no toolCalls (LLM intentionally completed with finish_reason='stop')
     const hasValidContent = llmResponse?.content && llmResponse.content.trim().length > 0
     const hasValidToolCalls = llmResponse?.toolCalls && Array.isArray(llmResponse.toolCalls) && llmResponse.toolCalls.length > 0
+    // Check for intentional empty completion (finish_reason='stop' in llm-fetch.ts returns this)
+    // IMPORTANT: If there are toolCalls, they take precedence over intentional-empty completion
+    // to ensure tool execution is not skipped
+    const isIntentionalEmptyCompletion = llmResponse?.needsMoreWork === false && llmResponse?.content === "" && !hasValidToolCalls
 
-    if (!llmResponse || (!hasValidContent && !hasValidToolCalls)) {
+    if (!llmResponse || (!hasValidContent && !hasValidToolCalls && !isIntentionalEmptyCompletion)) {
       logLLM(`❌ LLM null/empty response on iteration ${iteration}`)
       logLLM("Response details:", {
         hasResponse: !!llmResponse,
@@ -1363,6 +1373,98 @@ Return ONLY JSON per schema.`,
       })
       addMessage("user", "Previous request had invalid response. Please retry or summarize progress.")
       continue
+    }
+
+    // Handle intentional empty completion from LLM (finish_reason='stop')
+    // This is unusual - the model chose to complete without any content
+    // We should verify this is actually complete before accepting it
+    if (isIntentionalEmptyCompletion) {
+      logLLM("⚠️ LLM intentionally completed with empty response (finish_reason=stop)")
+      diagnosticsService.logWarning("llm", "LLM completed with empty response in agent mode", {
+        iteration,
+        needsMoreWork: llmResponse.needsMoreWork,
+        message: "Model completed intentionally without content - will verify before accepting"
+      })
+
+      // Run verifier to check if task is actually complete before accepting empty completion
+      if (config.mcpVerifyCompletionEnabled) {
+        const verifyStep = createProgressStep(
+          "thinking",
+          "Verifying empty completion",
+          "Checking if task was actually completed despite empty response",
+          "in_progress",
+        )
+        progressSteps.push(verifyStep)
+        emit({
+          currentIteration: iteration,
+          maxIterations,
+          steps: progressSteps.slice(-3),
+          isComplete: false,
+          conversationHistory: formatConversationForProgress(conversationHistory),
+        })
+
+        // Build verification context from last assistant message with content
+        const lastAssistantContent = conversationHistory
+          .filter(m => m.role === "assistant" && m.content && m.content.trim().length > 0)
+          .pop()?.content || ""
+
+        const retries = Math.max(0, config.mcpVerifyRetryCount ?? 1)
+        let verified = false
+        let verification: any = null
+
+        for (let i = 0; i <= retries; i++) {
+          verification = await verifyCompletionWithFetch(buildVerificationMessages(lastAssistantContent), config.mcpToolsProviderId)
+          if (verification?.isComplete === true) { verified = true; break }
+        }
+
+        if (!verified) {
+          verifyStep.status = "error"
+          verifyStep.description = "Empty completion rejected: task not actually complete"
+          logLLM("⚠️ Empty completion rejected by verifier - nudging LLM to continue")
+
+          const missing = (verification?.missingItems || []).filter((s: string) => s && s.trim()).map((s: string) => `- ${s}`).join("\n")
+          const reason = verification?.reason ? `Reason: ${verification.reason}` : ""
+          const userNudge = `Your previous response was empty. The task is not complete.\n${reason}\n${missing ? `Missing items:\n${missing}` : ""}\nPlease continue working on the task and provide a response.`
+          conversationHistory.push({ role: "user", content: userNudge })
+
+          // Continue the loop instead of returning
+          continue
+        }
+
+        verifyStep.status = "completed"
+        verifyStep.description = "Empty completion verified as actually complete"
+        logLLM("✅ Empty completion verified - task is actually complete")
+      }
+
+      // Mark thinking step as completed
+      thinkingStep.status = "completed"
+      thinkingStep.title = "Agent completed"
+      thinkingStep.description = "Model completed without additional content"
+
+      // Add completion step
+      const completionStep = createProgressStep(
+        "completion",
+        "Task completed",
+        "The model completed without additional content",
+        "completed",
+      )
+      progressSteps.push(completionStep)
+
+      // Emit final progress with empty content
+      emit({
+        currentIteration: iteration,
+        maxIterations,
+        steps: progressSteps.slice(-3),
+        isComplete: true,
+        finalContent: "",
+        conversationHistory: formatConversationForProgress(conversationHistory),
+      })
+
+      return {
+        content: "",
+        conversationHistory,
+        totalIterations: iteration,
+      }
     }
 
     // Update thinking step with actual LLM content and mark as completed

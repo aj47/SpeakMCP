@@ -26,8 +26,8 @@ backend/.wrangler
 
 # Database files
 *.db
-*.db-wal
 *.db-shm
+*.db-wal
 
 *.DS_Store*
 .augment

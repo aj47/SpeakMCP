@@ -2751,39 +2751,6 @@ export const router = {
 
       return true
     }),
-
-  // Debug endpoint to trigger fake waveform for testing panel dimensions
-  debugFakeWaveform: t.procedure
-    .input<{ duration?: number }>()
-    .action(async ({ input }) => {
-      logApp("[debugFakeWaveform] Triggering fake waveform recording")
-      const win = WINDOWS.get("panel")
-      if (!win) {
-        logApp("[debugFakeWaveform] Panel window not found")
-        return { success: false, error: "Panel window not found" }
-      }
-
-      // Resize panel to compact waveform size before showing (same as real recording)
-      // This tests the fix for issue #817
-      resizePanelForWaveform()
-
-      // Get window dimensions AFTER resize
-      const [width, height] = win.getSize()
-      const [x, y] = win.getPosition()
-      logApp("[debugFakeWaveform] Window dimensions after resize:", { width, height, x, y })
-
-      // Show the panel window
-      win.show()
-
-      // Send the fake waveform trigger to the renderer
-      getWindowRendererHandlers("panel")?.debugFakeWaveform.send({ duration: input.duration || 5000 })
-
-      return {
-        success: true,
-        windowDimensions: { width, height, x, y },
-        duration: input.duration || 5000
-      }
-    }),
 }
 
 // TTS Provider Implementation Functions

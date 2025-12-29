@@ -626,6 +626,29 @@ export const emergencyStopAgentMode = async () => {
 
 export function resizePanelForAgentMode() {
   setPanelMode("agent")
+
+  // Resize panel back to saved size for agent mode
+  // This is needed after resizePanelForWaveform() shrinks it to 80px
+  const win = WINDOWS.get("panel")
+  if (!win) return
+
+  try {
+    const savedSize = getSavedPanelSize()
+    const [currentWidth, currentHeight] = win.getSize()
+
+    // Only resize if current size is smaller than saved size
+    // This handles the case where panel was shrunk for waveform recording
+    if (currentHeight < savedSize.height || currentWidth < savedSize.width) {
+      logApp(`[resizePanelForAgentMode] Resizing panel from ${currentWidth}x${currentHeight} to saved size ${savedSize.width}x${savedSize.height}`)
+      win.setSize(savedSize.width, savedSize.height)
+
+      // Reposition to maintain the panel's anchor point
+      const position = calculatePanelPosition(savedSize, "agent")
+      win.setPosition(position.x, position.y)
+    }
+  } catch (e) {
+    logApp("[resizePanelForAgentMode] Failed to resize panel:", e)
+  }
 }
 
 export function resizePanelForTextInput() {

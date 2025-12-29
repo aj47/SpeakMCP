@@ -35,7 +35,6 @@ import * as Speech from 'expo-speech';
 import {
   preprocessTextForTTS,
   COLLAPSED_LINES,
-  getRoleIcon,
   getRoleLabel,
   shouldCollapseMessage,
   getToolResultsSummary,
@@ -1844,8 +1843,8 @@ export default function ChatScreen({ route, navigation }: any) {
       <View style={{ flex: 1 }}>
         <ScrollView
           ref={scrollViewRef}
-          style={{ flex: 1, padding: spacing.lg, backgroundColor: theme.colors.background }}
-          contentContainerStyle={{ paddingBottom: insets.bottom }}
+          style={{ flex: 1, padding: spacing.sm, backgroundColor: theme.colors.background }}
+          contentContainerStyle={{ paddingBottom: insets.bottom, gap: spacing.sm }}
           keyboardShouldPersistTaps="handled"
           contentInsetAdjustmentBehavior="automatic"
           onScroll={handleScroll}
@@ -1858,7 +1857,6 @@ export default function ChatScreen({ route, navigation }: any) {
             // expandedMessages is auto-updated via useEffect to expand the last assistant message
             // and persist the expansion state so it doesn't collapse when new messages arrive
             const isExpanded = expandedMessages[i] ?? false;
-            const roleIcon = getRoleIcon(m.role as 'user' | 'assistant' | 'tool');
             const roleLabel = getRoleLabel(m.role as 'user' | 'assistant' | 'tool');
 
             const toolCallCount = m.toolCalls?.length ?? 0;
@@ -1881,7 +1879,7 @@ export default function ChatScreen({ route, navigation }: any) {
                   m.role === 'user' ? styles.user : styles.assistant,
                 ]}
               >
-                {/* Clickable header for expand/collapse */}
+                {/* Role label header like desktop - shows "user" or "assistant" */}
                 <Pressable
                   onPress={shouldCollapse ? () => toggleMessageExpansion(i) : undefined}
                   disabled={!shouldCollapse}
@@ -1898,9 +1896,7 @@ export default function ChatScreen({ route, navigation }: any) {
                     shouldCollapse && pressed && styles.messageHeaderPressed,
                   ]}
                 >
-                  <Text style={styles.roleIcon} accessibilityLabel={roleLabel}>
-                    {roleIcon}
-                  </Text>
+                  <Text style={styles.roleLabel}>{roleLabel}</Text>
                   {(m.toolCalls?.length ?? 0) > 0 && (
                     <View style={[
                       styles.toolBadgeSmall,
@@ -2360,26 +2356,28 @@ export default function ChatScreen({ route, navigation }: any) {
 
 function createStyles(theme: Theme) {
   return StyleSheet.create({
+    // Desktop-style messages: left-border accent, full width, no bubbles
     msg: {
-      padding: spacing.sm,
-      borderRadius: radius.lg,
+      paddingLeft: spacing.sm,
+      paddingVertical: spacing.xs,
       marginBottom: spacing.xs,
-      maxWidth: '90%',
+      width: '100%',
     },
     user: {
-      backgroundColor: theme.colors.secondary,
-      alignSelf: 'flex-end',
+      // User messages: no left border, just plain
+      paddingLeft: 0,
     },
     assistant: {
-      backgroundColor: theme.colors.card,
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-      alignSelf: 'flex-start',
+      // Assistant messages: blue left-border accent like desktop
+      borderLeftWidth: 2,
+      borderLeftColor: hexToRgba(theme.colors.primary, 0.3),
+      paddingLeft: spacing.sm,
     },
-    roleIcon: {
-      fontSize: 12,
-      marginRight: 3,
-      opacity: 0.7,
+    roleLabel: {
+      fontSize: 11,
+      color: theme.colors.mutedForeground,
+      textTransform: 'capitalize',
+      marginBottom: 2,
     },
     messageHeader: {
       flexDirection: 'row',

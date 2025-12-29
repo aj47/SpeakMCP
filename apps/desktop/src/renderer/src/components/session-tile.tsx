@@ -75,7 +75,8 @@ export function SessionTile({
   const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Generate stable message ID from timestamp and role
-  const getMessageId = (message: { role: string; timestamp?: number }, index: number) => {
+  const getMessageId = (message: { role: string; timestamp?: number; id?: string }, index: number) => {
+    if (message.id) return message.id
     return `${message.timestamp || index}-${message.role}`
   }
 
@@ -194,6 +195,7 @@ export function SessionTile({
         role: "error" as const,
         content: session.errorMessage,
         timestamp: session.endTime || session.startTime,
+        id: `error-${session.id}`, // Stable unique ID for error messages
       }
 
       const messagesWithError = [...baseMessages]

@@ -1,9 +1,10 @@
 /**
  * Simple test script for the SpeakMCP client SDK.
- * 
+ *
  * Usage:
  *   1. Start the server: cd packages/server && pnpm start
- *   2. Run this test: cd packages/client && npx tsx test.ts
+ *   2. Build the client: cd packages/client && pnpm build
+ *   3. Run this test: cd packages/client && npx tsx test.ts
  */
 
 import { SpeakMcpClient } from './dist/index.js'

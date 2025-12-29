@@ -19,57 +19,6 @@ import { conversationService } from "./conversation-service"
 import { getCurrentPresetName } from "../shared"
 
 /**
- * Tool name patterns that require sequential execution to avoid race conditions.
- * These are typically browser automation tools that modify shared state (DOM, browser context).
- * The patterns match the tool name suffix (after the server prefix, e.g., "playwright:browser_click").
- *
- * When ANY tool in a batch matches these patterns, the entire batch executes sequentially
- * to prevent stale DOM references and other race conditions.
- */
-const SEQUENTIAL_EXECUTION_TOOL_PATTERNS: string[] = [
-  // Playwright browser tools that modify DOM or browser state
-  'browser_click',
-  'browser_drag',
-  'browser_type',
-  'browser_fill_form',
-  'browser_hover',
-  'browser_press_key',
-  'browser_select_option',
-  'browser_file_upload',
-  'browser_handle_dialog',
-  'browser_navigate',
-  'browser_navigate_back',
-  'browser_close',
-  'browser_resize',
-  'browser_tabs',
-  'browser_wait_for',
-  'browser_evaluate',
-  'browser_run_code',
-  // Vision-based coordinate tools
-  'browser_mouse_click_xy',
-  'browser_mouse_drag_xy',
-  'browser_mouse_move_xy',
-]
-
-/**
- * Check if a tool call requires sequential execution based on its name.
- * Matches against the SEQUENTIAL_EXECUTION_TOOL_PATTERNS list.
- */
-function toolRequiresSequentialExecution(toolName: string): boolean {
-  // Extract the tool name without server prefix (e.g., "browser_click" from "playwright:browser_click")
-  const baseName = toolName.includes(':') ? toolName.split(':')[1] : toolName
-  return SEQUENTIAL_EXECUTION_TOOL_PATTERNS.some(pattern => baseName === pattern)
-}
-
-/**
- * Check if any tools in the batch require sequential execution.
- * If even one tool requires sequential execution, the entire batch should execute sequentially.
- */
-function batchRequiresSequentialExecution(toolCalls: MCPToolCall[]): boolean {
-  return toolCalls.some(tc => toolRequiresSequentialExecution(tc.name))
-}
-
-/**
  * Use LLM to extract useful context from conversation history
  */
 async function extractContextFromHistory(
@@ -248,7 +197,8 @@ export async function processTranscriptWithTools(
   const chatProviderId = config.mcpToolsProviderId
 
   try {
-    const result = await makeLLMCallWithFetch(shrunkMessages, chatProviderId)
+    // Pass tools for native AI SDK tool calling
+    const result = await makeLLMCallWithFetch(shrunkMessages, chatProviderId, undefined, undefined, uniqueAvailableTools)
     return result
   } catch (error) {
     throw error
@@ -841,6 +791,10 @@ export async function processTranscriptWithAgentMode(
     { role: "user", content: transcript, timestamp: Date.now() },
   ]
 
+  // Track the index where the current user prompt was added
+  // This is used to scope tool result checks to only the current turn
+  const currentPromptIndex = previousConversationHistory?.length || 0
+
   logLLM(`[llm.ts processTranscriptWithAgentMode] conversationHistory initialized with ${conversationHistory.length} messages, roles: [${conversationHistory.map(m => m.role).join(', ')}]`)
 
   // Save the initial user message incrementally
@@ -1303,7 +1257,7 @@ Return ONLY JSON per schema.`,
         })
       }
 
-      llmResponse = await makeLLMCall(shrunkMessages, config, onRetryProgress, onStreamingUpdate, currentSessionId)
+      llmResponse = await makeLLMCall(shrunkMessages, config, onRetryProgress, onStreamingUpdate, currentSessionId, uniqueAvailableTools)
 
       // Clear streaming state after response is complete
       emit({
@@ -1562,7 +1516,7 @@ Return ONLY JSON per schema.`,
       const hasToolMarkers = /<\|tool_calls_section_begin\|>|<\|tool_call_begin\|>/i.test(contentText)
       if (hasToolMarkers) {
         conversationHistory.push({ role: "assistant", content: contentText.replace(/<\|[^|]*\|>/g, "").trim() })
-        conversationHistory.push({ role: "user", content: "Please return a valid JSON object with toolCalls per the schema so we can proceed." })
+        conversationHistory.push({ role: "user", content: "Please use the native tool-calling interface to call the tools directly, rather than describing them in text." })
         continue
       }
 
@@ -1590,7 +1544,7 @@ Return ONLY JSON per schema.`,
         conversationHistory.push({
           role: "user",
           content:
-            "Before marking complete: use the available tools to actually perform the steps. Reply with a valid JSON object per the tool-calling schema, including a toolCalls array with concrete parameters.",
+            "Before marking complete: please use the available tools to actually perform the steps. Call the tools directly using the native function calling interface.",
         })
         noOpCount = 0
         continue
@@ -1675,9 +1629,8 @@ Return ONLY JSON per schema.`,
           // If we haven't executed any tools and we keep failing verification, demand structured tool calls
           const hasToolResultsSoFar = conversationHistory.some((e) => e.role === "tool")
           if (!hasToolResultsSoFar && verificationFailCount >= 2) {
-            conversationHistory.push({ role: "user", content: "Important: Do not just state intent. Use available tools and reply with a valid JSON object that includes a toolCalls array with concrete parameters to fetch IDs and apply labels." })
-          verificationFailCount = 0 // reset on success
-
+            conversationHistory.push({ role: "user", content: "Important: Do not just state intent. Use the available tools by calling them directly via the native function calling interface to complete the task." })
+            verificationFailCount = 0 // reset on success
           }
           noOpCount = 0
           continue
@@ -1733,8 +1686,8 @@ Return ONLY JSON per schema.`,
     // Handle no-op iterations (no tool calls and no explicit completion)
     // Fix for https://github.com/aj47/SpeakMCP/issues/443:
     // Only terminate when needsMoreWork is EXPLICITLY false, not when undefined.
-    // When LLM returns plain text without JSON structure, needsMoreWork will be undefined,
-    // and we should nudge for proper JSON format rather than accepting it as final.
+    // When LLM returns plain text without tool calls, needsMoreWork will be undefined,
+    // and we should nudge to either use tools or provide a complete answer.
     if (!hasToolCalls && !explicitlyComplete) {
       noOpCount++
 
@@ -1742,20 +1695,59 @@ Return ONLY JSON per schema.`,
       const isActionableRequest = toolCapabilities.relevantTools.length > 0
       const contentText = llmResponse.content || ""
 
-      // Always nudge for proper JSON format when needsMoreWork is not explicitly set.
+      // Check if tools have already been executed for THIS user prompt (current turn)
+      // We only look at tool results AFTER currentPromptIndex to avoid treating a new request
+      // as complete based on tool results from previous conversation turns
+      // This fixes the infinite loop when LLM answers after tool execution but doesn't set needsMoreWork=false
+      const hasToolResultsInCurrentTurn = conversationHistory.slice(currentPromptIndex + 1).some((e) => e.role === "tool")
+      // When tools have been executed in this turn, accept any non-empty response (not just >= 10 chars)
+      // Short answers like "1" or "3 sessions" are valid responses after tool execution
+      const hasSubstantiveResponse = hasToolResultsInCurrentTurn
+        ? contentText.trim().length > 0 && !isToolCallPlaceholder(contentText)
+        : contentText.trim().length >= 10 && !isToolCallPlaceholder(contentText)
+
+      // Only treat as complete if:
+      // 1. Tools were executed for this turn
+      // 2. LLM provided a substantive response
+      // 3. needsMoreWork is NOT explicitly true (undefined is OK, means model didn't specify)
+      // If needsMoreWork === true, the model explicitly wants to continue working
+      if (hasToolResultsInCurrentTurn && hasSubstantiveResponse && llmResponse.needsMoreWork !== true) {
+        // Tools were already called for this request and LLM provided a real answer - treat as complete
+        if (isDebugLLM()) {
+          logLLM("Treating as complete: tools were executed and LLM provided substantive response", {
+            hasToolResults: hasToolResultsInCurrentTurn,
+            responseLength: contentText.trim().length,
+            responsePreview: contentText.substring(0, 100),
+            needsMoreWork: llmResponse.needsMoreWork
+          })
+        }
+        finalContent = contentText
+        addMessage("assistant", contentText)
+        emit({
+          currentIteration: iteration,
+          maxIterations,
+          steps: progressSteps.slice(-3),
+          isComplete: true,
+          finalContent,
+          conversationHistory: formatConversationForProgress(conversationHistory),
+        })
+        break
+      }
+
+      // Nudge the model to either use tools or provide a complete answer.
       // For actionable requests (with relevant tools), nudge immediately.
       // For non-actionable requests (simple Q&A), allow 1 no-op before nudging,
-      // giving the LLM a chance to self-correct, but don't auto-accept plain text.
+      // giving the LLM a chance to self-correct.
       if (noOpCount >= 2 || (isActionableRequest && noOpCount >= 1)) {
-        // Add nudge to push the agent forward - require proper JSON format
+        // Add nudge to push the agent forward
         // Only add assistant message if non-empty to avoid blank entries
         if (contentText.trim().length > 0) {
           addMessage("assistant", contentText)
         }
 
         const nudgeMessage = isActionableRequest
-          ? "You have relevant tools available for this request. Please respond with a valid JSON object: either call tools using the toolCalls array, or set needsMoreWork=false with a complete answer in the content field."
-          : "Please respond with a valid JSON object containing your answer in the content field and needsMoreWork=false if the task is complete."
+          ? "You have relevant tools available for this request. Please either call the tools directly using the native function calling interface, or provide a complete answer if the task cannot be accomplished with the available tools."
+          : "Please provide a complete answer to the request. If you need to use tools, call them directly using the native function calling interface."
 
         addMessage("user", nudgeMessage)
 
@@ -1804,12 +1796,9 @@ Return ONLY JSON per schema.`,
     }
 
     // Determine execution mode: parallel or sequential
-    // Sequential execution is forced when:
-    // 1. Any tool in batch matches SEQUENTIAL_EXECUTION_TOOL_PATTERNS (e.g., browser_click)
-    // 2. Config mcpParallelToolExecution is set to false
+    // Sequential execution is used when config mcpParallelToolExecution is set to false
     // Default is parallel execution when multiple tools are called
-    const toolsRequireSequential = batchRequiresSequentialExecution(toolCallsArray)
-    const forceSequential = toolsRequireSequential || config.mcpParallelToolExecution === false
+    const forceSequential = config.mcpParallelToolExecution === false
     const useParallelExecution = !forceSequential && toolCallsArray.length > 1
 
     if (useParallelExecution) {
@@ -1932,15 +1921,9 @@ Return ONLY JSON per schema.`,
     } else {
       // SEQUENTIAL EXECUTION: Execute tool calls one at a time
       if (isDebugTools()) {
-        let reason: string
-        if (toolCallsArray.length <= 1) {
-          reason = "Single tool call"
-        } else if (toolsRequireSequential) {
-          const sequentialTools = toolCallsArray.filter(tc => toolRequiresSequentialExecution(tc.name)).map(tc => tc.name)
-          reason = `Tool(s) require sequential execution to avoid race conditions: [${sequentialTools.join(', ')}]`
-        } else {
-          reason = "Config disabled parallel execution"
-        }
+        const reason = toolCallsArray.length <= 1
+          ? "Single tool call"
+          : "Config disabled parallel execution"
         logTools(`Executing ${toolCallsArray.length} tool calls sequentially - ${reason}`, toolCallsArray.map(t => t.name))
       }
       for (const [, toolCall] of toolCallsArray.entries()) {
@@ -2570,7 +2553,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
           conversationHistory.push({
             role: "user",
             content:
-              "Before verifying or completing: use the available tools to actually perform the steps. Reply with a valid JSON object per the tool-calling schema, including a toolCalls array with concrete parameters.",
+              "Before verifying or completing: please use the available tools to actually perform the steps. Call them directly using the native function calling interface.",
           })
           noOpCount = 0
           continue
@@ -2745,6 +2728,7 @@ async function makeLLMCall(
   onRetryProgress?: RetryProgressCallback,
   onStreamingUpdate?: StreamingCallback,
   sessionId?: string,
+  tools?: MCPTool[],
 ): Promise<LLMToolCallResponse> {
   const chatProviderId = config.mcpToolsProviderId
 
@@ -2756,6 +2740,12 @@ async function makeLLMCall(
         totalChars: messages.reduce((sum, msg) => sum + msg.content.length, 0),
         messages: messages,
       })
+      if (tools) {
+        logLLM("Tools →", {
+          count: tools.length,
+          names: tools.map(t => t.name),
+        })
+      }
     }
 
     // If streaming callback is provided and provider supports it, use streaming
@@ -2800,7 +2790,7 @@ async function makeLLMCall(
       // Wrap in try/finally to ensure streaming is cleaned up even if the call fails
       let result: LLMToolCallResponse
       try {
-        result = await makeLLMCallWithFetch(messages, chatProviderId, onRetryProgress, sessionId)
+        result = await makeLLMCallWithFetch(messages, chatProviderId, onRetryProgress, sessionId, tools)
       } finally {
         // Abort streaming request - we have the real response (or error) now
         // This saves bandwidth/tokens by closing the SSE connection immediately
@@ -2821,7 +2811,7 @@ async function makeLLMCall(
     }
 
     // Non-streaming path
-    const result = await makeLLMCallWithFetch(messages, chatProviderId, onRetryProgress, sessionId)
+    const result = await makeLLMCallWithFetch(messages, chatProviderId, onRetryProgress, sessionId, tools)
     if (isDebugLLM()) {
       logLLM("Response ←", result)
       logLLM("=== LLM CALL END ===")

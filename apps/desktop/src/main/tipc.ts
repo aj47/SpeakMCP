@@ -893,9 +893,11 @@ export const router = {
     showPanelWindow()
   }),
 
-  showPanelWindowWithTextInput: t.procedure.action(async () => {
-    await showPanelWindowAndShowTextInput()
-  }),
+  showPanelWindowWithTextInput: t.procedure
+    .input<{ initialText?: string }>()
+    .action(async ({ input }) => {
+      await showPanelWindowAndShowTextInput(input.initialText)
+    }),
 
   triggerMcpRecording: t.procedure
     .input<{ conversationId?: string; sessionId?: string; fromTile?: boolean }>()
@@ -2631,7 +2633,12 @@ export const router = {
     }),
 
   getAllMessageQueues: t.procedure.action(async () => {
-      return messageQueueService.getAllQueues()
+      const queues = messageQueueService.getAllQueues()
+      // Include isPaused state for each queue
+      return queues.map(q => ({
+        ...q,
+        isPaused: messageQueueService.isQueuePaused(q.conversationId),
+      }))
   }),
 
   removeFromMessageQueue: t.procedure

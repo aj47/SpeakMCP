@@ -46,12 +46,7 @@ fi
 # 5. Update icon cache
 # This ensures the app icon appears in menus and launchers
 if command -v gtk-update-icon-cache >/dev/null 2>&1; then
-    for size in 16 24 32 48 64 128 256 512; do
-        if [ -d "$ICON_DIR/${size}x${size}/apps" ]; then
-            gtk-update-icon-cache -f -t "$ICON_DIR" 2>/dev/null || true
-            break
-        fi
-    done
+    gtk-update-icon-cache -f -t "$ICON_DIR" 2>/dev/null || true
     echo "✓ Updated icon cache"
 fi
 

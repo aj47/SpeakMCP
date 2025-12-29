@@ -35,7 +35,6 @@ import * as Speech from 'expo-speech';
 import {
   preprocessTextForTTS,
   COLLAPSED_LINES,
-  getRoleIcon,
   getRoleLabel,
   shouldCollapseMessage,
   getToolResultsSummary,
@@ -44,7 +43,7 @@ import {
 } from '@speakmcp/shared';
 import { useHeaderHeight } from '@react-navigation/elements';
 import { useTheme } from '../ui/ThemeProvider';
-import { spacing, radius, Theme } from '../ui/theme';
+import { spacing, radius, Theme, hexToRgba } from '../ui/theme';
 import { MarkdownRenderer } from '../ui/MarkdownRenderer';
 
 export default function ChatScreen({ route, navigation }: any) {
@@ -1844,8 +1843,8 @@ export default function ChatScreen({ route, navigation }: any) {
       <View style={{ flex: 1 }}>
         <ScrollView
           ref={scrollViewRef}
-          style={{ flex: 1, padding: spacing.lg, backgroundColor: theme.colors.background }}
-          contentContainerStyle={{ paddingBottom: insets.bottom }}
+          style={{ flex: 1, padding: spacing.sm, backgroundColor: theme.colors.background }}
+          contentContainerStyle={{ paddingBottom: insets.bottom, gap: spacing.sm }}
           keyboardShouldPersistTaps="handled"
           contentInsetAdjustmentBehavior="automatic"
           onScroll={handleScroll}
@@ -1858,7 +1857,6 @@ export default function ChatScreen({ route, navigation }: any) {
             // expandedMessages is auto-updated via useEffect to expand the last assistant message
             // and persist the expansion state so it doesn't collapse when new messages arrive
             const isExpanded = expandedMessages[i] ?? false;
-            const roleIcon = getRoleIcon(m.role as 'user' | 'assistant' | 'tool');
             const roleLabel = getRoleLabel(m.role as 'user' | 'assistant' | 'tool');
 
             const toolCallCount = m.toolCalls?.length ?? 0;
@@ -1881,7 +1879,7 @@ export default function ChatScreen({ route, navigation }: any) {
                   m.role === 'user' ? styles.user : styles.assistant,
                 ]}
               >
-                {/* Clickable header for expand/collapse */}
+                {/* Role label header like desktop - shows "user" or "assistant" */}
                 <Pressable
                   onPress={shouldCollapse ? () => toggleMessageExpansion(i) : undefined}
                   disabled={!shouldCollapse}
@@ -1898,9 +1896,7 @@ export default function ChatScreen({ route, navigation }: any) {
                     shouldCollapse && pressed && styles.messageHeaderPressed,
                   ]}
                 >
-                  <Text style={styles.roleIcon} accessibilityLabel={roleLabel}>
-                    {roleIcon}
-                  </Text>
+                  <Text style={styles.roleLabel}>{roleLabel}</Text>
                   {(m.toolCalls?.length ?? 0) > 0 && (
                     <View style={[
                       styles.toolBadgeSmall,
@@ -2164,7 +2160,97 @@ export default function ChatScreen({ route, navigation }: any) {
                   // the same server-created conversation when the first attempt failed mid-stream
                   const retryClient = getSessionClient();
                   const recoveryConversationId = retryClient?.getRecoveryConversationId();
-                  if (recoveryConversationId) {
+
+                  // Try to recover conversation state from server first (fixes #815)
+                  // If the server already processed the message, we should sync the state
+                  // instead of re-sending the message
+                  if (recoveryConversationId && retryClient) {
+                    console.log('[ChatScreen] Retry: Checking server conversation state:', recoveryConversationId);
+                    try {
+                      const serverConversation = await retryClient.getConversation(recoveryConversationId);
+                      if (serverConversation && serverConversation.messages.length > 0) {
+                        // Check if the server has the user's message and a response
+                        const serverMessages = serverConversation.messages;
+
+                        // Find the index of the last user message
+                        let lastUserMsgIndex = -1;
+                        for (let i = serverMessages.length - 1; i >= 0; i--) {
+                          if (serverMessages[i].role === 'user') {
+                            lastUserMsgIndex = i;
+                            break;
+                          }
+                        }
+
+                        // Check if there's ANY assistant message with content after the last user message
+                        // This handles cases where tool messages follow the assistant response
+                        let hasAssistantResponse = false;
+                        if (lastUserMsgIndex >= 0) {
+                          for (let i = lastUserMsgIndex + 1; i < serverMessages.length; i++) {
+                            if (serverMessages[i].role === 'assistant' && serverMessages[i].content) {
+                              hasAssistantResponse = true;
+                              break;
+                            }
+                          }
+                        }
+
+                        // If there's an assistant response after the last user message, server already processed the request
+                        if (hasAssistantResponse) {
+                          console.log('[ChatScreen] Retry: Server already has response, syncing state');
+
+                          // Update the server conversation ID
+                          await sessionStore.setServerConversationId(recoveryConversationId);
+
+                          // Convert server messages to ChatMessage format, filtering out tool messages
+                          // and merging their toolResults into the preceding assistant message
+                          const recoveredMessages: ChatMessage[] = [];
+                          for (const msg of serverMessages) {
+                            // Only include 'user' and 'assistant' roles
+                            if (msg.role === 'user' || msg.role === 'assistant') {
+                              recoveredMessages.push({
+                                id: msg.id,
+                                role: msg.role,
+                                content: msg.content,
+                                toolCalls: msg.toolCalls,
+                                toolResults: msg.toolResults,
+                              });
+                            } else if (msg.role === 'tool' && recoveredMessages.length > 0) {
+                              // Merge tool message toolResults into the preceding assistant message
+                              const lastMessage = recoveredMessages[recoveredMessages.length - 1];
+                              if (lastMessage.role === 'assistant' && lastMessage.toolCalls && lastMessage.toolCalls.length > 0) {
+                                const hasToolResults = msg.toolResults && msg.toolResults.length > 0;
+                                const hasContent = msg.content && msg.content.trim().length > 0;
+
+                                if (hasToolResults) {
+                                  // Merge toolResults into the existing assistant message
+                                  lastMessage.toolResults = [
+                                    ...(lastMessage.toolResults || []),
+                                    ...(msg.toolResults || []),
+                                  ];
+                                  // Also preserve any content from the tool message (e.g., error messages)
+                                  if (hasContent) {
+                                    lastMessage.content = (lastMessage.content || '') +
+                                      (lastMessage.content ? '\n' : '') + msg.content;
+                                  }
+                                }
+                              }
+                            }
+                          }
+
+                          // Replace local messages with server state
+                          setMessages(recoveredMessages);
+
+                          // Also persist to session store
+                          await sessionStore.setMessages(recoveredMessages);
+
+                          console.log('[ChatScreen] Retry: Successfully recovered', recoveredMessages.length, 'messages from server');
+                          return; // Don't retry, we've recovered the state
+                        }
+                      }
+                    } catch (error) {
+                      console.log('[ChatScreen] Retry: Could not fetch server state, will retry message:', error);
+                    }
+
+                    // If we couldn't recover, set the conversation ID for the retry
                     console.log('[ChatScreen] Retry: Using recovery conversationId:', recoveryConversationId);
                     await sessionStore.setServerConversationId(recoveryConversationId);
                   }
@@ -2270,35 +2356,38 @@ export default function ChatScreen({ route, navigation }: any) {
 
 function createStyles(theme: Theme) {
   return StyleSheet.create({
+    // Desktop-style messages: left-border accent, full width, no bubbles
     msg: {
-      padding: spacing.md,
-      borderRadius: radius.xl,
-      marginBottom: spacing.sm,
-      maxWidth: '85%',
+      paddingLeft: spacing.sm,
+      paddingVertical: spacing.xs,
+      marginBottom: spacing.xs,
+      width: '100%',
     },
     user: {
-      backgroundColor: theme.colors.secondary,
-      alignSelf: 'flex-end',
+      // User messages: no left border, just plain
+      paddingLeft: 0,
     },
     assistant: {
-      backgroundColor: theme.colors.card,
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-      alignSelf: 'flex-start',
+      // Assistant messages: blue left-border accent like desktop
+      borderLeftWidth: 2,
+      borderLeftColor: hexToRgba(theme.colors.primary, 0.3),
+      paddingLeft: spacing.sm,
     },
-    roleIcon: {
-      fontSize: 14,
-      marginRight: 4,
+    roleLabel: {
+      fontSize: 11,
+      color: theme.colors.mutedForeground,
+      textTransform: 'capitalize',
+      marginBottom: 2,
     },
     messageHeader: {
       flexDirection: 'row',
       alignItems: 'center',
       flexWrap: 'wrap',
-      gap: spacing.xs,
-      marginBottom: spacing.xs,
-      paddingVertical: spacing.xs,
-      marginHorizontal: -spacing.xs,
-      paddingHorizontal: spacing.xs,
+      gap: 3,
+      marginBottom: 2,
+      paddingVertical: 2,
+      marginHorizontal: -2,
+      paddingHorizontal: 2,
       borderRadius: radius.sm,
     },
     messageHeaderClickable: {
@@ -2309,66 +2398,66 @@ function createStyles(theme: Theme) {
     },
     toolBadgeSmall: {
       backgroundColor: theme.colors.muted,
-      paddingHorizontal: spacing.sm,
-      paddingVertical: 3,
-      borderRadius: radius.md,
+      paddingHorizontal: spacing.xs,
+      paddingVertical: 2,
+      borderRadius: radius.sm,
       borderWidth: 1,
       borderColor: theme.colors.border,
       flexShrink: 1,
     },
     toolBadgePending: {
-      backgroundColor: 'rgba(59, 130, 246, 0.1)',
-      borderColor: 'rgba(59, 130, 246, 0.3)',
+      backgroundColor: hexToRgba(theme.colors.info, 0.08),
+      borderColor: hexToRgba(theme.colors.info, 0.25),
     },
     toolBadgeSuccess: {
-      backgroundColor: 'rgba(34, 197, 94, 0.1)',
-      borderColor: 'rgba(34, 197, 94, 0.3)',
+      backgroundColor: hexToRgba(theme.colors.success, 0.08),
+      borderColor: hexToRgba(theme.colors.success, 0.25),
     },
     toolBadgeError: {
-      backgroundColor: 'rgba(239, 68, 68, 0.1)',
-      borderColor: 'rgba(239, 68, 68, 0.3)',
+      backgroundColor: hexToRgba(theme.colors.destructive, 0.08),
+      borderColor: hexToRgba(theme.colors.destructive, 0.25),
     },
     toolBadgeSmallText: {
-      fontSize: 11,
+      fontSize: 10,
       color: theme.colors.mutedForeground,
       fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
       fontWeight: '600',
     },
     toolBadgePendingText: {
-      color: 'rgb(59, 130, 246)',
+      color: theme.colors.info,
     },
     toolBadgeSuccessText: {
-      color: 'rgb(34, 197, 94)',
+      color: theme.colors.success,
     },
     toolBadgeErrorText: {
-      color: 'rgb(239, 68, 68)',
+      color: theme.colors.destructive,
     },
     expandButton: {
       marginLeft: 'auto',
-      paddingHorizontal: spacing.sm,
-      paddingVertical: 4,
+      paddingHorizontal: spacing.xs,
+      paddingVertical: 2,
     },
     expandButtonText: {
-      fontSize: 12,
+      fontSize: 10,
       color: theme.colors.primary,
       fontWeight: '600',
     },
     collapsedToolPreview: {
-      fontSize: 11,
+      fontSize: 10,
       color: theme.colors.mutedForeground,
       fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
       opacity: 0.7,
-      marginBottom: spacing.xs,
+      marginBottom: 2,
     },
     collapsedToolText: {
-      fontSize: 12,
+      fontSize: 10,
       color: theme.colors.mutedForeground,
     },
     collapsedToolTextSuccess: {
-      color: 'rgb(34, 197, 94)',
+      color: theme.colors.success,
     },
     collapsedToolTextError: {
-      color: 'rgb(239, 68, 68)',
+      color: theme.colors.destructive,
     },
     inputRow: {
       flexDirection: 'row',
@@ -2461,12 +2550,12 @@ function createStyles(theme: Theme) {
       borderWidth: 1,
     },
     connectionBannerReconnecting: {
-      backgroundColor: 'rgba(59, 130, 246, 0.1)',
-      borderColor: 'rgba(59, 130, 246, 0.3)',
+      backgroundColor: hexToRgba(theme.colors.info, 0.1),
+      borderColor: hexToRgba(theme.colors.info, 0.3),
     },
     connectionBannerFailed: {
-      backgroundColor: 'rgba(239, 68, 68, 0.1)',
-      borderColor: 'rgba(239, 68, 68, 0.3)',
+      backgroundColor: hexToRgba(theme.colors.destructive, 0.1),
+      borderColor: hexToRgba(theme.colors.destructive, 0.3),
     },
     connectionBannerContent: {
       flexDirection: 'row',
@@ -2531,164 +2620,167 @@ function createStyles(theme: Theme) {
     },
     overlayText: {
       ...theme.typography.caption,
-      backgroundColor: 'rgba(0,0,0,0.75)',
-      color: '#FFFFFF',
+      backgroundColor: hexToRgba(theme.colors.foreground, 0.75),
+      color: theme.colors.background,
       paddingHorizontal: 12,
       paddingVertical: 8,
       borderRadius: radius.xl,
       marginBottom: 6,
     },
     overlayTranscript: {
-      backgroundColor: 'rgba(0,0,0,0.6)',
-      color: '#FFFFFF',
+      backgroundColor: hexToRgba(theme.colors.foreground, 0.6),
+      color: theme.colors.background,
       padding: 10,
       borderRadius: radius.lg,
       maxWidth: '90%',
     },
-    // Unified Tool Execution Card styles
+    // Unified Tool Execution Card styles - compact left-accent design matching desktop
     toolExecutionCard: {
-      marginTop: spacing.sm,
-      borderRadius: radius.lg,
-      borderWidth: 1,
-      borderColor: theme.colors.border,
+      marginTop: spacing.xs,
+      borderRadius: radius.sm,
+      borderLeftWidth: 2,
+      borderLeftColor: hexToRgba(theme.colors.mutedForeground, 0.6),
+      backgroundColor: hexToRgba(theme.colors.mutedForeground, 0.03),
       overflow: 'hidden',
     },
     toolExecutionPending: {
-      borderColor: 'rgba(59, 130, 246, 0.4)',
-      backgroundColor: 'rgba(59, 130, 246, 0.05)',
+      borderLeftColor: hexToRgba(theme.colors.info, 0.6),
+      backgroundColor: hexToRgba(theme.colors.info, 0.03),
     },
     toolExecutionSuccess: {
-      borderColor: 'rgba(34, 197, 94, 0.4)',
-      backgroundColor: 'rgba(34, 197, 94, 0.05)',
+      borderLeftColor: hexToRgba(theme.colors.success, 0.6),
+      backgroundColor: hexToRgba(theme.colors.success, 0.03),
     },
     toolExecutionError: {
-      borderColor: 'rgba(239, 68, 68, 0.4)',
-      backgroundColor: 'rgba(239, 68, 68, 0.05)',
+      borderLeftColor: hexToRgba(theme.colors.destructive, 0.6),
+      backgroundColor: hexToRgba(theme.colors.destructive, 0.03),
     },
     toolExecutionCollapsed: {
-      padding: spacing.sm,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: spacing.xs,
     },
     toolParamsSection: {
-      padding: spacing.sm,
-      backgroundColor: 'rgba(59, 130, 246, 0.08)',
-      borderBottomWidth: 1,
-      borderBottomColor: 'rgba(59, 130, 246, 0.2)',
+      paddingHorizontal: spacing.sm,
+      paddingVertical: spacing.xs,
     },
     toolParamsSectionTitle: {
-      fontSize: 11,
+      fontSize: 10,
       fontWeight: '600',
-      color: 'rgb(59, 130, 246)',
-      marginBottom: spacing.sm,
+      color: theme.colors.mutedForeground,
+      marginBottom: spacing.xs,
+      opacity: 0.7,
     },
     toolCallCard: {
-      backgroundColor: theme.colors.muted,
-      borderRadius: radius.md,
-      padding: spacing.sm,
+      backgroundColor: hexToRgba(theme.colors.foreground, 0.03),
+      borderRadius: radius.sm,
+      padding: spacing.xs,
       marginBottom: spacing.xs,
     },
     toolName: {
       fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
       fontWeight: '600',
       color: theme.colors.primary,
-      fontSize: 12,
-      marginBottom: spacing.xs,
+      fontSize: 11,
+      marginBottom: 2,
     },
     toolParamsScroll: {
-      maxHeight: 150,
+      maxHeight: 100,
       borderRadius: radius.sm,
       overflow: 'hidden',
     },
     toolParamsCode: {
       fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-      fontSize: 10,
+      fontSize: 9,
       color: theme.colors.foreground,
-      backgroundColor: theme.colors.background,
-      padding: spacing.sm,
+      backgroundColor: theme.colors.muted,
+      padding: spacing.xs,
       borderRadius: radius.sm,
     },
     toolResponseSection: {
-      padding: spacing.sm,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: spacing.xs,
     },
     toolResponsePending: {
-      backgroundColor: 'rgba(59, 130, 246, 0.05)',
+      // No background - let parent handle it
     },
     toolResponseSuccess: {
-      backgroundColor: 'rgba(34, 197, 94, 0.05)',
+      // No background - let parent handle it
     },
     toolResponseError: {
-      backgroundColor: 'rgba(239, 68, 68, 0.05)',
+      // No background - let parent handle it
     },
     toolResponseSectionTitle: {
-      fontSize: 11,
+      fontSize: 10,
       fontWeight: '600',
       color: theme.colors.mutedForeground,
-      marginBottom: spacing.sm,
+      marginBottom: spacing.xs,
+      opacity: 0.7,
     },
     toolResponsePendingText: {
-      fontSize: 11,
+      fontSize: 10,
       fontStyle: 'italic',
       color: theme.colors.mutedForeground,
       textAlign: 'center',
-      paddingVertical: spacing.sm,
+      paddingVertical: spacing.xs,
     },
     toolResultItem: {
-      marginBottom: spacing.sm,
+      marginBottom: spacing.xs,
     },
     toolResultHeader: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      marginBottom: spacing.xs,
+      marginBottom: 2,
     },
     toolResultCharCount: {
-      fontSize: 10,
+      fontSize: 9,
       fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
       color: theme.colors.mutedForeground,
-      opacity: 0.7,
+      opacity: 0.6,
     },
     toolResultBadge: {
-      fontSize: 11,
+      fontSize: 10,
       fontWeight: '600',
-      paddingHorizontal: 8,
-      paddingVertical: 3,
+      paddingHorizontal: 6,
+      paddingVertical: 2,
       borderRadius: radius.sm,
     },
     toolResultBadgeSuccess: {
-      backgroundColor: 'rgba(34, 197, 94, 0.2)',
-      color: '#22c55e',
+      backgroundColor: hexToRgba(theme.colors.success, 0.15),
+      color: theme.colors.success,
     },
     toolResultBadgeError: {
-      backgroundColor: 'rgba(239, 68, 68, 0.2)',
-      color: '#ef4444',
+      backgroundColor: hexToRgba(theme.colors.destructive, 0.15),
+      color: theme.colors.destructive,
     },
     toolResultScroll: {
-      maxHeight: 150,
+      maxHeight: 100,
       borderRadius: radius.sm,
       overflow: 'hidden',
     },
     toolResultCode: {
       fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-      fontSize: 10,
+      fontSize: 9,
       color: theme.colors.foreground,
       backgroundColor: theme.colors.muted,
-      padding: spacing.sm,
+      padding: spacing.xs,
       borderRadius: radius.sm,
     },
     toolResultErrorSection: {
-      marginTop: spacing.xs,
+      marginTop: 2,
     },
     toolResultErrorLabel: {
-      fontSize: 10,
+      fontSize: 9,
       fontWeight: '500',
-      color: '#ef4444',
-      marginBottom: 2,
+      color: theme.colors.destructive,
+      marginBottom: 1,
     },
     toolResultErrorText: {
       fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-      fontSize: 10,
-      color: '#ef4444',
-      backgroundColor: 'rgba(239, 68, 68, 0.1)',
-      padding: spacing.sm,
+      fontSize: 9,
+      color: theme.colors.destructive,
+      backgroundColor: hexToRgba(theme.colors.destructive, 0.08),
+      padding: spacing.xs,
       borderRadius: radius.sm,
     },
   });

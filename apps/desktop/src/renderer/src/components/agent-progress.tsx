@@ -6,7 +6,7 @@ import { MarkdownRenderer } from "@renderer/components/markdown-renderer"
 import { Button } from "./ui/button"
 import { Badge } from "./ui/badge"
 import { tipcClient } from "@renderer/lib/tipc-client"
-import { useAgentStore, useConversationStore, useMessageQueue } from "@renderer/stores"
+import { useAgentStore, useConversationStore, useMessageQueue, useIsQueuePaused } from "@renderer/stores"
 import { AudioPlayer } from "@renderer/components/audio-player"
 import { useConfigQuery } from "@renderer/lib/queries"
 import { useTheme } from "@renderer/contexts/theme-context"
@@ -1158,6 +1158,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
 
   // Get queued messages for this conversation (used in overlay variant)
   const queuedMessages = useMessageQueue(progress?.conversationId)
+  const isQueuePaused = useIsQueuePaused(progress?.conversationId)
   const hasQueuedMessages = queuedMessages.length > 0
 
   // Helper to toggle expansion state for a specific item
@@ -1984,6 +1985,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
               conversationId={progress.conversationId}
               messages={queuedMessages}
               compact={isCollapsed}
+              isPaused={isQueuePaused}
             />
           </div>
         )}
@@ -2231,6 +2233,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
             conversationId={progress.conversationId}
             messages={queuedMessages}
             compact={false}
+            isPaused={isQueuePaused}
           />
         </div>
       )}

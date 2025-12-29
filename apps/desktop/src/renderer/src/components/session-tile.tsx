@@ -23,7 +23,7 @@ import { Button } from "@renderer/components/ui/button"
 import { Badge } from "@renderer/components/ui/badge"
 import { MarkdownRenderer } from "@renderer/components/markdown-renderer"
 import { MessageQueuePanel } from "@renderer/components/message-queue-panel"
-import { useMessageQueue } from "@renderer/stores"
+import { useMessageQueue, useIsQueuePaused } from "@renderer/stores"
 
 const MIN_HEIGHT = 120
 const MAX_HEIGHT = 600
@@ -75,7 +75,8 @@ export function SessionTile({
   const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Generate stable message ID from timestamp and role
-  const getMessageId = (message: { role: string; timestamp?: number }, index: number) => {
+  const getMessageId = (message: { role: string; timestamp?: number; id?: string }, index: number) => {
+    if (message.id) return message.id
     return `${message.timestamp || index}-${message.role}`
   }
 
@@ -90,6 +91,7 @@ export function SessionTile({
 
   // Get queued messages for this conversation
   const queuedMessages = useMessageQueue(session.conversationId)
+  const isQueuePaused = useIsQueuePaused(session.conversationId)
 
   // Copy message to clipboard
   const handleCopyMessage = async (e: React.MouseEvent, content: string, messageId: string) => {
@@ -182,8 +184,46 @@ export function SessionTile({
     return `Session ${session.id.substring(0, 8)}`
   }
 
-  // Get conversation messages to display
-  const messages = progress?.conversationHistory || []
+  // Get conversation messages to display, integrating session error message chronologically
+  const messages = React.useMemo(() => {
+    const baseMessages = progress?.conversationHistory || []
+
+    // If there's a session error message, integrate it into the messages
+    if (session.errorMessage) {
+      // Use session.startTime as fallback to ensure stable timestamp for React key generation
+      // (Date.now() would create non-deterministic keys on each render)
+      const errorEntry = {
+        role: "error" as const,
+        content: session.errorMessage,
+        timestamp: session.endTime || session.startTime,
+        id: `error-${session.id}`, // Stable unique ID for error messages
+      }
+
+      const messagesWithError = [...baseMessages]
+
+      // If endTime is available, insert chronologically; otherwise append to end
+      if (session.endTime) {
+        let insertIndex = messagesWithError.length // Default to end
+
+        for (let i = 0; i < messagesWithError.length; i++) {
+          const msgTimestamp = messagesWithError[i].timestamp || 0
+          if (msgTimestamp > session.endTime) {
+            insertIndex = i
+            break
+          }
+        }
+
+        messagesWithError.splice(insertIndex, 0, errorEntry)
+      } else {
+        // No endTime - append error at the end so it's still visible
+        messagesWithError.push(errorEntry)
+      }
+
+      return messagesWithError
+    }
+
+    return baseMessages
+  }, [progress?.conversationHistory, session.errorMessage, session.endTime, session.startTime])
 
   return (
     <div
@@ -258,6 +298,21 @@ export function SessionTile({
                 messages.map((message, index) => {
                   const messageId = getMessageId(message, index)
                   const isCopied = copiedMessageId === messageId
+
+                  // Render error messages with special styling
+                  if (message.role === "error") {
+                    return (
+                      <div key={messageId} className="rounded-md bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 p-3">
+                        <div className="text-xs font-medium text-red-600 dark:text-red-400 mb-1">
+                          Error
+                        </div>
+                        <div className="text-sm text-red-700 dark:text-red-300">
+                          {typeof message.content === "string" ? message.content : JSON.stringify(message.content)}
+                        </div>
+                      </div>
+                    )
+                  }
+
                   return (
                     <div
                       key={messageId}
@@ -299,18 +354,6 @@ export function SessionTile({
                 })
               )}
 
-              {/* Error message if present */}
-              {session.errorMessage && (
-                <div className="rounded-md bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 p-3">
-                  <div className="text-xs font-medium text-red-600 dark:text-red-400 mb-1">
-                    Error
-                  </div>
-                  <div className="text-sm text-red-700 dark:text-red-300">
-                    {session.errorMessage}
-                  </div>
-                </div>
-              )}
-
               {/* Pending tool approval */}
               {hasPendingApproval && progress?.pendingToolApproval && (
                 <div className="rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 p-3">
@@ -335,6 +378,7 @@ export function SessionTile({
                 conversationId={session.conversationId}
                 messages={queuedMessages}
                 compact={isCollapsed}
+                isPaused={isQueuePaused}
               />
             </div>
           )}

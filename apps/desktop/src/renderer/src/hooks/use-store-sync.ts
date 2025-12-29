@@ -89,9 +89,9 @@ export function useStoreSync() {
   // Listen for message queue updates
   useEffect(() => {
     const unlisten = rendererHandlers.onMessageQueueUpdate.listen(
-      (data: { conversationId: string; queue: QueuedMessage[] }) => {
-        logUI('[useStoreSync] Message queue update:', data.conversationId, data.queue.length)
-        updateMessageQueue(data.conversationId, data.queue)
+      (data: { conversationId: string; queue: QueuedMessage[]; isPaused: boolean }) => {
+        logUI('[useStoreSync] Message queue update:', data.conversationId, data.queue.length, 'isPaused:', data.isPaused)
+        updateMessageQueue(data.conversationId, data.queue, data.isPaused)
       }
     )
     return unlisten
@@ -99,12 +99,12 @@ export function useStoreSync() {
 
   // Initial hydration of message queues on mount
   useEffect(() => {
-    tipcClient.getAllMessageQueues().then((queues) => {
+    tipcClient.getAllMessageQueues().then((queues: Array<{ conversationId: string; messages: QueuedMessage[]; isPaused: boolean }>) => {
       logUI('[useStoreSync] Initial message queue hydration:', queues.length, 'queues')
       for (const queue of queues) {
-        updateMessageQueue(queue.conversationId, queue.messages)
+        updateMessageQueue(queue.conversationId, queue.messages, queue.isPaused)
       }
-    }).catch((error) => {
+    }).catch((error: unknown) => {
       logUI('[useStoreSync] Failed to hydrate message queues:', error)
     })
   }, [])

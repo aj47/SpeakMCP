@@ -501,7 +501,7 @@ export async function showPanelWindowAndStartMcpRecording(conversationId?: strin
   showPanelWindow()
 }
 
-export async function showPanelWindowAndShowTextInput() {
+export async function showPanelWindowAndShowTextInput(initialText?: string) {
   // Capture focus before showing panel
   try {
     const focusedApp = await getFocusedAppInfo()
@@ -514,7 +514,7 @@ export async function showPanelWindowAndShowTextInput() {
   state.isTextInputActive = true
   setPanelMode("textInput")
   showPanelWindow() // This will now use textInput mode positioning
-  getWindowRendererHandlers("panel")?.showTextInput.send()
+  getWindowRendererHandlers("panel")?.showTextInput.send({ initialText })
 }
 
 export function makePanelWindowClosable() {

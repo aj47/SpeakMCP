@@ -10,6 +10,15 @@ export type RecordingHistoryItem = {
   transcript: string
 }
 
+// Predefined Prompts Types
+export interface PredefinedPrompt {
+  id: string
+  name: string
+  content: string
+  createdAt: number
+  updatedAt: number
+}
+
 // MCP Server Configuration Types
 export type MCPTransportType = "stdio" | "websocket" | "streamableHttp"
 
@@ -488,7 +497,8 @@ export type Config = {
   // Message Queue Configuration - when enabled, users can queue messages while agent is processing
   mcpMessageQueueEnabled?: boolean
 
-
+  // Predefined Prompts - frequently used prompts that can be quickly accessed
+  predefinedPrompts?: PredefinedPrompt[]
 
 	  // Remote Server Configuration
 	  remoteServerEnabled?: boolean

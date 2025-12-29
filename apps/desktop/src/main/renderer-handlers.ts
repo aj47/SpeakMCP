@@ -13,7 +13,7 @@ export type RendererHandlers = {
   finishMcpRecording: () => void
   startOrFinishMcpRecording: (data?: { conversationId?: string; sessionId?: string; fromTile?: boolean; fromButtonClick?: boolean }) => void
 
-  showTextInput: () => void
+  showTextInput: (data?: { initialText?: string }) => void
   hideTextInput: () => void
 
   agentProgressUpdate: (update: AgentProgressUpdate) => void
@@ -27,7 +27,7 @@ export type RendererHandlers = {
   focusAgentSession: (sessionId: string) => void
 
   // Message Queue handlers
-  onMessageQueueUpdate: (data: { conversationId: string; queue: QueuedMessage[] }) => void
+  onMessageQueueUpdate: (data: { conversationId: string; queue: QueuedMessage[]; isPaused: boolean }) => void
 
   updateAvailable: (e: UpdateDownloadedEvent) => void
   navigate: (url: string) => void

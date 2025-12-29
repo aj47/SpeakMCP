@@ -188,10 +188,12 @@ export function SessionTile({
 
     // If there's a session error message, integrate it into the messages
     if (session.errorMessage) {
+      // Use session.startTime as fallback to ensure stable timestamp for React key generation
+      // (Date.now() would create non-deterministic keys on each render)
       const errorEntry = {
         role: "error" as const,
         content: session.errorMessage,
-        timestamp: session.endTime || Date.now(),
+        timestamp: session.endTime || session.startTime,
       }
 
       const messagesWithError = [...baseMessages]
@@ -218,7 +220,7 @@ export function SessionTile({
     }
 
     return baseMessages
-  }, [progress?.conversationHistory, session.errorMessage, session.endTime])
+  }, [progress?.conversationHistory, session.errorMessage, session.endTime, session.startTime])
 
   return (
     <div

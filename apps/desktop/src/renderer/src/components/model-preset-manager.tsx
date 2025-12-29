@@ -23,7 +23,6 @@ import { toast } from "sonner"
 import { Plus, Pencil, Trash2, Key, Globe, Bot, FileText, Settings2 } from "lucide-react"
 import { getBuiltInModelPresets, DEFAULT_MODEL_PRESET_ID } from "@shared/index"
 import { PresetModelSelector } from "./preset-model-selector"
-import { ModelSelector } from "./model-selector"
 
 export function ModelPresetManager() {
   const configQuery = useConfigQuery()
@@ -294,8 +293,10 @@ export function ModelPresetManager() {
 
           {/* Inline model selectors - changes are auto-saved to preset */}
           <div className="space-y-3">
-            <ModelSelector
-              providerId="openai"
+            <PresetModelSelector
+              presetId={currentPreset.id}
+              baseUrl={currentPreset.baseUrl}
+              apiKey={currentPreset.apiKey}
               value={config?.mcpToolsOpenaiModel || ""}
               onValueChange={(value) => {
                 saveModelWithPreset('mcpToolsModel', 'mcpToolsOpenaiModel', value)
@@ -303,8 +304,10 @@ export function ModelPresetManager() {
               label="Agent/MCP Tools Model"
               placeholder="Select model"
             />
-            <ModelSelector
-              providerId="openai"
+            <PresetModelSelector
+              presetId={currentPreset.id}
+              baseUrl={currentPreset.baseUrl}
+              apiKey={currentPreset.apiKey}
               value={config?.transcriptPostProcessingOpenaiModel || ""}
               onValueChange={(value) => {
                 saveModelWithPreset('transcriptProcessingModel', 'transcriptPostProcessingOpenaiModel', value)

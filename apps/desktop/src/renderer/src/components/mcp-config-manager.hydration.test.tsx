@@ -84,12 +84,16 @@ function createHookRuntime() {
     }
   }
 
+  // useCallback just returns the callback as-is in this test runtime
+  const useCallback = <T extends (...args: any[]) => any>(callback: T, _deps?: any[]): T => callback
+
   const reactMock = {
     __esModule: true,
     default: {} as any,
     useState,
     useRef,
     useEffect,
+    useCallback,
   }
   reactMock.default = reactMock
 

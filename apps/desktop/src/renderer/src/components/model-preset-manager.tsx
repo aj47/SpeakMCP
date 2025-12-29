@@ -23,7 +23,6 @@ import { toast } from "sonner"
 import { Plus, Pencil, Trash2, Key, Globe, Bot, FileText, Settings2 } from "lucide-react"
 import { getBuiltInModelPresets, DEFAULT_MODEL_PRESET_ID } from "@shared/index"
 import { PresetModelSelector } from "./preset-model-selector"
-import { ModelSelector } from "./model-selector"
 
 export function ModelPresetManager() {
   const configQuery = useConfigQuery()
@@ -51,7 +50,13 @@ export function ModelPresetManager() {
       const saved = custom.find(c => c.id === preset.id)
       if (saved) {
         // Merge all saved properties (apiKey, mcpToolsModel, transcriptProcessingModel, etc.)
-        return { ...preset, ...saved }
+        const merged = { ...preset, ...saved }
+        // For builtin-openai, fallback to legacy openaiApiKey if saved preset has empty apiKey
+        // This handles the case where saveModelWithPreset persisted a preset with apiKey: ''
+        if (preset.id === DEFAULT_MODEL_PRESET_ID && !merged.apiKey && config?.openaiApiKey) {
+          merged.apiKey = config.openaiApiKey
+        }
+        return merged
       }
       // For builtin-openai, seed with legacy openaiApiKey if no saved preset exists
       if (preset.id === DEFAULT_MODEL_PRESET_ID && config?.openaiApiKey) {
@@ -294,8 +299,10 @@ export function ModelPresetManager() {
 
           {/* Inline model selectors - changes are auto-saved to preset */}
           <div className="space-y-3">
-            <ModelSelector
-              providerId="openai"
+            <PresetModelSelector
+              presetId={currentPreset.id}
+              baseUrl={currentPreset.baseUrl}
+              apiKey={currentPreset.apiKey}
               value={config?.mcpToolsOpenaiModel || ""}
               onValueChange={(value) => {
                 saveModelWithPreset('mcpToolsModel', 'mcpToolsOpenaiModel', value)
@@ -303,8 +310,10 @@ export function ModelPresetManager() {
               label="Agent/MCP Tools Model"
               placeholder="Select model"
             />
-            <ModelSelector
-              providerId="openai"
+            <PresetModelSelector
+              presetId={currentPreset.id}
+              baseUrl={currentPreset.baseUrl}
+              apiKey={currentPreset.apiKey}
               value={config?.transcriptPostProcessingOpenaiModel || ""}
               onValueChange={(value) => {
                 saveModelWithPreset('transcriptProcessingModel', 'transcriptPostProcessingOpenaiModel', value)

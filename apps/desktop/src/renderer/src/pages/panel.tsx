@@ -5,7 +5,7 @@ import { Recorder } from "@renderer/lib/recorder"
 import { playSound } from "@renderer/lib/sound"
 import { cn } from "@renderer/lib/utils"
 import { useMutation } from "@tanstack/react-query"
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState, useCallback } from "react"
 import { rendererHandlers, tipcClient } from "~/lib/tipc-client"
 import { TextInputPanel, TextInputPanelRef } from "@renderer/components/text-input-panel"
 import { PanelResizeWrapper } from "@renderer/components/panel-resize-wrapper"
@@ -20,7 +20,6 @@ import { formatKeyComboForDisplay } from "@shared/key-utils"
 import { Send } from "lucide-react"
 
 const VISUALIZER_BUFFER_LENGTH = 70
-// Minimum height for waveform panel - matches WAVEFORM_MIN_HEIGHT in main/window.ts
 const WAVEFORM_MIN_HEIGHT = 80
 
 const getInitialVisualizerData = () =>
@@ -43,6 +42,7 @@ export function Component() {
   const [fromButtonClick, setFromButtonClick] = useState(false)
   const { isDark } = useTheme()
   const lastRequestedModeRef = useRef<"normal" | "agent" | "textInput">("normal")
+
   const requestPanelMode = (mode: "normal" | "agent" | "textInput") => {
     if (lastRequestedModeRef.current === mode) return
     lastRequestedModeRef.current = mode
@@ -724,6 +724,51 @@ export function Component() {
     return unlisten
   }, [isConversationActive, endConversation, transcribeMutation, mcpTranscribeMutation, textInputMutation, mcpTextInputMutation])
 
+  // Debug: Fake waveform handler for testing panel dimensions
+  useEffect(() => {
+    const unlisten = rendererHandlers.debugFakeWaveform.listen((data) => {
+      logUI(`[Panel] Debug fake waveform triggered: ${JSON.stringify(data)}`)
+
+      // Set recording state to show waveform UI
+      setRecording(true)
+      recordingRef.current = true
+
+      // Generate fake waveform data over time
+      const duration = data.duration || 5000
+      const intervalMs = 50 // update every 50ms
+      let elapsed = 0
+
+      const interval = setInterval(() => {
+        elapsed += intervalMs
+
+        // Generate random RMS value between 0.1 and 0.9
+        const fakeRms = 0.1 + Math.random() * 0.8
+
+        setVisualizerData((prev) => {
+          const newData = [...prev, fakeRms]
+          if (newData.length > VISUALIZER_BUFFER_LENGTH) {
+            newData.shift()
+          }
+          return newData
+        })
+
+        // Stop after duration
+        if (elapsed >= duration) {
+          clearInterval(interval)
+          setRecording(false)
+          recordingRef.current = false
+          setVisualizerData(() => getInitialVisualizerData())
+          logUI('[Panel] Debug fake waveform ended')
+        }
+      }, intervalMs)
+
+      // Cleanup on unmount
+      return () => clearInterval(interval)
+    })
+
+    return unlisten
+  }, [])
+
 
 	  // Track latest state values in a ref to avoid race conditions with auto-close timeout
 	  const autoCloseStateRef = useRef({
@@ -808,7 +853,8 @@ export function Component() {
             agentProgress={agentProgress}
           />
         ) : (
-          <div className={cn(
+          <div
+            className={cn(
             "voice-input-panel modern-text-strong flex h-full w-full rounded-xl transition-all duration-300",
             isDark ? "dark" : ""
           )}>

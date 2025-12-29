@@ -54,6 +54,21 @@ await window.electron.ipcRenderer.invoke('createMcpTextInput', { text: 'hi', con
 ```
 Verify: `window.electron.ipcRenderer.invoke('getAgentStatus')`
 
+### Test 3: Trigger Fake Waveform (for debugging panel dimensions)
+```javascript
+// execute_javascript_electron-native
+// Triggers a fake waveform recording that runs for 5 seconds (default)
+// Watch console for dimension logging with [Waveform Dimensions] prefix
+await window.electron.ipcRenderer.invoke('debugFakeWaveform', { duration: 5000 });
+```
+
+This test shows the waveform panel and generates fake audio visualization data.
+It logs panel and waveform dimensions in the console, useful for debugging Issue #817.
+
+Look for logs like:
+- `[Waveform Dimensions] Recording active:` - Shows window size, panel container, waveform container dimensions
+- `[Waveform Dimensions] Fake waveform tick:` - Periodic dimension updates
+
 ---
 
 ## IPC Methods

@@ -38,4 +38,7 @@ export type RendererHandlers = {
 
   // MCP Sampling handlers (Protocol 2025-11-25)
   "mcp:sampling-request": (request: SamplingRequest) => void
+
+  // Debug handlers
+  debugFakeWaveform: (data: { duration?: number }) => void
 }

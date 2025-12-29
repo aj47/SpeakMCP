@@ -475,6 +475,10 @@ export async function showPanelWindowAndStartRecording(fromButtonClick?: boolean
   state.isRecordingFromButtonClick = fromButtonClick ?? false
   state.isRecordingMcpMode = false
 
+  // Resize panel to compact waveform size before showing
+  // This fixes the issue where panel had too much negative space (#817)
+  resizePanelForWaveform()
+
   // Start mic capture/recording as early as possible, but only after panel renderer is ready
   // This prevents lost IPC messages right after app launch when webContents may not have finished loading
   // Pass fromButtonClick so panel shows correct submit hint (Enter vs Release keys)
@@ -499,6 +503,10 @@ export async function showPanelWindowAndStartMcpRecording(conversationId?: strin
 
   // Ensure consistent sizing by setting mode in main before showing
   setPanelMode("normal")
+
+  // Resize panel to compact waveform size before showing
+  // This fixes the issue where panel had too much negative space (#817)
+  resizePanelForWaveform()
 
   // Start mic capture/recording as early as possible, but only after panel renderer is ready
   // This prevents lost IPC messages right after app launch when webContents may not have finished loading
@@ -626,6 +634,37 @@ export function resizePanelForTextInput() {
 
 export function resizePanelToNormal() {
   setPanelMode("normal")
+}
+
+/**
+ * Resize the panel to compact waveform size for recording.
+ * This shrinks the panel height to WAVEFORM_MIN_HEIGHT while keeping the current width.
+ * This fixes the issue where the panel had too much negative space when showing
+ * the waveform after being sized for agent mode.
+ * See: https://github.com/aj47/SpeakMCP/issues/817
+ */
+export function resizePanelForWaveform() {
+  const win = WINDOWS.get("panel")
+  if (!win) return
+
+  try {
+    const [currentWidth] = win.getSize()
+    const targetHeight = WAVEFORM_MIN_HEIGHT
+
+    // Keep the current width but shrink to waveform height
+    const minWidth = Math.max(200, MIN_WAVEFORM_WIDTH)
+    const newWidth = Math.max(currentWidth, minWidth)
+
+    logApp(`[resizePanelForWaveform] Resizing panel from current size to ${newWidth}x${targetHeight}`)
+
+    win.setSize(newWidth, targetHeight)
+
+    // Reposition to maintain the panel's anchor point (e.g., bottom-right of screen)
+    const position = calculatePanelPosition({ width: newWidth, height: targetHeight }, "normal")
+    win.setPosition(position.x, position.y)
+  } catch (e) {
+    logApp("[resizePanelForWaveform] Failed to resize panel:", e)
+  }
 }
 
 /**

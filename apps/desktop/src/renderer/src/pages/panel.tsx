@@ -726,8 +726,16 @@ export function Component() {
 
   // Debug: Fake waveform handler for testing panel dimensions
   useEffect(() => {
+    // Track interval ID at effect level for proper cleanup on unmount
+    let fakeWaveformIntervalId: ReturnType<typeof setInterval> | null = null
+
     const unlisten = rendererHandlers.debugFakeWaveform.listen((data) => {
       logUI(`[Panel] Debug fake waveform triggered: ${JSON.stringify(data)}`)
+
+      // Clear any existing interval before starting a new one
+      if (fakeWaveformIntervalId) {
+        clearInterval(fakeWaveformIntervalId)
+      }
 
       // Set recording state to show waveform UI
       setRecording(true)
@@ -738,7 +746,7 @@ export function Component() {
       const intervalMs = 50 // update every 50ms
       let elapsed = 0
 
-      const interval = setInterval(() => {
+      fakeWaveformIntervalId = setInterval(() => {
         elapsed += intervalMs
 
         // Generate random RMS value between 0.1 and 0.9
@@ -754,19 +762,25 @@ export function Component() {
 
         // Stop after duration
         if (elapsed >= duration) {
-          clearInterval(interval)
+          if (fakeWaveformIntervalId) {
+            clearInterval(fakeWaveformIntervalId)
+            fakeWaveformIntervalId = null
+          }
           setRecording(false)
           recordingRef.current = false
           setVisualizerData(() => getInitialVisualizerData())
           logUI('[Panel] Debug fake waveform ended')
         }
       }, intervalMs)
-
-      // Cleanup on unmount
-      return () => clearInterval(interval)
     })
 
-    return unlisten
+    // Cleanup both listener and interval on unmount
+    return () => {
+      unlisten()
+      if (fakeWaveformIntervalId) {
+        clearInterval(fakeWaveformIntervalId)
+      }
+    }
   }, [])
 
 

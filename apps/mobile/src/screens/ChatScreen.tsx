@@ -44,7 +44,7 @@ import {
 } from '@speakmcp/shared';
 import { useHeaderHeight } from '@react-navigation/elements';
 import { useTheme } from '../ui/ThemeProvider';
-import { spacing, radius, Theme } from '../ui/theme';
+import { spacing, radius, Theme, hexToRgba } from '../ui/theme';
 import { MarkdownRenderer } from '../ui/MarkdownRenderer';
 
 export default function ChatScreen({ route, navigation }: any) {
@@ -2408,16 +2408,16 @@ function createStyles(theme: Theme) {
       flexShrink: 1,
     },
     toolBadgePending: {
-      backgroundColor: 'rgba(59, 130, 246, 0.08)',
-      borderColor: 'rgba(59, 130, 246, 0.25)',
+      backgroundColor: hexToRgba(theme.colors.info, 0.08),
+      borderColor: hexToRgba(theme.colors.info, 0.25),
     },
     toolBadgeSuccess: {
-      backgroundColor: 'rgba(34, 197, 94, 0.08)',
-      borderColor: 'rgba(34, 197, 94, 0.25)',
+      backgroundColor: hexToRgba(theme.colors.success, 0.08),
+      borderColor: hexToRgba(theme.colors.success, 0.25),
     },
     toolBadgeError: {
-      backgroundColor: 'rgba(239, 68, 68, 0.08)',
-      borderColor: 'rgba(239, 68, 68, 0.25)',
+      backgroundColor: hexToRgba(theme.colors.destructive, 0.08),
+      borderColor: hexToRgba(theme.colors.destructive, 0.25),
     },
     toolBadgeSmallText: {
       fontSize: 10,
@@ -2426,13 +2426,13 @@ function createStyles(theme: Theme) {
       fontWeight: '600',
     },
     toolBadgePendingText: {
-      color: 'rgb(59, 130, 246)',
+      color: theme.colors.info,
     },
     toolBadgeSuccessText: {
-      color: 'rgb(34, 197, 94)',
+      color: theme.colors.success,
     },
     toolBadgeErrorText: {
-      color: 'rgb(239, 68, 68)',
+      color: theme.colors.destructive,
     },
     expandButton: {
       marginLeft: 'auto',
@@ -2456,10 +2456,10 @@ function createStyles(theme: Theme) {
       color: theme.colors.mutedForeground,
     },
     collapsedToolTextSuccess: {
-      color: 'rgb(34, 197, 94)',
+      color: theme.colors.success,
     },
     collapsedToolTextError: {
-      color: 'rgb(239, 68, 68)',
+      color: theme.colors.destructive,
     },
     inputRow: {
       flexDirection: 'row',
@@ -2552,12 +2552,12 @@ function createStyles(theme: Theme) {
       borderWidth: 1,
     },
     connectionBannerReconnecting: {
-      backgroundColor: 'rgba(59, 130, 246, 0.1)',
-      borderColor: 'rgba(59, 130, 246, 0.3)',
+      backgroundColor: hexToRgba(theme.colors.info, 0.1),
+      borderColor: hexToRgba(theme.colors.info, 0.3),
     },
     connectionBannerFailed: {
-      backgroundColor: 'rgba(239, 68, 68, 0.1)',
-      borderColor: 'rgba(239, 68, 68, 0.3)',
+      backgroundColor: hexToRgba(theme.colors.destructive, 0.1),
+      borderColor: hexToRgba(theme.colors.destructive, 0.3),
     },
     connectionBannerContent: {
       flexDirection: 'row',
@@ -2622,16 +2622,16 @@ function createStyles(theme: Theme) {
     },
     overlayText: {
       ...theme.typography.caption,
-      backgroundColor: 'rgba(0,0,0,0.75)',
-      color: '#FFFFFF',
+      backgroundColor: hexToRgba(theme.colors.foreground, 0.75),
+      color: theme.colors.background,
       paddingHorizontal: 12,
       paddingVertical: 8,
       borderRadius: radius.xl,
       marginBottom: 6,
     },
     overlayTranscript: {
-      backgroundColor: 'rgba(0,0,0,0.6)',
-      color: '#FFFFFF',
+      backgroundColor: hexToRgba(theme.colors.foreground, 0.6),
+      color: theme.colors.background,
       padding: 10,
       borderRadius: radius.lg,
       maxWidth: '90%',
@@ -2641,21 +2641,21 @@ function createStyles(theme: Theme) {
       marginTop: spacing.xs,
       borderRadius: radius.sm,
       borderLeftWidth: 2,
-      borderLeftColor: 'rgba(156, 163, 175, 0.6)', // gray-400
-      backgroundColor: 'rgba(156, 163, 175, 0.03)',
+      borderLeftColor: hexToRgba(theme.colors.mutedForeground, 0.6),
+      backgroundColor: hexToRgba(theme.colors.mutedForeground, 0.03),
       overflow: 'hidden',
     },
     toolExecutionPending: {
-      borderLeftColor: 'rgba(59, 130, 246, 0.6)',
-      backgroundColor: 'rgba(59, 130, 246, 0.03)',
+      borderLeftColor: hexToRgba(theme.colors.info, 0.6),
+      backgroundColor: hexToRgba(theme.colors.info, 0.03),
     },
     toolExecutionSuccess: {
-      borderLeftColor: 'rgba(34, 197, 94, 0.6)',
-      backgroundColor: 'rgba(34, 197, 94, 0.03)',
+      borderLeftColor: hexToRgba(theme.colors.success, 0.6),
+      backgroundColor: hexToRgba(theme.colors.success, 0.03),
     },
     toolExecutionError: {
-      borderLeftColor: 'rgba(239, 68, 68, 0.6)',
-      backgroundColor: 'rgba(239, 68, 68, 0.03)',
+      borderLeftColor: hexToRgba(theme.colors.destructive, 0.6),
+      backgroundColor: hexToRgba(theme.colors.destructive, 0.03),
     },
     toolExecutionCollapsed: {
       paddingHorizontal: spacing.sm,
@@ -2673,7 +2673,7 @@ function createStyles(theme: Theme) {
       opacity: 0.7,
     },
     toolCallCard: {
-      backgroundColor: 'rgba(0, 0, 0, 0.03)',
+      backgroundColor: hexToRgba(theme.colors.foreground, 0.03),
       borderRadius: radius.sm,
       padding: spacing.xs,
       marginBottom: spacing.xs,
@@ -2748,12 +2748,12 @@ function createStyles(theme: Theme) {
       borderRadius: radius.sm,
     },
     toolResultBadgeSuccess: {
-      backgroundColor: 'rgba(34, 197, 94, 0.15)',
-      color: '#22c55e',
+      backgroundColor: hexToRgba(theme.colors.success, 0.15),
+      color: theme.colors.success,
     },
     toolResultBadgeError: {
-      backgroundColor: 'rgba(239, 68, 68, 0.15)',
-      color: '#ef4444',
+      backgroundColor: hexToRgba(theme.colors.destructive, 0.15),
+      color: theme.colors.destructive,
     },
     toolResultScroll: {
       maxHeight: 100,
@@ -2774,14 +2774,14 @@ function createStyles(theme: Theme) {
     toolResultErrorLabel: {
       fontSize: 9,
       fontWeight: '500',
-      color: '#ef4444',
+      color: theme.colors.destructive,
       marginBottom: 1,
     },
     toolResultErrorText: {
       fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
       fontSize: 9,
-      color: '#ef4444',
-      backgroundColor: 'rgba(239, 68, 68, 0.08)',
+      color: theme.colors.destructive,
+      backgroundColor: hexToRgba(theme.colors.destructive, 0.08),
       padding: spacing.xs,
       borderRadius: radius.sm,
     },

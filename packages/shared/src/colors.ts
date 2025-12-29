@@ -32,6 +32,12 @@ export const lightColors = {
   border: '#F2F2F2',            // --border: 0 0% 95%
   input: '#E5E5E5',             // --input: 0 0% 89.8%
   ring: '#3B82F6',              // --ring: 217 91% 60%
+  success: '#22c55e',           // green-500 - for success states
+  successForeground: '#FFFFFF', // white text on success
+  warning: '#f59e0b',           // amber-500 - for warning states
+  warningForeground: '#000000', // black text on warning
+  info: '#3b82f6',              // blue-500 - for info/pending states
+  infoForeground: '#FFFFFF',    // white text on info
 } as const;
 
 /**
@@ -58,6 +64,12 @@ export const darkColors = {
   border: '#262626',            // --border: 0 0% 14.9%
   input: '#262626',             // --input: 0 0% 14.9%
   ring: '#3B82F6',              // --ring: 221 83% 53%
+  success: '#22c55e',           // green-500 - works in both modes
+  successForeground: '#FFFFFF', // white text on success
+  warning: '#f59e0b',           // amber-500 - works in both modes
+  warningForeground: '#000000', // black text on warning
+  info: '#3b82f6',              // blue-500 - works in both modes
+  infoForeground: '#FFFFFF',    // white text on info
 } as const;
 
 /**
@@ -77,6 +89,17 @@ export type ColorPalette = {
  */
 export function getColors(colorScheme: 'light' | 'dark'): ColorPalette {
   return colorScheme === 'dark' ? { ...darkColors } : { ...lightColors };
+}
+
+/**
+ * Convert hex color to rgba with opacity
+ * Useful for creating semi-transparent versions of theme colors
+ */
+export function hexToRgba(hex: string, opacity: number): string {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r}, ${g}, ${b}, ${opacity})`;
 }
 
 /**

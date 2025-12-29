@@ -791,6 +791,10 @@ export async function processTranscriptWithAgentMode(
     { role: "user", content: transcript, timestamp: Date.now() },
   ]
 
+  // Track the index where the current user prompt was added
+  // This is used to scope tool result checks to only the current turn
+  const currentPromptIndex = previousConversationHistory?.length || 0
+
   logLLM(`[llm.ts processTranscriptWithAgentMode] conversationHistory initialized with ${conversationHistory.length} messages, roles: [${conversationHistory.map(m => m.role).join(', ')}]`)
 
   // Save the initial user message incrementally
@@ -1588,6 +1592,45 @@ Return ONLY JSON per schema.`,
       // Check if this is an actionable request that should have executed tools
       const isActionableRequest = toolCapabilities.relevantTools.length > 0
       const contentText = llmResponse.content || ""
+
+      // Check if tools have already been executed for THIS user prompt (current turn)
+      // We only look at tool results AFTER currentPromptIndex to avoid treating a new request
+      // as complete based on tool results from previous conversation turns
+      // This fixes the infinite loop when LLM answers after tool execution but doesn't set needsMoreWork=false
+      const hasToolResultsInCurrentTurn = conversationHistory.slice(currentPromptIndex + 1).some((e) => e.role === "tool")
+      // When tools have been executed in this turn, accept any non-empty response (not just >= 10 chars)
+      // Short answers like "1" or "3 sessions" are valid responses after tool execution
+      const hasSubstantiveResponse = hasToolResultsInCurrentTurn
+        ? contentText.trim().length > 0 && !isToolCallPlaceholder(contentText)
+        : contentText.trim().length >= 10 && !isToolCallPlaceholder(contentText)
+
+      // Only treat as complete if:
+      // 1. Tools were executed for this turn
+      // 2. LLM provided a substantive response
+      // 3. needsMoreWork is NOT explicitly true (undefined is OK, means model didn't specify)
+      // If needsMoreWork === true, the model explicitly wants to continue working
+      if (hasToolResultsInCurrentTurn && hasSubstantiveResponse && llmResponse.needsMoreWork !== true) {
+        // Tools were already called for this request and LLM provided a real answer - treat as complete
+        if (isDebugLLM()) {
+          logLLM("Treating as complete: tools were executed and LLM provided substantive response", {
+            hasToolResults: hasToolResultsInCurrentTurn,
+            responseLength: contentText.trim().length,
+            responsePreview: contentText.substring(0, 100),
+            needsMoreWork: llmResponse.needsMoreWork
+          })
+        }
+        finalContent = contentText
+        addMessage("assistant", contentText)
+        emit({
+          currentIteration: iteration,
+          maxIterations,
+          steps: progressSteps.slice(-3),
+          isComplete: true,
+          finalContent,
+          conversationHistory: formatConversationForProgress(conversationHistory),
+        })
+        break
+      }
 
       // Nudge the model to either use tools or provide a complete answer.
       // For actionable requests (with relevant tools), nudge immediately.

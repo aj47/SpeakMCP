@@ -182,8 +182,36 @@ export function SessionTile({
     return `Session ${session.id.substring(0, 8)}`
   }
 
-  // Get conversation messages to display
-  const messages = progress?.conversationHistory || []
+  // Get conversation messages to display, integrating session error message chronologically
+  const messages = React.useMemo(() => {
+    const baseMessages = progress?.conversationHistory || []
+
+    // If there's a session error message, integrate it into the messages at the correct chronological position
+    if (session.errorMessage && session.endTime) {
+      const errorEntry = {
+        role: "error" as const,
+        content: session.errorMessage,
+        timestamp: session.endTime,
+      }
+
+      // Find the correct position to insert the error based on timestamp
+      const messagesWithError = [...baseMessages]
+      let insertIndex = messagesWithError.length // Default to end
+
+      for (let i = 0; i < messagesWithError.length; i++) {
+        const msgTimestamp = messagesWithError[i].timestamp || 0
+        if (msgTimestamp > session.endTime) {
+          insertIndex = i
+          break
+        }
+      }
+
+      messagesWithError.splice(insertIndex, 0, errorEntry)
+      return messagesWithError
+    }
+
+    return baseMessages
+  }, [progress?.conversationHistory, session.errorMessage, session.endTime])
 
   return (
     <div
@@ -258,6 +286,21 @@ export function SessionTile({
                 messages.map((message, index) => {
                   const messageId = getMessageId(message, index)
                   const isCopied = copiedMessageId === messageId
+
+                  // Render error messages with special styling
+                  if (message.role === "error") {
+                    return (
+                      <div key={messageId} className="rounded-md bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 p-3">
+                        <div className="text-xs font-medium text-red-600 dark:text-red-400 mb-1">
+                          Error
+                        </div>
+                        <div className="text-sm text-red-700 dark:text-red-300">
+                          {typeof message.content === "string" ? message.content : JSON.stringify(message.content)}
+                        </div>
+                      </div>
+                    )
+                  }
+
                   return (
                     <div
                       key={messageId}
@@ -297,18 +340,6 @@ export function SessionTile({
                   </div>
                   )
                 })
-              )}
-
-              {/* Error message if present */}
-              {session.errorMessage && (
-                <div className="rounded-md bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 p-3">
-                  <div className="text-xs font-medium text-red-600 dark:text-red-400 mb-1">
-                    Error
-                  </div>
-                  <div className="text-sm text-red-700 dark:text-red-300">
-                    {session.errorMessage}
-                  </div>
-                </div>
               )}
 
               {/* Pending tool approval */}

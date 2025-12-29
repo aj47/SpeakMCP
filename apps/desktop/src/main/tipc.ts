@@ -17,7 +17,6 @@ import {
   showPanelWindowAndShowTextInput,
   showPanelWindowAndStartMcpRecording,
   WAVEFORM_MIN_HEIGHT,
-  resizePanelForWaveform,
 } from "./window"
 import {
   app,

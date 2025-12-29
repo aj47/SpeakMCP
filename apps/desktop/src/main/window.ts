@@ -475,6 +475,10 @@ export async function showPanelWindowAndStartRecording(fromButtonClick?: boolean
   state.isRecordingFromButtonClick = fromButtonClick ?? false
   state.isRecordingMcpMode = false
 
+  // Ensure consistent sizing by setting mode in main before showing
+  // This prevents inheriting textInput mode's focus/show behavior from prior sessions
+  setPanelMode("normal")
+
   // Resize panel to compact waveform size before showing
   // This fixes the issue where panel had too much negative space (#817)
   resizePanelForWaveform()

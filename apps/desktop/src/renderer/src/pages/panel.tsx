@@ -376,25 +376,17 @@ export function Component() {
         return
       }
 
-      // Check if blob is empty
+      // Check if blob is empty - silently ignore (likely accidental press)
       if (blob.size === 0) {
-        console.error("[Panel] Recording blob is empty, cannot transcribe")
+        console.warn("[Panel] Recording blob is empty, ignoring (likely accidental press)")
         tipcClient.hidePanelWindow({})
-        tipcClient.displayError({
-          title: "Recording Error",
-          message: "Recording is empty. Please try recording again and speak for at least 1 second.",
-        })
         return
       }
 
-      // Check minimum duration (at least 100ms)
+      // Check minimum duration (at least 100ms) - silently ignore (likely accidental press)
       if (duration < 100) {
-        console.warn("[Panel] Recording duration too short:", duration, "ms")
+        console.warn("[Panel] Recording duration too short:", duration, "ms - ignoring (likely accidental press)")
         tipcClient.hidePanelWindow({})
-        tipcClient.displayError({
-          title: "Recording Too Short",
-          message: "Recording is too short. Please speak for at least 1 second.",
-        })
         return
       }
 

@@ -842,6 +842,10 @@ export async function processTranscriptWithAgentMode(
     { role: "user", content: transcript, timestamp: Date.now() },
   ]
 
+  // Track the index where the current user prompt was added
+  // This is used to scope tool result checks to only the current turn
+  const currentPromptIndex = previousConversationHistory?.length || 0
+
   logLLM(`[llm.ts processTranscriptWithAgentMode] conversationHistory initialized with ${conversationHistory.length} messages, roles: [${conversationHistory.map(m => m.role).join(', ')}]`)
 
   // Save the initial user message incrementally
@@ -1640,17 +1644,18 @@ Return ONLY JSON per schema.`,
       const isActionableRequest = toolCapabilities.relevantTools.length > 0
       const contentText = llmResponse.content || ""
 
-      // Check if tools have already been executed in this conversation
-      // If so, and the LLM provides a substantive response, treat as completion
+      // Check if tools have already been executed for THIS user prompt (current turn)
+      // We only look at tool results AFTER currentPromptIndex to avoid treating a new request
+      // as complete based on tool results from previous conversation turns
       // This fixes the infinite loop when LLM answers after tool execution but doesn't set needsMoreWork=false
-      const hasToolResultsInHistory = conversationHistory.some((e) => e.role === "tool")
+      const hasToolResultsInCurrentTurn = conversationHistory.slice(currentPromptIndex + 1).some((e) => e.role === "tool")
       const hasSubstantiveResponse = contentText.trim().length >= 10 && !isToolCallPlaceholder(contentText)
 
-      if (hasToolResultsInHistory && hasSubstantiveResponse) {
-        // Tools were already called and LLM provided a real answer - treat as complete
+      if (hasToolResultsInCurrentTurn && hasSubstantiveResponse) {
+        // Tools were already called for this request and LLM provided a real answer - treat as complete
         if (isDebugLLM()) {
           logLLM("Treating as complete: tools were executed and LLM provided substantive response", {
-            hasToolResults: hasToolResultsInHistory,
+            hasToolResults: hasToolResultsInCurrentTurn,
             responseLength: contentText.trim().length,
             responsePreview: contentText.substring(0, 100)
           })

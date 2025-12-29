@@ -94,12 +94,58 @@ export function getColors(colorScheme: 'light' | 'dark'): ColorPalette {
 /**
  * Convert hex color to rgba with opacity
  * Useful for creating semi-transparent versions of theme colors
+ *
+ * Handles various input formats:
+ * - #RRGGBB (6-digit hex)
+ * - #RGB (3-digit shorthand, expanded to 6-digit)
+ * - RRGGBB or RGB (missing # prefix)
+ * - rgba(...) strings (returns as-is with updated opacity)
+ *
+ * @param hex - The color value (hex string or rgba string)
+ * @param opacity - Opacity value (clamped to 0-1 range)
+ * @returns rgba() color string
  */
 export function hexToRgba(hex: string, opacity: number): string {
-  const r = parseInt(hex.slice(1, 3), 16);
-  const g = parseInt(hex.slice(3, 5), 16);
-  const b = parseInt(hex.slice(5, 7), 16);
-  return `rgba(${r}, ${g}, ${b}, ${opacity})`;
+  // Clamp opacity to valid range
+  const clampedOpacity = Math.max(0, Math.min(1, opacity));
+
+  // Handle empty or invalid input
+  if (!hex || typeof hex !== 'string') {
+    console.warn('hexToRgba: Invalid hex input, using fallback');
+    return `rgba(128, 128, 128, ${clampedOpacity})`;
+  }
+
+  const trimmed = hex.trim();
+
+  // If already an rgba/rgb string, extract RGB values and apply new opacity
+  if (trimmed.startsWith('rgba(') || trimmed.startsWith('rgb(')) {
+    const match = trimmed.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
+    if (match) {
+      return `rgba(${match[1]}, ${match[2]}, ${match[3]}, ${clampedOpacity})`;
+    }
+    console.warn('hexToRgba: Could not parse rgb/rgba string, using fallback');
+    return `rgba(128, 128, 128, ${clampedOpacity})`;
+  }
+
+  // Remove # prefix if present
+  let cleanHex = trimmed.startsWith('#') ? trimmed.slice(1) : trimmed;
+
+  // Handle 3-digit shorthand (#RGB -> #RRGGBB)
+  if (cleanHex.length === 3) {
+    cleanHex = cleanHex[0] + cleanHex[0] + cleanHex[1] + cleanHex[1] + cleanHex[2] + cleanHex[2];
+  }
+
+  // Validate hex format
+  if (cleanHex.length !== 6 || !/^[0-9A-Fa-f]{6}$/.test(cleanHex)) {
+    console.warn(`hexToRgba: Invalid hex format "${hex}", using fallback`);
+    return `rgba(128, 128, 128, ${clampedOpacity})`;
+  }
+
+  const r = parseInt(cleanHex.slice(0, 2), 16);
+  const g = parseInt(cleanHex.slice(2, 4), 16);
+  const b = parseInt(cleanHex.slice(4, 6), 16);
+
+  return `rgba(${r}, ${g}, ${b}, ${clampedOpacity})`;
 }
 
 /**

@@ -20,6 +20,8 @@ import { formatKeyComboForDisplay } from "@shared/key-utils"
 import { Send } from "lucide-react"
 
 const VISUALIZER_BUFFER_LENGTH = 70
+// Minimum height for waveform panel - matches WAVEFORM_MIN_HEIGHT in main/window.ts
+const WAVEFORM_MIN_HEIGHT = 80
 
 const getInitialVisualizerData = () =>
   Array<number>(VISUALIZER_BUFFER_LENGTH).fill(-1000)
@@ -779,7 +781,7 @@ export function Component() {
     <PanelResizeWrapper
       enableResize={true}
       minWidth={200}
-      minHeight={100}
+      minHeight={WAVEFORM_MIN_HEIGHT}
       className={cn(
         "floating-panel modern-text-strong flex h-screen flex-col text-foreground",
         isDark ? "dark" : ""

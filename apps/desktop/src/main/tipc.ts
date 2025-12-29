@@ -16,6 +16,7 @@ import {
   emergencyStopAgentMode,
   showPanelWindowAndShowTextInput,
   showPanelWindowAndStartMcpRecording,
+  WAVEFORM_MIN_HEIGHT,
 } from "./window"
 import {
   app,
@@ -2235,7 +2236,7 @@ export const router = {
 
       // Apply minimum size constraints
       const minWidth = 200
-      const minHeight = 100
+      const minHeight = WAVEFORM_MIN_HEIGHT
       const finalWidth = Math.max(minWidth, input.width)
       const finalHeight = Math.max(minHeight, input.height)
 
@@ -2292,9 +2293,9 @@ export const router = {
       // Apply saved custom size
       const { width, height } = config.panelCustomSize
       const finalWidth = Math.max(200, width)
-      const finalHeight = Math.max(100, height)
+      const finalHeight = Math.max(WAVEFORM_MIN_HEIGHT, height)
 
-      win.setMinimumSize(200, 100)
+      win.setMinimumSize(200, WAVEFORM_MIN_HEIGHT)
       win.setSize(finalWidth, finalHeight, false) // no animation on init
       return { width: finalWidth, height: finalHeight }
     }

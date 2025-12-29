@@ -2,6 +2,9 @@ import React, { useState, useEffect, useCallback } from "react"
 import { ResizeHandle } from "@renderer/components/resize-handle"
 import { tipcClient } from "@renderer/lib/tipc-client"
 
+// Minimum height for waveform panel - matches WAVEFORM_MIN_HEIGHT in main/window.ts
+const WAVEFORM_MIN_HEIGHT = 80
+
 interface PanelResizeWrapperProps {
   children: React.ReactNode
   className?: string
@@ -15,7 +18,7 @@ export function PanelResizeWrapper({
   className,
   enableResize = true,
   minWidth = 200,
-  minHeight = 100,
+  minHeight = WAVEFORM_MIN_HEIGHT,
 }: PanelResizeWrapperProps) {
   const [currentSize, setCurrentSize] = useState({ width: 300, height: 200 })
 

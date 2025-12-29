@@ -186,9 +186,17 @@ const calculateMinWaveformWidth = () => {
 
 const MIN_WAVEFORM_WIDTH = calculateMinWaveformWidth() // ~172px
 
+// Minimum height for waveform panel:
+// - Drag bar: 24px
+// - Waveform: 24px
+// - Submit button + hint: 28px
+// - Padding: ~4px
+// Total: ~80px
+export const WAVEFORM_MIN_HEIGHT = 80
+
 const panelWindowSize = {
   width: Math.max(260, MIN_WAVEFORM_WIDTH),
-  height: 50,
+  height: WAVEFORM_MIN_HEIGHT,
 }
 
 const agentPanelWindowSize = {
@@ -211,7 +219,7 @@ const getSavedPanelSize = () => {
     const maxWidth = 3000
     const maxHeight = 2000
     const minWidth = 200
-    const minHeight = 100
+    const minHeight = WAVEFORM_MIN_HEIGHT
 
     if (savedSize.width > maxWidth || savedSize.height > maxHeight) {
       logApp(`[window.ts] Saved size too large (${savedSize.width}x${savedSize.height}), using default:`, panelWindowSize)
@@ -330,7 +338,7 @@ function applyPanelMode(mode: "normal" | "agent" | "textInput") {
   // Ensure minimum size is enforced (prevents OS-level resize below waveform requirements)
   const minWidth = Math.max(200, MIN_WAVEFORM_WIDTH)
   try {
-    win.setMinimumSize(minWidth, 100)
+    win.setMinimumSize(minWidth, WAVEFORM_MIN_HEIGHT)
   } catch {}
 
   // Update focus behavior for the mode
@@ -390,7 +398,7 @@ export function createPanelWindow() {
       width: savedSize.width,
       height: savedSize.height,
       minWidth: minWidth, // Ensure minimum waveform width
-      minHeight: 100, // Allow resizing down to minimum
+      minHeight: WAVEFORM_MIN_HEIGHT, // Allow compact waveform panel with reduced negative space
       resizable: true, // Enable resizing
       focusable: false,
 

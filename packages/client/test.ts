@@ -6,7 +6,7 @@
  *   2. Run this test: cd packages/client && npx tsx test.ts
  */
 
-import { SpeakMcpClient } from './src/index.js'
+import { SpeakMcpClient } from './dist/index.js'
 
 const API_KEY = 'test-api-key' // Replace with your actual API key
 const BASE_URL = 'http://localhost:3847'

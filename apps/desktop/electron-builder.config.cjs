@@ -74,8 +74,7 @@ module.exports = {
     // Note: Without hardened runtime and proper code signing with a consistent Team ID,
     // macOS will treat each app version as a new app and require re-granting permissions
     hardenedRuntime: process.env.DISABLE_HARDENED_RUNTIME !== 'true',
-    // Timestamp is required for hardened runtime notarization
-    timestamp: process.env.DISABLE_HARDENED_RUNTIME !== 'true' ? "auto" : undefined,
+    // Note: Secure timestamp is automatically included by codesign when hardened runtime is enabled
     // Skip signing native extensions that cause timestamp issues
     signIgnore: [
       "node_modules/@egoist/electron-panel-window/build/Release/NativeExtension.node"

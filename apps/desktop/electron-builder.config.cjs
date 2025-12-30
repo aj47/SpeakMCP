@@ -66,11 +66,16 @@ module.exports = {
       "resources/bin/speakmcp-rs",
     ],
     artifactName: "${productName}-${version}-${arch}.${ext}",
+    entitlements: "build/entitlements.mac.plist",
     entitlementsInherit: "build/entitlements.mac.plist",
     identity: process.env.CSC_NAME || "Apple Development",
-    // Disable hardened runtime and timestamp for development builds to avoid timestamp service errors
-    // For production builds, set ENABLE_HARDENED_RUNTIME=true environment variable
-    hardenedRuntime: process.env.ENABLE_HARDENED_RUNTIME === 'true',
+    // Enable hardened runtime by default for production builds (required for permissions to persist across updates)
+    // Can be disabled for development by setting DISABLE_HARDENED_RUNTIME=true
+    // Note: Without hardened runtime and proper code signing with a consistent Team ID,
+    // macOS will treat each app version as a new app and require re-granting permissions
+    hardenedRuntime: process.env.DISABLE_HARDENED_RUNTIME !== 'true',
+    // Timestamp is required for hardened runtime notarization
+    timestamp: process.env.DISABLE_HARDENED_RUNTIME !== 'true' ? "auto" : undefined,
     // Skip signing native extensions that cause timestamp issues
     signIgnore: [
       "node_modules/@egoist/electron-panel-window/build/Release/NativeExtension.node"

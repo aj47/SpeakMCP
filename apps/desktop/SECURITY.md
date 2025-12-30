@@ -51,6 +51,18 @@ SpeakMCP is designed with security as a primary concern. This document outlines 
 3. **Secure Environment**: Run in secure computing environments
 4. **Access Control**: Limit application access to necessary resources
 
+### macOS Permissions
+SpeakMCP requires the following system permissions on macOS:
+- **Accessibility Access**: Required for global keyboard shortcuts (push-to-talk)
+- **Microphone Access**: Required for voice recording and dictation
+
+**Permission Persistence**: Permissions should persist across app updates when:
+- The app is properly code-signed with a Developer ID certificate
+- Hardened runtime is enabled (default for production builds)
+- The app is notarized by Apple
+
+If you need to re-grant permissions after an update, it may indicate the build was not signed with a proper Developer ID certificate. Official releases from GitHub Releases are properly signed and notarized.
+
 ## 🏗️ Secure Development Practices
 
 ### Code Review

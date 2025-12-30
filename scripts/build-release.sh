@@ -12,7 +12,8 @@
 #                          ❌ WRONG: "Developer ID Application: Your Name (TEAMID)"
 #                          ✅ RIGHT: "Your Name (TEAMID)"
 #   APPLE_DEVELOPER_ID   - Same as CSC_NAME, used for Rust binary signing
-#   ENABLE_HARDENED_RUNTIME=true - Enable hardened runtime for notarization
+#   DISABLE_HARDENED_RUNTIME=true - (Optional) Disable hardened runtime for development builds
+#   Note: Hardened runtime is enabled by default for notarization compatibility
 #
 # macOS Notarization (optional but recommended):
 #   APPLE_TEAM_ID        - Your 10-character Apple Team ID
@@ -67,8 +68,7 @@ build_macos() {
     echo "🦀 Building Rust binary..."
     pnpm run build-rs
     
-    # Set hardened runtime for production
-    export ENABLE_HARDENED_RUNTIME=true
+    # Note: Hardened runtime is enabled by default (see electron-builder.config.cjs)
     
     # Build DMG for both architectures (skip type checking for now)
     echo "📦 Building DMG packages..."

@@ -46,6 +46,9 @@ export function useProfileProvider(baseUrl: string, apiKey: string): ProfileCont
   
   // Track the current credentials to detect changes
   const credentialsRef = useRef({ baseUrl, apiKey });
+  // Track whether we've already fetched for the current credentials
+  // This prevents infinite refetch loops when the endpoint returns 404
+  const hasFetchedRef = useRef(false);
   
   const refresh = useCallback(async () => {
     // Only fetch if we have valid credentials
@@ -83,12 +86,19 @@ export function useProfileProvider(baseUrl: string, apiKey: string): ProfileCont
       credentialsRef.current.baseUrl !== baseUrl ||
       credentialsRef.current.apiKey !== apiKey;
     
-    credentialsRef.current = { baseUrl, apiKey };
+    if (credentialsChanged) {
+      credentialsRef.current = { baseUrl, apiKey };
+      // Reset the fetch flag when credentials change so we fetch with new credentials
+      hasFetchedRef.current = false;
+    }
     
-    if (credentialsChanged || !currentProfile) {
+    // Only fetch if we haven't already fetched for these credentials
+    // This prevents infinite loops when 404 sets currentProfile to null
+    if (!hasFetchedRef.current) {
+      hasFetchedRef.current = true;
       refresh();
     }
-  }, [baseUrl, apiKey, refresh, currentProfile]);
+  }, [baseUrl, apiKey, refresh]);
   
   return {
     currentProfile,

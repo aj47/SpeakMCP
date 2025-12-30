@@ -194,6 +194,14 @@ export const MIN_WAVEFORM_WIDTH = calculateMinWaveformWidth() // ~312px
 // Total: ~80px
 export const WAVEFORM_MIN_HEIGHT = 80
 
+// Minimum height for text input panel:
+// - Hint text row: ~20px
+// - Textarea: ~80px minimum for usability
+// - Bottom bar (char count + buttons): ~28px
+// - Padding (p-3 = 12px top + 12px bottom + gap-3 = 12px between)
+// Total: ~160px minimum
+export const TEXT_INPUT_MIN_HEIGHT = 160
+
 const panelWindowSize = {
   width: Math.max(260, MIN_WAVEFORM_WIDTH),
   height: WAVEFORM_MIN_HEIGHT,
@@ -530,9 +538,13 @@ export async function showPanelWindowAndShowTextInput(initialText?: string) {
     state.focusedAppBeforeRecording = null
   }
 
-  // Set text input state first, then show panel (which will use correct positioning)
+  // Set text input state first
   state.isTextInputActive = true
-  setPanelMode("textInput")
+
+  // Resize panel for text input mode before showing
+  // This fixes the issue where panel was too small after waveform recording (#840)
+  resizePanelForTextInput()
+
   showPanelWindow() // This will now use textInput mode positioning
   getWindowRendererHandlers("panel")?.showTextInput.send({ initialText })
 }
@@ -655,8 +667,41 @@ export function resizePanelForAgentMode() {
   }
 }
 
+/**
+ * Resize the panel for text input mode.
+ * This ensures the panel is at least TEXT_INPUT_MIN_HEIGHT tall for usability.
+ * This fixes the issue where the panel was too small for text input after
+ * being shrunk for waveform recording.
+ * See: https://github.com/aj47/SpeakMCP/issues/840
+ */
 export function resizePanelForTextInput() {
-  setPanelMode("textInput")
+  const win = WINDOWS.get("panel")
+  if (!win) {
+    setPanelMode("textInput")
+    return
+  }
+
+  try {
+    const [currentWidth, currentHeight] = win.getSize()
+    const targetHeight = Math.max(currentHeight, TEXT_INPUT_MIN_HEIGHT)
+    const targetWidth = Math.max(currentWidth, textInputPanelWindowSize.width)
+
+    logApp(`[resizePanelForTextInput] Current size: ${currentWidth}x${currentHeight}, target: ${targetWidth}x${targetHeight}`)
+
+    // Only resize if needed
+    if (currentHeight < TEXT_INPUT_MIN_HEIGHT || currentWidth < textInputPanelWindowSize.width) {
+      win.setSize(targetWidth, targetHeight)
+
+      // Reposition to maintain the panel's anchor point
+      const position = calculatePanelPosition({ width: targetWidth, height: targetHeight }, "textInput")
+      win.setPosition(position.x, position.y)
+    }
+
+    setPanelMode("textInput")
+  } catch (e) {
+    logApp("[resizePanelForTextInput] Failed to resize panel:", e)
+    setPanelMode("textInput")
+  }
 }
 
 export function resizePanelToNormal() {

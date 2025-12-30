@@ -5,6 +5,122 @@ import { AgentSkill, AgentSkillsData } from "@shared/types"
 import { randomUUID } from "crypto"
 import { logApp } from "./debug"
 
+/**
+ * Common paths where SKILL.md files might be located in a GitHub repo
+ */
+const SKILL_MD_PATHS = [
+  "SKILL.md",
+  "skill.md",
+  "skills/{name}/SKILL.md",
+  ".claude/skills/{name}/SKILL.md",
+  ".codex/skills/{name}/SKILL.md",
+]
+
+/**
+ * Parse a GitHub repo identifier or URL into owner, repo, and optional path
+ * Supports formats:
+ * - owner/repo
+ * - owner/repo/path/to/skill
+ * - https://github.com/owner/repo
+ * - https://github.com/owner/repo/tree/main/path/to/skill
+ */
+function parseGitHubIdentifier(input: string): { owner: string; repo: string; path?: string; ref: string } {
+  // Remove trailing slashes
+  input = input.trim().replace(/\/+$/, "")
+
+  // Handle full GitHub URLs
+  if (input.startsWith("https://github.com/") || input.startsWith("http://github.com/")) {
+    const url = new URL(input)
+    const parts = url.pathname.split("/").filter(Boolean)
+
+    if (parts.length < 2) {
+      throw new Error("Invalid GitHub URL: must include owner and repo")
+    }
+
+    const owner = parts[0]
+    const repo = parts[1]
+    let ref = "main"
+    let subPath: string | undefined
+
+    // Handle /tree/branch/path or /blob/branch/path URLs
+    if (parts.length > 2 && (parts[2] === "tree" || parts[2] === "blob")) {
+      if (parts.length > 3) {
+        ref = parts[3]
+        if (parts.length > 4) {
+          subPath = parts.slice(4).join("/")
+        }
+      }
+    } else if (parts.length > 2) {
+      // Simple path without /tree/ or /blob/
+      subPath = parts.slice(2).join("/")
+    }
+
+    return { owner, repo, path: subPath, ref }
+  }
+
+  // Handle owner/repo format (with optional path)
+  const parts = input.split("/").filter(Boolean)
+
+  if (parts.length < 2) {
+    throw new Error("Invalid GitHub identifier: expected 'owner/repo' or 'owner/repo/path'")
+  }
+
+  const owner = parts[0]
+  const repo = parts[1]
+  const subPath = parts.length > 2 ? parts.slice(2).join("/") : undefined
+
+  return { owner, repo, path: subPath, ref: "main" }
+}
+
+/**
+ * Fetch content from a GitHub raw URL
+ */
+async function fetchGitHubRaw(owner: string, repo: string, ref: string, filePath: string): Promise<string | null> {
+  const url = `https://raw.githubusercontent.com/${owner}/${repo}/${ref}/${filePath}`
+  logApp(`Fetching GitHub raw: ${url}`)
+
+  try {
+    const response = await fetch(url)
+    if (!response.ok) {
+      if (response.status === 404) {
+        return null // File not found, try another path
+      }
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+    }
+    return await response.text()
+  } catch (error) {
+    logApp(`Failed to fetch ${url}:`, error)
+    return null
+  }
+}
+
+/**
+ * List files in a GitHub directory using the API
+ */
+async function listGitHubDirectory(owner: string, repo: string, ref: string, dirPath: string): Promise<string[]> {
+  const url = `https://api.github.com/repos/${owner}/${repo}/contents/${dirPath}?ref=${ref}`
+  logApp(`Listing GitHub directory: ${url}`)
+
+  try {
+    const response = await fetch(url, {
+      headers: {
+        Accept: "application/vnd.github.v3+json",
+        "User-Agent": "SpeakMCP-SkillInstaller",
+      },
+    })
+    if (!response.ok) {
+      return []
+    }
+    const data = await response.json()
+    if (!Array.isArray(data)) {
+      return []
+    }
+    return data.map((item: { name: string }) => item.name)
+  } catch {
+    return []
+  }
+}
+
 // Skills are stored in a JSON file in the app data folder
 export const skillsPath = path.join(
   app.getPath("appData"),
@@ -377,6 +493,115 @@ The following skills provide specialized instructions for specific tasks:
 
 ${skillsContent}
 `
+  }
+
+  /**
+   * Import a skill from a GitHub repository
+   * @param repoIdentifier GitHub repo identifier (e.g., "owner/repo" or full URL)
+   * @returns Object with imported skills and any errors encountered
+   */
+  async importSkillFromGitHub(repoIdentifier: string): Promise<{
+    imported: AgentSkill[]
+    errors: string[]
+  }> {
+    const imported: AgentSkill[] = []
+    const errors: string[] = []
+
+    // Parse the GitHub identifier
+    let parsed: { owner: string; repo: string; path?: string; ref: string }
+    try {
+      parsed = parseGitHubIdentifier(repoIdentifier)
+    } catch (error) {
+      return {
+        imported: [],
+        errors: [error instanceof Error ? error.message : String(error)],
+      }
+    }
+
+    const { owner, repo, path: subPath, ref } = parsed
+    const repoName = repo // Use repo name as skill name fallback
+    logApp(`Importing skill from GitHub: ${owner}/${repo}${subPath ? `/${subPath}` : ""} (ref: ${ref})`)
+
+    // If a specific path is provided, try to find SKILL.md there
+    if (subPath) {
+      const pathsToTry = [
+        `${subPath}/SKILL.md`,
+        `${subPath}/skill.md`,
+        subPath.endsWith(".md") ? subPath : `${subPath}.md`,
+      ]
+
+      for (const filePath of pathsToTry) {
+        const content = await fetchGitHubRaw(owner, repo, ref, filePath)
+        if (content) {
+          try {
+            const githubPath = `github:${owner}/${repo}/${filePath}`
+            const skill = this.importSkillFromMarkdown(content, githubPath)
+            imported.push(skill)
+            logApp(`Imported skill from: ${filePath}`)
+            return { imported, errors }
+          } catch (error) {
+            errors.push(`Failed to parse ${filePath}: ${error instanceof Error ? error.message : String(error)}`)
+          }
+        }
+      }
+    }
+
+    // Try common SKILL.md locations
+    for (const pathTemplate of SKILL_MD_PATHS) {
+      const filePath = subPath
+        ? `${subPath}/${pathTemplate.replace("{name}", repoName)}`
+        : pathTemplate.replace("{name}", repoName)
+
+      const content = await fetchGitHubRaw(owner, repo, ref, filePath)
+      if (content) {
+        try {
+          const githubPath = `github:${owner}/${repo}/${filePath}`
+          const skill = this.importSkillFromMarkdown(content, githubPath)
+          imported.push(skill)
+          logApp(`Imported skill from: ${filePath}`)
+          return { imported, errors }
+        } catch (error) {
+          errors.push(`Failed to parse ${filePath}: ${error instanceof Error ? error.message : String(error)}`)
+        }
+      }
+    }
+
+    // Try to find skills in a "skills" directory
+    const skillsDirs = ["skills", ".claude/skills", ".codex/skills"]
+    for (const skillsDir of skillsDirs) {
+      const basePath = subPath ? `${subPath}/${skillsDir}` : skillsDir
+      const entries = await listGitHubDirectory(owner, repo, ref, basePath)
+
+      for (const entry of entries) {
+        const skillPath = `${basePath}/${entry}/SKILL.md`
+        const content = await fetchGitHubRaw(owner, repo, ref, skillPath)
+        if (content) {
+          try {
+            const githubPath = `github:${owner}/${repo}/${skillPath}`
+            // Check if already imported
+            if (this.getSkillByFilePath(githubPath)) {
+              logApp(`Skill already imported, skipping: ${skillPath}`)
+              continue
+            }
+            const skill = this.importSkillFromMarkdown(content, githubPath)
+            imported.push(skill)
+            logApp(`Imported skill from: ${skillPath}`)
+          } catch (error) {
+            errors.push(`Failed to parse ${skillPath}: ${error instanceof Error ? error.message : String(error)}`)
+          }
+        }
+      }
+
+      if (imported.length > 0) {
+        return { imported, errors }
+      }
+    }
+
+    if (imported.length === 0 && errors.length === 0) {
+      errors.push(`No SKILL.md found in repository ${owner}/${repo}`)
+    }
+
+    return { imported, errors }
   }
 
   /**

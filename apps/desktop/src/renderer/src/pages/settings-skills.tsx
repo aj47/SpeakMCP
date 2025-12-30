@@ -22,7 +22,7 @@ import { tipcClient } from "@renderer/lib/tipc-client"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { AgentSkill } from "@shared/types"
 import { toast } from "sonner"
-import { Plus, Pencil, Trash2, Download, Upload, FolderOpen, RefreshCw, Sparkles, Loader2, ChevronDown, FolderUp } from "lucide-react"
+import { Plus, Pencil, Trash2, Download, Upload, FolderOpen, RefreshCw, Sparkles, Loader2, ChevronDown, FolderUp, Github } from "lucide-react"
 import { ProfileBadge } from "@renderer/components/profile-badge"
 
 export function Component() {
@@ -33,6 +33,8 @@ export function Component() {
   const [newSkillName, setNewSkillName] = useState("")
   const [newSkillDescription, setNewSkillDescription] = useState("")
   const [newSkillInstructions, setNewSkillInstructions] = useState("")
+  const [isGitHubDialogOpen, setIsGitHubDialogOpen] = useState(false)
+  const [gitHubRepoInput, setGitHubRepoInput] = useState("")
 
   const skillsQuery = useQuery({
     queryKey: ["skills"],
@@ -225,6 +227,38 @@ export function Component() {
     },
   })
 
+  // Import skill from GitHub repository
+  const importSkillFromGitHubMutation = useMutation({
+    mutationFn: async (repoIdentifier: string) => {
+      return await tipcClient.importSkillFromGitHub({ repoIdentifier })
+    },
+    onSuccess: (result) => {
+      if (result) {
+        queryClient.invalidateQueries({ queryKey: ["skills"] })
+        if (result.imported.length > 0) {
+          toast.success(`Imported ${result.imported.length} skill(s) from GitHub: ${result.imported.map(s => s.name).join(", ")}`)
+        } else if (result.errors.length > 0) {
+          toast.error(`Failed to import: ${result.errors.join("; ")}`)
+        } else {
+          toast.info("No skills found in repository")
+        }
+        setIsGitHubDialogOpen(false)
+        setGitHubRepoInput("")
+      }
+    },
+    onError: (error: Error) => {
+      toast.error(`Failed to import from GitHub: ${error.message}`)
+    },
+  })
+
+  const handleImportFromGitHub = () => {
+    if (!gitHubRepoInput.trim()) {
+      toast.error("Please enter a GitHub repository (e.g., owner/repo)")
+      return
+    }
+    importSkillFromGitHubMutation.mutate(gitHubRepoInput.trim())
+  }
+
   const resetNewSkillForm = () => {
     setNewSkillName("")
     setNewSkillDescription("")
@@ -300,7 +334,7 @@ export function Component() {
                 <Button
                   variant="outline"
                   size="sm"
-                  disabled={importSkillMutation.isPending || importSkillFolderMutation.isPending || importSkillsFromParentFolderMutation.isPending}
+                  disabled={importSkillMutation.isPending || importSkillFolderMutation.isPending || importSkillsFromParentFolderMutation.isPending || importSkillFromGitHubMutation.isPending}
                 >
                   <Upload className="h-3 w-3 mr-1" />
                   Import
@@ -308,6 +342,10 @@ export function Component() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => setIsGitHubDialogOpen(true)}>
+                  <Github className="h-4 w-4 mr-2" />
+                  Import from GitHub
+                </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => importSkillMutation.mutate()}>
                   <Upload className="h-4 w-4 mr-2" />
                   Import SKILL.md File
@@ -509,6 +547,58 @@ export function Component() {
               </Button>
               <Button onClick={handleUpdateSkill} disabled={updateSkillMutation.isPending}>
                 {updateSkillMutation.isPending ? "Saving..." : "Save Changes"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* GitHub Import Dialog */}
+        <Dialog open={isGitHubDialogOpen} onOpenChange={setIsGitHubDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Import Skill from GitHub</DialogTitle>
+              <DialogDescription>
+                Enter a GitHub repository to import skills from. Supports formats like "owner/repo" or full GitHub URLs.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="github-repo">Repository</Label>
+                <Input
+                  id="github-repo"
+                  value={gitHubRepoInput}
+                  onChange={(e) => setGitHubRepoInput(e.target.value)}
+                  placeholder="e.g., SawyerHood/dev-browser"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      handleImportFromGitHub()
+                    }
+                  }}
+                />
+                <p className="text-xs text-muted-foreground mt-2">
+                  Examples: owner/repo, owner/repo/skills/my-skill, or https://github.com/owner/repo
+                </p>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => {
+                setIsGitHubDialogOpen(false)
+                setGitHubRepoInput("")
+              }}>
+                Cancel
+              </Button>
+              <Button onClick={handleImportFromGitHub} disabled={importSkillFromGitHubMutation.isPending}>
+                {importSkillFromGitHubMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                    Importing...
+                  </>
+                ) : (
+                  <>
+                    <Github className="h-3 w-3 mr-1" />
+                    Import
+                  </>
+                )}
               </Button>
             </DialogFooter>
           </DialogContent>

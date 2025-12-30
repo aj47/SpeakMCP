@@ -2893,6 +2893,14 @@ export const router = {
     return skillsService.scanSkillsFolder()
   }),
 
+  // Import skill(s) from a GitHub repository
+  importSkillFromGitHub: t.procedure
+    .input<{ repoIdentifier: string }>()
+    .action(async ({ input }) => {
+      const { skillsService } = await import("./skills-service")
+      return skillsService.importSkillFromGitHub(input.repoIdentifier)
+    }),
+
   getEnabledSkillsInstructions: t.procedure.action(async () => {
     const { skillsService } = await import("./skills-service")
     return skillsService.getEnabledSkillsInstructions()

@@ -505,12 +505,26 @@ export async function showPanelWindowAndStartMcpRecording(conversationId?: strin
   state.isRecordingFromButtonClick = fromButtonClick ?? false
   state.isRecordingMcpMode = true
 
+  // Check if there are active agent sessions (non-snoozed)
+  // Import at runtime to avoid circular dependency
+  const { AgentSessionTracker } = require("./agent-session-tracker")
+  const tracker = AgentSessionTracker.getInstance()
+  const activeSessions = tracker.getActiveSessions()
+  const hasActiveNonSnoozedSessions = activeSessions.some((s: { isSnoozed?: boolean }) => !s.isSnoozed)
+
   // Ensure consistent sizing by setting mode in main before showing
   setPanelMode("normal")
 
-  // Resize panel to compact waveform size before showing
-  // This fixes the issue where panel had too much negative space (#817)
-  resizePanelForWaveform()
+  // Only resize panel to compact waveform size if there are NO active sessions.
+  // When there ARE active sessions, the waveform will overlay on top of the agent progress
+  // at the current panel size. This fixes resizing bugs with voice follow-ups (#842).
+  if (!hasActiveNonSnoozedSessions) {
+    // Resize panel to compact waveform size before showing
+    // This fixes the issue where panel had too much negative space (#817)
+    resizePanelForWaveform()
+  } else {
+    logApp("[showPanelWindowAndStartMcpRecording] Skipping waveform resize - active sessions present, waveform will overlay")
+  }
 
   // Start mic capture/recording as early as possible, but only after panel renderer is ready
   // This prevents lost IPC messages right after app launch when webContents may not have finished loading

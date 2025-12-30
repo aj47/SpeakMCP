@@ -608,15 +608,9 @@ export function Component() {
     let targetMode: "agent" | "normal" | null = null
     if (anyActiveNonSnoozed) {
       targetMode = "agent"
-      // When switching to agent mode, stop any ongoing recording
-      if (recordingRef.current) {
-        logUI('[Panel] Switching to agent mode - stopping ongoing recording')
-        isConfirmedRef.current = false
-        setRecording(false)
-        recordingRef.current = false
-        setVisualizerData(() => getInitialVisualizerData())
-        recorderRef.current?.stopRecording()
-      }
+      // Note: We no longer stop ongoing recording when switching to agent mode.
+      // The waveform now overlays on top of agent progress, allowing voice follow-ups
+      // to work correctly without resizing conflicts. See issue #842.
     } else if (isTextSubmissionPending) {
       targetMode = null // keep current size briefly to avoid flicker
     } else {
@@ -815,8 +809,8 @@ export function Component() {
 
             <div className="relative flex grow items-center overflow-hidden">
               {/* Agent progress overlay - left-aligned and full coverage */}
-              {/* Hide overlay when recording to prevent waveform from appearing over completed sessions */}
-              {anyVisibleSessions && !recording && (
+              {/* Agent progress stays visible even during recording - waveform overlays on top */}
+              {anyVisibleSessions && (
                 hasMultipleSessions ? (
                   <MultiAgentProgressView
                     variant="overlay"
@@ -833,9 +827,14 @@ export function Component() {
                 )
               )}
 
-              {/* Waveform visualization and submit controls - only show when recording is active */}
+              {/* Waveform visualization and submit controls - overlays on top of agent progress when recording */}
+              {/* Uses higher z-index (z-30) to appear above agent progress (z-20) */}
               {recording && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center z-30">
+                <div className={cn(
+                  "absolute inset-0 flex flex-col items-center justify-center z-30",
+                  // Semi-transparent background when overlaying on agent progress
+                  anyVisibleSessions && "bg-background/90 backdrop-blur-sm"
+                )}>
                   {/* Waveform */}
                   <div
                     className={cn(

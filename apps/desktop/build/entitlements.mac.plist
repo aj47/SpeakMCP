@@ -11,7 +11,8 @@
     <!-- Required for Electron to load native modules with hardened runtime -->
     <key>com.apple.security.cs.disable-library-validation</key>
     <true/>
-    <!-- Required for Electron environment variable handling -->
+    <!-- Allow DYLD environment variables - may be needed by some native modules -->
+    <!-- Note: This is a permissive entitlement that weakens hardened runtime. Consider removing if not needed. -->
     <key>com.apple.security.cs.allow-dyld-environment-variables</key>
     <true/>
     <!-- Required for microphone access (voice recording) -->

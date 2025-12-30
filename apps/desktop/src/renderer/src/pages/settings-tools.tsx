@@ -27,7 +27,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@renderer/components/ui/tooltip"
-import { Save, Info, ChevronDown, RotateCcw, Plus } from "lucide-react"
+import { Save, Info, ChevronDown, RotateCcw, Plus, Upload, Download } from "lucide-react"
 import { toast } from "sonner"
 import { useState, useEffect } from "react"
 import { ProfileBadge } from "@renderer/components/profile-badge"
@@ -180,6 +180,37 @@ export function Component() {
     },
   })
 
+  // Export profile mutation
+  const exportProfileMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return await tipcClient.saveProfileFile({ id })
+    },
+    onSuccess: (success: boolean) => {
+      if (success) {
+        toast.success("Profile exported - review file before sharing (may contain sensitive data in args/URLs)")
+      }
+    },
+    onError: (error: Error) => {
+      toast.error(`Failed to export profile: ${error.message}`)
+    },
+  })
+
+  // Import profile mutation
+  const importProfileMutation = useMutation({
+    mutationFn: async () => {
+      return await tipcClient.loadProfileFile()
+    },
+    onSuccess: (profile: Profile | null) => {
+      if (profile) {
+        queryClient.invalidateQueries({ queryKey: ["profiles"] })
+        queryClient.invalidateQueries({ queryKey: ["current-profile"] })
+        toast.success(`Profile "${profile.name}" imported - configure MCP server credentials as needed`)
+      }
+    },
+    onError: (error: Error) => {
+      toast.error(`Failed to import profile: ${error.message}`)
+    },
+  })
 
   // Initialize local state when config loads
   useEffect(() => {
@@ -347,37 +378,63 @@ DOMAIN-SPECIFIC RULES:
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-semibold">Agent Settings</h3>
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-1"
-              onClick={() => setIsCreateProfileOpen(true)}
-            >
-              <Plus className="h-4 w-4" />
-              Create Profile
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1"
+                onClick={() => importProfileMutation.mutate()}
+                disabled={importProfileMutation.isPending}
+              >
+                <Upload className="h-4 w-4" />
+                Import
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1"
+                onClick={() => setIsCreateProfileOpen(true)}
+              >
+                <Plus className="h-4 w-4" />
+                Create Profile
+              </Button>
+            </div>
           </div>
 
           {/* Profile Selector Dropdown */}
           <div className="space-y-2">
             <Label>Active Profile</Label>
-            <Select
-              value={currentProfile?.id || ""}
-              onValueChange={handleProfileChange}
-              disabled={setCurrentProfileMutation.isPending}
-            >
-              <SelectTrigger className="w-full max-w-xs">
-                <SelectValue placeholder="Select a profile" />
-              </SelectTrigger>
-              <SelectContent>
-                {profiles.map((profile) => (
-                  <SelectItem key={profile.id} value={profile.id}>
-                    {profile.name}
-                    {profile.isDefault && " (Default)"}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="flex items-center gap-2">
+              <Select
+                value={currentProfile?.id || ""}
+                onValueChange={handleProfileChange}
+                disabled={setCurrentProfileMutation.isPending}
+              >
+                <SelectTrigger className="w-full max-w-xs">
+                  <SelectValue placeholder="Select a profile" />
+                </SelectTrigger>
+                <SelectContent>
+                  {profiles.map((profile) => (
+                    <SelectItem key={profile.id} value={profile.id}>
+                      {profile.name}
+                      {profile.isDefault && " (Default)"}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {currentProfile && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1"
+                  onClick={() => exportProfileMutation.mutate(currentProfile.id)}
+                  disabled={exportProfileMutation.isPending}
+                >
+                  <Download className="h-4 w-4" />
+                  Export
+                </Button>
+              )}
+            </div>
             <p className="text-xs text-muted-foreground">
               Switch between profiles to use different agent configurations.
             </p>

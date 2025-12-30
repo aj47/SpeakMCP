@@ -188,6 +188,8 @@ export function Component() {
     onSuccess: (success: boolean) => {
       if (success) {
         toast.success("Profile exported - review file before sharing (may contain sensitive data in args/URLs)")
+      } else {
+        toast.info("Export canceled")
       }
     },
     onError: (error: Error) => {
@@ -205,6 +207,8 @@ export function Component() {
         queryClient.invalidateQueries({ queryKey: ["profiles"] })
         queryClient.invalidateQueries({ queryKey: ["current-profile"] })
         toast.success(`Profile "${profile.name}" imported - configure MCP server credentials as needed`)
+      } else {
+        toast.info("Import canceled")
       }
     },
     onError: (error: Error) => {

@@ -33,7 +33,7 @@ export default function SessionListScreen({ navigation }: Props) {
             <View style={{
               flexDirection: 'row',
               alignItems: 'center',
-              backgroundColor: theme.colors.primary + '20',
+              backgroundColor: theme.colors.primary + '33',
               paddingHorizontal: 8,
               paddingVertical: 2,
               borderRadius: 10,

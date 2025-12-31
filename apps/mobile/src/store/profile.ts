@@ -69,7 +69,7 @@ export function useProfileProvider(baseUrl: string, apiKey: string): ProfileCont
       console.warn('[Profile] Failed to fetch current profile:', err);
       // Don't set error for network issues - just leave profile null
       // This prevents showing errors when not connected to a SpeakMCP server
-      if (err?.message?.includes('not found') || err?.message?.includes('404')) {
+      if (err?.message?.toLowerCase().includes('not found') || err?.message?.includes('404')) {
         // Server doesn't support profile endpoint - that's okay
         setCurrentProfile(null);
       } else {

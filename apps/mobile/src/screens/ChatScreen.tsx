@@ -28,6 +28,7 @@ import { useMessageQueueContext } from '../store/message-queue';
 import { MessageQueuePanel } from '../ui/MessageQueuePanel';
 import { useConnectionManager } from '../store/connectionManager';
 import { useTunnelConnection } from '../store/tunnelConnection';
+import { useProfile } from '../store/profile';
 import { ConnectionStatusIndicator } from '../ui/ConnectionStatusIndicator';
 import { ChatMessage, AgentProgressUpdate } from '../lib/openaiClient';
 import { RecoveryState, formatConnectionStatus } from '../lib/connectionRecovery';
@@ -56,6 +57,7 @@ export default function ChatScreen({ route, navigation }: any) {
   const messageQueue = useMessageQueueContext();
   const connectionManager = useConnectionManager();
   const { connectionInfo } = useTunnelConnection();
+  const { currentProfile } = useProfile();
   const handsFree = !!config.handsFree;
   const messageQueueEnabled = config.messageQueueEnabled !== false; // default true
   const handsFreeRef = useRef<boolean>(handsFree);
@@ -220,6 +222,30 @@ export default function ChatScreen({ route, navigation }: any) {
 
   useLayoutEffect(() => {
     navigation?.setOptions?.({
+      headerTitle: () => (
+        <View style={{ flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+          <Text style={{ fontSize: 17, fontWeight: '600', color: theme.colors.foreground }}>Chat</Text>
+          {currentProfile && (
+            <View style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: theme.colors.primary + '33',
+              paddingHorizontal: 8,
+              paddingVertical: 2,
+              borderRadius: 10,
+              marginTop: 2,
+            }}>
+              <Text style={{
+                fontSize: 11,
+                color: theme.colors.primary,
+                fontWeight: '500',
+              }}>
+                {currentProfile.name}
+              </Text>
+            </View>
+          )}
+        </View>
+      ),
       headerLeft: () => (
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
           <TouchableOpacity
@@ -306,7 +332,7 @@ export default function ChatScreen({ route, navigation }: any) {
         </View>
       ),
     });
-  }, [navigation, handsFree, handleKillSwitch, handleNewChat, responding, theme, isDark, sessionStore, connectionInfo.state, connectionInfo.retryCount]);
+  }, [navigation, handsFree, handleKillSwitch, handleNewChat, responding, theme, isDark, sessionStore, connectionInfo.state, connectionInfo.retryCount, currentProfile]);
 
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);

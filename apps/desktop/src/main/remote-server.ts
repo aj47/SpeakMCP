@@ -648,10 +648,11 @@ export async function startRemoteServer() {
     } catch (error: any) {
       diagnosticsService.logError("remote-server", "Failed to import profile", error)
       // Return 400 for JSON/validation errors, 500 for server errors
+      const errorMessage = (error?.message ?? "").toLowerCase()
       const isValidationError = error instanceof SyntaxError ||
-        error?.message?.toLowerCase().includes("json") ||
-        error?.message?.toLowerCase().includes("invalid") ||
-        error?.message?.toLowerCase().includes("missing")
+        errorMessage.includes("json") ||
+        errorMessage.includes("invalid") ||
+        errorMessage.includes("missing")
       return reply.code(isValidationError ? 400 : 500).send({ error: error?.message || "Failed to import profile" })
     }
   })

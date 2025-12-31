@@ -18,7 +18,7 @@ type NavLinkItem = {
 export const Component = () => {
   const navigate = useNavigate()
   const location = useLocation()
-  const [settingsExpanded, setSettingsExpanded] = useState(false)
+  const [settingsExpanded, setSettingsExpanded] = useState(true)
   const { isCollapsed, width, isResizing, toggleCollapse, handleResizeStart } = useSidebar()
 
   const settingsNavLinks: NavLinkItem[] = [

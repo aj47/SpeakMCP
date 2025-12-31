@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
-import { View, Text, TextInput, Switch, StyleSheet, ScrollView, Modal, TouchableOpacity, Platform, Pressable, ActivityIndicator, RefreshControl } from 'react-native';
+import { View, Text, TextInput, Switch, StyleSheet, ScrollView, Modal, TouchableOpacity, Platform, Pressable, ActivityIndicator, RefreshControl, Share, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppConfig, saveConfig, useConfigContext } from '../store/config';
 import { useTheme, ThemeMode } from '../ui/ThemeProvider';
@@ -58,6 +58,12 @@ export default function SettingsScreen({ navigation }: any) {
   const [isRefreshing, setIsRefreshing] = useState(false);
   // Track if the server is a SpeakMCP desktop server (supports our settings API)
   const [isSpeakMCPServer, setIsSpeakMCPServer] = useState(false);
+
+  // Profile import/export state
+  const [isExportingProfile, setIsExportingProfile] = useState(false);
+  const [isImportingProfile, setIsImportingProfile] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importJsonText, setImportJsonText] = useState('');
 
   // Model picker state
   const [availableModels, setAvailableModels] = useState<ModelInfo[]>([]);
@@ -176,6 +182,48 @@ export default function SettingsScreen({ navigation }: any) {
     } catch (error: any) {
       console.error('[Settings] Failed to switch profile:', error);
       setRemoteError(error.message || 'Failed to switch profile');
+    }
+  };
+
+  // Handle profile export
+  const handleExportProfile = async () => {
+    if (!settingsClient || !currentProfileId) return;
+
+    setIsExportingProfile(true);
+    try {
+      const result = await settingsClient.exportProfile(currentProfileId);
+      await Share.share({
+        message: result.profileJson,
+        title: 'Export Profile',
+      });
+    } catch (error: any) {
+      console.error('[Settings] Failed to export profile:', error);
+      Alert.alert('Export Failed', error.message || 'Failed to export profile');
+    } finally {
+      setIsExportingProfile(false);
+    }
+  };
+
+  // Handle profile import
+  const handleImportProfile = async () => {
+    if (!settingsClient || !importJsonText.trim()) return;
+
+    setIsImportingProfile(true);
+    try {
+      const result = await settingsClient.importProfile(importJsonText.trim());
+      // Refresh profiles list
+      const profilesRes = await settingsClient.getProfiles();
+      setProfiles(profilesRes.profiles);
+      setCurrentProfileId(profilesRes.currentProfileId);
+      // Close modal and clear input
+      setShowImportModal(false);
+      setImportJsonText('');
+      Alert.alert('Success', `Profile "${result.profile.name}" imported successfully`);
+    } catch (error: any) {
+      console.error('[Settings] Failed to import profile:', error);
+      Alert.alert('Import Failed', error.message || 'Failed to import profile');
+    } finally {
+      setIsImportingProfile(false);
     }
   };
 
@@ -663,6 +711,27 @@ export default function SettingsScreen({ navigation }: any) {
                     </TouchableOpacity>
                   ))}
                 </View>
+                {/* Profile Import/Export Buttons */}
+                <View style={styles.profileActions}>
+                  <TouchableOpacity
+                    style={[styles.profileActionButton, isImportingProfile && styles.profileActionButtonDisabled]}
+                    onPress={() => setShowImportModal(true)}
+                    disabled={isImportingProfile}
+                  >
+                    <Text style={styles.profileActionButtonText}>
+                      {isImportingProfile ? 'Importing...' : '📥 Import'}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.profileActionButton, (!currentProfileId || isExportingProfile) && styles.profileActionButtonDisabled]}
+                    onPress={handleExportProfile}
+                    disabled={!currentProfileId || isExportingProfile}
+                  >
+                    <Text style={styles.profileActionButtonText}>
+                      {isExportingProfile ? 'Exporting...' : '📤 Export'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
               </>
             )}
 
@@ -1049,6 +1118,72 @@ export default function SettingsScreen({ navigation }: any) {
           </View>
         </View>
       </Modal>
+
+      {/* Profile Import Modal */}
+      <Modal
+        visible={showImportModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => {
+          setShowImportModal(false);
+          setImportJsonText('');
+        }}
+      >
+        <View style={styles.importModalOverlay}>
+          <View style={styles.importModalContainer}>
+            <View style={styles.importModalHeader}>
+              <Text style={styles.importModalTitle}>Import Profile</Text>
+              <TouchableOpacity
+                onPress={() => {
+                  setShowImportModal(false);
+                  setImportJsonText('');
+                }}
+              >
+                <Text style={styles.importModalClose}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.importModalDescription}>
+              Paste the profile JSON below to import it.
+            </Text>
+
+            <TextInput
+              style={styles.importJsonInput}
+              value={importJsonText}
+              onChangeText={setImportJsonText}
+              placeholder='{"name": "My Profile", ...}'
+              placeholderTextColor={theme.colors.mutedForeground}
+              multiline
+              numberOfLines={8}
+              textAlignVertical="top"
+            />
+
+            <View style={styles.importModalActions}>
+              <TouchableOpacity
+                style={styles.importModalCancelButton}
+                onPress={() => {
+                  setShowImportModal(false);
+                  setImportJsonText('');
+                }}
+              >
+                <Text style={styles.importModalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.importModalImportButton,
+                  (!importJsonText.trim() || isImportingProfile) && styles.importModalImportButtonDisabled,
+                ]}
+                onPress={handleImportProfile}
+                disabled={!importJsonText.trim() || isImportingProfile}
+              >
+                <Text style={styles.importModalImportText}>
+                  {isImportingProfile ? 'Importing...' : 'Import'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </>
   );
 }
@@ -1298,6 +1433,110 @@ function createStyles(theme: ReturnType<typeof useTheme>['theme']) {
     checkmark: {
       color: theme.colors.primary,
       fontSize: 16,
+      fontWeight: '600',
+    },
+    profileActions: {
+      flexDirection: 'row',
+      gap: spacing.sm,
+      marginTop: spacing.sm,
+    },
+    profileActionButton: {
+      flex: 1,
+      paddingVertical: spacing.sm,
+      paddingHorizontal: spacing.md,
+      borderRadius: radius.md,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      backgroundColor: theme.colors.background,
+      alignItems: 'center',
+    },
+    profileActionButtonDisabled: {
+      opacity: 0.5,
+    },
+    profileActionButtonText: {
+      fontSize: 14,
+      color: theme.colors.foreground,
+      fontWeight: '500',
+    },
+    importModalOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: spacing.lg,
+    },
+    importModalContainer: {
+      backgroundColor: theme.colors.background,
+      borderRadius: radius.lg,
+      padding: spacing.lg,
+      width: '100%',
+      maxWidth: 400,
+    },
+    importModalHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: spacing.md,
+    },
+    importModalTitle: {
+      fontSize: 18,
+      fontWeight: '600',
+      color: theme.colors.foreground,
+    },
+    importModalClose: {
+      fontSize: 20,
+      color: theme.colors.mutedForeground,
+      padding: spacing.xs,
+    },
+    importModalDescription: {
+      fontSize: 14,
+      color: theme.colors.mutedForeground,
+      marginBottom: spacing.md,
+    },
+    importJsonInput: {
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      borderRadius: radius.md,
+      padding: spacing.md,
+      fontSize: 14,
+      color: theme.colors.foreground,
+      backgroundColor: theme.colors.muted,
+      minHeight: 150,
+      fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    },
+    importModalActions: {
+      flexDirection: 'row',
+      gap: spacing.sm,
+      marginTop: spacing.md,
+    },
+    importModalCancelButton: {
+      flex: 1,
+      paddingVertical: spacing.sm,
+      paddingHorizontal: spacing.md,
+      borderRadius: radius.md,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      alignItems: 'center',
+    },
+    importModalCancelText: {
+      fontSize: 14,
+      color: theme.colors.foreground,
+      fontWeight: '500',
+    },
+    importModalImportButton: {
+      flex: 1,
+      paddingVertical: spacing.sm,
+      paddingHorizontal: spacing.md,
+      borderRadius: radius.md,
+      backgroundColor: theme.colors.primary,
+      alignItems: 'center',
+    },
+    importModalImportButtonDisabled: {
+      opacity: 0.5,
+    },
+    importModalImportText: {
+      fontSize: 14,
+      color: theme.colors.primaryForeground,
       fontWeight: '600',
     },
     serverRow: {

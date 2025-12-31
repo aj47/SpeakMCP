@@ -126,6 +126,17 @@ export class SettingsApiClient {
     });
   }
 
+  async exportProfile(profileId: string): Promise<{ profileJson: string }> {
+    return this.request<{ profileJson: string }>(`/profiles/${encodeURIComponent(profileId)}/export`);
+  }
+
+  async importProfile(profileJson: string): Promise<{ success: boolean; profile: Profile }> {
+    return this.request('/profiles/import', {
+      method: 'POST',
+      body: JSON.stringify({ profileJson }),
+    });
+  }
+
   // MCP Server Management
   async getMCPServers(): Promise<MCPServersResponse> {
     return this.request<MCPServersResponse>('/mcp/servers');

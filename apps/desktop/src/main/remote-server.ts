@@ -614,6 +614,43 @@ export async function startRemoteServer() {
     }
   })
 
+  // GET /v1/profiles/:id/export - Export a profile as JSON
+  fastify.get("/v1/profiles/:id/export", async (req, reply) => {
+    try {
+      const params = req.params as { id: string }
+      const profileJson = profileService.exportProfile(params.id)
+      return reply.send({ profileJson })
+    } catch (error: any) {
+      diagnosticsService.logError("remote-server", "Failed to export profile", error)
+      const isNotFound = error?.message?.includes("not found")
+      return reply.code(isNotFound ? 404 : 500).send({ error: error?.message || "Failed to export profile" })
+    }
+  })
+
+  // POST /v1/profiles/import - Import a profile from JSON
+  fastify.post("/v1/profiles/import", async (req, reply) => {
+    try {
+      const body = req.body as any
+      const profileJson = body?.profileJson
+      if (!profileJson || typeof profileJson !== "string") {
+        return reply.code(400).send({ error: "Missing or invalid profileJson" })
+      }
+      const profile = profileService.importProfile(profileJson)
+      diagnosticsService.logInfo("remote-server", `Imported profile: ${profile.name}`)
+      return reply.send({
+        success: true,
+        profile: {
+          id: profile.id,
+          name: profile.name,
+          isDefault: profile.isDefault,
+        },
+      })
+    } catch (error: any) {
+      diagnosticsService.logError("remote-server", "Failed to import profile", error)
+      return reply.code(400).send({ error: error?.message || "Failed to import profile" })
+    }
+  })
+
   // GET /v1/mcp/servers - List MCP servers with status
   fastify.get("/v1/mcp/servers", async (_req, reply) => {
     try {

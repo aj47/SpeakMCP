@@ -211,14 +211,20 @@ export default function SettingsScreen({ navigation }: any) {
     setIsImportingProfile(true);
     try {
       const result = await settingsClient.importProfile(importJsonText.trim());
-      // Refresh profiles list
-      const profilesRes = await settingsClient.getProfiles();
-      setProfiles(profilesRes.profiles);
-      setCurrentProfileId(profilesRes.currentProfileId);
-      // Close modal and clear input
+      // Import succeeded - close modal and show success first
       setShowImportModal(false);
       setImportJsonText('');
       Alert.alert('Success', `Profile "${result.profile.name}" imported successfully`);
+
+      // Refresh profiles list separately - don't show import failure if only refresh fails
+      try {
+        const profilesRes = await settingsClient.getProfiles();
+        setProfiles(profilesRes.profiles);
+        setCurrentProfileId(profilesRes.currentProfileId);
+      } catch (refreshError: any) {
+        console.error('[Settings] Failed to refresh profiles after import:', refreshError);
+        // Don't show error alert - import was successful, just log the refresh issue
+      }
     } catch (error: any) {
       console.error('[Settings] Failed to import profile:', error);
       Alert.alert('Import Failed', error.message || 'Failed to import profile');

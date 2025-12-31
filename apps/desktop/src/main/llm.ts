@@ -1712,26 +1712,67 @@ Return ONLY JSON per schema.`,
 
       const trimmedContent = contentText.trim()
 
-      // When agent claims it's done (needsMoreWork !== true) and verification is enabled,
-      // always use the LLM verifier to determine if truly complete - no hardcoded patterns
-      if (hasToolResultsInCurrentTurn && hasSubstantiveResponse && llmResponse.needsMoreWork !== true && config.mcpVerifyCompletionEnabled) {
-        if (isDebugLLM()) {
-          logLLM("Agent claims complete - running LLM verifier", {
-            hasToolResults: hasToolResultsInCurrentTurn,
-            responseLength: trimmedContent.length,
-            responsePreview: trimmedContent.substring(0, 100),
-          })
-        }
-
-        // Run verification to check if this is truly complete
-        const verification = await verifyCompletionWithFetch(
-          buildVerificationMessages(contentText),
-          config.mcpToolsProviderId
-        )
-
-        if (verification?.isComplete === true) {
+      // When agent claims it's done (needsMoreWork !== true) and has tool results + substantive response,
+      // determine if the task is complete
+      if (hasToolResultsInCurrentTurn && hasSubstantiveResponse && llmResponse.needsMoreWork !== true) {
+        if (config.mcpVerifyCompletionEnabled) {
+          // Use LLM verifier to determine if truly complete
           if (isDebugLLM()) {
-            logLLM("Verifier confirmed completion", { verification })
+            logLLM("Agent claims complete - running LLM verifier", {
+              hasToolResults: hasToolResultsInCurrentTurn,
+              responseLength: trimmedContent.length,
+              responsePreview: trimmedContent.substring(0, 100),
+            })
+          }
+
+          // Run verification to check if this is truly complete
+          const verification = await verifyCompletionWithFetch(
+            buildVerificationMessages(contentText),
+            config.mcpToolsProviderId
+          )
+
+          if (verification?.isComplete === true) {
+            if (isDebugLLM()) {
+              logLLM("Verifier confirmed completion", { verification })
+            }
+            finalContent = contentText
+            addMessage("assistant", contentText)
+            emit({
+              currentIteration: iteration,
+              maxIterations,
+              steps: progressSteps.slice(-3),
+              isComplete: true,
+              finalContent,
+              conversationHistory: formatConversationForProgress(conversationHistory),
+            })
+            break
+          } else {
+            // Verifier says not complete - agent intends to continue
+            if (isDebugLLM()) {
+              logLLM("Verifier says not complete - continuing agent loop", {
+                verification,
+                responsePreview: trimmedContent.substring(0, 100),
+              })
+            }
+            // Add the partial response to history and continue
+            if (trimmedContent.length > 0) {
+              addMessage("assistant", contentText)
+            }
+            // Reset noOpCount since the agent is actively working (just not calling tools)
+            // noOpCount was already incremented at the top of the !hasToolCalls block,
+            // but this shouldn't count as a no-op since the verifier confirms ongoing work
+            noOpCount = 0
+            continue
+          }
+        } else {
+          // Verification is disabled - complete directly when tools executed + substantive response
+          // This preserves the "tools executed + substantive response" completion behavior from #443
+          if (isDebugLLM()) {
+            logLLM("Completing without verification (disabled) - tools executed with substantive response", {
+              hasToolResults: hasToolResultsInCurrentTurn,
+              responseLength: trimmedContent.length,
+              responsePreview: trimmedContent.substring(0, 100),
+            })
           }
           finalContent = contentText
           addMessage("assistant", contentText)
@@ -1744,23 +1785,6 @@ Return ONLY JSON per schema.`,
             conversationHistory: formatConversationForProgress(conversationHistory),
           })
           break
-        } else {
-          // Verifier says not complete - agent intends to continue
-          if (isDebugLLM()) {
-            logLLM("Verifier says not complete - continuing agent loop", {
-              verification,
-              responsePreview: trimmedContent.substring(0, 100),
-            })
-          }
-          // Add the partial response to history and continue
-          if (trimmedContent.length > 0) {
-            addMessage("assistant", contentText)
-          }
-          // Reset noOpCount since the agent is actively working (just not calling tools)
-          // noOpCount was already incremented at the top of the !hasToolCalls block,
-          // but this shouldn't count as a no-op since the verifier confirms ongoing work
-          noOpCount = 0
-          continue
         }
       }
 

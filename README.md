@@ -10,6 +10,7 @@
 ## 🎬 Preview
 
 [Click here to see v1 launch video on youtube ](https://www.youtube.com/watch?v=A4oKYCaeaaw)
+<img width="2050" height="1564" alt="image" src="https://github.com/user-attachments/assets/a1e55c53-838f-414f-92e7-d752f74e7107" />
 
 https://github.com/user-attachments/assets/0c181c70-d1f1-4c5d-a6f5-a73147e75182
 

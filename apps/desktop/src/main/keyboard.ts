@@ -525,6 +525,13 @@ export function listenToKeyboardEvents() {
           config.customTextInputShortcut,
         )
 
+        // Helper to cancel any voice recording in progress when switching to text input
+        const cancelVoiceRecordingForTextInput = () => {
+          cancelRecordingTimer()
+          isHoldingCtrlKey = false
+          // Don't call finishRecording - we're switching to text input mode, not completing a recording
+        }
+
         if (
           config.textInputShortcut === "ctrl-t" &&
           e.data.key === "KeyT" &&
@@ -535,6 +542,7 @@ export function listenToKeyboardEvents() {
           if (isDebugKeybinds()) {
             logKeybinds("Text input triggered: Ctrl+T")
           }
+          cancelVoiceRecordingForTextInput()
           showPanelWindowAndShowTextInput()
           return
         }
@@ -548,6 +556,7 @@ export function listenToKeyboardEvents() {
           if (isDebugKeybinds()) {
             logKeybinds("Text input triggered: Ctrl+Shift+T")
           }
+          cancelVoiceRecordingForTextInput()
           showPanelWindowAndShowTextInput()
           return
         }
@@ -561,6 +570,7 @@ export function listenToKeyboardEvents() {
           if (isDebugKeybinds()) {
             logKeybinds("Text input triggered: Alt+T")
           }
+          cancelVoiceRecordingForTextInput()
           showPanelWindowAndShowTextInput()
           return
         }
@@ -587,6 +597,7 @@ export function listenToKeyboardEvents() {
             )
           }
           if (matches) {
+            cancelVoiceRecordingForTextInput()
             showPanelWindowAndShowTextInput()
             return
           }

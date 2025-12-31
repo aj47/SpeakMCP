@@ -1001,22 +1001,25 @@ export async function processTranscriptWithAgentMode(
       content:
         `You are a strict completion verifier. Determine if the user's original request has been fully satisfied in the conversation.
 
+CRITICAL RULE: If the agent's LAST response states intent to take an action (e.g., "Let me try...", "I'll now...", "Now I will...") but NO tool was actually called after that statement, mark as INCOMPLETE. The agent must EXECUTE the action, not just state intent.
+
 IMPORTANT: Mark as COMPLETE if ANY of these conditions are met:
-1. The request was successfully fulfilled with concrete actions/results
+1. The request was successfully fulfilled with concrete actions/results (tool was called AND result received)
 2. The agent correctly identified the request is IMPOSSIBLE (e.g., can't access private data, lacks permissions, requires unavailable resources)
 3. The agent is asking for CLARIFICATION or MORE INFORMATION needed to proceed (this is a valid completion - the ball is in the user's court)
-4. The agent has given the SAME RESPONSE multiple times (indicates a loop - accept the response as final)
+4. The agent has attempted the same action 3+ times with the same result (indicates a genuine loop - accept as final)
 
 Examples of VALID completions:
 - "I cannot access your Amazon purchase history. Please provide the product link."
 - "I don't have permission to access that database. Please provide credentials."
 - "Which file would you like me to edit? Please specify the path."
 - "I need more details about the feature you want. Can you describe it?"
+- Agent called a tool and got a successful result
 
-Only mark as INCOMPLETE if:
-- The agent can fulfill the request but hasn't yet
-- The agent is making progress but hasn't finished
-- The agent hasn't acknowledged the request at all
+Examples of INVALID completions (mark as INCOMPLETE):
+- Agent says "Let me try GUILT" but no tool call followed
+- Agent says "I'll check the page now" but no tool call followed
+- Agent is still making progress on a multi-step task
 
 Return ONLY JSON per schema.`,
     })
@@ -1706,32 +1709,55 @@ Return ONLY JSON per schema.`,
         ? contentText.trim().length > 0 && !isToolCallPlaceholder(contentText)
         : contentText.trim().length >= 10 && !isToolCallPlaceholder(contentText)
 
-      // Only treat as complete if:
-      // 1. Tools were executed for this turn
-      // 2. LLM provided a substantive response
-      // 3. needsMoreWork is NOT explicitly true (undefined is OK, means model didn't specify)
-      // If needsMoreWork === true, the model explicitly wants to continue working
-      if (hasToolResultsInCurrentTurn && hasSubstantiveResponse && llmResponse.needsMoreWork !== true) {
-        // Tools were already called for this request and LLM provided a real answer - treat as complete
+      const trimmedContent = contentText.trim()
+
+      // When agent claims it's done (needsMoreWork !== true) and verification is enabled,
+      // always use the LLM verifier to determine if truly complete - no hardcoded patterns
+      if (hasToolResultsInCurrentTurn && hasSubstantiveResponse && llmResponse.needsMoreWork !== true && config.mcpVerifyCompletionEnabled) {
         if (isDebugLLM()) {
-          logLLM("Treating as complete: tools were executed and LLM provided substantive response", {
+          logLLM("Agent claims complete - running LLM verifier", {
             hasToolResults: hasToolResultsInCurrentTurn,
-            responseLength: contentText.trim().length,
-            responsePreview: contentText.substring(0, 100),
-            needsMoreWork: llmResponse.needsMoreWork
+            responseLength: trimmedContent.length,
+            responsePreview: trimmedContent.substring(0, 100),
           })
         }
-        finalContent = contentText
-        addMessage("assistant", contentText)
-        emit({
-          currentIteration: iteration,
-          maxIterations,
-          steps: progressSteps.slice(-3),
-          isComplete: true,
-          finalContent,
-          conversationHistory: formatConversationForProgress(conversationHistory),
-        })
-        break
+
+        // Run verification to check if this is truly complete
+        const verification = await verifyCompletionWithFetch(
+          buildVerificationMessages(contentText),
+          config.mcpToolsProviderId
+        )
+
+        if (verification?.isComplete === true) {
+          if (isDebugLLM()) {
+            logLLM("Verifier confirmed completion", { verification })
+          }
+          finalContent = contentText
+          addMessage("assistant", contentText)
+          emit({
+            currentIteration: iteration,
+            maxIterations,
+            steps: progressSteps.slice(-3),
+            isComplete: true,
+            finalContent,
+            conversationHistory: formatConversationForProgress(conversationHistory),
+          })
+          break
+        } else {
+          // Verifier says not complete - agent intends to continue
+          if (isDebugLLM()) {
+            logLLM("Verifier says not complete - continuing agent loop", {
+              verification,
+              responsePreview: trimmedContent.substring(0, 100),
+            })
+          }
+          // Add the partial response to history and continue
+          if (trimmedContent.length > 0) {
+            addMessage("assistant", contentText)
+          }
+          // Don't increment noOpCount - the agent is still working
+          continue
+        }
       }
 
       // Nudge the model to either use tools or provide a complete answer.

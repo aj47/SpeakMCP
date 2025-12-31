@@ -1156,6 +1156,9 @@ export default function SettingsScreen({ navigation }: any) {
               multiline
               numberOfLines={8}
               textAlignVertical="top"
+              autoCorrect={false}
+              autoCapitalize="none"
+              spellCheck={false}
             />
 
             <View style={styles.importModalActions}>

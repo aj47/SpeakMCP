@@ -1755,7 +1755,10 @@ Return ONLY JSON per schema.`,
           if (trimmedContent.length > 0) {
             addMessage("assistant", contentText)
           }
-          // Don't increment noOpCount - the agent is still working
+          // Reset noOpCount since the agent is actively working (just not calling tools)
+          // noOpCount was already incremented at the top of the !hasToolCalls block,
+          // but this shouldn't count as a no-op since the verifier confirms ongoing work
+          noOpCount = 0
           continue
         }
       }

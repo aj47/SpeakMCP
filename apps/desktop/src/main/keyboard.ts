@@ -528,8 +528,27 @@ export function listenToKeyboardEvents() {
         // Helper to cancel any voice recording in progress when switching to text input
         const cancelVoiceRecordingForTextInput = () => {
           cancelRecordingTimer()
+          cancelMcpRecordingTimer()
+          cancelCustomRecordingTimer()
+          cancelCustomMcpTimer()
+          
+          // If a recording has already started, explicitly discard it
+          // stopRecordingAndHidePanelWindow sends stopRecording which sets isConfirmedRef=false,
+          // causing the recording to be discarded rather than processed
+          if (state.isRecording) {
+            // Reset recording state flags before stopping
+            state.isRecordingFromButtonClick = false
+            state.isRecordingMcpMode = false
+            // Send stop signal to discard the recording (this also hides the panel,
+            // but showPanelWindowAndShowTextInput will re-show it in text input mode)
+            const panelHandlers = getWindowRendererHandlers("panel")
+            panelHandlers?.stopRecording.send()
+          }
+          
           isHoldingCtrlKey = false
-          // Don't call finishRecording - we're switching to text input mode, not completing a recording
+          isHoldingCtrlAltKey = false
+          isHoldingCustomRecordingKey = false
+          isHoldingCustomMcpKey = false
         }
 
         if (

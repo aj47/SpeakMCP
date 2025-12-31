@@ -1004,7 +1004,7 @@ export async function processTranscriptWithAgentMode(
 CRITICAL RULE: If the agent's LAST response states intent to take an action (e.g., "Let me try...", "I'll now...", "Now I will...") but NO tool was actually called after that statement, mark as INCOMPLETE. The agent must EXECUTE the action, not just state intent.
 
 IMPORTANT: Mark as COMPLETE if ANY of these conditions are met:
-1. The request was successfully fulfilled with concrete actions/results (tool was called AND result received)
+1. The request was successfully fulfilled with concrete actions/results (either via tool execution OR a direct text answer for questions that don't require tools)
 2. The agent correctly identified the request is IMPOSSIBLE (e.g., can't access private data, lacks permissions, requires unavailable resources)
 3. The agent is asking for CLARIFICATION or MORE INFORMATION needed to proceed (this is a valid completion - the ball is in the user's court)
 4. The agent has attempted the same action 3+ times with the same result (indicates a genuine loop - accept as final)
@@ -1015,6 +1015,7 @@ Examples of VALID completions:
 - "Which file would you like me to edit? Please specify the path."
 - "I need more details about the feature you want. Can you describe it?"
 - Agent called a tool and got a successful result
+- Agent provided a direct text answer to a question that didn't require tools (e.g., explaining a concept, answering a factual question)
 
 Examples of INVALID completions (mark as INCOMPLETE):
 - Agent says "Let me try GUILT" but no tool call followed

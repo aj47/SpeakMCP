@@ -817,7 +817,9 @@ export async function processTranscriptWithAgentMode(
   // Use per-profile skills config if available, otherwise fall back to empty (no skills)
   const { skillsService } = await import("./skills-service")
   const enabledSkillIds = effectiveProfileSnapshot?.skillsConfig?.enabledSkillIds ?? []
+  logLLM(`[processTranscriptWithAgentMode] Loading skills for session ${currentSessionId}. enabledSkillIds: [${enabledSkillIds.join(', ')}]`)
   const skillsInstructions = skillsService.getEnabledSkillsInstructionsForProfile(enabledSkillIds)
+  logLLM(`[processTranscriptWithAgentMode] Skills instructions loaded: ${skillsInstructions ? `${skillsInstructions.length} chars` : 'none'}`)
 
   // Construct system prompt using the new approach
   const systemPrompt = constructSystemPrompt(

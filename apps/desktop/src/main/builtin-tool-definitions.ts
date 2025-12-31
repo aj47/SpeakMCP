@@ -167,6 +167,28 @@ export const builtinToolDefinitions: BuiltinToolDefinition[] = [
       required: [],
     },
   },
+  {
+    name: `${BUILTIN_SERVER_NAME}:execute_command`,
+    description: "Execute a shell command. If skillId is provided, the command runs in that skill's directory (where SKILL.md is located). This is the primary way for skills to run shell commands, scripts, and automation.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        command: {
+          type: "string",
+          description: "The shell command to execute (e.g., './server.sh &', 'npm install', 'npx tsx script.ts')",
+        },
+        skillId: {
+          type: "string",
+          description: "Optional skill ID to run the command in that skill's directory. Get skill IDs from the enabled skills in the system prompt.",
+        },
+        timeout: {
+          type: "number",
+          description: "Command timeout in milliseconds (default: 30000). Set to 0 for no timeout.",
+        },
+      },
+      required: ["command"],
+    },
+  },
 ]
 
 /**

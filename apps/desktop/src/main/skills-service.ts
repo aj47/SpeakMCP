@@ -4,6 +4,10 @@ import fs from "fs"
 import { AgentSkill, AgentSkillsData } from "@shared/types"
 import { randomUUID } from "crypto"
 import { logApp } from "./debug"
+import { exec } from "child_process"
+import { promisify } from "util"
+
+const execAsync = promisify(exec)
 
 /**
  * Common paths where SKILL.md files might be located in a GitHub repo
@@ -450,7 +454,16 @@ class SkillsService {
     }
 
     const skillsContent = enabledSkills.map(skill => {
+      // Include skill ID and source info for execute_command tool
+      const skillIdInfo = `**Skill ID:** \`${skill.id}\``
+      const sourceInfo = skill.filePath
+        ? (skill.filePath.startsWith("github:")
+            ? `**Source:** GitHub (${skill.filePath})`
+            : `**Source:** Local`)
+        : ""
+
       return `## Skill: ${skill.name}
+${skillIdInfo}${sourceInfo ? `\n${sourceInfo}` : ""}
 ${skill.description ? `*${skill.description}*\n` : ""}
 ${skill.instructions}`
     }).join("\n\n---\n\n")
@@ -458,7 +471,8 @@ ${skill.instructions}`
     return `
 # Active Agent Skills
 
-The following skills provide specialized instructions for specific tasks:
+The following skills provide specialized instructions for specific tasks.
+Use \`speakmcp-settings:execute_command\` with the skill's ID to run commands in the skill's directory.
 
 ${skillsContent}
 `
@@ -481,7 +495,16 @@ ${skillsContent}
     }
 
     const skillsContent = enabledSkills.map(skill => {
+      // Include skill ID and source info for execute_command tool
+      const skillIdInfo = `**Skill ID:** \`${skill.id}\``
+      const sourceInfo = skill.filePath
+        ? (skill.filePath.startsWith("github:")
+            ? `**Source:** GitHub (${skill.filePath})`
+            : `**Source:** Local`)
+        : ""
+
       return `## Skill: ${skill.name}
+${skillIdInfo}${sourceInfo ? `\n${sourceInfo}` : ""}
 ${skill.description ? `*${skill.description}*\n` : ""}
 ${skill.instructions}`
     }).join("\n\n---\n\n")
@@ -489,14 +512,15 @@ ${skill.instructions}`
     return `
 # Active Agent Skills
 
-The following skills provide specialized instructions for specific tasks:
+The following skills provide specialized instructions for specific tasks.
+Use \`speakmcp-settings:execute_command\` with the skill's ID to run commands in the skill's directory.
 
 ${skillsContent}
 `
   }
 
   /**
-   * Import a skill from a GitHub repository
+   * Import a skill from a GitHub repository by cloning it locally
    * @param repoIdentifier GitHub repo identifier (e.g., "owner/repo" or full URL)
    * @returns Object with imported skills and any errors encountered
    */
@@ -519,82 +543,127 @@ ${skillsContent}
     }
 
     const { owner, repo, path: subPath, ref } = parsed
-    const repoName = repo // Use repo name as skill name fallback
     logApp(`Importing skill from GitHub: ${owner}/${repo}${subPath ? `/${subPath}` : ""} (ref: ${ref})`)
 
-    // If a specific path is provided, try to find SKILL.md there
-    if (subPath) {
-      const pathsToTry = [
-        `${subPath}/SKILL.md`,
-        `${subPath}/skill.md`,
-        subPath.endsWith(".md") ? subPath : `${subPath}.md`,
-      ]
+    // Determine the local clone directory
+    // Use format: skillsFolder/owner--repo (e.g., skills/SawyerHood--dev-browser)
+    const cloneDir = path.join(skillsFolder, `${owner}--${repo}`)
+    const repoUrl = `https://github.com/${owner}/${repo}.git`
 
-      for (const filePath of pathsToTry) {
-        const content = await fetchGitHubRaw(owner, repo, ref, filePath)
-        if (content) {
-          try {
-            const githubPath = `github:${owner}/${repo}/${filePath}`
-            const skill = this.importSkillFromMarkdown(content, githubPath)
-            imported.push(skill)
-            logApp(`Imported skill from: ${filePath}`)
-            return { imported, errors }
-          } catch (error) {
-            errors.push(`Failed to parse ${filePath}: ${error instanceof Error ? error.message : String(error)}`)
-          }
-        }
-      }
-    }
-
-    // Try common SKILL.md locations
-    for (const pathTemplate of SKILL_MD_PATHS) {
-      const filePath = subPath
-        ? `${subPath}/${pathTemplate.replace("{name}", repoName)}`
-        : pathTemplate.replace("{name}", repoName)
-
-      const content = await fetchGitHubRaw(owner, repo, ref, filePath)
-      if (content) {
+    // Clone or update the repository
+    try {
+      if (fs.existsSync(cloneDir)) {
+        // Repository already exists, pull latest changes
+        logApp(`Updating existing clone at ${cloneDir}`)
         try {
-          const githubPath = `github:${owner}/${repo}/${filePath}`
-          const skill = this.importSkillFromMarkdown(content, githubPath)
-          imported.push(skill)
-          logApp(`Imported skill from: ${filePath}`)
-          return { imported, errors }
-        } catch (error) {
-          errors.push(`Failed to parse ${filePath}: ${error instanceof Error ? error.message : String(error)}`)
+          await execAsync(`git fetch origin && git checkout ${ref} && git pull origin ${ref}`, { cwd: cloneDir })
+        } catch (pullError) {
+          // If pull fails (e.g., detached HEAD), try harder reset
+          logApp(`Pull failed, attempting reset: ${pullError}`)
+          await execAsync(`git fetch origin && git checkout ${ref} && git reset --hard origin/${ref}`, { cwd: cloneDir })
+        }
+      } else {
+        // Clone the repository
+        logApp(`Cloning ${repoUrl} to ${cloneDir}`)
+        fs.mkdirSync(skillsFolder, { recursive: true })
+        await execAsync(`git clone --branch ${ref} --single-branch "${repoUrl}" "${cloneDir}"`)
+      }
+    } catch (gitError) {
+      const errorMsg = gitError instanceof Error ? gitError.message : String(gitError)
+      errors.push(`Failed to clone repository: ${errorMsg}`)
+      return { imported, errors }
+    }
+
+    // Now find SKILL.md files in the cloned repo
+    const searchBase = subPath ? path.join(cloneDir, subPath) : cloneDir
+
+    // Helper to import a skill from a local file
+    const importLocalSkill = (skillMdPath: string): boolean => {
+      try {
+        // Check if already imported by this path
+        if (this.getSkillByFilePath(skillMdPath)) {
+          logApp(`Skill already imported, skipping: ${skillMdPath}`)
+          return false
+        }
+
+        const content = fs.readFileSync(skillMdPath, "utf-8")
+        const skill = this.importSkillFromMarkdown(content, skillMdPath)
+        imported.push(skill)
+        logApp(`Imported skill from local clone: ${skillMdPath}`)
+        return true
+      } catch (error) {
+        errors.push(`Failed to parse ${skillMdPath}: ${error instanceof Error ? error.message : String(error)}`)
+        return false
+      }
+    }
+
+    // If a specific subPath was given, look for SKILL.md there first
+    if (subPath && fs.existsSync(searchBase)) {
+      const directPaths = [
+        path.join(searchBase, "SKILL.md"),
+        path.join(searchBase, "skill.md"),
+      ]
+      for (const p of directPaths) {
+        if (fs.existsSync(p)) {
+          importLocalSkill(p)
+          if (imported.length > 0) return { imported, errors }
         }
       }
     }
 
-    // Try to find skills in a "skills" directory
+    // Try common SKILL.md locations in the clone
+    for (const pathTemplate of SKILL_MD_PATHS) {
+      const checkPath = path.join(searchBase, pathTemplate.replace("{name}", repo))
+      if (fs.existsSync(checkPath)) {
+        importLocalSkill(checkPath)
+        if (imported.length > 0) return { imported, errors }
+      }
+    }
+
+    // Look in skills subdirectories
     const skillsDirs = ["skills", ".claude/skills", ".codex/skills"]
     for (const skillsDir of skillsDirs) {
-      const basePath = subPath ? `${subPath}/${skillsDir}` : skillsDir
-      const entries = await listGitHubDirectory(owner, repo, ref, basePath)
-
-      for (const entry of entries) {
-        const skillPath = `${basePath}/${entry}/SKILL.md`
-        const content = await fetchGitHubRaw(owner, repo, ref, skillPath)
-        if (content) {
-          try {
-            const githubPath = `github:${owner}/${repo}/${skillPath}`
-            // Check if already imported
-            if (this.getSkillByFilePath(githubPath)) {
-              logApp(`Skill already imported, skipping: ${skillPath}`)
-              continue
+      const skillsDirPath = path.join(searchBase, skillsDir)
+      if (fs.existsSync(skillsDirPath) && fs.statSync(skillsDirPath).isDirectory()) {
+        const entries = fs.readdirSync(skillsDirPath)
+        for (const entry of entries) {
+          const entryPath = path.join(skillsDirPath, entry)
+          if (fs.statSync(entryPath).isDirectory()) {
+            const skillMdPath = path.join(entryPath, "SKILL.md")
+            if (fs.existsSync(skillMdPath)) {
+              importLocalSkill(skillMdPath)
             }
-            const skill = this.importSkillFromMarkdown(content, githubPath)
-            imported.push(skill)
-            logApp(`Imported skill from: ${skillPath}`)
-          } catch (error) {
-            errors.push(`Failed to parse ${skillPath}: ${error instanceof Error ? error.message : String(error)}`)
           }
         }
+        if (imported.length > 0) return { imported, errors }
       }
+    }
 
-      if (imported.length > 0) {
-        return { imported, errors }
+    // Last resort: search for any SKILL.md in the clone
+    const findSkillMdFiles = (dir: string, depth = 0): string[] => {
+      if (depth > 3) return [] // Limit search depth
+      const results: string[] = []
+      try {
+        const entries = fs.readdirSync(dir)
+        for (const entry of entries) {
+          if (entry.startsWith(".") || entry === "node_modules") continue
+          const fullPath = path.join(dir, entry)
+          const stat = fs.statSync(fullPath)
+          if (stat.isFile() && (entry === "SKILL.md" || entry === "skill.md")) {
+            results.push(fullPath)
+          } else if (stat.isDirectory()) {
+            results.push(...findSkillMdFiles(fullPath, depth + 1))
+          }
+        }
+      } catch {
+        // Ignore permission errors
       }
+      return results
+    }
+
+    const allSkillFiles = findSkillMdFiles(searchBase)
+    for (const skillFile of allSkillFiles) {
+      importLocalSkill(skillFile)
     }
 
     if (imported.length === 0 && errors.length === 0) {
@@ -602,6 +671,90 @@ ${skillsContent}
     }
 
     return { imported, errors }
+  }
+
+  /**
+   * Upgrade a GitHub-hosted skill to a local clone.
+   * This clones the repository and updates the skill's filePath to point to the local SKILL.md.
+   * @param skillId The ID of the skill to upgrade
+   * @returns The upgraded skill, or throws if upgrade fails
+   */
+  async upgradeGitHubSkillToLocal(skillId: string): Promise<AgentSkill> {
+    const skill = this.getSkill(skillId)
+    if (!skill) {
+      throw new Error(`Skill with id ${skillId} not found`)
+    }
+
+    if (!skill.filePath?.startsWith("github:")) {
+      throw new Error(`Skill ${skill.name} is not a GitHub-hosted skill`)
+    }
+
+    // Parse the github: path format: github:owner/repo/path/to/SKILL.md
+    const githubPath = skill.filePath.replace("github:", "")
+    const parts = githubPath.split("/")
+    if (parts.length < 2) {
+      throw new Error(`Invalid GitHub path format: ${skill.filePath}`)
+    }
+
+    const owner = parts[0]
+    const repo = parts[1]
+    const subPath = parts.slice(2, -1).join("/") // Everything except owner, repo, and SKILL.md filename
+
+    // Clone the repository
+    const cloneDir = path.join(skillsFolder, `${owner}--${repo}`)
+    const repoUrl = `https://github.com/${owner}/${repo}.git`
+
+    try {
+      if (fs.existsSync(cloneDir)) {
+        // Repository already exists, pull latest
+        logApp(`Updating existing clone at ${cloneDir}`)
+        await execAsync(`git pull`, { cwd: cloneDir })
+      } else {
+        // Clone the repository
+        logApp(`Cloning ${repoUrl} to ${cloneDir}`)
+        fs.mkdirSync(skillsFolder, { recursive: true })
+        await execAsync(`git clone "${repoUrl}" "${cloneDir}"`)
+      }
+    } catch (gitError) {
+      throw new Error(`Failed to clone repository: ${gitError instanceof Error ? gitError.message : String(gitError)}`)
+    }
+
+    // Find the SKILL.md in the local clone
+    const localSkillPath = path.join(cloneDir, subPath, "SKILL.md")
+    if (!fs.existsSync(localSkillPath)) {
+      throw new Error(`SKILL.md not found at expected path: ${localSkillPath}`)
+    }
+
+    // Update the skill's filePath to the local path
+    const updatedSkill = this.updateSkillFilePath(skillId, localSkillPath)
+    logApp(`Upgraded skill ${skill.name} to local clone: ${localSkillPath}`)
+
+    return updatedSkill
+  }
+
+  /**
+   * Update a skill's file path (internal method for upgrading GitHub skills)
+   */
+  private updateSkillFilePath(id: string, newFilePath: string): AgentSkill {
+    if (!this.skillsData) {
+      this.loadSkills()
+    }
+
+    const skill = this.getSkill(id)
+    if (!skill) {
+      throw new Error(`Skill with id ${id} not found`)
+    }
+
+    const updatedSkill = {
+      ...skill,
+      filePath: newFilePath,
+      updatedAt: Date.now(),
+    }
+
+    const index = this.skillsData!.skills.findIndex(s => s.id === id)
+    this.skillsData!.skills[index] = updatedSkill
+    this.saveSkills()
+    return updatedSkill
   }
 
   /**

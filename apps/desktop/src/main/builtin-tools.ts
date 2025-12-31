@@ -18,6 +18,11 @@ import { mcpService, type MCPTool, type MCPToolResult } from "./mcp-service"
 import { agentSessionTracker } from "./agent-session-tracker"
 import { agentSessionStateManager, toolApprovalManager } from "./state"
 import { emergencyStopAll } from "./emergency-stop"
+import { exec } from "child_process"
+import { promisify } from "util"
+import path from "path"
+
+const execAsync = promisify(exec)
 
 // Re-export from the dependency-free definitions module for backward compatibility
 // This breaks the circular dependency: profile-service -> builtin-tool-definitions (no cycle)
@@ -645,6 +650,121 @@ const toolHandlers: Record<string, ToolHandler> = {
         },
       ],
       isError: false,
+    }
+  },
+
+  execute_command: async (args: Record<string, unknown>): Promise<MCPToolResult> => {
+    const { skillsService } = await import("./skills-service")
+
+    // Validate required command parameter
+    if (!args.command || typeof args.command !== "string") {
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success: false, error: "command parameter is required and must be a string" }) }],
+        isError: true,
+      }
+    }
+
+    const command = args.command as string
+    const skillId = args.skillId as string | undefined
+    const timeout = typeof args.timeout === "number" ? args.timeout : 30000
+
+    // Determine the working directory
+    let cwd: string | undefined
+    let skillName: string | undefined
+
+    if (skillId) {
+      // Find the skill and get its directory
+      let skill = skillsService.getSkill(skillId)
+      if (!skill) {
+        return {
+          content: [{ type: "text", text: JSON.stringify({ success: false, error: `Skill not found: ${skillId}` }) }],
+          isError: true,
+        }
+      }
+
+      if (!skill.filePath) {
+        return {
+          content: [{ type: "text", text: JSON.stringify({ success: false, error: `Skill has no file path (not imported from disk): ${skill.name}` }) }],
+          isError: true,
+        }
+      }
+
+      // For local files, use the directory containing SKILL.md
+      // For GitHub skills, automatically upgrade to local clone
+      if (skill.filePath.startsWith("github:")) {
+        try {
+          // Dynamically import skills-service to avoid circular dependency
+          const { skillsService: skillsSvc } = await import("./skills-service")
+          skill = await skillsSvc.upgradeGitHubSkillToLocal(skillId)
+        } catch (upgradeError) {
+          return {
+            content: [{ type: "text", text: JSON.stringify({ success: false, error: `Failed to upgrade GitHub skill to local: ${upgradeError instanceof Error ? upgradeError.message : String(upgradeError)}` }) }],
+            isError: true,
+          }
+        }
+      }
+
+      cwd = path.dirname(skill.filePath!)
+      skillName = skill.name
+    }
+
+    try {
+      const execOptions: { cwd?: string; timeout?: number; maxBuffer?: number; shell?: string } = {
+        maxBuffer: 10 * 1024 * 1024, // 10MB buffer for large outputs
+        shell: process.platform === "win32" ? "cmd.exe" : "/bin/bash",
+      }
+
+      if (cwd) {
+        execOptions.cwd = cwd
+      }
+
+      if (timeout > 0) {
+        execOptions.timeout = timeout
+      }
+
+      const { stdout, stderr } = await execAsync(command, execOptions)
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({
+              success: true,
+              command,
+              cwd: cwd || process.cwd(),
+              skillName,
+              stdout: stdout || "",
+              stderr: stderr || "",
+            }, null, 2),
+          },
+        ],
+        isError: false,
+      }
+    } catch (error: any) {
+      // exec errors include stdout/stderr in the error object
+      const stdout = error.stdout || ""
+      const stderr = error.stderr || ""
+      const errorMessage = error.message || String(error)
+      const exitCode = error.code
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({
+              success: false,
+              command,
+              cwd: cwd || process.cwd(),
+              skillName,
+              error: errorMessage,
+              exitCode,
+              stdout,
+              stderr,
+            }, null, 2),
+          },
+        ],
+        isError: true,
+      }
     }
   },
 }

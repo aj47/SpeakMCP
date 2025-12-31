@@ -184,6 +184,7 @@ async function processWithAgentMode(
         systemPrompt: currentProfile.systemPrompt,
         mcpServerConfig: currentProfile.mcpServerConfig,
         modelConfig: currentProfile.modelConfig,
+        skillsConfig: currentProfile.skillsConfig,
       }
     }
   }
@@ -1326,6 +1327,7 @@ export const router = {
             systemPrompt: currentProfile.systemPrompt,
             mcpServerConfig: currentProfile.mcpServerConfig,
             modelConfig: currentProfile.modelConfig,
+            skillsConfig: currentProfile.skillsConfig,
           }
         }
       }

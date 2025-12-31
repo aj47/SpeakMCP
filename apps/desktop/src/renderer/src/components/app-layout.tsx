@@ -191,7 +191,7 @@ export const Component = () => {
               </button>
 
               {settingsExpanded && (
-                <div className="mt-1 grid gap-0.5 pl-2 text-sm">
+                <div className="mt-1 grid gap-0.5 text-sm">
                   {settingsNavLinks.map(renderNavLink)}
                 </div>
               )}

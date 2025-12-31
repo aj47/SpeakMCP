@@ -13,7 +13,27 @@ export const TILE_DIMENSIONS = {
   },
 } as const
 
-const STORAGE_KEY_PREFIX = "speakmcp-resizable-"
+export const STORAGE_KEY_PREFIX = "speakmcp-resizable-"
+
+/**
+ * Clears all persisted tile sizes from localStorage.
+ * Returns the number of entries cleared.
+ */
+export function clearAllPersistedSizes(): number {
+  try {
+    const keysToRemove: string[] = []
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i)
+      if (key && key.startsWith(STORAGE_KEY_PREFIX)) {
+        keysToRemove.push(key)
+      }
+    }
+    keysToRemove.forEach(key => localStorage.removeItem(key))
+    return keysToRemove.length
+  } catch {
+    return 0
+  }
+}
 
 export interface UseResizableOptions {
   initialWidth?: number

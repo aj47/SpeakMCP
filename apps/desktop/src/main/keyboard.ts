@@ -525,6 +525,33 @@ export function listenToKeyboardEvents() {
           config.customTextInputShortcut,
         )
 
+        // Helper to cancel any voice recording in progress when switching to text input
+        const cancelVoiceRecordingForTextInput = () => {
+          cancelRecordingTimer()
+          cancelMcpRecordingTimer()
+          cancelCustomRecordingTimer()
+          cancelCustomMcpTimer()
+          
+          // If a recording has already started, explicitly discard it
+          // stopRecordingAndHidePanelWindow sends stopRecording which sets isConfirmedRef=false,
+          // causing the recording to be discarded rather than processed
+          if (state.isRecording) {
+            // Reset recording state flags before stopping
+            state.isRecordingFromButtonClick = false
+            state.isRecordingMcpMode = false
+            state.isToggleRecordingActive = false
+            // Send stop signal to discard the recording
+            // Note: This only discards the blob; showPanelWindowAndShowTextInput will show the panel in text input mode
+            const panelHandlers = getWindowRendererHandlers("panel")
+            panelHandlers?.stopRecording.send()
+          }
+          
+          isHoldingCtrlKey = false
+          isHoldingCtrlAltKey = false
+          isHoldingCustomRecordingKey = false
+          isHoldingCustomMcpKey = false
+        }
+
         if (
           config.textInputShortcut === "ctrl-t" &&
           e.data.key === "KeyT" &&
@@ -535,6 +562,7 @@ export function listenToKeyboardEvents() {
           if (isDebugKeybinds()) {
             logKeybinds("Text input triggered: Ctrl+T")
           }
+          cancelVoiceRecordingForTextInput()
           showPanelWindowAndShowTextInput()
           return
         }
@@ -548,6 +576,7 @@ export function listenToKeyboardEvents() {
           if (isDebugKeybinds()) {
             logKeybinds("Text input triggered: Ctrl+Shift+T")
           }
+          cancelVoiceRecordingForTextInput()
           showPanelWindowAndShowTextInput()
           return
         }
@@ -561,6 +590,7 @@ export function listenToKeyboardEvents() {
           if (isDebugKeybinds()) {
             logKeybinds("Text input triggered: Alt+T")
           }
+          cancelVoiceRecordingForTextInput()
           showPanelWindowAndShowTextInput()
           return
         }
@@ -587,6 +617,7 @@ export function listenToKeyboardEvents() {
             )
           }
           if (matches) {
+            cancelVoiceRecordingForTextInput()
             showPanelWindowAndShowTextInput()
             return
           }

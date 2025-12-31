@@ -539,8 +539,8 @@ export function listenToKeyboardEvents() {
             // Reset recording state flags before stopping
             state.isRecordingFromButtonClick = false
             state.isRecordingMcpMode = false
-            // Send stop signal to discard the recording (this also hides the panel,
-            // but showPanelWindowAndShowTextInput will re-show it in text input mode)
+            // Send stop signal to discard the recording
+            // Note: This only discards the blob; showPanelWindowAndShowTextInput will show the panel in text input mode
             const panelHandlers = getWindowRendererHandlers("panel")
             panelHandlers?.stopRecording.send()
           }

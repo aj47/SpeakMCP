@@ -4,7 +4,7 @@ import { useParams } from "react-router-dom"
 import { tipcClient } from "@renderer/lib/tipc-client"
 import { useAgentStore } from "@renderer/stores"
 import { SessionGrid, SessionTileWrapper } from "@renderer/components/session-grid"
-import { clearAllPersistedSizes } from "@renderer/hooks/use-resizable"
+import { clearPersistedSize } from "@renderer/hooks/use-resizable"
 import { AgentProgress } from "@renderer/components/agent-progress"
 import { MessageCircle, Mic, Plus, Calendar, Trash2, Search, ChevronDown, FolderOpen, CheckCircle2, LayoutGrid, Kanban, RotateCcw } from "lucide-react"
 import { Button } from "@renderer/components/ui/button"
@@ -403,7 +403,7 @@ export function Component() {
   }
 
   const handleResetTileLayout = useCallback(() => {
-    clearAllPersistedSizes()
+    clearPersistedSize("session-tile")
     setTileResetKey(prev => prev + 1)
     toast.success("Tile sizes reset to default")
   }, [])

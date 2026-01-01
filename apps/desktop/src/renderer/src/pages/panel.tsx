@@ -87,7 +87,7 @@ export function Component() {
     .filter(progress => progress && !progress.isSnoozed && !progress.isComplete).length
 
   // Count all visible sessions (including completed but not snoozed) for overlay display
-  // Also count the focused session if it exists (even if snoozed) since user explicitly selected it
+  // Note: focused session exception is handled separately in anyVisibleSessions below
   const visibleSessionCount = Array.from(agentProgressById?.values() ?? [])
     .filter(progress => progress && !progress.isSnoozed).length
   const hasMultipleSessions = visibleSessionCount > 1

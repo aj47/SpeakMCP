@@ -13,7 +13,26 @@ export const TILE_DIMENSIONS = {
   },
 } as const
 
-const STORAGE_KEY_PREFIX = "speakmcp-resizable-"
+export const STORAGE_KEY_PREFIX = "speakmcp-resizable-"
+
+/**
+ * Clears persisted sizes from localStorage for a specific storage key.
+ * @param storageKey - The specific storage key to clear (without the prefix).
+ *                     For example, "session-tile" clears "speakmcp-resizable-session-tile".
+ * Returns true if the entry was cleared, false otherwise.
+ */
+export function clearPersistedSize(storageKey: string): boolean {
+  try {
+    const fullKey = STORAGE_KEY_PREFIX + storageKey
+    if (localStorage.getItem(fullKey) !== null) {
+      localStorage.removeItem(fullKey)
+      return true
+    }
+    return false
+  } catch {
+    return false
+  }
+}
 
 export interface UseResizableOptions {
   initialWidth?: number

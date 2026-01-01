@@ -4,8 +4,9 @@ import { useParams } from "react-router-dom"
 import { tipcClient } from "@renderer/lib/tipc-client"
 import { useAgentStore } from "@renderer/stores"
 import { SessionGrid, SessionTileWrapper } from "@renderer/components/session-grid"
+import { clearPersistedSize } from "@renderer/hooks/use-resizable"
 import { AgentProgress } from "@renderer/components/agent-progress"
-import { MessageCircle, Mic, Plus, Calendar, Trash2, Search, ChevronDown, FolderOpen, CheckCircle2, LayoutGrid, Kanban } from "lucide-react"
+import { MessageCircle, Mic, Plus, Calendar, Trash2, Search, ChevronDown, FolderOpen, CheckCircle2, LayoutGrid, Kanban, RotateCcw } from "lucide-react"
 import { Button } from "@renderer/components/ui/button"
 import { Input } from "@renderer/components/ui/input"
 import { Card, CardContent } from "@renderer/components/ui/card"
@@ -76,6 +77,7 @@ export function Component() {
   const [pastSessionsCount, setPastSessionsCount] = useState(INITIAL_PAST_SESSIONS)
   const [searchQuery, setSearchQuery] = useState("")
   const [showDeleteAllDialog, setShowDeleteAllDialog] = useState(false)
+  const [tileResetKey, setTileResetKey] = useState(0)
   const deleteConversationMutation = useDeleteConversationMutation()
   const deleteAllConversationsMutation = useDeleteAllConversationsMutation()
 
@@ -400,6 +402,12 @@ export function Component() {
     }
   }
 
+  const handleResetTileLayout = useCallback(() => {
+    clearPersistedSize("session-tile")
+    setTileResetKey(prev => prev + 1)
+    toast.success("Tile sizes reset to default")
+  }, [])
+
   // Count inactive (completed) sessions
   const inactiveSessionCount = useMemo(() => {
     return allProgressEntries.filter(([_, progress]) => progress?.isComplete).length
@@ -455,6 +463,18 @@ export function Component() {
                     <Kanban className="h-4 w-4" />
                   </Button>
                 </div>
+                {viewMode === "grid" && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleResetTileLayout}
+                    className="gap-2 text-muted-foreground hover:text-foreground"
+                    title="Reset all tile sizes to default dimensions"
+                  >
+                    <RotateCcw className="h-4 w-4" />
+                    Reset Layout
+                  </Button>
+                )}
                 {inactiveSessionCount > 0 && (
                   <Button
                     variant="ghost"
@@ -481,7 +501,7 @@ export function Component() {
                 onDismissPendingContinuation={handleDismissPendingContinuation}
               />
             ) : (
-              <SessionGrid sessionCount={allProgressEntries.length + (pendingProgress ? 1 : 0)}>
+              <SessionGrid sessionCount={allProgressEntries.length + (pendingProgress ? 1 : 0)} resetKey={tileResetKey}>
                 {/* Pending continuation tile first */}
                 {pendingProgress && pendingSessionId && (
                   <SessionTileWrapper

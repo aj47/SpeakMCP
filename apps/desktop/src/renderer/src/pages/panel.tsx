@@ -87,6 +87,7 @@ export function Component() {
     .filter(progress => progress && !progress.isSnoozed && !progress.isComplete).length
 
   // Count all visible sessions (including completed but not snoozed) for overlay display
+  // Also count the focused session if it exists (even if snoozed) since user explicitly selected it
   const visibleSessionCount = Array.from(agentProgressById?.values() ?? [])
     .filter(progress => progress && !progress.isSnoozed).length
   const hasMultipleSessions = visibleSessionCount > 1
@@ -95,10 +96,13 @@ export function Component() {
   // Only consider non-snoozed AND non-completed sessions as "active" for mode switching
   const anyActiveNonSnoozed = activeSessionCount > 0
   // Any non-snoozed session (including completed) should show the overlay
-  const anyVisibleSessions = visibleSessionCount > 0
+  // Also show overlay if there's a focused session (user explicitly selected it, even if snoozed)
+  const anyVisibleSessions = visibleSessionCount > 0 || (focusedSessionId && agentProgressById?.has(focusedSessionId))
   const displayProgress = useMemo(() => {
-    if (agentProgress && !agentProgress.isSnoozed) return agentProgress
-    // pick first non-snoozed session if focused one is missing/snoozed
+    // If user has explicitly focused a session, show it regardless of snoozed state
+    // This fixes the bug where clicking a completed snoozed session in kanban shows blank panel
+    if (agentProgress) return agentProgress
+    // pick first non-snoozed session if focused one is missing
     const entry = Array.from(agentProgressById?.values() ?? []).find(p => p && !p.isSnoozed)
     return entry || null
   }, [agentProgress, agentProgressById])

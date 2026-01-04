@@ -27,10 +27,6 @@ module.exports = {
     executableName: "speakmcp",
     target: [
       {
-        target: "nsis",
-        arch: ["x64"]
-      },
-      {
         target: "portable",
         arch: ["x64"]
       }
@@ -53,7 +49,7 @@ module.exports = {
     ]
   },
   nsis: {
-    artifactName: "${name}-${version}-setup.${ext}",
+    artifactName: "${productName}-${version}-setup.${ext}",
     shortcutName: "${productName}",
     uninstallDisplayName: "${productName}",
     createDesktopShortcut: "always",

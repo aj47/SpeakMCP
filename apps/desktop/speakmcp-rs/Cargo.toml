@@ -4,10 +4,18 @@ version = "1.1.0"
 edition = "2021"
 
 [dependencies]
-rdev = "0.5.3"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 enigo = "0.5.0"
+
+# For macOS/Windows, use rdev (native APIs)
+[target.'cfg(not(target_os = "linux"))'.dependencies]
+rdev = "0.5.3"
+
+# For Linux, use evdev directly (works on both X11 and Wayland)
+# No X11 dependencies - pure evdev access
+[target.'cfg(target_os = "linux")'.dependencies]
+evdev = "0.12"
 
 [profile.release]
 strip = true

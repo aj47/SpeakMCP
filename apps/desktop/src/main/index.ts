@@ -29,6 +29,18 @@ if (process.env.REMOTE_DEBUGGING_PORT) {
   app.commandLine.appendSwitch('remote-debugging-port', process.env.REMOTE_DEBUGGING_PORT)
 }
 
+// Linux/Wayland GPU compatibility fixes
+// These must be set before app.whenReady()
+if (process.platform === 'linux') {
+  // Enable Ozone platform for native Wayland support
+  app.commandLine.appendSwitch('enable-features', 'UseOzonePlatform,WaylandWindowDecorations')
+  app.commandLine.appendSwitch('ozone-platform-hint', 'auto')
+  // Disable GPU acceleration to avoid GBM/EGL issues on some Wayland compositors
+  app.commandLine.appendSwitch('disable-gpu')
+  // Use software rendering
+  app.commandLine.appendSwitch('disable-software-rasterizer')
+}
+
 registerServeSchema()
 
 app.whenReady().then(() => {

@@ -218,7 +218,7 @@ module.exports = {
     ]
   },
   deb: {
-    artifactName: "${name}_${version}_${arch}.${ext}",
+    artifactName: "${productName}_${version}_${arch}.${ext}",
     depends: [
       "libgtk-3-0",
       "libnotify4",
@@ -238,7 +238,7 @@ module.exports = {
     afterRemove: "build/linux/postrm.sh",
   },
   appImage: {
-    artifactName: "${name}-${version}.${ext}",
+    artifactName: "${productName}-${version}.${ext}",
   },
   npmRebuild: false,
   // After packing, clean up unnecessary files

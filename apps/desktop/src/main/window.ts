@@ -92,8 +92,20 @@ function createBaseWindow({
 
   if (showWhenReady) {
     win.on("ready-to-show", () => {
+      logUI(`[WINDOW ${_label}] ready-to-show event fired`)
       win.show()
     })
+
+    // Fallback for Linux/Wayland where ready-to-show may not fire reliably
+    if (process.platform === "linux") {
+      win.webContents.on("did-finish-load", () => {
+        logUI(`[WINDOW ${_label}] did-finish-load event fired (Linux fallback)`)
+        if (!win.isVisible()) {
+          logUI(`[WINDOW ${_label}] Window not visible, forcing show`)
+          win.show()
+        }
+      })
+    }
   }
 
   win.on("close", () => {
@@ -121,8 +133,10 @@ export function createMainWindow({ url }: { url?: string } = {}) {
   const win = createBaseWindow({
     id: "main",
     url,
+    showWhenReady: true,
     windowOptions: {
-      titleBarStyle: "hiddenInset",
+      // titleBarStyle: "hiddenInset" is macOS-only, causes issues on Linux/Wayland
+      ...(process.platform === "darwin" && { titleBarStyle: "hiddenInset" as const }),
     },
   })
 
@@ -150,8 +164,10 @@ export function createSetupWindow() {
   const win = createBaseWindow({
     id: "setup",
     url: "/setup",
+    showWhenReady: true,
     windowOptions: {
-      titleBarStyle: "hiddenInset",
+      // titleBarStyle: "hiddenInset" is macOS-only, causes issues on Linux/Wayland
+      ...(process.platform === "darwin" && { titleBarStyle: "hiddenInset" as const }),
       width: 800,
       height: 600,
       resizable: false,
@@ -392,7 +408,12 @@ export function createPanelWindow() {
     url: "/panel",
     showWhenReady: false,
     windowOptions: {
-      hiddenInMissionControl: true,
+      // macOS-only options
+      ...(process.platform === "darwin" && {
+        hiddenInMissionControl: true,
+        visualEffectState: "active" as const,
+        vibrancy: "under-window" as const,
+      }),
       skipTaskbar: true,
       closable: false,
       maximizable: false,
@@ -408,10 +429,8 @@ export function createPanelWindow() {
       minWidth: minWidth, // Ensure minimum waveform width
       minHeight: WAVEFORM_MIN_HEIGHT, // Allow compact waveform panel with reduced negative space
       resizable: true, // Enable resizing
-      focusable: false,
+      focusable: process.platform === "linux" ? true : false, // Linux needs focusable for window to display
 
-      visualEffectState: "active",
-      vibrancy: "under-window",
       alwaysOnTop: true,
       x: position.x,
       y: position.y,

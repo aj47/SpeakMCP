@@ -184,16 +184,29 @@ export function SessionTile({
     return `Session ${session.id.substring(0, 8)}`
   }
 
+  // Extended message type to include error messages for display
+  type DisplayMessage = {
+    role: "user" | "assistant" | "tool" | "error"
+    content: string
+    toolCalls?: { name: string; arguments: Record<string, unknown> }[]
+    toolResults?: { success: boolean; content: string; error?: string }[]
+    timestamp?: number
+    id?: string
+  }
+
   // Get conversation messages to display, integrating session error message chronologically
-  const messages = React.useMemo(() => {
-    const baseMessages = progress?.conversationHistory || []
+  const messages = React.useMemo((): DisplayMessage[] => {
+    const baseMessages: DisplayMessage[] = (progress?.conversationHistory || []).map(m => ({
+      ...m,
+      role: m.role as "user" | "assistant" | "tool"
+    }))
 
     // If there's a session error message, integrate it into the messages
     if (session.errorMessage) {
       // Use session.startTime as fallback to ensure stable timestamp for React key generation
       // (Date.now() would create non-deterministic keys on each render)
-      const errorEntry = {
-        role: "error" as const,
+      const errorEntry: DisplayMessage = {
+        role: "error",
         content: session.errorMessage,
         timestamp: session.endTime || session.startTime,
         id: `error-${session.id}`, // Stable unique ID for error messages

@@ -966,7 +966,7 @@ export const router = {
       )
       form.append(
         "model",
-        config.sttProviderId === "groq" ? "whisper-large-v3" : "whisper-1",
+        config.sttProviderId === "groq" ? "whisper-large-v3-turbo" : "whisper-1",
       )
       form.append("response_format", "json")
 
@@ -1240,7 +1240,7 @@ export const router = {
             )
             form.append(
               "model",
-              config.sttProviderId === "groq" ? "whisper-large-v3" : "whisper-1",
+              config.sttProviderId === "groq" ? "whisper-large-v3-turbo" : "whisper-1",
             )
             form.append("response_format", "json")
 
@@ -1411,7 +1411,7 @@ export const router = {
       )
       form.append(
         "model",
-        config.sttProviderId === "groq" ? "whisper-large-v3" : "whisper-1",
+        config.sttProviderId === "groq" ? "whisper-large-v3-turbo" : "whisper-1",
       )
       form.append("response_format", "json")
 

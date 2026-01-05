@@ -205,11 +205,15 @@ fn evdev_key_to_rdev_name(key: evdev::Key) -> String {
 fn start_keyboard_listener() -> Result<(), Box<dyn std::error::Error>> {
     use evdev::{Device, Key};
     use std::fs;
+    use std::path::PathBuf;
+    use std::sync::mpsc;
+    use std::thread;
 
     let input_dir = "/dev/input";
     let mut last_error: Option<String> = None;
+    let mut keyboard_devices: Vec<(PathBuf, Device)> = Vec::new();
 
-    // Enumerate devices in /dev/input/ to find keyboards
+    // Enumerate devices in /dev/input/ to find ALL keyboards
     let entries = fs::read_dir(input_dir)
         .map_err(|e| format!("Cannot access {}: {}", input_dir, e))?;
 
@@ -225,16 +229,15 @@ fn start_keyboard_listener() -> Result<(), Box<dyn std::error::Error>> {
         // Try to open the device
         match Device::open(&path) {
             Ok(device) => {
-                // Check if this device has keyboard capabilities (has letter keys)
+                // Check if this device has keyboard capabilities (has letter keys or modifier keys)
                 if device.supported_keys().map_or(false, |keys| {
-                    keys.contains(Key::KEY_A) || keys.contains(Key::KEY_SPACE)
+                    keys.contains(Key::KEY_A) || keys.contains(Key::KEY_SPACE) ||
+                    keys.contains(Key::KEY_LEFTCTRL) || keys.contains(Key::KEY_LEFTALT)
                 }) {
-                    eprintln!("Listening on keyboard: {} ({})",
+                    eprintln!("Found keyboard: {} ({})",
                         device.name().unwrap_or("Unknown"),
                         path.display());
-
-                    // Start listening loop on this device
-                    return listen_keyboard_device(device);
+                    keyboard_devices.push((path.clone(), device));
                 }
             }
             Err(e) => {
@@ -246,13 +249,47 @@ fn start_keyboard_listener() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // No keyboard found - provide helpful error message
-    if let Some(err) = last_error {
-        eprintln!("!error: PermissionDenied - User must be in 'input' group");
-        eprintln!("Run: sudo usermod -aG input $USER");
-        eprintln!("Then log out and log back in (or reboot)");
-        return Err(format!("Failed to access keyboard devices: {}", err).into());
+    if keyboard_devices.is_empty() {
+        if let Some(err) = last_error {
+            eprintln!("!error: PermissionDenied - User must be in 'input' group");
+            eprintln!("Run: sudo usermod -aG input $USER");
+            eprintln!("Then log out and log back in (or reboot)");
+            return Err(format!("Failed to access keyboard devices: {}", err).into());
+        }
+        return Err("No keyboard device found in /dev/input/".into());
     }
-    Err("No keyboard device found in /dev/input/".into())
+
+    eprintln!("Listening on {} keyboard device(s)", keyboard_devices.len());
+
+    // If only one keyboard, no need for threading
+    if keyboard_devices.len() == 1 {
+        let (_, device) = keyboard_devices.into_iter().next().unwrap();
+        return listen_keyboard_device(device);
+    }
+
+    // Multiple keyboards: spawn a thread for each and use a channel to communicate errors
+    let (tx, rx) = mpsc::channel::<String>();
+
+    for (path, device) in keyboard_devices {
+        let tx = tx.clone();
+        let path_str = path.display().to_string();
+        thread::spawn(move || {
+            if let Err(e) = listen_keyboard_device(device) {
+                let _ = tx.send(format!("Error on {}: {}", path_str, e));
+            }
+        });
+    }
+
+    // Drop our sender so rx.recv() will return when all threads have finished
+    drop(tx);
+
+    // Wait for the first error (or block forever if all devices work fine)
+    // This is the expected behavior - we want to keep running
+    if let Ok(error_msg) = rx.recv() {
+        return Err(error_msg.into());
+    }
+
+    Ok(())
 }
 
 #[cfg(target_os = "linux")]

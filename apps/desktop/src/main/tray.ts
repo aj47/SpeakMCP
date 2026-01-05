@@ -26,11 +26,19 @@ const buildMenu = (tray: Tray) =>
         if (state.isRecording) {
           state.isRecording = false
           tray.setImage(defaultIcon)
+          // On Linux, refresh the context menu to update the label
+          if (process.platform === "linux") {
+            updateTrayMenu(tray)
+          }
           stopRecordingAndHidePanelWindow()
           return
         }
         state.isRecording = true
         tray.setImage(stopIcon)
+        // On Linux, refresh the context menu to update the label
+        if (process.platform === "linux") {
+          updateTrayMenu(tray)
+        }
         showPanelWindowAndStartRecording(true)
       },
     },

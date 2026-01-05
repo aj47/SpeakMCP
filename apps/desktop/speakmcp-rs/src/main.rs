@@ -201,13 +201,30 @@ fn evdev_key_to_rdev_name(key: evdev::Key) -> String {
     }
 }
 
+/// Output an error event to stdout in JSON format so the desktop app can read it
+/// The app typically only consumes stdout, so stderr errors may not be visible to users
+#[cfg(target_os = "linux")]
+fn output_error_event(error_type: &str, message: &str) {
+    let error_event = KeyboardEvent {
+        event_type: "Error".to_string(),
+        name: Some(error_type.to_string()),
+        time: std::time::SystemTime::now(),
+        data: json!({"error": error_type, "message": message}).to_string(),
+    };
+    // Output to stdout so the app can read it
+    println!("{}", serde_json::to_string(&error_event).unwrap());
+    // Also output to stderr for debugging
+    eprintln!("!error: {} - {}", error_type, message);
+}
+
 #[cfg(target_os = "linux")]
 fn start_keyboard_listener() -> Result<(), Box<dyn std::error::Error>> {
     use evdev::{Device, Key};
     use std::fs;
     use std::path::PathBuf;
-    use std::sync::mpsc;
     use std::thread;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
 
     let input_dir = "/dev/input";
     let mut last_error: Option<String> = None;
@@ -251,12 +268,13 @@ fn start_keyboard_listener() -> Result<(), Box<dyn std::error::Error>> {
     // No keyboard found - provide helpful error message
     if keyboard_devices.is_empty() {
         if let Some(err) = last_error {
-            eprintln!("!error: PermissionDenied - User must be in 'input' group");
-            eprintln!("Run: sudo usermod -aG input $USER");
-            eprintln!("Then log out and log back in (or reboot)");
+            let message = "User must be in 'input' group. Run: sudo usermod -aG input $USER, then log out and back in.";
+            output_error_event("PermissionDenied", message);
             return Err(format!("Failed to access keyboard devices: {}", err).into());
         }
-        return Err("No keyboard device found in /dev/input/".into());
+        let message = "No keyboard device found in /dev/input/";
+        output_error_event("NoKeyboardFound", message);
+        return Err(message.into());
     }
 
     eprintln!("Listening on {} keyboard device(s)", keyboard_devices.len());
@@ -267,29 +285,37 @@ fn start_keyboard_listener() -> Result<(), Box<dyn std::error::Error>> {
         return listen_keyboard_device(device);
     }
 
-    // Multiple keyboards: spawn a thread for each and use a channel to communicate errors
-    let (tx, rx) = mpsc::channel::<String>();
+    // Multiple keyboards: spawn a thread for each
+    // Track how many devices are still active - treat per-device failures as non-fatal
+    let active_count = Arc::new(AtomicUsize::new(keyboard_devices.len()));
 
     for (path, device) in keyboard_devices {
-        let tx = tx.clone();
+        let active_count = Arc::clone(&active_count);
         let path_str = path.display().to_string();
         thread::spawn(move || {
             if let Err(e) = listen_keyboard_device(device) {
-                let _ = tx.send(format!("Error on {}: {}", path_str, e));
+                // Log the error but don't bring down the whole listener
+                // This allows hotkeys to continue working on other devices
+                // (e.g., if a USB keyboard is unplugged)
+                eprintln!("Device {} stopped: {}", path_str, e);
+                let remaining = active_count.fetch_sub(1, Ordering::SeqCst) - 1;
+                if remaining == 0 {
+                    // All devices have failed - output error to stdout so app can see it
+                    output_error_event("AllDevicesFailed", "All keyboard devices have stopped");
+                }
             }
         });
     }
 
-    // Drop our sender so rx.recv() will return when all threads have finished
-    drop(tx);
-
-    // Wait for the first error (or block forever if all devices work fine)
-    // This is the expected behavior - we want to keep running
-    if let Ok(error_msg) = rx.recv() {
-        return Err(error_msg.into());
+    // Block the main thread forever - the spawned threads will handle events
+    // This prevents the function from returning while devices are still being monitored
+    loop {
+        thread::sleep(std::time::Duration::from_secs(60));
+        // Check if all devices have failed
+        if active_count.load(Ordering::SeqCst) == 0 {
+            return Err("All keyboard devices have stopped".into());
+        }
     }
-
-    Ok(())
 }
 
 #[cfg(target_os = "linux")]

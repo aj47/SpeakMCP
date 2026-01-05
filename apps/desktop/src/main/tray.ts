@@ -20,28 +20,44 @@ const stopIcon = path.join(
 
 const buildMenu = (tray: Tray) =>
   Menu.buildFromTemplate([
-    {
-      label: state.isRecording ? "Cancel Recording" : "Start Recording",
-      click() {
-        if (state.isRecording) {
-          state.isRecording = false
-          tray.setImage(defaultIcon)
-          // On Linux, refresh the context menu to update the label
-          if (process.platform === "linux") {
-            updateTrayMenu(tray)
-          }
-          stopRecordingAndHidePanelWindow()
-          return
-        }
-        state.isRecording = true
-        tray.setImage(stopIcon)
-        // On Linux, refresh the context menu to update the label
-        if (process.platform === "linux") {
-          updateTrayMenu(tray)
-        }
-        showPanelWindowAndStartRecording(true)
-      },
-    },
+    // When recording, show both "Finish Recording" (submit) and "Cancel Recording" (discard)
+    // When not recording, show "Start Recording"
+    ...(state.isRecording
+      ? [
+          {
+            label: "Finish Recording",
+            click() {
+              // Use finishRecording to submit the recording (same as tray click on macOS/Windows)
+              getWindowRendererHandlers("panel")?.finishRecording.send()
+            },
+          },
+          {
+            label: "Cancel Recording",
+            click() {
+              state.isRecording = false
+              tray.setImage(defaultIcon)
+              // On Linux, refresh the context menu to update the label
+              if (process.platform === "linux") {
+                updateTrayMenu(tray)
+              }
+              stopRecordingAndHidePanelWindow()
+            },
+          },
+        ]
+      : [
+          {
+            label: "Start Recording",
+            click() {
+              state.isRecording = true
+              tray.setImage(stopIcon)
+              // On Linux, refresh the context menu to update the label
+              if (process.platform === "linux") {
+                updateTrayMenu(tray)
+              }
+              showPanelWindowAndStartRecording(true)
+            },
+          },
+        ]),
     {
       label: "View History",
       click() {

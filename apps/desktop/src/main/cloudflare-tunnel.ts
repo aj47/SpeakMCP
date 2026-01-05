@@ -49,7 +49,8 @@ function getEnhancedPath(): string {
   const pathSeparator = process.platform === "win32" ? ";" : ":"
   const searchPaths = getCloudflaredSearchPaths()
   const currentPath = process.env.PATH || ""
-  const currentPaths = currentPath.split(pathSeparator)
+  // Filter out empty strings to avoid PATH starting with separator when process.env.PATH is empty
+  const currentPaths = currentPath.split(pathSeparator).filter(Boolean)
 
   // Add search paths that aren't already in PATH
   for (const p of searchPaths) {
@@ -69,9 +70,6 @@ async function findCloudflaredPath(): Promise<string | null> {
   const binaryName = process.platform === "win32" ? "cloudflared.exe" : "cloudflared"
 
   debugLog(`Searching for cloudflared binary...`)
-  debugLog(`Binary name: ${binaryName}`)
-  debugLog(`Search paths: ${JSON.stringify(searchPaths, null, 2)}`)
-  debugLog(`Current process.env.PATH: ${process.env.PATH}`)
 
   for (const dir of searchPaths) {
     const fullPath = path.join(dir, binaryName)
@@ -104,7 +102,6 @@ export async function checkCloudflaredInstalled(): Promise<boolean> {
   // Fallback: try spawning with enhanced PATH
   debugLog(`checkCloudflaredInstalled: Trying spawn fallback with enhanced PATH`)
   const enhancedPath = getEnhancedPath()
-  debugLog(`Enhanced PATH for spawn: ${enhancedPath}`)
 
   // Create a clean env object with only string values for spawn
   const spawnEnv: Record<string, string> = {}
@@ -182,7 +179,6 @@ export async function startCloudflareTunnel(): Promise<{
 
   debugLog(`Starting tunnel with command: ${command}`)
   debugLog(`Target port: ${port}`)
-  debugLog(`Enhanced PATH: ${enhancedEnv.PATH}`)
 
   return new Promise<{ success: boolean; url?: string; error?: string }>((resolve) => {
     try {

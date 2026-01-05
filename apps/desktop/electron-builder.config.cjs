@@ -27,6 +27,10 @@ module.exports = {
     executableName: "speakmcp",
     target: [
       {
+        target: "nsis",
+        arch: ["x64"]
+      },
+      {
         target: "portable",
         arch: ["x64"]
       }

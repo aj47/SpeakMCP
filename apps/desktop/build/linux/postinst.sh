@@ -66,7 +66,7 @@ fi
 # This is required for evdev-based keyboard listening on Wayland
 CURRENT_USER="${SUDO_USER:-$USER}"
 if [ -n "$CURRENT_USER" ] && [ "$CURRENT_USER" != "root" ]; then
-    if ! groups "$CURRENT_USER" 2>/dev/null | grep -q '\binput\b'; then
+    if ! groups "$CURRENT_USER" 2>/dev/null | grep -qw 'input'; then
         echo ""
         echo "⚠️  IMPORTANT: For global hotkeys to work (especially on Wayland),"
         echo "   you need to add your user to the 'input' group:"

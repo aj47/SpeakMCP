@@ -1180,11 +1180,17 @@ export function listenToKeyboardEvents() {
     }
   })
 
+  // Cap the stderr buffer to 16KB to avoid unbounded memory growth
+  const STDERR_BUFFER_MAX_SIZE = 16 * 1024
   let stderrBuffer = ""
 
   child.stderr?.on("data", (data) => {
     const output = data.toString()
     stderrBuffer += output
+    // Keep only the last N bytes to prevent unbounded growth
+    if (stderrBuffer.length > STDERR_BUFFER_MAX_SIZE) {
+      stderrBuffer = stderrBuffer.slice(-STDERR_BUFFER_MAX_SIZE)
+    }
     if (isDebugKeybinds()) {
       logKeybinds("Keyboard listener stderr:", output)
     }

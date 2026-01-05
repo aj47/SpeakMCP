@@ -205,11 +205,14 @@ fn evdev_key_to_rdev_name(key: evdev::Key) -> String {
 fn start_keyboard_listener() -> Result<(), Box<dyn std::error::Error>> {
     use evdev::{Device, Key};
     use std::fs;
+    use std::sync::mpsc;
+    use std::thread;
 
     let input_dir = "/dev/input";
     let mut last_error: Option<String> = None;
+    let mut keyboard_devices: Vec<(String, std::path::PathBuf, Device)> = Vec::new();
 
-    // Enumerate devices in /dev/input/ to find keyboards
+    // Enumerate devices in /dev/input/ to find ALL keyboards
     let entries = fs::read_dir(input_dir)
         .map_err(|e| format!("Cannot access {}: {}", input_dir, e))?;
 
@@ -229,12 +232,9 @@ fn start_keyboard_listener() -> Result<(), Box<dyn std::error::Error>> {
                 if device.supported_keys().map_or(false, |keys| {
                     keys.contains(Key::KEY_A) || keys.contains(Key::KEY_SPACE)
                 }) {
-                    eprintln!("Listening on keyboard: {} ({})",
-                        device.name().unwrap_or("Unknown"),
-                        path.display());
-
-                    // Start listening loop on this device
-                    return listen_keyboard_device(device);
+                    let device_name = device.name().unwrap_or("Unknown").to_string();
+                    eprintln!("Found keyboard: {} ({})", device_name, path.display());
+                    keyboard_devices.push((device_name, path.clone(), device));
                 }
             }
             Err(e) => {
@@ -246,13 +246,47 @@ fn start_keyboard_listener() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // No keyboard found - provide helpful error message
-    if let Some(err) = last_error {
-        eprintln!("!error: PermissionDenied - User must be in 'input' group");
-        eprintln!("Run: sudo usermod -aG input $USER");
-        eprintln!("Then log out and log back in (or reboot)");
-        return Err(format!("Failed to access keyboard devices: {}", err).into());
+    if keyboard_devices.is_empty() {
+        if let Some(err) = last_error {
+            eprintln!("!error: PermissionDenied - User must be in 'input' group");
+            eprintln!("Run: sudo usermod -aG input $USER");
+            eprintln!("Then log out and log back in (or reboot)");
+            return Err(format!("Failed to access keyboard devices: {}", err).into());
+        }
+        return Err("No keyboard device found in /dev/input/".into());
     }
-    Err("No keyboard device found in /dev/input/".into())
+
+    eprintln!("Listening on {} keyboard device(s)", keyboard_devices.len());
+
+    // If only one keyboard, listen directly (no threading overhead)
+    if keyboard_devices.len() == 1 {
+        let (name, path, device) = keyboard_devices.pop().unwrap();
+        eprintln!("Listening on keyboard: {} ({})", name, path.display());
+        return listen_keyboard_device(device);
+    }
+
+    // Multiple keyboards: spawn a thread for each and use a channel to collect events
+    let (tx, rx) = mpsc::channel::<String>();
+
+    for (name, path, device) in keyboard_devices {
+        let tx = tx.clone();
+        eprintln!("Starting listener for: {} ({})", name, path.display());
+        thread::spawn(move || {
+            if let Err(e) = listen_keyboard_device_to_channel(device, tx) {
+                eprintln!("Listener error for {}: {}", name, e);
+            }
+        });
+    }
+
+    // Drop the original sender so rx knows when all threads are done
+    drop(tx);
+
+    // Main thread: receive and print events from all keyboards
+    for json_output in rx {
+        println!("{}", json_output);
+    }
+
+    Ok(())
 }
 
 #[cfg(target_os = "linux")]
@@ -280,6 +314,44 @@ fn listen_keyboard_device(mut device: evdev::Device) -> Result<(), Box<dyn std::
                 };
 
                 println!("{}", serde_json::to_string(&json_event).unwrap());
+            }
+        }
+    }
+}
+
+/// Version of listen_keyboard_device that sends events to a channel instead of stdout.
+/// Used when listening to multiple keyboard devices simultaneously.
+#[cfg(target_os = "linux")]
+fn listen_keyboard_device_to_channel(
+    mut device: evdev::Device,
+    tx: std::sync::mpsc::Sender<String>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    use evdev::InputEventKind;
+
+    loop {
+        for event in device.fetch_events()? {
+            if let InputEventKind::Key(key) = event.kind() {
+                let event_type = match event.value() {
+                    0 => "KeyRelease",
+                    1 => "KeyPress",
+                    2 => continue, // Key repeat, skip
+                    _ => continue,
+                };
+
+                // Convert evdev key name to rdev-compatible format
+                let rdev_key_name = evdev_key_to_rdev_name(key);
+
+                let json_event = KeyboardEvent {
+                    event_type: event_type.to_string(),
+                    name: Some(rdev_key_name.clone()),
+                    time: std::time::SystemTime::now(),
+                    data: json!({"key": rdev_key_name}).to_string(),
+                };
+
+                // Send to channel; if receiver is gone, exit gracefully
+                if tx.send(serde_json::to_string(&json_event).unwrap()).is_err() {
+                    return Ok(());
+                }
             }
         }
     }

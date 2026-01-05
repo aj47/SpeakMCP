@@ -440,6 +440,7 @@ export type Config = {
   autoSaveConversations?: boolean
 
   // Provider Section Collapse Configuration
+  providerSectionCollapsedOpenai?: boolean
   providerSectionCollapsedGroq?: boolean
   providerSectionCollapsedGemini?: boolean
 

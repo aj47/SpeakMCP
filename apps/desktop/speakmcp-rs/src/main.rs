@@ -61,8 +61,8 @@ fn start_keyboard_listener() -> Result<(), Box<dyn std::error::Error>> {
 // This approach works on both X11 and Wayland without any X11 dependencies.
 // Requires user to be in 'input' group: sudo usermod -aG input $USER
 
-/// Convert evdev key names (e.g., KEY_LEFTCTRL) to rdev-compatible names (e.g., ControlLeft)
-/// This ensures the Electron side can match keys consistently across platforms.
+/// Convert evdev Key to rdev-compatible key name
+/// The TypeScript handler expects rdev-style names like "ControlLeft", "KeyA", etc.
 #[cfg(target_os = "linux")]
 fn evdev_key_to_rdev_name(key: evdev::Key) -> String {
     use evdev::Key;
@@ -72,26 +72,12 @@ fn evdev_key_to_rdev_name(key: evdev::Key) -> String {
         Key::KEY_RIGHTCTRL => "ControlRight".to_string(),
         Key::KEY_LEFTSHIFT => "ShiftLeft".to_string(),
         Key::KEY_RIGHTSHIFT => "ShiftRight".to_string(),
-        Key::KEY_LEFTALT => "Alt".to_string(),
+        Key::KEY_LEFTALT => "Alt".to_string(),  // rdev uses "Alt" for left alt
         Key::KEY_RIGHTALT => "AltRight".to_string(),
         Key::KEY_LEFTMETA => "MetaLeft".to_string(),
         Key::KEY_RIGHTMETA => "MetaRight".to_string(),
-        
-        // Function keys
-        Key::KEY_F1 => "F1".to_string(),
-        Key::KEY_F2 => "F2".to_string(),
-        Key::KEY_F3 => "F3".to_string(),
-        Key::KEY_F4 => "F4".to_string(),
-        Key::KEY_F5 => "F5".to_string(),
-        Key::KEY_F6 => "F6".to_string(),
-        Key::KEY_F7 => "F7".to_string(),
-        Key::KEY_F8 => "F8".to_string(),
-        Key::KEY_F9 => "F9".to_string(),
-        Key::KEY_F10 => "F10".to_string(),
-        Key::KEY_F11 => "F11".to_string(),
-        Key::KEY_F12 => "F12".to_string(),
-        
-        // Letter keys
+
+        // Letter keys (rdev uses "KeyA", "KeyB", etc.)
         Key::KEY_A => "KeyA".to_string(),
         Key::KEY_B => "KeyB".to_string(),
         Key::KEY_C => "KeyC".to_string(),
@@ -118,7 +104,7 @@ fn evdev_key_to_rdev_name(key: evdev::Key) -> String {
         Key::KEY_X => "KeyX".to_string(),
         Key::KEY_Y => "KeyY".to_string(),
         Key::KEY_Z => "KeyZ".to_string(),
-        
+
         // Number keys
         Key::KEY_0 => "Digit0".to_string(),
         Key::KEY_1 => "Digit1".to_string(),
@@ -130,30 +116,42 @@ fn evdev_key_to_rdev_name(key: evdev::Key) -> String {
         Key::KEY_7 => "Digit7".to_string(),
         Key::KEY_8 => "Digit8".to_string(),
         Key::KEY_9 => "Digit9".to_string(),
-        
+
+        // Function keys
+        Key::KEY_F1 => "F1".to_string(),
+        Key::KEY_F2 => "F2".to_string(),
+        Key::KEY_F3 => "F3".to_string(),
+        Key::KEY_F4 => "F4".to_string(),
+        Key::KEY_F5 => "F5".to_string(),
+        Key::KEY_F6 => "F6".to_string(),
+        Key::KEY_F7 => "F7".to_string(),
+        Key::KEY_F8 => "F8".to_string(),
+        Key::KEY_F9 => "F9".to_string(),
+        Key::KEY_F10 => "F10".to_string(),
+        Key::KEY_F11 => "F11".to_string(),
+        Key::KEY_F12 => "F12".to_string(),
+
         // Special keys
-        Key::KEY_SPACE => "Space".to_string(),
-        Key::KEY_ENTER => "Return".to_string(),
         Key::KEY_ESC => "Escape".to_string(),
         Key::KEY_TAB => "Tab".to_string(),
-        Key::KEY_BACKSPACE => "Backspace".to_string(),
+        Key::KEY_CAPSLOCK => "CapsLock".to_string(),
+        Key::KEY_SPACE => "Space".to_string(),
+        Key::KEY_ENTER => "Return".to_string(),
+        Key::KEY_BACKSPACE => "BackSpace".to_string(),
         Key::KEY_DELETE => "Delete".to_string(),
         Key::KEY_INSERT => "Insert".to_string(),
         Key::KEY_HOME => "Home".to_string(),
         Key::KEY_END => "End".to_string(),
         Key::KEY_PAGEUP => "PageUp".to_string(),
         Key::KEY_PAGEDOWN => "PageDown".to_string(),
+
+        // Arrow keys
         Key::KEY_UP => "UpArrow".to_string(),
         Key::KEY_DOWN => "DownArrow".to_string(),
         Key::KEY_LEFT => "LeftArrow".to_string(),
         Key::KEY_RIGHT => "RightArrow".to_string(),
-        Key::KEY_CAPSLOCK => "CapsLock".to_string(),
-        Key::KEY_NUMLOCK => "NumLock".to_string(),
-        Key::KEY_SCROLLLOCK => "ScrollLock".to_string(),
-        Key::KEY_PRINT => "PrintScreen".to_string(),
-        Key::KEY_PAUSE => "Pause".to_string(),
-        
-        // Punctuation and symbols
+
+        // Punctuation/symbols
         Key::KEY_MINUS => "Minus".to_string(),
         Key::KEY_EQUAL => "Equal".to_string(),
         Key::KEY_LEFTBRACE => "BracketLeft".to_string(),
@@ -165,8 +163,8 @@ fn evdev_key_to_rdev_name(key: evdev::Key) -> String {
         Key::KEY_COMMA => "Comma".to_string(),
         Key::KEY_DOT => "Period".to_string(),
         Key::KEY_SLASH => "Slash".to_string(),
-        
-        // Numpad keys
+
+        // Numpad
         Key::KEY_KP0 => "Numpad0".to_string(),
         Key::KEY_KP1 => "Numpad1".to_string(),
         Key::KEY_KP2 => "Numpad2".to_string(),
@@ -177,33 +175,62 @@ fn evdev_key_to_rdev_name(key: evdev::Key) -> String {
         Key::KEY_KP7 => "Numpad7".to_string(),
         Key::KEY_KP8 => "Numpad8".to_string(),
         Key::KEY_KP9 => "Numpad9".to_string(),
-        Key::KEY_KPASTERISK => "NumpadMultiply".to_string(),
-        Key::KEY_KPMINUS => "NumpadSubtract".to_string(),
-        Key::KEY_KPPLUS => "NumpadAdd".to_string(),
-        Key::KEY_KPDOT => "NumpadDecimal".to_string(),
         Key::KEY_KPENTER => "NumpadEnter".to_string(),
+        Key::KEY_KPPLUS => "NumpadAdd".to_string(),
+        Key::KEY_KPMINUS => "NumpadSubtract".to_string(),
+        Key::KEY_KPASTERISK => "NumpadMultiply".to_string(),
         Key::KEY_KPSLASH => "NumpadDivide".to_string(),
-        
-        // Fn key (if available)
+        Key::KEY_KPDOT => "NumpadDecimal".to_string(),
+        Key::KEY_NUMLOCK => "NumLock".to_string(),
+
+        // Other
+        Key::KEY_SCROLLLOCK => "ScrollLock".to_string(),
+        Key::KEY_PAUSE => "Pause".to_string(),
+        Key::KEY_PRINT => "PrintScreen".to_string(),
         Key::KEY_FN => "Function".to_string(),
-        
-        // Default: return the evdev debug name for unmapped keys
-        _ => format!("{:?}", key),
+
+        // Fallback: use the Debug format but strip the "KEY_" prefix
+        _ => {
+            let debug_name = format!("{:?}", key);
+            if debug_name.starts_with("KEY_") {
+                debug_name[4..].to_string()
+            } else {
+                debug_name
+            }
+        }
     }
+}
+
+/// Output an error event to stdout in JSON format so the desktop app can read it
+/// The app typically only consumes stdout, so stderr errors may not be visible to users
+#[cfg(target_os = "linux")]
+fn output_error_event(error_type: &str, message: &str) {
+    let error_event = KeyboardEvent {
+        event_type: "Error".to_string(),
+        name: Some(error_type.to_string()),
+        time: std::time::SystemTime::now(),
+        data: json!({"error": error_type, "message": message}).to_string(),
+    };
+    // Output to stdout so the app can read it
+    println!("{}", serde_json::to_string(&error_event).unwrap());
+    // Also output to stderr for debugging
+    eprintln!("!error: {} - {}", error_type, message);
 }
 
 #[cfg(target_os = "linux")]
 fn start_keyboard_listener() -> Result<(), Box<dyn std::error::Error>> {
     use evdev::{Device, Key};
     use std::fs;
-    use std::sync::mpsc;
+    use std::path::PathBuf;
     use std::thread;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
 
     let input_dir = "/dev/input";
-    let mut keyboards: Vec<(String, std::path::PathBuf)> = Vec::new();
     let mut last_error: Option<String> = None;
+    let mut keyboard_devices: Vec<(PathBuf, Device)> = Vec::new();
 
-    // Enumerate devices in /dev/input/ to find all keyboards
+    // Enumerate devices in /dev/input/ to find ALL keyboards
     let entries = fs::read_dir(input_dir)
         .map_err(|e| format!("Cannot access {}: {}", input_dir, e))?;
 
@@ -219,12 +246,15 @@ fn start_keyboard_listener() -> Result<(), Box<dyn std::error::Error>> {
         // Try to open the device
         match Device::open(&path) {
             Ok(device) => {
-                // Check if this device has keyboard capabilities (has letter keys)
+                // Check if this device has keyboard capabilities (has letter keys or modifier keys)
                 if device.supported_keys().map_or(false, |keys| {
-                    keys.contains(Key::KEY_A) || keys.contains(Key::KEY_SPACE)
+                    keys.contains(Key::KEY_A) || keys.contains(Key::KEY_SPACE) ||
+                    keys.contains(Key::KEY_LEFTCTRL) || keys.contains(Key::KEY_LEFTALT)
                 }) {
-                    let device_name = device.name().unwrap_or("Unknown").to_string();
-                    keyboards.push((device_name, path.clone()));
+                    eprintln!("Found keyboard: {} ({})",
+                        device.name().unwrap_or("Unknown"),
+                        path.display());
+                    keyboard_devices.push((path.clone(), device));
                 }
             }
             Err(e) => {
@@ -236,61 +266,60 @@ fn start_keyboard_listener() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // No keyboard found - provide helpful error message
-    if keyboards.is_empty() {
+    if keyboard_devices.is_empty() {
         if let Some(err) = last_error {
-            eprintln!("!error: PermissionDenied - User must be in 'input' group");
-            eprintln!("Run: sudo usermod -aG input $USER");
-            eprintln!("Then log out and log back in (or reboot)");
+            let message = "User must be in 'input' group. Run: sudo usermod -aG input $USER, then log out and back in.";
+            output_error_event("PermissionDenied", message);
             return Err(format!("Failed to access keyboard devices: {}", err).into());
         }
-        return Err("No keyboard device found in /dev/input/".into());
+        let message = "No keyboard device found in /dev/input/";
+        output_error_event("NoKeyboardFound", message);
+        return Err(message.into());
     }
 
-    // Log all keyboards found
-    eprintln!("Found {} keyboard(s):", keyboards.len());
-    for (name, path) in &keyboards {
-        eprintln!("  - {} ({})", name, path.display());
+    eprintln!("Listening on {} keyboard device(s)", keyboard_devices.len());
+
+    // If only one keyboard, no need for threading
+    if keyboard_devices.len() == 1 {
+        let (_, device) = keyboard_devices.into_iter().next().unwrap();
+        return listen_keyboard_device(device);
     }
 
-    // Create a channel for keyboard events from all threads
-    let (tx, rx) = mpsc::channel::<KeyboardEvent>();
+    // Multiple keyboards: spawn a thread for each
+    // Track how many devices are still active - treat per-device failures as non-fatal
+    let active_count = Arc::new(AtomicUsize::new(keyboard_devices.len()));
 
-    // Spawn a thread for each keyboard device
-    for (device_name, path) in keyboards {
-        let tx = tx.clone();
+    for (path, device) in keyboard_devices {
+        let active_count = Arc::clone(&active_count);
         let path_str = path.display().to_string();
-        
         thread::spawn(move || {
-            match Device::open(&path) {
-                Ok(device) => {
-                    eprintln!("Listening on keyboard: {} ({})", device_name, path_str);
-                    if let Err(e) = listen_keyboard_device(device, tx) {
-                        eprintln!("Error listening to {}: {}", path_str, e);
-                    }
-                }
-                Err(e) => {
-                    eprintln!("Failed to reopen {}: {}", path_str, e);
+            if let Err(e) = listen_keyboard_device(device) {
+                // Log the error but don't bring down the whole listener
+                // This allows hotkeys to continue working on other devices
+                // (e.g., if a USB keyboard is unplugged)
+                eprintln!("Device {} stopped: {}", path_str, e);
+                let remaining = active_count.fetch_sub(1, Ordering::SeqCst) - 1;
+                if remaining == 0 {
+                    // All devices have failed - output error to stdout so app can see it
+                    output_error_event("AllDevicesFailed", "All keyboard devices have stopped");
                 }
             }
         });
     }
 
-    // Drop our copy of tx so the channel closes when all threads finish
-    drop(tx);
-
-    // Main thread receives events from all keyboards and prints them
-    for event in rx {
-        println!("{}", serde_json::to_string(&event).unwrap());
+    // Block the main thread forever - the spawned threads will handle events
+    // This prevents the function from returning while devices are still being monitored
+    loop {
+        thread::sleep(std::time::Duration::from_secs(60));
+        // Check if all devices have failed
+        if active_count.load(Ordering::SeqCst) == 0 {
+            return Err("All keyboard devices have stopped".into());
+        }
     }
-
-    Ok(())
 }
 
 #[cfg(target_os = "linux")]
-fn listen_keyboard_device(
-    mut device: evdev::Device,
-    tx: std::sync::mpsc::Sender<KeyboardEvent>,
-) -> Result<(), Box<dyn std::error::Error>> {
+fn listen_keyboard_device(mut device: evdev::Device) -> Result<(), Box<dyn std::error::Error>> {
     use evdev::InputEventKind;
 
     loop {
@@ -303,24 +332,24 @@ fn listen_keyboard_device(
                     _ => continue,
                 };
 
-                let key_name = evdev_key_to_rdev_name(key);
+                // Convert evdev key name to rdev-compatible format
+                let rdev_key_name = evdev_key_to_rdev_name(key);
+
                 let json_event = KeyboardEvent {
                     event_type: event_type.to_string(),
-                    name: Some(key_name.clone()),
+                    name: Some(rdev_key_name.clone()),
                     time: std::time::SystemTime::now(),
-                    data: json!({"key": key_name}).to_string(),
+                    data: json!({"key": rdev_key_name}).to_string(),
                 };
 
-                // Send event to main thread, ignore errors (channel closed)
-                if tx.send(json_event).is_err() {
-                    return Ok(());
-                }
+                println!("{}", serde_json::to_string(&json_event).unwrap());
             }
         }
     }
 }
 
 // ============ Common functions ============
+
 fn write_text(text: &str) -> Result<(), Box<dyn std::error::Error>> {
     use enigo::{Enigo, Keyboard, Settings};
 

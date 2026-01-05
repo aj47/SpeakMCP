@@ -140,6 +140,11 @@ const getConfig = () => {
     // Gemini TTS defaults
     geminiTtsModel: "gemini-2.5-flash-preview-tts",
     geminiTtsVoice: "Kore",
+    // Provider Section Collapse defaults - collapsed by default
+    providerSectionCollapsedOpenai: true,
+    providerSectionCollapsedGroq: true,
+    providerSectionCollapsedGemini: true,
+
     // API Retry defaults
     apiRetryCount: 3,
     apiRetryBaseDelay: 1000, // 1 second

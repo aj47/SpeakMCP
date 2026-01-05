@@ -7,6 +7,8 @@ export interface ModelInfo {
   description?: string
   context_length?: number
   created?: number
+  /** Whether this model supports speech-to-text transcription */
+  supportsTranscription?: boolean
 }
 
 interface ModelsResponse {
@@ -138,6 +140,9 @@ async function fetchOpenAIModels(
     )
   }
 
+  // Models that support speech-to-text transcription (OpenAI)
+  const openaiTranscriptionModels = ["whisper-1"]
+
   const finalModels = filteredModels
     .map((model) => ({
       id: model.id,
@@ -145,6 +150,7 @@ async function fetchOpenAIModels(
       description: model.description,
       context_length: model.context_length,
       created: model.created,
+      supportsTranscription: openaiTranscriptionModels.some(tm => model.id.includes(tm)),
     }))
     .sort((a, b) => {
       if (isOpenRouter) {
@@ -232,6 +238,9 @@ async function fetchGroqModels(
 
   const data: ModelsResponse = await response.json()
 
+  // Models that support speech-to-text transcription
+  const transcriptionModels = ["whisper-large-v3", "whisper-large-v3-turbo", "distil-whisper-large-v3-en"]
+
   return data.data
     .map((model) => ({
       id: model.id,
@@ -239,6 +248,7 @@ async function fetchGroqModels(
       description: model.description,
       context_length: model.context_length,
       created: model.created,
+      supportsTranscription: transcriptionModels.some(tm => model.id.includes(tm)),
     }))
     .sort((a, b) => a.name.localeCompare(b.name))
 }

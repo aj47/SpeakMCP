@@ -69,20 +69,18 @@ async function findCloudflaredPath(): Promise<string | null> {
   const searchPaths = getCloudflaredSearchPaths()
   const binaryName = process.platform === "win32" ? "cloudflared.exe" : "cloudflared"
 
-  debugLog(`Searching for cloudflared binary...`)
-
   for (const dir of searchPaths) {
     const fullPath = path.join(dir, binaryName)
     try {
       await access(fullPath, constants.F_OK | constants.X_OK)
-      debugLog(`✅ Found cloudflared at: ${fullPath}`)
+      debugLog(`Found cloudflared binary`)
       return fullPath
-    } catch (err) {
-      // Only log first few misses to avoid spam
+    } catch {
+      // Binary not found in this path, continue searching
     }
   }
 
-  debugLog(`cloudflared binary not found in any search path`)
+  debugLog(`cloudflared binary not found`)
   return null
 }
 
@@ -90,17 +88,13 @@ async function findCloudflaredPath(): Promise<string | null> {
  * Check if cloudflared is installed and available
  */
 export async function checkCloudflaredInstalled(): Promise<boolean> {
-  debugLog(`checkCloudflaredInstalled called`)
-
   // First try to find the binary directly
   const cloudflaredPath = await findCloudflaredPath()
   if (cloudflaredPath) {
-    debugLog(`checkCloudflaredInstalled: Found via direct path search`)
     return true
   }
 
   // Fallback: try spawning with enhanced PATH
-  debugLog(`checkCloudflaredInstalled: Trying spawn fallback with enhanced PATH`)
   const enhancedPath = getEnhancedPath()
 
   // Create a clean env object with only string values for spawn
@@ -114,17 +108,14 @@ export async function checkCloudflaredInstalled(): Promise<boolean> {
 
   return new Promise<boolean>((resolve) => {
     const proc = spawn("cloudflared", ["--version"], {
-      shell: true,
       stdio: ["ignore", "pipe", "pipe"],
       env: spawnEnv as NodeJS.ProcessEnv,
     })
 
-    proc.on("error", (err: Error) => {
-      debugLog(`checkCloudflaredInstalled spawn error: ${err.message}`)
+    proc.on("error", () => {
       resolve(false)
     })
     proc.on("close", (code: number | null) => {
-      debugLog(`checkCloudflaredInstalled spawn exited with code: ${code}`)
       resolve(code === 0)
     })
   })
@@ -177,32 +168,26 @@ export async function startCloudflareTunnel(): Promise<{
   }
   enhancedEnv.PATH = getEnhancedPath()
 
-  debugLog(`Starting tunnel with command: ${command}`)
-  debugLog(`Target port: ${port}`)
+  debugLog(`Starting tunnel on port ${port}`)
 
   return new Promise<{ success: boolean; url?: string; error?: string }>((resolve) => {
     try {
       // Spawn cloudflared with quick tunnel using resolved path and enhanced environment
-      debugLog(`Spawning: ${command} tunnel --url http://localhost:${port}`)
       const proc = spawn(command, ["tunnel", "--url", `http://localhost:${port}`], {
-        shell: true,
         stdio: ["ignore", "pipe", "pipe"],
         env: enhancedEnv as NodeJS.ProcessEnv,
       })
 
       tunnelProcess = proc
-      debugLog(`Process spawned with PID: ${proc.pid}`)
 
       // Handle stdout - look for the tunnel URL
       proc.stdout?.on("data", (data: Buffer) => {
         const output = data.toString()
-        debugLog(`stdout: ${output}`)
-
         const match = output.match(TUNNEL_URL_REGEX)
         if (match && !tunnelUrl) {
           tunnelUrl = match[0]
           isStarting = false
-          debugLog(`🎉 Tunnel URL found: ${tunnelUrl}`)
+          debugLog(`Tunnel URL established`)
           resolve({ success: true, url: tunnelUrl })
         }
       })
@@ -210,13 +195,11 @@ export async function startCloudflareTunnel(): Promise<{
       // Handle stderr - cloudflared outputs most info to stderr
       proc.stderr?.on("data", (data: Buffer) => {
         const output = data.toString()
-        debugLog(`stderr: ${output}`)
-
         const match = output.match(TUNNEL_URL_REGEX)
         if (match && !tunnelUrl) {
           tunnelUrl = match[0]
           isStarting = false
-          debugLog(`🎉 Tunnel URL found: ${tunnelUrl}`)
+          debugLog(`Tunnel URL established`)
           resolve({ success: true, url: tunnelUrl })
         }
       })
@@ -225,19 +208,17 @@ export async function startCloudflareTunnel(): Promise<{
         tunnelError = err.message
         tunnelProcess = null
         isStarting = false
-        debugLog(`❌ Process error: ${err.message}`)
         diagnosticsService.logError("cloudflare-tunnel", "Process error", err)
         resolve({ success: false, error: tunnelError || undefined })
       })
 
       proc.on("close", (code: number | null) => {
-        debugLog(`Process exited with code ${code}`)
         tunnelProcess = null
         isStarting = false
 
         if (!tunnelUrl) {
           tunnelError = `cloudflared exited with code ${code}`
-          debugLog(`❌ Tunnel failed: ${tunnelError}`)
+          debugLog(`Tunnel failed with exit code ${code}`)
           resolve({ success: false, error: tunnelError })
         }
       })

@@ -115,11 +115,13 @@ export function Component() {
 
     // Save Groq API key and set Groq as the default provider for STT, chat, and TTS
     // Wait for config to save before advancing to ensure transcription uses the new provider
+    // Set recommended models: gpt-oss-120b for agent tasks
     await saveConfigAsync({
       groqApiKey: apiKey.trim(),
       sttProviderId: "groq",
       transcriptPostProcessingProviderId: "groq",
       mcpToolsProviderId: "groq",
+      mcpToolsGroqModel: "openai/gpt-oss-120b",
       ttsProviderId: "groq",
     })
 

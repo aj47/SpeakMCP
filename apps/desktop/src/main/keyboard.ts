@@ -1180,9 +1180,19 @@ export function listenToKeyboardEvents() {
     }
   })
 
+  // Cap the stderr buffer to 16KB to avoid unbounded memory growth
+  const STDERR_BUFFER_MAX_SIZE = 16 * 1024
+  let stderrBuffer = ""
+
   child.stderr?.on("data", (data) => {
+    const output = data.toString()
+    stderrBuffer += output
+    // Keep only the last N bytes to prevent unbounded growth
+    if (stderrBuffer.length > STDERR_BUFFER_MAX_SIZE) {
+      stderrBuffer = stderrBuffer.slice(-STDERR_BUFFER_MAX_SIZE)
+    }
     if (isDebugKeybinds()) {
-      logKeybinds("Keyboard listener stderr:", data.toString())
+      logKeybinds("Keyboard listener stderr:", output)
     }
   })
 
@@ -1195,6 +1205,50 @@ export function listenToKeyboardEvents() {
   child.on("exit", (code, signal) => {
     if (isDebugKeybinds()) {
       logKeybinds("Keyboard listener process exited:", { code, signal })
+    }
+
+    // On Linux, if the process exits with code 1 and mentions PermissionDenied,
+    // show a helpful notification about the input group requirement
+    if (process.platform === "linux" && code === 1) {
+      if (stderrBuffer.includes("PermissionDenied") || stderrBuffer.includes("Permission denied")) {
+        const { dialog, Notification } = require("electron")
+
+        // Show a notification if supported
+        if (Notification.isSupported()) {
+          const notification = new Notification({
+            title: "SpeakMCP: Hotkeys Not Working",
+            body: "Global hotkeys require input group membership. Click for details.",
+            urgency: "critical",
+          })
+          notification.on("click", () => {
+            dialog.showMessageBox({
+              type: "warning",
+              title: "Global Hotkeys Permission Required",
+              message: "To use global hotkeys on Linux (especially Wayland), you need to add your user to the 'input' group.",
+              detail: "Run this command in a terminal:\n\nsudo usermod -aG input $USER\n\nThen log out and log back in for the change to take effect.\n\nThis is required because SpeakMCP needs to read keyboard events from /dev/input/ devices.",
+              buttons: ["OK"],
+            })
+          })
+          notification.show()
+        } else {
+          // Fallback to dialog
+          dialog.showMessageBox({
+            type: "warning",
+            title: "Global Hotkeys Permission Required",
+            message: "To use global hotkeys on Linux (especially Wayland), you need to add your user to the 'input' group.",
+            detail: "Run this command in a terminal:\n\nsudo usermod -aG input $USER\n\nThen log out and log back in for the change to take effect.",
+            buttons: ["OK"],
+          })
+        }
+
+        // eslint-disable-next-line no-console
+        console.error(
+          "[SpeakMCP] Global hotkeys failed: Permission denied.\n" +
+          "To fix this on Linux, add your user to the 'input' group:\n" +
+          "  sudo usermod -aG input $USER\n" +
+          "Then log out and log back in."
+        )
+      }
     }
   })
 }

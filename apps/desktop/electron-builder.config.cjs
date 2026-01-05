@@ -53,7 +53,7 @@ module.exports = {
     ]
   },
   nsis: {
-    artifactName: "${name}-${version}-setup.${ext}",
+    artifactName: "${productName}-${version}-setup.${ext}",
     shortcutName: "${productName}",
     uninstallDisplayName: "${productName}",
     createDesktopShortcut: "always",

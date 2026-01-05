@@ -306,9 +306,13 @@ export function ModelSelector({
 
             {filteredModels.map((model) => (
               <SelectItem key={model.id} value={model.id}>
-                <div className="flex w-full min-w-0 flex-col">
+                <div className="flex w-full min-w-0 items-center gap-2">
                   <span className="truncate">{model.name}</span>
-
+                  {model.supportsTranscription && (
+                    <span className="shrink-0 rounded-full bg-green-500/20 px-1.5 py-0.5 text-[10px] font-medium text-green-600 dark:text-green-400">
+                      STT
+                    </span>
+                  )}
                 </div>
               </SelectItem>
             ))}

@@ -2126,6 +2126,114 @@ export const router = {
     return { success: true }
   }),
 
+  // WhatsApp Integration
+  whatsappConnect: t.procedure.action(async () => {
+    const WHATSAPP_SERVER_NAME = "whatsapp"
+    try {
+      // Check if WhatsApp server is available
+      const serverStatus = mcpService.getServerStatus()
+      const whatsappServer = serverStatus.find(s => s.name === WHATSAPP_SERVER_NAME)
+      if (!whatsappServer || whatsappServer.status !== "connected") {
+        return { success: false, error: "WhatsApp server is not running. Please enable WhatsApp in settings." }
+      }
+
+      // Call the whatsapp_connect tool
+      const result = await mcpService.executeToolCall(
+        { name: "whatsapp_connect", arguments: {} },
+        undefined,
+        true // skip approval check for internal calls
+      )
+
+      // Parse the result to extract QR code if present
+      const textContent = result.content?.find((c: any) => c.type === "text")
+      if (textContent?.text) {
+        try {
+          const parsed = JSON.parse(textContent.text)
+          if (parsed.qrCode) {
+            return { success: true, qrCode: parsed.qrCode, status: "qr_required" }
+          } else if (parsed.status === "qr_required") {
+            return { success: true, qrCode: parsed.qrCode, status: "qr_required" }
+          }
+        } catch {
+          // Not JSON, check for connection success message
+          if (textContent.text.includes("Connected successfully")) {
+            return { success: true, status: "connected", message: textContent.text }
+          }
+          if (textContent.text.includes("Already connected")) {
+            return { success: true, status: "connected", message: textContent.text }
+          }
+        }
+        return { success: true, message: textContent.text }
+      }
+
+      return { success: true, message: "Connection initiated" }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }),
+
+  whatsappGetStatus: t.procedure.action(async () => {
+    const WHATSAPP_SERVER_NAME = "whatsapp"
+    try {
+      // Check if WhatsApp server is available
+      const serverStatus = mcpService.getServerStatus()
+      const whatsappServer = serverStatus.find(s => s.name === WHATSAPP_SERVER_NAME)
+      if (!whatsappServer || whatsappServer.status !== "connected") {
+        return { available: false, connected: false, error: "WhatsApp server is not running" }
+      }
+
+      // Call the whatsapp_get_status tool
+      const result = await mcpService.executeToolCall(
+        { name: "whatsapp_get_status", arguments: {} },
+        undefined,
+        true // skip approval check for internal calls
+      )
+
+      // Parse the result
+      const textContent = result.content?.find((c: any) => c.type === "text")
+      if (textContent?.text) {
+        try {
+          const parsed = JSON.parse(textContent.text)
+          return { available: true, ...parsed }
+        } catch {
+          return { available: true, message: textContent.text }
+        }
+      }
+
+      return { available: true, connected: false }
+    } catch (error) {
+      return { available: false, connected: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }),
+
+  whatsappDisconnect: t.procedure.action(async () => {
+    const WHATSAPP_SERVER_NAME = "whatsapp"
+    try {
+      const result = await mcpService.executeToolCall(
+        { name: "whatsapp_disconnect", arguments: {} },
+        undefined,
+        true
+      )
+      return { success: true }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }),
+
+  whatsappLogout: t.procedure.action(async () => {
+    const WHATSAPP_SERVER_NAME = "whatsapp"
+    try {
+      const result = await mcpService.executeToolCall(
+        { name: "whatsapp_logout", arguments: {} },
+        undefined,
+        true
+      )
+      return { success: true }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }),
+
   // Text-to-Speech
   generateSpeech: t.procedure
     .input<{

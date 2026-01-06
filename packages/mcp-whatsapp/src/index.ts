@@ -376,6 +376,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                   phoneNumber: status.phoneNumber,
                   userName: status.userName,
                   hasQrCode: !!status.qrCode,
+                  qrCode: status.qrCode, // Include actual QR code data for UI display
                   lastError: status.lastError,
                   hasCredentials: whatsapp.hasCredentials(),
                 },
@@ -420,7 +421,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             content: [
               {
                 type: "text",
-                text: "QR code generated. Please scan the QR code displayed in the terminal with your WhatsApp mobile app to authenticate. The QR code is printed in the server logs.",
+                text: JSON.stringify({
+                  status: "qr_required",
+                  qrCode: newStatus.qrCode,
+                  message: "QR code generated. Scan with your WhatsApp mobile app to authenticate.",
+                }),
               },
             ],
           }

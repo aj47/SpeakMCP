@@ -176,6 +176,11 @@ const getConfig = () => {
 	    remoteServerCorsOrigins: ["*"],
 	    remoteServerAutoShowPanel: false, // Don't auto-show panel by default for remote sessions
 
+    // WhatsApp Integration defaults
+    whatsappEnabled: false,
+    whatsappAllowFrom: [],
+    whatsappAutoReply: false,
+    whatsappLogMessages: false,
 
   }
 

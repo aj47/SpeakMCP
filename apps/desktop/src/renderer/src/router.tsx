@@ -50,6 +50,10 @@ export const router: ReturnType<typeof createBrowserRouter> =
           path: "settings/remote-server",
           lazy: () => import("./pages/settings-remote-server"),
         },
+        {
+          path: "settings/whatsapp",
+          lazy: () => import("./pages/settings-whatsapp"),
+        },
 
       ],
     },

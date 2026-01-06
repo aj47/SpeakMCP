@@ -1677,6 +1677,72 @@ export const router = {
       } catch (_e) {
         // lifecycle is best-effort
       }
+
+      // Manage WhatsApp MCP server auto-configuration
+      try {
+        const prevWhatsappEnabled = !!(prev as any)?.whatsappEnabled
+        const nextWhatsappEnabled = !!(merged as any)?.whatsappEnabled
+        const WHATSAPP_SERVER_NAME = "whatsapp"
+
+        if (prevWhatsappEnabled !== nextWhatsappEnabled) {
+          const currentMcpConfig = merged.mcpConfig || { mcpServers: {} }
+          const hasWhatsappServer = !!currentMcpConfig.mcpServers?.[WHATSAPP_SERVER_NAME]
+
+          if (nextWhatsappEnabled && !hasWhatsappServer) {
+            // Auto-add WhatsApp MCP server when enabled
+            // Determine the path to the WhatsApp MCP server
+            // In development: use the monorepo packages path
+            // In production: the package should be bundled with the app
+            let whatsappServerPath: string
+            if (process.env.NODE_ENV === "development" || process.env.ELECTRON_RENDERER_URL) {
+              // Development: use path relative to the monorepo root
+              whatsappServerPath = path.resolve(app.getAppPath(), "../../packages/mcp-whatsapp/dist/index.js")
+            } else {
+              // Production: use path relative to app resources
+              // The WhatsApp MCP package should be bundled in extraResources
+              whatsappServerPath = path.join(process.resourcesPath || app.getAppPath(), "mcp-whatsapp/dist/index.js")
+            }
+
+            const updatedMcpConfig: MCPConfig = {
+              ...currentMcpConfig,
+              mcpServers: {
+                ...currentMcpConfig.mcpServers,
+                [WHATSAPP_SERVER_NAME]: {
+                  command: "node",
+                  args: [whatsappServerPath],
+                  transport: "stdio",
+                },
+              },
+            }
+            merged.mcpConfig = updatedMcpConfig
+            configStore.save(merged)
+
+            // Initialize the WhatsApp server
+            const { mcpService } = await import("./mcp-service")
+            await mcpService.restartServer(WHATSAPP_SERVER_NAME)
+          } else if (!nextWhatsappEnabled && hasWhatsappServer) {
+            // Stop the WhatsApp server when disabled (but keep config for re-enabling)
+            const { mcpService } = await import("./mcp-service")
+            await mcpService.stopServer(WHATSAPP_SERVER_NAME)
+          }
+        } else if (nextWhatsappEnabled) {
+          // Check if WhatsApp settings changed - restart server to pick up new env vars
+          const whatsappSettingsChanged =
+            JSON.stringify((prev as any)?.whatsappAllowFrom) !== JSON.stringify((merged as any)?.whatsappAllowFrom) ||
+            (prev as any)?.whatsappAutoReply !== (merged as any)?.whatsappAutoReply ||
+            (prev as any)?.whatsappLogMessages !== (merged as any)?.whatsappLogMessages
+
+          if (whatsappSettingsChanged) {
+            const { mcpService } = await import("./mcp-service")
+            const currentMcpConfig = merged.mcpConfig || { mcpServers: {} }
+            if (currentMcpConfig.mcpServers?.[WHATSAPP_SERVER_NAME]) {
+              await mcpService.restartServer(WHATSAPP_SERVER_NAME)
+            }
+          }
+        }
+      } catch (_e) {
+        // lifecycle is best-effort
+      }
     }),
 
   recordEvent: t.procedure

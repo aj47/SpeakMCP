@@ -28,6 +28,16 @@ const SKILL_MD_PATHS = [
  * - https://github.com/owner/repo
  * - https://github.com/owner/repo/tree/main/path/to/skill
  */
+/**
+ * Validate a git ref (branch/tag name) to prevent command injection
+ * Only allows safe characters: alphanumeric, dots, hyphens, underscores, and forward slashes
+ */
+function validateGitRef(ref: string): boolean {
+  // Git ref names can contain alphanumeric, dots, hyphens, underscores, and slashes
+  // But must not contain shell metacharacters like ; & | $ ` ' " ( ) < > etc.
+  return /^[a-zA-Z0-9._\-/]+$/.test(ref)
+}
+
 function parseGitHubIdentifier(input: string): { owner: string; repo: string; path?: string; ref: string } {
   // Remove trailing slashes
   input = input.trim().replace(/\/+$/, "")
@@ -488,7 +498,11 @@ ${skillsContent}
     }
 
     const allSkills = this.getSkills()
-    const enabledSkills = allSkills.filter(skill => enabledSkillIds.includes(skill.id))
+    // Filter by both: skill must be in the profile's enabled list AND globally enabled (skill.enabled)
+    // The skill.enabled flag acts as a master kill-switch
+    const enabledSkills = allSkills.filter(skill => 
+      enabledSkillIds.includes(skill.id) && skill.enabled !== false
+    )
 
     if (enabledSkills.length === 0) {
       return ""
@@ -544,6 +558,14 @@ ${skillsContent}
 
     const { owner, repo, path: subPath, ref } = parsed
     logApp(`Importing skill from GitHub: ${owner}/${repo}${subPath ? `/${subPath}` : ""} (ref: ${ref})`)
+
+    // Validate the ref to prevent command injection
+    if (!validateGitRef(ref)) {
+      return {
+        imported: [],
+        errors: [`Invalid git ref: "${ref}". Ref names can only contain alphanumeric characters, dots, hyphens, underscores, and slashes.`],
+      }
+    }
 
     // Determine the local clone directory
     // Use format: skillsFolder/owner--repo (e.g., skills/SawyerHood--dev-browser)

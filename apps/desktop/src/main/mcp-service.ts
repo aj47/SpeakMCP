@@ -2319,6 +2319,20 @@ export class MCPService {
       }
       // Check if this is a built-in tool first
       if (isBuiltinTool(toolCall.name)) {
+        // Guard against executing built-in tools that are disabled in the profile config
+        // This ensures built-in tools (like execute_command) respect the same disabled tools rules as external tools
+        if (profileMcpConfig?.disabledTools?.includes(toolCall.name)) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Tool ${toolCall.name} is currently disabled for this profile.`,
+              },
+            ],
+            isError: true,
+          }
+        }
+
         if (isDebugTools()) {
           logTools("Executing built-in tool", { name: toolCall.name, arguments: toolCall.arguments })
         }
@@ -2418,18 +2432,9 @@ export class MCPService {
       })
 
       if (matchingTool && matchingTool.name.includes(":")) {
-        // Check if it's a built-in tool
-        if (isBuiltinTool(matchingTool.name)) {
-          const result = await executeBuiltinTool(matchingTool.name, toolCall.arguments || {})
-          if (result) {
-            return result
-          }
-        }
-
-        const [serverName, toolName] = matchingTool.name.split(":", 2)
-
         // Guard against executing tools that are disabled in the profile config
         // This ensures "disabled" consistently means non-executable, not just hidden from the tool list
+        // This check applies to BOTH built-in tools and external tools
         if (profileMcpConfig?.disabledTools?.includes(matchingTool.name)) {
           return {
             content: [
@@ -2441,6 +2446,18 @@ export class MCPService {
             isError: true,
           }
         }
+
+        // Check if it's a built-in tool
+        if (isBuiltinTool(matchingTool.name)) {
+          const result = await executeBuiltinTool(matchingTool.name, toolCall.arguments || {})
+          if (result) {
+            return result
+          }
+        }
+
+        const [serverName, toolName] = matchingTool.name.split(":", 2)
+
+        // Note: disabledTools check is already done above for both built-in and external tools
 
         const result = await this.executeServerTool(
           serverName,

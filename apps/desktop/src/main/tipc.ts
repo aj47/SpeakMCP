@@ -1736,7 +1736,10 @@ export const router = {
             (prev as any)?.whatsappLogMessages !== (merged as any)?.whatsappLogMessages
 
           // If auto-reply is enabled, also restart when Remote Server settings change
+          // This includes remoteServerEnabled because prepareEnvironment() only enables
+          // callback URL/API key injection when remote server is enabled
           const remoteServerSettingsChanged = (merged as any)?.whatsappAutoReply && (
+            (prev as any)?.remoteServerEnabled !== (merged as any)?.remoteServerEnabled ||
             (prev as any)?.remoteServerPort !== (merged as any)?.remoteServerPort ||
             (prev as any)?.remoteServerApiKey !== (merged as any)?.remoteServerApiKey
           )

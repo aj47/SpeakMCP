@@ -886,7 +886,11 @@ export function Component() {
                       <span>Submit</span>
                     </button>
                     <span className="text-xs text-muted-foreground">
-                      or press <kbd className="px-1.5 py-0.5 rounded bg-muted text-foreground font-mono text-xs">{getSubmitShortcutText}</kbd>
+                      {getSubmitShortcutText.toLowerCase().startsWith("release") ? (
+                        <>or <kbd className="px-1.5 py-0.5 rounded bg-muted text-foreground font-mono text-xs">{getSubmitShortcutText}</kbd></>
+                      ) : (
+                        <>or press <kbd className="px-1.5 py-0.5 rounded bg-muted text-foreground font-mono text-xs">{getSubmitShortcutText}</kbd></>
+                      )}
                     </span>
                   </div>
                 </div>

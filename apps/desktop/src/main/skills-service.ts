@@ -64,6 +64,34 @@ function validateGitHubIdentifierPart(part: string, type: "owner" | "repo"): boo
   return /^[a-zA-Z0-9._-]+$/.test(part)
 }
 
+/**
+ * Validate a subPath to prevent path traversal attacks.
+ * The subPath should not escape the intended directory via ".." or absolute paths.
+ */
+function validateSubPath(subPath: string): boolean {
+  if (!subPath) {
+    return true // Empty/null subPath is valid (means no subPath)
+  }
+  // Reject absolute paths
+  if (path.isAbsolute(subPath)) {
+    return false
+  }
+  // Reject paths containing .. (path traversal)
+  const normalizedPath = path.normalize(subPath)
+  if (normalizedPath.startsWith("..") || normalizedPath.includes(`${path.sep}..${path.sep}`) || normalizedPath.includes(`${path.sep}..`) || normalizedPath.endsWith("..")) {
+    return false
+  }
+  // Also reject if the path after normalization would escape
+  // Check each segment for ".."
+  const segments = subPath.split(/[/\\]/)
+  for (const segment of segments) {
+    if (segment === "..") {
+      return false
+    }
+  }
+  return true
+}
+
 function parseGitHubIdentifier(input: string): { owner: string; repo: string; path?: string; ref: string } {
   // Remove trailing slashes
   input = input.trim().replace(/\/+$/, "")
@@ -649,6 +677,15 @@ ${skillsContent}
       }
     }
 
+    // Validate subPath to prevent path traversal attacks
+    // Values like "../.." could escape the clone directory and access arbitrary local paths
+    if (subPath && !validateSubPath(subPath)) {
+      return {
+        imported: [],
+        errors: [`Invalid path: "${subPath}". Path cannot contain ".." or be absolute.`],
+      }
+    }
+
     // If ref is "main" (default), try to detect the actual default branch
     // This handles repos that use 'master' or other branch names
     if (ref === "main") {
@@ -833,6 +870,11 @@ ${skillsContent}
 
     if (!validateGitHubIdentifierPart(repo, "repo")) {
       throw new Error(`Invalid GitHub repo: "${repo}". Repository names can only contain alphanumeric characters, hyphens, underscores, and dots.`)
+    }
+
+    // Validate subPath to prevent path traversal attacks
+    if (subPath && !validateSubPath(subPath)) {
+      throw new Error(`Invalid path: "${subPath}". Path cannot contain ".." or be absolute.`)
     }
 
     // Clone the repository

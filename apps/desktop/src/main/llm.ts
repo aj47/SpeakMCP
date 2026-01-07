@@ -2863,11 +2863,13 @@ async function makeLLMCall(
         }
       }
 
-      // Use the streamed content for display consistency if we have it
-      // This ensures what the user saw streaming is what they get at the end
-      // Tool calls still come from the structured response since streaming doesn't capture them
-      // We always prefer streamed content for text since it's what the user watched appear
-      if (lastStreamedContent) {
+      // Use the streamed content for display consistency if we have it AND there are no tool calls.
+      // This ensures what the user saw streaming is what they get at the end for text-only responses.
+      // When tool calls are present, we keep the structured response content to maintain
+      // consistency between content and toolCalls in the conversation history.
+      // This prevents downstream agent logic from seeing mismatched text content and tool calls.
+      const hasToolCalls = result.toolCalls && result.toolCalls.length > 0
+      if (lastStreamedContent && !hasToolCalls) {
         result = {
           ...result,
           content: lastStreamedContent,

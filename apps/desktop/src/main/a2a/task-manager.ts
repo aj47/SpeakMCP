@@ -403,14 +403,28 @@ export class A2ATaskManager {
       return false;
     }
 
-    // Remove from session index
+    // Remove from session index and clean up empty Sets
     if (managed.parentSessionId) {
-      this.sessionTasks.get(managed.parentSessionId)?.delete(taskId);
+      const sessionSet = this.sessionTasks.get(managed.parentSessionId);
+      if (sessionSet) {
+        sessionSet.delete(taskId);
+        // Remove the map entry if the Set is now empty to prevent memory accumulation
+        if (sessionSet.size === 0) {
+          this.sessionTasks.delete(managed.parentSessionId);
+        }
+      }
     }
 
-    // Remove from context index
+    // Remove from context index and clean up empty Sets
     if (managed.task.contextId) {
-      this.contextTasks.get(managed.task.contextId)?.delete(taskId);
+      const contextSet = this.contextTasks.get(managed.task.contextId);
+      if (contextSet) {
+        contextSet.delete(taskId);
+        // Remove the map entry if the Set is now empty to prevent memory accumulation
+        if (contextSet.size === 0) {
+          this.contextTasks.delete(managed.task.contextId);
+        }
+      }
     }
 
     this.tasks.delete(taskId);

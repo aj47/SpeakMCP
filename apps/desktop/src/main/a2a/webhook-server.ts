@@ -209,18 +209,26 @@ export class A2AWebhookServer {
       return;
     }
 
-    // Verify authentication token if configured
+    // Verify authentication token - reject unknown task IDs to prevent injection
     const authHeader = req.headers['authorization'];
     const expectedToken = this.expectedTokens.get(taskId);
 
-    if (expectedToken) {
-      const providedToken = authHeader?.replace(/^Bearer\s+/i, '');
-      if (providedToken !== expectedToken) {
-        logA2A(`Unauthorized webhook request for task ${taskId}`);
-        res.writeHead(401, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Unauthorized' }));
-        return;
-      }
+    // If no token is registered for this task ID, reject the request
+    // This prevents unauthorized task update injection for unknown tasks
+    if (!expectedToken) {
+      logA2A(`Unknown task ID rejected: ${taskId}`);
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Unknown task' }));
+      return;
+    }
+
+    // Verify the provided token matches the expected token
+    const providedToken = authHeader?.replace(/^Bearer\s+/i, '');
+    if (providedToken !== expectedToken) {
+      logA2A(`Unauthorized webhook request for task ${taskId}`);
+      res.writeHead(401, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Unauthorized' }));
+      return;
     }
 
     // Collect request body

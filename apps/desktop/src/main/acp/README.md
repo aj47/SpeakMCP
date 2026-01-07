@@ -1,9 +1,6 @@
 # Multi-Agent Architecture
 
-SpeakMCP supports a multi-agent architecture that enables the main AI assistant to delegate tasks to specialized sub-agents. This is implemented using two industry-standard protocols:
-
-- **ACP (Agent Client Protocol)** - Zed's protocol for user-to-agent interaction
-- **A2A (Agent-to-Agent Protocol)** - Google's protocol for agent-to-agent delegation
+SpeakMCP supports a multi-agent architecture that enables the main AI assistant to delegate tasks to specialized sub-agents. This is implemented using the **ACP (Agent Client Protocol)** - Zed's protocol for agent interaction.
 
 ## Architecture Overview
 
@@ -15,26 +12,25 @@ SpeakMCP supports a multi-agent architecture that enables the main AI assistant 
                               │
                     ┌─────────┴─────────┐
                     │   Smart Router    │
-                    │ (Unified Routing) │
+                    │ (Capability-Based)│
                     └─────────┬─────────┘
                               │
-          ┌───────────────────┼───────────────────┐
-          │                   │                   │
-          ▼                   ▼                   ▼
-┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐
-│ Internal Agent  │ │   ACP Agents    │ │   A2A Agents    │
-│  (Built-in)     │ │ (stdio/remote)  │ │ (HTTP/JSON-RPC) │
-└─────────────────┘ └─────────────────┘ └─────────────────┘
+          ┌───────────────────┴───────────────────┐
+          │                                       │
+          ▼                                       ▼
+┌─────────────────┐                     ┌─────────────────┐
+│ Internal Agent  │                     │   ACP Agents    │
+│  (Built-in)     │                     │ (stdio/remote)  │
+└─────────────────┘                     └─────────────────┘
 ```
 
-## Protocols
+## ACP Protocol
 
-### ACP (Agent Client Protocol)
-
-Used for local agent communication via stdio or HTTP:
+The ACP (Agent Client Protocol) is used for agent communication via stdio or HTTP:
 
 - **stdio**: Spawns a local process, communicates via JSON-RPC over stdin/stdout
 - **remote**: Connects to an HTTP endpoint
+- **internal**: Built-in agent running within the main process
 
 Configuration in `config.json`:
 ```json
@@ -55,52 +51,22 @@ Configuration in `config.json`:
 }
 ```
 
-### A2A (Agent-to-Agent Protocol)
-
-Used for remote agent communication via HTTP/JSON-RPC:
-
-- Agents expose `/.well-known/agent-card.json` for discovery
-- Communication via JSON-RPC methods: `message/send`, `tasks/get`, `tasks/cancel`
-- Supports streaming and push notifications via webhooks
-
-Configuration in `config.json`:
-```json
-{
-  "a2aConfig": {
-    "agentUrls": [
-      "https://research-agent.example.com",
-      "https://analysis-agent.example.com"
-    ],
-    "enableWebhooks": true,
-    "webhookPort": 0
-  }
-}
-```
-
 ## Module Structure
 
 ```
 apps/desktop/src/main/
-├── acp/                          # ACP module (user-to-agent)
-│   ├── types.ts                  # ACP type definitions
-│   ├── acp-registry.ts           # Agent registration and discovery
-│   ├── acp-client-service.ts     # HTTP client for remote ACP agents
-│   ├── acp-process-manager.ts    # Process lifecycle for stdio agents
-│   ├── acp-router-tools.ts       # Built-in delegation tools
+├── acp/                              # ACP module
+│   ├── types.ts                      # ACP type definitions
+│   ├── acp-registry.ts               # Agent registration and discovery
+│   ├── acp-client-service.ts         # HTTP client for remote ACP agents
+│   ├── acp-process-manager.ts        # Process lifecycle for stdio agents
+│   ├── acp-router-tools.ts           # Built-in delegation tools
 │   ├── acp-router-tool-definitions.ts  # Tool schemas
-│   ├── acp-smart-router.ts       # Intelligent routing logic
-│   ├── acp-background-notifier.ts      # Background polling
-│   └── internal-agent.ts         # Built-in internal sub-agent
+│   ├── acp-smart-router.ts           # Intelligent routing logic
+│   ├── acp-background-notifier.ts    # Background polling
+│   └── internal-agent.ts             # Built-in internal sub-agent
 │
-├── a2a/                          # A2A module (agent-to-agent)
-│   ├── types.ts                  # A2A protocol types
-│   ├── agent-registry.ts         # Agent discovery via AgentCards
-│   ├── a2a-client.ts             # HTTP/JSON-RPC client
-│   ├── task-manager.ts           # Task lifecycle management
-│   ├── webhook-server.ts         # Push notification receiver
-│   └── index.ts                  # Module exports and initialization
-│
-└── acp-service.ts                # Legacy ACP service (stdio JSON-RPC)
+└── acp-service.ts                    # Legacy ACP service (stdio JSON-RPC)
 ```
 
 ## Delegation Tools
@@ -116,9 +82,9 @@ The main agent has access to these built-in tools for delegation:
 | `stop_agent` | Stop a running agent |
 | `cancel_agent_run` | Cancel a running task |
 
-### A2A-Aligned Aliases
+### Tool Aliases
 
-For compatibility with A2A terminology, these aliases are also available:
+For flexibility, these aliases are also available:
 
 | Alias | Maps To |
 |-------|---------|
@@ -140,34 +106,33 @@ const decision = acpSmartRouter.suggestUnifiedDelegation(
 
 if (decision.shouldDelegate) {
   console.log(`Best match: ${decision.suggestedAgents[0].agentName}`);
-  console.log(`Protocol: ${decision.suggestedAgents[0].isA2A ? 'A2A' : 'ACP'}`);
+  console.log(`Confidence: ${Math.round(decision.suggestedAgents[0].confidence * 100)}%`);
 }
 ```
 
 ## Task Lifecycle
 
 1. **Task Creation**: User request triggers delegation via `delegate_to_agent`
-2. **Agent Selection**: Smart router finds matching agents (ACP or A2A)
-3. **Execution**: Task sent to agent via appropriate protocol
+2. **Agent Selection**: Smart router finds matching agents based on capabilities
+3. **Execution**: Task sent to agent via ACP protocol
 4. **Progress Tracking**: UI receives real-time updates via event emitters
 5. **Completion**: Results returned to main agent for incorporation
 
 ## Adding Custom Agents
 
-### Local ACP Agent
+### Local stdio Agent
 
 1. Implement the ACP protocol (JSON-RPC over stdio)
-2. Add to `acpAgents` in config
+2. Add to `acpAgents` in config with `connection.type: "stdio"`
 3. Agent will be auto-discovered on startup
 
-### Remote A2A Agent
+### Remote HTTP Agent
 
-1. Host an A2A-compatible server with `/.well-known/agent-card.json`
-2. Add the URL to `a2aConfig.agentUrls`
+1. Host an ACP-compatible HTTP server
+2. Add to `acpAgents` in config with `connection.type: "remote"` and `connection.baseUrl`
 3. Agent will be discovered and registered on startup
 
 ## References
 
 - [Zed ACP Specification](https://zed.dev/docs/acp)
-- [Google A2A Protocol](https://github.com/google/a2a-protocol)
 - [Model Context Protocol](https://modelcontextprotocol.io/)

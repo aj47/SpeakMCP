@@ -16,12 +16,28 @@ function logACP(...args: unknown[]): void {
  * @returns The agent definition ready for registration
  */
 export function configToDefinition(config: ACPAgentConfig): ACPAgentDefinition {
-  const baseUrl =
-    config.connection.type === 'remote'
-      ? config.connection.baseUrl
-      : config.connection.port != null
-        ? `http://localhost:${config.connection.port}`
-        : 'http://localhost'
+  // Determine baseUrl based on connection type
+  let baseUrl: string
+  if (config.connection.type === 'remote' && config.connection.baseUrl) {
+    baseUrl = config.connection.baseUrl
+  } else if (config.connection.type === 'internal') {
+    // Internal agents don't have a baseUrl, but we use a placeholder
+    baseUrl = 'internal://'
+  } else {
+    // stdio agents use localhost with a dynamically assigned port
+    baseUrl = 'http://localhost'
+  }
+
+  // Build spawn config for stdio agents
+  const spawnConfig =
+    config.connection.type === 'stdio' && config.connection.command
+      ? {
+          command: config.connection.command,
+          args: config.connection.args ?? [],
+          env: config.connection.env,
+          cwd: config.connection.cwd,
+        }
+      : undefined
 
   return {
     name: config.name,
@@ -29,17 +45,7 @@ export function configToDefinition(config: ACPAgentConfig): ACPAgentDefinition {
     description: config.description ?? '',
     capabilities: config.capabilities ?? [],
     baseUrl,
-    spawnConfig:
-      config.connection.type === 'spawn'
-        ? {
-            command: config.connection.command,
-            args: config.connection.args ?? [],
-            env: config.connection.env,
-          }
-        : undefined,
-    maxConcurrency: config.maxConcurrentRuns,
-    timeout: config.defaultTimeout,
-    idleTimeoutMs: config.idleTimeoutMs,
+    spawnConfig,
   }
 }
 

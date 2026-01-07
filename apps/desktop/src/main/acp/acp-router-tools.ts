@@ -20,9 +20,21 @@ import {
   getInternalAgentInfo,
   getSessionDepth,
 } from './internal-agent';
-import { a2aAgentRegistry, createA2AClient, a2aTaskManager } from '../a2a';
-import type { A2ATextPart, A2AMessage, A2ATask, A2AArtifact, A2APart } from '../a2a/types';
-import { isTerminalState as isA2ATerminalState } from '../a2a/types';
+
+// ============================================================================
+// Consolidated Delegation State
+// ============================================================================
+
+/**
+ * Extended state for tracking delegated runs.
+ * Consolidates ACPSubAgentState with conversation history and emit timing.
+ */
+interface DelegatedRun extends ACPSubAgentState {
+  /** Conversation messages for this run */
+  conversation: ACPSubAgentMessage[];
+  /** Last time we emitted a progress update to the UI (for rate limiting) */
+  lastEmitTime: number;
+}
 
 /**
  * Log ACP router-related debug messages.
@@ -67,22 +79,141 @@ function cleanupDelegationMappings(runId: string, agentName: string): void {
   }
 }
 
-/** Track delegated sub-agent runs for status checking */
-const delegatedRuns: Map<string, ACPSubAgentState> = new Map();
+// ============================================================================
+// Shared Delegation Helpers
+// ============================================================================
 
-/** Track conversation messages per session for UI display */
-const sessionConversations: Map<string, ACPSubAgentMessage[]> = new Map();
+/** Arguments for creating a sub-agent state */
+interface CreateSubAgentStateArgs {
+  agentName: string;
+  task: string;
+  parentSessionId: string;
+  isInternal?: boolean;
+}
 
-/** Map from agent session IDs to our delegation run IDs */
+/**
+ * Create and register a new sub-agent state for tracking delegated runs.
+ * Initializes conversation with the user's task message.
+ */
+function createSubAgentState(args: CreateSubAgentStateArgs): DelegatedRun {
+  const runId = generateDelegationRunId();
+  const now = Date.now();
+  const userMessage: ACPSubAgentMessage = {
+    role: 'user',
+    content: args.task,
+    timestamp: now,
+  };
+  const delegatedRun: DelegatedRun = {
+    runId,
+    agentName: args.agentName,
+    parentSessionId: args.parentSessionId,
+    task: args.task,
+    status: 'pending',
+    startTime: now,
+    isInternal: args.isInternal,
+    conversation: [userMessage],
+    lastEmitTime: 0,
+  };
+  delegatedRuns.set(runId, delegatedRun);
+  return delegatedRun;
+}
+
+/**
+ * Result type for delegation operations.
+ */
+interface DelegationResult {
+  success: boolean;
+  runId: string;
+  agentName: string;
+  status: 'completed' | 'failed' | 'running' | 'cancelled';
+  output?: string;
+  error?: string;
+  duration?: number;
+  conversation?: ACPSubAgentMessage[];
+  message?: string;
+  note?: string;
+}
+
+/**
+ * Create a completed delegation result.
+ */
+function createCompletedResult(
+  subAgentState: DelegatedRun,
+  output: string,
+  conversation: ACPSubAgentMessage[]
+): DelegationResult {
+  subAgentState.status = 'completed';
+  return {
+    success: true,
+    runId: subAgentState.runId,
+    agentName: subAgentState.agentName,
+    status: 'completed',
+    output,
+    duration: Date.now() - subAgentState.startTime,
+    conversation,
+  };
+}
+
+/**
+ * Create a failed delegation result.
+ */
+function createFailedResult(
+  subAgentState: DelegatedRun,
+  error: string,
+  conversation?: ACPSubAgentMessage[]
+): DelegationResult {
+  subAgentState.status = 'failed';
+  return {
+    success: false,
+    runId: subAgentState.runId,
+    agentName: subAgentState.agentName,
+    status: 'failed',
+    error,
+    duration: Date.now() - subAgentState.startTime,
+    conversation,
+  };
+}
+
+/**
+ * Create an async running delegation result (for waitForResult=false).
+ */
+function createRunningResult(subAgentState: DelegatedRun): DelegationResult {
+  return {
+    success: true,
+    runId: subAgentState.runId,
+    agentName: subAgentState.agentName,
+    status: 'running',
+    message: `Task delegated to "${subAgentState.agentName}". Use check_agent_status with runId "${subAgentState.runId}" to check progress.`,
+  };
+}
+
+/**
+ * Register agent name to run ID mapping for session update fallback.
+ */
+function registerAgentRunMapping(agentName: string, runId: string): void {
+  let activeRunIds = agentNameToActiveRunIds.get(agentName);
+  if (!activeRunIds) {
+    activeRunIds = new Set();
+    agentNameToActiveRunIds.set(agentName, activeRunIds);
+  }
+  activeRunIds.add(runId);
+  logACPRouter(`Registered active run for ${agentName}: ${runId} (${activeRunIds.size} total active)`);
+}
+
+/**
+ * Track delegated sub-agent runs for status checking.
+ * Consolidates run state, conversation history, and emit timing.
+ */
+const delegatedRuns: Map<string, DelegatedRun> = new Map();
+
+/** Map from agent session IDs to our delegation run IDs (needed for stdio agent session mapping) */
 const sessionToRunId: Map<string, string> = new Map();
 
-/** Map from agent names to their currently active run IDs (for session mapping fallback) 
+/**
+ * Map from agent names to their currently active run IDs (for session mapping fallback).
  * Uses a Set to support parallel delegations to the same agent.
  */
 const agentNameToActiveRunIds: Map<string, Set<string>> = new Map();
-
-/** Track last emit time per runId for rate limiting */
-const lastEmitTime: Map<string, number> = new Map();
 
 // ============================================================================
 // Streaming Safeguards Configuration
@@ -234,12 +365,8 @@ acpService.on('sessionUpdate', (event: {
     }
   }
 
-  // Get or create conversation for this run (use runId, not sessionId, for consistency)
-  let conversation = sessionConversations.get(runId);
-  if (!conversation) {
-    conversation = [];
-    sessionConversations.set(runId, conversation);
-  }
+  // Use conversation from consolidated state
+  const conversation = subAgentState.conversation;
 
   // Convert content blocks to conversation messages with size limits
   if (content && Array.isArray(content)) {
@@ -274,19 +401,16 @@ acpService.on('sessionUpdate', (event: {
 
   // Enforce conversation size limit (keep most recent messages)
   if (conversation.length > MAX_CONVERSATION_MESSAGES * 2) {
-    const trimmed = conversation.slice(-MAX_CONVERSATION_MESSAGES);
-    sessionConversations.set(runId, trimmed);
-    conversation = trimmed;
+    subAgentState.conversation = conversation.slice(-MAX_CONVERSATION_MESSAGES);
   }
 
   // Rate limiting: skip emit if we recently emitted (unless complete)
   const now = Date.now();
-  const lastEmit = lastEmitTime.get(runId) || 0;
-  if (!isComplete && now - lastEmit < MIN_EMIT_INTERVAL_MS) {
-    logACPRouter(`Rate limiting UI emit for run ${runId} (${now - lastEmit}ms since last)`);
+  if (!isComplete && now - subAgentState.lastEmitTime < MIN_EMIT_INTERVAL_MS) {
+    logACPRouter(`Rate limiting UI emit for run ${runId} (${now - subAgentState.lastEmitTime}ms since last)`);
     return;
   }
-  lastEmitTime.set(runId, now);
+  subAgentState.lastEmitTime = now;
 
   // Build delegation progress with size-limited conversation
   const delegationProgress: ACPDelegationProgress = {
@@ -297,7 +421,7 @@ acpService.on('sessionUpdate', (event: {
     startTime: subAgentState.startTime,
     endTime: isComplete ? Date.now() : undefined,
     progressMessage: stopReason ? `Stop reason: ${stopReason}` : undefined,
-    conversation: prepareConversationForUI(conversation),
+    conversation: prepareConversationForUI(subAgentState.conversation),
   };
 
   // Emit progress update to UI
@@ -463,38 +587,97 @@ export async function handleDelegateToAgent(
 
   // Handle internal agent delegation
   if (args.agentName === 'internal') {
-    return handleInternalAgentDelegation(args, parentSessionId);
+    return executeInternalAgent(args, parentSessionId, waitForResult);
   }
 
-  // Check if this is an A2A agent (by URL or name match in A2A registry)
-  const a2aAgent = a2aAgentRegistry.getAllAgents().find(
-    a => a.card.name === args.agentName || a.card.url === args.agentName
-  );
-  if (a2aAgent) {
-    return handleA2ADelegation(args, a2aAgent.card.url, parentSessionId);
+  // Handle external (ACP) agent delegation
+  return executeACPAgent(args, parentSessionId, waitForResult);
+}
+
+/**
+ * Execute delegation to the internal agent.
+ * Uses the internal sub-session system with unified tracking.
+ */
+async function executeInternalAgent(
+  args: { task: string; context?: string },
+  parentSessionId: string | undefined,
+  waitForResult: boolean
+): Promise<object> {
+  logACPRouter('Executing internal agent', { task: args.task.substring(0, 100), parentSessionId });
+
+  // Check if internal agent is enabled
+  const internalConfig = getInternalAgentConfig();
+  if (internalConfig.enabled === false) {
+    return { success: false, error: 'Internal agent is disabled' };
   }
 
+  if (!parentSessionId) {
+    return { success: false, error: 'Parent session ID is required for internal agent delegation' };
+  }
+
+  // Create unified sub-agent state (conversation initialized automatically)
+  const subAgentState = createSubAgentState({
+    agentName: 'internal',
+    task: args.task,
+    parentSessionId,
+    isInternal: true,
+  });
+  subAgentState.status = 'running';
+
+  // Internal agent always executes synchronously
+  // waitForResult is ignored for internal agent (always waits)
+  try {
+    const result = await runInternalSubSession({
+      task: args.task,
+      context: args.context,
+      parentSessionId,
+    });
+
+    // Store sub-session ID for cancellation support
+    if (result.subSessionId) {
+      subAgentState.subSessionId = result.subSessionId;
+    }
+
+    // Update conversation history in consolidated state
+    subAgentState.conversation = result.conversationHistory.map(msg => ({
+      role: msg.role,
+      content: msg.content,
+      timestamp: msg.timestamp,
+    }));
+
+    if (result.success) {
+      return createCompletedResult(subAgentState, result.result || '', subAgentState.conversation);
+    } else {
+      return createFailedResult(subAgentState, result.error || 'Unknown error', subAgentState.conversation);
+    }
+  } catch (error) {
+    logACPRouter('Error in internal agent execution:', error);
+    return createFailedResult(subAgentState, error instanceof Error ? error.message : String(error));
+  }
+}
+
+/**
+ * Execute delegation to an external ACP agent (stdio or remote).
+ * Handles both synchronous and asynchronous execution modes.
+ */
+async function executeACPAgent(
+  args: { agentName: string; task: string; context?: string },
+  parentSessionId: string | undefined,
+  waitForResult: boolean
+): Promise<object> {
   try {
     // Check if agent exists in config
     const config = configStore.get();
     const agentConfig = config.acpAgents?.find((a) => a.name === args.agentName);
     if (!agentConfig) {
-      return {
-        success: false,
-        error: `Agent "${args.agentName}" not found in configuration or A2A registry`,
-      };
+      return { success: false, error: `Agent "${args.agentName}" not found in configuration` };
     }
 
     if (agentConfig.enabled === false) {
-      return {
-        success: false,
-        error: `Agent "${args.agentName}" is disabled`,
-      };
+      return { success: false, error: `Agent "${args.agentName}" is disabled` };
     }
 
-    // Check current status via acpService (only for stdio agents)
-    // For remote agents, acpService doesn't track status - they're assumed reachable
-    // and the actual HTTP call will fail if they're not available
+    // Ensure stdio agents are spawned
     if (agentConfig.connection.type === 'stdio') {
       const agentStatus = acpService.getAgentStatus(args.agentName);
       if (agentStatus?.status !== 'ready') {
@@ -509,237 +692,202 @@ export async function handleDelegateToAgent(
         }
       }
     }
-    // For remote agents, we proceed directly - acpClientService will handle the HTTP call
 
-    // Prepare the input message
-    // NOTE: Do not inline context formatting here; ACP service handles context formatting.
-    const input = args.task;
-
-    const runId = generateDelegationRunId();
-    const startTime = Date.now();
-
-    // Create the sub-agent state for tracking
-    const subAgentState: ACPSubAgentState = {
-      runId,
+    // Create unified sub-agent state (conversation initialized automatically)
+    const subAgentState = createSubAgentState({
       agentName: args.agentName,
-      parentSessionId: parentSessionId || 'unknown',
       task: args.task,
-      status: 'pending',
-      startTime,
-    };
-
-    delegatedRuns.set(runId, subAgentState);
-
-    // Use acpService.runTask for the actual delegation
+      parentSessionId: parentSessionId || 'unknown',
+    });
     subAgentState.status = 'running';
+    registerAgentRunMapping(args.agentName, subAgentState.runId);
 
-    // Register the agent name -> runId mapping for session update fallback
-    // Using a Set to support parallel delegations to the same agent
-    let activeRunIds = agentNameToActiveRunIds.get(args.agentName);
-    if (!activeRunIds) {
-      activeRunIds = new Set();
-      agentNameToActiveRunIds.set(args.agentName, activeRunIds);
-    }
-    activeRunIds.add(runId);
-    logACPRouter(`Registered active run for ${args.agentName}: ${runId} (${activeRunIds.size} total active)`);
-
-    // Add user message to conversation
-    const userMessage: ACPSubAgentMessage = {
-      role: 'user',
-      content: input,
-      timestamp: Date.now(),
-    };
-    sessionConversations.set(runId, [userMessage]);
-
-    // Helper to register session mapping after task starts
+    // Helper to register session mapping
     const registerSessionMapping = () => {
       const sessionId = acpService.getAgentSessionId(args.agentName);
       if (sessionId) {
-        sessionToRunId.set(sessionId, runId);
-        logACPRouter(`Mapped session ${sessionId} to run ${runId}`);
+        sessionToRunId.set(sessionId, subAgentState.runId);
+        logACPRouter(`Mapped session ${sessionId} to run ${subAgentState.runId}`);
       }
     };
 
     if (waitForResult) {
-      // Synchronous execution - wait for result
-      try {
-        // Register mapping before running (session may already exist)
-        registerSessionMapping();
-
-        const result = await acpService.runTask({
-          agentName: args.agentName,
-          input,
-          context: args.context,
-          mode: 'sync',
-        });
-
-        // Register mapping again after task (session may have been created)
-        registerSessionMapping();
-
-        // Get collected conversation
-        const conversation = sessionConversations.get(runId) || [];
-
-        // Add final assistant message if we got a result
-        if (result.result) {
-          conversation.push({
-            role: 'assistant',
-            content: result.result,
-            timestamp: Date.now(),
-          });
-        }
-
-        if (result.success) {
-          subAgentState.status = 'completed';
-          cleanupDelegationMappings(runId, args.agentName);
-          return {
-            success: true,
-            runId,
-            agentName: args.agentName,
-            status: 'completed',
-            output: result.result || '',
-            duration: Date.now() - startTime,
-            conversation,
-          };
-        } else {
-          subAgentState.status = 'failed';
-          cleanupDelegationMappings(runId, args.agentName);
-          return {
-            success: false,
-            runId,
-            agentName: args.agentName,
-            status: 'failed',
-            error: result.error || 'Unknown error',
-            duration: Date.now() - startTime,
-            conversation,
-          };
-        }
-      } catch (error) {
-        subAgentState.status = 'failed';
-        cleanupDelegationMappings(runId, args.agentName);
-        throw error;
-      }
+      return executeACPAgentSync(subAgentState, args, registerSessionMapping);
     } else {
-      // Asynchronous execution - return immediately with run ID
-      // Start background polling for notifications
-      acpBackgroundNotifier.startPolling();
-
-      // For remote HTTP agents, use acpClientService which returns a server run_id for status polling
-      if (agentConfig.connection.type === 'remote') {
-        const baseUrl = agentConfig.connection.baseUrl;
-        // Store baseUrl in subAgentState for background notifier to use
-        subAgentState.baseUrl = baseUrl;
-
-        // Start the async run via HTTP API
-        acpClientService.runAgentAsync({
-          agentName: args.agentName,
-          input,
-          mode: 'async',
-          parentSessionId,
-        }).then(
-          (acpRunId) => {
-            // Store the server's run ID for status polling
-            subAgentState.acpRunId = acpRunId;
-            logACPRouter(`Async HTTP run started for ${args.agentName}: acpRunId=${acpRunId}`);
-          },
-          (error) => {
-            subAgentState.status = 'failed';
-            const endTime = Date.now();
-            subAgentState.result = {
-              runId,
-              agentName: args.agentName,
-              status: 'failed',
-              startTime: subAgentState.startTime,
-              endTime,
-              metadata: { duration: endTime - subAgentState.startTime },
-              error: error instanceof Error ? error.message : String(error),
-            };
-            cleanupDelegationMappings(runId, args.agentName);
-            logACPRouter(`Async HTTP run failed for ${args.agentName}:`, error);
-          }
-        );
-      } else {
-        // For stdio agents, use acpService.runTask
-        acpService.runTask({
-          agentName: args.agentName,
-          input,
-          context: args.context,
-          mode: 'async',
-        }).then(
-          (result) => {
-            // Register mapping after task completes (session should now exist)
-            registerSessionMapping();
-
-            const endTime = Date.now();
-
-            if (result.success) {
-              subAgentState.status = 'completed';
-              // Store result for later retrieval
-              const runResult: ACPRunResult = {
-                runId,
-                agentName: args.agentName,
-                status: 'completed',
-                startTime: subAgentState.startTime,
-                endTime,
-                metadata: { duration: endTime - subAgentState.startTime },
-                output: [
-                  {
-                    role: 'assistant',
-                    parts: [{ content: result.result || '' }],
-                  },
-                ],
-              };
-              subAgentState.result = runResult;
-            } else {
-              subAgentState.status = 'failed';
-              const runResult: ACPRunResult = {
-                runId,
-                agentName: args.agentName,
-                status: 'failed',
-                startTime: subAgentState.startTime,
-                endTime,
-                metadata: { duration: endTime - subAgentState.startTime },
-                error: result.error || 'Unknown error',
-              };
-              subAgentState.result = runResult;
-            }
-            // Clean up mappings now that the run is done to avoid stale routing.
-            cleanupDelegationMappings(runId, args.agentName);
-            logACPRouter(`Async run completed for ${args.agentName}:`, result.success ? 'success' : 'failed');
-          },
-          (error) => {
-            subAgentState.status = 'failed';
-            const endTime = Date.now();
-            subAgentState.result = {
-              runId,
-              agentName: args.agentName,
-              status: 'failed',
-              startTime: subAgentState.startTime,
-              endTime,
-              metadata: { duration: endTime - subAgentState.startTime },
-              error: error instanceof Error ? error.message : String(error),
-            };
-            // Best-effort mapping cleanup for hard failures (no further session updates expected)
-            cleanupDelegationMappings(runId, args.agentName);
-            logACPRouter(`Async run failed for ${args.agentName}:`, error);
-          }
-        );
-      }
-
-      return {
-        success: true,
-        runId,
-        agentName: args.agentName,
-        status: 'running',
-        message: `Task delegated to "${args.agentName}". Use check_agent_status with runId "${runId}" to check progress.`,
-      };
+      return executeACPAgentAsync(subAgentState, args, agentConfig, parentSessionId, registerSessionMapping);
     }
   } catch (error) {
     logACPRouter('Error delegating to agent:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : String(error),
-    };
+    return { success: false, error: error instanceof Error ? error.message : String(error) };
   }
+}
+
+/**
+ * Execute synchronous ACP agent delegation.
+ */
+async function executeACPAgentSync(
+  subAgentState: DelegatedRun,
+  args: { agentName: string; task: string; context?: string },
+  registerSessionMapping: () => void
+): Promise<object> {
+  try {
+    registerSessionMapping();
+
+    const result = await acpService.runTask({
+      agentName: args.agentName,
+      input: args.task,
+      context: args.context,
+      mode: 'sync',
+    });
+
+    registerSessionMapping();
+
+    // Add final assistant message if we got a result
+    if (result.result) {
+      subAgentState.conversation.push({
+        role: 'assistant',
+        content: result.result,
+        timestamp: Date.now(),
+      });
+    }
+
+    cleanupDelegationMappings(subAgentState.runId, args.agentName);
+
+    if (result.success) {
+      return createCompletedResult(subAgentState, result.result || '', subAgentState.conversation);
+    } else {
+      return createFailedResult(subAgentState, result.error || 'Unknown error', subAgentState.conversation);
+    }
+  } catch (error) {
+    cleanupDelegationMappings(subAgentState.runId, args.agentName);
+    throw error;
+  }
+}
+
+/**
+ * Execute asynchronous ACP agent delegation.
+ */
+function executeACPAgentAsync(
+  subAgentState: DelegatedRun,
+  args: { agentName: string; task: string; context?: string },
+  agentConfig: NonNullable<ReturnType<typeof configStore.get>['acpAgents']>[number],
+  parentSessionId: string | undefined,
+  registerSessionMapping: () => void
+): DelegationResult {
+  // Start background polling for notifications
+  acpBackgroundNotifier.startPolling();
+
+  if (agentConfig.connection.type === 'remote' && agentConfig.connection.baseUrl) {
+    executeRemoteAgentAsync(subAgentState, args, agentConfig.connection.baseUrl, parentSessionId);
+  } else if (agentConfig.connection.type === 'remote') {
+    // Remote agent without baseUrl is a configuration error
+    subAgentState.status = 'failed';
+    return createFailedResult(subAgentState, `Remote agent "${args.agentName}" has no baseUrl configured`);
+  } else {
+    executeStdioAgentAsync(subAgentState, args, registerSessionMapping);
+  }
+
+  return createRunningResult(subAgentState);
+}
+
+/**
+ * Execute async remote HTTP agent delegation (fire-and-forget).
+ */
+function executeRemoteAgentAsync(
+  subAgentState: DelegatedRun,
+  args: { agentName: string; task: string },
+  baseUrl: string,
+  parentSessionId: string | undefined
+): void {
+  subAgentState.baseUrl = baseUrl;
+
+  acpClientService.runAgentAsync({
+    agentName: args.agentName,
+    input: args.task,
+    mode: 'async',
+    parentSessionId,
+  }).then(
+    (acpRunId) => {
+      subAgentState.acpRunId = acpRunId;
+      logACPRouter(`Async HTTP run started for ${args.agentName}: acpRunId=${acpRunId}`);
+    },
+    (error) => {
+      finalizeAsyncRunWithError(subAgentState, args.agentName, error);
+    }
+  );
+}
+
+/**
+ * Execute async stdio agent delegation (fire-and-forget).
+ */
+function executeStdioAgentAsync(
+  subAgentState: DelegatedRun,
+  args: { agentName: string; task: string; context?: string },
+  registerSessionMapping: () => void
+): void {
+  acpService.runTask({
+    agentName: args.agentName,
+    input: args.task,
+    context: args.context,
+    mode: 'async',
+  }).then(
+    (result) => {
+      registerSessionMapping();
+      const endTime = Date.now();
+
+      if (result.success) {
+        subAgentState.status = 'completed';
+        subAgentState.result = {
+          runId: subAgentState.runId,
+          agentName: args.agentName,
+          status: 'completed',
+          startTime: subAgentState.startTime,
+          endTime,
+          metadata: { duration: endTime - subAgentState.startTime },
+          output: [{ role: 'assistant', parts: [{ content: result.result || '' }] }],
+        };
+      } else {
+        subAgentState.status = 'failed';
+        subAgentState.result = {
+          runId: subAgentState.runId,
+          agentName: args.agentName,
+          status: 'failed',
+          startTime: subAgentState.startTime,
+          endTime,
+          metadata: { duration: endTime - subAgentState.startTime },
+          error: result.error || 'Unknown error',
+        };
+      }
+      cleanupDelegationMappings(subAgentState.runId, args.agentName);
+      logACPRouter(`Async run completed for ${args.agentName}:`, result.success ? 'success' : 'failed');
+    },
+    (error) => {
+      finalizeAsyncRunWithError(subAgentState, args.agentName, error);
+    }
+  );
+}
+
+/**
+ * Finalize an async run that failed with an error.
+ */
+function finalizeAsyncRunWithError(
+  subAgentState: DelegatedRun,
+  agentName: string,
+  error: unknown
+): void {
+  subAgentState.status = 'failed';
+  const endTime = Date.now();
+  subAgentState.result = {
+    runId: subAgentState.runId,
+    agentName,
+    status: 'failed',
+    startTime: subAgentState.startTime,
+    endTime,
+    metadata: { duration: endTime - subAgentState.startTime },
+    error: error instanceof Error ? error.message : String(error),
+  };
+  cleanupDelegationMappings(subAgentState.runId, agentName);
+  logACPRouter(`Async run failed for ${agentName}:`, error);
 }
 
 
@@ -764,71 +912,23 @@ export async function handleCheckAgentStatus(args: { runId: string; historyLengt
     // Query remote server for actual status if we have tracking info and the task is still running
     if (subAgentState.acpRunId && subAgentState.baseUrl && subAgentState.status === 'running') {
       try {
-        if (subAgentState.isA2A) {
-          // A2A protocol: Use A2A client to query task status
-          const a2aClient = createA2AClient(subAgentState.baseUrl);
-          const a2aTask = await a2aClient.getTask(subAgentState.acpRunId, args.historyLength);
+        // ACP protocol: Use ACP client to query run status
+        const acpResult = await acpClientService.getRunStatus(
+          subAgentState.baseUrl,
+          subAgentState.acpRunId
+        );
 
-          // Map A2A task state to our internal status
-          const taskState = a2aTask.status?.state;
-          if (taskState === 'completed') {
-            subAgentState.status = 'completed';
-            // Extract output from artifacts if available
-            const outputText = a2aTask.artifacts
-              ?.filter((a: A2AArtifact) => a.parts?.some((p: A2APart) => 'text' in p))
-              .map((a: A2AArtifact) => a.parts?.map((p: A2APart) => ('text' in p ? p.text : '')).join(''))
-              .join('\n\n') || '';
-            subAgentState.result = {
-              runId: subAgentState.runId,
-              agentName: subAgentState.agentName,
-              status: 'completed',
-              startTime: subAgentState.startTime,
-              output: outputText ? [{ role: 'assistant', parts: [{ content: outputText }] }] : [],
-              metadata: a2aTask.metadata,
-            };
-          } else if (taskState === 'canceled') {
-            // Handle canceled state separately from failed to preserve user cancel semantics
-            subAgentState.status = 'cancelled';
-            subAgentState.result = {
-              runId: subAgentState.runId,
-              agentName: subAgentState.agentName,
-              status: 'cancelled',
-              startTime: subAgentState.startTime,
-              error: 'A2A task was cancelled',
-            };
-          } else if (taskState === 'failed') {
-            subAgentState.status = 'failed';
-            subAgentState.result = {
-              runId: subAgentState.runId,
-              agentName: subAgentState.agentName,
-              status: 'failed',
-              startTime: subAgentState.startTime,
-              error: a2aTask.status?.message?.parts
-                ?.filter((p: A2APart) => 'text' in p)
-                .map((p: A2APart) => ('text' in p ? p.text : ''))
-                .join('') || 'A2A task failed',
-            };
-          }
-          // If still 'working' or 'input-required', keep local status as 'running'
-        } else {
-          // ACP protocol: Use ACP client to query run status
-          const acpResult = await acpClientService.getRunStatus(
-            subAgentState.baseUrl,
-            subAgentState.acpRunId
-          );
-
-          // Update local state based on ACP server response
-          if (acpResult.status === 'completed') {
-            subAgentState.status = 'completed';
-            subAgentState.result = acpResult;
-          } else if (acpResult.status === 'failed') {
-            subAgentState.status = 'failed';
-            subAgentState.result = acpResult;
-          }
-          // If still running, keep local status as 'running'
+        // Update local state based on ACP server response
+        if (acpResult.status === 'completed') {
+          subAgentState.status = 'completed';
+          subAgentState.result = acpResult;
+        } else if (acpResult.status === 'failed') {
+          subAgentState.status = 'failed';
+          subAgentState.result = acpResult;
         }
+        // If still running, keep local status as 'running'
       } catch (statusError) {
-        logACPRouter(`Error querying ${subAgentState.isA2A ? 'A2A' : 'ACP'} server status:`, statusError);
+        logACPRouter('Error querying ACP server status:', statusError);
         // Continue with local state if query fails
       }
     }
@@ -1002,7 +1102,7 @@ export async function executeACPRouterTool(
   args: Record<string, unknown>,
   parentSessionId?: string
 ): Promise<{ content: string; isError: boolean }> {
-  // Resolve A2A-aligned tool names to their canonical handlers
+  // Resolve alias tool names to their canonical handlers
   const resolvedToolName = resolveToolName(toolName);
   logACPRouter('Executing tool', { toolName, resolvedToolName, args, parentSessionId });
 
@@ -1015,7 +1115,7 @@ export async function executeACPRouterTool(
         break;
 
       case 'speakmcp-builtin:delegate_to_agent':
-        // Handle both legacy 'runId' and A2A 'taskId' terminology
+        // Handle both 'runId' and 'taskId' terminology
         result = await handleDelegateToAgent(
           args as {
             agentName: string;
@@ -1029,7 +1129,7 @@ export async function executeACPRouterTool(
         break;
 
       case 'speakmcp-builtin:check_agent_status':
-        // Handle both legacy 'runId' and A2A 'taskId' parameter names
+        // Handle both 'runId' and 'taskId' parameter names
         const statusArgs = args as { runId?: string; taskId?: string; historyLength?: number };
         const statusRunId = statusArgs.runId || statusArgs.taskId;
         if (!statusRunId) {
@@ -1054,7 +1154,7 @@ export async function executeACPRouterTool(
         break;
 
       case 'speakmcp-builtin:cancel_agent_run':
-        // Handle both legacy 'runId' and A2A 'taskId' parameter names
+        // Handle both 'runId' and 'taskId' parameter names
         const cancelArgs = args as { runId?: string; taskId?: string };
         const cancelRunId = cancelArgs.runId || cancelArgs.taskId;
         if (!cancelRunId) {
@@ -1073,7 +1173,7 @@ export async function executeACPRouterTool(
         return {
           content: JSON.stringify({
             success: false,
-            error: `Unknown ACP/A2A router tool: ${toolName}`,
+            error: `Unknown ACP router tool: ${toolName}`,
           }),
           isError: true,
         };
@@ -1098,9 +1198,9 @@ export async function executeACPRouterTool(
 
 /**
  * Check if a tool name is an ACP router tool.
- * Includes both legacy names and A2A-aligned aliases.
+ * Includes both canonical names and aliases.
  * @param toolName - The tool name to check
- * @returns True if the tool is an ACP/A2A router tool
+ * @returns True if the tool is an ACP router tool
  */
 export function isACPRouterTool(toolName: string): boolean {
   // Check both the original name and any aliases
@@ -1133,8 +1233,6 @@ export function getDelegatedRunDetails(runId: string): ACPDelegationProgress | n
     return null;
   }
 
-  const conversation = sessionConversations.get(runId) || [];
-
   return {
     runId: state.runId,
     agentName: state.agentName,
@@ -1146,7 +1244,7 @@ export function getDelegatedRunDetails(runId: string): ACPDelegationProgress | n
     progressMessage: state.progress,
     resultSummary: state.result?.output?.[0]?.parts?.[0]?.content?.substring(0, 200),
     error: state.result?.error,
-    conversation: [...conversation],
+    conversation: [...state.conversation],
   };
 }
 
@@ -1194,506 +1292,13 @@ export function cleanupOldDelegatedRuns(maxAgeMs: number = 60 * 60 * 1000): void
       cleanupDelegationMappings(runId, state.agentName);
     }
     delegatedRuns.delete(runId);
-    sessionConversations.delete(runId);
-    lastEmitTime.delete(runId);
     logACPRouter(`Cleaned up old delegated run: ${runId}`);
   }
 }
 
 // ============================================================================
-// Internal Agent Delegation (unified with external agents)
+// Cancellation Support
 // ============================================================================
-
-/**
- * Handle delegation to the internal agent.
- * This routes to the internal sub-session system but tracks in delegatedRuns like external agents.
- */
-async function handleInternalAgentDelegation(
-  args: {
-    task: string;
-    context?: string;
-    waitForResult?: boolean;
-  },
-  parentSessionId?: string
-): Promise<object> {
-  logACPRouter('Delegating to internal agent', { task: args.task.substring(0, 100), parentSessionId });
-
-  // Check if internal agent is enabled
-  const internalConfig = getInternalAgentConfig();
-  if (internalConfig.enabled === false) {
-    return {
-      success: false,
-      error: 'Internal agent is disabled',
-    };
-  }
-
-  if (!parentSessionId) {
-    return {
-      success: false,
-      error: 'Parent session ID is required for internal agent delegation',
-    };
-  }
-
-  const runId = generateDelegationRunId();
-  const startTime = Date.now();
-
-  // Create sub-agent state for unified tracking
-  const subAgentState: ACPSubAgentState = {
-    runId,
-    agentName: 'internal',
-    parentSessionId,
-    task: args.task,
-    status: 'pending',
-    startTime,
-    isInternal: true,
-  };
-
-  delegatedRuns.set(runId, subAgentState);
-  subAgentState.status = 'running';
-
-  // Add user message to conversation
-  const userMessage: ACPSubAgentMessage = {
-    role: 'user',
-    content: args.task,
-    timestamp: Date.now(),
-  };
-  sessionConversations.set(runId, [userMessage]);
-
-  try {
-    // Run the internal sub-session
-    const result = await runInternalSubSession({
-      task: args.task,
-      context: args.context,
-      parentSessionId,
-    });
-
-    // Store the sub-session ID for cancellation support
-    if (result.subSessionId) {
-      subAgentState.subSessionId = result.subSessionId;
-    }
-
-    // Convert conversation history to ACPSubAgentMessage format
-    const conversation = result.conversationHistory.map(msg => ({
-      role: msg.role,
-      content: msg.content,
-      timestamp: msg.timestamp,
-    }));
-    sessionConversations.set(runId, conversation);
-
-    if (result.success) {
-      subAgentState.status = 'completed';
-      return {
-        success: true,
-        runId,
-        agentName: 'internal',
-        status: 'completed',
-        output: result.result || '',
-        duration: Date.now() - startTime,
-        conversation,
-      };
-    } else {
-      subAgentState.status = 'failed';
-      return {
-        success: false,
-        runId,
-        agentName: 'internal',
-        status: 'failed',
-        error: result.error || 'Unknown error',
-        duration: Date.now() - startTime,
-        conversation,
-      };
-    }
-  } catch (error) {
-    subAgentState.status = 'failed';
-    logACPRouter('Error in internal agent delegation:', error);
-    return {
-      success: false,
-      runId,
-      agentName: 'internal',
-      error: error instanceof Error ? error.message : String(error),
-    };
-  }
-}
-
-// ============================================================================
-// A2A Agent Delegation (Google Agent-to-Agent Protocol)
-// ============================================================================
-
-/**
- * Handle delegation to an A2A remote agent.
- * Uses the A2A protocol (message/send, tasks/get, etc.) for communication.
- */
-async function handleA2ADelegation(
-  args: {
-    agentName: string;
-    task: string;
-    context?: string;
-    contextId?: string;
-    waitForResult?: boolean;
-  },
-  agentUrl: string,
-  parentSessionId?: string
-): Promise<object> {
-  logACPRouter('Delegating to A2A agent', { agentName: args.agentName, agentUrl, parentSessionId });
-
-  const waitForResult = args.waitForResult !== false;
-  const runId = generateDelegationRunId();
-  const startTime = Date.now();
-
-  // Create sub-agent state for tracking
-  const subAgentState: ACPSubAgentState = {
-    runId,
-    agentName: args.agentName,
-    parentSessionId: parentSessionId || 'unknown',
-    task: args.task,
-    status: 'pending',
-    startTime,
-    baseUrl: agentUrl,
-    isA2A: true,
-  };
-
-  delegatedRuns.set(runId, subAgentState);
-  subAgentState.status = 'running';
-
-  // Add user message to conversation
-  const userMessage: ACPSubAgentMessage = {
-    role: 'user',
-    content: args.task,
-    timestamp: Date.now(),
-  };
-  sessionConversations.set(runId, [userMessage]);
-
-  // Helper to extract text from A2A message parts
-  const extractTextFromParts = (parts: Array<A2ATextPart | unknown>): string => {
-    return parts
-      .filter((p): p is A2ATextPart => typeof p === 'object' && p !== null && 'text' in p)
-      .map(p => p.text)
-      .join('\n');
-  };
-
-  // Helper to extract text from A2A artifacts
-  const extractTextFromArtifacts = (artifacts: A2AArtifact[]): string => {
-    return artifacts
-      .filter(a => a.parts?.some(p => 'text' in p))
-      .map(a => extractTextFromParts(a.parts || []))
-      .join('\n\n');
-  };
-
-  try {
-    // Create A2A client for this agent
-    const a2aClient = createA2AClient(agentUrl);
-    const a2aClientOptions = { timeoutMs: 300000 }; // 5 minutes
-
-    // Build the message content
-    const messageContent = args.context
-      ? `Context: ${args.context}\n\nTask: ${args.task}`
-      : args.task;
-
-    // Create a task via the task manager for tracking
-    const contextId = args.contextId || parentSessionId || `ctx_${Date.now()}`;
-    const managedTask = a2aTaskManager.createTask({
-      agentUrl,
-      description: messageContent,
-      contextId,
-    });
-
-    // Store the A2A task ID for status polling
-    subAgentState.acpRunId = managedTask.task.id;
-
-    if (waitForResult) {
-      // Synchronous execution - send message and wait for completion
-      try {
-        const result = await a2aClient.sendMessage({
-          message: {
-            role: 'user',
-            parts: [{ text: messageContent }],
-          },
-          configuration: {
-            acceptedOutputModes: ['text'],
-          },
-        }, a2aClientOptions);
-
-        // Process the response - could be { task: A2ATask } or { message: A2AMessage }
-        const conversation: ACPSubAgentMessage[] = [userMessage];
-        let outputText = '';
-        let taskState: string = 'unknown';
-        let taskId: string | undefined;
-
-        if ('task' in result && result.task) {
-          const task = result.task;
-          taskId = task.id;
-          taskState = task.status?.state || 'unknown';
-
-          // Update acpRunId with the server-provided task ID for subsequent polling
-          // This ensures check_agent_status uses the correct ID returned by the server
-          if (taskId) {
-            subAgentState.acpRunId = taskId;
-          }
-
-          // Extract from task history
-          if (task.history) {
-            for (const msg of task.history) {
-              const textContent = extractTextFromParts(msg.parts);
-              if (textContent) {
-                conversation.push({
-                  role: msg.role === 'user' ? 'user' : 'assistant',
-                  content: textContent,
-                  timestamp: Date.now(),
-                });
-              }
-            }
-          }
-
-          // Extract from artifacts
-          if (task.artifacts) {
-            outputText = extractTextFromArtifacts(task.artifacts);
-          }
-
-          // Update task manager status
-          a2aTaskManager.updateStatus(managedTask.task.id, task.status?.state || 'working');
-        } else if ('message' in result && result.message) {
-          // Direct message response (no task created)
-          const msg = result.message;
-          const textContent = extractTextFromParts(msg.parts);
-          if (textContent) {
-            outputText = textContent;
-            conversation.push({
-              role: 'assistant',
-              content: textContent,
-              timestamp: Date.now(),
-            });
-          }
-          taskState = 'completed'; // Direct message means task is done
-        }
-
-        sessionConversations.set(runId, conversation);
-
-        // Check task status
-        if (taskState === 'completed') {
-          subAgentState.status = 'completed';
-          cleanupDelegationMappings(runId, args.agentName);
-          return {
-            success: true,
-            runId,
-            agentName: args.agentName,
-            status: 'completed',
-            output: outputText || 'Task completed',
-            duration: Date.now() - startTime,
-            conversation,
-            isA2A: true,
-          };
-        } else if (taskState === 'failed') {
-          subAgentState.status = 'failed';
-          cleanupDelegationMappings(runId, args.agentName);
-          return {
-            success: false,
-            runId,
-            agentName: args.agentName,
-            status: 'failed',
-            error: 'A2A task failed',
-            duration: Date.now() - startTime,
-            conversation,
-            isA2A: true,
-          };
-        } else {
-          // Task is still running or in input-required state - poll for completion
-          // since waitForResult=true means the caller expects a final result
-          if (taskId) {
-            const pollIntervalMs = 1000;
-            const maxWaitMs = 300000; // 5 minutes max wait
-            const pollStartTime = Date.now();
-
-            while (Date.now() - pollStartTime < maxWaitMs) {
-              await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
-
-              try {
-                const updatedTask = await a2aClient.getTask(taskId, undefined, a2aClientOptions);
-                const updatedState = updatedTask.status?.state;
-
-                if (updatedState && isA2ATerminalState(updatedState)) {
-                  // Update conversation with any new history
-                  if (updatedTask.history) {
-                    for (const msg of updatedTask.history) {
-                      const textContent = extractTextFromParts(msg.parts);
-                      if (textContent && !conversation.some(c => c.content === textContent)) {
-                        conversation.push({
-                          role: msg.role === 'user' ? 'user' : 'assistant',
-                          content: textContent,
-                          timestamp: Date.now(),
-                        });
-                      }
-                    }
-                  }
-
-                  sessionConversations.set(runId, conversation);
-
-                  if (updatedState === 'completed') {
-                    subAgentState.status = 'completed';
-                    const finalOutput = updatedTask.artifacts
-                      ? extractTextFromArtifacts(updatedTask.artifacts)
-                      : outputText;
-                    cleanupDelegationMappings(runId, args.agentName);
-                    return {
-                      success: true,
-                      runId,
-                      agentName: args.agentName,
-                      status: 'completed',
-                      output: finalOutput || 'Task completed',
-                      duration: Date.now() - startTime,
-                      conversation,
-                      isA2A: true,
-                    };
-                  } else {
-                    // failed, canceled, or rejected
-                    subAgentState.status = updatedState === 'canceled' ? 'cancelled' : 'failed';
-                    cleanupDelegationMappings(runId, args.agentName);
-                    return {
-                      success: false,
-                      runId,
-                      agentName: args.agentName,
-                      status: subAgentState.status,
-                      error: `A2A task ${updatedState}`,
-                      duration: Date.now() - startTime,
-                      conversation,
-                      isA2A: true,
-                    };
-                  }
-                }
-              } catch (pollError) {
-                logACPRouter('Error polling A2A task:', pollError);
-                // Continue polling on transient errors
-              }
-            }
-
-            // Timeout - return current state
-            return {
-              success: true,
-              runId,
-              agentName: args.agentName,
-              status: 'running',
-              message: `A2A task did not complete within timeout. Current state: ${taskState}. Use check_agent_status to poll for updates.`,
-              taskId,
-              isA2A: true,
-            };
-          }
-
-          // No taskId available, can't poll - return current state
-          subAgentState.status = 'running';
-          return {
-            success: true,
-            runId,
-            agentName: args.agentName,
-            status: taskState,
-            message: `A2A task submitted. Current state: ${taskState}`,
-            taskId,
-            isA2A: true,
-          };
-        }
-      } catch (error) {
-        subAgentState.status = 'failed';
-        cleanupDelegationMappings(runId, args.agentName);
-        throw error;
-      }
-    } else {
-      // Asynchronous execution - return immediately
-      acpBackgroundNotifier.startPolling();
-
-      // Send message asynchronously
-      a2aClient.sendMessage({
-        message: {
-          role: 'user',
-          parts: [{ text: messageContent }],
-        },
-        configuration: {
-          acceptedOutputModes: ['text'],
-        },
-      }).then(
-        (result) => {
-          let taskState = 'unknown';
-          let outputText = '';
-
-          if ('task' in result && result.task) {
-            const task = result.task;
-            taskState = task.status?.state || 'unknown';
-            a2aTaskManager.updateStatus(managedTask.task.id, task.status?.state || 'working');
-
-            // Update acpRunId with the server-provided task ID for subsequent polling
-            if (task.id) {
-              subAgentState.acpRunId = task.id;
-            }
-
-            if (task.artifacts) {
-              outputText = extractTextFromArtifacts(task.artifacts);
-            }
-          } else if ('message' in result && result.message) {
-            outputText = extractTextFromParts(result.message.parts);
-            taskState = 'completed';
-          }
-
-          if (taskState === 'completed') {
-            subAgentState.status = 'completed';
-            subAgentState.result = {
-              runId,
-              agentName: args.agentName,
-              status: 'completed',
-              startTime: subAgentState.startTime,
-              endTime: Date.now(),
-              metadata: { duration: Date.now() - subAgentState.startTime },
-              output: [{ role: 'assistant', parts: [{ content: outputText }] }],
-            };
-          } else if (taskState === 'failed') {
-            subAgentState.status = 'failed';
-            subAgentState.result = {
-              runId,
-              agentName: args.agentName,
-              status: 'failed',
-              startTime: subAgentState.startTime,
-              endTime: Date.now(),
-              metadata: { duration: Date.now() - subAgentState.startTime },
-              error: 'A2A task failed',
-            };
-          }
-          cleanupDelegationMappings(runId, args.agentName);
-        },
-        (error) => {
-          subAgentState.status = 'failed';
-          subAgentState.result = {
-            runId,
-            agentName: args.agentName,
-            status: 'failed',
-            startTime: subAgentState.startTime,
-            endTime: Date.now(),
-            metadata: { duration: Date.now() - subAgentState.startTime },
-            error: error instanceof Error ? error.message : String(error),
-          };
-          cleanupDelegationMappings(runId, args.agentName);
-          logACPRouter(`Async A2A run failed for ${args.agentName}:`, error);
-        }
-      );
-
-      return {
-        success: true,
-        runId,
-        agentName: args.agentName,
-        status: 'running',
-        message: `Task delegated to A2A agent "${args.agentName}". Use check_agent_status with runId "${runId}" to check progress.`,
-        taskId: managedTask.task.id,
-        isA2A: true,
-      };
-    }
-  } catch (error) {
-    subAgentState.status = 'failed';
-    cleanupDelegationMappings(runId, args.agentName);
-    logACPRouter('Error in A2A agent delegation:', error);
-    return {
-      success: false,
-      runId,
-      agentName: args.agentName,
-      error: error instanceof Error ? error.message : String(error),
-      isA2A: true,
-    };
-  }
-}
 
 /**
  * Cancel a running agent task (internal or external).

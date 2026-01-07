@@ -3,8 +3,6 @@
  *
  * This module provides task analysis and agent matching capabilities to help
  * the main AI assistant decide when to delegate work to specialized sub-agents.
- * 
- * Supports both local ACP agents and remote A2A agents for unified delegation routing.
  *
  * @example
  * ```typescript
@@ -20,7 +18,6 @@
 
 import { acpRegistry } from './acp-registry'
 import type { ACPAgentDefinition, ACPAgentInstance } from './types'
-import { a2aAgentRegistry, type RegisteredAgent as A2ARegisteredAgent } from '../a2a/agent-registry'
 
 type ACPAgentForDelegationPrompt = {
   definition: {
@@ -32,7 +29,7 @@ type ACPAgentForDelegationPrompt = {
 }
 
 /**
- * Unified agent representation for delegation (works for both ACP and A2A agents)
+ * Unified agent representation for delegation
  */
 export interface UnifiedAgent {
   /** Agent name/identifier */
@@ -43,9 +40,7 @@ export interface UnifiedAgent {
   description?: string
   /** List of capabilities/skills */
   capabilities: string[]
-  /** Whether this is an A2A remote agent */
-  isA2A: boolean
-  /** Base URL for A2A agents */
+  /** Base URL for the agent */
   baseUrl?: string
 }
 
@@ -67,9 +62,7 @@ export interface RoutingDecision {
     matchedCapabilities: string[]
     /** Suggested task description for this agent */
     suggestedTask?: string
-    /** Whether this is an A2A remote agent */
-    isA2A?: boolean
-    /** Base URL for A2A agents */
+    /** Base URL for the agent */
     baseUrl?: string
   }>
 }
@@ -287,43 +280,19 @@ export class ACPSmartRouter {
       displayName: agent.definition.displayName || agent.definition.name,
       description: agent.definition.description,
       capabilities: agent.definition.capabilities,
-      isA2A: false,
       baseUrl: agent.definition.baseUrl,
     }
   }
 
   /**
-   * Convert an A2A registered agent to a unified agent representation.
-   */
-  private a2aToUnifiedAgent(agent: A2ARegisteredAgent): UnifiedAgent {
-    const skills = agent.card.skills || []
-    // A2A skills have name and tags; we use skill names as capabilities
-    const capabilities = skills.map(s => s.name.toLowerCase())
-    
-    return {
-      name: agent.card.name,
-      displayName: agent.card.name,
-      description: agent.card.description,
-      capabilities,
-      isA2A: true,
-      baseUrl: agent.card.url,
-    }
-  }
-
-  /**
-   * Get all available agents (both ACP and A2A) as unified agents.
+   * Get all available agents as unified agents.
    */
   getAllUnifiedAgents(): UnifiedAgent[] {
-    const acpAgents = acpRegistry.getReadyAgents().map(a => this.acpToUnifiedAgent(a))
-    const a2aAgents = a2aAgentRegistry
-      .findAgents({ isReachable: true })
-      .map(a => this.a2aToUnifiedAgent(a))
-    
-    return [...acpAgents, ...a2aAgents]
+    return acpRegistry.getReadyAgents().map(a => this.acpToUnifiedAgent(a))
   }
 
   /**
-   * Find unified agents (ACP + A2A) that match the required capabilities.
+   * Find unified agents that match the required capabilities.
    * Returns agents sorted by how well they match the requirements.
    *
    * @param requiredCapabilities - List of capabilities needed for the task
@@ -518,11 +487,11 @@ export class ACPSmartRouter {
   }
 
   /**
-   * Suggest delegation considering both ACP and A2A agents (unified routing).
+   * Suggest delegation considering all available agents (unified routing).
    * This is the preferred method for new code.
    *
    * @param task - The task description to evaluate
-   * @returns Routing decision with suggested agents from both protocols
+   * @returns Routing decision with suggested agents
    */
   suggestUnifiedDelegation(task: string): RoutingDecision {
     const analysis = this.analyzeTask(task)
@@ -535,7 +504,7 @@ export class ACPSmartRouter {
       }
     }
 
-    // Find matching agents from both ACP and A2A registries
+    // Find matching agents
     const matchingAgents = this.findMatchingUnifiedAgents(analysis.requiredCapabilities)
 
     // No matching agents available
@@ -568,7 +537,6 @@ export class ACPSmartRouter {
         confidence,
         matchedCapabilities,
         suggestedTask: task,
-        isA2A: agent.isA2A,
         baseUrl: agent.baseUrl,
       }
     })
@@ -577,12 +545,11 @@ export class ACPSmartRouter {
     const bestMatch = suggestedAgents[0]
     const shouldDelegate = bestMatch.confidence >= 0.3 || analysis.taskType !== 'simple'
 
-    const protocolInfo = bestMatch.isA2A ? ' (A2A remote)' : ' (ACP local)'
     return {
       shouldDelegate,
       reason: shouldDelegate
         ? `Task matches ${bestMatch.matchedCapabilities.length} capabilities of available agents. ` +
-          `Best match: ${bestMatch.agentName}${protocolInfo} (${Math.round(bestMatch.confidence * 100)}% confidence).`
+          `Best match: ${bestMatch.agentName} (${Math.round(bestMatch.confidence * 100)}% confidence).`
         : 'Available agents do not sufficiently match the task requirements.',
       suggestedAgents: shouldDelegate ? suggestedAgents : undefined,
     }

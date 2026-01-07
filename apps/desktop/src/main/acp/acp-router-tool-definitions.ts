@@ -7,19 +7,11 @@
  *
  * The tool execution handlers are in acp-router-tools.ts, which imports
  * from this file and adds runtime functionality.
- * 
- * NOTE: This module now includes A2A-aligned tool names as aliases.
- * The following mappings apply:
- * - delegate_to_agent -> send_to_agent (A2A: message/send)
- * - check_agent_status -> get_task_status (A2A: tasks/get)
- * - cancel_agent_run -> cancel_task (A2A: tasks/cancel)
  */
 
 /**
  * Tool definitions for ACP router tools.
  * These are exposed as built-in tools for the main agent to use.
- * 
- * Tools include both legacy names and A2A-aligned names for compatibility.
  */
 export const acpRouterToolDefinitions = [
   {
@@ -77,7 +69,7 @@ export const acpRouterToolDefinitions = [
         },
         taskId: {
           type: 'string',
-          description: 'Alternative A2A-aligned name for runId (use either runId or taskId)',
+          description: 'Alternative name for runId (use either runId or taskId)',
         },
       },
       // Neither runId nor taskId is strictly required in schema since caller can use either
@@ -126,7 +118,7 @@ export const acpRouterToolDefinitions = [
         },
         taskId: {
           type: 'string',
-          description: 'Alternative A2A-aligned name for runId (use either runId or taskId)',
+          description: 'Alternative name for runId (use either runId or taskId)',
         },
       },
       // Neither runId nor taskId is strictly required in schema since caller can use either
@@ -134,11 +126,11 @@ export const acpRouterToolDefinitions = [
       required: [],
     },
   },
-  // A2A-aligned tool names (aliases for the above)
+  // Alias tool names for compatibility
   {
     name: 'speakmcp-builtin:send_to_agent',
     description:
-      'Send a task to an A2A agent. Alias for delegate_to_agent. The agent will process the task and return results.',
+      'Send a task to an agent. Alias for delegate_to_agent. The agent will process the task and return results.',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -156,7 +148,7 @@ export const acpRouterToolDefinitions = [
         },
         contextId: {
           type: 'string',
-          description: 'Optional context ID to group related tasks (A2A concept)',
+          description: 'Optional context ID to group related tasks',
         },
         waitForResult: {
           type: 'boolean',
@@ -202,7 +194,7 @@ export const acpRouterToolDefinitions = [
 ];
 
 /**
- * Mapping from A2A tool names to their legacy ACP equivalents.
+ * Mapping from alias tool names to their canonical equivalents.
  * Used for backward compatibility in the execution handler.
  */
 export const toolNameAliases: Record<string, string> = {
@@ -213,7 +205,7 @@ export const toolNameAliases: Record<string, string> = {
 
 /**
  * Resolve a tool name to its canonical handler name.
- * This allows A2A-named tools to map to existing handlers.
+ * This allows alias tool names to map to existing handlers.
  */
 export function resolveToolName(toolName: string): string {
   return toolNameAliases[toolName] || toolName;

@@ -158,44 +158,12 @@ export interface ACPSubAgentState {
   baseUrl?: string;
   /** Whether this is an internal sub-agent (not external ACP) */
   isInternal?: boolean;
-  /** Whether this is an A2A (Agent-to-Agent Protocol) remote agent */
-  isA2A?: boolean;
   /** The internal sub-session ID (for internal agents, used for cancellation) */
   subSessionId?: string;
 }
 
-/**
- * Configuration for an ACP agent - used in user configuration files.
- */
-export interface ACPAgentConfig {
-  /** Unique name identifier for the agent */
-  name: string;
-  /** Human-readable display name */
-  displayName?: string;
-  /** Description of the agent's purpose */
-  description?: string;
-  /** Capability tags for agent discovery */
-  capabilities?: string[];
-  /** Connection configuration - either remote URL or spawn configuration */
-  connection:
-    | { type: 'remote'; baseUrl: string }
-    | {
-        type: 'spawn';
-        command: string;
-        args?: string[];
-        env?: Record<string, string>;
-        cwd?: string;
-        port?: number;
-      };
-  /** Whether to automatically spawn the agent when needed */
-  autoSpawn?: boolean;
-  /** Whether to keep the agent alive after runs complete */
-  keepAlive?: boolean;
-  /** Time in milliseconds before idle agent is stopped */
-  idleTimeoutMs?: number;
-  /** Maximum number of concurrent runs for this agent */
-  maxConcurrentRuns?: number;
-  /** Default timeout in milliseconds for agent runs */
-  defaultTimeout?: number;
-}
+// NOTE: ACPAgentConfig is defined in shared/types.ts and should be imported from there.
+// This avoids duplication and ensures consistency across the codebase.
+// Re-export for backward compatibility within the ACP module.
+export type { ACPAgentConfig } from '../../shared/types';
 

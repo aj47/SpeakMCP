@@ -614,16 +614,6 @@ export type Config = {
 
   // ACP Agent Configuration
   acpAgents?: ACPAgentConfig[]
-
-  // A2A (Agent-to-Agent) Configuration
-  a2aConfig?: {
-    /** URLs of A2A agents to discover at startup */
-    agentUrls?: string[]
-    /** Whether to start the webhook server for push notifications */
-    enableWebhooks?: boolean
-    /** Port for the webhook server (0 for auto-assign) */
-    webhookPort?: number
-  }
 }
 
 

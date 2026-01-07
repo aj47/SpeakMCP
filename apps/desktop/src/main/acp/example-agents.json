@@ -14,10 +14,7 @@
         "args": ["-m", "agents.research_agent"],
         "cwd": "/path/to/research-agent-project"
       },
-      "autoSpawn": false,
-      "idleTimeoutMs": 300000,
-      "maxConcurrentRuns": 2,
-      "defaultTimeout": 60000
+      "autoSpawn": false
     },
     {
       "name": "coding-agent",
@@ -30,9 +27,7 @@
         "args": ["./agents/coding-agent/index.js"],
         "cwd": "~/projects/my-codebase"
       },
-      "autoSpawn": false,
-      "idleTimeoutMs": 600000,
-      "maxConcurrentRuns": 1
+      "autoSpawn": false
     },
     {
       "name": "writing-agent",
@@ -55,9 +50,7 @@
       "connection": {
         "type": "remote",
         "baseUrl": "https://acp.example.com"
-      },
-      "maxConcurrentRuns": 5,
-      "defaultTimeout": 120000
+      }
     },
     {
       "name": "beeai-agent",

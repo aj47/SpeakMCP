@@ -719,13 +719,14 @@ function PastSessionCard({
         {conversation.messageCount}
       </span>
       <button
+        type="button"
         onClick={(e) => {
           e.stopPropagation()
           onDelete()
         }}
         disabled={isDeleting}
         className={cn(
-          "shrink-0 p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity",
+          "shrink-0 p-1 rounded opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity",
           "text-muted-foreground hover:text-red-500 hover:bg-red-500/10"
         )}
         title="Delete session"

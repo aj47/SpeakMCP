@@ -456,36 +456,57 @@ class SkillsService {
   /**
    * Get the combined instructions from all enabled skills
    * This is used to inject into the system prompt
+   * Always includes the skills folder path so the agent can create new skills
    */
   getEnabledSkillsInstructions(): string {
     const enabledSkills = this.getEnabledSkills()
-    if (enabledSkills.length === 0) {
-      return ""
-    }
 
-    const skillsContent = enabledSkills.map(skill => {
-      // Include skill ID and source info for execute_command tool
-      const skillIdInfo = `**Skill ID:** \`${skill.id}\``
-      const sourceInfo = skill.filePath
-        ? (skill.filePath.startsWith("github:")
-            ? `**Source:** GitHub (${skill.filePath})`
-            : `**Source:** Local`)
-        : ""
+    // Always include skills folder info so agent can create/manage skills via filesystem
+    let result = `
+# Agent Skills
 
-      return `## Skill: ${skill.name}
+**Skills Folder**: ${skillsFolder}
+
+You can create new skills by writing .md files to the skills folder. Use this format:
+\`\`\`
+---
+name: skill-name
+description: What this skill does
+---
+
+Your instructions here in markdown...
+\`\`\`
+
+After creating a skill file, it will be available on the next agent session.
+Use \`speakmcp-settings:execute_command\` with a skill's ID to run commands in the skill's directory.
+`
+
+    if (enabledSkills.length > 0) {
+      const skillsContent = enabledSkills.map(skill => {
+        // Include skill ID and source info for execute_command tool
+        const skillIdInfo = `**Skill ID:** \`${skill.id}\``
+        const sourceInfo = skill.filePath
+          ? (skill.filePath.startsWith("github:")
+              ? `**Source:** GitHub (${skill.filePath})`
+              : `**Source:** Local`)
+          : ""
+
+        return `## Skill: ${skill.name}
 ${skillIdInfo}${sourceInfo ? `\n${sourceInfo}` : ""}
 ${skill.description ? `*${skill.description}*\n` : ""}
 ${skill.instructions}`
-    }).join("\n\n---\n\n")
+      }).join("\n\n---\n\n")
 
-    return `
-# Active Agent Skills
+      result += `
+## Active Skills
 
-The following skills provide specialized instructions for specific tasks.
-Use \`speakmcp-settings:execute_command\` with the skill's ID to run commands in the skill's directory.
+The following skills are currently enabled:
 
 ${skillsContent}
 `
+    }
+
+    return result
   }
 
   /**

@@ -222,9 +222,9 @@ const CompactMessage: React.FC<{
 
   const getRoleIcon = () => {
     switch (message.role) {
-      case "user": return "👤"
-      case "assistant": return "🤖"
-      case "tool": return "🔧"
+      case "user": return <span className="i-mingcute-user-3-line h-3 w-3 text-blue-500" />
+      case "assistant": return <span className="i-mingcute-android-2-line h-3 w-3 text-gray-500" />
+      case "tool": return <span className="i-mingcute-tool-line h-3 w-3 text-orange-500" />
     }
   }
 
@@ -304,8 +304,15 @@ const CompactMessage: React.FC<{
                       )}
                     >
                       <div className="flex items-center justify-between mb-1">
-                        <span className="font-semibold">
-                          {result.success ? "✅ Success" : "❌ Error"}
+                        <span className={cn(
+                          "font-semibold flex items-center gap-1",
+                          result.success ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"
+                        )}>
+                          {result.success ? (
+                            <><Check className="h-3 w-3" /> Success</>
+                          ) : (
+                            <><XCircle className="h-3 w-3" /> Error</>
+                          )}
                         </span>
                         <div className="flex items-center gap-2">
                           <span className="text-[10px] opacity-60 font-mono">
@@ -429,25 +436,6 @@ const ToolExecutionBubble: React.FC<{
   isExpanded: boolean
   onToggleExpand: () => void
 }> = ({ execution, isExpanded, onToggleExpand }) => {
-  const [showInputs, setShowInputs] = useState(false)
-  const [showOutputs, setShowOutputs] = useState(false)
-
-  // Collapsed by default; expand to show details
-  useEffect(() => {
-    if (isExpanded) {
-      setShowInputs(true)
-      setShowOutputs(true)
-    } else {
-      setShowInputs(false)
-      setShowOutputs(false)
-    }
-  }, [isExpanded, execution])
-
-  const isPending = execution.results.length === 0
-  const allSuccess = execution.results.length > 0 && execution.results.every((r) => r.success)
-  const hasErrors = execution.results.length > 0 && execution.results.some((r) => !r.success)
-  const headerTitle = execution.calls.map((c) => c.name).join(", ") || "Tool Execution"
-
   const copy = async (text: string) => {
     try {
       await navigator.clipboard?.writeText(text)
@@ -455,202 +443,104 @@ const ToolExecutionBubble: React.FC<{
   }
 
   const handleToggleExpand = () => onToggleExpand()
-  const handleChevronClick = (e: React.MouseEvent) => {
-    e.stopPropagation()
-    onToggleExpand()
-  }
-
-  // Handle hide/show buttons with event propagation stopped
-  const handleToggleInputs = (e: React.MouseEvent) => {
-    e.stopPropagation()
-    setShowInputs((v) => !v)
-  }
-
-  const handleToggleOutputs = (e: React.MouseEvent) => {
-    e.stopPropagation()
-    setShowOutputs((v) => !v)
-  }
 
   const handleCopy = (e: React.MouseEvent, text: string) => {
     e.stopPropagation()
     copy(text)
   }
 
-
-  // Generate preview for collapsed state - prioritize showing results when available
-  const collapsedInputPreview = (() => {
-    if (isExpanded) return null
-    // Create a summary of the first tool call's parameters
-    const firstCall = execution.calls[0]
-    if (!firstCall?.arguments) return null
-    return formatArgumentsPreview(firstCall.arguments)
-  })()
-
-  // Generate result summary for collapsed state
-  const collapsedResultSummary = (() => {
-    if (isExpanded || isPending) return null
-    if (execution.results.length === 0) return null
-    // Convert to the expected ToolResult format
-    const toolResults = execution.results.map(r => ({
-      success: r.success,
-      content: r.content,
-      error: r.error,
-    }))
-    return getToolResultsSummary(toolResults)
-  })()
-
+  // Compact single-line per tool display
   return (
-    <div
-      className={cn(
-        "rounded-lg border p-2 text-xs",
-        isPending
-          ? "border-blue-200/50 bg-blue-50/30 text-blue-800 dark:border-blue-700/50 dark:bg-blue-950/40 dark:text-blue-200"
-          : allSuccess
-            ? "border-green-200/50 bg-green-50/30 text-green-800 dark:border-green-700/50 dark:bg-green-950/40 dark:text-green-200"
-            : "border-red-200/50 bg-red-50/30 text-red-800 dark:border-red-700/50 dark:bg-red-950/40 dark:text-red-200",
-      )}
-    >
-      <div
-        className="mb-1 flex items-center justify-between px-1 py-1 cursor-pointer hover:bg-muted/20 rounded"
-        onClick={handleToggleExpand}
-        aria-expanded={isExpanded}
-      >
-        <div className="flex items-center gap-2 min-w-0 flex-1">
-          <span className="font-mono font-semibold truncate">{headerTitle}</span>
-          {!isExpanded && (
-            <Badge variant="outline" className="text-[10px] flex-shrink-0">
-              {isPending ? "Pending..." : allSuccess ? "✓" : "✗"}
-            </Badge>
-          )}
-          {isExpanded && (
-            <Badge variant="outline" className="text-[10px]">
-              {isPending ? "Pending..." : allSuccess ? "Success" : "With errors"}
-            </Badge>
-          )}
-        </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
-          {isExpanded && (
-            <span className="opacity-60 text-[10px]">{new Date(execution.timestamp).toLocaleTimeString()}</span>
-          )}
-          <button
-            onClick={handleChevronClick}
-            className="p-1 rounded hover:bg-muted/30 transition-colors"
-            aria-label={isExpanded ? "Collapse" : "Expand"}
-          >
-            {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-          </button>
-        </div>
-      </div>
+    <div className="space-y-0.5 text-xs">
+      {execution.calls.map((call, idx) => {
+        const result = execution.results[idx]
+        const callIsPending = !result
+        const callSuccess = result?.success
+        const callResultSummary = result ? getToolResultsSummary([result]) : null
+        const isToolExpanded = isExpanded
 
-      {/* Collapsed preview - show result summary when available, otherwise show input parameters */}
-      {!isExpanded && (collapsedResultSummary || collapsedInputPreview) && (
-        <div className="px-1 pb-1 text-[10px] opacity-80 truncate" title={collapsedResultSummary || collapsedInputPreview || ''}>
-          {collapsedResultSummary ? (
-            <span className="font-medium">{collapsedResultSummary}</span>
-          ) : (
-            <span className="font-mono opacity-70">{collapsedInputPreview}</span>
-          )}
-        </div>
-      )}
-
-      {isExpanded && (
-        <>
-          {/* Inputs */}
-          <div className="rounded-md bg-blue-50/40 dark:bg-blue-900/10 border border-blue-200/40 dark:border-blue-800/40 p-2 mb-2">
-            <div className="flex items-center justify-between">
-              <div className="text-[11px] font-semibold opacity-80">Call Parameters</div>
-              <div className="flex items-center gap-1">
-                <Button size="sm" variant="ghost" className="h-6 px-2" onClick={handleToggleInputs}>
-                  {showInputs ? "Hide" : "Show"}
-                </Button>
-                <Button size="sm" variant="ghost" className="h-6 px-2" onClick={(e) => handleCopy(e, JSON.stringify(execution.calls, null, 2))}>
-                  Copy
-                </Button>
-              </div>
-            </div>
-            {showInputs && (
-              <div className="mt-1 space-y-2">
-                {execution.calls.map((c, idx) => (
-                  <div key={idx} className="rounded bg-muted/50 p-2 overflow-auto whitespace-pre-wrap max-h-80 scrollbar-thin">
-                    <div className="mb-1 text-[11px] font-medium opacity-70">{c.name}</div>
-                    <pre>{JSON.stringify(c.arguments ?? {}, null, 2)}</pre>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Outputs */}
-          <div
-            className="rounded-md border p-2"
-            style={{
-              borderColor: isPending ? "rgb(191 219 254 / 0.5)" : allSuccess ? "rgb(187 247 208 / 0.5)" : "rgb(254 202 202 / 0.5)",
-              backgroundColor: isPending ? "rgb(239 246 255 / 0.3)" : allSuccess ? "rgb(240 253 244 / 0.3)" : "rgb(254 242 242 / 0.3)",
-            } as React.CSSProperties}
-          >
-            <div className="flex items-center justify-between">
-              <div className="text-[11px] font-semibold opacity-80">Response</div>
-              {!isPending && (
-                <div className="flex items-center gap-1">
-                  <Button size="sm" variant="ghost" className="h-6 px-2" onClick={handleToggleOutputs}>
-                    {showOutputs ? "Hide" : "Show"}
-                  </Button>
-                  <Button size="sm" variant="ghost" className="h-6 px-2" onClick={(e) => handleCopy(e, JSON.stringify(execution.results, null, 2))}>
-                    Copy
-                  </Button>
-                </div>
+        return (
+          <div key={idx}>
+            {/* Single line tool header */}
+            <div
+              className={cn(
+                "flex items-center gap-1.5 py-0.5 px-1.5 rounded text-[11px] cursor-pointer hover:bg-muted/30",
+                callIsPending
+                  ? "text-blue-600 dark:text-blue-400"
+                  : callSuccess
+                    ? "text-green-600 dark:text-green-400"
+                    : "text-red-600 dark:text-red-400",
               )}
+              onClick={handleToggleExpand}
+            >
+              <span className={cn(
+                "i-mingcute-tool-line h-2.5 w-2.5 flex-shrink-0",
+                callIsPending ? "text-blue-500" : callSuccess ? "text-green-500" : "text-red-500"
+              )} />
+              <span className="font-mono font-medium truncate">{call.name}</span>
+              <span className="text-[10px]">
+                {callIsPending ? (
+                  <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                ) : callSuccess ? (
+                  <Check className="h-2.5 w-2.5" />
+                ) : (
+                  <XCircle className="h-2.5 w-2.5" />
+                )}
+              </span>
+              {!isToolExpanded && callResultSummary && (
+                <span className="text-[10px] opacity-50 truncate flex-1">{callResultSummary}</span>
+              )}
+              <ChevronRight className={cn(
+                "h-2.5 w-2.5 opacity-40 flex-shrink-0 transition-transform",
+                isToolExpanded && "rotate-90"
+              )} />
             </div>
-            {isPending ? (
-              <div className="mt-2 text-center py-2 text-[11px] opacity-60 italic">
-                Waiting for response...
-              </div>
-            ) : showOutputs && (
-              <div className="mt-1 space-y-2">
-                {execution.results.map((r, idx) => (
-                  <div
-                    key={idx}
-                    className={cn(
-                      "rounded border p-2 text-xs",
-                      r.success
-                        ? "border-green-200/50 bg-green-50/30 dark:border-green-700/50 dark:bg-green-950/30"
-                        : "border-red-200/50 bg-red-50/30 dark:border-red-700/50 dark:bg-red-950/30",
-                    )}
-                  >
-                    <div className="mb-1 flex items-center justify-between">
-                      <span className="font-semibold">{r.success ? "✅ Success" : "❌ Error"}</span>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] opacity-60 font-mono">
-                          {(r.content?.length || 0).toLocaleString()} chars
-                        </span>
-                        <Badge variant="outline" className="text-[10px]">{`Result ${idx + 1}`}</Badge>
-                      </div>
+
+            {/* Expanded details for this tool */}
+            {isToolExpanded && (
+              <div className="ml-4 mt-0.5 mb-1 border-l border-border/50 pl-2 space-y-1 text-[10px]">
+                {call.arguments && (
+                  <>
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium opacity-70">Parameters</span>
+                      <Button size="sm" variant="ghost" className="h-4 px-1 text-[9px]" onClick={(e) => handleCopy(e, JSON.stringify(call.arguments, null, 2))}>
+                        <Copy className="h-2 w-2 mr-0.5" /> Copy
+                      </Button>
                     </div>
-                    <div className="space-y-2">
-                      <div>
-                        <div className="text-[11px] font-medium opacity-70 mb-1">Content:</div>
-                        <pre className="rounded bg-muted/30 p-2 overflow-auto whitespace-pre-wrap break-all max-h-80 scrollbar-thin">
-                          {r.content || "No content returned"}
-                        </pre>
-                      </div>
-                      {r.error && (
-                        <div>
-                          <div className="text-[11px] font-medium text-destructive mb-1">Error Details:</div>
-                          <pre className="rounded bg-destructive/10 p-2 overflow-auto whitespace-pre-wrap break-all max-h-60 scrollbar-thin">
-                            {r.error}
-                          </pre>
-                        </div>
-                      )}
+                    <pre className="rounded bg-muted/40 p-1.5 overflow-auto whitespace-pre-wrap max-h-32 scrollbar-thin">
+                      {JSON.stringify(call.arguments, null, 2)}
+                    </pre>
+                  </>
+                )}
+                {result && (
+                  <>
+                    <div className="flex items-center justify-between">
+                      <span className={cn(
+                        "font-medium",
+                        result.success ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"
+                      )}>
+                        {result.success ? "Result" : "Error"}
+                      </span>
+                      <span className="opacity-50 text-[9px]">{(result.content?.length || 0).toLocaleString()} chars</span>
                     </div>
+                    <pre className={cn(
+                      "rounded p-1.5 overflow-auto whitespace-pre-wrap break-all max-h-32 scrollbar-thin",
+                      result.success ? "bg-green-50/50 dark:bg-green-950/30" : "bg-red-50/50 dark:bg-red-950/30"
+                    )}>
+                      {result.error || result.content || "No content"}
+                    </pre>
+                  </>
+                )}
+                {callIsPending && (
+                  <div className="text-[10px] opacity-60 italic py-1">
+                    Waiting for response...
                   </div>
-                ))}
+                )}
               </div>
             )}
           </div>
-        </>
-      )}
-
-
+        )
+      })}
     </div>
   )
 }
@@ -718,7 +608,7 @@ const AssistantWithToolsBubble: React.FC<{
         className="flex items-start gap-2 px-2 py-1 text-left"
         onClick={handleToggleExpand}
       >
-        <span className="opacity-60 mt-0.5 flex-shrink-0">🤖</span>
+        <span className="i-mingcute-android-2-line h-3 w-3 text-gray-500 mt-0.5 flex-shrink-0" />
         <div className="flex-1 min-w-0">
           {hasThought && (
             <div className={cn(
@@ -729,100 +619,93 @@ const AssistantWithToolsBubble: React.FC<{
             </div>
           )}
 
-          {/* Tool execution section - always visible but collapsible */}
+          {/* Tool execution section - compact single line per tool */}
           <div className={cn(
-            "mt-2 rounded-lg border p-2",
-            isPending
-              ? "border-blue-200/50 bg-blue-50/30 text-blue-800 dark:border-blue-700/50 dark:bg-blue-950/40 dark:text-blue-200"
-              : allSuccess
-                ? "border-green-200/50 bg-green-50/30 text-green-800 dark:border-green-700/50 dark:bg-green-950/40 dark:text-green-200"
-                : "border-red-200/50 bg-red-50/30 text-red-800 dark:border-red-700/50 dark:bg-red-950/40 dark:text-red-200",
+            hasThought ? "mt-1" : "",
+            "space-y-0.5"
           )}>
-            <div
-              className="flex items-center justify-between cursor-pointer"
-              onClick={handleToggleToolDetails}
-            >
-              <div className="flex items-center gap-2 min-w-0 flex-1">
-                <span className="opacity-60">🔧</span>
-                <span className="font-mono font-semibold truncate">
-                  {toolCount === 1 ? data.calls[0].name : `${toolCount} tool calls`}
-                </span>
-                <Badge variant="outline" className="text-[10px] flex-shrink-0">
-                  {isPending ? "Running..." : allSuccess ? "✓" : "✗"}
-                </Badge>
-              </div>
-              <button
-                onClick={handleChevronClick}
-                className="p-1 rounded hover:bg-muted/30 transition-colors flex-shrink-0"
-                aria-label={showToolDetails ? "Collapse" : "Expand"}
-              >
-                {showToolDetails ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-              </button>
-            </div>
+            {data.calls.map((call, idx) => {
+              const result = data.results[idx]
+              const callIsPending = !result
+              const callSuccess = result?.success
+              const callResultSummary = result ? getToolResultsSummary([result]) : null
 
-            {/* Collapsed preview - show result summary */}
-            {!showToolDetails && collapsedResultSummary && (
-              <div className="mt-1 text-[10px] opacity-80 truncate">
-                <span className="font-medium">{collapsedResultSummary}</span>
-              </div>
-            )}
+              return (
+                <div
+                  key={idx}
+                  className={cn(
+                    "flex items-center gap-1.5 py-0.5 px-1 rounded text-[11px] cursor-pointer hover:bg-muted/30",
+                    callIsPending
+                      ? "text-blue-600 dark:text-blue-400"
+                      : callSuccess
+                        ? "text-green-600 dark:text-green-400"
+                        : "text-red-600 dark:text-red-400",
+                  )}
+                  onClick={handleToggleToolDetails}
+                >
+                  <span className={cn(
+                    "i-mingcute-tool-line h-2.5 w-2.5 flex-shrink-0",
+                    callIsPending ? "text-blue-500" : callSuccess ? "text-green-500" : "text-red-500"
+                  )} />
+                  <span className="font-mono font-medium truncate">{call.name}</span>
+                  <span className="text-[10px] opacity-60">
+                    {callIsPending ? (
+                      <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                    ) : callSuccess ? (
+                      <Check className="h-2.5 w-2.5" />
+                    ) : (
+                      <XCircle className="h-2.5 w-2.5" />
+                    )}
+                  </span>
+                  {!showToolDetails && callResultSummary && (
+                    <span className="text-[10px] opacity-50 truncate flex-1">{callResultSummary}</span>
+                  )}
+                  <ChevronRight className={cn(
+                    "h-2.5 w-2.5 opacity-40 flex-shrink-0 transition-transform",
+                    showToolDetails && "rotate-90"
+                  )} />
+                </div>
+              )
+            })}
+          </div>
 
-            {/* Expanded tool details */}
-            {showToolDetails && (
-              <div className="mt-2 space-y-2">
-                {/* Tool calls */}
-                {data.calls.map((call, idx) => (
-                  <div key={idx} className="rounded bg-muted/30 p-2">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="font-mono font-semibold text-primary">{call.name}</span>
-                      <Badge variant="outline" className="text-[10px]">Call {idx + 1}</Badge>
-                    </div>
+          {/* Expanded tool details */}
+          {showToolDetails && (
+            <div className="mt-1 space-y-1 ml-4 border-l border-border/50 pl-2">
+              {data.calls.map((call, idx) => {
+                const result = data.results[idx]
+                return (
+                  <div key={idx} className="text-[10px] space-y-1">
+                    <div className="font-medium opacity-70">Parameters:</div>
                     {call.arguments && (
-                      <pre className="rounded bg-muted/50 p-2 overflow-auto text-xs whitespace-pre-wrap max-h-40 scrollbar-thin">
+                      <pre className="rounded bg-muted/40 p-1.5 overflow-auto whitespace-pre-wrap max-h-32 scrollbar-thin text-[10px]">
                         {JSON.stringify(call.arguments, null, 2)}
                       </pre>
                     )}
-                  </div>
-                ))}
-
-                {/* Tool results */}
-                {data.results.length > 0 && (
-                  <div className="space-y-2">
-                    <div className="text-[11px] font-semibold opacity-70">Results:</div>
-                    {data.results.map((result, idx) => (
-                      <div
-                        key={idx}
-                        className={cn(
-                          "rounded border p-2",
-                          result.success
-                            ? "border-green-200/50 bg-green-50/20 dark:border-green-700/50 dark:bg-green-950/20"
-                            : "border-red-200/50 bg-red-50/20 dark:border-red-700/50 dark:bg-red-950/20",
-                        )}
-                      >
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="font-semibold">{result.success ? "✅ Success" : "❌ Error"}</span>
-                          <span className="text-[10px] opacity-60 font-mono">
-                            {(result.content?.length || 0).toLocaleString()} chars
+                    {result && (
+                      <>
+                        <div className="font-medium opacity-70 flex items-center gap-1">
+                          Result:
+                          <span className={cn(
+                            "text-[9px] font-semibold",
+                            result.success ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"
+                          )}>
+                            {result.success ? "OK" : "ERR"}
                           </span>
                         </div>
-                        <pre className="rounded bg-muted/30 p-2 overflow-auto whitespace-pre-wrap break-all max-h-40 scrollbar-thin">
-                          {result.content || "No content returned"}
+                        <pre className={cn(
+                          "rounded p-1.5 overflow-auto whitespace-pre-wrap break-all max-h-32 scrollbar-thin text-[10px]",
+                          result.success ? "bg-green-50/50 dark:bg-green-950/30" : "bg-red-50/50 dark:bg-red-950/30"
+                        )}>
+                          {result.error || result.content || "No content"}
                         </pre>
-                        {result.error && (
-                          <div className="mt-2">
-                            <div className="text-[11px] font-medium text-destructive mb-1">Error:</div>
-                            <pre className="rounded bg-destructive/10 p-2 overflow-auto whitespace-pre-wrap break-all max-h-40 scrollbar-thin">
-                              {result.error}
-                            </pre>
-                          </div>
-                        )}
-                      </div>
-                    ))}
+                      </>
+                    )}
                   </div>
-                )}
-              </div>
-            )}
-          </div>
+                )
+              })}
+            </div>
+          )}
         </div>
       </div>
     </div>

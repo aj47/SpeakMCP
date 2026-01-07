@@ -40,14 +40,23 @@ function sanitizeToolName(name: string, suffix?: string): string {
   let sanitized = name.replace(/:/g, "__COLON__")
   // Replace any remaining characters that don't match [a-zA-Z0-9_-] with underscore
   sanitized = sanitized.replace(/[^a-zA-Z0-9_-]/g, "_")
-  // Add disambiguation suffix if provided
+
+  // If we have a suffix, ensure it survives truncation by reserving space for it
+  // The suffix is added after truncation to prevent it from being cut off
   if (suffix) {
-    sanitized = `${sanitized}_${suffix}`
+    const suffixStr = `_${suffix}`
+    const maxBaseLength = 128 - suffixStr.length
+    if (sanitized.length > maxBaseLength) {
+      sanitized = sanitized.substring(0, maxBaseLength)
+    }
+    sanitized = `${sanitized}${suffixStr}`
+  } else {
+    // No suffix - simple truncation
+    if (sanitized.length > 128) {
+      sanitized = sanitized.substring(0, 128)
+    }
   }
-  // Truncate to 128 characters if needed
-  if (sanitized.length > 128) {
-    sanitized = sanitized.substring(0, 128)
-  }
+
   return sanitized
 }
 

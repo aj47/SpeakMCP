@@ -745,6 +745,7 @@ export class WhatsAppSession extends EventEmitter {
 
   /**
    * Send typing indicator (composing presence) to a chat
+   * Mirrors the same JID normalization/fallback as sendMessage to support LID-only chats
    */
   async sendTypingIndicator(chatId: string): Promise<{ success: boolean; error?: string }> {
     if (!this.socket || this.connectionState !== "connected") {
@@ -752,17 +753,47 @@ export class WhatsAppSession extends EventEmitter {
     }
 
     try {
-      // Format the JID
+      // Format the JID - determine if it's already formatted, or needs @s.whatsapp.net or @lid suffix
+      // Mirror the same logic as sendMessage to support LID-only chats
       let jid = chatId
+      let fallbackJid: string | null = null
+
       if (!jid.includes("@")) {
         const numericId = jid.replace(/[^0-9]/g, "")
-        jid = `${numericId}@s.whatsapp.net`
+
+        // Check if this ID is a known LID from our mapping
+        const isKnownLid = Array.from(this.lidToPhoneMap.keys()).includes(numericId)
+
+        if (isKnownLid) {
+          // This is a known LID, use @lid format
+          jid = `${numericId}@lid`
+        } else {
+          // Assume it's a phone number - try @s.whatsapp.net first, with @lid as fallback
+          jid = `${numericId}@s.whatsapp.net`
+          fallbackJid = `${numericId}@lid`
+        }
       }
 
-      // Send composing presence to show typing indicator
-      await this.socket.sendPresenceUpdate("composing", jid)
-      console.error(`[WhatsApp] Sent typing indicator to ${jid}`)
-      return { success: true }
+      // Helper function to send presence to a specific JID
+      const sendToJid = async (targetJid: string): Promise<void> => {
+        await this.socket!.sendPresenceUpdate("composing", targetJid)
+      }
+
+      // Try primary JID first
+      try {
+        await sendToJid(jid)
+        console.error(`[WhatsApp] Sent typing indicator to ${jid}`)
+        return { success: true }
+      } catch (primaryError) {
+        // If primary fails and we have a fallback, try that
+        if (fallbackJid) {
+          console.error(`[WhatsApp] Primary JID failed for typing, trying fallback: ${fallbackJid}`)
+          await sendToJid(fallbackJid)
+          console.error(`[WhatsApp] Sent typing indicator to ${fallbackJid}`)
+          return { success: true }
+        }
+        throw primaryError
+      }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
       console.error(`[WhatsApp] Failed to send typing indicator: ${errorMessage}`)
@@ -772,6 +803,7 @@ export class WhatsAppSession extends EventEmitter {
 
   /**
    * Stop typing indicator (paused presence) for a chat
+   * Mirrors the same JID normalization/fallback as sendMessage to support LID-only chats
    */
   async stopTypingIndicator(chatId: string): Promise<{ success: boolean; error?: string }> {
     if (!this.socket || this.connectionState !== "connected") {
@@ -779,17 +811,47 @@ export class WhatsAppSession extends EventEmitter {
     }
 
     try {
-      // Format the JID
+      // Format the JID - determine if it's already formatted, or needs @s.whatsapp.net or @lid suffix
+      // Mirror the same logic as sendMessage to support LID-only chats
       let jid = chatId
+      let fallbackJid: string | null = null
+
       if (!jid.includes("@")) {
         const numericId = jid.replace(/[^0-9]/g, "")
-        jid = `${numericId}@s.whatsapp.net`
+
+        // Check if this ID is a known LID from our mapping
+        const isKnownLid = Array.from(this.lidToPhoneMap.keys()).includes(numericId)
+
+        if (isKnownLid) {
+          // This is a known LID, use @lid format
+          jid = `${numericId}@lid`
+        } else {
+          // Assume it's a phone number - try @s.whatsapp.net first, with @lid as fallback
+          jid = `${numericId}@s.whatsapp.net`
+          fallbackJid = `${numericId}@lid`
+        }
       }
 
-      // Send paused presence to stop typing indicator
-      await this.socket.sendPresenceUpdate("paused", jid)
-      console.error(`[WhatsApp] Stopped typing indicator for ${jid}`)
-      return { success: true }
+      // Helper function to send presence to a specific JID
+      const sendToJid = async (targetJid: string): Promise<void> => {
+        await this.socket!.sendPresenceUpdate("paused", targetJid)
+      }
+
+      // Try primary JID first
+      try {
+        await sendToJid(jid)
+        console.error(`[WhatsApp] Stopped typing indicator for ${jid}`)
+        return { success: true }
+      } catch (primaryError) {
+        // If primary fails and we have a fallback, try that
+        if (fallbackJid) {
+          console.error(`[WhatsApp] Primary JID failed for stop typing, trying fallback: ${fallbackJid}`)
+          await sendToJid(fallbackJid)
+          console.error(`[WhatsApp] Stopped typing indicator for ${fallbackJid}`)
+          return { success: true }
+        }
+        throw primaryError
+      }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
       console.error(`[WhatsApp] Failed to stop typing indicator: ${errorMessage}`)

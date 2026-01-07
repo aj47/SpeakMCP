@@ -56,7 +56,6 @@ import {
   Power,
   PowerOff,
   Wrench,
-  Globe,
 } from "lucide-react"
 import { Spinner } from "@renderer/components/ui/spinner"
 import { MCPConfig, MCPServerConfig, MCPTransportType, OAuthConfig, ServerLogEntry, Profile } from "@shared/types"
@@ -71,7 +70,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "./ui/tooltip"
-import { MCPRegistryBrowser } from "./mcp-registry-browser"
+
 
 interface DetailedTool {
   name: string
@@ -155,17 +154,15 @@ interface ServerDialogProps {
   onImportFromText?: (text: string) => Promise<boolean>
   // Used to trigger state reset when dialog opens/closes (for Add mode where server prop doesn't change)
   isOpen?: boolean
-  // Existing server names for checking duplicates in registry browser
-  existingServerNames?: string[]
 }
 
 // Reserved server names that cannot be used by users (used for built-in functionality)
 const RESERVED_SERVER_NAMES = ["speakmcp-settings"]
 
-function ServerDialog({ server, onSave, onCancel, onImportFromFile, onImportFromText, isOpen, existingServerNames = [] }: ServerDialogProps) {
+function ServerDialog({ server, onSave, onCancel, onImportFromFile, onImportFromText, isOpen }: ServerDialogProps) {
   const [name, setName] = useState(server?.name || "")
-  // Default to 'registry' tab when adding a new server (better discovery), 'manual' when editing
-  const [activeTab, setActiveTab] = useState<'manual' | 'file' | 'paste' | 'examples' | 'registry'>(server ? 'manual' : 'registry')
+  // Default to 'examples' tab when adding a new server, 'manual' when editing
+  const [activeTab, setActiveTab] = useState<'manual' | 'file' | 'paste' | 'examples'>(server ? 'manual' : 'examples')
   const [jsonInputText, setJsonInputText] = useState("")
   const [isValidatingJson, setIsValidatingJson] = useState(false)
   const [transport, setTransport] = useState<MCPTransportType>(
@@ -207,8 +204,8 @@ function ServerDialog({ server, onSave, onCancel, onImportFromFile, onImportFrom
   // Reset all fields when server prop changes (e.g., when switching from edit to add)
   useEffect(() => {
     setName(server?.name || "")
-    // Default to 'registry' tab when adding a new server (better discovery), 'manual' when editing
-    setActiveTab(server ? 'manual' : 'registry')
+    // Default to 'examples' tab when adding a new server, 'manual' when editing
+    setActiveTab(server ? 'manual' : 'examples')
     setJsonInputText("")  // Clear pasted JSON to prevent data/secrets from persisting across dialog close/open
     setTransport(server?.config.transport || "stdio")
 
@@ -250,7 +247,7 @@ function ServerDialog({ server, onSave, onCancel, onImportFromFile, onImportFrom
       // Only reset for Add mode (server is undefined)
       // Edit mode is handled by the server dependency useEffect above
       setName("")
-      setActiveTab('registry')  // Default to 'registry' tab when adding a new server
+      setActiveTab('examples')  // Default to 'examples' tab when adding a new server
       setJsonInputText("")
       setIsValidatingJson(false) // Reset validation state to prevent UI getting stuck
       setTransport("stdio")
@@ -405,17 +402,6 @@ function ServerDialog({ server, onSave, onCancel, onImportFromFile, onImportFrom
           >
             Examples
           </Button>
-          {!server && (
-            <Button
-              variant={activeTab === 'registry' ? 'default' : 'outline'}
-              onClick={() => setActiveTab('registry')}
-              className="flex-1"
-              size="sm"
-            >
-              <Globe className="mr-1 h-3 w-3" />
-              Registry
-            </Button>
-          )}
         </div>
 
         {/* Manual Configuration Tab */}
@@ -848,16 +834,6 @@ function ServerDialog({ server, onSave, onCancel, onImportFromFile, onImportFrom
               )}
             </div>
           </div>
-        )}
-
-        {/* Registry Tab */}
-        {activeTab === 'registry' && (
-          <MCPRegistryBrowser
-            existingServerNames={existingServerNames}
-            onSelectServer={(name, config) => {
-              onSave(name, config)
-            }}
-          />
         )}
       </div>
 
@@ -2291,7 +2267,6 @@ export function MCPConfigManager({
                 onImportFromFile={handleImportConfigFromFile}
                 onImportFromText={handleImportFromText}
                 isOpen={showAddDialog}
-                existingServerNames={Object.keys(servers)}
               />
             </Dialog>
           </div>

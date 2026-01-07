@@ -1,12 +1,23 @@
 import React, { useState, useEffect, useMemo } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { tipcClient, rendererHandlers } from "@renderer/lib/tipc-client"
-import { Activity, ChevronDown, ChevronRight, X, Minimize2, Maximize2, Shield, CheckCircle2, Trash2, Clock } from "lucide-react"
+import { Activity, ChevronDown, ChevronRight, X, Minimize2, Maximize2, Shield, CheckCircle2, Trash2, Clock, Loader2, Search, FolderOpen, AlertTriangle } from "lucide-react"
 import { cn } from "@renderer/lib/utils"
 import { useAgentStore } from "@renderer/stores"
 import { logUI, logStateChange, logExpand } from "@renderer/lib/debug"
 import { useNavigate } from "react-router-dom"
-import { useConversationHistoryQuery, useDeleteConversationMutation } from "@renderer/lib/queries"
+import { useConversationHistoryQuery, useDeleteConversationMutation, useDeleteAllConversationsMutation } from "@renderer/lib/queries"
+import { Input } from "@renderer/components/ui/input"
+import { Button } from "@renderer/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@renderer/components/ui/dialog"
+import { toast } from "sonner"
 import { ConversationHistoryItem } from "@shared/types"
 import dayjs from "dayjs"
 import relativeTime from "dayjs/plugin/relativeTime"
@@ -51,6 +62,8 @@ export function ActiveAgentsSidebar() {
   })
 
   const [pastSessionsCount, setPastSessionsCount] = useState(INITIAL_PAST_SESSIONS)
+  const [searchQuery, setSearchQuery] = useState("")
+  const [showDeleteAllDialog, setShowDeleteAllDialog] = useState(false)
 
   const focusedSessionId = useAgentStore((s) => s.focusedSessionId)
   const setFocusedSessionId = useAgentStore((s) => s.setFocusedSessionId)
@@ -69,12 +82,20 @@ export function ActiveAgentsSidebar() {
   // Fetch conversation history for past sessions
   const conversationHistoryQuery = useConversationHistoryQuery()
   const deleteConversationMutation = useDeleteConversationMutation()
+  const deleteAllConversationsMutation = useDeleteAllConversationsMutation()
 
   // Get visible past sessions with lazy loading
   const visiblePastSessions = useMemo(() => {
     if (!conversationHistoryQuery.data) return []
-    return conversationHistoryQuery.data.slice(0, pastSessionsCount)
-  }, [conversationHistoryQuery.data, pastSessionsCount])
+    const filtered = searchQuery.trim()
+      ? conversationHistoryQuery.data.filter(
+          (session) =>
+            session.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            session.preview.toLowerCase().includes(searchQuery.toLowerCase())
+        )
+      : conversationHistoryQuery.data
+    return filtered.slice(0, pastSessionsCount)
+  }, [conversationHistoryQuery.data, pastSessionsCount, searchQuery])
 
   const hasMorePastSessions = (conversationHistoryQuery.data?.length ?? 0) > pastSessionsCount
 
@@ -256,6 +277,25 @@ export function ActiveAgentsSidebar() {
 
   const handleLoadMorePastSessions = () => {
     setPastSessionsCount(prev => prev + INITIAL_PAST_SESSIONS)
+  }
+
+  const handleOpenHistoryFolder = async () => {
+    try {
+      await tipcClient.openConversationsFolder()
+      toast.success("History folder opened")
+    } catch (error) {
+      toast.error("Failed to open history folder")
+    }
+  }
+
+  const handleDeleteAllHistory = async () => {
+    try {
+      await deleteAllConversationsMutation.mutateAsync()
+      toast.success("All history deleted")
+      setShowDeleteAllDialog(false)
+    } catch (error) {
+      toast.error("Failed to delete history")
+    }
   }
 
   // Format timestamp for display - use relative time for recent, absolute for older
@@ -447,16 +487,53 @@ export function ActiveAgentsSidebar() {
             <Clock className="h-3.5 w-3.5" />
             <span>Past Sessions</span>
             {conversationHistoryQuery.data && conversationHistoryQuery.data.length > 0 && (
-              <span className="ml-auto text-[10px] text-muted-foreground">
+              <span className="text-[10px] text-muted-foreground">
                 {conversationHistoryQuery.data.length}
               </span>
             )}
           </button>
+          {isPastSessionsExpanded && (
+            <div className="flex items-center gap-1 ml-auto">
+              <button
+                onClick={handleOpenHistoryFolder}
+                className="p-1 rounded hover:bg-accent/50 text-muted-foreground hover:text-foreground"
+                title="Open history folder"
+              >
+                <FolderOpen className="h-3 w-3" />
+              </button>
+              <button
+                onClick={() => setShowDeleteAllDialog(true)}
+                className="p-1 rounded hover:bg-destructive/20 text-muted-foreground hover:text-destructive"
+                title="Delete all history"
+                disabled={!conversationHistoryQuery.data?.length}
+              >
+                <Trash2 className="h-3 w-3" />
+              </button>
+            </div>
+          )}
         </div>
 
         {isPastSessionsExpanded && (
           <div className="mt-1 space-y-0.5 pl-2">
-            {visiblePastSessions.length === 0 ? (
+            <div className="px-2 pb-2">
+              <div className="relative">
+                <Search className="absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search sessions..."
+                  className="h-7 pl-7 text-xs"
+                />
+              </div>
+            </div>
+            {conversationHistoryQuery.isLoading ? (
+              <div className="flex items-center gap-2 px-2 py-2 text-xs text-muted-foreground">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                <span>Loading sessions...</span>
+              </div>
+            ) : conversationHistoryQuery.isError ? (
+              <p className="px-2 py-2 text-xs text-destructive">Failed to load sessions</p>
+            ) : visiblePastSessions.length === 0 ? (
               <p className="px-2 py-2 text-xs text-muted-foreground">No past sessions</p>
             ) : (
               <>
@@ -503,6 +580,32 @@ export function ActiveAgentsSidebar() {
         )}
       </div>
 
+      {/* Delete All Confirmation Dialog */}
+      <Dialog open={showDeleteAllDialog} onOpenChange={setShowDeleteAllDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-destructive" />
+              Delete All History
+            </DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete all conversation history? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDeleteAllDialog(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteAllHistory}
+              disabled={deleteAllConversationsMutation.isPending}
+            >
+              {deleteAllConversationsMutation.isPending ? "Deleting..." : "Delete All"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

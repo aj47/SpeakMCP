@@ -9,7 +9,7 @@ import { AgentProgress } from "@renderer/components/agent-progress"
 import { MessageCircle, Mic, Plus, Calendar, Trash2, Search, ChevronDown, FolderOpen, CheckCircle2, LayoutGrid, Kanban, RotateCcw } from "lucide-react"
 import { Button } from "@renderer/components/ui/button"
 import { Input } from "@renderer/components/ui/input"
-import { Card, CardContent } from "@renderer/components/ui/card"
+
 import { Badge } from "@renderer/components/ui/badge"
 import { useConversationHistoryQuery, useDeleteConversationMutation, useDeleteAllConversationsMutation } from "@renderer/lib/queries"
 import { ConversationHistoryItem, AgentProgressUpdate } from "@shared/types"
@@ -628,7 +628,7 @@ export function Component() {
                         <Calendar className="h-4 w-4" />
                         {date}
                       </h4>
-                      <div className="space-y-2">
+                      <div className="space-y-0.5">
                         {items.map((historyItem) => (
                           <PastSessionCard
                             key={historyItem.id}
@@ -705,44 +705,35 @@ function PastSessionCard({
   isDeleting,
 }: PastSessionCardProps) {
   return (
-    <Card
+    <div
       className={cn(
-        "cursor-pointer transition-all hover:shadow-md hover:border-primary/50",
+        "flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer transition-all",
+        "hover:bg-accent/50 group border border-transparent hover:border-border/50"
       )}
       onClick={onOpen}
+      title={`${conversation.preview}\n${dayjs(conversation.updatedAt).format("MMM D, h:mm A")}`}
     >
-      <CardContent className="p-4">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <h3 className="mb-1 truncate font-medium">{conversation.title}</h3>
-            <p className="mb-2 line-clamp-2 text-sm text-muted-foreground">
-              {conversation.preview}
-            </p>
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <Badge variant="secondary" className="text-xs">
-                {conversation.messageCount} messages
-              </Badge>
-              <span>•</span>
-              <span>
-                {dayjs(conversation.updatedAt).format("MMM D, h:mm A")}
-              </span>
-            </div>
-          </div>
-          <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onDelete}
-              disabled={isDeleting}
-              className="h-8 w-8 p-0 text-red-500 hover:text-red-600"
-              title="Delete session"
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
+      <CheckCircle2 className="h-4 w-4 shrink-0 text-muted-foreground" />
+      <span className="flex-1 truncate text-sm">{conversation.title}</span>
+      <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+        {conversation.messageCount}
+      </span>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation()
+          onDelete()
+        }}
+        disabled={isDeleting}
+        className={cn(
+          "shrink-0 p-1 rounded opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity",
+          "text-muted-foreground hover:text-red-500 hover:bg-red-500/10"
+        )}
+        title="Delete session"
+      >
+        <Trash2 className="h-3.5 w-3.5" />
+      </button>
+    </div>
   )
 }
 

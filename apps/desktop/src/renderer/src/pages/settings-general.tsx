@@ -213,7 +213,7 @@ export function Component() {
                   To use keyboard shortcuts on Linux, add your user to the 'input' group:
                 </p>
                 <code className="block text-xs bg-muted px-2 py-1 rounded font-mono">
-                  sudo usermod -aG input {linuxInputGroupQuery.data?.username || "$USER"}
+                  sudo usermod -aG input $USER
                 </code>
                 <p className="text-xs text-muted-foreground">
                   Then log out and log back in for the change to take effect.

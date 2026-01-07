@@ -223,7 +223,7 @@ function checkLinuxInputGroup(): void {
               type: "info",
               title: "Global Hotkeys Setup Required",
               message: "To use global keyboard shortcuts on Linux, you need to add your user to the 'input' group.",
-              detail: `Run this command in a terminal:\n\nsudo usermod -aG input ${username || "$USER"}\n\nThen log out and log back in for the change to take effect.\n\nThis is required because SpeakMCP needs to read keyboard events from /dev/input/ devices to detect hotkeys (works on both X11 and Wayland).`,
+              detail: `Run this command in a terminal:\n\nsudo usermod -aG input $USER\n\nThen log out and log back in for the change to take effect.\n\nThis is required because SpeakMCP needs to read keyboard events from /dev/input/ devices to detect hotkeys (works on both X11 and Wayland).`,
               buttons: ["OK"],
             })
           })

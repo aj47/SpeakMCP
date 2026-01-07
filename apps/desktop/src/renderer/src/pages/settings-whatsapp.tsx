@@ -42,7 +42,7 @@ export function Component() {
   )
 
   // Fetch WhatsApp status periodically
-  const fetchStatus = useCallback(async () => {
+  const fetchStatus = useCallback(async (): Promise<void> => {
     try {
       const result = await tipcClient.whatsappGetStatus()
       setStatus(result as WhatsAppStatus)
@@ -61,7 +61,9 @@ export function Component() {
 
   // Poll for status when enabled
   useEffect(() => {
-    if (!cfg?.whatsappEnabled) return
+    if (!cfg?.whatsappEnabled) {
+      return undefined
+    }
 
     fetchStatus()
     const interval = setInterval(fetchStatus, 3000) // Poll every 3 seconds
@@ -89,7 +91,10 @@ export function Component() {
 
   const handleDisconnect = async () => {
     try {
-      await tipcClient.whatsappDisconnect()
+      const result = await tipcClient.whatsappDisconnect()
+      if (!result.success) {
+        setStatusError(result.error || "Failed to disconnect")
+      }
       await fetchStatus()
     } catch (error) {
       setStatusError(error instanceof Error ? error.message : String(error))
@@ -98,8 +103,12 @@ export function Component() {
 
   const handleLogout = async () => {
     try {
-      await tipcClient.whatsappLogout()
-      setQrCodeData(null)
+      const result = await tipcClient.whatsappLogout()
+      if (!result.success) {
+        setStatusError(result.error || "Failed to logout")
+      } else {
+        setQrCodeData(null)
+      }
       await fetchStatus()
     } catch (error) {
       setStatusError(error instanceof Error ? error.message : String(error))

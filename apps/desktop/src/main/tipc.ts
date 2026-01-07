@@ -1688,37 +1688,39 @@ export const router = {
           const currentMcpConfig = merged.mcpConfig || { mcpServers: {} }
           const hasWhatsappServer = !!currentMcpConfig.mcpServers?.[WHATSAPP_SERVER_NAME]
 
-          if (nextWhatsappEnabled && !hasWhatsappServer) {
-            // Auto-add WhatsApp MCP server when enabled
-            // Determine the path to the WhatsApp MCP server
-            // In development: use the monorepo packages path
-            // In production: the package should be bundled with the app
-            let whatsappServerPath: string
-            if (process.env.NODE_ENV === "development" || process.env.ELECTRON_RENDERER_URL) {
-              // Development: use path relative to the monorepo root
-              whatsappServerPath = path.resolve(app.getAppPath(), "../../packages/mcp-whatsapp/dist/index.js")
-            } else {
-              // Production: use path relative to app resources
-              // The WhatsApp MCP package should be bundled in extraResources
-              whatsappServerPath = path.join(process.resourcesPath || app.getAppPath(), "mcp-whatsapp/dist/index.js")
-            }
-
-            const updatedMcpConfig: MCPConfig = {
-              ...currentMcpConfig,
-              mcpServers: {
-                ...currentMcpConfig.mcpServers,
-                [WHATSAPP_SERVER_NAME]: {
-                  command: "node",
-                  args: [whatsappServerPath],
-                  transport: "stdio",
-                },
-              },
-            }
-            merged.mcpConfig = updatedMcpConfig
-            configStore.save(merged)
-
-            // Initialize the WhatsApp server
+          if (nextWhatsappEnabled) {
+            // WhatsApp is being enabled
             const { mcpService } = await import("./mcp-service")
+            if (!hasWhatsappServer) {
+              // Auto-add WhatsApp MCP server when enabled
+              // Determine the path to the WhatsApp MCP server
+              // In development: use the monorepo packages path
+              // In production: the package should be bundled with the app
+              let whatsappServerPath: string
+              if (process.env.NODE_ENV === "development" || process.env.ELECTRON_RENDERER_URL) {
+                // Development: use path relative to the monorepo root
+                whatsappServerPath = path.resolve(app.getAppPath(), "../../packages/mcp-whatsapp/dist/index.js")
+              } else {
+                // Production: use path relative to app resources
+                // The WhatsApp MCP package should be bundled in extraResources
+                whatsappServerPath = path.join(process.resourcesPath || app.getAppPath(), "mcp-whatsapp/dist/index.js")
+              }
+
+              const updatedMcpConfig: MCPConfig = {
+                ...currentMcpConfig,
+                mcpServers: {
+                  ...currentMcpConfig.mcpServers,
+                  [WHATSAPP_SERVER_NAME]: {
+                    command: "node",
+                    args: [whatsappServerPath],
+                    transport: "stdio",
+                  },
+                },
+              }
+              merged.mcpConfig = updatedMcpConfig
+              configStore.save(merged)
+            }
+            // Start/restart the WhatsApp server (handles both new and existing configs)
             await mcpService.restartServer(WHATSAPP_SERVER_NAME)
           } else if (!nextWhatsappEnabled && hasWhatsappServer) {
             // Stop the WhatsApp server when disabled (but keep config for re-enabling)
@@ -2144,6 +2146,12 @@ export const router = {
         true // skip approval check for internal calls
       )
 
+      // Check if the tool returned an error result
+      if (result.isError) {
+        const errorText = result.content?.find((c: any) => c.type === "text")?.text || "Connection failed"
+        return { success: false, error: errorText }
+      }
+
       // Parse the result to extract QR code if present
       const textContent = result.content?.find((c: any) => c.type === "text")
       if (textContent?.text) {
@@ -2188,6 +2196,12 @@ export const router = {
         undefined,
         true // skip approval check for internal calls
       )
+
+      // Check if the tool returned an error result
+      if (result.isError) {
+        const errorText = result.content?.find((c: any) => c.type === "text")?.text || "Failed to get status"
+        return { available: true, connected: false, error: errorText }
+      }
 
       // Parse the result
       const textContent = result.content?.find((c: any) => c.type === "text")

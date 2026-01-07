@@ -666,7 +666,12 @@ const toolHandlers: Record<string, ToolHandler> = {
 
     const command = args.command as string
     const skillId = args.skillId as string | undefined
-    const timeout = typeof args.timeout === "number" ? args.timeout : 30000
+    // Validate timeout: must be a finite non-negative number, otherwise use default
+    // This prevents NaN or negative values from disabling the timeout entirely
+    const rawTimeout = args.timeout
+    const timeout = (typeof rawTimeout === "number" && Number.isFinite(rawTimeout) && rawTimeout >= 0) 
+      ? rawTimeout 
+      : 30000
 
     // Determine the working directory
     let cwd: string | undefined

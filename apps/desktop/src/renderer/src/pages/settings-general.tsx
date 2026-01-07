@@ -50,7 +50,7 @@ export function Component() {
   const linuxInputGroupQuery = useQuery({
     queryKey: ["linux-input-group"],
     queryFn: () => tipcClient.checkLinuxInputGroup(),
-    staleTime: 60000, // Check once per minute
+    staleTime: 60000, // Cache result for 1 minute (avoids refetch on navigation)
   })
 
   const saveConfigMutation = useSaveConfigMutation()

@@ -1126,31 +1126,15 @@ export function listenToKeyboardEvents() {
         cancelCustomMcpTimer()
       }
 
-      // Skip built-in hold mode handling for toggle mode shortcuts
-      if (
-        (currentConfig.shortcut === "ctrl-slash") ||
-        (currentConfig.shortcut === "custom" && currentConfig.customShortcutMode === "toggle")
-      )
-        return
-
-      cancelRecordingTimer()
+      // Always handle MCP hold-ctrl-alt key releases, regardless of recording shortcut mode
+      // This must happen before the toggle mode early return below
       cancelMcpRecordingTimer()
 
-      // Finish MCP hold on either modifier release
       if (e.data.key === "ControlLeft" || e.data.key === "ControlRight") {
         if (isHoldingCtrlAltKey) {
           const panelHandlers = getWindowRendererHandlers("panel")
           panelHandlers?.finishMcpRecording.send()
           isHoldingCtrlAltKey = false
-        } else {
-          if (isHoldingCtrlKey) {
-            getWindowRendererHandlers("panel")?.finishRecording.send()
-          } else if (!state.isTextInputActive) {
-            // Only close panel if we're not in text input mode
-            stopRecordingAndHidePanelWindow()
-          }
-
-          isHoldingCtrlKey = false
         }
       }
 
@@ -1159,8 +1143,33 @@ export function listenToKeyboardEvents() {
           const panelHandlers = getWindowRendererHandlers("panel")
           panelHandlers?.finishMcpRecording.send()
           isHoldingCtrlAltKey = false
+        }
+      }
+
+      // Skip built-in hold mode handling for toggle mode shortcuts
+      // (only applies to regular recording, not MCP agent mode which is handled above)
+      if (
+        (currentConfig.shortcut === "ctrl-slash") ||
+        (currentConfig.shortcut === "custom" && currentConfig.customShortcutMode === "toggle")
+      )
+        return
+
+      cancelRecordingTimer()
+
+      // Finish regular hold-ctrl recording on Ctrl release
+      if (e.data.key === "ControlLeft" || e.data.key === "ControlRight") {
+        if (isHoldingCtrlKey) {
+          getWindowRendererHandlers("panel")?.finishRecording.send()
         } else if (!state.isTextInputActive) {
           // Only close panel if we're not in text input mode
+          stopRecordingAndHidePanelWindow()
+        }
+        isHoldingCtrlKey = false
+      }
+
+      // Close panel on Alt release if not in text input mode (and not in MCP mode, which is handled above)
+      if (e.data.key === "Alt" || e.data.key === "AltLeft" || e.data.key === "AltRight") {
+        if (!state.isTextInputActive) {
           stopRecordingAndHidePanelWindow()
         }
       }

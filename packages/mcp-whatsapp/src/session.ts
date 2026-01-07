@@ -13,6 +13,7 @@ import makeWASocket, {
   makeCacheableSignalKeyStore,
   fetchLatestBaileysVersion,
   Browsers,
+  downloadMediaMessage,
 } from "@whiskeysockets/baileys"
 import { Boom } from "@hapi/boom"
 import pino from "pino"
@@ -326,7 +327,7 @@ export class WhatsAppSession extends EventEmitter {
   /**
    * Handle incoming messages
    */
-  private handleMessagesUpsert(m: BaileysEventMap["messages.upsert"]): void {
+  private async handleMessagesUpsert(m: BaileysEventMap["messages.upsert"]): Promise<void> {
     // Only process "notify" messages (real-time incoming messages)
     if (m.type !== "notify") {
       return
@@ -346,6 +347,29 @@ export class WhatsAppSession extends EventEmitter {
       const message = this.parseMessage(msg)
       if (!message) {
         continue
+      }
+
+      // Download media for image messages
+      if (message.mediaType === "image" && msg.message?.imageMessage) {
+        try {
+          console.error(`[WhatsApp] Downloading image from ${message.fromName || message.from}...`)
+          const buffer = await downloadMediaMessage(
+            msg,
+            "buffer",
+            {},
+            {
+              logger: undefined,
+              reuploadRequest: this.socket!.updateMediaMessage
+            }
+          )
+          if (buffer && Buffer.isBuffer(buffer)) {
+            message.mediaBuffer = buffer
+            message.mediaMimetype = msg.message.imageMessage.mimetype || "image/jpeg"
+            console.error(`[WhatsApp] Downloaded image: ${buffer.length} bytes, type: ${message.mediaMimetype}`)
+          }
+        } catch (error) {
+          console.error(`[WhatsApp] Failed to download image: ${error instanceof Error ? error.message : String(error)}`)
+        }
       }
 
       // Check allowlist if configured

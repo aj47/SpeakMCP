@@ -53,7 +53,8 @@ whatsapp.on("message", async (message: WhatsAppMessage) => {
   if (config.logMessages) {
     console.error(`[MCP-WhatsApp] New message from ${message.fromName || message.from}: ${message.text.substring(0, 50)}...`)
   } else {
-    console.error(`[MCP-WhatsApp] New message from ${message.fromName || message.from}`)
+    const mediaInfo = message.mediaType ? ` [${message.mediaType}]` : ""
+    console.error(`[MCP-WhatsApp] New message from ${message.fromName || message.from}${mediaInfo}`)
   }
 
   // Add to pending queue
@@ -68,6 +69,32 @@ whatsapp.on("message", async (message: WhatsAppMessage) => {
       // Use message.chatId for groups/DMs instead of message.from
       // In groups, message.from is the participant, but we need to reply to the chat
       const replyTarget = message.chatId || message.from
+
+      // Build message content - use array format if there's an image, otherwise string
+      let messageContent: string | Array<{ type: string; text?: string; image_url?: { url: string } }>
+      const textContent = `[WhatsApp message from ${message.fromName || message.from} (chat_id: ${replyTarget})]: ${message.text}\n\nIMPORTANT: To reply, use whatsapp_send_message with to="${replyTarget}"`
+
+      if (message.mediaType === "image" && message.mediaBuffer) {
+        // Format as OpenAI-compatible content array with image
+        const base64Image = message.mediaBuffer.toString("base64")
+        const mimeType = message.mediaMimetype || "image/jpeg"
+        messageContent = [
+          {
+            type: "text",
+            text: textContent,
+          },
+          {
+            type: "image_url",
+            image_url: {
+              url: `data:${mimeType};base64,${base64Image}`,
+            },
+          },
+        ]
+        console.error(`[MCP-WhatsApp] Forwarding image message (${message.mediaBuffer.length} bytes)`)
+      } else {
+        messageContent = textContent
+      }
+
       const response = await fetch(config.callbackUrl, {
         method: "POST",
         headers: {
@@ -78,7 +105,7 @@ whatsapp.on("message", async (message: WhatsAppMessage) => {
           messages: [
             {
               role: "user",
-              content: `[WhatsApp message from ${message.fromName || message.from} (chat_id: ${replyTarget})]: ${message.text}\n\nIMPORTANT: To reply, use whatsapp_send_message with to="${replyTarget}"`,
+              content: messageContent,
             },
           ],
           conversation_id: `whatsapp_${replyTarget}`,
@@ -358,14 +385,64 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           }
         }
 
-        const formatted = messages.map((m) => ({
-          from: m.from,
-          fromName: m.fromName,
-          text: m.text,
-          timestamp: new Date(m.timestamp).toISOString(),
-          isGroup: m.isGroup,
-          chatId: m.chatId,
-        }))
+        // Build response - include image data inline as base64 when available
+        const contentParts: Array<{ type: string; text?: string; image_url?: { url: string } }> = []
+
+        const formatted = messages.map((m) => {
+          const msgInfo: Record<string, unknown> = {
+            from: m.from,
+            fromName: m.fromName,
+            text: m.text,
+            timestamp: new Date(m.timestamp).toISOString(),
+            isGroup: m.isGroup,
+            chatId: m.chatId,
+          }
+
+          // Add media info if present
+          if (m.mediaType) {
+            msgInfo.mediaType = m.mediaType
+            if (m.mediaBuffer) {
+              msgInfo.hasMedia = true
+              msgInfo.mediaSize = m.mediaBuffer.length
+            }
+          }
+
+          return msgInfo
+        })
+
+        // Add text content with message info
+        contentParts.push({
+          type: "text",
+          text: JSON.stringify(formatted, null, 2),
+        })
+
+        // Add image content parts for messages with images
+        for (const m of messages) {
+          if (m.mediaType === "image" && m.mediaBuffer) {
+            const base64Image = m.mediaBuffer.toString("base64")
+            const mimeType = m.mediaMimetype || "image/jpeg"
+            contentParts.push({
+              type: "image_url",
+              image_url: {
+                url: `data:${mimeType};base64,${base64Image}`,
+              },
+            })
+          }
+        }
+
+        // If we have images, return as content array; otherwise just text
+        if (contentParts.length > 1) {
+          return {
+            content: contentParts.map(part => {
+              if (part.type === "text") {
+                return { type: "text", text: part.text || "" }
+              } else if (part.type === "image_url" && part.image_url) {
+                return { type: "image", data: part.image_url.url, mimeType: "image/jpeg" }
+              }
+              return { type: "text", text: "" }
+            }),
+          }
+        }
 
         return {
           content: [

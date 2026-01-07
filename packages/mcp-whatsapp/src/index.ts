@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 /**
  * WhatsApp MCP Server for SpeakMCP
  *
@@ -71,7 +70,7 @@ whatsapp.on("message", async (message: WhatsAppMessage) => {
           messages: [
             {
               role: "user",
-              content: `[WhatsApp message from ${message.fromName || message.from}]: ${message.text}`,
+              content: `[WhatsApp message from ${message.fromName || message.from} (chat_id: ${message.from})]: ${message.text}\n\nIMPORTANT: To reply, use whatsapp_send_message with to="${message.from}"`,
             },
           ],
           conversation_id: `whatsapp_${message.from}`,

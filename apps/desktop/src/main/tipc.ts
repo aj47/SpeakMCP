@@ -2132,8 +2132,8 @@ export const router = {
     try {
       // Check if WhatsApp server is available
       const serverStatus = mcpService.getServerStatus()
-      const whatsappServer = serverStatus.find(s => s.name === WHATSAPP_SERVER_NAME)
-      if (!whatsappServer || whatsappServer.status !== "connected") {
+      const whatsappServer = serverStatus[WHATSAPP_SERVER_NAME]
+      if (!whatsappServer || !whatsappServer.connected) {
         return { success: false, error: "WhatsApp server is not running. Please enable WhatsApp in settings." }
       }
 
@@ -2177,8 +2177,8 @@ export const router = {
     try {
       // Check if WhatsApp server is available
       const serverStatus = mcpService.getServerStatus()
-      const whatsappServer = serverStatus.find(s => s.name === WHATSAPP_SERVER_NAME)
-      if (!whatsappServer || whatsappServer.status !== "connected") {
+      const whatsappServer = serverStatus[WHATSAPP_SERVER_NAME]
+      if (!whatsappServer || !whatsappServer.connected) {
         return { available: false, connected: false, error: "WhatsApp server is not running" }
       }
 

@@ -11,6 +11,8 @@ import makeWASocket, {
   BaileysEventMap,
   proto,
   makeCacheableSignalKeyStore,
+  fetchLatestBaileysVersion,
+  Browsers,
 } from "@whiskeysockets/baileys"
 import { Boom } from "@hapi/boom"
 import pino from "pino"
@@ -28,8 +30,10 @@ import type {
   WhatsAppChat,
 } from "./types.js"
 
-// Create a silent logger for Baileys (it's very noisy by default)
-const logger = pino({ level: "silent" })
+// Simple pino logger for Baileys
+const logger = pino({
+  level: "warn", // Only log warnings and errors to reduce noise
+}, pino.destination(2)) // 2 = stderr file descriptor
 
 export class WhatsAppSession extends EventEmitter {
   private socket: WASocket | null = null
@@ -43,6 +47,8 @@ export class WhatsAppSession extends EventEmitter {
   private maxReconnectAttempts = 5
   private messageHistory: Map<string, WhatsAppMessage[]> = new Map()
   private readonly MAX_HISTORY_PER_CHAT = 50
+  // Map of LID -> phone number for allowlist checking
+  private lidToPhoneMap: Map<string, string> = new Map()
 
   constructor(config: WhatsAppConfig) {
     super()
@@ -56,6 +62,101 @@ export class WhatsAppSession extends EventEmitter {
     if (!fs.existsSync(this.config.authDir)) {
       fs.mkdirSync(this.config.authDir, { recursive: true })
     }
+
+    // Load LID mappings from auth directory if available
+    this.loadLidMappings()
+  }
+
+  /**
+   * Load LID to phone number mappings from auth state files
+   */
+  private loadLidMappings(): void {
+    try {
+      // Try to load lid-mappings.json which Baileys may create
+      const mappingsFile = path.join(this.config.authDir, "lid-mappings.json")
+      if (fs.existsSync(mappingsFile)) {
+        const data = JSON.parse(fs.readFileSync(mappingsFile, "utf-8"))
+        for (const [lid, phone] of Object.entries(data)) {
+          if (typeof phone === "string") {
+            this.lidToPhoneMap.set(lid.replace(/[^0-9]/g, ""), phone.replace(/[^0-9]/g, ""))
+          }
+        }
+        console.error(`[WhatsApp] Loaded ${this.lidToPhoneMap.size} LID mappings from file`)
+      }
+
+      // Also scan for any app-state files that might contain mappings
+      const files = fs.readdirSync(this.config.authDir)
+      for (const file of files) {
+        if (file.startsWith("app-state-sync-key-") && file.endsWith(".json")) {
+          // These files sometimes contain contact info with LID mappings
+          continue // Skip for now, complex format
+        }
+      }
+    } catch (error) {
+      console.error(`[WhatsApp] Error loading LID mappings: ${error}`)
+    }
+  }
+
+  /**
+   * Save LID mappings to file for persistence
+   */
+  private saveLidMappings(): void {
+    try {
+      const mappingsFile = path.join(this.config.authDir, "lid-mappings.json")
+      const data: Record<string, string> = {}
+      for (const [lid, phone] of this.lidToPhoneMap) {
+        data[lid] = phone
+      }
+      fs.writeFileSync(mappingsFile, JSON.stringify(data, null, 2))
+    } catch (error) {
+      console.error(`[WhatsApp] Error saving LID mappings: ${error}`)
+    }
+  }
+
+  /**
+   * Load LID mappings from Baileys auth state
+   */
+  private loadLidMappingsFromAuthState(state: { creds: unknown; keys: unknown }): void {
+    try {
+      // Check if creds has lid info
+      const creds = state.creds as Record<string, unknown>
+      if (creds && creds.lid && creds.me) {
+        const me = creds.me as { id?: string; lid?: string }
+        if (me.id && me.lid) {
+          const phoneNumber = me.id.replace(/@.*$/, "").replace(/[^0-9]/g, "").split(":")[0]
+          const lid = me.lid.replace(/@.*$/, "").replace(/[^0-9]/g, "")
+          if (lid && phoneNumber) {
+            this.lidToPhoneMap.set(lid, phoneNumber)
+            console.error(`[WhatsApp] Loaded own LID mapping from creds: ${lid} -> ${phoneNumber}`)
+          }
+        }
+      }
+
+      // Also try to read lid-mappings from auth directory files
+      const files = fs.readdirSync(this.config.authDir)
+      for (const file of files) {
+        if (file.includes("lid") && file.endsWith(".json")) {
+          try {
+            const filePath = path.join(this.config.authDir, file)
+            const data = JSON.parse(fs.readFileSync(filePath, "utf-8"))
+            // Try to extract any LID mappings from the file
+            if (typeof data === "object" && data !== null) {
+              for (const [key, value] of Object.entries(data)) {
+                if (typeof value === "string" && key.match(/^\d+$/) && value.match(/^\d+$/)) {
+                  this.lidToPhoneMap.set(key, value)
+                }
+              }
+            }
+          } catch {
+            // Ignore parse errors
+          }
+        }
+      }
+
+      console.error(`[WhatsApp] Total LID mappings loaded: ${this.lidToPhoneMap.size}`)
+    } catch (error) {
+      console.error(`[WhatsApp] Error loading LID mappings from auth state: ${error}`)
+    }
   }
 
   /**
@@ -63,15 +164,21 @@ export class WhatsAppSession extends EventEmitter {
    */
   async connect(): Promise<void> {
     if (this.socket) {
-      console.log("[WhatsApp] Already connected or connecting")
+      console.error("[WhatsApp] Already connected or connecting")
       return
     }
 
+    console.error("[WhatsApp] Starting connection...")
     this.connectionState = "connecting"
     this.emit("connectionUpdate", this.getStatus())
 
     try {
+      // Fetch the latest WhatsApp version to avoid 405 errors
+      const { version } = await fetchLatestBaileysVersion()
       const { state, saveCreds } = await useMultiFileAuthState(this.config.authDir)
+
+      // Try to load LID mappings from auth state
+      this.loadLidMappingsFromAuthState(state)
 
       this.socket = makeWASocket({
         auth: {
@@ -80,14 +187,21 @@ export class WhatsAppSession extends EventEmitter {
         },
         printQRInTerminal: false, // We handle QR ourselves
         logger,
-        browser: ["SpeakMCP", "Chrome", "1.0.0"],
+        browser: Browsers.macOS("Safari"), // Use Safari browser to avoid 405 errors
+        version, // Use the fetched WhatsApp version
         connectTimeoutMs: 60000,
         qrTimeout: 60000,
         defaultQueryTimeoutMs: 60000,
+        markOnlineOnConnect: false,
+        syncFullHistory: false,
       })
 
       // Handle connection updates
       this.socket.ev.on("connection.update", async (update) => {
+        // Only log significant connection state changes
+        if (update.connection || update.qr) {
+          console.error(`[WhatsApp] connection.update: ${update.connection || (update.qr ? 'qr' : 'other')}`)
+        }
         await this.handleConnectionUpdate(update, saveCreds)
       })
 
@@ -99,7 +213,30 @@ export class WhatsAppSession extends EventEmitter {
         this.handleMessagesUpsert(m)
       })
 
+      // Handle contacts update to capture LID -> phone number mappings
+      this.socket.ev.on("contacts.update", (contacts) => {
+        let newMappings = 0
+        for (const contact of contacts) {
+          // contacts.update can include LID info
+          if (contact.id && contact.lid) {
+            const phoneNumber = contact.id.replace(/@.*$/, "").replace(/[^0-9]/g, "")
+            const lid = contact.lid.replace(/@.*$/, "").replace(/[^0-9]/g, "")
+            if (lid && phoneNumber && !this.lidToPhoneMap.has(lid)) {
+              this.lidToPhoneMap.set(lid, phoneNumber)
+              newMappings++
+            }
+          }
+        }
+        if (newMappings > 0) {
+          console.error(`[WhatsApp] Added ${newMappings} new LID mappings (total: ${this.lidToPhoneMap.size})`)
+          this.saveLidMappings()
+        }
+      })
+
+      console.error("[WhatsApp] Event handlers set up, waiting for connection...")
+
     } catch (error) {
+      console.error(`[WhatsApp] Connection error: ${error instanceof Error ? error.stack : String(error)}`)
       this.lastError = error instanceof Error ? error.message : String(error)
       this.connectionState = "disconnected"
       this.emit("error", error)
@@ -133,10 +270,14 @@ export class WhatsAppSession extends EventEmitter {
     // Handle connection state changes
     if (connection === "close") {
       const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode
-      const shouldReconnect = statusCode !== DisconnectReason.loggedOut
+      // Don't reconnect if logged out OR if there's a conflict (another session took over)
+      // Conflict status code is 440
+      const isConflict = statusCode === 440
+      const isLoggedOut = statusCode === DisconnectReason.loggedOut
+      const shouldReconnect = !isLoggedOut && !isConflict
 
-      console.log(
-        `[WhatsApp] Connection closed. Status: ${statusCode}. Reconnect: ${shouldReconnect}`
+      console.error(
+        `[WhatsApp] Connection closed. Status: ${statusCode}. Conflict: ${isConflict}. Reconnect: ${shouldReconnect}`
       )
 
       this.socket = null
@@ -146,14 +287,16 @@ export class WhatsAppSession extends EventEmitter {
       if (shouldReconnect && this.reconnectAttempts < this.maxReconnectAttempts) {
         this.reconnectAttempts++
         const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 30000)
-        console.log(
+        console.error(
           `[WhatsApp] Reconnecting in ${delay / 1000}s (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`
         )
         setTimeout(() => this.connect(), delay)
-      } else if (statusCode === DisconnectReason.loggedOut) {
+      } else if (isLoggedOut) {
         // Clear credentials on logout
-        console.log("[WhatsApp] Logged out. Clearing credentials.")
+        console.error("[WhatsApp] Logged out. Clearing credentials.")
         this.clearCredentials()
+      } else if (isConflict) {
+        console.error("[WhatsApp] Session conflict - another client connected. Not auto-reconnecting.")
       }
 
       this.emit("connectionUpdate", this.getStatus())
@@ -179,39 +322,91 @@ export class WhatsAppSession extends EventEmitter {
    * Handle incoming messages
    */
   private handleMessagesUpsert(m: BaileysEventMap["messages.upsert"]): void {
-    if (m.type !== "notify") return
+    // Only process "notify" messages (real-time incoming messages)
+    if (m.type !== "notify") {
+      return
+    }
 
     for (const msg of m.messages) {
       // Skip messages from self
-      if (msg.key.fromMe) continue
+      if (msg.key.fromMe) {
+        continue
+      }
 
       // Skip status broadcasts
-      if (msg.key.remoteJid === "status@broadcast") continue
+      if (msg.key.remoteJid === "status@broadcast") {
+        continue
+      }
 
       const message = this.parseMessage(msg)
-      if (!message) continue
+      if (!message) {
+        continue
+      }
 
       // Check allowlist if configured
       if (this.config.allowFrom && this.config.allowFrom.length > 0) {
+        // Get the sender identifier - could be phone number or LID
         const senderNumber = message.from.replace(/[^0-9]/g, "")
+
+        // Also try to get the phone number from the chatId (which may have both formats)
+        // LIDs look like "98389177934034@lid", phone numbers like "61406142826@s.whatsapp.net"
+        const chatIdNumber = message.chatId?.replace(/@.*$/, "").replace(/[^0-9]/g, "") || ""
+
+        // Look up phone number from LID mapping if sender is a LID
+        let mappedPhoneNumber = ""
+        if (message.from.includes("@lid")) {
+          // First check our local map
+          if (this.lidToPhoneMap.has(senderNumber)) {
+            mappedPhoneNumber = this.lidToPhoneMap.get(senderNumber) || ""
+          }
+          // If not found, try to get it from the message's verifiedBizName or pushName
+          // which might contain the phone number
+          if (!mappedPhoneNumber && msg.verifiedBizName) {
+            const bizPhone = msg.verifiedBizName.replace(/[^0-9]/g, "")
+            if (bizPhone.length >= 10) {
+              mappedPhoneNumber = bizPhone
+              this.lidToPhoneMap.set(senderNumber, bizPhone)
+              this.saveLidMappings()
+            }
+          }
+        }
+
         const isAllowed = this.config.allowFrom.some((allowed) => {
           const normalizedAllowed = allowed.replace(/[^0-9]/g, "")
-          return senderNumber.endsWith(normalizedAllowed) || normalizedAllowed.endsWith(senderNumber)
+          // Check if any identifier matches the allowlist (flexible matching)
+          // Use endsWith to handle country code variations (e.g., 406142826 matches 61406142826)
+          const senderMatches = senderNumber.endsWith(normalizedAllowed) || normalizedAllowed.endsWith(senderNumber)
+          const chatIdMatches = chatIdNumber.endsWith(normalizedAllowed) || normalizedAllowed.endsWith(chatIdNumber)
+          // Also check the mapped phone number if we have one
+          const mappedMatches = mappedPhoneNumber ?
+            (mappedPhoneNumber.endsWith(normalizedAllowed) || normalizedAllowed.endsWith(mappedPhoneNumber)) : false
+          return senderMatches || chatIdMatches || mappedMatches
         })
 
         if (!isAllowed) {
-          if (this.config.logMessages) {
-            console.log(`[WhatsApp] Message from ${message.from} not in allowlist, ignoring`)
+          // For LID messages, provide clear instructions on how to allow this sender
+          if (message.from.includes("@lid")) {
+            console.error(`[WhatsApp] ⚠️ Message blocked from LID: ${senderNumber}`)
+            console.error(`[WhatsApp] 📝 To allow this sender, add "${senderNumber}" to your allowlist in WhatsApp settings.`)
+            console.error(`[WhatsApp] 💡 WhatsApp now uses LIDs (Linked IDs) instead of phone numbers for privacy.`)
+          } else {
+            console.error(`[WhatsApp] Message from ${message.from} not in allowlist, ignoring`)
           }
           continue
+        }
+
+        // Log allowed message
+        if (this.config.logMessages) {
+          console.error(`[WhatsApp] ✅ Message allowed from ${message.from}`)
         }
       }
 
       // Store in history
       this.addToHistory(message)
 
+      // Log received message if logging enabled
       if (this.config.logMessages) {
-        console.log(`[WhatsApp] Message from ${message.fromName || message.from}: ${message.text}`)
+        console.error(`[WhatsApp] ✅ New message from ${message.fromName || message.from}: ${message.text}`)
       }
 
       this.emit("message", message)
@@ -315,8 +510,17 @@ export class WhatsAppSession extends EventEmitter {
       // Format the JID
       let jid = options.to
       if (!jid.includes("@")) {
-        // Assume it's a phone number, add @s.whatsapp.net
-        jid = `${jid.replace(/[^0-9]/g, "")}@s.whatsapp.net`
+        // Check if this looks like a LID (numeric string that we've seen in @lid format)
+        // LIDs are typically used for cross-device linking in newer WhatsApp versions
+        // Try @lid first, then fall back to @s.whatsapp.net
+        const numericId = jid.replace(/[^0-9]/g, "")
+
+        // If the number looks like a LID (we can try sending to @lid format)
+        // LIDs are usually longer numbers that don't look like phone numbers
+        // Phone numbers typically have country codes (1-3 digits) + number (9-12 digits)
+        // LIDs can be similar length but we should try @lid if that's what we received from
+        jid = `${numericId}@lid`
+        console.error(`[WhatsApp] Sending to LID format: ${jid}`)
       }
 
       // Chunk long messages

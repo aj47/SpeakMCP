@@ -44,7 +44,7 @@ export function Component() {
   // Fetch WhatsApp status periodically
   const fetchStatus = useCallback(async () => {
     try {
-      const result = await tipcClient.whatsappGetStatus.query()
+      const result = await tipcClient.whatsappGetStatus()
       setStatus(result as WhatsAppStatus)
       setStatusError(null)
 
@@ -72,7 +72,7 @@ export function Component() {
     setIsConnecting(true)
     setStatusError(null)
     try {
-      const result = await tipcClient.whatsappConnect.query()
+      const result = await tipcClient.whatsappConnect()
       if (!result.success) {
         setStatusError(result.error || "Failed to connect")
       } else if (result.qrCode) {
@@ -89,7 +89,7 @@ export function Component() {
 
   const handleDisconnect = async () => {
     try {
-      await tipcClient.whatsappDisconnect.query()
+      await tipcClient.whatsappDisconnect()
       await fetchStatus()
     } catch (error) {
       setStatusError(error instanceof Error ? error.message : String(error))
@@ -98,7 +98,7 @@ export function Component() {
 
   const handleLogout = async () => {
     try {
-      await tipcClient.whatsappLogout.query()
+      await tipcClient.whatsappLogout()
       setQrCodeData(null)
       await fetchStatus()
     } catch (error) {

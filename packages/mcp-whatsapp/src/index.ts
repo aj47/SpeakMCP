@@ -54,9 +54,26 @@ const newSessionRequested: Set<string> = new Set()
 // Handle incoming messages
 whatsapp.on("message", async (message: WhatsAppMessage) => {
   const chatId = message.chatId || message.from
+  const messageText = message.text || ""
+
+  // Debug log for /new command detection - show character codes for debugging
+  const trimmed = messageText.trim()
+  const lower = trimmed.toLowerCase()
+  const charCodes = [...trimmed].map(c => c.charCodeAt(0)).join(',')
+  console.error(`[MCP-WhatsApp] === MESSAGE RECEIVED ===`)
+  console.error(`[MCP-WhatsApp] Raw text: "${messageText}"`)
+  console.error(`[MCP-WhatsApp] Trimmed: "${trimmed}" (length: ${trimmed.length})`)
+  console.error(`[MCP-WhatsApp] Lower: "${lower}"`)
+  console.error(`[MCP-WhatsApp] Char codes: [${charCodes}]`)
+  console.error(`[MCP-WhatsApp] Expected: "/new" (char codes: [47,110,101,119])`)
+  console.error(`[MCP-WhatsApp] Match check: "${lower}" === "/new" ? ${lower === "/new"}`)
 
   // Handle /new command - start a new session on next message
-  if (message.text.trim().toLowerCase() === "/new") {
+  // Also check for common variations
+  const isNewCommand = lower === "/new" || lower === "\\new" || lower === "/new\n" || trimmed === "/new"
+  console.error(`[MCP-WhatsApp] isNewCommand: ${isNewCommand}`)
+
+  if (isNewCommand) {
     newSessionRequested.add(chatId)
     console.error(`[MCP-WhatsApp] /new command received from ${chatId} - next message will start a new session`)
 
@@ -75,7 +92,7 @@ whatsapp.on("message", async (message: WhatsAppMessage) => {
   }
   // Only log message content if logging is enabled to avoid accidental leakage
   if (config.logMessages) {
-    console.error(`[MCP-WhatsApp] New message from ${message.fromName || message.from}: ${message.text.substring(0, 50)}...`)
+    console.error(`[MCP-WhatsApp] New message from ${message.fromName || message.from}: ${messageText.substring(0, 50)}...`)
   } else {
     const mediaInfo = message.mediaType ? ` [${message.mediaType}]` : ""
     console.error(`[MCP-WhatsApp] New message from ${message.fromName || message.from}${mediaInfo}`)
@@ -108,7 +125,7 @@ whatsapp.on("message", async (message: WhatsAppMessage) => {
 
       // Build message content - use array format if there's an image, otherwise string
       let messageContent: string | Array<{ type: string; text?: string; image_url?: { url: string } }>
-      const textContent = `[WhatsApp message from ${message.fromName || message.from} (chat_id: ${replyTarget})]: ${message.text}
+      const textContent = `[WhatsApp message from ${message.fromName || message.from} (chat_id: ${replyTarget})]: ${messageText}
 
 ACTION REQUIRED - RESPOND IMMEDIATELY:
 1. FIRST, call whatsapp_send_typing with to="${replyTarget}" to show typing indicator

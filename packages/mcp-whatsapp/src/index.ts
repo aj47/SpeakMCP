@@ -467,16 +467,27 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
         // If we have images, return as content array; otherwise just text
         if (contentParts.length > 1) {
-          return {
-            content: contentParts.map(part => {
-              if (part.type === "text") {
-                return { type: "text", text: part.text || "" }
-              } else if (part.type === "image_url" && part.image_url) {
-                return { type: "image", data: part.image_url.url, mimeType: "image/jpeg" }
+          // For MCP image content, we need to return raw base64 data (no data: URL prefix)
+          // and use the actual mimeType from the message
+          const mcpContent: Array<{ type: string; text?: string; data?: string; mimeType?: string }> = []
+
+          for (const part of contentParts) {
+            if (part.type === "text") {
+              mcpContent.push({ type: "text", text: part.text || "" })
+            } else if (part.type === "image_url" && part.image_url) {
+              // Extract raw base64 data without the data: URL prefix
+              // The URL is in format: data:${mimeType};base64,${base64Data}
+              const dataUrl = part.image_url.url
+              const base64Match = dataUrl.match(/^data:([^;]+);base64,(.+)$/)
+              if (base64Match) {
+                const actualMimeType = base64Match[1]
+                const rawBase64 = base64Match[2]
+                mcpContent.push({ type: "image", data: rawBase64, mimeType: actualMimeType })
               }
-              return { type: "text", text: "" }
-            }),
+            }
           }
+
+          return { content: mcpContent }
         }
 
         return {

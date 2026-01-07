@@ -306,8 +306,10 @@ export function ActiveAgentsSidebar() {
       {isExpanded && hasRecentSessions && (
         <div className="mt-1 space-y-0.5 pl-2">
           {recentSessions.map((session) => {
-            // Status colors: red for error, gray for stopped/completed
-            const statusDotColor = session.status === "error" ? "bg-red-500" : "bg-muted-foreground"
+            // Status colors: red for error/stopped, gray for completed
+            const statusDotColor = session.status === "error" || session.status === "stopped"
+              ? "bg-red-500"
+              : "bg-muted-foreground"
             return (
               <div
                 key={session.id}

@@ -92,7 +92,12 @@ function validateSubPath(subPath: string): boolean {
   return true
 }
 
-function parseGitHubIdentifier(input: string): { owner: string; repo: string; path?: string; ref: string } {
+/**
+ * Parse a GitHub identifier with support for branch names containing slashes.
+ * For /tree/<ref>/... URLs, we store all remaining parts and let the caller
+ * resolve the correct ref/path split using the GitHub API.
+ */
+function parseGitHubIdentifier(input: string): { owner: string; repo: string; path?: string; ref: string; refAndPath?: string[] } {
   // Remove trailing slashes
   input = input.trim().replace(/\/+$/, "")
 
@@ -109,10 +114,17 @@ function parseGitHubIdentifier(input: string): { owner: string; repo: string; pa
     const repo = parts[1]
     let ref = "main"
     let subPath: string | undefined
+    let refAndPath: string[] | undefined
 
     // Handle /tree/branch/path or /blob/branch/path URLs
+    // Note: Branch names can contain slashes (e.g., "feature/foo"), so we can't simply
+    // assume parts[3] is the full branch name. We store all remaining parts and let
+    // the caller resolve the correct split using the GitHub API.
     if (parts.length > 2 && (parts[2] === "tree" || parts[2] === "blob")) {
       if (parts.length > 3) {
+        // Store all parts after tree/blob for later resolution
+        refAndPath = parts.slice(3)
+        // Use first segment as initial ref guess (will be resolved later)
         ref = parts[3]
         if (parts.length > 4) {
           subPath = parts.slice(4).join("/")
@@ -123,7 +135,7 @@ function parseGitHubIdentifier(input: string): { owner: string; repo: string; pa
       subPath = parts.slice(2).join("/")
     }
 
-    return { owner, repo, path: subPath, ref }
+    return { owner, repo, path: subPath, ref, refAndPath }
   }
 
   // Handle owner/repo format (with optional path)
@@ -166,6 +178,80 @@ async function fetchGitHubDefaultBranch(owner: string, repo: string): Promise<st
   } catch (error) {
     logApp(`Failed to fetch default branch, falling back to 'main':`, error)
     return "main"
+  }
+}
+
+/**
+ * Resolve a ref/path split from URL parts by checking against valid branches.
+ * For URLs like /tree/feature/foo/path/to/skill, we need to determine where
+ * the branch name ends and the path begins.
+ * 
+ * This function tries progressively longer ref candidates until it finds one
+ * that exists as a valid branch/tag in the repository.
+ * 
+ * @param owner - Repository owner
+ * @param repo - Repository name
+ * @param refAndPath - Array of path segments after /tree/ or /blob/
+ * @returns Resolved ref and path, or null if resolution fails
+ */
+async function resolveRefAndPath(
+  owner: string, 
+  repo: string, 
+  refAndPath: string[]
+): Promise<{ ref: string; path?: string } | null> {
+  if (refAndPath.length === 0) {
+    return null
+  }
+
+  // Try progressively longer refs
+  // For ["feature", "foo", "path", "to", "skill"], try:
+  // 1. "feature" with path "foo/path/to/skill"
+  // 2. "feature/foo" with path "path/to/skill"
+  // 3. "feature/foo/path" with path "to/skill"
+  // etc.
+  for (let i = 1; i <= refAndPath.length; i++) {
+    const candidateRef = refAndPath.slice(0, i).join("/")
+    const remainingPath = i < refAndPath.length ? refAndPath.slice(i).join("/") : undefined
+    
+    // Check if this ref exists by trying to fetch the branch/tag info
+    const refUrl = `https://api.github.com/repos/${owner}/${repo}/git/ref/heads/${encodeURIComponent(candidateRef)}`
+    
+    try {
+      const response = await fetch(refUrl, {
+        headers: {
+          Accept: "application/vnd.github.v3+json",
+          "User-Agent": "SpeakMCP-SkillInstaller",
+        },
+      })
+      
+      if (response.ok) {
+        logApp(`Resolved branch name with slashes: "${candidateRef}"`)
+        return { ref: candidateRef, path: remainingPath }
+      }
+      
+      // Also try as a tag
+      const tagUrl = `https://api.github.com/repos/${owner}/${repo}/git/ref/tags/${encodeURIComponent(candidateRef)}`
+      const tagResponse = await fetch(tagUrl, {
+        headers: {
+          Accept: "application/vnd.github.v3+json",
+          "User-Agent": "SpeakMCP-SkillInstaller",
+        },
+      })
+      
+      if (tagResponse.ok) {
+        logApp(`Resolved tag name with slashes: "${candidateRef}"`)
+        return { ref: candidateRef, path: remainingPath }
+      }
+    } catch {
+      // Continue trying other candidates
+    }
+  }
+
+  // If no valid ref found, return the first segment as ref (fallback behavior)
+  logApp(`Could not resolve ref from URL parts, using first segment: "${refAndPath[0]}"`)
+  return {
+    ref: refAndPath[0],
+    path: refAndPath.length > 1 ? refAndPath.slice(1).join("/") : undefined
   }
 }
 
@@ -650,7 +736,7 @@ ${skillsContent}
     const errors: string[] = []
 
     // Parse the GitHub identifier
-    let parsed: { owner: string; repo: string; path?: string; ref: string }
+    let parsed: { owner: string; repo: string; path?: string; ref: string; refAndPath?: string[] }
     try {
       parsed = parseGitHubIdentifier(repoIdentifier)
     } catch (error) {
@@ -660,7 +746,7 @@ ${skillsContent}
       }
     }
 
-    let { owner, repo, path: subPath, ref } = parsed
+    let { owner, repo, path: subPath, ref, refAndPath } = parsed
 
     // Validate owner and repo early before any API calls
     if (!validateGitHubIdentifierPart(owner, "owner")) {
@@ -674,6 +760,16 @@ ${skillsContent}
       return {
         imported: [],
         errors: [`Invalid GitHub repo: "${repo}". Repository names can only contain alphanumeric characters, hyphens, underscores, and dots.`],
+      }
+    }
+
+    // If we have refAndPath (from a /tree/ or /blob/ URL), resolve the branch name
+    // This handles branch names with slashes like "feature/foo"
+    if (refAndPath && refAndPath.length > 0) {
+      const resolved = await resolveRefAndPath(owner, repo, refAndPath)
+      if (resolved) {
+        ref = resolved.ref
+        subPath = resolved.path
       }
     }
 

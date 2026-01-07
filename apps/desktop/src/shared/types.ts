@@ -113,6 +113,61 @@ export interface ServerLogEntry {
 }
 
 // Agent Mode Progress Tracking Types
+
+/**
+ * A message in a sub-agent conversation
+ */
+export interface ACPSubAgentMessage {
+  /** Role of the sender */
+  role: 'user' | 'assistant' | 'tool'
+  /** Message content */
+  content: string
+  /** Tool name if this is a tool call/result */
+  toolName?: string
+  /** Tool input (for tool calls) */
+  toolInput?: unknown
+  /** Timestamp */
+  timestamp: number
+}
+
+/**
+ * Progress information for a delegated ACP sub-agent
+ */
+export interface ACPDelegationProgress {
+  /** Unique identifier for this delegation run */
+  runId: string
+  /** Name of the ACP agent being delegated to */
+  agentName: string
+  /** The task that was delegated */
+  task: string
+  /** Current status of the delegation */
+  status: 'pending' | 'spawning' | 'running' | 'completed' | 'failed' | 'cancelled'
+  /** Optional progress message from the sub-agent */
+  progressMessage?: string
+  /** When the delegation started */
+  startTime: number
+  /** When the delegation ended (if complete) */
+  endTime?: number
+  /** Result summary (if completed) */
+  resultSummary?: string
+  /** Error message (if failed) */
+  error?: string
+  /** Full conversation history from the sub-agent */
+  conversation?: ACPSubAgentMessage[]
+}
+
+/**
+ * State of all active ACP delegations for a session
+ */
+export interface ACPDelegationState {
+  /** Session ID of the parent agent */
+  parentSessionId: string
+  /** All delegations for this session */
+  delegations: ACPDelegationProgress[]
+  /** Number of active (non-completed) delegations */
+  activeCount: number
+}
+
 export interface AgentProgressStep {
   id: string
   type: "thinking" | "tool_call" | "tool_result" | "completion" | "tool_approval"
@@ -128,6 +183,8 @@ export interface AgentProgressStep {
     toolName: string
     arguments: any
   }
+  /** If this step is a delegation to a sub-agent */
+  delegation?: ACPDelegationProgress
 }
 
 export interface AgentProgressUpdate {
@@ -307,6 +364,41 @@ export interface ModelPreset {
   updatedAt?: number
   mcpToolsModel?: string
   transcriptProcessingModel?: string
+}
+
+// ACP Agent Configuration Types
+export type ACPConnectionType = "stdio" | "remote" | "internal"
+
+export interface ACPAgentConfig {
+  // Unique identifier for the agent
+  name: string
+  // Human-readable display name
+  displayName: string
+  // Description of what the agent does
+  description?: string
+  // Agent capabilities (e.g., "coding", "debugging", "refactoring")
+  capabilities?: string[]
+  // Whether to auto-spawn this agent on app startup
+  autoSpawn?: boolean
+  // Whether this agent is enabled
+  enabled?: boolean
+  // Whether this is a built-in internal agent (cannot be deleted)
+  isInternal?: boolean
+  // Connection configuration
+  connection: {
+    // Connection type: "stdio" for local process, "remote" for HTTP endpoint, "internal" for built-in
+    type: ACPConnectionType
+    // For stdio: command to run (e.g., "auggie", "claude-code-acp")
+    command?: string
+    // For stdio: command arguments (e.g., ["--acp"])
+    args?: string[]
+    // For stdio: environment variables
+    env?: Record<string, string>
+    // For stdio: working directory to spawn the agent in
+    cwd?: string
+    // For remote: base URL of the ACP server
+    baseUrl?: string
+  }
 }
 
 export type Config = {
@@ -520,6 +612,18 @@ export type Config = {
   streamStatusWatcherEnabled?: boolean
   streamStatusFilePath?: string
 
+  // ACP Agent Configuration
+  acpAgents?: ACPAgentConfig[]
+
+  // A2A (Agent-to-Agent) Configuration
+  a2aConfig?: {
+    /** URLs of A2A agents to discover at startup */
+    agentUrls?: string[]
+    /** Whether to start the webhook server for push notifications */
+    enableWebhooks?: boolean
+    /** Port for the webhook server (0 for auto-assign) */
+    webhookPort?: number
+  }
 }
 
 

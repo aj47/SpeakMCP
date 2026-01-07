@@ -2275,6 +2275,7 @@ export class MCPService {
     toolCall: MCPToolCall,
     onProgress?: (message: string) => void,
     skipApprovalCheck: boolean = false,
+    sessionId?: string,
     profileMcpConfig?: ProfileMcpServerConfig
   ): Promise<MCPToolResult> {
     try {
@@ -2322,7 +2323,7 @@ export class MCPService {
         if (isDebugTools()) {
           logTools("Executing built-in tool", { name: toolCall.name, arguments: toolCall.arguments })
         }
-        const result = await executeBuiltinTool(toolCall.name, toolCall.arguments || {})
+        const result = await executeBuiltinTool(toolCall.name, toolCall.arguments || {}, sessionId)
         if (result) {
           if (isDebugTools()) {
             logTools("Built-in tool result", { name: toolCall.name, result })
@@ -2420,7 +2421,7 @@ export class MCPService {
       if (matchingTool && matchingTool.name.includes(":")) {
         // Check if it's a built-in tool
         if (isBuiltinTool(matchingTool.name)) {
-          const result = await executeBuiltinTool(matchingTool.name, toolCall.arguments || {})
+          const result = await executeBuiltinTool(matchingTool.name, toolCall.arguments || {}, sessionId)
           if (result) {
             return result
           }

@@ -9,6 +9,8 @@
  * import from services that might also need access to these definitions.
  */
 
+import { acpRouterToolDefinitions } from './acp/acp-router-tool-definitions'
+
 // Define a local type to avoid importing from mcp-service
 export interface BuiltinToolDefinition {
   name: string
@@ -167,6 +169,8 @@ export const builtinToolDefinitions: BuiltinToolDefinition[] = [
       required: [],
     },
   },
+  // ACP router tools for agent delegation
+  ...acpRouterToolDefinitions,
 ]
 
 /**

@@ -432,6 +432,14 @@ class ACPService extends EventEmitter {
         logApp(`[ACP] Agent ${agentName} is already starting, waiting for it to be ready`)
         // Wait for the existing spawn to complete (poll until ready or error)
         await this.waitForAgentReady(agentName)
+        // Check final status after waiting - throw if agent failed or stopped
+        const finalInstance = this.agents.get(agentName)
+        if (finalInstance?.status === "error") {
+          throw new Error(finalInstance.error || `Agent ${agentName} failed to start`)
+        }
+        if (finalInstance?.status === "stopped" || !finalInstance) {
+          throw new Error(`Agent ${agentName} stopped unexpectedly during startup`)
+        }
         return
       }
     }

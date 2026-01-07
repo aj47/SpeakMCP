@@ -2214,6 +2214,11 @@ export const router = {
         undefined,
         true
       )
+      // Check if the tool returned an error result
+      if (result.isError) {
+        const errorText = result.content?.find((c: any) => c.type === "text")?.text || "Disconnect failed"
+        return { success: false, error: errorText }
+      }
       return { success: true }
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : String(error) }
@@ -2228,6 +2233,11 @@ export const router = {
         undefined,
         true
       )
+      // Check if the tool returned an error result
+      if (result.isError) {
+        const errorText = result.content?.find((c: any) => c.type === "text")?.text || "Logout failed"
+        return { success: false, error: errorText }
+      }
       return { success: true }
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : String(error) }

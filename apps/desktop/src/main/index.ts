@@ -99,8 +99,11 @@ app.whenReady().then(() => {
 
   if (accessibilityGranted) {
     // Check if onboarding has been completed
+    // Skip for existing users who have already configured models (pre-onboarding installs)
     const cfg = configStore.get()
-    const needsOnboarding = !cfg.onboardingCompleted
+    const hasCustomPresets = cfg.modelPresets && cfg.modelPresets.length > 0
+    const hasSelectedPreset = cfg.currentModelPresetId !== undefined
+    const needsOnboarding = !cfg.onboardingCompleted && !hasCustomPresets && !hasSelectedPreset
 
     if (needsOnboarding) {
       createMainWindow({ url: "/onboarding" })
@@ -172,8 +175,11 @@ app.whenReady().then(() => {
     if (accessibilityGranted) {
       if (!WINDOWS.get("main")) {
         // Check if onboarding has been completed
+        // Skip for existing users who have already configured models (pre-onboarding installs)
         const cfg = configStore.get()
-        const needsOnboarding = !cfg.onboardingCompleted
+        const hasCustomPresets = cfg.modelPresets && cfg.modelPresets.length > 0
+        const hasSelectedPreset = cfg.currentModelPresetId !== undefined
+        const needsOnboarding = !cfg.onboardingCompleted && !hasCustomPresets && !hasSelectedPreset
 
         if (needsOnboarding) {
           createMainWindow({ url: "/onboarding" })

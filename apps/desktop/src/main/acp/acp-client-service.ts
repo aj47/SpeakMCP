@@ -291,8 +291,10 @@ export class ACPClientService {
         buffer = lines.pop() || '';
 
         for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const data = line.slice(6).trim();
+          // SSE field grammar allows both "data: " (with space) and "data:" (without space)
+          if (line.startsWith('data:')) {
+            // Handle both "data: value" and "data:value" formats per SSE spec
+            const data = line.startsWith('data: ') ? line.slice(6).trim() : line.slice(5).trim();
             if (data === '[DONE]') continue;
 
             try {

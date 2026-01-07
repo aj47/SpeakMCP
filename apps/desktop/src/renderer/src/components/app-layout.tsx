@@ -27,11 +27,14 @@ export const Component = () => {
   // Skip for existing users who have already configured models (pre-onboarding installs)
   useEffect(() => {
     if (configQuery.data) {
-      const hasExistingConfig = configQuery.data.modelConfigurations &&
-        configQuery.data.modelConfigurations.length > 0
+      // Check for existing model configuration using the correct config properties
+      // Users with custom modelPresets or a non-default currentModelPresetId are considered existing users
+      const hasCustomPresets = configQuery.data.modelPresets &&
+        configQuery.data.modelPresets.length > 0
+      const hasSelectedPreset = configQuery.data.currentModelPresetId !== undefined
 
-      // Only redirect to onboarding for truly new users
-      if (!configQuery.data.onboardingCompleted && !hasExistingConfig) {
+      // Only redirect to onboarding for truly new users (no existing config)
+      if (!configQuery.data.onboardingCompleted && !hasCustomPresets && !hasSelectedPreset) {
         navigate("/onboarding")
       }
     }

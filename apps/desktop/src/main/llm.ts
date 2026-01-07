@@ -2817,9 +2817,15 @@ async function makeLLMCall(
       // This prevents late streaming updates from appearing after the response is ready
       let streamingAborted = false
 
+      // Track the last accumulated streaming content to use as the final text
+      // This ensures the user sees the same content they watched stream in
+      let lastStreamedContent = ""
+
       // Wrap the callback to ignore updates after the structured call completes
+      // and track the accumulated content for consistency
       const wrappedOnStreamingUpdate = (chunk: string, accumulated: string) => {
         if (!streamingAborted) {
+          lastStreamedContent = accumulated
           onStreamingUpdate(chunk, accumulated)
         }
       }
@@ -2854,6 +2860,17 @@ async function makeLLMCall(
         // Unregister the streaming abort controller since we're done with it
         if (sessionId) {
           agentSessionStateManager.unregisterAbortController(sessionId, streamingAbortController)
+        }
+      }
+
+      // Use the streamed content for display consistency if we have it
+      // This ensures what the user saw streaming is what they get at the end
+      // Tool calls still come from the structured response since streaming doesn't capture them
+      // We always prefer streamed content for text since it's what the user watched appear
+      if (lastStreamedContent) {
+        result = {
+          ...result,
+          content: lastStreamedContent,
         }
       }
 

@@ -359,7 +359,9 @@ export function Component() {
     recorder.on("record-start", () => {
       setRecording(true)
       recordingRef.current = true
-      tipcClient.recordEvent({ type: "start" })
+      // Pass mcpMode to main process so it knows we're in MCP toggle mode
+      // This is critical for preventing panel close on key release in toggle mode
+      tipcClient.recordEvent({ type: "start", mcpMode: mcpModeRef.current })
     })
 
     recorder.on("visualizer-data", (rms) => {

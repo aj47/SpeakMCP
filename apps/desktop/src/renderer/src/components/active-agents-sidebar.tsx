@@ -84,20 +84,24 @@ export function ActiveAgentsSidebar() {
   const deleteConversationMutation = useDeleteConversationMutation()
   const deleteAllConversationsMutation = useDeleteAllConversationsMutation()
 
-  // Get visible past sessions with lazy loading
-  const visiblePastSessions = useMemo(() => {
+  // Get filtered past sessions (for total count)
+  const filteredPastSessions = useMemo(() => {
     if (!conversationHistoryQuery.data) return []
-    const filtered = searchQuery.trim()
+    return searchQuery.trim()
       ? conversationHistoryQuery.data.filter(
           (session) =>
             session.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
             session.preview.toLowerCase().includes(searchQuery.toLowerCase())
         )
       : conversationHistoryQuery.data
-    return filtered.slice(0, pastSessionsCount)
-  }, [conversationHistoryQuery.data, pastSessionsCount, searchQuery])
+  }, [conversationHistoryQuery.data, searchQuery])
 
-  const hasMorePastSessions = (conversationHistoryQuery.data?.length ?? 0) > pastSessionsCount
+  // Get visible past sessions with lazy loading
+  const visiblePastSessions = useMemo(() => {
+    return filteredPastSessions.slice(0, pastSessionsCount)
+  }, [filteredPastSessions, pastSessionsCount])
+
+  const hasMorePastSessions = filteredPastSessions.length > pastSessionsCount
 
   useEffect(() => {
     const unlisten = rendererHandlers.agentSessionsUpdated.listen((updatedData) => {
@@ -272,6 +276,7 @@ export function ActiveAgentsSidebar() {
       await deleteConversationMutation.mutateAsync(conversationId)
     } catch (error) {
       console.error("Failed to delete session:", error)
+      toast.error("Failed to delete session")
     }
   }
 
@@ -571,7 +576,7 @@ export function ActiveAgentsSidebar() {
                     onClick={handleLoadMorePastSessions}
                     className="w-full px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-accent/50 rounded-md transition-colors"
                   >
-                    Load more ({(conversationHistoryQuery.data?.length ?? 0) - pastSessionsCount} remaining)
+                    Load more ({filteredPastSessions.length - pastSessionsCount} remaining)
                   </button>
                 )}
               </>

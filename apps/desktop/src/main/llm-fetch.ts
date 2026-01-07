@@ -26,13 +26,22 @@ import { state, agentSessionStateManager, llmRequestAbortManager } from "./state
 
 /**
  * Sanitize tool name for provider compatibility.
- * Some providers (OpenAI, Groq) reject tool names containing ':'.
- * MCP tool names often include server prefixes like "server:tool_name".
- * We replace ':' with '__COLON__' to avoid collisions with tool names that
- * legitimately contain '__' (double underscore).
+ * Providers require tool names matching pattern: ^[a-zA-Z0-9_-]{1,128}$
+ * MCP tool names often include server prefixes like "server:tool_name" and may
+ * contain spaces or other special characters.
+ * We replace ':' with '__COLON__' and other invalid characters with '__'
+ * to ensure compatibility while maintaining reversibility through the nameMap.
  */
 function sanitizeToolName(name: string): string {
-  return name.replace(/:/g, "__COLON__")
+  // First replace colons with __COLON__ to preserve server prefix distinction
+  let sanitized = name.replace(/:/g, "__COLON__")
+  // Replace any remaining characters that don't match [a-zA-Z0-9_-] with underscore
+  sanitized = sanitized.replace(/[^a-zA-Z0-9_-]/g, "_")
+  // Truncate to 128 characters if needed
+  if (sanitized.length > 128) {
+    sanitized = sanitized.substring(0, 128)
+  }
+  return sanitized
 }
 
 /**

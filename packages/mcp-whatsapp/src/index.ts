@@ -72,7 +72,14 @@ whatsapp.on("message", async (message: WhatsAppMessage) => {
 
       // Build message content - use array format if there's an image, otherwise string
       let messageContent: string | Array<{ type: string; text?: string; image_url?: { url: string } }>
-      const textContent = `[WhatsApp message from ${message.fromName || message.from} (chat_id: ${replyTarget})]: ${message.text}\n\nIMPORTANT: To reply, use whatsapp_send_message with to="${replyTarget}"`
+      const textContent = `[WhatsApp message from ${message.fromName || message.from} (chat_id: ${replyTarget})]: ${message.text}
+
+ACTION REQUIRED - RESPOND IMMEDIATELY:
+1. FIRST, call whatsapp_send_typing with to="${replyTarget}" to show typing indicator
+2. THEN, briefly acknowledge the message and explain what you're doing (e.g., "Got it, let me look into that..." or "Processing your request...")
+3. If you need to think or process, you can continue after sending the initial acknowledgment
+
+To send any reply, use whatsapp_send_message with to="${replyTarget}"`
 
       if (message.mediaType === "image" && message.mediaBuffer) {
         // Format as OpenAI-compatible content array with image
@@ -252,6 +259,21 @@ const tools = [
       type: "object" as const,
       properties: {},
       required: [],
+    },
+  },
+  {
+    name: "whatsapp_send_typing",
+    description:
+      "Send a typing indicator to a WhatsApp chat. This shows the 'typing...' status to the recipient. Call this immediately when you receive a message to let the user know you're processing their request. The typing indicator will automatically stop when you send a message.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        to: {
+          type: "string",
+          description: "Recipient phone number in international format (e.g., 14155551234) or chat JID",
+        },
+      },
+      required: ["to"],
     },
   },
 ]
@@ -560,6 +582,33 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               text: "Logged out from WhatsApp. Credentials cleared. You will need to scan QR code again.",
             },
           ],
+        }
+      }
+
+      case "whatsapp_send_typing": {
+        const { to } = args as { to: string }
+        if (!to) {
+          return {
+            content: [{ type: "text", text: "Error: 'to' is required" }],
+            isError: true,
+          }
+        }
+
+        const result = await whatsapp.sendTypingIndicator(to)
+        if (result.success) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Typing indicator sent to ${to}. The recipient will see "typing..." until you send a message.`,
+              },
+            ],
+          }
+        } else {
+          return {
+            content: [{ type: "text", text: `Failed to send typing indicator: ${result.error}` }],
+            isError: true,
+          }
         }
       }
 

@@ -744,6 +744,60 @@ export class WhatsAppSession extends EventEmitter {
   }
 
   /**
+   * Send typing indicator (composing presence) to a chat
+   */
+  async sendTypingIndicator(chatId: string): Promise<{ success: boolean; error?: string }> {
+    if (!this.socket || this.connectionState !== "connected") {
+      return { success: false, error: "Not connected to WhatsApp" }
+    }
+
+    try {
+      // Format the JID
+      let jid = chatId
+      if (!jid.includes("@")) {
+        const numericId = jid.replace(/[^0-9]/g, "")
+        jid = `${numericId}@s.whatsapp.net`
+      }
+
+      // Send composing presence to show typing indicator
+      await this.socket.sendPresenceUpdate("composing", jid)
+      console.error(`[WhatsApp] Sent typing indicator to ${jid}`)
+      return { success: true }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      console.error(`[WhatsApp] Failed to send typing indicator: ${errorMessage}`)
+      return { success: false, error: errorMessage }
+    }
+  }
+
+  /**
+   * Stop typing indicator (paused presence) for a chat
+   */
+  async stopTypingIndicator(chatId: string): Promise<{ success: boolean; error?: string }> {
+    if (!this.socket || this.connectionState !== "connected") {
+      return { success: false, error: "Not connected to WhatsApp" }
+    }
+
+    try {
+      // Format the JID
+      let jid = chatId
+      if (!jid.includes("@")) {
+        const numericId = jid.replace(/[^0-9]/g, "")
+        jid = `${numericId}@s.whatsapp.net`
+      }
+
+      // Send paused presence to stop typing indicator
+      await this.socket.sendPresenceUpdate("paused", jid)
+      console.error(`[WhatsApp] Stopped typing indicator for ${jid}`)
+      return { success: true }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      console.error(`[WhatsApp] Failed to stop typing indicator: ${errorMessage}`)
+      return { success: false, error: errorMessage }
+    }
+  }
+
+  /**
    * Disconnect from WhatsApp
    */
   async disconnect(): Promise<void> {

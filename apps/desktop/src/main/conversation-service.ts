@@ -180,6 +180,18 @@ export class ConversationService {
     role: "user" | "assistant" = "user",
   ): Promise<Conversation> {
     const conversationId = this.generateConversationId()
+    return this.createConversationWithId(conversationId, firstMessage, role)
+  }
+
+  /**
+   * Create a conversation with a specific ID.
+   * Used for external integrations (like WhatsApp) that need to use their own identifiers.
+   */
+  async createConversationWithId(
+    conversationId: string,
+    firstMessage: string,
+    role: "user" | "assistant" = "user",
+  ): Promise<Conversation> {
     const messageId = this.generateMessageId()
     const now = Date.now()
 

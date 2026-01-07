@@ -2821,6 +2821,10 @@ async function makeLLMCall(
       // This ensures the user sees the same content they watched stream in
       let lastStreamedContent = ""
 
+      // Track whether streaming failed - if so, we should not use partial/stale content
+      // to overwrite the full structured response
+      let streamingFailed = false
+
       // Wrap the callback to ignore updates after the structured call completes
       // and track the accumulated content for consistency
       const wrappedOnStreamingUpdate = (chunk: string, accumulated: string) => {
@@ -2840,6 +2844,8 @@ async function makeLLMCall(
         streamingAbortController,
       ).catch(err => {
         // Streaming errors are non-fatal - we still have the structured call
+        // Mark streaming as failed so we don't use partial/stale content
+        streamingFailed = true
         if (isDebugLLM()) {
           logLLM("Streaming call failed (non-fatal):", err)
         }
@@ -2863,13 +2869,16 @@ async function makeLLMCall(
         }
       }
 
-      // Use the streamed content for display consistency if we have it AND there are no tool calls.
+      // Use the streamed content for display consistency if:
+      // 1. We have streamed content AND
+      // 2. Streaming didn't fail (to avoid using partial/stale content) AND
+      // 3. There are no tool calls (to maintain consistency between content and toolCalls)
       // This ensures what the user saw streaming is what they get at the end for text-only responses.
       // When tool calls are present, we keep the structured response content to maintain
       // consistency between content and toolCalls in the conversation history.
       // This prevents downstream agent logic from seeing mismatched text content and tool calls.
       const hasToolCalls = result.toolCalls && result.toolCalls.length > 0
-      if (lastStreamedContent && !hasToolCalls) {
+      if (lastStreamedContent && !streamingFailed && !hasToolCalls) {
         result = {
           ...result,
           content: lastStreamedContent,

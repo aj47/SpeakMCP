@@ -1187,6 +1187,7 @@ const DelegationBubble: React.FC<{
   const isRunning = delegation.status === 'running' || delegation.status === 'pending'
   const isCompleted = delegation.status === 'completed'
   const isFailed = delegation.status === 'failed'
+  const isCancelled = delegation.status === 'cancelled'
   const hasConversation = delegation.conversation && delegation.conversation.length > 0
 
   // Track live elapsed time only while running
@@ -1223,24 +1224,32 @@ const DelegationBubble: React.FC<{
     ? 'border-green-300 dark:border-green-700 bg-green-50/50 dark:bg-green-950/30'
     : isFailed
     ? 'border-red-300 dark:border-red-700 bg-red-50/50 dark:bg-red-950/30'
+    : isCancelled
+    ? 'border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-950/30'
     : 'border-blue-300 dark:border-blue-700 bg-blue-50/50 dark:bg-blue-950/30'
 
   const headerColor = isCompleted
     ? 'bg-green-100/50 dark:bg-green-900/30 border-green-200 dark:border-green-800'
     : isFailed
     ? 'bg-red-100/50 dark:bg-red-900/30 border-red-200 dark:border-red-800'
+    : isCancelled
+    ? 'bg-amber-100/50 dark:bg-amber-900/30 border-amber-200 dark:border-amber-800'
     : 'bg-blue-100/50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-800'
 
   const textColor = isCompleted
     ? 'text-green-800 dark:text-green-200'
     : isFailed
     ? 'text-red-800 dark:text-red-200'
+    : isCancelled
+    ? 'text-amber-800 dark:text-amber-200'
     : 'text-blue-800 dark:text-blue-200'
 
   const iconColor = isCompleted
     ? 'text-green-600 dark:text-green-400'
     : isFailed
     ? 'text-red-600 dark:text-red-400'
+    : isCancelled
+    ? 'text-amber-600 dark:text-amber-400'
     : 'text-blue-600 dark:text-blue-400'
 
   const handleHeaderClick = () => {
@@ -1276,6 +1285,9 @@ const DelegationBubble: React.FC<{
           )}
           {isFailed && (
             <XCircle className={cn("h-3 w-3", iconColor)} />
+          )}
+          {isCancelled && (
+            <OctagonX className={cn("h-3 w-3", iconColor)} />
           )}
           <span className="text-[10px] font-mono text-gray-500 dark:text-gray-400 ml-1">
             {duration}s
@@ -1347,7 +1359,7 @@ const DelegationBubble: React.FC<{
           {/* Status footer */}
           <div className="flex items-center justify-between mt-2">
             <span className={cn("text-xs", textColor.replace('800', '600').replace('200', '400'))}>
-              {isRunning ? 'Running' : isCompleted ? 'Completed' : 'Failed'}
+              {isRunning ? 'Running' : isCompleted ? 'Completed' : isCancelled ? 'Cancelled' : 'Failed'}
             </span>
             {hasConversation && !isConversationOpen && (
               <button

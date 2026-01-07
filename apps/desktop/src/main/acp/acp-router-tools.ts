@@ -694,10 +694,14 @@ async function executeACPAgent(
     }
 
     // Create unified sub-agent state (conversation initialized automatically)
+    // Warn if parentSessionId is missing - this can cause delegation progress to be misattributed
+    if (!parentSessionId) {
+      logACPRouter(`Warning: No parentSessionId provided for delegation to ${args.agentName}. Progress updates may not be correctly attributed.`);
+    }
     const subAgentState = createSubAgentState({
       agentName: args.agentName,
       task: args.task,
-      parentSessionId: parentSessionId || 'unknown',
+      parentSessionId: parentSessionId || `orphaned-${Date.now()}`,
     });
     subAgentState.status = 'running';
     registerAgentRunMapping(args.agentName, subAgentState.runId);
@@ -918,12 +922,9 @@ export async function handleCheckAgentStatus(args: { runId: string; historyLengt
           subAgentState.acpRunId
         );
 
-        // Update local state based on ACP server response
-        if (acpResult.status === 'completed') {
-          subAgentState.status = 'completed';
-          subAgentState.result = acpResult;
-        } else if (acpResult.status === 'failed') {
-          subAgentState.status = 'failed';
+        // Update local state based on ACP server response for terminal states
+        if (acpResult.status === 'completed' || acpResult.status === 'failed' || acpResult.status === 'cancelled') {
+          subAgentState.status = acpResult.status;
           subAgentState.result = acpResult;
         }
         // If still running, keep local status as 'running'

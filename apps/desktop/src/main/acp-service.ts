@@ -1053,7 +1053,7 @@ class ACPService extends EventEmitter {
         clientInfo: {
           name: "speakmcp",
           title: "SpeakMCP",
-          version: "1.0.0",
+          version: "1.2.0",
         },
       }) as { protocolVersion?: number; agentCapabilities?: unknown }
 

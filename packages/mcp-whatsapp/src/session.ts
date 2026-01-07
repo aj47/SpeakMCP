@@ -49,6 +49,8 @@ export class WhatsAppSession extends EventEmitter {
   private readonly MAX_HISTORY_PER_CHAT = 50
   // Map of LID -> phone number for allowlist checking
   private lidToPhoneMap: Map<string, string> = new Map()
+  // Flag to suppress auto-reconnect on explicit disconnect
+  private explicitDisconnect = false
 
   constructor(config: WhatsAppConfig) {
     super()
@@ -169,6 +171,8 @@ export class WhatsAppSession extends EventEmitter {
     }
 
     console.error("[WhatsApp] Starting connection...")
+    // Reset explicit disconnect flag when connecting
+    this.explicitDisconnect = false
     this.connectionState = "connecting"
     this.emit("connectionUpdate", this.getStatus())
 
@@ -270,14 +274,15 @@ export class WhatsAppSession extends EventEmitter {
     // Handle connection state changes
     if (connection === "close") {
       const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode
-      // Don't reconnect if logged out OR if there's a conflict (another session took over)
+      // Don't reconnect if logged out, conflict, or explicit disconnect
       // Conflict status code is 440
       const isConflict = statusCode === 440
       const isLoggedOut = statusCode === DisconnectReason.loggedOut
-      const shouldReconnect = !isLoggedOut && !isConflict
+      const isExplicitDisconnect = this.explicitDisconnect
+      const shouldReconnect = !isLoggedOut && !isConflict && !isExplicitDisconnect
 
       console.error(
-        `[WhatsApp] Connection closed. Status: ${statusCode}. Conflict: ${isConflict}. Reconnect: ${shouldReconnect}`
+        `[WhatsApp] Connection closed. Status: ${statusCode}. Conflict: ${isConflict}. Explicit: ${isExplicitDisconnect}. Reconnect: ${shouldReconnect}`
       )
 
       this.socket = null
@@ -310,7 +315,7 @@ export class WhatsAppSession extends EventEmitter {
       // Get user info
       if (this.socket?.user) {
         this.phoneNumber = this.socket.user.id.split(":")[0]
-        this.userName = this.socket.user.name || undefined
+        this.userName = this.socket.user.name || null
         console.log(`[WhatsApp] Logged in as: ${this.userName} (${this.phoneNumber})`)
       }
 
@@ -712,6 +717,8 @@ export class WhatsAppSession extends EventEmitter {
    * Disconnect from WhatsApp
    */
   async disconnect(): Promise<void> {
+    // Set flag to suppress auto-reconnect
+    this.explicitDisconnect = true
     if (this.socket) {
       this.socket.end(undefined)
       this.socket = null

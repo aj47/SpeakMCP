@@ -65,6 +65,9 @@ whatsapp.on("message", async (message: WhatsAppMessage) => {
   // If callback URL is configured, forward the message
   if (config.callbackUrl && config.callbackApiKey) {
     try {
+      // Use message.chatId for groups/DMs instead of message.from
+      // In groups, message.from is the participant, but we need to reply to the chat
+      const replyTarget = message.chatId || message.from
       const response = await fetch(config.callbackUrl, {
         method: "POST",
         headers: {
@@ -75,10 +78,10 @@ whatsapp.on("message", async (message: WhatsAppMessage) => {
           messages: [
             {
               role: "user",
-              content: `[WhatsApp message from ${message.fromName || message.from} (chat_id: ${message.from})]: ${message.text}\n\nIMPORTANT: To reply, use whatsapp_send_message with to="${message.from}"`,
+              content: `[WhatsApp message from ${message.fromName || message.from} (chat_id: ${replyTarget})]: ${message.text}\n\nIMPORTANT: To reply, use whatsapp_send_message with to="${replyTarget}"`,
             },
           ],
-          conversation_id: `whatsapp_${message.from}`,
+          conversation_id: `whatsapp_${replyTarget}`,
           stream: false,
         }),
       })
@@ -93,7 +96,7 @@ whatsapp.on("message", async (message: WhatsAppMessage) => {
         const replyContent = data.choices?.[0]?.message?.content || data.content
         if (replyContent) {
           await whatsapp.sendMessage({
-            to: message.from,
+            to: replyTarget,
             text: replyContent,
           })
         }

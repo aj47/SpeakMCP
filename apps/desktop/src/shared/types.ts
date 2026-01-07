@@ -510,6 +510,12 @@ export type Config = {
 	  remoteServerCorsOrigins?: string[]
 	  remoteServerAutoShowPanel?: boolean // Auto-show floating panel when receiving remote messages
 
+  // WhatsApp Integration Configuration
+  whatsappEnabled?: boolean
+  whatsappAllowFrom?: string[]  // Phone numbers allowed to message (international format without +)
+  whatsappAutoReply?: boolean   // Auto-reply to messages using agent
+  whatsappLogMessages?: boolean // Log message content (privacy concern)
+
   // Stream Status Watcher Configuration
   streamStatusWatcherEnabled?: boolean
   streamStatusFilePath?: string

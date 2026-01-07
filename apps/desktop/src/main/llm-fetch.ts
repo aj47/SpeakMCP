@@ -26,13 +26,38 @@ import { state, agentSessionStateManager, llmRequestAbortManager } from "./state
 
 /**
  * Sanitize tool name for provider compatibility.
- * Some providers (OpenAI, Groq) reject tool names containing ':'.
- * MCP tool names often include server prefixes like "server:tool_name".
- * We replace ':' with '__COLON__' to avoid collisions with tool names that
- * legitimately contain '__' (double underscore).
+ * Providers require tool names matching pattern: ^[a-zA-Z0-9_-]{1,128}$
+ * MCP tool names often include server prefixes like "server:tool_name" and may
+ * contain spaces or other special characters.
+ * We replace ':' with '__COLON__' and other invalid characters with '__'
+ * to ensure compatibility while maintaining reversibility through the nameMap.
+ *
+ * @param name - Original tool name
+ * @param suffix - Optional disambiguation suffix for collision handling
  */
-function sanitizeToolName(name: string): string {
-  return name.replace(/:/g, "__COLON__")
+function sanitizeToolName(name: string, suffix?: string): string {
+  // First replace colons with __COLON__ to preserve server prefix distinction
+  let sanitized = name.replace(/:/g, "__COLON__")
+  // Replace any remaining characters that don't match [a-zA-Z0-9_-] with underscore
+  sanitized = sanitized.replace(/[^a-zA-Z0-9_-]/g, "_")
+
+  // If we have a suffix, ensure it survives truncation by reserving space for it
+  // The suffix is added after truncation to prevent it from being cut off
+  if (suffix) {
+    const suffixStr = `_${suffix}`
+    const maxBaseLength = 128 - suffixStr.length
+    if (sanitized.length > maxBaseLength) {
+      sanitized = sanitized.substring(0, maxBaseLength)
+    }
+    sanitized = `${sanitized}${suffixStr}`
+  } else {
+    // No suffix - simple truncation
+    if (sanitized.length > 128) {
+      sanitized = sanitized.substring(0, 128)
+    }
+  }
+
+  return sanitized
 }
 
 /**
@@ -65,15 +90,27 @@ interface ConvertedTools {
 function convertMCPToolsToAISDKTools(mcpTools: MCPTool[]): ConvertedTools {
   const tools: Record<string, ReturnType<typeof aiTool>> = {}
   const nameMap = new Map<string, string>()
+  // Track collision counts for disambiguation
+  const collisionCount = new Map<string, number>()
 
   for (const mcpTool of mcpTools) {
     // Sanitize tool name to avoid provider compatibility issues
     // (OpenAI/Groq reject tool names containing ':')
-    const sanitizedName = sanitizeToolName(mcpTool.name)
+    let sanitizedName = sanitizeToolName(mcpTool.name)
 
-    // Check for collision (two different tool names sanitizing to the same key)
+    // Handle collision: if this sanitized name already exists with a different original name,
+    // add a deterministic disambiguation suffix to make it unique
     if (nameMap.has(sanitizedName) && nameMap.get(sanitizedName) !== mcpTool.name) {
-      logLLM(`⚠️ Tool name collision detected: "${mcpTool.name}" and "${nameMap.get(sanitizedName)}" both sanitize to "${sanitizedName}"`)
+      const existingOriginal = nameMap.get(sanitizedName)
+      logLLM(`⚠️ Tool name collision detected: "${mcpTool.name}" and "${existingOriginal}" both sanitize to "${sanitizedName}"`)
+
+      // Get or initialize collision counter for this base name
+      const count = (collisionCount.get(sanitizedName) || 0) + 1
+      collisionCount.set(sanitizedName, count)
+
+      // Generate a unique name with numeric suffix
+      sanitizedName = sanitizeToolName(mcpTool.name, String(count))
+      logLLM(`   Disambiguated to: "${sanitizedName}"`)
     }
 
     // Store the mapping from sanitized name to original name

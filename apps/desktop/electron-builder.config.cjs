@@ -49,6 +49,11 @@ module.exports = {
       {
         from: "build/icon.ico",
         to: "icon.ico"
+      },
+      {
+        from: "../../packages/mcp-whatsapp/dist",
+        to: "mcp-whatsapp/dist",
+        filter: ["**/*"]
       }
     ]
   },
@@ -64,6 +69,13 @@ module.exports = {
   mac: {
     binaries: [
       "resources/bin/speakmcp-rs",
+    ],
+    extraResources: [
+      {
+        from: "../../packages/mcp-whatsapp/dist",
+        to: "mcp-whatsapp/dist",
+        filter: ["**/*"]
+      }
     ],
     artifactName: "${productName}-${version}-${arch}.${ext}",
     entitlementsInherit: "build/entitlements.mac.plist",
@@ -213,6 +225,11 @@ module.exports = {
       {
         from: "resources/bin/speakmcp-rs",
         to: "bin/speakmcp-rs",
+        filter: ["**/*"]
+      },
+      {
+        from: "../../packages/mcp-whatsapp/dist",
+        to: "mcp-whatsapp/dist",
         filter: ["**/*"]
       }
     ]

@@ -201,13 +201,21 @@ async function runAgent(options: RunAgentOptions): Promise<{
         })),
       }))
     } else {
-      // Conversation not found, start fresh
-      diagnosticsService.logInfo("remote-server", `Conversation ${conversationId} not found, starting fresh`)
-      conversationId = undefined
+      // Conversation not found - create it with the provided ID to maintain session continuity
+      // This is important for external integrations like WhatsApp where the conversation_id
+      // is based on the sender's identifier (e.g., whatsapp_61406142826@s.whatsapp.net)
+      diagnosticsService.logInfo("remote-server", `Conversation ${conversationId} not found, creating with provided ID`)
+      const newConversation = await conversationService.createConversationWithId(conversationId, prompt, "user")
+      // Update conversationId to use the actual persisted ID (which may be sanitized)
+      // This ensures session lookup and later operations use the correct ID
+      conversationId = newConversation.id
+      // Mark that we've just created the conversation so we don't try to add another message below
+      previousConversationHistory = []
+      diagnosticsService.logInfo("remote-server", `Created new conversation with ID ${newConversation.id}`)
     }
   }
 
-  // Create a new conversation if none exists
+  // Create a new conversation if none exists (only when no conversationId was provided at all)
   if (!conversationId) {
     const newConversation = await conversationService.createConversation(prompt, "user")
     conversationId = newConversation.id

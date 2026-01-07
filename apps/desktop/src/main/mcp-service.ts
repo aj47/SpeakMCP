@@ -492,7 +492,7 @@ export class MCPService {
         const resolvedCommand = await this.resolveCommandPath(
           serverConfig.command,
         )
-        const environment = await this.prepareEnvironment(serverConfig.env)
+        const environment = await this.prepareEnvironment(serverName, serverConfig.env)
 
         // Create transport with stderr piped so we can capture logs
         const transport = new StdioClientTransport({
@@ -2546,6 +2546,7 @@ export class MCPService {
    * Prepare environment variables for spawning MCP servers
    */
   async prepareEnvironment(
+    serverName: string,
     serverEnv?: Record<string, string>,
   ): Promise<Record<string, string>> {
     // Create a clean environment with only string values
@@ -2583,6 +2584,32 @@ export class MCPService {
     // Add server-specific environment variables
     if (serverEnv) {
       Object.assign(environment, serverEnv)
+    }
+
+    // Inject WhatsApp configuration for the WhatsApp MCP server
+    if (serverName === "whatsapp") {
+      const config = configStore.get()
+
+      // Inject allowlist
+      if (config.whatsappAllowFrom && config.whatsappAllowFrom.length > 0) {
+        environment.WHATSAPP_ALLOW_FROM = config.whatsappAllowFrom.join(",")
+      }
+
+      // Inject auto-reply settings - only if remote server is enabled
+      if (config.whatsappAutoReply && config.remoteServerEnabled && config.remoteServerApiKey) {
+        environment.WHATSAPP_AUTO_REPLY = "true"
+        const port = config.remoteServerPort || 3210
+        environment.WHATSAPP_CALLBACK_URL = `http://localhost:${port}/v1/chat/completions`
+        environment.WHATSAPP_CALLBACK_API_KEY = config.remoteServerApiKey
+      }
+
+      // Inject log messages setting
+      if (config.whatsappLogMessages) {
+        environment.WHATSAPP_LOG_MESSAGES = "true"
+      }
+
+      // Set auth directory to SpeakMCP data folder
+      environment.WHATSAPP_AUTH_DIR = path.join(app.getPath("appData"), process.env.APP_ID || "speakmcp", "whatsapp-auth")
     }
 
     return environment

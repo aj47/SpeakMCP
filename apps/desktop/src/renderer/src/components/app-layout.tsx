@@ -47,6 +47,11 @@ export const Component = () => {
       href: "/settings/remote-server",
       icon: "i-mingcute-server-line",
     },
+    {
+      text: "WhatsApp",
+      href: "/settings/whatsapp",
+      icon: "i-mingcute-message-4-line",
+    },
   ]
 
   // Route aliases that should highlight the same nav item

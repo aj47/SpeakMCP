@@ -62,12 +62,13 @@ function ensureDefaultFilesystemServer(config: Config): { config: Config; change
     mkdirSync(skillsFolder, { recursive: true })
   }
 
-  // Create the default filesystem server config pointing to the data folder
-  // This gives agent access to skills folder and other SpeakMCP data
+  // Create the default filesystem server config pointing to the skills folder only
+  // This scopes access to just the skills folder, not the entire data folder
+  // to reduce accidental exposure of unrelated (potentially sensitive) app data
   const filesystemServerConfig: MCPServerConfig = {
     transport: "stdio" as MCPTransportType,
     command: "npx",
-    args: ["-y", "@modelcontextprotocol/server-filesystem", dataFolder],
+    args: ["-y", "@modelcontextprotocol/server-filesystem", skillsFolder],
   }
 
   const newMcpConfig: MCPConfig = {
@@ -79,7 +80,7 @@ function ensureDefaultFilesystemServer(config: Config): { config: Config; change
   }
 
   if (isDebugTools()) {
-    logTools(`Auto-configured default filesystem server with path: ${dataFolder}`)
+    logTools(`Auto-configured default filesystem server with path: ${skillsFolder}`)
   }
 
   return {

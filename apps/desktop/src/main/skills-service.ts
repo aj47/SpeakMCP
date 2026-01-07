@@ -102,6 +102,35 @@ function parseGitHubIdentifier(input: string): { owner: string; repo: string; pa
 }
 
 /**
+ * Fetch the default branch for a GitHub repository.
+ * This handles repos that use 'master' or other branch names instead of 'main'.
+ */
+async function fetchGitHubDefaultBranch(owner: string, repo: string): Promise<string> {
+  const url = `https://api.github.com/repos/${owner}/${repo}`
+  logApp(`Fetching GitHub default branch for ${owner}/${repo}`)
+
+  try {
+    const response = await fetch(url, {
+      headers: {
+        Accept: "application/vnd.github.v3+json",
+        "User-Agent": "SpeakMCP-SkillInstaller",
+      },
+    })
+    if (!response.ok) {
+      logApp(`Failed to fetch repo info, falling back to 'main': ${response.status}`)
+      return "main"
+    }
+    const data = await response.json()
+    const defaultBranch = data.default_branch || "main"
+    logApp(`Detected default branch: ${defaultBranch}`)
+    return defaultBranch
+  } catch (error) {
+    logApp(`Failed to fetch default branch, falling back to 'main':`, error)
+    return "main"
+  }
+}
+
+/**
  * Fetch content from a GitHub raw URL
  */
 async function fetchGitHubRaw(owner: string, repo: string, ref: string, filePath: string): Promise<string | null> {
@@ -592,11 +621,9 @@ ${skillsContent}
       }
     }
 
-    const { owner, repo, path: subPath, ref } = parsed
-    logApp(`Importing skill from GitHub: ${owner}/${repo}${subPath ? `/${subPath}` : ""} (ref: ${ref})`)
+    let { owner, repo, path: subPath, ref } = parsed
 
-    // Validate owner and repo to prevent command injection
-    // These values are interpolated into shell commands via execAsync
+    // Validate owner and repo early before any API calls
     if (!validateGitHubIdentifierPart(owner, "owner")) {
       return {
         imported: [],
@@ -611,7 +638,20 @@ ${skillsContent}
       }
     }
 
+    // If ref is "main" (default), try to detect the actual default branch
+    // This handles repos that use 'master' or other branch names
+    if (ref === "main") {
+      const detectedRef = await fetchGitHubDefaultBranch(owner, repo)
+      if (detectedRef !== "main") {
+        logApp(`Using detected default branch '${detectedRef}' instead of 'main'`)
+        ref = detectedRef
+      }
+    }
+
+    logApp(`Importing skill from GitHub: ${owner}/${repo}${subPath ? `/${subPath}` : ""} (ref: ${ref})`)
+
     // Validate the ref to prevent command injection
+    // Note: owner and repo are already validated above before the API call
     if (!validateGitRef(ref)) {
       return {
         imported: [],

@@ -15,10 +15,167 @@ import { state, agentProcessManager, suppressPanelAutoShow } from "./state"
 import { calculatePanelPosition } from "./panel-position"
 import { setupConsoleLogger } from "./console-logger"
 import { emergencyStopAll } from "./emergency-stop"
+import { diagnosticsService } from "./diagnostics"
 
 type WINDOW_ID = "main" | "panel" | "setup"
 
 export const WINDOWS = new Map<WINDOW_ID, BrowserWindow>()
+
+// Crash recovery tracking to prevent infinite restart loops
+// Uses a rolling window approach: tracks actual crash timestamps to enforce
+// a true "max N crashes in the last 60 seconds" limit, rather than a fixed
+// window that resets after 60s from the first crash.
+
+const crashTimestamps = new Map<WINDOW_ID, number[]>()
+const MAX_CRASHES_IN_WINDOW = 3 // Max crashes allowed before giving up
+const CRASH_WINDOW_MS = 60000 // 1 minute rolling window for counting crashes
+const CRASH_RECOVERY_DELAY_MS = 1000 // Delay before attempting recovery
+
+/**
+ * Check if we should attempt crash recovery for a window.
+ * Uses a rolling window approach: counts crashes within the last CRASH_WINDOW_MS.
+ * This prevents the edge case where crashes spaced across fixed window boundaries
+ * could allow unlimited recovery attempts despite exceeding the per-minute limit.
+ */
+function shouldAttemptCrashRecovery(windowId: WINDOW_ID): boolean {
+  const now = Date.now()
+  const cutoff = now - CRASH_WINDOW_MS
+
+  // Get existing timestamps or create empty array
+  let timestamps = crashTimestamps.get(windowId) || []
+
+  // Filter to only keep crashes within the rolling window
+  timestamps = timestamps.filter((ts) => ts > cutoff)
+
+  // Check if we've exceeded the limit within the rolling window
+  if (timestamps.length >= MAX_CRASHES_IN_WINDOW) {
+    logApp(
+      `[CRASH RECOVERY] Window ${windowId} has crashed ${timestamps.length} times in the last ${CRASH_WINDOW_MS / 1000}s, not attempting recovery`
+    )
+    // Still update the map with filtered timestamps (cleanup old entries)
+    crashTimestamps.set(windowId, timestamps)
+    return false
+  }
+
+  // Add current crash timestamp and allow recovery
+  timestamps.push(now)
+  crashTimestamps.set(windowId, timestamps)
+  return true
+}
+
+/**
+ * Handle renderer process crash with recovery attempt
+ */
+function handleRendererCrash(
+  windowId: WINDOW_ID,
+  crashedWindow: BrowserWindow,
+  details: Electron.RenderProcessGoneDetails,
+  recreateWindow: () => BrowserWindow | void
+): void {
+  const crashInfo = {
+    windowId,
+    reason: details.reason,
+    exitCode: details.exitCode,
+    timestamp: new Date().toISOString(),
+  }
+
+  // Log to console (always, not just in debug mode)
+  console.error(`[CRASH] Renderer process gone for ${windowId}:`, crashInfo)
+
+  // Log to diagnostics service
+  diagnosticsService.logError(
+    "window",
+    `Renderer process crashed: ${windowId}`,
+    { ...crashInfo, details }
+  )
+
+  // IMMEDIATELY clear the crashed window from WINDOWS map to prevent
+  // other code from attempting IPC against the dead webContents during
+  // the recovery delay. This fixes the race condition where:
+  // - whenPanelReady() might see isLoading()==false on dead webContents
+  // - getWindowRendererHandlers() would return handlers for dead webContents
+  WINDOWS.delete(windowId)
+
+  // Also reset panel-specific ready state if the panel crashed
+  if (windowId === "panel") {
+    panelWebContentsReady = false
+  }
+
+  // Check if we should attempt recovery
+  if (!shouldAttemptCrashRecovery(windowId)) {
+    diagnosticsService.logError(
+      "window",
+      `Crash recovery disabled for ${windowId} due to repeated crashes`,
+      crashInfo
+    )
+    // Still destroy the crashed window even if not recovering
+    try {
+      crashedWindow.destroy()
+    } catch (e) {
+      // Window may already be destroyed
+    }
+    return
+  }
+
+  logApp(`[CRASH RECOVERY] Attempting to recreate ${windowId} window after crash...`)
+
+  // Delay before recreating to prevent rapid crash loops
+  setTimeout(() => {
+    // Re-check isQuitting inside timeout - app may have entered quit mode
+    // after the crash event but before this delayed callback runs
+    if (state.isQuitting) {
+      logApp(`[CRASH RECOVERY] App is quitting, skipping recovery for ${windowId}`)
+      // Still destroy the crashed window during quit
+      try {
+        crashedWindow.destroy()
+      } catch (e) {
+        // Window may already be destroyed
+      }
+      return
+    }
+
+    // Check if window was already recreated by another code path (e.g., app.on("activate"),
+    // tray click, etc.) during the recovery delay. Skip recreation to prevent duplicates.
+    if (WINDOWS.has(windowId)) {
+      logApp(`[CRASH RECOVERY] Window ${windowId} already recreated by another code path, skipping duplicate creation`)
+      // Still destroy the old crashed window
+      try {
+        crashedWindow.destroy()
+      } catch (e) {
+        // Window may already be destroyed
+      }
+      return
+    }
+
+    try {
+      // Destroy the crashed window (already removed from WINDOWS map above)
+      try {
+        crashedWindow.destroy()
+      } catch (e) {
+        // Window may already be destroyed
+      }
+
+      // Recreate the window
+      const newWin = recreateWindow()
+      if (newWin) {
+        logApp(`[CRASH RECOVERY] Successfully recreated ${windowId} window`)
+        diagnosticsService.logInfo(
+          "window",
+          `Successfully recovered ${windowId} window after crash`,
+          crashInfo
+        )
+      }
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error)
+      logApp(`[CRASH RECOVERY] Failed to recreate ${windowId} window:`, errorMsg)
+      diagnosticsService.logError(
+        "window",
+        `Failed to recover ${windowId} window after crash`,
+        { ...crashInfo, error: errorMsg }
+      )
+    }
+  }, CRASH_RECOVERY_DELAY_MS)
+}
 
 // Track panel webContents ready state to avoid sending IPC before renderer is ready
 let panelWebContentsReady = false
@@ -56,11 +213,13 @@ function createBaseWindow({
   url,
   showWhenReady = true,
   windowOptions,
+  onCrashRecreate,
 }: {
   id: WINDOW_ID
   url?: string
   showWhenReady?: boolean
   windowOptions?: BrowserWindowConstructorOptions
+  onCrashRecreate?: () => BrowserWindow | void
 }) {
   const win = new BrowserWindow({
     width: 900,
@@ -118,6 +277,17 @@ function createBaseWindow({
     return { action: "deny" }
   })
 
+  // Handle renderer process crashes with recovery attempt
+  if (onCrashRecreate) {
+    win.webContents.on("render-process-gone", (_event, details) => {
+      // Only attempt recovery for crash reasons (not clean exit)
+      // Also skip recovery if app is quitting - SIGTERM during shutdown is not a crash
+      if (details.reason !== "clean-exit" && !state.isQuitting) {
+        handleRendererCrash(id, win, details, onCrashRecreate)
+      }
+    })
+  }
+
   const baseUrl = import.meta.env.PROD
     ? "assets://app"
     : process.env["ELECTRON_RENDERER_URL"]
@@ -138,6 +308,8 @@ export function createMainWindow({ url }: { url?: string } = {}) {
       // titleBarStyle: "hiddenInset" is macOS-only, causes issues on Linux/Wayland
       ...(process.platform === "darwin" && { titleBarStyle: "hiddenInset" as const }),
     },
+    // Enable crash recovery for main window
+    onCrashRecreate: () => createMainWindow({ url }),
   })
 
   if (process.env.IS_MAC) {
@@ -172,6 +344,8 @@ export function createSetupWindow() {
       height: 600,
       resizable: false,
     },
+    // Enable crash recovery for setup window
+    onCrashRecreate: () => createSetupWindow(),
   })
 
   return win
@@ -435,6 +609,8 @@ export function createPanelWindow() {
       x: position.x,
       y: position.y,
     },
+    // Enable crash recovery for panel window
+    onCrashRecreate: () => createPanelWindow(),
   })
 
   logApp("[window.ts] createPanelWindow - window created with size:", { width: savedSize.width, height: savedSize.height })

@@ -37,6 +37,16 @@ export const state = {
   agentSessions: new Map<string, AgentSessionState>(),
   panelAutoShowSuppressedUntil: 0,
   pendingToolApprovals: new Map<string, PendingToolApproval>(),
+  /** Flag to indicate the app is quitting - prevents crash recovery during shutdown */
+  isQuitting: false,
+}
+
+/**
+ * Mark the app as quitting. Once set, crash recovery will not recreate windows.
+ * This prevents the recovery system from interfering with normal app shutdown.
+ */
+export function setAppQuitting(): void {
+  state.isQuitting = true
 }
 
 export const agentProcessManager = {

@@ -47,9 +47,14 @@ function generateDelegationRunId(): string {
  * already replaced the agentName/session mapping.
  */
 function cleanupDelegationMappings(runId: string, agentName: string): void {
-  // Remove agentName → runId fallback mapping only if it still points at this run.
-  if (agentNameToActiveRunId.get(agentName) === runId) {
-    agentNameToActiveRunId.delete(agentName);
+  // Remove runId from the agentName → runIds set
+  const activeRunIds = agentNameToActiveRunIds.get(agentName);
+  if (activeRunIds) {
+    activeRunIds.delete(runId);
+    // Clean up empty sets to prevent memory accumulation
+    if (activeRunIds.size === 0) {
+      agentNameToActiveRunIds.delete(agentName);
+    }
     logACPRouter(`Cleaned up active run mapping for ${agentName}: ${runId}`);
   }
 
@@ -71,8 +76,10 @@ const sessionConversations: Map<string, ACPSubAgentMessage[]> = new Map();
 /** Map from agent session IDs to our delegation run IDs */
 const sessionToRunId: Map<string, string> = new Map();
 
-/** Map from agent names to their currently active run IDs (for session mapping fallback) */
-const agentNameToActiveRunId: Map<string, string> = new Map();
+/** Map from agent names to their currently active run IDs (for session mapping fallback) 
+ * Uses a Set to support parallel delegations to the same agent.
+ */
+const agentNameToActiveRunIds: Map<string, Set<string>> = new Map();
 
 /** Track last emit time per runId for rate limiting */
 const lastEmitTime: Map<string, number> = new Map();
@@ -173,13 +180,16 @@ acpService.on('sessionUpdate', (event: {
   let runId = mappedRunId;
 
   // If no session mapping exists, try to find by agent name (fallback for race condition)
+  // Note: With parallel delegations, we pick one of the active runs. This is best-effort
+  // since we can't determine which run a session belongs to without the session ID mapping.
   if (!runId) {
-    const activeRunId = agentNameToActiveRunId.get(agentName);
+    const activeRunIds = agentNameToActiveRunIds.get(agentName);
+    const activeRunId = activeRunIds?.values().next().value;
     if (activeRunId) {
       // Establish the session mapping now that we have both IDs
       sessionToRunId.set(sessionId, activeRunId);
       runId = activeRunId;
-      logACPRouter(`Created session mapping: ${sessionId} -> ${runId} (via agent name fallback)`);
+      logACPRouter(`Created session mapping: ${sessionId} -> ${runId} (via agent name fallback, ${activeRunIds?.size || 0} active runs)`);
     } else {
       logACPRouter(`No run ID found for session ${sessionId} or agent ${agentName}`);
       return;
@@ -192,12 +202,19 @@ acpService.on('sessionUpdate', (event: {
     // Clean it up and retry via agent-name fallback (fixes misrouting/dropping later updates).
     if (mappedRunId) {
       sessionToRunId.delete(sessionId);
-      if (agentNameToActiveRunId.get(agentName) === mappedRunId) {
-        agentNameToActiveRunId.delete(agentName);
+      // Remove the stale runId from the agent's active runs set
+      const activeRunIds = agentNameToActiveRunIds.get(agentName);
+      if (activeRunIds) {
+        activeRunIds.delete(mappedRunId);
+        if (activeRunIds.size === 0) {
+          agentNameToActiveRunIds.delete(agentName);
+        }
       }
       logACPRouter(`Removed stale session mapping: ${sessionId} -> ${mappedRunId}`);
 
-      const activeRunId = agentNameToActiveRunId.get(agentName);
+      // Try to find another active run for this agent
+      const remainingRunIds = agentNameToActiveRunIds.get(agentName);
+      const activeRunId = remainingRunIds?.values().next().value;
       if (!activeRunId) {
         logACPRouter(`No active run found for agent ${agentName} after stale mapping cleanup`);
         return;
@@ -517,8 +534,14 @@ export async function handleDelegateToAgent(
     subAgentState.status = 'running';
 
     // Register the agent name -> runId mapping for session update fallback
-    agentNameToActiveRunId.set(args.agentName, runId);
-    logACPRouter(`Registered active run for ${args.agentName}: ${runId}`);
+    // Using a Set to support parallel delegations to the same agent
+    let activeRunIds = agentNameToActiveRunIds.get(args.agentName);
+    if (!activeRunIds) {
+      activeRunIds = new Set();
+      agentNameToActiveRunIds.set(args.agentName, activeRunIds);
+    }
+    activeRunIds.add(runId);
+    logACPRouter(`Registered active run for ${args.agentName}: ${runId} (${activeRunIds.size} total active)`);
 
     // Add user message to conversation
     const userMessage: ACPSubAgentMessage = {

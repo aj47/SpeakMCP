@@ -80,7 +80,8 @@ export class ACPBackgroundNotifier {
       try {
         const result = await acpClientService.getRunStatus(state.baseUrl, state.acpRunId)
 
-        if (result.status === 'completed' || result.status === 'failed') {
+        // Handle all terminal states: completed, failed, and cancelled
+        if (result.status === 'completed' || result.status === 'failed' || result.status === 'cancelled') {
           // Update the task state
           state.status = result.status
           state.result = result
@@ -141,8 +142,11 @@ export class ACPBackgroundNotifier {
       error: state.status === 'failed' ? state.result?.error : undefined,
     }
 
-    // Mark as complete for any terminal state (completed or failed)
-    const isTerminalState = state.status === 'completed' || state.status === 'failed'
+    // Mark as complete for any terminal state (completed, failed, or cancelled)
+    const isTerminalState = state.status === 'completed' || state.status === 'failed' || state.status === 'cancelled'
+
+    // Map status to step status - completed is success, everything else (failed/cancelled) is error
+    const stepStatus = state.status === 'completed' ? 'completed' : 'error'
 
     // Emit progress update to UI
     await emitAgentProgress({
@@ -156,7 +160,7 @@ export class ACPBackgroundNotifier {
           type: 'completion',
           title: `Delegation ${state.status}: ${state.agentName}`,
           description: state.task,
-          status: state.status === 'completed' ? 'completed' : 'error',
+          status: stepStatus,
           timestamp: Date.now(),
           delegation: delegationProgress,
         },
@@ -177,13 +181,20 @@ export class ACPBackgroundNotifier {
         return
       }
 
-      const isSuccess = state.status === 'completed'
       const duration = Math.round((Date.now() - state.startTime) / 1000)
 
+      // Determine title based on status (completed, failed, or cancelled)
+      let title: string
+      if (state.status === 'completed') {
+        title = `✅ ${state.agentName} completed`
+      } else if (state.status === 'cancelled') {
+        title = `⚠️ ${state.agentName} cancelled`
+      } else {
+        title = `❌ ${state.agentName} failed`
+      }
+
       const notification = new Notification({
-        title: isSuccess
-          ? `✅ ${state.agentName} completed`
-          : `❌ ${state.agentName} failed`,
+        title,
         body: resultSummary
           ? `${state.task.substring(0, 50)}${state.task.length > 50 ? '...' : ''}\n${resultSummary.substring(0, 100)}${resultSummary.length > 100 ? '...' : ''}`
           : `${state.task.substring(0, 100)}${state.task.length > 100 ? '...' : ''}\nCompleted in ${duration}s`,

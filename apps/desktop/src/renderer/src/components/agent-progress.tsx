@@ -523,12 +523,24 @@ const ToolExecutionBubble: React.FC<{
                       </span>
                       <span className="opacity-50 text-[9px]">{(result.content?.length || 0).toLocaleString()} chars</span>
                     </div>
-                    <pre className={cn(
-                      "rounded p-1.5 overflow-auto whitespace-pre-wrap break-all max-h-32 scrollbar-thin",
-                      result.success ? "bg-green-50/50 dark:bg-green-950/30" : "bg-red-50/50 dark:bg-red-950/30"
-                    )}>
-                      {result.error || result.content || "No content"}
-                    </pre>
+                    {result.error && (
+                      <pre className="rounded p-1.5 overflow-auto whitespace-pre-wrap break-all max-h-32 scrollbar-thin bg-red-50/50 dark:bg-red-950/30 text-red-700 dark:text-red-300">
+                        {result.error}
+                      </pre>
+                    )}
+                    {result.content && (
+                      <pre className={cn(
+                        "rounded p-1.5 overflow-auto whitespace-pre-wrap break-all max-h-32 scrollbar-thin",
+                        result.success ? "bg-green-50/50 dark:bg-green-950/30" : "bg-muted/40"
+                      )}>
+                        {result.content}
+                      </pre>
+                    )}
+                    {!result.error && !result.content && (
+                      <pre className="rounded p-1.5 overflow-auto whitespace-pre-wrap break-all max-h-32 scrollbar-thin bg-muted/40">
+                        No content
+                      </pre>
+                    )}
                   </>
                 )}
                 {callIsPending && (
@@ -693,12 +705,24 @@ const AssistantWithToolsBubble: React.FC<{
                             {result.success ? "OK" : "ERR"}
                           </span>
                         </div>
-                        <pre className={cn(
-                          "rounded p-1.5 overflow-auto whitespace-pre-wrap break-all max-h-32 scrollbar-thin text-[10px]",
-                          result.success ? "bg-green-50/50 dark:bg-green-950/30" : "bg-red-50/50 dark:bg-red-950/30"
-                        )}>
-                          {result.error || result.content || "No content"}
-                        </pre>
+                        {result.error && (
+                          <pre className="rounded p-1.5 overflow-auto whitespace-pre-wrap break-all max-h-32 scrollbar-thin text-[10px] bg-red-50/50 dark:bg-red-950/30 text-red-700 dark:text-red-300">
+                            {result.error}
+                          </pre>
+                        )}
+                        {result.content && (
+                          <pre className={cn(
+                            "rounded p-1.5 overflow-auto whitespace-pre-wrap break-all max-h-32 scrollbar-thin text-[10px]",
+                            result.success ? "bg-green-50/50 dark:bg-green-950/30" : "bg-muted/40"
+                          )}>
+                            {result.content}
+                          </pre>
+                        )}
+                        {!result.error && !result.content && (
+                          <pre className="rounded p-1.5 overflow-auto whitespace-pre-wrap break-all max-h-32 scrollbar-thin text-[10px] bg-muted/40">
+                            No content
+                          </pre>
+                        )}
                       </>
                     )}
                   </div>

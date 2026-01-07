@@ -31,10 +31,15 @@ const SKILL_MD_PATHS = [
 /**
  * Validate a git ref (branch/tag name) to prevent command injection
  * Only allows safe characters: alphanumeric, dots, hyphens, underscores, and forward slashes
+ * Must not start with a hyphen to prevent being interpreted as a flag in git commands
  */
 function validateGitRef(ref: string): boolean {
   // Git ref names can contain alphanumeric, dots, hyphens, underscores, and slashes
   // But must not contain shell metacharacters like ; & | $ ` ' " ( ) < > etc.
+  // Must not start with a hyphen to prevent flag injection (e.g., "-delete" in git checkout)
+  if (ref.startsWith("-")) {
+    return false
+  }
   return /^[a-zA-Z0-9._\-/]+$/.test(ref)
 }
 
@@ -43,9 +48,15 @@ function validateGitRef(ref: string): boolean {
  * GitHub usernames/org names: alphanumeric and hyphens, cannot start/end with hyphen, max 39 chars
  * GitHub repo names: alphanumeric, hyphens, underscores, and dots
  * We use a slightly permissive pattern that still blocks shell metacharacters
+ * Must not start with a hyphen to prevent flag injection when used in git commands
  */
 function validateGitHubIdentifierPart(part: string, type: "owner" | "repo"): boolean {
   if (!part || part.length === 0 || part.length > 100) {
+    return false
+  }
+  // Must not start with a hyphen to prevent flag injection in shell commands
+  // (GitHub also doesn't allow usernames starting with hyphens)
+  if (part.startsWith("-")) {
     return false
   }
   // Allow alphanumeric, hyphens, underscores, and dots

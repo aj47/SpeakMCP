@@ -59,7 +59,17 @@ function ensureDefaultFilesystemServer(config: Config): { config: Config; change
   // Ensure the skills folder exists
   const skillsFolder = path.join(dataFolder, "skills")
   if (!existsSync(skillsFolder)) {
-    mkdirSync(skillsFolder, { recursive: true })
+    try {
+      mkdirSync(skillsFolder, { recursive: true })
+    } catch (error) {
+      // Log error but don't fail MCP initialization - skills folder is optional
+      // This handles edge cases like permissions issues or file existing as non-directory
+      if (isDebugTools()) {
+        logTools(`Failed to create skills folder at ${skillsFolder}: ${error instanceof Error ? error.message : String(error)}`)
+      }
+      // Continue without the filesystem server since we couldn't create the folder
+      return { config, changed: false }
+    }
   }
 
   // Create the default filesystem server config pointing to the skills folder only

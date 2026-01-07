@@ -212,11 +212,29 @@ const keysPressed = new Map<string, number>()
 // allowing common modifier combos like Ctrl+C to cancel before recording begins).
 const HOLD_TO_RECORD_DELAY_MS = 250
 
+// Helper to check if a key is a modifier key
+const isModifierKey = (key: string): boolean => {
+  return (
+    key === "ControlLeft" ||
+    key === "ControlRight" ||
+    key === "ShiftLeft" ||
+    key === "ShiftRight" ||
+    key === "Alt" ||
+    key === "AltLeft" ||
+    key === "AltRight" ||
+    key === "MetaLeft" ||
+    key === "MetaRight"
+  )
+}
+
 const hasRecentKeyPress = () => {
   if (keysPressed.size === 0) return false
 
   const now = Date.now() / 1000
-  return [...keysPressed.values()].some((time) => {
+  return [...keysPressed.entries()].some(([key, time]) => {
+    // Exclude modifier keys from the check - they should not block shortcuts
+    // that use only modifier key combinations (like toggle-ctrl-alt)
+    if (isModifierKey(key)) return false
     // 10 seconds
     // for some weird reasons sometime KeyRelease event is missing for some keys
     // so they stay in the map
@@ -326,6 +344,15 @@ export function listenToKeyboardEvents() {
     if (isDebugKeybinds()) {
       logKeybinds("MCP tools triggered: Ctrl+Alt (toggle mode)")
     }
+
+    // Set state.isRecordingMcpMode BEFORE sending the message
+    // This ensures the key release handlers know we're in MCP toggle mode
+    // and won't prematurely close the panel when the user releases Ctrl/Alt
+    if (!state.isRecording) {
+      // Starting MCP recording - set the flag now so key release handlers know
+      state.isRecordingMcpMode = true
+    }
+    // Note: When stopping, the recordEvent handler will set isRecordingMcpMode = false
 
     // Toggle MCP recording on/off
     getWindowRendererHandlers("panel")?.startOrFinishMcpRecording.send()

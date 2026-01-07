@@ -352,9 +352,13 @@ export class WhatsAppSession extends EventEmitter {
         // LIDs look like "98389177934034@lid", phone numbers like "61406142826@s.whatsapp.net"
         const chatIdNumber = message.chatId?.replace(/@.*$/, "").replace(/[^0-9]/g, "") || ""
 
+        // Detect if this is a LID-based message by checking the chatId (not message.from)
+        // message.from is already split at "@" so it won't contain "@lid"
+        const isLidMessage = message.chatId?.includes("@lid") || false
+
         // Look up phone number from LID mapping if sender is a LID
         let mappedPhoneNumber = ""
-        if (message.from.includes("@lid")) {
+        if (isLidMessage) {
           // First check our local map
           if (this.lidToPhoneMap.has(senderNumber)) {
             mappedPhoneNumber = this.lidToPhoneMap.get(senderNumber) || ""
@@ -390,7 +394,7 @@ export class WhatsAppSession extends EventEmitter {
         if (!isAllowed) {
           // Provide clear, actionable instructions for blocked messages
           const senderName = message.fromName ? ` (${message.fromName})` : ""
-          if (message.from.includes("@lid")) {
+          if (isLidMessage) {
             console.error(`[WhatsApp] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`)
             console.error(`[WhatsApp] ⚠️  MESSAGE BLOCKED - Sender not in allowlist`)
             console.error(`[WhatsApp] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`)
@@ -541,34 +545,59 @@ export class WhatsAppSession extends EventEmitter {
     }
 
     try {
-      // Format the JID
+      // Format the JID - determine if it's already formatted, or needs @s.whatsapp.net or @lid suffix
       let jid = options.to
+      let fallbackJid: string | null = null
+
       if (!jid.includes("@")) {
-        // Check if this looks like a LID (numeric string that we've seen in @lid format)
-        // LIDs are typically used for cross-device linking in newer WhatsApp versions
-        // Try @lid first, then fall back to @s.whatsapp.net
         const numericId = jid.replace(/[^0-9]/g, "")
 
-        // If the number looks like a LID (we can try sending to @lid format)
-        // LIDs are usually longer numbers that don't look like phone numbers
-        // Phone numbers typically have country codes (1-3 digits) + number (9-12 digits)
-        // LIDs can be similar length but we should try @lid if that's what we received from
-        jid = `${numericId}@lid`
-        console.error(`[WhatsApp] Sending to LID format: ${jid}`)
+        // Check if this ID is a known LID from our mapping (reverse lookup)
+        const isKnownLid = Array.from(this.lidToPhoneMap.keys()).includes(numericId)
+
+        if (isKnownLid) {
+          // This is a known LID, use @lid format
+          jid = `${numericId}@lid`
+          console.error(`[WhatsApp] Sending to known LID: ${jid}`)
+        } else {
+          // Assume it's a phone number - try @s.whatsapp.net first, with @lid as fallback
+          // The tool/docs advertise sending to phone numbers, so we default to that format
+          jid = `${numericId}@s.whatsapp.net`
+          fallbackJid = `${numericId}@lid`
+          console.error(`[WhatsApp] Sending to phone number format: ${jid} (fallback: ${fallbackJid})`)
+        }
       }
 
-      // Chunk long messages
-      const chunks = this.chunkMessage(options.text)
-      let lastMessageId: string | undefined
+      // Helper function to send message chunks to a specific JID
+      const sendToJid = async (targetJid: string): Promise<{ success: boolean; messageId?: string; error?: string }> => {
+        const chunks = this.chunkMessage(options.text)
+        let lastMessageId: string | undefined
 
-      for (const chunk of chunks) {
-        const result = await this.socket.sendMessage(jid, {
-          text: chunk,
-        })
-        lastMessageId = result?.key?.id || undefined
+        for (const chunk of chunks) {
+          const result = await this.socket!.sendMessage(targetJid, {
+            text: chunk,
+          })
+          lastMessageId = result?.key?.id || undefined
+        }
+        return { success: true, messageId: lastMessageId }
       }
 
-      return { success: true, messageId: lastMessageId }
+      // Try primary JID first
+      try {
+        return await sendToJid(jid)
+      } catch (primaryError) {
+        // If primary fails and we have a fallback, try that
+        if (fallbackJid) {
+          console.error(`[WhatsApp] Primary JID failed, trying fallback: ${fallbackJid}`)
+          try {
+            return await sendToJid(fallbackJid)
+          } catch (fallbackError) {
+            // Both failed, throw original error
+            throw primaryError
+          }
+        }
+        throw primaryError
+      }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
       console.error(`[WhatsApp] Failed to send message: ${errorMessage}`)

@@ -253,7 +253,7 @@ export function Component() {
         {enabled && (
           <ControlGroup title="Settings">
             <Control
-              label={<ControlLabel label="Allowed Phone Numbers" tooltip="Only messages from these numbers will be processed. Leave empty to allow all (not recommended)." />}
+              label={<ControlLabel label="Allowed Senders" tooltip="Only messages from these senders will be processed. Accepts phone numbers (E.164) or WhatsApp LIDs. Leave empty to allow all (not recommended)." />}
               className="px-3"
             >
               <Input
@@ -266,14 +266,36 @@ export function Component() {
                     .filter(Boolean)
                   saveConfig({ whatsappAllowFrom: numbers })
                 }}
-                placeholder="14155551234, 14155555678"
+                placeholder="14155551234, 98389177934034"
                 className="w-full"
               />
-              <div className="mt-1 text-xs text-muted-foreground">
-                Enter phone numbers in international format without + sign, separated by commas
+              <div className="mt-2 text-xs text-muted-foreground space-y-1">
+                <p>Enter phone numbers or LIDs separated by commas (numbers only, no + sign)</p>
+                <details className="cursor-pointer">
+                  <summary className="text-blue-600 dark:text-blue-400 hover:underline">
+                    ℹ️ What are LIDs? How do I find them?
+                  </summary>
+                  <div className="mt-2 p-2 bg-muted/50 rounded-md space-y-2">
+                    <p>
+                      <strong>LIDs (Linked IDs)</strong> are WhatsApp's privacy-focused identifiers that replace phone numbers in some cases.
+                    </p>
+                    <p>
+                      <strong>To find a sender's LID:</strong>
+                    </p>
+                    <ol className="list-decimal list-inside space-y-1 ml-2">
+                      <li>Enable "Log Message Content" below</li>
+                      <li>Have the person send you a message</li>
+                      <li>Check the logs - blocked messages show the LID to add</li>
+                      <li>Copy the LID number and add it here</li>
+                    </ol>
+                    <p className="text-amber-600 dark:text-amber-400">
+                      💡 Tip: Phone numbers still work for many contacts. Try the phone number first, then use LID if messages are blocked.
+                    </p>
+                  </div>
+                </details>
               </div>
               {(!cfg.whatsappAllowFrom || cfg.whatsappAllowFrom.length === 0) && (
-                <div className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                <div className="mt-2 text-xs text-amber-600 dark:text-amber-400">
                   ⚠️ No allowlist set - all incoming messages will be accepted
                 </div>
               )}

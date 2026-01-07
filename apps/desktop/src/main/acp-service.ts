@@ -1176,8 +1176,10 @@ class ACPService extends EventEmitter {
       return undefined
     }
 
-    // Reuse existing session if available
+    // Reuse existing session if available, but clear previous output to avoid
+    // mixing content from different runTask() calls
     if (instance.sessionId) {
+      this.clearSessionOutput(instance.sessionId)
       return instance.sessionId
     }
 

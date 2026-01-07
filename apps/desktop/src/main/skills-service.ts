@@ -38,6 +38,21 @@ function validateGitRef(ref: string): boolean {
   return /^[a-zA-Z0-9._\-/]+$/.test(ref)
 }
 
+/**
+ * Validate a GitHub owner or repo name to prevent command injection
+ * GitHub usernames/org names: alphanumeric and hyphens, cannot start/end with hyphen, max 39 chars
+ * GitHub repo names: alphanumeric, hyphens, underscores, and dots
+ * We use a slightly permissive pattern that still blocks shell metacharacters
+ */
+function validateGitHubIdentifierPart(part: string, type: "owner" | "repo"): boolean {
+  if (!part || part.length === 0 || part.length > 100) {
+    return false
+  }
+  // Allow alphanumeric, hyphens, underscores, and dots
+  // Block shell metacharacters like ; & | $ ` ' " ( ) < > space newline etc.
+  return /^[a-zA-Z0-9._-]+$/.test(part)
+}
+
 function parseGitHubIdentifier(input: string): { owner: string; repo: string; path?: string; ref: string } {
   // Remove trailing slashes
   input = input.trim().replace(/\/+$/, "")
@@ -580,6 +595,22 @@ ${skillsContent}
     const { owner, repo, path: subPath, ref } = parsed
     logApp(`Importing skill from GitHub: ${owner}/${repo}${subPath ? `/${subPath}` : ""} (ref: ${ref})`)
 
+    // Validate owner and repo to prevent command injection
+    // These values are interpolated into shell commands via execAsync
+    if (!validateGitHubIdentifierPart(owner, "owner")) {
+      return {
+        imported: [],
+        errors: [`Invalid GitHub owner: "${owner}". Owner names can only contain alphanumeric characters, hyphens, underscores, and dots.`],
+      }
+    }
+
+    if (!validateGitHubIdentifierPart(repo, "repo")) {
+      return {
+        imported: [],
+        errors: [`Invalid GitHub repo: "${repo}". Repository names can only contain alphanumeric characters, hyphens, underscores, and dots.`],
+      }
+    }
+
     // Validate the ref to prevent command injection
     if (!validateGitRef(ref)) {
       return {
@@ -742,6 +773,16 @@ ${skillsContent}
     const owner = parts[0]
     const repo = parts[1]
     const subPath = parts.slice(2, -1).join("/") // Everything except owner, repo, and SKILL.md filename
+
+    // Validate owner and repo to prevent command injection
+    // These values are interpolated into shell commands via execAsync
+    if (!validateGitHubIdentifierPart(owner, "owner")) {
+      throw new Error(`Invalid GitHub owner: "${owner}". Owner names can only contain alphanumeric characters, hyphens, underscores, and dots.`)
+    }
+
+    if (!validateGitHubIdentifierPart(repo, "repo")) {
+      throw new Error(`Invalid GitHub repo: "${repo}". Repository names can only contain alphanumeric characters, hyphens, underscores, and dots.`)
+    }
 
     // Clone the repository
     const cloneDir = path.join(skillsFolder, `${owner}--${repo}`)

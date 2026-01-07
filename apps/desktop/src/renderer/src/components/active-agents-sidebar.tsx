@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { tipcClient, rendererHandlers } from "@renderer/lib/tipc-client"
-import { Activity, ChevronDown, ChevronRight, X, Minimize2, Maximize2, Shield } from "lucide-react"
+import { ChevronDown, ChevronRight, X, Minimize2, Maximize2 } from "lucide-react"
 import { cn } from "@renderer/lib/utils"
 import { useAgentStore } from "@renderer/stores"
 import { logUI, logStateChange, logExpand } from "@renderer/lib/debug"
@@ -236,74 +236,67 @@ export function ActiveAgentsSidebar() {
       </div>
 
       {isExpanded && (
-        <div className="mt-1 space-y-1 pl-2">
+        <div className="mt-1 space-y-0.5 pl-2">
           {activeSessions.map((session) => {
             const isFocused = focusedSessionId === session.id
             const sessionProgress = agentProgressById.get(session.id)
             const hasPendingApproval = !!sessionProgress?.pendingToolApproval
+            // Status colors: amber for pending approval, blue for active, gray for snoozed
+            const statusDotColor = hasPendingApproval
+              ? "bg-amber-500"
+              : session.isSnoozed
+              ? "bg-muted-foreground"
+              : "bg-blue-500"
             return (
               <div
                 key={session.id}
                 onClick={() => handleSessionClick(session.id)}
                 className={cn(
-                  "group relative cursor-pointer rounded-md border px-2 py-1.5 text-xs transition-all",
+                  "group relative cursor-pointer rounded px-1.5 py-1 text-xs transition-all flex items-center gap-1.5",
                   hasPendingApproval
-                    ? "border-amber-500 bg-amber-500/10 ring-1 ring-amber-500/20"
+                    ? "bg-amber-500/10"
                     : isFocused
-                    ? "border-blue-500 bg-blue-500/10 ring-1 ring-blue-500/20"
-                    : "border-border/50 bg-card/50 hover:border-border hover:bg-card"
+                    ? "bg-blue-500/10"
+                    : "hover:bg-accent/50"
                 )}
               >
-                <div className="flex items-center gap-1.5">
-                  {hasPendingApproval ? (
-                    <Shield className="h-3 w-3 shrink-0 text-amber-500 animate-pulse" />
-                  ) : (
-                    <Activity className={cn(
-                      "h-3 w-3 shrink-0",
-                      session.isSnoozed ? "text-muted-foreground" : "animate-pulse text-blue-500"
-                    )} />
+                {/* Status dot */}
+                <span className={cn(
+                  "shrink-0 h-1.5 w-1.5 rounded-full",
+                  statusDotColor,
+                  !session.isSnoozed && !hasPendingApproval && "animate-pulse"
+                )} />
+                <p className={cn(
+                  "flex-1 truncate",
+                  hasPendingApproval ? "text-amber-700 dark:text-amber-300" :
+                  session.isSnoozed ? "text-muted-foreground" : "text-foreground"
+                )}>
+                  {hasPendingApproval ? `⚠ ${session.conversationTitle}` : session.conversationTitle}
+                </p>
+                <button
+                  onClick={(e) => handleToggleSnooze(session.id, session.isSnoozed ?? false, e)}
+                  className={cn(
+                    "shrink-0 rounded p-0.5 opacity-0 transition-all hover:bg-accent hover:text-foreground group-hover:opacity-100",
+                    isFocused && "opacity-100"
                   )}
-                  <p className={cn(
-                    "flex-1 truncate font-medium",
-                    hasPendingApproval ? "text-amber-700 dark:text-amber-300" :
-                    session.isSnoozed ? "text-muted-foreground" : "text-foreground"
-                  )}>
-                    {session.conversationTitle}
-                  </p>
-                  <button
-                    onClick={(e) => handleToggleSnooze(session.id, session.isSnoozed ?? false, e)}
-                    className={cn(
-                      "shrink-0 rounded p-0.5 opacity-0 transition-all hover:bg-accent hover:text-foreground group-hover:opacity-100",
-                      isFocused && "opacity-100"
-                    )}
-                    title={session.isSnoozed ? "Restore - show progress UI" : "Minimize - run in background"}
-                  >
-                    {session.isSnoozed ? (
-                      <Maximize2 className="h-3 w-3" />
-                    ) : (
-                      <Minimize2 className="h-3 w-3" />
-                    )}
-                  </button>
-                  <button
-                    onClick={(e) => handleStopSession(session.id, e)}
-                    className={cn(
-                      "shrink-0 rounded p-0.5 opacity-0 transition-all hover:bg-destructive/20 hover:text-destructive group-hover:opacity-100",
-                      isFocused && "opacity-100"
-                    )}
-                    title="Stop this agent session"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                </div>
-                {hasPendingApproval ? (
-                  <p className="mt-0.5 truncate pl-4 text-[10px] text-amber-600 dark:text-amber-400 font-medium">
-                    ⚠ Approval required: {sessionProgress.pendingToolApproval?.toolName}
-                  </p>
-                ) : session.lastActivity && (
-                  <p className="mt-0.5 truncate pl-4 text-[10px] text-muted-foreground">
-                    {session.lastActivity}
-                  </p>
-                )}
+                  title={session.isSnoozed ? "Restore - show progress UI" : "Minimize - run in background"}
+                >
+                  {session.isSnoozed ? (
+                    <Maximize2 className="h-3 w-3" />
+                  ) : (
+                    <Minimize2 className="h-3 w-3" />
+                  )}
+                </button>
+                <button
+                  onClick={(e) => handleStopSession(session.id, e)}
+                  className={cn(
+                    "shrink-0 rounded p-0.5 opacity-0 transition-all hover:bg-destructive/20 hover:text-destructive group-hover:opacity-100",
+                    isFocused && "opacity-100"
+                  )}
+                  title="Stop this agent session"
+                >
+                  <X className="h-3 w-3" />
+                </button>
               </div>
             )
           })}
@@ -311,9 +304,12 @@ export function ActiveAgentsSidebar() {
       )}
 
       {isExpanded && hasRecentSessions && (
-        <div className="mt-2 space-y-1 pl-2">
+        <div className="mt-1 space-y-0.5 pl-2">
           {recentSessions.map((session) => {
-            const statusLabel = session.status === "stopped" ? "Stopped" : session.status === "error" ? "Error" : "Completed"
+            // Status colors: red for error/stopped, gray for completed
+            const statusDotColor = session.status === "error" || session.status === "stopped"
+              ? "bg-red-500"
+              : "bg-muted-foreground"
             return (
               <div
                 key={session.id}
@@ -325,20 +321,13 @@ export function ActiveAgentsSidebar() {
                   }
                 }}
                 className={cn(
-                  "relative rounded-md border px-2 py-1.5 text-xs text-muted-foreground bg-card/30 transition-all",
-                  session.conversationId && "cursor-pointer hover:bg-card/50 hover:border-border"
+                  "rounded px-1.5 py-1 text-xs text-muted-foreground transition-all flex items-center gap-1.5",
+                  session.conversationId && "cursor-pointer hover:bg-accent/50"
                 )}
               >
-                <div className="flex items-center gap-1.5">
-                  <Activity className="h-3 w-3 shrink-0 text-muted-foreground" />
-                  <p className="flex-1 truncate">{session.conversationTitle}</p>
-                  <span className="shrink-0 rounded bg-accent/20 px-1.5 py-0.5 text-[10px]">{statusLabel}</span>
-                </div>
-                {session.lastActivity && (
-                  <p className="mt-0.5 truncate pl-4 text-[10px] text-muted-foreground">
-                    {session.lastActivity}
-                  </p>
-                )}
+                {/* Status dot */}
+                <span className={cn("shrink-0 h-1.5 w-1.5 rounded-full", statusDotColor)} />
+                <p className="flex-1 truncate">{session.conversationTitle}</p>
               </div>
             )
           })}

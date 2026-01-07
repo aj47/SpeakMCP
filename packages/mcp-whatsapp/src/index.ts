@@ -49,7 +49,12 @@ const MAX_PENDING_MESSAGES = 100
 
 // Handle incoming messages
 whatsapp.on("message", async (message: WhatsAppMessage) => {
-  console.error(`[MCP-WhatsApp] New message from ${message.fromName || message.from}: ${message.text.substring(0, 50)}...`)
+  // Only log message content if logging is enabled to avoid accidental leakage
+  if (config.logMessages) {
+    console.error(`[MCP-WhatsApp] New message from ${message.fromName || message.from}: ${message.text.substring(0, 50)}...`)
+  } else {
+    console.error(`[MCP-WhatsApp] New message from ${message.fromName || message.from}`)
+  }
 
   // Add to pending queue
   pendingMessages.push(message)
@@ -79,11 +84,17 @@ whatsapp.on("message", async (message: WhatsAppMessage) => {
       })
 
       if (response.ok && config.autoReply) {
-        const data = (await response.json()) as { content?: string }
-        if (data.content) {
+        // Parse response - support both OpenAI-style (choices[0].message.content) and simple (content) formats
+        const data = (await response.json()) as {
+          content?: string
+          choices?: Array<{ message?: { content?: string } }>
+        }
+        // Try OpenAI format first, then fall back to simple format
+        const replyContent = data.choices?.[0]?.message?.content || data.content
+        if (replyContent) {
           await whatsapp.sendMessage({
             to: message.from,
-            text: data.content,
+            text: replyContent,
           })
         }
       }

@@ -373,24 +373,40 @@ export class WhatsAppSession extends EventEmitter {
 
         const isAllowed = this.config.allowFrom.some((allowed) => {
           const normalizedAllowed = allowed.replace(/[^0-9]/g, "")
-          // Check if any identifier matches the allowlist (flexible matching)
-          // Use endsWith to handle country code variations (e.g., 406142826 matches 61406142826)
-          const senderMatches = senderNumber.endsWith(normalizedAllowed) || normalizedAllowed.endsWith(senderNumber)
-          const chatIdMatches = chatIdNumber.endsWith(normalizedAllowed) || normalizedAllowed.endsWith(chatIdNumber)
+          // Security: Require minimum length for allowlist entries to prevent weak matches
+          if (normalizedAllowed.length < 7) {
+            console.error(`[WhatsApp] Skipping allowlist entry "${allowed}" - too short (min 7 digits)`)
+            return false
+          }
+          // Check if any identifier matches the allowlist using exact normalized match
+          // This is more secure than partial matching which could allow unintended numbers
+          const senderMatches = senderNumber === normalizedAllowed
+          const chatIdMatches = chatIdNumber === normalizedAllowed
           // Also check the mapped phone number if we have one
-          const mappedMatches = mappedPhoneNumber ?
-            (mappedPhoneNumber.endsWith(normalizedAllowed) || normalizedAllowed.endsWith(mappedPhoneNumber)) : false
+          const mappedMatches = mappedPhoneNumber ? mappedPhoneNumber === normalizedAllowed : false
           return senderMatches || chatIdMatches || mappedMatches
         })
 
         if (!isAllowed) {
-          // For LID messages, provide clear instructions on how to allow this sender
+          // Provide clear, actionable instructions for blocked messages
+          const senderName = message.fromName ? ` (${message.fromName})` : ""
           if (message.from.includes("@lid")) {
-            console.error(`[WhatsApp] ⚠️ Message blocked from LID: ${senderNumber}`)
-            console.error(`[WhatsApp] 📝 To allow this sender, add "${senderNumber}" to your allowlist in WhatsApp settings.`)
-            console.error(`[WhatsApp] 💡 WhatsApp now uses LIDs (Linked IDs) instead of phone numbers for privacy.`)
+            console.error(`[WhatsApp] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`)
+            console.error(`[WhatsApp] ⚠️  MESSAGE BLOCKED - Sender not in allowlist`)
+            console.error(`[WhatsApp] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`)
+            console.error(`[WhatsApp] 👤 Sender: ${senderNumber}${senderName}`)
+            console.error(`[WhatsApp] 📋 To allow this sender, copy this LID: ${senderNumber}`)
+            console.error(`[WhatsApp] ➡️  Go to Settings > WhatsApp > Allowed Senders and add it`)
+            console.error(`[WhatsApp] 💡 WhatsApp uses LIDs (Linked IDs) for privacy - phone numbers may not work`)
+            console.error(`[WhatsApp] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`)
           } else {
-            console.error(`[WhatsApp] Message from ${message.from} not in allowlist, ignoring`)
+            console.error(`[WhatsApp] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`)
+            console.error(`[WhatsApp] ⚠️  MESSAGE BLOCKED - Sender not in allowlist`)
+            console.error(`[WhatsApp] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`)
+            console.error(`[WhatsApp] 👤 Sender: ${senderNumber}${senderName}`)
+            console.error(`[WhatsApp] 📋 To allow this sender, copy this number: ${senderNumber}`)
+            console.error(`[WhatsApp] ➡️  Go to Settings > WhatsApp > Allowed Senders and add it`)
+            console.error(`[WhatsApp] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`)
           }
           continue
         }
@@ -470,6 +486,24 @@ export class WhatsAppSession extends EventEmitter {
       }
     }
 
+    // Safely parse messageTimestamp which can be a number, Long, or undefined
+    // Baileys may return Long-like objects, so we need to handle them properly
+    let timestamp = Date.now()
+    const rawTimestamp = msg.messageTimestamp
+    if (rawTimestamp !== undefined && rawTimestamp !== null) {
+      // Handle Long-like objects (with low/high properties) or direct numbers
+      if (typeof rawTimestamp === "object" && "low" in rawTimestamp) {
+        // Long type from protobuf - extract the number safely
+        const longObj = rawTimestamp as { low: number; high: number; unsigned?: boolean }
+        // For timestamps in seconds, the high bits should be 0 for reasonable dates
+        timestamp = (longObj.low >>> 0) * 1000 // Use unsigned right shift to get positive value
+      } else if (typeof rawTimestamp === "number" && !isNaN(rawTimestamp) && rawTimestamp > 0) {
+        timestamp = rawTimestamp * 1000
+      } else if (typeof rawTimestamp === "bigint") {
+        timestamp = Number(rawTimestamp) * 1000
+      }
+    }
+
     return {
       id: msg.key.id || "",
       from: senderJid.split("@")[0],
@@ -477,7 +511,7 @@ export class WhatsAppSession extends EventEmitter {
       chatId: remoteJid,
       isGroup,
       text,
-      timestamp: (msg.messageTimestamp as number) * 1000 || Date.now(),
+      timestamp,
       mediaType,
       quotedMessage,
     }

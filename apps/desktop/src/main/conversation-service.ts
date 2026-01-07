@@ -184,6 +184,30 @@ export class ConversationService {
   }
 
   /**
+   * Validate and sanitize a conversation ID to prevent path traversal attacks.
+   * Rejects IDs containing path separators or other dangerous characters.
+   */
+  private validateConversationId(conversationId: string): string {
+    // Reject path separators and parent directory references
+    if (conversationId.includes("/") || conversationId.includes("\\") || conversationId.includes("..")) {
+      throw new Error(`Invalid conversation ID: contains path separators or traversal sequences`)
+    }
+    // Reject null bytes which could truncate paths
+    if (conversationId.includes("\0")) {
+      throw new Error(`Invalid conversation ID: contains null bytes`)
+    }
+    // Sanitize: only allow alphanumeric, underscore, hyphen, at sign, and dot
+    // This covers formats like: conv_123_abc, whatsapp_61406142826@s.whatsapp.net
+    const sanitized = conversationId.replace(/[^a-zA-Z0-9_\-@.]/g, "_")
+    // Ensure the sanitized ID doesn't resolve outside conversations folder
+    const resolvedPath = path.resolve(conversationsFolder, `${sanitized}.json`)
+    if (!resolvedPath.startsWith(path.resolve(conversationsFolder))) {
+      throw new Error(`Invalid conversation ID: path traversal detected`)
+    }
+    return sanitized
+  }
+
+  /**
    * Create a conversation with a specific ID.
    * Used for external integrations (like WhatsApp) that need to use their own identifiers.
    */
@@ -192,6 +216,8 @@ export class ConversationService {
     firstMessage: string,
     role: "user" | "assistant" = "user",
   ): Promise<Conversation> {
+    // Validate and sanitize the externally-provided conversation ID
+    const validatedId = this.validateConversationId(conversationId)
     const messageId = this.generateMessageId()
     const now = Date.now()
 
@@ -203,7 +229,7 @@ export class ConversationService {
     }
 
     const conversation: Conversation = {
-      id: conversationId,
+      id: validatedId,
       title: this.generateConversationTitle(firstMessage),
       createdAt: now,
       updatedAt: now,

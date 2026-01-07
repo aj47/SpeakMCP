@@ -364,7 +364,7 @@ export class WhatsAppSession extends EventEmitter {
             "buffer",
             {},
             {
-              logger: undefined,
+              logger,
               reuploadRequest: this.socket!.updateMediaMessage
             }
           )
@@ -472,11 +472,11 @@ export class WhatsAppSession extends EventEmitter {
    * Parse a Baileys message into our format
    */
   private parseMessage(msg: proto.IWebMessageInfo): WhatsAppMessage | null {
-    const remoteJid = msg.key.remoteJid
+    const remoteJid = msg.key?.remoteJid
     if (!remoteJid) return null
 
     const isGroup = remoteJid.endsWith("@g.us")
-    const senderJid = isGroup ? msg.key.participant : remoteJid
+    const senderJid = isGroup ? msg.key?.participant : remoteJid
     if (!senderJid) return null
 
     // Extract text content from various message types
@@ -544,7 +544,7 @@ export class WhatsAppSession extends EventEmitter {
     }
 
     return {
-      id: msg.key.id || "",
+      id: msg.key?.id || "",
       from: senderJid.split("@")[0],
       fromName: msg.pushName || undefined,
       chatId: remoteJid,

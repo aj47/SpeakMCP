@@ -144,6 +144,8 @@ export function Component() {
       const shortcut = config.mcpToolsShortcut
       if (shortcut === "hold-ctrl-alt") {
         return "Release keys"
+      } else if (shortcut === "toggle-ctrl-alt") {
+        return "Ctrl+Alt"
       } else if (shortcut === "ctrl-alt-slash") {
         return "Ctrl+Alt+/"
       } else if (shortcut === "custom" && config.customMcpToolsShortcut) {

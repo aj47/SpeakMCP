@@ -1185,8 +1185,9 @@ export function listenToKeyboardEvents() {
       if (e.data.key === "ControlLeft" || e.data.key === "ControlRight") {
         if (isHoldingCtrlKey) {
           getWindowRendererHandlers("panel")?.finishRecording.send()
-        } else if (!state.isTextInputActive) {
-          // Only close panel if we're not in text input mode
+        } else if (!state.isTextInputActive && !state.isRecordingMcpMode) {
+          // Only close panel if we're not in text input mode and not in MCP recording mode
+          // (MCP toggle mode should not close panel on key release)
           stopRecordingAndHidePanelWindow()
         }
         isHoldingCtrlKey = false
@@ -1194,7 +1195,9 @@ export function listenToKeyboardEvents() {
 
       // Close panel on Alt release if not in text input mode (and not in MCP mode, which is handled above)
       if (e.data.key === "Alt" || e.data.key === "AltLeft" || e.data.key === "AltRight") {
-        if (!state.isTextInputActive) {
+        if (!state.isTextInputActive && !state.isRecordingMcpMode) {
+          // Only close panel if we're not in text input mode and not in MCP recording mode
+          // (MCP toggle mode should not close panel on key release)
           stopRecordingAndHidePanelWindow()
         }
       }

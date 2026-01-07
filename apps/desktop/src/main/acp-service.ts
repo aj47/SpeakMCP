@@ -1009,7 +1009,9 @@ class ACPService extends EventEmitter {
         logApp(`[ACP:${agentName}] User approved file read: ${filePath}`)
       }
 
-      const content = await readFile(filePath, "utf-8")
+      // Use resolved path for actual read to prevent TOCTOU attacks via symlink swapping
+      const effectivePath = resolvedPath || filePath
+      const content = await readFile(effectivePath, "utf-8")
 
       // Handle line offset and limit if specified
       if (line !== undefined || limit !== undefined) {
@@ -1122,10 +1124,15 @@ class ACPService extends EventEmitter {
         logApp(`[ACP:${agentName}] User approved file write: ${filePath}`)
       }
 
-      // Ensure parent directory exists
-      await mkdir(dirname(filePath), { recursive: true })
+      // Use resolved path for actual write to prevent TOCTOU attacks via symlink swapping
+      // If file exists and is a symlink, resolvedFilePath will be the actual target
+      // Otherwise fall back to original path for new files
+      const effectivePath = resolvedFilePath || filePath
 
-      await writeFile(filePath, content, "utf-8")
+      // Ensure parent directory exists
+      await mkdir(dirname(effectivePath), { recursive: true })
+
+      await writeFile(effectivePath, content, "utf-8")
 
       logApp(`[ACP:${agentName}] Successfully wrote file: ${filePath}`)
       return {}

@@ -755,7 +755,9 @@ async function executeACPAgentSync(
       });
     }
 
-    cleanupDelegationMappings(subAgentState.runId, args.agentName);
+    // Note: Don't cleanup delegation mappings here - the sessionUpdate handler
+    // will clean up when isComplete arrives. Early cleanup can cause late
+    // session/update notifications to be dropped/misrouted.
 
     if (result.success) {
       return createCompletedResult(subAgentState, result.result || '', subAgentState.conversation);
@@ -763,7 +765,9 @@ async function executeACPAgentSync(
       return createFailedResult(subAgentState, result.error || 'Unknown error', subAgentState.conversation);
     }
   } catch (error) {
-    cleanupDelegationMappings(subAgentState.runId, args.agentName);
+    // Note: Don't cleanup delegation mappings here - the sessionUpdate handler
+    // will clean up when isComplete arrives. Early cleanup can cause late
+    // session/update notifications to be dropped/misrouted.
     throw error;
   }
 }
@@ -862,7 +866,9 @@ function executeStdioAgentAsync(
           error: result.error || 'Unknown error',
         };
       }
-      cleanupDelegationMappings(subAgentState.runId, args.agentName);
+      // Note: Don't cleanup delegation mappings here - the sessionUpdate handler
+      // will clean up when isComplete arrives. Early cleanup can cause late
+      // session/update notifications to be dropped/misrouted.
       logACPRouter(`Async run completed for ${args.agentName}:`, result.success ? 'success' : 'failed');
     },
     (error) => {
@@ -890,7 +896,9 @@ function finalizeAsyncRunWithError(
     metadata: { duration: endTime - subAgentState.startTime },
     error: error instanceof Error ? error.message : String(error),
   };
-  cleanupDelegationMappings(subAgentState.runId, agentName);
+  // Note: Don't cleanup delegation mappings here - the sessionUpdate handler
+  // will clean up when isComplete arrives. Early cleanup can cause late
+  // session/update notifications to be dropped/misrouted.
   logACPRouter(`Async run failed for ${agentName}:`, error);
 }
 

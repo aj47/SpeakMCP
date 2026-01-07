@@ -1,4 +1,4 @@
-import { app, Menu } from "electron"
+import { app, Menu, Notification, dialog } from "electron"
 import { electronApp, optimizer } from "@electron-toolkit/utils"
 import {
   createMainWindow,
@@ -119,6 +119,11 @@ app.whenReady().then(() => {
   listenToKeyboardEvents()
   logApp("Keyboard event listener started")
 
+  // Check Linux input group on startup and show notification if not in group
+  if (process.platform === "linux") {
+    checkLinuxInputGroup()
+  }
+
   initTray()
   logApp("System tray initialized")
 
@@ -187,3 +192,48 @@ app.on("window-all-closed", () => {
     app.quit()
   }
 })
+
+/**
+ * Check if the current user is in the 'input' group on Linux.
+ * Shows a notification if not, as this is required for global hotkeys.
+ */
+function checkLinuxInputGroup(): void {
+  try {
+    const { execSync } = require("child_process")
+    const username = process.env.USER || process.env.USERNAME || ""
+
+    // Check if user is in input group using 'groups' command
+    const groupsOutput = execSync("groups", { encoding: "utf-8" }).trim()
+    const groups = groupsOutput.split(/\s+/)
+    const inInputGroup = groups.includes("input")
+
+    if (!inInputGroup) {
+      logApp(`User '${username}' is not in 'input' group - global hotkeys may not work`)
+
+      // Show notification after a short delay to let the app fully start
+      setTimeout(() => {
+        if (Notification.isSupported()) {
+          const notification = new Notification({
+            title: "SpeakMCP: Setup Required for Hotkeys",
+            body: "Global keyboard shortcuts require additional permissions on Linux. Click for details.",
+            urgency: "normal",
+          })
+          notification.on("click", () => {
+            dialog.showMessageBox({
+              type: "info",
+              title: "Global Hotkeys Setup Required",
+              message: "To use global keyboard shortcuts on Linux, you need to add your user to the 'input' group.",
+              detail: `Run this command in a terminal:\n\nsudo usermod -aG input ${username || "$USER"}\n\nThen log out and log back in for the change to take effect.\n\nThis is required because SpeakMCP needs to read keyboard events from /dev/input/ devices to detect hotkeys (works on both X11 and Wayland).`,
+              buttons: ["OK"],
+            })
+          })
+          notification.show()
+        }
+      }, 3000) // 3 second delay
+    } else {
+      logApp(`User '${username}' is in 'input' group - global hotkeys should work`)
+    }
+  } catch (error) {
+    logApp("Failed to check input group membership:", error)
+  }
+}

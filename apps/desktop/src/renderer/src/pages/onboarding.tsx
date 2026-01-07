@@ -516,6 +516,8 @@ function AgentStep({
   const getAgentShortcutDisplay = () => {
     if (mcpToolsShortcut === "hold-ctrl-alt") {
       return "Hold Ctrl+Alt"
+    } else if (mcpToolsShortcut === "toggle-ctrl-alt") {
+      return "Toggle Ctrl+Alt"
     } else if (mcpToolsShortcut === "ctrl-alt-slash") {
       return "Press Ctrl+Alt+/"
     } else if (mcpToolsShortcut === "custom" && config?.customMcpToolsShortcut) {
@@ -631,6 +633,7 @@ function AgentStep({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="hold-ctrl-alt">Hold Ctrl+Alt</SelectItem>
+              <SelectItem value="toggle-ctrl-alt">Toggle Ctrl+Alt</SelectItem>
               <SelectItem value="ctrl-alt-slash">Ctrl+Alt+/</SelectItem>
               <SelectItem value="custom">Custom</SelectItem>
             </SelectContent>

@@ -308,12 +308,36 @@ export function listenToKeyboardEvents() {
     }, HOLD_TO_RECORD_DELAY_MS)
   }
 
+  const tryToggleMcpIfEligible = () => {
+    const config = configStore.get()
+    if (config.mcpToolsShortcut !== "toggle-ctrl-alt") {
+      return
+    }
+
+    // Both modifiers must be down
+    if (!isPressedCtrlKey || !isPressedAltKey) return
+
+    // Guard against recent non-modifier presses
+    if (hasRecentKeyPress()) return
+
+    // Cancel regular recording timer since MCP is prioritized
+    cancelRecordingTimer()
+
+    if (isDebugKeybinds()) {
+      logKeybinds("MCP tools triggered: Ctrl+Alt (toggle mode)")
+    }
+
+    // Toggle MCP recording on/off
+    getWindowRendererHandlers("panel")?.startOrFinishMcpRecording.send()
+  }
+
 
   const handleEvent = (e: RdevEvent) => {
     if (e.event_type === "KeyPress") {
       if (e.data.key === "ControlLeft" || e.data.key === "ControlRight") {
         isPressedCtrlKey = true
         tryStartMcpHoldIfEligible()
+        tryToggleMcpIfEligible()
         if (isDebugKeybinds()) {
           logKeybinds("Ctrl key pressed, isPressedCtrlKey =", isPressedCtrlKey)
         }
@@ -333,6 +357,7 @@ export function listenToKeyboardEvents() {
         isPressedAltKey = true
         isPressedCtrlAltKey = isPressedCtrlKey && isPressedAltKey
         tryStartMcpHoldIfEligible()
+        tryToggleMcpIfEligible()
         if (isDebugKeybinds()) {
           logKeybinds(
             "Alt key pressed, isPressedAltKey =",

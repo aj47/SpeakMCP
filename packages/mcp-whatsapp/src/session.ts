@@ -296,7 +296,13 @@ export class WhatsAppSession extends EventEmitter {
         console.error(
           `[WhatsApp] Reconnecting in ${delay / 1000}s (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`
         )
-        setTimeout(() => this.connect(), delay)
+        // Handle promise rejection from connect() to prevent unhandled rejection
+        // that could potentially terminate the MCP server process
+        setTimeout(() => {
+          this.connect().catch((err) => {
+            console.error(`[WhatsApp] Reconnect attempt failed: ${err instanceof Error ? err.message : String(err)}`)
+          })
+        }, delay)
       } else if (isLoggedOut) {
         // Clear credentials on logout
         console.error("[WhatsApp] Logged out. Clearing credentials.")

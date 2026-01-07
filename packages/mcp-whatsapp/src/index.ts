@@ -316,13 +316,26 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           }
         }
 
-        // Normalize chat ID
-        let normalizedChatId = chat_id
-        if (!chat_id.includes("@")) {
-          normalizedChatId = `${chat_id.replace(/[^0-9]/g, "")}@s.whatsapp.net`
+        // Normalize chat ID and search both @s.whatsapp.net and @lid formats
+        // Some DMs may be keyed/stored under @lid chat IDs
+        let messages: WhatsAppMessage[] = []
+        const numericId = chat_id.replace(/[^0-9]/g, "")
+
+        if (chat_id.includes("@")) {
+          // Already has a suffix, use as-is
+          messages = whatsapp.getMessages(chat_id, Math.min(limit, 50))
+        } else {
+          // Try @s.whatsapp.net first (standard phone number format)
+          const phoneJid = `${numericId}@s.whatsapp.net`
+          messages = whatsapp.getMessages(phoneJid, Math.min(limit, 50))
+
+          // If no messages found, try @lid format (WhatsApp Linked ID)
+          if (messages.length === 0) {
+            const lidJid = `${numericId}@lid`
+            messages = whatsapp.getMessages(lidJid, Math.min(limit, 50))
+          }
         }
 
-        const messages = whatsapp.getMessages(normalizedChatId, Math.min(limit, 50))
         if (messages.length === 0) {
           return {
             content: [{ type: "text", text: `No messages found for chat ${chat_id}` }],

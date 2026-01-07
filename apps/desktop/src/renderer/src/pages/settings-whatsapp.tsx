@@ -319,7 +319,11 @@ export function Component() {
                 onCheckedChange={(value) => {
                   saveConfig({ whatsappAutoReply: value })
                 }}
-                disabled={!cfg.whatsappAutoReply && (!remoteServerEnabled || !hasApiKey)}
+                disabled={
+                  // Only disable when trying to enable without prerequisites
+                  // Always allow turning OFF (unchecking) so users can opt out
+                  !(cfg.whatsappAutoReply ?? false) && (!remoteServerEnabled || !hasApiKey)
+                }
               />
               {cfg.whatsappAutoReply && remoteServerEnabled && hasApiKey && (
                 <div className="mt-1 text-xs text-green-600 dark:text-green-400">

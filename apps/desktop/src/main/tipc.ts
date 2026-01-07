@@ -1729,12 +1729,19 @@ export const router = {
           }
         } else if (nextWhatsappEnabled) {
           // Check if WhatsApp settings changed - restart server to pick up new env vars
+          // Also watch Remote Server settings since prepareEnvironment() derives callback URL/API key from them
           const whatsappSettingsChanged =
             JSON.stringify((prev as any)?.whatsappAllowFrom) !== JSON.stringify((merged as any)?.whatsappAllowFrom) ||
             (prev as any)?.whatsappAutoReply !== (merged as any)?.whatsappAutoReply ||
             (prev as any)?.whatsappLogMessages !== (merged as any)?.whatsappLogMessages
 
-          if (whatsappSettingsChanged) {
+          // If auto-reply is enabled, also restart when Remote Server settings change
+          const remoteServerSettingsChanged = (merged as any)?.whatsappAutoReply && (
+            (prev as any)?.remoteServerPort !== (merged as any)?.remoteServerPort ||
+            (prev as any)?.remoteServerApiKey !== (merged as any)?.remoteServerApiKey
+          )
+
+          if (whatsappSettingsChanged || remoteServerSettingsChanged) {
             const { mcpService } = await import("./mcp-service")
             const currentMcpConfig = merged.mcpConfig || { mcpServers: {} }
             if (currentMcpConfig.mcpServers?.[WHATSAPP_SERVER_NAME]) {

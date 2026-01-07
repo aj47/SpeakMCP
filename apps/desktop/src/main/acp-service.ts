@@ -923,12 +923,15 @@ class ACPService extends EventEmitter {
   /**
    * Handle fs/read_text_file - Read file contents for agent
    * Per ACP spec, only available if client advertises fs.readTextFile capability.
+   * 
+   * Security: Requires user approval when mcpRequireApprovalBeforeToolCall is enabled,
+   * in addition to the blocklist check for sensitive paths.
    */
   private async handleReadTextFile(
     agentName: string,
     params: ACPReadTextFileRequest
   ): Promise<{ content: string }> {
-    const { path: filePath, line, limit } = params
+    const { sessionId, path: filePath, line, limit } = params
 
     logApp(`[ACP:${agentName}] Reading file: ${filePath} (line: ${line}, limit: ${limit})`)
 
@@ -948,6 +951,54 @@ class ACPService extends EventEmitter {
       if (this.isSensitivePath(filePath) || this.isSensitivePath(pathToCheck)) {
         logApp(`[ACP:${agentName}] BLOCKED read of sensitive path: ${filePath} (resolved: ${pathToCheck})`)
         throw new Error("Access denied: Cannot read files in sensitive locations (SSH keys, credentials, etc.)")
+      }
+
+      // Security check: Require user approval if enabled in config
+      const config = configStore.get()
+      if (config.mcpRequireApprovalBeforeToolCall) {
+        const { approvalId, promise } = toolApprovalManager.requestApproval(
+          sessionId,
+          `fs/read_text_file`,
+          { path: filePath, line, limit }
+        )
+
+        // Emit progress update to show pending approval in UI
+        await emitAgentProgress({
+          sessionId,
+          currentIteration: 0,
+          maxIterations: 1,
+          steps: [
+            {
+              id: `acp-file-read-${Date.now()}`,
+              type: "tool_approval",
+              title: `ACP Agent: ${agentName}`,
+              description: `Read file: ${filePath}`,
+              status: "awaiting_approval",
+              timestamp: Date.now(),
+              approvalRequest: {
+                approvalId,
+                toolName: "fs/read_text_file",
+                arguments: { path: filePath, line, limit },
+              },
+            },
+          ],
+          isComplete: false,
+          pendingToolApproval: {
+            approvalId,
+            toolName: "fs/read_text_file",
+            arguments: { path: filePath, line, limit },
+          },
+        })
+
+        // Wait for user response
+        const approved = await promise
+
+        if (!approved) {
+          logApp(`[ACP:${agentName}] User denied file read: ${filePath}`)
+          throw new Error("User denied file read operation")
+        }
+
+        logApp(`[ACP:${agentName}] User approved file read: ${filePath}`)
       }
 
       const content = await readFile(filePath, "utf-8")
@@ -976,12 +1027,15 @@ class ACPService extends EventEmitter {
   /**
    * Handle fs/write_text_file - Write file contents for agent
    * Per ACP spec, only available if client advertises fs.writeTextFile capability.
+   * 
+   * Security: Requires user approval when mcpRequireApprovalBeforeToolCall is enabled,
+   * in addition to the blocklist check for sensitive paths.
    */
   private async handleWriteTextFile(
     agentName: string,
     params: ACPWriteTextFileRequest
   ): Promise<Record<string, never>> {
-    const { path: filePath, content } = params
+    const { sessionId, path: filePath, content } = params
 
     logApp(`[ACP:${agentName}] Writing file: ${filePath} (${content.length} bytes)`)
 
@@ -1010,6 +1064,54 @@ class ACPService extends EventEmitter {
           this.isSensitivePath(constructedPath)) {
         logApp(`[ACP:${agentName}] BLOCKED write to sensitive path: ${filePath} (resolved file: ${resolvedFilePath}, constructed: ${constructedPath})`)
         throw new Error("Access denied: Cannot write files in sensitive locations (SSH keys, credentials, etc.)")
+      }
+
+      // Security check: Require user approval if enabled in config
+      const config = configStore.get()
+      if (config.mcpRequireApprovalBeforeToolCall) {
+        const { approvalId, promise } = toolApprovalManager.requestApproval(
+          sessionId,
+          `fs/write_text_file`,
+          { path: filePath, contentLength: content.length }
+        )
+
+        // Emit progress update to show pending approval in UI
+        await emitAgentProgress({
+          sessionId,
+          currentIteration: 0,
+          maxIterations: 1,
+          steps: [
+            {
+              id: `acp-file-write-${Date.now()}`,
+              type: "tool_approval",
+              title: `ACP Agent: ${agentName}`,
+              description: `Write file: ${filePath} (${content.length} bytes)`,
+              status: "awaiting_approval",
+              timestamp: Date.now(),
+              approvalRequest: {
+                approvalId,
+                toolName: "fs/write_text_file",
+                arguments: { path: filePath, contentLength: content.length },
+              },
+            },
+          ],
+          isComplete: false,
+          pendingToolApproval: {
+            approvalId,
+            toolName: "fs/write_text_file",
+            arguments: { path: filePath, contentLength: content.length },
+          },
+        })
+
+        // Wait for user response
+        const approved = await promise
+
+        if (!approved) {
+          logApp(`[ACP:${agentName}] User denied file write: ${filePath}`)
+          throw new Error("User denied file write operation")
+        }
+
+        logApp(`[ACP:${agentName}] User approved file write: ${filePath}`)
       }
 
       // Ensure parent directory exists

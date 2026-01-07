@@ -47,8 +47,32 @@ const whatsapp = new WhatsAppSession(config)
 const pendingMessages: WhatsAppMessage[] = []
 const MAX_PENDING_MESSAGES = 100
 
+// Track users who have requested a new session via /new command
+// Key: chatId (e.g., "61406142826@s.whatsapp.net"), Value: true if new session requested
+const newSessionRequested: Set<string> = new Set()
+
 // Handle incoming messages
 whatsapp.on("message", async (message: WhatsAppMessage) => {
+  const chatId = message.chatId || message.from
+
+  // Handle /new command - start a new session on next message
+  if (message.text.trim().toLowerCase() === "/new") {
+    newSessionRequested.add(chatId)
+    console.error(`[MCP-WhatsApp] /new command received from ${chatId} - next message will start a new session`)
+
+    // Send confirmation to the user
+    try {
+      await whatsapp.sendMessage({
+        to: chatId,
+        text: "✅ New session requested. Your next message will start a fresh conversation.",
+      })
+    } catch (error) {
+      console.error("[MCP-WhatsApp] Failed to send /new confirmation:", error)
+    }
+
+    // Don't forward /new command to the agent
+    return
+  }
   // Only log message content if logging is enabled to avoid accidental leakage
   if (config.logMessages) {
     console.error(`[MCP-WhatsApp] New message from ${message.fromName || message.from}: ${message.text.substring(0, 50)}...`)
@@ -69,6 +93,18 @@ whatsapp.on("message", async (message: WhatsAppMessage) => {
       // Use message.chatId for groups/DMs instead of message.from
       // In groups, message.from is the participant, but we need to reply to the chat
       const replyTarget = message.chatId || message.from
+
+      // Determine conversation ID - use new unique ID if /new was requested
+      let conversationId: string
+      if (newSessionRequested.has(chatId)) {
+        // Generate a unique conversation ID for this new session
+        conversationId = `whatsapp_${replyTarget}_${Date.now()}`
+        newSessionRequested.delete(chatId)
+        console.error(`[MCP-WhatsApp] Starting new session for ${chatId}: ${conversationId}`)
+      } else {
+        // Use the static conversation ID for continuity
+        conversationId = `whatsapp_${replyTarget}`
+      }
 
       // Build message content - use array format if there's an image, otherwise string
       let messageContent: string | Array<{ type: string; text?: string; image_url?: { url: string } }>
@@ -115,7 +151,7 @@ To send any reply, use whatsapp_send_message with to="${replyTarget}"`
               content: messageContent,
             },
           ],
-          conversation_id: `whatsapp_${replyTarget}`,
+          conversation_id: conversationId,
           stream: false,
         }),
       })

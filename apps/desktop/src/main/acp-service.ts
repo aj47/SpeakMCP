@@ -557,6 +557,7 @@ class ACPService extends EventEmitter {
   /**
    * Wait for an agent to transition from 'starting' to 'ready' or 'error'.
    * Used to prevent spawning duplicate processes when multiple spawn requests arrive.
+   * Throws an error if the timeout is reached while agent is still starting.
    */
   private async waitForAgentReady(agentName: string, timeoutMs = 30000): Promise<void> {
     const startTime = Date.now()
@@ -570,7 +571,16 @@ class ACPService extends EventEmitter {
       await new Promise(resolve => setTimeout(resolve, pollIntervalMs))
     }
 
-    logApp(`[ACP] Timeout waiting for agent ${agentName} to become ready`)
+    // Timeout reached - update agent status and throw error
+    const instance = this.agents.get(agentName)
+    if (instance && instance.status === "starting") {
+      const errorMessage = `Timeout waiting for agent ${agentName} to become ready after ${timeoutMs}ms`
+      logApp(`[ACP] ${errorMessage}`)
+      instance.status = "error"
+      instance.error = errorMessage
+      this.emit("agentStatusChanged", { agentName, status: "error", error: errorMessage })
+      throw new Error(errorMessage)
+    }
   }
 
   /**

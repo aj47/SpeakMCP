@@ -58,6 +58,10 @@ export async function processTranscriptWithACPAgent(
   // Track accumulated text across all session updates for streaming display
   let accumulatedText = ""
 
+  // Counter for generating unique step IDs to avoid collisions in tight loops
+  let stepIdCounter = 0
+  const generateStepId = (prefix: string): string => `${prefix}-${Date.now()}-${++stepIdCounter}`
+
   // Load existing conversation history for UI display
   type ConversationHistoryMessage = {
     role: "user" | "assistant" | "tool"
@@ -107,7 +111,7 @@ export async function processTranscriptWithACPAgent(
   // Show thinking step
   await emitProgress([
     {
-      id: `acp-thinking-${Date.now()}`,
+      id: generateStepId("acp-thinking"),
       type: "thinking",
       title: `Sending to ${agentName}...`,
       status: "in_progress",
@@ -152,7 +156,7 @@ export async function processTranscriptWithACPAgent(
             // Accumulate text for streaming display
             accumulatedText += block.text
             steps.push({
-              id: `acp-text-${Date.now()}`,
+              id: generateStepId("acp-text"),
               type: "thinking",
               title: "Agent response",
               description: block.text.substring(0, 200) + (block.text.length > 200 ? "..." : ""),
@@ -162,7 +166,7 @@ export async function processTranscriptWithACPAgent(
             })
           } else if (block.type === "tool_use" && block.name) {
             steps.push({
-              id: `acp-tool-${Date.now()}`,
+              id: generateStepId("acp-tool"),
               type: "tool_call",
               title: `Tool: ${block.name}`,
               status: "in_progress",
@@ -175,7 +179,7 @@ export async function processTranscriptWithACPAgent(
       // Always emit with streaming content to show accumulated text
       emitProgress(
         steps.length > 0 ? steps : [{
-          id: `acp-streaming-${Date.now()}`,
+          id: generateStepId("acp-streaming"),
           type: "thinking",
           title: "Agent response",
           status: "in_progress",
@@ -212,7 +216,7 @@ export async function processTranscriptWithACPAgent(
       // Emit completion with final accumulated text
       await emitProgress([
         {
-          id: `acp-complete-${Date.now()}`,
+          id: generateStepId("acp-complete"),
           type: "completion",
           title: result.success ? "Response complete" : "Request failed",
           description: result.error,
@@ -243,7 +247,7 @@ export async function processTranscriptWithACPAgent(
 
     await emitProgress([
       {
-        id: `acp-error-${Date.now()}`,
+        id: generateStepId("acp-error"),
         type: "completion",
         title: "Error",
         description: errorMessage,

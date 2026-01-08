@@ -486,9 +486,9 @@ export function ActiveAgentsSidebar() {
           <button
             onClick={() => setIsPastSessionsExpanded(!isPastSessionsExpanded)}
             className="flex items-center gap-2 flex-1 min-w-0 focus:outline-none focus:ring-1 focus:ring-ring rounded"
+            title="Past Sessions"
           >
             <Clock className="h-3.5 w-3.5" />
-            <span>Past Sessions</span>
             {conversationHistoryQuery.data && conversationHistoryQuery.data.length > 0 && (
               <span className="text-[10px] text-muted-foreground">
                 {conversationHistoryQuery.data.length}

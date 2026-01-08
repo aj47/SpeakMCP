@@ -64,6 +64,7 @@ import { agentSessionTracker } from "./agent-session-tracker"
 import { messageQueueService } from "./message-queue-service"
 import { profileService } from "./profile-service"
 import { acpService, ACPRunRequest } from "./acp-service"
+import { processTranscriptWithACPAgent } from "./acp-main-agent"
 
 async function initializeMcpWithProgress(config: Config, sessionId: string): Promise<void> {
   const shouldStop = () => agentSessionStateManager.shouldStopSession(sessionId)
@@ -160,6 +161,46 @@ async function processWithAgentMode(
   startSnoozed: boolean = false, // Whether to start session snoozed (default: false to show panel)
 ): Promise<string> {
   const config = configStore.get()
+
+  // Check if ACP main agent mode is enabled - route to ACP agent instead of LLM API
+  if (config.mainAgentMode === "acp" && config.mainAgentName) {
+    logLLM(`[processWithAgentMode] ACP mode enabled, routing to agent: ${config.mainAgentName}`)
+
+    // Create conversation title for session tracking
+    const conversationTitle = text.length > 50 ? text.substring(0, 50) + "..." : text
+
+    // Start tracking this agent session (or reuse existing one)
+    const sessionId = existingSessionId || agentSessionTracker.startSession(conversationId, conversationTitle, startSnoozed)
+
+    // Process with ACP agent
+    const result = await processTranscriptWithACPAgent(text, {
+      agentName: config.mainAgentName,
+      conversationId: conversationId || sessionId,
+      sessionId,
+    })
+
+    // Save assistant response to conversation history if we have a conversation ID
+    // Note: User message is already added by createMcpTextInput or processQueuedMessages
+    if (conversationId && result.response) {
+      await conversationService.addMessageToConversation(
+        conversationId,
+        result.response,
+        "assistant"
+      )
+    }
+
+    // Mark session as completed
+    if (result.success) {
+      logLLM(`[processWithAgentMode] ACP mode completed successfully for session ${sessionId}, conversation ${conversationId}`)
+      agentSessionTracker.completeSession(sessionId, "ACP agent completed successfully")
+    } else {
+      logLLM(`[processWithAgentMode] ACP mode failed for session ${sessionId}: ${result.error}`)
+      agentSessionTracker.errorSession(sessionId, result.error || "Unknown error")
+    }
+
+    logLLM(`[processWithAgentMode] ACP mode returning, queue processing should trigger in .finally()`)
+    return result.response || result.error || "No response from agent"
+  }
 
   // NOTE: Don't clear all agent progress here - we support multiple concurrent sessions
   // Each session manages its own progress lifecycle independently
@@ -410,11 +451,14 @@ const saveRecordingsHitory = (history: RecordingHistoryItem[]) => {
  * Uses a per-conversation lock to prevent concurrent processing of the same queue.
  */
 async function processQueuedMessages(conversationId: string): Promise<void> {
+  logLLM(`[processQueuedMessages] Starting queue processing for ${conversationId}`)
 
   // Try to acquire processing lock - if another processor is already running, skip
   if (!messageQueueService.tryAcquireProcessingLock(conversationId)) {
+    logLLM(`[processQueuedMessages] Failed to acquire lock for ${conversationId}`)
     return
   }
+  logLLM(`[processQueuedMessages] Acquired lock for ${conversationId}`)
 
   try {
     while (true) {
@@ -427,6 +471,12 @@ async function processQueuedMessages(conversationId: string): Promise<void> {
       // Peek at the next message without removing it
       const queuedMessage = messageQueueService.peek(conversationId)
       if (!queuedMessage) {
+        logLLM(`[processQueuedMessages] No more pending messages in queue for ${conversationId}`)
+        // Debug: log the actual queue state
+        const allMessages = messageQueueService.getQueue(conversationId)
+        if (allMessages.length > 0) {
+          logLLM(`[processQueuedMessages] Queue has ${allMessages.length} messages but peek returned null. First message status: ${allMessages[0]?.status}`)
+        }
         return // No more messages in queue
       }
 
@@ -1200,6 +1250,7 @@ export const router = {
         })
         .finally(() => {
           // Process queued messages after this session completes (success or error)
+          logLLM(`[createMcpTextInput] .finally() triggered for conversation ${conversationId}, calling processQueuedMessages`)
           processQueuedMessages(conversationId!).catch((err) => {
             logLLM("[createMcpTextInput] Error processing queued messages:", err)
           })

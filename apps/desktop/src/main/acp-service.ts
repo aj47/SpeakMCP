@@ -62,6 +62,10 @@ export interface ACPAgentInstance {
   // ACP protocol state
   initialized?: boolean
   sessionId?: string
+  // Agent capabilities from initialize response
+  agentCapabilities?: {
+    loadSession?: boolean
+  }
 }
 
 // ACP Run request
@@ -781,6 +785,30 @@ class ACPService extends EventEmitter {
   }
 
   /**
+   * Send a JSON-RPC notification to an agent (no response expected)
+   */
+  private sendNotification(agentName: string, method: string, params?: unknown): void {
+    const instance = this.agents.get(agentName)
+    if (!instance?.process?.stdin) {
+      logApp(`[ACP:${agentName}] Cannot send notification - agent not ready`)
+      return
+    }
+
+    const notification: JsonRpcNotification = {
+      jsonrpc: "2.0",
+      method,
+      params,
+    }
+
+    const message = JSON.stringify(notification) + "\n"
+    instance.process.stdin.write(message, (err) => {
+      if (err) {
+        logApp(`[ACP:${agentName}] Failed to send notification: ${err.message}`)
+      }
+    })
+  }
+
+  /**
    * Handle session/request_permission - Request user approval for tool calls
    * Per ACP spec, this is sent by agents before executing sensitive operations.
    */
@@ -1172,10 +1200,15 @@ class ACPService extends EventEmitter {
           title: "SpeakMCP",
           version: "1.2.0",
         },
-      }) as { protocolVersion?: number; agentCapabilities?: unknown }
+      }) as { protocolVersion?: number; agentCapabilities?: { loadSession?: boolean } }
 
       logApp(`[ACP:${agentName}] Initialized with protocol version ${result?.protocolVersion}`)
       instance.initialized = true
+
+      // Store agent capabilities from response
+      if (result?.agentCapabilities) {
+        instance.agentCapabilities = result.agentCapabilities as { loadSession?: boolean }
+      }
     } catch (error) {
       logApp(`[ACP:${agentName}] Initialize failed: ${error}`)
       // Don't throw - some agents might not require initialization
@@ -1387,6 +1420,140 @@ class ACPService extends EventEmitter {
     logApp(`[ACP] Shutting down all agents`)
     const stopPromises = Array.from(this.agents.keys()).map(name => this.stopAgent(name))
     await Promise.allSettled(stopPromises)
+  }
+
+  /**
+   * Get or create a session for main agent use.
+   * Unlike runTask(), this gives fine-grained control over session lifecycle.
+   */
+  async getOrCreateSession(agentName: string, forceNew?: boolean): Promise<string | undefined> {
+    // Ensure agent is spawned and ready
+    let instance = this.agents.get(agentName)
+    if (!instance || instance.status !== "ready") {
+      try {
+        await this.spawnAgent(agentName)
+        instance = this.agents.get(agentName)
+      } catch (error) {
+        logApp(`[ACP:${agentName}] Failed to spawn agent for session: ${error}`)
+        return undefined
+      }
+    }
+
+    if (!instance || instance.status !== "ready") {
+      return undefined
+    }
+
+    // Initialize if not already done
+    if (!instance.initialized) {
+      await this.initializeAgent(agentName)
+    }
+
+    // If forceNew, clear existing session
+    if (forceNew && instance.sessionId) {
+      this.clearSessionOutput(instance.sessionId)
+      instance.sessionId = undefined
+    }
+
+    // Create or reuse session
+    return await this.createSession(agentName)
+  }
+
+  /**
+   * Send a prompt to an existing session and return when complete.
+   * Emits 'sessionUpdate' events during execution for progress tracking.
+   */
+  async sendPrompt(
+    agentName: string,
+    sessionId: string,
+    prompt: string
+  ): Promise<{
+    success: boolean
+    response?: string
+    stopReason?: string
+    error?: string
+  }> {
+    const instance = this.agents.get(agentName)
+    if (!instance || instance.status !== "ready") {
+      return {
+        success: false,
+        error: `Agent ${agentName} is not ready`,
+      }
+    }
+
+    try {
+      // Format prompt as content blocks per ACP spec
+      const promptContent = [{ type: "text", text: prompt }]
+
+      logApp(`[ACP:${agentName}] Sending prompt to session ${sessionId}`)
+      const result = await this.sendRequest(agentName, "session/prompt", {
+        sessionId,
+        prompt: promptContent,
+      }) as {
+        stopReason?: string
+        error?: { message?: string }
+        content?: ACPContentBlock[]
+        message?: { content?: ACPContentBlock[] }
+      }
+
+      if (result?.error) {
+        return {
+          success: false,
+          error: result.error.message || JSON.stringify(result.error),
+        }
+      }
+
+      // Collect text output from the response
+      let responseText = ""
+      const contentBlocks = result?.content || result?.message?.content || []
+
+      if (Array.isArray(contentBlocks)) {
+        for (const block of contentBlocks) {
+          if (typeof block === "string") {
+            responseText += block + "\n"
+          } else if (block?.type === "text" && block?.text) {
+            responseText += block.text + "\n"
+          }
+        }
+      }
+
+      // Also check session output collected from notifications
+      const sessionOutput = this.getSessionOutput(sessionId)
+      if (sessionOutput) {
+        for (const block of sessionOutput.contentBlocks) {
+          if (block.type === "text" && block.text && !responseText.includes(block.text)) {
+            responseText += block.text + "\n"
+          }
+        }
+      }
+
+      return {
+        success: true,
+        response: responseText.trim() || undefined,
+        stopReason: result?.stopReason,
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      return {
+        success: false,
+        error: errorMessage,
+      }
+    }
+  }
+
+  /**
+   * Cancel an in-progress prompt.
+   */
+  async cancelPrompt(agentName: string, sessionId: string): Promise<void> {
+    logApp(`[ACP:${agentName}] Cancelling prompt for session ${sessionId}`)
+    this.sendNotification(agentName, "session/cancel", { sessionId })
+  }
+
+  /**
+   * Check if an agent supports session loading (for resuming sessions).
+   */
+  getAgentCapabilities(agentName: string): { loadSession?: boolean } | undefined {
+    const instance = this.agents.get(agentName)
+    return instance?.agentCapabilities
   }
 }
 

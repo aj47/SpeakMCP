@@ -614,6 +614,12 @@ export type Config = {
 
   // ACP Agent Configuration
   acpAgents?: ACPAgentConfig[]
+
+  // Main agent mode: "api" uses external LLM API, "acp" uses an ACP agent as the brain
+  mainAgentMode?: "api" | "acp"
+
+  // Name of the ACP agent to use when mainAgentMode is "acp"
+  mainAgentName?: string
 }
 
 

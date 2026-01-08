@@ -177,6 +177,7 @@ export async function processTranscriptWithACPAgent(
       }
 
       // Always emit with streaming content to show accumulated text
+      // Handle the promise to avoid unhandled rejections in the main process
       emitProgress(
         steps.length > 0 ? steps : [{
           id: generateStepId("acp-streaming"),
@@ -192,7 +193,9 @@ export async function processTranscriptWithACPAgent(
           text: accumulatedText,
           isStreaming: !event.isComplete,
         }
-      )
+      ).catch(err => {
+        logApp(`[ACP Main] Failed to emit progress: ${err}`)
+      })
     }
 
     acpService.on("sessionUpdate", progressHandler)

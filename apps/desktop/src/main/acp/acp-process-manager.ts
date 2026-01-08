@@ -164,9 +164,12 @@ export class ACPProcessManager {
     childProcess.kill('SIGTERM');
 
     // Wait for graceful shutdown, then SIGKILL
+    // Note: childProcess.killed becomes true immediately after sending SIGTERM,
+    // so we check exitCode instead to determine if the process has actually exited
     await new Promise<void>((resolve) => {
       const killTimeout = setTimeout(() => {
-        if (!childProcess.killed) {
+        // Check if process has actually exited (exitCode will be non-null once exited)
+        if (childProcess.exitCode === null) {
           logACP(`Agent "${agentName}" did not stop gracefully, sending SIGKILL`);
           childProcess.kill('SIGKILL');
         }

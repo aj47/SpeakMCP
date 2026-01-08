@@ -169,12 +169,23 @@ export async function processTranscriptWithTools(
   )
 
   const userGuidelines = config.mcpToolsSystemPrompt
+  // Load enabled agent skills instructions for non-agent mode too
+  // Use the current profile's skills config
+  const { skillsService } = await import("./skills-service")
+  const { profileService } = await import("./profile-service")
+  const currentProfileId = config.mcpCurrentProfileId
+  const enabledSkillIds = currentProfileId
+    ? profileService.getEnabledSkillIdsForProfile(currentProfileId)
+    : []
+  const skillsInstructions = skillsService.getEnabledSkillsInstructionsForProfile(enabledSkillIds)
+
   const systemPrompt = constructSystemPrompt(
     uniqueAvailableTools,
     userGuidelines,
     false,
     undefined,
     config.mcpCustomSystemPrompt,
+    skillsInstructions,
   )
 
   const messages = [
@@ -751,6 +762,15 @@ export async function processTranscriptWithAgentMode(
   const agentModeGuidelines = effectiveProfileSnapshot?.guidelines ?? config.mcpToolsSystemPrompt ?? ""
   const customSystemPrompt = effectiveProfileSnapshot?.systemPrompt ?? config.mcpCustomSystemPrompt
 
+  // Load enabled agent skills instructions for the current profile
+  // Skills provide specialized instructions that improve AI performance on specific tasks
+  // Use per-profile skills config if available, otherwise fall back to empty (no skills)
+  const { skillsService } = await import("./skills-service")
+  const enabledSkillIds = effectiveProfileSnapshot?.skillsConfig?.enabledSkillIds ?? []
+  logLLM(`[processTranscriptWithAgentMode] Loading skills for session ${currentSessionId}. enabledSkillIds: [${enabledSkillIds.join(', ')}]`)
+  const skillsInstructions = skillsService.getEnabledSkillsInstructionsForProfile(enabledSkillIds)
+  logLLM(`[processTranscriptWithAgentMode] Skills instructions loaded: ${skillsInstructions ? `${skillsInstructions.length} chars` : 'none'}`)
+
   // Construct system prompt using the new approach
   const systemPrompt = constructSystemPrompt(
     uniqueAvailableTools,
@@ -758,6 +778,7 @@ export async function processTranscriptWithAgentMode(
     true,
     toolCapabilities.relevantTools,
     customSystemPrompt, // custom base system prompt from profile snapshot or global config
+    skillsInstructions, // agent skills instructions
   )
 
   // Generic context extraction from chat history - works with any MCP tool
@@ -943,6 +964,7 @@ export async function processTranscriptWithAgentMode(
       true,
       toolCapabilities.relevantTools,
       customSystemPrompt, // Use session-bound custom system prompt
+      skillsInstructions, // agent skills instructions
     )
 
     const postVerifySummaryMessages = [
@@ -2293,6 +2315,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
           true, // isAgentMode
           undefined, // relevantTools
           customSystemPrompt, // Use session-bound custom system prompt
+          skillsInstructions, // agent skills instructions
         )
 
         const summaryMessages = [
@@ -2564,6 +2587,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
           true, // isAgentMode
           undefined, // relevantTools
           customSystemPrompt, // Use session-bound custom system prompt
+          skillsInstructions, // agent skills instructions
         )
 
         const summaryMessages = [

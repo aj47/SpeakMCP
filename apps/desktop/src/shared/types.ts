@@ -266,6 +266,16 @@ export type ProfileModelConfig = {
   ttsProviderId?: "openai" | "groq" | "gemini"
 }
 
+// Per-profile skills configuration
+// Skills are disabled by default for each profile; users opt-in to specific skills
+export type ProfileSkillsConfig = {
+  // List of skill IDs that are enabled for this profile
+  enabledSkillIds?: string[]
+  // When true, newly-added skills are also disabled by default for this profile
+  // This ensures strict opt-in behavior
+  allSkillsDisabledByDefault?: boolean
+}
+
 // Profile Management Types
 export type Profile = {
   id: string
@@ -276,6 +286,7 @@ export type Profile = {
   isDefault?: boolean
   mcpServerConfig?: ProfileMcpServerConfig
   modelConfig?: ProfileModelConfig
+  skillsConfig?: ProfileSkillsConfig
   systemPrompt?: string
 }
 
@@ -295,6 +306,7 @@ export type SessionProfileSnapshot = {
   systemPrompt?: string
   mcpServerConfig?: ProfileMcpServerConfig
   modelConfig?: ProfileModelConfig
+  skillsConfig?: ProfileSkillsConfig
 }
 
 export interface ModelPreset {
@@ -307,6 +319,25 @@ export interface ModelPreset {
   updatedAt?: number
   mcpToolsModel?: string
   transcriptProcessingModel?: string
+}
+
+// Agent Skills Types
+// Skills are instruction files that can be loaded dynamically to improve AI performance on specialized tasks
+// Based on Anthropic's Agent Skills specification (formerly Claude Skills)
+export interface AgentSkill {
+  id: string
+  name: string
+  description: string
+  instructions: string // The markdown content with instructions
+  enabled: boolean
+  createdAt: number
+  updatedAt: number
+  source?: "local" | "imported" // Where the skill came from
+  filePath?: string // Path to the SKILL.md file if loaded from disk
+}
+
+export interface AgentSkillsData {
+  skills: AgentSkill[]
 }
 
 export type Config = {

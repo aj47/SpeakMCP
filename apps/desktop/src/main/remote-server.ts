@@ -268,6 +268,7 @@ async function runAgent(options: RunAgentOptions): Promise<{
         systemPrompt: currentProfile.systemPrompt,
         mcpServerConfig: currentProfile.mcpServerConfig,
         modelConfig: currentProfile.modelConfig,
+        skillsConfig: currentProfile.skillsConfig,
       }
     }
   }

@@ -406,7 +406,7 @@ export type Config = {
   // MCP Tool Calling Configuration
   /** @deprecated MCP tools are now always enabled. This field is kept for backwards compatibility but ignored. */
   mcpToolsEnabled?: boolean
-  mcpToolsShortcut?: "hold-ctrl-alt" | "ctrl-alt-slash" | "custom"
+  mcpToolsShortcut?: "hold-ctrl-alt" | "toggle-ctrl-alt" | "ctrl-alt-slash" | "custom"
   customMcpToolsShortcut?: string
   customMcpToolsShortcutMode?: "hold" | "toggle" // Mode for custom MCP tools shortcut
   mcpToolsProviderId?: CHAT_PROVIDER_ID

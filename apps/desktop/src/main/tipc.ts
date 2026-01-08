@@ -1758,12 +1758,17 @@ export const router = {
     }),
 
   recordEvent: t.procedure
-    .input<{ type: "start" | "end" }>()
+    .input<{ type: "start" | "end"; mcpMode?: boolean }>()
     .action(async ({ input }) => {
       if (input.type === "start") {
         state.isRecording = true
+        // Track MCP mode state so main process knows if we're in MCP toggle mode
+        if (input.mcpMode !== undefined) {
+          state.isRecordingMcpMode = input.mcpMode
+        }
       } else {
         state.isRecording = false
+        state.isRecordingMcpMode = false
       }
       updateTrayIcon()
     }),

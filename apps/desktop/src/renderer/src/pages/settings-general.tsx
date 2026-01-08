@@ -410,7 +410,7 @@ export function Component() {
             <div className="space-y-2">
               <Select
                 value={configQuery.data?.mcpToolsShortcut || "hold-ctrl-alt"}
-                onValueChange={(value: "hold-ctrl-alt" | "ctrl-alt-slash" | "custom") => {
+                onValueChange={(value: "hold-ctrl-alt" | "toggle-ctrl-alt" | "ctrl-alt-slash" | "custom") => {
                   saveConfig({ mcpToolsShortcut: value })
                 }}
               >
@@ -419,6 +419,7 @@ export function Component() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="hold-ctrl-alt">Hold Ctrl+Alt</SelectItem>
+                  <SelectItem value="toggle-ctrl-alt">Toggle Ctrl+Alt</SelectItem>
                   <SelectItem value="ctrl-alt-slash">Ctrl+Alt+/</SelectItem>
                   <SelectItem value="custom">Custom</SelectItem>
                 </SelectContent>

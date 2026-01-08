@@ -238,3 +238,28 @@ export function getMcpToolsShortcutDisplay(
       return "Hold Ctrl+Alt"
   }
 }
+
+/**
+ * Get the display string for the text input shortcut.
+ * This provides a centralized mapping to ensure consistency across UI components.
+ */
+export function getTextInputShortcutDisplay(
+  shortcut: "ctrl-t" | "ctrl-shift-t" | "alt-t" | "custom" | undefined,
+  customShortcut?: string,
+): string {
+  switch (shortcut) {
+    case "ctrl-t":
+      return "Ctrl+T"
+    case "ctrl-shift-t":
+      return "Ctrl+Shift+T"
+    case "alt-t":
+      return "Alt+T"
+    case "custom":
+      if (customShortcut) {
+        return formatKeyComboForDisplay(customShortcut)
+      }
+      return "Ctrl+T"
+    default:
+      return "Ctrl+T"
+  }
+}

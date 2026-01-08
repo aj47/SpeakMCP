@@ -14,13 +14,14 @@ import { toast } from "sonner"
 import { SessionsKanban } from "@renderer/components/sessions-kanban"
 import { PredefinedPromptsMenu } from "@renderer/components/predefined-prompts-menu"
 import { useConfigQuery } from "@renderer/lib/query-client"
-import { getMcpToolsShortcutDisplay } from "@shared/key-utils"
+import { getMcpToolsShortcutDisplay, getTextInputShortcutDisplay } from "@shared/key-utils"
 
-function EmptyState({ onTextClick, onVoiceClick, onSelectPrompt, agentModeShortcut }: {
+function EmptyState({ onTextClick, onVoiceClick, onSelectPrompt, textInputShortcut, voiceInputShortcut }: {
   onTextClick: () => void
   onVoiceClick: () => void
   onSelectPrompt: (content: string) => void
-  agentModeShortcut: string
+  textInputShortcut: string
+  voiceInputShortcut: string
 }) {
   return (
     <div className="flex flex-col items-center justify-center p-8 text-center">
@@ -45,13 +46,21 @@ function EmptyState({ onTextClick, onVoiceClick, onSelectPrompt, agentModeShortc
             onSelectPrompt={onSelectPrompt}
           />
         </div>
-        {/* Aura agent mode keybind hint */}
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Keyboard className="h-4 w-4" />
-          <span>Aura:</span>
-          <kbd className="px-2 py-0.5 text-xs font-semibold bg-muted border rounded">
-            {agentModeShortcut}
-          </kbd>
+        {/* Keybind hints */}
+        <div className="flex items-center gap-4 text-sm text-muted-foreground">
+          <div className="flex items-center gap-2">
+            <Keyboard className="h-4 w-4" />
+            <span>Text:</span>
+            <kbd className="px-2 py-0.5 text-xs font-semibold bg-muted border rounded">
+              {textInputShortcut}
+            </kbd>
+          </div>
+          <div className="flex items-center gap-2">
+            <span>Voice:</span>
+            <kbd className="px-2 py-0.5 text-xs font-semibold bg-muted border rounded">
+              {voiceInputShortcut}
+            </kbd>
+          </div>
         </div>
       </div>
     </div>
@@ -69,9 +78,10 @@ export function Component() {
   const viewMode = useAgentStore((s) => s.viewMode)
   const setViewMode = useAgentStore((s) => s.setViewMode)
 
-  // Get config for agent mode shortcut display
+  // Get config for shortcut displays
   const configQuery = useConfigQuery()
-  const agentModeShortcut = getMcpToolsShortcutDisplay(configQuery.data?.mcpToolsShortcut, configQuery.data?.customMcpToolsShortcut)
+  const textInputShortcut = getTextInputShortcutDisplay(configQuery.data?.textInputShortcut, configQuery.data?.customTextInputShortcut)
+  const voiceInputShortcut = getMcpToolsShortcutDisplay(configQuery.data?.mcpToolsShortcut, configQuery.data?.customMcpToolsShortcut)
 
   const [sessionOrder, setSessionOrder] = useState<string[]>([])
   const [draggedSessionId, setDraggedSessionId] = useState<string | null>(null)
@@ -340,7 +350,8 @@ export function Component() {
             onTextClick={handleTextClick}
             onVoiceClick={handleVoiceStart}
             onSelectPrompt={handleSelectPrompt}
-            agentModeShortcut={agentModeShortcut}
+            textInputShortcut={textInputShortcut}
+            voiceInputShortcut={voiceInputShortcut}
           />
         ) : (
           <>
@@ -358,13 +369,21 @@ export function Component() {
                 <PredefinedPromptsMenu
                   onSelectPrompt={handleSelectPrompt}
                 />
-                {/* Aura agent mode keybind hint */}
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground ml-2">
-                  <Keyboard className="h-3.5 w-3.5" />
-                  <span>Aura:</span>
-                  <kbd className="px-1.5 py-0.5 text-xs font-semibold bg-muted border rounded">
-                    {agentModeShortcut}
-                  </kbd>
+                {/* Keybind hints */}
+                <div className="flex items-center gap-3 text-xs text-muted-foreground ml-2">
+                  <div className="flex items-center gap-1.5">
+                    <Keyboard className="h-3.5 w-3.5" />
+                    <span>Text:</span>
+                    <kbd className="px-1.5 py-0.5 text-xs font-semibold bg-muted border rounded">
+                      {textInputShortcut}
+                    </kbd>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span>Voice:</span>
+                    <kbd className="px-1.5 py-0.5 text-xs font-semibold bg-muted border rounded">
+                      {voiceInputShortcut}
+                    </kbd>
+                  </div>
                 </div>
               </div>
               <div className="flex items-center gap-2">

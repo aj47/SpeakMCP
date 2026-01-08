@@ -124,6 +124,15 @@ nvm use 20      # If using nvm
 | Native Binary | Rust | Keyboard monitoring, text injection |
 | MCP Client | TypeScript | Model Context Protocol with OAuth 2.1 |
 | AI Providers | OpenAI, Groq, Gemini | Speech recognition, LLM, TTS |
+| Multi-Agent | ACP | Task delegation to specialized sub-agents |
+
+### Multi-Agent System
+
+SpeakMCP supports delegating tasks to specialized sub-agents using the ACP (Agent Client Protocol):
+
+- **ACP (Agent Client Protocol)**: Zed's protocol for local agents (stdio) or remote HTTP agents
+
+See [apps/desktop/src/main/acp/README.md](apps/desktop/src/main/acp/README.md) for detailed documentation.
 
 ## Contributing
 

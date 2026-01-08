@@ -9,7 +9,6 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { rendererHandlers, tipcClient } from "~/lib/tipc-client"
 import { TextInputPanel, TextInputPanelRef } from "@renderer/components/text-input-panel"
 import { PanelResizeWrapper } from "@renderer/components/panel-resize-wrapper"
-import { logUI } from "@renderer/lib/debug"
 import { useAgentStore, useAgentProgress, useConversationStore } from "@renderer/stores"
 import { useConversationQuery, useCreateConversationMutation, useAddMessageToConversationMutation } from "@renderer/lib/queries"
 import { PanelDragBar } from "@renderer/components/panel-drag-bar"
@@ -106,28 +105,6 @@ export function Component() {
     const entry = Array.from(agentProgressById?.values() ?? []).find(p => p && !p.isSnoozed)
     return entry || null
   }, [agentProgress, agentProgressById])
-
-  useEffect(() => {
-    logUI('[Panel] agentProgress changed:', {
-      hasProgress: !!agentProgress,
-      sessionId: agentProgress?.sessionId,
-      focusedSessionId,
-      totalSessions: agentProgressById.size,
-      activeSessionCount,
-      hasMultipleSessions,
-      allSessionIds: Array.from(agentProgressById.keys())
-    })
-  }, [agentProgress, focusedSessionId, agentProgressById.size, activeSessionCount, hasMultipleSessions])
-
-  useEffect(() => {
-    logUI('[Panel] recording state changed:', {
-      recording,
-      anyActiveNonSnoozed,
-      anyVisibleSessions,
-      showTextInput,
-      mcpMode
-    })
-  }, [recording, anyActiveNonSnoozed, anyVisibleSessions, showTextInput, mcpMode])
 
   const configQuery = useConfigQuery()
   const isDragEnabled = (configQuery.data as any)?.panelDragEnabled ?? true
@@ -480,7 +457,6 @@ export function Component() {
   useEffect(() => {
     const unlisten = rendererHandlers.showTextInput.listen((data) => {
       // Reset any previous pending state to ensure textarea is enabled
-      logUI('[Panel] showTextInput received: resetting text input mutations and enabling textarea')
       textInputMutation.reset()
       mcpTextInputMutation.reset()
 
@@ -619,7 +595,6 @@ export function Component() {
       targetMode = "agent"
       // When switching to agent mode, stop any ongoing recording
       if (recordingRef.current) {
-        logUI('[Panel] Switching to agent mode - stopping ongoing recording')
         isConfirmedRef.current = false
         setRecording(false)
         recordingRef.current = false
@@ -649,21 +624,6 @@ export function Component() {
   // 2. mcpTextInputMutation.onSuccess/onError also hide it (lines 194, 204)
   // 3. Hiding on ANY agentProgress change would close text input when background
   //    sessions get updates, which breaks the UX when user is typing
-
-  // Debug: Log overlay visibility conditions
-  useEffect(() => {
-    logUI('[Panel] Overlay visibility check:', {
-      hasAgentProgress: !!agentProgress,
-      mcpTranscribePending: mcpTranscribeMutation.isPending,
-      shouldShowOverlay: anyVisibleSessions && !recording,
-      anyVisibleSessions,
-      recording,
-      anyActiveNonSnoozed,
-      agentProgressSessionId: agentProgress?.sessionId,
-      agentProgressComplete: agentProgress?.isComplete,
-      agentProgressSnoozed: agentProgress?.isSnoozed
-    })
-  }, [agentProgress, anyActiveNonSnoozed, anyVisibleSessions, recording, mcpTranscribeMutation.isPending])
 
   // Clear agent progress handler
   useEffect(() => {

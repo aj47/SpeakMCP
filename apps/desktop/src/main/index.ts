@@ -21,6 +21,7 @@ import { diagnosticsService } from "./diagnostics"
 
 import { configStore } from "./config"
 import { startRemoteServer } from "./remote-server"
+import { acpService } from "./acp-service"
 
 // Enable CDP remote debugging port if REMOTE_DEBUGGING_PORT env variable is set
 // This must be called before app.whenReady()
@@ -98,8 +99,11 @@ app.whenReady().then(() => {
 
   if (accessibilityGranted) {
     // Check if onboarding has been completed
+    // Skip for existing users who have already configured models (pre-onboarding installs)
     const cfg = configStore.get()
-    const needsOnboarding = !cfg.onboardingCompleted
+    const hasCustomPresets = cfg.modelPresets && cfg.modelPresets.length > 0
+    const hasSelectedPreset = cfg.currentModelPresetId !== undefined
+    const needsOnboarding = !cfg.onboardingCompleted && !hasCustomPresets && !hasSelectedPreset
 
     if (needsOnboarding) {
       createMainWindow({ url: "/onboarding" })
@@ -136,6 +140,16 @@ app.whenReady().then(() => {
       logApp("Failed to initialize MCP service on startup:", error)
     })
 
+  // Initialize ACP service (spawns auto-start agents)
+  acpService
+    .initialize()
+    .then(() => {
+      logApp("ACP service initialized successfully")
+    })
+    .catch((error) => {
+      logApp("Failed to initialize ACP service:", error)
+    })
+
 	  try {
 	    const cfg = configStore.get()
 	    if (cfg.remoteServerEnabled) {
@@ -161,8 +175,11 @@ app.whenReady().then(() => {
     if (accessibilityGranted) {
       if (!WINDOWS.get("main")) {
         // Check if onboarding has been completed
+        // Skip for existing users who have already configured models (pre-onboarding installs)
         const cfg = configStore.get()
-        const needsOnboarding = !cfg.onboardingCompleted
+        const hasCustomPresets = cfg.modelPresets && cfg.modelPresets.length > 0
+        const hasSelectedPreset = cfg.currentModelPresetId !== undefined
+        const needsOnboarding = !cfg.onboardingCompleted && !hasCustomPresets && !hasSelectedPreset
 
         if (needsOnboarding) {
           createMainWindow({ url: "/onboarding" })
@@ -179,6 +196,10 @@ app.whenReady().then(() => {
 
   app.on("before-quit", () => {
     makePanelWindowClosable()
+    // Shutdown ACP agents gracefully
+    acpService.shutdown().catch((error) => {
+      console.error('[App] Error shutting down ACP service:', error)
+    })
   })
 })
 

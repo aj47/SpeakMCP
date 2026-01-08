@@ -9,6 +9,8 @@
  * import from services that might also need access to these definitions.
  */
 
+import { acpRouterToolDefinitions } from './acp/acp-router-tool-definitions'
+
 // Define a local type to avoid importing from mcp-service
 export interface BuiltinToolDefinition {
   name: string
@@ -167,6 +169,13 @@ export const builtinToolDefinitions: BuiltinToolDefinition[] = [
       required: [],
     },
   },
+  // ACP router tools for agent delegation
+  // NOTE: These tools use a different prefix (speakmcp-builtin:) than the settings tools
+  // above (speakmcp-settings:). This is intentional - agent delegation tools are logically
+  // distinct from settings management. Both are treated as built-in tools for execution
+  // purposes (see isBuiltinTool in builtin-tools.ts). For UI grouping, all tools in this
+  // array are shown under the "speakmcp-settings" virtual server.
+  ...acpRouterToolDefinitions,
 ]
 
 /**

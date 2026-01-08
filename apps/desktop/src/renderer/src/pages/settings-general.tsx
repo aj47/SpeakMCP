@@ -762,6 +762,56 @@ export function Component() {
 
         {/* Agent Settings */}
         <ControlGroup title="Agent Settings">
+          {/* Main Agent Mode Selection */}
+          <Control label={<ControlLabel label="Main Agent Mode" tooltip="Choose how the main agent processes your requests. API mode uses external LLM APIs (OpenAI, Groq, Gemini). ACP mode routes prompts to a configured ACP agent like Claude Code." />} className="px-3">
+            <Select
+              value={configQuery.data?.mainAgentMode || "api"}
+              onValueChange={(value: "api" | "acp") => {
+                saveConfig({ mainAgentMode: value })
+              }}
+            >
+              <SelectTrigger className="w-[200px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="api">API (OpenAI, Groq, Gemini)</SelectItem>
+                <SelectItem value="acp">ACP Agent</SelectItem>
+              </SelectContent>
+            </Select>
+          </Control>
+
+          {configQuery.data?.mainAgentMode === "acp" && (
+            <>
+              <Control label={<ControlLabel label="ACP Agent" tooltip="Select which configured ACP agent to use as the main agent. The agent must be configured in the ACP Agents settings page." />} className="px-3">
+                <Select
+                  value={configQuery.data?.mainAgentName || ""}
+                  onValueChange={(value: string) => {
+                    saveConfig({ mainAgentName: value })
+                  }}
+                >
+                  <SelectTrigger className="w-[200px]">
+                    <SelectValue placeholder="Select an agent..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(configQuery.data?.acpAgents || [])
+                      .filter(agent => agent.enabled !== false)
+                      .map(agent => (
+                        <SelectItem key={agent.name} value={agent.name}>
+                          {agent.displayName || agent.name}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </Control>
+
+              {configQuery.data?.mainAgentName && (
+                <div className="px-3 py-2 text-sm text-muted-foreground bg-muted/30 rounded-md mx-3 mb-2">
+                  <span className="font-medium">Note:</span> When using ACP mode, the agent will use its own MCP tools and LLM, not SpeakMCP's configured providers and tools.
+                </div>
+              )}
+            </>
+          )}
+
           <Control label={<ControlLabel label="Message Queuing" tooltip="Allow queueing messages while the agent is processing. Messages will be processed in order after the current task completes." />} className="px-3">
             <Switch
               checked={configQuery.data?.mcpMessageQueueEnabled ?? true}

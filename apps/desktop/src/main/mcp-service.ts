@@ -36,7 +36,7 @@ import { diagnosticsService } from "./diagnostics"
 import { state, agentProcessManager } from "./state"
 import { OAuthClient } from "./oauth-client"
 import { oauthStorage } from "./oauth-storage"
-import { isDebugTools, logTools } from "./debug"
+import { isDebugTools, logTools, logMCP } from "./debug"
 import { app, dialog } from "electron"
 import { builtinTools, executeBuiltinTool, isBuiltinTool, BUILTIN_SERVER_NAME } from "./builtin-tools"
 
@@ -1301,9 +1301,22 @@ export class MCPService {
           arguments: processedArguments,
         })
       }
+
+      // Log complete MCP request
+      logMCP("REQUEST", serverName, {
+        tool: toolName,
+        arguments: processedArguments,
+      })
+
       const result = await client.callTool({
         name: toolName,
         arguments: processedArguments,
+      })
+
+      // Log complete MCP response
+      logMCP("RESPONSE", serverName, {
+        tool: toolName,
+        result: result,
       })
 
       if (isDebugTools()) {
@@ -1379,10 +1392,26 @@ export class MCPService {
                   correctedArgs,
                 })
               }
+
+              // Log retry MCP request
+              logMCP("REQUEST", serverName, {
+                tool: toolName,
+                arguments: correctedArgs,
+                retry: true,
+              })
+
               const retryResult = await client.callTool({
                 name: toolName,
                 arguments: correctedArgs,
               })
+
+              // Log retry MCP response
+              logMCP("RESPONSE", serverName, {
+                tool: toolName,
+                result: retryResult,
+                retry: true,
+              })
+
               if (isDebugTools()) {
                 logTools("Retry result", { serverName, toolName, retryResult })
               }
@@ -2275,6 +2304,7 @@ export class MCPService {
     toolCall: MCPToolCall,
     onProgress?: (message: string) => void,
     skipApprovalCheck: boolean = false,
+    sessionId?: string,
     profileMcpConfig?: ProfileMcpServerConfig
   ): Promise<MCPToolResult> {
     try {
@@ -2322,7 +2352,7 @@ export class MCPService {
         if (isDebugTools()) {
           logTools("Executing built-in tool", { name: toolCall.name, arguments: toolCall.arguments })
         }
-        const result = await executeBuiltinTool(toolCall.name, toolCall.arguments || {})
+        const result = await executeBuiltinTool(toolCall.name, toolCall.arguments || {}, sessionId)
         if (result) {
           if (isDebugTools()) {
             logTools("Built-in tool result", { name: toolCall.name, result })
@@ -2420,7 +2450,7 @@ export class MCPService {
       if (matchingTool && matchingTool.name.includes(":")) {
         // Check if it's a built-in tool
         if (isBuiltinTool(matchingTool.name)) {
-          const result = await executeBuiltinTool(matchingTool.name, toolCall.arguments || {})
+          const result = await executeBuiltinTool(matchingTool.name, toolCall.arguments || {}, sessionId)
           if (result) {
             return result
           }

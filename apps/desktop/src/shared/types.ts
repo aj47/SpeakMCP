@@ -516,7 +516,7 @@ export type Config = {
   // MCP Tool Calling Configuration
   /** @deprecated MCP tools are now always enabled. This field is kept for backwards compatibility but ignored. */
   mcpToolsEnabled?: boolean
-  mcpToolsShortcut?: "hold-ctrl-alt" | "ctrl-alt-slash" | "custom"
+  mcpToolsShortcut?: "hold-ctrl-alt" | "toggle-ctrl-alt" | "ctrl-alt-slash" | "custom"
   customMcpToolsShortcut?: string
   customMcpToolsShortcutMode?: "hold" | "toggle" // Mode for custom MCP tools shortcut
   mcpToolsProviderId?: CHAT_PROVIDER_ID
@@ -574,6 +574,11 @@ export type Config = {
   // When false, the floating panel will not automatically appear during agent sessions
   // Users can still manually access the panel via hotkeys, tray menu, or UI
   floatingPanelAutoShow?: boolean
+
+  // Hide Floating Panel When Main App is Focused
+  // When true (default), the floating panel will automatically hide when the main SpeakMCP window is focused
+  // The panel will reappear when the main window loses focus (if auto-show conditions are met)
+  hidePanelWhenMainFocused?: boolean
 
   // API Retry Configuration
   apiRetryCount?: number
@@ -638,6 +643,10 @@ export type Config = {
 
   // Name of the ACP agent to use when mainAgentMode is "acp"
   mainAgentName?: string
+
+  // Streamer Mode Configuration
+  // When enabled, hides sensitive information (phone numbers, QR codes, API keys) for screen sharing
+  streamerModeEnabled?: boolean
 }
 
 

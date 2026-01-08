@@ -121,6 +121,8 @@ export function Component() {
       const shortcut = config.mcpToolsShortcut
       if (shortcut === "hold-ctrl-alt") {
         return "Release keys"
+      } else if (shortcut === "toggle-ctrl-alt") {
+        return "Ctrl+Alt"
       } else if (shortcut === "ctrl-alt-slash") {
         return "Ctrl+Alt+/"
       } else if (shortcut === "custom" && config.customMcpToolsShortcut) {
@@ -334,7 +336,9 @@ export function Component() {
     recorder.on("record-start", () => {
       setRecording(true)
       recordingRef.current = true
-      tipcClient.recordEvent({ type: "start" })
+      // Pass mcpMode to main process so it knows we're in MCP toggle mode
+      // This is critical for preventing panel close on key release in toggle mode
+      tipcClient.recordEvent({ type: "start", mcpMode: mcpModeRef.current })
     })
 
     recorder.on("visualizer-data", (rms) => {
@@ -846,7 +850,11 @@ export function Component() {
                       <span>Submit</span>
                     </button>
                     <span className="text-xs text-muted-foreground">
-                      or press <kbd className="px-1.5 py-0.5 rounded bg-muted text-foreground font-mono text-xs">{getSubmitShortcutText}</kbd>
+                      {getSubmitShortcutText.toLowerCase().startsWith("release") ? (
+                        <>or <kbd className="px-1.5 py-0.5 rounded bg-muted text-foreground font-mono text-xs">{getSubmitShortcutText}</kbd></>
+                      ) : (
+                        <>or press <kbd className="px-1.5 py-0.5 rounded bg-muted text-foreground font-mono text-xs">{getSubmitShortcutText}</kbd></>
+                      )}
                     </span>
                   </div>
                 </div>

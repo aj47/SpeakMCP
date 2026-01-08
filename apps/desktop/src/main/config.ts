@@ -113,6 +113,8 @@ const getConfig = () => {
     panelTextInputModeSize: undefined,
     // Floating panel auto-show - when true, panel auto-shows during agent sessions
     floatingPanelAutoShow: true,
+    // Hide floating panel when main app is focused (default: enabled)
+    hidePanelWhenMainFocused: true,
     // Theme preference defaults
     themePreference: "system",
 
@@ -189,6 +191,9 @@ const getConfig = () => {
     whatsappAllowFrom: [],
     whatsappAutoReply: false,
     whatsappLogMessages: false,
+
+    // Streamer Mode - hides sensitive info for screen sharing
+    streamerModeEnabled: false,
 
   }
 

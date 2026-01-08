@@ -6,29 +6,24 @@ import { useAgentStore } from "@renderer/stores"
 import { SessionGrid, SessionTileWrapper } from "@renderer/components/session-grid"
 import { clearPersistedSize } from "@renderer/hooks/use-resizable"
 import { AgentProgress } from "@renderer/components/agent-progress"
-import { MessageCircle, Mic, Plus, Calendar, Trash2, Search, ChevronDown, FolderOpen, CheckCircle2, LayoutGrid, Kanban, RotateCcw } from "lucide-react"
+import { MessageCircle, Mic, Plus, CheckCircle2, LayoutGrid, Kanban, RotateCcw, Keyboard } from "lucide-react"
 import { Button } from "@renderer/components/ui/button"
-import { Input } from "@renderer/components/ui/input"
-import { Card, CardContent } from "@renderer/components/ui/card"
-import { Badge } from "@renderer/components/ui/badge"
-import { useConversationHistoryQuery, useDeleteConversationMutation, useDeleteAllConversationsMutation } from "@renderer/lib/queries"
-import { ConversationHistoryItem, AgentProgressUpdate } from "@shared/types"
+import { AgentProgressUpdate } from "@shared/types"
 import { cn } from "@renderer/lib/utils"
 import { toast } from "sonner"
 import { SessionsKanban } from "@renderer/components/sessions-kanban"
-import { SessionViewMode } from "@renderer/stores"
-import dayjs from "dayjs"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@renderer/components/ui/dialog"
 import { PredefinedPromptsMenu } from "@renderer/components/predefined-prompts-menu"
+import { useConfigQuery } from "@renderer/lib/query-client"
+import { getMcpToolsShortcutDisplay, getTextInputShortcutDisplay, getDictationShortcutDisplay } from "@shared/key-utils"
 
-function EmptyState({ onTextClick, onVoiceClick, onSelectPrompt }: { onTextClick: () => void; onVoiceClick: () => void; onSelectPrompt: (content: string) => void }) {
+function EmptyState({ onTextClick, onVoiceClick, onSelectPrompt, textInputShortcut, voiceInputShortcut, dictationShortcut }: {
+  onTextClick: () => void
+  onVoiceClick: () => void
+  onSelectPrompt: (content: string) => void
+  textInputShortcut: string
+  voiceInputShortcut: string
+  dictationShortcut: string
+}) {
   return (
     <div className="flex flex-col items-center justify-center p-8 text-center">
       <div className="rounded-full bg-muted p-4 mb-4">
@@ -38,25 +33,46 @@ function EmptyState({ onTextClick, onVoiceClick, onSelectPrompt }: { onTextClick
       <p className="text-muted-foreground mb-6 max-w-md">
         Start a new agent session using text or voice input. Your sessions will appear here as tiles.
       </p>
-      <div className="flex gap-3 items-center">
-        <Button onClick={onTextClick} className="gap-2">
-          <Plus className="h-4 w-4" />
-          Start with Text
-        </Button>
-        <Button variant="secondary" onClick={onVoiceClick} className="gap-2">
-          <Mic className="h-4 w-4" />
-          Start with Voice
-        </Button>
-        <PredefinedPromptsMenu
-          onSelectPrompt={onSelectPrompt}
-        />
+      <div className="flex flex-col items-center gap-4">
+        <div className="flex gap-3 items-center">
+          <Button onClick={onTextClick} className="gap-2">
+            <Plus className="h-4 w-4" />
+            Start with Text
+          </Button>
+          <Button variant="secondary" onClick={onVoiceClick} className="gap-2">
+            <Mic className="h-4 w-4" />
+            Start with Voice
+          </Button>
+          <PredefinedPromptsMenu
+            onSelectPrompt={onSelectPrompt}
+          />
+        </div>
+        {/* Keybind hints */}
+        <div className="flex items-center gap-4 text-sm text-muted-foreground">
+          <div className="flex items-center gap-2">
+            <Keyboard className="h-4 w-4" />
+            <span>Text:</span>
+            <kbd className="px-2 py-0.5 text-xs font-semibold bg-muted border rounded">
+              {textInputShortcut}
+            </kbd>
+          </div>
+          <div className="flex items-center gap-2">
+            <span>Voice:</span>
+            <kbd className="px-2 py-0.5 text-xs font-semibold bg-muted border rounded">
+              {voiceInputShortcut}
+            </kbd>
+          </div>
+          <div className="flex items-center gap-2">
+            <span>Dictation:</span>
+            <kbd className="px-2 py-0.5 text-xs font-semibold bg-muted border rounded">
+              {dictationShortcut}
+            </kbd>
+          </div>
+        </div>
       </div>
     </div>
   )
 }
-
-const INITIAL_PAST_SESSIONS = 10
-const LOAD_MORE_INCREMENT = 10
 
 export function Component() {
   const queryClient = useQueryClient()
@@ -69,17 +85,17 @@ export function Component() {
   const viewMode = useAgentStore((s) => s.viewMode)
   const setViewMode = useAgentStore((s) => s.setViewMode)
 
+  // Get config for shortcut displays
+  const configQuery = useConfigQuery()
+  const textInputShortcut = getTextInputShortcutDisplay(configQuery.data?.textInputShortcut, configQuery.data?.customTextInputShortcut)
+  const voiceInputShortcut = getMcpToolsShortcutDisplay(configQuery.data?.mcpToolsShortcut, configQuery.data?.customMcpToolsShortcut)
+  const dictationShortcut = getDictationShortcutDisplay(configQuery.data?.shortcut, configQuery.data?.customShortcut)
+
   const [sessionOrder, setSessionOrder] = useState<string[]>([])
   const [draggedSessionId, setDraggedSessionId] = useState<string | null>(null)
   const [dragTargetIndex, setDragTargetIndex] = useState<number | null>(null)
   const [collapsedSessions, setCollapsedSessions] = useState<Record<string, boolean>>({})
-  const [pastSessionsExpanded, setPastSessionsExpanded] = useState(true)
-  const [pastSessionsCount, setPastSessionsCount] = useState(INITIAL_PAST_SESSIONS)
-  const [searchQuery, setSearchQuery] = useState("")
-  const [showDeleteAllDialog, setShowDeleteAllDialog] = useState(false)
   const [tileResetKey, setTileResetKey] = useState(0)
-  const deleteConversationMutation = useDeleteConversationMutation()
-  const deleteAllConversationsMutation = useDeleteAllConversationsMutation()
 
   const sessionRefs = useRef<Record<string, HTMLDivElement | null>>({})
 
@@ -134,54 +150,6 @@ export function Component() {
 
   // State for pending conversation continuation (user selected a conversation to continue)
   const [pendingConversationId, setPendingConversationId] = useState<string | null>(null)
-
-  // Fetch all conversations from history
-  const conversationHistoryQuery = useConversationHistoryQuery()
-
-  // Filter and group past sessions for display
-  const filteredHistory = useMemo(() => {
-    if (!conversationHistoryQuery.data) return []
-    return conversationHistoryQuery.data.filter(
-      (historyItem) =>
-        historyItem.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        historyItem.preview.toLowerCase().includes(searchQuery.toLowerCase()),
-    )
-  }, [conversationHistoryQuery.data, searchQuery])
-
-  // Group history by date for display
-  const groupedHistory = useMemo(() => {
-    const groups = new Map<string, ConversationHistoryItem[]>()
-    const today = dayjs().format("YYYY-MM-DD")
-    const yesterday = dayjs().subtract(1, "day").format("YYYY-MM-DD")
-
-    // Take only the number we want to show (lazy loading)
-    const visibleItems = filteredHistory.slice(0, pastSessionsCount)
-
-    for (const historyItem of visibleItems) {
-      const date = dayjs(historyItem.updatedAt).format("YYYY-MM-DD")
-      let groupKey: string
-
-      if (date === today) {
-        groupKey = "Today"
-      } else if (date === yesterday) {
-        groupKey = "Yesterday"
-      } else {
-        groupKey = dayjs(historyItem.updatedAt).format("MMM D, YYYY")
-      }
-
-      const items = groups.get(groupKey) || []
-      items.push(historyItem)
-      groups.set(groupKey, items)
-    }
-
-    return Array.from(groups.entries()).map(([date, items]) => ({
-      date,
-      items: items.sort((a, b) => b.updatedAt - a.updatedAt),
-    }))
-  }, [filteredHistory, pastSessionsCount])
-
-  // Check if there are more items to load
-  const hasMorePastSessions = filteredHistory.length > pastSessionsCount
 
   // Handle route parameter for deep-linking to specific session
   // When navigating to /:id, focus the active session tile or create a new tile for past sessions
@@ -360,39 +328,6 @@ export function Component() {
     setDragTargetIndex(null)
   }, [draggedSessionId, dragTargetIndex, allProgressEntries])
 
-  // Past sessions handlers
-  const handleLoadMore = useCallback(() => {
-    setPastSessionsCount(prev => prev + LOAD_MORE_INCREMENT)
-  }, [])
-
-  const handleDeleteHistoryItem = async (historyItemId: string) => {
-    try {
-      await deleteConversationMutation.mutateAsync(historyItemId)
-      toast.success("Session deleted")
-    } catch (error) {
-      toast.error("Failed to delete session")
-    }
-  }
-
-  const handleDeleteAllHistory = async () => {
-    try {
-      await deleteAllConversationsMutation.mutateAsync()
-      toast.success("All history deleted")
-      setShowDeleteAllDialog(false)
-    } catch (error) {
-      toast.error("Failed to delete history")
-    }
-  }
-
-  const handleOpenHistoryFolder = async () => {
-    try {
-      await tipcClient.openConversationsFolder()
-      toast.success("History folder opened")
-    } catch (error) {
-      toast.error("Failed to open history folder")
-    }
-  }
-
   const handleClearInactiveSessions = async () => {
     try {
       await tipcClient.clearInactiveSessions()
@@ -419,7 +354,14 @@ export function Component() {
       <div className="flex-1 overflow-y-auto scrollbar-hide-until-hover">
         {/* Show empty state when no sessions and no pending */}
         {allProgressEntries.length === 0 && !pendingProgress ? (
-          <EmptyState onTextClick={handleTextClick} onVoiceClick={handleVoiceStart} onSelectPrompt={handleSelectPrompt} />
+          <EmptyState
+            onTextClick={handleTextClick}
+            onVoiceClick={handleVoiceStart}
+            onSelectPrompt={handleSelectPrompt}
+            textInputShortcut={textInputShortcut}
+            voiceInputShortcut={voiceInputShortcut}
+            dictationShortcut={dictationShortcut}
+          />
         ) : (
           <>
             {/* Header with start buttons, view toggle, and clear inactive button */}
@@ -436,6 +378,28 @@ export function Component() {
                 <PredefinedPromptsMenu
                   onSelectPrompt={handleSelectPrompt}
                 />
+                {/* Keybind hints */}
+                <div className="flex items-center gap-3 text-xs text-muted-foreground ml-2">
+                  <div className="flex items-center gap-1.5">
+                    <Keyboard className="h-3.5 w-3.5" />
+                    <span>Text:</span>
+                    <kbd className="px-1.5 py-0.5 text-xs font-semibold bg-muted border rounded">
+                      {textInputShortcut}
+                    </kbd>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span>Voice:</span>
+                    <kbd className="px-1.5 py-0.5 text-xs font-semibold bg-muted border rounded">
+                      {voiceInputShortcut}
+                    </kbd>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span>Dictation:</span>
+                    <kbd className="px-1.5 py-0.5 text-xs font-semibold bg-muted border rounded">
+                      {dictationShortcut}
+                    </kbd>
+                  </div>
+                </div>
               </div>
               <div className="flex items-center gap-2">
                 {/* View mode toggle */}
@@ -563,186 +527,8 @@ export function Component() {
           </>
         )}
 
-        {/* Past Sessions Section - always shown with lazy loading */}
-        <div className="border-t">
-          <div className="px-4 py-3 flex items-center justify-between bg-muted/30">
-            <button
-              onClick={() => setPastSessionsExpanded(!pastSessionsExpanded)}
-              className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <ChevronDown className={cn("h-4 w-4 transition-transform", !pastSessionsExpanded && "-rotate-90")} />
-              <Calendar className="h-4 w-4" />
-              <span>Past Sessions</span>
-              {conversationHistoryQuery.data && (
-                <Badge variant="secondary" className="text-xs">
-                  {conversationHistoryQuery.data.length}
-                </Badge>
-              )}
-            </button>
-            <div className="flex items-center gap-2">
-              {pastSessionsExpanded && (
-                <>
-                  <div className="relative">
-                    <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                    <Input
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      placeholder="Search..."
-                      className="w-40 h-7 pl-7 text-xs"
-                    />
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleOpenHistoryFolder}
-                    className="h-7 w-7 p-0"
-                    title="Open history folder"
-                  >
-                    <FolderOpen className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setShowDeleteAllDialog(true)}
-                    className="h-7 w-7 p-0 text-red-500 hover:text-red-600"
-                    title="Delete all history"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
-                </>
-              )}
-            </div>
-          </div>
-
-          {pastSessionsExpanded && (
-            <div className="px-4 py-4">
-              {groupedHistory.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  {searchQuery ? "No matching sessions" : "No past sessions yet"}
-                </div>
-              ) : (
-                <div className="space-y-6">
-                  {groupedHistory.map(({ date, items }) => (
-                    <div key={date}>
-                      <h4 className="mb-3 flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                        <Calendar className="h-4 w-4" />
-                        {date}
-                      </h4>
-                      <div className="space-y-2">
-                        {items.map((historyItem) => (
-                          <PastSessionCard
-                            key={historyItem.id}
-                            conversation={historyItem}
-                            onOpen={() => handleContinueConversation(historyItem.id)}
-                            onDelete={() => handleDeleteHistoryItem(historyItem.id)}
-                            isDeleting={deleteConversationMutation.isPending}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-
-                  {/* Load more button */}
-                  {hasMorePastSessions && (
-                    <div className="flex justify-center pt-4">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={handleLoadMore}
-                        className="gap-2"
-                      >
-                        <ChevronDown className="h-4 w-4" />
-                        Load More ({filteredHistory.length - pastSessionsCount} remaining)
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
       </div>
-
-      {/* Delete All Confirmation Dialog */}
-      <Dialog open={showDeleteAllDialog} onOpenChange={setShowDeleteAllDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete All History</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete all session history? This action cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowDeleteAllDialog(false)}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleDeleteAllHistory}
-              disabled={deleteAllConversationsMutation.isPending}
-            >
-              {deleteAllConversationsMutation.isPending ? "Deleting..." : "Delete All"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
-  )
-}
-
-/** Card for a past session in the history list - clicking opens as a new tile */
-interface PastSessionCardProps {
-  conversation: ConversationHistoryItem
-  onOpen: () => void
-  onDelete: () => void
-  isDeleting: boolean
-}
-
-function PastSessionCard({
-  conversation,
-  onOpen,
-  onDelete,
-  isDeleting,
-}: PastSessionCardProps) {
-  return (
-    <Card
-      className={cn(
-        "cursor-pointer transition-all hover:shadow-md hover:border-primary/50",
-      )}
-      onClick={onOpen}
-    >
-      <CardContent className="p-4">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <h3 className="mb-1 truncate font-medium">{conversation.title}</h3>
-            <p className="mb-2 line-clamp-2 text-sm text-muted-foreground">
-              {conversation.preview}
-            </p>
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <Badge variant="secondary" className="text-xs">
-                {conversation.messageCount} messages
-              </Badge>
-              <span>•</span>
-              <span>
-                {dayjs(conversation.updatedAt).format("MMM D, h:mm A")}
-              </span>
-            </div>
-          </div>
-          <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onDelete}
-              disabled={isDeleting}
-              className="h-8 w-8 p-0 text-red-500 hover:text-red-600"
-              title="Delete session"
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
   )
 }
 

@@ -211,3 +211,78 @@ export function getEffectiveShortcut(
   }
   return shortcutType
 }
+
+/**
+ * Get the display string for the agent mode (MCP tools) shortcut.
+ * This provides a centralized mapping to ensure consistency across UI components
+ * that display the currently active shortcut (e.g., sessions page hints, onboarding).
+ * Note: Settings dropdown labels use hardcoded strings since they show all available options.
+ */
+export function getMcpToolsShortcutDisplay(
+  shortcut: "hold-ctrl-alt" | "toggle-ctrl-alt" | "ctrl-alt-slash" | "custom" | undefined,
+  customShortcut?: string,
+): string {
+  switch (shortcut) {
+    case "hold-ctrl-alt":
+      return "Hold Ctrl+Alt"
+    case "toggle-ctrl-alt":
+      return "Press Ctrl+Alt"
+    case "ctrl-alt-slash":
+      return "Ctrl+Alt+/"
+    case "custom":
+      if (customShortcut) {
+        return formatKeyComboForDisplay(customShortcut)
+      }
+      return "Hold Ctrl+Alt"
+    default:
+      return "Hold Ctrl+Alt"
+  }
+}
+
+/**
+ * Get the display string for the text input shortcut.
+ * This provides a centralized mapping to ensure consistency across UI components.
+ */
+export function getTextInputShortcutDisplay(
+  shortcut: "ctrl-t" | "ctrl-shift-t" | "alt-t" | "custom" | undefined,
+  customShortcut?: string,
+): string {
+  switch (shortcut) {
+    case "ctrl-t":
+      return "Ctrl+T"
+    case "ctrl-shift-t":
+      return "Ctrl+Shift+T"
+    case "alt-t":
+      return "Alt+T"
+    case "custom":
+      if (customShortcut) {
+        return formatKeyComboForDisplay(customShortcut)
+      }
+      return "Ctrl+T"
+    default:
+      return "Ctrl+T"
+  }
+}
+
+/**
+ * Get the display string for the dictation (recording) shortcut.
+ * This provides a centralized mapping to ensure consistency across UI components.
+ */
+export function getDictationShortcutDisplay(
+  shortcut: "hold-ctrl" | "ctrl-slash" | "custom" | undefined,
+  customShortcut?: string,
+): string {
+  switch (shortcut) {
+    case "hold-ctrl":
+      return "Hold Ctrl"
+    case "ctrl-slash":
+      return "Ctrl+/"
+    case "custom":
+      if (customShortcut) {
+        return formatKeyComboForDisplay(customShortcut)
+      }
+      return "Hold Ctrl"
+    default:
+      return "Hold Ctrl"
+  }
+}

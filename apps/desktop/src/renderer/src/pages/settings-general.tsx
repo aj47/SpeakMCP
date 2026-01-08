@@ -136,6 +136,23 @@ export function Component() {
               }}
             />
           </Control>
+
+          <Control label={<ControlLabel label="Streamer Mode" tooltip="Hide sensitive information (phone numbers, QR codes, API keys) when streaming or sharing your screen" />} className="px-3">
+            <Switch
+              defaultChecked={configQuery.data.streamerModeEnabled ?? false}
+              onCheckedChange={(value) => {
+                saveConfig({
+                  streamerModeEnabled: value,
+                })
+              }}
+            />
+          </Control>
+          {configQuery.data.streamerModeEnabled && (
+            <div className="px-3 py-2 text-xs text-amber-600 dark:text-amber-400 flex items-center gap-2">
+              <span className="i-mingcute-eye-off-line h-4 w-4" />
+              <span>Streamer Mode is active - sensitive information is hidden</span>
+            </div>
+          )}
         </ControlGroup>
 
         <ControlGroup title="Appearance">
@@ -410,7 +427,7 @@ export function Component() {
             <div className="space-y-2">
               <Select
                 value={configQuery.data?.mcpToolsShortcut || "hold-ctrl-alt"}
-                onValueChange={(value: "hold-ctrl-alt" | "ctrl-alt-slash" | "custom") => {
+                onValueChange={(value: "hold-ctrl-alt" | "toggle-ctrl-alt" | "ctrl-alt-slash" | "custom") => {
                   saveConfig({ mcpToolsShortcut: value })
                 }}
               >
@@ -419,6 +436,7 @@ export function Component() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="hold-ctrl-alt">Hold Ctrl+Alt</SelectItem>
+                  <SelectItem value="toggle-ctrl-alt">Toggle Ctrl+Alt</SelectItem>
                   <SelectItem value="ctrl-alt-slash">Ctrl+Alt+/</SelectItem>
                   <SelectItem value="custom">Custom</SelectItem>
                 </SelectContent>
@@ -724,6 +742,17 @@ export function Component() {
               onCheckedChange={(value) => {
                 saveConfig({
                   floatingPanelAutoShow: value,
+                })
+              }}
+            />
+          </Control>
+
+          <Control label={<ControlLabel label="Hide Panel When Main App Focused" tooltip="When enabled, the floating panel automatically hides when the main SpeakMCP window is focused. The panel reappears when the main window loses focus." />} className="px-3">
+            <Switch
+              checked={configQuery.data?.hidePanelWhenMainFocused !== false}
+              onCheckedChange={(value) => {
+                saveConfig({
+                  hidePanelWhenMainFocused: value,
                 })
               }}
             />

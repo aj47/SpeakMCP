@@ -7,8 +7,8 @@ import { SettingsDragBar } from "@renderer/components/settings-drag-bar"
 import { ActiveAgentsSidebar } from "@renderer/components/active-agents-sidebar"
 import { SidebarProfileSelector } from "@renderer/components/sidebar-profile-selector"
 import { useSidebar, SIDEBAR_DIMENSIONS } from "@renderer/hooks/use-sidebar"
-import { PanelLeftClose, PanelLeft } from "lucide-react"
 import { useConfigQuery } from "@renderer/lib/query-client"
+import { PanelLeftClose, PanelLeft } from "lucide-react"
 
 type NavLinkItem = {
   text: string
@@ -22,23 +22,6 @@ export const Component = () => {
   const [settingsExpanded, setSettingsExpanded] = useState(true)
   const { isCollapsed, width, isResizing, toggleCollapse, handleResizeStart } = useSidebar()
   const configQuery = useConfigQuery()
-
-  // Redirect to onboarding if not completed
-  // Skip for existing users who have already configured models (pre-onboarding installs)
-  useEffect(() => {
-    if (configQuery.data) {
-      // Check for existing model configuration using the correct config properties
-      // Users with custom modelPresets or a non-default currentModelPresetId are considered existing users
-      const hasCustomPresets = configQuery.data.modelPresets &&
-        configQuery.data.modelPresets.length > 0
-      const hasSelectedPreset = configQuery.data.currentModelPresetId !== undefined
-
-      // Only redirect to onboarding for truly new users (no existing config)
-      if (!configQuery.data.onboardingCompleted && !hasCustomPresets && !hasSelectedPreset) {
-        navigate("/onboarding")
-      }
-    }
-  }, [configQuery.data, navigate])
 
   const settingsNavLinks: NavLinkItem[] = [
     {
@@ -230,7 +213,7 @@ export const Component = () => {
 
         {/* Sessions Section - shows sessions list, scrollable to bottom */}
         {!isCollapsed && (
-          <div className="mt-2 min-h-0 flex-1 overflow-y-auto">
+          <div className="mt-2 min-h-0 flex-1 overflow-y-auto scrollbar-none">
             <ActiveAgentsSidebar />
           </div>
         )}

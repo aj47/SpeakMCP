@@ -1,11 +1,29 @@
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, useMemo } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { tipcClient, rendererHandlers } from "@renderer/lib/tipc-client"
-import { Activity, ChevronDown, ChevronRight, X, Minimize2, Maximize2, Shield } from "lucide-react"
+import { ChevronDown, ChevronRight, X, Minimize2, Maximize2, CheckCircle2, Trash2, Clock, Loader2, Search, FolderOpen, AlertTriangle } from "lucide-react"
 import { cn } from "@renderer/lib/utils"
 import { useAgentStore } from "@renderer/stores"
 import { logUI, logStateChange, logExpand } from "@renderer/lib/debug"
 import { useNavigate } from "react-router-dom"
+import { useConversationHistoryQuery, useDeleteConversationMutation, useDeleteAllConversationsMutation } from "@renderer/lib/queries"
+import { Input } from "@renderer/components/ui/input"
+import { Button } from "@renderer/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@renderer/components/ui/dialog"
+import { toast } from "sonner"
+import { ConversationHistoryItem } from "@shared/types"
+import dayjs from "dayjs"
+import relativeTime from "dayjs/plugin/relativeTime"
+
+// Enable relative time plugin for dayjs
+dayjs.extend(relativeTime)
 
 interface AgentSession {
   id: string
@@ -27,6 +45,8 @@ interface AgentSessionsResponse {
 }
 
 const STORAGE_KEY = 'active-agents-sidebar-expanded'
+const PAST_SESSIONS_STORAGE_KEY = 'past-sessions-sidebar-expanded'
+const INITIAL_PAST_SESSIONS = 10
 
 export function ActiveAgentsSidebar() {
   const [isExpanded, setIsExpanded] = useState(() => {
@@ -35,6 +55,15 @@ export function ActiveAgentsSidebar() {
     logExpand("ActiveAgentsSidebar", "init", { key: STORAGE_KEY, raw: stored, parsed: initial })
     return initial
   })
+
+  const [isPastSessionsExpanded, setIsPastSessionsExpanded] = useState(() => {
+    const stored = localStorage.getItem(PAST_SESSIONS_STORAGE_KEY)
+    return stored !== null ? stored === 'true' : true
+  })
+
+  const [pastSessionsCount, setPastSessionsCount] = useState(INITIAL_PAST_SESSIONS)
+  const [searchQuery, setSearchQuery] = useState("")
+  const [showDeleteAllDialog, setShowDeleteAllDialog] = useState(false)
 
   const focusedSessionId = useAgentStore((s) => s.focusedSessionId)
   const setFocusedSessionId = useAgentStore((s) => s.setFocusedSessionId)
@@ -49,6 +78,30 @@ export function ActiveAgentsSidebar() {
       return await tipcClient.getAgentSessions()
     },
   })
+
+  // Fetch conversation history for past sessions
+  const conversationHistoryQuery = useConversationHistoryQuery()
+  const deleteConversationMutation = useDeleteConversationMutation()
+  const deleteAllConversationsMutation = useDeleteAllConversationsMutation()
+
+  // Get filtered past sessions (for total count)
+  const filteredPastSessions = useMemo(() => {
+    if (!conversationHistoryQuery.data) return []
+    return searchQuery.trim()
+      ? conversationHistoryQuery.data.filter(
+          (session) =>
+            session.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            session.preview.toLowerCase().includes(searchQuery.toLowerCase())
+        )
+      : conversationHistoryQuery.data
+  }, [conversationHistoryQuery.data, searchQuery])
+
+  // Get visible past sessions with lazy loading
+  const visiblePastSessions = useMemo(() => {
+    return filteredPastSessions.slice(0, pastSessionsCount)
+  }, [filteredPastSessions, pastSessionsCount])
+
+  const hasMorePastSessions = filteredPastSessions.length > pastSessionsCount
 
   useEffect(() => {
     const unlisten = rendererHandlers.agentSessionsUpdated.listen((updatedData) => {
@@ -75,6 +128,15 @@ export function ActiveAgentsSidebar() {
       logExpand("ActiveAgentsSidebar", "error", { key: STORAGE_KEY, error: e instanceof Error ? e.message : String(e) })
     }
   }, [isExpanded])
+
+  // Persist past sessions expanded state
+  useEffect(() => {
+    try {
+      localStorage.setItem(PAST_SESSIONS_STORAGE_KEY, String(isPastSessionsExpanded))
+    } catch (e) {
+      console.error("Failed to save past sessions expanded state:", e)
+    }
+  }, [isPastSessionsExpanded])
 
   // Log when sessions change
   useEffect(() => {
@@ -201,6 +263,73 @@ export function ActiveAgentsSidebar() {
     }
   }
 
+  // Past sessions handlers
+  const handlePastSessionClick = (conversationId: string) => {
+    logUI('[ActiveAgentsSidebar] Past session clicked:', conversationId)
+    // Navigate to sessions page with the conversation ID
+    navigate(`/${conversationId}`)
+  }
+
+  const handleDeletePastSession = async (conversationId: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    try {
+      await deleteConversationMutation.mutateAsync(conversationId)
+    } catch (error) {
+      console.error("Failed to delete session:", error)
+      toast.error("Failed to delete session")
+    }
+  }
+
+  const handleLoadMorePastSessions = () => {
+    setPastSessionsCount(prev => prev + INITIAL_PAST_SESSIONS)
+  }
+
+  const handleOpenHistoryFolder = async () => {
+    try {
+      await tipcClient.openConversationsFolder()
+      toast.success("History folder opened")
+    } catch (error) {
+      toast.error("Failed to open history folder")
+    }
+  }
+
+  const handleDeleteAllHistory = async () => {
+    try {
+      await deleteAllConversationsMutation.mutateAsync()
+      toast.success("All history deleted")
+      setShowDeleteAllDialog(false)
+    } catch (error) {
+      toast.error("Failed to delete history")
+    }
+  }
+
+  // Format timestamp for display - use abbreviated relative time for recent, absolute for older
+  const formatTimestamp = (timestamp: number): string => {
+    const now = dayjs()
+    const date = dayjs(timestamp)
+    // Clamp to 0 to handle clock skew (when timestamp is slightly in the future)
+    const diffSeconds = Math.max(0, now.diff(date, 'second'))
+    const diffMinutes = Math.max(0, now.diff(date, 'minute'))
+    const diffHours = Math.max(0, now.diff(date, 'hour'))
+
+    if (diffHours < 24) {
+      // Within 24 hours - show abbreviated relative time
+      if (diffSeconds < 60) {
+        return `${diffSeconds}s`
+      } else if (diffMinutes < 60) {
+        return `${diffMinutes}m`
+      } else {
+        return `${diffHours}h`
+      }
+    } else if (diffHours < 168) {
+      // Within a week - show day and time
+      return date.format("ddd h:mm A")
+    } else {
+      // Older - show date
+      return date.format("MMM D")
+    }
+  }
+
   return (
     <div className="px-2 pb-2">
       <div
@@ -236,74 +365,67 @@ export function ActiveAgentsSidebar() {
       </div>
 
       {isExpanded && (
-        <div className="mt-1 space-y-1 pl-2">
+        <div className="mt-1 space-y-0.5 pl-2">
           {activeSessions.map((session) => {
             const isFocused = focusedSessionId === session.id
             const sessionProgress = agentProgressById.get(session.id)
             const hasPendingApproval = !!sessionProgress?.pendingToolApproval
+            // Status colors: amber for pending approval, blue for active, gray for snoozed
+            const statusDotColor = hasPendingApproval
+              ? "bg-amber-500"
+              : session.isSnoozed
+              ? "bg-muted-foreground"
+              : "bg-blue-500"
             return (
               <div
                 key={session.id}
                 onClick={() => handleSessionClick(session.id)}
                 className={cn(
-                  "group relative cursor-pointer rounded-md border px-2 py-1.5 text-xs transition-all",
+                  "group relative cursor-pointer rounded px-1.5 py-1 text-xs transition-all flex items-center gap-1.5",
                   hasPendingApproval
-                    ? "border-amber-500 bg-amber-500/10 ring-1 ring-amber-500/20"
+                    ? "bg-amber-500/10"
                     : isFocused
-                    ? "border-blue-500 bg-blue-500/10 ring-1 ring-blue-500/20"
-                    : "border-border/50 bg-card/50 hover:border-border hover:bg-card"
+                    ? "bg-blue-500/10"
+                    : "hover:bg-accent/50"
                 )}
               >
-                <div className="flex items-center gap-1.5">
-                  {hasPendingApproval ? (
-                    <Shield className="h-3 w-3 shrink-0 text-amber-500 animate-pulse" />
-                  ) : (
-                    <Activity className={cn(
-                      "h-3 w-3 shrink-0",
-                      session.isSnoozed ? "text-muted-foreground" : "animate-pulse text-blue-500"
-                    )} />
+                {/* Status dot */}
+                <span className={cn(
+                  "shrink-0 h-1.5 w-1.5 rounded-full",
+                  statusDotColor,
+                  !session.isSnoozed && !hasPendingApproval && "animate-pulse"
+                )} />
+                <p className={cn(
+                  "flex-1 truncate",
+                  hasPendingApproval ? "text-amber-700 dark:text-amber-300" :
+                  session.isSnoozed ? "text-muted-foreground" : "text-foreground"
+                )}>
+                  {hasPendingApproval ? `⚠ ${session.conversationTitle}` : session.conversationTitle}
+                </p>
+                <button
+                  onClick={(e) => handleToggleSnooze(session.id, session.isSnoozed ?? false, e)}
+                  className={cn(
+                    "shrink-0 rounded p-0.5 opacity-0 transition-all hover:bg-accent hover:text-foreground group-hover:opacity-100",
+                    isFocused && "opacity-100"
                   )}
-                  <p className={cn(
-                    "flex-1 truncate font-medium",
-                    hasPendingApproval ? "text-amber-700 dark:text-amber-300" :
-                    session.isSnoozed ? "text-muted-foreground" : "text-foreground"
-                  )}>
-                    {session.conversationTitle}
-                  </p>
-                  <button
-                    onClick={(e) => handleToggleSnooze(session.id, session.isSnoozed ?? false, e)}
-                    className={cn(
-                      "shrink-0 rounded p-0.5 opacity-0 transition-all hover:bg-accent hover:text-foreground group-hover:opacity-100",
-                      isFocused && "opacity-100"
-                    )}
-                    title={session.isSnoozed ? "Restore - show progress UI" : "Minimize - run in background"}
-                  >
-                    {session.isSnoozed ? (
-                      <Maximize2 className="h-3 w-3" />
-                    ) : (
-                      <Minimize2 className="h-3 w-3" />
-                    )}
-                  </button>
-                  <button
-                    onClick={(e) => handleStopSession(session.id, e)}
-                    className={cn(
-                      "shrink-0 rounded p-0.5 opacity-0 transition-all hover:bg-destructive/20 hover:text-destructive group-hover:opacity-100",
-                      isFocused && "opacity-100"
-                    )}
-                    title="Stop this agent session"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                </div>
-                {hasPendingApproval ? (
-                  <p className="mt-0.5 truncate pl-4 text-[10px] text-amber-600 dark:text-amber-400 font-medium">
-                    ⚠ Approval required: {sessionProgress.pendingToolApproval?.toolName}
-                  </p>
-                ) : session.lastActivity && (
-                  <p className="mt-0.5 truncate pl-4 text-[10px] text-muted-foreground">
-                    {session.lastActivity}
-                  </p>
-                )}
+                  title={session.isSnoozed ? "Restore - show progress UI" : "Minimize - run in background"}
+                >
+                  {session.isSnoozed ? (
+                    <Maximize2 className="h-3 w-3" />
+                  ) : (
+                    <Minimize2 className="h-3 w-3" />
+                  )}
+                </button>
+                <button
+                  onClick={(e) => handleStopSession(session.id, e)}
+                  className={cn(
+                    "shrink-0 rounded p-0.5 opacity-0 transition-all hover:bg-destructive/20 hover:text-destructive group-hover:opacity-100",
+                    isFocused && "opacity-100"
+                  )}
+                  title="Stop this agent session"
+                >
+                  <X className="h-3 w-3" />
+                </button>
               </div>
             )
           })}
@@ -311,9 +433,12 @@ export function ActiveAgentsSidebar() {
       )}
 
       {isExpanded && hasRecentSessions && (
-        <div className="mt-2 space-y-1 pl-2">
+        <div className="mt-1 space-y-0.5 pl-2">
           {recentSessions.map((session) => {
-            const statusLabel = session.status === "stopped" ? "Stopped" : session.status === "error" ? "Error" : "Completed"
+            // Status colors: red for error/stopped, gray for completed
+            const statusDotColor = session.status === "error" || session.status === "stopped"
+              ? "bg-red-500"
+              : "bg-muted-foreground"
             return (
               <div
                 key={session.id}
@@ -325,26 +450,169 @@ export function ActiveAgentsSidebar() {
                   }
                 }}
                 className={cn(
-                  "relative rounded-md border px-2 py-1.5 text-xs text-muted-foreground bg-card/30 transition-all",
-                  session.conversationId && "cursor-pointer hover:bg-card/50 hover:border-border"
+                  "rounded px-1.5 py-1 text-xs text-muted-foreground transition-all flex items-center gap-1.5",
+                  session.conversationId && "cursor-pointer hover:bg-accent/50"
                 )}
               >
-                <div className="flex items-center gap-1.5">
-                  <Activity className="h-3 w-3 shrink-0 text-muted-foreground" />
-                  <p className="flex-1 truncate">{session.conversationTitle}</p>
-                  <span className="shrink-0 rounded bg-accent/20 px-1.5 py-0.5 text-[10px]">{statusLabel}</span>
-                </div>
-                {session.lastActivity && (
-                  <p className="mt-0.5 truncate pl-4 text-[10px] text-muted-foreground">
-                    {session.lastActivity}
-                  </p>
-                )}
+                {/* Status dot */}
+                <span className={cn("shrink-0 h-1.5 w-1.5 rounded-full", statusDotColor)} />
+                <p className="flex-1 truncate">{session.conversationTitle}</p>
               </div>
             )
           })}
         </div>
       )}
 
+      {/* Past Sessions Section */}
+      <div className="mt-3 border-t pt-2">
+        <div
+          className={cn(
+            "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium transition-all duration-200",
+            "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+          )}
+        >
+          <button
+            onClick={() => setIsPastSessionsExpanded(!isPastSessionsExpanded)}
+            className="shrink-0 cursor-pointer hover:text-foreground focus:outline-none focus:ring-1 focus:ring-ring rounded"
+            aria-label={isPastSessionsExpanded ? "Collapse past sessions" : "Expand past sessions"}
+            aria-expanded={isPastSessionsExpanded}
+          >
+            {isPastSessionsExpanded ? (
+              <ChevronDown className="h-3.5 w-3.5" />
+            ) : (
+              <ChevronRight className="h-3.5 w-3.5" />
+            )}
+          </button>
+          <button
+            onClick={() => setIsPastSessionsExpanded(!isPastSessionsExpanded)}
+            className="flex items-center gap-2 flex-1 min-w-0 focus:outline-none focus:ring-1 focus:ring-ring rounded"
+            title="Past Sessions"
+            aria-label={conversationHistoryQuery.data && conversationHistoryQuery.data.length > 0
+              ? `Past Sessions (${conversationHistoryQuery.data.length})`
+              : "Past Sessions"}
+          >
+            <Clock className="h-3.5 w-3.5" />
+            {conversationHistoryQuery.data && conversationHistoryQuery.data.length > 0 && (
+              <span className="text-[10px] text-muted-foreground">
+                {conversationHistoryQuery.data.length}
+              </span>
+            )}
+          </button>
+          {isPastSessionsExpanded && (
+            <div className="flex items-center gap-1 ml-auto">
+              <button
+                onClick={handleOpenHistoryFolder}
+                className="p-1 rounded hover:bg-accent/50 text-muted-foreground hover:text-foreground"
+                title="Open history folder"
+              >
+                <FolderOpen className="h-3 w-3" />
+              </button>
+              <button
+                onClick={() => setShowDeleteAllDialog(true)}
+                className="p-1 rounded hover:bg-destructive/20 text-muted-foreground hover:text-destructive"
+                title="Delete all history"
+                disabled={!conversationHistoryQuery.data?.length}
+              >
+                <Trash2 className="h-3 w-3" />
+              </button>
+            </div>
+          )}
+        </div>
+
+        {isPastSessionsExpanded && (
+          <div className="mt-1 space-y-0.5 pl-2">
+            <div className="px-2 pb-2">
+              <div className="relative">
+                <Search className="absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search sessions..."
+                  className="h-7 pl-7 text-xs"
+                />
+              </div>
+            </div>
+            {conversationHistoryQuery.isLoading ? (
+              <div className="flex items-center gap-2 px-2 py-2 text-xs text-muted-foreground">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                <span>Loading sessions...</span>
+              </div>
+            ) : conversationHistoryQuery.isError ? (
+              <p className="px-2 py-2 text-xs text-destructive">Failed to load sessions</p>
+            ) : visiblePastSessions.length === 0 ? (
+              <p className="px-2 py-2 text-xs text-muted-foreground">No past sessions</p>
+            ) : (
+              <>
+                {visiblePastSessions.map((session) => (
+                  <div
+                    key={session.id}
+                    onClick={() => handlePastSessionClick(session.id)}
+                    className={cn(
+                      "group relative cursor-pointer rounded-md px-2 py-1.5 text-xs transition-all",
+                      "hover:bg-accent/50"
+                    )}
+                    title={`${session.preview}\n${dayjs(session.updatedAt).format("MMM D, h:mm A")}`}
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <CheckCircle2 className="h-3 w-3 shrink-0 text-muted-foreground" />
+                      <p className="flex-1 truncate text-foreground">{session.title}</p>
+                      {/* Time ago shown by default, replaced by delete button on hover */}
+                      <span className="shrink-0 text-[10px] text-muted-foreground tabular-nums group-hover:hidden">
+                        {formatTimestamp(session.updatedAt)}
+                      </span>
+                      <button
+                        onClick={(e) => handleDeletePastSession(session.id, e)}
+                        disabled={deleteConversationMutation.isPending}
+                        className={cn(
+                          "shrink-0 rounded p-0.5 hidden transition-all hover:bg-destructive/20 hover:text-destructive group-hover:block"
+                        )}
+                        title="Delete session"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                {hasMorePastSessions && (
+                  <button
+                    onClick={handleLoadMorePastSessions}
+                    className="w-full px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-accent/50 rounded-md transition-colors"
+                  >
+                    Load more ({filteredPastSessions.length - pastSessionsCount} remaining)
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Delete All Confirmation Dialog */}
+      <Dialog open={showDeleteAllDialog} onOpenChange={setShowDeleteAllDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-destructive" />
+              Delete All History
+            </DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete all conversation history? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDeleteAllDialog(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteAllHistory}
+              disabled={deleteAllConversationsMutation.isPending}
+            >
+              {deleteAllConversationsMutation.isPending ? "Deleting..." : "Delete All"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

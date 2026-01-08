@@ -1813,12 +1813,17 @@ export const router = {
     }),
 
   recordEvent: t.procedure
-    .input<{ type: "start" | "end" }>()
+    .input<{ type: "start" | "end"; mcpMode?: boolean }>()
     .action(async ({ input }) => {
       if (input.type === "start") {
         state.isRecording = true
+        // Track MCP mode state so main process knows if we're in MCP toggle mode
+        if (input.mcpMode !== undefined) {
+          state.isRecordingMcpMode = input.mcpMode
+        }
       } else {
         state.isRecording = false
+        state.isRecordingMcpMode = false
       }
       updateTrayIcon()
     }),
@@ -3249,7 +3254,11 @@ async function generateGroqTTS(
 
     // Check for specific error cases and provide helpful messages
     if (errorText.includes("requires terms acceptance")) {
-      throw new Error("Groq TTS model requires terms acceptance. Please visit https://console.groq.com/playground to accept the terms for the Orpheus TTS model.")
+      // The model parameter determines which terms page to show
+      const modelParam = model === "canopylabs/orpheus-arabic-saudi"
+        ? "canopylabs%2Forpheus-arabic-saudi"
+        : "canopylabs%2Forpheus-v1-english"
+      throw new Error(`Groq TTS model requires terms acceptance. Please visit https://console.groq.com/playground?model=${modelParam} and accept the terms when prompted, then try again.`)
     }
 
     throw new Error(`Groq TTS API error: ${response.statusText} - ${errorText}`)

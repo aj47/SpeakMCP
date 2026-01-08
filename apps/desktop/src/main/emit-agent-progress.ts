@@ -41,11 +41,16 @@ export async function emitAgentProgress(update: AgentProgressUpdate): Promise<vo
   // Check if floating panel auto-show is globally disabled in settings
   const config = configStore.get()
   const floatingPanelAutoShowEnabled = config.floatingPanelAutoShow !== false
+  const hidePanelWhenMainFocused = config.hidePanelWhenMainFocused !== false
+
+  // Check if main window is focused (to prevent panel showing when main app is focused)
+  // Reuse the 'main' variable from above to avoid redeclaration
+  const isMainFocused = main?.isFocused() ?? false
 
   if (!panel.isVisible() && update.sessionId) {
     const isSnoozed = agentSessionTracker.isSessionSnoozed(update.sessionId)
 
-    if (floatingPanelAutoShowEnabled && !isPanelAutoShowSuppressed() && !isSnoozed) {
+    if (floatingPanelAutoShowEnabled && !isPanelAutoShowSuppressed() && !isSnoozed && !(hidePanelWhenMainFocused && isMainFocused)) {
       resizePanelForAgentMode()
       showPanelWindow()
     }

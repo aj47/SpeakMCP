@@ -212,11 +212,29 @@ const keysPressed = new Map<string, number>()
 // allowing common modifier combos like Ctrl+C to cancel before recording begins).
 const HOLD_TO_RECORD_DELAY_MS = 250
 
+// Helper to check if a key is a modifier key
+const isModifierKey = (key: string): boolean => {
+  return (
+    key === "ControlLeft" ||
+    key === "ControlRight" ||
+    key === "ShiftLeft" ||
+    key === "ShiftRight" ||
+    key === "Alt" ||
+    key === "AltLeft" ||
+    key === "AltRight" ||
+    key === "MetaLeft" ||
+    key === "MetaRight"
+  )
+}
+
 const hasRecentKeyPress = () => {
   if (keysPressed.size === 0) return false
 
   const now = Date.now() / 1000
-  return [...keysPressed.values()].some((time) => {
+  return [...keysPressed.entries()].some(([key, time]) => {
+    // Exclude modifier keys from the check - they should not block shortcuts
+    // that use only modifier key combinations (like toggle-ctrl-alt)
+    if (isModifierKey(key)) return false
     // 10 seconds
     // for some weird reasons sometime KeyRelease event is missing for some keys
     // so they stay in the map
@@ -308,12 +326,45 @@ export function listenToKeyboardEvents() {
     }, HOLD_TO_RECORD_DELAY_MS)
   }
 
+  const tryToggleMcpIfEligible = () => {
+    const config = configStore.get()
+    if (config.mcpToolsShortcut !== "toggle-ctrl-alt") {
+      return
+    }
+
+    // Both modifiers must be down
+    if (!isPressedCtrlKey || !isPressedAltKey) return
+
+    // Guard against recent non-modifier presses
+    if (hasRecentKeyPress()) return
+
+    // Cancel regular recording timer since MCP is prioritized
+    cancelRecordingTimer()
+
+    if (isDebugKeybinds()) {
+      logKeybinds("MCP tools triggered: Ctrl+Alt (toggle mode)")
+    }
+
+    // Set state.isRecordingMcpMode BEFORE sending the message
+    // This ensures the key release handlers know we're in MCP toggle mode
+    // and won't prematurely close the panel when the user releases Ctrl/Alt
+    if (!state.isRecording) {
+      // Starting MCP recording - set the flag now so key release handlers know
+      state.isRecordingMcpMode = true
+    }
+    // Note: When stopping, the recordEvent handler will set isRecordingMcpMode = false
+
+    // Toggle MCP recording on/off
+    getWindowRendererHandlers("panel")?.startOrFinishMcpRecording.send()
+  }
+
 
   const handleEvent = (e: RdevEvent) => {
     if (e.event_type === "KeyPress") {
       if (e.data.key === "ControlLeft" || e.data.key === "ControlRight") {
         isPressedCtrlKey = true
         tryStartMcpHoldIfEligible()
+        tryToggleMcpIfEligible()
         if (isDebugKeybinds()) {
           logKeybinds("Ctrl key pressed, isPressedCtrlKey =", isPressedCtrlKey)
         }
@@ -333,6 +384,7 @@ export function listenToKeyboardEvents() {
         isPressedAltKey = true
         isPressedCtrlAltKey = isPressedCtrlKey && isPressedAltKey
         tryStartMcpHoldIfEligible()
+        tryToggleMcpIfEligible()
         if (isDebugKeybinds()) {
           logKeybinds(
             "Alt key pressed, isPressedAltKey =",
@@ -1126,31 +1178,15 @@ export function listenToKeyboardEvents() {
         cancelCustomMcpTimer()
       }
 
-      // Skip built-in hold mode handling for toggle mode shortcuts
-      if (
-        (currentConfig.shortcut === "ctrl-slash") ||
-        (currentConfig.shortcut === "custom" && currentConfig.customShortcutMode === "toggle")
-      )
-        return
-
-      cancelRecordingTimer()
+      // Always handle MCP hold-ctrl-alt key releases, regardless of recording shortcut mode
+      // This must happen before the toggle mode early return below
       cancelMcpRecordingTimer()
 
-      // Finish MCP hold on either modifier release
       if (e.data.key === "ControlLeft" || e.data.key === "ControlRight") {
         if (isHoldingCtrlAltKey) {
           const panelHandlers = getWindowRendererHandlers("panel")
           panelHandlers?.finishMcpRecording.send()
           isHoldingCtrlAltKey = false
-        } else {
-          if (isHoldingCtrlKey) {
-            getWindowRendererHandlers("panel")?.finishRecording.send()
-          } else if (!state.isTextInputActive) {
-            // Only close panel if we're not in text input mode
-            stopRecordingAndHidePanelWindow()
-          }
-
-          isHoldingCtrlKey = false
         }
       }
 
@@ -1159,8 +1195,36 @@ export function listenToKeyboardEvents() {
           const panelHandlers = getWindowRendererHandlers("panel")
           panelHandlers?.finishMcpRecording.send()
           isHoldingCtrlAltKey = false
-        } else if (!state.isTextInputActive) {
-          // Only close panel if we're not in text input mode
+        }
+      }
+
+      // Skip built-in hold mode handling for toggle mode shortcuts
+      // (only applies to regular recording, not MCP agent mode which is handled above)
+      if (
+        (currentConfig.shortcut === "ctrl-slash") ||
+        (currentConfig.shortcut === "custom" && currentConfig.customShortcutMode === "toggle")
+      )
+        return
+
+      cancelRecordingTimer()
+
+      // Finish regular hold-ctrl recording on Ctrl release
+      if (e.data.key === "ControlLeft" || e.data.key === "ControlRight") {
+        if (isHoldingCtrlKey) {
+          getWindowRendererHandlers("panel")?.finishRecording.send()
+        } else if (!state.isTextInputActive && !state.isRecordingMcpMode) {
+          // Only close panel if we're not in text input mode and not in MCP recording mode
+          // (MCP toggle mode should not close panel on key release)
+          stopRecordingAndHidePanelWindow()
+        }
+        isHoldingCtrlKey = false
+      }
+
+      // Close panel on Alt release if not in text input mode (and not in MCP mode, which is handled above)
+      if (e.data.key === "Alt" || e.data.key === "AltLeft" || e.data.key === "AltRight") {
+        if (!state.isTextInputActive && !state.isRecordingMcpMode) {
+          // Only close panel if we're not in text input mode and not in MCP recording mode
+          // (MCP toggle mode should not close panel on key release)
           stopRecordingAndHidePanelWindow()
         }
       }

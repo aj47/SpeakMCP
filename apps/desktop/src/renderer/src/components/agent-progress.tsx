@@ -173,7 +173,7 @@ const CompactMessage: React.FC<{
         if (error.message.includes("API key")) {
           errorMessage = "TTS API key not configured"
         } else if (error.message.includes("terms acceptance")) {
-          errorMessage = "Groq TTS model requires terms acceptance. Please visit the Groq console to accept terms for the Orpheus TTS model."
+          errorMessage = "Groq TTS model requires terms acceptance. Visit the Groq Playground with the model selected to accept terms."
         } else if (error.message.includes("rate limit")) {
           errorMessage = "Rate limit exceeded. Please try again later"
         } else if (error.message.includes("network") || error.message.includes("fetch")) {
@@ -379,14 +379,14 @@ const CompactMessage: React.FC<{
                     <>
                       Groq TTS model requires terms acceptance.{" "}
                       <a
-                        href="https://console.groq.com/playground"
+                        href="https://console.groq.com/playground?model=canopylabs%2Forpheus-v1-english"
                         target="_blank"
                         rel="noopener noreferrer"
                         className="underline hover:no-underline"
                       >
-                        Click here to accept terms
+                        Click here to open the Playground
                       </a>{" "}
-                      for the Orpheus TTS model.
+                      and accept the terms when prompted.
                     </>
                   ) : (
                     ttsError

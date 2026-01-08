@@ -303,15 +303,24 @@ export function ActiveAgentsSidebar() {
     }
   }
 
-  // Format timestamp for display - use relative time for recent, absolute for older
+  // Format timestamp for display - use abbreviated relative time for recent, absolute for older
   const formatTimestamp = (timestamp: number): string => {
     const now = dayjs()
     const date = dayjs(timestamp)
-    const diffHours = now.diff(date, 'hour')
+    // Clamp to 0 to handle clock skew (when timestamp is slightly in the future)
+    const diffSeconds = Math.max(0, now.diff(date, 'second'))
+    const diffMinutes = Math.max(0, now.diff(date, 'minute'))
+    const diffHours = Math.max(0, now.diff(date, 'hour'))
 
     if (diffHours < 24) {
-      // Within 24 hours - show relative time
-      return date.fromNow()
+      // Within 24 hours - show abbreviated relative time
+      if (diffSeconds < 60) {
+        return `${diffSeconds}s`
+      } else if (diffMinutes < 60) {
+        return `${diffMinutes}m`
+      } else {
+        return `${diffHours}h`
+      }
     } else if (diffHours < 168) {
       // Within a week - show day and time
       return date.format("ddd h:mm A")
@@ -544,14 +553,15 @@ export function ActiveAgentsSidebar() {
                     <div className="flex items-center gap-1.5">
                       <CheckCircle2 className="h-3 w-3 shrink-0 text-muted-foreground" />
                       <p className="flex-1 truncate text-foreground">{session.title}</p>
-                      <span className="shrink-0 text-[10px] text-muted-foreground tabular-nums">
+                      {/* Time ago shown by default, replaced by delete button on hover */}
+                      <span className="shrink-0 text-[10px] text-muted-foreground tabular-nums group-hover:hidden">
                         {formatTimestamp(session.updatedAt)}
                       </span>
                       <button
                         onClick={(e) => handleDeletePastSession(session.id, e)}
                         disabled={deleteConversationMutation.isPending}
                         className={cn(
-                          "shrink-0 rounded p-0.5 opacity-0 transition-all hover:bg-destructive/20 hover:text-destructive group-hover:opacity-100"
+                          "shrink-0 rounded p-0.5 hidden transition-all hover:bg-destructive/20 hover:text-destructive group-hover:block"
                         )}
                         title="Delete session"
                       >

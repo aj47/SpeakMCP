@@ -3044,7 +3044,11 @@ async function generateGroqTTS(
 
     // Check for specific error cases and provide helpful messages
     if (errorText.includes("requires terms acceptance")) {
-      throw new Error("Groq TTS model requires terms acceptance. Please visit https://console.groq.com/playground to accept the terms for the Orpheus TTS model.")
+      // The model parameter determines which terms page to show
+      const modelParam = model === "canopylabs/orpheus-arabic-saudi"
+        ? "canopylabs%2Forpheus-arabic-saudi"
+        : "canopylabs%2Forpheus-v1-english"
+      throw new Error(`Groq TTS model requires terms acceptance. Please visit https://console.groq.com/playground?model=${modelParam} and accept the terms when prompted, then try again.`)
     }
 
     throw new Error(`Groq TTS API error: ${response.statusText} - ${errorText}`)

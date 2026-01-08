@@ -465,6 +465,11 @@ export type Config = {
   // Users can still manually access the panel via hotkeys, tray menu, or UI
   floatingPanelAutoShow?: boolean
 
+  // Hide Floating Panel When Main App is Focused
+  // When true (default), the floating panel will automatically hide when the main SpeakMCP window is focused
+  // The panel will reappear when the main window loses focus (if auto-show conditions are met)
+  hidePanelWhenMainFocused?: boolean
+
   // API Retry Configuration
   apiRetryCount?: number
   apiRetryBaseDelay?: number

@@ -730,6 +730,17 @@ export function Component() {
             />
           </Control>
 
+          <Control label={<ControlLabel label="Hide Panel When Main App Focused" tooltip="When enabled, the floating panel automatically hides when the main SpeakMCP window is focused. The panel reappears when the main window loses focus." />} className="px-3">
+            <Switch
+              checked={configQuery.data?.hidePanelWhenMainFocused !== false}
+              onCheckedChange={(value) => {
+                saveConfig({
+                  hidePanelWhenMainFocused: value,
+                })
+              }}
+            />
+          </Control>
+
         </ControlGroup>
 
         {/* Agent Settings */}

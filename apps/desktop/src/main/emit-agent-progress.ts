@@ -67,15 +67,22 @@ export async function emitAgentProgress(update: AgentProgressUpdate): Promise<vo
   // Check if floating panel auto-show is globally disabled in settings
   const config = configStore.get()
   const floatingPanelAutoShowEnabled = config.floatingPanelAutoShow !== false
+  const hidePanelWhenMainFocused = config.hidePanelWhenMainFocused !== false
+
+  // Check if main window is focused (to prevent panel showing when main app is focused)
+  // Reuse the 'main' variable from above to avoid redeclaration
+  const isMainFocused = main?.isFocused() ?? false
 
   if (!panel.isVisible() && update.sessionId) {
     const isSnoozed = agentSessionTracker.isSessionSnoozed(update.sessionId)
-    throttledLog(`[emitAgentProgress] Panel not visible. Session ${update.sessionId} snoozed check: ${isSnoozed}, floatingPanelAutoShow: ${floatingPanelAutoShowEnabled}`)
+    throttledLog(`[emitAgentProgress] Panel not visible. Session ${update.sessionId} snoozed check: ${isSnoozed}, floatingPanelAutoShow: ${floatingPanelAutoShowEnabled}, mainFocused: ${isMainFocused}`)
 
     if (!floatingPanelAutoShowEnabled) {
       throttledLog(`[emitAgentProgress] Floating panel auto-show disabled in settings; NOT showing panel for session ${update.sessionId}`)
     } else if (isPanelAutoShowSuppressed()) {
       throttledLog(`[emitAgentProgress] Panel auto-show suppressed; NOT showing panel for session ${update.sessionId}`)
+    } else if (hidePanelWhenMainFocused && isMainFocused) {
+      throttledLog(`[emitAgentProgress] Main window is focused and hidePanelWhenMainFocused is enabled; NOT showing panel for session ${update.sessionId}`)
     } else if (!isSnoozed) {
       throttledLog(`[emitAgentProgress] Showing panel for non-snoozed session ${update.sessionId}`)
       resizePanelForAgentMode()

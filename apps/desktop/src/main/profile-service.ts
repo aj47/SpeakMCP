@@ -6,6 +6,7 @@ import { randomUUID } from "crypto"
 import { logApp } from "./debug"
 import { configStore } from "./config"
 import { getBuiltinToolNames } from "./builtin-tool-definitions"
+import { profileFileService } from "./profile-file-service"
 
 const RESERVED_SERVER_NAMES = ["speakmcp-settings"]
 
@@ -300,6 +301,9 @@ class ProfileService {
       const dataFolder = path.dirname(profilesPath)
       fs.mkdirSync(dataFolder, { recursive: true })
       fs.writeFileSync(profilesPath, JSON.stringify(this.profilesData, null, 2))
+
+      // Sync profiles to markdown files for dynamic context discovery
+      profileFileService.syncAllProfiles(this.profilesData.profiles)
     } catch (error) {
       logApp("Error saving profiles:", error)
       throw new Error(`Failed to save profiles: ${error instanceof Error ? error.message : String(error)}`)
@@ -408,6 +412,9 @@ class ProfileService {
 
     this.profilesData!.profiles = this.profilesData!.profiles.filter((p) => p.id !== id)
     this.saveProfiles()
+
+    // Remove the profile markdown file
+    profileFileService.removeProfileFile(id)
     return true
   }
 

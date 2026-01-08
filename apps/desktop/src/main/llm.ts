@@ -1699,6 +1699,30 @@ Return ONLY JSON per schema.`,
       const isActionableRequest = toolCapabilities.relevantTools.length > 0
       const contentText = llmResponse.content || ""
 
+      // IMPORTANT: If NO tools are available at all, accept any non-empty response as complete.
+      // This prevents infinite loops when the user has no MCP servers configured.
+      // Without tools, the agent cannot do anything more, so a text response is the final answer.
+      const noToolsAvailable = !availableTools || availableTools.length === 0
+      if (noToolsAvailable && contentText.trim().length > 0) {
+        if (isDebugLLM()) {
+          logLLM("No tools available - accepting text response as complete", {
+            responseLength: contentText.trim().length,
+            responsePreview: contentText.substring(0, 100),
+          })
+        }
+        finalContent = contentText
+        addMessage("assistant", contentText)
+        emit({
+          currentIteration: iteration,
+          maxIterations,
+          steps: progressSteps.slice(-3),
+          isComplete: true,
+          finalContent,
+          conversationHistory: formatConversationForProgress(conversationHistory),
+        })
+        break
+      }
+
       // Check if tools have already been executed for THIS user prompt (current turn)
       // We only look at tool results AFTER currentPromptIndex to avoid treating a new request
       // as complete based on tool results from previous conversation turns

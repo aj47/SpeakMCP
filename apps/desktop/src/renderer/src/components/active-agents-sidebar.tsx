@@ -303,15 +303,23 @@ export function ActiveAgentsSidebar() {
     }
   }
 
-  // Format timestamp for display - use relative time for recent, absolute for older
+  // Format timestamp for display - use abbreviated relative time for recent, absolute for older
   const formatTimestamp = (timestamp: number): string => {
     const now = dayjs()
     const date = dayjs(timestamp)
+    const diffSeconds = now.diff(date, 'second')
+    const diffMinutes = now.diff(date, 'minute')
     const diffHours = now.diff(date, 'hour')
 
     if (diffHours < 24) {
-      // Within 24 hours - show relative time
-      return date.fromNow()
+      // Within 24 hours - show abbreviated relative time
+      if (diffSeconds < 60) {
+        return `${diffSeconds}s`
+      } else if (diffMinutes < 60) {
+        return `${diffMinutes}m`
+      } else {
+        return `${diffHours}h`
+      }
     } else if (diffHours < 168) {
       // Within a week - show day and time
       return date.format("ddd h:mm A")

@@ -307,9 +307,10 @@ export function ActiveAgentsSidebar() {
   const formatTimestamp = (timestamp: number): string => {
     const now = dayjs()
     const date = dayjs(timestamp)
-    const diffSeconds = now.diff(date, 'second')
-    const diffMinutes = now.diff(date, 'minute')
-    const diffHours = now.diff(date, 'hour')
+    // Clamp to 0 to handle clock skew (when timestamp is slightly in the future)
+    const diffSeconds = Math.max(0, now.diff(date, 'second'))
+    const diffMinutes = Math.max(0, now.diff(date, 'minute'))
+    const diffHours = Math.max(0, now.diff(date, 'hour'))
 
     if (diffHours < 24) {
       // Within 24 hours - show abbreviated relative time

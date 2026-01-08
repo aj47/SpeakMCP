@@ -218,11 +218,15 @@ function emitSubSessionDelegationProgress(
   };
 
   // Emit progress update to parent session's UI
+  // IMPORTANT: isComplete is always false because this is a delegation progress update,
+  // not a completion of the parent session. The parent session continues running after
+  // the delegation completes. Setting isComplete: true here would incorrectly mark the
+  // parent session as done in the UI while the main agent is still processing.
   emitAgentProgress({
     sessionId: parentSessionId,
     currentIteration: 0,
     maxIterations: 1,
-    isComplete: subSession.status === 'completed' || subSession.status === 'failed' || subSession.status === 'cancelled',
+    isComplete: false,
     steps: [
       {
         id: `delegation-${subSession.id}`,

@@ -155,18 +155,19 @@ export class ACPBackgroundNotifier {
       error: state.status === 'failed' ? state.result?.error : undefined,
     }
 
-    // Mark as complete for any terminal state (completed, failed, or cancelled)
-    const isTerminalState = state.status === 'completed' || state.status === 'failed' || state.status === 'cancelled'
-
     // Map status to step status - completed is success, everything else (failed/cancelled) is error
     const stepStatus = state.status === 'completed' ? 'completed' : 'error'
 
     // Emit progress update to UI
+    // IMPORTANT: isComplete is always false because this is a delegation progress update,
+    // not a completion of the parent session. The parent session may continue running after
+    // the delegation completes (e.g., the main agent processes the result and continues).
+    // Setting isComplete: true here would incorrectly mark the parent session as done.
     await emitAgentProgress({
       sessionId: state.parentSessionId,
       currentIteration: 0,
       maxIterations: 1,
-      isComplete: isTerminalState,
+      isComplete: false,
       steps: [
         {
           id: `delegation-complete-${state.runId}`,

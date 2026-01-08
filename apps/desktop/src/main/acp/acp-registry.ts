@@ -1,15 +1,6 @@
 import type { ACPAgentDefinition, ACPAgentInstance, ACPAgentConfig } from './types'
 
 /**
- * Log ACP-related debug messages.
- * TODO: Integrate with debug.ts when ACP debug flag is added
- */
-function logACP(...args: unknown[]): void {
-  // eslint-disable-next-line no-console
-  console.log(`[${new Date().toISOString()}] [ACP]`, ...args)
-}
-
-/**
  * Converts a user-provided ACPAgentConfig to an ACPAgentDefinition.
  * This handles the transformation from user configuration format to the internal agent definition format.
  * @param config - The user configuration for an ACP agent
@@ -69,7 +60,6 @@ export class ACPRegistry {
     const existing = this.agents.get(definition.name)
     if (existing) {
       existing.definition = definition
-      logACP(`Agent "${definition.name}" already registered, updated definition`)
       return
     }
 
@@ -83,7 +73,6 @@ export class ACPRegistry {
     }
 
     this.agents.set(definition.name, instance)
-    logACP(`Registered agent: ${definition.name}`)
   }
 
   /**
@@ -91,11 +80,7 @@ export class ACPRegistry {
    * @param name - The name of the agent to unregister
    */
   unregisterAgent(name: string): void {
-    if (this.agents.delete(name)) {
-      logACP(`Unregistered agent: ${name}`)
-    } else {
-      logACP(`Agent "${name}" not found for unregistration`)
-    }
+    this.agents.delete(name)
   }
 
   /**
@@ -156,7 +141,6 @@ export class ACPRegistry {
   updateAgentStatus(name: string, status: ACPAgentInstance['status'], error?: string): void {
     const agent = this.agents.get(name)
     if (!agent) {
-      logACP(`Cannot update status: agent "${name}" not found`)
       return
     }
 
@@ -167,8 +151,6 @@ export class ACPRegistry {
     } else if (status === 'error') {
       agent.lastError = error ?? agent.lastError
     }
-
-    logACP(`Agent "${name}" status updated to: ${status}${error ? ` (${error})` : ''}`)
   }
 
   /**
@@ -188,7 +170,6 @@ export class ACPRegistry {
           agent.status = 'busy'
         }
       }
-      logACP(`Agent "${name}" active runs: ${agent.activeRuns}`)
     }
   }
 
@@ -208,7 +189,6 @@ export class ACPRegistry {
           agent.status = 'ready'
         }
       }
-      logACP(`Agent "${name}" active runs: ${agent.activeRuns}`)
     }
   }
 
@@ -219,7 +199,6 @@ export class ACPRegistry {
    */
   loadFromConfig(configs: ACPAgentConfig[]): void {
     this.configuredAgents = configs
-    logACP(`Loading ${configs.length} agents from configuration`)
 
     for (const config of configs) {
       const definition = configToDefinition(config)

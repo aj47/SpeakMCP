@@ -14,9 +14,9 @@ import { readFile, writeFile, mkdir, realpath } from "fs/promises"
 import { dirname } from "path"
 import { configStore } from "./config"
 import { ACPAgentConfig } from "../shared/types"
-import { logApp } from "./debug"
 import { toolApprovalManager } from "./state"
 import { emitAgentProgress } from "./emit-agent-progress"
+import { logACP } from "./debug"
 
 // JSON-RPC types
 interface JsonRpcRequest {
@@ -190,10 +190,6 @@ class ACPService extends EventEmitter {
   private handleAgentNotification(event: { agentName: string; method: string; params: unknown }): void {
     const { agentName, method, params } = event
 
-    // Always log the raw params for debugging
-    logApp(`[ACP:${agentName}] Received notification: ${method}`)
-    logApp(`[ACP:${agentName}] Notification params: ${JSON.stringify(params, null, 2).substring(0, 2000)}`)
-
     if (method === "session/update") {
       this.handleSessionUpdate(agentName, params as {
         sessionId?: string
@@ -206,7 +202,6 @@ class ACPService extends EventEmitter {
       const logParams = params as { level?: string; message?: string; data?: unknown }
       const level = logParams?.level || "info"
       const message = logParams?.message || JSON.stringify(logParams)
-      logApp(`[ACP:${agentName}:${level}] ${message}`)
 
       // Emit for UI consumption
       this.emit("agentLog", { agentName, level, message, data: logParams?.data })
@@ -277,18 +272,6 @@ class ACPService extends EventEmitter {
       for (const block of contentBlocks) {
         output.contentBlocks.push(block)
 
-        // Log text content for visibility
-        if (block.type === "text" && block.text) {
-          // Truncate long text for logging
-          const displayText = block.text.length > 500
-            ? block.text.substring(0, 500) + "..."
-            : block.text
-          logApp(`[ACP:${agentName}:output] ${displayText}`)
-        } else if (block.type === "tool_use" && block.name) {
-          logApp(`[ACP:${agentName}:tool] Using tool: ${block.name}`)
-        } else if (block.type === "tool_result") {
-          logApp(`[ACP:${agentName}:tool] Tool result received`)
-        }
       }
     }
 
@@ -299,13 +282,11 @@ class ACPService extends EventEmitter {
     if (params.isComplete) {
       output.isComplete = true
       output.stopReason = stopReason
-      logApp(`[ACP:${agentName}] Session ${sessionId} complete. Stop reason: ${stopReason}`)
     }
 
     // Handle tool call updates from the notification
     const toolCallUpdate = params.toolCall || params.update?.toolCall
     if (toolCallUpdate) {
-      logApp(`[ACP:${agentName}] Tool call update: ${toolCallUpdate.title} (status: ${toolCallUpdate.status})`)
       this.emit("toolCallUpdate", {
         agentName,
         sessionId,
@@ -360,14 +341,12 @@ class ACPService extends EventEmitter {
     const config = configStore.get()
     const acpAgents = config.acpAgents || []
 
-    logApp(`[ACP] Initializing with ${acpAgents.length} configured agents`)
-
     for (const agentConfig of acpAgents) {
       if (agentConfig.enabled !== false && agentConfig.autoSpawn) {
         try {
           await this.spawnAgent(agentConfig.name)
-        } catch (error) {
-          logApp(`[ACP] Failed to auto-spawn agent ${agentConfig.name}: ${error}`)
+        } catch {
+          // Silently ignore auto-spawn failures
         }
       }
     }
@@ -429,11 +408,9 @@ class ACPService extends EventEmitter {
     const existing = this.agents.get(agentName)
     if (existing) {
       if (existing.status === "ready") {
-        logApp(`[ACP] Agent ${agentName} is already ready`)
         return
       }
       if (existing.status === "starting") {
-        logApp(`[ACP] Agent ${agentName} is already starting, waiting for it to be ready`)
         // Wait for the existing spawn to complete (poll until ready or error)
         await this.waitForAgentReady(agentName)
         // Check final status after waiting - throw if agent failed or stopped
@@ -457,8 +434,6 @@ class ACPService extends EventEmitter {
     if (!command) {
       throw new Error(`No command specified for agent ${agentName}`)
     }
-
-    logApp(`[ACP] Spawning agent ${agentName}: ${command} ${args.join(" ")}${cwd ? ` (cwd: ${cwd})` : ""}`)
 
     // Create agent instance
     const instance: ACPAgentInstance = {
@@ -493,14 +468,12 @@ class ACPService extends EventEmitter {
 
       // Handle stderr (logs)
       proc.stderr?.on("data", (data: Buffer) => {
-        const message = data.toString()
-        logApp(`[ACP:${agentName}:stderr] ${message}`)
+        // stderr is captured but not logged to reduce noise
+        void data
       })
 
       // Handle process exit
       proc.on("exit", (code, signal) => {
-        logApp(`[ACP] Agent ${agentName} exited with code ${code}, signal ${signal}`)
-        
         // Distinguish between clean shutdown and abnormal exit
         // Exit code 0 or SIGTERM signal indicates clean shutdown
         const isCleanShutdown = code === 0 || signal === "SIGTERM"
@@ -530,7 +503,6 @@ class ACPService extends EventEmitter {
 
       // Handle process error
       proc.on("error", (error) => {
-        logApp(`[ACP] Agent ${agentName} process error: ${error.message}`)
         instance.status = "error"
         instance.error = error.message
         this.emit("agentStatusChanged", { agentName, status: "error", error: error.message })
@@ -542,7 +514,6 @@ class ACPService extends EventEmitter {
       if (instance.status === "starting") {
         instance.status = "ready"
         this.emit("agentStatusChanged", { agentName, status: "ready" })
-        logApp(`[ACP] Agent ${agentName} is ready`)
       }
 
     } catch (error) {
@@ -575,7 +546,6 @@ class ACPService extends EventEmitter {
     const instance = this.agents.get(agentName)
     if (instance && instance.status === "starting") {
       const errorMessage = `Timeout waiting for agent ${agentName} to become ready after ${timeoutMs}ms`
-      logApp(`[ACP] ${errorMessage}`)
       instance.status = "error"
       instance.error = errorMessage
       this.emit("agentStatusChanged", { agentName, status: "error", error: errorMessage })
@@ -591,8 +561,6 @@ class ACPService extends EventEmitter {
     if (!instance || !instance.process) {
       return
     }
-
-    logApp(`[ACP] Stopping agent ${agentName}`)
 
     // Reject any pending requests
     for (const [id, { reject }] of instance.pendingRequests) {
@@ -618,8 +586,8 @@ class ACPService extends EventEmitter {
           resolve()
         })
       })
-    } catch (error) {
-      logApp(`[ACP] Error stopping agent ${agentName}: ${error}`)
+    } catch {
+      // Silently ignore errors during shutdown
     }
 
     instance.status = "stopped"
@@ -643,6 +611,9 @@ class ACPService extends EventEmitter {
       method,
       params,
     }
+
+    // Log the complete request (not individual chunks)
+    logACP("REQUEST", agentName, method, params)
 
     return new Promise((resolve, reject) => {
       // Timeout handle so we can clear it when response arrives
@@ -709,24 +680,36 @@ class ACPService extends EventEmitter {
         if ("id" in message && message.id !== null && "method" in message) {
           // This is a REQUEST from the agent to us (the client)
           // We need to handle it and send a response back
+          logACP("REQUEST", agentName, `← ${(message as JsonRpcRequest).method}`, (message as JsonRpcRequest).params)
           this.handleAgentRequest(agentName, message as JsonRpcRequest)
         } else if ("id" in message && message.id !== null) {
           // This is a RESPONSE to one of our requests
           const pending = instance.pendingRequests.get(message.id)
           if (pending) {
             instance.pendingRequests.delete(message.id)
-            if ((message as JsonRpcResponse).error) {
-              pending.reject(new Error((message as JsonRpcResponse).error!.message))
+            const response = message as JsonRpcResponse
+            // Log the complete response (not individual chunks)
+            logACP("RESPONSE", agentName, `id:${message.id}`, response.error || response.result)
+            if (response.error) {
+              pending.reject(new Error(response.error.message))
             } else {
-              pending.resolve((message as JsonRpcResponse).result)
+              pending.resolve(response.result)
             }
           }
         } else if ("method" in message) {
           // This is a notification (no id means no response expected)
-          this.emit("notification", { agentName, method: message.method, params: message.params })
+          // Only log non-chunk notifications to avoid spam
+          const notification = message as JsonRpcNotification
+          const params = notification.params as Record<string, unknown> | undefined
+          const update = params?.update as Record<string, unknown> | undefined
+          const isChunk = notification.method === "session/update" && update?.sessionUpdate === "agent_message_chunk"
+          if (!isChunk) {
+            logACP("NOTIFICATION", agentName, `← ${notification.method}`, notification.params)
+          }
+          this.emit("notification", { agentName, method: notification.method, params: notification.params })
         }
-      } catch (error) {
-        logApp(`[ACP:${agentName}] Failed to parse message: ${line}`)
+      } catch {
+        // Silently ignore unparseable messages
       }
     }
   }
@@ -741,7 +724,6 @@ class ACPService extends EventEmitter {
    */
   private async handleAgentRequest(agentName: string, request: JsonRpcRequest): Promise<void> {
     const { id, method, params } = request
-    logApp(`[ACP:${agentName}] Received request: ${method} (id: ${id})`)
 
     try {
       let result: unknown
@@ -773,7 +755,6 @@ class ACPService extends EventEmitter {
     } catch (error) {
       // Send error response
       const errorMessage = error instanceof Error ? error.message : String(error)
-      logApp(`[ACP:${agentName}] Error handling request ${method}: ${errorMessage}`)
       this.sendResponse(agentName, id, undefined, {
         code: -32000,
         message: errorMessage,
@@ -792,7 +773,6 @@ class ACPService extends EventEmitter {
   ): void {
     const instance = this.agents.get(agentName)
     if (!instance?.process?.stdin) {
-      logApp(`[ACP:${agentName}] Cannot send response - agent not ready`)
       return
     }
 
@@ -804,9 +784,8 @@ class ACPService extends EventEmitter {
 
     const message = JSON.stringify(response) + "\n"
     instance.process.stdin.write(message, (err) => {
-      if (err) {
-        logApp(`[ACP:${agentName}] Failed to send response: ${err.message}`)
-      }
+      // Silently ignore write failures
+      void err
     })
   }
 
@@ -816,7 +795,6 @@ class ACPService extends EventEmitter {
   private sendNotification(agentName: string, method: string, params?: unknown): void {
     const instance = this.agents.get(agentName)
     if (!instance?.process?.stdin) {
-      logApp(`[ACP:${agentName}] Cannot send notification - agent not ready`)
       return
     }
 
@@ -826,11 +804,13 @@ class ACPService extends EventEmitter {
       params,
     }
 
+    // Log outgoing notification
+    logACP("NOTIFICATION", agentName, method, params)
+
     const message = JSON.stringify(notification) + "\n"
     instance.process.stdin.write(message, (err) => {
-      if (err) {
-        logApp(`[ACP:${agentName}] Failed to send notification: ${err.message}`)
-      }
+      // Silently ignore write failures
+      void err
     })
   }
 
@@ -843,9 +823,6 @@ class ACPService extends EventEmitter {
     params: ACPRequestPermissionRequest
   ): Promise<ACPRequestPermissionResponse> {
     const { sessionId, toolCall, options } = params
-
-    logApp(`[ACP:${agentName}] Permission request for tool: ${toolCall.title} (id: ${toolCall.toolCallId})`)
-    logApp(`[ACP:${agentName}] Options: ${JSON.stringify(options.map(o => o.name))}`)
 
     // Emit tool call status update for UI visibility
     this.emit("toolCallUpdate", {
@@ -995,8 +972,6 @@ class ACPService extends EventEmitter {
   ): Promise<{ content: string }> {
     const { sessionId, path: filePath, line, limit } = params
 
-    logApp(`[ACP:${agentName}] Reading file: ${filePath} (line: ${line}, limit: ${limit})`)
-
     try {
       // Security check: Ensure path is absolute
       // Allow both forward slash (Unix and Windows C:/) and backslash (Windows C:\) patterns
@@ -1011,7 +986,6 @@ class ACPService extends EventEmitter {
 
       // Security check: Block access to sensitive paths (check both original and resolved)
       if (this.isSensitivePath(filePath) || this.isSensitivePath(pathToCheck)) {
-        logApp(`[ACP:${agentName}] BLOCKED read of sensitive path: ${filePath} (resolved: ${pathToCheck})`)
         throw new Error("Access denied: Cannot read files in sensitive locations (SSH keys, credentials, etc.)")
       }
 
@@ -1056,11 +1030,8 @@ class ACPService extends EventEmitter {
         const approved = await promise
 
         if (!approved) {
-          logApp(`[ACP:${agentName}] User denied file read: ${filePath}`)
           throw new Error("User denied file read operation")
         }
-
-        logApp(`[ACP:${agentName}] User approved file read: ${filePath}`)
       }
 
       // Use resolved path for actual read to prevent TOCTOU attacks via symlink swapping
@@ -1083,7 +1054,6 @@ class ACPService extends EventEmitter {
       return { content }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
-      logApp(`[ACP:${agentName}] Failed to read file ${filePath}: ${errorMessage}`)
       throw new Error(`Failed to read file: ${errorMessage}`)
     }
   }
@@ -1100,8 +1070,6 @@ class ACPService extends EventEmitter {
     params: ACPWriteTextFileRequest
   ): Promise<Record<string, never>> {
     const { sessionId, path: filePath, content } = params
-
-    logApp(`[ACP:${agentName}] Writing file: ${filePath} (${content.length} bytes)`)
 
     try {
       // Security check: Ensure path is absolute
@@ -1123,10 +1091,9 @@ class ACPService extends EventEmitter {
 
       // Security check: Block writes to sensitive paths
       // Check: original path, resolved file path (if symlink exists), and constructed path from resolved directory
-      if (this.isSensitivePath(filePath) || 
+      if (this.isSensitivePath(filePath) ||
           (resolvedFilePath && this.isSensitivePath(resolvedFilePath)) ||
           this.isSensitivePath(constructedPath)) {
-        logApp(`[ACP:${agentName}] BLOCKED write to sensitive path: ${filePath} (resolved file: ${resolvedFilePath}, constructed: ${constructedPath})`)
         throw new Error("Access denied: Cannot write files in sensitive locations (SSH keys, credentials, etc.)")
       }
 
@@ -1171,11 +1138,8 @@ class ACPService extends EventEmitter {
         const approved = await promise
 
         if (!approved) {
-          logApp(`[ACP:${agentName}] User denied file write: ${filePath}`)
           throw new Error("User denied file write operation")
         }
-
-        logApp(`[ACP:${agentName}] User approved file write: ${filePath}`)
       }
 
       // Use resolved path for actual write to prevent TOCTOU attacks via symlink swapping
@@ -1187,12 +1151,9 @@ class ACPService extends EventEmitter {
       await mkdir(dirname(effectivePath), { recursive: true })
 
       await writeFile(effectivePath, content, "utf-8")
-
-      logApp(`[ACP:${agentName}] Successfully wrote file: ${filePath}`)
       return {}
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
-      logApp(`[ACP:${agentName}] Failed to write file ${filePath}: ${errorMessage}`)
       throw new Error(`Failed to write file: ${errorMessage}`)
     }
   }
@@ -1206,8 +1167,6 @@ class ACPService extends EventEmitter {
     if (!instance || instance.initialized) {
       return
     }
-
-    logApp(`[ACP:${agentName}] Sending initialize request`)
 
     try {
       const result = await this.sendRequest(agentName, "initialize", {
@@ -1228,15 +1187,13 @@ class ACPService extends EventEmitter {
         },
       }) as { protocolVersion?: number; agentCapabilities?: { loadSession?: boolean } }
 
-      logApp(`[ACP:${agentName}] Initialized with protocol version ${result?.protocolVersion}`)
       instance.initialized = true
 
       // Store agent capabilities from response
       if (result?.agentCapabilities) {
         instance.agentCapabilities = result.agentCapabilities as { loadSession?: boolean }
       }
-    } catch (error) {
-      logApp(`[ACP:${agentName}] Initialize failed: ${error}`)
+    } catch {
       // Don't throw - some agents might not require initialization
     }
   }
@@ -1257,8 +1214,6 @@ class ACPService extends EventEmitter {
       return instance.sessionId
     }
 
-    logApp(`[ACP:${agentName}] Creating new session`)
-
     try {
       // Use session/new per ACP spec (not session/create)
       const result = await this.sendRequest(agentName, "session/new", {
@@ -1269,11 +1224,9 @@ class ACPService extends EventEmitter {
       const sessionId = result?.sessionId
       if (sessionId) {
         instance.sessionId = sessionId
-        logApp(`[ACP:${agentName}] Session created: ${sessionId}`)
       }
       return sessionId
-    } catch (error) {
-      logApp(`[ACP:${agentName}] Session creation failed: ${error}`)
+    } catch {
       return undefined
     }
   }
@@ -1343,16 +1296,12 @@ class ACPService extends EventEmitter {
         promptParams.sessionId = sessionId
       }
 
-      logApp(`[ACP:${agentName}] Sending session/prompt`)
       const promptResult = await this.sendRequest(agentName, "session/prompt", promptParams) as {
         stopReason?: string
         error?: { message?: string }
         content?: ACPContentBlock[]
         message?: { content?: ACPContentBlock[] }  // Some agents wrap content in message
       }
-
-      // Debug: Log the raw response structure
-      logApp(`[ACP:${agentName}] session/prompt response: ${JSON.stringify(promptResult, null, 2).substring(0, 3000)}`)
 
       if (promptResult?.error) {
         return {
@@ -1414,8 +1363,6 @@ class ACPService extends EventEmitter {
         resultMessage = "Task sent to agent. Output will be logged as it arrives."
       }
 
-      logApp(`[ACP:${agentName}] Task result: ${resultMessage.substring(0, 200)}...`)
-
       return {
         success: true,
         result: resultMessage,
@@ -1425,7 +1372,6 @@ class ACPService extends EventEmitter {
 
       // Check if this is a "Method not found" error - agent might use different protocol
       if (errorMessage.includes("Method not found")) {
-        logApp(`[ACP:${agentName}] Standard ACP methods not supported, this agent may use a different protocol`)
         return {
           success: false,
           error: `Agent "${agentName}" doesn't support standard ACP protocol. It may require a different integration method.`,
@@ -1443,7 +1389,6 @@ class ACPService extends EventEmitter {
    * Clean up all agents on shutdown
    */
   async shutdown(): Promise<void> {
-    logApp(`[ACP] Shutting down all agents`)
     const stopPromises = Array.from(this.agents.keys()).map(name => this.stopAgent(name))
     await Promise.allSettled(stopPromises)
   }
@@ -1459,8 +1404,7 @@ class ACPService extends EventEmitter {
       try {
         await this.spawnAgent(agentName)
         instance = this.agents.get(agentName)
-      } catch (error) {
-        logApp(`[ACP:${agentName}] Failed to spawn agent for session: ${error}`)
+      } catch {
         return undefined
       }
     }
@@ -1506,11 +1450,15 @@ class ACPService extends EventEmitter {
       }
     }
 
+    // Clear any stale session output from previous prompts in this session
+    // This ensures we only collect content blocks from the current prompt,
+    // preventing old messages from being included in the response
+    this.clearSessionOutput(sessionId)
+
     try {
       // Format prompt as content blocks per ACP spec
       const promptContent = [{ type: "text", text: prompt }]
 
-      logApp(`[ACP:${agentName}] Sending prompt to session ${sessionId}`)
       const result = await this.sendRequest(agentName, "session/prompt", {
         sessionId,
         prompt: promptContent,
@@ -1570,7 +1518,6 @@ class ACPService extends EventEmitter {
    * Cancel an in-progress prompt.
    */
   async cancelPrompt(agentName: string, sessionId: string): Promise<void> {
-    logApp(`[ACP:${agentName}] Cancelling prompt for session ${sessionId}`)
     this.sendNotification(agentName, "session/cancel", { sessionId })
   }
 

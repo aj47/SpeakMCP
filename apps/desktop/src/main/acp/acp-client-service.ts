@@ -58,7 +58,6 @@ export class ACPClientService {
       const data = await response.json();
       return data.agents || data || [];
     } catch (error) {
-      console.error('[ACP Client] Error discovering agents:', error);
       throw error;
     }
   }
@@ -108,11 +107,6 @@ export class ACPClientService {
       const result = await response.json();
       return result as ACPRunResult;
     } catch (error) {
-      if ((error as Error).name === 'AbortError') {
-        console.log(`[ACP Client] Run ${runId} was cancelled`);
-      } else {
-        console.error('[ACP Client] Error running agent sync:', error);
-      }
       throw error;
     } finally {
       this.activeRuns.delete(runId);
@@ -188,11 +182,6 @@ export class ACPClientService {
 
       return serverRunId || localRunId;
     } catch (error) {
-      if ((error as Error).name === 'AbortError') {
-        console.log(`[ACP Client] Async run start ${localRunId} was cancelled`);
-      } else {
-        console.error('[ACP Client] Error running agent async:', error);
-      }
       throw error;
     } finally {
       // Async mode only needs tracking while the start request is in-flight.
@@ -220,7 +209,6 @@ export class ACPClientService {
       const result = await response.json();
       return result as ACPRunResult;
     } catch (error) {
-      console.error('[ACP Client] Error getting run status:', error);
       throw error;
     }
   }
@@ -335,11 +323,6 @@ export class ACPClientService {
 
       return finalResult ? { ...baseResult, ...finalResult } : baseResult;
     } catch (error) {
-      if ((error as Error).name === 'AbortError') {
-        console.log(`[ACP Client] Stream ${runId} was cancelled`);
-      } else {
-        console.error('[ACP Client] Error streaming agent:', error);
-      }
       throw error;
     } finally {
       this.activeRuns.delete(runId);
@@ -353,14 +336,12 @@ export class ACPClientService {
   cancelRun(runId: string): void {
     const run = this.activeRuns.get(runId);
     if (run) {
-      console.log(`[ACP Client] Cancelling run ${runId}`);
       run.controller.abort();
       this.activeRuns.delete(runId);
     }
   }
 
   cancelAllRuns(): void {
-    console.log(`[ACP Client] Cancelling all ${this.activeRuns.size} active runs`);
     for (const [runId, run] of this.activeRuns) {
       run.controller.abort();
     }

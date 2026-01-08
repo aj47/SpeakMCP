@@ -36,7 +36,7 @@ import { diagnosticsService } from "./diagnostics"
 import { state, agentProcessManager } from "./state"
 import { OAuthClient } from "./oauth-client"
 import { oauthStorage } from "./oauth-storage"
-import { isDebugTools, logTools } from "./debug"
+import { isDebugTools, logTools, logMCP } from "./debug"
 import { app, dialog } from "electron"
 import { builtinTools, executeBuiltinTool, isBuiltinTool, BUILTIN_SERVER_NAME } from "./builtin-tools"
 
@@ -1301,9 +1301,22 @@ export class MCPService {
           arguments: processedArguments,
         })
       }
+
+      // Log complete MCP request
+      logMCP("REQUEST", serverName, {
+        tool: toolName,
+        arguments: processedArguments,
+      })
+
       const result = await client.callTool({
         name: toolName,
         arguments: processedArguments,
+      })
+
+      // Log complete MCP response
+      logMCP("RESPONSE", serverName, {
+        tool: toolName,
+        result: result,
       })
 
       if (isDebugTools()) {
@@ -1379,10 +1392,26 @@ export class MCPService {
                   correctedArgs,
                 })
               }
+
+              // Log retry MCP request
+              logMCP("REQUEST", serverName, {
+                tool: toolName,
+                arguments: correctedArgs,
+                retry: true,
+              })
+
               const retryResult = await client.callTool({
                 name: toolName,
                 arguments: correctedArgs,
               })
+
+              // Log retry MCP response
+              logMCP("RESPONSE", serverName, {
+                tool: toolName,
+                result: retryResult,
+                retry: true,
+              })
+
               if (isDebugTools()) {
                 logTools("Retry result", { serverName, toolName, retryResult })
               }

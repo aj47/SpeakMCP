@@ -38,14 +38,6 @@ interface DelegatedRun extends ACPSubAgentState {
 }
 
 /**
- * Log ACP router-related debug messages.
- */
-function logACPRouter(...args: unknown[]): void {
-  // eslint-disable-next-line no-console
-  console.log(`[${new Date().toISOString()}] [ACP Router]`, ...args);
-}
-
-/**
  * Generate a unique run ID for tracking delegated runs.
  */
 function generateDelegationRunId(): string {
@@ -68,14 +60,12 @@ function cleanupDelegationMappings(runId: string, agentName: string): void {
     if (activeRunIds.size === 0) {
       agentNameToActiveRunIds.delete(agentName);
     }
-    logACPRouter(`Cleaned up active run mapping for ${agentName}: ${runId}`);
   }
 
   // Remove any sessionId → runId mappings pointing at this run.
   for (const [sessionId, mappedRunId] of sessionToRunId.entries()) {
     if (mappedRunId === runId) {
       sessionToRunId.delete(sessionId);
-      logACPRouter(`Cleaned up session mapping: ${sessionId} -> ${runId}`);
     }
   }
 }
@@ -198,7 +188,6 @@ function registerAgentRunMapping(agentName: string, runId: string): void {
     agentNameToActiveRunIds.set(agentName, activeRunIds);
   }
   activeRunIds.add(runId);
-  logACPRouter(`Registered active run for ${agentName}: ${runId} (${activeRunIds.size} total active)`);
 }
 
 /**
@@ -305,8 +294,6 @@ acpService.on('sessionUpdate', (event: {
 }) => {
   const { agentName, sessionId, content, isComplete, stopReason } = event;
 
-  logACPRouter(`Session update from ${agentName}:`, { sessionId, isComplete, contentBlocks: content?.length });
-
   // Find the run ID for this session
   const mappedRunId = sessionToRunId.get(sessionId);
   let runId = mappedRunId;
@@ -321,9 +308,7 @@ acpService.on('sessionUpdate', (event: {
       // Establish the session mapping now that we have both IDs
       sessionToRunId.set(sessionId, activeRunId);
       runId = activeRunId;
-      logACPRouter(`Created session mapping: ${sessionId} -> ${runId} (via agent name fallback, ${activeRunIds?.size || 0} active runs)`);
     } else {
-      logACPRouter(`No run ID found for session ${sessionId} or agent ${agentName}`);
       return;
     }
   }
@@ -342,13 +327,11 @@ acpService.on('sessionUpdate', (event: {
           agentNameToActiveRunIds.delete(agentName);
         }
       }
-      logACPRouter(`Removed stale session mapping: ${sessionId} -> ${mappedRunId}`);
 
       // Try to find another active run for this agent
       const remainingRunIds = agentNameToActiveRunIds.get(agentName);
       const activeRunId = remainingRunIds?.values().next().value;
       if (!activeRunId) {
-        logACPRouter(`No active run found for agent ${agentName} after stale mapping cleanup`);
         return;
       }
 
@@ -356,12 +339,9 @@ acpService.on('sessionUpdate', (event: {
       runId = activeRunId;
       subAgentState = delegatedRuns.get(runId);
       if (!subAgentState) {
-        logACPRouter(`No sub-agent state found for recovered run ${runId}`);
         return;
       }
-      logACPRouter(`Recovered session mapping: ${sessionId} -> ${runId} (after stale cleanup)`);
     } else {
-      logACPRouter(`No sub-agent state found for run ${runId}`);
       return;
     }
   }
@@ -408,7 +388,6 @@ acpService.on('sessionUpdate', (event: {
   // Rate limiting: skip emit if we recently emitted (unless complete)
   const now = Date.now();
   if (!isComplete && now - subAgentState.lastEmitTime < MIN_EMIT_INTERVAL_MS) {
-    logACPRouter(`Rate limiting UI emit for run ${runId} (${now - subAgentState.lastEmitTime}ms since last)`);
     return;
   }
   subAgentState.lastEmitTime = now;
@@ -426,11 +405,15 @@ acpService.on('sessionUpdate', (event: {
   };
 
   // Emit progress update to UI
+  // IMPORTANT: isComplete is always false because this is a delegation progress update,
+  // not a completion of the parent session. The parent session continues running after
+  // the delegation completes. Setting isComplete: true here would incorrectly mark the
+  // parent session as done in the UI while the main agent is still processing.
   emitAgentProgress({
     sessionId: subAgentState.parentSessionId,
     currentIteration: 0,
     maxIterations: 1,
-    isComplete: isComplete || false,
+    isComplete: false,
     steps: [
       {
         id: `delegation-${runId}`,
@@ -442,8 +425,8 @@ acpService.on('sessionUpdate', (event: {
         delegation: delegationProgress,
       },
     ],
-  }).catch(err => {
-    logACPRouter('Failed to emit agent progress:', err);
+  }).catch(() => {
+    // Ignore emit errors
   });
 
   // Once the agent reports completion for this session, the mappings are no longer needed.
@@ -492,8 +475,6 @@ export function getInternalAgentConfig(): import('../../shared/types').ACPAgentC
 export async function handleListAvailableAgents(args: {
   capability?: string;
 }): Promise<object> {
-  logACPRouter('Listing available agents', args);
-
   try {
     // Get agents from the actual config (shared/types.ts ACPAgentConfig)
     const config = configStore.get();
@@ -556,7 +537,6 @@ export async function handleListAvailableAgents(args: {
       filter: args.capability || null,
     };
   } catch (error) {
-    logACPRouter('Error listing agents:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : String(error),
@@ -582,8 +562,6 @@ export async function handleDelegateToAgent(
   },
   parentSessionId?: string
 ): Promise<object> {
-  logACPRouter('Delegating to agent', { ...args, parentSessionId });
-
   const waitForResult = args.waitForResult !== false; // Default to true
 
   // Handle internal agent delegation
@@ -604,8 +582,6 @@ async function executeInternalAgent(
   parentSessionId: string | undefined,
   waitForResult: boolean
 ): Promise<object> {
-  logACPRouter('Executing internal agent', { task: args.task.substring(0, 100), parentSessionId });
-
   // Check if internal agent is enabled
   const internalConfig = getInternalAgentConfig();
   if (internalConfig.enabled === false) {
@@ -653,7 +629,6 @@ async function executeInternalAgent(
       return createFailedResult(subAgentState, result.error || 'Unknown error', subAgentState.conversation);
     }
   } catch (error) {
-    logACPRouter('Error in internal agent execution:', error);
     return createFailedResult(subAgentState, error instanceof Error ? error.message : String(error));
   }
 }
@@ -683,7 +658,6 @@ async function executeACPAgent(
     if (agentConfig.connection.type === 'stdio') {
       const agentStatus = acpService.getAgentStatus(args.agentName);
       if (agentStatus?.status !== 'ready') {
-        logACPRouter(`Agent "${args.agentName}" not ready, attempting to spawn...`);
         try {
           await acpService.spawnAgent(args.agentName);
         } catch (spawnError) {
@@ -696,10 +670,6 @@ async function executeACPAgent(
     }
 
     // Create unified sub-agent state (conversation initialized automatically)
-    // Warn if parentSessionId is missing - this can cause delegation progress to be misattributed
-    if (!parentSessionId) {
-      logACPRouter(`Warning: No parentSessionId provided for delegation to ${args.agentName}. Progress updates may not be correctly attributed.`);
-    }
     const subAgentState = createSubAgentState({
       agentName: args.agentName,
       task: args.task,
@@ -713,7 +683,6 @@ async function executeACPAgent(
       const sessionId = acpService.getAgentSessionId(args.agentName);
       if (sessionId) {
         sessionToRunId.set(sessionId, subAgentState.runId);
-        logACPRouter(`Mapped session ${sessionId} to run ${subAgentState.runId}`);
       }
     };
 
@@ -723,7 +692,6 @@ async function executeACPAgent(
       return executeACPAgentAsync(subAgentState, args, agentConfig, parentSessionId, registerSessionMapping);
     }
   } catch (error) {
-    logACPRouter('Error delegating to agent:', error);
     return { success: false, error: error instanceof Error ? error.message : String(error) };
   }
 }
@@ -819,7 +787,6 @@ function executeRemoteAgentAsync(
   }).then(
     (acpRunId) => {
       subAgentState.acpRunId = acpRunId;
-      logACPRouter(`Async HTTP run started for ${args.agentName}: acpRunId=${acpRunId}`);
     },
     (error) => {
       finalizeAsyncRunWithError(subAgentState, args.agentName, error);
@@ -871,7 +838,6 @@ function executeStdioAgentAsync(
       // Note: Don't cleanup delegation mappings here - the sessionUpdate handler
       // will clean up when isComplete arrives. Early cleanup can cause late
       // session/update notifications to be dropped/misrouted.
-      logACPRouter(`Async run completed for ${args.agentName}:`, result.success ? 'success' : 'failed');
     },
     (error) => {
       finalizeAsyncRunWithError(subAgentState, args.agentName, error);
@@ -901,7 +867,6 @@ function finalizeAsyncRunWithError(
   // Note: Don't cleanup delegation mappings here - the sessionUpdate handler
   // will clean up when isComplete arrives. Early cleanup can cause late
   // session/update notifications to be dropped/misrouted.
-  logACPRouter(`Async run failed for ${agentName}:`, error);
 }
 
 
@@ -911,8 +876,6 @@ function finalizeAsyncRunWithError(
  * @returns Object with current status of the run
  */
 export async function handleCheckAgentStatus(args: { runId: string; historyLength?: number }): Promise<object> {
-  logACPRouter('Checking agent status', args);
-
   try {
     const subAgentState = delegatedRuns.get(args.runId);
 
@@ -938,8 +901,7 @@ export async function handleCheckAgentStatus(args: { runId: string; historyLengt
           subAgentState.result = acpResult;
         }
         // If still running, keep local status as 'running'
-      } catch (statusError) {
-        logACPRouter('Error querying ACP server status:', statusError);
+      } catch {
         // Continue with local state if query fails
       }
     }
@@ -972,7 +934,6 @@ export async function handleCheckAgentStatus(args: { runId: string; historyLengt
 
     return response;
   } catch (error) {
-    logACPRouter('Error checking agent status:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : String(error),
@@ -987,8 +948,6 @@ export async function handleCheckAgentStatus(args: { runId: string; historyLengt
  * @returns Object with spawn result
  */
 export async function handleSpawnAgent(args: { agentName: string }): Promise<object> {
-  logACPRouter('Spawning agent', args);
-
   try {
     // Check if agent exists in config
     const config = configStore.get();
@@ -1036,7 +995,6 @@ export async function handleSpawnAgent(args: { agentName: string }): Promise<obj
       agentName: args.agentName,
     };
   } catch (error) {
-    logACPRouter('Error spawning agent:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : String(error),
@@ -1051,8 +1009,6 @@ export async function handleSpawnAgent(args: { agentName: string }): Promise<obj
  * @returns Object with stop result
  */
 export async function handleStopAgent(args: { agentName: string }): Promise<object> {
-  logACPRouter('Stopping agent', args);
-
   try {
     // Check if agent exists in config
     const config = configStore.get();
@@ -1085,7 +1041,6 @@ export async function handleStopAgent(args: { agentName: string }): Promise<obje
       agentName: args.agentName,
     };
   } catch (error) {
-    logACPRouter('Error stopping agent:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : String(error),
@@ -1115,7 +1070,6 @@ export async function executeACPRouterTool(
 ): Promise<{ content: string; isError: boolean }> {
   // Resolve alias tool names to their canonical handlers
   const resolvedToolName = resolveToolName(toolName);
-  logACPRouter('Executing tool', { toolName, resolvedToolName, args, parentSessionId });
 
   try {
     let result: object;
@@ -1196,7 +1150,6 @@ export async function executeACPRouterTool(
       isError,
     };
   } catch (error) {
-    logACPRouter('Error executing tool:', error);
     return {
       content: JSON.stringify({
         success: false,
@@ -1303,7 +1256,6 @@ export function cleanupOldDelegatedRuns(maxAgeMs: number = 60 * 60 * 1000): void
       cleanupDelegationMappings(runId, state.agentName);
     }
     delegatedRuns.delete(runId);
-    logACPRouter(`Cleaned up old delegated run: ${runId}`);
   }
 }
 
@@ -1317,8 +1269,6 @@ export function cleanupOldDelegatedRuns(maxAgeMs: number = 60 * 60 * 1000): void
  * @returns Object with cancellation result
  */
 export async function handleCancelAgentRun(args: { runId: string }): Promise<object> {
-  logACPRouter('Cancelling agent run', args);
-
   const state = delegatedRuns.get(args.runId);
   if (!state) {
     return {
@@ -1370,7 +1320,6 @@ export async function handleCancelAgentRun(args: { runId: string }): Promise<obj
       note: 'External agent tasks cannot be forcefully stopped mid-execution',
     };
   } catch (error) {
-    logACPRouter('Error cancelling agent run:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : String(error),

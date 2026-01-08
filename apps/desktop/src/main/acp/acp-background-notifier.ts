@@ -49,7 +49,14 @@ export class ACPBackgroundNotifier {
   }
 
   /**
-   * Returns true if any tasks are poll-worthy (running with required fields).
+   * Returns true if any tasks are poll-worthy or awaiting setup.
+   * 
+   * Includes:
+   * - Running tasks with baseUrl and acpRunId (actively pollable)
+   * - Running tasks with baseUrl but no acpRunId yet (async POST /runs in flight)
+   * 
+   * The second case prevents premature stopPolling() when a remote async run
+   * is being started and acpRunId hasn't been populated yet.
    */
   hasRunningTasks(): boolean {
     if (!this.delegatedRuns) {
@@ -57,7 +64,13 @@ export class ACPBackgroundNotifier {
     }
 
     for (const state of this.delegatedRuns.values()) {
+      // Actively pollable: running + remote baseUrl + acpRunId assigned
       if (state.status === 'running' && state.baseUrl && state.acpRunId) {
+        return true
+      }
+      // Awaiting acpRunId: running + remote baseUrl but POST /runs still in flight
+      // Keep polling alive to avoid dropping notifications on slow networks
+      if (state.status === 'running' && state.baseUrl && !state.acpRunId) {
         return true
       }
     }

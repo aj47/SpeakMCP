@@ -256,6 +256,12 @@ export interface RunSubSessionOptions {
   profileSnapshot?: SessionProfileSnapshot;
   /** Optional callback for progress updates */
   onProgress?: (update: AgentProgressUpdate) => void;
+  /**
+   * Optional pre-generated sub-session ID.
+   * If provided, allows the caller to capture the ID before execution starts,
+   * enabling cancellation of in-flight sub-sessions.
+   */
+  subSessionId?: string;
 }
 
 export interface SubSessionResult {
@@ -292,8 +298,10 @@ export async function runInternalSubSession(
   const parentDepth = getSessionDepth(parentSessionId);
   const subSessionDepth = parentDepth + 1;
 
-  // Generate sub-session ID
-  const subSessionId = `subsession_${Date.now()}_${uuidv4().substring(0, 8)}`;
+  // Generate sub-session ID or use pre-generated one from caller
+  // Using a pre-generated ID allows callers to track the sub-session for cancellation
+  // before this async function completes
+  const subSessionId = options.subSessionId ?? `subsession_${Date.now()}_${uuidv4().substring(0, 8)}`;
 
   // Create sub-session state
   const subSession: InternalSubSession = {
@@ -540,6 +548,15 @@ export function cancelSubSession(subSessionId: string): boolean {
 
   logSubSession(`Sub-session ${subSessionId} cancelled`);
   return true;
+}
+
+/**
+ * Generate a unique sub-session ID.
+ * Can be used by callers to pre-generate the ID before calling runInternalSubSession,
+ * enabling cancellation of in-flight sub-sessions.
+ */
+export function generateSubSessionId(): string {
+  return `subsession_${Date.now()}_${uuidv4().substring(0, 8)}`;
 }
 
 /**

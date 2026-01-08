@@ -19,6 +19,7 @@ import {
   cancelSubSession,
   getInternalAgentInfo,
   getSessionDepth,
+  generateSubSessionId,
 } from './internal-agent';
 
 // ============================================================================
@@ -624,6 +625,11 @@ async function executeInternalAgent(
   });
   subAgentState.status = 'running';
 
+  // Pre-generate sub-session ID and store it BEFORE starting execution.
+  // This enables cancel_agent_run to work for in-flight internal tasks.
+  const preGeneratedSubSessionId = generateSubSessionId();
+  subAgentState.subSessionId = preGeneratedSubSessionId;
+
   // Internal agent always executes synchronously
   // waitForResult is ignored for internal agent (always waits)
   try {
@@ -631,12 +637,8 @@ async function executeInternalAgent(
       task: args.task,
       context: args.context,
       parentSessionId,
+      subSessionId: preGeneratedSubSessionId,
     });
-
-    // Store sub-session ID for cancellation support
-    if (result.subSessionId) {
-      subAgentState.subSessionId = result.subSessionId;
-    }
 
     // Update conversation history in consolidated state
     subAgentState.conversation = result.conversationHistory.map(msg => ({

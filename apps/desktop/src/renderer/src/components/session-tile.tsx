@@ -119,7 +119,7 @@ export function SessionTile({
 
   const handleToggleCollapse = (e?: React.MouseEvent | React.KeyboardEvent) => {
     e?.stopPropagation()
-    setIsCollapsed(!isCollapsed)
+    setIsCollapsed(prev => !prev)
   }
 
   // Resize handlers

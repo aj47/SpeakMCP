@@ -1712,6 +1712,35 @@ Return ONLY JSON per schema.`,
 
       const trimmedContent = contentText.trim()
 
+      // IMPORTANT: For non-actionable requests (no relevant tools OR no tools at all),
+      // accept any non-empty text response as complete. This prevents infinite loops
+      // for simple Q&A like "hi" where the LLM just responds without tool calls.
+      // We use a lower threshold here (any non-empty response) because short greetings
+      // like "Hi." or "Hello." are valid complete responses to simple greetings.
+      const noToolsAvailable = !availableTools || availableTools.length === 0
+      const hasAnyResponse = trimmedContent.length > 0 && !isToolCallPlaceholder(contentText)
+      if ((noToolsAvailable || !isActionableRequest) && hasAnyResponse && llmResponse.needsMoreWork !== true) {
+        if (isDebugLLM()) {
+          logLLM("Non-actionable request with substantive response - accepting as complete", {
+            noToolsAvailable,
+            isActionableRequest,
+            responseLength: trimmedContent.length,
+            responsePreview: trimmedContent.substring(0, 100),
+          })
+        }
+        finalContent = contentText
+        addMessage("assistant", contentText)
+        emit({
+          currentIteration: iteration,
+          maxIterations,
+          steps: progressSteps.slice(-3),
+          isComplete: true,
+          finalContent,
+          conversationHistory: formatConversationForProgress(conversationHistory),
+        })
+        break
+      }
+
       // When agent claims it's done (needsMoreWork !== true) and has tool results + substantive response,
       // determine if the task is complete
       if (hasToolResultsInCurrentTurn && hasSubstantiveResponse && llmResponse.needsMoreWork !== true) {

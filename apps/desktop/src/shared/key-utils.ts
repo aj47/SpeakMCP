@@ -226,7 +226,7 @@ export function getMcpToolsShortcutDisplay(
     case "hold-ctrl-alt":
       return "Hold Ctrl+Alt"
     case "toggle-ctrl-alt":
-      return "Toggle Ctrl+Alt"
+      return "Press Ctrl+Alt"
     case "ctrl-alt-slash":
       return "Ctrl+Alt+/"
     case "custom":

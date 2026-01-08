@@ -117,6 +117,10 @@ export function SessionTile({
   const hasPendingApproval = !!progress?.pendingToolApproval
   const hasQueuedMessages = queuedMessages.length > 0
 
+  // Toggle collapse state for the session tile
+  // Note: stopPropagation() is intentional here - when users click the header to
+  // expand/collapse, we don't want to also trigger the tile-level onFocus handler.
+  // The collapse/expand action is distinct from selecting/focusing a session.
   const handleToggleCollapse = (e?: React.MouseEvent | React.KeyboardEvent) => {
     e?.stopPropagation()
     setIsCollapsed(prev => !prev)

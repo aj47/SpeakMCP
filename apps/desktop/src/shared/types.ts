@@ -503,6 +503,10 @@ export type Config = {
   // Message Queue Configuration - when enabled, users can queue messages while agent is processing
   mcpMessageQueueEnabled?: boolean
 
+  // Discovery Mode Configuration - when enabled, only tool names are in system prompt
+  // Full tool schemas are read from files on-demand (following Cursor's Dynamic Context Discovery)
+  mcpDiscoveryModeEnabled?: boolean
+
   // Predefined Prompts - frequently used prompts that can be quickly accessed
   predefinedPrompts?: PredefinedPrompt[]
 

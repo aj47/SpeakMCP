@@ -9,7 +9,10 @@ import { AgentProgressStep, AgentProgressUpdate, SessionProfileSnapshot } from "
 import { diagnosticsService } from "./diagnostics"
 import { makeStructuredContextExtraction, ContextExtractionResponse } from "./structured-output"
 import { makeLLMCallWithFetch, makeTextCompletionWithFetch, verifyCompletionWithFetch, RetryProgressCallback, makeLLMCallWithStreaming, StreamingCallback } from "./llm-fetch"
-import { constructSystemPrompt } from "./system-prompts"
+import { constructSystemPrompt, constructDiscoverySystemPrompt } from "./system-prompts"
+import { mcpFileSyncService } from "./mcp-file-sync"
+import { skillsService } from "./skills-service"
+import { DiscoveryContext } from "@shared/file-discovery-types"
 import { state, agentSessionStateManager } from "./state"
 import { isDebugLLM, logLLM, isDebugTools, logTools } from "./debug"
 import { shrinkMessagesForLLM, estimateTokensFromMessages } from "./context-budget"
@@ -17,6 +20,50 @@ import { emitAgentProgress } from "./emit-agent-progress"
 import { agentSessionTracker } from "./agent-session-tracker"
 import { conversationService } from "./conversation-service"
 import { getCurrentPresetName } from "../shared"
+
+/**
+ * Build discovery context for discovery-aware system prompts
+ * This gathers tool summaries and skill info from the file system
+ */
+function buildDiscoveryContext(): DiscoveryContext {
+  return {
+    mcpToolSummaries: mcpFileSyncService.getToolSummaries(),
+    skillSummaries: skillsService.getSkillSummaries(),
+    discoveryFolderPath: mcpFileSyncService.getDiscoveryFolderPath(),
+  }
+}
+
+/**
+ * Build system prompt, using discovery mode if enabled
+ * Discovery mode only includes tool names in prompt, full schemas read from files on-demand
+ */
+function buildSystemPrompt(
+  availableTools: Array<{ name: string; description: string; inputSchema?: any }>,
+  userGuidelines: string | undefined,
+  isAgentMode: boolean,
+  relevantTools?: Array<{ name: string; description: string; inputSchema?: any }>,
+  customSystemPrompt?: string,
+): string {
+  const config = configStore.get()
+
+  if (config.mcpDiscoveryModeEnabled) {
+    const discoveryContext = buildDiscoveryContext()
+    return constructDiscoverySystemPrompt(
+      discoveryContext,
+      userGuidelines,
+      isAgentMode,
+      customSystemPrompt,
+    )
+  }
+
+  return constructSystemPrompt(
+    availableTools,
+    userGuidelines,
+    isAgentMode,
+    relevantTools,
+    customSystemPrompt,
+  )
+}
 
 /**
  * Use LLM to extract useful context from conversation history
@@ -169,7 +216,7 @@ export async function processTranscriptWithTools(
   )
 
   const userGuidelines = config.mcpToolsSystemPrompt
-  const systemPrompt = constructSystemPrompt(
+  const systemPrompt = buildSystemPrompt(
     uniqueAvailableTools,
     userGuidelines,
     false,
@@ -752,7 +799,7 @@ export async function processTranscriptWithAgentMode(
   const customSystemPrompt = effectiveProfileSnapshot?.systemPrompt ?? config.mcpCustomSystemPrompt
 
   // Construct system prompt using the new approach
-  const systemPrompt = constructSystemPrompt(
+  const systemPrompt = buildSystemPrompt(
     uniqueAvailableTools,
     agentModeGuidelines,
     true,
@@ -937,7 +984,7 @@ export async function processTranscriptWithAgentMode(
       conversationHistory: formatConversationForProgress(conversationHistory),
     })
 
-    const postVerifySystemPrompt = constructSystemPrompt(
+    const postVerifySystemPrompt = buildSystemPrompt(
       uniqueAvailableTools,
       agentModeGuidelines, // Use session-bound guidelines
       true,
@@ -2287,7 +2334,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
         })
 
         // Get the summary from the agent
-        const contextAwarePrompt = constructSystemPrompt(
+        const contextAwarePrompt = buildSystemPrompt(
           uniqueAvailableTools,
           agentModeGuidelines, // Use session-bound guidelines
           true, // isAgentMode
@@ -2558,7 +2605,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
         })
 
         // Get the summary from the agent
-        const contextAwarePrompt = constructSystemPrompt(
+        const contextAwarePrompt = buildSystemPrompt(
           uniqueAvailableTools,
           agentModeGuidelines, // Use session-bound guidelines
           true, // isAgentMode

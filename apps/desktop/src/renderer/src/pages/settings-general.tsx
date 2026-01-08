@@ -801,6 +801,13 @@ export function Component() {
             />
           </Control>
 
+          <Control label={<ControlLabel label="Discovery Mode (Experimental)" tooltip="When enabled, only tool names are included in the system prompt. Full tool schemas are stored as files and read on-demand, reducing token usage. Based on Cursor's Dynamic Context Discovery approach." />} className="px-3">
+            <Switch
+              checked={configQuery.data?.mcpDiscoveryModeEnabled ?? false}
+              onCheckedChange={(value) => saveConfig({ mcpDiscoveryModeEnabled: value })}
+            />
+          </Control>
+
           <Control label={<ControlLabel label="Emergency Kill Switch" tooltip="Provides a global hotkey to immediately stop agent mode and kill all agent-created processes" />} className="px-3">
             <div className="space-y-3">
               <div className="flex items-center gap-2">

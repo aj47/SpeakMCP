@@ -6,26 +6,12 @@ import { useAgentStore } from "@renderer/stores"
 import { SessionGrid, SessionTileWrapper } from "@renderer/components/session-grid"
 import { clearPersistedSize } from "@renderer/hooks/use-resizable"
 import { AgentProgress } from "@renderer/components/agent-progress"
-import { MessageCircle, Mic, Plus, Calendar, Trash2, Search, ChevronDown, FolderOpen, CheckCircle2, LayoutGrid, Kanban, RotateCcw } from "lucide-react"
+import { MessageCircle, Mic, Plus, CheckCircle2, LayoutGrid, Kanban, RotateCcw } from "lucide-react"
 import { Button } from "@renderer/components/ui/button"
-import { Input } from "@renderer/components/ui/input"
-
-import { Badge } from "@renderer/components/ui/badge"
-import { useConversationHistoryQuery, useDeleteConversationMutation, useDeleteAllConversationsMutation } from "@renderer/lib/queries"
-import { ConversationHistoryItem, AgentProgressUpdate } from "@shared/types"
+import { AgentProgressUpdate } from "@shared/types"
 import { cn } from "@renderer/lib/utils"
 import { toast } from "sonner"
 import { SessionsKanban } from "@renderer/components/sessions-kanban"
-import { SessionViewMode } from "@renderer/stores"
-import dayjs from "dayjs"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@renderer/components/ui/dialog"
 import { PredefinedPromptsMenu } from "@renderer/components/predefined-prompts-menu"
 
 function EmptyState({ onTextClick, onVoiceClick, onSelectPrompt }: { onTextClick: () => void; onVoiceClick: () => void; onSelectPrompt: (content: string) => void }) {
@@ -55,9 +41,6 @@ function EmptyState({ onTextClick, onVoiceClick, onSelectPrompt }: { onTextClick
   )
 }
 
-const INITIAL_PAST_SESSIONS = 10
-const LOAD_MORE_INCREMENT = 10
-
 export function Component() {
   const queryClient = useQueryClient()
   const { id: routeHistoryItemId } = useParams<{ id: string }>()
@@ -73,13 +56,7 @@ export function Component() {
   const [draggedSessionId, setDraggedSessionId] = useState<string | null>(null)
   const [dragTargetIndex, setDragTargetIndex] = useState<number | null>(null)
   const [collapsedSessions, setCollapsedSessions] = useState<Record<string, boolean>>({})
-  const [pastSessionsExpanded, setPastSessionsExpanded] = useState(true)
-  const [pastSessionsCount, setPastSessionsCount] = useState(INITIAL_PAST_SESSIONS)
-  const [searchQuery, setSearchQuery] = useState("")
-  const [showDeleteAllDialog, setShowDeleteAllDialog] = useState(false)
   const [tileResetKey, setTileResetKey] = useState(0)
-  const deleteConversationMutation = useDeleteConversationMutation()
-  const deleteAllConversationsMutation = useDeleteAllConversationsMutation()
 
   const sessionRefs = useRef<Record<string, HTMLDivElement | null>>({})
 
@@ -134,54 +111,6 @@ export function Component() {
 
   // State for pending conversation continuation (user selected a conversation to continue)
   const [pendingConversationId, setPendingConversationId] = useState<string | null>(null)
-
-  // Fetch all conversations from history
-  const conversationHistoryQuery = useConversationHistoryQuery()
-
-  // Filter and group past sessions for display
-  const filteredHistory = useMemo(() => {
-    if (!conversationHistoryQuery.data) return []
-    return conversationHistoryQuery.data.filter(
-      (historyItem) =>
-        historyItem.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        historyItem.preview.toLowerCase().includes(searchQuery.toLowerCase()),
-    )
-  }, [conversationHistoryQuery.data, searchQuery])
-
-  // Group history by date for display
-  const groupedHistory = useMemo(() => {
-    const groups = new Map<string, ConversationHistoryItem[]>()
-    const today = dayjs().format("YYYY-MM-DD")
-    const yesterday = dayjs().subtract(1, "day").format("YYYY-MM-DD")
-
-    // Take only the number we want to show (lazy loading)
-    const visibleItems = filteredHistory.slice(0, pastSessionsCount)
-
-    for (const historyItem of visibleItems) {
-      const date = dayjs(historyItem.updatedAt).format("YYYY-MM-DD")
-      let groupKey: string
-
-      if (date === today) {
-        groupKey = "Today"
-      } else if (date === yesterday) {
-        groupKey = "Yesterday"
-      } else {
-        groupKey = dayjs(historyItem.updatedAt).format("MMM D, YYYY")
-      }
-
-      const items = groups.get(groupKey) || []
-      items.push(historyItem)
-      groups.set(groupKey, items)
-    }
-
-    return Array.from(groups.entries()).map(([date, items]) => ({
-      date,
-      items: items.sort((a, b) => b.updatedAt - a.updatedAt),
-    }))
-  }, [filteredHistory, pastSessionsCount])
-
-  // Check if there are more items to load
-  const hasMorePastSessions = filteredHistory.length > pastSessionsCount
 
   // Handle route parameter for deep-linking to specific session
   // When navigating to /:id, focus the active session tile or create a new tile for past sessions
@@ -360,39 +289,6 @@ export function Component() {
     setDragTargetIndex(null)
   }, [draggedSessionId, dragTargetIndex, allProgressEntries])
 
-  // Past sessions handlers
-  const handleLoadMore = useCallback(() => {
-    setPastSessionsCount(prev => prev + LOAD_MORE_INCREMENT)
-  }, [])
-
-  const handleDeleteHistoryItem = async (historyItemId: string) => {
-    try {
-      await deleteConversationMutation.mutateAsync(historyItemId)
-      toast.success("Session deleted")
-    } catch (error) {
-      toast.error("Failed to delete session")
-    }
-  }
-
-  const handleDeleteAllHistory = async () => {
-    try {
-      await deleteAllConversationsMutation.mutateAsync()
-      toast.success("All history deleted")
-      setShowDeleteAllDialog(false)
-    } catch (error) {
-      toast.error("Failed to delete history")
-    }
-  }
-
-  const handleOpenHistoryFolder = async () => {
-    try {
-      await tipcClient.openConversationsFolder()
-      toast.success("History folder opened")
-    } catch (error) {
-      toast.error("Failed to open history folder")
-    }
-  }
-
   const handleClearInactiveSessions = async () => {
     try {
       await tipcClient.clearInactiveSessions()
@@ -563,176 +459,7 @@ export function Component() {
           </>
         )}
 
-        {/* Past Sessions Section - always shown with lazy loading */}
-        <div className="border-t">
-          <div className="px-4 py-3 flex items-center justify-between bg-muted/30">
-            <button
-              onClick={() => setPastSessionsExpanded(!pastSessionsExpanded)}
-              className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <ChevronDown className={cn("h-4 w-4 transition-transform", !pastSessionsExpanded && "-rotate-90")} />
-              <Calendar className="h-4 w-4" />
-              <span>Past Sessions</span>
-              {conversationHistoryQuery.data && (
-                <Badge variant="secondary" className="text-xs">
-                  {conversationHistoryQuery.data.length}
-                </Badge>
-              )}
-            </button>
-            <div className="flex items-center gap-2">
-              {pastSessionsExpanded && (
-                <>
-                  <div className="relative">
-                    <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                    <Input
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      placeholder="Search..."
-                      className="w-40 h-7 pl-7 text-xs"
-                    />
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleOpenHistoryFolder}
-                    className="h-7 w-7 p-0"
-                    title="Open history folder"
-                  >
-                    <FolderOpen className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setShowDeleteAllDialog(true)}
-                    className="h-7 w-7 p-0 text-red-500 hover:text-red-600"
-                    title="Delete all history"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
-                </>
-              )}
-            </div>
-          </div>
-
-          {pastSessionsExpanded && (
-            <div className="px-4 py-4">
-              {groupedHistory.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  {searchQuery ? "No matching sessions" : "No past sessions yet"}
-                </div>
-              ) : (
-                <div className="space-y-6">
-                  {groupedHistory.map(({ date, items }) => (
-                    <div key={date}>
-                      <h4 className="mb-3 flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                        <Calendar className="h-4 w-4" />
-                        {date}
-                      </h4>
-                      <div className="space-y-0.5">
-                        {items.map((historyItem) => (
-                          <PastSessionCard
-                            key={historyItem.id}
-                            conversation={historyItem}
-                            onOpen={() => handleContinueConversation(historyItem.id)}
-                            onDelete={() => handleDeleteHistoryItem(historyItem.id)}
-                            isDeleting={deleteConversationMutation.isPending}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-
-                  {/* Load more button */}
-                  {hasMorePastSessions && (
-                    <div className="flex justify-center pt-4">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={handleLoadMore}
-                        className="gap-2"
-                      >
-                        <ChevronDown className="h-4 w-4" />
-                        Load More ({filteredHistory.length - pastSessionsCount} remaining)
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
       </div>
-
-      {/* Delete All Confirmation Dialog */}
-      <Dialog open={showDeleteAllDialog} onOpenChange={setShowDeleteAllDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete All History</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete all session history? This action cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowDeleteAllDialog(false)}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleDeleteAllHistory}
-              disabled={deleteAllConversationsMutation.isPending}
-            >
-              {deleteAllConversationsMutation.isPending ? "Deleting..." : "Delete All"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
-  )
-}
-
-/** Card for a past session in the history list - clicking opens as a new tile */
-interface PastSessionCardProps {
-  conversation: ConversationHistoryItem
-  onOpen: () => void
-  onDelete: () => void
-  isDeleting: boolean
-}
-
-function PastSessionCard({
-  conversation,
-  onOpen,
-  onDelete,
-  isDeleting,
-}: PastSessionCardProps) {
-  return (
-    <div
-      className={cn(
-        "flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer transition-all",
-        "hover:bg-accent/50 group border border-transparent hover:border-border/50"
-      )}
-      onClick={onOpen}
-      title={`${conversation.preview}\n${dayjs(conversation.updatedAt).format("MMM D, h:mm A")}`}
-    >
-      <CheckCircle2 className="h-4 w-4 shrink-0 text-muted-foreground" />
-      <span className="flex-1 truncate text-sm">{conversation.title}</span>
-      <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-        {conversation.messageCount}
-      </span>
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation()
-          onDelete()
-        }}
-        disabled={isDeleting}
-        className={cn(
-          "shrink-0 p-1 rounded opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity",
-          "text-muted-foreground hover:text-red-500 hover:bg-red-500/10"
-        )}
-        title="Delete session"
-      >
-        <Trash2 className="h-3.5 w-3.5" />
-      </button>
     </div>
   )
 }

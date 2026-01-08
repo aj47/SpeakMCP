@@ -206,7 +206,7 @@ export const Component = () => {
 
         {/* Sessions Section - shows sessions list, scrollable to bottom */}
         {!isCollapsed && (
-          <div className="mt-2 min-h-0 flex-1 overflow-y-auto">
+          <div className="mt-2 min-h-0 flex-1 overflow-y-auto scrollbar-none">
             <ActiveAgentsSidebar />
           </div>
         )}

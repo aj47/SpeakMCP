@@ -553,14 +553,15 @@ export function ActiveAgentsSidebar() {
                     <div className="flex items-center gap-1.5">
                       <CheckCircle2 className="h-3 w-3 shrink-0 text-muted-foreground" />
                       <p className="flex-1 truncate text-foreground">{session.title}</p>
-                      <span className="shrink-0 text-[10px] text-muted-foreground tabular-nums">
+                      {/* Time ago shown by default, replaced by delete button on hover */}
+                      <span className="shrink-0 text-[10px] text-muted-foreground tabular-nums group-hover:hidden">
                         {formatTimestamp(session.updatedAt)}
                       </span>
                       <button
                         onClick={(e) => handleDeletePastSession(session.id, e)}
                         disabled={deleteConversationMutation.isPending}
                         className={cn(
-                          "shrink-0 rounded p-0.5 opacity-0 transition-all hover:bg-destructive/20 hover:text-destructive group-hover:opacity-100"
+                          "shrink-0 rounded p-0.5 hidden transition-all hover:bg-destructive/20 hover:text-destructive group-hover:block"
                         )}
                         title="Delete session"
                       >

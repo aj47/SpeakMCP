@@ -25,6 +25,10 @@ export interface ACPSessionInfo {
 // In-memory storage for conversation-to-session mapping
 const conversationSessions: Map<string, ACPSessionInfo> = new Map()
 
+// Mapping from ACP session ID → SpeakMCP session ID
+// This is needed for routing tool approval requests to the correct UI session
+const acpToSpeakMcpSession: Map<string, string> = new Map()
+
 /**
  * Get the ACP session for a conversation (if any).
  * @param conversationId The SpeakMCP conversation ID
@@ -105,6 +109,40 @@ export function touchSession(conversationId: string): void {
   const session = conversationSessions.get(conversationId)
   if (session) {
     session.lastUsedAt = Date.now()
+  }
+}
+
+/**
+ * Map an ACP session ID to a SpeakMCP session ID.
+ * This is needed for routing tool approval requests to the correct UI session.
+ * @param acpSessionId The ACP agent's session ID
+ * @param speakMcpSessionId The SpeakMCP internal session ID (for UI progress tracking)
+ */
+export function setAcpToSpeakMcpSessionMapping(
+  acpSessionId: string,
+  speakMcpSessionId: string
+): void {
+  acpToSpeakMcpSession.set(acpSessionId, speakMcpSessionId)
+  logApp(`[ACP Session] Mapped ACP session ${acpSessionId} → SpeakMCP session ${speakMcpSessionId}`)
+}
+
+/**
+ * Get the SpeakMCP session ID for a given ACP session ID.
+ * @param acpSessionId The ACP agent's session ID
+ * @returns The SpeakMCP session ID, or undefined if not mapped
+ */
+export function getSpeakMcpSessionForAcpSession(acpSessionId: string): string | undefined {
+  return acpToSpeakMcpSession.get(acpSessionId)
+}
+
+/**
+ * Clear the ACP → SpeakMCP session mapping.
+ * @param acpSessionId The ACP session ID to remove
+ */
+export function clearAcpToSpeakMcpSessionMapping(acpSessionId: string): void {
+  if (acpToSpeakMcpSession.has(acpSessionId)) {
+    acpToSpeakMcpSession.delete(acpSessionId)
+    logApp(`[ACP Session] Cleared ACP → SpeakMCP mapping for ${acpSessionId}`)
   }
 }
 

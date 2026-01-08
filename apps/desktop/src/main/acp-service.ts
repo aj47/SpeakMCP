@@ -17,6 +17,7 @@ import { ACPAgentConfig } from "../shared/types"
 import { toolApprovalManager } from "./state"
 import { emitAgentProgress } from "./emit-agent-progress"
 import { logACP } from "./debug"
+import { getSpeakMcpSessionForAcpSession } from "./acp-session-state"
 
 // JSON-RPC types
 interface JsonRpcRequest {
@@ -65,6 +66,21 @@ export interface ACPAgentInstance {
   // Agent capabilities from initialize response
   agentCapabilities?: {
     loadSession?: boolean
+  }
+  agentInfo?: {
+    name: string
+    title: string
+    version: string
+  }
+  sessionInfo?: {
+    models?: {
+      availableModels: Array<{ modelId: string; name: string; description?: string }>
+      currentModelId: string
+    }
+    modes?: {
+      availableModes: Array<{ id: string; name: string; description?: string }>
+      currentModeId: string
+    }
   }
 }
 
@@ -150,10 +166,11 @@ export interface ACPRequestPermissionRequest {
 }
 
 // ACP Request Permission Response (from client to agent)
+// Per ACP spec, outcome is an object with "outcome" string field and optional "optionId"
 export interface ACPRequestPermissionResponse {
-  outcome: 
-    | { selected: { optionId: string } }
-    | { cancelled: Record<string, never> }
+  outcome:
+    | { outcome: "selected"; optionId: string }
+    | { outcome: "cancelled" }
 }
 
 // ACP fs/read_text_file Request
@@ -225,6 +242,25 @@ class ACPService extends EventEmitter {
       stopReason?: string
       toolCall?: ACPToolCallUpdate
     }
+    // Claude Code metadata (Task 2.3) - updated to match actual structure from Claude Code agent
+    _meta?: {
+      claudeCode?: {
+        toolName?: string
+        toolResponse?: {
+          status?: string
+          agentId?: string
+          totalDurationMs?: number
+          totalTokens?: number
+          totalToolUseCount?: number
+          usage?: {
+            input_tokens?: number
+            cache_creation_input_tokens?: number
+            cache_read_input_tokens?: number
+            output_tokens?: number
+          }
+        }
+      }
+    }
   }): void {
     const instance = this.agents.get(agentName)
     // Generate a unique fallback session ID per agent to avoid mixing output from different agents/runs
@@ -295,6 +331,9 @@ class ACPService extends EventEmitter {
       })
     }
 
+    // Extract Claude Code tool response metadata (Task 2.3)
+    const toolResponseStats = params._meta?.claudeCode?.toolResponse
+
     // Emit event for real-time UI updates
     this.emit("sessionUpdate", {
       agentName,
@@ -304,6 +343,8 @@ class ACPService extends EventEmitter {
       isComplete: params.isComplete,
       stopReason,
       totalBlocks: output.contentBlocks.length,
+      // Include tool response stats if present (Task 2.3)
+      toolResponseStats,
     })
   }
 
@@ -386,6 +427,14 @@ class ACPService extends EventEmitter {
   getAgentSessionId(agentName: string): string | undefined {
     const instance = this.agents.get(agentName)
     return instance?.sessionId
+  }
+
+  /**
+   * Get a specific agent instance (Task 5.2)
+   * Provides access to agent info, session info, and other instance data.
+   */
+  getAgentInstance(agentName: string): ACPAgentInstance | undefined {
+    return this.agents.get(agentName)
   }
 
   /**
@@ -725,6 +774,8 @@ class ACPService extends EventEmitter {
   private async handleAgentRequest(agentName: string, request: JsonRpcRequest): Promise<void> {
     const { id, method, params } = request
 
+    console.log(`[ACP handleAgentRequest] method=${method}, id=${id} (type: ${typeof id})`)
+
     try {
       let result: unknown
 
@@ -773,6 +824,7 @@ class ACPService extends EventEmitter {
   ): void {
     const instance = this.agents.get(agentName)
     if (!instance?.process?.stdin) {
+      console.log(`[ACP sendResponse] No process/stdin for agent=${agentName}, id=${id}`)
       return
     }
 
@@ -782,10 +834,15 @@ class ACPService extends EventEmitter {
       ...(error ? { error } : { result: result ?? {} }),
     }
 
+    console.log(`[ACP sendResponse] Sending response to ${agentName}, id=${id}:`, JSON.stringify(response, null, 2))
+
     const message = JSON.stringify(response) + "\n"
     instance.process.stdin.write(message, (err) => {
-      // Silently ignore write failures
-      void err
+      if (err) {
+        console.log(`[ACP sendResponse] Write error for ${agentName}, id=${id}:`, err)
+      } else {
+        console.log(`[ACP sendResponse] Successfully wrote response to ${agentName}, id=${id}`)
+      }
     })
   }
 
@@ -822,12 +879,18 @@ class ACPService extends EventEmitter {
     agentName: string,
     params: ACPRequestPermissionRequest
   ): Promise<ACPRequestPermissionResponse> {
-    const { sessionId, toolCall, options } = params
+    const { sessionId: acpSessionId, toolCall, options } = params
+
+    // Map ACP session ID to SpeakMCP session ID for UI routing
+    // The ACP agent uses its own session IDs, but SpeakMCP's UI tracks progress
+    // using its own session IDs from agentSessionTracker
+    const speakMcpSessionId = getSpeakMcpSessionForAcpSession(acpSessionId) || acpSessionId
+    logACP("PERMISSION", agentName, `Mapping ACP session ${acpSessionId} → SpeakMCP session ${speakMcpSessionId}`)
 
     // Emit tool call status update for UI visibility
     this.emit("toolCallUpdate", {
       agentName,
-      sessionId,
+      sessionId: speakMcpSessionId,
       toolCall: {
         ...toolCall,
         status: "pending" as ACPToolCallStatus,
@@ -838,14 +901,14 @@ class ACPService extends EventEmitter {
     // Use the existing tool approval manager to request approval
     // This integrates with SpeakMCP's existing UI approval flow
     const { approvalId, promise } = toolApprovalManager.requestApproval(
-      sessionId,
+      speakMcpSessionId,
       toolCall.title,
       toolCall.rawInput
     )
 
     // Emit progress update to show pending approval in UI
     await emitAgentProgress({
-      sessionId,
+      sessionId: speakMcpSessionId,
       currentIteration: 0,
       maxIterations: 1,
       steps: [
@@ -872,12 +935,16 @@ class ACPService extends EventEmitter {
     })
 
     // Wait for user response
+    console.log(`[ACP Tool Approval] Waiting for user response for approvalId=${approvalId}, speakMcpSessionId=${speakMcpSessionId}`)
+    console.log(`[ACP Tool Approval] pendingToolApprovals before wait:`, toolApprovalManager.getPendingApprovalCount())
     const approved = await promise
+    console.log(`[ACP Tool Approval] User responded: approved=${approved} for approvalId=${approvalId}`)
+    console.log(`[ACP Tool Approval] pendingToolApprovals after response:`, toolApprovalManager.getPendingApprovalCount())
 
     // Emit status update
     this.emit("toolCallUpdate", {
       agentName,
-      sessionId,
+      sessionId: speakMcpSessionId,
       toolCall: {
         ...toolCall,
         status: approved ? "running" : "failed",
@@ -885,12 +952,31 @@ class ACPService extends EventEmitter {
       awaitingPermission: false,
     })
 
+    // Clear the pending approval from the UI by emitting progress update without pendingToolApproval
+    await emitAgentProgress({
+      sessionId: speakMcpSessionId,
+      currentIteration: 0,
+      maxIterations: 1,
+      steps: [
+        {
+          id: `acp-tool-${toolCall.toolCallId}`,
+          type: "tool_approval",
+          title: `ACP Agent: ${agentName}`,
+          description: toolCall.title,
+          status: approved ? "completed" : "error",
+          timestamp: Date.now(),
+        },
+      ],
+      isComplete: false,
+      // No pendingToolApproval - clears it from the UI
+    })
+
     if (approved) {
       // Find the "allow_once" or first allow option
       const allowOption = options.find(o => o.kind === "allow_once") || options.find(o => o.kind !== "deny")
       if (allowOption) {
         return {
-          outcome: { selected: { optionId: allowOption.optionId } },
+          outcome: { outcome: "selected", optionId: allowOption.optionId },
         }
       }
     }
@@ -899,13 +985,13 @@ class ACPService extends EventEmitter {
     const denyOption = options.find(o => o.kind === "deny")
     if (denyOption) {
       return {
-        outcome: { selected: { optionId: denyOption.optionId } },
+        outcome: { outcome: "selected", optionId: denyOption.optionId },
       }
     }
 
     // No deny option available, return cancelled
     return {
-      outcome: { cancelled: {} },
+      outcome: { outcome: "cancelled" },
     }
   }
 
@@ -970,7 +1056,10 @@ class ACPService extends EventEmitter {
     agentName: string,
     params: ACPReadTextFileRequest
   ): Promise<{ content: string }> {
-    const { sessionId, path: filePath, line, limit } = params
+    const { sessionId: acpSessionId, path: filePath, line, limit } = params
+
+    // Map ACP session ID to SpeakMCP session ID for UI routing
+    const speakMcpSessionId = getSpeakMcpSessionForAcpSession(acpSessionId) || acpSessionId
 
     try {
       // Security check: Ensure path is absolute
@@ -993,14 +1082,14 @@ class ACPService extends EventEmitter {
       const config = configStore.get()
       if (config.mcpRequireApprovalBeforeToolCall) {
         const { approvalId, promise } = toolApprovalManager.requestApproval(
-          sessionId,
+          speakMcpSessionId,
           `fs/read_text_file`,
           { path: filePath, line, limit }
         )
 
         // Emit progress update to show pending approval in UI
         await emitAgentProgress({
-          sessionId,
+          sessionId: speakMcpSessionId,
           currentIteration: 0,
           maxIterations: 1,
           steps: [
@@ -1028,6 +1117,25 @@ class ACPService extends EventEmitter {
 
         // Wait for user response
         const approved = await promise
+
+        // Clear the pending approval from the UI by emitting progress update without pendingToolApproval
+        await emitAgentProgress({
+          sessionId: speakMcpSessionId,
+          currentIteration: 0,
+          maxIterations: 1,
+          steps: [
+            {
+              id: `acp-file-read-${Date.now()}`,
+              type: "tool_approval",
+              title: `ACP Agent: ${agentName}`,
+              description: `Read file: ${filePath}`,
+              status: approved ? "completed" : "error",
+              timestamp: Date.now(),
+            },
+          ],
+          isComplete: false,
+          // No pendingToolApproval - clears it from the UI
+        })
 
         if (!approved) {
           throw new Error("User denied file read operation")
@@ -1069,7 +1177,10 @@ class ACPService extends EventEmitter {
     agentName: string,
     params: ACPWriteTextFileRequest
   ): Promise<Record<string, never>> {
-    const { sessionId, path: filePath, content } = params
+    const { sessionId: acpSessionId, path: filePath, content } = params
+
+    // Map ACP session ID to SpeakMCP session ID for UI routing
+    const speakMcpSessionId = getSpeakMcpSessionForAcpSession(acpSessionId) || acpSessionId
 
     try {
       // Security check: Ensure path is absolute
@@ -1081,10 +1192,10 @@ class ACPService extends EventEmitter {
       // Resolve symlinks to check the real path for security
       // We check both the file itself (if it exists and is a symlink) and the parent directory
       // This prevents bypassing blocklist via symlinks to sensitive locations
-      
+
       // First, try to resolve the file path itself (handles existing symlinks)
       const resolvedFilePath = await this.resolveRealPath(filePath)
-      
+
       // Also resolve the parent directory for the case where file doesn't exist yet
       const resolvedDirPath = await this.resolveRealPath(dirname(filePath))
       const constructedPath = resolvedDirPath ? `${resolvedDirPath}/${filePath.split(/[/\\]/).pop()}` : filePath
@@ -1101,14 +1212,14 @@ class ACPService extends EventEmitter {
       const config = configStore.get()
       if (config.mcpRequireApprovalBeforeToolCall) {
         const { approvalId, promise } = toolApprovalManager.requestApproval(
-          sessionId,
+          speakMcpSessionId,
           `fs/write_text_file`,
           { path: filePath, contentLength: content.length }
         )
 
         // Emit progress update to show pending approval in UI
         await emitAgentProgress({
-          sessionId,
+          sessionId: speakMcpSessionId,
           currentIteration: 0,
           maxIterations: 1,
           steps: [
@@ -1136,6 +1247,25 @@ class ACPService extends EventEmitter {
 
         // Wait for user response
         const approved = await promise
+
+        // Clear the pending approval from the UI by emitting progress update without pendingToolApproval
+        await emitAgentProgress({
+          sessionId: speakMcpSessionId,
+          currentIteration: 0,
+          maxIterations: 1,
+          steps: [
+            {
+              id: `acp-file-write-${Date.now()}`,
+              type: "tool_approval",
+              title: `ACP Agent: ${agentName}`,
+              description: `Write file: ${filePath} (${content.length} bytes)`,
+              status: approved ? "completed" : "error",
+              timestamp: Date.now(),
+            },
+          ],
+          isComplete: false,
+          // No pendingToolApproval - clears it from the UI
+        })
 
         if (!approved) {
           throw new Error("User denied file write operation")
@@ -1185,13 +1315,26 @@ class ACPService extends EventEmitter {
           title: "SpeakMCP",
           version: "1.2.0",
         },
-      }) as { protocolVersion?: number; agentCapabilities?: { loadSession?: boolean } }
+      }) as {
+        protocolVersion?: number
+        agentCapabilities?: { loadSession?: boolean }
+        agentInfo?: { name?: string; title?: string; version?: string }
+      }
 
       instance.initialized = true
 
       // Store agent capabilities from response
       if (result?.agentCapabilities) {
         instance.agentCapabilities = result.agentCapabilities as { loadSession?: boolean }
+      }
+
+      // Store agent info from response (Task 2.1)
+      if (result?.agentInfo) {
+        instance.agentInfo = {
+          name: result.agentInfo.name || "",
+          title: result.agentInfo.title || "",
+          version: result.agentInfo.version || "",
+        }
       }
     } catch {
       // Don't throw - some agents might not require initialization
@@ -1219,12 +1362,39 @@ class ACPService extends EventEmitter {
       const result = await this.sendRequest(agentName, "session/new", {
         cwd: process.cwd(),
         mcpServers: [],
-      }) as { sessionId?: string }
+      }) as {
+        sessionId?: string
+        models?: {
+          availableModels: Array<{ modelId: string; name: string; description?: string }>
+          currentModelId: string
+        }
+        modes?: {
+          availableModes: Array<{ id: string; name: string; description?: string }>
+          currentModeId: string
+        }
+      }
 
       const sessionId = result?.sessionId
       if (sessionId) {
         instance.sessionId = sessionId
       }
+
+      // Store models from session/new response (Task 2.2)
+      if (result?.models) {
+        instance.sessionInfo = {
+          ...instance.sessionInfo,
+          models: result.models,
+        }
+      }
+
+      // Store modes from session/new response (Task 2.2)
+      if (result?.modes) {
+        instance.sessionInfo = {
+          ...instance.sessionInfo,
+          modes: result.modes,
+        }
+      }
+
       return sessionId
     } catch {
       return undefined

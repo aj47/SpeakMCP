@@ -16,6 +16,8 @@ import { OverlayFollowUpInput } from "./overlay-follow-up-input"
 import { MessageQueuePanel } from "@renderer/components/message-queue-panel"
 import { useResizable, TILE_DIMENSIONS } from "@renderer/hooks/use-resizable"
 import { getToolResultsSummary } from "@speakmcp/shared"
+import { ToolExecutionStats } from "./tool-execution-stats"
+import { ACPSessionBadge } from "./acp-session-badge"
 
 interface AgentProgressProps {
   progress: AgentProgressUpdate | null
@@ -59,6 +61,11 @@ type DisplayItem =
       isComplete: boolean
       calls: Array<{ name: string; arguments: any }>
       results: Array<{ success: boolean; content: string; error?: string }>
+      executionStats?: {
+        durationMs?: number
+        totalTokens?: number
+        model?: string
+      }
     } }
   | { kind: "tool_approval"; id: string; data: {
       approvalId: string
@@ -566,6 +573,11 @@ const AssistantWithToolsBubble: React.FC<{
     isComplete: boolean
     calls: Array<{ name: string; arguments: any }>
     results: Array<{ success: boolean; content: string; error?: string }>
+    executionStats?: {
+      durationMs?: number
+      totalTokens?: number
+      model?: string
+    }
   }
   isExpanded: boolean
   onToggleExpand: () => void
@@ -729,6 +741,9 @@ const AssistantWithToolsBubble: React.FC<{
                   </div>
                 )
               })}
+              {data.executionStats && (
+                <ToolExecutionStats stats={data.executionStats} compact />
+              )}
             </div>
           )}
         </div>
@@ -1586,21 +1601,30 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
 
   const handleApproveToolCall = async () => {
     const approvalId = progress?.pendingToolApproval?.approvalId
-    if (!approvalId) return
+    console.log(`[Tool Approval UI] handleApproveToolCall called, approvalId=${approvalId}`)
+    if (!approvalId) {
+      console.log(`[Tool Approval UI] No approvalId found, returning early`)
+      return
+    }
     // Synchronous check to prevent double-click race condition
-    if (respondingApprovalIdRef.current === approvalId) return
+    if (respondingApprovalIdRef.current === approvalId) {
+      console.log(`[Tool Approval UI] Already responding to this approval, skipping`)
+      return
+    }
 
     respondingApprovalIdRef.current = approvalId
     setRespondingApprovalId(approvalId)
+    console.log(`[Tool Approval UI] Calling tipcClient.respondToToolApproval with approvalId=${approvalId}, approved=true`)
     try {
-      await tipcClient.respondToToolApproval({
+      const result = await tipcClient.respondToToolApproval({
         approvalId,
         approved: true,
       })
+      console.log(`[Tool Approval UI] respondToToolApproval returned:`, result)
       // Don't reset respondingApprovalId on success - keep showing "Processing..."
       // The approval bubble will be removed when pendingToolApproval is cleared from progress
     } catch (error) {
-      console.error("Failed to approve tool call:", error)
+      console.error("[Tool Approval UI] Failed to approve tool call:", error)
       // Only reset on error so user can retry
       respondingApprovalIdRef.current = null
       setRespondingApprovalId(null)
@@ -1609,21 +1633,30 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
 
   const handleDenyToolCall = async () => {
     const approvalId = progress?.pendingToolApproval?.approvalId
-    if (!approvalId) return
+    console.log(`[Tool Approval UI] handleDenyToolCall called, approvalId=${approvalId}`)
+    if (!approvalId) {
+      console.log(`[Tool Approval UI] No approvalId found for deny, returning early`)
+      return
+    }
     // Synchronous check to prevent double-click race condition
-    if (respondingApprovalIdRef.current === approvalId) return
+    if (respondingApprovalIdRef.current === approvalId) {
+      console.log(`[Tool Approval UI] Already responding to this approval (deny), skipping`)
+      return
+    }
 
     respondingApprovalIdRef.current = approvalId
     setRespondingApprovalId(approvalId)
+    console.log(`[Tool Approval UI] Calling tipcClient.respondToToolApproval with approvalId=${approvalId}, approved=false`)
     try {
-      await tipcClient.respondToToolApproval({
+      const result = await tipcClient.respondToToolApproval({
         approvalId,
         approved: false,
       })
+      console.log(`[Tool Approval UI] respondToToolApproval (deny) returned:`, result)
       // Don't reset respondingApprovalId on success - keep showing "Processing..."
       // The approval bubble will be removed when pendingToolApproval is cleared from progress
     } catch (error) {
-      console.error("Failed to deny tool call:", error)
+      console.error("[Tool Approval UI] Failed to deny tool call:", error)
       // Only reset on error so user can retry
       respondingApprovalIdRef.current = null
       setRespondingApprovalId(null)
@@ -1645,6 +1678,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
     contextInfo,
     modelInfo,
     profileName,
+    acpSessionInfo,
   } = progress
 
   // Detect if agent was stopped by kill switch
@@ -1818,6 +1852,17 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
       const aIndex = ++roleCounters.assistant
       const execTimestamp = next?.timestamp ?? m.timestamp
       const toolExecId = generateToolExecutionId(m.toolCalls, execTimestamp)
+
+      // Look for a matching step with executionStats (match by tool name from tool_call steps)
+      // or find the most recent tool_call step with stats
+      const toolCallNames = m.toolCalls.map(c => c.name)
+      const matchingStep = steps?.find(
+        step =>
+          step.type === "tool_call" &&
+          step.executionStats &&
+          (step.title?.includes(toolCallNames[0]) || toolCallNames.some(name => step.title?.includes(name)))
+      )
+
       displayItems.push({
         kind: "assistant_with_tools",
         id: `assistant-tools-${aIndex}-${toolExecId}`,
@@ -1827,6 +1872,12 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
           isComplete: m.isComplete,
           calls: m.toolCalls,
           results,
+          // Attach executionStats from the matching step if found
+          executionStats: matchingStep?.executionStats ? {
+            durationMs: matchingStep.executionStats.durationMs,
+            totalTokens: matchingStep.executionStats.totalTokens,
+            model: matchingStep.subagentId,
+          } : undefined,
         },
       })
       if (next && next.role === "tool" && next.toolResults) {
@@ -2308,10 +2359,15 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
                   {profileName}
                 </span>
               )}
-              {profileName && modelInfo && !isComplete && (
+              {(profileName && (modelInfo || acpSessionInfo) && !isComplete) && (
                 <span className="text-muted-foreground/50">•</span>
               )}
-              {!isComplete && modelInfo && (
+              {/* ACP Session info for tile variant */}
+              {acpSessionInfo && (
+                <ACPSessionBadge info={acpSessionInfo} />
+              )}
+              {/* Model info - only show for non-ACP sessions */}
+              {!isComplete && modelInfo && !acpSessionInfo && (
                 <span className="text-[10px] truncate max-w-[100px]" title={`${modelInfo.provider}: ${modelInfo.model}`}>
                   {modelInfo.provider}/{modelInfo.model.split('/').pop()?.substring(0, 15)}
                 </span>
@@ -2431,8 +2487,12 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
               {profileName}
             </span>
           )}
-          {/* Model and provider info */}
-          {!isComplete && modelInfo && (
+          {/* ACP Session info (agent and model from ACP) */}
+          {acpSessionInfo && (
+            <ACPSessionBadge info={acpSessionInfo} />
+          )}
+          {/* Model and provider info - only show for non-ACP sessions */}
+          {!isComplete && modelInfo && !acpSessionInfo && (
             <span className="text-[10px] text-muted-foreground/70 truncate max-w-[120px]" title={`${modelInfo.provider}: ${modelInfo.model}`}>
               {modelInfo.provider}/{modelInfo.model.split('/').pop()?.substring(0, 20)}
             </span>

@@ -840,7 +840,9 @@ export const router = {
   respondToToolApproval: t.procedure
     .input<{ approvalId: string; approved: boolean }>()
     .action(async ({ input }) => {
+      logApp(`[Tool Approval] respondToToolApproval called: approvalId=${input.approvalId}, approved=${input.approved}`)
       const success = toolApprovalManager.respondToApproval(input.approvalId, input.approved)
+      logApp(`[Tool Approval] respondToApproval result: success=${success}`)
       return { success }
     }),
 

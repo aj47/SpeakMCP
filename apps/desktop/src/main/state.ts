@@ -322,12 +322,17 @@ export const toolApprovalManager = {
 
   // Respond to a tool approval request
   respondToApproval(approvalId: string, approved: boolean): boolean {
+    console.log(`[Tool Approval] respondToApproval: looking for approvalId=${approvalId}`)
+    console.log(`[Tool Approval] pendingToolApprovals.size=${state.pendingToolApprovals.size}`)
+    console.log(`[Tool Approval] pendingToolApprovals keys:`, Array.from(state.pendingToolApprovals.keys()))
     const approval = state.pendingToolApprovals.get(approvalId)
     if (approval) {
+      console.log(`[Tool Approval] Found approval, resolving with approved=${approved}`)
       approval.resolve(approved)
       state.pendingToolApprovals.delete(approvalId)
       return true
     }
+    console.log(`[Tool Approval] Approval NOT found for approvalId=${approvalId}`)
     return false
   },
 
@@ -357,5 +362,10 @@ export const toolApprovalManager = {
       approval.resolve(false) // Deny all tool calls
     }
     state.pendingToolApprovals.clear()
+  },
+
+  // Get the count of pending approvals (for debugging)
+  getPendingApprovalCount(): number {
+    return state.pendingToolApprovals.size
   },
 }

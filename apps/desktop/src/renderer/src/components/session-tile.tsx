@@ -266,7 +266,7 @@ export function SessionTile({
           onKeyDown={(e) => {
             if (e.key === 'Enter' || e.key === ' ') {
               e.preventDefault()
-              handleToggleCollapse()
+              handleToggleCollapse(e)
             }
           }}
           title={isCollapsed ? "Click to expand" : "Click to collapse"}

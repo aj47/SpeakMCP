@@ -487,7 +487,9 @@ export function ActiveAgentsSidebar() {
             onClick={() => setIsPastSessionsExpanded(!isPastSessionsExpanded)}
             className="flex items-center gap-2 flex-1 min-w-0 focus:outline-none focus:ring-1 focus:ring-ring rounded"
             title="Past Sessions"
-            aria-label="Past Sessions"
+            aria-label={conversationHistoryQuery.data && conversationHistoryQuery.data.length > 0
+              ? `Past Sessions (${conversationHistoryQuery.data.length})`
+              : "Past Sessions"}
           >
             <Clock className="h-3.5 w-3.5" />
             {conversationHistoryQuery.data && conversationHistoryQuery.data.length > 0 && (

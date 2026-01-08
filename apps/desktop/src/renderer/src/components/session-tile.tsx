@@ -117,8 +117,8 @@ export function SessionTile({
   const hasPendingApproval = !!progress?.pendingToolApproval
   const hasQueuedMessages = queuedMessages.length > 0
 
-  const handleToggleCollapse = (e: React.MouseEvent) => {
-    e.stopPropagation()
+  const handleToggleCollapse = (e?: React.MouseEvent | React.KeyboardEvent) => {
+    e?.stopPropagation()
     setIsCollapsed(!isCollapsed)
   }
 
@@ -257,8 +257,18 @@ export function SessionTile({
       <div className="flex items-center gap-2 px-3 py-2 border-b bg-muted/30 flex-shrink-0">
         {/* Clickable area for collapse toggle - includes status indicator and title */}
         <div
-          className="flex items-center gap-2 flex-1 min-w-0 cursor-pointer"
+          role="button"
+          tabIndex={0}
+          aria-expanded={!isCollapsed}
+          aria-label={isCollapsed ? "Expand session" : "Collapse session"}
+          className="flex items-center gap-2 flex-1 min-w-0 cursor-pointer focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1 rounded-sm"
           onClick={handleToggleCollapse}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault()
+              handleToggleCollapse()
+            }
+          }}
           title={isCollapsed ? "Click to expand" : "Click to collapse"}
         >
           {getStatusIndicator()}

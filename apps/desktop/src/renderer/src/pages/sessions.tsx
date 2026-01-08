@@ -6,15 +6,39 @@ import { useAgentStore } from "@renderer/stores"
 import { SessionGrid, SessionTileWrapper } from "@renderer/components/session-grid"
 import { clearPersistedSize } from "@renderer/hooks/use-resizable"
 import { AgentProgress } from "@renderer/components/agent-progress"
-import { MessageCircle, Mic, Plus, CheckCircle2, LayoutGrid, Kanban, RotateCcw } from "lucide-react"
+import { MessageCircle, Mic, Plus, CheckCircle2, LayoutGrid, Kanban, RotateCcw, Keyboard } from "lucide-react"
 import { Button } from "@renderer/components/ui/button"
-import { AgentProgressUpdate } from "@shared/types"
+import { AgentProgressUpdate, Config } from "@shared/types"
 import { cn } from "@renderer/lib/utils"
 import { toast } from "sonner"
 import { SessionsKanban } from "@renderer/components/sessions-kanban"
 import { PredefinedPromptsMenu } from "@renderer/components/predefined-prompts-menu"
+import { useConfigQuery } from "@renderer/lib/query-client"
+import { formatKeyComboForDisplay } from "@shared/key-utils"
 
-function EmptyState({ onTextClick, onVoiceClick, onSelectPrompt }: { onTextClick: () => void; onVoiceClick: () => void; onSelectPrompt: (content: string) => void }) {
+/**
+ * Get the display string for the agent mode (Aura) shortcut
+ */
+function getAgentModeShortcutDisplay(config: Config | undefined): string {
+  const shortcut = config?.mcpToolsShortcut || "hold-ctrl-alt"
+  if (shortcut === "hold-ctrl-alt") {
+    return "Hold Ctrl+Alt"
+  } else if (shortcut === "toggle-ctrl-alt") {
+    return "Press Ctrl+Alt"
+  } else if (shortcut === "ctrl-alt-slash") {
+    return "Ctrl+Alt+/"
+  } else if (shortcut === "custom" && config?.customMcpToolsShortcut) {
+    return formatKeyComboForDisplay(config.customMcpToolsShortcut)
+  }
+  return "Hold Ctrl+Alt"
+}
+
+function EmptyState({ onTextClick, onVoiceClick, onSelectPrompt, agentModeShortcut }: {
+  onTextClick: () => void
+  onVoiceClick: () => void
+  onSelectPrompt: (content: string) => void
+  agentModeShortcut: string
+}) {
   return (
     <div className="flex flex-col items-center justify-center p-8 text-center">
       <div className="rounded-full bg-muted p-4 mb-4">
@@ -24,18 +48,28 @@ function EmptyState({ onTextClick, onVoiceClick, onSelectPrompt }: { onTextClick
       <p className="text-muted-foreground mb-6 max-w-md">
         Start a new agent session using text or voice input. Your sessions will appear here as tiles.
       </p>
-      <div className="flex gap-3 items-center">
-        <Button onClick={onTextClick} className="gap-2">
-          <Plus className="h-4 w-4" />
-          Start with Text
-        </Button>
-        <Button variant="secondary" onClick={onVoiceClick} className="gap-2">
-          <Mic className="h-4 w-4" />
-          Start with Voice
-        </Button>
-        <PredefinedPromptsMenu
-          onSelectPrompt={onSelectPrompt}
-        />
+      <div className="flex flex-col items-center gap-4">
+        <div className="flex gap-3 items-center">
+          <Button onClick={onTextClick} className="gap-2">
+            <Plus className="h-4 w-4" />
+            Start with Text
+          </Button>
+          <Button variant="secondary" onClick={onVoiceClick} className="gap-2">
+            <Mic className="h-4 w-4" />
+            Start with Voice
+          </Button>
+          <PredefinedPromptsMenu
+            onSelectPrompt={onSelectPrompt}
+          />
+        </div>
+        {/* Aura agent mode keybind hint */}
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Keyboard className="h-4 w-4" />
+          <span>Aura:</span>
+          <kbd className="px-2 py-0.5 text-xs font-semibold bg-muted border rounded">
+            {agentModeShortcut}
+          </kbd>
+        </div>
       </div>
     </div>
   )
@@ -51,6 +85,10 @@ export function Component() {
   const setScrollToSessionId = useAgentStore((s) => s.setScrollToSessionId)
   const viewMode = useAgentStore((s) => s.viewMode)
   const setViewMode = useAgentStore((s) => s.setViewMode)
+
+  // Get config for agent mode shortcut display
+  const configQuery = useConfigQuery()
+  const agentModeShortcut = getAgentModeShortcutDisplay(configQuery.data)
 
   const [sessionOrder, setSessionOrder] = useState<string[]>([])
   const [draggedSessionId, setDraggedSessionId] = useState<string | null>(null)
@@ -315,7 +353,12 @@ export function Component() {
       <div className="flex-1 overflow-y-auto scrollbar-hide-until-hover">
         {/* Show empty state when no sessions and no pending */}
         {allProgressEntries.length === 0 && !pendingProgress ? (
-          <EmptyState onTextClick={handleTextClick} onVoiceClick={handleVoiceStart} onSelectPrompt={handleSelectPrompt} />
+          <EmptyState
+            onTextClick={handleTextClick}
+            onVoiceClick={handleVoiceStart}
+            onSelectPrompt={handleSelectPrompt}
+            agentModeShortcut={agentModeShortcut}
+          />
         ) : (
           <>
             {/* Header with start buttons, view toggle, and clear inactive button */}
@@ -332,6 +375,14 @@ export function Component() {
                 <PredefinedPromptsMenu
                   onSelectPrompt={handleSelectPrompt}
                 />
+                {/* Aura agent mode keybind hint */}
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground ml-2">
+                  <Keyboard className="h-3.5 w-3.5" />
+                  <span>Aura:</span>
+                  <kbd className="px-1.5 py-0.5 text-xs font-semibold bg-muted border rounded">
+                    {agentModeShortcut}
+                  </kbd>
+                </div>
               </div>
               <div className="flex items-center gap-2">
                 {/* View mode toggle */}

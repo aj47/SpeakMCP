@@ -263,3 +263,26 @@ export function getTextInputShortcutDisplay(
       return "Ctrl+T"
   }
 }
+
+/**
+ * Get the display string for the dictation (recording) shortcut.
+ * This provides a centralized mapping to ensure consistency across UI components.
+ */
+export function getDictationShortcutDisplay(
+  shortcut: "hold-ctrl" | "ctrl-slash" | "custom" | undefined,
+  customShortcut?: string,
+): string {
+  switch (shortcut) {
+    case "hold-ctrl":
+      return "Hold Ctrl"
+    case "ctrl-slash":
+      return "Ctrl+/"
+    case "custom":
+      if (customShortcut) {
+        return formatKeyComboForDisplay(customShortcut)
+      }
+      return "Hold Ctrl"
+    default:
+      return "Hold Ctrl"
+  }
+}

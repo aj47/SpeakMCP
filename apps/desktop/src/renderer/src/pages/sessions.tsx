@@ -14,14 +14,15 @@ import { toast } from "sonner"
 import { SessionsKanban } from "@renderer/components/sessions-kanban"
 import { PredefinedPromptsMenu } from "@renderer/components/predefined-prompts-menu"
 import { useConfigQuery } from "@renderer/lib/query-client"
-import { getMcpToolsShortcutDisplay, getTextInputShortcutDisplay } from "@shared/key-utils"
+import { getMcpToolsShortcutDisplay, getTextInputShortcutDisplay, getDictationShortcutDisplay } from "@shared/key-utils"
 
-function EmptyState({ onTextClick, onVoiceClick, onSelectPrompt, textInputShortcut, voiceInputShortcut }: {
+function EmptyState({ onTextClick, onVoiceClick, onSelectPrompt, textInputShortcut, voiceInputShortcut, dictationShortcut }: {
   onTextClick: () => void
   onVoiceClick: () => void
   onSelectPrompt: (content: string) => void
   textInputShortcut: string
   voiceInputShortcut: string
+  dictationShortcut: string
 }) {
   return (
     <div className="flex flex-col items-center justify-center p-8 text-center">
@@ -61,6 +62,12 @@ function EmptyState({ onTextClick, onVoiceClick, onSelectPrompt, textInputShortc
               {voiceInputShortcut}
             </kbd>
           </div>
+          <div className="flex items-center gap-2">
+            <span>Dictation:</span>
+            <kbd className="px-2 py-0.5 text-xs font-semibold bg-muted border rounded">
+              {dictationShortcut}
+            </kbd>
+          </div>
         </div>
       </div>
     </div>
@@ -82,6 +89,7 @@ export function Component() {
   const configQuery = useConfigQuery()
   const textInputShortcut = getTextInputShortcutDisplay(configQuery.data?.textInputShortcut, configQuery.data?.customTextInputShortcut)
   const voiceInputShortcut = getMcpToolsShortcutDisplay(configQuery.data?.mcpToolsShortcut, configQuery.data?.customMcpToolsShortcut)
+  const dictationShortcut = getDictationShortcutDisplay(configQuery.data?.shortcut, configQuery.data?.customShortcut)
 
   const [sessionOrder, setSessionOrder] = useState<string[]>([])
   const [draggedSessionId, setDraggedSessionId] = useState<string | null>(null)
@@ -352,6 +360,7 @@ export function Component() {
             onSelectPrompt={handleSelectPrompt}
             textInputShortcut={textInputShortcut}
             voiceInputShortcut={voiceInputShortcut}
+            dictationShortcut={dictationShortcut}
           />
         ) : (
           <>
@@ -382,6 +391,12 @@ export function Component() {
                     <span>Voice:</span>
                     <kbd className="px-1.5 py-0.5 text-xs font-semibold bg-muted border rounded">
                       {voiceInputShortcut}
+                    </kbd>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span>Dictation:</span>
+                    <kbd className="px-1.5 py-0.5 text-xs font-semibold bg-muted border rounded">
+                      {dictationShortcut}
                     </kbd>
                   </div>
                 </div>

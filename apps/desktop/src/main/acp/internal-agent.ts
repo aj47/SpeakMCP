@@ -438,26 +438,40 @@ export async function runInternalSubSession(
     // This prevents a cancelled sub-session from transitioning back to completed
     // Note: Re-fetch from map since cancelSubSession() can mutate status asynchronously
     const currentSubSession = activeSubSessions.get(subSessionId);
-    if (currentSubSession && currentSubSession.status !== 'cancelled') {
+    const wasCancelled = currentSubSession?.status === 'cancelled';
+    
+    if (currentSubSession && !wasCancelled) {
       currentSubSession.status = 'completed';
       currentSubSession.endTime = Date.now();
       currentSubSession.result = result.content;
+
+      // Add final assistant message to conversation history only for completed runs (not cancelled)
+      const existingFinal = subSession.conversationHistory.find(
+        m => m.role === 'assistant' && m.content === result.content
+      );
+      if (!existingFinal) {
+        subSession.conversationHistory.push({
+          role: 'assistant',
+          content: result.content,
+          timestamp: Date.now(),
+        });
+      }
     }
 
-    // Add final assistant message to conversation history (if not already added)
-    const existingFinal = subSession.conversationHistory.find(
-      m => m.role === 'assistant' && m.content === result.content
-    );
-    if (!existingFinal) {
-      subSession.conversationHistory.push({
-        role: 'assistant',
-        content: result.content,
-        timestamp: Date.now(),
-      });
-    }
-
-    // Emit final delegation progress showing completion
+    // Emit final delegation progress showing completion or cancelled state
     emitSubSessionDelegationProgress(subSession, parentSessionId);
+
+    // If cancelled, return with cancelled status to properly signal to callers
+    if (wasCancelled) {
+      logSubSession(`Sub-session ${subSessionId} was cancelled`);
+      return {
+        success: false,
+        subSessionId,
+        error: 'Sub-session was cancelled',
+        conversationHistory: subSession.conversationHistory,
+        duration: Date.now() - subSession.startTime,
+      };
+    }
 
     logSubSession(`Sub-session ${subSessionId} completed successfully`);
 

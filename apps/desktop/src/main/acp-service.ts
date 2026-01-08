@@ -500,7 +500,19 @@ class ACPService extends EventEmitter {
       // Handle process exit
       proc.on("exit", (code, signal) => {
         logApp(`[ACP] Agent ${agentName} exited with code ${code}, signal ${signal}`)
-        instance.status = "stopped"
+        
+        // Distinguish between clean shutdown and abnormal exit
+        // Exit code 0 or SIGTERM signal indicates clean shutdown
+        const isCleanShutdown = code === 0 || signal === "SIGTERM"
+        
+        if (isCleanShutdown) {
+          instance.status = "stopped"
+        } else {
+          // Abnormal exit - preserve error state for diagnostics
+          instance.status = "error"
+          instance.error = instance.error || `Process exited with code ${code}${signal ? `, signal ${signal}` : ''}`
+        }
+        
         instance.process = undefined
 
         // Reject any pending requests
@@ -509,7 +521,11 @@ class ACPService extends EventEmitter {
         }
         instance.pendingRequests.clear()
 
-        this.emit("agentStatusChanged", { agentName, status: "stopped" })
+        this.emit("agentStatusChanged", { 
+          agentName, 
+          status: instance.status, 
+          error: instance.error 
+        })
       })
 
       // Handle process error

@@ -280,14 +280,14 @@ async function processWithAgentMode(
         // Wait for user response
         const approved = await approvalPromise
 
-        // Clear the pending approval from the UI by emitting without pendingToolApproval
+        // Clear the pending approval from the UI by explicitly setting pendingToolApproval to undefined
         await emitAgentProgress({
           sessionId,
           currentIteration: 0,
           maxIterations: config.mcpMaxIterations ?? 10,
           steps: [],
           isComplete: false,
-          // No pendingToolApproval - clears it
+          pendingToolApproval: undefined, // Explicitly clear to sync state across all windows
         })
 
         if (!approved) {

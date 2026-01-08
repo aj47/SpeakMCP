@@ -1898,14 +1898,8 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
     }
   }
 
-  // Add pending tool approval to display items if present
-  if (progress.pendingToolApproval) {
-    displayItems.push({
-      kind: "tool_approval",
-      id: `approval-${progress.pendingToolApproval.approvalId}`,
-      data: progress.pendingToolApproval,
-    })
-  }
+  // NOTE: Tool approval is now rendered separately outside the scroll area for visibility
+  // It is NOT added to displayItems anymore to ensure it stays visible regardless of scroll position
 
   // Add retry status to display items if present
   if (progress.retryInfo && progress.retryInfo.isRetrying) {
@@ -2352,6 +2346,18 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
               </div>
             </div>
 
+            {/* Tool Approval - Fixed position outside scroll area */}
+            {progress.pendingToolApproval && (
+              <div className="flex-shrink-0">
+                <ToolApprovalBubble
+                  approval={progress.pendingToolApproval}
+                  onApprove={handleApproveToolCall}
+                  onDeny={handleDenyToolCall}
+                  isResponding={isRespondingToApproval}
+                />
+              </div>
+            )}
+
             {/* Footer with status info */}
             <div className="px-3 py-2 border-t bg-muted/20 text-xs text-muted-foreground flex-shrink-0 flex items-center gap-2">
               {profileName && (
@@ -2665,6 +2671,18 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
         </div>
 
       </div>
+
+      {/* Tool Approval - Fixed position outside scroll area for overlay variant */}
+      {progress.pendingToolApproval && (
+        <div className="flex-shrink-0 mx-2 mb-2">
+          <ToolApprovalBubble
+            approval={progress.pendingToolApproval}
+            onApprove={handleApproveToolCall}
+            onDeny={handleDenyToolCall}
+            isResponding={isRespondingToApproval}
+          />
+        </div>
+      )}
 
       {/* Message Queue Panel - shows queued messages in overlay */}
       {hasQueuedMessages && progress.conversationId && (

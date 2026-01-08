@@ -185,6 +185,15 @@ export interface AgentProgressStep {
   }
   /** If this step is a delegation to a sub-agent */
   delegation?: ACPDelegationProgress
+  executionStats?: {
+    durationMs?: number
+    totalTokens?: number
+    toolUseCount?: number
+    inputTokens?: number
+    outputTokens?: number
+    cacheHitTokens?: number
+  }
+  subagentId?: string
 }
 
 export interface AgentProgressUpdate {
@@ -232,6 +241,15 @@ export interface AgentProgressUpdate {
   }
   /** Profile name associated with this session (from profile snapshot) */
   profileName?: string
+  acpSessionInfo?: {
+    agentName?: string
+    agentTitle?: string
+    agentVersion?: string
+    currentModel?: string
+    currentMode?: string
+    availableModels?: Array<{ id: string; name: string; description?: string }>
+    availableModes?: Array<{ id: string; name: string; description?: string }>
+  }
 }
 
 // Message Queue Types

@@ -11,6 +11,7 @@ import {
   setSessionForConversation,
   clearSessionForConversation,
   touchSession,
+  setAcpToSpeakMcpSessionMapping,
 } from "./acp-session-state"
 import { emitAgentProgress } from "./emit-agent-progress"
 import { AgentProgressUpdate, AgentProgressStep } from "../shared/types"
@@ -83,6 +84,29 @@ export async function processTranscriptWithACPAgent(
     logApp(`[ACP Main] Failed to load conversation history: ${err}`)
   }
 
+  // Helper to get ACP session info for progress updates (Task 3.1)
+  const getAcpSessionInfo = () => {
+    const agentInstance = acpService.getAgentInstance(agentName)
+    if (!agentInstance) return undefined
+    return {
+      agentName: agentInstance.agentInfo?.name,
+      agentTitle: agentInstance.agentInfo?.title,
+      agentVersion: agentInstance.agentInfo?.version,
+      currentModel: agentInstance.sessionInfo?.models?.currentModelId,
+      currentMode: agentInstance.sessionInfo?.modes?.currentModeId,
+      availableModels: agentInstance.sessionInfo?.models?.availableModels?.map(m => ({
+        id: m.modelId,
+        name: m.name,
+        description: m.description,
+      })),
+      availableModes: agentInstance.sessionInfo?.modes?.availableModes?.map(m => ({
+        id: m.id,
+        name: m.name,
+        description: m.description,
+      })),
+    }
+  }
+
   // Emit progress with optional streaming content and conversation history
   const emitProgress = async (
     steps: AgentProgressStep[],
@@ -100,6 +124,8 @@ export async function processTranscriptWithACPAgent(
       finalContent,
       streamingContent,
       conversationHistory,
+      // Include ACP session info in progress updates (Task 3.1)
+      acpSessionInfo: getAcpSessionInfo(),
     }
     await emitAgentProgress(update)
     onProgress?.(update)
@@ -139,12 +165,29 @@ export async function processTranscriptWithACPAgent(
       logApp(`[ACP Main] Created new session ${acpSessionId}`)
     }
 
+    // Register the ACP session → SpeakMCP session mapping
+    // This is critical for routing tool approval requests to the correct UI session
+    setAcpToSpeakMcpSessionMapping(acpSessionId, sessionId)
+
     // Set up progress listener for session updates
     const progressHandler = (event: {
       agentName: string
       sessionId: string
       content?: ACPContentBlock[]
       isComplete?: boolean
+      toolResponseStats?: {
+        status?: string
+        agentId?: string
+        totalDurationMs?: number
+        totalTokens?: number
+        totalToolUseCount?: number
+        usage?: {
+          input_tokens?: number
+          cache_creation_input_tokens?: number
+          cache_read_input_tokens?: number
+          output_tokens?: number
+        }
+      }
     }) => {
       if (event.sessionId !== acpSessionId) return
 
@@ -165,15 +208,49 @@ export async function processTranscriptWithACPAgent(
               llmContent: accumulatedText, // Use accumulated text, not just this block
             })
           } else if (block.type === "tool_use" && block.name) {
-            steps.push({
+            const step: AgentProgressStep = {
               id: generateStepId("acp-tool"),
               type: "tool_call",
               title: `Tool: ${block.name}`,
               status: "in_progress",
               timestamp: Date.now(),
-            })
+            }
+            // Attach execution stats if available from tool response
+            if (event.toolResponseStats) {
+              step.executionStats = {
+                durationMs: event.toolResponseStats.totalDurationMs,
+                totalTokens: event.toolResponseStats.totalTokens,
+                toolUseCount: event.toolResponseStats.totalToolUseCount,
+                inputTokens: event.toolResponseStats.usage?.input_tokens,
+                outputTokens: event.toolResponseStats.usage?.output_tokens,
+                cacheHitTokens: event.toolResponseStats.usage?.cache_read_input_tokens,
+              }
+              step.subagentId = event.toolResponseStats.agentId
+            }
+            steps.push(step)
           }
         }
+      }
+
+      // If we have toolResponseStats but no tool_use content block, it's a tool completion update
+      // Emit a step with the execution stats
+      if (event.toolResponseStats && steps.length === 0) {
+        steps.push({
+          id: generateStepId("acp-tool-result"),
+          type: "tool_call",
+          title: "Tool completed",
+          status: "completed",
+          timestamp: Date.now(),
+          executionStats: {
+            durationMs: event.toolResponseStats.totalDurationMs,
+            totalTokens: event.toolResponseStats.totalTokens,
+            toolUseCount: event.toolResponseStats.totalToolUseCount,
+            inputTokens: event.toolResponseStats.usage?.input_tokens,
+            outputTokens: event.toolResponseStats.usage?.output_tokens,
+            cacheHitTokens: event.toolResponseStats.usage?.cache_read_input_tokens,
+          },
+          subagentId: event.toolResponseStats.agentId,
+        })
       }
 
       // Always emit with streaming content to show accumulated text

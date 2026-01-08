@@ -112,6 +112,11 @@ export const useAgentStore = create<AgentState>((set, get) => ({
           mergedUpdate = {
             ...existingProgress,
             ...update,
+            // Explicitly handle pendingToolApproval: if update has the key (even if undefined),
+            // use the update value; otherwise preserve existing. This ensures clearing works.
+            pendingToolApproval: 'pendingToolApproval' in update
+              ? update.pendingToolApproval
+              : existingProgress.pendingToolApproval,
             conversationHistory: hasEmptyHistory
               ? existingProgress.conversationHistory
               : update.conversationHistory,
@@ -124,6 +129,11 @@ export const useAgentStore = create<AgentState>((set, get) => ({
           mergedUpdate = {
             ...existingProgress,
             ...update,
+            // Explicitly handle pendingToolApproval: if update has the key (even if undefined),
+            // use the update value; otherwise preserve existing. This ensures clearing works.
+            pendingToolApproval: 'pendingToolApproval' in update
+              ? update.pendingToolApproval
+              : existingProgress.pendingToolApproval,
             steps: mergedSteps,
           }
         }

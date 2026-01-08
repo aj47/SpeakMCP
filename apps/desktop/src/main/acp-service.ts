@@ -952,7 +952,7 @@ class ACPService extends EventEmitter {
       awaitingPermission: false,
     })
 
-    // Clear the pending approval from the UI by emitting progress update without pendingToolApproval
+    // Clear the pending approval from the UI by explicitly setting pendingToolApproval to undefined
     await emitAgentProgress({
       sessionId: speakMcpSessionId,
       currentIteration: 0,
@@ -968,7 +968,7 @@ class ACPService extends EventEmitter {
         },
       ],
       isComplete: false,
-      // No pendingToolApproval - clears it from the UI
+      pendingToolApproval: undefined, // Explicitly clear to sync state across all windows
     })
 
     if (approved) {
@@ -1118,7 +1118,7 @@ class ACPService extends EventEmitter {
         // Wait for user response
         const approved = await promise
 
-        // Clear the pending approval from the UI by emitting progress update without pendingToolApproval
+        // Clear the pending approval from the UI by explicitly setting pendingToolApproval to undefined
         await emitAgentProgress({
           sessionId: speakMcpSessionId,
           currentIteration: 0,
@@ -1134,7 +1134,7 @@ class ACPService extends EventEmitter {
             },
           ],
           isComplete: false,
-          // No pendingToolApproval - clears it from the UI
+          pendingToolApproval: undefined, // Explicitly clear to sync state across all windows
         })
 
         if (!approved) {
@@ -1248,7 +1248,7 @@ class ACPService extends EventEmitter {
         // Wait for user response
         const approved = await promise
 
-        // Clear the pending approval from the UI by emitting progress update without pendingToolApproval
+        // Clear the pending approval from the UI by explicitly setting pendingToolApproval to undefined
         await emitAgentProgress({
           sessionId: speakMcpSessionId,
           currentIteration: 0,
@@ -1264,7 +1264,7 @@ class ACPService extends EventEmitter {
             },
           ],
           isComplete: false,
-          // No pendingToolApproval - clears it from the UI
+          pendingToolApproval: undefined, // Explicitly clear to sync state across all windows
         })
 
         if (!approved) {

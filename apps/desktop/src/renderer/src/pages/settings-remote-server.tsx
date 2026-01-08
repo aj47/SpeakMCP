@@ -18,7 +18,7 @@ import { QRCodeSVG } from "qrcode.react"
 import { EyeOff } from "lucide-react"
 
 /**
- * Mask a URL for streamer mode - shows protocol and domain structure but hides actual content
+ * Mask a URL for streamer mode - hides all alphanumeric content while preserving URL structure (://, ., /, :)
  */
 function maskUrl(url: string): string {
   if (!url) return "https://***.***.***.***:****/v1"

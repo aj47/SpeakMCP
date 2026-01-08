@@ -1699,15 +1699,33 @@ Return ONLY JSON per schema.`,
       const isActionableRequest = toolCapabilities.relevantTools.length > 0
       const contentText = llmResponse.content || ""
 
-      // IMPORTANT: If NO tools are available at all, accept any non-empty response as complete.
-      // This prevents infinite loops when the user has no MCP servers configured.
-      // Without tools, the agent cannot do anything more, so a text response is the final answer.
+      // Check if tools have already been executed for THIS user prompt (current turn)
+      // We only look at tool results AFTER currentPromptIndex to avoid treating a new request
+      // as complete based on tool results from previous conversation turns
+      // This fixes the infinite loop when LLM answers after tool execution but doesn't set needsMoreWork=false
+      const hasToolResultsInCurrentTurn = conversationHistory.slice(currentPromptIndex + 1).some((e) => e.role === "tool")
+      // When tools have been executed in this turn, accept any non-empty response (not just >= 10 chars)
+      // Short answers like "1" or "3 sessions" are valid responses after tool execution
+      const hasSubstantiveResponse = hasToolResultsInCurrentTurn
+        ? contentText.trim().length > 0 && !isToolCallPlaceholder(contentText)
+        : contentText.trim().length >= 10 && !isToolCallPlaceholder(contentText)
+
+      const trimmedContent = contentText.trim()
+
+      // IMPORTANT: For non-actionable requests (no relevant tools OR no tools at all),
+      // accept any non-empty text response as complete. This prevents infinite loops
+      // for simple Q&A like "hi" where the LLM just responds without tool calls.
+      // We use a lower threshold here (any non-empty response) because short greetings
+      // like "Hi." or "Hello." are valid complete responses to simple greetings.
       const noToolsAvailable = !availableTools || availableTools.length === 0
-      if (noToolsAvailable && contentText.trim().length > 0) {
+      const hasAnyResponse = trimmedContent.length > 0 && !isToolCallPlaceholder(contentText)
+      if ((noToolsAvailable || !isActionableRequest) && hasAnyResponse && llmResponse.needsMoreWork !== true) {
         if (isDebugLLM()) {
-          logLLM("No tools available - accepting text response as complete", {
-            responseLength: contentText.trim().length,
-            responsePreview: contentText.substring(0, 100),
+          logLLM("Non-actionable request with substantive response - accepting as complete", {
+            noToolsAvailable,
+            isActionableRequest,
+            responseLength: trimmedContent.length,
+            responsePreview: trimmedContent.substring(0, 100),
           })
         }
         finalContent = contentText
@@ -1722,19 +1740,6 @@ Return ONLY JSON per schema.`,
         })
         break
       }
-
-      // Check if tools have already been executed for THIS user prompt (current turn)
-      // We only look at tool results AFTER currentPromptIndex to avoid treating a new request
-      // as complete based on tool results from previous conversation turns
-      // This fixes the infinite loop when LLM answers after tool execution but doesn't set needsMoreWork=false
-      const hasToolResultsInCurrentTurn = conversationHistory.slice(currentPromptIndex + 1).some((e) => e.role === "tool")
-      // When tools have been executed in this turn, accept any non-empty response (not just >= 10 chars)
-      // Short answers like "1" or "3 sessions" are valid responses after tool execution
-      const hasSubstantiveResponse = hasToolResultsInCurrentTurn
-        ? contentText.trim().length > 0 && !isToolCallPlaceholder(contentText)
-        : contentText.trim().length >= 10 && !isToolCallPlaceholder(contentText)
-
-      const trimmedContent = contentText.trim()
 
       // When agent claims it's done (needsMoreWork !== true) and has tool results + substantive response,
       // determine if the task is complete

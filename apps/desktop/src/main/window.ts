@@ -131,6 +131,11 @@ function createBaseWindow({
 // Track whether panel was hidden due to main window focus (for restore on blur)
 let panelHiddenByMainFocus = false
 
+// Exported for use in panel show event to reset stale flag
+export function clearPanelHiddenByMainFocus() {
+  panelHiddenByMainFocus = false
+}
+
 export function createMainWindow({ url }: { url?: string } = {}) {
   logApp("Creating main window...")
   const win = createBaseWindow({
@@ -164,7 +169,11 @@ export function createMainWindow({ url }: { url?: string } = {}) {
       if (panel && !panel.isVisible()) {
         logApp("[createMainWindow] Main window blurred - restoring floating panel")
         panelHiddenByMainFocus = false
-        showPanelWindow()
+        // Use showInactive() directly to avoid stealing focus from other apps.
+        // showPanelWindow() would call win.focus() on Windows which is undesirable
+        // when the user is switching away from the main app.
+        panel.showInactive()
+        ensurePanelZOrder(panel)
       }
     }
   })
@@ -480,8 +489,13 @@ export function createPanelWindow() {
     getRendererHandlers<RendererHandlers>(win.webContents).stopRecording.send()
   })
 
-  // Reassert z-order on lifecycle changes
-  win.on("show", () => ensurePanelZOrder(win))
+  // Reassert z-order on lifecycle changes and reset stale focus-hide flag
+  win.on("show", () => {
+    ensurePanelZOrder(win)
+    // Clear the flag when panel becomes visible through any means.
+    // This prevents stale state if user manually shows panel while main is focused.
+    clearPanelHiddenByMainFocus()
+  })
   win.on("blur", () => ensurePanelZOrder(win))
   win.on("focus", () => ensurePanelZOrder(win))
   win.on("move", () => ensurePanelZOrder(win))

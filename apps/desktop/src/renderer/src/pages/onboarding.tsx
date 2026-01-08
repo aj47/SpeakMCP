@@ -16,6 +16,7 @@ import { tipcClient } from "@renderer/lib/tipc-client"
 import { Recorder } from "@renderer/lib/recorder"
 import { useMutation } from "@tanstack/react-query"
 import { KeyRecorder } from "@renderer/components/key-recorder"
+import { getMcpToolsShortcutDisplay } from "@shared/key-utils"
 
 type OnboardingStep = "welcome" | "api-key" | "dictation" | "agent" | "complete"
 
@@ -513,19 +514,6 @@ function AgentStep({
 
   const mcpToolsShortcut = config?.mcpToolsShortcut || "hold-ctrl-alt"
 
-  const getAgentShortcutDisplay = () => {
-    if (mcpToolsShortcut === "hold-ctrl-alt") {
-      return "Hold Ctrl+Alt"
-    } else if (mcpToolsShortcut === "toggle-ctrl-alt") {
-      return "Toggle Ctrl+Alt"
-    } else if (mcpToolsShortcut === "ctrl-alt-slash") {
-      return "Press Ctrl+Alt+/"
-    } else if (mcpToolsShortcut === "custom" && config?.customMcpToolsShortcut) {
-      return config.customMcpToolsShortcut
-    }
-    return "Hold Ctrl+Alt"
-  }
-
   const handleInstallExa = async () => {
     setIsInstallingExa(true)
     try {
@@ -714,7 +702,7 @@ function AgentStep({
         <div className="flex items-center gap-2 mb-3 p-2 rounded bg-primary/10 border border-primary/20">
           <span className="i-mingcute-keyboard-fill text-primary"></span>
           <span className="text-sm">
-            <strong>{getAgentShortcutDisplay()}</strong> to speak to your agent from anywhere
+            <strong>{getMcpToolsShortcutDisplay(mcpToolsShortcut, config?.customMcpToolsShortcut)}</strong> to speak to your agent from anywhere
           </span>
         </div>
 

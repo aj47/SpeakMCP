@@ -8,30 +8,13 @@ import { clearPersistedSize } from "@renderer/hooks/use-resizable"
 import { AgentProgress } from "@renderer/components/agent-progress"
 import { MessageCircle, Mic, Plus, CheckCircle2, LayoutGrid, Kanban, RotateCcw, Keyboard } from "lucide-react"
 import { Button } from "@renderer/components/ui/button"
-import { AgentProgressUpdate, Config } from "@shared/types"
+import { AgentProgressUpdate } from "@shared/types"
 import { cn } from "@renderer/lib/utils"
 import { toast } from "sonner"
 import { SessionsKanban } from "@renderer/components/sessions-kanban"
 import { PredefinedPromptsMenu } from "@renderer/components/predefined-prompts-menu"
 import { useConfigQuery } from "@renderer/lib/query-client"
-import { formatKeyComboForDisplay } from "@shared/key-utils"
-
-/**
- * Get the display string for the agent mode (Aura) shortcut
- */
-function getAgentModeShortcutDisplay(config: Config | undefined): string {
-  const shortcut = config?.mcpToolsShortcut || "hold-ctrl-alt"
-  if (shortcut === "hold-ctrl-alt") {
-    return "Hold Ctrl+Alt"
-  } else if (shortcut === "toggle-ctrl-alt") {
-    return "Press Ctrl+Alt"
-  } else if (shortcut === "ctrl-alt-slash") {
-    return "Ctrl+Alt+/"
-  } else if (shortcut === "custom" && config?.customMcpToolsShortcut) {
-    return formatKeyComboForDisplay(config.customMcpToolsShortcut)
-  }
-  return "Hold Ctrl+Alt"
-}
+import { getMcpToolsShortcutDisplay } from "@shared/key-utils"
 
 function EmptyState({ onTextClick, onVoiceClick, onSelectPrompt, agentModeShortcut }: {
   onTextClick: () => void
@@ -88,7 +71,7 @@ export function Component() {
 
   // Get config for agent mode shortcut display
   const configQuery = useConfigQuery()
-  const agentModeShortcut = getAgentModeShortcutDisplay(configQuery.data)
+  const agentModeShortcut = getMcpToolsShortcutDisplay(configQuery.data?.mcpToolsShortcut, configQuery.data?.customMcpToolsShortcut)
 
   const [sessionOrder, setSessionOrder] = useState<string[]>([])
   const [draggedSessionId, setDraggedSessionId] = useState<string | null>(null)

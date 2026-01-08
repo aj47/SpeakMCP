@@ -211,3 +211,29 @@ export function getEffectiveShortcut(
   }
   return shortcutType
 }
+
+/**
+ * Get the display string for the agent mode (MCP tools) shortcut.
+ * This provides a centralized mapping to ensure consistency across all UI components
+ * (sessions, settings-general, onboarding).
+ */
+export function getMcpToolsShortcutDisplay(
+  shortcut: "hold-ctrl-alt" | "toggle-ctrl-alt" | "ctrl-alt-slash" | "custom" | undefined,
+  customShortcut?: string,
+): string {
+  switch (shortcut) {
+    case "hold-ctrl-alt":
+      return "Hold Ctrl+Alt"
+    case "toggle-ctrl-alt":
+      return "Toggle Ctrl+Alt"
+    case "ctrl-alt-slash":
+      return "Ctrl+Alt+/"
+    case "custom":
+      if (customShortcut) {
+        return formatKeyComboForDisplay(customShortcut)
+      }
+      return "Hold Ctrl+Alt"
+    default:
+      return "Hold Ctrl+Alt"
+  }
+}

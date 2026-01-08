@@ -136,6 +136,23 @@ export function Component() {
               }}
             />
           </Control>
+
+          <Control label={<ControlLabel label="Streamer Mode" tooltip="Hide sensitive information (phone numbers, QR codes, API keys) when streaming or sharing your screen" />} className="px-3">
+            <Switch
+              defaultChecked={configQuery.data.streamerModeEnabled ?? false}
+              onCheckedChange={(value) => {
+                saveConfig({
+                  streamerModeEnabled: value,
+                })
+              }}
+            />
+          </Control>
+          {configQuery.data.streamerModeEnabled && (
+            <div className="px-3 py-2 text-xs text-amber-600 dark:text-amber-400 flex items-center gap-2">
+              <span className="i-mingcute-eye-off-line h-4 w-4" />
+              <span>Streamer Mode is active - sensitive information is hidden</span>
+            </div>
+          )}
         </ControlGroup>
 
         <ControlGroup title="Appearance">

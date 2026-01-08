@@ -15,6 +15,17 @@ import { tipcClient } from "@renderer/lib/tipc-client"
 import type { Config } from "@shared/types"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { QRCodeSVG } from "qrcode.react"
+import { EyeOff } from "lucide-react"
+
+/**
+ * Mask a URL for streamer mode - masks all alphanumeric content (including the protocol)
+ * while preserving URL structure characters (://, ., /, :)
+ */
+function maskUrl(url: string): string {
+  if (!url) return "https://***.***.***.***:****/v1"
+  // Replace the sensitive parts with asterisks while preserving structure
+  return url.replace(/([a-zA-Z0-9-]+)/g, (match) => "*".repeat(Math.min(match.length, 8)))
+}
 
 export function Component() {
   const configQuery = useConfigQuery()
@@ -73,6 +84,7 @@ export function Component() {
   if (!cfg) return null
 
   const enabled = cfg.remoteServerEnabled ?? false
+  const streamerMode = cfg.streamerModeEnabled ?? false
 
   const baseUrl = cfg.remoteServerBindAddress && cfg.remoteServerPort
     ? `http://${cfg.remoteServerBindAddress}:${cfg.remoteServerPort}/v1`
@@ -161,9 +173,11 @@ export function Component() {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => cfg.remoteServerApiKey && navigator.clipboard.writeText(cfg.remoteServerApiKey)}
+                    disabled={streamerMode}
+                    title={streamerMode ? "Disabled in Streamer Mode" : undefined}
+                    onClick={() => cfg.remoteServerApiKey && !streamerMode && navigator.clipboard.writeText(cfg.remoteServerApiKey)}
                   >
-                    Copy
+                    {streamerMode ? <><EyeOff className="h-3.5 w-3.5 mr-1" />Hidden</> : "Copy"}
                   </Button>
                   <Button
                     variant="secondary"
@@ -180,6 +194,12 @@ export function Component() {
                     Regenerate
                   </Button>
                 </div>
+                {streamerMode && (
+                  <div className="mt-1 text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                    <EyeOff className="h-3 w-3" />
+                    Copy disabled in Streamer Mode
+                  </div>
+                )}
               </Control>
 
               <Control label={<ControlLabel label="Log Level" tooltip="Fastify logger level" />} className="px-3">
@@ -220,34 +240,53 @@ export function Component() {
               {baseUrl && (
                 <>
                   <Control label="Base URL" className="px-3">
-                    <div className="text-sm text-muted-foreground select-text break-all">{baseUrl}</div>
+                    <div className="text-sm text-muted-foreground select-text break-all">
+                      {streamerMode ? maskUrl(baseUrl) : baseUrl}
+                    </div>
+                    {streamerMode && (
+                      <div className="mt-1 text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                        <EyeOff className="h-3 w-3" />
+                        URL masked in Streamer Mode
+                      </div>
+                    )}
                   </Control>
 
                   {cfg?.remoteServerApiKey && (
                     <Control label={<ControlLabel label="Mobile App QR Code" tooltip="Scan this QR code with the SpeakMCP mobile app to connect (local network only)" />} className="px-3">
                       <div className="flex flex-col items-start gap-3">
-                        <div className="p-3 bg-white rounded-lg">
-                          <QRCodeSVG
-                            value={`speakmcp://config?baseUrl=${encodeURIComponent(baseUrl)}&apiKey=${encodeURIComponent(cfg.remoteServerApiKey)}`}
-                            size={160}
-                            level="M"
-                          />
-                        </div>
+                        {streamerMode ? (
+                          <div className="p-3 bg-muted/50 rounded-lg flex flex-col items-center justify-center" style={{ width: 160, height: 160 }}>
+                            <EyeOff className="h-8 w-8 text-muted-foreground mb-2" />
+                            <span className="text-xs text-muted-foreground text-center">QR hidden<br />Streamer Mode</span>
+                          </div>
+                        ) : (
+                          <div className="p-3 bg-white rounded-lg">
+                            <QRCodeSVG
+                              value={`speakmcp://config?baseUrl=${encodeURIComponent(baseUrl)}&apiKey=${encodeURIComponent(cfg.remoteServerApiKey)}`}
+                              size={160}
+                              level="M"
+                            />
+                          </div>
+                        )}
                         <div className="flex flex-wrap items-center gap-2">
                           <Button
                             variant="outline"
                             size="sm"
+                            disabled={streamerMode}
+                            title={streamerMode ? "Disabled in Streamer Mode" : undefined}
                             onClick={() => {
+                              if (streamerMode) return
                               const deepLink = `speakmcp://config?baseUrl=${encodeURIComponent(baseUrl)}&apiKey=${encodeURIComponent(cfg.remoteServerApiKey || "")}`
                               navigator.clipboard.writeText(deepLink)
                             }}
                           >
-                            Copy Deep Link
+                            {streamerMode ? <><EyeOff className="h-3.5 w-3.5 mr-1" />Hidden</> : "Copy Deep Link"}
                           </Button>
                         </div>
                         <div className="text-xs text-muted-foreground">
-                          Scan with the SpeakMCP mobile app to auto-configure. Works on local network only.
-                          For internet access, use Cloudflare Tunnel below.
+                          {streamerMode
+                            ? "QR code and deep link hidden in Streamer Mode"
+                            : "Scan with the SpeakMCP mobile app to auto-configure. Works on local network only. For internet access, use Cloudflare Tunnel below."}
                         </div>
                       </div>
                     </Control>
@@ -341,48 +380,64 @@ export function Component() {
                     <Control label={<ControlLabel label="Public URL" tooltip="Use this URL to access your remote server from anywhere" />} className="px-3">
                       <div className="flex flex-wrap items-center gap-2">
                         <Input
-                          type="text"
-                          value={`${tunnelStatus.url}/v1`}
+                          type={streamerMode ? "password" : "text"}
+                          value={streamerMode ? "••••••••••••••••••••" : `${tunnelStatus.url}/v1`}
                           readOnly
                           className="w-full sm:w-[360px] max-w-full min-w-0 font-mono text-xs"
                         />
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => navigator.clipboard.writeText(`${tunnelStatus.url}/v1`)}
+                          disabled={streamerMode}
+                          title={streamerMode ? "Disabled in Streamer Mode" : undefined}
+                          onClick={() => !streamerMode && navigator.clipboard.writeText(`${tunnelStatus.url}/v1`)}
                         >
-                          Copy
+                          {streamerMode ? <><EyeOff className="h-3.5 w-3.5 mr-1" />Hidden</> : "Copy"}
                         </Button>
                       </div>
                       <div className="mt-1 text-xs text-muted-foreground">
-                        This URL is temporary and will change when you restart the tunnel.
+                        {streamerMode
+                          ? <span className="text-amber-600 dark:text-amber-400 flex items-center gap-1"><EyeOff className="h-3 w-3" />URL hidden in Streamer Mode</span>
+                          : "This URL is temporary and will change when you restart the tunnel."}
                       </div>
                     </Control>
 
                     {cfg?.remoteServerApiKey && (
                       <Control label={<ControlLabel label="Mobile App QR Code" tooltip="Scan this QR code with the SpeakMCP mobile app to connect" />} className="px-3">
                         <div className="flex flex-col items-start gap-3">
-                          <div className="p-3 bg-white rounded-lg">
-                            <QRCodeSVG
-                              value={`speakmcp://config?baseUrl=${encodeURIComponent(`${tunnelStatus.url}/v1`)}&apiKey=${encodeURIComponent(cfg.remoteServerApiKey)}`}
-                              size={160}
-                              level="M"
-                            />
-                          </div>
+                          {streamerMode ? (
+                            <div className="p-3 bg-muted/50 rounded-lg flex flex-col items-center justify-center" style={{ width: 160, height: 160 }}>
+                              <EyeOff className="h-8 w-8 text-muted-foreground mb-2" />
+                              <span className="text-xs text-muted-foreground text-center">QR hidden<br />Streamer Mode</span>
+                            </div>
+                          ) : (
+                            <div className="p-3 bg-white rounded-lg">
+                              <QRCodeSVG
+                                value={`speakmcp://config?baseUrl=${encodeURIComponent(`${tunnelStatus.url}/v1`)}&apiKey=${encodeURIComponent(cfg.remoteServerApiKey)}`}
+                                size={160}
+                                level="M"
+                              />
+                            </div>
+                          )}
                           <div className="flex flex-wrap items-center gap-2">
                             <Button
                               variant="outline"
                               size="sm"
+                              disabled={streamerMode}
+                              title={streamerMode ? "Disabled in Streamer Mode" : undefined}
                               onClick={() => {
+                                if (streamerMode) return
                                 const deepLink = `speakmcp://config?baseUrl=${encodeURIComponent(`${tunnelStatus.url}/v1`)}&apiKey=${encodeURIComponent(cfg.remoteServerApiKey || "")}`
                                 navigator.clipboard.writeText(deepLink)
                               }}
                             >
-                              Copy Deep Link
+                              {streamerMode ? <><EyeOff className="h-3.5 w-3.5 mr-1" />Hidden</> : "Copy Deep Link"}
                             </Button>
                           </div>
                           <div className="text-xs text-muted-foreground">
-                            Scan with the SpeakMCP mobile app to auto-configure the connection.
+                            {streamerMode
+                              ? "QR code and deep link hidden in Streamer Mode"
+                              : "Scan with the SpeakMCP mobile app to auto-configure the connection."}
                           </div>
                         </div>
                       </Control>

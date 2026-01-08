@@ -7,7 +7,8 @@ import { SettingsDragBar } from "@renderer/components/settings-drag-bar"
 import { ActiveAgentsSidebar } from "@renderer/components/active-agents-sidebar"
 import { SidebarProfileSelector } from "@renderer/components/sidebar-profile-selector"
 import { useSidebar, SIDEBAR_DIMENSIONS } from "@renderer/hooks/use-sidebar"
-import { PanelLeftClose, PanelLeft } from "lucide-react"
+import { useConfigQuery } from "@renderer/lib/query-client"
+import { PanelLeftClose, PanelLeft, EyeOff } from "lucide-react"
 
 type NavLinkItem = {
   text: string
@@ -20,6 +21,8 @@ export const Component = () => {
   const location = useLocation()
   const [settingsExpanded, setSettingsExpanded] = useState(true)
   const { isCollapsed, width, isResizing, toggleCollapse, handleResizeStart } = useSidebar()
+  const configQuery = useConfigQuery()
+  const streamerMode = configQuery.data?.streamerModeEnabled ?? false
 
   const settingsNavLinks: NavLinkItem[] = [
     {
@@ -239,6 +242,25 @@ export const Component = () => {
 
         {/* Spacer to push footer down when collapsed */}
         {isCollapsed && <div className="flex-1" />}
+
+        {/* Streamer Mode Indicator */}
+        {streamerMode && (
+          <div className={cn(
+            "shrink-0 mx-1 mb-2 rounded-md bg-amber-500/10 border border-amber-500/30",
+            isCollapsed ? "p-1.5" : "px-2 py-1.5"
+          )}>
+            {isCollapsed ? (
+              <div className="flex justify-center" title="Streamer Mode Active">
+                <EyeOff className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400">
+                <EyeOff className="h-3.5 w-3.5 shrink-0" />
+                <span className="font-medium">Streamer Mode</span>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Loading spinner at the bottom of the sidebar */}
         <div className="shrink-0">

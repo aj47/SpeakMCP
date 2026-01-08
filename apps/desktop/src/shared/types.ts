@@ -520,6 +520,10 @@ export type Config = {
   streamStatusWatcherEnabled?: boolean
   streamStatusFilePath?: string
 
+  // Streamer Mode Configuration
+  // When enabled, hides sensitive information (phone numbers, QR codes, API keys) for screen sharing
+  streamerModeEnabled?: boolean
+
 }
 
 

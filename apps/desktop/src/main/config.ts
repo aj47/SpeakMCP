@@ -187,6 +187,9 @@ const getConfig = () => {
     whatsappAutoReply: false,
     whatsappLogMessages: false,
 
+    // Streamer Mode - hides sensitive info for screen sharing
+    streamerModeEnabled: false,
+
   }
 
   try {

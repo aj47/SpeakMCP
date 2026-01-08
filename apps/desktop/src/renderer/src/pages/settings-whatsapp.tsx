@@ -5,9 +5,20 @@ import { Input } from "@renderer/components/ui/input"
 import { Button } from "@renderer/components/ui/button"
 import { useConfigQuery, useSaveConfigMutation } from "@renderer/lib/query-client"
 import type { Config } from "@shared/types"
-import { AlertTriangle, Loader2, CheckCircle2, XCircle, RefreshCw, LogOut, QrCode as QrCodeIcon } from "lucide-react"
+import { AlertTriangle, Loader2, CheckCircle2, XCircle, RefreshCw, LogOut, QrCode as QrCodeIcon, EyeOff } from "lucide-react"
 import { tipcClient } from "@renderer/lib/tipc-client"
 import { QRCodeSVG } from "qrcode.react"
+
+/**
+ * Mask a phone number for streamer mode
+ * Replaces digits with asterisks while preserving structure
+ */
+function maskPhoneNumber(phone: string | undefined): string {
+  if (!phone) return "***-***-****"
+  // Replace all but first 2 and last 2 digits with asterisks
+  if (phone.length <= 4) return "****"
+  return phone.slice(0, 2) + "*".repeat(phone.length - 4) + phone.slice(-2)
+}
 
 interface WhatsAppStatus {
   available: boolean
@@ -120,6 +131,7 @@ export function Component() {
   const enabled = cfg.whatsappEnabled ?? false
   const remoteServerEnabled = cfg.remoteServerEnabled ?? false
   const hasApiKey = !!cfg.remoteServerApiKey
+  const streamerMode = cfg.streamerModeEnabled ?? false
 
   return (
     <div className="modern-panel h-full overflow-y-auto overflow-x-hidden px-6 py-4">
@@ -171,13 +183,21 @@ export function Component() {
             endDescription="Connect your WhatsApp account by scanning the QR code"
           >
             <div className="px-3 py-2">
+              {/* Streamer mode indicator */}
+              {streamerMode && (
+                <div className="mb-3 flex items-center gap-2 text-xs text-amber-600 dark:text-amber-400">
+                  <EyeOff className="h-3.5 w-3.5" />
+                  <span>Streamer Mode: Phone numbers and QR codes are hidden</span>
+                </div>
+              )}
+
               {/* Status display */}
               <div className="flex items-center gap-2 mb-4">
                 {status?.connected ? (
                   <>
                     <CheckCircle2 className="h-5 w-5 text-green-500" />
                     <span className="text-sm text-green-600 dark:text-green-400">
-                      Connected as {status.userName || "Unknown"} ({status.phoneNumber})
+                      Connected as {streamerMode ? "****" : (status.userName || "Unknown")} ({streamerMode ? maskPhoneNumber(status.phoneNumber) : status.phoneNumber})
                     </span>
                   </>
                 ) : status?.available ? (
@@ -205,9 +225,16 @@ export function Component() {
               {/* QR Code display */}
               {qrCodeData && !status?.connected && (
                 <div className="mb-4 flex flex-col items-center">
-                  <div className="bg-white p-4 rounded-lg shadow-md">
-                    <QRCodeSVG value={qrCodeData} size={256} />
-                  </div>
+                  {streamerMode ? (
+                    <div className="bg-muted/50 p-4 rounded-lg shadow-md flex flex-col items-center justify-center" style={{ width: 256, height: 256 }}>
+                      <EyeOff className="h-12 w-12 text-muted-foreground mb-2" />
+                      <span className="text-sm text-muted-foreground text-center">QR Code hidden<br />Streamer Mode is active</span>
+                    </div>
+                  ) : (
+                    <div className="bg-white p-4 rounded-lg shadow-md">
+                      <QRCodeSVG value={qrCodeData} size={256} />
+                    </div>
+                  )}
                   <p className="mt-2 text-sm text-muted-foreground text-center">
                     Open WhatsApp on your phone → Settings → Linked Devices → Scan this QR code
                   </p>
@@ -266,7 +293,7 @@ export function Component() {
               className="px-3"
             >
               <Input
-                type="text"
+                type={streamerMode ? "password" : "text"}
                 value={(cfg.whatsappAllowFrom || []).join(", ")}
                 onChange={(e) => {
                   const numbers = e.currentTarget.value
@@ -275,7 +302,7 @@ export function Component() {
                     .filter(Boolean)
                   saveConfig({ whatsappAllowFrom: numbers })
                 }}
-                placeholder="14155551234, 98389177934034"
+                placeholder={streamerMode ? "••••••••••" : "14155551234, 98389177934034"}
                 className="w-full"
               />
               <div className="mt-2 text-xs text-muted-foreground space-y-1">

@@ -382,11 +382,19 @@ async function runAgent(options: RunAgentOptions): Promise<{
   const isWhatsApp = isWhatsAppConversation(conversationId)
   const whatsappChatId = isWhatsApp ? extractWhatsAppChatId(conversationId!) : null
 
-  // Check if this conversation has WhatsApp origin (either from current request or stored in metadata)
-  let hasWhatsAppOrigin = origin === "whatsapp"
-  if (!hasWhatsAppOrigin && isExistingConversation) {
+  // Check if this conversation has WhatsApp origin
+  // SECURITY: For existing conversations, ONLY trust the stored origin metadata.
+  // The request header is only used to set the origin when creating a NEW conversation.
+  // This prevents attackers from retroactively enabling the approval-bypassing harness
+  // by adding the X-SpeakMCP-Origin header to requests for existing conversations.
+  let hasWhatsAppOrigin = false
+  if (isExistingConversation) {
+    // For existing conversations, stored metadata is authoritative
     const storedOrigin = await conversationService.getConversationOrigin(conversationId)
     hasWhatsAppOrigin = storedOrigin === "whatsapp"
+  } else {
+    // For new conversations, trust the request header (which will be stored in metadata)
+    hasWhatsAppOrigin = origin === "whatsapp"
   }
 
   const useWhatsAppHarness = isWhatsApp && whatsappChatId && hasWhatsAppOrigin && (cfg.whatsappHarnessOutput ?? true)
@@ -576,9 +584,9 @@ export async function startRemoteServer() {
       //    so the harness bypass is not a significant additional risk.
       //
       // 2. Origin Stored in Metadata: When a conversation is FIRST created, the origin
-      //    is persisted in conversation metadata (see line ~297). For existing conversations,
-      //    the stored origin is the authoritative source of truth (see hasWhatsAppOrigin
-      //    logic around line ~386-390).
+      //    is persisted in conversation metadata (see createConversation in conversation-service.ts).
+      //    For existing conversations, the stored origin is the ONLY source of truth -
+      //    the request header is completely ignored (see hasWhatsAppOrigin logic in runAgent).
       //
       // 3. Header Only Trusted for New Conversations: The X-SpeakMCP-Origin header is
       //    only used to set the origin when creating a NEW conversation. An attacker

@@ -377,6 +377,9 @@ export function Component() {
               <div className="mt-1 text-xs text-muted-foreground">
                 When enabled (default), WhatsApp becomes transparent like TTS - the harness automatically sends typing indicators and messages.
               </div>
+              <div className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                ⚠️ Changes to this setting require restarting the WhatsApp connection to take effect.
+              </div>
             </Control>
 
             <Control

@@ -563,8 +563,30 @@ export async function startRemoteServer() {
       // Check if client wants SSE streaming
       const isStreaming = body.stream === true
 
-      // Extract origin from X-SpeakMCP-Origin header (set by WhatsApp MCP server)
-      // This is used to verify that requests genuinely come from WhatsApp
+      // ─────────────────────────────────────────────────────────────────────────────
+      // X-SpeakMCP-Origin Header Security Model
+      // ─────────────────────────────────────────────────────────────────────────────
+      // The X-SpeakMCP-Origin header indicates the source of the request (e.g., "whatsapp").
+      // This header is used to enable the WhatsApp harness, which bypasses manual approval
+      // for WhatsApp responses.
+      //
+      // Security considerations:
+      // 1. API Key as Primary Security: The remoteServerApiKey is the primary security
+      //    mechanism. Any client with the API key can already execute agent actions,
+      //    so the harness bypass is not a significant additional risk.
+      //
+      // 2. Origin Stored in Metadata: When a conversation is FIRST created, the origin
+      //    is persisted in conversation metadata (see line ~297). For existing conversations,
+      //    the stored origin is the authoritative source of truth (see hasWhatsAppOrigin
+      //    logic around line ~386-390).
+      //
+      // 3. Header Only Trusted for New Conversations: The X-SpeakMCP-Origin header is
+      //    only used to set the origin when creating a NEW conversation. An attacker
+      //    cannot retroactively add WhatsApp origin to an existing conversation.
+      //
+      // 4. Defense in Depth: Even if an attacker forges the header, they would also need
+      //    a valid whatsapp_* prefixed conversation_id that matches the expected format.
+      // ─────────────────────────────────────────────────────────────────────────────
       const originHeader = req.headers["x-speakmcp-origin"]
       const origin = originHeader === "whatsapp" ? "whatsapp" as const : undefined
 

@@ -673,9 +673,6 @@ export async function processTranscriptWithAgentMode(
     }
   }
 
-  // Track pending save operations to avoid race conditions with compaction
-  let pendingSavePromises: Promise<unknown>[] = []
-
   // Helper function to add a message to conversation history AND save it incrementally
   // This ensures all messages are both in memory and persisted to disk
   const addMessage = (
@@ -695,14 +692,9 @@ export async function processTranscriptWithAgentMode(
     }
     conversationHistory.push(message)
 
-    // Save to disk asynchronously and track the promise
-    const savePromise = saveMessageIncremental(role, content, toolCalls, toolResults).catch(err => {
+    // Save to disk asynchronously (fire and forget)
+    saveMessageIncremental(role, content, toolCalls, toolResults).catch(err => {
       logLLM("[addMessage] Failed to save message:", err)
-    })
-    pendingSavePromises.push(savePromise)
-    // Clean up completed promises to avoid memory leak
-    savePromise.finally(() => {
-      pendingSavePromises = pendingSavePromises.filter(p => p !== savePromise)
     })
   }
 
@@ -814,12 +806,8 @@ export async function processTranscriptWithAgentMode(
     msg => msg.role === "user" && msg.content === transcript
   ) ?? false
   if (!userMessageAlreadyExists) {
-    const savePromise = saveMessageIncremental("user", transcript).catch(err => {
+    saveMessageIncremental("user", transcript).catch(err => {
       logLLM("[processTranscriptWithAgentMode] Failed to save initial user message:", err)
-    })
-    pendingSavePromises.push(savePromise)
-    savePromise.finally(() => {
-      pendingSavePromises = pendingSavePromises.filter(p => p !== savePromise)
     })
   }
 
@@ -1199,7 +1187,7 @@ Return ONLY JSON per schema.`,
     ]
 
     // Apply context budget management before the agent LLM call
-    const { messages: shrunkMessages, estTokensAfter, maxTokens: maxContextTokens, compaction, summarizedMessages } = await shrinkMessagesForLLM({
+    const { messages: shrunkMessages, estTokensAfter, maxTokens: maxContextTokens } = await shrinkMessagesForLLM({
       messages: messages as any,
       availableTools: uniqueAvailableTools,
       relevantTools: toolCapabilities.relevantTools,
@@ -1220,56 +1208,6 @@ Return ONLY JSON per schema.`,
     })
     // Update context info for progress display
     contextInfoRef = { estTokens: estTokensAfter, maxTokens: maxContextTokens }
-
-    // Persist Tier 1 summarization to in-memory conversationHistory
-    // This prevents re-summarizing the same messages in subsequent iterations
-    if (summarizedMessages && summarizedMessages.length > 0) {
-      for (const { conversationHistoryIndex, summarizedContent } of summarizedMessages) {
-        if (conversationHistoryIndex >= 0 && conversationHistoryIndex < conversationHistory.length) {
-          conversationHistory[conversationHistoryIndex] = {
-            ...conversationHistory[conversationHistoryIndex],
-            content: summarizedContent,
-          }
-        }
-      }
-      logLLM(`[processTranscriptWithAgentMode] Updated ${summarizedMessages.length} messages in conversationHistory with summarized content`)
-    }
-
-    // Persist compaction to disk if it occurred
-    // This replaces old messages with a summary message in the conversation file
-    if (compaction && currentConversationId) {
-      logLLM(`Compaction triggered: ${compaction.droppedMessageCount} messages dropped, compacting up to index ${compaction.compactUpToIndex}`)
-      try {
-        // Wait for any pending saves to complete before compacting
-        // to avoid race conditions where a save clobbers compaction or vice versa
-        if (pendingSavePromises.length > 0) {
-          await Promise.all(pendingSavePromises)
-          pendingSavePromises = []
-        }
-        const compactResult = await conversationService.compactConversation(
-          currentConversationId,
-          compaction.summaryContent,
-          compaction.compactUpToIndex,
-        )
-
-        // Update in-memory conversationHistory to match the compacted on-disk state.
-        // This prevents re-summarizing already-compacted content in subsequent iterations.
-        if (compactResult && compaction.compactUpToIndex > 0 && compaction.compactUpToIndex <= conversationHistory.length) {
-          // Replace the first N messages with a single summary message
-          const summaryMessage = {
-            role: "assistant" as const,
-            content: compaction.summaryContent,
-            timestamp: Date.now(),
-          }
-          const messagesAfterCompaction = conversationHistory.slice(compaction.compactUpToIndex)
-          conversationHistory.length = 0
-          conversationHistory.push(summaryMessage, ...messagesAfterCompaction)
-          logLLM(`[processTranscriptWithAgentMode] Updated in-memory conversationHistory: ${compaction.compactUpToIndex} messages replaced with summary, new length: ${conversationHistory.length}`)
-        }
-      } catch (err) {
-        logLLM("[processTranscriptWithAgentMode] Failed to persist compaction:", err)
-      }
-    }
 
     // If stop was requested during context shrinking, exit now
     if (agentSessionStateManager.shouldStopSession(currentSessionId)) {

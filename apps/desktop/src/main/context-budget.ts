@@ -6,14 +6,6 @@ import { agentSessionStateManager } from "./state"
 
 export type LLMMessage = { role: string; content: string }
 
-// Marker to identify already-summarized content, preventing duplicate summarization
-// when the same conversation is processed multiple times (e.g., back-to-back messages)
-const SUMMARY_MARKER = "<!-- ctx-summary -->"
-
-export function isAlreadySummarized(content: string): boolean {
-  return content.includes(SUMMARY_MARKER)
-}
-
 // Simple in-memory cache for provider/model context windows
 const contextWindowCache = new Map<string, number>()
 
@@ -104,13 +96,6 @@ export function getProviderAndModel(): { providerId: string; model: string } {
 }
 
 export async function summarizeContent(content: string, sessionId?: string): Promise<string> {
-  // Skip if already summarized to prevent duplicate summarization
-  // when the same conversation is processed multiple times
-  if (isAlreadySummarized(content)) {
-    if (isDebugLLM()) logLLM("ContextBudget: skipping already-summarized content")
-    return content
-  }
-
   const { providerId: provider } = getProviderAndModel() // align with agent provider
   const MAX_TOKENS_HINT = 400 // soft guidance via prompt only
   const CHUNK_SIZE = 16000 // ~4k tokens per chunk (roughly)
@@ -142,9 +127,7 @@ ${src}`
 
   // Small enough: single pass
   if (content.length <= CHUNK_SIZE) {
-    const summary = await summarizeOnce(content)
-    // Append marker to prevent re-summarization
-    return `${summary}\n${SUMMARY_MARKER}`
+    return await summarizeOnce(content)
   }
 
   // Large content: chunk then combine
@@ -165,8 +148,7 @@ ${src}`
     combined = await summarizeOnce(combined)
   }
 
-  // Append marker to prevent re-summarization
-  return `${combined}\n${SUMMARY_MARKER}`
+  return combined
 }
 
 export interface ShrinkOptions {
@@ -187,35 +169,6 @@ export interface ShrinkResult {
   estTokensBefore: number
   estTokensAfter: number
   maxTokens: number
-  /**
-   * When compaction was performed (drop_middle strategy), this contains the info needed
-   * to persist the compaction to disk. The caller should use this to call
-   * conversationService.compactConversation() to persist the changes.
-   */
-  compaction?: {
-    /** Summary of the dropped messages */
-    summaryContent: string
-    /** Number of messages that were dropped/compacted */
-    droppedMessageCount: number
-    /**
-     * Index (exclusive) up to which messages should be replaced with the summary on disk.
-     * This is the index of the first message in the "tail" that is being kept.
-     * Messages from 0 to compactUpToIndex-1 will be replaced with the summary.
-     */
-    compactUpToIndex: number
-  }
-  /**
-   * When Tier 1 summarization was performed on individual large messages,
-   * this maps the original message index (in LLM array space, excluding system message)
-   * to the summarized content. The caller should use this to update conversationHistory
-   * so that the summarized content persists between iterations.
-   */
-  summarizedMessages?: Array<{
-    /** Index in the original conversationHistory (0-based, not counting system message) */
-    conversationHistoryIndex: number
-    /** The summarized content to store */
-    summarizedContent: string
-  }>
 }
 
 export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<ShrinkResult> {
@@ -278,23 +231,13 @@ export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<ShrinkR
   }
 
   // Tier 1: Summarize large messages (prefer tool outputs or very long entries)
-  // Skip already-summarized messages to prevent duplicate summarization
   const indicesByLength = messages
     .map((m, i) => ({ i, len: m.content?.length || 0, role: m.role, content: m.content }))
-    .filter((x) => x.len > summarizeThreshold && x.role !== "system" && !isAlreadySummarized(x.content || ""))
+    .filter((x) => x.len > summarizeThreshold && x.role !== "system")
     .sort((a, b) => b.len - a.len)
 
   const totalToSummarize = indicesByLength.length
   let summarizedCount = 0
-
-  // Track which messages were summarized so they can be persisted to conversationHistory
-  // The LLM array has a system message at index 0 that doesn't exist in conversationHistory:
-  //   - LLM array: [system_prompt, msg0, msg1, msg2, ...]
-  //   - conversationHistory: [msg0, msg1, msg2, ...]
-  // So LLM index N corresponds to conversationHistory index (N - 1) when there's a system message.
-  const tier1SystemIdx = messages.findIndex((m) => m.role === "system")
-  const tier1SystemOffset = tier1SystemIdx >= 0 ? 1 : 0
-  const summarizedMessages: ShrinkResult["summarizedMessages"] = []
 
   for (const item of indicesByLength) {
     // Check if session should stop before summarizing
@@ -316,31 +259,14 @@ export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<ShrinkR
     const summarized = await summarizeContent(item.content!, opts.sessionId)
     messages[item.i] = { ...messages[item.i], content: summarized }
 
-    // Track this summarization so it can be persisted
-    // Only track if the message came from conversationHistory (index > 0 when system msg exists)
-    const conversationHistoryIndex = item.i - tier1SystemOffset
-    if (conversationHistoryIndex >= 0) {
-      summarizedMessages.push({
-        conversationHistoryIndex,
-        summarizedContent: summarized,
-      })
-    }
-
     applied.push("summarize")
     tokens = estimateTokensFromMessages(messages)
     if (tokens <= targetTokens) break
   }
 
   if (tokens <= targetTokens) {
-    if (isDebugLLM()) logLLM("ContextBudget: after summarize", { estTokens: tokens, summarizedCount: summarizedMessages.length })
-    return {
-      messages,
-      appliedStrategies: applied,
-      estTokensBefore: tokens,
-      estTokensAfter: tokens,
-      maxTokens,
-      summarizedMessages: summarizedMessages.length > 0 ? summarizedMessages : undefined,
-    }
+    if (isDebugLLM()) logLLM("ContextBudget: after summarize", { estTokens: tokens })
+    return { messages, appliedStrategies: applied, estTokensBefore: tokens, estTokensAfter: tokens, maxTokens }
   }
 
   // Tier 2: Remove middle messages (keep system, first user, last N)
@@ -350,7 +276,6 @@ export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<ShrinkR
   const systemIdx = messages.findIndex((m) => m.role === "system")
   const firstUserIdx = messages.findIndex((m, idx) => m.role === "user" && idx !== systemIdx)
 
-  const tail = messages.slice(-effectiveLastN)
   const keptSet = new Set<number>()
   if (systemIdx >= 0) keptSet.add(systemIdx)
   if (firstUserIdx >= 0) keptSet.add(firstUserIdx)
@@ -360,35 +285,6 @@ export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<ShrinkR
     if (k >= 0) keptSet.add(k)
   }
 
-  // Calculate compactUpToIndex BEFORE reassigning messages
-  // so we can correctly identify which messages will be compacted on disk.
-  //
-  // IMPORTANT: We need to convert from LLM-array-space to on-disk-conversation-space.
-  // The LLM array has a system message at index 0 that doesn't exist on disk:
-  //   - LLM array: [system_prompt, msg0, msg1, msg2, ...]
-  //   - On-disk:   [msg0, msg1, msg2, ...]
-  // So LLM index N corresponds to on-disk index (N - 1) when there's a system message.
-  const systemMessageOffset = systemIdx >= 0 ? 1 : 0
-  const compactUpToIndex = baseLen - effectiveLastN - systemMessageOffset
-
-  // The cutoff index in LLM-array-space: messages from systemMessageOffset to this index (exclusive)
-  // will be compacted on disk.
-  const llmCutoffIndex = compactUpToIndex + systemMessageOffset
-
-  // Collect dropped messages for summarization in chronological order.
-  // ONLY include messages that will actually be replaced by compaction on disk:
-  // - On-disk indices 0 to compactUpToIndex-1 correspond to LLM indices systemMessageOffset to llmCutoffIndex-1
-  // - The first user message should only be included if it falls within this range
-  // NOTE: We must do this BEFORE reassigning `messages` to `ordered`
-  const droppedMessages: LLMMessage[] = []
-  for (let i = systemMessageOffset; i < llmCutoffIndex && i < baseLen; i++) {
-    // Include any non-system message in the compaction range
-    if (messages[i] && messages[i].role !== "system") {
-      droppedMessages.push(messages[i])
-    }
-  }
-
-  const trimmed = messages.filter((_, idx) => keptSet.has(idx))
   // Preserve order: system -> first user -> (chronological tail without duplicates)
   const ordered: LLMMessage[] = []
   if (systemIdx >= 0) ordered.push(messages[systemIdx])
@@ -400,47 +296,9 @@ export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<ShrinkR
   applied.push("drop_middle")
   tokens = estimateTokensFromMessages(messages)
 
-  let compaction: ShrinkResult["compaction"] = undefined
-  // Only generate compaction if:
-  // 1. We have messages to summarize (droppedMessages.length > 0)
-  // 2. There's actually a prefix to compact on disk (compactUpToIndex > 0)
-  // This prevents wasted summarizeContent() LLM calls when there's nothing to compact
-  if (droppedMessages.length > 0 && compactUpToIndex > 0) {
-    // Create a summary of the dropped conversation
-    const droppedContent = droppedMessages
-      .map((m) => `${m.role}: ${m.content?.substring(0, 500) || "(empty)"}`)
-      .join("\n\n")
-
-    // Use LLM to summarize the dropped content (if it's substantial)
-    let summaryContent: string
-    if (droppedContent.length > 500) {
-      summaryContent = await summarizeContent(
-        `Summarize this conversation history concisely, preserving key facts, decisions, and context:\n\n${droppedContent}`,
-        opts.sessionId
-      )
-    } else {
-      summaryContent = `[Previous conversation summary: ${droppedMessages.length} messages compacted]\n${droppedContent}`
-    }
-
-    compaction = {
-      summaryContent,
-      droppedMessageCount: droppedMessages.length,
-      compactUpToIndex,
-    }
-    if (isDebugLLM()) logLLM("ContextBudget: compaction generated", { droppedCount: droppedMessages.length, compactUpToIndex })
-  }
-
   if (tokens <= targetTokens) {
     if (isDebugLLM()) logLLM("ContextBudget: after drop_middle", { estTokens: tokens, kept: messages.length })
-    return {
-      messages,
-      appliedStrategies: applied,
-      estTokensBefore: tokens,
-      estTokensAfter: tokens,
-      maxTokens,
-      compaction,
-      summarizedMessages: summarizedMessages.length > 0 ? summarizedMessages : undefined,
-    }
+    return { messages, appliedStrategies: applied, estTokensBefore: tokens, estTokensAfter: tokens, maxTokens }
   }
 
   // Tier 3: Minimal system prompt
@@ -460,14 +318,6 @@ export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<ShrinkR
 
   if (isDebugLLM()) logLLM("ContextBudget: after minimal_system_prompt", { estTokens: tokens })
 
-  return {
-    messages,
-    appliedStrategies: applied,
-    estTokensBefore: tokens,
-    estTokensAfter: tokens,
-    maxTokens,
-    compaction,
-    summarizedMessages: summarizedMessages.length > 0 ? summarizedMessages : undefined,
-  }
+  return { messages, appliedStrategies: applied, estTokensBefore: tokens, estTokensAfter: tokens, maxTokens }
 }
 

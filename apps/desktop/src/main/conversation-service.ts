@@ -302,10 +302,11 @@ export class ConversationService {
         return null
       }
 
-      // Validate index
+      // Validate index - return null to signal no compaction occurred
+      // This allows callers to distinguish "compaction succeeded" from "skipped due to invalid index"
       if (replaceUpToIndex <= 0 || replaceUpToIndex > conversation.messages.length) {
-        logApp(`[conversationService] compactConversation: invalid replaceUpToIndex: ${replaceUpToIndex}, messages: ${conversation.messages.length}`)
-        return conversation
+        logApp(`[conversationService] compactConversation: invalid replaceUpToIndex: ${replaceUpToIndex}, messages: ${conversation.messages.length}, skipping compaction`)
+        return null
       }
 
       // Create summary message

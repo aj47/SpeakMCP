@@ -47,8 +47,8 @@ function EmptyState({ onTextClick, onVoiceClick, onSelectPrompt, textInputShortc
             onSelectPrompt={onSelectPrompt}
           />
         </div>
-        {/* Keybind hints */}
-        <div className="flex items-center gap-4 text-sm text-muted-foreground">
+        {/* Keybind hints - hidden on narrow screens */}
+        <div className="hidden md:flex items-center gap-4 text-sm text-muted-foreground">
           <div className="flex items-center gap-2">
             <Keyboard className="h-4 w-4" />
             <span>Text:</span>
@@ -378,8 +378,8 @@ export function Component() {
                 <PredefinedPromptsMenu
                   onSelectPrompt={handleSelectPrompt}
                 />
-                {/* Keybind hints */}
-                <div className="flex items-center gap-3 text-xs text-muted-foreground ml-2">
+                {/* Keybind hints - hidden on narrow screens */}
+                <div className="hidden lg:flex items-center gap-3 text-xs text-muted-foreground ml-2">
                   <div className="flex items-center gap-1.5">
                     <Keyboard className="h-3.5 w-3.5" />
                     <span>Text:</span>

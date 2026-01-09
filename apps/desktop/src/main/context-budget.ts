@@ -204,6 +204,18 @@ export interface ShrinkResult {
      */
     compactUpToIndex: number
   }
+  /**
+   * When Tier 1 summarization was performed on individual large messages,
+   * this maps the original message index (in LLM array space, excluding system message)
+   * to the summarized content. The caller should use this to update conversationHistory
+   * so that the summarized content persists between iterations.
+   */
+  summarizedMessages?: Array<{
+    /** Index in the original conversationHistory (0-based, not counting system message) */
+    conversationHistoryIndex: number
+    /** The summarized content to store */
+    summarizedContent: string
+  }>
 }
 
 export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<ShrinkResult> {
@@ -275,6 +287,15 @@ export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<ShrinkR
   const totalToSummarize = indicesByLength.length
   let summarizedCount = 0
 
+  // Track which messages were summarized so they can be persisted to conversationHistory
+  // The LLM array has a system message at index 0 that doesn't exist in conversationHistory:
+  //   - LLM array: [system_prompt, msg0, msg1, msg2, ...]
+  //   - conversationHistory: [msg0, msg1, msg2, ...]
+  // So LLM index N corresponds to conversationHistory index (N - 1) when there's a system message.
+  const tier1SystemIdx = messages.findIndex((m) => m.role === "system")
+  const tier1SystemOffset = tier1SystemIdx >= 0 ? 1 : 0
+  const summarizedMessages: ShrinkResult["summarizedMessages"] = []
+
   for (const item of indicesByLength) {
     // Check if session should stop before summarizing
     if (opts.sessionId && agentSessionStateManager.shouldStopSession(opts.sessionId)) {
@@ -294,14 +315,32 @@ export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<ShrinkR
 
     const summarized = await summarizeContent(item.content!, opts.sessionId)
     messages[item.i] = { ...messages[item.i], content: summarized }
+
+    // Track this summarization so it can be persisted
+    // Only track if the message came from conversationHistory (index > 0 when system msg exists)
+    const conversationHistoryIndex = item.i - tier1SystemOffset
+    if (conversationHistoryIndex >= 0) {
+      summarizedMessages.push({
+        conversationHistoryIndex,
+        summarizedContent: summarized,
+      })
+    }
+
     applied.push("summarize")
     tokens = estimateTokensFromMessages(messages)
     if (tokens <= targetTokens) break
   }
 
   if (tokens <= targetTokens) {
-    if (isDebugLLM()) logLLM("ContextBudget: after summarize", { estTokens: tokens })
-    return { messages, appliedStrategies: applied, estTokensBefore: tokens, estTokensAfter: tokens, maxTokens }
+    if (isDebugLLM()) logLLM("ContextBudget: after summarize", { estTokens: tokens, summarizedCount: summarizedMessages.length })
+    return {
+      messages,
+      appliedStrategies: applied,
+      estTokensBefore: tokens,
+      estTokensAfter: tokens,
+      maxTokens,
+      summarizedMessages: summarizedMessages.length > 0 ? summarizedMessages : undefined,
+    }
   }
 
   // Tier 2: Remove middle messages (keep system, first user, last N)
@@ -393,7 +432,15 @@ export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<ShrinkR
 
   if (tokens <= targetTokens) {
     if (isDebugLLM()) logLLM("ContextBudget: after drop_middle", { estTokens: tokens, kept: messages.length })
-    return { messages, appliedStrategies: applied, estTokensBefore: tokens, estTokensAfter: tokens, maxTokens, compaction }
+    return {
+      messages,
+      appliedStrategies: applied,
+      estTokensBefore: tokens,
+      estTokensAfter: tokens,
+      maxTokens,
+      compaction,
+      summarizedMessages: summarizedMessages.length > 0 ? summarizedMessages : undefined,
+    }
   }
 
   // Tier 3: Minimal system prompt
@@ -413,6 +460,14 @@ export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<ShrinkR
 
   if (isDebugLLM()) logLLM("ContextBudget: after minimal_system_prompt", { estTokens: tokens })
 
-  return { messages, appliedStrategies: applied, estTokensBefore: tokens, estTokensAfter: tokens, maxTokens, compaction }
+  return {
+    messages,
+    appliedStrategies: applied,
+    estTokensBefore: tokens,
+    estTokensAfter: tokens,
+    maxTokens,
+    compaction,
+    summarizedMessages: summarizedMessages.length > 0 ? summarizedMessages : undefined,
+  }
 }
 

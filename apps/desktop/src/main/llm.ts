@@ -1199,7 +1199,7 @@ Return ONLY JSON per schema.`,
     ]
 
     // Apply context budget management before the agent LLM call
-    const { messages: shrunkMessages, estTokensAfter, maxTokens: maxContextTokens, compaction } = await shrinkMessagesForLLM({
+    const { messages: shrunkMessages, estTokensAfter, maxTokens: maxContextTokens, compaction, summarizedMessages } = await shrinkMessagesForLLM({
       messages: messages as any,
       availableTools: uniqueAvailableTools,
       relevantTools: toolCapabilities.relevantTools,
@@ -1220,6 +1220,20 @@ Return ONLY JSON per schema.`,
     })
     // Update context info for progress display
     contextInfoRef = { estTokens: estTokensAfter, maxTokens: maxContextTokens }
+
+    // Persist Tier 1 summarization to in-memory conversationHistory
+    // This prevents re-summarizing the same messages in subsequent iterations
+    if (summarizedMessages && summarizedMessages.length > 0) {
+      for (const { conversationHistoryIndex, summarizedContent } of summarizedMessages) {
+        if (conversationHistoryIndex >= 0 && conversationHistoryIndex < conversationHistory.length) {
+          conversationHistory[conversationHistoryIndex] = {
+            ...conversationHistory[conversationHistoryIndex],
+            content: summarizedContent,
+          }
+        }
+      }
+      logLLM(`[processTranscriptWithAgentMode] Updated ${summarizedMessages.length} messages in conversationHistory with summarized content`)
+    }
 
     // Persist compaction to disk if it occurred
     // This replaces old messages with a summary message in the conversation file

@@ -264,6 +264,30 @@ export class ConversationService {
     return conversation.metadata?.origin ?? null
   }
 
+  /**
+   * Set or update the origin of a conversation.
+   * Used for migrating pre-existing conversations that don't have origin metadata.
+   * Returns true if the update was successful, false if the conversation doesn't exist.
+   */
+  async setConversationOrigin(
+    conversationId: string,
+    origin: "whatsapp" | "desktop" | "remote" | "unknown",
+  ): Promise<boolean> {
+    const conversation = await this.loadConversation(conversationId)
+    if (!conversation) {
+      return false
+    }
+
+    // Initialize metadata if it doesn't exist
+    if (!conversation.metadata) {
+      conversation.metadata = {}
+    }
+
+    conversation.metadata.origin = origin
+    await this.saveConversation(conversation)
+    return true
+  }
+
   async addMessageToConversation(
     conversationId: string,
     content: string,

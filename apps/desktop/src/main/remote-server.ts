@@ -387,11 +387,27 @@ async function runAgent(options: RunAgentOptions): Promise<{
   // The request header is only used to set the origin when creating a NEW conversation.
   // This prevents attackers from retroactively enabling the approval-bypassing harness
   // by adding the X-SpeakMCP-Origin header to requests for existing conversations.
+  //
+  // MIGRATION: For pre-existing WhatsApp conversations (created before origin tracking was
+  // introduced), we allow a one-time migration: if the conversation ID has the whatsapp_ prefix
+  // AND the current request has origin="whatsapp" AND the stored origin is null, we update
+  // the stored origin to "whatsapp". This ensures existing WhatsApp conversations continue
+  // to work after upgrading. See GitHub review comment #10 on PR #905.
   let hasWhatsAppOrigin = false
   if (isExistingConversation) {
     // For existing conversations, stored metadata is authoritative
     const storedOrigin = await conversationService.getConversationOrigin(conversationId)
-    hasWhatsAppOrigin = storedOrigin === "whatsapp"
+    if (storedOrigin === "whatsapp") {
+      hasWhatsAppOrigin = true
+    } else if (storedOrigin === null && isWhatsApp && origin === "whatsapp") {
+      // MIGRATION: Pre-existing WhatsApp conversation without origin metadata.
+      // The whatsapp_ prefix + current request origin header indicates this is a legitimate
+      // WhatsApp conversation from before origin tracking. Migrate it.
+      diagnosticsService.logInfo("remote-server", `[WhatsApp Harness] Migrating pre-existing WhatsApp conversation ${conversationId} - setting origin to "whatsapp"`)
+      await conversationService.setConversationOrigin(conversationId, "whatsapp")
+      hasWhatsAppOrigin = true
+    }
+    // If storedOrigin is a non-whatsapp value (like "remote", "desktop"), don't allow migration
   } else {
     // For new conversations, trust the request header (which will be stored in metadata)
     hasWhatsAppOrigin = origin === "whatsapp"

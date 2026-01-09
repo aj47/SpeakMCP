@@ -181,11 +181,17 @@ function extractWhatsAppChatId(conversationId: string): string | null {
 async function sendWhatsAppTypingIndicator(chatId: string): Promise<void> {
   try {
     diagnosticsService.logInfo("remote-server", `[WhatsApp Harness] Sending typing indicator to ${chatId}`)
-    await mcpService.executeToolCall(
+    const result = await mcpService.executeToolCall(
       { name: "whatsapp:whatsapp_send_typing", arguments: { to: chatId } },
       undefined,
       true // skip approval check for harness-level calls
     )
+    if (result.isError) {
+      const errorMessage = result.content.map(c => c.text).join(', ')
+      diagnosticsService.logWarning("remote-server", `[WhatsApp Harness] Typing indicator failed: ${errorMessage}`)
+    } else {
+      diagnosticsService.logInfo("remote-server", `[WhatsApp Harness] Typing indicator sent successfully to ${chatId}`)
+    }
   } catch (error) {
     diagnosticsService.logWarning("remote-server", `[WhatsApp Harness] Failed to send typing indicator: ${error}`)
     // Don't throw - typing indicator failures shouldn't break the flow
@@ -199,12 +205,17 @@ async function sendWhatsAppTypingIndicator(chatId: string): Promise<void> {
 async function sendWhatsAppMessage(chatId: string, text: string): Promise<void> {
   try {
     diagnosticsService.logInfo("remote-server", `[WhatsApp Harness] Sending message to ${chatId} (${text.length} chars)`)
-    await mcpService.executeToolCall(
+    const result = await mcpService.executeToolCall(
       { name: "whatsapp:whatsapp_send_message", arguments: { to: chatId, text } },
       undefined,
       true // skip approval check for harness-level calls
     )
-    diagnosticsService.logInfo("remote-server", `[WhatsApp Harness] Message sent successfully to ${chatId}`)
+    if (result.isError) {
+      const errorMessage = result.content.map(c => c.text).join(', ')
+      diagnosticsService.logError("remote-server", `[WhatsApp Harness] Failed to send message to ${chatId}: ${errorMessage}`)
+    } else {
+      diagnosticsService.logInfo("remote-server", `[WhatsApp Harness] Message sent successfully to ${chatId}`)
+    }
   } catch (error) {
     diagnosticsService.logError("remote-server", `[WhatsApp Harness] Failed to send message to ${chatId}`, error)
     // Don't throw - let the agent loop complete even if WhatsApp sending fails

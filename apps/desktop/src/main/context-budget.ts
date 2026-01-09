@@ -193,9 +193,10 @@ function normalizeModelName(model: string): string {
   let normalized = model.toLowerCase()
 
   // Remove provider prefixes (e.g., "anthropic/", "openai/", "accounts/fireworks/models/")
+  // More specific patterns MUST come first to avoid partial matches
   const prefixPatterns = [
+    /^accounts\/[^/]+\/models\//, // Fireworks style (must be first - more specific)
     /^[a-z0-9-]+\//, // Simple prefix like "anthropic/"
-    /^accounts\/[^/]+\/models\//, // Fireworks style
   ]
   for (const pattern of prefixPatterns) {
     normalized = normalized.replace(pattern, "")

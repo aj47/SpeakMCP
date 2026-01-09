@@ -162,8 +162,11 @@ const MODEL_REGISTRY: Record<string, ModelSpec> = {
   // -------------------------------------------------------------------------
   // DeepSeek models
   // -------------------------------------------------------------------------
+  // Note: "deepseek-v3" becomes "deepseek-3" after normalization (v(\d+) -> $1)
   "deepseek-r1": { contextWindow: 128_000, maxOutputTokens: 8_192 },
+  "deepseek-r-1": { contextWindow: 128_000, maxOutputTokens: 8_192 },
   "deepseek-v3": { contextWindow: 128_000, maxOutputTokens: 8_192 },
+  "deepseek-3": { contextWindow: 128_000, maxOutputTokens: 8_192 },
   "deepseek-coder": { contextWindow: 128_000, maxOutputTokens: 8_192 },
   "deepseek-chat": { contextWindow: 128_000, maxOutputTokens: 8_192 },
   "deepseek": { contextWindow: 128_000, maxOutputTokens: 8_192 },

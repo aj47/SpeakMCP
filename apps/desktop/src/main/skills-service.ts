@@ -21,7 +21,9 @@ class SkillsService {
 
   constructor() {
     this.discoveryFolder = path.join(dataFolder, FILE_DISCOVERY_FOLDERS.ROOT)
-    this.skillsFolder = path.join(this.discoveryFolder, FILE_DISCOVERY_FOLDERS.SKILLS)
+    // Skills are stored directly in {dataFolder}/skills/ (not under .speakmcp)
+    // This matches the convention used by existing skills and other tools
+    this.skillsFolder = path.join(dataFolder, FILE_DISCOVERY_FOLDERS.SKILLS)
     this.loadedSkills = new Map()
   }
 

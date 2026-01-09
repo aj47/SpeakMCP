@@ -467,6 +467,9 @@ async function runAgent(options: RunAgentOptions): Promise<{
       sessionId, // Pass session ID for progress routing
       onProgress, // Pass progress callback for SSE streaming
       profileSnapshot, // Pass profile snapshot for session isolation
+      // When WhatsApp harness output is enabled, accept simple conversational responses
+      // without requiring tool calls (e.g., agent responds "banana" to "reply with banana")
+      { acceptSimpleResponse: useWhatsAppHarness },
     )
 
     // Mark session as completed

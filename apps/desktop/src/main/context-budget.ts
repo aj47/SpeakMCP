@@ -302,16 +302,18 @@ export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<ShrinkR
     if (k >= 0) keptSet.add(k)
   }
 
-  // Collect dropped messages (excluding system) for summarization
-  // Include the first user message since it will be replaced by compaction on disk
+  // Collect dropped messages (excluding system) for summarization in chronological order.
+  // Include the first user message since it will be replaced by compaction on disk.
+  // We iterate in index order to maintain proper chronology, which is important when
+  // there are existing summary messages from prior compactions.
   const droppedMessages: LLMMessage[] = []
-  // Add first user message at the start of droppedMessages (it's kept in LLM array but compacted on disk)
-  if (firstUserIdx >= 0 && messages[firstUserIdx]) {
-    droppedMessages.push(messages[firstUserIdx])
-  }
   for (let i = 0; i < baseLen; i++) {
-    if (!keptSet.has(i) && messages[i].role !== "system") {
-      droppedMessages.push(messages[i])
+    // Include first user message (it's kept in LLM array but compacted on disk)
+    // OR any non-system message that's not in the kept set
+    if (messages[i].role !== "system") {
+      if (i === firstUserIdx || !keptSet.has(i)) {
+        droppedMessages.push(messages[i])
+      }
     }
   }
 

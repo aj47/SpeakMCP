@@ -193,13 +193,17 @@ function normalizeModelName(model: string): string {
   let normalized = model.toLowerCase()
 
   // Remove provider prefixes (e.g., "anthropic/", "openai/", "accounts/fireworks/models/")
-  // More specific patterns MUST come first to avoid partial matches
+  // Try patterns from most specific to least specific, stop after first match
   const prefixPatterns = [
-    /^accounts\/[^/]+\/models\//, // Fireworks style (must be first - more specific)
-    /^[a-z0-9-]+\//, // Simple prefix like "anthropic/"
+    /^accounts\/[^/]+\/models\//, // Fireworks: accounts/fireworks/models/...
+    /^[a-z0-9]+\/[a-z0-9-]+\//, // Two-level: provider/subtype/ (e.g., openrouter/anthropic/)
+    /^[a-z0-9-]+\//, // Simple prefix: anthropic/, openai/, etc.
   ]
   for (const pattern of prefixPatterns) {
-    normalized = normalized.replace(pattern, "")
+    if (pattern.test(normalized)) {
+      normalized = normalized.replace(pattern, "")
+      break // Stop after first match to avoid double-stripping
+    }
   }
 
   // Remove date suffixes (e.g., "-20251001", "-2024-06-20")
@@ -290,18 +294,21 @@ function getModelContextWindow(providerId: string, model: string): number {
   }
 
   if (providerId === "openai") {
-    // Unknown OpenAI model - assume modern GPT-4 class
-    return 128_000
+    // Unknown OpenAI model - use conservative default to avoid oversized requests
+    // (legacy models like GPT-3.5 have 16K, embedding models even less)
+    return 16_000
   }
 
   if (providerId === "anthropic") {
-    // Unknown Anthropic model - assume Claude class
-    return 200_000
+    // Unknown Anthropic model - use conservative default
+    // (older Claude models may have smaller contexts)
+    return 100_000
   }
 
   if (providerId === "gemini" || providerId === "google") {
-    // Unknown Google model - assume Gemini class
-    return 1_000_000
+    // Unknown Google model - use conservative default
+    // (some Gemini variants have smaller contexts than the flagship)
+    return 128_000
   }
 
   // Generic fallback - conservative

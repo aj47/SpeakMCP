@@ -6,6 +6,14 @@ import { agentSessionStateManager } from "./state"
 
 export type LLMMessage = { role: string; content: string }
 
+// Marker to identify already-summarized content, preventing duplicate summarization
+// when the same conversation is processed multiple times (e.g., back-to-back messages)
+const SUMMARY_MARKER = "<!-- ctx-summary -->"
+
+export function isAlreadySummarized(content: string): boolean {
+  return content.includes(SUMMARY_MARKER)
+}
+
 // Simple in-memory cache for provider/model context windows
 const contextWindowCache = new Map<string, number>()
 
@@ -96,6 +104,13 @@ export function getProviderAndModel(): { providerId: string; model: string } {
 }
 
 export async function summarizeContent(content: string, sessionId?: string): Promise<string> {
+  // Skip if already summarized to prevent duplicate summarization
+  // when the same conversation is processed multiple times
+  if (isAlreadySummarized(content)) {
+    if (isDebugLLM()) logLLM("ContextBudget: skipping already-summarized content")
+    return content
+  }
+
   const { providerId: provider } = getProviderAndModel() // align with agent provider
   const MAX_TOKENS_HINT = 400 // soft guidance via prompt only
   const CHUNK_SIZE = 16000 // ~4k tokens per chunk (roughly)
@@ -127,7 +142,9 @@ ${src}`
 
   // Small enough: single pass
   if (content.length <= CHUNK_SIZE) {
-    return await summarizeOnce(content)
+    const summary = await summarizeOnce(content)
+    // Append marker to prevent re-summarization
+    return `${summary}\n${SUMMARY_MARKER}`
   }
 
   // Large content: chunk then combine
@@ -148,7 +165,8 @@ ${src}`
     combined = await summarizeOnce(combined)
   }
 
-  return combined
+  // Append marker to prevent re-summarization
+  return `${combined}\n${SUMMARY_MARKER}`
 }
 
 export interface ShrinkOptions {
@@ -248,9 +266,10 @@ export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<ShrinkR
   }
 
   // Tier 1: Summarize large messages (prefer tool outputs or very long entries)
+  // Skip already-summarized messages to prevent duplicate summarization
   const indicesByLength = messages
     .map((m, i) => ({ i, len: m.content?.length || 0, role: m.role, content: m.content }))
-    .filter((x) => x.len > summarizeThreshold && x.role !== "system")
+    .filter((x) => x.len > summarizeThreshold && x.role !== "system" && !isAlreadySummarized(x.content || ""))
     .sort((a, b) => b.len - a.len)
 
   const totalToSummarize = indicesByLength.length

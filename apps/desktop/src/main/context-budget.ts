@@ -343,7 +343,14 @@ export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<ShrinkR
 
     // Calculate the correct compaction index: the start of the tail that's being kept
     // This is the index of the first message in the "last N" that we're preserving
-    const compactUpToIndex = baseLen - effectiveLastN
+    //
+    // IMPORTANT: We need to convert from LLM-array-space to on-disk-conversation-space.
+    // The LLM array has a system message at index 0 that doesn't exist on disk:
+    //   - LLM array: [system_prompt, msg0, msg1, msg2, ...]
+    //   - On-disk:   [msg0, msg1, msg2, ...]
+    // So LLM index N corresponds to on-disk index (N - 1) when there's a system message.
+    const systemMessageOffset = systemIdx >= 0 ? 1 : 0
+    const compactUpToIndex = baseLen - effectiveLastN - systemMessageOffset
 
     compaction = {
       summaryContent,

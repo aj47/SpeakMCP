@@ -327,9 +327,23 @@ export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<ShrinkR
   applied.push("drop_middle")
   tokens = estimateTokensFromMessages(messages)
 
-  // Generate compaction info if we dropped messages
+  // Generate compaction info if we dropped messages AND there's actually a prefix to compact on disk
+  // Calculate compactUpToIndex first to gate the expensive summarization call
+  //
+  // IMPORTANT: We need to convert from LLM-array-space to on-disk-conversation-space.
+  // The LLM array has a system message at index 0 that doesn't exist on disk:
+  //   - LLM array: [system_prompt, msg0, msg1, msg2, ...]
+  //   - On-disk:   [msg0, msg1, msg2, ...]
+  // So LLM index N corresponds to on-disk index (N - 1) when there's a system message.
+  const systemMessageOffset = systemIdx >= 0 ? 1 : 0
+  const compactUpToIndex = baseLen - effectiveLastN - systemMessageOffset
+
   let compaction: ShrinkResult["compaction"] = undefined
-  if (droppedMessages.length > 0) {
+  // Only generate compaction if:
+  // 1. We have messages to summarize (droppedMessages.length > 0)
+  // 2. There's actually a prefix to compact on disk (compactUpToIndex > 0)
+  // This prevents wasted summarizeContent() LLM calls when there's nothing to compact
+  if (droppedMessages.length > 0 && compactUpToIndex > 0) {
     // Create a summary of the dropped conversation
     const droppedContent = droppedMessages
       .map((m) => `${m.role}: ${m.content?.substring(0, 500) || "(empty)"}`)
@@ -346,23 +360,12 @@ export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<ShrinkR
       summaryContent = `[Previous conversation summary: ${droppedMessages.length} messages compacted]\n${droppedContent}`
     }
 
-    // Calculate the correct compaction index: the start of the tail that's being kept
-    // This is the index of the first message in the "last N" that we're preserving
-    //
-    // IMPORTANT: We need to convert from LLM-array-space to on-disk-conversation-space.
-    // The LLM array has a system message at index 0 that doesn't exist on disk:
-    //   - LLM array: [system_prompt, msg0, msg1, msg2, ...]
-    //   - On-disk:   [msg0, msg1, msg2, ...]
-    // So LLM index N corresponds to on-disk index (N - 1) when there's a system message.
-    const systemMessageOffset = systemIdx >= 0 ? 1 : 0
-    const compactUpToIndex = baseLen - effectiveLastN - systemMessageOffset
-
     compaction = {
       summaryContent,
       droppedMessageCount: droppedMessages.length,
       compactUpToIndex,
     }
-    if (isDebugLLM()) logLLM("ContextBudget: compaction generated", { droppedCount: droppedMessages.length })
+    if (isDebugLLM()) logLLM("ContextBudget: compaction generated", { droppedCount: droppedMessages.length, compactUpToIndex })
   }
 
   if (tokens <= targetTokens) {

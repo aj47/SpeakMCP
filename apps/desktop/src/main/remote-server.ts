@@ -293,8 +293,10 @@ async function runAgent(options: RunAgentOptions): Promise<{
       // Conversation not found - create it with the provided ID to maintain session continuity
       // This is important for external integrations like WhatsApp where the conversation_id
       // is based on the sender's identifier (e.g., whatsapp_61406142826@s.whatsapp.net)
-      diagnosticsService.logInfo("remote-server", `Conversation ${conversationId} not found, creating with provided ID${origin ? ` (origin: ${origin})` : ""}`)
-      const newConversation = await conversationService.createConversationWithId(conversationId, prompt, "user", origin)
+      // Default origin to "remote" for non-WhatsApp remote clients to ensure origin is always persisted
+      const effectiveOrigin = origin || "remote"
+      diagnosticsService.logInfo("remote-server", `Conversation ${conversationId} not found, creating with provided ID (origin: ${effectiveOrigin})`)
+      const newConversation = await conversationService.createConversationWithId(conversationId, prompt, "user", effectiveOrigin)
       // Update conversationId to use the actual persisted ID (which may be sanitized)
       // This ensures session lookup and later operations use the correct ID
       conversationId = newConversation.id
@@ -392,7 +394,7 @@ async function runAgent(options: RunAgentOptions): Promise<{
   // introduced), we allow a one-time migration: if the conversation ID has the whatsapp_ prefix
   // AND the current request has origin="whatsapp" AND the stored origin is null, we update
   // the stored origin to "whatsapp". This ensures existing WhatsApp conversations continue
-  // to work after upgrading. See GitHub review comment #10 on PR #905.
+  // to work after upgrading, avoiding the need for users to start new sessions.
   let hasWhatsAppOrigin = false
   if (isExistingConversation) {
     // For existing conversations, stored metadata is authoritative

@@ -175,6 +175,7 @@ To send any reply, use whatsapp_send_message with to="${replyTarget}"`
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${config.callbackApiKey}`,
+          "X-SpeakMCP-Origin": "whatsapp",
         },
         body: JSON.stringify({
           messages: [

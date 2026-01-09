@@ -224,6 +224,7 @@ export interface Conversation {
     model?: string
     provider?: string
     agentMode?: boolean
+    origin?: "whatsapp" | "desktop" | "remote" | "unknown"
   }
 }
 

@@ -100,6 +100,8 @@ interface RunAgentOptions {
   prompt: string
   conversationId?: string
   onProgress?: (update: AgentProgressUpdate) => void
+  /** Origin of the request - used to mark conversations for security purposes */
+  origin?: "whatsapp" | "desktop" | "remote" | "unknown"
 }
 
 function formatConversationHistoryForApi(
@@ -233,7 +235,7 @@ async function runAgent(options: RunAgentOptions): Promise<{
     timestamp?: number
   }>
 }> {
-  const { prompt, conversationId: inputConversationId, onProgress } = options
+  const { prompt, conversationId: inputConversationId, onProgress, origin } = options
   const cfg = configStore.get()
 
   // Set agent mode state for process management - ensure clean state
@@ -291,8 +293,8 @@ async function runAgent(options: RunAgentOptions): Promise<{
       // Conversation not found - create it with the provided ID to maintain session continuity
       // This is important for external integrations like WhatsApp where the conversation_id
       // is based on the sender's identifier (e.g., whatsapp_61406142826@s.whatsapp.net)
-      diagnosticsService.logInfo("remote-server", `Conversation ${conversationId} not found, creating with provided ID`)
-      const newConversation = await conversationService.createConversationWithId(conversationId, prompt, "user")
+      diagnosticsService.logInfo("remote-server", `Conversation ${conversationId} not found, creating with provided ID${origin ? ` (origin: ${origin})` : ""}`)
+      const newConversation = await conversationService.createConversationWithId(conversationId, prompt, "user", origin)
       // Update conversationId to use the actual persisted ID (which may be sanitized)
       // This ensures session lookup and later operations use the correct ID
       conversationId = newConversation.id
@@ -304,7 +306,13 @@ async function runAgent(options: RunAgentOptions): Promise<{
 
   // Create a new conversation if none exists (only when no conversationId was provided at all)
   if (!conversationId) {
-    const newConversation = await conversationService.createConversation(prompt, "user")
+    // For requests without a conversationId, default origin to "remote" since they come via the remote server
+    const newConversation = await conversationService.createConversationWithId(
+      conversationService.generateConversationIdPublic(),
+      prompt,
+      "user",
+      origin || "remote"
+    )
     conversationId = newConversation.id
     diagnosticsService.logInfo("remote-server", `Created new conversation ${conversationId}`)
   }
@@ -365,19 +373,28 @@ async function runAgent(options: RunAgentOptions): Promise<{
 
   // Determine if this is a WhatsApp conversation and harness output is enabled
   // SECURITY: Only enable harness-level WhatsApp calls (which bypass tool approval) for
-  // existing conversations. This prevents an attacker from crafting a whatsapp_ prefixed
-  // conversation_id and triggering WhatsApp sends without approval.
-  // For a new conversation with whatsapp_ prefix, the agent will still need to use
-  // WhatsApp tools explicitly (which require approval), but on subsequent messages
-  // to that conversation, the harness will automatically handle output.
+  // conversations that genuinely originated from WhatsApp. We check:
+  // 1. The conversation ID has whatsapp_ prefix (format check)
+  // 2. EITHER the current request has origin="whatsapp" (from X-SpeakMCP-Origin header)
+  //    OR the conversation was created with origin="whatsapp" (stored in metadata)
+  // This prevents an attacker from crafting a whatsapp_ prefixed conversation_id
+  // and triggering WhatsApp sends without approval.
   const isWhatsApp = isWhatsAppConversation(conversationId)
   const whatsappChatId = isWhatsApp ? extractWhatsAppChatId(conversationId!) : null
-  const useWhatsAppHarness = isWhatsApp && whatsappChatId && isExistingConversation && (cfg.whatsappHarnessOutput ?? true)
+
+  // Check if this conversation has WhatsApp origin (either from current request or stored in metadata)
+  let hasWhatsAppOrigin = origin === "whatsapp"
+  if (!hasWhatsAppOrigin && isExistingConversation) {
+    const storedOrigin = await conversationService.getConversationOrigin(conversationId)
+    hasWhatsAppOrigin = storedOrigin === "whatsapp"
+  }
+
+  const useWhatsAppHarness = isWhatsApp && whatsappChatId && hasWhatsAppOrigin && (cfg.whatsappHarnessOutput ?? true)
 
   if (useWhatsAppHarness) {
-    diagnosticsService.logInfo("remote-server", `[WhatsApp Harness] Enabled for conversation ${conversationId}, chatId: ${whatsappChatId}`)
-  } else if (isWhatsApp && whatsappChatId && !isExistingConversation) {
-    diagnosticsService.logInfo("remote-server", `[WhatsApp Harness] Skipped for NEW conversation ${conversationId} (security: first message requires explicit tool approval)`)
+    diagnosticsService.logInfo("remote-server", `[WhatsApp Harness] Enabled for conversation ${conversationId}, chatId: ${whatsappChatId} (origin verified)`)
+  } else if (isWhatsApp && whatsappChatId && !hasWhatsAppOrigin) {
+    diagnosticsService.logInfo("remote-server", `[WhatsApp Harness] Skipped for conversation ${conversationId} (security: origin not verified as WhatsApp)`)
   }
 
   try {
@@ -546,8 +563,13 @@ export async function startRemoteServer() {
       // Check if client wants SSE streaming
       const isStreaming = body.stream === true
 
-      console.log("[remote-server] Chat request:", { conversationId: conversationId || "new", promptLength: prompt.length, streaming: isStreaming })
-      diagnosticsService.logInfo("remote-server", `Handling completion request${conversationId ? ` for conversation ${conversationId}` : ""}${isStreaming ? " (streaming)" : ""}`)
+      // Extract origin from X-SpeakMCP-Origin header (set by WhatsApp MCP server)
+      // This is used to verify that requests genuinely come from WhatsApp
+      const originHeader = req.headers["x-speakmcp-origin"]
+      const origin = originHeader === "whatsapp" ? "whatsapp" as const : undefined
+
+      console.log("[remote-server] Chat request:", { conversationId: conversationId || "new", promptLength: prompt.length, streaming: isStreaming, origin: origin || "none" })
+      diagnosticsService.logInfo("remote-server", `Handling completion request${conversationId ? ` for conversation ${conversationId}` : ""}${isStreaming ? " (streaming)" : ""}${origin ? ` (origin: ${origin})` : ""}`)
 
       if (isStreaming) {
         // SSE streaming mode
@@ -572,7 +594,7 @@ export async function startRemoteServer() {
         }
 
         try {
-          const result = await runAgent({ prompt, conversationId, onProgress })
+          const result = await runAgent({ prompt, conversationId, onProgress, origin })
 
           // Record as if user submitted a text input
           recordHistory(result.content)
@@ -604,7 +626,7 @@ export async function startRemoteServer() {
       }
 
       // Non-streaming mode (existing behavior)
-      const result = await runAgent({ prompt, conversationId })
+      const result = await runAgent({ prompt, conversationId, origin })
 
       // Record as if user submitted a text input
       recordHistory(result.content)

@@ -40,6 +40,14 @@ export class ConversationService {
     return `conv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
   }
 
+  /**
+   * Public method to generate a conversation ID.
+   * Used by remote-server when creating new conversations without a provided ID.
+   */
+  generateConversationIdPublic(): string {
+    return this.generateConversationId()
+  }
+
   private generateMessageId(): string {
     return `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
   }
@@ -215,6 +223,7 @@ export class ConversationService {
     conversationId: string,
     firstMessage: string,
     role: "user" | "assistant" = "user",
+    origin?: "whatsapp" | "desktop" | "remote" | "unknown",
   ): Promise<Conversation> {
     // Validate and sanitize the externally-provided conversation ID
     const validatedId = this.validateConversationId(conversationId)
@@ -234,10 +243,25 @@ export class ConversationService {
       createdAt: now,
       updatedAt: now,
       messages: [message],
+      metadata: origin ? { origin } : undefined,
     }
 
     await this.saveConversation(conversation)
     return conversation
+  }
+
+  /**
+   * Get the origin of a conversation.
+   * Returns the origin if found, or null if the conversation doesn't exist.
+   */
+  async getConversationOrigin(
+    conversationId: string,
+  ): Promise<"whatsapp" | "desktop" | "remote" | "unknown" | null> {
+    const conversation = await this.loadConversation(conversationId)
+    if (!conversation) {
+      return null
+    }
+    return conversation.metadata?.origin ?? null
   }
 
   async addMessageToConversation(

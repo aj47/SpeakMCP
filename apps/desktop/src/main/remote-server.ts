@@ -366,12 +366,16 @@ async function runAgent(options: RunAgentOptions): Promise<{
 
   if (useWhatsAppHarness) {
     diagnosticsService.logInfo("remote-server", `[WhatsApp Harness] Enabled for conversation ${conversationId}, chatId: ${whatsappChatId}`)
-    // Send typing indicator immediately when starting to process
-    await sendWhatsAppTypingIndicator(whatsappChatId)
   }
 
   try {
     await mcpService.initialize()
+
+    // Send typing indicator after MCP is initialized so WhatsApp server is ready
+    if (useWhatsAppHarness) {
+      await sendWhatsAppTypingIndicator(whatsappChatId)
+    }
+
     mcpService.registerExistingProcessesWithAgentManager()
 
     // Get available tools filtered by profile snapshot if available (for session isolation)
@@ -415,7 +419,7 @@ async function runAgent(options: RunAgentOptions): Promise<{
 
     // If WhatsApp harness is enabled, notify user of the error
     if (useWhatsAppHarness && whatsappChatId) {
-      await sendWhatsAppMessage(whatsappChatId, `Sorry, I encountered an error while processing your request: ${errorMessage}`)
+      await sendWhatsAppMessage(whatsappChatId, "Sorry, I encountered an error while processing your request. Please try again later.")
     }
 
     throw error

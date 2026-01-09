@@ -188,7 +188,7 @@ To send any reply, use whatsapp_send_message with to="${replyTarget}"`
         }),
       })
 
-      if (response.ok && config.autoReply) {
+      if (response.ok && config.autoReply && !config.harnessOutput) {
         // Parse response - support both OpenAI-style (choices[0].message.content) and simple (content) formats
         const data = (await response.json()) as {
           content?: string

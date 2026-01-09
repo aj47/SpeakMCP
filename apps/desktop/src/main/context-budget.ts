@@ -188,6 +188,8 @@ const MODEL_REGISTRY: Record<string, ModelSpec> = {
  * - claude-haiku-4.5-20251001 -> claude-haiku-4.5
  * - anthropic/claude-3.5-sonnet -> claude-3.5-sonnet
  * - accounts/fireworks/models/llama-v3p1-70b -> llama-v3p1-70b
+ * - gpt4 -> gpt-4 (inserts hyphen between letters and digits)
+ * - gpt4o -> gpt-4o
  */
 function normalizeModelName(model: string): string {
   let normalized = model.toLowerCase()
@@ -218,6 +220,11 @@ function normalizeModelName(model: string): string {
   normalized = normalized.replace(/v(\d+)p(\d+)/g, "$1.$2")
   normalized = normalized.replace(/v(\d+)-(\d+)/g, "$1.$2")
   normalized = normalized.replace(/v(\d+)/g, "$1")
+
+  // Insert hyphen between letters and digits where missing (gpt4 -> gpt-4, gpt35 -> gpt-3.5)
+  // This handles common variations like "gpt4", "gpt4o", "gpt35" which should match "gpt-4", etc.
+  // Pattern: letter followed by digit (without hyphen between them)
+  normalized = normalized.replace(/([a-z])(\d)/g, "$1-$2")
 
   return normalized
 }

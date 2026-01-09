@@ -146,5 +146,6 @@ export interface DiscoveryContext {
   skillSummaries: SkillSummary[]
   activeProfilePath?: string
   discoveryFolderPath: string
+  skillsFolderPath: string
 }
 

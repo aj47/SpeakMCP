@@ -192,10 +192,14 @@ export function constructDiscoverySystemPrompt(
     prompt += `\n\nAVAILABLE MCP SERVERS AND TOOLS:\n${formatToolSummaries(context.mcpToolSummaries)}`
   }
 
-  // Add skill summaries
+  // Add skill summaries with clear usage instructions
   if (context.skillSummaries.length > 0) {
     prompt += `\n\nAVAILABLE SKILLS:\n${formatSkillSummaries(context.skillSummaries)}`
-    prompt += `\nRead skills/{skill-id}/SKILL.md for detailed instructions.`
+    prompt += `\n\nUSING SKILLS:`
+    prompt += `\nWhen a user request matches a skill's description, you MUST:`
+    prompt += `\n1. Read the skill file: ${context.skillsFolderPath}/{skill-id}/SKILL.md`
+    prompt += `\n2. Follow the instructions in the skill file exactly`
+    prompt += `\n3. Use any scripts or tools mentioned in the skill`
   }
 
   // Add active profile hint

@@ -30,6 +30,7 @@ function buildDiscoveryContext(): DiscoveryContext {
     mcpToolSummaries: mcpFileSyncService.getToolSummaries(),
     skillSummaries: skillsService.getSkillSummaries(),
     discoveryFolderPath: mcpFileSyncService.getDiscoveryFolderPath(),
+    skillsFolderPath: skillsService.getSkillsFolderPath(),
   }
 }
 

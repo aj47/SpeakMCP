@@ -249,6 +249,8 @@ async function runAgent(options: RunAgentOptions): Promise<{
     toolResults?: any[]
   }> | undefined
   let conversationId = inputConversationId
+  // Track if this is an existing conversation (important for security - see below)
+  let isExistingConversation = false
 
   // Create or continue conversation - matching tipc.ts createMcpTextInput logic
   if (conversationId) {
@@ -260,6 +262,8 @@ async function runAgent(options: RunAgentOptions): Promise<{
     )
 
     if (updatedConversation) {
+      // This is an existing conversation - it was created by a prior request
+      isExistingConversation = true
       // Load conversation history excluding the message we just added (the current user input)
       // This matches tipc.ts processWithAgentMode behavior
       const messagesToConvert = updatedConversation.messages.slice(0, -1)
@@ -360,12 +364,20 @@ async function runAgent(options: RunAgentOptions): Promise<{
   const sessionId = existingSessionId || agentSessionTracker.startSession(conversationId, conversationTitle, startSnoozed, profileSnapshot)
 
   // Determine if this is a WhatsApp conversation and harness output is enabled
+  // SECURITY: Only enable harness-level WhatsApp calls (which bypass tool approval) for
+  // existing conversations. This prevents an attacker from crafting a whatsapp_ prefixed
+  // conversation_id and triggering WhatsApp sends without approval.
+  // For a new conversation with whatsapp_ prefix, the agent will still need to use
+  // WhatsApp tools explicitly (which require approval), but on subsequent messages
+  // to that conversation, the harness will automatically handle output.
   const isWhatsApp = isWhatsAppConversation(conversationId)
   const whatsappChatId = isWhatsApp ? extractWhatsAppChatId(conversationId!) : null
-  const useWhatsAppHarness = isWhatsApp && whatsappChatId && (cfg.whatsappHarnessOutput ?? true)
+  const useWhatsAppHarness = isWhatsApp && whatsappChatId && isExistingConversation && (cfg.whatsappHarnessOutput ?? true)
 
   if (useWhatsAppHarness) {
     diagnosticsService.logInfo("remote-server", `[WhatsApp Harness] Enabled for conversation ${conversationId}, chatId: ${whatsappChatId}`)
+  } else if (isWhatsApp && whatsappChatId && !isExistingConversation) {
+    diagnosticsService.logInfo("remote-server", `[WhatsApp Harness] Skipped for NEW conversation ${conversationId} (security: first message requires explicit tool approval)`)
   }
 
   try {

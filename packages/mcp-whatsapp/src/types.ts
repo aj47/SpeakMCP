@@ -17,6 +17,12 @@ export interface WhatsAppConfig {
   maxMessageLength?: number
   /** Whether to log message content (disable for privacy) */
   logMessages?: boolean
+  /**
+   * When true (default), the harness layer handles typing indicators and message sending automatically.
+   * The agent doesn't need to call WhatsApp tools to respond - responses are sent transparently.
+   * WhatsApp tools are still available for special cases like sending to different numbers.
+   */
+  harnessOutput?: boolean
 }
 
 export interface WhatsAppMessage {

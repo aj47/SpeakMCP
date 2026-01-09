@@ -139,6 +139,78 @@ function formatConversationHistoryForApi(
   }))
 }
 
+/**
+ * Check if a conversation ID represents a WhatsApp conversation.
+ * WhatsApp conversation IDs have the format: whatsapp_<chatId> or whatsapp_<chatId>_<timestamp>
+ */
+function isWhatsAppConversation(conversationId: string | undefined): boolean {
+  return !!conversationId && conversationId.startsWith("whatsapp_")
+}
+
+/**
+ * Extract the WhatsApp chat ID (recipient) from a WhatsApp conversation ID.
+ * Handles formats: whatsapp_<chatId> and whatsapp_<chatId>_<timestamp>
+ */
+function extractWhatsAppChatId(conversationId: string): string | null {
+  if (!conversationId.startsWith("whatsapp_")) {
+    return null
+  }
+  // Remove "whatsapp_" prefix
+  const remainder = conversationId.substring(9)
+  // Check if this is a timestamped ID (whatsapp_<chatId>_<timestamp>)
+  // Chat IDs contain @ (e.g., 61406142826@s.whatsapp.net)
+  const atIndex = remainder.indexOf("@")
+  if (atIndex === -1) {
+    return null
+  }
+  // Find the end of the chat ID (next _ after the domain, or end of string)
+  const afterAt = remainder.substring(atIndex)
+  const nextUnderscore = afterAt.indexOf("_")
+  if (nextUnderscore === -1) {
+    // No timestamp suffix - return the whole remainder
+    return remainder
+  }
+  // Has timestamp suffix - extract just the chat ID part
+  return remainder.substring(0, atIndex + nextUnderscore)
+}
+
+/**
+ * Send a WhatsApp typing indicator via the MCP tool.
+ * This is called by the harness layer to show typing status automatically.
+ */
+async function sendWhatsAppTypingIndicator(chatId: string): Promise<void> {
+  try {
+    diagnosticsService.logInfo("remote-server", `[WhatsApp Harness] Sending typing indicator to ${chatId}`)
+    await mcpService.executeToolCall(
+      { name: "whatsapp:whatsapp_send_typing", arguments: { to: chatId } },
+      undefined,
+      true // skip approval check for harness-level calls
+    )
+  } catch (error) {
+    diagnosticsService.logWarning("remote-server", `[WhatsApp Harness] Failed to send typing indicator: ${error}`)
+    // Don't throw - typing indicator failures shouldn't break the flow
+  }
+}
+
+/**
+ * Send a WhatsApp message via the MCP tool.
+ * This is called by the harness layer to send responses automatically.
+ */
+async function sendWhatsAppMessage(chatId: string, text: string): Promise<void> {
+  try {
+    diagnosticsService.logInfo("remote-server", `[WhatsApp Harness] Sending message to ${chatId} (${text.length} chars)`)
+    await mcpService.executeToolCall(
+      { name: "whatsapp:whatsapp_send_message", arguments: { to: chatId, text } },
+      undefined,
+      true // skip approval check for harness-level calls
+    )
+    diagnosticsService.logInfo("remote-server", `[WhatsApp Harness] Message sent successfully to ${chatId}`)
+  } catch (error) {
+    diagnosticsService.logError("remote-server", `[WhatsApp Harness] Failed to send message to ${chatId}`, error)
+    // Don't throw - let the agent loop complete even if WhatsApp sending fails
+  }
+}
+
 async function runAgent(options: RunAgentOptions): Promise<{
   content: string
   conversationId: string
@@ -276,6 +348,17 @@ async function runAgent(options: RunAgentOptions): Promise<{
   const conversationTitle = prompt.length > 50 ? prompt.substring(0, 50) + "..." : prompt
   const sessionId = existingSessionId || agentSessionTracker.startSession(conversationId, conversationTitle, startSnoozed, profileSnapshot)
 
+  // Determine if this is a WhatsApp conversation and harness output is enabled
+  const isWhatsApp = isWhatsAppConversation(conversationId)
+  const whatsappChatId = isWhatsApp ? extractWhatsAppChatId(conversationId!) : null
+  const useWhatsAppHarness = isWhatsApp && whatsappChatId && (cfg.whatsappHarnessOutput ?? true)
+
+  if (useWhatsAppHarness) {
+    diagnosticsService.logInfo("remote-server", `[WhatsApp Harness] Enabled for conversation ${conversationId}, chatId: ${whatsappChatId}`)
+    // Send typing indicator immediately when starting to process
+    await sendWhatsAppTypingIndicator(whatsappChatId)
+  }
+
   try {
     await mcpService.initialize()
     mcpService.registerExistingProcessesWithAgentManager()
@@ -305,6 +388,11 @@ async function runAgent(options: RunAgentOptions): Promise<{
     // Mark session as completed
     agentSessionTracker.completeSession(sessionId, "Agent completed successfully")
 
+    // If WhatsApp harness output is enabled, automatically send the final response
+    if (useWhatsAppHarness && agentResult.content) {
+      await sendWhatsAppMessage(whatsappChatId, agentResult.content)
+    }
+
     // Format conversation history for API response (convert MCPToolResult to ToolResult format)
     const formattedHistory = formatConversationHistoryForApi(agentResult.conversationHistory)
 
@@ -313,6 +401,12 @@ async function runAgent(options: RunAgentOptions): Promise<{
     // Mark session as errored
     const errorMessage = error instanceof Error ? error.message : "Unknown error"
     agentSessionTracker.errorSession(sessionId, errorMessage)
+
+    // If WhatsApp harness is enabled, notify user of the error
+    if (useWhatsAppHarness && whatsappChatId) {
+      await sendWhatsAppMessage(whatsappChatId, `Sorry, I encountered an error while processing your request: ${errorMessage}`)
+    }
+
     throw error
   } finally {
     // Clean up agent state to ensure next session starts fresh

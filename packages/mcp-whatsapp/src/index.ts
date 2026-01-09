@@ -38,6 +38,7 @@ const config: WhatsAppConfig = {
   callbackUrl: process.env.WHATSAPP_CALLBACK_URL,
   callbackApiKey: process.env.WHATSAPP_CALLBACK_API_KEY,
   logMessages: process.env.WHATSAPP_LOG_MESSAGES === "true",
+  harnessOutput: process.env.WHATSAPP_HARNESS_OUTPUT !== "false", // Default true
 }
 
 // Create WhatsApp session
@@ -125,7 +126,20 @@ whatsapp.on("message", async (message: WhatsAppMessage) => {
 
       // Build message content - use array format if there's an image, otherwise string
       let messageContent: string | Array<{ type: string; text?: string; image_url?: { url: string } }>
-      const textContent = `[WhatsApp message from ${message.fromName || message.from} (chat_id: ${replyTarget})]: ${messageText}
+
+      // When harness output is enabled, the harness automatically handles typing indicators and message sending
+      // The agent doesn't need to call WhatsApp tools explicitly - just respond normally
+      // Tools are still available for special cases (e.g., sending to different numbers)
+      let textContent: string
+      if (config.harnessOutput) {
+        // Simplified prompt - harness handles output automatically
+        textContent = `[WhatsApp message from ${message.fromName || message.from}]: ${messageText}
+
+Note: This is a WhatsApp message. Respond naturally - your response will be automatically sent back.
+For special cases (sending to different numbers, etc.), you can still use WhatsApp tools.`
+      } else {
+        // Legacy prompt - agent must explicitly call WhatsApp tools
+        textContent = `[WhatsApp message from ${message.fromName || message.from} (chat_id: ${replyTarget})]: ${messageText}
 
 ACTION REQUIRED - RESPOND IMMEDIATELY:
 1. FIRST, call whatsapp_send_typing with to="${replyTarget}" to show typing indicator
@@ -133,6 +147,7 @@ ACTION REQUIRED - RESPOND IMMEDIATELY:
 3. If you need to think or process, you can continue after sending the initial acknowledgment
 
 To send any reply, use whatsapp_send_message with to="${replyTarget}"`
+      }
 
       if (message.mediaType === "image" && message.mediaBuffer) {
         // Format as OpenAI-compatible content array with image

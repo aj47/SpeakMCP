@@ -518,6 +518,7 @@ export type Config = {
   whatsappAllowFrom?: string[]  // Phone numbers allowed to message (international format without +)
   whatsappAutoReply?: boolean   // Auto-reply to messages using agent
   whatsappLogMessages?: boolean // Log message content (privacy concern)
+  whatsappHarnessOutput?: boolean // When true, harness automatically sends typing indicators and messages (default: true)
 
   // Stream Status Watcher Configuration
   streamStatusWatcherEnabled?: boolean
